@@ -11,7 +11,7 @@ import { isInvestigationSufficient, summarizeStatForContext, formatNum, formatPc
 import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js';
 import { getConstitution } from '../constitution/index.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
-import { nbaSeason, nhlSeason, nflSeason } from '../../../utils/dateUtils.js';
+import { nbaSeason, nhlSeason, nflSeason, ncaafSeason } from '../../../utils/dateUtils.js';
 import { getTokensForSport, toolDefinitions } from '../tools/toolDefinitions.js';
 
 function hasInvestigationCompleteMarker(text = '') {
@@ -1083,11 +1083,14 @@ INVESTIGATION COMPLETE`;
               // regular/postseason games so "last N" is provably the last N.
               const currentYear = new Date().getFullYear();
               logs = await ballDontLieService.getMlbPlayerGameRowsChrono(player.id, currentYear);
-            } else {
-              // NFL / NCAAF
+            } else if (args.sport === 'NFL') {
               const season = nflSeason();
               const allLogs = await ballDontLieService.getNflPlayerGameLogsBatch([player.id], season, numGames);
               logs = allLogs[player.id];
+            } else {
+              // BDL does not expose the NFL game-log endpoint for NCAAF.
+              // Never relabel professional stats as college evidence.
+              logs = [];
             }
 
             // Summarize player game logs for context efficiency.
@@ -1410,7 +1413,7 @@ INVESTIGATION COMPLETE`;
 
             let statResult = { stat_type: args.stat_type, team: args.team, data: [] };
             // Calculate NCAAF season dynamically
-            const season = nflSeason();
+            const season = ncaafSeason();
 
             // Get team ID first
             const teams = await ballDontLieService.getTeams('americanfootball_ncaaf');
@@ -1434,7 +1437,7 @@ INVESTIGATION COMPLETE`;
               }));
             } else {
               // Get player season stats for the team
-              const seasonStats = await ballDontLieService.getNcaafPlayerSeasonStats(team.id, season);
+              const seasonStats = await ballDontLieService.getNcaafPlayerSeasonStats({ teamId: team.id, season });
 
               if (args.stat_type === 'OFFENSE') {
                 // Filter offensive players (QBs, RBs, WRs, TEs)

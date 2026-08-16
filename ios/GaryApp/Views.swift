@@ -904,12 +904,13 @@ private enum BillfoldCompute {
         let filteredBySport: [PropResult]
         switch selectedSport {
         case .all:
-            // Fun lanes (TDs, HRs) never count in the official props record.
-            filteredBySport = filteredByTime.filter { !$0.isTDResult && !$0.isHRResult }
+            // NFL TDs and MLB HRs are dedicated fun lanes. NCAAF touchdown
+            // props are core NCAAF results and remain part of ALL.
+            filteredBySport = filteredByTime.filter { !$0.isNFLTDResult && !$0.isHRResult }
         case .nflTDs:
-            filteredBySport = filteredByTime.filter { $0.isTDResult }
+            filteredBySport = filteredByTime.filter { $0.isNFLTDResult }
         case .nfl:
-            filteredBySport = filteredByTime.filter { ($0.effectiveLeague ?? "") == "NFL" && !$0.isTDResult }
+            filteredBySport = filteredByTime.filter { ($0.effectiveLeague ?? "") == "NFL" && !$0.isNFLTDResult }
         case .mlbHR:
             // prop_type match, not the sport string — grader rows carry no
             // sport column, so the old rawValue compare matched nothing.
@@ -928,8 +929,10 @@ private enum BillfoldCompute {
             return Set(gameRows.compactMap { $0.effectiveLeague })
         }
 
-        var leagues = Set(propRows.compactMap { $0.effectiveLeague })
-        if propRows.contains(where: { $0.isTDResult }) {
+        // An NFL scorer row belongs to the dedicated NFL TDs chip, not the
+        // regular NFL chip. NCAAF touchdown rows are deliberately retained.
+        var leagues = Set(propRows.filter { !$0.isNFLTDResult }.compactMap { $0.effectiveLeague })
+        if propRows.contains(where: { $0.isNFLTDResult }) {
             leagues.insert("NFL TDs")
         }
         // HR rows infer effectiveLeague "MLB" (no sport column on grader
@@ -966,7 +969,8 @@ private enum BillfoldCompute {
             }
             return propRows.filter { row in
                 switch sport {
-                case .nflTDs: return row.isTDResult
+                case .nflTDs: return row.isNFLTDResult
+                case .nfl: return row.effectiveLeague == "NFL" && !row.isNFLTDResult
                 case .mlbHR: return row.isHRResult
                 default: return row.effectiveLeague == sport.rawValue
                 }
@@ -1114,7 +1118,7 @@ private enum BillfoldCompute {
                 selectedTab: selectedTab,
                 selectedSport: selectedSport,
                 gameRows: sportGames,
-                propRows: sportProps.filter { !$0.isTDResult && !$0.isHRResult }
+                propRows: sportProps.filter { !$0.isNFLTDResult && !$0.isHRResult }
             ),
             journal: journal(streakItems: streakItems, trend: trend, record: record, netUnits: netUnits),
             calibration: calibration(
@@ -1150,12 +1154,11 @@ private enum BillfoldCompute {
         let sportTimeframeProps = cutoffKey(sportTimeframeCutoff).map { key in
             validProps.filter { dateKey($0.game_date) >= key }
         } ?? validProps
-        // Fun lanes (HR bets, TDs) never touch Gary's metrics — the by-sport
-        // grid and per-sport equity lines count CORE props only. The unfiltered
-        // sets above still feed availableSports so the MLB HR / NFL TDs chips
-        // stay tappable (the explicit fun-lane views).
-        let metricsPropsAll = timeframePropsAll.filter { !$0.isTDResult && !$0.isHRResult }
-        let metricsSportProps = sportTimeframeProps.filter { !$0.isTDResult && !$0.isHRResult }
+        // Dedicated fun lanes (MLB HR and NFL TD) never touch Gary's core
+        // metrics. NCAAF touchdown props are regular NCAAF results, so they
+        // remain in ALL, the by-sport grid and the NCAAF equity line.
+        let metricsPropsAll = timeframePropsAll.filter { !$0.isNFLTDResult && !$0.isHRResult }
+        let metricsSportProps = sportTimeframeProps.filter { !$0.isNFLTDResult && !$0.isHRResult }
         let filteredGames = filterGameResults(gameResults, cutoff: timeframeCutoff, selectedSport: selectedSport)
         let filteredProps = filterPropResults(propResults, cutoff: timeframeCutoff, selectedSport: selectedSport)
 
@@ -3062,16 +3065,20 @@ struct HomeView: View {
     /// authoritative. The old unconditional scheduled-first rule caused the
     /// finished board to regress to `STARTED` overnight.
     private func sheetLive(_ full: String, gameID: Int? = nil, commence: String? = nil) -> LiveScore? {
-        let fuzzy = liveScoresNow.filter { abbrGameMatches($0.abbrGame, matchup: full) }
         let matches: [LiveScore]
         if let gameID {
-            let exact = fuzzy.filter { $0.game_id == String(gameID) }
+            // Exact provider identity must not depend on a league-specific
+            // abbreviation dictionary. That dictionary never covered every
+            // NCAAF school and previously made an exact football row invisible.
+            let exact = liveScoresNow.filter { $0.game_id == String(gameID) }
             // At the 6am roll the cache can briefly contain yesterday's same-team
             // series game. Never fall back from today's id to a different id;
             // id-less legacy rows remain eligible for older feeds.
-            matches = exact.isEmpty ? fuzzy.filter { $0.game_id == nil } : exact
+            matches = exact.isEmpty
+                ? liveScoresNow.filter { $0.game_id == nil && abbrGameMatches($0.abbrGame, matchup: full) }
+                : exact
         } else {
-            matches = fuzzy
+            matches = liveScoresNow.filter { abbrGameMatches($0.abbrGame, matchup: full) }
         }
 
         // Unknown start keeps the historical behavior; callers with a real slate
@@ -3226,9 +3233,10 @@ struct HomeView: View {
                     // money, sitting on the number, or a total still cooking.
                     // That's a SWEAT, and it wears amber so it is distinct from
                     // covering green, losing red and the brand gold used for calls.
-                    // No call on the game means nothing to sweat: the slot stays empty.
-                    statusText = calls.isEmpty ? "" : "SWEATING"
-                    statusColor = GaryColors.sweating
+                    // A live game with no Gary call is still a complete Board row.
+                    // Say that plainly instead of leaving a visually broken hole.
+                    statusText = calls.isEmpty ? "NO PICK" : "SWEATING"
+                    statusColor = calls.isEmpty ? Color.white.opacity(0.62) : GaryColors.sweating
                 }
             } else if (ls?.isFinal ?? false) || !storedRows.isEmpty {
                 // A durable grade is just as authoritative as a live-score
@@ -3261,7 +3269,10 @@ struct HomeView: View {
                 else if lost > 0 && cashed == 0 { statusText = "✗ LOST"; statusColor = GaryColors.loss }
                 else if cashed > 0 && lost > 0 { statusText = "✓✗ SPLIT"; statusColor = GaryColors.gold }
                 else if pushed > 0 { statusText = "PUSH"; statusColor = GaryColors.gold }
-                else { statusText = ""; statusColor = Color.white.opacity(0.62) }
+                else {
+                    statusText = calls.isEmpty ? "NO PICK" : ""
+                    statusColor = Color.white.opacity(0.62)
+                }
             }
             // (Per-row "PICK ~x:xx" labels removed Jul 27 — the Tonight header
             // carries one "PICKS DROP 90 MIN BEFORE" note instead.)
@@ -3275,13 +3286,13 @@ struct HomeView: View {
                     // the durable CASHED/LOST grade as soon as it lands.
                     zone = .settled
                     clockText = "RESULT PENDING"
-                    statusText = ""
+                    statusText = calls.isEmpty ? "NO PICK" : ""
                     statusColor = Color.white.opacity(0.55)
                 } else {
                     zone = .live
                     clockText = "▶ STARTED"
-                    statusText = ""
-                    statusColor = GaryColors.gold
+                    statusText = calls.isEmpty ? "NO PICK" : "SWEATING"
+                    statusColor = calls.isEmpty ? Color.white.opacity(0.62) : GaryColors.sweating
                 }
             }
             // The market line is a PRE-GAME slot only — a live/final row must
@@ -3816,7 +3827,7 @@ struct HomeView: View {
     /// games first.
    static func buildDailyFormBySport(games: [GameResult], live: [LiveScore],
                                       slateDay: String, anchor: String?,
-                                      sports: [String] = ["MLB", "WC"]) -> [DailyFormCell] {
+                                      sports: [String] = ["MLB", "NFL", "NCAAF", "WC"]) -> [DailyFormCell] {
         func tally(_ day: String?, _ league: String) -> (Int, Int, Int) {
             guard let day = day else { return (0, 0, 0) }
             var w = 0, l = 0, p = 0
@@ -4203,8 +4214,9 @@ struct HomeView: View {
         case "MLB": maps = [mlbTeamKeywords]
         case "NBA": maps = [nbaTeamKeywords]
         case "NHL": maps = [nhlTeamKeywords]
+        case "NFL", "NFL TDS": maps = [nflTeamKeywords]
         case "WC": maps = [wcTeamKeywords]
-        default: maps = [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, wcTeamKeywords]
+        default: maps = [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, nflTeamKeywords, wcTeamKeywords]
         }
         for map in maps {
             for (ab, kws) in map where kws.contains(where: { lower.contains($0) }) { return ab }
@@ -5995,6 +6007,8 @@ struct LeagueWordsTrigger: View {
                 Text(current)
                     .font(GaryFonts.display(19))
                     .foregroundStyle(GaryColors.gold)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(GaryColors.gold.opacity(0.8))
@@ -6002,6 +6016,7 @@ struct LeagueWordsTrigger: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .layoutPriority(2)
         .accessibilityLabel("Switch league — \(current) selected")
     }
 }
@@ -7059,7 +7074,7 @@ enum WinnersSlot: Int {
 /// keyword maps first, mascot prefix as the fallback.
 func winnersTeamAbbr(_ team: String?) -> String {
     guard let t = team?.lowercased(), !t.isEmpty else { return "—" }
-    for map in [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords] {
+    for map in [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, nflTeamKeywords] {
         for (abbr, kws) in map where kws.contains(where: { t.contains($0) }) { return abbr }
     }
     let last = t.split(separator: " ").last.map(String.init) ?? t
@@ -7246,8 +7261,10 @@ struct PremiumPicksView: View {
             ? ["MLB", "NBA", "NHL", "WC", "NFL", "NCAAF", "NCAAB"]
             : ["MLB", "NBA", "NHL", "NFL", "NCAAF", "NCAAB"]
     }
-    // Sports with a props product (WC + college are game picks only).
-    private let propSports = ["MLB", "NBA", "NHL", "NFL"]
+    // Sports with a props product. NCAAF is fail-closed upstream until its
+    // verified market provider has a live key, but once lines are present its
+    // cards belong on the same Winners prop shelf as every other sport.
+    private let propSports = ["MLB", "NBA", "NHL", "NFL", "NCAAF"]
 
     // MARK: - Terminal status / tab counts (all derived from loaded view state)
 
@@ -8031,12 +8048,81 @@ struct PremiumPicksView: View {
         selectedDate ?? (shelf.settled ? SupabaseAPI.yesterdayEST() : SupabaseAPI.todayEST())
     }
 
-    /// Graded outcome for a prop on the given slate day ("date|name" keyed),
-    /// nil while ungraded — so day-game props stamp the moment grading runs,
-    /// not the next morning.
+    /// Strip a numeric line embedded at the end of a prop label. This mirrors
+    /// the Picks page's result identity so `passing_yards 249.5` and the
+    /// grader's `passing_yards` + `249.5` columns resolve to the same type.
+    private func normalizeWinnerPropType(_ raw: String) -> String {
+        raw.lowercased()
+            .replacingOccurrences(of: #"\s+[\d.]+"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
+    }
+
+    /// Canonicalize numeric lines so equivalent encodings (`1.5`, `1.50`) do
+    /// not break an otherwise exact result match.
+    private func normalizeWinnerPropLine(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return "" }
+        if let value = Double(trimmed) { return String(format: "%g", value) }
+        return trimmed.lowercased()
+    }
+
+    /// Use the same matchup normalization as Picks, including two-word mascot
+    /// handling, before it becomes part of the result identity.
+    private func normalizeWinnerPropMatchup(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return "" }
+        return shortenMatchup(trimmed).lowercased()
+    }
+
+    /// Exact Winners prop-result identity. Date prevents cross-day borrowing;
+    /// type + line + matchup prevent two props for the same player from sharing
+    /// whichever outcome happened to be written last.
+    private func winnerPropResultKey(
+        day: String,
+        player: String,
+        propType: String,
+        line: String,
+        matchup: String
+    ) -> String? {
+        let normalizedDay = day.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedPlayer = player.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedType = normalizeWinnerPropType(propType)
+        guard !normalizedDay.isEmpty, !normalizedPlayer.isEmpty, !normalizedType.isEmpty else { return nil }
+
+        return [
+            normalizedDay,
+            normalizedPlayer,
+            normalizedType,
+            normalizeWinnerPropLine(line),
+            normalizeWinnerPropMatchup(matchup),
+        ].joined(separator: "|")
+    }
+
+    private func winnerPropResultKey(for prop: PropPick, on day: String) -> String? {
+        winnerPropResultKey(
+            day: day,
+            player: prop.player ?? "",
+            propType: prop.prop ?? "",
+            line: prop.line ?? "",
+            matchup: prop.matchup ?? ""
+        )
+    }
+
+    private func winnerPropResultKey(for result: PropResult) -> String? {
+        winnerPropResultKey(
+            day: result.game_date ?? "",
+            player: result.player_name ?? "",
+            propType: result.prop_type ?? "",
+            line: result.line_value?.value ?? "",
+            matchup: result.matchup ?? ""
+        )
+    }
+
+    /// Graded outcome for one exact prop on the given slate day, nil while
+    /// ungraded — so day-game props stamp as soon as their own result lands.
     private func propResult(for prop: PropPick, on day: String) -> String? {
-        guard let name = prop.player?.lowercased(), !name.isEmpty else { return nil }
-        return propResultsMap["\(day)|\(name)"]
+        guard let key = winnerPropResultKey(for: prop, on: day) else { return nil }
+        return propResultsMap[key]
     }
 
     /// The prop's game final ("away-home") — props borrow their matchup's score
@@ -8245,7 +8331,7 @@ struct PremiumPicksView: View {
     }
 
     private func propPlaceholderRow(for league: String) -> some View {
-        Text("No \(league) props yet — next slate posts ~90 min before tip.")
+        Text("No \(league) props yet — next slate posts ~90 min before \(shelfStartNoun(for: league)).")
             .font(GaryFonts.text(13))
             .foregroundStyle(.white.opacity(0.62))
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -8269,10 +8355,19 @@ struct PremiumPicksView: View {
         }
     }
 
+    /// Empty shelves use the sport's real start language. Football was still
+    /// inheriting the basketball "tip" copy after its boards became first-class.
+    private func shelfStartNoun(for league: String) -> String {
+        switch league.uppercased() {
+        case "NFL", "NCAAF": return "kickoff"
+        default: return "tip"
+        }
+    }
+
     private func placeholderRow(for league: String) -> some View {
         let msg: String = (league == "WC" && worldCupPhase() == .preTournament)
             ? "World Cup kicks off June 11 — picks drop with the slate."
-            : "No \(league) pick yet — next slate posts ~90 min before tip."
+            : "No \(league) pick yet — next slate posts ~90 min before \(shelfStartNoun(for: league))."
         return Text(msg)
             .font(GaryFonts.text(13))
             .foregroundStyle(.white.opacity(0.62))
@@ -8487,7 +8582,7 @@ struct PremiumPicksView: View {
     /// (flip-backs + CASHED/LOST stamps), ordered by sport. No live/slate logic.
     private func loadHistorical(_ date: String) async {
         await MainActor.run { loading = true; gameShelves = []; propShelves = [] }
-        async let gamesF = SupabaseAPI.fetchDailyPicks(date: date)
+        async let gamesF = SupabaseAPI.fetchExactDatePicks(date: date)
         async let propsF = SupabaseAPI.fetchPropPicks(date: date)
         async let resultsF = SupabaseAPI.fetchAllGameResults(since: date)
         async let propResF = SupabaseAPI.fetchRecentPropResults(limit: 200)
@@ -8510,8 +8605,9 @@ struct PremiumPicksView: View {
         }
         var pMap: [String: String] = [:]
         for r in propResults where r.game_date == date {
-            // Same "date|name" key convention as the live board's map.
-            if let n = r.player_name?.lowercased(), !n.isEmpty, let res = r.result { pMap["\(date)|\(n)"] = res.lowercased() }
+            guard let key = winnerPropResultKey(for: r),
+                  let result = r.result, !result.isEmpty else { continue }
+            pMap[key] = result.lowercased()
         }
 
         let byLeague = Dictionary(grouping: games, by: { leagueKey($0) })
@@ -8588,7 +8684,7 @@ struct PremiumPicksView: View {
         let yesterday = SupabaseAPI.yesterdayEST()
 
         async let todayGameF = SupabaseAPI.fetchAllPicks(date: today)
-        async let yGameF = SupabaseAPI.fetchDailyPicks(date: yesterday)
+        async let yGameF = SupabaseAPI.fetchExactDatePicks(date: yesterday)
         async let resultsF = SupabaseAPI.fetchAllGameResults(since: yesterday)
         async let todayPropsF = SupabaseAPI.fetchPropPicks(date: today)
         async let slateF = SupabaseAPI.fetchDailySlate(date: today)
@@ -8715,15 +8811,14 @@ struct PremiumPicksView: View {
         async let recentPropResultsF = SupabaseAPI.fetchRecentPropResults(limit: 100)
         let yProps = (try? await yPropsF) ?? []
         let recentPropResults = (try? await recentPropResultsF) ?? []
-        // Day-keyed ("date|name") and NOT yesterday-only: on a day-game slate
-        // props grade mid-afternoon, and the yesterday-only name map left
-        // today's settled props unstamped (founder catch, Jul 23). The day in
-        // the key stops a two-day player repeat from borrowing the wrong result.
+        // Exact prop identity and NOT yesterday-only: on a day-game slate props
+        // grade mid-afternoon. Date + player + type + line + matchup keeps a
+        // same-player alternate market from borrowing another prop's outcome.
         var pMap: [String: String] = [:]
         for r in recentPropResults {
-            if let d = r.game_date, let n = r.player_name?.lowercased(), !n.isEmpty, let res = r.result {
-                pMap["\(d)|\(n)"] = res.lowercased()
-            }
+            guard let key = winnerPropResultKey(for: r),
+                  let result = r.result, !result.isEmpty else { continue }
+            pMap[key] = result.lowercased()
         }
         let propsByLeague = Dictionary(grouping: todayProps, by: { propLeagueKey($0) })
         let yPropsByLeague = Dictionary(grouping: yProps, by: { propLeagueKey($0) })
@@ -9898,7 +9993,7 @@ struct GaryPicksView: View {
 
         // PERF (Jul 13): yesterday's board rides alongside today's fetch —
         // it was a serial round trip after the 30s-gated today load.
-        async let yesterdayFetch = SupabaseAPI.fetchDailyPicks(date: SupabaseAPI.yesterdayEST())
+        async let yesterdayFetch = SupabaseAPI.fetchExactDatePicks(date: SupabaseAPI.yesterdayEST(), forceRefresh: forceRefresh)
 
         // Use a timeout to prevent infinite loading
         var picks: [GaryPick] = []
@@ -10017,16 +10112,17 @@ struct GaryPropsView: View {
 
         switch selectedSport {
         case .all:
-            // Show all non-TD props; if none today, fall back to yesterday's
-            let todayNonTD = allProps.filter { !$0.isTDPick }
-            if todayNonTD.isEmpty && showingYesterdayResults {
-                return sortByTime(yesterdayProps.filter { !$0.isTDPick })
+            // Only NFL TDs have a dedicated props lane. College touchdown
+            // props remain normal NCAAF content in ALL.
+            let todayCore = allProps.filter { !$0.isNFLTDPick }
+            if todayCore.isEmpty && showingYesterdayResults {
+                return sortByTime(yesterdayProps.filter { !$0.isNFLTDPick })
             }
-            return sortByTime(todayNonTD)
+            return sortByTime(todayCore)
         case .nflTDs:
             var merged = allProps
             if showingYesterdayResults { merged.append(contentsOf: yesterdayProps) }
-            return merged.filter { $0.isTDPick }.sorted { a, b in
+            return merged.filter { $0.isNFLTDPick }.sorted { a, b in
                 if a.tdCategory != b.tdCategory { return a.tdCategory == "standard" }
                 return (a.commence_time ?? "") < (b.commence_time ?? "")
             }
@@ -10035,7 +10131,7 @@ struct GaryPropsView: View {
             if showingYesterdayResults && !sportsWithFreshProps.contains("NFL") {
                 merged.append(contentsOf: yesterdayProps.filter { ($0.effectiveLeague ?? "") == "NFL" })
             }
-            return sortByTime(merged.filter { ($0.effectiveLeague ?? "") == "NFL" && !$0.isTDPick })
+            return sortByTime(merged.filter { ($0.effectiveLeague ?? "") == "NFL" && !$0.isNFLTDPick })
         default:
             var merged = allProps
             if showingYesterdayResults && !sportsWithFreshProps.contains(selectedSport.rawValue) {
@@ -10068,8 +10164,10 @@ struct GaryPropsView: View {
     
     private var availableSports: Set<String> {
         let combined = allProps + (showingYesterdayResults ? yesterdayProps : [])
-        var sports = Set(combined.compactMap { $0.effectiveLeague })
-        if combined.contains(where: { $0.isTDPick }) {
+        // Keep the NFL TD-only payload out of the regular NFL chip. NCAAF TD
+        // props are not special-cased and continue to surface NCAAF normally.
+        var sports = Set(combined.filter { !$0.isNFLTDPick }.compactMap { $0.effectiveLeague })
+        if combined.contains(where: { $0.isNFLTDPick }) {
             sports.insert("NFL TDs")
         }
         return sports
@@ -11024,7 +11122,7 @@ struct GaryPropsView: View {
         var yPicks: [GaryPick] = []
         var resultsMap: [String: String] = [:]
         let yesterday = SupabaseAPI.yesterdayEST()
-        if let fetched = try? await SupabaseAPI.fetchDailyPicks(date: yesterday) {
+        if let fetched = try? await SupabaseAPI.fetchExactDatePicks(date: yesterday, forceRefresh: forceRefresh) {
             // Only keep yesterday's picks for sports that DON'T have fresh picks today.
             yPicks = fetched.filter { !($0.pick ?? "").isEmpty && !freshSports.contains(($0.league ?? "").uppercased()) }
             if !yPicks.isEmpty {
@@ -12763,13 +12861,14 @@ struct BillfoldView: View {
         let results: [PropResult]
         switch selectedSport {
         case .all:
-            // Fun lanes (TDs, HRs) never count in the official props record.
-            results = timeframePropResults.filter { !$0.isTDResult && !$0.isHRResult }
+            // Only NFL TDs are the dedicated touchdown fun lane. NCAAF
+            // touchdown props remain visible in ALL and under NCAAF.
+            results = timeframePropResults.filter { !$0.isNFLTDResult && !$0.isHRResult }
         case .nflTDs:
-            results = timeframePropResults.filter { $0.isTDResult }
+            results = timeframePropResults.filter { $0.isNFLTDResult }
         case .nfl:
             results = timeframePropResults
-                .filter { ($0.effectiveLeague ?? "") == "NFL" && !$0.isTDResult }
+                .filter { ($0.effectiveLeague ?? "") == "NFL" && !$0.isNFLTDResult }
         default:
             results = timeframePropResults
                 .filter { ($0.effectiveLeague ?? "") == selectedSport.rawValue }
@@ -15857,11 +15956,19 @@ struct CompactPickRow: View {
     private func teamAbbrev(_ shortName: String) -> String {
         let lower = shortName.lowercased()
         let lg = (pick.league ?? "").uppercased()
+        if lg == "NCAAF" {
+            let stored = homeIsPicked ? pick.homeTeamAbbreviation : pick.awayTeamAbbreviation
+            if let value = stored?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty {
+                return value.uppercased()
+            }
+            return shortName.uppercased()
+        }
         let maps: [[String: [String]]] = lg == "NBA" ? [nbaTeamKeywords]
             : lg == "MLB" ? [mlbTeamKeywords]
             : lg == "NHL" ? [nhlTeamKeywords]
+            : lg == "NFL" || lg == "NFL TDS" ? [nflTeamKeywords]
             : lg == "WC" ? [wcTeamKeywords]
-            : [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, wcTeamKeywords]
+            : [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, nflTeamKeywords, wcTeamKeywords]
         for map in maps {
             for (abbr, kws) in map where kws.contains(where: { lower.contains($0) }) { return abbr }
         }
@@ -16927,11 +17034,13 @@ let wcTeamColors: [String: String] = [
 func shareTeamAbbrev(_ name: String, league: String?) -> String {
     let lower = name.lowercased()
     let lg = (league ?? "").uppercased()
+    if lg == "NCAAF" { return Formatters.shortTeamName(name, league: league).uppercased() }
     let maps: [[String: [String]]] = lg == "NBA" || lg == "WNBA" ? [nbaTeamKeywords]
         : lg == "MLB" || lg == "MLB HR" ? [mlbTeamKeywords]
         : lg == "NHL" ? [nhlTeamKeywords]
+        : lg == "NFL" || lg == "NFL TDS" ? [nflTeamKeywords]
         : lg == "WC" ? [wcTeamKeywords]
-        : [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, wcTeamKeywords]
+        : [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, nflTeamKeywords, wcTeamKeywords]
     for map in maps {
         for (abbr, kws) in map where kws.contains(where: { lower.contains($0) }) { return abbr }
     }
@@ -16941,9 +17050,10 @@ func shareTeamAbbrev(_ name: String, league: String?) -> String {
 
 /// Chip styling for a team: brand color + the initials worn on the puck.
 /// WC keeps the full 3-letter country code; clubs wear 1–2 characters.
-func teamChipStyle(team: String, league: String?) -> (color: Color, label: String) {
+func teamChipStyle(team: String, league: String?, abbreviation: String? = nil) -> (color: Color, label: String) {
     let lg = (league ?? "").uppercased()
-    let abbr = shareTeamAbbrev(team, league: league)
+    let stored = abbreviation?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let abbr = stored?.isEmpty == false ? stored!.uppercased() : shareTeamAbbrev(team, league: league)
     let map: [String: String]? =
         lg == "MLB" || lg == "MLB HR" ? mlbTeamColors
         : lg == "NBA" || lg == "WNBA" ? nbaTeamColors
@@ -16961,11 +17071,12 @@ func teamChipStyle(team: String, league: String?) -> (color: Color, label: Strin
 struct TeamColorChip: View {
     let team: String
     let league: String?
+    var abbreviation: String? = nil
     var size: CGFloat = 40
     var dimmed: Bool = false
 
     var body: some View {
-        let style = teamChipStyle(team: team, league: league)
+        let style = teamChipStyle(team: team, league: league, abbreviation: abbreviation)
         let fontScale: CGFloat = style.label.count >= 3 ? 0.30 : (style.label.count == 2 ? 0.36 : 0.44)
         ZStack {
             Circle().fill(style.color)
@@ -17001,7 +17112,11 @@ func compactSharePick(pick: GaryPick, awayPicked: Bool, homePicked: Bool,
     guard awayPicked || homePicked else { return raw.uppercased() }
     let pickedFull = homePicked ? (pick.homeTeam ?? "") : (pick.awayTeam ?? "")
     let pickedShort = homePicked ? homeShort : awayShort
-    let abbrev = shareTeamAbbrev(pickedShort.isEmpty ? pickedFull : pickedShort, league: pick.league)
+    let stored = homePicked ? pick.homeTeamAbbreviation : pick.awayTeamAbbreviation
+    let cleanedStored = stored?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let abbrev = cleanedStored?.isEmpty == false
+        ? cleanedStored!.uppercased()
+        : shareTeamAbbrev(pickedShort.isEmpty ? pickedFull : pickedShort, league: pick.league)
     var teamWords = Set(pickedFull.lowercased().split(separator: " ").map(String.init))
     teamWords.formUnion(pickedShort.lowercased().split(separator: " ").map(String.init))
     var words = raw.split(separator: " ").map(String.init)
@@ -17113,8 +17228,10 @@ struct ShareCardView: View {
             }
 
             VStack(spacing: square ? 12 : 15) {
-                teamRow(name: awayShort, team: pick.awayTeam ?? awayShort, picked: awayPicked)
-                teamRow(name: homeShort, team: pick.homeTeam ?? homeShort, picked: homePicked)
+                teamRow(name: awayShort, team: pick.awayTeam ?? awayShort,
+                        abbreviation: pick.awayTeamAbbreviation, picked: awayPicked)
+                teamRow(name: homeShort, team: pick.homeTeam ?? homeShort,
+                        abbreviation: pick.homeTeamAbbreviation, picked: homePicked)
             }
             .padding(.top, square ? 18 : 24)
 
@@ -17168,9 +17285,10 @@ struct ShareCardView: View {
         .shadow(color: .black.opacity(0.55), radius: 26, y: 14)
     }
 
-    private func teamRow(name: String, team: String, picked: Bool) -> some View {
+    private func teamRow(name: String, team: String, abbreviation: String?, picked: Bool) -> some View {
         HStack(spacing: 13) {
-            TeamColorChip(team: team, league: pick.league, size: square ? 36 : 40, dimmed: !picked)
+            TeamColorChip(team: team, league: pick.league, abbreviation: abbreviation,
+                          size: square ? 36 : 40, dimmed: !picked)
             Text(name)
                 .font(GaryFonts.text(square ? 21 : 24, picked ? .bold : .semibold))
                 .foregroundStyle(.white.opacity(picked ? 1 : 0.62))
@@ -19526,7 +19644,10 @@ final class PropsSlateStore: ObservableObject {
                 try await SupabaseAPI.fetchPropPicks(date: yesterday, forceRefresh: forceRefresh)
             }
             yFetchOK = true
-            yPropsAll = fetched.filter { !$0.isTDPick }   // UNGATED — for the explicit Yesterday view
+            // Keep TD scorers in the canonical yesterday payload. The dedicated
+            // Props surface may still offer its NFL-TDs lens, while the Picks
+            // page now shows every NFL play together under the NFL tab.
+            yPropsAll = fetched   // UNGATED — for the explicit Yesterday view
             let yesterdaySportsNeeded = fetched.filter { !freshSports.contains(($0.effectiveLeague ?? "").uppercased()) }
             if !yesterdaySportsNeeded.isEmpty {
                 yProps = yesterdaySportsNeeded
@@ -19609,7 +19730,7 @@ final class PropsSlateStore: ObservableObject {
         var scoreMap: [String: String] = [:]
         var todayMap: [String: String] = [:]
         let yesterday = SupabaseAPI.yesterdayEST()
-        if let fetched = try? await SupabaseAPI.fetchDailyPicks(date: yesterday) {
+        if let fetched = try? await SupabaseAPI.fetchExactDatePicks(date: yesterday, forceRefresh: forceRefresh) {
             yPicksAll = fetched.filter { !($0.pick ?? "").isEmpty }   // UNGATED — explicit Yesterday view
             yPicks = yPicksAll.filter { !freshSports.contains(($0.league ?? "").uppercased()) }
         }
@@ -19662,15 +19783,16 @@ final class PropsSlateStore: ObservableObject {
 
     // MARK: Derived data
 
-    /// All non-TD props for the slate, sorted by game time. Per-sport recap:
+    /// All props for the slate, sorted by game time. NFL TD scorers remain in
+    /// the same game's carousel under the NFL tab; they are not a separate
+    /// sport. Per-sport recap:
     /// `yesterdayProps` only contains sports with NO fresh props today
     /// (filtered at load), so mixing them in gives every sport either today's
     /// slate or yesterday's results — the same rule the rest of the app follows.
     var slateProps: [PropPick] {
         let sortByTime: ([PropPick]) -> [PropPick] = { $0.sorted { ($0.commence_time ?? "") < ($1.commence_time ?? "") } }
-        let todayNonTD = allProps.filter { !$0.isTDPick }
-        let recap = showingYesterdayResults ? yesterdayProps.filter { !$0.isTDPick } : []
-        return sortByTime(todayNonTD + recap)
+        let recap = showingYesterdayResults ? yesterdayProps : []
+        return sortByTime(allProps + recap)
     }
 
     /// Group props by matchup, preserving first-seen order. Identical logic to
@@ -19745,9 +19867,10 @@ final class PropsSlateStore: ObservableObject {
     /// stamped) picks first — a series matchup (e.g. Blue Jays @ Red Sox on both
     /// Wed and Thu) otherwise returns today's UNGRADED pick under Yesterday,
     /// showing the wrong time and no CASHED/LOST stamp.
-    func gamePicksForMatchup(_ matchup: String, preferYesterday: Bool = false) -> [(pick: GaryPick, isYesterday: Bool)] {
-        let todayPicks = allMatchGamePicks(in: gamePicks, matchup: matchup)
-        let yPicks = allMatchGamePicks(in: yesterdayGamePicksAll, matchup: matchup)
+    func gamePicksForMatchup(_ matchup: String, league: String? = nil,
+                             preferYesterday: Bool = false) -> [(pick: GaryPick, isYesterday: Bool)] {
+        let todayPicks = allMatchGamePicks(in: gamePicks, matchup: matchup, league: league)
+        let yPicks = allMatchGamePicks(in: yesterdayGamePicksAll, matchup: matchup, league: league)
         if preferYesterday {
             if !yPicks.isEmpty { return yPicks.map { ($0, true) } }
             return todayPicks.map { ($0, false) }
@@ -19758,9 +19881,11 @@ final class PropsSlateStore: ObservableObject {
         return todayPicks.map { ($0, false) }
     }
 
-    private func allMatchGamePicks(in arr: [GaryPick], matchup: String) -> [GaryPick] {
+    private func allMatchGamePicks(in arr: [GaryPick], matchup: String, league: String?) -> [GaryPick] {
         let m = matchup.lowercased()
+        let scopedLeague = league?.uppercased()
         return arr.filter { p in
+            if let scopedLeague, (p.league ?? "").uppercased() != scopedLeague { return false }
             guard let h = p.homeTeam?.lowercased(), let a = p.awayTeam?.lowercased(), !h.isEmpty, !a.isEmpty else { return false }
             let hKey = h.split(separator: " ").last.map(String.init) ?? h
             let aKey = a.split(separator: " ").last.map(String.init) ?? a
@@ -19905,13 +20030,15 @@ enum HubTone {
 }
 
 enum HubLeagueSel {
-    case mlb, nba, wc
+    case mlb, nfl, ncaaf, nba, wc
     /// Short display label for the league toggle / empty state.
     var label: String {
         switch self {
         case .mlb: return "MLB"
+        case .nfl: return "NFL"
+        case .ncaaf: return "NCAAF"
         case .nba: return "NBA"
-        case .wc: return "WC"   // short — three leagues share one header row
+        case .wc: return "WC"
         }
     }
 }
@@ -19974,6 +20101,16 @@ enum SignalKind {
     case teamRecord
     // MLB team angle — bullpen workload (relief IP) over the last 3 games
     case bullpenFatigue
+    // Football lanes. These remain distinct instead of borrowing baseball
+    // labels, so an NFL/NCAAF edge always says exactly what its source measured.
+    case trenches, quarterback, passRush, coverage, paceScript
+    case redZone, turnoverEdge, explosivePlay, specialTeams, coaching
+    // Football-only product modules: live factor tracking on a game page and
+    // the post-publish market receipt in The Hub.
+    case theSweat, afterGary
+    // Football season-long fantasy lanes: current role, scoring-area work,
+    // opponent, and movement over recent games for both NFL and NCAAF.
+    case fantasyUsage, fantasyRedZone, fantasyMatchup, fantasyTrend
     var icon: String {
         switch self {
         case .streak: return "flame.fill"
@@ -20002,6 +20139,22 @@ enum SignalKind {
         case .batterVsArm: return "figure.baseball"
         case .teamRecord: return "person.3.fill"
         case .bullpenFatigue: return "bolt.slash.fill"
+        case .trenches: return "shield.lefthalf.filled"
+        case .quarterback: return "football.fill"
+        case .passRush: return "bolt.fill"
+        case .coverage: return "lock.shield.fill"
+        case .paceScript: return "metronome.fill"
+        case .redZone: return "scope"
+        case .turnoverEdge: return "arrow.triangle.2.circlepath"
+        case .explosivePlay: return "burst.fill"
+        case .specialTeams: return "figure.american.football"
+        case .coaching: return "person.crop.rectangle.stack.fill"
+        case .theSweat: return "waveform.path.ecg"
+        case .afterGary: return "arrow.trianglehead.2.clockwise.rotate.90"
+        case .fantasyUsage: return "chart.bar.fill"
+        case .fantasyRedZone: return "scope"
+        case .fantasyMatchup: return "person.2.fill"
+        case .fantasyTrend: return "chart.line.uptrend.xyaxis"
         }
     }
     var tint: Color {
@@ -20009,7 +20162,13 @@ enum SignalKind {
         case .hot: return HubPalette.green
         case .hrThreat: return HubPalette.green
         case .fantasyPickups: return HubPalette.green
-        case .starterForm, .firstInning, .runningGame, .parkWeather: return .white.opacity(0.6)
+        case .starterForm, .firstInning, .runningGame, .parkWeather,
+             .trenches, .quarterback, .passRush, .coverage, .paceScript,
+             .redZone, .turnoverEdge, .explosivePlay, .specialTeams, .coaching,
+             .theSweat, .afterGary:
+            return .white.opacity(0.6)
+        case .fantasyUsage, .fantasyRedZone, .fantasyMatchup, .fantasyTrend:
+            return GaryColors.nflAccent
         case .cold: return HubPalette.red
         case .regression: return HubPalette.red
         // Lane identity stays neutral; the tint only carries hot/cold meaning.
@@ -20044,6 +20203,22 @@ enum SignalKind {
         case .batterVsArm: return "VS THIS ARM"
         case .teamRecord: return "RECORD"
         case .bullpenFatigue: return "BULLPEN"
+        case .trenches: return "THE TRENCHES"
+        case .quarterback: return "QUARTERBACKS"
+        case .passRush: return "PASS RUSH"
+        case .coverage: return "COVERAGE"
+        case .paceScript: return "PACE & SCRIPT"
+        case .redZone: return "RED ZONE"
+        case .turnoverEdge: return "TURNOVERS"
+        case .explosivePlay: return "EXPLOSIVE PLAY"
+        case .specialTeams: return "SPECIAL TEAMS"
+        case .coaching: return "COACHING"
+        case .theSweat: return "THE SWEAT"
+        case .afterGary: return "AFTER GARY"
+        case .fantasyUsage: return "USAGE & ROLE"
+        case .fantasyRedZone: return "RED-ZONE ROLE"
+        case .fantasyMatchup: return "MATCHUP"
+        case .fantasyTrend: return "RECENT TREND"
         }
     }
 }
@@ -20098,6 +20273,9 @@ struct Signal: Identifiable {
     /// the doubleheader-safe attachment key: a game page only wears edges whose
     /// game id matches its own (Jul 22 2026, the Max Fried mixup).
     var gameId: String? = nil
+    /// Football live-factor payload (`the_sweat`). It remains separate from
+    /// generic edge detail so the game page can render the state compactly.
+    var sweat: SwapMeta? = nil
 }
 
 // MARK: - Picks Tab (per-game swipe carousel: Today's Top + game-by-game)
@@ -20286,6 +20464,28 @@ let nhlTeamKeywords: [String: [String]] = [
     "WPG": ["jets", "winnipeg"], "WSH": ["capitals"],
 ]
 
+/// NFL BDL team abbreviation -> stable city/mascot keywords. Football live
+/// rows carry the provider game id, but these aliases keep legacy/id-less
+/// results, Hub connections, share cards and score labels deterministic too.
+let nflTeamKeywords: [String: [String]] = [
+    "ARI": ["cardinals", "arizona"], "ATL": ["falcons", "atlanta"],
+    "BAL": ["ravens", "baltimore"], "BUF": ["bills", "buffalo"],
+    "CAR": ["panthers", "carolina"], "CHI": ["bears", "chicago"],
+    "CIN": ["bengals", "cincinnati"], "CLE": ["browns", "cleveland"],
+    "DAL": ["cowboys", "dallas"], "DEN": ["broncos", "denver"],
+    "DET": ["lions", "detroit"], "GB": ["packers", "green bay"],
+    "HOU": ["texans", "houston"], "IND": ["colts", "indianapolis"],
+    "JAX": ["jaguars", "jacksonville"], "JAC": ["jaguars", "jacksonville"],
+    "KC": ["chiefs", "kansas city"], "LV": ["raiders", "las vegas"],
+    "LAC": ["chargers"], "LAR": ["rams"], "MIA": ["dolphins", "miami"],
+    "MIN": ["vikings", "minnesota"], "NE": ["patriots", "new england"],
+    "NO": ["saints", "new orleans"], "NYG": ["giants"], "NYJ": ["jets"],
+    "PHI": ["eagles", "philadelphia"], "PIT": ["steelers", "pittsburgh"],
+    "SEA": ["seahawks", "seattle"], "SF": ["49ers", "san francisco"],
+    "TB": ["buccaneers", "bucs", "tampa bay"], "TEN": ["titans", "tennessee"],
+    "WSH": ["commanders", "washington"], "WAS": ["commanders", "washington"],
+]
+
 /// FIFA country codes -> nation names for the 48 qualified 2026 World Cup
 /// teams (generated from the live FIFA teams endpoint — same source the pick
 /// pipeline names matchups from).
@@ -20316,7 +20516,7 @@ let wcTeamKeywords: [String: [String]] = [
 /// real game still lands on a single key.
 let reverseTeamKeywordIndex: [String: Set<String>] = {
     var idx: [String: Set<String>] = [:]
-    for map in [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, wcTeamKeywords] {
+    for map in [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, nflTeamKeywords, wcTeamKeywords] {
         for (abbr, kws) in map {
             for kw in kws { idx[kw, default: []].insert(abbr.uppercased()) }
         }
@@ -20388,8 +20588,10 @@ func teamAbbrevFromName(_ name: String, league: String? = nil) -> String {
     case "MLB": maps = [mlbTeamKeywords]
     case "NBA": maps = [nbaTeamKeywords]
     case "NHL": maps = [nhlTeamKeywords]
+    case "NFL", "NFL TDS": maps = [nflTeamKeywords]
+    case "NCAAF": return Formatters.shortTeamName(name, league: league).uppercased()
     case "WC": maps = [wcTeamKeywords]
-    default: maps = [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, wcTeamKeywords]
+    default: maps = [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, nflTeamKeywords, wcTeamKeywords]
     }
     for map in maps {
         for (ab, kws) in map where kws.contains(where: { lower.contains($0) }) { return ab }
@@ -20493,18 +20695,18 @@ func splitTake(_ rationale: String?) -> (take: String?, rest: String?) {
 }
 
 
-/// League priority for defaults, headlines and board order while a
-/// championship round is running: a Finals game outranks the nightly MLB
-/// slate; the World Cup owns its own Home module but ranks above the daily
-/// slate elsewhere. Static for now — revisit in the fall, when the World
-/// Series vs NBA regular season flips this.
+/// League priority for defaults, headlines and Home board order. During the
+/// football season, the NFL and NCAAF desks lead, followed by MLB; inactive
+/// leagues naturally disappear because the callers only rank posted content.
 enum LeaguePriority {
     static func rank(_ league: String?) -> Int {
         switch (league ?? "").uppercased() {
-        case "NBA": return 0
-        case "WC", "SOCCER_WORLD_CUP", "SOCCER": return 1
+        case "NFL", "NFL TDS": return 0
+        case "NCAAF": return 1
         case "MLB": return 2
-        default: return 3
+        case "WC", "SOCCER_WORLD_CUP", "SOCCER": return 3
+        case "NBA": return 4
+        default: return 5
         }
     }
 }
@@ -20516,7 +20718,7 @@ func abbrGameMatches(_ abbrGame: String, matchup: String) -> Bool {
         .filter { $0.count >= 2 }
     guard abbrevs.count >= 2 else { return false }
     return abbrevs.allSatisfy { ab in
-        let kws = (mlbTeamKeywords[ab] ?? []) + (nbaTeamKeywords[ab] ?? []) + (nhlTeamKeywords[ab] ?? []) + (wcTeamKeywords[ab] ?? [])
+        let kws = (mlbTeamKeywords[ab] ?? []) + (nbaTeamKeywords[ab] ?? []) + (nhlTeamKeywords[ab] ?? []) + (nflTeamKeywords[ab] ?? []) + (wcTeamKeywords[ab] ?? [])
         return kws.contains { hay.contains($0) }
     }
 }
@@ -20528,7 +20730,7 @@ func orientedFinalScores(_ ls: LiveScore, awayTeam: String?, homeTeam: String?) 
     guard let a = ls.away_score, let h = ls.home_score else { return nil }
     func matches(_ abbr: String?, _ team: String?) -> Bool {
         guard let ab = abbr?.uppercased(), let hay = team?.lowercased(), !hay.isEmpty else { return false }
-        let kws = (mlbTeamKeywords[ab] ?? []) + (nbaTeamKeywords[ab] ?? []) + (nhlTeamKeywords[ab] ?? []) + (wcTeamKeywords[ab] ?? [])
+        let kws = (mlbTeamKeywords[ab] ?? []) + (nbaTeamKeywords[ab] ?? []) + (nhlTeamKeywords[ab] ?? []) + (nflTeamKeywords[ab] ?? []) + (wcTeamKeywords[ab] ?? [])
         return kws.contains { hay.contains($0) }
     }
     if matches(ls.away_abbr, awayTeam) || matches(ls.home_abbr, homeTeam) { return (a, h) }
@@ -20658,17 +20860,21 @@ struct PicksCarouselView: View {
         // Today's slate leagues too — so a sport with games tonight but no picks
         // yet still gets a filter chip (matches the look-ahead matchups below).
         s.formUnion(store.slate.compactMap { ($0.league ?? "").uppercased() }.filter { !$0.isEmpty })
+        // Football is a first-class Picks desk, not an off-season overlay item.
+        // Keep both chips reachable before the first weekly pick lands; their
+        // empty state remains honest until the slate or card arrives.
+        s.formUnion(["NFL", "NCAAF"])
         // The MLB HR lane is retired — guarantee no HR chip even if a non-HR prop
         // arrives mislabeled "MLB HR" (its card already routes to MLB via propSportKey).
         s.remove("MLB HR")
-        // Display priority — WC leads, then MLB (user call Jun 13 2026: the World
-        // Cup outranks MLB while it's on, so it sits closest to ALL). Anything
-        // else falls back to alphabetical.
+        // Football-season priority: NFL, then NCAAF, then MLB. A league with a
+        // game today still outranks an idle league, so preseason/off-day tabs do
+        // not displace the active board.
         // A league with games TODAY always outranks an idle one (founder,
         // Jul 12: WC before MLB on a no-WC day made no sense); canonical
         // priority only breaks ties inside each group.
         let todayLeagues = Set(store.slate.compactMap { ($0.league ?? "").uppercased() })
-        let priority: [String: Int] = ["WC": 0, "MLB": 1]
+        let priority: [String: Int] = ["NFL": 0, "NCAAF": 1, "MLB": 2, "WC": 3]
         // ALL is flag-gated (founder, Jul 13: league chips only) — the chip
         // drops but every ALL code path below survives for an easy restore.
         return (AppFlags.picksAllTab ? ["ALL"] : []) + s.sorted { a, b in
@@ -20711,13 +20917,13 @@ struct PicksCarouselView: View {
     /// today's matchup tabs or yesterday's games leak into TODAY (the
     /// "Jays @ Sox · WEDNESDAY 6:45 PM" bug under a sport with no props yet).
     private var filteredTodayProps: [PropPick] {
-        let today = store.allProps.filter { !$0.isTDPick && !isHomeRunProp($0) }   // HR retired from Picks
+        let today = store.allProps.filter { !isHomeRunProp($0) }   // HR retired from Picks; NFL TDs stay under NFL
         return sport == "ALL" ? today : today.filter { propSportKey($0) == sport }
     }
     /// Yesterday's own props (sport-scoped, no TD picks) — the source for the
     /// Yesterday matchup row so every settled game shows, not just slate leftovers.
     private var filteredYesterdayProps: [PropPick] {
-        let yp = store.yesterdayPropsAll.filter { !$0.isTDPick && !isHomeRunProp($0) }   // ungated: all of yesterday, HR retired
+        let yp = store.yesterdayPropsAll.filter { !isHomeRunProp($0) }   // ungated: all of yesterday; NFL TDs stay under NFL
         return sport == "ALL" ? yp : yp.filter { propSportKey($0) == sport }
     }
     /// PERF#1(b): the heavy grouping/merge/look-ahead, memoized into `gamesMemo`
@@ -20841,8 +21047,12 @@ struct PicksCarouselView: View {
             let gKey = Self.matchupKey(g.matchup)
             let gid = bdlGameId(for: g)
             idx[Self.gameIdentityKey(g.matchup, g.commence)] = connections.filter { s in
-                guard abbrGameMatches(s.game, matchup: hay) || Self.matchupKey(s.game) == gKey else { return false }
+                // Exact provider identity wins before any team-name parsing.
+                // NCAAF insight rows intentionally use provider abbreviations,
+                // while slate rows carry full school names; rejecting on the
+                // fuzzy guard first made correctly keyed college intel vanish.
                 if let gid, let sid = s.gameId.flatMap({ Int($0) }) { return sid == gid }
+                guard abbrGameMatches(s.game, matchup: hay) || Self.matchupKey(s.game) == gKey else { return false }
                 if g.dh, s.gameId != nil { return false }   // id present but unverifiable — keep it off
                 return true
             }
@@ -20879,10 +21089,48 @@ struct PicksCarouselView: View {
     /// attachment). nil when the slate hasn't landed or the row predates ids.
     private func bdlGameId(for g: (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])) -> Int? {
         let key = Self.gameIdentityKey(g.matchup, g.commence)
+        let scopedLeague = g.props.first?.effectiveLeague?.uppercased()
+            ?? (sport == "ALL" ? nil : sport.uppercased())
         return store.slate.first {
-            Self.gameIdentityKey("\($0.away_team ?? "") @ \($0.home_team ?? "")",
-                                 $0.commence_time.flatMap(parseISO8601)) == key
+            let rowLeague = ($0.league ?? "").uppercased()
+            return (scopedLeague == nil || rowLeague == scopedLeague)
+                && Self.gameIdentityKey("\($0.away_team ?? "") @ \($0.home_team ?? "")",
+                                        $0.commence_time.flatMap(parseISO8601)) == key
         }?.bdl_game_id
+    }
+
+    /// Carry league identity into a game page even when it is a slate-only
+    /// morning placeholder with no pick, prop, edge, or scout row yet. Without
+    /// this, football look-aheads briefly mounted the baseball sections and an
+    /// untyped INCOMING card until a later payload happened to supply a league.
+    private func league(for g: (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])) -> String? {
+        let activeLeague = sport == "ALL" ? nil : sport.uppercased()
+        if let league = g.props.first?.effectiveLeague, !league.isEmpty,
+           activeLeague == nil || league.uppercased() == activeLeague {
+            return league.uppercased()
+        }
+
+        let key = Self.gameIdentityKey(g.matchup, g.commence)
+        if let league = store.slate.first(where: {
+            let rowLeague = ($0.league ?? "").uppercased()
+            return (activeLeague == nil || rowLeague == activeLeague)
+                && Self.gameIdentityKey("\($0.away_team ?? "") @ \($0.home_team ?? "")",
+                                        $0.commence_time.flatMap(parseISO8601)) == key
+        })?.league, !league.isEmpty {
+            return league.uppercased()
+        }
+
+        let dayPicks = pickDay == .today ? store.gamePicks : store.yesterdayGamePicksAll
+        if let league = dayPicks.first(where: {
+            let matchup = "\($0.awayTeam ?? "") @ \($0.homeTeam ?? "")"
+            let pickLeague = ($0.league ?? "").uppercased()
+            return (activeLeague == nil || pickLeague == activeLeague)
+                && Self.gameIdentityKey(matchup, $0.commence_time.flatMap(parseISO8601)) == key
+        })?.league, !league.isEmpty {
+            return league.uppercased()
+        }
+
+        return activeLeague
     }
 
     /// Per-GAME live lookup: BDL id first (doubleheader-exact), matchup-string
@@ -21070,10 +21318,15 @@ struct PicksCarouselView: View {
             rebuildMemo()          // fold the just-loaded connections into the edge index
         }
         .task {
-            // Masthead/strip context — both cached, both safe to miss (the record
-            // line and O/U just stay off until they land).
+            // Strip context is cached and safe to miss; its O/U simply stays off.
             if stripBoard == nil { stripBoard = await TodayBoardCache.get() }
-            if record7 == nil { record7 = await SupabaseAPI.fetchSevenDayPickRecord() }
+        }
+        .task(id: sport) {
+            // Each league owns its record. Clear the previous desk immediately so
+            // NFL/NCAAF can never flash MLB's L7 while their scoped fetch resolves.
+            record7 = nil
+            let scopedLeague = sport == "ALL" ? nil : sport
+            record7 = await SupabaseAPI.fetchSevenDayPickRecord(league: scopedLeague)
         }
         .task {
             // Keep the SHARED live-score cache warm while this tab is on screen — the
@@ -21108,7 +21361,7 @@ struct PicksCarouselView: View {
             switch verb {
             case "picks": if let idx = Int(arg) { withAnimation { page = idx } }
             case "picksday": withAnimation { pickDay = arg == "yesterday" ? .yesterday : .today }
-            case "picksport": withAnimation { sport = arg.uppercased() }
+            case "picksport": sport = arg.uppercased()
             default: break
             }
         }
@@ -21196,7 +21449,11 @@ struct PicksCarouselView: View {
                                       // bucket ride this page — the twin keeps its own.
                                       entries: {
                                           guard sport != "MLB HR" else { return [] }
-                                          let all = store.gamePicksForMatchup(g.matchup, preferYesterday: pickDay == .yesterday)
+                                          let all = store.gamePicksForMatchup(
+                                              g.matchup,
+                                              league: league(for: g),
+                                              preferYesterday: pickDay == .yesterday
+                                          )
                                           guard g.dh else { return all }
                                           return all.filter {
                                               Self.timeBucket($0.pick.commence_time.flatMap(parseISO8601)) == Self.timeBucket(g.commence)
@@ -21205,7 +21462,8 @@ struct PicksCarouselView: View {
                                       gamePickResult: { store.gamePickResult($0, forYesterday: pickDay == .yesterday) }, resultForProp: { store.resultForProp($0, forYesterday: pickDay == .yesterday) },
                                       edges: edges(for: g), bdlGameId: bdlGameId(for: g),
                                       onTapProp: { selectedProp = $0 },
-                                      onSeeYesterday: { withAnimation(.easeInOut(duration: 0.25)) { pickDay = .yesterday; page = 0 } })
+                                      onSeeYesterday: { withAnimation(.easeInOut(duration: 0.25)) { pickDay = .yesterday; page = 0 } },
+                                      pageLeagueHint: league(for: g))
                             .padding(.bottom, 130)
                     }
                     .refreshable { await store.refresh() }
@@ -21215,6 +21473,10 @@ struct PicksCarouselView: View {
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
+            // A league switch replaces the page controller immediately. Keeping
+            // the old controller alive for an animated crossfade briefly painted
+            // MLB cards underneath the NFL header even though the data was scoped.
+            .id("\(sport)-\(pickDay == .today ? "today" : "yesterday")")
         }
     }
 
@@ -21283,7 +21545,7 @@ struct PicksCarouselView: View {
         // The whole calendar, not just what's live (founder, Aug 4).
         let full = opts + LeagueOverlayState.offSeasonOptions(excluding: Set(sports))
         LeagueOverlayState.shared.present(full) { picked in
-            withAnimation(.easeInOut(duration: 0.2)) { sport = picked }
+            sport = picked
         }
     }
 
@@ -21362,9 +21624,13 @@ struct PicksCarouselView: View {
         let on = (index == page)
         let lg = gameLeague(g)
         let parts = g.matchup.components(separatedBy: " @ ")
-        let label = parts.count == 2
-            ? "\(teamAbbrev(parts[0], league: lg)) @ \(teamAbbrev(parts[1], league: lg))"
-            : g.matchup.uppercased()
+        let official = boardAbbreviations(for: g)
+        let label = official.map { "\($0.away) @ \($0.home)" }
+            ?? (lg == "NCAAF"
+                ? g.matchup.uppercased()
+                : parts.count == 2
+                ? "\(teamAbbrev(parts[0], league: lg)) @ \(teamAbbrev(parts[1], league: lg))"
+                : g.matchup.uppercased())
         let timeLabel = g.time.replacingOccurrences(of: " ET", with: "")
         let total = totalFor(g)
         return Button { withAnimation(.easeInOut(duration: 0.25)) { page = index } } label: {
@@ -21415,6 +21681,46 @@ struct PicksCarouselView: View {
         }?.total
     }
 
+    /// Official provider abbreviations, resolved by exact provider game id and
+    /// league before any legacy name/time fallback. This is especially important
+    /// for NCAAF, where a mascot-derived fallback can turn "Alabama Crimson Tide"
+    /// into the incorrect "TID".
+    private func boardAbbreviations(for g: (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])) -> (away: String, home: String)? {
+        guard pickDay == .today else { return nil }
+        let league = gameLeague(g).uppercased()
+
+        if let gameId = bdlGameId(for: g),
+           let live = LiveScoreCache.shared.status(forGameId: gameId),
+           (live.league ?? "").uppercased() == league,
+           let away = live.away_abbr?.trimmingCharacters(in: .whitespacesAndNewlines),
+           let home = live.home_abbr?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !away.isEmpty, !home.isEmpty {
+            return (away.uppercased(), home.uppercased())
+        }
+
+        guard let rows = stripBoard?.board else { return nil }
+        let key = Self.gameIdentityKey(g.matchup, g.commence)
+        let row: TomorrowBoardRow?
+        if let gameId = bdlGameId(for: g) {
+            row = rows.first {
+                $0.bdl_game_id == gameId && ($0.league ?? "").uppercased() == league
+            }
+        } else {
+            // Name/time matching exists only for legacy rows that carry no id.
+            row = rows.first {
+                $0.bdl_game_id == nil
+                    && ($0.league ?? "").uppercased() == league
+                    && Self.gameIdentityKey("\($0.away_team ?? "") @ \($0.home_team ?? "")",
+                                            $0.commence_time.flatMap(parseISO8601)) == key
+            }
+        }
+        guard let row,
+        let away = row.away_abbr?.trimmingCharacters(in: .whitespacesAndNewlines),
+        let home = row.home_abbr?.trimmingCharacters(in: .whitespacesAndNewlines),
+        !away.isEmpty, !home.isEmpty else { return nil }
+        return (away.uppercased(), home.uppercased())
+    }
+
     /// LIVE / FINAL second line for a strip block; nil pre-game (the block
     /// shows time + O/U instead). Yesterday's FINAL comes from the graded
     /// result, not the live-score cache (which only reliably has today's
@@ -21447,8 +21753,9 @@ struct PicksCarouselView: View {
         case "MLB", "MLB HR": maps = [mlbTeamKeywords]
         case "NBA": maps = [nbaTeamKeywords]
         case "NHL": maps = [nhlTeamKeywords]
+        case "NFL", "NFL TDS": maps = [nflTeamKeywords]
         case "WC": maps = [wcTeamKeywords]
-        default: maps = [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, wcTeamKeywords]
+        default: maps = [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, nflTeamKeywords, wcTeamKeywords]
         }
         for map in maps {
             for (ab, kws) in map where kws.contains(where: { lower.contains($0) }) { return ab }
@@ -21514,7 +21821,7 @@ struct PicksCarouselView: View {
                         .foregroundStyle(GaryColors.gold)
                 }
                 .pageGutter().padding(.top, 20)
-                Text("The league is dark — Gary's board returns with the next fixture.")
+                Text("Gary's board returns with the next slate.")
                     .font(GaryFonts.text(13))
                     .foregroundStyle(GaryColors.sectionSub)
                     .pageGutter().padding(.top, 8)
@@ -21561,17 +21868,7 @@ struct PicksCarouselView: View {
     /// abbreviation map. Reads the game's own props first, then the day's
     /// picks / slate, falling back to the active filter.
     private func gameLeague(_ g: (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])) -> String {
-        if let lg = g.props.first?.effectiveLeague, !lg.isEmpty { return lg.uppercased() }
-        let key = Self.matchupKey(g.matchup)
-        if let p = (store.gamePicks + store.yesterdayGamePicks).first(where: {
-            Self.matchupKey("\($0.awayTeam ?? "") @ \($0.homeTeam ?? "")") == key }) {
-            return (p.league ?? "").uppercased()
-        }
-        if let s = store.slate.first(where: {
-            Self.matchupKey("\($0.away_team ?? "") @ \($0.home_team ?? "")") == key }) {
-            return (s.league ?? "").uppercased()
-        }
-        return sport == "ALL" ? "" : sport
+        league(for: g) ?? ""
     }
 
     /// Best-effort: surface edges whose "ABBR @ ABBR" shares a team token with
@@ -21588,8 +21885,8 @@ struct PicksCarouselView: View {
         let gKey = Self.matchupKey(g.matchup)
         let gid = bdlGameId(for: g)
         return connections.filter { s in
-            guard abbrGameMatches(s.game, matchup: hay) || Self.matchupKey(s.game) == gKey else { return false }
             if let gid, let sid = s.gameId.flatMap({ Int($0) }) { return sid == gid }
+            guard abbrGameMatches(s.game, matchup: hay) || Self.matchupKey(s.game) == gKey else { return false }
             if g.dh, s.gameId != nil { return false }
             return true
         }
@@ -21629,6 +21926,7 @@ struct PicksCarouselView: View {
     /// the Hub's front page excludes; Fantasy remains their one home.
     static let fantasyOnlyKinds: Set<SignalKind> = [
         .fantasyPickups, .twoStart, .closerWatch, .returnWatch, .cutList,
+        .fantasyUsage, .fantasyRedZone, .fantasyMatchup, .fantasyTrend,
     ]
 
     private func loadConnections() async {
@@ -21734,6 +22032,13 @@ struct TeasedPickCard: View {
     var onSeeYesterday: (() -> Void)? = nil
 
     private var gameStarted: Bool { commence.map { $0 <= Date() } ?? false }
+    private var eventName: String {
+        switch league?.uppercased() {
+        case "NFL", "NCAAF": return "kickoff"
+        case "NBA", "WC": return "tipoff"
+        default: return "first pitch"
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -21761,7 +22066,7 @@ struct TeasedPickCard: View {
 
                 Text(gameStarted
                      ? "Gary's call didn't post for this one. The rest of the board is live."
-                     : "Gary posts his call ~90 minutes before first pitch")
+                     : "Gary posts his call ~90 minutes before \(eventName)")
                     .font(GaryFonts.text(13.5, .medium))
                     .foregroundStyle(.white.opacity(0.6))
                     .lineLimit(1).minimumScaleFactor(0.8)
@@ -22725,7 +23030,7 @@ fileprivate struct ScoutNotebookSection: View {
 /// Aug 6). One contained section: its own title, then the ledger. Renders
 /// nothing when the game has no series row or the row predates the meetings
 /// payload, so a thin day simply drops the section instead of showing a stub.
-fileprivate struct GameH2HSection: View {
+struct GameH2HSection: View {
     let edges: [Signal]
 
     private var row: Signal? {
@@ -22794,10 +23099,9 @@ fileprivate struct ScoutBigNumbersSection: View {
         return n > 0 ? "+\(n)" : "\(n)"
     }
 
-    /// THE LINE — open → now, one book, display only (never on Gary's desk).
-    /// Always renders once lines are posted: a real move shows the arrow and
-    /// the side the market came toward; an unmoved line says so honestly with
-    /// the favorite's price as the numeral.
+    /// THE LINE — the current price leads, one book, display only (never on
+    /// Gary's desk). The sentence carries open → now so the movement remains
+    /// explicit without repeating the full ladder in the oversized numeral.
     private var lineMoveRow: Row? {
         var best: (name: String, open: Double, cur: Double, delta: Double)? = nil
         for (open, cur, name) in [(d.mlOpenAway, d.mlAway, d.awayName),
@@ -22808,8 +23112,8 @@ fileprivate struct ScoutBigNumbersSection: View {
         }
         if let b = best {
             return Row(id: "line-move",
-                       numeral: "\(Self.american(b.open))→\(Self.american(b.cur))",
-                       bold: "The market has come toward the \(b.name) since open", rest: "")
+                       numeral: Self.american(b.cur),
+                       bold: "\(b.name) opened \(Self.american(b.open)) and are now \(Self.american(b.cur))", rest: "")
         }
         // No move — show the favorite holding its number.
         guard let ha = d.mlAway, let hh = d.mlHome else { return nil }
@@ -22978,6 +23282,10 @@ struct PicksGamePage: View {
     /// Flips the whole Picks view to YESTERDAY's board/results — wired from the
     /// locked look-ahead card so a user with no pick yet can go see last night.
     var onSeeYesterday: (() -> Void)? = nil
+    /// League carried by the carousel's exact slate identity. This is present
+    /// before picks/props/insights and prevents a football placeholder from
+    /// falling through to baseball's page modules while morning data loads.
+    var pageLeagueHint: String? = nil
 
     /// The shared day board — feeds THE SCOUT and lets the league branches
     /// below engage from the MORNING, before any pick or intel row exists
@@ -23009,20 +23317,27 @@ struct PicksGamePage: View {
         Array(group.props.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.prefix(5))
     }
 
-    /// MLB games swap the flat GAME INTEL list for the modular MLB dashboard.
-    private var isMLB: Bool {
-        if (group.props.first?.effectiveLeague ?? "").uppercased() == "MLB" { return true }
-        if (entries.first?.pick.league ?? "").uppercased() == "MLB" { return true }
-        if scoutRow?.league?.uppercased() == "MLB" { return true }
-        return edges.contains { $0.league == .mlb }
+    /// One league identity for the whole page. Prefer the card payload, then
+    /// the slate row, then a fetched edge so a morning look-ahead still mounts
+    /// the correct sport surface before Gary's pick arrives.
+    private var pageLeague: String {
+        if let league = pageLeagueHint, !league.isEmpty { return league.uppercased() }
+        if let league = group.props.first?.effectiveLeague, !league.isEmpty { return league.uppercased() }
+        if let league = entries.first?.pick.league, !league.isEmpty { return league.uppercased() }
+        if let league = scoutRow?.league, !league.isEmpty { return league.uppercased() }
+        return edges.first?.league.label ?? ""
     }
+
+    /// MLB games swap the flat GAME INTEL list for the modular MLB dashboard.
+    private var isMLB: Bool { pageLeague == "MLB" }
+    private var isFootball: Bool { pageLeague == "NFL" || pageLeague == "NCAAF" }
 
     /// "Blue Jays @ Red Sox" — mascot-short matchup name for the white page header.
     /// Keeps two-word mascots whole and WC nations intact (never the bare last word).
     private var matchupTitle: String {
         let parts = group.matchup.components(separatedBy: " @ ")
         guard parts.count == 2 else { return group.matchup }
-        let lg = (group.props.first?.effectiveLeague ?? "").uppercased()
+        let lg = pageLeague
         return "\(Formatters.shortTeamName(parts[0], league: lg)) @ \(Formatters.shortTeamName(parts[1], league: lg))"
     }
 
@@ -23067,20 +23382,17 @@ struct PicksGamePage: View {
                     }
                     .padding(.horizontal, 16)
                 }
-            } else if !(heroScore?.isLive ?? false) && !(heroScore?.isFinal ?? false) {
-                // Look-ahead placeholder in the pick's slot — the game's on the
-                // board, Gary's pick lands ~90 min out, and the intel below is
-                // live now. Only for an UPCOMING game (a live/final game shows its
-                // score on the LiveScoreStrip above; "drops ~90 min before" copy
-                // would be wrong once the game has started).
-                // No pick yet → the standard INCOMING card (no blur, Jul 3): a real
-                // pick card whose headline says the pick isn't here YET. Keeps the
-                // page's design language intact and links back to last night.
-                TeasedPickCard(league: group.props.first?.effectiveLeague ?? entries.first?.pick.league,
+            } else {
+                // No pick yet → keep the standard placeholder in the pick slot.
+                // Its exact game commence time is the source of truth: upcoming
+                // games say INCOMING; once kickoff/first pitch passes, the same
+                // card says NO PICK THIS GAME. Do not hide that honest state merely
+                // because the live-score cache also knows the game is live/final.
+                TeasedPickCard(league: pageLeague.isEmpty ? nil : pageLeague,
                                time: group.time.isEmpty ? nil : group.time,
-                               // The upcoming-game guard above leans on the live cache,
-                               // which can MISS a game entirely — the card checks the
-                               // real clock itself and flips to the honest no-pick state.
+                               // The slate/group timestamp is preferred; a prop's
+                               // game timestamp is a defensive fallback for rows
+                               // assembled before the slate finishes hydrating.
                                commence: group.commence ?? parseISO8601(group.props.first?.commence_time ?? ""),
                                onSeeYesterday: onSeeYesterday)
                     .padding(.horizontal, 16)
@@ -23096,6 +23408,15 @@ struct PicksGamePage: View {
             // surface, dormant outside All-Star week anyway).
             if !AppFlags.storeSafe, entries.contains(where: { ($0.pick.type ?? "") == "special" }) {
                 DerbyContestSection()
+            } else if isFootball {
+                FootballGameIntelView(
+                    league: pageLeague,
+                    matchup: group.matchup,
+                    picks: entries.map(\.pick),
+                    props: topProps,
+                    row: scoutRow,
+                    edges: edges
+                )
             } else {
             // The Scout Trio (founder, Jul 22): the three approved mocks
             // stacked in his order — THE TUG, THE NOTEBOOK, THE BIG NUMBERS.
@@ -23120,7 +23441,7 @@ struct PicksGamePage: View {
                 // a synthetic lineup row carries the 8 contestants, so the
                 // standard field view + tappable player cards just work.
                 MLBGameIntelView(matchup: group.matchup, edges: edges, showHeader: false)
-            } else if !entries.contains(where: { ($0.pick.type ?? "") == "special" }) {
+            } else if !isFootball && !entries.contains(where: { ($0.pick.type ?? "") == "special" }) {
                 EdgesSection(title: "GAME INTEL", edges: edges)
             }
         }
@@ -23595,6 +23916,27 @@ extension SignalKind {
         case "closer_watch": return .closerWatch
         case "return_watch": return .returnWatch
         case "cut_list": return .cutList
+        // Football game-intel lanes. Accept the compact category names and the
+        // descriptive names used by older desk experiments; both resolve to one
+        // honest UI label instead of being dropped as unknown.
+        case "trenches", "the_trenches", "ol_dl", "line_play", "line_of_scrimmage": return .trenches
+        case "quarterback", "quarterbacks", "qb", "qb_matchup": return .quarterback
+        case "pass_rush", "pressure", "pressure_rate": return .passRush
+        case "coverage", "secondary", "coverage_matchup": return .coverage
+        case "pace_script", "pace_and_script", "game_script", "tempo": return .paceScript
+        case "red_zone", "red_zone_edge", "red_zone_td": return .redZone
+        case "turnover_edge", "turnovers", "turnover_margin": return .turnoverEdge
+        case "explosive_play", "explosive_plays", "explosiveness": return .explosivePlay
+        case "special_teams", "special_teams_edge": return .specialTeams
+        case "coaching", "coaching_edge": return .coaching
+        case "the_sweat", "sweat": return .theSweat
+        case "after_gary", "after gary": return .afterGary
+        // NFL fantasy lanes. These are kept separate from MLB waiver/closer
+        // categories because their evidence and labels are sport-specific.
+        case "fantasy_usage", "usage", "usage_role", "snap_share", "target_share", "rush_share": return .fantasyUsage
+        case "fantasy_red_zone", "red_zone_role", "goal_line_role": return .fantasyRedZone
+        case "fantasy_matchup", "player_matchup": return .fantasyMatchup
+        case "fantasy_trend", "recent_usage", "recent_trend": return .fantasyTrend
         default: return nil
         }
     }
@@ -23604,6 +23946,8 @@ extension HubLeagueSel {
     static func from(_ raw: String?) -> HubLeagueSel? {
         switch (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased() {
         case "MLB": return .mlb
+        case "NFL", "AMERICAN_FOOTBALL_NFL": return .nfl
+        case "NCAAF", "NCAA FOOTBALL", "AMERICAN_FOOTBALL_NCAAF": return .ncaaf
         case "NBA": return .nba
         case "WC", "WORLD CUP", "SOCCER_WORLD_CUP": return .wc
         default: return nil
@@ -23652,10 +23996,14 @@ extension Connection {
             nrfi: (meta?.kind == "nrfi") ? meta : nil,
             slateDate: date,
             weather: (meta?.kind == "park_weather") ? meta : nil,
-            fantasy: ["fantasy_pickup", "two_start", "closer_watch", "return_watch", "cut_list"]
+            fantasy: ["fantasy_pickup", "two_start", "closer_watch", "return_watch", "cut_list",
+                      "fantasy_usage", "usage", "usage_role", "snap_share", "target_share", "rush_share",
+                      "fantasy_red_zone", "red_zone_role", "goal_line_role",
+                      "fantasy_matchup", "player_matchup", "fantasy_trend", "recent_usage", "recent_trend"]
                 .contains(meta?.kind ?? "") ? meta : nil,
             position: meta?.position,
-            gameId: game_id
+            gameId: game_id,
+            sweat: kd == .theSweat ? meta : nil
         )
     }
 }
@@ -25257,11 +25605,13 @@ struct TaleOfTapeSection: View {
             "FIELD_POSITION": "Yards/G",
             // NEW: Individual NFL stat tokens (flattened)
             "POINTS_PER_GAME": "Points/Game",
+            "POINTS_GM": "Points/Game",
             "YARDS_PER_GAME": "Yards/Game",
             "YPG": "Yards/Game",
             "TOTAL_YARDS_PER_GAME": "Total YPG",
             "YARDS_PER_PLAY": "Yards/Play",
             "OPP_POINTS_PER_GAME": "Opp PPG",
+            "OPP_PTS_GM": "Opp PPG",
             "OPP_PPG": "Opp PPG",
             "OPP_YARDS_PER_GAME": "Opp Yards",
             "OPP_YPG": "Opp Yards",
@@ -25279,7 +25629,9 @@ struct TaleOfTapeSection: View {
             "INTS": "INTs",
             "RUSH_TDS": "Rush TDs",
             "RUSHING_YARDS_PER_GAME": "Rush YPG",
+            "RUSH_YDS_GM": "Rush YPG",
             "RUSH_YPG": "Rush YPG",
+            "PASS_YDS_GM": "Pass YPG",
             "YARDS_PER_CARRY": "Yds/Carry",
             "RECEIVING_YARDS_PER_GAME": "Recv YPG",
             "RECV_YPG": "Recv YPG",
@@ -25454,7 +25806,7 @@ struct TaleOfTapeSection: View {
                                         .font(.system(size: 8, weight: .bold))
                                         .foregroundStyle(greenAccent)
                                 }
-                                Text(displayName(for: token))
+                                Text(stat.name ?? displayName(for: token))
                                     .font(.caption)
                                     .foregroundStyle(.white.opacity(0.62))
                                     .lineLimit(1)

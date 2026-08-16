@@ -580,13 +580,18 @@ struct HubView: View {
             let end = cal.date(from: comps)!
             return Date() >= start && Date() < end
         }()
-        let order: [HubLeagueSel] = [.nba, .wc, .mlb]
+        let order: [HubLeagueSel] = [.mlb, .nfl, .ncaaf, .nba, .wc]
         // All-Star break (Jul 13-14 2026): a dark MLB slate is still an MLB
         // day — keep the tab so the All-Star card has a home (founder call;
         // same date-window treatment WC already gets). Self-retires Jul 15.
         let allStarActive = ["2026-07-13", "2026-07-14"].contains(SupabaseAPI.todayEST())
+        let permanentDesks: Set<HubLeagueSel> = [.mlb, .nfl, .ncaaf]
         let present = order.filter { lg in
-            (lg == .wc && wcActive) || (lg == .mlb && allStarActive) || fetched.contains { $0.league == lg }
+            permanentDesks.contains(lg)
+                || (lg == .wc && wcActive)
+                || (lg == .mlb && allStarActive)
+                || fetched.contains { $0.league == lg }
+                || (todayBoard?.board ?? []).contains { ($0.league ?? "").uppercased() == lg.label }
         }
         return present.isEmpty ? [.mlb] : present
     }
@@ -594,6 +599,7 @@ struct HubView: View {
     private func load() async {
         let date = SupabaseAPI.todayEST()
         let gradedDate0 = SupabaseAPI.hubGradedDateEST()
+        let shouldChooseInitialLeague = !didLoad
         async let rateF = SupabaseAPI.fetchInsightHitRate(date: gradedDate0)
         async let nightF = SupabaseAPI.fetchNightHighlights(date: gradedDate0)
         async let streaksF = SupabaseAPI.fetchStreaks()
@@ -688,7 +694,8 @@ struct HubView: View {
             }
             // Land on the highest-priority league with edges tonight, without
             // stomping a user-picked league that still has rows.
-            if !collected.contains(where: { $0.league == sel }),
+            if shouldChooseInitialLeague,
+               !collected.contains(where: { $0.league == sel }),
                let top = availableLeagues.first(where: { lg in collected.contains { $0.league == lg } }) {
                 sel = top
             }
@@ -724,11 +731,21 @@ struct HubView: View {
         case .hrThreat:                              anchor = HubView.hrThreatsLive ? "hr" : "bats"
         case .starterForm, .teamRecord,
              .bullpenFatigue, .ballpark:             anchor = sel == .wc ? "matchups" : "arms"
-        case .situational:                           anchor = sel == .wc ? "matchups" : "arms"
-        case .h2h, .injury, .firstInning,
+        case .situational:                           anchor = (sel == .nfl || sel == .ncaaf) ? "edges" : (sel == .wc ? "matchups" : "arms")
+        case .injury:                                anchor = (sel == .nfl || sel == .ncaaf) ? "field" : "matchups"
+        case .h2h, .firstInning,
              .runningGame, .parkWeather:             anchor = "matchups"
         case .tournament, .advancement:              anchor = "cup"
         case .xgRegression, .xgRecap:                anchor = "numbers"
+        case .trenches, .passRush:                   anchor = "trenches"
+        case .quarterback:                           anchor = "field"
+        case .coverage, .paceScript, .redZone,
+             .turnoverEdge, .explosivePlay,
+             .specialTeams, .coaching:               anchor = "edges"
+        case .afterGary:                              anchor = "afterGary"
+        case .theSweat:                               anchor = "edges"
+        case .fantasyUsage, .fantasyRedZone,
+             .fantasyMatchup, .fantasyTrend:          anchor = "fantasy"
         }
         openBeats.insert(anchor)
         pendingScrollAnchor = anchor
@@ -797,7 +814,13 @@ struct HubView: View {
     /// was filtered).
     private static let fantasyKinds: Set<SignalKind> = [
         .fantasyPickups, .twoStart, .closerWatch, .returnWatch, .cutList,
+        .fantasyUsage, .fantasyRedZone, .fantasyMatchup, .fantasyTrend,
     ]
+
+    /// These are complete product modules, not editorial stories. Keeping them
+    /// out of The Lead / Best of the Board prevents the same receipt from
+    /// appearing once as a hero and again in its purpose-built section.
+    private static let moduleKinds: Set<SignalKind> = [.theSweat, .afterGary]
 
     /// Relevance-ranked stories across every lane (rows arrive relevance-
     /// ordered per league): no look-ahead regression, no confirmed-XI cards,
@@ -808,6 +831,7 @@ struct HubView: View {
         for s in leagueSignals {
             if s.confirmedXI != nil { continue }
             if Self.fantasyKinds.contains(s.kind) { continue }
+            if Self.moduleKinds.contains(s.kind) { continue }
             if s.reg?.day == "tomorrow" { continue }
             let c = counts[s.kind] ?? 0
             guard c < 2 else { continue }
@@ -826,6 +850,8 @@ struct HubView: View {
     private static let leadInsightKinds: Set<SignalKind> = [
         .regression, .ballpark, .platoon, .h2h, .bullpenFatigue,
         .firstInning, .closerWatch, .runningGame, .parkWeather,
+        .trenches, .quarterback, .passRush, .coverage, .paceScript,
+        .redZone, .turnoverEdge, .explosivePlay, .specialTeams, .coaching,
     ]
     /// Resolve the lead and remainder from one ranked snapshot. The previous
     /// `bestOfBoard` filter called `lead` inside its closure, which rebuilt
@@ -859,6 +885,22 @@ struct HubView: View {
                 Beat(anchor: "cup", title: "The Cup", kinds: [.tournament, .advancement]),
                 Beat(anchor: "numbers", title: "The Numbers", kinds: [.xgRegression, .xgRecap]),
                 Beat(anchor: "matchups", title: "The Matchups", kinds: [.h2h, .situational, .ballpark, .streak]),
+            ]
+        }
+        if sel == .nfl {
+            return [
+                Beat(anchor: "trenches", title: "The Trenches", kinds: [.trenches, .passRush]),
+                Beat(anchor: "field", title: "The Field", kinds: [.quarterback, .injury]),
+                Beat(anchor: "edges", title: "The Edges", kinds: [.coverage, .paceScript, .redZone, .turnoverEdge, .explosivePlay, .situational, .coaching]),
+                Beat(anchor: "afterGary", title: "After Gary", kinds: [.afterGary]),
+            ]
+        }
+        if sel == .ncaaf {
+            return [
+                Beat(anchor: "trenches", title: "The Trenches", kinds: [.trenches, .passRush]),
+                Beat(anchor: "field", title: "The Field", kinds: [.quarterback, .injury]),
+                Beat(anchor: "edges", title: "The Edges", kinds: [.paceScript, .specialTeams, .redZone, .turnoverEdge, .explosivePlay, .situational, .coaching]),
+                Beat(anchor: "afterGary", title: "After Gary", kinds: [.afterGary]),
             ]
         }
         // HOME RUN THREATS gets its own stage back (founder green-light
@@ -897,7 +939,20 @@ struct HubView: View {
     /// lane kicker). Regression rows live on the board, never in a beat.
     private func beatRows(_ beat: Beat) -> [Signal] {
         let kinds = Set(beat.kinds)
-        return leagueSignals.filter { kinds.contains($0.kind) && $0.confirmedXI == nil && $0.reg == nil }
+        // Football's thinner preseason feeds made the same signal appear as
+        // THE LEAD, BEST OF THE BOARD, and again in its beat. Once a story is
+        // featured above, keep the lower beat for additional reads only.
+        let featured: Set<UUID> = {
+            guard sel == .nfl || sel == .ncaaf else { return [] }
+            let selection = frontPageSelection
+            return Set(([selection.lead].compactMap { $0 } + selection.best).map(\.id))
+        }()
+        return leagueSignals.filter {
+            kinds.contains($0.kind)
+                && !featured.contains($0.id)
+                && $0.confirmedXI == nil
+                && $0.reg == nil
+        }
     }
 
     /// "hub" | "fantasy" — which desk the page shows (header toggle, persisted).
@@ -914,7 +969,7 @@ struct HubView: View {
         // "the H2H parts here doesnt need to be on The Hub") — the team season
         // series lives on the Picks page game view, where the ledger renders.
         // Without this it would fall through to More Edges and reappear.
-        var placed: Set<SignalKind> = Self.fantasyKinds.union([.regression, .streak, .h2h])
+        var placed: Set<SignalKind> = Self.fantasyKinds.union([.regression, .streak, .h2h, .theSweat])
         for b in beats { for k in b.kinds { placed.insert(k) } }
         return leagueSignals.filter { !placed.contains($0.kind) && $0.confirmedXI == nil }
     }
@@ -942,7 +997,13 @@ struct HubView: View {
             // Founder-picked shapes (Aug 6): H2H = the case card (mock H6),
             // NRFI = the story card (mock N10). WC still speaks the old
             // storyboard; every other beat keeps the flat feed.
-            if beat.anchor == "nrfi" {
+            if beat.anchor == "afterGary" {
+                HubAfterGarySection(anchor: beat.anchor,
+                                    rows: rows,
+                                    openBeats: $openBeats,
+                                    onRow: { s in openSignal(s) })
+                    .id(beat.anchor)
+            } else if beat.anchor == "nrfi" {
                 HubNrfiSection(rows: rows) { s in openSignal(s) }
                     .id(beat.anchor)
             } else if beat.anchor == "matchups" {
@@ -1134,6 +1195,15 @@ struct HubView: View {
 
     private var hubScopeContent: AnyView {
         if hubScope == "fantasy" {
+            if sel == .nfl || sel == .ncaaf {
+                return AnyView(
+                    FootballFantasyPage(
+                        league: sel,
+                        signals: leagueSignals.filter { Self.fantasyKinds.contains($0.kind) },
+                        loaded: didLoad
+                    ) { s in openSignal(s) }
+                )
+            }
             return AnyView(
                 FantasyCornerPage(
                     pickups: items(.fantasyPickups),
@@ -1289,6 +1359,8 @@ struct HubView: View {
             guard verb == "hub" else { return }
             switch arg.lowercased() {
             case "mlb": withAnimation { sel = .mlb }
+            case "nfl": withAnimation { sel = .nfl }
+            case "ncaaf": withAnimation { sel = .ncaaf }
             case "nba": withAnimation { sel = .nba }
             case "wc": withAnimation { sel = .wc }
             // Any other arg = a section anchor ("hub fantasy", "hub lastNight")
@@ -1467,7 +1539,7 @@ struct HubView: View {
     private var hubMorningNotice: some View {
         VStack(alignment: .leading, spacing: 6) {
             HubKicker(text: "Tonight's Board")
-            Text("No \(sel.label) edges posted yet — tonight's board fills in as lineups and matchups firm up.")
+            Text("No \(sel.label) edges posted yet.")
                 .font(HubFont.body(14.5, .semibold))
                 .foregroundStyle(.white.opacity(0.8))
                 .fixedSize(horizontal: false, vertical: true)
@@ -2344,6 +2416,69 @@ fileprivate struct HubBeatSection: View {
             HubHead(title: title, count: rows.count)
             HubBeatList(rows: isOpen ? rows : Array(rows.prefix(topCount)),
                         open: isOpen, kickerFor: kickerFor, onRow: onRow, onProfile: onProfile)
+            if rows.count > topCount {
+                HubSeeAllButton(isOpen: isOpen, total: rows.count) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if isOpen { openBeats.remove(anchor) } else { openBeats.insert(anchor) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Market movement after Gary published, kept deliberately receipt-like:
+/// matchup, locked line → current line, and which snapshot held the edge.
+/// The book/as-of detail remains available on tap without adding tutorial copy
+/// to the feed itself.
+fileprivate struct HubAfterGarySection: View {
+    let anchor: String
+    let rows: [Signal]
+    @Binding var openBeats: Set<String>
+    let onRow: (Signal) -> Void
+
+    private let topCount = 4
+    private var isOpen: Bool { openBeats.contains(anchor) }
+    private var visible: [Signal] { isOpen ? rows : Array(rows.prefix(topCount)) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HubHead(title: "After Gary", count: rows.count)
+            VStack(spacing: 0) {
+                ForEach(Array(visible.enumerated()), id: \.element.id) { index, signal in
+                    Button { onRow(signal) } label: {
+                        HStack(alignment: .center, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                if !signal.game.isEmpty {
+                                    Text(signal.game.uppercased())
+                                        .font(HubFont.data(9.5, .medium))
+                                        .foregroundStyle(.white.opacity(0.55))
+                                        .lineLimit(1)
+                                }
+                                Text(signal.headline)
+                                    .font(HubFont.body(14.5, .semibold))
+                                    .foregroundStyle(.white.opacity(0.95))
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                            }
+                            Spacer(minLength: 6)
+                            if !signal.value.isEmpty {
+                                Text(signal.value)
+                                    .font(HubFont.data(12.5, .semibold))
+                                    .foregroundStyle(GaryColors.gold)
+                                    .lineLimit(1)
+                            }
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.45))
+                        }
+                        .padding(.horizontal, 18).padding(.vertical, 11)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    if index < visible.count - 1 { HubRule(inset: 18) }
+                }
+            }
             if rows.count > topCount {
                 HubSeeAllButton(isOpen: isOpen, total: rows.count) {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -4022,7 +4157,7 @@ fileprivate struct HubGameSheet: View {
             VStack(alignment: .leading, spacing: 26) {
                 header
                 if edges.isEmpty {
-                    Text("No edges posted for this game yet — they land as lineups and matchups firm up.")
+                    Text("No edges posted for this game yet.")
                         .font(HubFont.body(15)).foregroundStyle(.white.opacity(0.62))
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, 18)

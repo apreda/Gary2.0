@@ -18,7 +18,19 @@ import { contentModel, contentModelCascade } from './solText.js';
 
 // Lanes whose detail is already Gary's prose (sourced from a pick rationale or
 // written by their own Sol pass) — rewriting them would launder better copy.
-const SKIP_CATEGORIES = new Set(['gary_hr_threats', 'closer_watch', 'cut_list', 'fantasy_pickups', 'two_start_week', 'return_watch']);
+const SKIP_CATEGORIES = new Set([
+  'gary_hr_threats', 'closer_watch', 'cut_list', 'fantasy_pickups',
+  'two_start_week', 'return_watch',
+  // Deterministic NFL fantasy evidence must keep its measured comparison copy;
+  // a generic voice rewrite could introduce an unsupported role or matchup fact.
+  'fantasy_usage', 'fantasy_trend', 'fantasy_matchup',
+]);
+
+// Football Hub rows are deliberately written as literal, provider-grounded
+// comparisons. Until there is a football-specific fact-fenced prose pass, keep
+// those details intact instead of asking a generic model to add matchup color
+// that is not present in the evidence.
+const DETERMINISTIC_LEAGUES = new Set(['nfl', 'ncaaf']);
 
 const CHUNK = 60;
 
@@ -56,6 +68,8 @@ const todayLong = () => new Date().toLocaleDateString('en-US', {
  * every chunk — partial results apply partially.
  */
 export async function applyGaryVoice(rows, { league = 'mlb' } = {}) {
+  if (DETERMINISTIC_LEAGUES.has(String(league || '').trim().toLowerCase())) return rows;
+
   const eligible = rows
     .map((r, idx) => ({ r, idx }))
     .filter(({ r }) => r && r.detail && !SKIP_CATEGORIES.has(String(r.category || '')));

@@ -7,7 +7,7 @@
  * - Roster depth from BDL
  * - Returning players detection
  *
- * NCAAF uses nflSeason() for season year (same timing)
+ * NCAAF season data is keyed to the year play begins (August-January).
  */
 
 import { ballDontLieService } from '../../../ballDontLieService.js';
@@ -32,6 +32,7 @@ import {
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
 // Import QB helpers from NFL builder (shared between NFL and NCAAF)
 import { fetchStartingQBs, formatStartingQBs } from './nfl.js';
+import { footballSeasonForDate, footballSeasonLabel } from './footballSeason.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // CFP SEEDING & BOWL GAME CONSTANTS
@@ -156,8 +157,11 @@ const TEAM_TIER_OVERRIDES = {
 /**
  * Get CFP seeding from hardcoded bracket
  */
-function getCfpSeedingFromBracket(teamName) {
+function getCfpSeedingFromBracket(teamName, season = footballSeasonForDate('NCAAF')) {
   if (!teamName) return null;
+  // This embedded bracket is historical. Never project its 2025 seeds onto a
+  // later season; current seeds must come from the game or grounded context.
+  if (Number(season) !== 2025) return null;
 
   // Direct match
   if (CFP_2025_26_SEEDING[teamName]) {
@@ -180,8 +184,8 @@ function getCfpSeedingFromBracket(teamName) {
  * Looks for patterns like "#8 Oklahoma", "#9 seed Alabama", "(8) Oklahoma", "8-seed Oklahoma"
  * Also handles "Ole Miss is the higher seed (No. 6)" style from search results
  */
-function parseCfpSeeding(text, teamName) {
-  if (!text || !teamName) return getCfpSeedingFromBracket(teamName);
+function parseCfpSeeding(text, teamName, season = footballSeasonForDate('NCAAF')) {
+  if (!text || !teamName) return getCfpSeedingFromBracket(teamName, season);
 
   const schoolName = teamName.split(' ')[0]; // e.g., "Alabama" from "Alabama Crimson Tide"
   const schoolNames = [teamName, schoolName];
@@ -231,7 +235,7 @@ function parseCfpSeeding(text, teamName) {
   }
 
   // Fallback to hardcoded bracket if regex fails
-  return getCfpSeedingFromBracket(teamName);
+  return getCfpSeedingFromBracket(teamName, season);
 }
 
 /**
@@ -304,8 +308,9 @@ function determineBowlTier(game, homeTeam, awayTeam) {
   ];
 
   // Check if both teams are in the CFP bracket - strongly suggests a TIER 1 game during bowl season
-  const isCfpMatchup = getCfpSeedingFromBracket(homeTeam) !== null && getCfpSeedingFromBracket(awayTeam) !== null;
   const gameDate = new Date(game.commence_time || game.date);
+  const season = footballSeasonForDate('NCAAF', gameDate);
+  const isCfpMatchup = getCfpSeedingFromBracket(homeTeam, season) !== null && getCfpSeedingFromBracket(awayTeam, season) !== null;
   const month = gameDate.getMonth();
   const day = gameDate.getDate();
   const isBowlSeason = (month === 11 && day >= 14) || (month === 0 && day <= 15);
@@ -424,8 +429,9 @@ async function fetchBowlGameContext(homeTeam, awayTeam, game, groundingText = nu
         // Use grounding text if available for more accurate round detection
         const textForRoundDetection = (groundingText || '') + (game.name || '') + (game.title || '');
         game.cfpRound = detectCfpRound(textForRoundDetection);
-        game.homeSeed = getCfpSeedingFromBracket(homeTeam);
-        game.awaySeed = getCfpSeedingFromBracket(awayTeam);
+        const season = footballSeasonForDate('NCAAF', gameDate);
+        game.homeSeed = parseCfpSeeding(groundingText || '', homeTeam, season);
+        game.awaySeed = parseCfpSeeding(groundingText || '', awayTeam, season);
       }
     }
 
@@ -458,7 +464,7 @@ ${bowlTierInfo.section}
 /**
  * Fetch CFP Road to Championship context for NCAAF playoff games
  * Uses Gemini Grounding to research each team's playoff journey
- * CRITICAL: Only uses web search data (no training data) for accurate 2025-26 CFP info
+ * CRITICAL: Only uses web search data (no training data) for current CFP info
  *
  * This provides Gary with full context of how each team reached the championship:
  * - Each playoff game result and score
@@ -469,6 +475,8 @@ async function fetchCfpJourneyContext(homeTeam, awayTeam, game) {
   try {
     // Only fetch for CFP games (championship/semifinal/quarterfinal)
     const gameDate = new Date(game.commence_time || game.date);
+    const season = footballSeasonForDate('NCAAF', gameDate);
+    const seasonLabel = footballSeasonLabel(season);
     const month = gameDate.getMonth(); // 0-indexed
     const day = gameDate.getDate();
 
@@ -503,8 +511,8 @@ async function fetchCfpJourneyContext(homeTeam, awayTeam, game) {
 
     // Fetch journey for both teams in parallel
     const [homeJourney, awayJourney] = await Promise.all([
-      fetchTeamCfpJourney(homeTeam, todayStr),
-      fetchTeamCfpJourney(awayTeam, todayStr)
+      fetchTeamCfpJourney(homeTeam, todayStr, season),
+      fetchTeamCfpJourney(awayTeam, todayStr, season)
     ]);
 
     if (!homeJourney && !awayJourney) {
@@ -515,7 +523,7 @@ async function fetchCfpJourneyContext(homeTeam, awayTeam, game) {
     // Format the section
     const lines = [
       '',
-      'CFP ROAD TO THE CHAMPIONSHIP (2025-26 PLAYOFF JOURNEY)',
+      `CFP ROAD TO THE CHAMPIONSHIP (${seasonLabel} PLAYOFF JOURNEY)`,
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
       'How each team reached this game:',
       ''
@@ -550,16 +558,17 @@ async function fetchCfpJourneyContext(homeTeam, awayTeam, game) {
  * Fetch a single team's CFP playoff journey via Gemini Grounding
  * Uses explicit date context to force web search instead of training data
  */
-async function fetchTeamCfpJourney(teamName, todayStr) {
+async function fetchTeamCfpJourney(teamName, todayStr, season = footballSeasonForDate('NCAAF')) {
   try {
-    const query = `IMPORTANT: Today is ${todayStr}. This is the 2025-2026 College Football Playoff season.
+    const seasonLabel = footballSeasonLabel(season);
+    const query = `IMPORTANT: Today is ${todayStr}. This is the ${seasonLabel} College Football Playoff season.
 DO NOT use any training data. ONLY use current web search results.
 
-Search for: ${teamName} 2025-2026 College Football Playoff games results
+Search for: ${teamName} ${seasonLabel} College Football Playoff games results
 
-For the ${teamName} college football team, provide their COMPLETE 2025-26 CFP playoff journey:
+For the ${teamName} college football team, provide their COMPLETE ${seasonLabel} CFP playoff journey:
 
-1. List EVERY CFP playoff game they have played this postseason (December ${new Date().getFullYear() - 1} - January ${new Date().getFullYear()})
+1. List EVERY CFP playoff game they have played this postseason (December ${season} - January ${season + 1})
 2. For each game include:
    - Round (First Round, Quarterfinal, Semifinal)
    - Opponent
@@ -569,7 +578,7 @@ For the ${teamName} college football team, provide their COMPLETE 2025-26 CFP pl
 
 3. Summarize their playoff results: scores, opponents, and outcomes.
 
-Format as a concise bullet list. If ${teamName} is NOT in the 2025-26 CFP, say "Not in 2025-26 CFP".
+Format as a concise bullet list. If ${teamName} is NOT in the ${seasonLabel} CFP, say "Not in ${seasonLabel} CFP".
 ONLY report ACTUAL games that have been PLAYED - do not predict future games.`;
 
     const result = await geminiGroundingSearch(query, {
@@ -587,7 +596,7 @@ ONLY report ACTUAL games that have been PLAYED - do not predict future games.`;
     // Check if team is not in CFP
     if (journeyText.toLowerCase().includes('not in') &&
         journeyText.toLowerCase().includes('cfp')) {
-      console.log(`[Scout Report] ${teamName} not in 2025-26 CFP`);
+      console.log(`[Scout Report] ${teamName} not in ${seasonLabel} CFP`);
       return null;
     }
 
@@ -611,7 +620,7 @@ ONLY report ACTUAL games that have been PLAYED - do not predict future games.`;
  * Uses roster + season stats to show who's on the team
  * This prevents hallucinations about players who've transferred
  */
-async function fetchNcaafKeyPlayers(homeTeam, awayTeam, sport) {
+async function fetchNcaafKeyPlayers(homeTeam, awayTeam, sport, season = footballSeasonForDate('NCAAF')) {
   try {
     const bdlSport = sportToBdlKey(sport);
     if (bdlSport !== 'americanfootball_ncaaf') {
@@ -629,17 +638,12 @@ async function fetchNcaafKeyPlayers(homeTeam, awayTeam, sport) {
 
     console.log(`[Scout Report] Fetching NCAAF rosters for ${homeTeam} (ID: ${homeTeamData?.id}) and ${awayTeam} (ID: ${awayTeamData?.id})`);
 
-    // NCAAF season: Calculate dynamically - Aug-Dec = current year, Jan-Jul = previous year
-    const ncaafMonth = new Date().getMonth() + 1;
-    const ncaafYear = new Date().getFullYear();
-    const season = ncaafMonth <= 7 ? ncaafYear - 1 : ncaafYear;
-
     // Fetch rosters and season stats for both teams in parallel
     const [homePlayers, awayPlayers, homeStats, awayStats] = await Promise.all([
       homeTeamData ? ballDontLieService.getNcaafTeamPlayers(homeTeamData.id) : [],
       awayTeamData ? ballDontLieService.getNcaafTeamPlayers(awayTeamData.id) : [],
-      homeTeamData ? ballDontLieService.getNcaafPlayerSeasonStats(homeTeamData.id, season) : [],
-      awayTeamData ? ballDontLieService.getNcaafPlayerSeasonStats(awayTeamData.id, season) : []
+      homeTeamData ? ballDontLieService.getNcaafPlayerSeasonStats({ teamId: homeTeamData.id, season }) : [],
+      awayTeamData ? ballDontLieService.getNcaafPlayerSeasonStats({ teamId: awayTeamData.id, season }) : []
     ]);
 
     // Process each team's roster to get key players with stats
@@ -997,6 +1001,7 @@ export async function buildNcaafScoutReport(game, options = {}) {
   const homeTeam = game.home_team;
   const awayTeam = game.away_team;
   const sportKey = 'NCAAF';
+  const ncaafSeasonYear = footballSeasonForDate(sportKey, game.commence_time || new Date());
 
   // Fetch basic data in parallel
   const [homeProfile, awayProfile, injuries, recentHome, recentAway, standingsSnapshot] = await Promise.all([
@@ -1010,11 +1015,11 @@ export async function buildNcaafScoutReport(game, options = {}) {
 
   // For NCAAF, fetch starting QBs (pass injuries to filter out IR/Out players)
   let startingQBs = null;
-  startingQBs = await fetchStartingQBs(homeTeam, awayTeam, sportKey, injuries);
+  startingQBs = await fetchStartingQBs(homeTeam, awayTeam, sportKey, injuries, ncaafSeasonYear);
 
   // For NCAAF, fetch key players (roster + stats) to prevent hallucinations
   let ncaafKeyPlayers = null;
-  ncaafKeyPlayers = await fetchNcaafKeyPlayers(homeTeam, awayTeam, sportKey);
+  ncaafKeyPlayers = await fetchNcaafKeyPlayers(homeTeam, awayTeam, sportKey, ncaafSeasonYear);
 
   // For NCAAF, fetch conference tier context
   let conferenceTierSection = '';
@@ -1143,11 +1148,7 @@ export async function buildNcaafScoutReport(game, options = {}) {
   const venueLabel = game.venue || (game.isNeutralSite ? 'Neutral Site' : `${homeTeam} Home`);
   const tournamentLabel = game.tournamentContext ? `[${game.tournamentContext}]` : '';
 
-  // Dynamic season label (e.g., "2025-26") — works for any year
-  const _now = new Date();
-  const _yr = _now.getFullYear();
-  const _mo = _now.getMonth() + 1;
-  const seasonLabel = _mo >= 7 ? `${_yr}-${String(_yr + 1).slice(2)}` : `${_yr - 1}-${String(_yr).slice(2)}`;
+  const seasonLabel = footballSeasonLabel(ncaafSeasonYear);
 
   // Build game context section if we have special context
   let gameContextSection = '';

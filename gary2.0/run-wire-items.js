@@ -41,7 +41,7 @@ import { getESTDate } from './src/utils/dateUtils.js';
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Leagues the Wire covers. Mirrors run-insight-connections.js ACTIVE_LEAGUES.
-const ACTIVE_LEAGUES = ['MLB', 'NBA'];
+const ACTIVE_LEAGUES = ['MLB', 'NFL', 'NCAAF', 'NBA'];
 
 // Cheap grounding model — same as the insights pipeline.
 const WIRE_MODEL = 'gemini-3-flash-preview';
@@ -71,6 +71,7 @@ const RECAPS_REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/game_recaps` : nul
 // model from fabricating games (e.g. inventing a 2024-Finals NBA matchup when the
 // NBA pipeline has produced nothing real).
 const DAILY_PICKS_REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/daily_picks` : null;
+const DAILY_SLATE_REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/daily_slate` : null;
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
@@ -272,8 +273,30 @@ function teamTokens(name) {
     .filter((w) => w.length >= 3 && !TEAM_STOPWORDS.has(w));
 }
 
-/** Pull today's slate team names for a league from daily_picks. */
+/** Pull today's full slate team names, falling back to the legacy pick row. */
 async function fetchSlateTeams(date, league) {
+  if (DAILY_SLATE_REST_URL) {
+    try {
+      const resp = await axios({
+        method: 'GET',
+        url: DAILY_SLATE_REST_URL,
+        headers: restHeaders,
+        params: {
+          select: 'away_team,home_team',
+          date: `eq.${date}`,
+          league: `eq.${league}`,
+          limit: 200,
+        },
+      });
+      const rows = Array.isArray(resp.data) ? resp.data : [];
+      const names = rows.flatMap((row) => [row?.away_team, row?.home_team]).filter(Boolean);
+      if (names.length > 0) return names;
+    } catch (err) {
+      const detail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
+      console.warn(`   ⚠️  [${league}] daily_slate fetch failed; trying pick ledger: ${detail}`);
+    }
+  }
+
   if (!DAILY_PICKS_REST_URL) return [];
   try {
     const resp = await axios({
@@ -362,6 +385,13 @@ function buildPrompt({ date, league, todayFinals, ydayFinals, allowNames }) {
   const teamsBlock = allowNames && allowNames.length
     ? allowNames.map((n) => `- ${n}`).join('\n')
     : '(none)';
+  const football = league === 'NFL' || league === 'NCAAF';
+  const momentExamples = football
+    ? `a multi-touchdown game, a 100-yard rushing or receiving performance, a pick-six, a dominant sack/turnover game, a comeback, a game-winning drive, an upset, or a milestone explicitly present in the verified notes`
+    : `a multi-homer night, a double-digit strikeout start, a no-hitter or one taken deep into the game, a huge RBI line, a walk-off, an extra-innings marathon, a slugfest or a shutout of note, or a milestone explicitly present in the verified notes`;
+  const environmentExamples = football
+    ? `weather, pace, expected game script, or scoring-environment notes relevant to the total`
+    : `scoring-environment, park, or weather notes relevant to totals`;
 
   return `You are the editor of "The Wire" — the day-in-${league} ticker on a sports betting app's ` +
     `front page. It is ${clock} ET on ${date}. Yesterday was ${yday}. Generate today's items.\n\n` +
@@ -386,10 +416,7 @@ function buildPrompt({ date, league, todayFinals, ydayFinals, allowNames }) {
     `  "relevance_score": integer 0-100 (higher = more lead-worthy / front-page)\n\n` +
     `EDITORIAL RULES:\n` +
     `- moment (the feed's LEAD kind): a thing that HAPPENED in a game worth telling a friend about — ` +
-    `a multi-homer night, a double-digit strikeout start, a no-hitter or one taken deep into the game, ` +
-    `a huge RBI line, a walk-off, an extra-innings marathon, a slugfest or a shutout of note, a ` +
-    `milestone reached, a streak extended or snapped. Name the player and the real number ` +
-    `("Caminero homers twice in Coors", "Skenes strikes out 11 over 7"). This is fan-interest copy, ` +
+    `${momentExamples}. Name the player/team and the real number when the notes provide it. This is fan-interest copy, ` +
     `NOT a betting recap — never frame a moment against a spread or closing number.\n` +
     `- STAT GROUNDING LAW for moments: a moment is built EXCLUSIVELY from that game's line in the ` +
     `FINALS blocks above — the final, the box, the notes. Not from search, not from memory: not the ` +
@@ -404,7 +431,7 @@ function buildPrompt({ date, league, todayFinals, ydayFinals, allowNames }) {
     `- The night's best moments are the feed's lead — when the notes produced real ones, score them ` +
     `above everything else.\n` +
     `- line_move: name the OLD number and the NEW number ("Total dropped from 9 to 8.5").\n` +
-    `- pace: scoring-environment / park / weather note relevant to totals.\n` +
+    `- pace: ${environmentExamples}.\n` +
     `FRESHNESS LAWS (the reason this feed exists — violating them ships stale news):\n` +
     `- Lead with TODAY: things that happened today, injury news from today, moves on the upcoming slate.\n` +
     `- An item about yesterday is allowed ONLY when today has not yet produced its own material ` +

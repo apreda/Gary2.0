@@ -700,7 +700,11 @@ export const teamStatsMethods = {
       const cacheKey = `${sportKey}_team_stats_${JSON.stringify(params)}`;
       return await getCachedOrFetch(cacheKey, async () => {
         const sport = this._getSportClient(sportKey);
-        const fn = sport?.getTeamStats || sport?.getStats;
+        // NFL's SDK `getStats` returns player boxes, not team boxes. Football
+        // must fall through to its dedicated /team_stats HTTP route unless the
+        // SDK eventually exposes a real `getTeamStats` method.
+        const isFootball = sportKey === 'americanfootball_nfl' || sportKey === 'americanfootball_ncaaf';
+        const fn = sport?.getTeamStats || (!isFootball ? sport?.getStats : null);
         if (fn) {
           const resp = await fn.call(sport, params);
           return resp?.data || [];

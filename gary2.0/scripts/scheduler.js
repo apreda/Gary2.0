@@ -19,6 +19,29 @@ import '../src/loadEnv.js';
 import { spawn, execSync } from 'child_process';
 import { existsSync, mkdirSync, appendFileSync } from 'fs';
 import { join } from 'path';
+import {
+  childExecutionBudget,
+  coalesceOverdueTiers,
+  decisionLaneKey,
+  gameHasStarted,
+  hasUrgentUpcomingTrigger,
+  isFinalPendingTier,
+  isSportFetchRetryEntry,
+  makeSportFetchRetryEntry,
+  ncaafClusterConcurrency,
+  nextTriggerBatch,
+  laneOwnsMlbDriftGuard,
+  pendingEntriesForChildBudget,
+  partitionStartedEntries,
+  reanchorGameSchedule,
+  runIndependentDecisionLanes,
+  runIndependentScheduleLanes,
+  runPerGameDecisionPipeline,
+  scheduleEntryKey,
+} from './lib/schedulerPolicy.js';
+import { parsePropRunOutcome } from './lib/propsRunReliability.js';
+import { parsePickRunOutcome } from './lib/pickRunReliability.js';
+import { classifyNcaafFbsGames, resolveNcaafKickoff } from '../src/services/ncaafGamePolicy.js';
 
 const PROJECT_DIR = join(import.meta.dirname, '..');
 const LOG_DIR = join(PROJECT_DIR, 'logs', 'scheduler');
@@ -40,6 +63,11 @@ const LEAD_TIME_MINUTES = 90;       // Primary trigger (kept for any external re
 const RETRY_LEAD_TIMES_MINUTES = [90, 60, 30, 15]; // First → fallbacks → final
 
 const SPORTS = [
+  { key: 'americanfootball_nfl', flag: '--nfl', label: 'NFL', propsScript: 'run-agentic-nfl-props.js' },
+  // Live college props come from The Odds API and are BDL roster/stat
+  // validated. A missing/deactivated server key fails this lane loudly; it
+  // never manufactures a market from stats.
+  { key: 'americanfootball_ncaaf', flag: '--ncaaf', label: 'NCAAF', propsScript: 'run-agentic-ncaaf-props.js' },
   { key: 'basketball_nba', flag: '--nba', label: 'NBA', propsScript: 'run-agentic-nba-props.js' },
   // NHL PARKED (Jul 13 2026): the BDL NHL tier lapsed, so every fetch 401s. That
   // permanent failure set fetchFailed=true on every daily build, which on the
@@ -54,11 +82,14 @@ const SPORTS = [
 
 // Within a shared trigger window, process lightweight/time-sensitive slates
 // before MLB's full picks+props block. Lower number = runs earlier.
-// Ordering only — execution stays strictly sequential.
+// This orders the shared daily-ledger lane; NFL and NCAAF decisions use the
+// separate bounded per-game lanes defined below.
 const SPORT_RUN_PRIORITY = {
-  basketball_nba: 1,
-  icehockey_nhl: 2,
-  baseball_mlb: 3,
+  americanfootball_nfl: 1,
+  americanfootball_ncaaf: 2,
+  basketball_nba: 3,
+  icehockey_nhl: 4,
+  baseball_mlb: 5,
 };
 
 // Spaced retries for fixed-trigger sports, as minutes AFTER the fixed time
@@ -66,6 +97,31 @@ const SPORT_RUN_PRIORITY = {
 // successful pick hits run-agentic-picks.js's "already has pick" dedup and
 // exits in ~1s, so the extra triggers are a cheap reliability net.
 const FIXED_TRIGGER_RETRY_OFFSETS_MINUTES = [0, 45, 90];
+
+// NFL game picks and props write through atomic RPCs, so each worker can move
+// directly from one exact game's pick decision into that game's props/TD
+// decision. Keep the complete per-game pipeline capped at three workers.
+const NFL_GAME_DECISION_CONCURRENCY = 3;
+
+// NCAAF Saturdays routinely put dozens of games into the same kickoff
+// cluster. Scale the bounded model/context pool with the cluster rather than
+// leaving every large slate behind three workers. The cross-process BDL gate
+// remains authoritative and serializes provider transports independently.
+const NCAAF_CLUSTER_MAX_CONCURRENCY = 12;
+const NCAAF_TARGET_GAMES_PER_WORKER = 4;
+
+// A child may research for a long time, but it may not own the scheduler past
+// the next queued trigger or its own kickoff/first pitch. Two minutes lets the
+// parent terminate and reap a slow child, record a retryable failure, and move
+// to the next batch before that batch's wall-clock window opens.
+const CHILD_MAX_RUNTIME_MS = 45 * 60 * 1000;
+const CHILD_DEADLINE_SAFETY_MS = 2 * 60 * 1000;
+const CHILD_TERMINATION_GRACE_MS = 5 * 1000;
+// An overdue lane can start just before another independent lane's clock and
+// otherwise hold the top-level loop past that trigger. Enroll only missing
+// lanes inside this small horizon; their own wall-clock guard still waits for
+// the exact trigger before starting a child.
+const CROSS_LANE_TRIGGER_LOOKAHEAD_MS = 3 * 60 * 1000;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // LOGGING
@@ -75,7 +131,7 @@ function log(msg) {
   const line = `[${ts}] ${msg}`;
   console.log(line);
   try {
-    const logFile = join(LOG_DIR, `scheduler-${new Date().toISOString().split('T')[0]}.log`);
+    const logFile = join(LOG_DIR, `scheduler-${getTodayETDateStr()}.log`);
     appendFileSync(logFile, line + '\n');
   } catch {}
 }
@@ -113,6 +169,8 @@ function extractStartTimeIso(game, sportKey) {
   if (sportKey === 'basketball_nba') return game.datetime;
   if (sportKey === 'icehockey_nhl') return game.start_time_utc;
   if (sportKey === 'baseball_mlb') return game.date;
+  if (sportKey === 'americanfootball_nfl') return game.date;
+  if (sportKey === 'americanfootball_ncaaf') return resolveNcaafKickoff(game).iso;
   throw new Error(`extractStartTimeIso: unknown sportKey ${sportKey}`);
 }
 
@@ -127,23 +185,46 @@ function addDaysISO(dateStr, days) {
 }
 
 // Fetch games whose ET game-day matches `etDateStr`. We query both the ET date
-// and the next UTC date, because MLB indexes by UTC date — a 9pm ET game lives
-// under tomorrow's UTC date. Then we filter by actual ET start time.
+// and the next UTC date, because late ET games can live under tomorrow's UTC
+// provider date. Then we filter by actual ET start time.
 async function fetchGamesForETDate(sportKey, etDateStr) {
   const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
   const dates = [etDateStr, addDaysISO(etDateStr, 1)];
+  const params = { dates, per_page: 100 };
+  // BDL's NFL games endpoint defaults away from preseason. August would then
+  // look like a dark league even while real games are on the board.
+  if (sportKey === 'americanfootball_nfl') params.season_type = [1, 2, 3];
   let games;
   try {
-    games = await ballDontLieService.getGames(sportKey, { dates, per_page: 100 });
+    games = await ballDontLieService.getGames(sportKey, params);
   } catch (e) {
     log(`  ❌ ${sportKey}: BDL fetch failed for ${dates.join(',')}: ${e.message}`);
     return null; // null = fetch FAILED (retryable); [] = genuinely no games
   }
   if (!Array.isArray(games)) return [];
 
+  if (sportKey === 'americanfootball_ncaaf' && games.length > 0) {
+    let classified = classifyNcaafFbsGames(games);
+    if (classified.unresolved.length > 0) {
+      const teams = await ballDontLieService.getTeams('americanfootball_ncaaf');
+      classified = classifyNcaafFbsGames(games, teams);
+    }
+    if (classified.unresolved.length > 0) {
+      log(`  ❌ ${sportKey}: ${classified.unresolved.length} game(s) lack provider-grounded FBS identity — retrying the sport instead of publishing a partial slate`);
+      return null;
+    }
+    if (classified.rejected.length > 0) {
+      log(`  ⏭️ ${sportKey}: excluded ${classified.rejected.length} non-FBS matchup(s)`);
+    }
+    games = classified.accepted;
+  }
+
   const filtered = [];
   for (const g of games) {
-    const startIso = extractStartTimeIso(g, sportKey);
+    const ncaafKickoff = sportKey === 'americanfootball_ncaaf'
+      ? resolveNcaafKickoff(g)
+      : null;
+    const startIso = ncaafKickoff?.iso ?? extractStartTimeIso(g, sportKey);
     if (!startIso) {
       log(`  ⚠️ ${sportKey} game ${g.id}: missing start time field — skipping`);
       continue;
@@ -154,6 +235,14 @@ async function fetchGamesForETDate(sportKey, etDateStr) {
       continue;
     }
     if (getETDateStr(start) !== etDateStr) continue;
+    // Date-only NCAAF values are safe for a public-slate placeholder but not
+    // for execution. Never build T-90/T-60/T-30/T-15 jobs from the explicit
+    // 3 PM display estimate. `null` routes this sport through the existing
+    // isolated retry queue while healthy sports keep their own schedules.
+    if (ncaafKickoff?.estimated) {
+      log(`  ❌ ${sportKey} game ${g.id}: exact kickoff not posted — retrying NCAAF instead of scheduling from the display estimate`);
+      return null;
+    }
     filtered.push({ raw: g, startTime: start });
   }
   // Dedupe in case a game appears in both UTC date queries (rare but possible)
@@ -163,6 +252,42 @@ async function fetchGamesForETDate(sportKey, etDateStr) {
     seen.add(raw.id);
     return true;
   });
+}
+
+function scheduleGamesForSport(sport, games, etDateStr, { logGames = true } = {}) {
+  const entries = [];
+  for (const { raw: game, startTime } of games) {
+    const homeTeam = game.home_team?.full_name || game.home_team?.name || 'Home';
+    const awayTeam = game.visitor_team?.full_name || game.away_team?.full_name || game.visitor_team?.name || game.away_team?.name || 'Away';
+    const matchup = `${awayTeam} @ ${homeTeam}`;
+    const startET = startTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
+    const tierLabels = [];
+
+    if (sport.fixedTriggerET) {
+      const base = instantForETDate(etDateStr, sport.fixedTriggerET.hour, sport.fixedTriggerET.minute);
+      const latest = new Date(startTime.getTime() - 15 * 60 * 1000);
+      for (let i = 0; i < FIXED_TRIGGER_RETRY_OFFSETS_MINUTES.length; i++) {
+        let triggerTime = new Date(base.getTime() + FIXED_TRIGGER_RETRY_OFFSETS_MINUTES[i] * 60 * 1000);
+        if (triggerTime > latest) {
+          if (i === 0) triggerTime = latest;
+          else continue;
+        }
+        entries.push({ sport, matchup, homeTeam, awayTeam, startTime, triggerTime, gameId: game.id, tier: i + 1, leadMin: null });
+        const triggerET = triggerTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
+        tierLabels.push(`fixed=${triggerET}`);
+      }
+    } else {
+      for (let i = 0; i < RETRY_LEAD_TIMES_MINUTES.length; i++) {
+        const leadMin = RETRY_LEAD_TIMES_MINUTES[i];
+        const triggerTime = new Date(startTime.getTime() - leadMin * 60 * 1000);
+        entries.push({ sport, matchup, homeTeam, awayTeam, startTime, triggerTime, gameId: game.id, tier: i + 1, leadMin });
+        const triggerET = triggerTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
+        tierLabels.push(`T${leadMin}=${triggerET}`);
+      }
+    }
+    if (logGames) log(`    ${matchup} | Game: ${startET} | ${tierLabels.join(' / ')} | id: ${game.id}`);
+  }
+  return entries;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -179,10 +304,9 @@ async function buildPlan(etDateStr) {
   for (const sport of SPORTS) {
     const games = await fetchGamesForETDate(sport.key, etDateStr);
     if (games === null) {
-      // NOTE: buildPlanResilient only retries intra-day when the WHOLE slate is
-      // empty. If another sport has games, this failed sport is dropped until the
-      // next daily build — so "will retry" here means tomorrow, not in minutes.
-      log(`  ${sport.label}: fetch FAILED — will retry on next daily build (intra-day only if no sport has games)`);
+      const retry = makeSportFetchRetryEntry({ sport, dateStr: etDateStr, attempt: 1 });
+      schedule.push(retry);
+      log(`  ${sport.label}: fetch FAILED — queued an isolated retry in 1m; healthy sports continue`);
       fetchFailed = true;
       continue;
     }
@@ -193,45 +317,7 @@ async function buildPlan(etDateStr) {
 
     log(`  ${sport.label}: ${games.length} games`);
 
-    for (const { raw: game, startTime } of games) {
-      const homeTeam = game.home_team?.full_name || game.home_team?.name || 'Home';
-      const awayTeam = game.visitor_team?.full_name || game.away_team?.full_name || game.visitor_team?.name || game.away_team?.name || 'Away';
-      const matchup = `${awayTeam} @ ${homeTeam}`;
-      const startET = startTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
-
-      // Emit one schedule entry per trigger tier. Two shapes:
-      //   • Fixed-time sports (sport.fixedTriggerET set): fire at a fixed ET
-      //     wall-clock time + spaced retries, capped so we never trigger after
-      //     kickoff. leadMin is null → distinguishes these in the run logs.
-      //   • Lead-time sports (NBA/NHL/MLB): fire at startTime − T-90/60/30/15.
-      // Either way, run-agentic-picks.js's "already has pick" dedup turns every
-      // tier after a successful pick into a ~1s no-op.
-      const tierLabels = [];
-      if (sport.fixedTriggerET) {
-        const base = instantForETDate(etDateStr, sport.fixedTriggerET.hour, sport.fixedTriggerET.minute);
-        const latest = new Date(startTime.getTime() - 15 * 60 * 1000); // never pick after kickoff
-        for (let i = 0; i < FIXED_TRIGGER_RETRY_OFFSETS_MINUTES.length; i++) {
-          let triggerTime = new Date(base.getTime() + FIXED_TRIGGER_RETRY_OFFSETS_MINUTES[i] * 60 * 1000);
-          if (triggerTime > latest) {
-            if (i === 0) triggerTime = latest; // early game: keep one trigger, fire ASAP
-            else continue;                      // drop retries that would land after kickoff
-          }
-          schedule.push({ sport, matchup, homeTeam, awayTeam, startTime, triggerTime, gameId: game.id, tier: i + 1, leadMin: null });
-          const triggerET = triggerTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
-          tierLabels.push(`fixed=${triggerET}`);
-        }
-      } else {
-        for (let i = 0; i < RETRY_LEAD_TIMES_MINUTES.length; i++) {
-          const leadMin = RETRY_LEAD_TIMES_MINUTES[i];
-          const triggerTime = new Date(startTime.getTime() - leadMin * 60 * 1000);
-          const tier = i + 1; // 1 = primary, 2 = first retry, 3 = final retry
-          schedule.push({ sport, matchup, homeTeam, awayTeam, startTime, triggerTime, gameId: game.id, tier, leadMin });
-          const triggerET = triggerTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
-          tierLabels.push(`T${leadMin}=${triggerET}`);
-        }
-      }
-      log(`    ${matchup} | Game: ${startET} | ${tierLabels.join(' / ')} | id: ${game.id}`);
-    }
+    schedule.push(...scheduleGamesForSport(sport, games, etDateStr));
   }
 
   schedule.sort((a, b) => a.triggerTime - b.triggerTime);
@@ -239,8 +325,10 @@ async function buildPlan(etDateStr) {
   // up to RETRY_LEAD_TIMES_MINUTES.length entries (currently 4: T-90/60/30/15),
   // but only the first successful tier actually generates a pick — the rest
   // hit the picks-script dedup and exit in ~1 second.
-  const uniqueGameIds = new Set(schedule.map(e => e.gameId));
-  log(`\n📋 Total: ${schedule.length} trigger entries across ${uniqueGameIds.size} unique games (up to ${RETRY_LEAD_TIMES_MINUTES.length} retries per game)`);
+  const gameEntries = schedule.filter((entry) => !isSportFetchRetryEntry(entry));
+  const uniqueGameIds = new Set(gameEntries.map(e => `${e.sport.key}:${e.gameId}`));
+  const retryCount = schedule.length - gameEntries.length;
+  log(`\n📋 Total: ${gameEntries.length} trigger entries across ${uniqueGameIds.size} unique games (up to ${RETRY_LEAD_TIMES_MINUTES.length} retries per game)${retryCount ? ` + ${retryCount} sport fetch retry` : ''}`);
   return { schedule, fetchFailed };
 }
 
@@ -281,8 +369,9 @@ async function writeTomorrowBoardNonFatal(tomorrowDateStr) {
 // Here, an empty plan caused by fetch FAILURES retries with backoff up to
 // `maxWaitMs`. A clean empty (fetches succeeded, no games) returns at once; a
 // partial result (some sport failed but others have games) proceeds rather
-// than holding a good slate hostage to one flaky sport — the failed sport gets
-// another shot on the next daily build. Returns the schedule array.
+// than holding a good slate hostage to one flaky sport. The failed sport is
+// represented by a retry entry in the same live queue, so it gets another shot
+// in minutes without rebuilding or duplicating healthy leagues.
 // The last ET date a plan was actually BUILT for — the hibernation guard's
 // ledger. A laptop that sleeps through a day boundary mid-execution wakes,
 // finishes the stale day, and must NOT sleep to the next 5 AM while the
@@ -298,6 +387,17 @@ async function buildPlanResilient(dateStr, { maxWaitMs = 90 * 60 * 1000 } = {}) 
     attempt++;
     const { schedule, fetchFailed } = await buildPlan(dateStr);
     if (schedule.length > 0 || !fetchFailed) {
+      const urgent = hasUrgentUpcomingTrigger(schedule, Date.now());
+      if (urgent) {
+        // On a midday restart/wake, board refreshes can make many odds calls.
+        // The slate is already persisted by the morning build; do not hold an
+        // imminent pick window behind non-critical snapshot enrichment.
+        log('⏩ Urgent pick window detected — deferring daily/tomorrow board refreshes until the next scheduled build');
+        return schedule;
+      }
+      if (fetchFailed) {
+        log('🔁 Partial provider failure remains queued inside today’s live plan; public-board snapshots will keep the healthy leagues while that sport retries');
+      }
       // Plan built (or genuinely no games) — snapshot the public slate for the app.
       await writeDailySlateNonFatal(dateStr);
       // Refresh TODAY's board at the 5 AM plan build too. The snapshot was
@@ -328,12 +428,59 @@ async function buildPlanResilient(dateStr, { maxWaitMs = 90 * 60 * 1000 } = {}) 
 // ═══════════════════════════════════════════════════════════════════════════
 // RUN: Execute a single script
 // ═══════════════════════════════════════════════════════════════════════════
-function runScript(scriptPath, args = []) {
+class SchedulerChildDeadlineError extends Error {
+  constructor({ scriptPath, timeoutMs, deadlineAt, limitingReason }) {
+    const deadline = deadlineAt instanceof Date ? deadlineAt : new Date(deadlineAt);
+    const deadlineText = Number.isFinite(deadline.getTime()) ? deadline.toISOString() : 'unknown';
+    super(`Child deadline reached before ${limitingReason} (${scriptPath}; budget ${Math.round(timeoutMs / 1000)}s; deadline ${deadlineText})`);
+    this.name = 'SchedulerChildDeadlineError';
+    this.code = 'SCHEDULER_CHILD_DEADLINE';
+    this.retryable = true;
+    this.scriptPath = scriptPath;
+    this.timeoutMs = timeoutMs;
+    this.deadlineAt = deadlineText;
+    this.limitingReason = limitingReason;
+  }
+}
+
+function signalChildProcessGroup(proc, signal) {
+  // Each runner owns a process group so its model/search subprocesses cannot
+  // outlive a deadline and keep researching or writing after the queue moves.
+  try {
+    if (Number.isInteger(proc?.pid)) process.kill(-proc.pid, signal);
+  } catch {
+    try { proc?.kill(signal); } catch {}
+  }
+}
+
+function runScript(scriptPath, args = [], options = {}) {
   return new Promise((resolve, reject) => {
+    const timeoutMs = Number.isFinite(Number(options.timeoutMs))
+      ? Math.max(0, Math.floor(Number(options.timeoutMs)))
+      : CHILD_MAX_RUNTIME_MS;
+    const limitingReason = options.limitingReason || 'hard_cap';
+    const deadlineAt = options.deadlineAt instanceof Date
+      ? options.deadlineAt
+      : new Date(Date.now() + timeoutMs);
+    const deadlineError = () => new SchedulerChildDeadlineError({
+      scriptPath,
+      timeoutMs,
+      deadlineAt,
+      limitingReason,
+    });
+
+    // Do not start a process that cannot finish inside a safe wall-clock
+    // window. Its untouched later tier remains in the dynamic queue.
+    if (timeoutMs <= 0) {
+      reject(deadlineError());
+      return;
+    }
+
     log(`  📡 Running: node ${scriptPath} ${args.join(' ')}`);
     const proc = spawn('node', [scriptPath, ...args], {
       cwd: PROJECT_DIR,
       stdio: ['ignore', 'pipe', 'pipe'],
+      detached: true,
       env: { ...process.env, NODE_OPTIONS: '' }
     });
 
@@ -348,11 +495,48 @@ function runScript(scriptPath, args = []) {
     });
     proc.stderr.on('data', (data) => { output += data.toString(); });
 
-    proc.on('close', (code) => {
+    let settled = false;
+    let timedOut = false;
+    let killTimer = null;
+    const persistOutput = () => {
       try {
-        const logFile = join(LOG_DIR, `${new Date().toISOString().split('T')[0]}-${args.join('-')}.log`);
+        const logFile = join(LOG_DIR, `${getTodayETDateStr()}-${args.join('-')}.log`);
         appendFileSync(logFile, output);
       } catch {}
+    };
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      timedOut = true;
+      signalChildProcessGroup(proc, 'SIGTERM');
+      // Do not advance the queue while a timed-out writer is still alive.
+      // Wait through the grace period even if the direct Node child closes:
+      // model/search descendants share the group and must be gone too.
+      killTimer = setTimeout(() => {
+        signalChildProcessGroup(proc, 'SIGKILL');
+        if (settled) return;
+        settled = true;
+        persistOutput();
+        log(`  ⏱️ Deadline stopped child tree before ${limitingReason}; later tier remains eligible`);
+        reject(deadlineError());
+      }, CHILD_TERMINATION_GRACE_MS);
+    }, timeoutMs);
+
+    proc.on('error', (error) => {
+      if (settled) return;
+      if (timedOut) return; // deadline timer owns group cleanup + rejection
+      settled = true;
+      clearTimeout(timeout);
+      if (killTimer) clearTimeout(killTimer);
+      reject(error);
+    });
+
+    proc.on('close', (code) => {
+      if (settled) return;
+      if (timedOut) return; // wait for the group cleanup grace period
+      settled = true;
+      clearTimeout(timeout);
+      if (killTimer) clearTimeout(killTimer);
+      persistOutput();
       if (code === 0) {
         log(`  ✅ Done`);
         resolve(output);
@@ -361,9 +545,6 @@ function runScript(scriptPath, args = []) {
         reject(new Error(`Exit code ${code}`));
       }
     });
-
-    // 45 min safety timeout — Pro-model game picks with retries can run long
-    setTimeout(() => { proc.kill('SIGTERM'); reject(new Error('Timeout 45min')); }, 45 * 60 * 1000);
   });
 }
 
@@ -377,12 +558,9 @@ function runScript(scriptPath, args = []) {
 // pitches MOVE (Aug 13 2026: Reds @ White Sox went 2:10 → 1:10 ET after the
 // plan was built, turning our T-90 into a real T-30 — the pick landed with 21
 // minutes to spare). Every 10 minutes, re-check today's un-started MLB games
-// against MLB's official schedule API; if a game now starts EARLIER than
-// planned and we're already inside its true lead window, fire its pick + props
-// runs immediately instead of waiting on triggers anchored to the stale time.
-// Games moved LATER just log — the stale triggers fire early and the retry
-// tiers cover the lineup gate. Double-fires are safe by construction:
-// run-agentic's already-has-pick dedup and the store-guard both no-op repeats.
+// against MLB's official schedule API. If a game moves in either direction,
+// every remaining tier is re-anchored to the verified start so a delay cannot
+// burn all retries early and a moved-up game cannot wait on stale clocks.
 
 const DRIFT_CHECK_INTERVAL_MS = 10 * 60 * 1000;
 const DRIFT_MIN_DELTA_MS = 5 * 60 * 1000;
@@ -423,7 +601,6 @@ function startMlbDriftGuard(schedule) {
   if (activeDriftTimer) { clearInterval(activeDriftTimer); activeDriftTimer = null; }
   const mlbPrimaries = schedule.filter((e) => e.sport.key === 'baseball_mlb' && e.tier === 1);
   if (mlbPrimaries.length === 0) return;
-  const fired = new Set();
   let checking = false;
   const fmtET = (d) => d.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
 
@@ -432,7 +609,7 @@ function startMlbDriftGuard(schedule) {
     checking = true;
     try {
       const now = Date.now();
-      const pending = mlbPrimaries.filter((e) => !fired.has(e.gameId) && e.startTime.getTime() > now - 60 * 60 * 1000);
+      const pending = mlbPrimaries.filter((e) => e.startTime.getTime() > now - 60 * 60 * 1000);
       if (pending.length === 0) return;
       const official = await fetchOfficialMlbStarts(getTodayETDateStr());
       for (const entry of pending) {
@@ -441,24 +618,8 @@ function startMlbDriftGuard(schedule) {
         const deltaMs = match.start.getTime() - entry.startTime.getTime();
         if (Math.abs(deltaMs) < DRIFT_MIN_DELTA_MS) continue;
         log(`🕐 START-TIME DRIFT: ${entry.matchup} — planned ${fmtET(entry.startTime)} ET, official now ${fmtET(match.start)} ET (${Math.round(deltaMs / 60000)} min)`);
-        if (deltaMs >= 0) continue; // moved later — stale triggers fire early; retry tiers cover the gate
-        const trueStart = match.start.getTime();
-        if (now >= trueStart) continue; // already underway — the pick lane won't take a started game
-        if (now < trueStart - LEAD_TIME_MINUTES * 60 * 1000) continue; // true window not open yet; next tick re-checks
-        fired.add(entry.gameId);
-        log(`⚡ DRIFT FIRE: ${entry.matchup} moved up ${Math.round(-deltaMs / 60000)} min — running picks now, ${Math.round((trueStart - now) / 60000)} min to first pitch (id ${entry.gameId})`);
-        try {
-          await runScript('scripts/run-agentic-picks.js', [entry.sport.flag, '--game-id', String(entry.gameId)]);
-        } catch (e) {
-          log(`  ❌ Drift-fired game picks failed: ${entry.matchup}: ${e.message}`);
-        }
-        if (entry.sport.propsScript) {
-          try {
-            await runScript(`scripts/${entry.sport.propsScript}`, ['--game-id', String(entry.gameId)]);
-          } catch (e) {
-            log(`  ❌ Drift-fired props failed: ${entry.matchup}: ${e.message}`);
-          }
-        }
+        const changed = reanchorGameSchedule(schedule, entry, match.start);
+        log(`🧭 DRIFT RE-ANCHORED: ${entry.matchup} — ${changed} unfired tier(s) now follow the official ${fmtET(match.start)} ET start (id ${entry.gameId})`);
       }
     } catch (e) {
       log(`⚠️ Drift guard check failed (non-fatal, next tick retries): ${e.message}`);
@@ -474,55 +635,61 @@ async function executeSchedule(schedule) {
     log('No games scheduled — nothing to run.');
     return;
   }
-  startMlbDriftGuard(schedule);
+  await runIndependentScheduleLanes(schedule, async (laneSchedule, laneKey) => {
+    await executeDecisionLaneSchedule(laneSchedule, {
+      ownsMlbDriftGuard: laneOwnsMlbDriftGuard(laneKey, laneSchedule),
+    });
+  });
+}
 
-  // Group games that start within 15 min of each other (run them as a batch)
-  // This avoids scheduling 8 NBA games individually when they all start at 7 PM.
-  // The window is anchored to the batch's FIRST entry — chaining off the
-  // previous entry let a dense slate link 12:00→12:10→…→3:45 into one
-  // 52-entry mega-batch (Jul 5: the 4-5 PM games' tiers all fired at 1 PM
-  // against a closed lineup gate and burned every retry).
-  const batches = [];
-  let currentBatch = [schedule[0]];
-
-  for (let i = 1; i < schedule.length; i++) {
-    const batchAnchor = currentBatch[0].triggerTime.getTime();
-    const thisTrigger = schedule[i].triggerTime.getTime();
-
-    if (thisTrigger - batchAnchor <= 15 * 60 * 1000) {
-      // Within 15 min of the batch open — same batch
-      currentBatch.push(schedule[i]);
-    } else {
-      batches.push(currentBatch);
-      currentBatch = [schedule[i]];
-    }
+async function executeDecisionLaneSchedule(schedule, { ownsMlbDriftGuard = false } = {}) {
+  if (schedule.length === 0) {
+    log('No games scheduled — nothing to run.');
+    return;
   }
-  batches.push(currentBatch);
+  if (ownsMlbDriftGuard) startMlbDriftGuard(schedule);
 
-  log(`\n📦 ${batches.length} trigger windows for ${schedule.length} games`);
+  // Keep the queue dynamic. The official MLB drift guard mutates the same Date
+  // objects when a first pitch moves, so each loop re-sorts and forms the next
+  // anchored 15-minute batch from current truth. A moved-later game no longer
+  // burns all four retries against its stale morning start time.
+  let pendingEntries = [...schedule];
+  log(`\n📦 Dynamic trigger queue armed for ${schedule.length} entries`);
 
   // Coverage tracking. A game is a confirmed MISS once its FINAL retry tier has
   // fired and no pick is stored. We check the instant that last tier completes —
   // not at end-of-day — so an early slate surfaces by late morning instead of
   // after the night's last MLB game. (log + rollup; no real-time push.)
-  const lastTierTime = new Map(); // gameId -> latest triggerTime (ms)
-  for (const e of schedule) {
-    const t = e.triggerTime.getTime();
-    if (!lastTierTime.has(e.gameId) || t > lastTierTime.get(e.gameId)) lastTierTime.set(e.gameId, t);
-  }
-  const uniqueGameIds = new Set(schedule.map(e => e.gameId));
+  const uniqueGameIds = new Set(
+    schedule.filter((entry) => !isSportFetchRetryEntry(entry)).map(scheduleEntryKey),
+  );
   const missedGames = [];
-  // Props-miss tracking (Aug 3): a CRASHED props run is a miss; a run that
-  // stores nothing is Gary passing the game (legitimate, by contract). A
-  // later tier's success clears the flag, so only games that END their tiers
-  // with props in a failed state alert.
+  const gameOutcomeByGame = new Map();
+  // Props-miss tracking: the child must emit a structured stored/pass outcome.
+  // A later tier's accepted outcome clears an earlier technical failure.
   const propsFailedByGame = new Map(); // gameId -> last error message
+  const propsOutcomeByGame = new Map(); // game key -> stored | pass
   const missedProps = [];
+  const skippedStartedGames = new Set();
+  const coverageCheckedGames = new Set();
+  const deferredSlateRefreshDates = new Set();
   let gameAlreadyHasPick = null;
-  try { ({ gameAlreadyHasPick } = await import('../src/services/picksService.js')); }
+  let nflGameAlreadyHasPick = null;
+  try { ({ gameAlreadyHasPick, nflGameAlreadyHasPick } = await import('../src/services/picksService.js')); }
   catch (e) { log(`⚠️ Coverage check disabled — picksService load failed: ${e.message}`); }
 
-  for (const batch of batches) {
+  while (pendingEntries.length > 0) {
+    const overdue = coalesceOverdueTiers(pendingEntries, Date.now());
+    pendingEntries = overdue.entries;
+    for (const entry of overdue.skipped) {
+      const tierTag = entry.leadMin == null ? 'fixed retry' : `T-${entry.leadMin}`;
+      log(`⏭️ SUPERSEDED WINDOW SKIPPED: ${entry.sport.label} ${entry.matchup} ${tierTag} — a newer tier remains (id ${entry.gameId})`);
+    }
+
+    let batch = nextTriggerBatch(pendingEntries, {
+      now: Date.now(),
+      crossLaneLookaheadMs: CROSS_LANE_TRIGGER_LOOKAHEAD_MS,
+    });
     const triggerTime = batch[0].triggerTime;
     const now = Date.now();
     const waitMs = triggerTime.getTime() - now;
@@ -535,7 +702,80 @@ async function executeSchedule(schedule) {
       await sleepUntilWallClock(triggerTime);
     }
 
-    log(`\n🔔 Trigger window: ${batch.length} game(s)`);
+    // A drift correction may have re-ordered the queue while we slept.
+    batch = nextTriggerBatch(pendingEntries, {
+      now: Date.now(),
+      crossLaneLookaheadMs: CROSS_LANE_TRIGGER_LOOKAHEAD_MS,
+    });
+    const batchSet = new Set(batch);
+    pendingEntries = pendingEntries.filter((entry) => !batchSet.has(entry));
+
+    // A partial provider outage lives in this same dynamic queue. Retry only
+    // the failed sport, then inject its recovered game tiers without rebuilding
+    // or duplicating healthy sports. Exponential retries continue while the ET
+    // game day is current; incomplete FBS identity is retryable, never guessed.
+    const fetchRetries = batch.filter(isSportFetchRetryEntry);
+    batch = batch.filter((entry) => !isSportFetchRetryEntry(entry));
+    for (const retry of fetchRetries) {
+      if (getTodayETDateStr() !== retry.dateStr) {
+        log(`⏭️ ${retry.sport.label} fetch retry expired at the ET day boundary (${retry.dateStr})`);
+        continue;
+      }
+      log(`🔁 ${retry.sport.label} isolated slate retry ${retry.attempt} for ${retry.dateStr}`);
+      const games = await fetchGamesForETDate(retry.sport.key, retry.dateStr);
+      if (games === null) {
+        const nextRetry = makeSportFetchRetryEntry({
+          sport: retry.sport,
+          dateStr: retry.dateStr,
+          attempt: retry.attempt + 1,
+        });
+        pendingEntries.push(nextRetry);
+        const waitMin = Math.round((nextRetry.triggerTime.getTime() - Date.now()) / 60_000);
+        log(`  ❌ ${retry.sport.label} still unavailable — next isolated retry in ${waitMin}m`);
+        continue;
+      }
+
+      const upcomingGames = games.filter(({ startTime }) => startTime.getTime() > Date.now());
+      const recovered = scheduleGamesForSport(retry.sport, upcomingGames, retry.dateStr);
+      pendingEntries.push(...recovered);
+      schedule.push(...recovered);
+      for (const entry of recovered) uniqueGameIds.add(scheduleEntryKey(entry));
+      if (ownsMlbDriftGuard && retry.sport.key === 'baseball_mlb' && recovered.length > 0) {
+        startMlbDriftGuard(schedule);
+      }
+      log(`  ✅ ${retry.sport.label} recovered: ${upcomingGames.length} upcoming game(s), ${recovered.length} trigger tier(s) inserted`);
+      if (games.length > upcomingGames.length) {
+        log(`  ⏭️ ${retry.sport.label}: ${games.length - upcomingGames.length} already-started game(s) were not backfilled`);
+      }
+      if (!hasUrgentUpcomingTrigger(recovered, Date.now())) {
+        await writeDailySlateNonFatal(retry.dateStr);
+      } else {
+        deferredSlateRefreshDates.add(retry.dateStr);
+        log(`  ⏩ ${retry.sport.label} recovered inside a live pick window — slate refresh deferred so the pick runs first`);
+      }
+    }
+
+    if (batch.length === 0) continue;
+
+    // Laptop wake/catch-up safety: never replay a betting task after the game
+    // has started. This applies equally to game picks and props.
+    const coverageBatch = batch;
+    const { runnable: runnableBatch, stale } = partitionStartedEntries(batch, Date.now());
+    for (const entry of stale) {
+      const key = scheduleEntryKey(entry);
+      if (!skippedStartedGames.has(key)) {
+        skippedStartedGames.add(key);
+        log(`⏭️ STALE WINDOW SKIPPED: ${entry.sport.label} ${entry.matchup} already started — no game pick or props will run (id ${entry.gameId})`);
+      }
+    }
+    batch = runnableBatch;
+
+    log(`\n🔔 Trigger window: ${batch.length} runnable game(s), ${stale.length} stale skip(s)`);
+
+    // A pending clock from another lane can be ignored by child budgets only
+    // while that lane is genuinely enrolled in this batch. Lanes remove
+    // themselves after their complete game+props work finishes.
+    const activeBatchLaneKeys = new Set(batch.map(decisionLaneKey));
 
     // Group this batch by sport so we run game picks for the same sport together
     // (better for disk cache — all NHL picks, then all NHL props)
@@ -546,67 +786,212 @@ async function executeSchedule(schedule) {
       bySport.get(key).push(entry);
     }
 
-    // Process sports by SPORT_RUN_PRIORITY so a lighter slate isn't stuck
-    // behind MLB's full picks+props block in a shared window.
-    // Order only — still strictly sequential, still picks→props per sport.
+    // Process sports by SPORT_RUN_PRIORITY. NFL writes through its atomic
+    // weekly ledger; NCAAF and the shared daily lane write through the atomic
+    // daily ledger. That lets the two football slates use bounded research
+    // pools without losing a concurrently completed MLB/NBA decision.
     const orderedSports = [...bySport.entries()].sort(
       (a, b) => (SPORT_RUN_PRIORITY[a[0]] ?? 99) - (SPORT_RUN_PRIORITY[b[0]] ?? 99)
     );
-    for (const [sportKey, games] of orderedSports) {
-      const sport = games[0].sport;
-      log(`\n── ${sport.label}: ${games.length} game(s) ──`);
-
-      // Run all game picks for this sport first.
-      // We pass --game-id (BDL game id) so we always target the exact game,
-      // never a substring match (which would collide on Red/White Sox or doubleheaders).
-      for (const entry of games) {
-        // Never fire a tier before its own clock — a retry that runs early
-        // hits the closed lineup gate, stores nothing, and is spent. (Catch-up
-        // after a long prior run is the normal case: past-due entries don't wait.)
-        if (entry.triggerTime.getTime() - Date.now() > 90 * 1000) {
-          await sleepUntilWallClock(entry.triggerTime);
+    // The three decision lanes start together. Inside each lane, game calls
+    // lead props; there is deliberately no cross-lane barrier. A long shared
+    // MLB/NBA decision therefore cannot delay NFL/NCAAF props, and a football
+    // props run cannot delay the shared lane's next game decision.
+    const runGameDecision = async (entry) => {
+      const sport = entry.sport;
+      // Never fire a tier before its own clock — a retry that runs early
+      // hits the closed lineup gate, stores nothing, and is spent. (Catch-up
+      // after a long prior run is the normal case: past-due entries don't wait.)
+      if (entry.triggerTime.getTime() > Date.now()) {
+        await sleepUntilWallClock(entry.triggerTime);
+      }
+      if (gameHasStarted(entry, Date.now())) {
+        const key = scheduleEntryKey(entry);
+        skippedStartedGames.add(key);
+        log(`  ⏭️ Game-pick window expired while earlier work ran: ${entry.sport.label} ${entry.matchup} (id ${entry.gameId})`);
+        return;
+      }
+      const tierWord = entry.tier > 1 ? 'retry' : 'primary';
+      const tierTag = entry.leadMin == null ? ` [${tierWord}, fixed 10AM]` : ` [${tierWord} T-${entry.leadMin}]`;
+      try {
+        log(`  📊 Game picks: ${entry.matchup}${tierTag} (id ${entry.gameId})`);
+        const childBudget = childExecutionBudget({
+          entry,
+          pendingEntries: pendingEntriesForChildBudget(entry, pendingEntries, activeBatchLaneKeys),
+          maxRuntimeMs: CHILD_MAX_RUNTIME_MS,
+          safetyBufferMs: CHILD_DEADLINE_SAFETY_MS,
+        });
+        // Exact BDL id only — never a matchup substring (doubleheader-safe).
+        const output = await runScript(
+          'scripts/run-agentic-picks.js',
+          [sport.flag, '--game-id', String(entry.gameId)],
+          childBudget,
+        );
+        const outcome = parsePickRunOutcome(output);
+        const targetStored = outcome?.status === 'stored'
+          && outcome?.game_ids?.map(String).includes(String(entry.gameId));
+        if (!targetStored) {
+          throw new Error(`Game-pick runner returned no verified stored outcome for game ${entry.gameId}`);
         }
-        const tierWord = entry.tier > 1 ? 'retry' : 'primary';
-        const tierTag = entry.leadMin == null ? ` [${tierWord}, fixed 10AM]` : ` [${tierWord} T-${entry.leadMin}]`;
-        try {
-          log(`  📊 Game picks: ${entry.matchup}${tierTag} (id ${entry.gameId})`);
-          await runScript('scripts/run-agentic-picks.js', [sport.flag, '--game-id', String(entry.gameId)]);
-        } catch (e) {
-          log(`  ❌ Game picks failed: ${entry.matchup}${tierTag}: ${e.message}`);
+        gameOutcomeByGame.set(scheduleEntryKey(entry), 'stored');
+        log(`  🧾 Game-pick outcome: stored for ${entry.matchup}`);
+      } catch (e) {
+        log(`  ❌ Game picks failed: ${entry.matchup}${tierTag}: ${e.message}`);
+      }
+    };
+
+    const nflGames = bySport.get('americanfootball_nfl') || [];
+
+    const ncaafGames = bySport.get('americanfootball_ncaaf') || [];
+
+    const runSharedDailyGameLane = async () => {
+      for (const [sportKey, games] of orderedSports) {
+        if (sportKey === 'americanfootball_nfl' || sportKey === 'americanfootball_ncaaf') continue;
+        const sport = games[0].sport;
+        log(`\n── ${sport.label}: ${games.length} game decision(s), sequential daily-ledger lane ──`);
+        for (const entry of games) {
+          await runGameDecision(entry);
         }
       }
+    };
 
-      // Then run props for all games (disk cache from game picks). Sports with no
-      // propsScript configured (game picks only) skip this entirely.
-      for (const entry of games) {
-        if (!sport.propsScript) break;
-        // Same early-fire guard as game picks above.
-        if (entry.triggerTime.getTime() - Date.now() > 90 * 1000) {
-          await sleepUntilWallClock(entry.triggerTime);
-        }
-        const tierWord = entry.tier > 1 ? 'retry' : 'primary';
-        const tierTag = entry.leadMin == null ? ` [${tierWord}, fixed 10AM]` : ` [${tierWord} T-${entry.leadMin}]`;
-        try {
-          log(`  🎯 Props: ${entry.matchup}${tierTag} (id ${entry.gameId})`);
-          await runScript(`scripts/${sport.propsScript}`, ['--game-id', String(entry.gameId)]);
-          propsFailedByGame.delete(entry.gameId);
-        } catch (e) {
-          log(`  ❌ Props failed: ${entry.matchup}${tierTag}: ${e.message}`);
-          propsFailedByGame.set(entry.gameId, e.message);
-        }
+    // Each sport lane keeps its own game-before-props ordering. Football props
+    // no longer wait for an unrelated slow MLB/NBA game decision: NFL, NCAAF,
+    // and the shared daily-ledger lane advance independently, while every
+    // writer still uses its atomic sport/date storage path.
+    const runPropDecision = async (entry) => {
+      const sport = entry.sport;
+      if (!sport.propsScript) return;
+      // Same early-fire guard as game picks above.
+      if (entry.triggerTime.getTime() > Date.now()) {
+        await sleepUntilWallClock(entry.triggerTime);
       }
-    }
+      const gameKey = scheduleEntryKey(entry);
+      if (gameHasStarted(entry, Date.now())) {
+        skippedStartedGames.add(gameKey);
+        log(`  ⏭️ Props window expired while earlier work ran: ${entry.sport.label} ${entry.matchup} (id ${entry.gameId})`);
+        return;
+      }
+      const tierWord = entry.tier > 1 ? 'retry' : 'primary';
+      const tierTag = entry.leadMin == null ? ` [${tierWord}, fixed 10AM]` : ` [${tierWord} T-${entry.leadMin}]`;
+      try {
+        log(`  🎯 Props: ${entry.matchup}${tierTag} (id ${entry.gameId})`);
+        const childBudget = childExecutionBudget({
+          entry,
+          pendingEntries: pendingEntriesForChildBudget(entry, pendingEntries, activeBatchLaneKeys),
+          maxRuntimeMs: CHILD_MAX_RUNTIME_MS,
+          safetyBufferMs: CHILD_DEADLINE_SAFETY_MS,
+        });
+        const output = await runScript(
+          `scripts/${sport.propsScript}`,
+          ['--game-id', String(entry.gameId)],
+          childBudget,
+        );
+        const outcome = parsePropRunOutcome(output);
+        const targetCovered = outcome?.game_ids?.map(String).includes(String(entry.gameId));
+        if (!outcome || !['stored', 'pass'].includes(outcome.status) || !targetCovered) {
+          throw new Error(`Props runner returned no accepted stored/pass outcome for game ${entry.gameId}`);
+        }
+        propsOutcomeByGame.set(gameKey, outcome.status);
+        propsFailedByGame.delete(gameKey);
+        log(`  🧾 Props outcome: ${outcome.status} for ${entry.matchup} (${outcome.pick_count || 0} pick(s))`);
+      } catch (e) {
+        log(`  ❌ Props failed: ${entry.matchup}${tierTag}: ${e.message}`);
+        propsFailedByGame.set(gameKey, e.message);
+      }
+    };
+
+    const runNFLDecisionLane = async () => {
+      if (nflGames.length === 0) return;
+      const workers = Math.min(NFL_GAME_DECISION_CONCURRENCY, nflGames.length);
+      log(`\n── NFL: ${nflGames.length} per-game decision pipeline(s), ${workers} bounded worker(s) ──`);
+      await runPerGameDecisionPipeline({
+        entries: nflGames,
+        concurrency: NFL_GAME_DECISION_CONCURRENCY,
+        runGame: runGameDecision,
+        runProps: runPropDecision,
+      });
+    };
+
+    const runNCAAFDecisionLane = async () => {
+      if (ncaafGames.length === 0) return;
+      const workers = ncaafClusterConcurrency(ncaafGames.length, {
+        maxWorkers: NCAAF_CLUSTER_MAX_CONCURRENCY,
+        targetGamesPerWorker: NCAAF_TARGET_GAMES_PER_WORKER,
+      });
+      log(`\n── NCAAF: ${ncaafGames.length} per-game decision pipeline(s), ${workers} bounded worker(s) ──`);
+      await runPerGameDecisionPipeline({
+        entries: ncaafGames,
+        concurrency: workers,
+        runGame: runGameDecision,
+        runProps: runPropDecision,
+      });
+    };
+
+    const runSharedPropLane = async () => {
+      for (const [sportKey, games] of orderedSports) {
+        if (sportKey === 'americanfootball_nfl' || sportKey === 'americanfootball_ncaaf') continue;
+        const sport = games[0].sport;
+        if (!sport.propsScript) continue;
+        log(`\n── ${sport.label}: ${games.length} prop decision(s), sequential lane ──`);
+        for (const entry of games) await runPropDecision(entry);
+      }
+    };
+
+    const trackedLane = (laneKey, lane) => ({
+      runGames: async () => {
+        try {
+          await lane.runGames();
+        } catch (error) {
+          activeBatchLaneKeys.delete(laneKey);
+          throw error;
+        }
+      },
+      runProps: async () => {
+        try {
+          await lane.runProps();
+        } finally {
+          activeBatchLaneKeys.delete(laneKey);
+        }
+      },
+    });
+
+    await runIndependentDecisionLanes([
+      trackedLane('americanfootball_nfl', {
+        // The three-worker NFL cap applies to the entire exact-game pipeline:
+        // game decision first, then that same game's props/TD decision.
+        runGames: runNFLDecisionLane,
+        runProps: async () => {},
+      }),
+      trackedLane('americanfootball_ncaaf', {
+        // One college worker completes the exact game's decision before
+        // starting that same game's props. There is no full-slate barrier, so
+        // an early-completing game is not held behind dozens of peers sharing
+        // its kickoff cluster.
+        runGames: runNCAAFDecisionLane,
+        runProps: async () => {},
+      }),
+      trackedLane('shared', {
+        runGames: runSharedDailyGameLane,
+        runProps: runSharedPropLane,
+      }),
+    ]);
 
     // Coverage: any game in this window whose FINAL tier just fired with no
     // stored pick is a confirmed miss — flag it now (picks store synchronously
     // during runScript above, so the DB read here is accurate). Checked once per
     // game (only at its last tier), so no duplicate warnings.
-    if (typeof gameAlreadyHasPick === 'function') {
-      for (const entry of batch) {
-        if (entry.triggerTime.getTime() !== lastTierTime.get(entry.gameId)) continue;
+    for (const entry of coverageBatch) {
+      if (!isFinalPendingTier(entry, pendingEntries)) continue;
+      const gameKey = scheduleEntryKey(entry);
+      if (coverageCheckedGames.has(gameKey)) continue;
+      coverageCheckedGames.add(gameKey);
+      if (typeof gameAlreadyHasPick === 'function') {
         const etDate = entry.startTime.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
         try {
-          const res = await gameAlreadyHasPick(entry.sport.label, entry.homeTeam, entry.awayTeam, etDate, entry.gameId);
+          const res = entry.sport.label === 'NFL' && typeof nflGameAlreadyHasPick === 'function'
+            ? await nflGameAlreadyHasPick(entry.homeTeam, entry.awayTeam, entry.startTime, entry.gameId)
+            : await gameAlreadyHasPick(entry.sport.label, entry.homeTeam, entry.awayTeam, etDate, entry.gameId);
           if (!res?.exists) {
             missedGames.push(entry);
             log(`⚠️ MISSED PICK: ${entry.sport.label} ${entry.matchup} — 0 stored after all retry tiers (id ${entry.gameId})`);
@@ -614,17 +999,33 @@ async function executeSchedule(schedule) {
         } catch (e) {
           log(`⚠️ Coverage check failed for ${entry.sport.label} ${entry.matchup}: ${e.message}`);
         }
-        // Props miss: the game just fired its FINAL tier and its last props
-        // run crashed (successes clear the flag above).
-        if (entry.sport.propsScript && propsFailedByGame.has(entry.gameId)) {
-          missedProps.push(entry);
-          log(`⚠️ MISSED PROPS: ${entry.sport.label} ${entry.matchup} — last props run crashed after all retry tiers (id ${entry.gameId}): ${propsFailedByGame.get(entry.gameId)}`);
-        }
+      }
+      // Props coverage does not depend on the picksService helper loading.
+      // The child outcome is already held in memory, so keep this warning live
+      // even if the later database coverage import is unavailable.
+      if (entry.sport.propsScript && !propsOutcomeByGame.has(gameKey)) {
+        missedProps.push(entry);
+        const reason = propsFailedByGame.get(gameKey) || 'no stored/pass outcome';
+        log(`⚠️ MISSED PROPS: ${entry.sport.label} ${entry.matchup} — no accepted stored/pass outcome after all retry tiers (id ${entry.gameId}): ${reason}`);
+      }
+    }
+
+    if (deferredSlateRefreshDates.size > 0 && !hasUrgentUpcomingTrigger(pendingEntries, Date.now())) {
+      for (const dateStr of deferredSlateRefreshDates) {
+        await writeDailySlateNonFatal(dateStr);
+        deferredSlateRefreshDates.delete(dateStr);
       }
     }
   }
 
-  if (activeDriftTimer) { clearInterval(activeDriftTimer); activeDriftTimer = null; }
+  // A long final decision can cross every later trigger. Do not leave a
+  // successfully recovered sport absent from the public slate in that case.
+  for (const dateStr of deferredSlateRefreshDates) await writeDailySlateNonFatal(dateStr);
+
+  if (ownsMlbDriftGuard && activeDriftTimer) {
+    clearInterval(activeDriftTimer);
+    activeDriftTimer = null;
+  }
 
   log('\n🏁 All games complete for today.');
 
@@ -637,15 +1038,31 @@ async function executeSchedule(schedule) {
     log(`📊 Daily pick coverage: ${covered}/${uniqueGameIds.size} covered — ${missedGames.length} MISSED: ${missedGames.map(g => `${g.sport.label} ${g.matchup}`).join(' | ')}`);
   }
   if (missedProps.length === 0) {
-    log(`📊 Daily props coverage: no crashed props runs ✅ (empty slates = Gary passing, by design)`);
+    log(`📊 Daily props coverage: every props game produced a verified stored/pass outcome ✅`);
   } else {
-    log(`📊 Daily props coverage: ${missedProps.length} game(s) ended with a CRASHED props run: ${missedProps.map(g => `${g.sport.label} ${g.matchup}`).join(' | ')}`);
+    log(`📊 Daily props coverage: ${missedProps.length} game(s) ended without a verified stored/pass outcome: ${missedProps.map(g => `${g.sport.label} ${g.matchup}`).join(' | ')}`);
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
+async function runBounded(items, concurrency, worker) {
+  if (!Array.isArray(items) || items.length === 0) return;
+  const workerCount = Math.max(1, Math.min(Math.trunc(concurrency) || 1, items.length));
+  let nextIndex = 0;
+
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (nextIndex < items.length) {
+      // JavaScript runs this read/increment synchronously before the await, so
+      // each worker receives one distinct item without another coordination
+      // primitive.
+      const item = items[nextIndex++];
+      await worker(item);
+    }
+  }));
+}
+
 function getTodayETDateStr() {
   return getETDateStr(new Date());
 }
@@ -753,7 +1170,7 @@ async function main() {
   const todaySchedule = await buildPlanResilient(getTodayETDateStr());
   // Filter by GAME start time, not trigger time — if the game itself hasn't started, run picks
   // even if the 90-min lead window has already passed (picks just trigger immediately).
-  const upcoming = todaySchedule.filter(e => e.startTime > new Date());
+  const upcoming = todaySchedule.filter(e => isSportFetchRetryEntry(e) || e.startTime > new Date());
   if (upcoming.length > 0) {
     log(`\n⚡ ${upcoming.length} game(s) still upcoming today — running`);
     await executeSchedule(upcoming);
@@ -772,7 +1189,7 @@ async function main() {
     if (lastPlannedDate !== null && wakeDate !== lastPlannedDate) {
       log(`\n⚡ ${wakeDate} was never planned (execution slept across the day boundary) — building it now`);
       const recovered = await buildPlanResilient(wakeDate);
-      const stillUpcoming = recovered.filter(e => e.startTime > new Date());
+      const stillUpcoming = recovered.filter(e => isSportFetchRetryEntry(e) || e.startTime > new Date());
       if (stillUpcoming.length > 0) {
         log(`⚡ ${stillUpcoming.length} game(s) still upcoming today — running`);
         await executeSchedule(stillUpcoming);
@@ -795,7 +1212,7 @@ async function main() {
       const todaySchedule = await buildPlanResilient(currentDate);
       // Filter by GAME start time, not trigger time — if the game itself hasn't started, run picks
   // even if the 90-min lead window has already passed (picks just trigger immediately).
-  const upcoming = todaySchedule.filter(e => e.startTime > new Date());
+  const upcoming = todaySchedule.filter(e => isSportFetchRetryEntry(e) || e.startTime > new Date());
       if (upcoming.length > 0) {
         log(`⚡ ${upcoming.length} game(s) still upcoming — running`);
         await executeSchedule(upcoming);

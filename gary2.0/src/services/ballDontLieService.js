@@ -1,6 +1,12 @@
 import { BalldontlieAPI } from '@balldontlie/sdk';
 import axios from 'axios';
 import { nhlSeason } from '../utils/dateUtils.js';
+import { waitForBdlRequestSlot } from './bdlRequestGate.js';
+import {
+  isFootballBdlCacheKey,
+  readSharedFootballCache,
+  writeSharedFootballCache,
+} from './bdlSharedFootballCache.js';
 
 // Set cache TTL (5 minutes for playoff data)
 const TTL_MINUTES = 5;
@@ -109,6 +115,162 @@ function initApi() {
  * @param {number} ttlMinutes - Cache TTL in minutes
  */
 const inflight = new Map(); // key -> Promise<data>
+const footballGameBatchQueues = new Map();
+const footballTeamSeasonBatchQueues = new Map();
+
+function gameHasTeam(game, teamId) {
+  const wanted = String(teamId);
+  return [
+    game?.home_team?.id,
+    game?.visitor_team?.id,
+    game?.away_team?.id,
+    game?.home_team_id,
+    game?.visitor_team_id,
+    game?.away_team_id
+  ].some(id => id !== null && id !== undefined && String(id) === wanted);
+}
+
+/**
+ * Coalesce the two concurrent full-season football schedule requests made for
+ * a matchup. BDL's games endpoint accepts multiple team_ids[], so one response
+ * can be split back into the exact per-team arrays each caller requested.
+ */
+function fetchFootballGamesBatched(sportKey, params, fetchCombined) {
+  const teamIds = Array.isArray(params?.team_ids) ? params.team_ids.filter(Boolean) : [];
+  const isFootball = sportKey === 'americanfootball_nfl' || sportKey === 'americanfootball_ncaaf';
+  // Only full-season pages are safe to combine without changing either
+  // caller's result window. NFL/NCAAF matchup totals are comfortably <100.
+  if (!isFootball || teamIds.length !== 1 || Number(params?.per_page || 0) < 100) {
+    return fetchCombined(params);
+  }
+
+  const baseParams = { ...params };
+  delete baseParams.team_ids;
+  const queueKey = `${sportKey}:${JSON.stringify(baseParams)}`;
+
+  return new Promise((resolve, reject) => {
+    let queue = footballGameBatchQueues.get(queueKey);
+    if (!queue) {
+      queue = [];
+      footballGameBatchQueues.set(queueKey, queue);
+      queueMicrotask(async () => {
+        footballGameBatchQueues.delete(queueKey);
+        const entries = [...queue];
+        // Cap each combined page at the two teams from one matchup. This keeps
+        // the result set below per_page=100 even if an unrelated caller starts
+        // several football schedule reads in the same microtask.
+        const pairs = [];
+        for (let i = 0; i < entries.length; i += 2) pairs.push(entries.slice(i, i + 2));
+        await Promise.all(pairs.map(async (pair) => {
+          try {
+            const combinedTeamIds = [...new Set(pair.flatMap(entry => entry.teamIds))];
+            const combined = await pair[0].fetchCombined({
+              ...baseParams,
+              team_ids: combinedTeamIds
+            });
+            for (const entry of pair) {
+              const requested = entry.teamIds[0];
+              entry.resolve((combined || []).filter(game => gameHasTeam(game, requested)));
+            }
+          } catch (error) {
+            if (pair.length === 1) {
+              pair[0].reject(error);
+              return;
+            }
+            // Preserve the old partial-success behavior if a multi-team query
+            // is rejected by retrying each side with the original request.
+            await Promise.all(pair.map(async (entry) => {
+              try {
+                entry.resolve(await entry.fetchCombined({
+                  ...baseParams,
+                  team_ids: entry.teamIds
+                }));
+              } catch (singleError) {
+                entry.reject(singleError);
+              }
+            }));
+          }
+        }));
+      });
+    }
+    queue.push({ teamIds, fetchCombined, resolve, reject });
+  });
+}
+
+function teamIdFromStatRow(row) {
+  return row?.team?.id ?? row?.team_id ?? row?.teamId ?? null;
+}
+
+/**
+ * Coalesce the two team-season-stat reads made while building a football
+ * matchup. Both NFL and NCAAF endpoints accept team_ids[], and their rows carry
+ * team identity so the combined response can be split back to each caller.
+ * If an unexpected response omits identity, fall back to the original
+ * one-team requests instead of guessing which row belongs to which side.
+ */
+function fetchFootballTeamSeasonStatsBatched(sportKey, teamId, season, postseason, fetchRows) {
+  const isFootball = sportKey === 'americanfootball_nfl' || sportKey === 'americanfootball_ncaaf';
+  if (!isFootball || !teamId || !season) return fetchRows([teamId]);
+
+  const queueKey = `${sportKey}:${season}:${Boolean(postseason)}`;
+  return new Promise((resolve, reject) => {
+    let queue = footballTeamSeasonBatchQueues.get(queueKey);
+    if (!queue) {
+      queue = [];
+      footballTeamSeasonBatchQueues.set(queueKey, queue);
+      queueMicrotask(async () => {
+        footballTeamSeasonBatchQueues.delete(queueKey);
+        const entries = [...queue];
+        const pairs = [];
+        for (let i = 0; i < entries.length; i += 2) pairs.push(entries.slice(i, i + 2));
+
+        await Promise.all(pairs.map(async (pair) => {
+          try {
+            const teamIds = [...new Set(pair.map(entry => entry.teamId))];
+            const combined = await pair[0].fetchRows(teamIds);
+            const rows = Array.isArray(combined) ? combined : [];
+            const hasTeamIdentity = rows.some(row => teamIdFromStatRow(row) != null);
+
+            if (pair.length === 1 || rows.length === 0 || hasTeamIdentity) {
+              for (const entry of pair) {
+                const selected = pair.length === 1
+                  ? rows
+                  : rows.filter(row => String(teamIdFromStatRow(row)) === String(entry.teamId));
+                entry.resolve(selected);
+              }
+              return;
+            }
+
+            // Defensive compatibility path for an undocumented/unlabelled
+            // response shape: preserve the original one-team behavior.
+            await Promise.all(pair.map(async (entry) => {
+              try {
+                entry.resolve(await entry.fetchRows([entry.teamId]));
+              } catch (error) {
+                entry.reject(error);
+              }
+            }));
+          } catch (error) {
+            if (pair.length === 1) {
+              pair[0].reject(error);
+              return;
+            }
+            // Preserve the old partial-success behavior if a multi-team query
+            // is rejected by retrying each side with the original request.
+            await Promise.all(pair.map(async (entry) => {
+              try {
+                entry.resolve(await entry.fetchRows([entry.teamId]));
+              } catch (singleError) {
+                entry.reject(singleError);
+              }
+            }));
+          }
+        }));
+      });
+    }
+    queue.push({ teamId, fetchRows, resolve, reject });
+  });
+}
 
 // Transient network failures — DNS blips, connection resets, timeouts.
 // undici's fetch throws TypeError("fetch failed") with the real code on
@@ -137,6 +299,17 @@ export async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES) {
     }
   }
 
+  // Football desks run in separate child processes. Reuse substantive JSON
+  // fetched by a neighboring game before booking another account-wide BDL
+  // request. Other sports never enter this path.
+  if (isFootballBdlCacheKey(key)) {
+    const shared = await readSharedFootballCache(key, now);
+    if (shared.hit) {
+      cacheMap.set(key, { data: shared.data, expiry: shared.expiry });
+      return shared.data;
+    }
+  }
+
   // Single-flight: if another caller is already fetching the same key,
   // wait on their promise instead of issuing a duplicate request.
   if (inflight.has(key)) {
@@ -155,6 +328,13 @@ export async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES) {
     let netAttempt = 0;
     for (;;) {
       try {
+        if (isFootballBdlCacheKey(key)) {
+          await waitForBdlRequestSlot(key);
+          // A sibling may have filled the shared cache while this process waited
+          // for the global slot. Re-check immediately before the real transport.
+          const shared = await readSharedFootballCache(key);
+          if (shared.hit) return shared.data;
+        }
         return await fetchFn();
       } catch (err) {
         const status = err?.response?.status ?? err?.status;
@@ -179,8 +359,10 @@ export async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES) {
   };
 
   const promise = fetchWithRetry()
-    .then(data => {
-      cacheMap.set(key, { data, expiry: now + (ttlMinutes * 60 * 1000) });
+    .then(async data => {
+      const expiry = Date.now() + (ttlMinutes * 60 * 1000);
+      cacheMap.set(key, { data, expiry });
+      await writeSharedFootballCache(key, data, ttlMinutes);
       return data;
     })
     .finally(() => {
@@ -240,6 +422,166 @@ function normalizeName(value) {
   s = s.replace(/[^a-z0-9\s]/g, ' ');
   s = s.replace(/\s+/g, ' ').trim();
   return s;
+}
+
+/**
+ * Build the existing NFL prop-log summary from raw BDL stat rows.
+ * Kept pure so the batched transport can be tested independently from HTTP.
+ */
+export function summarizeNflPlayerGameLogs(rawStats, numGames = 5) {
+  const gameStats = (rawStats || [])
+    .filter((g) => {
+      if (!g.game?.date) return false;
+      const status = String(g.game?.status || '').trim().toLowerCase();
+      // The NFL stats feed can expose an in-progress row. Never let a partial
+      // box displace a completed game in the recent-results sample. Older
+      // fixtures without a status remain compatible with the established
+      // summary contract.
+      return !status || status.includes('final') || status === 'post' ||
+        status === 'complete' || status === 'completed';
+    })
+    .sort((a, b) => new Date(b.game.date) - new Date(a.game.date))
+    .slice(0, numGames);
+
+  if (gameStats.length === 0) return null;
+
+  const gp = gameStats.length;
+  const totals = {
+    pass_yds: 0, pass_tds: 0, pass_att: 0, pass_comp: 0, ints: 0,
+    rush_yds: 0, rush_att: 0, rush_tds: 0,
+    rec_yds: 0, receptions: 0, targets: 0, rec_tds: 0
+  };
+
+  const gameByGame = gameStats.map(g => {
+    const playerTeamId = g.team?.id ?? g.player?.team?.id;
+    const stats = {
+      gameId: g.game?.id,
+      date: g.game?.date || g.game?.datetime,
+      status: g.game?.status ?? null,
+      opponent: g.game?.home_team?.id === playerTeamId
+        ? g.game?.visitor_team?.abbreviation
+        : g.game?.home_team?.abbreviation,
+      isHome: g.game?.home_team?.id === playerTeamId,
+      pass_yds: g.passing_yards || 0,
+      pass_tds: g.passing_touchdowns || 0,
+      pass_att: g.passing_attempts || 0,
+      pass_comp: g.passing_completions || 0,
+      ints: g.passing_interceptions || 0,
+      rush_yds: g.rushing_yards || 0,
+      rush_att: g.rushing_attempts || 0,
+      rush_tds: g.rushing_touchdowns || 0,
+      rec_yds: g.receiving_yards || 0,
+      receptions: g.receptions || 0,
+      targets: g.receiving_targets || 0,
+      rec_tds: g.receiving_touchdowns || 0
+    };
+
+    Object.keys(totals).forEach(k => { totals[k] += stats[k]; });
+    return stats;
+  });
+
+  const averages = {};
+  Object.keys(totals).forEach(k => {
+    averages[k] = gp > 0 ? (totals[k] / gp).toFixed(1) : '0.0';
+  });
+
+  const calcConsistency = (statKey) => {
+    const values = gameByGame.map(g => g[statKey]);
+    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    if (mean === 0) return 1.0;
+    const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length;
+    const stdDev = Math.sqrt(variance);
+    const cv = stdDev / mean;
+    return Math.max(0, Math.min(1, 1 - cv)).toFixed(2);
+  };
+
+  const consistency = {
+    pass_yds: calcConsistency('pass_yds'),
+    rush_yds: calcConsistency('rush_yds'),
+    rec_yds: calcConsistency('rec_yds'),
+    receptions: calcConsistency('receptions')
+  };
+
+  const homeGames = gameByGame.filter(g => g.isHome);
+  const awayGames = gameByGame.filter(g => !g.isHome);
+  const calcSplitAvg = (games, statKey) => {
+    if (games.length === 0) return 'N/A';
+    return (games.reduce((sum, g) => sum + g[statKey], 0) / games.length).toFixed(1);
+  };
+  const splitFor = (games) => ({
+    games: games.length,
+    pass_yds: calcSplitAvg(games, 'pass_yds'),
+    rush_yds: calcSplitAvg(games, 'rush_yds'),
+    rec_yds: calcSplitAvg(games, 'rec_yds'),
+    receptions: calcSplitAvg(games, 'receptions')
+  });
+  const splits = { home: splitFor(homeGames), away: splitFor(awayGames) };
+
+  let targetTrend = null;
+  const targetValues = gameByGame.map(g => g.targets || 0);
+  if (targetValues.some(t => t > 0)) {
+    const l5TargetsAvg = targetValues.reduce((a, b) => a + b, 0) / gp;
+    const l2TargetsAvg = gp >= 2
+      ? targetValues.slice(0, 2).reduce((a, b) => a + b, 0) / 2
+      : l5TargetsAvg;
+    const l3TargetsAvg = gp >= 3
+      ? targetValues.slice(0, 3).reduce((a, b) => a + b, 0) / 3
+      : l5TargetsAvg;
+    const targetChange = l5TargetsAvg > 0
+      ? ((l2TargetsAvg - l5TargetsAvg) / l5TargetsAvg * 100).toFixed(0)
+      : 0;
+    const isSpike = parseFloat(targetChange) >= 20;
+    const isDeclining = parseFloat(targetChange) <= -20;
+    targetTrend = {
+      l5Avg: l5TargetsAvg.toFixed(1),
+      l3Avg: l3TargetsAvg.toFixed(1),
+      l2Avg: l2TargetsAvg.toFixed(1),
+      lastGame: targetValues[0],
+      change: targetChange,
+      trend: isSpike ? 'SPIKE' : isDeclining ? 'DECLINING' : 'STABLE',
+      gameByGame: targetValues.slice(0, 5)
+    };
+  }
+
+  let usageTrend = null;
+  const usageValues = gameByGame.map(g =>
+    (g.targets || 0) + (g.rush_att || 0) + (g.receptions || 0)
+  );
+  if (usageValues.some(u => u > 0)) {
+    const l5UsageAvg = usageValues.reduce((a, b) => a + b, 0) / gp;
+    const l2UsageAvg = gp >= 2
+      ? usageValues.slice(0, 2).reduce((a, b) => a + b, 0) / 2
+      : l5UsageAvg;
+    const usageChange = l5UsageAvg > 0
+      ? ((l2UsageAvg - l5UsageAvg) / l5UsageAvg * 100).toFixed(0)
+      : 0;
+    let usageLevel = 'LOW';
+    if (l5UsageAvg >= 15) usageLevel = 'ELITE';
+    else if (l5UsageAvg >= 10) usageLevel = 'HIGH';
+    else if (l5UsageAvg >= 5) usageLevel = 'MODERATE';
+    usageTrend = {
+      l5Avg: l5UsageAvg.toFixed(1),
+      l2Avg: l2UsageAvg.toFixed(1),
+      lastGame: usageValues[0],
+      change: usageChange,
+      level: usageLevel,
+      trend: parseFloat(usageChange) >= 15
+        ? 'INCREASING'
+        : parseFloat(usageChange) <= -15 ? 'DECREASING' : 'STABLE',
+      gameByGame: usageValues.slice(0, 5)
+    };
+  }
+
+  return {
+    gamesAnalyzed: gp,
+    games: gameByGame,
+    averages,
+    consistency,
+    splits,
+    targetTrend,
+    usageTrend,
+    lastGame: gameByGame[0] || null
+  };
 }
 
 /**
@@ -966,39 +1308,6 @@ const ballDontLieService = {
       }, ttlMinutes);
     } catch (e) {
       console.error('[Ball Don\'t Lie] ncaaf getNcaafTeamPlayers error:', e.message);
-      return [];
-    }
-  },
-
-  /**
-   * NCAAF Player Season Stats
-   * GET /ncaaf/v1/player_season_stats?team_ids[]=<ID>&season=<season>
-   * Returns season statistics for players on a specific team
-   * @param {number} teamId - BDL team ID
-   * @param {number} season - Season year (calculated dynamically if not provided)
-   * @returns {Array} - Array of player season stat objects
-   */
-  async getNcaafPlayerSeasonStats(teamId, season = null, ttlMinutes = 30) {
-    // Calculate dynamic NCAAF season: Aug-Feb spans years
-    if (!season) {
-      const month = new Date().getMonth() + 1;
-      const year = new Date().getFullYear();
-      season = month <= 7 ? year - 1 : year;
-    }
-    try {
-      if (!teamId) return [];
-      const cacheKey = `ncaaf_player_season_stats_${teamId}_${season}`;
-      return await getCachedOrFetch(cacheKey, async () => {
-        const url = `${BALLDONTLIE_API_BASE_URL}/ncaaf/v1/player_season_stats${buildQuery({ 
-          team_ids: [teamId],
-          season,
-          per_page: 100
-        })}`;
-        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
-        return response.data?.data || [];
-      }, ttlMinutes);
-    } catch (e) {
-      console.error('[Ball Don\'t Lie] ncaaf getNcaafPlayerSeasonStats error:', e.message);
       return [];
     }
   },
@@ -1798,20 +2107,12 @@ const ballDontLieService = {
         // Fetch team rosters (depth charts)
         console.log(`🏈 [Ball Don't Lie] Fetching NFL team rosters...`);
         
-        const fetchRoster = async (teamId) => {
-          try {
-            const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/teams/${teamId}/roster?season=${season}`;
-            const resp = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
-            return resp.data?.data || [];
-          } catch (e) {
-            console.warn(`[Ball Don't Lie] Could not fetch roster for team ${teamId}:`, e.message);
-            return [];
-          }
-        };
-        
+        // Starting-QB and key-player discovery already use this cached roster
+        // method. Reuse it here instead of issuing the same two HTTP requests
+        // again under the roster-depth cache key.
         const [homeRoster, awayRoster] = await Promise.all([
-          fetchRoster(homeTeam.id),
-          fetchRoster(awayTeam.id)
+          this.getNflTeamRoster(homeTeam.id, season, ttlMinutes),
+          this.getNflTeamRoster(awayTeam.id, season, ttlMinutes)
         ]);
         
         // Format player from depth chart
@@ -2339,7 +2640,7 @@ const ballDontLieService = {
    * @param {number} numGames - Number of recent games to fetch (default 5)
    * @returns {Object} - Map of playerId -> game log data with stats and trends
    */
-  async getNflPlayerGameLogsBatch(playerIds, season = null, numGames = 5, ttlMinutes = 15) {
+  async getNflPlayerGameLogsBatch(playerIds, season = null, numGames = 5, ttlMinutes = 15, options = {}) {
     // Calculate dynamic NFL season: Aug-Feb spans years
     if (!season) {
       const month = new Date().getMonth() + 1;
@@ -2348,214 +2649,92 @@ const ballDontLieService = {
     }
     try {
       if (!Array.isArray(playerIds) || playerIds.length === 0) return {};
-      
+
+      const uniquePlayerIds = [...new Set(playerIds.filter(Boolean))];
       const results = {};
-      
-      // Fetch game logs for each player in parallel (batch of 5 at a time to avoid rate limits)
-      const batchSize = 5;
-      for (let i = 0; i < playerIds.length; i += batchSize) {
-        const batch = playerIds.slice(i, i + batchSize);
-        
-        await Promise.all(batch.map(async (playerId) => {
-          const cacheKey = `nfl_player_game_logs_${playerId}_${season}_${numGames}`;
-          
-          try {
-            const logs = await getCachedOrFetch(cacheKey, async () => {
-              // Fetch player's game stats using the stats endpoint
-              // NOTE: BDL NFL stats API requires "seasons[]" (array format), not "season"
-              // CRITICAL FIX: Must fetch ALL season games (25+) because BDL API returns oldest-first
-              // by default. Only then can we sort and get the ACTUAL most recent 5 games.
-              const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/stats${buildQuery({
-                player_ids: [playerId],
-                seasons: [season], // CRITICAL: Must use seasons[] array format per BDL docs
-                per_page: 25 // Fetch full season (17 regular + some extra) to ensure we get ALL games
-              })}`;
-              
-              const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
-              // CRITICAL: BDL returns stats oldest-first, so we MUST sort by date DESCENDING
-              // to get the actual most recent games (Dec games, not Sept games)
-              const allStats = (response.data?.data || [])
-                .filter(g => g.game?.date) // Ensure valid date
-                .sort((a, b) => new Date(b.game.date) - new Date(a.game.date));
-              const gameStats = allStats.slice(0, numGames);
-              
-              if (gameStats.length === 0) return null;
-              
-              // Calculate averages and consistency
-              const gp = gameStats.length;
-              const totals = {
-                pass_yds: 0, pass_tds: 0, pass_att: 0, pass_comp: 0, ints: 0,
-                rush_yds: 0, rush_att: 0, rush_tds: 0,
-                rec_yds: 0, receptions: 0, targets: 0, rec_tds: 0
-              };
-              
-              const gameByGame = gameStats.map(g => {
-                const stats = {
-                  gameId: g.game?.id,
-                  date: g.game?.date || g.game?.datetime,
-                  opponent: g.game?.home_team?.id === g.player?.team?.id 
-                    ? g.game?.visitor_team?.abbreviation 
-                    : g.game?.home_team?.abbreviation,
-                  isHome: g.game?.home_team?.id === g.player?.team?.id,
-                  pass_yds: g.passing_yards || 0,
-                  pass_tds: g.passing_touchdowns || 0,
-                  pass_att: g.passing_attempts || 0,
-                  pass_comp: g.passing_completions || 0,
-                  ints: g.passing_interceptions || 0,
-                  rush_yds: g.rushing_yards || 0,
-                  rush_att: g.rushing_attempts || 0,
-                  rush_tds: g.rushing_touchdowns || 0,
-                  rec_yds: g.receiving_yards || 0,
-                  receptions: g.receptions || 0,
-                  targets: g.receiving_targets || 0,
-                  rec_tds: g.receiving_touchdowns || 0
-                };
-                
-                // Accumulate totals
-                Object.keys(totals).forEach(k => { totals[k] += stats[k]; });
-                
-                return stats;
-              });
-              
-              // Calculate averages
-              const averages = {};
-              Object.keys(totals).forEach(k => {
-                averages[k] = gp > 0 ? (totals[k] / gp).toFixed(1) : '0.0';
-              });
-              
-              // Calculate consistency (coefficient of variation - lower = more consistent)
-              // For key stats: pass_yds, rush_yds, rec_yds, receptions
-              const calcConsistency = (statKey) => {
-                const values = gameByGame.map(g => g[statKey]);
-                const mean = values.reduce((a, b) => a + b, 0) / values.length;
-                if (mean === 0) return 1.0;
-                const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length;
-                const stdDev = Math.sqrt(variance);
-                // Convert CV to consistency score (1 - normalized CV, capped at 0-1)
-                const cv = stdDev / mean;
-                return Math.max(0, Math.min(1, 1 - cv)).toFixed(2);
-              };
-              
-              const consistency = {
-                pass_yds: calcConsistency('pass_yds'),
-                rush_yds: calcConsistency('rush_yds'),
-                rec_yds: calcConsistency('rec_yds'),
-                receptions: calcConsistency('receptions')
-              };
-              
-              // Home/Away splits
-              const homeGames = gameByGame.filter(g => g.isHome);
-              const awayGames = gameByGame.filter(g => !g.isHome);
-              
-              const calcSplitAvg = (games, statKey) => {
-                if (games.length === 0) return 'N/A';
-                return (games.reduce((sum, g) => sum + g[statKey], 0) / games.length).toFixed(1);
-              };
-              
-              const splits = {
-                home: {
-                  games: homeGames.length,
-                  pass_yds: calcSplitAvg(homeGames, 'pass_yds'),
-                  rush_yds: calcSplitAvg(homeGames, 'rush_yds'),
-                  rec_yds: calcSplitAvg(homeGames, 'rec_yds'),
-                  receptions: calcSplitAvg(homeGames, 'receptions')
-                },
-                away: {
-                  games: awayGames.length,
-                  pass_yds: calcSplitAvg(awayGames, 'pass_yds'),
-                  rush_yds: calcSplitAvg(awayGames, 'rush_yds'),
-                  rec_yds: calcSplitAvg(awayGames, 'rec_yds'),
-                  receptions: calcSplitAvg(awayGames, 'receptions')
-                }
-              };
-              
-              // TARGET SHARE TRENDING - Detect usage spikes for WR/TE/RB
-              // Compare L2 targets vs L5 average
-              let targetTrend = null;
-              const targetValues = gameByGame.map(g => g.targets || 0);
-              if (targetValues.some(t => t > 0)) {
-                const l5TargetsAvg = targetValues.reduce((a, b) => a + b, 0) / gp;
-                const l2TargetsAvg = gp >= 2 
-                  ? targetValues.slice(0, 2).reduce((a, b) => a + b, 0) / 2 
-                  : l5TargetsAvg;
-                const l3TargetsAvg = gp >= 3
-                  ? targetValues.slice(0, 3).reduce((a, b) => a + b, 0) / 3
-                  : l5TargetsAvg;
-                
-                // Calculate target share trend
-                const targetChange = l5TargetsAvg > 0 
-                  ? ((l2TargetsAvg - l5TargetsAvg) / l5TargetsAvg * 100).toFixed(0) 
-                  : 0;
-                
-                // Detect spike (L2 avg > L5 avg by 20%+)
-                const isSpike = parseFloat(targetChange) >= 20;
-                const isDeclining = parseFloat(targetChange) <= -20;
-                
-                targetTrend = {
-                  l5Avg: l5TargetsAvg.toFixed(1),
-                  l3Avg: l3TargetsAvg.toFixed(1),
-                  l2Avg: l2TargetsAvg.toFixed(1),
-                  lastGame: targetValues[0],
-                  change: targetChange,
-                  trend: isSpike ? 'SPIKE' : isDeclining ? 'DECLINING' : 'STABLE',
-                  gameByGame: targetValues.slice(0, 5)
-                };
-              }
-              
-              // USAGE TRACKING - Proxy for snap counts using touches + targets
-              // Higher total touches = more involvement = likely more snaps
-              let usageTrend = null;
-              const usageValues = gameByGame.map(g => 
-                (g.targets || 0) + (g.rush_att || 0) + (g.receptions || 0)
-              );
-              if (usageValues.some(u => u > 0)) {
-                const l5UsageAvg = usageValues.reduce((a, b) => a + b, 0) / gp;
-                const l2UsageAvg = gp >= 2 
-                  ? usageValues.slice(0, 2).reduce((a, b) => a + b, 0) / 2 
-                  : l5UsageAvg;
-                
-                const usageChange = l5UsageAvg > 0 
-                  ? ((l2UsageAvg - l5UsageAvg) / l5UsageAvg * 100).toFixed(0) 
-                  : 0;
-                
-                // Categorize usage level
-                let usageLevel = 'LOW';
-                if (l5UsageAvg >= 15) usageLevel = 'ELITE';
-                else if (l5UsageAvg >= 10) usageLevel = 'HIGH';
-                else if (l5UsageAvg >= 5) usageLevel = 'MODERATE';
-                
-                usageTrend = {
-                  l5Avg: l5UsageAvg.toFixed(1),
-                  l2Avg: l2UsageAvg.toFixed(1),
-                  lastGame: usageValues[0],
-                  change: usageChange,
-                  level: usageLevel,
-                  trend: parseFloat(usageChange) >= 15 ? 'INCREASING' : 
-                         parseFloat(usageChange) <= -15 ? 'DECREASING' : 'STABLE',
-                  gameByGame: usageValues.slice(0, 5)
-                };
-              }
-              
-              return {
-                gamesAnalyzed: gp,
-                games: gameByGame,
-                averages,
-                consistency,
-                splits,
-                targetTrend,
-                usageTrend,
-                lastGame: gameByGame[0] || null
-              };
-            }, ttlMinutes);
-            
-            if (logs) results[playerId] = logs;
-          } catch (e) {
-            console.warn(`[Ball Don't Lie] NFL game logs fetch failed for player ${playerId}:`, e.message);
-          }
-        }));
+      const seasonType = [1, 2, 3].includes(Number(options?.seasonType))
+        ? Number(options.seasonType)
+        : 2;
+
+      const missingPlayerIds = [];
+      for (const playerId of uniquePlayerIds) {
+        const playerCacheKey = `nfl_player_game_logs_${playerId}_${season}_${seasonType}_${numGames}`;
+        const cached = cacheMap.get(playerCacheKey);
+        if (cached && Date.now() < cached.expiry) {
+          if (cached.data) results[playerId] = cached.data;
+        } else {
+          missingPlayerIds.push(playerId);
+        }
       }
-      
-      console.log(`[Ball Don't Lie] NFL game logs: fetched for ${Object.keys(results).length}/${playerIds.length} players`);
+
+      if (missingPlayerIds.length > 0) {
+        try {
+          // BDL accepts multiple player_ids[] in one stats request. Fetch every
+          // candidate together and paginate so batching never truncates a full
+          // season. Typical seven-player props boards complete in one or two
+          // page calls instead of seven separate player requests.
+          const batchKey = `nfl_player_game_logs_batch_${[...missingPlayerIds].sort().join('-')}_${season}_${seasonType}_${numGames}`;
+          const rowsByPlayer = await getCachedOrFetch(batchKey, async () => {
+            const grouped = new Map(missingPlayerIds.map(id => [String(id), []]));
+            let cursor = null;
+            const seenCursors = new Set();
+
+            do {
+              const query = {
+                player_ids: missingPlayerIds,
+                seasons: [season],
+                season_type: seasonType,
+                per_page: 100
+              };
+              if (cursor) query.cursor = cursor;
+              const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/stats${buildQuery(query)}`;
+              const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
+              for (const row of (response.data?.data || [])) {
+                const playerId = row.player?.id ?? row.player_id;
+                const key = String(playerId ?? '');
+                if (grouped.has(key)) grouped.get(key).push(row);
+              }
+              const nextCursor = response.data?.meta?.next_cursor || null;
+              cursor = nextCursor && !seenCursors.has(String(nextCursor)) ? nextCursor : null;
+              if (cursor) seenCursors.add(String(cursor));
+            } while (cursor);
+
+            return Object.fromEntries(grouped);
+          }, ttlMinutes);
+
+          const expiry = Date.now() + (ttlMinutes * 60 * 1000);
+          for (const playerId of missingPlayerIds) {
+            const logs = summarizeNflPlayerGameLogs(rowsByPlayer?.[String(playerId)] || [], numGames);
+            cacheMap.set(`nfl_player_game_logs_${playerId}_${season}_${seasonType}_${numGames}`, { data: logs, expiry });
+            if (logs) results[playerId] = logs;
+          }
+        } catch (batchError) {
+          // Keep the old partial-success behavior if the multi-ID request is
+          // ever rejected: retry each player through the original one-player
+          // query shape instead of losing the entire props evidence set.
+          console.warn(`[Ball Don't Lie] Batched NFL game logs failed; retrying per player: ${batchError.message}`);
+          await Promise.all(missingPlayerIds.map(async (playerId) => {
+            const playerCacheKey = `nfl_player_game_logs_${playerId}_${season}_${seasonType}_${numGames}`;
+            try {
+              const logs = await getCachedOrFetch(playerCacheKey, async () => {
+                const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/stats${buildQuery({
+                  player_ids: [playerId],
+                  seasons: [season],
+                  season_type: seasonType,
+                  per_page: 25
+                })}`;
+                const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
+                return summarizeNflPlayerGameLogs(response.data?.data || [], numGames);
+              }, ttlMinutes);
+              if (logs) results[playerId] = logs;
+            } catch (playerError) {
+              console.warn(`[Ball Don't Lie] NFL game logs fetch failed for player ${playerId}:`, playerError.message);
+            }
+          }));
+        }
+      }
+
+      console.log(`[Ball Don't Lie] NFL game logs: fetched for ${Object.keys(results).length}/${uniquePlayerIds.length} players`);
       return results;
     } catch (e) {
       console.error('[Ball Don\'t Lie] nfl getNflPlayerGameLogsBatch error:', e.message);
@@ -3031,27 +3210,86 @@ const ballDontLieService = {
     }
   },
 
+  /**
+   * Fetch one provider game by its canonical BDL id.
+   *
+   * Scheduler exact-game runs must not discover one NFL matchup by downloading
+   * one or more date/slate pages first. The SDK exposes a dedicated
+   * `/games/:id` route, so keep that lookup explicit and independently cached.
+   */
+  async getGame(sportKey, gameId, ttlMinutes = 1) {
+    if (gameId === null || gameId === undefined || String(gameId).trim() === '') {
+      throw new Error('getGame requires a provider game id');
+    }
+
+    try {
+      const normalizedId = /^\d+$/.test(String(gameId)) ? Number(gameId) : gameId;
+      const cacheKey = `${sportKey}_game_${String(gameId)}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const sport = this._getSportClient(sportKey);
+        if (sport?.getGame) {
+          const response = await sport.getGame(normalizedId);
+          const game = response?.data?.data ?? response?.data ?? null;
+          return _normalizeGame(sportKey, game);
+        }
+
+        const endpointMap = {
+          icehockey_nhl: 'nhl/v1/games',
+          americanfootball_nfl: 'nfl/v1/games',
+          americanfootball_ncaaf: 'ncaaf/v1/games',
+          basketball_ncaab: 'ncaab/v1/games',
+          basketball_nba: 'nba/v1/games',
+          baseball_mlb: 'mlb/v1/games',
+        };
+        const path = endpointMap[sportKey];
+        if (!path) throw new Error('getGame not supported');
+        const url = `${BALLDONTLIE_API_BASE_URL}/${path}/${encodeURIComponent(String(gameId))}`;
+        const response = await fetch(url, {
+          headers: { Authorization: API_KEY },
+          signal: AbortSignal.timeout(BDL_TIMEOUT_MS),
+        });
+        if (!response.ok) {
+          const body = await response.text().catch(() => '');
+          throw new Error(`HTTP ${response.status} ${body}`);
+        }
+        const json = await response.json().catch(() => ({}));
+        return _normalizeGame(sportKey, json?.data ?? null);
+      }, ttlMinutes);
+    } catch (error) {
+      console.error(`[Ball Don't Lie] ${sportKey} getGame(${gameId}) error:`, error.message);
+      throw error;
+    }
+  },
+
   async getGames(sportKey, params = {}, ttlMinutes = 10) {
     try {
       const cacheKey = `${sportKey}_games_${JSON.stringify(params)}`;
-      return await getCachedOrFetch(cacheKey, async () => {
-        let games;
+      const fetchGames = async (requestParams) => {
         const sport = this._getSportClient(sportKey);
-        if (sport?.getGames) {
-          const resp = await sport.getGames(params);
-          games = resp?.data || [];
-        } else {
-          const endpointMap = {
-            icehockey_nhl: 'nhl/v1/games',
-            americanfootball_nfl: 'nfl/v1/games',
-            americanfootball_ncaaf: 'ncaaf/v1/games',
-            basketball_ncaab: 'ncaab/v1/games',
-            basketball_nba: 'nba/v1/games',
-            baseball_mlb: 'mlb/v1/games'
-          };
+        const endpointMap = {
+          icehockey_nhl: 'nhl/v1/games',
+          americanfootball_nfl: 'nfl/v1/games',
+          americanfootball_ncaaf: 'ncaaf/v1/games',
+          basketball_ncaab: 'ncaab/v1/games',
+          basketball_nba: 'nba/v1/games',
+          baseball_mlb: 'mlb/v1/games'
+        };
+
+        const fetchPage = async (pageParams) => {
+          if (sport?.getGames) {
+            const resp = await sport.getGames(pageParams);
+            const rows = Array.isArray(resp?.data)
+              ? resp.data
+              : (Array.isArray(resp?.data?.data) ? resp.data.data : []);
+            return {
+              rows,
+              nextCursor: resp?.meta?.next_cursor ?? resp?.data?.meta?.next_cursor ?? null,
+            };
+          }
+
           const path = endpointMap[sportKey];
           if (!path) throw new Error('getGames not supported');
-          const qs = buildQuery(params);
+          const qs = buildQuery(pageParams);
           const url = `https://api.balldontlie.io/${path}${qs}`;
           const resp = await fetch(url, { headers: { Authorization: API_KEY }, signal: AbortSignal.timeout(BDL_TIMEOUT_MS) });
           if (!resp.ok) {
@@ -3059,10 +3297,62 @@ const ballDontLieService = {
             throw new Error(`HTTP ${resp.status} ${text}`);
           }
           const json = await resp.json().catch(() => ({}));
-          games = Array.isArray(json?.data) ? json.data : [];
+          return {
+            rows: Array.isArray(json?.data) ? json.data : [],
+            nextCursor: json?.meta?.next_cursor ?? null,
+          };
+        };
+
+        // A full college Saturday includes FCS matchups in the provider feed
+        // and can exceed BDL's 100-row page before the FBS policy is applied.
+        // Follow every NCAAF cursor first; callers then classify the complete
+        // provider result instead of silently publishing only page one.
+        const paginate = sportKey === 'americanfootball_ncaaf';
+        const allGames = [];
+        const seenCursors = new Set();
+        let cursor = requestParams?.cursor ?? null;
+        let pageCount = 0;
+
+        for (;;) {
+          if (pageCount > 0) {
+            // getCachedOrFetch reserves the first transport. Each additional
+            // page must reserve its own account-wide slot as well.
+            await waitForBdlRequestSlot(`${cacheKey}:page:${pageCount + 1}`);
+          }
+          const pageParams = cursor == null
+            ? { ...requestParams }
+            : { ...requestParams, cursor };
+          const page = await fetchPage(pageParams);
+          allGames.push(...page.rows);
+          pageCount += 1;
+
+          if (!paginate || page.nextCursor == null) break;
+          const cursorKey = String(page.nextCursor);
+          if (seenCursors.has(cursorKey)) {
+            throw new Error(`NCAAF games pagination repeated cursor ${cursorKey}`);
+          }
+          seenCursors.add(cursorKey);
+          cursor = page.nextCursor;
+          if (pageCount >= 100) {
+            throw new Error('NCAAF games pagination exceeded 100 pages');
+          }
         }
-        // Normalize field names to standard (NBA) convention
-        return games.map(g => _normalizeGame(sportKey, g));
+
+        // Normalize field names to standard (NBA) convention. Dedupe by exact
+        // provider game id because adjacent UTC-date pages can overlap.
+        const seenGameIds = new Set();
+        return allGames
+          .map(g => _normalizeGame(sportKey, g))
+          .filter((game) => {
+            if (!paginate || game?.id == null) return true;
+            const key = String(game.id);
+            if (seenGameIds.has(key)) return false;
+            seenGameIds.add(key);
+            return true;
+          });
+      };
+      return await getCachedOrFetch(cacheKey, async () => {
+        return fetchFootballGamesBatched(sportKey, params, fetchGames);
       }, ttlMinutes);
     } catch (e) {
       console.error(`[Ball Don't Lie] ${sportKey} getGames error:`, e.message);
@@ -3341,7 +3631,13 @@ const ballDontLieService = {
       const cacheKey = `${sportKey}_team_stats_${JSON.stringify(params)}`;
       return await getCachedOrFetch(cacheKey, async () => {
         const sport = this._getSportClient(sportKey);
-        const fn = sport?.getTeamStats || sport?.getStats;
+        // NFL's SDK `getStats` is the PLAYER box-score endpoint. Treating it as
+        // a fallback for team stats returns one row per player and can silently
+        // turn the first player row for each team/game into a fake team box.
+        // Football has a dedicated /team_stats HTTP route below, so only use an
+        // SDK method when the client actually exposes `getTeamStats`.
+        const isFootball = sportKey === 'americanfootball_nfl' || sportKey === 'americanfootball_ncaaf';
+        const fn = sport?.getTeamStats || (!isFootball ? sport?.getStats : null);
         if (fn) {
           const resp = await fn.call(sport, params);
           return resp?.data || [];
@@ -3426,6 +3722,34 @@ const ballDontLieService = {
       const cacheKey = `${sportKey}_team_season_stats_${teamId}_${season}_${postseason}`;
       return await getCachedOrFetch(cacheKey, async () => {
         if (!teamId || !season) return [];
+        // Football team-season endpoints accept multiple team_ids[]. The home
+        // and away profile reads start together, so combine their transport
+        // while retaining the existing per-team cache keys and return shape.
+        if (sportKey === 'americanfootball_nfl' || sportKey === 'americanfootball_ncaaf') {
+          const path = sportKey === 'americanfootball_nfl'
+            ? 'nfl/v1/team_season_stats'
+            : 'ncaaf/v1/team_season_stats';
+          const fetchRows = async (teamIds) => {
+            const params = { season, team_ids: teamIds };
+            if (sportKey === 'americanfootball_nfl') params.postseason = postseason;
+            if (sportKey === 'americanfootball_ncaaf') params.per_page = 100;
+            const url = `https://api.balldontlie.io/${path}${buildQuery(params)}`;
+            const resp = await fetch(url, { headers: { Authorization: API_KEY }, signal: AbortSignal.timeout(BDL_TIMEOUT_MS) });
+            if (!resp.ok) {
+              const text = await resp.text().catch(() => '');
+              throw new Error(`HTTP ${resp.status} ${text}`);
+            }
+            const json = await resp.json().catch(() => ({}));
+            return Array.isArray(json?.data) ? json.data : [];
+          };
+          return fetchFootballTeamSeasonStatsBatched(
+            sportKey,
+            teamId,
+            season,
+            postseason,
+            fetchRows
+          );
+        }
         // NHL team season stats
         // BDL returns array of {name, value} pairs - convert to flat object for consistency
         if (sportKey === 'icehockey_nhl') {
@@ -3448,17 +3772,6 @@ const ballDontLieService = {
           }
           console.log(`[Ball Don't Lie] NHL team ${teamId} season stats: ${Object.keys(statsObject).length} fields loaded`);
           return statsObject;
-        }
-        // NFL team season stats
-        if (sportKey === 'americanfootball_nfl') {
-          const url = `https://api.balldontlie.io/nfl/v1/team_season_stats${buildQuery({ season, team_ids: [teamId], postseason })}`;
-          const resp = await fetch(url, { headers: { Authorization: API_KEY }, signal: AbortSignal.timeout(BDL_TIMEOUT_MS) });
-          if (!resp.ok) {
-            const text = await resp.text().catch(() => '');
-            throw new Error(`HTTP ${resp.status} ${text}`);
-          }
-          const json = await resp.json().catch(() => ({}));
-          return Array.isArray(json?.data) ? json.data : [];
         }
         // NCAAB team season stats
         if (sportKey === 'basketball_ncaab') {
@@ -3492,19 +3805,7 @@ const ballDontLieService = {
           }
           return data;
         }
-        // NBA/NCAAF: fall back to standings/leaders or dedicated season stats
-        // NBA: no direct team season stats; caller should use getStandingsGeneric + leaders
-        // NCAAF: use dedicated team_season_stats per dev docs
-        if (sportKey === 'americanfootball_ncaaf') {
-          const url = `https://api.balldontlie.io/ncaaf/v1/team_season_stats${buildQuery({ season, team_ids: [teamId], per_page: 100 })}`;
-          const resp = await fetch(url, { headers: { Authorization: API_KEY }, signal: AbortSignal.timeout(BDL_TIMEOUT_MS) });
-          if (!resp.ok) {
-            const text = await resp.text().catch(() => '');
-            throw new Error(`HTTP ${resp.status} ${text}`);
-          }
-          const json = await resp.json().catch(() => ({}));
-          return Array.isArray(json?.data) ? json.data : [];
-        }
+        // NBA: no direct team season stats; caller should use standings/leaders.
         return [];
       }, ttlMinutes);
     } catch (e) {

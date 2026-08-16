@@ -2291,6 +2291,10 @@ ${storylinesGrounding ? `\n— THE STORYLINES —\n${storylinesGrounding}` : ''}
     injuries: injuriesSection || gameContextGrounding || '',
     verifiedTaleOfTape,
     recentScores,
+    // The exact confirmed lineups that passed the shared BDL + official MLB
+    // fallback gate. Downstream desks must reuse this object instead of
+    // independently fetching a weaker lineup source.
+    confirmedLineups: { home: homeData, away: awayData },
     venue: typeof venue === 'string' ? venue : venue?.name || 'Unknown',
     tokenMenu,
     homeRecord: null,

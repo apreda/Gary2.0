@@ -348,10 +348,12 @@ export const nflFetchers = {
   },
 
   EPA_LAST_5: async (bdlSport, home, away, season) => {
-    // Fetch last 5 completed games for each team to compute actual L5 scoring
+    // Match the full-season request made by the scout report so this token can
+    // reuse that cached schedule. An NFL season is well below 100 games and we
+    // still sort and take exactly the latest five below.
     const [homeGamesRaw, awayGamesRaw] = await Promise.all([
-      ballDontLieService.getGames(bdlSport, { team_ids: [home.id], seasons: [season], per_page: 25 }),
-      ballDontLieService.getGames(bdlSport, { team_ids: [away.id], seasons: [season], per_page: 25 })
+      ballDontLieService.getGames(bdlSport, { team_ids: [home.id], seasons: [season], per_page: 100 }),
+      ballDontLieService.getGames(bdlSport, { team_ids: [away.id], seasons: [season], per_page: 100 })
     ]);
 
     const calcL5Scoring = (games, teamId) => {
@@ -404,17 +406,10 @@ export const nflFetchers = {
   },
 
   RED_ZONE_DEFENSE: async (bdlSport, home, away, season) => {
-    // Try to get actual red zone defense data from recent games (opponent stats)
-    const [homeGames, awayGames] = await Promise.all([
-      ballDontLieService.getTeamStats ? 
-        ballDontLieService.getTeamStats(bdlSport, { team_ids: [home.id], seasons: [season], per_page: 10 }) : [],
-      ballDontLieService.getTeamStats ? 
-        ballDontLieService.getTeamStats(bdlSport, { team_ids: [away.id], seasons: [season], per_page: 10 }) : []
-    ]);
-    
     // For defense, we need opponent's red zone stats when playing against this team
     // This requires getting opponent stats from games, which is complex
-    // For now, fall back to defensive efficiency metrics
+    // For now, use defensive efficiency metrics. Do not download team-game rows:
+    // they were never read by this calculation and added two BDL requests.
     
     const [homeStatsArr, awayStatsArr] = await Promise.all([
       ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
@@ -1137,12 +1132,20 @@ export const nflFetchers = {
     try {
       const homeId = home.id || home.teamId;
       const awayId = away.id || away.teamId;
-      const homeGames = homeId ? await ballDontLieService.getGames('americanfootball_nfl', { team_ids: [homeId], seasons: [season], per_page: 50 }).catch(() => []) : [];
-      const awayGames = awayId ? await ballDontLieService.getGames('americanfootball_nfl', { team_ids: [awayId], seasons: [season], per_page: 50 }).catch(() => []) : [];
+      // Use the same full-season query shape as the scout report. That makes
+      // both sides cache hits during research instead of two new BDL calls.
+      const [homeGames, awayGames] = await Promise.all([
+        homeId
+          ? ballDontLieService.getGames('americanfootball_nfl', { team_ids: [homeId], seasons: [season], per_page: 100 }).catch(() => [])
+          : Promise.resolve([]),
+        awayId
+          ? ballDontLieService.getGames('americanfootball_nfl', { team_ids: [awayId], seasons: [season], per_page: 100 }).catch(() => [])
+          : Promise.resolve([])
+      ]);
 
       const today = new Date().toISOString().split('T')[0];
       const formatSchedule = (games, teamName) => {
-        const sorted = (games || []).sort((a, b) => new Date(a.date || a.datetime) - new Date(b.date || b.datetime));
+        const sorted = [...(games || [])].sort((a, b) => new Date(a.date || a.datetime) - new Date(b.date || b.datetime));
         const past = sorted.filter(g => g.status === 'Final').slice(-2);
         const future = sorted.filter(g => g.status !== 'Final' && (g.date || g.datetime) > today).slice(0, 2);
         const lines = [`${teamName}:`];

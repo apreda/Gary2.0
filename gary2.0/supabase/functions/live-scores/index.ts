@@ -1,7 +1,7 @@
 // Supabase Edge Function: live-scores
 //
 // Cloud port of scripts/poll-live-scores.js — so live scores stay fresh 24/7,
-// independent of the laptop. Polls today's MLB (BallDontLie) slate and upserts
+// independent of the laptop. Polls today's MLB / NFL / NCAAF BallDontLie slates and upserts
 // one row per game into `live_scores`, exactly the shape the iOS app reads.
 // Fired every ~1 minute by pg_cron during live windows.
 //
@@ -22,6 +22,19 @@
 //
 // Grading (grade-on-final) is a SEPARATE function/layer — this one only mirrors
 // scores, which keeps it cheap and low-risk to run all day.
+
+import {
+  addUtcDateDays,
+  footballBdlRequest,
+  normalizeFootballGames,
+} from "../_shared/liveScoreFootball.js";
+import {
+  constrainLiveScoreGateToWindow,
+  evaluateLiveScoreSourceResults,
+  isAuthoritativeSlateFullyFinal,
+  resolveLiveScoreSourceGate,
+  selectLiveScoreSources,
+} from "../_shared/liveScoreSourceGate.js";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -116,8 +129,12 @@ function isImminent(startAt: string | null, nowMs: number): boolean {
 }
 
 async function mlbGames(date: string, now: string): Promise<Game[]> {
-  const games = await bdlGet("/mlb/v1/games", { dates: [date], per_page: "50" });
-  return games.map((g: any): Game => {
+  // One ET slate spans two UTC dates. BDL accepts both dates in one request,
+  // so late West Coast games stay visible without spending a second call.
+  const games = await bdlGet("/mlb/v1/games", { dates: [date, addUtcDateDays(date)], per_page: "100" });
+  return games.map((g: any): Game | null => {
+    const gameDate = etDateStr(g.date);
+    if (gameDate && gameDate !== date) return null;
     const status = normStatus(g.status);
     const detail = status === "live" && Number.isFinite(Number(g.period))
       ? `INN ${g.period}`
@@ -131,13 +148,41 @@ async function mlbGames(date: string, now: string): Promise<Game[]> {
         // Stamp by the game's true ET slate date (BDL `dates:[date]` returns a
         // 9:38pm-ET game under the NEXT UTC day — without this it leaks onto
         // tomorrow's board). g.date is the game's UTC start instant.
-        date: etDateStr(g.date) ?? date, league: "MLB", game_id: String(g.id),
+        date: gameDate ?? date, league: "MLB", game_id: String(g.id),
         away_abbr: g.away_team?.abbreviation ?? null,
         home_abbr: g.home_team?.abbreviation ?? null,
         away_score: num(g.away_team_data?.runs),
         home_score: num(g.home_team_data?.runs),
         status, detail, outs: null, bases: null, updated_at: now,
       },
+    };
+  }).filter((game: Game | null): game is Game => game !== null);
+}
+
+// Football games use an ISO start datetime. Ask BDL for both UTC dates that
+// can contain one ET slate, then keep only games whose true ET start date is
+// the requested date. NFL includes preseason explicitly; BDL's default omits
+// it, which otherwise makes the entire August slate disappear.
+async function footballGames(league: "NFL" | "NCAAF", date: string, now: string): Promise<Game[]> {
+  const request = footballBdlRequest(league, date);
+  const raw = await bdlGet(request.path, request.params);
+  const normalized = normalizeFootballGames(raw, {
+    league,
+    targetDate: date,
+    nowMs: Date.parse(now),
+  });
+  for (const issue of normalized.issues) {
+    console.warn(`[live-scores] ${league} game ${issue.gameId ?? "?"} skipped: ${issue.message}`);
+  }
+  if (normalized.rows.length === 0 && normalized.issues.length > 0) {
+    throw new Error(`${league} returned games but none had a usable live-score shape`);
+  }
+
+  return normalized.rows.map((item: any): Game => {
+    const { _etDate, ...score } = item.row;
+    return {
+      startAt: item.startAt,
+      row: { ...score, date: _etDate, updated_at: now } as Row,
     };
   });
 }
@@ -159,14 +204,43 @@ async function upsertLiveScores(rows: Row[]): Promise<void> {
 
 // Cheap pre-BDL gate: read today's stored rows (Supabase, not BDL). Returns the
 // set of stored statuses so we can decide whether the slate is already settled.
-async function storedStatuses(date: string): Promise<string[]> {
+async function storedScoreRows(date: string): Promise<Array<{ league: string; game_id: string; status: string }>> {
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/live_scores?date=eq.${date}&select=status`,
+    `${SUPABASE_URL}/rest/v1/live_scores?date=eq.${date}&select=league,game_id,status`,
     { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } },
   );
   if (!res.ok) return []; // fail open — fall through to a normal BDL poll
   const data = await res.json();
-  return Array.isArray(data) ? data.map((r: any) => String(r.status)) : [];
+  return Array.isArray(data) ? data : [];
+}
+
+// Exact-date, pre-BDL source gate. A populated daily_slate is authoritative;
+// an unavailable, empty, or malformed read deliberately fails open so an early
+// morning slate race cannot silently hide scheduled football.
+async function dailySlateSourceGate(
+  date: string,
+  supportedLeagues: string[],
+  storedRows: Array<{ league: string; game_id: string; status: string }>,
+  nowMs: number,
+) {
+  try {
+    const url = new URL(`${SUPABASE_URL}/rest/v1/daily_slate`);
+    url.searchParams.set("date", `eq.${date}`);
+    url.searchParams.set("select", "league,bdl_game_id,commence_time");
+    const res = await fetch(url, {
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+    });
+    if (!res.ok) throw new Error(`daily_slate read ${res.status}: ${await res.text()}`);
+    const rows = await res.json();
+    const gate = resolveLiveScoreSourceGate({ rows, supportedLeagues });
+    return {
+      ...constrainLiveScoreGateToWindow(gate, { rows, storedRows, nowMs }),
+      slateRows: Array.isArray(rows) ? rows : [],
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return resolveLiveScoreSourceGate({ error: message, supportedLeagues });
+  }
 }
 
 Deno.serve(async () => {
@@ -176,25 +250,59 @@ Deno.serve(async () => {
     });
   }
   const date = estDate();
+  const stored = await storedScoreRows(date);
+  const now = new Date().toISOString();
+  const nowMs = Date.parse(now);
+  // Providers stay behind closures: creating promises before the source gate
+  // would spend the BDL request even for a league absent from daily_slate.
+  const sourceCatalog = [
+    { name: "MLB", load: () => mlbGames(date, now) },
+    { name: "NFL", load: () => footballGames("NFL", date, now) },
+    { name: "NCAAF", load: () => footballGames("NCAAF", date, now) },
+  ];
+  const sourceGate: any = await dailySlateSourceGate(
+    date,
+    sourceCatalog.map((source) => source.name),
+    stored,
+    nowMs,
+  );
 
-  // CHEAP GATE (no BDL): if today's slate is already fully populated and every
-  // game has gone FINAL, the day is done — skip the BDL fetch + upsert entirely.
-  // This is what spares BDL all evening/overnight while the cron still fires
-  // every minute. We only fall through (and pay for BDL) when there is at least
-  // one game still scheduled/live, or no rows yet for today (first populate).
-  const stored = await storedStatuses(date);
-  if (stored.length > 0 && stored.every((s) => s === "final")) {
+  // Do not infer that the whole ET slate is finished from stored rows alone.
+  // On a mixed-source day, an early MLB window may be all-final before a later
+  // NFL/NCAAF game has ever created a live_scores row. daily_slate is the exact
+  // authoritative game list; only exact final coverage of that list earns the
+  // cheap all-night exit.
+  if (isAuthoritativeSlateFullyFinal({
+    gate: sourceGate,
+    slateRows: sourceGate.slateRows,
+    storedRows: stored,
+  })) {
     return new Response(
       JSON.stringify({ ok: true, date, skipped: "slate-final", games: stored.length }),
       { headers: { "Content-Type": "application/json" } },
     );
   }
 
-  const now = new Date().toISOString();
-  const nowMs = Date.parse(now);
-  const results = await Promise.allSettled([mlbGames(date, now)]);
-  const games = results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
-  const errors = results.filter((r) => r.status === "rejected").map((r: any) => String(r.reason));
+  const sources = selectLiveScoreSources(sourceGate, sourceCatalog);
+  if (sourceGate.authoritative && sources.length === 0) {
+    return new Response(
+      JSON.stringify({ ok: true, date, skipped: "outside-live-window", games: stored.length }),
+      { headers: { "Content-Type": "application/json" } },
+    );
+  }
+  if (sourceGate.authoritative) {
+    console.log(`[live-scores] daily_slate source gate ${date}: ${sourceGate.leagues.join(", ")}`);
+  } else {
+    console.warn(`[live-scores] ${sourceGate.mode}; polling all sources (${sourceGate.reason})`);
+  }
+
+  const results = await Promise.allSettled(sources.map((source) => source.load()));
+  const evaluated = evaluateLiveScoreSourceResults({ gate: sourceGate, sources, settled: results });
+  const games: Game[] = evaluated.items;
+  const errors: string[] = evaluated.failures.map((failure: any) => {
+    console.error(`[live-scores] ${failure.name} source failed: ${failure.message}`);
+    return `${failure.name}: ${failure.message}`;
+  });
 
   const live = games.filter((g) => g.row.status === "live").length;
   const final = games.filter((g) => g.row.status === "final").length;
@@ -215,8 +323,8 @@ Deno.serve(async () => {
 
   if (!worthWriting) {
     return new Response(
-      JSON.stringify({ ok: true, date, skipped: "nothing-live", games: games.length, live, imminent, final, errors }),
-      { headers: { "Content-Type": "application/json" } },
+      JSON.stringify({ ok: errors.length === 0, date, skipped: "nothing-live", games: games.length, live, imminent, final, errors }),
+      { status: errors.length ? 502 : 200, headers: { "Content-Type": "application/json" } },
     );
   }
 
@@ -228,7 +336,8 @@ Deno.serve(async () => {
     });
   }
 
-  return new Response(JSON.stringify({ ok: true, date, games: games.length, live, imminent, final, errors }), {
+  return new Response(JSON.stringify({ ok: errors.length === 0, date, games: games.length, live, imminent, final, errors }), {
+    status: errors.length ? 502 : 200,
     headers: { "Content-Type": "application/json" },
   });
 });

@@ -14,8 +14,15 @@
 
 // MUST load env vars FIRST before any other imports
 import '../src/loadEnv.js';
+import {
+  assertPicksStillPregame,
+  exactFootballGameDiscoveryOptions,
+  formatPickRunOutcome,
+} from './lib/pickRunReliability.js';
+import { exitAfterFlushing } from './lib/processLifecycle.js';
 import { ncaabSeason } from '../src/utils/dateUtils.js';
 import { countRealStats } from '../src/services/agentic/statsSubstance.js';
+import { classifyNcaafFbsGames } from '../src/services/ncaafGamePolicy.js';
 
 // Now import modules that depend on env vars
 const { analyzeGame } = await import('../src/services/agentic/orchestrator/index.js');
@@ -66,6 +73,11 @@ const tokenToIosKey = {
   'TOV_GM': 'turnovers_per_game',
   'OREB_GM': 'oreb_per_game',
   'DREB_GM': 'dreb_per_game',
+  // NFL verified Tale of the Tape rows
+  'POINTS_GM': 'points_per_game',
+  'OPP_PTS_GM': 'opp_points_per_game',
+  'RUSH_YDS_GM': 'rushing_yards_per_game',
+  'PASS_YDS_GM': 'passing_ypg',
   // NCAAB Barttorvik stats
   'ADJOE': 'offensive_rating',
   'ADJDE': 'defensive_rating',
@@ -194,9 +206,146 @@ function formatOddsForStorage(oddsArray, pick, homeTeam, awayTeam) {
   };
   });
 }
+
+/**
+ * Identify a football pick's exact sportsbook without electing a new market.
+ * Spreads already use the explicit best-line election below. Moneylines/totals
+ * historically stored the chosen number and price but dropped the vendor; this
+ * recovers it only when one BDL book matches BOTH exactly. No consensus or
+ * cross-book fallback is allowed.
+ */
+function exactFootballMarketBook(sportsbookOdds, result) {
+  if (!Array.isArray(sportsbookOdds) || !result) return null;
+  const wantedOdds = finiteNumber(result.odds);
+  if (wantedOdds == null) return null;
+  const pickText = String(result.pick || '').trim().toLowerCase();
+  const candidates = sportsbookOdds.filter((row) => {
+    if (!row?.book || normalizeVendorForReceipt(row.book) === 'unknown') return false;
+    if (result.type === 'moneyline') return finiteNumber(row.ml) === wantedOdds;
+    if (result.type !== 'total') return false;
+    const wantedLine = finiteNumber(result.total);
+    if (wantedLine == null || finiteNumber(row.total) !== wantedLine) return false;
+    const rowOdds = pickText.startsWith('over')
+      ? finiteNumber(row.total_over_odds)
+      : pickText.startsWith('under')
+        ? finiteNumber(row.total_under_odds)
+        : null;
+    return rowOdds === wantedOdds;
+  });
+  candidates.sort((a, b) => normalizeVendorForReceipt(a.book).localeCompare(normalizeVendorForReceipt(b.book)));
+  return candidates[0]?.book ?? null;
+}
+
+function normalizeVendorForReceipt(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
 const { supabase } = await import('../src/supabaseClient.js');
 const { classOf, classWinRates, winnersScore } = await import('../src/services/pickdesk/winnersScore.js');
 const { judgeWinnersCase } = await import('../src/services/pickdesk/winnersJudge.js');
+
+const DAILY_SLATE_LEAGUE = {
+  americanfootball_nfl: 'NFL',
+  americanfootball_ncaaf: 'NCAAF',
+  basketball_nba: 'NBA',
+  baseball_mlb: 'MLB',
+};
+
+function finiteNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+/**
+ * Recover one exact scheduled game from the already-published morning slate.
+ * This is a real frozen sportsbook snapshot, never a fabricated line. It is
+ * only used for scheduler `--game-id` runs when BDL's live path is empty or
+ * missing a market; valid live fields always win in the merge below.
+ */
+async function fetchDailySlateGame(sportKey, etDate, gameId) {
+  const league = DAILY_SLATE_LEAGUE[sportKey];
+  if (!league || !etDate || gameId == null) return null;
+
+  const { data, error } = await supabase
+    .from('daily_slate')
+    .select('date,league,bdl_game_id,away_team,home_team,commence_time,spread,ml_away,ml_home,total,line_vendor')
+    .eq('date', etDate)
+    .eq('league', league)
+    .eq('bdl_game_id', String(gameId))
+    .limit(1);
+  if (error) throw new Error(`daily_slate exact-game read failed: ${error.message}`);
+  const row = data?.[0];
+  if (!row) return null;
+
+  const spreadHome = finiteNumber(row.spread);
+  const mlHome = finiteNumber(row.ml_home);
+  const mlAway = finiteNumber(row.ml_away);
+  const total = finiteNumber(row.total);
+  const vendor = row.line_vendor || 'opening-snapshot';
+  const markets = [];
+  if (mlHome !== null && mlAway !== null) {
+    markets.push({
+      key: 'h2h',
+      outcomes: [
+        { name: row.home_team, price: mlHome },
+        { name: row.away_team, price: mlAway },
+      ],
+    });
+  }
+
+  return {
+    id: row.bdl_game_id,
+    bdl_game_id: row.bdl_game_id,
+    sport_key: sportKey,
+    home_team: row.home_team,
+    away_team: row.away_team,
+    commence_time: row.commence_time,
+    spread_home: spreadHome,
+    spread_away: spreadHome === null ? null : -spreadHome,
+    spread_home_odds: null,
+    spread_away_odds: null,
+    moneyline_home: mlHome,
+    moneyline_away: mlAway,
+    total,
+    line_vendor: vendor,
+    line_snapshot: 'opening',
+    // dailySlateService writes NCAAF rows only after the provider-grounded
+    // FBS policy has accepted both teams. Carry that exact internal provenance
+    // into this recovery object; no caller-supplied verified flag is trusted.
+    ...(sportKey === 'americanfootball_ncaaf'
+      ? { ncaaf_fbs_verified: true, ncaaf_fbs_verification_source: 'daily_slate' }
+      : {}),
+    bookmakers: markets.length ? [{ key: vendor, title: vendor, markets }] : [],
+  };
+}
+
+function isVerifiedNcaafSlateFallback(game) {
+  return game?.ncaaf_fbs_verified === true
+    && ['daily_slate', 'provider_exact'].includes(game?.ncaaf_fbs_verification_source);
+}
+
+function mergeExactGameWithSlate(liveGame, slateGame) {
+  if (!liveGame) return slateGame;
+  if (!slateGame) return liveGame;
+  const liveHasMl = finiteNumber(liveGame.moneyline_home) !== null && finiteNumber(liveGame.moneyline_away) !== null;
+  const liveHasPricedSpread = finiteNumber(liveGame.spread_home) !== null &&
+    (finiteNumber(liveGame.spread_home_odds) !== null || finiteNumber(liveGame.spread_away_odds) !== null);
+  const liveHasBook = Array.isArray(liveGame.bookmakers) && liveGame.bookmakers.some(book => Array.isArray(book?.markets) && book.markets.length > 0);
+  return {
+    ...slateGame,
+    ...liveGame,
+    moneyline_home: liveHasMl ? liveGame.moneyline_home : slateGame.moneyline_home,
+    moneyline_away: liveHasMl ? liveGame.moneyline_away : slateGame.moneyline_away,
+    spread_home: liveHasPricedSpread ? liveGame.spread_home : slateGame.spread_home,
+    spread_away: liveHasPricedSpread ? liveGame.spread_away : slateGame.spread_away,
+    spread_home_odds: liveHasPricedSpread ? liveGame.spread_home_odds : null,
+    spread_away_odds: liveHasPricedSpread ? liveGame.spread_away_odds : null,
+    total: finiteNumber(liveGame.total) !== null ? liveGame.total : slateGame.total,
+    line_vendor: liveHasMl || liveHasPricedSpread ? (liveGame.line_vendor ?? slateGame.line_vendor) : slateGame.line_vendor,
+    line_snapshot: liveHasMl || liveHasPricedSpread ? (liveGame.line_snapshot ?? 'live') : 'opening',
+    bookmakers: liveHasBook ? liveGame.bookmakers : slateGame.bookmakers,
+  };
+}
 
 // WINNERS SCORE v1 (founder GO, Aug 10): trailing-30d class rates from the
 // graded ledger, fetched once per run. A failed fetch scores every pick
@@ -242,21 +391,6 @@ const SPORT_CONFIG = {
   mlb: { key: 'baseball_mlb', name: 'MLB', emoji: '⚾', useToday: true },
 };
 
-// FBS Conference IDs from BDL (excludes FCS conferences like Big Sky, SWAC, MEAC, etc.)
-const FBS_CONFERENCE_IDS = [
-  1,   // ACC
-  2,   // American Athletic
-  3,   // Big 12
-  4,   // Big Ten
-  5,   // Conference USA
-  6,   // FBS Independents
-  7,   // MAC (Mid-American)
-  8,   // Mountain West
-  9,   // Pac-12 (mostly defunct, teams moved)
-  10,  // SEC
-  11,  // Sun Belt
-];
-
 // ═══════════════════════════════════════════════════════════════════════════
 // PICK LOGGING & TRANSPARENCY
 // ═══════════════════════════════════════════════════════════════════════════
@@ -272,6 +406,7 @@ const FBS_CONFERENCE_IDS = [
 // In-memory tracking to prevent duplicate processing in same run session
 // This prevents race conditions where DB check passes but pick is already being generated
 const processedGamesThisSession = new Set();
+const existingPickGameIds = new Set();
 
 function getGameKey(homeTeam, awayTeam) {
   return `${homeTeam}|${awayTeam}`.toLowerCase().trim();
@@ -311,7 +446,15 @@ const gameIdFilter = getArgValue('--game-id');
 // --force flag to skip deduplication check (for re-running specific games)
 const forceRerun = args.includes('--force');
 // --date flag to filter games to specific date(s) (e.g., "2025-12-25" or "2025-12-25,2025-12-26")
-const dateFilter = getArgValue('--date');
+// Scheduler exact-game runs are always for the current ET slate. Supplying an
+// exact game id without a date used to reopen NFL's entire rolling week, spend
+// eight BDL requests, and then lose the requested game to 429s. Derive today's
+// ET date for that exact-id path; manual weekly runs without --game-id retain
+// the existing weekly behavior.
+const requestedDateFilter = getArgValue('--date');
+const dateFilter = requestedDateFilter || (gameIdFilter
+  ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date())
+  : undefined);
 // --dynamic flag to enable dynamic slate review (organic pick selection based on board quality)
 const useDynamicSlateReview = args.includes('--dynamic');
 // NCAAB always filters to NCAA Tournament games during March Madness (no flag needed)
@@ -445,10 +588,55 @@ async function main() {
     console.log(`${'═'.repeat(70)}\n`);
 
     try {
+      // Scheduler retries are exact-game runs. If that provider game id is
+      // already durably stored, stop before touching BDL or the model. The old
+      // path fetched the full slate first, so a harmless retry could spend
+      // minutes in the shared rate-limit queue and delay the next live game.
+      // `--force`, dry runs and test-table runs intentionally bypass this.
+      if (gameIdFilter && !forceRerun && shouldStore && !useTestTable) {
+        const preflightDate = dateFilter?.split(',')[0]?.trim();
+        const stored = await picksService.pickAlreadyStoredByGameId(
+          config.name,
+          preflightDate,
+          gameIdFilter,
+        );
+        if (stored?.exists) {
+          console.log(`[${config.name}] ⏭️ Exact game ${gameIdFilter} is already stored (${stored.source}); skipping upstream fetch and analysis`);
+          existingPickGameIds.add(String(gameIdFilter));
+          summary[config.name] = {
+            games: 1,
+            picks: 0,
+            existing: 1,
+            time: (Date.now() - sportStartTime) / 1000,
+          };
+          continue;
+        }
+      }
+
       // Fetch games
       console.log(`[${config.name}] Fetching upcoming games...`);
 
-      const allGames = await oddsService.getUpcomingGames(config.key, { nocache: true, targetDate: dateFilter });
+      let allGames = await oddsService.getUpcomingGames(config.key, {
+        nocache: true,
+        targetDate: dateFilter,
+        ...exactFootballGameDiscoveryOptions(config.key, gameIdFilter),
+      });
+      if (gameIdFilter && dateFilter) {
+        try {
+          const slateGame = await fetchDailySlateGame(config.key, dateFilter.split(',')[0].trim(), gameIdFilter);
+          if (slateGame) {
+            const liveIndex = (allGames || []).findIndex(game => String(game.bdl_game_id ?? game.id ?? '') === String(gameIdFilter));
+            if (liveIndex >= 0) {
+              allGames[liveIndex] = mergeExactGameWithSlate(allGames[liveIndex], slateGame);
+            } else {
+              allGames = [...(allGames || []), slateGame];
+            }
+            console.log(`[${config.name}] Exact game ${gameIdFilter}: daily_slate opening snapshot armed as verified market fallback`);
+          }
+        } catch (slateError) {
+          console.warn(`[${config.name}] Exact daily_slate fallback unavailable: ${slateError.message}`);
+        }
+      }
 
       // Filter to games within time window
       const now = new Date();
@@ -518,7 +706,7 @@ async function main() {
           // Get end of current week (next Tuesday 5:00 AM ET to catch late Monday games)
           const weekStartDate = new Date(currentWeekStart + 'T00:00:00');
           const weekEndDate = new Date(weekStartDate);
-          weekEndDate.setDate(weekEndDate.getDate() + 8); // Tuesday of next week
+          weekEndDate.setDate(weekEndDate.getDate() + 7); // Tuesday of next week
           weekEndDate.setHours(5, 0, 0, 0); // 5 AM to catch any late Monday finishes
 
           // Check if today is Monday (MNF day) - only process today's games
@@ -604,7 +792,21 @@ async function main() {
 
       // NFL: Enrich games with playoff round significance (Wild Card, Divisional, Championship, Super Bowl)
       if (config.key === 'americanfootball_nfl' && games.length > 0) {
-        try {
+        const weekToSignificance = {
+          1: 'Wild Card',
+          2: 'Divisional Round',
+          3: 'Conference Championship',
+          4: 'Super Bowl'
+        };
+        if (gameIdFilter) {
+          // The exact provider response already carries postseason/week. Do not
+          // download the full postseason slate just to label one scheduler game.
+          for (const game of games) {
+            if (game.postseason && game.week) {
+              game.gameSignificance = weekToSignificance[game.week] || 'Playoff';
+            }
+          }
+        } else try {
           console.log(`[${config.name}] Checking for postseason games via BDL...`);
           const bdlGames = await ballDontLieService.getGames('americanfootball_nfl', {
             postseason: true,
@@ -621,14 +823,6 @@ async function main() {
               const key = `${homeKey}:${awayKey}`;
               bdlGameMap.set(key, g);
             }
-            
-            // Map postseason week to significance
-            const weekToSignificance = {
-              1: 'Wild Card',
-              2: 'Divisional Round',
-              3: 'Conference Championship',
-              4: 'Super Bowl'
-            };
             
             // Enrich each game with gameSignificance
             for (const game of games) {
@@ -651,21 +845,26 @@ async function main() {
       // NCAAF: Filter to FBS only (exclude FCS games)
       if (config.fbsOnly && config.key === 'americanfootball_ncaaf') {
         console.log(`[${config.name}] Filtering to FBS games only (excluding FCS)...`);
-        const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
-        const ncaafTeams = await ballDontLieService.getTeams('americanfootball_ncaaf');
-
-        const fbsTeamNames = new Set(
-          ncaafTeams
-            .filter(t => FBS_CONFERENCE_IDS.includes(t.conference))
-            .map(t => t.full_name?.toLowerCase())
-        );
-
         const beforeCount = games.length;
-        games = games.filter(g => {
-          const homeIsFbs = fbsTeamNames.has(g.home_team?.toLowerCase());
-          const awayIsFbs = fbsTeamNames.has(g.away_team?.toLowerCase());
-          return homeIsFbs && awayIsFbs; // Both teams must be FBS
-        });
+        const verifiedSlateFallbacks = games.filter(isVerifiedNcaafSlateFallback);
+        const providerGames = games.filter((game) => !isVerifiedNcaafSlateFallback(game));
+        // An exact authoritative morning-slate fallback has already passed the
+        // provider policy, so it must not depend on a second BDL teams request
+        // during the outage/rate-limit condition it exists to recover from.
+        const ncaafTeams = providerGames.length > 0
+          ? await ballDontLieService.getTeams('americanfootball_ncaaf')
+          : [];
+        const classified = classifyNcaafFbsGames(
+          providerGames,
+          ncaafTeams,
+        );
+        if (classified.unresolved.length > 0) {
+          throw new Error(
+            `NCAAF FBS identity unresolved for ${classified.unresolved.length} game(s); refusing a partial pick slate`,
+          );
+        }
+        const accepted = new Set([...classified.accepted, ...verifiedSlateFallbacks]);
+        games = games.filter((game) => accepted.has(game));
         console.log(`[${config.name}] FBS filter: ${beforeCount} → ${games.length} games (removed ${beforeCount - games.length} FCS games)`);
       }
 
@@ -940,6 +1139,7 @@ async function main() {
         const existingPick = await checkExistingPick(config.name, game.home_team, game.away_team, gameESTDate, bdlGameId);
         if (existingPick) {
           console.log(`⏭️  Already have pick for this game: "${existingPick}"`);
+          if (bdlGameId != null) existingPickGameIds.add(String(bdlGameId));
           processedGamesThisSession.add(gameKey); // Mark as processed
           continue;
           }
@@ -1423,8 +1623,15 @@ async function main() {
           }
 
           // ALWAYS use verifiedTaleOfTape when available — toolCallHistory is inconsistent
-          if ((config.key === 'icehockey_nhl' || config.key === 'basketball_nba' || config.key === 'basketball_ncaab' || config.key === 'baseball_mlb') && result.verifiedTaleOfTape?.rows) {
-            const sportLabels = { 'icehockey_nhl': 'NHL', 'basketball_nba': 'NBA', 'basketball_ncaab': 'NCAAB', 'baseball_mlb': 'MLB' };
+          if ((config.key === 'icehockey_nhl' || config.key === 'basketball_nba' || config.key === 'basketball_ncaab' || config.key === 'baseball_mlb' || config.key === 'americanfootball_nfl' || config.key === 'americanfootball_ncaaf') && result.verifiedTaleOfTape?.rows) {
+            const sportLabels = {
+              'icehockey_nhl': 'NHL',
+              'basketball_nba': 'NBA',
+              'basketball_ncaab': 'NCAAB',
+              'baseball_mlb': 'MLB',
+              'americanfootball_nfl': 'NFL',
+              'americanfootball_ncaaf': 'NCAAF'
+            };
             const sportLabel = sportLabels[config.key] || config.key;
             console.log(`   📊 ${sportLabel}: Using verified Tale of Tape (${result.verifiedTaleOfTape.rows.length} rows) for pick card`);
 
@@ -1451,7 +1658,10 @@ async function main() {
                 name: row.name,
                 token: row.token,
                 home: { team: homeTeam, [iosKey]: homeValue },
-                away: { team: awayTeam, [iosKey]: awayValue }
+                away: { team: awayTeam, [iosKey]: awayValue },
+                // NFL prior-season baselines must remain visibly attributable
+                // after the verified tape is reshaped for storage/iOS.
+                ...(row.statProvenance ? { statProvenance: row.statProvenance } : {})
               });
             }
             console.log(`   ✓ ${sportLabel}: Added ${statsData.length} stats from verified Tale of Tape`);
@@ -1459,7 +1669,7 @@ async function main() {
             // Per-sport expected row counts — drift is a silent iOS rendering bug
             // MLB = 16 since Jul 22 2026 (team-stats block restored after the
             // gp<100 date-bomb fix; 15 when BDL lacks batting_r for Runs/Game).
-            const expectedRowCount = { 'NHL': 15, 'NCAAB': 15, 'NBA': 15, 'MLB': 16 }[sportLabel];
+            const expectedRowCount = { 'NHL': 15, 'NCAAB': 15, 'NBA': 15, 'MLB': 16, 'NFL': 6, 'NCAAF': 7 }[sportLabel];
             if (expectedRowCount && statsData.length !== expectedRowCount) {
               console.warn(`   ⚠️ ${sportLabel}: Expected ${expectedRowCount} Tale of Tape rows, got ${statsData.length} — check scout report builder`);
             }
@@ -1530,7 +1740,25 @@ async function main() {
           // Use best available line if found, otherwise fall back to default
           const finalSpread = bestLine?.spread ?? result.spread;
           const finalSpreadOdds = bestLine?.spreadOdds ?? result.spreadOdds;
-          const bestLineBook = bestLine?.book ?? result.book ?? null;
+          const isFootballPick = config.key === 'americanfootball_nfl' || config.key === 'americanfootball_ncaaf';
+          const exactFootballBook = isFootballPick
+            ? exactFootballMarketBook(sportsbookOdds, result)
+            : null;
+          const bestLineBook = bestLine?.book ?? result.book ?? exactFootballBook ?? null;
+          // AFTER GARY receipt: seal the exact elected football market beside
+          // the pick. First-writer-wins storage makes this immutable; later
+          // proof refreshes compare only this vendor to that same vendor.
+          const footballPublishedAt = isFootballPick ? new Date().toISOString() : null;
+          const footballPublishedMarket = isFootballPick ? {
+            market_type: result.type,
+            vendor: bestLineBook,
+            line: result.type === 'spread'
+              ? finalSpread
+              : (result.type === 'total' ? result.total : null),
+            odds: result.type === 'spread'
+              ? (finalSpreadOdds ?? result.odds)
+              : result.odds,
+          } : null;
 
           // Update pick text to reflect best available line (not just Gary's raw output).
           // F-5: the stored odds are the ELECTED board line, so the pick text must say
@@ -1611,6 +1839,13 @@ async function main() {
             spread: finalSpread, // Best available line (not just the first sportsbook)
             spreadOdds: finalSpreadOdds,
             bestLineBook: bestLineBook, // Which sportsbook has the best line
+            ...(isFootballPick ? {
+              published_at: footballPublishedAt,
+              published_market: footballPublishedMarket,
+              season_type: game?.season_type ?? null,
+              homeTeamAbbreviation: game?.home_team?.abbreviation ?? null,
+              awayTeamAbbreviation: (game?.away_team ?? game?.visitor_team)?.abbreviation ?? null,
+            } : {}),
             moneylineHome: result.moneylineHome,
             moneylineAway: result.moneylineAway,
             total: result.total,
@@ -1631,6 +1866,10 @@ async function main() {
             pick_id: `agentic-${config.key}-${game.id || Date.now()}`,
             // BDL game id — disambiguates doubleheaders for dedupe
             bdl_game_id: game.bdl_game_id ?? game.id ?? null,
+            // Football's weekly storage must follow the scheduled game, not
+            // the wall clock of whichever machine ran the process.
+            season: game.season ?? null,
+            week: game.week ?? null,
             commence_time: game.commence_time,
             soccer_match_id: game.soccer_match_id ?? null,
             soccer_three_way_ml: game.soccer_three_way_ml ?? null,
@@ -1892,10 +2131,28 @@ async function main() {
   
   // Give time for any pending async operations (Supabase connections, etc.) to complete
   await sleep(2000);
-  
-  // Explicitly exit with success code
+
+  const failedSports = Object.entries(summary).filter(([, data]) => data?.error);
+  if (failedSports.length > 0) {
+    throw new Error(`Pick run failed: ${failedSports.map(([sport, data]) => `${sport}: ${data.error}`).join(' | ')}`);
+  }
+
+  const storedGameIds = allPicks
+    .map((pick) => pick?.bdl_game_id ?? pick?.game_id)
+    .filter((id) => id != null)
+    .map(String);
+  const coveredGameIds = [...new Set([...existingPickGameIds, ...storedGameIds])];
+  if (gameIdFilter && !coveredGameIds.includes(String(gameIdFilter))) {
+    throw new Error(`Exact game ${gameIdFilter} completed without a verified stored pick`);
+  }
+
+  const outcome = {
+    status: shouldStore ? 'stored' : 'dry_run',
+    game_ids: coveredGameIds,
+    pick_count: allPicks.length,
+  };
+  console.log(formatPickRunOutcome(outcome));
   console.log('✅ Process complete. Exiting cleanly...');
-  process.exit(0);
 }
 
 async function checkExistingPick(league, homeTeam, awayTeam, gameDate = null, gameId = null) {
@@ -1904,7 +2161,7 @@ async function checkExistingPick(league, homeTeam, awayTeam, gameDate = null, ga
     if (league === 'NFL') {
       const { nflGameAlreadyHasPick } = await import('../src/services/picksService.js');
       if (typeof nflGameAlreadyHasPick === 'function') {
-        const result = await nflGameAlreadyHasPick(homeTeam, awayTeam);
+        const result = await nflGameAlreadyHasPick(homeTeam, awayTeam, gameDate, gameId);
         if (result.exists) {
           return result.existingPick;
         }
@@ -1934,60 +2191,64 @@ async function storePicks(picks) {
   // TEST MODE - store to test_daily_picks instead of production tables
   if (useTestTable) {
     console.log(`🧪 TEST MODE - Storing ${picks.length} picks to test_daily_picks table`);
-    try {
-      // The row is keyed by date and shared across same-day runs, so stamp each
-      // pick with its arm — test queries separate arms by test_arm, not by the
-      // row's (last-writer-wins) test_name.
-      const armLabel = testName || process.env.GARY_MODEL_OVERRIDE || 'default';
-      for (const p of picks) p.test_arm = armLabel;
-      const result = await picksService.storeTestPicks(picks, testName, `Test run at ${new Date().toISOString()}`);
-      if (result.success) {
-        console.log(`✅ TEST: Stored ${result.count} picks in test_daily_picks (mode: ${result.mode})`);
-      } else {
-        console.error(`⚠️  TEST storage issue:`, result.error || result.message);
-      }
-    } catch (error) {
-      console.error(`❌ Error storing test picks:`, error.message);
+    // The row is keyed by date and shared across same-day runs, so stamp each
+    // pick with its arm — test queries separate arms by test_arm, not by the
+    // row's (last-writer-wins) test_name.
+    const armLabel = testName || process.env.GARY_MODEL_OVERRIDE || 'default';
+    for (const p of picks) p.test_arm = armLabel;
+    const result = await picksService.storeTestPicks(picks, testName, `Test run at ${new Date().toISOString()}`);
+    if (!result.success) {
+      throw new Error(`TEST storage failed: ${result.error || result.message || 'unknown error'}`);
     }
-    return;
+    console.log(`✅ TEST: Stored ${result.count} picks in test_daily_picks (mode: ${result.mode})`);
+    return result;
   }
 
-  try {
-    // Separate NFL picks (go to weekly table) from other picks (go to daily table)
-    const nflPicks = picks.filter(p => p.league === 'NFL');
-    const otherPicks = picks.filter(p => p.league !== 'NFL');
+  // Re-check at the actual write boundary. Research can be long-running and
+  // a game that was upcoming when this process started may now be live.
+  assertPicksStillPregame(picks);
 
-    // Store NFL picks in weekly table
-    if (nflPicks.length > 0) {
-      console.log(`🏈 Storing ${nflPicks.length} NFL picks in weekly table...`);
-      const nflResult = await picksService.storeWeeklyNFLPicks(nflPicks);
-      if (nflResult.success) {
-        console.log(`✅ NFL: Stored ${nflResult.count} new picks (${nflResult.total || nflResult.count} total for week)`);
-      } else {
-        console.error(`⚠️  NFL storage issue:`, nflResult.error || nflResult.message);
-      }
-    }
+  // Separate NFL picks (go to weekly table) from other picks (go to daily table)
+  const nflPicks = picks.filter(p => p.league === 'NFL');
+  const otherPicks = picks.filter(p => p.league !== 'NFL');
 
-    // Store other sports in daily table
-    if (otherPicks.length > 0) {
-      const result = await picksService.storeDailyPicksInDatabase(otherPicks, dateFilter || null);
-      if (result.success) {
-        console.log(`✅ Successfully stored ${otherPicks.length} picks in daily table`);
-      } else {
-        console.error(`⚠️  Storage issue:`, result.error || 'Unknown error');
-      }
+  // Store NFL picks in weekly table
+  if (nflPicks.length > 0) {
+    console.log(`🏈 Storing ${nflPicks.length} NFL picks in weekly table...`);
+    const nflResult = await picksService.storeWeeklyNFLPicks(nflPicks);
+    if (!nflResult.success) {
+      throw new Error(`NFL storage failed: ${nflResult.error || nflResult.message || 'unknown error'}`);
     }
-  } catch (error) {
-    console.error(`❌ Error storing picks:`, error.message);
+    console.log(`✅ NFL: Stored ${nflResult.count} new picks (${nflResult.total || nflResult.count} total for week)`);
   }
+
+  // Store other sports in daily table
+  if (otherPicks.length > 0) {
+    const result = await picksService.storeDailyPicksInDatabase(otherPicks, dateFilter || null);
+    if (!result.success) {
+      throw new Error(`Daily-picks storage failed: ${result.error || result.message || 'unknown error'}`);
+    }
+    console.log(`✅ Successfully stored ${otherPicks.length} picks in daily table`);
+  }
+  return { success: true, count: picks.length };
 }
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Run
-main().catch(error => {
-  console.error('Fatal error:', error);
-  process.exit(1);
-});
+// Football exact-game children must exit explicitly after a successful
+// decision so open provider sockets or SDK timers cannot delay that game's
+// props. Preserve the existing termination behavior for every other sport.
+const exitRunner = (code) => (
+  args.includes('--nfl') || args.includes('--ncaaf')
+    ? exitAfterFlushing(code)
+    : process.exit(code)
+);
+
+main()
+  .then(() => exitRunner(0))
+  .catch(error => {
+    console.error('Fatal error:', error);
+    return exitRunner(1);
+  });

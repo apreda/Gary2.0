@@ -76,13 +76,17 @@ export function nhlSeason() {
 
 /**
  * Get the current NFL season year.
- * NFL regular season starts in September.
- * @returns {number} The NFL season year (e.g., 2025 for the Sep 2025 - Feb 2026 season)
+ * NFL preseason starts in August.
+ * @param {Date} [date] Instant whose Eastern season should be resolved.
+ * @returns {number} The NFL season year (e.g., 2026 for Aug 2026 - Feb 2027)
  */
-export function nflSeason() {
-  const now = getCurrentEST();
-  const month = now.getMonth(); // 0-indexed
-  return month >= 8 ? now.getFullYear() : now.getFullYear() - 1; // Sep+
+export function nflSeason(date = new Date()) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', year: 'numeric', month: 'numeric',
+  }).formatToParts(date).map(({ type, value }) => [type, value]));
+  const year = Number(parts.year);
+  const month = Number(parts.month);
+  return month >= 8 ? year : year - 1;
 }
 
 /**
@@ -102,11 +106,14 @@ export function ncaabSeason() {
  * NCAAF season starts in August (Aug 2025 - Jan 2026 = "2025" season).
  * @returns {number} The NCAAF season year (e.g., 2025 for the Aug 2025 - Jan 2026 season)
  */
-export function ncaafSeason() {
-  const now = getCurrentEST();
-  const month = now.getMonth(); // 0-indexed
-  // Aug-Dec → current year, Jan-Jul → prev year
-  return month >= 7 ? now.getFullYear() : now.getFullYear() - 1;
+export function ncaafSeason(date = new Date()) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', year: 'numeric', month: 'numeric',
+  }).formatToParts(date).map(({ type, value }) => [type, value]));
+  const year = Number(parts.year);
+  const month = Number(parts.month);
+  // Aug-Dec → current year, Jan-Jul → prior year.
+  return month >= 8 ? year : year - 1;
 }
 
 /**
@@ -203,5 +210,4 @@ export const getESTHour = () => {
   const estTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
   return estTime.getHours();
 };
-
 

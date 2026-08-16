@@ -8,8 +8,11 @@ import { isCodexCliModel, createCodexCliSession, sendToCodexCliSession, resetCod
 // Minimum cacheable content size (Gemini 3 Flash min is 1024 tokens; ~4K chars is safe).
 // Below this we skip caching — break-even doesn't work and the API rejects small caches.
 const MIN_CACHE_CHAR_THRESHOLD = 4000;
-// Cache TTL — single pick run takes 5-7 min, 15 min gives plenty of buffer.
-const CACHE_TTL_SECONDS = 900;
+// The scheduler permits an agent child to run for 45 minutes. The explicit
+// Gemini cache must outlive that entire process: once an attached cache expires,
+// Gemini rejects the next chat turn with 403 `CachedContent not found` and the
+// evidence run is lost. Keep a full 15-minute margin beyond the child bound.
+export const GEMINI_CACHE_TTL_SECONDS = 60 * 60;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PERSISTENT SESSION MANAGEMENT (Gemini 3 Thought Signatures)
@@ -90,7 +93,7 @@ export async function createGeminiSession(options = {}) {
       const cacheRequest = {
         model: `models/${validatedModel}`,
         systemInstruction: { parts: [{ text: systemPrompt }] },
-        ttlSeconds: CACHE_TTL_SECONDS,
+        ttlSeconds: GEMINI_CACHE_TTL_SECONDS,
       };
       if (geminiTools.length > 0) {
         cacheRequest.tools = geminiTools;
@@ -98,7 +101,7 @@ export async function createGeminiSession(options = {}) {
       const cache = await cacheManager.create(cacheRequest);
       cacheObject = cache;
       cachedContentName = cache.name;
-      console.log(`[Session] 💾 Cache created (${systemPrompt.length} char system prompt, TTL ${CACHE_TTL_SECONDS}): ${cachedContentName}`);
+      console.log(`[Session] 💾 Cache created (${systemPrompt.length} char system prompt, TTL ${GEMINI_CACHE_TTL_SECONDS}): ${cachedContentName}`);
     } catch (e) {
       console.warn(`[Session] ⚠️ Cache creation failed (${e.message}) — proceeding without cache`);
       cacheObject = null;
@@ -438,4 +441,3 @@ export async function sendToSessionWithRetry(session, message, options = {}, max
     }
   }
 }
-

@@ -5,6 +5,7 @@
  * NOTE: The Odds API has been deprecated - all props now come from Ball Don't Lie
  */
 import { ballDontLieService } from './ballDontLieService.js';
+import { ncaafPropOddsService } from './ncaafPropOddsService.js';
 import { normalizeTeamName as _normalizeTeamName } from './agentic/sharedUtils.js';
 
 // Wrap shared normalizer with space-stripping for this file's comparison pattern
@@ -169,6 +170,21 @@ export const propOddsService = {
       // Normalize team names for flexible matching (uses shared city alias mappings)
       const normalizedHomeTeam = normalizeTeamName(homeTeam);
       const normalizedAwayTeam = normalizeTeamName(awayTeam);
+
+      // ============ NCAAF: current event markets from The Odds API ============
+      // BDL's NCAAF prop product is historical/opening data, so it cannot be
+      // used as tonight's bettable board. This adapter performs exact
+      // home+away+ET-date matching, then the NCAAF context validates every
+      // market player and stat against BDL before Gary can see the line.
+      if (sport === 'americanfootball_ncaaf') {
+        console.log('[PropOdds] Using The Odds API current event markets for NCAAF player props');
+        return ncaafPropOddsService.getPlayerPropMarkets({
+          homeTeam,
+          awayTeam,
+          commenceTime,
+          bdlGameId: gameId,
+        });
+      }
       
       // ============ NHL: Use Ball Don't Lie Player Props API ============
       if (sport === 'icehockey_nhl') {

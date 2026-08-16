@@ -5,10 +5,11 @@ This directory contains scripts for generating, storing, and grading betting pic
 ## Scripts
 
 ### `run-agentic-picks.js`
-Runs the agentic pipeline for game picks (NBA, NHL, NFL, NCAAB).
+Runs the agentic pipeline for game picks (NBA, NHL, NFL, NCAAB, NCAAF).
 ```bash
 node scripts/run-agentic-picks.js --nba
 node scripts/run-agentic-picks.js --nfl --matchup "Patriots" --limit 1
+node scripts/run-agentic-picks.js --ncaaf --matchup "Alabama" --limit 1
 ```
 
 ### `run-agentic-nba-props.js`
@@ -24,15 +25,17 @@ node scripts/run-agentic-nhl-props.js --store=1
 ```
 
 ### `run-agentic-nfl-props.js`
-Runs the agentic pipeline for NFL player props.
+Runs the agentic pipeline for NFL player props, including the supported TD
+markets in the same atomic per-game pass.
 ```bash
 node scripts/run-agentic-nfl-props.js --store=1
 ```
 
-### `run-agentic-nfl-td.js` / `run-agentic-tnf-td.js` / `run-agentic-mnf-td.js`
-NFL touchdown prop variants (full slate, Thursday Night, Monday Night).
+### `run-agentic-ncaaf-props.js`
+Runs the NCAAF player-props/anytime-TD lane using current event markets and
+exact BDL roster/stat/game identity validation.
 ```bash
-node scripts/run-agentic-nfl-td.js --store=1
+node scripts/run-agentic-ncaaf-props.js --game-id=<BDL_GAME_ID> --store=1
 ```
 
 ### `run-agentic-props-cli.js`
@@ -51,6 +54,7 @@ All scripts require these env vars (set in `.env` or CI):
 - `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
 - `GEMINI_API_KEY` — primary LLM for analysis
 - `BALLDONTLIE_API_KEY` — odds, stats, and player data
+- `NCAAF_THE_ODDS_API_KEY` — active server-side The Odds API key for current NCAAF player props
 - `TANK01_RAPIDAPI_KEY` — DFS salaries and projections
 
 ## Pick Generation Flow

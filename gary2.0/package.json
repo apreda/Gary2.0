@@ -19,6 +19,9 @@
     "gary:nfl": "node scripts/run-agentic-picks.js --nfl",
     "gary:ncaab": "node scripts/run-agentic-picks.js --ncaab",
     "gary:ncaaf": "node scripts/run-agentic-picks.js --ncaaf",
+    "hub:football": "node run-insight-connections.js --league NFL,NCAAF",
+    "hub:nfl": "node run-insight-connections.js --league NFL",
+    "hub:ncaaf": "node run-insight-connections.js --league NCAAF",
     "test": "vitest run",
     "test:watch": "vitest"
   },

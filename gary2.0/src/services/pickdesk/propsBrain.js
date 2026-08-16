@@ -19,6 +19,7 @@ import { createHash } from 'crypto';
 import { buildMlbDesk, fetchTonightsGameCall } from './mlbDesk.js';
 import { GEMINI_PROPS_MODEL, GEMINI_PRO_FALLBACK, DESK_FALLBACK_MODELS, DESK_COST_PER_M } from '../agentic/orchestrator/orchestratorConfig.js';
 import { createGeminiSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
+import { normalizePropBetDirection } from '../agentic/propsSharedUtils.js';
 import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from '../agentic/orchestrator/statAudit.js';
 import { ballDontLieService } from '../ballDontLieService.js';
 import { propOddsService } from '../propOddsService.js';
@@ -294,7 +295,7 @@ const MENU_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
   || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
 
 async function snapshotPropMenu({ markets, matchup, gameId, gameDate }) {
-  if (!MENU_URL || !MENU_KEY || !Array.isArray(markets) || !markets.length) return;
+  if (!MENU_URL || !MENU_KEY || !Array.isArray(markets) || !markets.length || gameId == null) return;
   try {
     let rows = markets.map((m) => ({
       player: m.player, team: m.team ?? null, prop_type: m.prop_type,
@@ -310,14 +311,17 @@ async function snapshotPropMenu({ markets, matchup, gameId, gameDate }) {
     // 100% home_runs, against 146-150 across 15 market types for the rest.
     // Union with whatever is already stored (fresh prices win on a repeat
     // key), so no partial board can ever shrink a fuller one.
+    let existingId = null;
     try {
       const prior = await fetch(
-        `${MENU_URL}/rest/v1/prop_menu?select=markets&game_date=eq.${gameDate}`
-          + `&matchup=eq.${encodeURIComponent(matchup)}`,
+        `${MENU_URL}/rest/v1/prop_menu?select=id,markets&league=eq.MLB`
+          + `&bdl_game_id=eq.${encodeURIComponent(gameId)}`,
         { headers: { apikey: MENU_KEY, Authorization: `Bearer ${MENU_KEY}` } },
       );
       if (prior.ok) {
-        const existing = (await prior.json())?.[0]?.markets;
+        const existingRow = (await prior.json())?.[0];
+        existingId = existingRow?.id ?? null;
+        const existing = existingRow?.markets;
         if (Array.isArray(existing) && existing.length) {
           const key = (m) => `${String(m.player).toLowerCase()}|${m.prop_type}|${m.line}`;
           const merged = new Map(existing.map((m) => [key(m), m]));
@@ -327,20 +331,24 @@ async function snapshotPropMenu({ markets, matchup, gameId, gameDate }) {
       }
     } catch { /* fail-soft: a merge that can't read just writes this board */ }
 
-    const res = await fetch(`${MENU_URL}/rest/v1/prop_menu`, {
-      method: 'POST',
+    const endpoint = existingId == null
+      ? `${MENU_URL}/rest/v1/prop_menu`
+      : `${MENU_URL}/rest/v1/prop_menu?id=eq.${encodeURIComponent(existingId)}`;
+    const res = await fetch(endpoint, {
+      method: existingId == null ? 'POST' : 'PATCH',
       headers: {
         apikey: MENU_KEY, Authorization: `Bearer ${MENU_KEY}`,
         'Content-Type': 'application/json',
-        Prefer: 'resolution=merge-duplicates,return=minimal',
+        Prefer: 'return=minimal',
       },
-      body: JSON.stringify([{
+      body: JSON.stringify({
         game_date: gameDate, league: 'MLB', matchup,
         bdl_game_id: gameId ?? null, markets: rows,
-      }]),
+      }),
     });
     if (!res.ok) {
-      console.warn(`   [Props Brain] menu snapshot skipped (${res.status})`);
+      const detail = await res.text().catch(() => '');
+      console.warn(`   [Props Brain] menu snapshot skipped (${res.status}${detail ? `: ${detail}` : ''})`);
       return;
     }
     console.log(`   [Props Brain] menu snapshot: ${rows.length} priced markets` + `${markets.length !== rows.length ? ` (${markets.length} this board, merged with stored)` : ''}`);
@@ -361,19 +369,18 @@ const todayLong = () => new Date().toLocaleDateString('en-US', {
   weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/New_York',
 });
 
-/** Tonight's lineup + probable names (normalized) — null when not yet posted. */
-async function fetchLineupNames(gameId) {
-  if (!gameId) return null;
-  try {
-    const lu = await ballDontLieService.getMlbLineups(gameId);
-    if (!lu) return null;
-    const names = new Set();
-    for (const side of Object.values(lu)) {
-      for (const b of side?.batters || []) if (b?.name) names.add(norm(b.name));
-      if (side?.pitcher?.name) names.add(norm(side.pitcher.name));
+/** Names from the exact BDL + official-MLB fallback lineups the desk resolved. */
+export function resolvedConfirmedLineupNames(scout) {
+  const lineups = scout?.confirmedLineups;
+  if (!lineups) return null;
+  const names = new Set();
+  for (const side of [lineups.home, lineups.away]) {
+    for (const batter of side?.batters || []) {
+      if (batter?.name) names.add(norm(batter.name));
     }
-    return names.size ? names : null;
-  } catch { return null; }
+    if (side?.pitcher?.name) names.add(norm(side.pitcher.name));
+  }
+  return names.size ? names : null;
 }
 
 /**
@@ -382,8 +389,13 @@ async function fetchLineupNames(gameId) {
  * not change.
  */
 export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
-  const gameId = game.bdl_game_id ?? game.id ?? null;
-  const lineupNames = await fetchLineupNames(gameId);
+  // Resolve the desk first, once. Its scout owns the canonical confirmed
+  // lineup after combining BDL with the official MLB Stats API fallback.
+  const desk = await buildMlbDesk(game, options);
+  const lineupNames = resolvedConfirmedLineupNames(desk.scout);
+  if (!lineupNames) {
+    throw new Error('MLB props desk returned no resolved confirmed lineup');
+  }
 
   // Cleared-count source: each board player's chrono game log (cached, one
   // request per player). A failed fetch just drops that player's counts.
@@ -409,20 +421,20 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
   // playerProps arrive as MARKET rows (propOddsService.getMlbPlayerPropMarkets).
   // One board, one system (founder, Aug 3: the legacy board and its A/B
   // harness are deleted — no side-by-side, no old parts).
-  const board = buildPropBoardV2(playerProps, { lineupNames, hrOnly: !!options.hrOnly, chronoByPlayer });
+  const validatedPlayers = new Set(chronoByPlayer.keys());
+  const statsBackedProps = (playerProps || []).filter((prop) => validatedPlayers.has(norm(prop?.player)));
+  const board = buildPropBoardV2(statsBackedProps, { lineupNames, hrOnly: !!options.hrOnly, chronoByPlayer });
   if (!board.players.size) {
-    console.log('   [Props Brain] empty board after filters — pass');
-    return { picks: [], validatedPlayers: board.players };
+    throw new Error('MLB props board has no lineup-confirmed player with successfully fetched stats');
   }
 
-  const desk = await buildMlbDesk(game, options);
   const { homeTeam, awayTeam } = desk.meta;
 
   await snapshotPropMenu({
     markets: board.markets,
     matchup: `${awayTeam} @ ${homeTeam}`,
     gameId: game.bdl_game_id ?? game.id,
-    gameDate: new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }),
+    gameDate: new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }),
   });
 
   // GARY'S GAME CALL (founder GO, Aug 4 — the Seymour/Luzardo autopsies: the
@@ -450,8 +462,9 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
     return { issues: [...a.retryable, ...c], warnings: a.warnOnly?.length ? a.warnOnly : null };
   };
 
-  // One full props pass on one model. Contained parse failures return
-  // { error }; provider/quota failures THROW so the cascade below owns them.
+  // One full props pass on one model. Invalid output is a provider failure,
+  // not an organic pass, so it must enter the same cascade as quota/network
+  // failures after the one repair request is exhausted.
   const runPropsPass = async (modelName) => {
     const session = await createGeminiSession({
       modelName,
@@ -470,8 +483,9 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
       res = await sendToSessionWithRetry(session, 'Return your final JSON now.', {});
       bump(res);
       parsed = parsePicksJson(res.content);
-      if (!parsed) return { error: 'parse: no valid picks JSON after re-ask' };
+      if (!parsed) throw new Error('parse: no valid picks JSON after re-ask');
     }
+    let explicitPass = parsed.picks.length === 0;
 
     let audits = parsed.picks.map(p => auditOne(p.rationale));
     if (audits.some(a => a.issues.length)) {
@@ -482,6 +496,7 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
       const rp = parsePicksJson(res.content);
       if (rp) {
         parsed = rp;
+        explicitPass = parsed.picks.length === 0;
         audits = parsed.picks.map(p => auditOne(p.rationale));
       }
       const keep = parsed.picks.filter((_, i) => !audits[i].issues.length);
@@ -495,7 +510,7 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
     const [inRate, outRate] = DESK_COST_PER_M[modelName] || [0, 0];
     const cost = (usage.in * inRate + usage.out * outRate) / 1e6;
     console.log(`   [Props Brain] one call (${modelName}), ${usage.in.toLocaleString()} in / ${usage.out.toLocaleString()} out ≈ $${cost.toFixed(3)} — ${parsed.picks.length} pick(s)`);
-    return { parsed, audits, usage };
+    return { parsed, audits, usage, explicitPass };
   };
 
   // Match the game-desk resilience policy: subscription primary, the other
@@ -537,15 +552,14 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
       }
     }
   }
-  if (pass.error) return { error: pass.error, picks: [], validatedPlayers: board.players };
-  const { parsed, audits, usage } = pass;
+  const { parsed, audits, usage, explicitPass } = pass;
 
   const picks = parsed.picks.map((p, i) => ({
     player: p.player,
     team: p.team ?? null,
     prop: String(p.prop_type || '').trim(),
     line: p.line != null ? p.line : null,
-    bet: norm(p.bet) === 'under' ? 'under' : 'over',
+    bet: normalizePropBetDirection(p.bet),
     odds: p.odds != null ? String(p.odds) : null,
     confidence: p.confidence_score ?? null,
     rationale: p.rationale,
@@ -565,5 +579,10 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
     _statAuditWarnings: audits[i]?.warnings ?? null,
   }));
 
-  return { picks, validatedPlayers: board.players, _usage: usage };
+  return {
+    picks,
+    explicitPass,
+    validatedPlayers,
+    _usage: usage,
+  };
 }

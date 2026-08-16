@@ -1,6 +1,6 @@
 import { isGeminiToken, getAuthoritativeSource, clearStatRouterCache, DEPRECATED_TOKENS, sportToBdlKey, normalizeSportName, findTeam } from './statRouterCommon.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
-import { nbaSeason, nhlSeason, nflSeason, ncaabSeason, mlbSeason } from '../../../../utils/dateUtils.js';
+import { nbaSeason, nhlSeason, nflSeason, ncaabSeason, ncaafSeason, mlbSeason } from '../../../../utils/dateUtils.js';
 import { nbaFetchers } from './nbaFetchers.js';
 import { nhlFetchers } from './nhlFetchers.js';
 import { nflFetchers } from './nflFetchers.js';
@@ -25,6 +25,18 @@ const SPORT_FAMILY = { nba: 'basketball', ncaab: 'basketball', nfl: 'americanfoo
 // Tokens that take bdlSport and route internally — genuinely sport-agnostic,
 // reachable from any sport (NHL reaches STANDINGS/REST_SITUATION via aliases).
 const SHARED_TOKENS = new Set(['DEFAULT', 'REST_SITUATION', 'STANDINGS', 'H2H_HISTORY']);
+// These scoring-split handlers are deliberately polymorphic, but only for the
+// two leagues whose BDL game rows expose Q1-Q4 fields. They live in the NBA
+// fetcher module for historical reasons and use the supplied `bdlSport` for all
+// requests. Without this explicit access contract, the ownership guard rejects
+// the NFL tokens as NBA-only before the handler can route to the NFL endpoint.
+const SPORT_POLYMORPHIC_TOKENS = new Map([
+  ['QUARTER_SCORING', new Set(['NBA', 'NFL'])],
+  ['FIRST_HALF_TRENDS', new Set(['NBA', 'NFL'])],
+  ['SECOND_HALF_TRENDS', new Set(['NBA', 'NFL'])],
+  ['FIRST_HALF_SCORING', new Set(['NBA', 'NFL'])],
+  ['SECOND_HALF_SCORING', new Set(['NBA', 'NFL'])],
+]);
 const FETCHERS = {};
 const TOKEN_OWNER = {};
 for (const [ownerSport, map] of Object.entries(SPORT_SOURCES)) {
@@ -59,16 +71,6 @@ const ALIASES = {
   FIRST_HALF_SCORING: 'FIRST_HALF_TRENDS',
   SECOND_HALF_SCORING: 'SECOND_HALF_TRENDS',
   CLOSE_GAME_RECORD: 'CLUTCH_STATS',
-  // NCAAF: investigation factors reference these names, fetchers use different names
-  NCAAF_SP_PLUS_RATINGS: 'NCAAF_SP_PLUS',
-  NCAAF_FPI_RATINGS: 'NCAAF_FPI',
-  NCAAF_EPA: 'NCAAF_EPA_ADVANCED',
-  NCAAF_SUCCESS_RATE: 'NCAAF_EPA_ADVANCED',
-  NCAAF_HAVOC: 'NCAAF_HAVOC_RATE',
-  NCAAF_EXPLOSIVE_PLAYS: 'NCAAF_EXPLOSIVENESS',
-  NCAAF_RUSH_EFFICIENCY: 'NCAAF_RUSHING_EFFICIENCY',
-  NCAAF_PASS_EFFICIENCY: 'NCAAF_PASSING_EFFICIENCY',
-  NCAAF_REDZONE: 'NCAAF_RED_ZONE',
   // MLB: route the generic H2H_HISTORY name to MLB_H2H. Without this, MLB usage
   // of H2H_HISTORY fell through to the NBA-shaped fetcher which needs home.id
   // (BDL team id) — MLB code path constructs home with only full_name/name, so
@@ -104,7 +106,9 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
     defaultSeason = ncaabSeason();
   } else if (normalizedSportForSeason.includes('nhl')) {
     defaultSeason = nhlSeason();
-  } else if (normalizedSportForSeason.includes('nfl') || normalizedSportForSeason.includes('ncaaf')) {
+  } else if (normalizedSportForSeason.includes('ncaaf')) {
+    defaultSeason = ncaafSeason();
+  } else if (normalizedSportForSeason.includes('nfl')) {
     defaultSeason = nflSeason();
   } else if (normalizedSportForSeason.includes('mlb') || normalizedSportForSeason.includes('baseball')) {
     defaultSeason = mlbSeason();
@@ -155,7 +159,8 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
     // error back to Gary instead of silently fetching the wrong sport's data.
     const tokenOwner = TOKEN_OWNER[resolvedKey];
     const currentFamily = (bdlSport || '').split('_')[0];
-    if (tokenOwner && !SHARED_TOKENS.has(resolvedKey) && SPORT_FAMILY[tokenOwner] !== currentFamily) {
+    const permitsCurrentSport = SPORT_POLYMORPHIC_TOKENS.get(resolvedKey)?.has(normalizedSport) === true;
+    if (tokenOwner && !SHARED_TOKENS.has(resolvedKey) && !permitsCurrentSport && SPORT_FAMILY[tokenOwner] !== currentFamily) {
       console.warn(`[Stat Router] 🛑 Cross-sport block: ${resolvedKey} belongs to ${tokenOwner.toUpperCase()}, requested during a ${sport} run`);
       return { error: `Stat token ${token} belongs to ${tokenOwner.toUpperCase()} — not available for ${sport}. Use this sport's own tokens.`, token };
     }

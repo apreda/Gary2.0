@@ -3,7 +3,7 @@
  * Insight Connections Runner
  *
  * Calls generateInsightConnections() for a given date across the active leagues
- * (MLB for now) and INSERTs the resulting flat rows into the `insight_connections`
+ * and INSERTs the resulting flat rows into the `insight_connections`
  * Supabase table. Idempotent per day: the day's existing rows for each league are
  * replaced (DELETE-then-INSERT) so re-runs never duplicate.
  *
@@ -13,7 +13,7 @@
  * the anon key), which bypasses RLS. iOS reads via the anon SELECT policy.
  *
  * Usage:
- *   node run-insight-connections.js                       # today (EST), all active leagues
+ *   node run-insight-connections.js                       # today (EST), MLB + NBA safe default
  *   node run-insight-connections.js --date 2026-06-02     # specific date
  *   node run-insight-connections.js --league MLB          # single league
  *   node run-insight-connections.js --league mlb,nba      # multiple leagues
@@ -31,6 +31,11 @@ const { generateInsightConnections } = await import('./src/services/insights/gen
 const { buildPlayerInsightCards } = await import('./src/services/insights/playerInsightCards.js');
 const { ballDontLieService } = await import('./src/services/ballDontLieService.js');
 const { buildLeaguePulse } = await import('./src/services/insights/leaguePulse.js');
+const {
+  footballHubRunIsEmptyFailure,
+  shouldUpgradeFootballFantasyEvidence,
+} = await import('./scripts/lib/insightRunPolicy.js');
+const { replaceFootballProofRows } = await import('./scripts/lib/footballProofStorage.js');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Config
@@ -38,7 +43,11 @@ const { buildLeaguePulse } = await import('./src/services/insights/leaguePulse.j
 
 // Leagues we currently generate insight connections for. Add others here as
 // they come online (each needs a computer registry in generateInsightConnections).
-const ACTIVE_LEAGUES = ['MLB', 'NBA'];
+const ACTIVE_LEAGUES = ['MLB', 'NFL', 'NCAAF', 'NBA'];
+// Keep the local/default invocation on its historical MLB/NBA scope. Football
+// runs through the separately staggered football-hub-insights workflow (or an
+// explicit --league request) so it never gets silently coupled to this command.
+const DEFAULT_LEAGUES = ['MLB', 'NBA'];
 
 // Resolve Supabase config exactly like src/supabaseClient.js does for Node scripts.
 const supabaseUrl =
@@ -55,7 +64,7 @@ const REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/${TABLE}` : null;
 // These facts can be invalidated by the most recently completed game. Unlike
 // editorial reads, they must refresh in place across the day rather than obey
 // the first-write-wins copy freeze.
-const VOLATILE_CATEGORIES = new Set(['streaking', 'streak']);
+const VOLATILE_CATEGORIES = new Set(['streaking', 'streak', 'the_sweat', 'after_gary']);
 
 // Per-player breakdown packs (the iOS Hub "full breakdown" view). Built for MLB
 // (hitter/pitcher) after the day's insight_connections insert succeeds; failures
@@ -103,8 +112,8 @@ if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
 }
 
 // Leagues: --league (comma-separated, case-insensitive) filtered to ACTIVE_LEAGUES,
-// else all active leagues.
-let leagues = ACTIVE_LEAGUES;
+// else the non-football safe default.
+let leagues = DEFAULT_LEAGUES;
 if (leagueArg) {
   const requested = leagueArg
     .split(',')
@@ -281,6 +290,19 @@ async function replaceVolatileRows(date, league, rows) {
     // A non-empty fresh lane proves the computer completed. Never delete the
     // last-good lane on a zero-row/transient-data run.
     if (!fresh.length) continue;
+    if (category === 'the_sweat' || category === 'after_gary') {
+      await replaceFootballProofRows({
+        httpClient: axios,
+        restUrl: REST_URL,
+        headers: restHeaders,
+        date,
+        league,
+        category,
+        rows: fresh,
+      });
+      for (const row of fresh) replacedKeys.add(rowKey(row));
+      continue;
+    }
     const { data: existing } = await axios.get(REST_URL, {
       headers: restHeaders,
       params: {
@@ -349,6 +371,9 @@ async function patchRowById(id, patch) {
  * same-shaped headlines from different matchups.
  */
 function rowKey(r) {
+  if (r.category === 'the_sweat' && r.meta?.factor_code) {
+    return `${r.category}|${r.game_id || ''}|${r.meta.factor_code}`;
+  }
   const hasEntity = r.player_id || r.team_id || r.game_id;
   return hasEntity
     ? `${r.category}|${r.player_id || ''}|${r.team_id || ''}|${r.game_id || ''}`
@@ -542,8 +567,18 @@ async function run() {
   for (const league of leagues) {
     console.log(`\n── ${league} ──`);
     let connections;
+    let generatedGameCount = 0;
     try {
-      connections = await generateInsightConnections({ date: targetDate, league });
+      const generated = await generateInsightConnections({ date: targetDate, league });
+      generatedGameCount = Number(generated?.gameCount) || 0;
+      if (Array.isArray(generated?.failures) && generated.failures.length > 0) {
+        hadError = true;
+        console.error(
+          `❌ [${league}] ${generated.failures.length} insight computer(s) failed: ` +
+          generated.failures.map((failure) => `${failure.computer}: ${failure.message}`).join(' | '),
+        );
+      }
+      connections = generated;
     } catch (err) {
       hadError = true;
       console.error(`❌ [${league}] generateInsightConnections failed: ${err.message}`);
@@ -574,6 +609,17 @@ async function run() {
     }
 
     if (connections.length === 0) {
+      if (footballHubRunIsEmptyFailure({
+        league,
+        gameCount: generatedGameCount,
+        connectionCount: connections.length,
+      })) {
+        hadError = true;
+        console.error(
+          `❌ [${league}] ${generatedGameCount} scheduled game(s) produced zero Hub rows across every registered computer. ` +
+          'No rows were deleted; failing the run so this cannot report a false-green football board.',
+        );
+      }
       console.log(`   No connections generated for ${league} on ${targetDate}.`);
       // League Pulse is INDEPENDENT of the connections (it builds league-wide
       // tables straight from the slate), so still build it on a 0-connection day.
@@ -698,11 +744,24 @@ async function run() {
               && s.meta?.price == null && s.meta?.sp_first_inning == null)
             || (Array.isArray(r.meta?.meetings) && r.meta.meetings.length
               && !Array.isArray(s.meta?.meetings));
-          if (!needsVoice && !needsId && !needsEnrich) continue;
+          const needsFantasyEvidenceUpgrade = shouldUpgradeFootballFantasyEvidence(s, r);
+          if (!needsVoice && !needsId && !needsEnrich && !needsFantasyEvidenceUpgrade) continue;
           const patch = {};
-          if (needsVoice || needsEnrich) {
+          if (needsVoice || needsEnrich || needsFantasyEvidenceUpgrade) {
             patch.detail = r.detail;
             patch.meta = { ...(s.meta || {}), ...(r.meta || {}) };
+          }
+          if (needsFantasyEvidenceUpgrade) {
+            // This is the one content transition that may change already-shown
+            // football fantasy copy: the prior-season label and figures must
+            // leave together when verified current-season evidence arrives.
+            patch.headline = r.headline;
+            patch.value = r.value;
+            patch.tone = r.tone;
+            patch.spark = r.spark;
+            patch.line_val = r.line_val;
+            patch.relevance_score = r.relevance_score;
+            if (r.team_id != null) patch.team_id = String(r.team_id);
           }
           if (needsId) {
             patch.player_id = String(r.player_id);
@@ -715,7 +774,7 @@ async function run() {
         console.warn(`   [Content patch] skipped: ${e.message}`);
       }
 
-      console.log(`   ✅ ${fresh.length} new / ${rows.length} computed for ${league} (${targetDate}); ${Math.max(0, rows.length - fresh.length - upgraded - volatileKeys.size)} already posted (frozen); ${volatileKeys.size} volatile row(s) refreshed; ${upgraded} confirmedXI situational row(s) upgraded-in-place; ${patched} content-patched (voice/ids).`);
+      console.log(`   ✅ ${fresh.length} new / ${rows.length} computed for ${league} (${targetDate}); ${Math.max(0, rows.length - fresh.length - upgraded - volatileKeys.size)} already posted (frozen); ${volatileKeys.size} volatile row(s) refreshed; ${upgraded} confirmedXI situational row(s) upgraded-in-place; ${patched} content-patched (voice/ids/fantasy evidence).`);
       // After the connections insert succeeds, build + store this league's
       // per-player breakdown packs (MLB only). NON-FATAL — guarded internally.
       await buildAndStoreCards({ date: targetDate, league, connections });

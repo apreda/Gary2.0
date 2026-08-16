@@ -12,6 +12,7 @@
  */
 import { runAgenticPropsCli } from './run-agentic-props-cli.js';
 import { buildNflPropsAgenticContext } from '../src/services/agentic/nflPropsAgenticContext.js';
+import { exitAfterFlushing } from './lib/processLifecycle.js';
 
 runAgenticPropsCli({
   sportKey: 'americanfootball_nfl',
@@ -22,8 +23,8 @@ runAgenticPropsCli({
   limitDefault: 4,  // Default to 4 games (typical NFL slate focus)
   regularOnly: false  // Set true to skip TDs (--regular=1 flag also works)
 })
-  .then(() => process.exit(0))
+  .then(() => exitAfterFlushing(0))
   .catch((error) => {
     console.error('Agentic NFL Props runner crashed:', error);
-    process.exit(1);
+    return exitAfterFlushing(1);
   });

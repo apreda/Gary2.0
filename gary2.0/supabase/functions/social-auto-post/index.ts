@@ -112,7 +112,9 @@ function ordinalDate(ymd: string): string {
   return `${month} ${day}${suffix}`;
 }
 
-async function callLLM(system: string, user: string): Promise<string> {
+type JsonSchema = Record<string, unknown>;
+
+async function callLLM(system: string, user: string, responseSchema?: JsonSchema): Promise<string> {
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
     method: "POST",
     headers: { "x-goog-api-key": GEMINI_KEY, "content-type": "application/json" },
@@ -121,7 +123,12 @@ async function callLLM(system: string, user: string): Promise<string> {
       contents: [{ role: "user", parts: [{ text: user }] }],
       // Pro models THINK before answering and the thoughts bill against maxOutputTokens — without capping
       // thinking, long social prompts burn the whole budget and return empty (every call fell to fallback).
-      generationConfig: { maxOutputTokens: 8000, responseMimeType: "application/json", ...(GEMINI_MODEL.includes("pro") ? { thinkingConfig: { thinkingLevel: "low" } } : {}) },
+      generationConfig: {
+        maxOutputTokens: 8000,
+        responseMimeType: "application/json",
+        ...(responseSchema ? { responseSchema } : {}),
+        ...(GEMINI_MODEL.includes("pro") ? { thinkingConfig: { thinkingLevel: "low" } } : {}),
+      },
     }),
   });
   const j = await r.json();
@@ -275,6 +282,21 @@ HARD RULES (breaking any one fails the post):
 STYLE: specific player names and real numbers. Lead with the single strongest, most concrete, checkable stat, never a vague claim. Use contractions (it's, that's, couldn't, had 'em). Sentence fragments are good. Do NOT write complete, balanced, essay-style sentences. Vary sentence length. Do not open consecutive sentences the same way. Sound like a text to a friend, not an article or a brand account.
 RECURRING VOCABULARY (Gary's own bits; use AT MOST one per post and only where it fits naturally, never forced): his results ledger is always "the tape" ("It's on the tape", "Check the tape"). Closers he actually uses: "That's the play." (stamping a pick), "Never sweated it." (a win never in doubt), "Cashed. Next." (routine win), "I'll wear that one." (owning a loss), "Money back, nothing learned." (push), "The number's the number." (the stat is the argument), "Paid like it should've." (plus-money win), "Same read, next game." (loss, process was right).
 Always return ONLY valid JSON as instructed.`;
+
+const PICK_HOOK_SCHEMA: JsonSchema = {
+  type: "object",
+  properties: {
+    angle: {
+      type: "string",
+      description: "Required non-empty story angle grounded in the supplied rationale. Exactly one sentence and 55 to 100 characters.",
+    },
+    edge: {
+      type: "string",
+      description: "Required non-empty strongest falsifiable factor and Gary's stance. Exactly one sentence and 55 to 100 characters.",
+    },
+  },
+  required: ["angle", "edge"],
+};
 
 // ── THE PROPS REPLY (founder, Aug 14 2026) ────────────────────────────────────
 // Under every game tweet: "Gary's Prop Bets", the bare list for THAT game — no
@@ -431,15 +453,17 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
     // WITHHOLD POLICY: the hook is angle + the pick line + ONE strongest falsifiable factor. The full breakdown and the rest
     // of the slate stay in the app (that is the reason to download). The model writes the angle and the single edge; we inject
     // the pick line verbatim so it is always clean shorthand and never carries an emoji.
-    const user = `Write the hook for a single bet. Return ONLY JSON: {"angle": "...", "edge": "..."}.
+    const user = `Write the hook for a single bet. Return ONLY JSON: {"angle": "publishable prose", "edge": "publishable prose"}.
+Both fields are REQUIRED and must contain complete, non-empty prose. Never return an empty string and never omit either field.
+The completed angle, injected pick line, and edge must fit within 270 total characters.
 PICK: ${chosen.pick} | odds: ${chosen.odds ?? "see rationale"} | ${chosen.awayTeam} @ ${chosen.homeTeam} | league ${league} | starts ${chosen.time ?? chosen.commence_time} ET
 ${isTopPick ? "This is Gary's highest-conviction play on the whole board today. Let the angle and the edge carry that certainty in his voice. Do NOT use any label, badge, or the words 'top pick'.\n" : ""}Match this VOICE (a DIFFERENT game, copy the casual style not the facts):
-ANGLE example: "Pirates are down to a backup catcher who's never taken an MLB at-bat, and he let guys run wild in the minors, 84% on steals."
-EDGE example: "He's catching a Dodgers lineup built to run, swiped a bag in nine straight. I'm laying the runline."
+ANGLE example: "Backup catcher today, and he allowed an 84% steal rate in the minors."
+EDGE example: "The Dodgers have stolen a bag in nine straight. I am laying the runline."
 Notice: casual, contractions, one concrete number, ends on a stance, no fancy adjectives.
 
-ANGLE: a punchy 1 to 2 line story angle tied to a real detail in the rationale (a scratch, a matchup edge, a rest or bullpen situation, a trend). Under roughly 200 characters. No pick, no odds, no link.
-EDGE: the ONE single strongest, most specific, FALSIFIABLE factor from the rationale or stats (a concrete number or a named situational edge). One or two sentences. End on a short casual stance about the play (for example "I'm laying the runline." or "I'll take the over."). Do NOT list multiple stats. Hold the rest of the reasoning back for the app. No call to action, no link.
+ANGLE: exactly one sentence, 55 to 100 characters, tied to a real detail in the rationale. No pick, odds, or link.
+EDGE: exactly one sentence, 55 to 100 characters, with the ONE strongest falsifiable factor and a short stance. No list, call to action, or link.
 
 RATIONALE:
 ${chosen.rationale ?? ""}
@@ -449,7 +473,7 @@ ${JSON.stringify(chosen.statsData ?? []).slice(0, 4000)}
 
 INJURIES:
 ${JSON.stringify(chosen.injuries ?? []).slice(0, 1500)}`;
-    const out = parseJsonBlock(await callLLM(VOICE_RULES, user));
+    const out = parseJsonBlock(await callLLM(VOICE_RULES, user, PICK_HOOK_SCHEMA));
     const angle = clean(out.angle);
     const edge = clean(out.edge);
     // BROKEN-TWEET GUARD (Aug 4 2026, founder: "our tweets seem to be broken").
@@ -470,6 +494,9 @@ ${JSON.stringify(chosen.injuries ?? []).slice(0, 1500)}`;
       throw new Error(`Empty hook content from LLM for "${chosen.pick}" — angle="${angle}" edge="${edge}", refusing to post`);
     }
     const hook = `${angle}\n\n${pickLine}\n\n${edge}`;
+    if (hook.length > 280) {
+      throw new Error(`Hook exceeds X limit for "${chosen.pick}" — ${hook.length} characters, refusing to post`);
+    }
     // THE PROPS REPLY (founder, Aug 14 2026 — supersedes the Jul 5 first-thread-only handoff): every game
     // thread gets ONE reply — "Gary's Prop Bets", the bare list for THIS game (HR threats included, no
     // commentary), then the classic app handoff. A game with no props falls back to the old rule: the

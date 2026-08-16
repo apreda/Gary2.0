@@ -25,6 +25,38 @@ import { getGeminiClient, groundingSearch, geminiGroundingSearch } from './groun
 // TEAM PROFILE FUNCTIONS
 // ============================================================================
 
+const NFL_TAPE_PERFORMANCE_FIELDS = [
+  'total_points_per_game',
+  'opp_total_points_per_game',
+  'rushing_yards_per_game',
+  'net_passing_yards_per_game'
+];
+
+function exactFootballSeasonStatsRow(rows, teamId) {
+  if (!Array.isArray(rows)) return rows || null;
+  const exactRows = rows.filter((row) =>
+    String(row?.team?.id ?? row?.team_id ?? '') === String(teamId)
+  );
+  return exactRows.length === 1 ? exactRows[0] : null;
+}
+
+export function hasSubstantiveNflSeasonStats(row) {
+  if (!row || Array.isArray(row)) return false;
+  return NFL_TAPE_PERFORMANCE_FIELDS.some((field) => {
+    const value = row[field];
+    return value !== null && value !== undefined && value !== '' &&
+      String(value).trim().toUpperCase() !== 'N/A';
+  });
+}
+
+function isNflAugustPreseason(value = new Date()) {
+  const month = Number(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    month: 'numeric'
+  }).format(value));
+  return month === 8;
+}
+
 export async function fetchTeamProfile(teamName, sport) {
   try {
     const bdlSport = sportToBdlKey(sport);
@@ -38,24 +70,60 @@ export async function fetchTeamProfile(teamName, sport) {
     // Calculate current season dynamically
     const currentSeason = seasonForSport(sport);
     
-    // Get season stats
-    let seasonStats = await ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: team.id, season: currentSeason, postseason: false });
+    // BDL does not publish NFL team-season aggregates for preseason. In August,
+    // go directly to the prior completed regular season instead of spending one
+    // of the trial's five requests/minute on a guaranteed-empty current season.
+    // Outside August, try the current season first and fall back only when its
+    // exact team row has no usable performance fields (for example before Week
+    // 1 data has landed).
+    const isNfl = bdlSport === 'americanfootball_nfl';
+    const priorSeason = currentSeason - 1;
+    let seasonStatsSeason = isNfl && isNflAugustPreseason() ? priorSeason : currentSeason;
+    let seasonStats = await ballDontLieService.getTeamSeasonStats(bdlSport, {
+      teamId: team.id,
+      season: seasonStatsSeason,
+      postseason: false
+    });
     
-    // NCAAF: BDL returns an array of stats, extract the team's stats object
-    // The array may contain stats for the specific team we queried
-    if (bdlSport === 'americanfootball_ncaaf' && Array.isArray(seasonStats)) {
-      if (seasonStats.length > 0) {
-        // Find the stats for our team (in case multiple returned) or use first
-        const teamStats = seasonStats.find(s => s.team?.id === team.id) || seasonStats[0];
-        seasonStats = teamStats;
-        // Log actual NCAAF fields (BDL doesn't have PPG for NCAAF)
-        console.log(`[Scout Report] NCAAF ${teamName} season stats:`, 
-          `Pass YPG=${seasonStats.passing_yards_per_game || 'N/A'}, ` +
-          `Rush YPG=${seasonStats.rushing_yards_per_game || 'N/A'}`);
-      } else {
-        seasonStats = null;
-        console.log(`[Scout Report] NCAAF ${teamName} - no team season stats from BDL`);
+    // Both football team-season endpoints return arrays. Resolve the exact
+    // requested team before Tale of the Tape reads the stat fields; leaving an
+    // NFL response as an array made every verified row render N/A and tripped
+    // the no-stats hard gate after Gary had completed a real investigation.
+    if ((isNfl || bdlSport === 'americanfootball_ncaaf') && Array.isArray(seasonStats)) {
+      seasonStats = exactFootballSeasonStatsRow(seasonStats, team.id);
+      if (bdlSport === 'americanfootball_ncaaf' && seasonStats) {
+        console.log(`[Scout Report] NCAAF ${teamName} season stats:`,
+          `Pass YPG=${seasonStats.passing_yards_per_game ?? 'N/A'}, ` +
+          `Rush YPG=${seasonStats.rushing_yards_per_game ?? 'N/A'}`);
+      } else if (!seasonStats) {
+        console.log(`[Scout Report] ${bdlSport === 'americanfootball_nfl' ? 'NFL' : 'NCAAF'} ${teamName} - no exact team season stats from BDL`);
       }
+    }
+
+    if (isNfl && seasonStatsSeason === currentSeason && !hasSubstantiveNflSeasonStats(seasonStats)) {
+      const priorRows = await ballDontLieService.getTeamSeasonStats(bdlSport, {
+        teamId: team.id,
+        season: priorSeason,
+        postseason: false
+      });
+      const priorStats = exactFootballSeasonStatsRow(priorRows, team.id);
+      if (hasSubstantiveNflSeasonStats(priorStats)) {
+        seasonStats = priorStats;
+        seasonStatsSeason = priorSeason;
+      }
+    }
+
+    const seasonStatsScope = isNfl
+      ? (seasonStatsSeason === priorSeason ? 'prior_completed_regular_season' : 'current_regular_season')
+      : null;
+    const seasonStatsLabel = isNfl
+      ? (seasonStatsScope === 'prior_completed_regular_season'
+          ? `${seasonStatsSeason} prior completed regular-season baseline (not current-season form)`
+          : `${seasonStatsSeason} current regular season`)
+      : null;
+
+    if (isNfl && hasSubstantiveNflSeasonStats(seasonStats)) {
+      console.log(`[Scout Report] NFL ${teamName} performance baseline: ${seasonStatsSeason} (${seasonStatsScope})`);
     }
     
     // Fetch standings - NCAAB and NCAAF require conference_id from the team data
@@ -112,6 +180,8 @@ export async function fetchTeamProfile(teamName, sport) {
     
     const isNHL = sport === 'NHL' || bdlSport === 'icehockey_nhl';
     
+    let recordSeason = null;
+    let recordSource = null;
     if (standingWins !== undefined || standingLosses !== undefined) {
       // Use ?? to coerce null to 0 (BDL returns null for teams with 0 losses)
       if (isNHL) {
@@ -120,6 +190,8 @@ export async function fetchTeamProfile(teamName, sport) {
       } else {
         record = `${standingWins ?? 0}-${standingLosses ?? 0}`;
       }
+      recordSeason = currentSeason;
+      recordSource = 'standings';
       console.log(`[Scout Report] ${teamName} record from BDL standings: ${record}, conf: ${conferenceRecord}`);
     } else if (statsWins !== undefined || statsLosses !== undefined) {
       if (isNHL) {
@@ -128,6 +200,8 @@ export async function fetchTeamProfile(teamName, sport) {
       } else {
         record = `${statsWins ?? 0}-${statsLosses ?? 0}`;
       }
+      recordSeason = seasonStatsSeason;
+      recordSource = seasonStatsScope;
       console.log(`[Scout Report] ${teamName} record from BDL season stats: ${record}`);
     }
     
@@ -144,6 +218,12 @@ export async function fetchTeamProfile(teamName, sport) {
       conferenceRecord,
       streak: formatStreak(teamStanding),
       seasonStats: seasonStats,
+      seasonStatsSeason,
+      seasonStatsScope,
+      seasonStatsLabel,
+      recordSeason,
+      recordSource,
+      teamId: team.id,
       standing: teamStanding,
     };
   } catch (error) {

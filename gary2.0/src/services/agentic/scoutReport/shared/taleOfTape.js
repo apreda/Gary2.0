@@ -268,6 +268,26 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
 
   } else if (sport === 'NFL' || sport === 'americanfootball_nfl') {
     // NFL stats - has points per game fields
+    const usesPriorBaseline = homeProfile?.seasonStatsScope === 'prior_completed_regular_season' ||
+      awayProfile?.seasonStatsScope === 'prior_completed_regular_season';
+    const sharedBaselineSeason = homeProfile?.seasonStatsSeason === awayProfile?.seasonStatsSeason
+      ? homeProfile?.seasonStatsSeason
+      : null;
+    const performanceLabel = (label) => usesPriorBaseline
+      ? `${label} · ${sharedBaselineSeason ?? 'prior'} baseline`
+      : label;
+    const nflStatProvenance = {
+      home: {
+        season: homeProfile?.seasonStatsSeason ?? null,
+        scope: homeProfile?.seasonStatsScope ?? null,
+        label: homeProfile?.seasonStatsLabel ?? null
+      },
+      away: {
+        season: awayProfile?.seasonStatsSeason ?? null,
+        scope: awayProfile?.seasonStatsScope ?? null,
+        label: awayProfile?.seasonStatsLabel ?? null
+      }
+    };
     const record = formatStat(homeProfile?.record, awayProfile?.record, true);
     const ppg = formatStat(
       homeStats.total_points_per_game?.toFixed?.(1) || homeStats.total_points_per_game,
@@ -296,10 +316,10 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
     rows = [
       { label: 'L5 Form', ...l5Form },
       { label: 'Record', ...record },
-      { label: 'Points/Gm', ...ppg },
-      { label: 'Opp Pts/Gm', ...oppPpg },
-      { label: 'Rush Yds/Gm', ...rushYpg },
-      { label: 'Pass Yds/Gm', ...passYpg },
+      { label: performanceLabel('Points/Gm'), token: 'POINTS_GM', ...ppg, statProvenance: nflStatProvenance },
+      { label: performanceLabel('Opp Pts/Gm'), token: 'OPP_PTS_GM', ...oppPpg, statProvenance: nflStatProvenance },
+      { label: performanceLabel('Rush Yds/Gm'), token: 'RUSH_YDS_GM', ...rushYpg, statProvenance: nflStatProvenance },
+      { label: performanceLabel('Pass Yds/Gm'), token: 'PASS_YDS_GM', ...passYpg, statProvenance: nflStatProvenance },
       { label: 'Key Injuries', home: homeInjuries, away: awayInjuries, arrow: '' }
     ];
 
@@ -344,9 +364,13 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
       { label: 'Record', ...record },
       { label: 'Pass Yds/Gm', ...passYpg },
       { label: 'Rush Yds/Gm', ...rushYpg },
-      { label: 'Total Yds/Gm', ...totalYpg },
-      { label: 'Opp Pass Yds', ...oppPassYds },
-      { label: 'Opp Rush Yds', ...oppRushYds },
+      // These explicit canonical tokens are also the iOS decoder contract.
+      // Label-derived TOTAL_YDS_GM / OPP_PASS_YDS / OPP_RUSH_YDS produced
+      // nested JSON keys the app could not read, even though the values were
+      // verified. Keep this correction inside the NCAAF branch only.
+      { label: 'Total Yds/Gm', token: 'TOTAL_YPG', ...totalYpg },
+      { label: 'Opp Pass Yds', token: 'OPP_PASSING_YARDS', ...oppPassYds },
+      { label: 'Opp Rush Yds', token: 'OPP_RUSHING_YARDS', ...oppRushYds },
       { label: 'Key Injuries', home: homeInjuries, away: awayInjuries, arrow: '' }
     ];
 
@@ -371,9 +395,14 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
     return `${label}${homeVal}${arrow}${awayVal}`;
   });
 
+  const isNfl = sport === 'NFL' || sport === 'americanfootball_nfl';
+  const nflProvenanceText = isNfl
+    ? `NFL PERFORMANCE BASELINE SOURCE\n${homeTeam}: ${homeProfile?.seasonStatsLabel ?? 'unavailable'}\n${awayTeam}: ${awayProfile?.seasonStatsLabel ?? 'unavailable'}\n\n`
+    : '';
+
   const formattedText = `TALE OF THE TAPE (VERIFIED FROM BDL)
 
-${headerLine}
+${nflProvenanceText}${headerLine}
 ${rowLines.join('\n')}`;
 
   // Return both formatted text AND structured rows for iOS app
@@ -382,9 +411,26 @@ ${rowLines.join('\n')}`;
     text: formattedText,
     rows: rows.map(row => ({
       name: row.label,
-      token: row.label.toUpperCase().replace(/[^A-Z0-9]/g, '_'),
+      token: row.token || row.label.toUpperCase().replace(/[^A-Z0-9]/g, '_'),
       home: { team: homeTeam, value: row.home },
-      away: { team: awayTeam, value: row.away }
-    }))
+      away: { team: awayTeam, value: row.away },
+      ...(row.statProvenance ? { statProvenance: row.statProvenance } : {})
+    })),
+    ...(isNfl ? {
+      provenance: {
+        home: {
+          team: homeTeam,
+          season: homeProfile?.seasonStatsSeason ?? null,
+          scope: homeProfile?.seasonStatsScope ?? null,
+          label: homeProfile?.seasonStatsLabel ?? null
+        },
+        away: {
+          team: awayTeam,
+          season: awayProfile?.seasonStatsSeason ?? null,
+          scope: awayProfile?.seasonStatsScope ?? null,
+          label: awayProfile?.seasonStatsLabel ?? null
+        }
+      }
+    } : {})
   };
 }

@@ -88,6 +88,47 @@ struct Connection: Decodable {
     let result_note: String?     // grader's one-liner ("2-for-4, double") — receipts subline
 }
 
+/// A compact value in an insight row's `meta` payload. Football's live state
+/// lanes may publish a number (pressure rate, line, share) or an already-
+/// formatted string ("42%", "7-3"). Decoding both prevents one new factor from
+/// invalidating the entire `insight_connections` response.
+enum InsightMetaValue: Decodable {
+    case string(String)
+    case number(Double)
+    case bool(Bool)
+
+    init(from decoder: Decoder) throws {
+        let value = try decoder.singleValueContainer()
+        if let string = try? value.decode(String.self) {
+            self = .string(string)
+        } else if let number = try? value.decode(Double.self) {
+            self = .number(number)
+        } else if let bool = try? value.decode(Bool.self) {
+            self = .bool(bool)
+        } else {
+            throw DecodingError.typeMismatch(
+                InsightMetaValue.self,
+                .init(codingPath: decoder.codingPath,
+                      debugDescription: "Expected a string, number, or boolean insight value")
+            )
+        }
+    }
+
+    var display: String {
+        switch self {
+        case .string(let value):
+            return value
+        case .number(let value):
+            if value.rounded() == value { return String(Int(value)) }
+            return String(format: "%.2f", value)
+                .replacingOccurrences(of: #"0+$"#, with: "", options: .regularExpression)
+                .replacingOccurrences(of: #"\.$"#, with: "", options: .regularExpression)
+        case .bool(let value):
+            return value ? "YES" : "NO"
+        }
+    }
+}
+
 /// Structured player-swap payload on beneficiary rows (kind == "swap"):
 /// the OUT player, why, and tonight's replacement with his slot + line.
 /// Immutable, reference-backed because a `Signal` exposes this same payload
@@ -101,6 +142,15 @@ final class SwapMeta: Decodable {
     /// template sentence here) — the expanded card's "numbers behind it" line.
     let evidence: String?
     let kind: String?
+    // Football state modules. `baseline` / `live_value` deliberately accept
+    // either numeric or formatted scalar values; every other field is stable.
+    let pick_id: String?
+    let season_type: String?
+    let factor_code: String?
+    let baseline: InsightMetaValue?
+    let live_value: InsightMetaValue?
+    let state: String?
+    let as_of: String?
     let team: String?
     let position: String?
     let out_name: String?
@@ -528,6 +578,8 @@ struct GaryPick: Identifiable, Codable {
     let time: String?
     let homeTeam: String?
     let awayTeam: String?
+    var homeTeamAbbreviation: String? = nil
+    var awayTeamAbbreviation: String? = nil
     let type: String?
     let trapAlert: Bool?
     let commence_time: String?  // ISO format: "2025-12-07T18:00:00Z"
@@ -645,6 +697,17 @@ struct GaryPick: Identifiable, Codable {
     
     /// Parse from dictionary (for manual JSON parsing)
     static func from(dict: [String: Any]) -> GaryPick? {
+        func number(_ keys: String...) -> Double? {
+            for key in keys {
+                if let value = dict[key] as? NSNumber { return value.doubleValue }
+                if let value = dict[key] as? String,
+                   let parsed = Double(value.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                    return parsed
+                }
+            }
+            return nil
+        }
+
         // Parse statsData
         var statsDataArray: [StatData]? = nil
         if let statsDataRaw = dict["statsData"] as? [[String: Any]] {
@@ -675,6 +738,8 @@ struct GaryPick: Identifiable, Codable {
             time: dict["time"] as? String,
             homeTeam: dict["homeTeam"] as? String,
             awayTeam: dict["awayTeam"] as? String,
+            homeTeamAbbreviation: (dict["homeTeamAbbreviation"] ?? dict["home_team_abbreviation"]) as? String,
+            awayTeamAbbreviation: (dict["awayTeamAbbreviation"] ?? dict["away_team_abbreviation"]) as? String,
             type: dict["type"] as? String,
             trapAlert: dict["trapAlert"] as? Bool,
             commence_time: dict["commence_time"] as? String,
@@ -695,6 +760,9 @@ struct GaryPick: Identifiable, Codable {
             awayRanking: (dict["awayRanking"] as? NSNumber)?.intValue,
             is_top_pick: dict["is_top_pick"] as? Bool,
             sportsbook_odds: sportsbookOddsArray,
+            spread: number("spread"),
+            moneylineHome: number("moneylineHome", "moneyline_home"),
+            moneylineAway: number("moneylineAway", "moneyline_away"),
             soccerStage: dict["soccer_stage"] as? String,
             soccerGroup: dict["soccer_group"] as? String,
             soccerRound: dict["soccer_round"] as? String
@@ -1223,10 +1291,10 @@ struct StatValues: Codable {
         case "TALENT_COMPOSITE": return overall ?? "N/A"
         case "FIELD_POSITION": return yardsPerGame ?? "N/A"
         // NEW: Individual NFL/NCAAF stat tokens (flattened)
-        case "POINTS_PER_GAME", "PPG": return pointsPerGame ?? "N/A"
+        case "POINTS_PER_GAME", "POINTS_GM", "PPG": return pointsPerGame ?? "N/A"
         case "YARDS_PER_GAME", "YPG", "TOTAL_YARDS_PER_GAME", "TOTAL_YPG": return totalYpg ?? yardsPerGame ?? totalYardsPerGame ?? "N/A"
         case "YARDS_PER_PLAY": return yardsPerPlay ?? yardsPerGame ?? "N/A"
-        case "OPP_POINTS_PER_GAME", "OPP_PPG": return oppPointsPerGame ?? "N/A"
+        case "OPP_POINTS_PER_GAME", "OPP_PTS_GM", "OPP_PPG": return oppPointsPerGame ?? "N/A"
         case "OPP_YARDS_PER_GAME", "OPP_YPG", "OPP_TOTAL_YARDS": return oppTotalYards ?? oppYardsPerGame ?? "N/A"
         case "POINT_DIFF": return pointDiff ?? "N/A"
         case "THIRD_DOWN_PCT": return thirdDownPct ?? "N/A"
@@ -1241,8 +1309,8 @@ struct StatValues: Codable {
         case "PASSING_TDS", "PASS_TDS": return passingTds ?? "N/A"
         case "INTERCEPTIONS", "INTS", "INTERCEPTIONS_THROWN": return interceptionsThrown ?? interceptions ?? "N/A"
         case "RUSHING_TDS", "RUSH_TDS": return rushingTds ?? "N/A"
-        case "RUSHING_YARDS_PER_GAME", "RUSH_YPG", "RUSHING_YPG": return rushingYpg ?? rushingYardsPerGame ?? "N/A"
-        case "PASSING_YPG": return passingYpg ?? "N/A"
+        case "RUSHING_YARDS_PER_GAME", "RUSH_YDS_GM", "RUSH_YPG", "RUSHING_YPG": return rushingYpg ?? rushingYardsPerGame ?? "N/A"
+        case "PASS_YDS_GM", "PASSING_YPG": return passingYpg ?? "N/A"
         case "TOTAL_TDS": return totalTds ?? "N/A"
         case "OPP_PASSING_YARDS": return oppPassingYards ?? "N/A"
         case "OPP_RUSHING_YARDS": return oppRushingYards ?? "N/A"
@@ -1486,6 +1554,12 @@ struct PropPick: Identifiable, Codable {
         tdCategory != nil
     }
 
+    /// The dedicated live `NFL TDs` surface is league-specific. NCAAF uses
+    /// the same touchdown category metadata, but its props stay in NCAAF/ALL.
+    var isNFLTDPick: Bool {
+        effectiveLeague == "NFL" && isTDPick
+    }
+
     /// HR fun-lane membership — the ONE source of truth for every surface
     /// (founder, Jul 29: HR Threats never touch Gary's props record; they live
     /// in the Hub's HR Threats lane + the Billfold's longshot tracker only).
@@ -1725,14 +1799,28 @@ struct PropResult: Decodable {
         return nil
     }
     
-    /// Whether this is a TD scorer result (NFL anytime TD picks)
+    /// Whether this is an anytime-TD scorer result in any football league.
+    /// League routing stays separate: an NCAAF scorer must never be promoted
+    /// into the NFL-only fun lane merely because both markets say touchdown.
     var isTDResult: Bool {
         let propLower = (prop_type ?? "").lowercased()
         let pickLower = (pick_text ?? "").lowercased()
-        return propLower.contains("anytime") && propLower.contains("td") ||
-               pickLower.contains("anytime") && pickLower.contains("td") ||
+        let propAnytimeTD = propLower.contains("anytime")
+            && (propLower.contains("td") || propLower.contains("touchdown"))
+        let pickAnytimeTD = pickLower.contains("anytime")
+            && (pickLower.contains("td") || pickLower.contains("touchdown"))
+        return propAnytimeTD ||
+               pickAnytimeTD ||
                propLower == "anytime_td" ||
-               propLower == "td_scorer"
+               propLower == "td_scorer" ||
+               propLower == "touchdown_scorer"
+    }
+
+    /// The dedicated Billfold `NFL TDs` lane is NFL-only. College touchdown
+    /// props remain ordinary NCAAF results and therefore stay visible in both
+    /// NCAAF and ALL instead of being relabeled or removed as an NFL fun bet.
+    var isNFLTDResult: Bool {
+        effectiveLeague == "NFL" && isTDResult
     }
 
     /// Whether this is a home-run bet (the fun lane — founder, Jul 29: tracked

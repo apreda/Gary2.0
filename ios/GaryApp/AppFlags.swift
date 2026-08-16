@@ -37,7 +37,8 @@ extension AppFlags {
     /// connections. WC drops out entirely when the feature is off, so those loops
     /// never even request the World Cup lane.
     static var insightLeagues: [String] {
-        worldCupEnabled ? ["MLB", "NBA", "WC"] : ["MLB", "NBA"]
+        worldCupEnabled ? ["MLB", "NFL", "NCAAF", "NBA", "WC"]
+                        : ["MLB", "NFL", "NCAAF", "NBA"]
     }
 
     /// Picks-page ALL tab (founder, Jul 13 2026: "we don't need an ALL tab at

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildGaryPropsSystemPrompt, THE_PROPS_ASK, buildPropBoardV2, selectPrimaryMarkets, statForProp, clearedClause } from '../../../src/services/pickdesk/propsBrain.js';
+import { buildGaryPropsSystemPrompt, THE_PROPS_ASK, buildPropBoardV2, selectPrimaryMarkets, statForProp, clearedClause, resolvedConfirmedLineupNames } from '../../../src/services/pickdesk/propsBrain.js';
 import { propOddsService } from '../../../src/services/propOddsService.js';
 
 // The props prompt surface is a product contract (spec 2026-07-26-props-desk).
@@ -24,6 +24,22 @@ Each prop you take publishes as its own card with its own "Gary's Take" — the 
     expect(THE_PROPS_ASK).toContain('confidence_score (0.50–1.00)');
     // No steering, no strategy, no menu explanations beyond the output contract.
     expect(THE_PROPS_ASK).not.toMatch(/value|edge|sharp|favor|prefer|target/i);
+  });
+});
+
+describe('shared confirmed lineup', () => {
+  it('reads both batting orders and starting pitchers from the resolved desk scout', () => {
+    const names = resolvedConfirmedLineupNames({
+      confirmedLineups: {
+        home: { batters: [{ name: 'Aaron Judge' }], pitcher: { name: 'Gerrit Cole' } },
+        away: { batters: [{ name: 'Rafael Devers' }], pitcher: { name: 'Garrett Crochet' } },
+      },
+    });
+    expect(names).toEqual(new Set(['aaron judge', 'gerrit cole', 'rafael devers', 'garrett crochet']));
+  });
+
+  it('never fails open when the desk did not return a structured lineup', () => {
+    expect(resolvedConfirmedLineupNames({})).toBeNull();
   });
 });
 

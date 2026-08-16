@@ -7,7 +7,7 @@
  * ALL of today's games from the morning, with Gary's picks overlaying later.
  *
  * Data sources (reuses the exact fetch paths the picks pipeline already pays for):
- *   - MLB / NBA / NHL: oddsService.getUpcomingGames(sportKey, { targetDate })
+ *   - MLB / NFL / NCAAF / NBA: oddsService.getUpcomingGames(sportKey, { targetDate })
  *     → BDL games+odds with flat moneyline_home/spread_home/total fields.
  *
  * Write path: service-role REST upsert on (date, league, away_team, home_team)
@@ -33,8 +33,9 @@ const CONFLICT_KEY = 'date,league,away_team,home_team,commence_time';
 // Active sports for the slate (same set the scheduler plans for).
 const SLATE_SPORTS = [
   { key: 'baseball_mlb', league: 'MLB' },
+  { key: 'americanfootball_nfl', league: 'NFL' },
+  { key: 'americanfootball_ncaaf', league: 'NCAAF' },
   { key: 'basketball_nba', league: 'NBA' },
-  { key: 'icehockey_nhl', league: 'NHL' },
 ];
 
 export function getETDateStr(date) {
@@ -78,13 +79,23 @@ export function sanitizeLines(league, { spread, ml_home, ml_away, total }) {
 export const SLATE_SPORTS_LIST = SLATE_SPORTS;
 
 export async function buildLeagueRows(sport, etDateStr) {
-  // MLB / NBA / NHL: BDL games + odds, flat fields already extracted by oddsService.
+  // Active sports: BDL games + odds, flat fields already extracted by oddsService.
   // The BDL adapter handles the MLB UTC-date bleed (evening ET games indexed under
   // the next UTC date) internally; we still filter by actual ET start date here.
   const games = await oddsService.getUpcomingGames(sport.key, {
     nocache: true,
     targetDate: etDateStr,
   });
+
+  if (sport.league === 'NCAAF') {
+    const unverified = (Array.isArray(games) ? games : [])
+      .filter((game) => game?.ncaaf_fbs_verified !== true);
+    if (unverified.length > 0) {
+      throw new Error(
+        `NCAAF source returned ${unverified.length} game(s) without provider-verified FBS identity`,
+      );
+    }
+  }
 
   const rows = [];
   for (const g of Array.isArray(games) ? games : []) {

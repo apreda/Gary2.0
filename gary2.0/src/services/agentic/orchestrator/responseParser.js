@@ -449,23 +449,22 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   // NEVER default to -110 or use ML odds for a spread pick
   let odds;
   if (parsed.type === 'spread') {
-    // For spread picks: use spreadOdds, then game spread_odds — NEVER ML odds
-    // Try parsed odds first, then game odds (field is spread_home_odds, not spread_odds)
+    // The feed is authoritative. Gary may only repeat a price supplied in the
+    // game market; model-authored odds are a fallback when the feed truly has
+    // no side price, never an override of a verified sportsbook number.
     const sideSpread = detectPickedTeam(parsed.pick, homeTeam, awayTeam);
     const pickedHomeSpread = sideSpread === 'home';
-    odds = parsed.odds ?? parsed.spreadOdds
-      ?? (pickedHomeSpread ? gameOdds.spread_home_odds : gameOdds.spread_away_odds)
-      ?? gameOdds.spread_home_odds ?? null;
+    odds = (pickedHomeSpread ? gameOdds.spread_home_odds : gameOdds.spread_away_odds) ?? null;
   } else {
     // For ML picks: determine which team was picked and use their ML odds
     const sideOdds = detectPickedTeam(parsed.pick, homeTeam, awayTeam);
     const pickedHome = sideOdds === 'home';
-    odds = parsed.odds ?? (pickedHome ? parsed.moneylineHome : parsed.moneylineAway)
-      ?? (pickedHome ? gameOdds.moneyline_home : gameOdds.moneyline_away) ?? null;
+    odds = (pickedHome ? gameOdds.moneyline_home : gameOdds.moneyline_away) ?? null;
   }
 
   if (odds == null) {
-    console.warn(`[Orchestrator] ⚠️ NO ODDS AVAILABLE for pick "${pickText}" — AI and game data both missing`);
+    console.error(`[Orchestrator] REJECTED: no verified sportsbook price for pick "${pickText}" — model-authored/default odds are not a market`);
+    return null;
   }
   // Normalize the trailing odds. Strip an existing trailing price — a signed token
   // (always odds) OR an unsigned copy of THIS price (Gary drops the + on plus-money,
@@ -504,8 +503,9 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
         const correctSign = correctSpread >= 0 ? '+' : '-';
         const correctAbs = Math.abs(correctSpread);
 
-        // Fix if: sign is missing, sign is wrong, OR number doesn't match odds
-        if (!currentSign || (currentSign === '+' && correctSpread < 0) || (currentSign === '-' && correctSpread > 0)) {
+        // Fix if: sign is missing, sign is wrong, OR number doesn't match the
+        // verified market (the model once emitted Bills +0.0 on a -3.5 board).
+        if (!currentSign || (currentSign === '+' && correctSpread < 0) || (currentSign === '-' && correctSpread > 0) || Math.abs(spreadNum - correctAbs) > 0.001) {
           const oldFragment = spreadInText[0];
           const correctStr = correctSpread >= 0 ? `+${correctAbs}` : `-${correctAbs}`;
           const newFragment = ` ${correctStr} `;
@@ -592,6 +592,20 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     odds = parseInt(odds, 10) || null;
   }
 
+  const finalSide = detectPickedTeam(pickText, homeTeam, awayTeam);
+  const pickedHomeFinal = finalSide === 'home';
+  const pickedAwayFinal = finalSide === 'away';
+  const marketSpread = pickedHomeFinal
+    ? gameOdds.spread_home
+    : pickedAwayFinal
+      ? (gameOdds.spread_away ?? (gameOdds.spread_home != null ? -Number(gameOdds.spread_home) : null))
+      : null;
+  const marketSpreadOdds = pickedHomeFinal
+    ? gameOdds.spread_home_odds
+    : pickedAwayFinal
+      ? gameOdds.spread_away_odds
+      : null;
+
   return {
     pick: pickText,
     type: parsed.type || 'spread',
@@ -604,12 +618,12 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     sport: sport,
     rationale: rationale,
     // Include odds from Gary's output — fall back to game data, NEVER to -110
-    spread: parsed.spread ?? gameOdds.spread_home ?? null,
-    spreadOdds: parsed.spreadOdds ?? gameOdds.spread_home_odds ?? null,
-    moneylineHome: parsed.moneylineHome ?? gameOdds.moneyline_home ?? null,
-    moneylineAway: parsed.moneylineAway ?? gameOdds.moneyline_away ?? null,
-    total: parsed.total ?? gameOdds.total ?? null,
-    totalOdds: parsed.totalOdds ?? gameOdds.total_over_odds ?? null,
+    spread: marketSpread ?? parsed.spread ?? null,
+    spreadOdds: marketSpreadOdds ?? parsed.spreadOdds ?? null,
+    moneylineHome: gameOdds.moneyline_home ?? parsed.moneylineHome ?? null,
+    moneylineAway: gameOdds.moneyline_away ?? parsed.moneylineAway ?? null,
+    total: gameOdds.total ?? parsed.total ?? null,
+    totalOdds: gameOdds.total_over_odds ?? parsed.totalOdds ?? null,
     // Additional judge fields
     momentum: parsed.momentum || null,
     agentic: true // Flag to identify agentic picks
@@ -619,4 +633,3 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
 /**
  * Normalize sport to league name
  */
-

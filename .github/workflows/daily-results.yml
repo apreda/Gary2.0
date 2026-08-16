@@ -12,6 +12,13 @@ on:
     - cron: '0 13 * * *'  # ~9am ET — catch-up / re-grade for late West-Coast finishers
   workflow_dispatch:  # Allow manual trigger
 
+# Share the same database-writer lane as the near-real-time football grader.
+# A long full pass and a football pass must never race each other's idempotent
+# read/update/insert sequence.
+concurrency:
+  group: results-grading
+  cancel-in-progress: false
+
 jobs:
   check-results:
     runs-on: ubuntu-latest

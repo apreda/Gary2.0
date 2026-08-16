@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Ultimate Results Script (Gary 2.0)
- * - Prop bets (NBA, NHL, NFL, MLB) — graded FIRST so recaps can cite real prop prices
+ * - Prop bets (NBA, NHL, NFL, NCAAF, MLB) — graded FIRST so recaps can cite real prop prices
  * - Daily picks (NBA, NHL, NFL, NCAAB, NCAAF, MLB) + betting recaps & fact checks
  * - Weekly NFL picks
  * - Night highlights (league-wide standout stat lines → night_highlights)
@@ -19,8 +19,37 @@ import { factCheckPick, buildGameEvidence } from '../src/services/factCheck.js';
 import { generateRecap, filterPropsForGame, headlineNeedsRepair } from '../src/services/gameRecap.js';
 import { runNightHighlights } from '../src/services/nightHighlights.js';
 import { writeStreaks } from '../src/services/streaksService.js';
+import { waitForBdlRequestSlot } from '../src/services/bdlRequestGate.js';
+import {
+  findExactNcaafStatRow,
+  ncaafActualFromStatRow,
+} from '../src/services/ncaafPropStats.js';
+import { resolveNcaafKickoff } from '../src/services/ncaafGamePolicy.js';
+import {
+  assertFootballSettlementCoverage,
+  buildFootballSettlementOutcome,
+  gradeGameSpread,
+  gradePropResult,
+  isFinalGameStatus,
+  nflActualFromStatRow,
+  nflSeasonTypeForGame,
+  normalizeStoredPropType,
+  pickGameId as storedPickGameId,
+  propGameId,
+  propResultIdentity,
+  statsForGame,
+} from './lib/resultsGradingReliability.js';
+import {
+  FOOTBALL_SETTLEMENT_SPORTS,
+  nflWeekStartForDate,
+  parseResultsRunArgs,
+  runFootballSettlementDates,
+  sportAllowed,
+} from './lib/resultsRunMode.js';
 // Load environment variables FIRST (centralized)
 await import('../src/loadEnv.js');
+
+const RUN_OPTIONS = parseResultsRunArgs(process.argv.slice(2));
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
@@ -67,8 +96,7 @@ const estDate = (offset = 0) => {
 
 // Explicit CLI date wins; otherwise default to ET-yesterday.
 const getTargetDate = () => {
-  const args = process.argv.slice(2);
-  if (args.length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(args[0])) return args[0];
+  if (RUN_OPTIONS.explicitDate) return RUN_OPTIONS.explicitDate;
   return estDate(-1);
 };
 
@@ -79,8 +107,7 @@ const getTargetDate = () => {
 // games settle rolls the headline same-day instead of waiting for the 2am
 // yesterday-only pass. Every step here is idempotent per date.
 const getTargetDates = () => {
-  const args = process.argv.slice(2);
-  if (args.length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(args[0])) return [args[0]];
+  if (RUN_OPTIONS.explicitDate) return [RUN_OPTIONS.explicitDate];
   return [estDate(0), estDate(-1)];
 };
 
@@ -176,13 +203,36 @@ function normalizeToETDate(matchedGame) {
  */
 async function bdlFetch(path, params = '') {
   const url = `https://api.balldontlie.io/${path}${params ? '?' + params : ''}`;
-  try {
-    const res = await fetch(url, { headers: { 'Authorization': BDL_API_KEY } });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch (e) {
-    return null;
+  const attempts = RUN_OPTIONS.footballSettlements ? 2 : 1;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      // The frequent cloud pass shares a five-starts/minute BDL account with
+      // the live-score function. Keep this process to three evenly spaced
+      // starts/minute and give a collision-throttled request one gated retry.
+      // The historical full/nightly mode is intentionally unchanged.
+      if (RUN_OPTIONS.footballSettlements) {
+        await waitForBdlRequestSlot(`football-results ${path}`);
+      }
+      const res = await fetch(url, { headers: { 'Authorization': BDL_API_KEY } });
+      if (res.ok) return await res.json();
+      if (res.status === 429 && attempt + 1 < attempts) {
+        console.warn(`  ⚠️ BDL ${path} rate-limited; retrying on the next guarded slot`);
+        continue;
+      }
+      const message = `BDL ${path} returned HTTP ${res.status}`;
+      if (RUN_OPTIONS.footballSettlements) throw new Error(message);
+      console.warn(`  ⚠️ ${message}`);
+      return null;
+    } catch (e) {
+      if (attempt + 1 >= attempts) {
+        if (RUN_OPTIONS.footballSettlements) {
+          throw new Error(`BDL ${path} failed after ${attempts} attempt(s): ${e.message}`, { cause: e });
+        }
+        return null;
+      }
+    }
   }
+  return null;
 }
 
 async function fetchGames(league, date) {
@@ -190,11 +240,73 @@ async function fetchGames(league, date) {
   if (cache.games.has(key)) return cache.games.get(key);
 
   // NBA uses v1/ while others use league/v1/
-  const path = league.toUpperCase() === 'NBA' ? 'v1/games' : `${league.toLowerCase()}/v1/games`;
-  const data = await bdlFetch(path, `dates[]=${date}`);
+  const normalizedLeague = league.toUpperCase();
+  const path = normalizedLeague === 'NBA' ? 'v1/games' : `${league.toLowerCase()}/v1/games`;
+  const params = new URLSearchParams();
+  params.append('dates[]', date);
+  // BDL's NFL endpoint does not include preseason unless season_type is
+  // explicit. Settlement must cover every stored NFL market: preseason (1),
+  // regular season (2), and postseason (3).
+  if (normalizedLeague === 'NFL') {
+    for (const seasonType of [1, 2, 3]) params.append('season_type[]', String(seasonType));
+  }
+  const data = await bdlFetch(path, params.toString());
   const games = data?.data || [];
   cache.games.set(key, games);
   return games;
+}
+
+async function fetchNCAAFGames(date) {
+  const key = `NCAAF-full-${date}`;
+  if (cache.games.has(key)) return cache.games.get(key);
+
+  const nextUtcDate = (() => {
+    const next = new Date(`${date}T12:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    return next.toISOString().slice(0, 10);
+  })();
+
+  // A college Saturday can exceed one page, and late ET kickoffs can be filed
+  // under the next UTC provider date. Pull both complete provider dates, then
+  // filter back to the requested ET slate so tomorrow's games cannot leak in.
+  const games = [];
+  for (const providerDate of [date, nextUtcDate]) {
+    const providerKey = `NCAAF-provider-${providerDate}`;
+    let providerGames = cache.games.get(providerKey);
+    if (!providerGames) {
+      providerGames = [];
+      let cursor = null;
+      for (let page = 0; page < 10; page += 1) {
+        const cursorParam = cursor != null ? `&cursor=${encodeURIComponent(cursor)}` : '';
+        const data = await bdlFetch(
+          'ncaaf/v1/games',
+          `dates[]=${providerDate}&per_page=100${cursorParam}`,
+        );
+        if (!data) break;
+        providerGames.push(...(data.data || []));
+        cursor = data?.meta?.next_cursor ?? null;
+        if (cursor == null) break;
+      }
+      cache.games.set(providerKey, providerGames);
+    }
+    games.push(...providerGames);
+  }
+
+  const unique = [...new Map(
+    games.filter((game) => game?.id != null).map((game) => [String(game.id), game]),
+  ).values()];
+  const exactEtSlate = unique.filter((game) => {
+    const kickoff = resolveNcaafKickoff(game);
+    if (!kickoff.iso) return false;
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/New_York',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date(kickoff.iso)) === date;
+  });
+  cache.games.set(key, exactEtSlate);
+  return exactEtSlate;
 }
 
 // MLB-only: BDL indexes games by UTC date. A 9:38 PM ET game on April 18 starts
@@ -237,14 +349,58 @@ async function fetchBoxScores(league, date) {
   return box;
 }
 
-async function fetchNFLStats(gameIds) {
-  if (!gameIds.length) return [];
-  const key = gameIds.join(',');
+async function fetchNFLStats(games) {
+  if (!games.length) return [];
+  const exactGames = games
+    .filter((game) => game?.id != null)
+    .map((game) => ({ game, gameId: String(game.id), seasonType: nflSeasonTypeForGame(game) }));
+  const key = `nfl-stats-${exactGames.map(({ gameId, seasonType }) => `${gameId}:${seasonType}`).join(',')}`;
   if (cache.stats.has(key)) return cache.stats.get(key);
 
-  const params = gameIds.map(id => `game_ids[]=${id}`).join('&') + '&per_page=100';
-  const data = await bdlFetch('nfl/v1/stats', params);
-  const stats = data?.data || [];
+  // Fetch one game at a time and stamp every row with that exact source id.
+  // The NFL endpoint's stat rows do not reliably expose their game id, so a
+  // date-wide batch cannot safely attribute a same-name player to one game.
+  // `season_type` is mandatory for preseason/postseason; BDL otherwise defaults
+  // to regular season and returns a clean-but-empty array for an exact August
+  // preseason game id.
+  const stats = [];
+  for (const { gameId, seasonType } of exactGames) {
+    const data = await bdlFetch(
+      'nfl/v1/stats',
+      `game_ids[]=${gameId}&season_type=${seasonType}&per_page=100`,
+    );
+    if (data?.data) {
+      stats.push(...data.data.map((row) => ({ ...row, _game_id: String(gameId) })));
+    }
+  }
+  cache.stats.set(key, stats);
+  return stats;
+}
+
+async function fetchNCAAFStats(gameIds) {
+  if (!gameIds.length) return [];
+  const key = `ncaaf-stats-${gameIds.join(',')}`;
+  if (cache.stats.has(key)) return cache.stats.get(key);
+
+  // As with NFL, fetch and stamp one exact game at a time. A date-wide pool is
+  // not sufficient attribution for a college slate with many same-name players.
+  const stats = [];
+  for (const gameId of gameIds) {
+    let cursor = null;
+    for (let page = 0; page < 10; page += 1) {
+      const cursorParam = cursor != null ? `&cursor=${encodeURIComponent(cursor)}` : '';
+      const data = await bdlFetch('ncaaf/v1/player_stats', `game_ids[]=${gameId}&per_page=100${cursorParam}`);
+      if (!data) break;
+      // Do not blindly trust/filter-stamp a response row. NCAAF rows expose a
+      // nested game id, so require it to equal the requested final game before
+      // it is eligible to grade anything.
+      stats.push(...(data.data || [])
+        .filter((row) => String(row?.game?.id ?? '') === String(gameId))
+        .map((row) => ({ ...row, _game_id: String(gameId) })));
+      cursor = data?.meta?.next_cursor ?? null;
+      if (cursor == null) break;
+    }
+  }
   cache.stats.set(key, stats);
   return stats;
 }
@@ -321,13 +477,8 @@ function gradeGame(pickText, homeTeam, awayTeam, hScore, vScore) {
 
   // 3. Spread (Only if not a Moneyline pick)
   if (!isML) {
-    const spreadMatch = pickText.match(/([+-][1-9]\d{0,1}(\.\d)?)(?!\d)/);
-    if (spreadMatch) {
-      const spread = parseFloat(spreadMatch[1]);
-      const diff = side === 'home' ? (hScore - vScore) : (vScore - hScore);
-      if (diff + spread === 0) return 'push';
-      return (diff + spread > 0) ? 'won' : 'lost';
-    }
+    const spreadResult = gradeGameSpread(pickText, side, hScore, vScore);
+    if (spreadResult) return spreadResult;
   }
 
   // 3-way moneyline DRAW pick (win · tie · lose) — wins only on a level
@@ -350,19 +501,10 @@ function gradeGame(pickText, homeTeam, awayTeam, hScore, vScore) {
   return null;
 }
 
-function gradeProp(actual, line, bet) {
-  if (actual === null) return null;
-  const b = bet.toLowerCase();
-  if (b === 'over' || b === 'yes' || b === 'anytime') {
-    return (actual > line || (b === 'anytime' && actual >= 1)) ? 'won' : 'lost';
-  }
-  return actual < line ? 'won' : 'lost';
-}
-
 /**
  * Prop Value Extraction
  */
-function getStatValue(sport, data, name, type) {
+function getStatValue(sport, data, name, type, playerId = null) {
   const target = normalizeName(name), t = type.toLowerCase();
   if (!data || data.length === 0) return null;
 
@@ -434,22 +576,13 @@ function getStatValue(sport, data, name, type) {
     }
   } else if (sport === 'NFL') {
     const p = findPlayerFlat(data);
-    if (p) {
-      if (t.includes('passing yard')) return p.passing_yards ?? 0;
-      if (t.includes('passing td')) return p.passing_touchdowns ?? 0;
-      if (t.includes('rushing yard')) return p.rushing_yards ?? 0;
-      if (t.includes('rushing td')) return p.rushing_touchdowns ?? 0;
-      if (t.includes('receiving yard')) return p.receiving_yards ?? 0;
-      if (t.includes('receiving td')) return p.receiving_touchdowns ?? 0;
-      if (t.includes('reception')) return p.receptions ?? 0;
-      if (t.includes('anytime td') || t.includes('touchdown')) return (p.rushing_touchdowns || 0) + (p.receiving_touchdowns || 0) > 0 ? 1 : 0;
-      if (t.includes('interception')) return p.passing_interceptions ?? 0;
-      if (t.includes('completion')) return p.passing_completions ?? 0;
-      if (t.includes('attempt')) {
-        if (t.includes('rush')) return p.rushing_attempts ?? 0;
-        if (t.includes('pass')) return p.passing_attempts ?? 0;
-      }
-    }
+    if (p) return nflActualFromStatRow(p, type, data);
+  } else if (sport === 'NCAAF') {
+    // Generation stamps the exact BDL roster id. Require it here too: a
+    // college game can contain duplicate/similar names, so name-only matching
+    // is not authoritative enough to settle money.
+    const p = findExactNcaafStatRow(data, playerId);
+    if (p) return ncaafActualFromStatRow(p, type);
   } else if (sport === 'MLB') {
     // BDL /mlb/v1/stats returns flat array with player objects
     const p = findPlayerFlat(data) || findPlayerInGames(data);
@@ -684,19 +817,138 @@ async function recapGradedPick({ pick, league, gameDate, result, hs, vs, matched
   }
 }
 
+let gameResultIdentityColumnAvailable;
+let nflResultIdentityColumnAvailable;
+
+async function supportsExactGameResultIdentity() {
+  if (gameResultIdentityColumnAvailable !== undefined) return gameResultIdentityColumnAvailable;
+
+  const { error } = await supabase.from('game_results').select('game_id').limit(1);
+  if (!error) {
+    gameResultIdentityColumnAvailable = true;
+    return true;
+  }
+
+  const missingColumn = ['42703', 'PGRST204'].includes(String(error.code || ''))
+    || /column .*?game_id.*?does not exist|could not find .*?game_id.*?column/i.test(error.message || '');
+  if (!missingColumn) throw new Error(`Could not inspect game_results.game_id: ${error.message}`);
+
+  // Keep grading safe while code and schema roll out separately. The legacy
+  // lookup still uses league + matchup + pick text + date rather than the old
+  // collision-prone pick-text/date pair.
+  console.warn('  ⚠️ game_results.game_id is not deployed yet — using legacy-safe result identity');
+  gameResultIdentityColumnAvailable = false;
+  return false;
+}
+
+async function supportsExactNFLResultIdentity() {
+  if (nflResultIdentityColumnAvailable !== undefined) return nflResultIdentityColumnAvailable;
+
+  const { error } = await supabase.from('nfl_results').select('game_id').limit(1);
+  if (!error) {
+    nflResultIdentityColumnAvailable = true;
+    return true;
+  }
+
+  const missingColumn = ['42703', 'PGRST204'].includes(String(error.code || ''))
+    || /column .*?game_id.*?does not exist|could not find .*?game_id.*?column/i.test(error.message || '');
+  if (!missingColumn) throw new Error(`Could not inspect nfl_results.game_id: ${error.message}`);
+
+  // Deployment-safe rollout: old code keeps its matchup-aware lookup and fails
+  // closed on the historical unique-index collision until the migration lands.
+  console.warn('  ⚠️ nfl_results.game_id is not deployed yet — using legacy-safe result identity');
+  nflResultIdentityColumnAvailable = false;
+  return false;
+}
+
+async function fetchExistingGameResult({
+  targetTable,
+  league,
+  gameDate,
+  gameId,
+  pickText,
+  matchup,
+  exactGameIdentity,
+}) {
+  if (exactGameIdentity && gameId) {
+    let exactQuery = supabase
+      .from(targetTable)
+      .select('id')
+      .eq('game_date', gameDate)
+      .eq('game_id', gameId)
+      .eq('matchup', matchup)
+      .eq('pick_text', pickText);
+    if (targetTable === 'game_results') exactQuery = exactQuery.eq('league', league);
+    const { data, error } = await exactQuery.limit(1);
+    if (error) throw new Error(`Exact game-result identity lookup failed: ${error.message}`);
+    if (data?.[0]) return data[0];
+  }
+
+  let query = supabase
+    .from(targetTable)
+    .select('id')
+    .eq('game_date', gameDate)
+    .eq('matchup', matchup)
+    .eq('pick_text', pickText);
+  if (targetTable === 'game_results') {
+    query = query.eq('league', league);
+  }
+  if (exactGameIdentity) query = query.is('game_id', null);
+
+  const { data, error } = await query.limit(1);
+  if (error) throw new Error(`Legacy game-result identity lookup failed: ${error.message}`);
+  return data?.[0] ?? null;
+}
+
 /**
  * Main Logic
  */
-async function processGenericGames(table, date, leagueFilter = null) {
+function emptySettlementStats() {
+  return {
+    w: 0,
+    l: 0,
+    p: 0,
+    hrW: 0,
+    hrL: 0,
+    hrP: 0,
+    candidates: 0,
+    finalEligible: 0,
+    persisted: 0,
+    readBack: 0,
+    pendingNonFinal: 0,
+    invalidIdentity: 0,
+    unmatched: 0,
+    unresolvedFinal: 0,
+    errors: [],
+    persistedResultIds: [],
+  };
+}
+
+async function readBackPersistedResults(table, resultIds, label) {
+  const ids = [...new Set((resultIds || []).filter(Boolean).map(String))];
+  if (!ids.length) return 0;
+
+  const { data, error } = await supabase.from(table).select('id').in('id', ids);
+  if (error) throw new Error(`${label} result readback failed: ${error.message}`);
+  const found = new Set((data || []).map((row) => String(row.id)));
+  const missing = ids.filter((id) => !found.has(id));
+  if (missing.length) {
+    throw new Error(`${label} result readback missing ${missing.length}/${ids.length} row(s)`);
+  }
+  return found.size;
+}
+
+async function processGenericGames(table, date, leagueFilter = null, { settlementOnly = false } = {}) {
   console.log(`\n📂 Processing ${table.toUpperCase()} for ${date}...`);
   const query = supabase.from(table).select('*');
   if (table === 'daily_picks') query.eq('date', date);
   else query.eq('week_start', date);
 
-  const { data: rows } = await query;
-  if (!rows?.length) return { w: 0, l: 0 };
+  const { data: rows, error: rowsError } = await query;
+  if (rowsError) throw new Error(`Could not read ${table} for ${date}: ${rowsError.message}`);
+  const stats = emptySettlementStats();
+  if (!rows?.length) return stats;
 
-  const stats = { w: 0, l: 0, p: 0 };
   for (const row of rows) {
     const picks = typeof row.picks === 'string' ? JSON.parse(row.picks) : (row.picks || row.picks_array || []);
 
@@ -721,6 +973,7 @@ async function processGenericGames(table, date, leagueFilter = null) {
     for (const pick of picks) {
       if (leagueFilter && pick.league?.toUpperCase() !== leagueFilter) continue;
       const league = pick.league || (table === 'weekly_nfl_picks' ? 'NFL' : 'UNKNOWN');
+      stats.candidates++;
       
       // For weekly NFL, search a range around the date to handle UTC and different game days
       let gameDate = date;
@@ -736,20 +989,39 @@ async function processGenericGames(table, date, leagueFilter = null) {
       // Pick may store the BDL game id as `game_id` or `bdl_game_id` (we add this
       // at pick-generation time). Match by ID first to avoid grabbing a different
       // day's same-teams game (UTC bleed) or the wrong half of a doubleheader.
-      const pickGameId = pick.game_id ?? pick.bdl_game_id ?? null;
+      const pickGameId = storedPickGameId(pick);
+
+      // College slates are too large for matchup-only attribution. Every new
+      // NCAAF pick is stamped with its BDL game id; a legacy/id-less row remains
+      // pending rather than risking another game with similar team names.
+      if (['NFL', 'NCAAF'].includes(league) && pickGameId == null) {
+        stats.invalidIdentity++;
+        console.log(`  ⏳ EXACT GAME ID MISSING — leaving ${league} pick pending: ${pick.awayTeam} @ ${pick.homeTeam}`);
+        continue;
+      }
 
       if (table === 'weekly_nfl_picks') {
-        const dateObj = new Date(date);
+        const dateObj = new Date(`${date}T12:00:00Z`);
+        // Include the following UTC date so a Monday-night ET game filed by
+        // the provider on Tuesday UTC still settles inside this Tue–Mon row.
         for (let i = 0; i <= 7; i++) {
           const checkDate = new Date(dateObj);
-          checkDate.setDate(dateObj.getDate() + i);
+          checkDate.setUTCDate(dateObj.getUTCDate() + i);
           const dStr = checkDate.toISOString().split('T')[0];
           const games = await fetchGames(league, dStr);
           const result = matchGame(games, pick.homeTeam, pick.awayTeam, pickGameId);
-          if (result && result.game.status === 'Final') {
-            matchedGame = result.game;
-            swapped = result.swapped;
-            gameDate = dStr;
+          if (result) {
+            const statusStr = String(result.game.status ?? '').trim();
+            if (!isFinalGameStatus(statusStr)) {
+              console.log(`  ⏳ NOT FINAL — skipping grade for ${pick.awayTeam} @ ${pick.homeTeam} (status: ${statusStr || 'missing'})`);
+              gameFoundNotFinal = true;
+            } else {
+              matchedGame = result.game;
+              swapped = result.swapped;
+              gameDate = dStr;
+            }
+            // Once the exact weekly game is found, never continue into another
+            // date or let grounding invent a final for an in-progress game.
             break;
           }
         }
@@ -758,20 +1030,19 @@ async function processGenericGames(table, date, leagueFilter = null) {
         // Other sports: single-date fetch is fine (their date field aligns with ET).
         const games = league === 'MLB'
           ? await fetchMlbGamesForETDate(date)
-          : await fetchGames(league, date);
+          : league === 'NCAAF' ? await fetchNCAAFGames(date)
+            : await fetchGames(league, date);
         const result = matchGame(games, pick.homeTeam, pick.awayTeam, pickGameId);
         if (result) {
           // FINALITY GATE — never grade a non-final game. A suspended or
           // in-progress game carries partial scores in the same fields, and the
-          // results dedup makes a wrong grade PERMANENT. (NFL already gates on
-          // status === 'Final' above.)
-          // Status shapes: MLB/NHL 'STATUS_FINAL', NBA 'Final' (scheduled NBA
-          // games carry an ISO datetime — correctly excluded). A missing status
-          // field grades with a warning so a provider shape change can't
-          // silently stall a whole league's grading.
+          // results dedup makes a wrong grade PERMANENT. Status shapes include
+          // NFL 'Final/OT', MLB/NHL 'STATUS_FINAL', and NBA 'Final'. A missing
+          // NFL status is not proof of completion and remains pending.
           const statusStr = String(result.game.status ?? '').trim();
-          if (statusStr && !statusStr.toUpperCase().includes('FINAL')) {
-            console.log(`  ⏳ NOT FINAL — skipping grade for ${pick.awayTeam} @ ${pick.homeTeam} (status: ${statusStr})`);
+          const finalStatus = isFinalGameStatus(statusStr);
+          if ((['NFL', 'NCAAF'].includes(league) && !finalStatus) || (statusStr && !finalStatus)) {
+            console.log(`  ⏳ NOT FINAL — skipping grade for ${pick.awayTeam} @ ${pick.homeTeam} (status: ${statusStr || 'missing'})`);
             gameFoundNotFinal = true; // provider has it but it isn't over — do NOT fall through to grounding
           } else {
             if (!statusStr) {
@@ -813,18 +1084,20 @@ async function processGenericGames(table, date, leagueFilter = null) {
       // through here and got graded off an LLM "what was the final score?" answer,
       // posting a premature/wrong result (Jul 9: Mariners ML graded a 4-1 loss while
       // the game was in the 4th inning).
-      if (hs === null && !gameFoundNotFinal) {
+      if (hs === null && !gameFoundNotFinal && league !== 'NCAAF' && !(settlementOnly && league === 'NFL')) {
         const g = await getScoreGrounding(league, pick.homeTeam, pick.awayTeam, date);
         if (g) { hs = g.h; vs = g.v; }
       }
 
-      if (hs !== null) {
+      if (hs !== null && vs !== null) {
+        stats.finalEligible++;
         const res = gradeGame(pick.pick, pick.homeTeam, pick.awayTeam, hs, vs);
 
         // gradeGame couldn't classify this pick as a team-score bet (e.g. a
         // player prop) — leave it pending rather than writing a null/garbage
         // result. See the Jul 15 2026 comment on gradeGame's final return.
         if (res == null) {
+          stats.unresolvedFinal++;
           console.log(`  ⏭️  UNGRADEABLE (not a team-score bet) — leaving pending: ${league} "${pick.pick}"`);
           continue;
         }
@@ -848,6 +1121,12 @@ async function processGenericGames(table, date, leagueFilter = null) {
         // iOS doesn't read pick_id so storing the parent row id is correct.
         const perPickId = row.id;
         const targetTable = league === 'NFL' ? 'nfl_results' : 'game_results';
+        const resolvedGameId = matchedGame?.id == null ? pickGameId : String(matchedGame.id);
+        const exactGameIdentity = targetTable === 'game_results'
+          ? await supportsExactGameResultIdentity()
+          : targetTable === 'nfl_results'
+            ? await supportsExactNFLResultIdentity()
+            : false;
         const isWinnersPick = winnerKeys.has(winnerKey(pick));
         const insertPayload = league === 'NFL'
           ? {
@@ -855,24 +1134,36 @@ async function processGenericGames(table, date, leagueFilter = null) {
               final_score: `${vs}-${hs}`, pick_text: pick.pick,
               matchup: `${pick.awayTeam} @ ${pick.homeTeam}`,
               is_winners_pick: isWinnersPick,
+              ...(exactGameIdentity && resolvedGameId ? { game_id: resolvedGameId } : {}),
             }
           : {
               pick_id: perPickId, game_date: gameDate, league, result: res,
               final_score: `${vs}-${hs}`, pick_text: pick.pick,
               matchup: `${pick.awayTeam} @ ${pick.homeTeam}`,
               is_winners_pick: isWinnersPick,
+              ...(exactGameIdentity && resolvedGameId ? { game_id: resolvedGameId } : {}),
             };
 
         let alreadyExists = false;
         let insertFailed = false;
-        const { data: exist, error: dedupErr } = await supabase
-          .from(targetTable)
-          .select('id')
-          .eq('pick_text', pick.pick)
-          .eq('game_date', gameDate)
-          .maybeSingle();
-        if (dedupErr) {
-          console.error(`  ❌ DEDUP CHECK FAILED [${targetTable}] ${league} "${pick.pick}" (${gameDate}): ${dedupErr.message}`);
+        let persistedResultId = null;
+        let exist = null;
+        let dedupError = null;
+        try {
+          exist = await fetchExistingGameResult({
+            targetTable,
+            league,
+            gameDate,
+            gameId: resolvedGameId,
+            pickText: pick.pick,
+            matchup: `${pick.awayTeam} @ ${pick.homeTeam}`,
+            exactGameIdentity,
+          });
+        } catch (error) {
+          dedupError = error;
+        }
+        if (dedupError) {
+          console.error(`  ❌ DEDUP CHECK FAILED [${targetTable}] ${league} "${pick.pick}" (${gameDate}): ${dedupError.message}`);
           insertFailed = true;
         } else if (exist) {
           // Row exists from an earlier (possibly mid-game or glitched-"final") grade —
@@ -882,111 +1173,283 @@ async function processGenericGames(table, date, leagueFilter = null) {
           // grader's re-grade fix (the Jun 18 Soto-HR bug). For an already-correct
           // row the update writes the same values — a harmless no-op.
           alreadyExists = true;
+          const updatePayload = {
+            result: res,
+            final_score: `${vs}-${hs}`,
+            is_winners_pick: isWinnersPick,
+            updated_at: new Date().toISOString(),
+            ...(exactGameIdentity && resolvedGameId
+              ? { game_id: resolvedGameId }
+              : {}),
+          };
           const { error: updErr } = await supabase
             .from(targetTable)
-            .update({ result: res, final_score: `${vs}-${hs}`,
-                      is_winners_pick: isWinnersPick, updated_at: new Date().toISOString() })
+            .update(updatePayload)
             .eq('id', exist.id);
           if (updErr) {
             console.error(`  ❌ UPDATE FAILED [${targetTable}] ${league} "${pick.pick}" (${gameDate}): ${updErr.message}`);
             insertFailed = true;
+          } else {
+            persistedResultId = exist.id;
           }
         } else {
-          const { error: insertErr } = await supabase.from(targetTable).insert(insertPayload);
+          const insertQuery = supabase.from(targetTable).insert(insertPayload);
+          const { data: inserted, error: insertErr } = settlementOnly
+            ? await insertQuery.select('id').single()
+            : await insertQuery;
           if (insertErr) {
             console.error(`  ❌ INSERT FAILED [${targetTable}] ${league} "${pick.pick}" (${gameDate}): ${insertErr.message}${insertErr.code ? ' [code=' + insertErr.code + ']' : ''}${insertErr.details ? ' details=' + insertErr.details : ''}${insertErr.hint ? ' hint=' + insertErr.hint : ''}`);
             insertFailed = true;
+          } else if (settlementOnly) {
+            persistedResultId = inserted?.id ?? null;
+            if (!persistedResultId) {
+              console.error(`  ❌ INSERT READBACK ID MISSING [${targetTable}] ${league} "${pick.pick}" (${gameDate})`);
+              insertFailed = true;
+            }
           }
         }
 
         if (insertFailed) {
+          stats.errors.push(`${targetTable} write failed for ${league} ${pick.pick}`);
+          stats.unresolvedFinal++;
           // Don't fictionalize the W/L count when the row didn't land — iOS
           // reads game_results directly, so an uncounted stat is more honest
           // than a counted-but-missing row.
           console.error(`  ⛔ Skipped stats counter for ${league} "${pick.pick}" due to insert failure (row not in ${targetTable})`);
         } else {
+          stats.persisted++;
+          if (settlementOnly && persistedResultId) stats.persistedResultIds.push(persistedResultId);
           stats[res[0]]++;
           const tag = alreadyExists ? '⏩ ALREADY' : '✅';
           console.log(`  ${tag} ${league}: ${pick.pick} -> ${res.toUpperCase()} (${vs}-${hs}) on ${gameDate}`);
 
-          // Fact-check the rationale against the actual outcome. Runs on
-          // re-grades too (alreadyExists) — its own dedup makes that a no-op
-          // unless the fact check is missing. Never fatal to grading.
-          try {
-            await factCheckGradedPick({ pick, league, gameDate, result: res, hs, vs, matchedGame });
-          } catch (e) {
-            console.warn(`  ⚠️ Fact-check failed (non-fatal) for ${league} "${pick.pick}": ${e.message}`);
-          }
+          if (!settlementOnly) {
+            // Fact-check the rationale against the actual outcome. Runs on
+            // re-grades too (alreadyExists) — its own dedup makes that a no-op
+            // unless the fact check is missing. Never fatal to grading.
+            try {
+              await factCheckGradedPick({ pick, league, gameDate, result: res, hs, vs, matchedGame });
+            } catch (e) {
+              console.warn(`  ⚠️ Fact-check failed (non-fatal) for ${league} "${pick.pick}": ${e.message}`);
+            }
 
-          // Betting recap of the game itself (game_recaps). Same re-grade /
-          // dedup semantics as the fact check. Never fatal to grading.
-          try {
-            await recapGradedPick({ pick, league, gameDate, result: res, hs, vs, matchedGame });
-          } catch (e) {
-            console.warn(`  ⚠️ Recap failed (non-fatal) for ${league} "${pick.pick}": ${e.message}`);
+            // Betting recap of the game itself (game_recaps). Same re-grade /
+            // dedup semantics as the fact check. Never fatal to grading.
+            try {
+              await recapGradedPick({ pick, league, gameDate, result: res, hs, vs, matchedGame });
+            } catch (e) {
+              console.warn(`  ⚠️ Recap failed (non-fatal) for ${league} "${pick.pick}": ${e.message}`);
+            }
           }
         }
+      } else if (gameFoundNotFinal) {
+        stats.pendingNonFinal++;
+      } else if (matchedGame) {
+        stats.finalEligible++;
+        stats.unresolvedFinal++;
+        console.error(`  ❌ FINAL SCORE MISSING — ${league} ${pick.awayTeam} @ ${pick.homeTeam}`);
+      } else {
+        stats.unmatched++;
       }
     }
+  }
+  if (settlementOnly) {
+    const targetTable = table === 'weekly_nfl_picks' ? 'nfl_results' : 'game_results';
+    stats.readBack = await readBackPersistedResults(
+      targetTable,
+      stats.persistedResultIds,
+      `${leagueFilter || table} ${date}`,
+    );
   }
   return stats;
 }
 
-async function processPropBets(date) {
+let propResultIdentityColumnsAvailable;
+
+async function supportsExactPropResultIdentity() {
+  if (propResultIdentityColumnsAvailable !== undefined) return propResultIdentityColumnsAvailable;
+
+  const { error } = await supabase.from('prop_results').select('game_id,sport').limit(1);
+  if (!error) {
+    propResultIdentityColumnsAvailable = true;
+    return true;
+  }
+
+  const missingColumns = ['42703', 'PGRST204'].includes(String(error.code || ''))
+    || /column .*?(game_id|sport).*?does not exist|could not find .*?(game_id|sport).*?column/i.test(error.message || '');
+  if (!missingColumns) throw new Error(`Could not inspect prop_results identity columns: ${error.message}`);
+
+  // Allows the script and schema migration to roll out independently. The
+  // legacy lookup below is more specific than the old three-field query, but
+  // exact cross-sport/game identity begins as soon as the migration is applied.
+  console.warn('  ⚠️ prop_results.game_id/sport are not deployed yet — using legacy-safe result identity');
+  propResultIdentityColumnsAvailable = false;
+  return false;
+}
+
+function withNullSafeEq(query, column, value) {
+  return value == null || String(value).trim() === ''
+    ? query.is(column, null)
+    : query.eq(column, value);
+}
+
+async function fetchExistingPropResult(identity, { exactColumns, claimedIds }) {
+  const select = exactColumns ? 'id,game_id,sport,created_at' : 'id,created_at';
+  const takeUnclaimed = (rows) => (rows || []).find((row) => !claimedIds.has(row.id)) || null;
+
+  if (exactColumns && identity.gameId && identity.sport) {
+    const { data, error } = await supabase
+      .from('prop_results')
+      .select(select)
+      .eq('game_date', identity.gameDate)
+      .eq('game_id', identity.gameId)
+      .eq('sport', identity.sport)
+      .eq('player_name', identity.playerName)
+      .eq('prop_type', identity.propType)
+      .ilike('bet', identity.bet)
+      .eq('line_value', identity.line)
+      .limit(2);
+    if (error) throw new Error(`Exact prop-result identity lookup failed: ${error.message}`);
+    const exact = takeUnclaimed(data);
+    if (exact) return exact;
+  }
+
+  // Legacy rows predate game_id/sport. Include every identity dimension their
+  // schema can represent, then claim each candidate at most once per run. That
+  // lets a doubleheader adopt two historical rows instead of repeatedly
+  // overwriting the first one while the new columns backfill organically.
+  let query = supabase
+    .from('prop_results')
+    .select(select)
+    .eq('prop_pick_id', identity.propPickId)
+    .eq('game_date', identity.gameDate)
+    .eq('player_name', identity.playerName)
+    .eq('prop_type', identity.propType)
+    .ilike('bet', identity.bet)
+    .eq('line_value', identity.line)
+    .order('created_at', { ascending: true })
+    .limit(20);
+  query = withNullSafeEq(query, 'matchup', identity.matchup);
+  if (exactColumns) {
+    query = query.is('game_id', null).is('sport', null);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(`Legacy prop-result identity lookup failed: ${error.message}`);
+  return takeUnclaimed(data);
+}
+
+async function processPropBets(date, sportFilter = null, { settlementOnly = false } = {}) {
   console.log(`\n🎯 Processing PROP BETS for ${date}...`);
   const next = new Date(date); next.setDate(next.getDate() + 1);
   const nextStr = next.toISOString().split('T')[0];
+  const allowedSports = sportFilter
+    ? new Set([...sportFilter].map((sport) => String(sport).trim().toUpperCase()))
+    : null;
+  const propsForRow = (row) => typeof row.props === 'string'
+    ? JSON.parse(row.props)
+    : (row.props || row.picks || []);
   
-  const { data: rows } = await supabase.from('prop_picks').select('*').in('date', [date, nextStr]);
-  if (!rows?.length) return { w: 0, l: 0 };
+  const { data: rows, error: rowsError } = await supabase.from('prop_picks').select('*').in('date', [date, nextStr]);
+  if (rowsError) throw new Error(`Could not read prop_picks for ${date}/${nextStr}: ${rowsError.message}`);
+  const stats = emptySettlementStats();
+  if (!rows?.length) return stats;
+  if (allowedSports && !rows.some((row) => propsForRow(row).some((pick) => sportAllowed(pick?.sport, allowedSports)))) {
+    console.log(`  ⏭️  No ${[...allowedSports].join('/')} props stored for this window.`);
+    return stats;
+  }
+  const referencedNFLGameIds = new Set();
+  const referencedNCAAFGameIds = new Set();
+  for (const row of rows) {
+    for (const pick of propsForRow(row)) {
+      const gameId = propGameId(pick);
+      if (!gameId) continue;
+      const sport = String(pick?.sport ?? '').trim().toUpperCase();
+      if (sport === 'NFL') referencedNFLGameIds.add(gameId);
+      if (sport === 'NCAAF') referencedNCAAFGameIds.add(gameId);
+    }
+  }
+  const exactPropIdentity = await supportsExactPropResultIdentity();
 
   const dates = [date, nextStr];
-  const nbaBox = (await Promise.all(dates.map(d => fetchBoxScores('NBA', d)))).flat();
-  const nhlBox = (await Promise.all(dates.map(d => fetchBoxScores('NHL', d)))).flat();
-  const nflGames = (await Promise.all(dates.map(d => fetchGames('NFL', d)))).flat();
+  const wants = (sport) => sportAllowed(sport, allowedSports);
+  const nbaBox = wants('NBA') ? (await Promise.all(dates.map(d => fetchBoxScores('NBA', d)))).flat() : [];
+  const nhlBox = wants('NHL') ? (await Promise.all(dates.map(d => fetchBoxScores('NHL', d)))).flat() : [];
+  const nflGames = wants('NFL') ? (await Promise.all(dates.map(d => fetchGames('NFL', d)))).flat() : [];
+  const ncaafGames = wants('NCAAF') ? (await Promise.all(dates.map(d => fetchNCAAFGames(d)))).flat() : [];
   // MLB: no box_scores endpoint — fetch games then stats by game_ids (same pattern as NFL)
-  const mlbGames = (await Promise.all(dates.map(d => fetchGames('MLB', d)))).flat();
+  const mlbGames = wants('MLB') ? (await Promise.all(dates.map(d => fetchGames('MLB', d)))).flat() : [];
   const mlbStats = await fetchMLBStats([...new Set(mlbGames.map(g => g.id).filter(Boolean))]);
-  const nflStats = await fetchNFLStats([...new Set(nflGames.map(g => g.id))]);
   // FINALITY GATE source (props): the set of MLB games that are FINAL. A prop whose game
   // isn't final must NOT be graded — an in-progress/unstarted game returns 0/partial stats
   // and settles the player prematurely (today's live game graded "0 TB -> LOST" before first
   // pitch). This mirrors the cloud grade-props gate.
-  const mlbFinalIds = new Set(mlbGames.filter(g => String(g.status || '').toUpperCase().includes('FINAL')).map(g => String(g.id)));
+  const mlbFinalIds = new Set(mlbGames.filter(g => isFinalGameStatus(g.status)).map(g => String(g.id)));
+  const nflFinalIds = new Set(nflGames.filter(g => isFinalGameStatus(g.status)).map(g => String(g.id)));
+  const ncaafFinalIds = new Set(ncaafGames.filter(g => isFinalGameStatus(g.status)).map(g => String(g.id)));
+  // Only fetch NFL player stats for games proven final, then keep the source-id
+  // stamp so each prop reads its own game's stat line.
+  const nflStats = await fetchNFLStats(
+    nflGames.filter((game) => nflFinalIds.has(String(game.id)) && referencedNFLGameIds.has(String(game.id))),
+  );
+  const ncaafStats = await fetchNCAAFStats(
+    [...ncaafFinalIds].filter((gameId) => referencedNCAAFGameIds.has(gameId)),
+  );
 
-  console.log(`  📊 Data loaded: NBA=${nbaBox.length} box scores, NHL=${nhlBox.length} box scores, MLB=${mlbStats.length} player stats, NFL=${nflStats.length} player stats`);
+  console.log(`  📊 Data loaded: NBA=${nbaBox.length} box scores, NHL=${nhlBox.length} box scores, MLB=${mlbStats.length} player stats, NFL=${nflStats.length} player stats, NCAAF=${ncaafStats.length} player stats`);
 
-  const stats = { w: 0, l: 0, hrW: 0, hrL: 0 };
   const handled = new Set();
+  const claimedExistingResultIds = new Set();
   let skippedNotFinal = 0;
 
   for (const row of rows) {
-    const picks = typeof row.props === 'string' ? JSON.parse(row.props) : (row.props || row.picks || []);
+    const picks = propsForRow(row);
     for (const p of picks) {
       const name = p.player || p.player_name, rawProp = p.prop || p.prop_type;
       // 'MLB HR' is the dedicated home-run lane's sport label: it keeps its
       // own label in prop_results (own record, never mixed into the main MLB
       // props record) but routes to MLB data sources for grading.
-      const sport = p.sport?.toUpperCase();
+      const sport = String(p.sport ?? '').trim().toUpperCase();
       const dataSport = sport === 'MLB HR' ? 'MLB' : sport;
-      const type = rawProp?.split(' ')?.[0] || rawProp;
-      const line = p.line || p.line_value, bet = p.bet;
-      if (!name || !type || line === undefined) continue;
+      if (!sportAllowed(dataSport, allowedSports)) continue;
+      const type = dataSport === 'NFL'
+        ? normalizeStoredPropType(rawProp)
+        : (rawProp?.split(/\s+/)?.[0] || rawProp);
+      const line = p.line ?? p.line_value;
+      const bet = String(p.bet ?? p.direction ?? '').trim().toLowerCase();
+      const gameId = propGameId(p);
+      if (!name || !type || line == null || !bet || !sport) {
+        stats.candidates++;
+        stats.invalidIdentity++;
+        continue;
+      }
 
       // FINALITY GATE (props) — never grade a prop whose game isn't final. An in-progress or
       // unstarted game returns 0/partial stats and settles the player prematurely (a live MLB
       // game graded "0 total bases -> LOST" before first pitch). Skip -> the prop stays pending
       // and grades correctly once the game is final. Props with no game_id fall through (legacy).
-      if (dataSport === 'MLB' && p.game_id != null && !mlbFinalIds.has(String(p.game_id))) { skippedNotFinal++; continue; }
+      if (dataSport === 'MLB' && gameId != null && !mlbFinalIds.has(gameId)) { skippedNotFinal++; stats.pendingNonFinal++; continue; }
+      // NFL stat rows can report zero/partial production while a game is live.
+      // Unlike legacy lanes, an NFL prop must carry an exact game id and that
+      // provider game must be final before API stats OR grounding may settle it.
+      if (dataSport === 'NFL' && gameId == null) { stats.candidates++; stats.invalidIdentity++; continue; }
+      if (dataSport === 'NFL' && !nflFinalIds.has(gameId)) { skippedNotFinal++; stats.candidates++; stats.pendingNonFinal++; continue; }
+      // NCAAF follows the same hard identity/finality law as NFL. Legacy
+      // matchup-only props are not safe on a large college slate and remain
+      // pending until they carry an exact provider game id.
+      if (dataSport === 'NCAAF' && gameId == null) { stats.candidates++; stats.invalidIdentity++; continue; }
+      if (dataSport === 'NCAAF' && !ncaafFinalIds.has(gameId)) { skippedNotFinal++; stats.candidates++; stats.pendingNonFinal++; continue; }
 
-      const key = `${normalizeName(name)}-${type}-${line}-${row.date}`;
+      const key = propResultIdentity({
+        gameId, sport, playerName: name, propType: type, bet, line, gameDate: row.date,
+      });
       if (handled.has(key)) continue; handled.add(key);
+      stats.candidates++;
+      if (['NFL', 'NCAAF'].includes(dataSport)) stats.finalEligible++;
 
-      // RE-GRADE every run (no early skip). The prop grader has no finality gate, so an
-      // early run can read an IN-PROGRESS box score and mark a player 0-for; that result
-      // must be CORRECTED once the box score is final (Jun 18: Juan Soto HR graded 0
-      // mid-game and stuck "lost" despite his 2 HR final, because the old code skipped any
-      // already-graded prop). The existing-row path below now UPDATEs instead of skipping.
+      // Re-grade every eligible FINAL run (no early settled-row skip). That lets
+      // corrected provider stats repair a prior result while the finality gates
+      // above prevent partial/live stats from creating one in the first place.
       let actual = null;
       let source = 'none';
       if (dataSport === 'NBA') actual = getStatValue('NBA', nbaBox, name, type);
@@ -1003,10 +1466,19 @@ async function processPropBets(date) {
           : mlbStats;
         actual = getStatValue('MLB', pool, name, type);
       }
-      else if (dataSport === 'NFL') actual = getStatValue('NFL', nflStats, name, type);
+      else if (dataSport === 'NFL') actual = getStatValue('NFL', statsForGame(nflStats, gameId), name, type);
+      else if (dataSport === 'NCAAF') actual = getStatValue('NCAAF', statsForGame(ncaafStats, gameId), name, type, p.player_id);
 
       if (actual !== null) {
         source = 'api';
+      } else if (['NFL', 'NCAAF'].includes(dataSport) && settlementOnly) {
+        // The laptop-independent football pass never lets a model settle a
+        // wager. Exact final-game BDL stats are the grading authority; a
+        // provider hole stays pending, makes the structured coverage outcome
+        // fail, and can self-heal on a later idempotent run.
+        console.error(`    [BDL Miss] ${dataSport}: ${name} "${type}" missing from exact game ${gameId}; leaving pending`);
+        stats.unresolvedFinal++;
+        continue;
       } else {
         console.warn(`    [BDL Miss] ${sport}: ${name} "${type}" not found in box scores — trying grounding`);
         actual = await getPropGrounding(dataSport, name, type, row.date);
@@ -1014,53 +1486,94 @@ async function processPropBets(date) {
       }
 
       if (actual !== null) {
-        const res = gradeProp(actual, line, bet);
+        const res = gradePropResult(actual, line, bet);
+        if (res == null) {
+          if (['NFL', 'NCAAF'].includes(dataSport)) stats.unresolvedFinal++;
+          console.error(`  ❌ ${sport}: ${name} ${type} — invalid grade inputs (${bet} ${line}, actual ${actual}).`);
+          continue;
+        }
         let propInsertFailed = false;
         let propAlreadyExists = false;
-        const { data: exist, error: dedupErr } = await supabase
-          .from('prop_results')
-          .select('id')
-          .eq('player_name', name)
-          .eq('prop_type', type)
-          .eq('game_date', row.date)
-          .maybeSingle();
-        if (dedupErr) {
-          console.error(`  ❌ DEDUP CHECK FAILED [prop_results] ${sport} "${name} ${type}" (${row.date}): ${dedupErr.message}`);
+        let persistedResultId = null;
+        const persistentIdentity = {
+          propPickId: row.id,
+          gameDate: row.date,
+          gameId,
+          sport,
+          playerName: name,
+          propType: type,
+          bet,
+          line,
+          matchup: p.matchup ?? null,
+        };
+        let exist = null;
+        try {
+          exist = await fetchExistingPropResult(persistentIdentity, {
+            exactColumns: exactPropIdentity,
+            claimedIds: claimedExistingResultIds,
+          });
+          if (exist) claimedExistingResultIds.add(exist.id);
+        } catch (error) {
+          console.error(`  ❌ DEDUP CHECK FAILED [prop_results] ${sport} "${name} ${type}" (${row.date}): ${error.message}`);
           propInsertFailed = true;
-        } else if (exist) {
+        }
+
+        const identityStamp = exactPropIdentity && gameId
+          ? { game_id: gameId, sport }
+          : {};
+        if (!propInsertFailed && exist) {
           // Row exists from an earlier (possibly mid-game) grade — RE-GRADE and UPDATE to
           // the current box-score value so a premature miss self-corrects once the game is
           // final, instead of being skipped forever (the Jun 18 Soto-HR bug).
           propAlreadyExists = true;
           const { error: updErr } = await supabase.from('prop_results')
             .update({ actual_value: actual, result: res, pick_text: `${name} ${bet} ${line} ${type}`,
-                      odds: p.odds != null ? String(p.odds) : null, updated_at: new Date().toISOString() })
+                      odds: p.odds != null ? String(p.odds) : null,
+                      ...identityStamp,
+                      updated_at: new Date().toISOString() })
             .eq('id', exist.id);
           if (updErr) {
             console.error(`  ❌ UPDATE FAILED [prop_results] ${sport} "${name} ${type}" (${row.date}): ${updErr.message}`);
             propInsertFailed = true;
+          } else {
+            persistedResultId = exist.id;
           }
-        } else {
-          const { error: insertErr } = await supabase.from('prop_results').insert({
+        } else if (!propInsertFailed) {
+          const insertPayload = {
             prop_pick_id: row.id, game_date: row.date, player_name: name,
             prop_type: type, line_value: line, actual_value: actual,
             result: res, pick_text: `${name} ${bet} ${line} ${type}`,
             matchup: p.matchup, bet: bet,
             odds: p.odds != null ? String(p.odds) : null,
-          });
+            ...identityStamp,
+          };
+          const insertQuery = supabase.from('prop_results').insert(insertPayload);
+          const { data: inserted, error: insertErr } = settlementOnly
+            ? await insertQuery.select('id').single()
+            : await insertQuery;
           if (insertErr) {
             console.error(`  ❌ INSERT FAILED [prop_results] ${sport} "${name} ${type}" (${row.date}): ${insertErr.message}${insertErr.code ? ' [code=' + insertErr.code + ']' : ''}${insertErr.details ? ' details=' + insertErr.details : ''}${insertErr.hint ? ' hint=' + insertErr.hint : ''}`);
             propInsertFailed = true;
+          } else if (settlementOnly) {
+            persistedResultId = inserted?.id ?? null;
+            if (!persistedResultId) {
+              console.error(`  ❌ INSERT READBACK ID MISSING [prop_results] ${sport} "${name} ${type}" (${row.date})`);
+              propInsertFailed = true;
+            }
           }
         }
 
         if (propInsertFailed) {
+          stats.errors.push(`prop_results write failed for ${sport} ${name} ${type}`);
+          if (['NFL', 'NCAAF'].includes(dataSport)) stats.unresolvedFinal++;
           console.error(`  ⛔ Skipped prop stats counter for ${sport} "${name} ${type}" due to insert failure`);
         } else {
+          stats.persisted++;
+          if (settlementOnly && persistedResultId) stats.persistedResultIds.push(persistedResultId);
           // HR bets are the fun lane, not official picks (founder, Jul 29):
           // they tally separately and never touch the official props record.
           if (/home_run/i.test(String(type || ''))) {
-            stats[res === 'won' ? 'hrW' : 'hrL']++;
+            stats[res === 'won' ? 'hrW' : res === 'lost' ? 'hrL' : 'hrP']++;
           } else {
             stats[res[0]]++;
           }
@@ -1068,12 +1581,54 @@ async function processPropBets(date) {
           console.log(`  ${tag} ${sport}: ${name} ${type} ${bet} ${line} -> ${res.toUpperCase()} (${actual}) [${source}]`);
         }
       } else {
+        if (['NFL', 'NCAAF'].includes(dataSport)) stats.unresolvedFinal++;
         console.error(`  ❌ ${sport}: ${name} ${type} — NO DATA from API or grounding. Prop not graded.`);
       }
     }
   }
   if (skippedNotFinal) console.log(`  ⏳ Props finality gate: skipped ${skippedNotFinal} pick(s) whose game isn't final yet (will grade once final).`);
+  if (settlementOnly) {
+    stats.readBack = await readBackPersistedResults('prop_results', stats.persistedResultIds, `football props ${date}`);
+  }
   return stats;
+}
+
+/**
+ * Small cloud-safe settlement pass used by the frequent GitHub workflow.
+ *
+ * It deliberately reuses the exact same provider identity, finality, grading,
+ * dedup, and write paths as the full nightly job, but only opens the two
+ * football lanes. Editorial work (recaps/fact checks), MLB/NBA/NHL fetches,
+ * night highlights, streaks, and era auditing remain on the existing full
+ * cadence. This makes football result badges laptop-independent without
+ * turning a 15-minute settlement poll into a broad production rewrite.
+ */
+async function mainFootballSettlements(targetDate) {
+  console.log(`\n🏈 FOOTBALL SETTLEMENT DATE: ${targetDate}`);
+  const footballSports = new Set(FOOTBALL_SETTLEMENT_SPORTS);
+
+  const props = await processPropBets(targetDate, footballSports, { settlementOnly: true });
+  const ncaaf = await processGenericGames('daily_picks', targetDate, 'NCAAF', { settlementOnly: true });
+  const weekStart = nflWeekStartForDate(targetDate);
+  const nfl = await processGenericGames('weekly_nfl_picks', weekStart, 'NFL', { settlementOnly: true });
+
+  const outcome = buildFootballSettlementOutcome(targetDate, { ncaaf, nfl, props });
+
+  console.log(`\n────────────────────────────────────────`);
+  console.log(`FOOTBALL SETTLEMENT SUMMARY FOR ${targetDate}`);
+  console.log(`NCAAF: ${ncaaf.w}W - ${ncaaf.l}L - ${ncaaf.p}P`);
+  console.log(`NFL:   ${nfl.w}W - ${nfl.l}L - ${nfl.p}P`);
+  console.log(`Props: ${props.w}W - ${props.l}L - ${props.p}P`);
+  console.log(`────────────────────────────────────────\n`);
+
+  try {
+    assertFootballSettlementCoverage(outcome);
+  } catch (error) {
+    console.log(`FOOTBALL_SETTLEMENT_OUTCOME=${JSON.stringify(outcome)}`);
+    throw error;
+  }
+  console.log(`FOOTBALL_SETTLEMENT_OUTCOME=${JSON.stringify(outcome)}`);
+  return outcome;
 }
 
 async function main(targetDate = getTargetDate()) {
@@ -1086,13 +1641,8 @@ async function main(targetDate = getTargetDate()) {
 
   const daily = await processGenericGames('daily_picks', targetDate);
 
-  // Weekly NFL - find the Monday of the target date's week
-  const dateParts = targetDate.split('-').map(Number);
-  const d = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-  const day = d.getDay(); // 0 = Sunday, 1 = Monday...
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  const weekDay = new Date(d.setDate(diff));
-  const weekStart = weekDay.toISOString().split('T')[0];
+  // Weekly NFL - use the same Tue–Mon ET publication key as storage.
+  const weekStart = nflWeekStartForDate(targetDate);
 
   const weeklyNFL = await processGenericGames('weekly_nfl_picks', weekStart, 'NFL');
 
@@ -1146,13 +1696,17 @@ async function main(targetDate = getTargetDate()) {
   console.log(`════════════════════════════════════════\n`);
 }
 
-// Grade + recap each target date in turn. With no CLI date this is TODAY then
-// YESTERDAY (ET) — today first so the Home marquee headline rolls to today's
-// finished games same-day; yesterday second to backfill late overnight finals.
-// The finality gate skips anything still in progress, and every step is
-// idempotent per date, so re-runs cost ~$0 once nothing new has settled.
+// The full grade+recap run remains TODAY then YESTERDAY (ET), so the Home
+// marquee rolls to today's finished games same-day. The frequent football-only
+// settlement lane deliberately reverses that default: yesterday's late finals
+// are attempted first, and a failure on either date cannot skip the other.
+// Every path is idempotent per date.
 async function run() {
   const dates = getTargetDates();
+  if (RUN_OPTIONS.footballSettlements) {
+    await runFootballSettlementDates(dates, mainFootballSettlements);
+    return;
+  }
   for (const date of dates) {
     await main(date);
   }

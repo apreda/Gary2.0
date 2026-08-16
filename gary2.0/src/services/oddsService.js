@@ -343,8 +343,15 @@ export const oddsService = {
 
       let dates = [];
       const isNfl = sport === 'americanfootball_nfl';
+      const isNcaaf = sport === 'americanfootball_ncaaf';
 
-      if (isNfl) {
+      if (options.targetDate) {
+        // An explicit date is an exact slate request for every sport. NFL's
+        // weekly analysis window must not turn a one-day Home/Board refresh
+        // into seven parallel BDL calls (and a predictable 429 burst).
+        dates = options.targetDate.split(',').map(d => d.trim());
+        console.log(`[Odds Service] ${sport}: Fetching games for target date(s): ${dates.join(', ')}`);
+      } else if (isNfl) {
         const { windowStart, windowEnd } = computeWindow(sport);
         console.log(`[Odds Service] ${sport}: Expanded NFL window ${windowStart.toISOString()} to ${windowEnd.toISOString()}`);
         const dayMs = 24 * 60 * 60 * 1000;
@@ -366,50 +373,54 @@ export const oddsService = {
         const estFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' });
         const todayEst = estFormatter.format(new Date());
 
-        if (options.targetDate) {
-          // Support comma-separated dates (e.g., "2026-02-11,2026-02-12")
-          dates = options.targetDate.split(',').map(d => d.trim());
-          console.log(`[Odds Service] ${sport}: Fetching games for target date(s): ${dates.join(', ')}`);
-        } else {
-          dates = [todayEst];
-          console.log(`[Odds Service] ${sport}: Fetching games for TODAY only: ${todayEst}`);
-        }
+        dates = [todayEst];
+        console.log(`[Odds Service] ${sport}: Fetching games for TODAY only: ${todayEst}`);
       }
 
-      // Fetch games+odds for each day in parallel and merge
+      // Fetch games+odds for each day in parallel and merge. Scheduler
+      // football children already carry the canonical BDL game id, so resolve
+      // that one game directly instead of downloading the date/full-slate
+      // pages first. Manual no-id runs deliberately retain the slate path.
       let combined = [];
       try {
-        const perDay = await Promise.all(
-          dates.map(async (d) => {
-            let dayGames = [];
-            try {
-              // PRIMARY SOURCE: Ball Don't Lie
-              console.log(`[Odds Service] ${sport}: Attempting Primary Source (BDL) for ${d}`);
-              dayGames = await ballDontLieOddsService.getGamesWithOddsForSport(sport, d);
-            } catch (err) {
-              console.warn(`[Odds Service] ${sport}: Failed fetching odds for ${d}:`, err?.message || err);
-            }
-
-            // Note: If BDL returns games without odds, we still keep them.
-            // Gary can work with games even when odds are missing.
-            if (!Array.isArray(dayGames) || dayGames.length === 0) {
-              console.log(`[Odds Service] ${sport}: No games from BDL for ${d}.`);
-            } else {
-              // Log if some games are missing odds (informational only - we keep them)
-              const gamesWithoutOdds = dayGames.filter(g => {
-                if (!g.bookmakers || g.bookmakers.length === 0) return true;
-                const hasMarkets = g.bookmakers.some(b => b.markets && b.markets.length > 0);
-                return !hasMarkets;
-              });
-              if (gamesWithoutOdds.length > 0) {
-                console.log(`[Odds Service] ${sport}: ${gamesWithoutOdds.length} of ${dayGames.length} games have missing odds (keeping them anyway).`);
+        if ((isNfl || isNcaaf) && options.gameId != null) {
+          console.log(`[Odds Service] ${sport}: Fetching exact provider game ${options.gameId}`);
+          combined = isNfl
+            ? await ballDontLieOddsService.getNflGameWithOddsById(options.gameId)
+            : await ballDontLieOddsService.getNcaafGameWithOddsById(options.gameId);
+        } else {
+          const perDay = await Promise.all(
+            dates.map(async (d) => {
+              let dayGames = [];
+              try {
+                // PRIMARY SOURCE: Ball Don't Lie
+                console.log(`[Odds Service] ${sport}: Attempting Primary Source (BDL) for ${d}`);
+                dayGames = await ballDontLieOddsService.getGamesWithOddsForSport(sport, d);
+              } catch (err) {
+                console.warn(`[Odds Service] ${sport}: Failed fetching odds for ${d}:`, err?.message || err);
               }
-            }
 
-            return Array.isArray(dayGames) ? dayGames : [];
-          })
-        );
-        combined = perDay.flat();
+              // Note: If BDL returns games without odds, we still keep them.
+              // Gary can work with games even when odds are missing.
+              if (!Array.isArray(dayGames) || dayGames.length === 0) {
+                console.log(`[Odds Service] ${sport}: No games from BDL for ${d}.`);
+              } else {
+                // Log if some games are missing odds (informational only - we keep them)
+                const gamesWithoutOdds = dayGames.filter(g => {
+                  if (!g.bookmakers || g.bookmakers.length === 0) return true;
+                  const hasMarkets = g.bookmakers.some(b => b.markets && b.markets.length > 0);
+                  return !hasMarkets;
+                });
+                if (gamesWithoutOdds.length > 0) {
+                  console.log(`[Odds Service] ${sport}: ${gamesWithoutOdds.length} of ${dayGames.length} games have missing odds (keeping them anyway).`);
+                }
+              }
+
+              return Array.isArray(dayGames) ? dayGames : [];
+            })
+          );
+          combined = perDay.flat();
+        }
       } catch (e) {
         console.error(`[Odds Service] BallDontLieOdds adapter error for ${sport}:`, e?.message || e);
       }

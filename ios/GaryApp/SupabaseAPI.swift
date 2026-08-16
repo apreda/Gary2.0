@@ -153,17 +153,21 @@ enum SupabaseAPI {
         return try await fetchMostRecentGameRecord()
     }
 
-    /// Rolling 7-day GAME-pick record across every sport — the Picks masthead's
-    /// "LAST 7 DAYS" line (the Hub's twin shows the insight-lane record; Picks
-    /// shows the record of the actual picks). Pushes sit out of the headline
-    /// count, matching the Hub's two-number read.
-    static func fetchSevenDayPickRecord() async -> (w: Int, l: Int)? {
+    /// Rolling 7-day GAME-pick record for the selected Picks desk. Passing nil
+    /// keeps the all-sports behavior used by the optional ALL desk; a league
+    /// tab must never inherit another sport's record. Pushes sit out of the
+    /// headline count, matching the Hub's two-number read.
+    static func fetchSevenDayPickRecord(league: String? = nil) async -> (w: Int, l: Int)? {
         guard let tz = TimeZone(identifier: "America/New_York") else { return nil }
         var cal = Calendar(identifier: .gregorian); cal.timeZone = tz
         let since = formatDateEST(cal.date(byAdding: .day, value: -7, to: Date()) ?? Date())
         guard let results = try? await fetchAllGameResults(since: since) else { return nil }
         var w = 0, l = 0
+        let normalizedLeague = league?.uppercased()
         for r in results where !AppFlags.hidesWorldCupRow(r.league) {
+            if let normalizedLeague, r.effectiveLeague?.uppercased() != normalizedLeague {
+                continue
+            }
             switch r.result?.lowercased() {
             case "won", "win", "w":   w += 1
             case "lost", "loss", "l": l += 1
@@ -336,20 +340,52 @@ enum SupabaseAPI {
         .sorted { $0.total > $1.total }
     }
 
-    /// Get NFL week start date (Monday) for a given date
-    private static func getNFLWeekStart(for date: Date = Date()) -> String {
-        guard let tz = TimeZone(identifier: "America/New_York") else { return todayEST() }
+    /// Get the Tuesday week identity for an explicit Eastern calendar date.
+    /// NFL storage is weekly, but every app surface still requests one slate day;
+    /// deriving this from that requested day prevents a Thursday pick from leaking
+    /// onto Sunday (or a prior week from appearing as today's card).
+    private static func getNFLWeekStart(for dateString: String) -> String? {
+        guard let tz = TimeZone(identifier: "America/New_York") else { return nil }
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = tz
+        formatter.dateFormat = "yyyy-MM-dd"
+        guard let date = formatter.date(from: dateString) else { return nil }
+
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = tz
-        
+
         let weekday = cal.component(.weekday, from: date)
-        // Sunday = 1, Monday = 2, etc. Find previous Monday.
-        let daysToSubtract = (weekday == 1) ? 6 : (weekday - 2)
-        
-        guard let monday = cal.date(byAdding: .day, value: -daysToSubtract, to: date) else {
-            return todayEST()
+        // The NFL slate is Tuesday through Monday: Tuesday = 3 in Calendar's
+        // Sunday-based numbering. Monday therefore remains in the week that
+        // began six days earlier instead of being split from Thu/Sun.
+        let daysToSubtract = (weekday - 3 + 7) % 7
+
+        guard let tuesday = cal.date(byAdding: .day, value: -daysToSubtract, to: date) else {
+            return nil
         }
-        return formatDateEST(monday)
+        return formatDateEST(tuesday)
+    }
+
+    /// The NFL season is named for the calendar year in which it starts.
+    /// Preseason begins in August; January/February games belong to the prior year.
+    private static func nflSeason(for dateString: String) -> Int? {
+        let parts = dateString.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        return parts[1] >= 8 ? parts[0] : parts[0] - 1
+    }
+
+    private static func easternCalendarDate(ofISO8601 string: String) -> String? {
+        let standard = ISO8601DateFormatter()
+        var parsed = standard.date(from: string)
+        if parsed == nil {
+            let fractional = ISO8601DateFormatter()
+            fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            parsed = fractional.date(from: string)
+        }
+        guard let parsed else { return nil }
+        return formatDateEST(parsed)
     }
     
     // MARK: - Network Helpers
@@ -1149,19 +1185,16 @@ enum SupabaseAPI {
 
     // MARK: - Weekly NFL Picks
     
-    /// Fetch NFL picks for the current week
-    /// Gets the most recent week's picks (NFL weeks run Thu-Mon, so Monday games are still previous week)
-    /// Returns empty array if no picks exist - NO FALLBACK
-    static func fetchWeeklyNFLPicks() async throws -> [GaryPick] {
-        // NFL season spans Sept-Feb, so in Jan-July we want previous year's season
-        let currentYear = Calendar.current.component(.year, from: Date())
-        let currentMonth = Calendar.current.component(.month, from: Date())
-        let nflSeason = currentMonth <= 7 ? currentYear - 1 : currentYear
-        
+    /// Fetch NFL picks for one explicit slate date from the canonical weekly row.
+    /// Returns empty if that exact week/day has no pick — never a prior-week fallback.
+    static func fetchWeeklyNFLPicks(for date: String) async throws -> [GaryPick] {
+        guard let weekStart = getNFLWeekStart(for: date),
+              let season = nflSeason(for: date) else { return [] }
+
         let url = buildURL(table: "weekly_nfl_picks", query: [
             URLQueryItem(name: "select", value: "picks::text,week_start,week_number,season"),
-            URLQueryItem(name: "season", value: "eq.\(nflSeason)"),
-            URLQueryItem(name: "order", value: "week_start.desc"),
+            URLQueryItem(name: "week_start", value: "eq.\(weekStart)"),
+            URLQueryItem(name: "season", value: "eq.\(season)"),
             URLQueryItem(name: "limit", value: "1")
         ])
         
@@ -1173,11 +1206,12 @@ enum SupabaseAPI {
 
         let rows = try JSONDecoder().decode([WeeklyNFLPicksRow].self, from: data)
         
-        if let row = rows.first {
-            return parsePicksRow(row.picks)
+        guard let row = rows.first else { return [] }
+        return parsePicksRow(row.picks).filter { pick in
+            guard (pick.league ?? "").uppercased() == "NFL",
+                  let commence = pick.commence_time else { return false }
+            return easternCalendarDate(ofISO8601: commence) == date
         }
-        
-        return []
     }
     
     // MARK: - Upcoming NCAAB Tournament Picks
@@ -1210,6 +1244,34 @@ enum SupabaseAPI {
 
     // MARK: - Combined Picks
 
+    /// Fetch the picks stored for exactly one slate date, including NFL picks
+    /// from the weekly table. Unlike `fetchAllPicks`, this deliberately does not
+    /// append future NCAAB tournament rows, which keeps Yesterday and historical
+    /// boards pinned to the date the user selected.
+    /// - Parameter forceRefresh: Set to true for pull-to-refresh to bypass cache
+    static func fetchExactDatePicks(date: String, forceRefresh: Bool = false) async throws -> [GaryPick] {
+        let cacheKey = "exactDatePicks_\(date)"
+
+        if !forceRefresh,
+           let cached: [GaryPick] = await APICache.shared.get(cacheKey, ttl: APICache.liveContentTTL) {
+            return cached
+        }
+
+        async let dailyTask = fetchDailyPicks(date: date)
+        async let nflTask = fetchWeeklyNFLPicks(for: date)
+
+        let dailyPicks = (try? await dailyTask) ?? []
+        let nflPicks = (try? await nflTask) ?? []
+
+        guard !Task.isCancelled else { throw CancellationError() }
+
+        // Weekly storage is canonical for NFL. Excluding legacy daily NFL rows
+        // prevents one card from appearing twice on historical surfaces.
+        let result = dailyPicks.filter { ($0.league ?? "").uppercased() != "NFL" } + nflPicks
+        await APICache.shared.set(cacheKey, value: result)
+        return result
+    }
+
     /// Fetch all picks: non-NFL from daily_picks + NFL from weekly_nfl_picks + upcoming NCAAB tournament picks
     /// - Parameter forceRefresh: Set to true for pull-to-refresh to bypass cache
     static func fetchAllPicks(date: String, forceRefresh: Bool = false) async throws -> [GaryPick] {
@@ -1222,7 +1284,7 @@ enum SupabaseAPI {
 
         // Fetch fresh data
         async let dailyTask = fetchDailyPicks(date: date)
-        async let nflTask = fetchWeeklyNFLPicks()
+        async let nflTask = fetchWeeklyNFLPicks(for: date)
         async let ncaabUpcomingTask = fetchUpcomingNCAABPicks(afterDate: date)
 
         let dailyPicks = (try? await dailyTask) ?? []
@@ -1378,68 +1440,129 @@ enum SupabaseAPI {
     /// injury objects, and sportsbook snapshots. Pulling that entire JSON for
     /// 90 days was a 12–13 MB request and made the page feel frozen. PostgREST
     /// can project individual JSON-array fields, cutting the same request to
-    /// roughly 0.2 MB. Thirty slots covers the observed maximum (27) with room
-    /// to spare; game props live in their own table.
+    /// roughly 0.2 MB. NFL lives in canonical `weekly_nfl_picks`, so that table
+    /// gets the same narrow projection in parallel; we derive each NFL item's
+    /// Eastern game date from `commence_time` instead of assigning an entire
+    /// weekly row to one day. Thirty slots covers the observed daily maximum
+    /// (27) and a full NFL week with room to spare; game props live separately.
     static func fetchBillfoldPickMetadata(
         since dateFilter: String,
         forceRefresh: Bool = false
     ) async throws -> [BillfoldPickMetadata] {
-        let cacheKey = "billfoldPickMetadata_\(dateFilter)_\(billfoldSnapshotWindowKey())"
+        // v2 invalidates the old daily-only payload immediately after this ships.
+        let cacheKey = "billfoldPickMetadataV2_\(dateFilter)_\(billfoldSnapshotWindowKey())"
         if !forceRefresh,
            let cached: [BillfoldPickMetadata] = await APICache.shared.get(cacheKey, ttl: APICache.billfoldTTL) {
             return cached
         }
 
-        var projection = ["date"]
+        var dailyProjection = ["date"]
+        var nflProjection = ["week_start"]
         for index in 0..<30 {
-            projection.append("p\(index)_pick:picks->\(index)->>pick")
-            projection.append("p\(index)_confidence:picks->\(index)->>confidence")
-            projection.append("p\(index)_top:picks->\(index)->>is_top_pick")
+            let fields = [
+                "p\(index)_pick:picks->\(index)->>pick",
+                "p\(index)_confidence:picks->\(index)->>confidence",
+                "p\(index)_top:picks->\(index)->>is_top_pick"
+            ]
+            dailyProjection.append(contentsOf: fields)
+            dailyProjection.append("p\(index)_league:picks->\(index)->>league")
+            nflProjection.append(contentsOf: fields)
+            nflProjection.append("p\(index)_commence:picks->\(index)->>commence_time")
         }
 
-        let url = buildURL(table: "daily_picks", query: [
-            URLQueryItem(name: "select", value: projection.joined(separator: ",")),
+        let dailyURL = buildURL(table: "daily_picks", query: [
+            URLQueryItem(name: "select", value: dailyProjection.joined(separator: ",")),
             URLQueryItem(name: "date", value: "gte.\(dateFilter)"),
             URLQueryItem(name: "order", value: "date.desc")
         ])
-        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
-        guard let http = response as? HTTPURLResponse,
-              (200...299).contains(http.statusCode),
-              let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-            print("[SupabaseAPI] Billfold pick metadata fetch failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
-            return []
-        }
+
+        // A week can start up to six days before the requested history window.
+        // Query the containing Tuesday, then filter each pick back to dateFilter
+        // after deriving its actual ET game date from commence_time.
+        let nflSince = getNFLWeekStart(for: dateFilter) ?? dateFilter
+        let nflURL = buildURL(table: "weekly_nfl_picks", query: [
+            URLQueryItem(name: "select", value: nflProjection.joined(separator: ",")),
+            URLQueryItem(name: "week_start", value: "gte.\(nflSince)"),
+            URLQueryItem(name: "order", value: "week_start.desc")
+        ])
+
+        // Both payloads are small and independent. Running them concurrently
+        // preserves Billfold's first-frame latency while adding NFL history.
+        async let dailyPayload = fetchBillfoldMetadataPayload(dailyURL, source: "daily_picks")
+        async let nflPayload = fetchBillfoldMetadataPayload(nflURL, source: "weekly_nfl_picks")
+        let (dailyData, nflData) = await (dailyPayload, nflPayload)
 
         var result: [BillfoldPickMetadata] = []
-        result.reserveCapacity(rows.count * 15)
-        for row in rows {
-            guard let date = row["date"] as? String else { continue }
-            for index in 0..<30 {
-                guard let pick = row["p\(index)_pick"] as? String, !pick.isEmpty else { continue }
+        let dailyRows = dailyData.flatMap {
+            try? JSONSerialization.jsonObject(with: $0) as? [[String: Any]]
+        } ?? []
+        let nflRows = nflData.flatMap {
+            try? JSONSerialization.jsonObject(with: $0) as? [[String: Any]]
+        } ?? []
+        result.reserveCapacity((dailyRows.count * 15) + (nflRows.count * 16))
 
-                let confidence: Double?
-                if let value = row["p\(index)_confidence"] as? String {
-                    confidence = Double(value)
-                } else if let value = row["p\(index)_confidence"] as? NSNumber {
-                    confidence = value.doubleValue
-                } else {
-                    confidence = nil
+        func appendRows(_ rows: [[String: Any]], nfl: Bool) {
+            for row in rows {
+                for index in 0..<30 {
+                    guard let pick = row["p\(index)_pick"] as? String, !pick.isEmpty else { continue }
+                    // Weekly storage is canonical for NFL. Ignore any legacy
+                    // daily copy so one pick cannot calibrate twice.
+                    if !nfl, (row["p\(index)_league"] as? String)?.uppercased() == "NFL" {
+                        continue
+                    }
+
+                    let date: String?
+                    if nfl {
+                        date = (row["p\(index)_commence"] as? String)
+                            .flatMap { easternCalendarDate(ofISO8601: $0) }
+                    } else {
+                        date = row["date"] as? String
+                    }
+                    guard let date, date >= dateFilter else { continue }
+
+                    let confidence: Double?
+                    if let value = row["p\(index)_confidence"] as? String {
+                        confidence = Double(value)
+                    } else if let value = row["p\(index)_confidence"] as? NSNumber {
+                        confidence = value.doubleValue
+                    } else {
+                        confidence = nil
+                    }
+
+                    let topValue = row["p\(index)_top"]
+                    let isTopPick = (topValue as? Bool)
+                        ?? ((topValue as? String)?.lowercased() == "true")
+                    result.append(BillfoldPickMetadata(
+                        date: date,
+                        pick: pick,
+                        confidence: confidence,
+                        isTopPick: isTopPick
+                    ))
                 }
-
-                let topValue = row["p\(index)_top"]
-                let isTopPick = (topValue as? Bool)
-                    ?? ((topValue as? String)?.lowercased() == "true")
-                result.append(BillfoldPickMetadata(
-                    date: date,
-                    pick: pick,
-                    confidence: confidence,
-                    isTopPick: isTopPick
-                ))
             }
         }
 
+        appendRows(dailyRows, nfl: false)
+        appendRows(nflRows, nfl: true)
+
         await APICache.shared.set(cacheKey, value: result)
         return result
+    }
+
+    /// Fetch one narrow Billfold metadata projection. A failure in one storage
+    /// lane does not erase metadata returned by the other lane.
+    private static func fetchBillfoldMetadataPayload(_ url: URL, source: String) async -> Data? {
+        do {
+            let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                print("[SupabaseAPI] Billfold \(source) metadata fetch failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+                return nil
+            }
+            return data
+        } catch {
+            print("[SupabaseAPI] Billfold \(source) metadata fetch failed: \(error.localizedDescription)")
+            return nil
+        }
     }
 
     /// Fetch prop results with optional date filter
@@ -1457,7 +1580,7 @@ enum SupabaseAPI {
         var query = [
             URLQueryItem(
                 name: "select",
-                value: "game_date,matchup,player_name,pick_text,prop_type,bet,line_value,result,odds,actual_value"
+                value: "game_date,matchup,player_name,pick_text,prop_type,bet,line_value,result,odds,actual_value,sport"
             ),
             URLQueryItem(name: "order", value: "game_date.desc")
         ]

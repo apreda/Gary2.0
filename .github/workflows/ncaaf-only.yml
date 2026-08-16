@@ -1,0 +1,90 @@
+name: NCAAF Only - Picks & Optional Props
+
+# Manual backstop for the same NCAAF desks used by the local scheduler. Game
+# picks are supported with BDL. Player props remain explicitly opt-in because
+# they require a separate active The Odds API key and must fail closed when a
+# real market board is unavailable.
+on:
+  workflow_dispatch:
+    inputs:
+      matchup:
+        description: 'Optional team/matchup filter (for example, "Alabama")'
+        required: false
+        default: ''
+      run_props:
+        description: 'Also run live NCAAF props (requires NCAAF_THE_ODDS_API_KEY)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  TZ: America/New_York
+  MATCHUP: ${{ inputs.matchup }}
+
+concurrency:
+  group: ncaaf-complete-generation
+  cancel-in-progress: false
+
+jobs:
+  ncaaf-complete:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    defaults:
+      run:
+        working-directory: gary2.0
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: gary2.0/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Generate NCAAF game picks
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
+        run: |
+          if [ -n "$MATCHUP" ]; then
+            node scripts/run-agentic-picks.js --ncaaf --matchup "$MATCHUP" --limit 1
+          else
+            node scripts/run-agentic-picks.js --ncaaf
+          fi
+
+      - name: Generate NCAAF props from a live market board
+        if: ${{ inputs.run_props }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
+          NCAAF_THE_ODDS_API_KEY: ${{ secrets.NCAAF_THE_ODDS_API_KEY }}
+        run: |
+          if [ -z "$NCAAF_THE_ODDS_API_KEY" ]; then
+            echo "NCAAF props requested, but NCAAF_THE_ODDS_API_KEY is not configured." >&2
+            exit 2
+          fi
+          if [ -n "$MATCHUP" ]; then
+            node scripts/run-agentic-ncaaf-props.js --store=1 --matchup "$MATCHUP" --limit 1
+          else
+            node scripts/run-agentic-ncaaf-props.js --store=1
+          fi
+
+      - name: Log completion
+        if: always()
+        run: echo "NCAAF generation finished at $(date)"

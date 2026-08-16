@@ -2,7 +2,7 @@
 /**
  * Live Scores Poller
  *
- * Snapshots today's slate (MLB / NBA / NHL) into the `live_scores`
+ * Snapshots today's slate (MLB / NBA / NHL / NFL / NCAAF) into the `live_scores`
  * Supabase table so the iOS app can show scores while games are in progress.
  * Designed to run every ~2 minutes via launchd (com.gary2.live-scores): one
  * cached call per league, upsert one row per game, exit. When nothing is live
@@ -28,6 +28,15 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getESTDate } from '../src/utils/dateUtils.js';
 import { etDateStr } from '../src/services/insights/shared.js';
+import {
+  footballBdlRequest,
+  normalizeFootballGames,
+} from '../supabase/functions/_shared/liveScoreFootball.js';
+import {
+  evaluateLiveScoreSourceResults,
+  resolveLiveScoreSourceGate,
+  selectLiveScoreSources,
+} from '../supabase/functions/_shared/liveScoreSourceGate.js';
 
 const { ballDontLieService: bdl } = await import('../src/services/ballDontLieService.js');
 // MLB Stats API: BDL has neither outs nor baserunners, so live MLB game state
@@ -38,6 +47,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE
 const adminKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 const REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/live_scores` : null;
+const DAILY_SLATE_REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/daily_slate` : null;
 const PROJECT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..');
 const GRADE_LOCK = '/tmp/gary-live-grade.lock';
 const GRADE_LOCK_TTL_MS = 8 * 60 * 1000; // a hung grader can't wedge triggering forever
@@ -167,6 +177,28 @@ function nbaRows() {
   }));
 }
 
+// BDL's football games carry an ISO start in `date`, but the `dates[]` filter
+// is UTC-based. One request asks for both possible UTC dates, then the shared
+// normalizer keeps only games whose actual start belongs to targetDate in ET.
+// NFL explicitly asks for preseason + regular + postseason; BDL otherwise
+// excludes preseason, which would make August games disappear from live score.
+async function footballRows(league) {
+  const request = footballBdlRequest(league, targetDate);
+  const games = (await bdl.getGames(request.sportKey, request.params, 1)) || [];
+  const normalized = normalizeFootballGames(games, {
+    league,
+    targetDate,
+    nowMs: Date.now(),
+  });
+  for (const issue of normalized.issues) {
+    console.warn(`[live-scores] ${league} game ${issue.gameId ?? '?'} skipped: ${issue.message}`);
+  }
+  if (normalized.rows.length === 0 && normalized.issues.length > 0) {
+    throw new Error(`${league} returned games but none had a usable live-score shape`);
+  }
+  return normalized.rows.map((item) => item.row);
+}
+
 // NHL via the league's public score API (no key). gameState values observed
 // live on 2026-06-04: FUT/PRE (scheduled), LIVE/CRIT (in progress),
 // FINAL/OFF (settled). Detail composes "P2 12:51" / "INT1" / "OT 4:31" / "SO".
@@ -229,6 +261,34 @@ async function fetchPrevFinalIds(date) {
     return new Set((data || []).map((r) => `${r.league}:${r.game_id}`));
   } catch {
     return null; // unknown prior state -> don't trigger this cycle; the next one retries
+  }
+}
+
+// Exact-date, pre-provider source gate. A valid populated daily_slate is the
+// schedule authority, so an absent league is never called. An unavailable or
+// empty slate fails open through the shared resolver: spending a few extra
+// requests is safer than silently hiding scheduled football while the morning
+// slate is still being assembled.
+async function liveScoreSourceGate(date, supportedLeagues) {
+  if (!DAILY_SLATE_REST_URL || !adminKey) {
+    return resolveLiveScoreSourceGate({
+      error: 'Supabase daily_slate configuration missing',
+      supportedLeagues,
+    });
+  }
+
+  try {
+    const { data } = await axios.get(DAILY_SLATE_REST_URL, {
+      params: { date: `eq.${date}`, select: 'league' },
+      headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
+      timeout: 10000,
+    });
+    return resolveLiveScoreSourceGate({ rows: data, supportedLeagues });
+  } catch (error) {
+    return resolveLiveScoreSourceGate({
+      error: error?.message || String(error),
+      supportedLeagues,
+    });
   }
 }
 
@@ -295,11 +355,46 @@ async function run() {
   // ones that flip to final on THIS poll (each game triggers grading exactly once).
   const prevFinalIds = dryRun ? null : await fetchPrevFinalIds(targetDate);
 
-  const settled = await Promise.allSettled([mlbRows(), nbaRows(), nhlRows()]);
-  const rows = [];
-  for (const r of settled) {
-    if (r.status === 'fulfilled' && Array.isArray(r.value)) rows.push(...r.value);
+  // Keep providers behind closures. Constructing promises here would spend the
+  // BDL request before the daily_slate gate had a chance to exclude the league.
+  const sourceCatalog = [
+    { name: 'MLB', load: () => mlbRows() },
+    { name: 'NBA', load: () => nbaRows() },
+    { name: 'NHL', load: () => nhlRows() },
+    { name: 'NFL', load: () => footballRows('NFL') },
+    { name: 'NCAAF', load: () => footballRows('NCAAF') },
+  ];
+  const sourceGate = await liveScoreSourceGate(
+    targetDate,
+    sourceCatalog.map((source) => source.name),
+  );
+  const sources = selectLiveScoreSources(sourceGate, sourceCatalog);
+  if (sourceGate.authoritative) {
+    console.log(`[live-scores] daily_slate source gate ${targetDate}: ${sourceGate.leagues.join(', ')}`);
+  } else {
+    console.warn(`[live-scores] ${sourceGate.mode}; polling all sources (${sourceGate.reason})`);
   }
+  const settled = await Promise.allSettled(sources.map((source) => source.load()));
+  const evaluated = evaluateLiveScoreSourceResults({
+    gate: sourceGate,
+    sources,
+    settled,
+    // Preserve the pre-gate local contract: when daily_slate cannot tell us
+    // what is expected, a rejected football source still exits non-zero.
+    alwaysRequiredLeagues: ['NFL', 'NCAAF'],
+  });
+  const rows = evaluated.items;
+  for (const failure of evaluated.failures) {
+    console.warn(`[live-scores] ${failure.name} source failed: ${failure.message}`);
+  }
+
+  const assertExpectedSources = () => {
+    if (evaluated.requiredFailures.length > 0) {
+      const messages = evaluated.requiredFailures
+        .map((failure) => `${failure.name}: ${failure.message}`);
+      throw new Error(`expected live-score source failure — ${messages.join('; ')}`);
+    }
+  };
 
   // Stamp each row by its OWN ET slate date (falling back to targetDate when a
   // game carried no datetime). A late game returned under tomorrow's UTC date is
@@ -314,9 +409,11 @@ async function run() {
   if (dryRun) {
     console.log(JSON.stringify(stamped, null, 2));
     console.log(`🧪 DRY RUN — ${stamped.length} game(s): ${live} live, ${final} final.`);
+    assertExpectedSources();
     return;
   }
   if (!stamped.length) {
+    assertExpectedSources();
     console.log(`No games for ${targetDate} — nothing to write.`);
     return;
   }
@@ -411,6 +508,11 @@ async function run() {
       triggerGrading(targetDate);
     }
   }
+
+  // Successful leagues are persisted before surfacing an expected-source
+  // failure, so healthy feeds stay fresh while launchd still receives a
+  // non-zero status and can retry the missing league.
+  assertExpectedSources();
 }
 
 run()

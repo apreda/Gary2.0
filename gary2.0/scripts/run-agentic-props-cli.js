@@ -6,11 +6,21 @@
 // Load environment variables FIRST
 import '../src/loadEnv.js';
 import { createClient } from '@supabase/supabase-js';
+import {
+  etDayBounds,
+  formatPropRunOutcome,
+  propGameDiscoveryOptions,
+  propGameRejectionReason,
+  propPickDedupeKey,
+  reconcilePropTeam,
+  samePropGame,
+} from './lib/propsRunReliability.js';
+import { stampFootballTdCategory, storePropPicksAtomic } from './lib/propPicksStorage.js';
 
 // Dynamic imports after env is loaded (so geminiService gets correct proxy URL)
 const { oddsService } = await import('../src/services/oddsService.js');
 const { propOddsService } = await import('../src/services/propOddsService.js');
-const { getPropsConstitution, applyPropsPerGameConstraint, stripInternalFields } = await import('../src/services/agentic/propsSharedUtils.js');
+const { getPropsConstitution, applyPropsPerGameConstraint, isExplicitPropsPass, normalizePropBetDirection, stripInternalFields } = await import('../src/services/agentic/propsSharedUtils.js');
 const { analyzeGame } = await import('../src/services/agentic/orchestrator/index.js');
 const { analyzeMlbPropsDesk, PROPS_PROMPT_SHA } = await import('../src/services/pickdesk/propsBrain.js');
 
@@ -102,6 +112,23 @@ export async function runAgenticPropsCli({
   // --test flag: store to test_prop_picks table instead of production (for testing)
   const useTestTable = args.test === true || args.test === '1' || args.test === 'true';
   const testTableName = useTestTable ? 'test_prop_picks' : 'prop_picks';
+  const existingGameIds = [];
+  const passedGameIds = [];
+  const finishOutcome = (status, extra = {}) => {
+    const outcome = {
+      status,
+      sport: leagueLabel,
+      game_ids: [...new Set([...existingGameIds, ...passedGameIds, ...(extra.game_ids || [])])],
+      existing_game_ids: [...new Set(existingGameIds)],
+      passed_game_ids: [...new Set(passedGameIds)],
+      pick_count: extra.pick_count || 0,
+      ...(extra.added_count != null ? { added_count: extra.added_count } : {}),
+      ...(extra.skipped_count != null ? { skipped_count: extra.skipped_count } : {}),
+      ...(extra.replaced_count != null ? { replaced_count: extra.replaced_count } : {}),
+    };
+    console.log(formatPropRunOutcome(outcome));
+    return outcome;
+  };
 
   console.log(`\n🏈 Agentic ${leagueLabel} Props Runner Starting...`);
   console.log(`${'='.repeat(50)}`);
@@ -116,22 +143,20 @@ export async function runAgenticPropsCli({
   console.log(`${'='.repeat(50)}\n`);
 
   // Fetch upcoming games
-  const games = await oddsService.getUpcomingGames(sportKey, { nocache });
+  const games = await oddsService.getUpcomingGames(sportKey, propGameDiscoveryOptions({
+    sportKey,
+    nocache,
+    gameIdFilter,
+    etDate: getESTDate(),
+  }));
   const now = Date.now();
   
   // Calculate time window based on filtering mode
   let todayStart, tomorrowStart;
   if (useESTDayFiltering) {
-    // Use EST day boundaries for filtering (all games on current EST day)
-    // DST-safe: Calculate using proper timezone offset
     const todayEST = getESTDate();
-    // Create date at midnight EST/EDT (timezone-aware)
-    const midnightToday = new Date(`${todayEST}T00:00:00`);
-    // Get the timezone offset for EST/EDT dynamically
-    const estOffset = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', timeZoneName: 'short' }).includes('EDT') ? '-04:00' : '-05:00';
-    todayStart = new Date(`${todayEST}T00:00:00${estOffset}`).getTime();
-    tomorrowStart = todayStart + (24 * 60 * 60 * 1000);
-    console.log(`📅 EST Day Filter: ${todayEST} (${estOffset}), todayStart=${new Date(todayStart).toISOString()}, tomorrowStart=${new Date(tomorrowStart).toISOString()}`);
+    ({ start: todayStart, end: tomorrowStart } = etDayBounds(todayEST));
+    console.log(`📅 ET Day Filter: ${todayEST}, todayStart=${new Date(todayStart).toISOString()}, tomorrowStart=${new Date(tomorrowStart).toISOString()}`);
   }
   const windowMs = windowHours ? windowHours * 60 * 60 * 1000 : null;
 
@@ -145,39 +170,19 @@ export async function runAgenticPropsCli({
   const filtered = games
     .filter((game) => {
       const tip = new Date(game.commence_time).getTime();
-      const tipIsNaN = Number.isNaN(tip);
-      const tipInPast = tip <= now;
-      const tipOutsideWindow = windowMs != null && tip > now + windowMs;
-
-      // DEBUG: Log each game's filter result
-      if (tipIsNaN || tipInPast || tipOutsideWindow) {
+      const rejection = propGameRejectionReason(game, {
+        now,
+        useESTDayFiltering,
+        todayStart,
+        tomorrowStart,
+        windowMs,
+        gameIdFilter,
+        matchupFilter,
+      });
+      if (rejection) {
         console.log(`🚫 FILTERED OUT: ${game.away_team} @ ${game.home_team}`);
-        console.log(`   commence_time: ${game.commence_time}, tip: ${tip}, isNaN: ${tipIsNaN}, inPast: ${tipInPast}, outsideWindow: ${tipOutsideWindow}`);
-      }
-
-      if (tipIsNaN) return false;
-
-      if (useESTDayFiltering) {
-        // Filter games starting on current EST day
-        if (tip < todayStart || tip >= tomorrowStart) return false;
-      } else {
-        // Use rolling window (original behavior)
-        if (tipInPast) return false;
-        if (tipOutsideWindow) return false;
-      }
-
-      // Apply --game-id filter (exact, no ambiguity)
-      if (gameIdFilter) {
-        const gid = String(game.bdl_game_id ?? game.id ?? '');
-        if (gid !== gameIdFilter) return false;
-      }
-
-      // Apply matchup filter if provided
-      if (matchupFilter) {
-        const matchupLower = matchupFilter.toLowerCase();
-        const homeMatch = game.home_team.toLowerCase().includes(matchupLower);
-        const awayMatch = game.away_team.toLowerCase().includes(matchupLower);
-        if (!homeMatch && !awayMatch) return false;
+        console.log(`   commence_time: ${game.commence_time}, tip: ${tip}, reason: ${rejection}`);
+        return false;
       }
       return true;
     })
@@ -187,8 +192,7 @@ export async function runAgenticPropsCli({
   console.log(`Found ${filtered.length} ${leagueLabel} games to process.\n`);
 
   if (filtered.length === 0) {
-    console.log(`⚠️ No upcoming ${leagueLabel} games found within ${windowHours}h window.`);
-    return;
+    throw new Error(`No eligible upcoming ${leagueLabel} game matched this run${gameIdFilter ? ` (game ${gameIdFilter})` : ''}`);
   }
 
   const allPropPicks = [];
@@ -196,9 +200,9 @@ export async function runAgenticPropsCli({
   // Early-skip dedup so the scheduler's multi-tier retry windows (T-90 / T-60 /
   // T-30) don't re-spend the full ~$0.07 prop pipeline on a game that already
   // has props for today. Pulls the existing per-day row once and bails per
-  // game if any of today's prop picks already match this matchup. The existing
-  // upsert path below still handles partial re-runs correctly when force-run
-  // is intended (just run with --force).
+  // game if any of today's prop picks already carry this exact game id. The existing
+  // atomic path below still handles an intentional exact-game replacement
+  // when force-run is requested (just run with --force).
   let existingPropsForToday = [];
   if (shouldStore && !forceRun) {
     try {
@@ -221,15 +225,10 @@ export async function runAgenticPropsCli({
       }
     } catch (_) { /* non-fatal — fall through to full processing */ }
   }
-  const existingMatchupsForSport = new Set(
-    existingPropsForToday
-      .filter(p => p?.sport === leagueLabel)
-      .map(p => (p.matchup || '').toLowerCase())
-      .filter(Boolean)
-  );
-
   for (const game of filtered) {
     const matchup = `${game.away_team} @ ${game.home_team}`;
+    const gameId = game.bdl_game_id ?? game.id ?? null;
+    const gameIdentity = { game_id: gameId, matchup };
     const gameTime = new Date(game.commence_time).toLocaleString('en-US', {
       timeZone: 'America/New_York',
       weekday: 'short',
@@ -240,8 +239,9 @@ export async function runAgenticPropsCli({
       hour12: true
     });
 
-    if (existingMatchupsForSport.has(matchup.toLowerCase())) {
+    if (existingPropsForToday.some((pick) => pick?.sport === leagueLabel && samePropGame(pick, gameIdentity))) {
       console.log(`🚫 GAME ALREADY HAS PROPS: ${leagueLabel} ${matchup} — skipping (use --force=1 to override)`);
+      existingGameIds.push(String(gameId));
       continue;
     }
 
@@ -268,8 +268,7 @@ export async function runAgenticPropsCli({
         }
         console.log(`✅ Found ${playerProps.length} prop lines`);
       } catch (propsError) {
-        console.warn(`⚠️ Could not fetch props: ${propsError.message}`);
-        continue;
+        throw new Error(`Could not fetch prop lines for ${matchup}: ${propsError.message}`, { cause: propsError });
       }
 
       // HR-only mode: filter to home_runs props only
@@ -287,8 +286,7 @@ export async function runAgenticPropsCli({
       // a manual on-demand HR-only run, but the daily slate no longer needs it.)
 
       if (playerProps.length === 0) {
-        console.log(`⚠️ No${hrOnly ? ' HR' : ''} props available for this game, skipping...`);
-        continue;
+        throw new Error(`No${hrOnly ? ' HR' : ''} prop lines available for ${matchup}`);
       }
 
       let result;
@@ -303,12 +301,24 @@ export async function runAgenticPropsCli({
         let validatedPlayerNames;
         if (sportKey === 'baseball_mlb') {
           const deskRes = await analyzeMlbPropsDesk(game, playerProps, { nocache, hrOnly });
-          if (deskRes.error) console.warn(`[Props CLI] desk lane: ${deskRes.error}`);
-          result = { picks: deskRes.picks || [] };
+          if (deskRes.error) throw new Error(`MLB props desk failed: ${deskRes.error}`);
+          result = {
+            picks: deskRes.picks || [],
+            explicitPass: deskRes.explicitPass === true,
+          };
           validatedPlayerNames = deskRes.validatedPlayers || new Set();
         } else {
           console.log(`[Orchestrator Props] Building context for ${matchup}...`);
           const context = await buildContext(game, playerProps, { nocache, regularOnly: cliRegularOnly });
+
+          // A sport context may narrow the provider board after authoritative
+          // roster/stat validation. Adopt that exact board for BOTH the lines
+          // shown to Gary and the provider-price reconciliation below. NCAAF,
+          // for example, rejects any The Odds API player who is not on one of
+          // the two current BDL rosters or lacks the BDL field for that market.
+          if (Array.isArray(context.playerProps)) {
+            playerProps = context.playerProps;
+          }
 
           // Prepare prop candidates and available lines for orchestrator
           const propCandidates = (context.propCandidates || []).slice(0, 14).map(p => ({
@@ -413,19 +423,23 @@ export async function runAgenticPropsCli({
             // free-text odds (which flow straight into the stored card + the units/ROI math).
             // Match player + prop_type + line + side; null when no book line matches → the
             // pick is dropped below as unverified. Never trust the model's number.
-            const _side = (pick.bet || pick.direction || '').toLowerCase();
-            const _over = _side === 'over' || _side === 'yes';
+            const _side = normalizePropBetDirection(pick.bet ?? pick.direction);
+            const _over = _side === 'over';
             const _oddsRow = playerProps.find(pp =>
               (pp.player || '').toLowerCase() === (pick.player || '').toLowerCase() &&
               (pp.prop_type || '').toLowerCase() === prop.toLowerCase() &&
               (line == null || Number(pp.line) === Number(line))
             );
-            const _providerOdds = _oddsRow ? (_over ? _oddsRow.over_odds : _oddsRow.under_odds) : null;
+            const _providerOdds = _side && _oddsRow
+              ? (_over ? _oddsRow.over_odds : _oddsRow.under_odds)
+              : null;
 
             return {
               ...pick,
+              team: reconcilePropTeam(pick.team, _oddsRow?.team),
+              ...(leagueLabel === 'NCAAF' ? { player_id: _oddsRow?.player_id ?? null } : {}),
               odds: _providerOdds != null ? String(_providerOdds) : (pick.odds != null ? String(pick.odds) : null),
-              _oddsUnverified: _providerOdds == null,
+              _oddsUnverified: _side == null || _providerOdds == null,
               prop: displayProp,
               line: line != null ? String(line) : null,
               // HR picks route to the "MLB HR" lane even though they came from the
@@ -437,7 +451,7 @@ export async function runAgenticPropsCli({
               // BDL game id — pins the prop to the exact game (doubleheaders,
               // same-series UTC-window collisions) for dedupe + future grading
               game_id: game.bdl_game_id ?? game.id ?? null,
-              bet: pick.bet ? (pick.bet.toLowerCase() === 'yes' ? 'over' : pick.bet.toLowerCase()) : pick.bet,
+              bet: _side,
               confidence: pick.confidence || null
             };
           });
@@ -450,6 +464,8 @@ export async function runAgenticPropsCli({
           {
             const beforeOdds = result.picks.length;
             result.picks = result.picks.filter(p => {
+              if (!p.bet) { console.warn(`[Props CLI] 🛑 Direction gate: dropped ${p.player} ${p.prop} — bet must be over, under, or yes`); return false; }
+              if (leagueLabel === 'NCAAF' && p.player_id == null) { console.warn(`[Props CLI] 🛑 Player-id gate: dropped ${p.player} ${p.prop} — no exact BDL roster id`); return false; }
               if (p.odds == null) { console.warn(`[Props CLI] 🛑 Odds gate: dropped ${p.player} ${p.prop} — no price at all (model + BDL both missing)`); return false; }
               if (p._oddsUnverified) { console.warn(`[Props CLI] 🛑 Odds gate: dropped ${p.player} ${p.prop} @ ${p.odds} — no BDL line matched the pick (model-quoted price)`); return false; }
               // BET-WINDOW PERMISSION — every sport (founder, Aug 3: props
@@ -471,10 +487,17 @@ export async function runAgenticPropsCli({
             if (droppedOdds > 0) console.log(`[Props CLI] Odds gate dropped ${droppedOdds} pick(s) without a verifiable book price`);
           }
 
+          // TD scorer identity is a storage/UI contract, not model prose. Once
+          // the provider-price hard gate has passed, deterministically stamp an
+          // anytime scorer as Regular (< +200) or Value (+200 and above). This
+          // applies identically to NFL and NCAAF and clears stray categories
+          // from ordinary football props.
+          result.picks = result.picks.map((pick) => stampFootballTdCategory(pick, leagueLabel));
+
           // Apply 2-per-game cap + Gary Specials correlation for every sport.
           // Previously this only ran for NBA/NHL — MLB and NFL bypassed the cap
           // and never got correlation flags. There's no reason to skip it.
-          if (['NBA', 'NHL', 'MLB', 'NFL'].includes(leagueLabel)) {
+          if (['NBA', 'NHL', 'MLB', 'NFL', 'NCAAF'].includes(leagueLabel)) {
             const { constrainedPicks } = applyPropsPerGameConstraint(result.picks, `${leagueLabel}-post`);
             result.picks = constrainedPicks;
           }
@@ -494,30 +517,37 @@ export async function runAgenticPropsCli({
         }
 
         allPropPicks.push(...result.picks);
+      } else if (result.explicitPass === true || isExplicitPropsPass(result)) {
+        console.log(`↪️ Gary explicitly passed props for ${matchup}`);
+        passedGameIds.push(String(gameId));
       } else {
-        console.log(`⚠️ No confident prop picks for this game`);
+        throw new Error(`Props generation for ${matchup} produced no valid picks and no explicit pass`);
       }
 
     } catch (error) {
       console.error(`❌ Error processing ${matchup}:`, error.message);
+      throw new Error(`Props processing failed for ${matchup}: ${error.message}`, { cause: error });
     }
   }
 
   // Deduplicate and Prepare Final Picks
   if (allPropPicks.length === 0) {
-    console.log(`\n⚠️ No prop picks generated across all games.`);
-    return;
+    if (existingGameIds.length > 0) {
+      console.log(`\n✅ Every eligible game already has stored props.`);
+      return finishOutcome('stored');
+    }
+    if (passedGameIds.length > 0) {
+      console.log(`\n↪️ Gary explicitly passed every eligible game.`);
+      return finishOutcome('pass');
+    }
+    throw new Error('No prop picks generated and no explicit pass was recorded');
   }
 
-  // CRITICAL: Deduplicate by player + prop_type
-  const dedupeKey = (pick) => {
-    const propType = (pick.prop || '').split(' ')[0].toLowerCase();
-    return `${(pick.player || '').toLowerCase()}_${propType}`;
-  };
-
+  // Deduplicate within the exact game. Player+prop alone collides when the
+  // same clubs play twice on one date.
   const deduped = new Map();
   for (const pick of allPropPicks) {
-    const key = dedupeKey(pick);
+    const key = propPickDedupeKey(pick);
     const existing = deduped.get(key);
     if (!existing || 
         (pick.confidence || 0) > (existing.confidence || 0) ||
@@ -548,8 +578,13 @@ export async function runAgenticPropsCli({
   if (validPicks.length < sortedPicks.length) {
     console.log(`[Props CLI] Filtered out ${sortedPicks.length - validPicks.length} invalid pick(s). ${validPicks.length} valid picks remain.`);
   }
+  if (validPicks.length === 0) {
+    throw new Error('Generated prop picks failed required-field validation');
+  }
 
   // STORAGE (Do this BEFORE the big summary print)
+  let storageSucceeded = false;
+  let storageSummary = null;
   if (shouldStore) {
     console.log(`\n💾 Storing ${validPicks.length} picks in Supabase...`);
     
@@ -557,7 +592,7 @@ export async function runAgenticPropsCli({
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
     
     if (!supabaseUrl || !supabaseKey) {
-      console.error(`❌ Missing Supabase credentials`);
+      throw new Error('Missing Supabase credentials');
     } else {
       const supabase = createClient(supabaseUrl, supabaseKey, {
         auth: { autoRefreshToken: false, persistSession: false }
@@ -566,64 +601,100 @@ export async function runAgenticPropsCli({
       // Store under the GAME's ET date (from commence_time), never the run's
       // "today" — fixes props from a game landing under tomorrow's key when the
       // run crosses ET midnight (the June 14 → June 15 mis-dating bug).
-      const dateParam = estDateFromISO(validPicks[0]?.commence_time);
-      const { data: existingData } = await supabase
-        .from(testTableName)
-        .select('picks')
-        .eq('date', dateParam)
-        .single();
+      if (!useTestTable) {
+        // Every production sport takes the same Postgres date lock. Leaving
+        // MLB on the old client-side merge would let it overwrite a football
+        // child even if every football child used the RPC correctly.
+        const picksByDate = new Map();
+        for (const pick of validPicks.map(stripInternalFields)) {
+          const pickDate = estDateFromISO(pick.commence_time);
+          if (!picksByDate.has(pickDate)) picksByDate.set(pickDate, []);
+          picksByDate.get(pickDate).push(pick);
+        }
 
-      let existingPicks = [];
-      const newMatchups = new Set(validPicks.map(p => p.matchup?.toLowerCase()).filter(Boolean));
-      // Check if new picks include TD picks (for NFL categorized format)
-      const newHasTdPicks = validPicks.some(p => p.td_category);
-      // The MLB run now emits BOTH lanes — regular "MLB" + the folded-in "MLB HR" —
-      // so it owns and replaces both for the matchups it just processed (otherwise a
-      // stale HR pick would linger beside the freshly generated one).
-      const ownedLanes = leagueLabel === 'MLB' ? new Set(['MLB', 'MLB HR']) : new Set([leagueLabel]);
+        const writes = [];
+        for (const [dateParam, datePicks] of picksByDate) {
+          writes.push(await storePropPicksAtomic({
+            client: supabase,
+            date: dateParam,
+            leagueLabel,
+            picks: datePicks,
+            forceRun,
+          }));
+        }
 
-      if (existingData?.picks) {
-        existingPicks = existingData.picks.filter(p => {
-          // Always keep picks from lanes this run doesn't own
-          if (!ownedLanes.has(p.sport)) return true;
-          
-          const pickMatchup = p.matchup?.toLowerCase();
-          const isSameMatchup = pickMatchup && newMatchups.has(pickMatchup);
-          
-          // For NFL: If new picks include TD picks, filter out existing TD picks for same matchup
-          // This prevents duplicates when running NFL props (which now outputs categorized TD picks)
-          if (leagueLabel === 'NFL' && p.td_category && newHasTdPicks && isSameMatchup) {
-            console.log(`[Storage] Replacing existing ${p.td_category} TD pick for ${pickMatchup}`);
-            return false;
-          }
-          
-          // Keep existing TD picks if new picks don't include TDs (standalone TD script didn't run yet)
-          if (p.td_category && !newHasTdPicks) return true;
-          
-          // Filter out existing regular props for same matchup
-          return !isSameMatchup;
+        storageSummary = writes.reduce((summary, result) => ({
+          added: summary.added + result.added,
+          skipped: summary.skipped + result.skipped,
+          replaced: summary.replaced + result.replaced,
+          total: summary.total + result.total,
+          game_ids: [...new Set([...summary.game_ids, ...result.game_ids])],
+          added_game_ids: [...new Set([...summary.added_game_ids, ...result.added_game_ids])],
+          skipped_game_ids: [...new Set([...summary.skipped_game_ids, ...result.skipped_game_ids])],
+          replaced_game_ids: [...new Set([...summary.replaced_game_ids, ...result.replaced_game_ids])],
+          mode: writes.length === 1 ? result.mode : 'multi_date',
+        }), {
+          added: 0,
+          skipped: 0,
+          replaced: 0,
+          total: 0,
+          game_ids: [],
+          added_game_ids: [],
+          skipped_game_ids: [],
+          replaced_game_ids: [],
+          mode: 'append',
         });
-      }
-
-      // F-5: strip pipeline-internal flags (_oddsUnverified, _statAuditWarnings, …) at the
-      // storage boundary — existing rows too, so the day's row self-cleans on each write.
-      const mergedPicks = [...existingPicks, ...validPicks].map(stripInternalFields);
-      
-      // Use upsert instead of delete-then-insert (atomic, race-safe)
-      const { error: upsertError } = await supabase
-        .from(testTableName)
-        .upsert({
-          date: dateParam,
-          picks: mergedPicks,
-          created_at: new Date().toISOString()
-        }, {
-          onConflict: 'date'
-        });
-
-      if (upsertError) {
-        console.error(`❌ Upsert error: ${upsertError.message}`);
+        console.log(`✅ Atomic prop storage: ${storageSummary.added} added, ${storageSummary.skipped} already present, ${storageSummary.replaced} replaced`);
+        storageSucceeded = true;
       } else {
+        // Preserve the isolated test table's existing read/merge/upsert path;
+        // production never falls back here.
+        const dateParam = estDateFromISO(validPicks[0]?.commence_time);
+        const { data: existingData, error: existingError } = await supabase
+          .from(testTableName)
+          .select('picks')
+          .eq('date', dateParam)
+          .maybeSingle();
+        if (existingError) {
+          throw new Error(`Could not read existing ${testTableName} row for ${dateParam}: ${existingError.message}`);
+        }
+
+        let existingPicks = [];
+        const newHasTdPicks = validPicks.some(p => p.td_category);
+        const ownedLanes = leagueLabel === 'MLB' ? new Set(['MLB', 'MLB HR']) : new Set([leagueLabel]);
+
+        if (existingData?.picks) {
+          existingPicks = existingData.picks.filter(p => {
+            if (!ownedLanes.has(p.sport)) return true;
+
+            const pickMatchup = p.matchup?.toLowerCase();
+            const isSameGame = validPicks.some((newPick) => samePropGame(p, newPick));
+
+            if (leagueLabel === 'NFL' && p.td_category && newHasTdPicks && isSameGame) {
+              console.log(`[Storage] Replacing existing ${p.td_category} TD pick for ${pickMatchup}`);
+              return false;
+            }
+            if (p.td_category && !newHasTdPicks) return true;
+            return !isSameGame;
+          });
+        }
+
+        const mergedPicks = [...existingPicks, ...validPicks].map(stripInternalFields);
+        const { error: upsertError } = await supabase
+          .from(testTableName)
+          .upsert({
+            date: dateParam,
+            picks: mergedPicks,
+            created_at: new Date().toISOString()
+          }, {
+            onConflict: 'date'
+          });
+
+        if (upsertError) {
+          throw new Error(`Could not store ${testTableName} row for ${dateParam}: ${upsertError.message}`);
+        }
         console.log(`✅ Successfully stored picks for ${dateParam}`);
+        storageSucceeded = true;
       }
     }
   }
@@ -641,4 +712,18 @@ export async function runAgenticPropsCli({
   });
 
   console.log(`\n🏁 Agentic ${leagueLabel} Props Runner Complete.\n`);
+  const pickedGameIds = validPicks
+    .map((pick) => pick.game_id)
+    .filter((id) => id != null)
+    .map(String);
+  if (shouldStore && !storageSucceeded) {
+    throw new Error('Props storage did not complete');
+  }
+  return finishOutcome(shouldStore ? 'stored' : 'dry_run', {
+    game_ids: shouldStore && storageSummary ? storageSummary.game_ids : pickedGameIds,
+    pick_count: validPicks.length,
+    added_count: storageSummary?.added,
+    skipped_count: storageSummary?.skipped,
+    replaced_count: storageSummary?.replaced,
+  });
 }

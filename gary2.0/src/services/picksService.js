@@ -2,7 +2,7 @@
  * Gary Picks Service - Fully Integrated
  * Handles NBA, NFL, NHL, NCAAF, NCAAB pick generation and storage
  */
-import { supabase, supabaseAdmin, storeDailyPicks } from '../supabaseClient.js';
+import { supabase, supabaseAdmin } from '../supabaseClient.js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { getESTDate, toESTDate } from '../utils/dateUtils.js';
 
@@ -142,6 +142,91 @@ async function gameAlreadyHasPick(league, homeTeam, awayTeam, gameDate = null, g
   return { exists: false, existingPick: null };
 }
 
+/**
+ * Cheap retry preflight keyed only by the provider game id.
+ *
+ * This is deliberately exact-ID-only: legacy rows without an id do not count,
+ * and props never count as the game's published side. A read problem fails
+ * open so the scheduler can continue into the normal generation/store guard
+ * instead of suppressing a possibly missing pick.
+ */
+async function pickAlreadyStoredByGameId(league, gameDate, gameId) {
+  const normalizedLeague = String(league || '').trim().toUpperCase();
+  const normalizedGameId = gameId == null ? '' : String(gameId).trim();
+  const rawDate = gameDate == null ? '' : String(gameDate).trim();
+  let etDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null;
+
+  if (!etDate && gameDate != null) {
+    const instant = new Date(gameDate);
+    if (Number.isFinite(instant.getTime())) {
+      etDate = instant.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    }
+  }
+
+  if (!normalizedLeague || !etDate || !normalizedGameId) {
+    return {
+      exists: false,
+      existingPick: null,
+      error: 'league, valid ET date, and game_id are required',
+    };
+  }
+
+  try {
+    const reader = supabaseAdmin || supabase;
+    let query;
+    let source;
+    if (normalizedLeague === 'NFL') {
+      // Noon UTC remains on the same ET civil date year-round, avoiding the
+      // UTC-midnight shift when deriving the weekly ledger key.
+      const [year, month, day] = etDate.split('-').map(Number);
+      const anchor = new Date(Date.UTC(year, month - 1, day, 12));
+      query = reader
+        .from('weekly_nfl_picks')
+        .select('picks')
+        .eq('week_start', getNFLWeekStart(anchor))
+        .eq('season', getNFLSeason(anchor))
+        .limit(1);
+      source = 'weekly_nfl_picks';
+    } else {
+      query = reader
+        .from('daily_picks')
+        .select('picks')
+        .eq('date', etDate)
+        .limit(1);
+      source = 'daily_picks';
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.warn(`⚠️ Exact-ID pick preflight read failed (${source}): ${error.message || error.code || 'unknown'}`);
+      return { exists: false, existingPick: null, source, error: error.message || 'read failed' };
+    }
+
+    const rawPicks = data?.[0]?.picks;
+    const picks = Array.isArray(rawPicks)
+      ? rawPicks
+      : (() => { try { return JSON.parse(rawPicks || '[]'); } catch { return []; } })();
+    const existing = picks.find((pick) => {
+      if (pick?.type === 'prop' || pick?.pickType === 'prop') return false;
+      const pickLeague = String(pick?.league || pick?.sport || '').trim().toUpperCase();
+      if (pickLeague !== normalizedLeague) return false;
+      const storedId = pick?.bdl_game_id ?? pick?.game_id;
+      return storedId != null && String(storedId).trim() === normalizedGameId;
+    });
+
+    if (!existing) return { exists: false, existingPick: null, source };
+    return {
+      exists: true,
+      existingPick: existing.pick || null,
+      storedPick: existing,
+      source,
+    };
+  } catch (error) {
+    console.warn(`⚠️ Exact-ID pick preflight failed open: ${error.message}`);
+    return { exists: false, existingPick: null, error: error.message };
+  }
+}
+
 // Helper: Store picks in database
 async function storeDailyPicksInDatabase(picks, overrideDate = null) {
   if (!picks || !Array.isArray(picks) || picks.length === 0)
@@ -230,6 +315,13 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
         statsData: pick.statsData || [], // Full stat values for Tale of the Tape
         injuries: pick.injuries || null, // Structured injury data from BDL
         commence_time: pick.commence_time || null,
+        // Football-only immutable market receipt. Conditional spreads preserve
+        // every non-football JSON shape byte-for-byte.
+        ...(pick.published_at ? { published_at: pick.published_at } : {}),
+        ...(pick.published_market ? { published_market: pick.published_market } : {}),
+        ...(pick.season_type != null ? { season_type: pick.season_type } : {}),
+        ...(pick.homeTeamAbbreviation ? { homeTeamAbbreviation: pick.homeTeamAbbreviation } : {}),
+        ...(pick.awayTeamAbbreviation ? { awayTeamAbbreviation: pick.awayTeamAbbreviation } : {}),
         // BDL game id — disambiguates doubleheaders for dedupe
         game_id: pick.bdl_game_id ?? pick.game_id ?? null,
         // Venue/tournament context (for NBA Cup, neutral site games, CFP games, etc.)
@@ -321,6 +413,13 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
       injuries: pick.injuries || null, // Structured injury data from BDL
       commence_time: pick.commence_time || null,
       gameTime: pick.gameTime || null,
+      // Agentic NCAAF picks take this fallback mapping branch. Keep the sealed
+      // same-book receipt without adding any keys to MLB/NBA rows.
+      ...(pick.published_at ? { published_at: pick.published_at } : {}),
+      ...(pick.published_market ? { published_market: pick.published_market } : {}),
+      ...(pick.season_type != null ? { season_type: pick.season_type } : {}),
+      ...(pick.homeTeamAbbreviation ? { homeTeamAbbreviation: pick.homeTeamAbbreviation } : {}),
+      ...(pick.awayTeamAbbreviation ? { awayTeamAbbreviation: pick.awayTeamAbbreviation } : {}),
       // BDL game id — disambiguates doubleheaders for dedupe
       game_id: pick.bdl_game_id ?? pick.game_id ?? null,
       // Venue/tournament context (for NBA Cup, neutral site games, CFP games, etc.)
@@ -413,182 +512,62 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
     return { success: false, message: 'No picks to store' };
   }
 
-  // Create append/merge storage: fetch existing row, merge, then upsert
+  // Independent scheduler children are separate processes, so an in-memory
+  // mutex and a JavaScript read/merge/upsert cannot protect this shared JSON
+  // row. Every daily sport uses the same Postgres transaction instead. This
+  // keeps MLB/NBA behavior intact while allowing NCAAF games to finish in
+  // parallel without replacing each other (or a simultaneous MLB pick).
   await ensureValidSupabaseSession();
-  // Only allow the catch-block service-role fallback to write when the pre-read
-  // succeeded — its upsert REPLACES the whole row, so writing without knowing
-  // the row's current picks can erase the rest of the day.
-  let mergeStateKnown = false;
-  let fallbackPicksRef = validPicks; // reassigned to the FULL merged set once computed
+  const writer = supabaseAdmin || supabase;
   try {
-    const { data: existingRows, error: selectError } = await supabase
-      .from('daily_picks')
-      .select('id, picks')
-      .eq('date', currentDateString)
-      .limit(1);
-
-    if (selectError) {
-      // HARD STOP — without the pre-read we don't know what the row holds, and
-      // every write path below (insert OR service-role upsert) REPLACES the row.
-      // Writing blind here wiped-or-could-wipe a full day of public picks.
-      // Fail loud instead; the caller's end-of-run batch store retries fresh.
-      throw new Error(`daily_picks pre-read failed (${selectError.message || selectError.code || 'unknown'}) — refusing to write blind`);
+    const sanitizedPicks = JSON.parse(JSON.stringify(validPicks));
+    const missingNcaafGameId = sanitizedPicks.find((pick) => {
+      const league = String(pick?.league || pick?.sport || '').trim().toUpperCase();
+      const isProp = pick?.type === 'prop' || pick?.pickType === 'prop';
+      const isSoccer = pick?.soccer_match_id != null && String(pick.soccer_match_id).trim() !== '';
+      const gameId = pick?.bdl_game_id ?? pick?.game_id;
+      return league === 'NCAAF' && !isProp && !isSoccer
+        && (gameId == null || String(gameId).trim() === '');
+    });
+    if (missingNcaafGameId) {
+      return {
+        success: false,
+        error: `NCAAF atomic storage requires bdl_game_id or game_id (${missingNcaafGameId.awayTeam || '?'} @ ${missingNcaafGameId.homeTeam || '?'})`,
+      };
     }
 
-    // Prepare merged picks
-    let mergedPicks = [];
-    mergeStateKnown = true; // pre-read succeeded — fallback writes are safe
-    if (existingRows && existingRows.length > 0) {
-      const existing = existingRows[0];
-      const existingPicks = Array.isArray(existing.picks)
-        ? existing.picks
-        : (() => { try { return JSON.parse(existing.picks || '[]'); } catch { return []; } })();
+    const { data, error } = await writer.rpc('append_daily_picks_atomic', {
+      p_date: currentDateString,
+      p_new_picks: sanitizedPicks,
+    });
 
-      // GAME-LEVEL DEDUPE: Only ONE pick per game, regardless of pick type (spread/ML/etc)
-      // This prevents Gary from picking both sides of a game (e.g., Cowboys +3 AND Lions ML)
-      // Helper to check if a pick is a prop pick (defined once, used throughout)
-      const checkIsProp = (p) => (p?.type === 'prop' || p?.pickType === 'prop');
-      
-      // For game picks: dedupe by game matchup only (not by the specific pick)
-      // For prop picks: dedupe by player + prop to allow multiple player props per game
-      const gameKey = (p) => {
-        if (checkIsProp(p)) {
-          // Props: allow multiple per game but dedupe by player+prop
-          return `prop|${p.league || ''}|${p.player || ''}|${p.prop || p.statType || ''}`;
-        }
-        // Soccer (World Cup): the SIDE and TOTAL legs coexist as separate cards.
-        // Key on pick_category (build-time role: side/total), NOT type — a side that
-        // resolves to "total" would otherwise collide with the total leg and drop one.
-        if (p.soccer_match_id) {
-          return `soccer|${p.soccer_match_id}|${p.pick_category || p.type || 'moneyline'}`;
-        }
-        // Game picks: ONE per game — include the BDL game id so a doubleheader's
-        // game 2 never collides with (and silently deletes) game 1's stored pick.
-        const gid = p.bdl_game_id ?? p.game_id ?? '';
-        return `game|${p.league || ''}|${p.homeTeam || ''}|${p.awayTeam || ''}|${gid}`;
-      };
-
-      const seen = new Set();
-      const toAppend = validPicks.filter(p => {
-        const key = gameKey(p);
-        if (seen.has(key)) {
-          console.log(`⚠️ BLOCKED DUPLICATE in current batch: ${key}`);
-          return false;
-        }
-        seen.add(key);
-        return true;
-      });
-
-      // Same-game identity. Game picks match by id when BOTH sides carry one
-      // (doubleheader-safe); an existing pick WITHOUT an id falls back to
-      // teams-only matching.
-      const checkIsGamePick = (p) => !checkIsProp(p) && !p.soccer_match_id;
-      const sameGame = (newPick, oldPick) => {
-        if (!checkIsGamePick(newPick) || !checkIsGamePick(oldPick)) {
-          return gameKey(newPick) === gameKey(oldPick);
-        }
-        const teamsEqual = (newPick.league || '') === (oldPick.league || '') &&
-          (newPick.homeTeam || '') === (oldPick.homeTeam || '') &&
-          (newPick.awayTeam || '') === (oldPick.awayTeam || '');
-        if (!teamsEqual) return false;
-        const newId = newPick.bdl_game_id ?? newPick.game_id;
-        const oldId = oldPick.bdl_game_id ?? oldPick.game_id;
-        if (newId != null && oldId != null) return String(newId) === String(oldId);
-        return true; // legacy un-stamped pick: teams+date identity
-      };
-
-      // STORE-GUARD — FIRST WRITER WINS (incident #10, Jul 12 2026): two
-      // production hosts run in parallel and both can pass the pre-analysis
-      // "already has a pick" check inside the same window; under the old
-      // later-writer-wins merge the second host's disagreeing pick silently
-      // FLIPPED the published one (CHC→CIN, OAK→CHW sides). A pick that's
-      // stored is the pick — an incoming pick for a game that already has one
-      // is DROPPED, never a replacer. A deliberate re-pick now requires
-      // deleting the game's row first (manual, founder-approved).
-      const kept = toAppend.filter(n => {
-        const clash = existingPicks.find(p => sameGame(n, p));
-        if (clash) {
-          const same = (clash.pick || '') === (n.pick || '');
-          console.warn(`🛡️ STORE-GUARD: kept existing "${clash.pick}" — dropped incoming ${same ? 'duplicate' : `DISAGREEING "${n.pick}"`} for ${n.awayTeam || '?'} @ ${n.homeTeam || '?'} (parallel-host write)`);
-          return false;
-        }
-        return true;
-      });
-
-      // Apply cap for props only on the combined set (keep existing first)
-      const combined = [...existingPicks, ...kept];
-      const props = combined.filter(checkIsProp);
-      const nonProps = combined.filter(p => !checkIsProp(p));
-      const cappedProps = props.slice(0, 10);
-      mergedPicks = [...nonProps, ...cappedProps];
-      fallbackPicksRef = mergedPicks;
-
-      console.log(`Merging ${kept.length} new picks (${toAppend.length - kept.length} guard-dropped) into existing ${existingPicks.length}; final size ${mergedPicks.length}`);
-
-      // Use storeDailyPicks (service role key) to upsert merged picks
-      const storeResult = await storeDailyPicks(currentDateString, mergedPicks);
-      if (!storeResult.success) {
-        throw new Error(`Failed to append picks: ${storeResult.error || 'unknown'}`);
-      }
-
-      console.log('✅ Successfully appended picks to existing daily_picks row');
-      return { success: true, count: validPicks.length, mode: 'append' };
-    } else {
-      // No existing row: insert new
-      // Cap total prop picks to 10 without changing existing filters
-      const checkIsPropNew = (p) => (p?.type === 'prop' || p?.pickType === 'prop');
-      const propOnly = validPicks.filter(checkIsPropNew);
-      const nonProps = validPicks.filter(p => !checkIsPropNew(p));
-      const cappedProps = propOnly.slice(0, 10);
-      const finalPicks = [...nonProps, ...cappedProps];
-      fallbackPicksRef = finalPicks;
-
-      const pickData = { date: currentDateString, picks: finalPicks };
-      console.log('Inserting new daily_picks row');
-
-      const { error: insertError } = await supabase
-        .from('daily_picks')
-        .insert(pickData);
-
-      if (insertError) {
-        console.error('Insert failed, retrying with stringified picks:', insertError.message);
-        const { error: insertAltError } = await supabase
-          .from('daily_picks')
-          .insert({
-            date: currentDateString,
-            picks: finalPicks
-          });
-        if (insertAltError) {
-          throw new Error(`Failed to store picks: ${insertAltError.message}`);
-        }
-        console.log('✅ Successfully stored picks using alternative approach');
-        return { success: true, count: finalPicks.length, method: 'alternative' };
-      }
-
-      console.log(`✅ Successfully stored ${finalPicks.length} picks in database (props capped at ${cappedProps.length}/10)`);
-      return { success: true, count: finalPicks.length };
+    if (error) {
+      console.error('❌ Atomic daily-picks RPC failed:', error);
+      // There is intentionally no direct-table fallback. Any client-side
+      // read/merge/upsert can lose a concurrent sport's write, which is worse
+      // than failing this run loudly and retrying it.
+      return { success: false, error: error.message || 'Atomic daily-picks RPC failed' };
     }
+
+    const added = Number(data?.added ?? 0);
+    const skipped = Number(data?.skipped ?? 0);
+    const total = Number(data?.total ?? added);
+    const mode = data?.mode || 'append';
+    const gameIds = Array.isArray(data?.game_ids) ? data.game_ids.map(String) : [];
+
+    console.log(`✅ Atomically stored ${added} new daily pick(s) (${total} total; ${skipped} guard-skipped)`);
+    return {
+      success: true,
+      count: added,
+      added,
+      skipped,
+      total,
+      game_ids: gameIds,
+      mode,
+    };
   } catch (error) {
-    console.error('❌ Error storing picks:', error);
-    if (!mergeStateKnown) {
-      // The pre-read failed — the service-role upsert below replaces the whole
-      // row, so writing now could erase every pick already stored today.
-      throw new Error(`Failed to store picks (no safe fallback — pre-read failed): ${error.message}`);
-    }
-    // Final fallback: use service-role direct REST helper (bypasses RLS).
-    // fallbackPicksRef is the FULL merged set (existing + new), never just the
-    // current batch — the helper's upsert is a wholesale row replace.
-    try {
-      const fb = await storeDailyPicks(currentDateString, fallbackPicksRef);
-      if (fb?.success) {
-        console.log('✅ Stored picks via service-role REST fallback');
-        return { success: true, count: validPicks.length, method: 'service-role' };
-      }
-      throw new Error(fb?.message || 'Unknown REST fallback failure');
-    } catch (restError) {
-      console.error('❌ REST fallback also failed:', restError);
-      throw new Error(`Failed to store picks: ${error.message}`);
-    }
+    console.error('❌ Error atomically storing daily picks:', error);
+    return { success: false, error: error.message };
   } finally {
     isStoringPicks = false;
     console.log('🔓 Storage lock released');
@@ -599,34 +578,57 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
 // WEEKLY NFL PICKS (persist all week)
 // ==========================================
 
-/**
- * Get the Monday of the current NFL week
- * NFL weeks run Tuesday-Monday
- */
+/** Get the Tuesday start of the current NFL publication week (Tue–Mon, ET). */
 function getNFLWeekStart(date = new Date()) {
-  const d = new Date(date);
-  const day = d.getDay(); // 0=Sun, 1=Mon, etc.
-  // Get previous Monday (or today if Monday)
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString().split('T')[0]; // YYYY-MM-DD
+  const instant = new Date(date);
+  const etDate = instant.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const [year, month, dayOfMonth] = etDate.split('-').map(Number);
+  const civil = new Date(Date.UTC(year, month - 1, dayOfMonth));
+  const weekday = civil.getUTCDay(); // 0=Sun, 1=Mon, 2=Tue, etc.
+  const daysSinceTuesday = (weekday - 2 + 7) % 7;
+  civil.setUTCDate(civil.getUTCDate() - daysSinceTuesday);
+  return civil.toISOString().slice(0, 10);
+}
+
+function getNFLSeason(date = new Date()) {
+  const instant = new Date(date);
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', year: 'numeric', month: 'numeric',
+  }).formatToParts(instant);
+  const values = Object.fromEntries(parts.map((part) => [part.type, Number(part.value)]));
+  // Preseason begins in August. Jan-Jul belongs to the season that began the
+  // prior calendar year.
+  return values.month >= 8 ? values.year : values.year - 1;
 }
 
 /**
- * Get current NFL week number (approximate)
- * Dynamically calculates based on NFL season start (first week of September)
+ * Date-derived NFL week fallback. Provider `game.week` is authoritative and is
+ * persisted whenever BDL supplies it; this is only for legacy/frozen-slate
+ * rows that lack the field. August is preseason (week 1 starts on the first
+ * Monday of August). Regular week 1 starts on the Thursday after Labor Day.
  */
 function getNFLWeekNumber(date = new Date()) {
-  // Calculate NFL season dynamically: Sep-Dec = current year, Jan-Aug = previous year
-  const month = date.getMonth() + 1;
-  const seasonYear = month >= 9 ? date.getFullYear() : date.getFullYear() - 1;
-  // NFL season typically starts first Thursday after Labor Day (~Sep 5-11)
-  // Use Sep 1 as approximation since exact date varies
-  const seasonStart = new Date(`${seasonYear}-09-01`);
-  const diffTime = date.getTime() - seasonStart.getTime();
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-  return Math.max(1, Math.min(18, Math.ceil(diffDays / 7)));
+  const instant = new Date(date);
+  const etDate = instant.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const [year, month, day] = etDate.split('-').map(Number);
+  const civil = new Date(Date.UTC(year, month - 1, day));
+  const seasonYear = getNFLSeason(instant);
+
+  if (year === seasonYear && month === 8) {
+    const augustFirst = new Date(Date.UTC(seasonYear, 7, 1));
+    const daysToMonday = (8 - augustFirst.getUTCDay()) % 7;
+    const preseasonStart = new Date(augustFirst);
+    preseasonStart.setUTCDate(preseasonStart.getUTCDate() + daysToMonday);
+    const elapsed = Math.floor((civil.getTime() - preseasonStart.getTime()) / 86400000);
+    return Math.max(1, Math.min(4, Math.floor(elapsed / 7) + 1));
+  }
+
+  const septemberFirst = new Date(Date.UTC(seasonYear, 8, 1));
+  const daysToLaborDay = (8 - septemberFirst.getUTCDay()) % 7;
+  const regularStart = new Date(septemberFirst);
+  regularStart.setUTCDate(regularStart.getUTCDate() + daysToLaborDay + 3);
+  const elapsed = Math.floor((civil.getTime() - regularStart.getTime()) / 86400000);
+  return Math.max(1, Math.min(18, Math.floor(elapsed / 7) + 1));
 }
 
 /**
@@ -637,67 +639,59 @@ async function storeWeeklyNFLPicks(picks) {
     return { success: false, message: 'No NFL picks provided' };
   }
   
-  await ensureValidSupabaseSession();
-  
-  const weekStart = getNFLWeekStart();
-  const weekNumber = getNFLWeekNumber();
-  
-  // NFL Season Logic: Jan-July games belong to the season that started the previous year
-  const now = new Date();
-  const currentMonth = now.getMonth() + 1; // 1-indexed
-  const season = currentMonth <= 7 ? now.getFullYear() - 1 : now.getFullYear();
+  const writer = supabaseAdmin || supabase;
+  const anchorDate = new Date(picks[0]?.commence_time || Date.now());
+  const weekStart = getNFLWeekStart(anchorDate);
+  const weekNumber = Number(picks[0]?.week ?? getNFLWeekNumber(anchorDate));
+  const season = Number(picks[0]?.season ?? getNFLSeason(anchorDate));
   
   console.log(`🏈 Storing ${picks.length} NFL picks for Week ${weekNumber} (${weekStart}), Season ${season}`);
   
   try {
-    // Check if we have existing picks for this week
-    const { data: existingData, error: fetchError } = await supabase
-      .from('weekly_nfl_picks')
-      .select('picks')
-      .eq('week_start', weekStart)
-      .eq('season', season)
-      .limit(1);
-    
-    if (fetchError && fetchError.code !== 'PGRST116') {
-      console.error('Error fetching existing NFL picks:', fetchError);
-      return { success: false, error: fetchError.message };
+    // Separate scheduler children are separate Node processes, so an in-memory
+    // mutex cannot protect this shared JSON row. Let Postgres serialize the
+    // append in one transaction; the RPC is service-role-only and implements
+    // the same first-writer-wins publication rule by exact provider game id.
+    const sanitizedPicks = JSON.parse(JSON.stringify(picks));
+    const missingGameId = sanitizedPicks.find((pick) => {
+      const gameId = pick?.bdl_game_id ?? pick?.game_id;
+      return gameId == null || String(gameId).trim() === '';
+    });
+    if (missingGameId) {
+      return {
+        success: false,
+        error: `NFL atomic storage requires bdl_game_id or game_id (${missingGameId.awayTeam || '?'} @ ${missingGameId.homeTeam || '?'})`,
+      };
     }
-    
-    let existingPicks = existingData?.[0]?.picks || [];
-    
-    // Dedupe by game (homeTeam + awayTeam)
-    const gameKey = (p) => `${p.homeTeam || ''}|${p.awayTeam || ''}`.toLowerCase();
-    const existingGames = new Set(existingPicks.map(gameKey));
-    
-    const newPicks = picks.filter(p => !existingGames.has(gameKey(p)));
-    
-    if (newPicks.length === 0) {
-      console.log('🏈 All NFL games already have picks for this week');
-      return { success: true, message: 'No new picks to add', count: 0 };
+
+    const { data, error } = await writer.rpc('append_weekly_nfl_picks_atomic', {
+      p_week_start: weekStart,
+      p_week_number: weekNumber,
+      p_season: season,
+      p_new_picks: sanitizedPicks,
+    });
+
+    if (error) {
+      console.error('Error atomically storing NFL picks:', error);
+      return { success: false, error: error.message };
     }
-    
-    const mergedPicks = [...existingPicks, ...newPicks];
-    
-    // Upsert the picks
-    const { error: upsertError } = await supabase
-      .from('weekly_nfl_picks')
-      .upsert({
-        week_start: weekStart,
-        week_number: weekNumber,
-        season: season,
-        picks: mergedPicks,
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'week_start,season'
-      });
-    
-    if (upsertError) {
-      console.error('Error storing NFL picks:', upsertError);
-      return { success: false, error: upsertError.message };
+
+    const added = Number(data?.added ?? 0);
+    const skipped = Number(data?.skipped ?? 0);
+    const total = Number(data?.total ?? added);
+    if (added === 0) {
+      console.log(`🏈 All ${skipped || sanitizedPicks.length} NFL game pick(s) were already stored for this week`);
+    } else {
+      console.log(`✅ Atomically stored ${added} new NFL pick(s) (${total} total for week; ${skipped} guard-skipped)`);
     }
-    
-    console.log(`✅ Stored ${newPicks.length} new NFL picks (${mergedPicks.length} total for week)`);
-    return { success: true, count: newPicks.length, total: mergedPicks.length };
+    return {
+      success: true,
+      count: added,
+      total,
+      skipped,
+      game_ids: Array.isArray(data?.game_ids) ? data.game_ids.map(String) : [],
+      mode: data?.mode || 'append',
+    };
     
   } catch (error) {
     console.error('Error in storeWeeklyNFLPicks:', error);
@@ -708,14 +702,14 @@ async function storeWeeklyNFLPicks(picks) {
 /**
  * Fetch NFL picks for the current week
  */
-async function getWeeklyNFLPicks(weekStart = null) {
+async function getWeeklyNFLPicks(weekStart = null, seasonOverride = null) {
   await ensureValidSupabaseSession();
   
   const targetWeek = weekStart || getNFLWeekStart();
   // NFL Season Logic: Jan-July games belong to the season that started the previous year
   const now = new Date();
   const currentMonth = now.getMonth() + 1; // 1-indexed
-  const season = currentMonth <= 7 ? now.getFullYear() - 1 : now.getFullYear();
+  const season = seasonOverride ?? (currentMonth <= 7 ? now.getFullYear() - 1 : now.getFullYear());
   
   try {
     const { data, error } = await supabase
@@ -741,11 +735,15 @@ async function getWeeklyNFLPicks(weekStart = null) {
 /**
  * Check if an NFL game already has a pick this week
  */
-async function nflGameAlreadyHasPick(homeTeam, awayTeam) {
-  const picks = await getWeeklyNFLPicks();
+async function nflGameAlreadyHasPick(homeTeam, awayTeam, gameDate = null, gameId = null) {
+  const anchor = new Date(gameDate || Date.now());
+  const picks = await getWeeklyNFLPicks(getNFLWeekStart(anchor), getNFLSeason(anchor));
   const gameKey = `${homeTeam}|${awayTeam}`.toLowerCase();
+  const targetId = gameId != null ? String(gameId) : null;
   
   const existing = picks.find(p => {
+    const rawId = p?.bdl_game_id ?? p?.game_id;
+    if (targetId != null && rawId != null) return String(rawId) === targetId;
     const pKey = `${p.homeTeam || ''}|${p.awayTeam || ''}`.toLowerCase();
     return pKey === gameKey;
   });
@@ -864,10 +862,12 @@ const picksService = {
   nflGameAlreadyHasPick,
   getNFLWeekStart,
   getNFLWeekNumber,
+  getNFLSeason,
   ensureValidSupabaseSession,
+  pickAlreadyStoredByGameId,
 };
 
-export { processGameOnce, gameAlreadyHasPick, nflGameAlreadyHasPick };
-export { picksService, storeWeeklyNFLPicks, storeTestPicks };
+export { processGameOnce, gameAlreadyHasPick, nflGameAlreadyHasPick, pickAlreadyStoredByGameId };
+export { picksService, storeWeeklyNFLPicks, storeTestPicks, getNFLWeekStart, getNFLWeekNumber, getNFLSeason };
 
 export default picksService;

@@ -274,6 +274,18 @@ export function isExplicitPropsPass(args) {
 }
 
 /**
+ * Accept only the three directions the prop contracts permit. "yes" is the
+ * one-priced-market spelling of over; malformed or missing output stays null
+ * so no downstream code can silently turn it into a bet side.
+ */
+export function normalizePropBetDirection(value) {
+  const direction = String(value || '').trim().toLowerCase();
+  if (direction === 'yes') return 'over';
+  if (direction === 'over' || direction === 'under') return direction;
+  return null;
+}
+
+/**
  * F-5 (Jul 5 2026 audit): pipeline-internal flags (underscore-prefixed keys such
  * as _oddsUnverified / _statAuditWarnings) must never ship inside the user-facing
  * pick JSON. Strip them at the storage boundary.

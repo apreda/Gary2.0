@@ -138,16 +138,6 @@ const NCAAF_TOKENS = [
   'NCAAF_SCORING',            // BDL: calculated from TDs and game data
   'NCAAF_TURNOVER_MARGIN',    // BDL: passing_interceptions
   
-  // ===== ADVANCED ANALYTICS (via Gemini Grounding - NEW) =====
-  'NCAAF_SP_PLUS_RATINGS',    // SP+ offensive/defensive rankings
-  'NCAAF_FPI_RATINGS',        // ESPN FPI rankings and win probabilities
-  'NCAAF_EPA',                // Expected Points Added (EPA) data
-  'NCAAF_SUCCESS_RATE',       // Offensive/defensive success rates
-  'NCAAF_HAVOC',              // Havoc rate (TFLs, sacks, forced fumbles)
-  'NCAAF_EXPLOSIVE_PLAYS',    // Big play frequency (20+ yard gains)
-  'NCAAF_RUSH_EFFICIENCY',    // Opponent-adjusted rushing metrics
-  'NCAAF_PASS_EFFICIENCY',    // Opponent-adjusted passing metrics
-  'NCAAF_REDZONE',            // Red zone scoring and defense conversion %
   // ===== GAME DATA (BDL games endpoint - WORKS) =====
   'RECENT_FORM',              // BDL: recent game results and scores
   'SCORING',                  // BDL: points per game from game data
@@ -161,8 +151,10 @@ const NCAAF_TOKENS = [
   'TOP_PLAYERS',              // BDL: key players and their stats
   'INJURIES',                 // BDL: injury report
   
-  // NOTE: Advanced analytics (SP+, EPA, etc.) are provided via Gemini Grounding
-  // in the Scout Report, not via stat tokens.
+  // Advanced analytics are deliberately not advertised here. Gary may cite a
+  // sourced, current figure found during organic research, but the tool router
+  // must not promise SP+/FPI/EPA/havoc fields that have no deterministic data
+  // adapter and then quietly return a generic unavailable result.
 ];
 
 // NHL Stat Tokens (uses BDL + Gemini Grounding for advanced stats)

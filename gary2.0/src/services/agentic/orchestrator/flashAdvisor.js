@@ -6,6 +6,13 @@ import { toolDefinitions, getTokensForSport } from '../tools/toolDefinitions.js'
 import { fetchStats } from '../tools/statRouters/index.js';
 import { summarizeStatForContext, summarizeNbaPlayerAdvancedStats, summarizeMlbPlayerGameLogs } from './orchestratorHelpers.js';
 import { geminiGroundingSearch } from '../scoutReport/scoutReportBuilder.js';
+import {
+  buildResearchFactorPlan,
+  findMissingRequiredResearchFactors,
+  mapResearchFactors,
+  researchConcurrencyForSport,
+  shouldUseNflResearchBaseline
+} from './footballResearchPolicy.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FLASH RESEARCH — Research Assistant + Context Extraction
@@ -198,6 +205,11 @@ export async function buildFlashResearchBriefing(scoutReportContent, sport, home
       .replace('baseball_', '')
       .toUpperCase();
 
+    const { INVESTIGATION_FACTORS } = await import('./investigationFactors.js');
+    const sportFactors = INVESTIGATION_FACTORS[sport] || {};
+    const researchFactorPlan = buildResearchFactorPlan(sport, sportFactors, options);
+    const isNflAugustPreseasonScoutPlan = researchFactorPlan.mode === 'nfl_august_preseason_scout';
+
     // Flash token dedup cache — prevents re-fetching the same stat within a single game analysis
     const _flashTokenCache = new Map();
     // Accumulated factor findings — Flash writes each factor incrementally
@@ -207,13 +219,32 @@ export async function buildFlashResearchBriefing(scoutReportContent, sport, home
     const gameDate = options.gameTime
       ? new Date(options.gameTime).toISOString().split('T')[0]
       : new Date().toISOString().split('T')[0];
+    const hasResearchSeason = options.researchSeason !== null &&
+      options.researchSeason !== undefined &&
+      options.researchSeason !== '' &&
+      Number.isInteger(Number(options.researchSeason));
+    const researchOptions = hasResearchSeason
+      ? { ...options, season: Number(options.researchSeason) }
+      : options;
+    const researchProvenanceBlock = options.researchSeasonLabel
+      ? `## VERIFIED PERFORMANCE DATA WINDOW\nPerformance stat tools are pinned to: ${options.researchSeasonLabel}. Treat those numbers only as a team-performance baseline. Current roster, availability, lineups, and game-specific context come from the current scout report. Never describe the baseline as current-season form.\n`
+      : '';
 
-    // Get per-sport investigation methodology (factors + cross-referencing)
-    const investigationMethodology = getFlashInvestigationPrompt(sport, options.spread ?? null);
+    // August NFL preseason has already paid for a current-state scout with QB
+    // rotations, rested starters, roster depth, injuries and a provenance-
+    // labeled prior-season baseline. Flash's job here is to analyze that exact
+    // evidence, not launch the regular-season 18-factor fetch menu again.
+    const investigationMethodology = isNflAugustPreseasonScoutPlan
+      ? `## NFL PRESEASON EVIDENCE REVIEW
+
+The verified scout report is the complete evidence source for this run. Analyze exactly these required factors: QB situation and rotation, skill-player availability/usage, injuries, trenches and available depth, coaching/playing-time intent, and prior-season efficiency as baseline context only.
+
+Current preseason personnel, announced starter rest, rotations, injuries and coaching intent take priority over prior-season starter statistics. If the scout has no reliable evidence for part of a factor, say that plainly. Do not fill gaps with a prediction, betting opinion, or invented fact. Do not make a pick.`
+      : getFlashInvestigationPrompt(sport, options.spread ?? null);
 
     // Flash gets the same stat tools Gary has (minus FINALIZE_PROPS)
     // All sports get fetch_narrative_context (grounding) — Flash handles narrative investigation
-    const researchTools = toolDefinitions;
+    const researchTools = isNflAugustPreseasonScoutPlan ? [] : toolDefinitions;
 
     const isNCAABSport = sport === 'basketball_ncaab' || sport === 'NCAAB';
     const isMLBSport = sport === 'baseball_mlb' || sport === 'MLB';
@@ -234,10 +265,13 @@ export async function buildFlashResearchBriefing(scoutReportContent, sport, home
 
 A stat by itself is just a number. Your job is to figure out WHY. An efficiency spike could be a real shift or 3 games against tanking teams. A player's absence could be devastating or already absorbed. A record could be misleading because of blowout variance. You find the story behind the data.
 
-You have stat-fetching tools and a narrative context tool. USE THEM.
+${isNflAugustPreseasonScoutPlan
+  ? 'The current scout report already contains the required evidence. No research tools are enabled for this bounded preseason review.'
+  : 'You have stat-fetching tools and a narrative context tool. USE THEM.'}
 
 ${investigationMethodology}
 ${mlbAwarenessBlock}
+${researchProvenanceBlock}
 CRITICAL RULES:
 - Report specific numbers with context: "Team went 2-4 with -8.3 net rating during games 60-65 when Player X was out — but 3 of those were against top-10 defenses"
 - Report each factor's findings, and weight them honestly: for each, note whether it meaningfully moves THIS game or is minor context. Most individual factors move a single game far less than they look like they do — say so when that's the case. Gary makes the final call and connects the dots, but your job is to tell him what carries real weight and what is small, not to present every factor as equally important
@@ -269,6 +303,7 @@ ${scoutReportContent}`,
 
 **Game:** ${homeTeam} vs ${awayTeam} (${sportLabel})
 ${hasSpread ? `**Spread:** ${options.spread}` : ''}
+${options.researchSeasonLabel ? `**Performance data window:** ${options.researchSeasonLabel}` : ''}
 
 The full scout report for this game is in your system context — it is your baseline for every factor. I will now ask you to investigate factors one at a time.${isNCAABSport ? ' (NCAAB: narrative context is already in the scout report — prefer fetch_stats for BDL data)' : ''}${isMLBSport ? `
 
@@ -311,21 +346,32 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
     // seeds each factor's fresh chat via resetSessionChat (below), so prior factors'
     // raw tool-result blobs are not re-billed on every later factor.
 
-    // Step 2: Get the factor list for this sport
-    const { INVESTIGATION_FACTORS } = await import('./investigationFactors.js');
-    const sportFactors = INVESTIGATION_FACTORS[sport] || {};
-    const factorNames = Object.keys(sportFactors).filter(f => sportFactors[f] && sportFactors[f].length > 0);
-    // Also include factors with empty token lists (preloaded from scout report) — Flash should still analyze them
-    const allFactorNames = Object.keys(sportFactors);
+    // Step 2: Get the exact factor plan for this run. Regular-season paths use
+    // the complete configured map. Verified August NFL preseason uses the
+    // bounded, fail-closed scout review defined in footballResearchPolicy.
+    const allFactorNames = researchFactorPlan.factors.map((factor) => factor.name);
+    const factorNames = researchFactorPlan.factors.filter((factor) => factor.tokens.length > 0);
 
-    console.log(`[Research Briefing] ${allFactorNames.length} factors to investigate (${factorNames.length} with tokens)`);
+    console.log(`[Research Briefing] ${allFactorNames.length} factors to investigate (${factorNames.length} with tokens, mode=${researchFactorPlan.mode})`);
 
-    // Step 3: Investigate each factor one at a time
-    for (let fi = 0; fi < allFactorNames.length; fi++) {
-      const factorName = allFactorNames[fi];
-      const factorTokens = sportFactors[factorName] || [];
+    // Step 3: Investigate every factor. NFL factors are independent homework
+    // lanes, so run a small bounded pool against separate chats created from
+    // the same cached model. Other sports retain the exact serial behavior.
+    const researchConcurrency = researchConcurrencyForSport(sport);
+    const completedFactorFindings = new Array(allFactorNames.length);
+    let completedFactorCount = 0;
+    console.log(`[Research Briefing] Factor worker concurrency: ${researchConcurrency}`);
 
-      const factorPrompt = factorTokens.length > 0
+    const factorResults = await mapResearchFactors(
+      researchFactorPlan.factors,
+      researchConcurrency,
+      async (factorPlan, fi) => {
+      const factorName = factorPlan.name;
+      const factorTokens = factorPlan.tokens;
+
+      const factorPrompt = isNflAugustPreseasonScoutPlan
+        ? `Analyze required NFL preseason factor: ${factorName}. Use only the verified scout report in your context. Return factual findings for BOTH teams; distinguish current preseason personnel/rotation evidence from the prior-season performance baseline. If evidence is unavailable, state that plainly. Return exactly one JSON object and do not make a pick.`
+        : factorTokens.length > 0
         ? `Investigate factor: ${factorName} now and write your findings.`
         : `Analyze factor: ${factorName} using the data already in the scout report and write your findings.`;
 
@@ -334,9 +380,13 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
       // scout report + compact findings-so-far so each factor still investigates with
       // full context + all prior CONCLUSIONS. resetSessionChat re-attaches the system
       // prompt inline if the session is not cache-backed (never a naked chat).
-      const _findingsSoFar = renderFindingsSoFar(_accumulatedFactors);
+      const _findingsSoFar = renderFindingsSoFar(completedFactorFindings.filter(Boolean));
       const _seedUserText = _findingsSoFar ? `${briefingPrompt}\n\n---\n\n${_findingsSoFar}` : briefingPrompt;
-      resetSessionChat(briefingSession, [
+      // Clone only the mutable chat handle. All factor sessions reuse the one
+      // cache-backed GenerativeModel; no additional cache or system prompt is
+      // created, and thought-signature histories remain isolated per factor.
+      const factorSession = researchConcurrency > 1 ? { ...briefingSession } : briefingSession;
+      resetSessionChat(factorSession, [
         { role: 'user', parts: [{ text: _seedUserText }] },
         { role: 'model', parts: [{ text: 'Understood. I have the scout report and all prior findings. Tell me the next factor to investigate and I will return exactly one JSON object.' }] }
       ]);
@@ -347,7 +397,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
       const MAX_FACTOR_ITERATIONS = 5; // All sports: 5 rounds per factor for full investigation
 
       for (let iter = 0; iter < MAX_FACTOR_ITERATIONS; iter++) {
-        const response = await sendToSessionWithRetry(briefingSession, currentMessage, { isFunctionResponse });
+        const response = await sendToSessionWithRetry(factorSession, currentMessage, { isFunctionResponse });
 
         // Process tool calls if Flash wants to fetch stats
         if (response.toolCalls && response.toolCalls.length > 0) {
@@ -382,7 +432,10 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
               }
 
               try {
-                const statResult = await fetchStats(sport, token, homeTeam, awayTeam, options);
+                const statOptions = hasResearchSeason && shouldUseNflResearchBaseline(sport, token)
+                  ? researchOptions
+                  : options;
+                const statResult = await fetchStats(sport, token, homeTeam, awayTeam, statOptions);
                 const hasError = statResult?.error;
                 const statSummary = summarizeStatForContext(statResult, token, homeTeam, awayTeam);
                 functionResponses.push({ name: functionName, content: statSummary });
@@ -469,10 +522,17 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                     // so the briefing gets the same compact format Gary's path does.
                     logContent = summarizeMlbPlayerGameLogs(args.player_name, logs);
                   } else if (args.sport === 'NFL' || args.sport === 'NCAAF') {
-                    const s = nflSeason();
+                    const s = args.sport === 'NFL' && hasResearchSeason
+                      ? Number(options.researchSeason)
+                      : nflSeason();
                     const all = await ballDontLieService.getNflPlayerGameLogsBatch([player.id], s, numGames);
                     logs = all[player.id];
-                    logContent = JSON.stringify({ player: args.player_name, sport: args.sport, logs: logs || [] });
+                    logContent = JSON.stringify({
+                      player: args.player_name,
+                      sport: args.sport,
+                      data_window: args.sport === 'NFL' ? (options.researchSeasonLabel || String(s)) : String(s),
+                      logs: logs || []
+                    });
                   } else {
                     // Unknown sport — return an explicit error instead of
                     // silently hitting NFL endpoints (the prior bug).
@@ -563,24 +623,36 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
             // Try parsing the whole response as JSON
             const factorObj = JSON.parse(content.match(/\{[\s\S]*\}/)?.[0] || content);
             factorObj.factor = factorObj.factor || factorObj.name || factorObj.title || factorName;
-            _accumulatedFactors.push(factorObj);
-            console.log(`[Research Briefing] ✓ Factor "${factorObj.factor}" complete (${_accumulatedFactors.length}/${allFactorNames.length})`);
+            completedFactorFindings[fi] = factorObj;
+            completedFactorCount += 1;
+            console.log(`[Research Briefing] ✓ Factor "${factorObj.factor}" complete (${completedFactorCount}/${allFactorNames.length})`);
+            return factorObj;
           } catch {
             // Flash wrote prose instead of JSON — wrap it
-            _accumulatedFactors.push({
+            const proseFactor = {
               factor: factorName,
               keyFinding: content.slice(0, 200),
               numbers: '',
               context: content
-            });
-            console.log(`[Research Briefing] ✓ Factor "${factorName}" complete (prose, ${_accumulatedFactors.length}/${allFactorNames.length})`);
+            };
+            completedFactorFindings[fi] = proseFactor;
+            completedFactorCount += 1;
+            console.log(`[Research Briefing] ✓ Factor "${factorName}" complete (prose, ${completedFactorCount}/${allFactorNames.length})`);
+            return proseFactor;
           }
-          break; // Factor complete — move to next factor
         }
 
-        break; // No content and no tool calls — move on
+        return null; // No content and no tool calls — preserve existing skip semantics
       }
+      return null;
+      }
+    );
+
+    const missingRequiredFactors = findMissingRequiredResearchFactors(researchFactorPlan, factorResults);
+    if (missingRequiredFactors.length > 0) {
+      throw new Error(`[HARD FAIL] Required ${researchFactorPlan.mode} factors incomplete: ${missingRequiredFactors.join(', ')}`);
     }
+    _accumulatedFactors.push(...factorResults.filter(Boolean));
 
     // Step 4: Render briefing from accumulated factors
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);

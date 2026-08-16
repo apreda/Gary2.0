@@ -21,6 +21,7 @@ import {
   fixBdlInjuryStatus,
   normalizeTeamName
 } from './sharedUtils.js';
+import { nflPropsDataWindow } from './scoutReport/sports/footballSeason.js';
 
 const SPORT_KEY = 'americanfootball_nfl';
 
@@ -32,13 +33,15 @@ const VALID_NFL_PROP_TYPES = [
   'rushing_yards', 'player_rush_yds', 'rush_yds',
   'receiving_yards', 'player_rec_yds', 'rec_yds',
   'receptions', 'player_receptions',
-  'passing_touchdowns', 'player_pass_tds', 'pass_tds',
+  'passing_touchdowns', 'passing_tds', 'player_pass_tds', 'pass_tds',
   'rushing_touchdowns', 'player_rush_tds', 'rush_tds',
+  'receiving_touchdowns', 'player_rec_tds', 'rec_tds',
   'anytime_touchdown', 'anytime_td', 'player_anytime_td',
-  'completions', 'player_completions', 'pass_completions',
+  'completions', 'passing_completions', 'player_completions', 'pass_completions',
   'pass_attempts', 'player_pass_attempts', 'passing_attempts',
+  'rushing_attempts', 'rush_attempts', 'player_rush_attempts',
   'interceptions', 'player_interceptions',
-  'longest_completion', 'longest_rush', 'longest_reception',
+  'longest_completion', 'longest_pass', 'longest_rush', 'longest_reception',
   'rushing_receiving_yards', 'rush_rec_yds',
   'passing_rushing_yards', 'pass_rush_yds',
   'yards', 'total_yards'
@@ -54,6 +57,25 @@ const INVALID_NFL_PROP_TYPES = [
   '1h_', '2h_'
 ];
 
+const NFL_TD_PROP_TYPES = [
+  'anytime_td', 'anytime_touchdown', 'player_anytime_td',
+  'passing_touchdowns', 'passing_tds', 'player_pass_tds', 'pass_tds',
+  'rushing_touchdowns', 'player_rush_tds', 'rush_tds',
+  'receiving_touchdowns', 'player_rec_tds', 'rec_tds'
+];
+
+export function isNflTouchdownPropType(propType) {
+  const normalized = String(propType || '').toLowerCase();
+  return NFL_TD_PROP_TYPES.some((type) => normalized.includes(type));
+}
+
+export function isSupportedNflPropType(propType) {
+  const normalized = String(propType || '').trim().toLowerCase();
+  if (!normalized) return false;
+  if (INVALID_NFL_PROP_TYPES.some((invalid) => normalized.includes(invalid))) return false;
+  return VALID_NFL_PROP_TYPES.includes(normalized);
+}
+
 /**
  * Group props by player, filtering to valid NFL prop types only
  */
@@ -63,11 +85,11 @@ function groupNflPropsByPlayer(props) {
   for (const prop of props) {
     const propType = (prop.prop_type || '').toLowerCase();
 
-    if (INVALID_NFL_PROP_TYPES.some(invalid => propType.includes(invalid))) continue;
-
-    const isValid = VALID_NFL_PROP_TYPES.some(valid => propType.includes(valid));
-    if (!isValid && propType) {
-      console.log(`[NFL Props] Skipping unknown prop type: ${propType}`);
+    // BDL prop types are exact market identifiers. Substring acceptance lets a
+    // quarter/half or unrelated `*_yards` market slip through under the broad
+    // `yards` alias, even though the final-game grader cannot settle it.
+    if (!isSupportedNflPropType(propType)) {
+      if (propType) console.log(`[NFL Props] Skipping unsupported prop type: ${propType}`);
       continue;
     }
 
@@ -153,7 +175,7 @@ function getTopNflPropCandidates(props, maxPlayersPerTeam = 7, homeTeamName = nu
  * Calculate hit rate for an NFL player prop against recent game logs.
  * Tells Gary "hit O 245.5 pass yards in 7/10 games."
  */
-function calculateNflHitRate(games, propType, line) {
+export function calculateNflHitRate(games, propType, line) {
   if (!games || games.length === 0 || line == null) return null;
 
   const propToField = {
@@ -161,20 +183,26 @@ function calculateNflHitRate(games, propType, line) {
     'rushing_yards': 'rush_yds', 'player_rush_yds': 'rush_yds', 'rush_yds': 'rush_yds',
     'receiving_yards': 'rec_yds', 'player_rec_yds': 'rec_yds', 'rec_yds': 'rec_yds',
     'receptions': 'receptions', 'player_receptions': 'receptions',
-    'passing_touchdowns': 'pass_tds', 'player_pass_tds': 'pass_tds', 'pass_tds': 'pass_tds',
+    'passing_touchdowns': 'pass_tds', 'passing_tds': 'pass_tds', 'player_pass_tds': 'pass_tds', 'pass_tds': 'pass_tds',
     'rushing_touchdowns': 'rush_tds', 'player_rush_tds': 'rush_tds', 'rush_tds': 'rush_tds',
-    'completions': 'pass_comp', 'player_completions': 'pass_comp',
+    'receiving_touchdowns': 'rec_tds', 'player_rec_tds': 'rec_tds', 'rec_tds': 'rec_tds',
+    'completions': 'pass_comp', 'passing_completions': 'pass_comp', 'player_completions': 'pass_comp',
     'interceptions': 'ints', 'player_interceptions': 'ints',
-    'pass_attempts': 'pass_att', 'player_pass_attempts': 'pass_att'
+    'pass_attempts': 'pass_att', 'passing_attempts': 'pass_att', 'player_pass_attempts': 'pass_att',
+    'rushing_attempts': 'rush_att', 'rush_attempts': 'rush_att', 'player_rush_attempts': 'rush_att'
   };
 
-  const field = propToField[propType?.toLowerCase()] || propType;
+  const normalizedType = propType?.toLowerCase();
+  const field = propToField[normalizedType] || normalizedType;
+  const isAnytimeTd = ['anytime_touchdown', 'anytime_td', 'player_anytime_td'].includes(normalizedType);
 
   let hitsOver = 0, hitsUnder = 0, pushes = 0;
   const values = [];
 
   for (const game of games) {
-    const value = game[field];
+    const value = isAnytimeTd
+      ? numberOrZero(game.rush_tds) + numberOrZero(game.rec_tds)
+      : game[field];
     if (value === undefined || value === null) continue;
     values.push(value);
     if (value > line) hitsOver++;
@@ -200,6 +228,11 @@ function calculateNflHitRate(games, propType, line) {
   };
 }
 
+function numberOrZero(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
 // ── NFL game total / game script context ────────────────────────────────────
 
 /**
@@ -207,10 +240,14 @@ function calculateNflHitRate(games, propType, line) {
  * Calculates implied team points from spread + O/U.
  * NFL totals typically range from 36 to 55+.
  */
-function getNflGameTotalContext(marketSnapshot, homeTeam = '', awayTeam = '') {
-  const total = parseFloat(marketSnapshot?.total?.line) || null;
-  const spread = parseFloat(marketSnapshot?.spread?.home?.point) ||
-                 parseFloat(marketSnapshot?.spread?.line) || null;
+export function getNflGameTotalContext(marketSnapshot, homeTeam = '', awayTeam = '') {
+  const parsedTotal = Number.parseFloat(marketSnapshot?.total?.line);
+  const parsedHomeSpread = Number.parseFloat(marketSnapshot?.spread?.home?.point);
+  const parsedSpread = Number.parseFloat(marketSnapshot?.spread?.line);
+  const total = Number.isFinite(parsedTotal) ? parsedTotal : null;
+  const spread = Number.isFinite(parsedHomeSpread)
+    ? parsedHomeSpread
+    : (Number.isFinite(parsedSpread) ? parsedSpread : null);
 
   if (!total) {
     return { available: false, reason: 'Total not available', total: null, spread: null };
@@ -242,7 +279,7 @@ function getNflGameTotalContext(marketSnapshot, homeTeam = '', awayTeam = '') {
   return {
     available: true,
     total,
-    spread: spread || null,
+    spread,
     favorite,
     underdog,
     gameScript,
@@ -345,14 +382,8 @@ async function resolveNflPlayerIds(propCandidates, teamIds, season, homeTeamName
 
   console.log(`[NFL Props Context] Validated ${playersValidated}/${propCandidates.length} players against ${homeTeamName} + ${awayTeamName}`);
 
-  // If we got 0 validated but had IDs, try fallback to roster search
   if (playersValidated === 0 && playersWithIds > 0) {
-    console.log(`[NFL Props Context] ⚠️ Team matching failed — accepting all players with IDs as fallback`);
-    for (const candidate of propCandidates) {
-      if (candidate.playerId) {
-        playerIdMap[candidate.player.toLowerCase()] = { id: candidate.playerId, team: candidate.team };
-      }
-    }
+    console.warn('[NFL Props Context] Team validation rejected every player ID; failing closed instead of accepting players from an unverified game/team');
   }
 
   return playerIdMap;
@@ -406,7 +437,7 @@ async function fetchNflSeasonStatsBatch(playerIdMap, teamIds, season) {
 /**
  * Fetch game logs for all prop candidates (last 5 games).
  */
-async function fetchNflPlayerGameLogs(playerIdMap, season) {
+async function fetchNflPlayerGameLogs(playerIdMap, season, seasonType = 2) {
   const playerIds = Object.values(playerIdMap).map(p => p?.id || p).filter(id => id);
   if (playerIds.length === 0) {
     console.warn('[NFL Props Context] No player IDs for game logs');
@@ -415,7 +446,7 @@ async function fetchNflPlayerGameLogs(playerIdMap, season) {
 
   console.log(`[NFL Props Context] Fetching game logs for ${playerIds.length} players...`);
   try {
-    const logsMap = await ballDontLieService.getNflPlayerGameLogsBatch(playerIds, season, 5);
+    const logsMap = await ballDontLieService.getNflPlayerGameLogsBatch(playerIds, season, 5, 15, { seasonType });
     console.log(`[NFL Props Context] ✓ Got game logs for ${Object.keys(logsMap).length} players`);
     return logsMap;
   } catch (e) {
@@ -450,7 +481,7 @@ function formatNflPropsInjuries(injuries = []) {
  * Build comprehensive player stats text for Gary.
  * Position-aware formatting (QB / RB / WR-TE).
  */
-function buildNflPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonStats, playerIdMap, injuries, playerGameLogs) {
+function buildNflPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonStats, playerIdMap, injuries, playerGameLogs, dataWindow) {
   let statsText = '';
 
   const getStats = (name) => {
@@ -502,7 +533,8 @@ function buildNflPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeaso
       return section;
     }
 
-    section += '\n**Player Season Stats & Recent Form:**\n';
+    section += `\n**Performance baseline:** ${dataWindow.baselineLabel}\n`;
+    section += `**Recent-game window:** ${dataWindow.recentLabel}\n`;
 
     for (const candidate of players) {
       const stats = getStats(candidate.player);
@@ -519,18 +551,18 @@ function buildNflPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeaso
       if (stats) {
         // Position-specific season stat formatting
         if (position === 'QB') {
-          section += `  Season: ${stats.games_played || 0} GP, ${stats.passing_yards || 0} pass yds, ${stats.passing_touchdowns || 0} pass TD, ${stats.passing_completions || 0}/${stats.passing_attempts || 0} (${stats.passing_attempts > 0 ? ((stats.passing_completions / stats.passing_attempts) * 100).toFixed(1) : 'N/A'}%), ${stats.passing_interceptions || 0} INT\n`;
+          section += `  Baseline: ${stats.games_played || 0} GP, ${stats.passing_yards || 0} pass yds, ${stats.passing_touchdowns || 0} pass TD, ${stats.passing_completions || 0}/${stats.passing_attempts || 0} (${stats.passing_attempts > 0 ? ((stats.passing_completions / stats.passing_attempts) * 100).toFixed(1) : 'N/A'}%), ${stats.passing_interceptions || 0} INT\n`;
           if (stats.rushing_yards > 50) {
             section += `  Rushing: ${stats.rushing_yards || 0} yds, ${stats.rushing_touchdowns || 0} TD, ${stats.rushing_attempts || 0} att\n`;
           }
         } else if (position === 'RB') {
-          section += `  Season: ${stats.games_played || 0} GP, ${stats.rushing_yards || 0} rush yds, ${stats.rushing_touchdowns || 0} rush TD, ${stats.rushing_attempts || 0} att`;
+          section += `  Baseline: ${stats.games_played || 0} GP, ${stats.rushing_yards || 0} rush yds, ${stats.rushing_touchdowns || 0} rush TD, ${stats.rushing_attempts || 0} att`;
           if (stats.receptions > 0) {
             section += `, ${stats.receptions || 0} rec, ${stats.receiving_yards || 0} rec yds`;
           }
           section += '\n';
         } else {
-          section += `  Season: ${stats.games_played || 0} GP, ${stats.receptions || 0} rec, ${stats.receiving_yards || 0} rec yds, ${stats.receiving_touchdowns || 0} rec TD, ${stats.receiving_targets || 0} tgt\n`;
+          section += `  Baseline: ${stats.games_played || 0} GP, ${stats.receptions || 0} rec, ${stats.receiving_yards || 0} rec yds, ${stats.receiving_touchdowns || 0} rec TD, ${stats.receiving_targets || 0} tgt\n`;
           if (stats.rushing_yards > 0) {
             section += `  Rushing: ${stats.rushing_yards || 0} yds, ${stats.rushing_touchdowns || 0} TD\n`;
           }
@@ -681,13 +713,12 @@ function buildNflPropsTokenSlices(playerStats, propCandidates, injuries, marketS
  */
 export async function buildNflPropsAgenticContext(game, playerProps, options = {}) {
   const commenceDate = parseGameDate(game.commence_time) || new Date();
-  const month = commenceDate.getMonth() + 1;
-  const year = commenceDate.getFullYear();
-  // NFL season starts in August/September: Aug(8)-Dec = currentYear, Jan-Jul = previousYear
-  const season = month >= 8 ? year : year - 1;
+  const dataWindow = nflPropsDataWindow(game, commenceDate);
+  const season = dataWindow.season;
   const dateStr = commenceDate.toISOString().slice(0, 10);
 
-  console.log(`[NFL Props Context] Building context for ${game.away_team} @ ${game.home_team} (Season ${season})`);
+  console.log(`[NFL Props Context] Building context for ${game.away_team} @ ${game.home_team} (${dataWindow.phase}, Season ${season})`);
+  console.log(`[NFL Props Context] Evidence windows: ${dataWindow.baselineLabel}; ${dataWindow.recentLabel}`);
 
   // Resolve teams
   let homeTeam = null, awayTeam = null;
@@ -710,16 +741,18 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
   if (homeTeam?.id) teamIds.push(homeTeam.id);
   if (awayTeam?.id) teamIds.push(awayTeam.id);
 
-  // Process prop candidates (7 per team = 14 total)
-  const propCandidates = getTopNflPropCandidates(playerProps, 7, game.home_team, game.away_team);
-
   // Filter regular-only props (yards/receptions, exclude TDs) if requested
-  let filteredProps = playerProps;
+  const filteredProps = options.regularOnly
+    ? playerProps.filter((prop) => !isNflTouchdownPropType(prop.prop_type))
+    : playerProps;
   if (options.regularOnly) {
-    const tdTypes = ['anytime_td', 'anytime_touchdown', 'passing_touchdowns', 'rushing_touchdowns', 'receiving_touchdowns', 'player_pass_tds', 'player_rush_tds'];
-    filteredProps = playerProps.filter(p => !tdTypes.some(t => (p.prop_type || '').toLowerCase().includes(t)));
     console.log(`[NFL Props Context] Regular-only mode: ${filteredProps.length}/${playerProps.length} props (TDs excluded)`);
   }
+
+  // Candidate menus must be built from the filtered board. Previously
+  // regular-only mode returned a filtered `playerProps` array but left TDs in
+  // `propCandidates`/tokenData, so the model could still select one.
+  const propCandidates = getTopNflPropCandidates(filteredProps, 7, game.home_team, game.away_team);
 
   // Parallel fetch: injuries, player IDs, narrative, line movement
   console.log('[NFL Props Context] Fetching injuries, player IDs, narrative, and line movement...');
@@ -795,8 +828,8 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
   // Fetch player season stats and game logs in parallel
   console.log('[NFL Props Context] Fetching player season stats and game logs...');
   const [playerSeasonStats, playerGameLogs] = await Promise.all([
-    fetchNflSeasonStatsBatch(playerIdMap, teamIds, season),
-    fetchNflPlayerGameLogs(playerIdMap, season)
+    fetchNflSeasonStatsBatch(playerIdMap, teamIds, dataWindow.baselineSeason),
+    fetchNflPlayerGameLogs(playerIdMap, dataWindow.recentSeason, dataWindow.recentSeasonType)
   ]);
 
   const playersWithStats = Object.keys(playerSeasonStats).length;
@@ -817,7 +850,8 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     playerSeasonStats,
     playerIdMap,
     formattedInjuries,
-    playerGameLogs
+    playerGameLogs,
+    dataWindow
   );
 
   // Build token data
@@ -839,6 +873,9 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     gameId: `nfl-props-${game.id}`,
     sport: SPORT_KEY,
     league: 'NFL',
+    seasonPhase: dataWindow.phase,
+    performanceBaseline: dataWindow.baselineLabel,
+    recentFormWindow: dataWindow.recentLabel,
     matchup: `${game.away_team} @ ${game.home_team}`,
     homeTeam: homeTeam?.full_name || game.home_team,
     awayTeam: awayTeam?.full_name || game.away_team,
@@ -904,6 +941,10 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
       homeTeam: homeTeam?.full_name || game.home_team,
       awayTeam: awayTeam?.full_name || game.away_team,
       season,
+      seasonType: dataWindow.seasonType,
+      seasonPhase: dataWindow.phase,
+      performanceBaseline: dataWindow.baselineLabel,
+      recentFormWindow: dataWindow.recentLabel,
       gameTime: game.commence_time,
       playerStatsCoverage: `${playersWithStats}/${totalCandidates}`,
       playerLogsCoverage: `${playersWithLogs}/${totalCandidates}`,

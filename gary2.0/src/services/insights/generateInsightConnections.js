@@ -24,6 +24,7 @@
 
 import { ballDontLieService } from '../ballDontLieService.js';
 import { todayStr, gameLabel, clampScore, etDateStr } from './shared.js';
+import { footballSeasonForDate, loadFootballSlate } from './footballData.js';
 
 // MLB connection computers (one file per lane under ./computers/).
 import { computeHeatCheck } from './computers/heatCheck.js';
@@ -55,6 +56,13 @@ import { computeNbaRestFatigue } from './computers/nbaRestFatigue.js';
 import { computeNbaStreak } from './computers/nbaStreak.js';
 import { computeNbaBeneficiary } from './computers/nbaBeneficiary.js';
 import { computeNbaOwned } from './computers/nbaOwned.js';
+
+// NFL/NCAAF computers. These consume only BDL team-game boxes and BDL odds;
+// unsupported football concepts remain absent instead of being synthesized.
+import { computeFootballTeamEdges } from './computers/footballTeamEdges.js';
+import { computeFootballMarketEdges } from './computers/footballMarketEdges.js';
+import { computeNflFantasyEdges } from './computers/nflFantasyEdges.js';
+import { computeNcaafFantasyEdges } from './computers/ncaafFantasyEdges.js';
 
 /**
  * Registry of computers per league. Each entry is an async fn:
@@ -95,9 +103,26 @@ const NBA_COMPUTERS = [
   computeNbaOwned,
 ];
 
+const FOOTBALL_COMPUTERS = [
+  computeFootballTeamEdges,
+  computeFootballMarketEdges,
+];
+
+const NFL_COMPUTERS = [
+  ...FOOTBALL_COMPUTERS,
+  computeNflFantasyEdges,
+];
+
+const NCAAF_COMPUTERS = [
+  ...FOOTBALL_COMPUTERS,
+  computeNcaafFantasyEdges,
+];
+
 const COMPUTERS_BY_LEAGUE = {
   mlb: MLB_COMPUTERS,
   nba: NBA_COMPUTERS,
+  nfl: NFL_COMPUTERS,
+  ncaaf: NCAAF_COMPUTERS,
 };
 
 /**
@@ -116,9 +141,13 @@ const COMPUTERS_BY_LEAGUE = {
 export async function generateInsightConnections({ date, league = 'mlb', options = {} } = {}) {
   const dateStr = date || todayStr();
   const leagueKey = String(league || 'mlb').toLowerCase();
-  const maxRows = Number.isFinite(options.maxRows) ? options.maxRows : 120;
+  const isFootball = leagueKey === 'nfl' || leagueKey === 'ncaaf';
+  // A Saturday college slate can carry 40+ games. Football's defaults retain
+  // per-game evidence rather than letting the baseball-oriented category cap
+  // silently remove later kickoffs. Explicit caller caps still win.
+  const maxRows = Number.isFinite(options.maxRows) ? options.maxRows : (isFootball ? 360 : 120);
   const minRelevance = Number.isFinite(options.minRelevance) ? options.minRelevance : 35;
-  const maxPerCategory = Number.isFinite(options.maxPerCategory) ? options.maxPerCategory : 8;
+  const maxPerCategory = Number.isFinite(options.maxPerCategory) ? options.maxPerCategory : (isFootball ? 100 : 8);
 
   let computers = COMPUTERS_BY_LEAGUE[leagueKey];
   if (!computers) {
@@ -132,7 +161,9 @@ export async function generateInsightConnections({ date, league = 'mlb', options
   //    NBA: getNbaGamesForDate(dateStr) — same contract.
   let games = [];
   try {
-    if (leagueKey === 'nba') {
+    if (isFootball) {
+      games = await loadFootballSlate({ bdl: ballDontLieService, league: leagueKey, date: dateStr });
+    } else if (leagueKey === 'nba') {
       games = (await ballDontLieService.getNbaGamesForDate(dateStr)) || [];
     } else {
       // BDL dates by UTC instant, so an 8pm+ ET game lands on the NEXT UTC day.
@@ -147,8 +178,10 @@ export async function generateInsightConnections({ date, league = 'mlb', options
        .filter((g) => etDateStr(g?.date) === dateStr);
     }
   } catch (err) {
-    console.error('[insights] Failed to load slate:', err?.message || err);
-    games = [];
+    // A real dark day is represented by a successful empty response below.
+    // A provider failure is operationally different and must reach the runner
+    // so GitHub/local automation cannot report a false-green 0-row success.
+    throw new Error(`[insights] Failed to load ${leagueKey.toUpperCase()} slate: ${err?.message || err}`);
   }
 
   if (!Array.isArray(games) || games.length === 0) {
@@ -185,26 +218,26 @@ export async function generateInsightConnections({ date, league = 'mlb', options
   const settled = await Promise.allSettled(
     computers.map(async (fn) => {
       const name = fn.name || 'computer';
-      try {
-        const rows = await fn(ctx);
-        // Per-lane diagnostics: a 0-row lane should be visible in the log, not
-        // silently absorbed into the aggregate (a 157-line lane once shipped 0
-        // rows for weeks because nothing surfaced which gate killed it).
-        console.log(`[insights]   ${name}: ${Array.isArray(rows) ? rows.length : 0} row(s)`);
-        return Array.isArray(rows) ? rows : [];
-      } catch (err) {
-        // Defensive contract: a throwing computer is logged and dropped, never fatal.
-        console.error(`[insights] computer "${name}" threw:`, err?.message || err);
-        return [];
-      }
+      const rows = await fn(ctx);
+      // Per-lane diagnostics: a 0-row lane should be visible in the log, not
+      // silently absorbed into the aggregate.
+      console.log(`[insights]   ${name}: ${Array.isArray(rows) ? rows.length : 0} row(s)`);
+      return Array.isArray(rows) ? rows : [];
     }),
   );
 
   // 3. Flatten + validate + filter to the slate + sort + de-dupe + cap.
   const raw = [];
-  for (const r of settled) {
+  const failures = [];
+  settled.forEach((r, index) => {
     if (r.status === 'fulfilled' && Array.isArray(r.value)) raw.push(...r.value);
-  }
+    if (r.status === 'rejected') {
+      const computer = computers[index]?.name || `computer_${index + 1}`;
+      const message = r.reason?.message || String(r.reason);
+      failures.push({ computer, message });
+      console.error(`[insights] computer "${computer}" threw: ${message}`);
+    }
+  });
 
   const connections = postProcess(raw, { slateGameIds, minRelevance, maxRows, maxPerCategory });
 
@@ -224,7 +257,7 @@ export async function generateInsightConnections({ date, league = 'mlb', options
       `${raw.length} raw connections -> ${connections.length} after filter/sort/cap.`,
   );
 
-  return { date: dateStr, league: leagueKey, season, gameCount: games.length, connections };
+  return { date: dateStr, league: leagueKey, season, gameCount: games.length, connections, failures };
 }
 
 /**
@@ -233,6 +266,21 @@ export async function generateInsightConnections({ date, league = 'mlb', options
  * near-identical rows (same category + game + value), and cap each category so
  * one prolific lane (25 hot bats on a full slate) can't crowd out the others.
  */
+export function insightConnectionIdentity(row) {
+  if (row?.category === 'the_sweat') {
+    const pickId = String(row?.meta?.pick_id ?? '');
+    const factor = String(row?.meta?.factor_code ?? '');
+    if (row?.game_id != null && pickId && factor) {
+      return `the_sweat|${row.game_id}|${pickId}|${factor}`;
+    }
+  }
+  if (row?.category === 'after_gary') {
+    const pickId = String(row?.meta?.pick_id ?? '');
+    if (row?.game_id != null && pickId) return `after_gary|${row.game_id}|${pickId}`;
+  }
+  return `${row?.category}|${row?.game}|${row?.player_id ?? ''}|${row?.value}`;
+}
+
 function postProcess(rows, { slateGameIds, minRelevance, maxRows, maxPerCategory = 8 }) {
   const seen = new Set();
   const out = [];
@@ -246,7 +294,7 @@ function postProcess(rows, { slateGameIds, minRelevance, maxRows, maxPerCategory
     row.relevance_score = clampScore(row.relevance_score);
     if (row.relevance_score < minRelevance) continue;
 
-    const dedupeKey = `${row.category}|${row.game}|${row.player_id ?? ''}|${row.value}`;
+    const dedupeKey = insightConnectionIdentity(row);
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
 
@@ -296,6 +344,9 @@ function seasonForDate(dateStr, leagueKey = 'mlb') {
   if (leagueKey === 'nba') {
     const mo = Number(String(dateStr).slice(5, 7)) || 1;
     return mo >= 9 ? year : year - 1;
+  }
+  if (leagueKey === 'nfl' || leagueKey === 'ncaaf') {
+    return footballSeasonForDate(dateStr);
   }
   return year;
 }

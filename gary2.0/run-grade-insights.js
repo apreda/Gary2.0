@@ -93,6 +93,8 @@ import './src/loadEnv.js';
 import axios from 'axios';
 import { getESTDate } from './src/utils/dateUtils.js';
 import { nameKey, etDateStr } from './src/services/insights/shared.js';
+import { loadFootballSlate } from './src/services/insights/footballData.js';
+import { gradeFootballInsightRow } from './src/services/insights/footballGrade.js';
 
 // Import after env is loaded (services read env at module init time)
 const { ballDontLieService: bdl } = await import('./src/services/ballDontLieService.js');
@@ -103,7 +105,7 @@ const mlbStatsApi = (await import('./src/services/mlbStatsApiService.js')).defau
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Leagues we grade. Matches ACTIVE_LEAGUES in run-insight-connections.js.
-const ACTIVE_LEAGUES = ['MLB', 'NBA'];
+const ACTIVE_LEAGUES = ['MLB', 'NFL', 'NCAAF', 'NBA'];
 
 // Resolve Supabase config exactly like run-insight-connections.js / supabaseClient.js.
 const supabaseUrl =
@@ -829,6 +831,27 @@ async function gradeNba(rows) {
   return verdicts;
 }
 
+async function gradeFootball(rows, league) {
+  let slate = [];
+  try {
+    slate = await loadFootballSlate({
+      bdl,
+      league: String(league).toLowerCase(),
+      date: targetDate,
+    });
+  } catch (err) {
+    console.error(`[grade-insights][${league}] slate fetch failed: ${err?.message || err}`);
+  }
+  const gameById = new Map((slate || []).map((game) => [String(game.id), game]));
+
+  return rows.map((row) => {
+    const game = row.game_id != null ? gameById.get(String(row.game_id)) : null;
+    if (!game) return { row, verdict: skip('game not on slate') };
+    if (!isFinal(game.status)) return { row, verdict: skip('game not final') };
+    return { row, verdict: gradeFootballInsightRow(row, game) };
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Main
 // ─────────────────────────────────────────────────────────────────────────────
@@ -880,7 +903,8 @@ async function run() {
     let verdicts;
     try {
       verdicts = league === 'NBA' ? await gradeNba(rows)
-        : await gradeMlb(rows);
+        : (league === 'NFL' || league === 'NCAAF') ? await gradeFootball(rows, league)
+          : await gradeMlb(rows);
     } catch (err) {
       hadError = true;
       console.error(`   ❌ [${league}] grading crashed: ${err?.message || err}`);

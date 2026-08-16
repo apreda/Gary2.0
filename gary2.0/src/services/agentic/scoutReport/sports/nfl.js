@@ -3,11 +3,9 @@
  * Handles all NFL-specific logic for building the pre-game scout report.
  */
 
-import axios from 'axios';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { generateGameSignificance } from '../gameSignificanceGenerator.js';
 import { formatTokenMenu } from '../../tools/toolDefinitions.js';
-import { nflSeason } from '../../../../utils/dateUtils.js';
 import {
   seasonForSport,
   sportToBdlKey,
@@ -31,6 +29,12 @@ import {
   formatH2HSection
 } from '../shared/dataFetchers.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
+import {
+  footballSeasonForDate,
+  footballSeasonLabel,
+  nflPrimetimeSlot,
+  stampNflPreseasonContext,
+} from './footballSeason.js';
 
 
 // =========================================================================
@@ -77,7 +81,7 @@ const nflStadiums = {
 // fetchQBStatsByName
 // Fetches season stats for a specific QB by name from BDL
 // =========================================================================
-async function fetchQBStatsByName(qbName, teamName) {
+async function fetchQBStatsByName(qbName, teamName, season = footballSeasonForDate('NFL')) {
   try {
     const bdlSport = 'americanfootball_nfl';
     const teams = await ballDontLieService.getTeams(bdlSport);
@@ -87,24 +91,10 @@ async function fetchQBStatsByName(qbName, teamName) {
       return { name: qbName, team: teamName, passingYards: 0, passingTds: 0, gamesPlayed: 0 };
     }
 
-    // Get API key and base URL
-    const API_KEY =
-      (typeof process !== 'undefined' && process?.env?.BALLDONTLIE_API_KEY) ||
-      (typeof process !== 'undefined' && process?.env?.VITE_BALLDONTLIE_API_KEY) ||
-      (typeof process !== 'undefined' && process?.env?.NEXT_PUBLIC_BALLDONTLIE_API_KEY) ||
-      (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_BALLDONTLIE_API_KEY) ||
-      '';
-    const BALLDONTLIE_API_BASE_URL = 'https://api.balldontlie.io';
-
-    // Calculate NFL season dynamically
-    const nflMonth = new Date().getMonth() + 1;
-    const nflYear = new Date().getFullYear();
-    const nflSeasonYear = nflMonth <= 7 ? nflYear - 1 : nflYear;
-
-    // Fetch all player stats for the team
-    const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/season_stats?season=${nflSeasonYear}&team_id=${team.id}&per_page=100`;
-    const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
-    const allStats = response.data?.data || [];
+    // Reuse the service-level cache shared with fetchKeyPlayers. The previous
+    // direct axios request hit this exact endpoint outside the cache, then the
+    // key-player pass downloaded the same team's season stats again.
+    const allStats = await ballDontLieService.getNflSeasonStatsByTeam(team.id, season);
 
     // Find this specific QB by name (fuzzy match)
     const searchName = qbName.toLowerCase().trim();
@@ -212,7 +202,7 @@ async function fetchQBStatsByName(qbName, teamName) {
 // - Season stat leaders (returns inactive players like Joe Flacco)
 // - Fallback sources (can be wrong/outdated)
 // =========================================================================
-async function fetchStartingQBs(homeTeam, awayTeam, sport, injuries = null) {
+async function fetchStartingQBs(homeTeam, awayTeam, sport, injuries = null, season = footballSeasonForDate(sport)) {
   try {
     const bdlSport = sportToBdlKey(sport);
     if (!bdlSport || (bdlSport !== 'americanfootball_nfl' && bdlSport !== 'americanfootball_ncaaf')) {
@@ -234,27 +224,33 @@ async function fetchStartingQBs(homeTeam, awayTeam, sport, injuries = null) {
 
     console.log(`[Scout Report] Fetching ${sportLabel} starting QBs from depth chart: ${awayTeam} @ ${homeTeam}`);
 
-    // STEP 1: Get starting QBs from depth chart (handles injuries automatically)
-    // Pass the sport key so NCAAF uses NCAAF roster, NFL uses NFL roster
-    const [homeQBDepth, awayQBDepth] = await Promise.all([
-      homeTeamData ? ballDontLieService.getStartingQBFromDepthChart(homeTeamData.id, 2025, bdlSport) : null,
-      awayTeamData ? ballDontLieService.getStartingQBFromDepthChart(awayTeamData.id, 2025, bdlSport) : null
-    ]);
+    // NFL has a true depth chart. BDL's NCAAF roster has no depth ordering, so
+    // selecting the first roster QB would manufacture a starter; for college,
+    // use the current-season passing leader and otherwise leave it unconfirmed.
+    const [homeQBDepth, awayQBDepth] = isNCAAF
+      ? await Promise.all([
+          homeTeamData ? fetchNCAAFStartingQBFromStats(homeTeamData.id, homeTeam, season) : null,
+          awayTeamData ? fetchNCAAFStartingQBFromStats(awayTeamData.id, awayTeam, season) : null
+        ])
+      : await Promise.all([
+          homeTeamData ? ballDontLieService.getStartingQBFromDepthChart(homeTeamData.id, season, bdlSport) : null,
+          awayTeamData ? ballDontLieService.getStartingQBFromDepthChart(awayTeamData.id, season, bdlSport) : null
+        ]);
 
     // STEP 2: Fetch season stats for these specific QBs
     // The depth chart tells us WHO is starting, now get their stats
     let homeQB = homeQBDepth;
     let awayQB = awayQBDepth;
 
-    if (homeQBDepth) {
-      const stats = await fetchQBStatsByName(homeQBDepth.name, homeTeam);
+    if (homeQBDepth && !isNCAAF) {
+      const stats = await fetchQBStatsByName(homeQBDepth.name, homeTeam, season);
       if (stats) {
         homeQB = { ...homeQBDepth, ...stats, isBackup: homeQBDepth.isBackup };
       }
     }
 
-    if (awayQBDepth) {
-      const stats = await fetchQBStatsByName(awayQBDepth.name, awayTeam);
+    if (awayQBDepth && !isNCAAF) {
+      const stats = await fetchQBStatsByName(awayQBDepth.name, awayTeam, season);
       if (stats) {
         awayQB = { ...awayQBDepth, ...stats, isBackup: awayQBDepth.isBackup };
       }
@@ -265,7 +261,7 @@ async function fetchStartingQBs(homeTeam, awayTeam, sport, injuries = null) {
     if (isNCAAF) {
       if (!homeQB || homeQB.name === 'undefined undefined') {
         console.log(`[Scout Report] NCAAF fallback: Getting QB from season stats for ${homeTeam}`);
-        const fallbackQB = await fetchNCAAFStartingQBFromStats(homeTeamData?.id, homeTeam);
+        const fallbackQB = await fetchNCAAFStartingQBFromStats(homeTeamData?.id, homeTeam, season);
         if (fallbackQB) {
           homeQB = fallbackQB;
         } else {
@@ -275,7 +271,7 @@ async function fetchStartingQBs(homeTeam, awayTeam, sport, injuries = null) {
       }
       if (!awayQB || awayQB.name === 'undefined undefined') {
         console.log(`[Scout Report] NCAAF fallback: Getting QB from season stats for ${awayTeam}`);
-        const fallbackQB = await fetchNCAAFStartingQBFromStats(awayTeamData?.id, awayTeam);
+        const fallbackQB = await fetchNCAAFStartingQBFromStats(awayTeamData?.id, awayTeam, season);
         if (fallbackQB) {
           awayQB = fallbackQB;
         } else {
@@ -302,7 +298,7 @@ async function fetchStartingQBs(homeTeam, awayTeam, sport, injuries = null) {
       console.log(`[Scout Report] Away QB: Retrieved via Gemini Grounding (BDL depth chart unavailable)`);
     }
 
-    return { home: homeQB, away: awayQB };
+    return { home: homeQB, away: awayQB, season, sport: sportLabel };
   } catch (error) {
     console.error('[Scout Report] Error fetching starting QBs:', error.message);
     return null;
@@ -316,12 +312,9 @@ async function fetchStartingQBs(homeTeam, awayTeam, sport, injuries = null) {
 // BDL depth chart is sparse for college - this uses actual season stats instead
 // Falls back to Gemini Grounding if BDL has no data
 // =========================================================================
-async function fetchNCAAFStartingQBFromStats(teamId, teamName) {
+async function fetchNCAAFStartingQBFromStats(teamId, teamName, season = footballSeasonForDate('NCAAF')) {
   try {
     if (!teamId) return null;
-
-    // Calculate NCAAF season using centralized function
-    const season = nflSeason(); // NCAAF uses same timing as NFL
 
     // Fetch player season stats for the team - use OPTIONS OBJECT format
     console.log(`[Scout Report] Fetching NCAAF QB stats from BDL for ${teamName} (teamId: ${teamId}, season: ${season})`);
@@ -419,7 +412,7 @@ async function fetchNCAAFStartingQBFromStats(teamId, teamName) {
 // Uses roster depth chart + season stats to show who actually plays
 // This prevents hallucinations about players who've been traded/cut
 // =========================================================================
-async function fetchKeyPlayers(homeTeam, awayTeam, sport) {
+export async function fetchKeyPlayers(homeTeam, awayTeam, sport, season = footballSeasonForDate('NFL')) {
   try {
     const bdlSport = sportToBdlKey(sport);
     if (bdlSport !== 'americanfootball_nfl') {
@@ -439,10 +432,10 @@ async function fetchKeyPlayers(homeTeam, awayTeam, sport) {
 
     // Fetch rosters and season stats in parallel
     const [homeRoster, awayRoster, homeStats, awayStats] = await Promise.all([
-      homeTeamData ? ballDontLieService.getNflTeamRoster(homeTeamData.id, 2025) : [],
-      awayTeamData ? ballDontLieService.getNflTeamRoster(awayTeamData.id, 2025) : [],
-      homeTeamData ? ballDontLieService.getNflSeasonStatsByTeam(homeTeamData.id, 2025) : [],
-      awayTeamData ? ballDontLieService.getNflSeasonStatsByTeam(awayTeamData.id, 2025) : []
+      homeTeamData ? ballDontLieService.getNflTeamRoster(homeTeamData.id, season) : [],
+      awayTeamData ? ballDontLieService.getNflTeamRoster(awayTeamData.id, season) : [],
+      homeTeamData ? ballDontLieService.getNflSeasonStatsByTeam(homeTeamData.id, season) : [],
+      awayTeamData ? ballDontLieService.getNflSeasonStatsByTeam(awayTeamData.id, season) : []
     ]);
 
     // Process each team's roster to get key starters
@@ -1139,7 +1132,7 @@ function formatStartingQBs(homeTeam, awayTeam, qbs) {
     lines.push('');
   }
 
-  lines.push('QB data from BDL (2025-26 season).');
+  lines.push(`QB data from BDL (${footballSeasonLabel(qbs.season)} season).`);
   lines.push('');
 
   return lines.join('\n');
@@ -1153,6 +1146,8 @@ export async function buildNflScoutReport(game, options = {}) {
   const homeTeam = game.home_team;
   const awayTeam = game.away_team;
   const sportKey = 'NFL';
+  const nflSeasonYear = footballSeasonForDate(sportKey, game.commence_time || new Date());
+  const preseasonContext = stampNflPreseasonContext(game, game.commence_time || new Date());
 
   // ===================================================================
   // Step A: Fetch shared base data in parallel
@@ -1179,12 +1174,12 @@ export async function buildNflScoutReport(game, options = {}) {
   // ===================================================================
   // Step C: Fetch starting QBs (pass injuries to filter out IR/Out players)
   // ===================================================================
-  const startingQBs = await fetchStartingQBs(homeTeam, awayTeam, sportKey, injuries);
+  const startingQBs = await fetchStartingQBs(homeTeam, awayTeam, sportKey, injuries, nflSeasonYear);
 
   // ===================================================================
   // Step D: Fetch key players (roster + stats) to prevent hallucinations
   // ===================================================================
-  const keyPlayers = await fetchKeyPlayers(homeTeam, awayTeam, sportKey);
+  const keyPlayers = await fetchKeyPlayers(homeTeam, awayTeam, sportKey, nflSeasonYear);
 
   // ===================================================================
   // Step E: Fetch NFL roster depth + playoff history
@@ -1193,8 +1188,6 @@ export async function buildNflScoutReport(game, options = {}) {
   let nflPlayoffHistory = null;
   let nflHomeTeamId = null;
   let nflAwayTeamId = null;
-
-  const nflSeasonYear = nflSeason();
 
   try {
     nflRosterDepth = await ballDontLieService.getNflRosterDepth(homeTeam, awayTeam, nflSeasonYear);
@@ -1223,7 +1216,7 @@ export async function buildNflScoutReport(game, options = {}) {
         console.log(`[Scout Report] NFL Playoff game detected - fetching playoff history for ${homeTeam} (${nflHomeTeamId}) and ${awayTeam} (${nflAwayTeamId})`);
         nflPlayoffHistory = await ballDontLieService.getNflPlayoffHistory(
           [nflHomeTeamId, nflAwayTeamId],
-          nflSeason
+          nflSeasonYear
         );
         console.log(`[Scout Report] NFL playoff history: ${nflPlayoffHistory?.games?.length || 0} previous games found`);
       }
@@ -1235,20 +1228,19 @@ export async function buildNflScoutReport(game, options = {}) {
   // ===================================================================
   // Step F: Set NFL tournament context (primetime / playoff round)
   // ===================================================================
-  const gameDate = new Date(game.commence_time);
-  const day = gameDate.getUTCDay(); // 0=Sun, 1=Mon, 4=Thu
-  const hour = gameDate.getUTCHours(); // UTC hours
+  // Preseason is the primary phase label. A Saturday/Sunday night exhibition
+  // must not be stored as SNF (or fall through to Regular Season) simply
+  // because of its kickoff hour.
+  if (!preseasonContext) {
+    const primetimeSlot = nflPrimetimeSlot(game.commence_time);
+    if (primetimeSlot) game.tournamentContext = primetimeSlot;
 
-  // Simple primetime detection (games starting after 8pm ET / 1am UTC)
-  if (day === 1 && hour >= 0) game.tournamentContext = 'MNF';
-  else if (day === 4 && hour >= 0) game.tournamentContext = 'TNF';
-  else if (day === 0 && hour >= 23) game.tournamentContext = 'SNF';
-
-  // Also check for "Divisional", "Wild Card", etc. in game name
-  if (lowerName.includes('divisional')) game.tournamentContext = 'Divisional';
-  else if (lowerName.includes('wild card')) game.tournamentContext = 'Wild Card';
-  else if (lowerName.includes('championship')) game.tournamentContext = 'Championship';
-  else if (lowerName.includes('super bowl')) game.tournamentContext = 'Super Bowl';
+    // Also check for "Divisional", "Wild Card", etc. in game name
+    if (lowerName.includes('divisional')) game.tournamentContext = 'Divisional';
+    else if (lowerName.includes('wild card')) game.tournamentContext = 'Wild Card';
+    else if (lowerName.includes('championship')) game.tournamentContext = 'Championship';
+    else if (lowerName.includes('super bowl')) game.tournamentContext = 'Super Bowl';
+  }
 
   // ===================================================================
   // Step G: Fetch H2H data
@@ -1436,11 +1428,7 @@ export async function buildNflScoutReport(game, options = {}) {
   const venueLabel = game.venue || (game.isNeutralSite ? 'Neutral Site' : `${homeTeam} Home`);
   const tournamentLabel = game.tournamentContext ? `[${game.tournamentContext}]` : '';
 
-  // Dynamic season label (e.g., "2025-26")
-  const _now = new Date();
-  const _yr = _now.getFullYear();
-  const _mo = _now.getMonth() + 1;
-  const seasonLabel = _mo >= 7 ? `${_yr}-${String(_yr + 1).slice(2)}` : `${_yr - 1}-${String(_yr).slice(2)}`;
+  const seasonLabel = footballSeasonLabel(nflSeasonYear);
 
   // Build game context section if we have special context
   let gameContextSection = '';

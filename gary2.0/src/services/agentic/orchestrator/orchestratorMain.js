@@ -8,9 +8,11 @@ import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, nhlSeason, nflSeason, ncaabSeason } from '../../../utils/dateUtils.js';
 import { CONFIG, GEMINI_PRO_MODEL } from './orchestratorConfig.js';
 import { createGeminiSession, sendToSession } from './sessionManager.js';
+import { shouldReuseScoutReport } from '../statsSubstance.js';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from 'fs';
 import { join } from 'path';
 import { createHash } from 'crypto';
+import { resolveNflResearchBaseline } from './footballResearchPolicy.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SCOUT REPORT CACHE — share full scout report between game picks → props
@@ -42,6 +44,10 @@ function loadCachedScoutReport(homeTeam, awayTeam, sport, game) {
     const stat = statSync(file);
     if (Date.now() - stat.mtimeMs > SCOUT_CACHE_TTL_MS) return null;
     const data = JSON.parse(readFileSync(file, 'utf8'));
+    if (!shouldReuseScoutReport(data, sport)) {
+      console.warn(`[Orchestrator] NFL scout cache has zero verified performance stats; rebuilding ${awayTeam} @ ${homeTeam}`);
+      return null;
+    }
     console.log(`[Orchestrator] ♻️ Loaded cached scout report for ${awayTeam} @ ${homeTeam}`);
     return data;
   } catch { return null; }
@@ -90,8 +96,13 @@ export async function analyzeGame(game, sport, options = {}) {
     if (!scoutReportData) {
       console.log('[Orchestrator] Building scout report...');
       scoutReportData = await buildScoutReport(game, sport, { sportsbookOdds: options.sportsbookOdds });
-      // Cache for props to reuse
-      saveCachedScoutReport(homeTeam, awayTeam, sport, game, scoutReportData);
+      // Cache for props to reuse. Never persist an all-N/A NFL tape: a transient
+      // BDL throttle must not poison every retry for the next three hours.
+      if (shouldReuseScoutReport(scoutReportData, sport)) {
+        saveCachedScoutReport(homeTeam, awayTeam, sport, game, scoutReportData);
+      } else {
+        console.warn(`[Orchestrator] NFL scout has zero verified performance stats; not caching ${awayTeam} @ ${homeTeam}`);
+      }
     }
 
     // MLB tools need the MLB Stats API gamePk to identify probable pitchers,
@@ -114,6 +125,7 @@ export async function analyzeGame(game, sport, options = {}) {
     const injuries = typeof scoutReportData === 'object' ? scoutReportData.injuries : null;
     // Extract verified Tale of the Tape (pre-computed stats for pick card display)
     const verifiedTaleOfTape = typeof scoutReportData === 'object' ? scoutReportData.verifiedTaleOfTape : null;
+    const researchBaseline = resolveNflResearchBaseline(sport, verifiedTaleOfTape);
     // Extract venue context (for NBA Cup, neutral site games, CFP games, etc.)
     const venueContext = typeof scoutReportData === 'object' ? {
       venue: scoutReportData.venue,
@@ -240,6 +252,14 @@ context for player-level evaluation. Investigate the game thoroughly first.
       awayRecord,
       // Pass Flash's investigation-ready scout report (includes Tale of Tape + token menu)
       scoutReport: flashText,
+      // NFL preseason: use the same verified prior-season performance baseline
+      // already printed in the scout report. This avoids an empty current-year
+      // refetch while preserving explicit provenance in every research finding.
+      ...(researchBaseline ? {
+        researchSeason: researchBaseline.season,
+        researchSeasonScope: researchBaseline.scope,
+        researchSeasonLabel: researchBaseline.label
+      } : {}),
       // Optional sport-specific Pass 2.5 decision guards (phase-aligned)
       pass25DecisionGuards: (typeof constitution === 'object' ? constitution.pass25DecisionGuards || '' : ''),
       bilateralCasePrompt: (typeof constitution === 'object' ? constitution.bilateralCasePrompt || null : null),

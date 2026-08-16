@@ -3,7 +3,7 @@
  * Contains pure utility helpers used across multiple per-sport modules.
  */
 
-import { nbaSeason, nhlSeason, nflSeason, ncaabSeason } from '../../../../utils/dateUtils.js';
+import { nbaSeason, nhlSeason, nflSeason, ncaabSeason, ncaafSeason } from '../../../../utils/dateUtils.js';
 
 /**
  * Get current season year for a given sport key.
@@ -16,7 +16,7 @@ export function seasonForSport(sport) {
   if (s === 'NFL' || s === 'AMERICANFOOTBALL_NFL') return nflSeason();
   if (s === 'NHL' || s === 'ICEHOCKEY_NHL') return nhlSeason();
   if (s === 'NCAAB' || s === 'BASKETBALL_NCAAB') return ncaabSeason();
-  if (s === 'NCAAF' || s === 'AMERICANFOOTBALL_NCAAF') return nflSeason(); // NCAAF uses same timing as NFL
+  if (s === 'NCAAF' || s === 'AMERICANFOOTBALL_NCAAF') return ncaafSeason();
   if (s === 'MLB' || s === 'BASEBALL_MLB') return new Date().getFullYear(); // MLB = calendar year
   // Fallback: Oct+ = current year, else previous year
   return nbaSeason();

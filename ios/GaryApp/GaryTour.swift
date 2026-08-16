@@ -24,7 +24,7 @@ import UIKit
 //   recelebrate                  clear the win-celebration ledger (count-up/confetti re-fire)
 //   picks 2                      Picks carousel page index
 //   picksday today|yesterday     Picks board day
-//   hub mlb|nba|wc               Hub league tab
+//   hub mlb|nfl|ncaaf|nba|wc     Hub league tab
 //   billfold LINE|CANDLES|SPORTS Billfold chart mode
 //   scroll 800 / scroll -400     scroll the frontmost scroll view by px
 //   hscroll 300                  scroll EVERY horizontal rail on screen by px

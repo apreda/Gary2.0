@@ -1,8 +1,10 @@
 name: Hub Insights Runner
 
 # Cloud replacement for the laptop-based insight_connections pipeline.
-# Runs node run-insight-connections.js (MLB + NBA + WC) on a schedule so Hub
-# content — streaks, hot/cold, regression, ballpark shifts, WC form, etc. —
+# Runs MLB + NBA on the existing schedule. Football has its own staggered
+# football-hub-insights workflow and remains available as an explicit manual
+# lane here; both workflows share one concurrency group.
+# Hub content — streaks, hot/cold, regression, ballpark shifts, etc. —
 # populates 24/7 with no laptop.
 #
 # Schedule (EDT = UTC-4 in summer, EST = UTC-5 in winter — cron is UTC):
@@ -30,7 +32,18 @@ on:
     - cron: '0 20 * * *'    # 4pm EDT / 3pm EST
     - cron: '0 22 * * *'    # 6pm EDT / 5pm EST
     - cron: '0 0 * * *'     # 8pm EDT / 7pm EST (runs at midnight UTC = next calendar day)
-  workflow_dispatch:         # manual trigger from GitHub Actions tab anytime
+  workflow_dispatch:
+    inputs:
+      leagues:
+        description: League lane to populate
+        required: true
+        default: MLB,NBA
+        type: choice
+        options:
+          - MLB,NBA
+          - NFL,NCAAF
+          - NFL
+          - NCAAF
 
 env:
   TZ: America/New_York
@@ -44,7 +57,7 @@ concurrency:
 jobs:
   run-insights:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
 
     steps:
       - name: Checkout repository
@@ -69,7 +82,15 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
-        run: node run-insight-connections.js
+          # Scheduled runs keep their historical MLB/NBA scope. Manual football
+          # dispatches serialize with the separate football cadence.
+          HUB_LEAGUES: ${{ github.event_name == 'workflow_dispatch' && inputs.leagues || 'MLB,NBA' }}
+        run: |
+          case "$HUB_LEAGUES" in
+            MLB,NBA|NFL,NCAAF|NFL|NCAAF) ;;
+            *) echo "Unsupported Hub league lane: $HUB_LEAGUES"; exit 2 ;;
+          esac
+          node run-insight-connections.js --league "$HUB_LEAGUES"
 
       - name: Summary
         if: always()

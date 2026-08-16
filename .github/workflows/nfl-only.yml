@@ -13,6 +13,17 @@ on:
         required: false
         default: 'false'
 
+permissions:
+  contents: read
+
+env:
+  TZ: America/New_York
+  MATCHUP: ${{ inputs.matchup }}
+
+concurrency:
+  group: nfl-complete-generation
+  cancel-in-progress: false
+
 jobs:
   nfl-complete:
     runs-on: ubuntu-latest
@@ -45,8 +56,8 @@ jobs:
           BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
           TANK01_RAPIDAPI_KEY: ${{ secrets.TANK01_RAPIDAPI_KEY }}
         run: |
-          if [ -n "${{ github.event.inputs.matchup }}" ]; then
-            node scripts/run-agentic-picks.js --nfl --matchup "${{ github.event.inputs.matchup }}" --limit 1
+          if [ -n "$MATCHUP" ]; then
+            node scripts/run-agentic-picks.js --nfl --matchup "$MATCHUP" --limit 1
           else
             node scripts/run-agentic-picks.js --nfl
           fi
@@ -60,18 +71,14 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
           TANK01_RAPIDAPI_KEY: ${{ secrets.TANK01_RAPIDAPI_KEY }}
-        run: node scripts/run-agentic-nfl-props.js --store=1
-
-      - name: Generate NFL TD props
-        if: ${{ github.event.inputs.skip_props != 'true' }}
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
-          TANK01_RAPIDAPI_KEY: ${{ secrets.TANK01_RAPIDAPI_KEY }}
-        run: node scripts/run-agentic-nfl-td.js --store=1
+        run: |
+          if [ -n "$MATCHUP" ]; then
+            node scripts/run-agentic-nfl-props.js --store=1 --matchup "$MATCHUP" --limit 1
+          else
+            # The canonical NFL props runner already includes regular and TD
+            # markets in one atomic per-game storage pass.
+            node scripts/run-agentic-nfl-props.js --store=1
+          fi
 
       - name: Log completion
         run: echo "NFL complete generation finished at $(date)"

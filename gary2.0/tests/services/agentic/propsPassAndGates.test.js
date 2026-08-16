@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 import { buildPass3Props, getFinalizePropsToolForSport } from '../../../src/services/agentic/orchestrator/passBuilders.js';
-import { isExplicitPropsPass, stripInternalFields } from '../../../src/services/agentic/propsSharedUtils.js';
+import { isExplicitPropsPass, normalizePropBetDirection, stripInternalFields } from '../../../src/services/agentic/propsSharedUtils.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '../../..');
@@ -62,16 +62,40 @@ describe('F-5: odds gate + no internal flags in stored picks', () => {
   });
 });
 
+describe('direction gate', () => {
+  it('accepts only over, under, and yes without inventing a side', () => {
+    expect(normalizePropBetDirection('OVER')).toBe('over');
+    expect(normalizePropBetDirection('under')).toBe('under');
+    expect(normalizePropBetDirection('yes')).toBe('over');
+    expect(normalizePropBetDirection('no')).toBeNull();
+    expect(normalizePropBetDirection('higher')).toBeNull();
+    expect(normalizePropBetDirection(undefined)).toBeNull();
+  });
+
+  it('the CLI drops a null direction before odds reconciliation can ship it', () => {
+    const cli = src('scripts/run-agentic-props-cli.js');
+    expect(cli).toContain('normalizePropBetDirection(pick.bet ?? pick.direction)');
+    expect(cli).toMatch(/Direction gate: dropped/);
+  });
+});
+
 describe('no-stats gate: unvalidated players never reach a stored pick', () => {
-  it('MLB desk lane pool is the board (lineup-filtered) and the CLI gate applies to both lanes', () => {
-    // Old MLB context builder deleted Jul 26 2026 — the desk lane's validated
-    // pool is THE PROP BOARD's players, tightened to posted lineups.
+  it('MLB validates only players whose stat fetch returned real rows', () => {
     const brain = src('src/services/pickdesk/propsBrain.js');
-    expect(brain).toContain('validatedPlayers: board.players');
-    expect(brain).toMatch(/lineupNames\.has\(norm\(p\.player\)\)/);
+    expect(brain).toContain('const validatedPlayers = new Set(chronoByPlayer.keys())');
+    expect(brain).toContain('validatedPlayers.has(norm(prop?.player))');
+    expect(brain).toContain('validatedPlayers,');
     const cli = src('scripts/run-agentic-props-cli.js');
     expect(cli).toContain('validatedPlayerNames = deskRes.validatedPlayers');
     expect(cli).toMatch(/No-stats gate: dropped/);
+  });
+
+  it('the props board reuses the desk scout\'s BDL plus official-MLB resolved lineup', () => {
+    const brain = src('src/services/pickdesk/propsBrain.js');
+    const mlbScout = src('src/services/agentic/scoutReport/sports/mlb.js');
+    expect(brain).toContain('resolvedConfirmedLineupNames(desk.scout)');
+    expect(brain).not.toContain('getMlbLineups(gameId)');
+    expect(mlbScout).toContain('confirmedLineups: { home: homeData, away: awayData }');
   });
 });
 
