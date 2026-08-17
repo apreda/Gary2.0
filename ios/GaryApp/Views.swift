@@ -2233,6 +2233,26 @@ struct HomeView: View {
             }
 
             StatusBarScrim()
+
+            // Gold-ground chrome fades. Top: board plates scroll under the
+            // clock, so the status area gets its own warm-black fade. Bottom:
+            // content settles into near-black under the dock instead of
+            // ghosting through the tab labels.
+            VStack {
+                LinearGradient(colors: [Color(hex: "#0A0806").opacity(0.92),
+                                        Color(hex: "#0A0806").opacity(0)],
+                               startPoint: .top, endPoint: .bottom)
+                    .frame(height: 112)
+                Spacer()
+                LinearGradient(stops: [
+                    .init(color: Color(hex: "#0A0806").opacity(0), location: 0),
+                    .init(color: Color(hex: "#0A0806").opacity(0.62), location: 0.45),
+                    .init(color: Color(hex: "#0A0806").opacity(0.98), location: 1),
+                ], startPoint: .top, endPoint: .bottom)
+                    .frame(height: 190)
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
         }
         .overlay {
             if showDailyRecap {
@@ -3151,7 +3171,6 @@ struct HomeView: View {
 
         // ── THE BOARD — every game, one list, all day.
         homeSheet
-            .goldPlate()
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
 
@@ -3928,6 +3947,10 @@ struct HomeView: View {
             homeSheetPanel(rows.filter { $0.league == selected.rawValue },
                            selected: selected,
                            available: available)
+                // Plate the PANEL, not the builder: a modifier on a two-view
+                // @ViewBuilder replicates onto each sibling, and the section
+                // rule above was getting its own plate (the black sliver).
+                .goldPlate()
         }
     }
 
@@ -11961,6 +11984,8 @@ struct TomorrowView {
     /// The Tomorrow body — the scrolling content under the switcher. Lives inside
     /// Home's ScrollView, so it returns a VStack (no ScrollView/background here).
     struct Body: View {
+        // Gold labels flip to ink on the Solid Gold ground (gold-on-gold law).
+        @Environment(\.garySurface) private var surface
         let board: TomorrowBoard?
         // (Jul 5 redesign: the Hub/Today flag machinery — leagueFilter,
         // include*, dayLabel, liveStatus, the 1Hz ticker — left with its last
@@ -12310,7 +12335,7 @@ struct TomorrowView {
                 HStack(spacing: 10) {
                     Text("Tomorrow's Board")
                         .font(GaryFonts.display(17))
-                        .foregroundStyle(GaryColors.sectionHead)   // match "The Day Ahead" header
+                        .foregroundStyle(surface == .plated ? AnyShapeStyle(GaryColors.ink.opacity(0.88)) : AnyShapeStyle(GaryColors.sectionHead))   // match "The Day Ahead" header
                     Spacer(minLength: 6)
                     legendDot(Color(hex: "#4FB14F"), "MLB")
                     legendDot(Color(hex: "#3FB6A8"), "WC")
@@ -25130,13 +25155,17 @@ final class HubFocusState: ObservableObject {
 struct HubSectionHeader: View {
     let eyebrow: String
     let sub: String
+    // Gold eyebrows die on the Solid Gold luminous ground (gold-on-gold law,
+    // Aug 17) — on a .plated page the header speaks dark ink instead.
+    @Environment(\.garySurface) private var surface
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(eyebrow)
                 .font(GaryFonts.display(17))
-                .foregroundStyle(GaryColors.sectionHead)
+                .foregroundStyle(surface == .plated ? AnyShapeStyle(GaryColors.ink.opacity(0.88)) : AnyShapeStyle(GaryColors.sectionHead))
             if !sub.isEmpty {
-                Text(sub).font(.system(size: 12)).foregroundStyle(GaryColors.sectionSub)
+                Text(sub).font(.system(size: 12))
+                    .foregroundStyle(surface == .plated ? AnyShapeStyle(GaryColors.ink.opacity(0.60)) : AnyShapeStyle(GaryColors.sectionSub))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
