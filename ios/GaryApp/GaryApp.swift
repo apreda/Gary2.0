@@ -140,6 +140,17 @@ struct GaryApp: App {
 
     var body: some Scene {
         WindowGroup {
+            // DESIGN BRANCH ONLY (design/home-depth-studies): boot straight
+            // into the five depth-background studies. Never merges to main.
+            DepthStudiesView()
+        }
+    }
+}
+
+private struct _RetiredRoot: View {
+    @ObservedObject var authManager = AuthManager.shared
+    @AppStorage("hasEntered") private var hasEntered: Bool = false
+    var body: some View {
             Group {
                 if hasEntered {
                     ContentView()
@@ -163,6 +174,5 @@ struct GaryApp: App {
                 dumpShareCardRendersIfRequested()
                 #endif
             }
-        }
     }
 }
