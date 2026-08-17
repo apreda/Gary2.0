@@ -22,6 +22,7 @@
 // LLM: Google Gemini (GEMINI_API_KEY secret; model override via GEMINI_MODEL, default gemini-3.5-flash)
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { matchVerdicts, plainVerdict, buildVerdictPrompt, trimTweet } from "./verdicts.ts";
+import { fallbackVerbatimPair, isVerbatimSnippet, splitSentences } from "../_shared/verbatimSnippets.js";
 import { computeStanding } from "./pl.ts";
 import { selectPicks, type Slot } from "./window.ts";
 import { marqueeScore } from "./marquee.ts";
@@ -283,19 +284,26 @@ STYLE: specific player names and real numbers. Lead with the single strongest, m
 RECURRING VOCABULARY (Gary's own bits; use AT MOST one per post and only where it fits naturally, never forced): his results ledger is always "the tape" ("It's on the tape", "Check the tape"). Closers he actually uses: "That's the play." (stamping a pick), "Never sweated it." (a win never in doubt), "Cashed. Next." (routine win), "I'll wear that one." (owning a loss), "Money back, nothing learned." (push), "The number's the number." (the stat is the argument), "Paid like it should've." (plus-money win), "Same read, next game." (loss, process was right).
 Always return ONLY valid JSON as instructed.`;
 
-const PICK_HOOK_SCHEMA: JsonSchema = {
+// VERBATIM PICK POSTS (founder directive, Aug 17 2026): the pick tweet is
+// Gary's own published rationale, word for word. The model only SELECTS which
+// two whole sentences to surface — it never writes, edits, shortens, or
+// paraphrases. Selection is verified in code against the stored rationale;
+// a failed selection falls back to deterministic sentence choice.
+const VERBATIM_RULES = `You select tweet content for @BetwithGary. The numbered sentences you receive are Gary's own published pick rationale. You NEVER write, edit, shorten, merge, or paraphrase — you only CHOOSE sentences, copied character-for-character as listed. Always return ONLY valid JSON as instructed.`;
+
+const PICK_VERBATIM_SCHEMA: JsonSchema = {
   type: "object",
   properties: {
-    angle: {
+    opening: {
       type: "string",
-      description: "Required non-empty story angle grounded in the supplied rationale. Exactly one sentence and 55 to 100 characters.",
+      description: "One sentence copied EXACTLY from the numbered list: the strongest story/hook sentence.",
     },
-    edge: {
+    closing: {
       type: "string",
-      description: "Required non-empty strongest falsifiable factor and Gary's stance. Exactly one sentence and 55 to 100 characters.",
+      description: "One DIFFERENT sentence copied EXACTLY from the numbered list: the strongest reason or stance sentence.",
     },
   },
-  required: ["angle", "edge"],
+  required: ["opening", "closing"],
 };
 
 // ── THE PROPS REPLY (founder, Aug 14 2026) ────────────────────────────────────
@@ -450,50 +458,53 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
     const oddsStr = (chosen.odds && !String(chosen.pick).includes(String(chosen.odds))) ? ` (${chosen.odds})` : "";
     const pickLine = `${chosen.pick}${oddsStr}`; // clean machine-readable shorthand, no emoji
 
-    // WITHHOLD POLICY: the hook is angle + the pick line + ONE strongest falsifiable factor. The full breakdown and the rest
-    // of the slate stay in the app (that is the reason to download). The model writes the angle and the single edge; we inject
-    // the pick line verbatim so it is always clean shorthand and never carries an emoji.
-    const user = `Write the hook for a single bet. Return ONLY JSON: {"angle": "publishable prose", "edge": "publishable prose"}.
-Both fields are REQUIRED and must contain complete, non-empty prose. Never return an empty string and never omit either field.
-The completed angle, injected pick line, and edge must fit within 270 total characters.
-PICK: ${chosen.pick} | odds: ${chosen.odds ?? "see rationale"} | ${chosen.awayTeam} @ ${chosen.homeTeam} | league ${league} | starts ${chosen.time ?? chosen.commence_time} ET
-${isTopPick ? "This is Gary's highest-conviction play on the whole board today. Let the angle and the edge carry that certainty in his voice. Do NOT use any label, badge, or the words 'top pick'.\n" : ""}Match this VOICE (a DIFFERENT game, copy the casual style not the facts):
-ANGLE example: "Backup catcher today, and he allowed an 84% steal rate in the minors."
-EDGE example: "The Dodgers have stolen a bag in nine straight. I am laying the runline."
-Notice: casual, contractions, one concrete number, ends on a stance, no fancy adjectives.
-
-ANGLE: exactly one sentence, 55 to 100 characters, tied to a real detail in the rationale. No pick, odds, or link.
-EDGE: exactly one sentence, 55 to 100 characters, with the ONE strongest falsifiable factor and a short stance. No list, call to action, or link.
-
-RATIONALE:
-${chosen.rationale ?? ""}
-
-STATS:
-${JSON.stringify(chosen.statsData ?? []).slice(0, 4000)}
-
-INJURIES:
-${JSON.stringify(chosen.injuries ?? []).slice(0, 1500)}`;
-    const out = parseJsonBlock(await callLLM(VOICE_RULES, user, PICK_HOOK_SCHEMA));
-    const angle = clean(out.angle);
-    const edge = clean(out.edge);
-    // BROKEN-TWEET GUARD (Aug 4 2026, founder: "our tweets seem to be broken").
-    // Root cause: Gemini's JSON contract is satisfied (valid JSON, so callLLM/
-    // parseJsonBlock never throw) but occasionally returns {"angle":"","edge":""}
-    // or omits the keys — an empty-but-well-formed response. Nothing downstream
-    // checked for that, so the hook silently built as "\n\nPICK LINE\n\n" and
-    // posted live with no analytical text (confirmed in social_post_log: ~1 in
-    // 5 recent standard posts, e.g. "Minnesota Twins ML -140" on 2026-08-04).
-    // Real angle/edge content is always a full sentence or more; anything this
-    // short is the empty-response failure mode, not a legitimately terse write.
-    // Throwing here (before postTweet) keeps the broken tweet off the timeline —
-    // social_post_log is only written AFTER a successful postTweet, so the pick
-    // stays unposted. Aug 5: the throw is now caught per-pick by the loop, so it
-    // costs this one pick this run and the next run retries it — it no longer
-    // takes the whole slate down (that is how Astros -1.5 and Cubs ML were lost).
-    if (angle.length < 15 || edge.length < 15) {
-      throw new Error(`Empty hook content from LLM for "${chosen.pick}" — angle="${angle}" edge="${edge}", refusing to post`);
+    // WITHHOLD POLICY, VERBATIM EDITION (founder, Aug 17 2026): the hook is
+    // two of Gary's OWN rationale sentences around the injected pick line —
+    // the feed says exactly what the app says, word for word. The model only
+    // selects which sentences; code verifies every selection is a verbatim
+    // substring of the stored rationale and falls back to deterministic
+    // sentence choice when it is not. Sentences are never trimmed (no
+    // ellipsis, ever) and never restyled — Gary's punctuation is Gary's.
+    const rationaleText = String(chosen.rationale ?? "");
+    const sentences = splitSentences(rationaleText);
+    if (sentences.length === 0) {
+      throw new Error(`No rationale sentences for "${chosen.pick}", refusing to post`);
     }
-    const hook = `${angle}\n\n${pickLine}\n\n${edge}`;
+    // Two newline-pairs join the three segments; keep the whole post ≤ 278.
+    const budget = 278 - pickLine.length - 4;
+    const numbered = sentences.map((s, i) => `${i + 1}. ${s}`).join("\n");
+    const user = `Choose the two sentences for a single bet's post. Return ONLY JSON: {"opening": "...", "closing": "..."}.
+Both values MUST be sentences copied character-for-character from the numbered list below — different sentences, and their combined length must be at most ${budget} characters.
+opening: the strongest story/hook sentence. closing: the strongest reason or stance sentence (prefer one that carries Gary's stance).
+${isTopPick ? "This is Gary's highest-conviction play on the whole board today — prefer the sentences that carry that certainty.\n" : ""}PICK: ${chosen.pick} | ${chosen.awayTeam} @ ${chosen.homeTeam} | league ${league}
+
+SENTENCES:
+${numbered}`;
+    const selectionOk = (o: string, c: string) =>
+      isVerbatimSnippet(rationaleText, o) && isVerbatimSnippet(rationaleText, c)
+      && o.trim() !== c.trim() && (o.length + c.length) <= budget;
+    let out = parseJsonBlock(await callLLM(VERBATIM_RULES, user, PICK_VERBATIM_SCHEMA));
+    let opening = String(out.opening ?? "").trim();
+    let closing = String(out.closing ?? "").trim();
+    if (!selectionOk(opening, closing)) {
+      // One retry with the violation named, then the deterministic fallback.
+      out = parseJsonBlock(await callLLM(
+        VERBATIM_RULES,
+        `${user}\n\nYour previous selection was rejected: each value must be COPIED EXACTLY from the numbered list (no edits, no merging) and the two must be different sentences fitting ${budget} characters combined.`,
+        PICK_VERBATIM_SCHEMA,
+      ));
+      opening = String(out.opening ?? "").trim();
+      closing = String(out.closing ?? "").trim();
+    }
+    if (!selectionOk(opening, closing)) {
+      const pair = fallbackVerbatimPair(rationaleText, budget);
+      if (!pair) {
+        throw new Error(`No verbatim sentence pair fits for "${chosen.pick}", refusing to post`);
+      }
+      opening = pair.opening;
+      closing = pair.closing;
+    }
+    const hook = [opening, pickLine, closing].filter(Boolean).join("\n\n");
     if (hook.length > 280) {
       throw new Error(`Hook exceeds X limit for "${chosen.pick}" — ${hook.length} characters, refusing to post`);
     }
