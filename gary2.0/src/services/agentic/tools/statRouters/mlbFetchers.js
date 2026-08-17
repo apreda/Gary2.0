@@ -23,6 +23,7 @@ import {
 import { getPitcherArsenal, getPitcherStatcastProfile } from '../../../baseballSavantService.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { formatSampleSuffix } from './statRouterCommon.js';
+import { bullpenLedgerDate, relieverBoxEntries } from './bullpenLedger.js';
 // Bridge-aware search seam (Jul 30): ALL grounding in this file routes like
 // the WORLD lane — Claude sub first when GARY_GROUNDING_VIA_CLAUDE=1 ($0),
 // then the API chain — never a hardwired paid Gemini call.
@@ -1794,10 +1795,9 @@ export const mlbFetchers = {
           if (!b?.teams) continue;
           const sk = b.teams.home?.team?.id === mlbTeam.id ? 'home' : 'away';
           const sd = b.teams[sk];
-          const pids = Array.isArray(sd?.pitchers) ? sd.pitchers.slice(1) : [];
           let counted = false;
-          for (const pid of pids) {
-            const st = sd?.players?.[`ID${pid}`]?.stats?.pitching;
+          for (const { player } of relieverBoxEntries(sd)) {
+            const st = player?.stats?.pitching;
             const ipn = parseFloat(st?.inningsPitched);
             if (!Number.isFinite(ipn)) continue;
             penForm.outs += Math.floor(ipn) * 3 + Math.round((ipn % 1) * 10);
@@ -1809,7 +1809,7 @@ export const mlbFetchers = {
         const armTotals = new Map(); // name -> { outs, pitches, er, dates[] }
         const gameDates = [];        // chronological (recentGames is oldest -> newest)
         for (const game of recentGames) {
-          const date = (game.gameDate || '').split('T')[0];
+          const date = bullpenLedgerDate(game);
           const box = await getGameBoxScore(game.gamePk).catch(() => null);
           if (!box?.teams) {
             lines.push(`${date}: Box score unavailable`);
@@ -1824,16 +1824,15 @@ export const mlbFetchers = {
           const homeId = box.teams.home?.team?.id;
           const sideKey = homeId === mlbTeam.id ? 'home' : 'away';
           const side = box.teams[sideKey];
-          const players = side?.players || {};
-          const pitcherIds = Array.isArray(side?.pitchers) ? side.pitchers : [];
           gameDates.push(date);
 
           const relievers = [];
           // pitchers[] is appearance order: [0] is the STARTER, everyone after
           // is relief. (The old `ip < 5` heuristic misfiled a shelled starter
           // as a relief arm and dropped a 5-inning bulk reliever entirely.)
-          for (const pid of pitcherIds.slice(1)) {
-            const p = players[`ID${pid}`];
+          // relieverBoxEntries also drops position players mopping up a
+          // blowout — they are not pen arms (Aug 15 KC fix).
+          for (const { pid, player: p } of relieverBoxEntries(side)) {
             const ipStr = p?.stats?.pitching?.inningsPitched;
             if (ipStr == null) continue;
             // MLB IP is in "outs decimal" form (e.g. "1.2" = 1 inning + 2 outs).
