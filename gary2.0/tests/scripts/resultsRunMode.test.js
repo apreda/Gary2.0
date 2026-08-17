@@ -123,9 +123,11 @@ describe('near-real-time football workflow wiring', () => {
     expect(runner).toContain('[...ncaafFinalIds].filter((gameId) => referencedNCAAFGameIds.has(gameId))');
   });
 
-  it('keeps the existing full/MLB cadence and serializes the manual football backstop', () => {
-    expect(fullWorkflow).toContain("cron: '0 6 * * *'");
-    expect(fullWorkflow).toContain("cron: '0 13 * * *'");
+  it('keeps both results workflows manual-only and serialized on one writer lane', () => {
+    // Single-home decision (Aug 17 2026): the local daily-results LaunchAgent
+    // owns the schedule; cloud results workflows are dispatch-only backstops.
+    expect(fullWorkflow).not.toMatch(/^\s*schedule:/m);
+    expect(fullWorkflow).toMatch(/^on:\n\s+workflow_dispatch:/m);
     expect(fullWorkflow).toContain('group: results-grading');
     expect(footballWorkflow).toContain('group: results-grading');
     expect(footballWorkflow).toContain('cancel-in-progress: false');

@@ -2,11 +2,15 @@
 /**
  * Live Scores Poller
  *
- * Snapshots today's slate (MLB / NBA / NHL / NFL / NCAAF) into the `live_scores`
- * Supabase table so the iOS app can show scores while games are in progress.
- * Designed to run every ~2 minutes via launchd (com.gary2.live-scores): one
- * cached call per league, upsert one row per game, exit. When nothing is live
- * the whole run is a couple of cheap cached reads — safe to fire all day.
+ * Local half of the live-score lane (single-home split, Aug 17 2026). The
+ * cloud live-scores edge function (pg_cron, ~1 min) is the SOLE writer of
+ * MLB/NFL/NCAAF score FRAMES; this poller owns everything the cloud function
+ * does not have: NBA/NHL frames, MLB outs/bases + cashed-prop events (surgical
+ * PATCH so frame writers can never clobber them), the grading queues, the
+ * football proof lifecycle, and phantom-row cleanup. Runs every ~2 minutes via
+ * launchd (com.gary2.live-scores): one cached call per league, exit. When
+ * nothing is live the whole run is a couple of cheap cached reads — safe to
+ * fire all day.
  *
  * Status normalization: scheduled | live | final, plus exact MLB interruption
  * states delayed | postponed | suspended | cancelled. `detail` is a short
@@ -42,6 +46,7 @@ import {
   isRecoverableMlbGameInterruption,
   normalizeMlbGameStatus,
 } from '../supabase/functions/_shared/mlbGameStatus.js';
+import { localFrameRows } from '../supabase/functions/_shared/liveScoreFrameOwnership.js';
 import {
   pendingGradeFiles,
   queueExactGradeRequest,
@@ -552,29 +557,45 @@ async function run() {
   }
 
   // Upsert on (date, league, game_id) so each poll updates rows in place.
-  await axios({
-    method: 'POST',
-    url: `${REST_URL}?on_conflict=date,league,game_id`,
-    data: JSON.parse(JSON.stringify(stamped)),
-    headers: {
-      apikey: adminKey,
-      Authorization: `Bearer ${adminKey}`,
-      'Content-Type': 'application/json',
-      Prefer: 'resolution=merge-duplicates,return=minimal',
-    },
-  });
-  console.log(`✅ live_scores: ${stamped.length} game(s) for ${targetDate} (${live} live, ${final} final).`);
+  // FRAME OWNERSHIP: only locally-owned leagues (NBA/NHL) are written here —
+  // the cloud edge function is the sole MLB/NFL/NCAAF frame writer. The
+  // cloud-owned leagues were still fetched above because the grading queues,
+  // football reconciliation, cleanup, and the MLB enrichment PATCH below all
+  // work off provider truth, not off who wrote the frame.
+  const frameRows = localFrameRows(stamped);
+  if (frameRows.length) {
+    await axios({
+      method: 'POST',
+      url: `${REST_URL}?on_conflict=date,league,game_id`,
+      data: JSON.parse(JSON.stringify(frameRows)),
+      headers: {
+        apikey: adminKey,
+        Authorization: `Bearer ${adminKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates,return=minimal',
+      },
+    });
+  }
+  console.log(
+    `✅ live_scores: ${frameRows.length} local frame(s) written of ${stamped.length} game(s) `
+    + `for ${targetDate} (${live} live, ${final} final; cloud owns MLB/NFL/NCAAF frames).`,
+  );
 
-  // ── the cashed-props pass, live games only ──
-  const liveRows = stamped.filter((r) => r.status === 'live');
+  // ── the live-MLB enrichment pass: cashed-prop events + outs/bases ──
+  // Surgical PATCH per live game, never a frame upsert: the cloud frame writer
+  // does not carry these columns, so a PATCH is the only write shape it can
+  // never clobber. outs/bases ride along with events because the MLB frame no
+  // longer flows through this process at all (cloud-owned).
+  const liveRows = stamped.filter((r) => r.status === 'live' && r.league === 'MLB');
   for (const r of liveRows) {
-    const events = r.league === 'MLB' ? await mlbLiveEvents(r.game_id) : null;
-    if (!events) continue;
+    const events = await mlbLiveEvents(r.game_id);
+    const patch = { outs: r.outs, bases: r.bases };
+    if (events) patch.events = events;
     try {
       await axios({
         method: 'PATCH',
         url: `${REST_URL}?date=eq.${r.date}&league=eq.${encodeURIComponent(r.league)}&game_id=eq.${encodeURIComponent(r.game_id)}`,
-        data: { events },
+        data: patch,
         headers: {
           apikey: adminKey,
           Authorization: `Bearer ${adminKey}`,
@@ -582,7 +603,7 @@ async function run() {
           Prefer: 'return=minimal',
         },
       });
-      if (events.length) console.log(`🎯 ${r.league} ${r.game_id}: ${events.length} cashed-prop event(s).`);
+      if (events?.length) console.log(`🎯 ${r.league} ${r.game_id}: ${events.length} cashed-prop event(s).`);
     } catch (e) {
       console.warn(`[events] write ${r.league} ${r.game_id}: ${e.message}`);
     }

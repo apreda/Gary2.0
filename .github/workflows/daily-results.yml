@@ -1,15 +1,13 @@
 name: Daily Results Check
 
-# Cloud grader (laptop-independent) — posts the overnight slate's results early,
-# even when the local laptop scheduler is asleep/dead. run-all-results.js targets
-# UTC-yesterday and re-grades + UPDATEs every run, so it's idempotent and a too-early
-# run self-corrects on the next pass. Cron is UTC and drifts 1h across DST:
-#   06:00 UTC = 2am EDT (summer) / 1am EST (winter)
-#   13:00 UTC = 9am EDT (summer) / 8am EST (winter)
+# MANUAL BACKSTOP ONLY (single-home decision, Aug 17 2026): the local
+# com.gary2.daily-results LaunchAgent (5×/day incl. 2am ET, kept awake by
+# com.gary.keepawake) is the sole scheduled owner of run-all-results.js, and
+# the pg_cron grade-results/grade-props edge functions grade continuously in
+# the cloud. Scheduled runs here were a duplicate writer on the same lane.
+# Dispatch by hand only when the laptop lane is down. run-all-results.js
+# re-grades + UPDATEs every run, so a manual run is always idempotent.
 on:
-  schedule:
-    - cron: '0 6 * * *'   # ~2am ET — overnight results post before the user wakes
-    - cron: '0 13 * * *'  # ~9am ET — catch-up / re-grade for late West-Coast finishers
   workflow_dispatch:  # Allow manual trigger
 
 # Share the same database-writer lane as the near-real-time football grader.

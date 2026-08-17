@@ -201,8 +201,6 @@ export function normalizeFootballGame(game, { league, targetDate, nowMs = Date.n
       home_score: numberOrNull(game.home_team_score ?? game.home_score),
       status,
       detail: footballDetail(game, status),
-      outs: null,
-      bases: null,
     },
   };
 }

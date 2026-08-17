@@ -97,8 +97,9 @@ type Row = {
   home_score: number | null;
   status: string;
   detail: string | null;
-  outs: number | null;
-  bases: string | null;
+  // outs/bases/events are deliberately ABSENT: the local poller owns the MLB
+  // enrichment via surgical PATCH, and a frame writer that upserted nulls for
+  // columns it does not compute was clobbering that enrichment every minute.
   updated_at: string;
 };
 
@@ -141,7 +142,7 @@ async function mlbGames(date: string, now: string): Promise<Game[]> {
         home_abbr: g.home_team?.abbreviation ?? null,
         away_score: num(g.away_team_data?.runs),
         home_score: num(g.home_team_data?.runs),
-        status, detail, outs: null, bases: null, updated_at: now,
+        status, detail, updated_at: now,
       },
     };
   }).filter((game: Game | null): game is Game => game !== null);

@@ -1,37 +1,15 @@
 name: Hub Insights Runner
 
-# Established cloud backstop for the local insight_connections pipeline.
-# Scheduled runs retain their historical MLB + NBA scope. Football normally
-# runs in the same local daily-insights process and is available here only by
-# explicit manual dispatch; both Actions share one concurrency group.
-# Hub content — streaks, hot/cold, regression, ballpark shifts, etc. —
-# populates 24/7 with no laptop.
+# MANUAL BACKSTOP ONLY (single-home decision, Aug 17 2026): the local
+# com.gary2.daily-insights LaunchAgent is the sole scheduled owner of the
+# insight_connections pipeline — it runs the same script on the $0 Claude
+# bridge, so scheduled cloud runs here were a paid duplicate writer.
+# Dispatch this workflow by hand only when the laptop lane is down.
 #
-# Schedule (EDT = UTC-4 in summer, EST = UTC-5 in winter — cron is UTC):
-#   6am ET  → non-lineup lanes (streaks, regression, heat/cold, WC form)
-#   10am ET → starters typically post; ballpark/starter-form lanes fill in
-#   12pm ET → catch-up for early games (12pm first pitch days)
-#   2pm ET  → afternoon confirmation run
-#   4pm ET  → late-posted lineups for evening slate
-#   6pm ET  → final fill before primetime first pitches
-#   8pm ET  → late-night cleanup
-#
-# Additive-freeze: each run only INSERTs rows not already stored for the day —
-# cards a user sees at 9am are still there at 6pm; the afternoon runs add new
-# lanes (lineup-dependent) that were empty before. Nothing is ever replaced.
-#
-# Cost: ~3 min/run avg × 7 runs/day × 30 days = ~630 GitHub Actions minutes/month
-# (GitHub Free includes 2,000 min/month for private repos — well within limits).
+# Additive-freeze still applies: each run only INSERTs rows not already
+# stored for the day — a manual run can never replace existing cards.
 
 on:
-  schedule:
-    - cron: '0 10 * * *'    # 6am EDT / 5am EST
-    - cron: '0 14 * * *'    # 10am EDT / 9am EST
-    - cron: '0 16 * * *'    # 12pm EDT / 11am EST
-    - cron: '0 18 * * *'    # 2pm EDT / 1pm EST
-    - cron: '0 20 * * *'    # 4pm EDT / 3pm EST
-    - cron: '0 22 * * *'    # 6pm EDT / 5pm EST
-    - cron: '0 0 * * *'     # 8pm EDT / 7pm EST (runs at midnight UTC = next calendar day)
   workflow_dispatch:
     inputs:
       leagues:
