@@ -3980,18 +3980,12 @@ struct HomeView: View {
                                 : Color.white.opacity(enabled ? 0.56 : 0.24))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
-                            .overlay(alignment: .bottom) {
-                                if league == selected {
-                                    Rectangle().fill(GaryColors.gold.opacity(0.85)).frame(height: 2)
-                                }
-                            }
                     }
                     .buttonStyle(.plain)
                     .disabled(!enabled)
                     .accessibilityAddTraits(league == selected ? .isSelected : [])
                 }
             }
-            Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
             ForEach(Array(rows.enumerated()), id: \.element.id) { i, r in
                 Button {
                     PicksFocusState.shared.focus(game: r.matchupFull,
