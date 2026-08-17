@@ -3158,7 +3158,6 @@ struct HomeView: View {
                                    PicksFocusState.shared.focus(game: m)
                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 3 }
                                })
-                .goldPlate()
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
         }
@@ -3959,13 +3958,6 @@ struct HomeView: View {
             homeSheetPanel(rows.filter { $0.league == selected.rawValue },
                            selected: selected,
                            available: available)
-                // Plate the PANEL, not the builder: a modifier on a two-view
-                // @ViewBuilder replicates onto each sibling, and the section
-                // rule above was getting its own plate (the black sliver).
-                .goldPlate()
-                // Every floating card shares the ONE gutter (founder crop
-                // review: the board ran wider than the approved cards).
-                .pageGutter()
         }
     }
 
@@ -4016,7 +4008,9 @@ struct HomeView: View {
         .padding(.vertical, 3)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(GaryColors.panelFill)
+                .fill(surface == .plated
+                      ? AnyShapeStyle(Color(hex: "#14100A").opacity(0.88))
+                      : AnyShapeStyle(GaryColors.panelFill))
                 // The component stays identical between tabs; only the selected
                 // sport's identity colors the single board outline.
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -5357,6 +5351,10 @@ struct HomeSectionRule: View {
 /// open the game; the footer unfolds the full ranked list, which stamps
 /// CASHED/LOST as the day settles and teases tomorrow's marquee once done.
 struct HomeMarqueeTracker: View {
+    // On the Solid Gold ground the card's translucent wash becomes an opaque
+    // dark plate — the marquee owns its full card design (corners, ticker,
+    // stroke, gutter), so ONLY the fill adapts. Never wrap it in a plate.
+    @Environment(\.garySurface) private var surface
     struct Entry: Identifiable {
         let id: String
         let rank: Int
@@ -5471,7 +5469,9 @@ struct HomeMarqueeTracker: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(GaryColors.panelFill)
+                .fill(surface == .plated
+                      ? AnyShapeStyle(Color(hex: "#14100A").opacity(0.88))
+                      : AnyShapeStyle(GaryColors.panelFill))
         )
         // The ribbon band is a square-cornered surface — clip it to the card
         // shape so it never pokes past the rounded border (Aug 3 polish).
