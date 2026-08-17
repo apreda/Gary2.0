@@ -23,6 +23,7 @@
  */
 import { createHash } from 'crypto';
 import { buildMlbDesk } from './mlbDesk.js';
+import { pickSideByName } from '../teamIdentity.js';
 import { GAME_PICK_MODEL, DESK_FALLBACK_MODELS, DESK_COST_PER_M } from '../agentic/orchestrator/orchestratorConfig.js';
 import { createGeminiSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from '../agentic/orchestrator/statAudit.js';
@@ -215,8 +216,10 @@ export function mapFinalPick(parsed, meta) {
   // F-5 text rules) expects bare trailing odds.
   const fp = String(parsed.final_pick || '').replace(/\(\s*([+-]\d{3,4})\s*\)/g, '$1').replace(/\s{2,}/g, ' ').trim();
   const isSpread = /run\s*line|[+-]1\.5/i.test(fp);
-  const fpLower = fp.toLowerCase();
-  const homeSide = fpLower.includes(String(meta.homeTeam || '').toLowerCase().split(' ').pop());
+  // Longest-suffix side detection (leakage-audit finding 3, Aug 17): the old
+  // last-word check read "White Sox ML" as the HOME side in a Sox-vs-Sox
+  // matchup and priced the pick off the wrong moneyline.
+  const homeSide = pickSideByName(fp, meta.homeTeam, meta.awayTeam) === 'home';
   const oddsM = fp.trim().match(/([+-]\d{3,4})$/);
   const metaOdds = isSpread
     ? (homeSide ? meta.spreadHomeOdds : meta.spreadAwayOdds)

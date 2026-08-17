@@ -20,6 +20,7 @@
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { matchupIncludesBothTeams } from './teamIdentity.js';
 import {
   GEMINI_FLASH_MODEL,
   GEMINI_SAFETY_SETTINGS,
@@ -147,22 +148,13 @@ function parseRecapResponse(text) {
 /**
  * Filter prop_results rows down to the ones belonging to one game, by matching
  * the row's matchup string ("Cardinals @ Mets") against the pick's home/away
- * team names. Tries full-name containment first, then last-word ("Mets",
- * "Golden Knights" → "knights") so short and full team-name styles both match.
+ * team names. Suffix-aware whole-word matching handles both short and full
+ * team-name styles, and a word both teams share ("Sox") can never stand in
+ * for either side (leakage-audit finding 4, Aug 17).
  * Callers fetch the date's prop_results once and filter per game.
  */
 export function filterPropsForGame(propRows, homeTeam, awayTeam) {
-  const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-  const h = norm(homeTeam);
-  const a = norm(awayTeam);
-  if (!h || !a) return [];
-  const hLast = h.split(' ').pop();
-  const aLast = a.split(' ').pop();
-  return (propRows || []).filter((r) => {
-    const m = norm(r.matchup);
-    if (!m) return false;
-    return (m.includes(h) || m.includes(hLast)) && (m.includes(a) || m.includes(aLast));
-  });
+  return (propRows || []).filter((r) => matchupIncludesBothTeams(r.matchup, homeTeam, awayTeam));
 }
 
 /**

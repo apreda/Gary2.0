@@ -34,6 +34,7 @@ import {
 } from '../../../mlbStatsApiService.js';
 import { recentWindowLine, monthArcLine, longLayoffFlag, earlyCareerFlag, midSeasonGapFlag, singleStartDistortion, teamChangeFlags, seasonLineQualifier, matchupRecencyLine, homeRoadLine } from './pitcherArc.js';
 import { foldName } from '../../../../utils/nameUtils.js';
+import { findStandingsRow } from '../../../teamIdentity.js';
 import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbSeasonSeriesGroups, computeMlbScheduleShape, computeMlbRecentSeriesForm, groupGamesIntoSeries, situationalSeriesLine, toEtDate } from './mlbSeriesState.js';
 import { computeHitterContact, hitterContactLine, computePitcherWhiffByStart } from './mlbContactQuality.js';
 import {
@@ -1872,9 +1873,9 @@ export async function buildMlbScoutReport(game, options = {}) {
   let situationFlagsSection = '';
   try {
     const teamGamesOf = (teamName) => {
-      const lw = teamName.toLowerCase().split(' ').pop();
-      const row = (bdlStandings || []).find(st =>
-        (st.team?.display_name || st.team?.full_name || '').toLowerCase().includes(lw));
+      // Exact whole-name lookup (leakage-audit finding 2, Aug 17): last-word
+      // `.includes` let a Sox team read the other Sox team's games-played.
+      const row = findStandingsRow(bdlStandings, teamName);
       return row ? (Number(row.wins) || 0) + (Number(row.losses) || 0) : null;
     };
     const gpOf = (stats, playerName) => {

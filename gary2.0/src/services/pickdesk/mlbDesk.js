@@ -15,6 +15,7 @@
  */
 import axios from 'axios';
 import { buildScoutReport } from '../agentic/scoutReport/scoutReportBuilder.js';
+import { findStandingsRow } from '../teamIdentity.js';
 import { ballDontLieService } from '../ballDontLieService.js';
 import { fetchStats } from '../agentic/tools/statRouters/index.js';
 import { summarizeStatForContext } from '../agentic/orchestrator/orchestratorHelpers.js';
@@ -37,16 +38,11 @@ const NEWS_HEADER = `═══ TODAY'S BREAKING NEWS ═══`;
 const INJURIES_HEADER = `═══ INJURIES (BDL Structured) ═══`;
 
 const todayEST = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-const lastWord = (name) => String(name || '').toLowerCase().split(' ').pop();
 
-function findRow(standings, teamName) {
-  const lw = lastWord(teamName);
-  return (standings || []).find(s => {
-    const dn = (s.team?.display_name || s.team?.full_name || '').toLowerCase();
-    const ab = (s.team?.abbreviation || '').toLowerCase();
-    return dn.includes(lw) || ab === lw;
-  }) || null;
-}
+// Exact whole-name standings lookup (leakage-audit finding 1, Aug 17): the
+// old last-word `.includes` match let one Sox team wear the other's division
+// line in the desk. findStandingsRow never substring-matches, never guesses.
+const findRow = (standings, teamName) => findStandingsRow(standings, teamName);
 
 export function stakesLine(standings, teamName) {
   const t = findRow(standings, teamName);
