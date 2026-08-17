@@ -197,6 +197,9 @@ private let depthStudies: [DepthStudy] = [
     .init(id: 7, name: "THE VAULT", cue: "MONUMENTAL SCALE"),
     .init(id: 8, name: "FIELD LEVEL", cue: "FULL SCENE · NO RULES · LIVE"),
     .init(id: 9, name: "GOLDEN HOUR", cue: "COLOSSAL SKYBOX · NO RULES · LIVE"),
+    .init(id: 10, name: "MOLTEN", cue: "LIQUID GOLD · ABSTRACT · LIVE"),
+    .init(id: 11, name: "THE GLOW", cue: "PURE RADIANCE · ABSTRACT · LIVE"),
+    .init(id: 12, name: "OBSIDIAN", cue: "LIVING SURFACE · ABSTRACT · LIVE"),
 ]
 
 struct DepthStudiesView: View {
@@ -267,7 +270,7 @@ private struct DepthStudyPage: View {
     var body: some View {
         ZStack {
             Group {
-                if [5, 6, 8, 9].contains(study.id) && !reduceMotion {
+                if [5, 6, 8, 9, 10, 11, 12].contains(study.id) && !reduceMotion {
                     // the LIVE studies: slow ambient animation at a throttled
                     // frame rate — atmosphere breathing, the market drawing
                     TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { tl in
@@ -336,6 +339,9 @@ private struct DepthBackground: View {
                 case 7: vault(w: w, h: h)
                 case 8: fieldLevel(w: w, h: h)
                 case 9: goldenHour(w: w, h: h)
+                case 10: molten(w: w, h: h)
+                case 11: theGlow(w: w, h: h)
+                case 12: obsidian(w: w, h: h)
                 default: Color.black
                 }
             }
@@ -889,6 +895,148 @@ private struct DepthBackground: View {
                         Gradient(colors: [Color(hex: "#F2B94E").opacity(0.30), Color(hex: "#F2B94E").opacity(0.02)]),
                         startPoint: CGPoint(x: sun.x, y: horizonY),
                         endPoint: CGPoint(x: sun.x, y: H)))
+        }
+    }
+
+    // STUDY 11 — MOLTEN. The Golden Hour presence with the imagery deleted:
+    // four ribbons of liquid gold flow diagonally through black, built from
+    // hundreds of soft light-blobs so the edges melt. Nothing to look AT —
+    // only material. The cards ride on top like plates on dark water.
+    @ViewBuilder private func molten(w: CGFloat, h: CGFloat) -> some View {
+        LinearGradient(colors: [Color(hex: "#0B0906"), Color(hex: "#060504"), Color(hex: "#0A0705")],
+                       startPoint: .top, endPoint: .bottom)
+        Canvas { ctx, size in
+            let W = size.width, H = size.height
+            let tones = [Color(hex: "#F2E4BC"), Color(hex: "#D9A62B"), Color(hex: "#A8791E"), Color(hex: "#FFE9AE")]
+            for ribbon in 0..<4 {
+                let tone = tones[ribbon]
+                let phase = Double(ribbon) * 1.7
+                let speed = 0.045 + 0.018 * Double(ribbon)
+                let baseY = H * (0.14 + 0.24 * CGFloat(ribbon))
+                let slope: CGFloat = ribbon % 2 == 0 ? 0.16 : -0.13
+                let peak = alpha(ribbon == 1 ? 0.075 : 0.055)
+                for k in 0..<56 {
+                    let u = Double(k) / 55.0
+                    let x = CGFloat(u) * (W * 1.3) - 0.15 * W
+                    let wave1 = H * 0.050 * CGFloat(sin(u * 4.2 * .pi + time * speed + phase))
+                    let wave2 = H * 0.022 * CGFloat(sin(u * 9.0 * .pi - time * speed * 1.6 + phase))
+                    let y = baseY + slope * (x - W / 2) + wave1 + wave2
+                    let r = W * (0.085 + 0.030 * CGFloat(sin(u * 3 * .pi + phase + time * 0.03)))
+                    let a = peak * sin(u * .pi)
+                    ctx.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)),
+                             with: .radialGradient(Gradient(colors: [tone.opacity(a), .clear]),
+                                                   center: CGPoint(x: x, y: y), startRadius: 0, endRadius: r))
+                }
+            }
+            // embers adrift between the ribbons
+            var rnd = DepthLCG(seed: 1010)
+            for _ in 0..<26 {
+                let x0 = rnd.next(), y0 = rnd.next()
+                let speed = 0.006 + rnd.next() * 0.010
+                let tw = 0.5 + 0.5 * sin(time * (0.8 + rnd.next()) + rnd.next() * 9)
+                let y = CGFloat((y0 + time * speed).truncatingRemainder(dividingBy: 1.08)) * H
+                let x = CGFloat(x0) * W + 8 * CGFloat(sin(time * 0.3 + y0 * 12))
+                let d = 1.2 + rnd.next() * 1.4
+                ctx.fill(Path(ellipseIn: CGRect(x: x, y: H - y, width: d, height: d)),
+                         with: .color(Color(hex: "#F6ECC8").opacity(alpha(0.18) * tw)))
+            }
+        }
+    }
+
+    // STUDY 12 — THE GLOW. One immense radiance breathing beneath the deck,
+    // light-shafts swaying like a slow exhale, motes rising through it — the
+    // colossal-scale feeling with no object to pull the eye. Gold and black
+    // and nothing else.
+    @ViewBuilder private func theGlow(w: CGFloat, h: CGFloat) -> some View {
+        Color(hex: "#060504")
+        Canvas { ctx, size in
+            let W = size.width, H = size.height
+            let source = CGPoint(x: 0.5 * W, y: 1.06 * H)
+            let breath = 0.86 + 0.14 * sin(time / 7.0)
+            let breath2 = 0.9 + 0.1 * sin(time / 5.0 + 2.1)
+            // the deep radiance
+            ctx.fill(Path(CGRect(x: 0, y: 0, width: W, height: H)),
+                     with: .radialGradient(
+                        Gradient(stops: [
+                            .init(color: Color(hex: "#E8B84B").opacity(alpha(0.34) * breath), location: 0),
+                            .init(color: Color(hex: "#9C6C1A").opacity(alpha(0.16) * breath), location: 0.34),
+                            .init(color: Color(hex: "#3A2A0C").opacity(alpha(0.08)), location: 0.62),
+                            .init(color: .clear, location: 1),
+                        ]),
+                        center: source, startRadius: 0, endRadius: 1.25 * H))
+            // a counter-glow answering faintly from above
+            ctx.fill(Path(CGRect(x: 0, y: 0, width: W, height: 0.5 * H)),
+                     with: .radialGradient(
+                        Gradient(colors: [Color(hex: "#FFF2CC").opacity(alpha(0.085) * breath2), .clear]),
+                        center: CGPoint(x: 0.5 * W, y: -0.18 * H), startRadius: 0, endRadius: 0.85 * H))
+            // light shafts swaying — an exhale, never a sun
+            let sway = 0.07 * sin(time * 0.05)
+            for k in 0..<9 {
+                let spread = Double(k - 4) * 0.16
+                let a = -Double.pi / 2 + spread + sway
+                let halfSpread = 0.045
+                let R = 1.35 * H
+                var wedge = Path()
+                wedge.move(to: source)
+                wedge.addLine(to: CGPoint(x: source.x + CGFloat(cos(a - halfSpread)) * R,
+                                          y: source.y + CGFloat(sin(a - halfSpread)) * R))
+                wedge.addLine(to: CGPoint(x: source.x + CGFloat(cos(a + halfSpread)) * R,
+                                          y: source.y + CGFloat(sin(a + halfSpread)) * R))
+                wedge.closeSubpath()
+                let rayAlpha = alpha(k % 2 == 0 ? 0.055 : 0.028) * breath
+                ctx.fill(wedge, with: .radialGradient(
+                    Gradient(colors: [Color(hex: "#FFE9AE").opacity(rayAlpha), .clear]),
+                    center: source, startRadius: 0.18 * H, endRadius: R))
+            }
+            // motes rising through the light
+            var rnd = DepthLCG(seed: 1111)
+            for _ in 0..<34 {
+                let x0 = rnd.next(), off = rnd.next()
+                let speed = 0.008 + rnd.next() * 0.014
+                let prog = (off + time * speed).truncatingRemainder(dividingBy: 1)
+                let y = (1.05 - CGFloat(prog) * 1.15) * H
+                let x = CGFloat(x0) * W + 10 * CGFloat(sin(time * 0.4 + off * 11))
+                let d = 1.0 + rnd.next() * 1.8
+                let tw = 0.4 + 0.6 * sin(time * (1.1 + rnd.next()) + off * 13)
+                let fade = sin(.pi * prog)
+                ctx.fill(Path(ellipseIn: CGRect(x: x, y: y, width: d, height: d)),
+                         with: .color(Color(hex: "#F6ECC8").opacity(alpha(0.30) * tw * fade)))
+            }
+        }
+    }
+
+    // STUDY 13 — OBSIDIAN. The app's ground becomes material: black glass
+    // whose surface carries slow gold caustics — light remembered by a dark
+    // stone. Fourteen breathing filaments, each stroked three times so it
+    // glows without a single blur filter. The quietest of the loud ones.
+    @ViewBuilder private func obsidian(w: CGFloat, h: CGFloat) -> some View {
+        LinearGradient(colors: [Color(hex: "#0A0806"), Color(hex: "#060504"), Color(hex: "#080604")],
+                       startPoint: .top, endPoint: .bottom)
+        LinearGradient(colors: [Color(hex: "#F6F1E7").opacity(0.02), .clear, Color(hex: "#F6F1E7").opacity(0.014)],
+                       startPoint: .topLeading, endPoint: .bottomTrailing)
+        Canvas { ctx, size in
+            let W = size.width, H = size.height
+            for i in 0..<14 {
+                let fi = Double(i)
+                let baseY = H * (0.05 + 0.068 * CGFloat(i))
+                var path = Path()
+                let steps = 30
+                for s in 0...steps {
+                    let u = Double(s) / Double(steps)
+                    let x = CGFloat(u) * W
+                    let t1: Double = sin(u * 2.0 * .pi * 1.8 + time * 0.22 + fi * 0.9)
+                    let t2: Double = sin(u * 2.0 * .pi * 3.7 - time * 0.16 + fi * 1.7)
+                    let t3: Double = sin(u * 2.0 * .pi * 7.1 + time * 0.31 + fi * 2.6)
+                    let wobble: Double = 0.018 * t1 + 0.011 * t2 + 0.006 * t3
+                    let y = baseY + H * CGFloat(wobble)
+                    if s == 0 { path.move(to: CGPoint(x: x, y: y)) } else { path.addLine(to: CGPoint(x: x, y: y)) }
+                }
+                // brightness swells and fades per filament on its own cycle
+                let pulse = 0.55 + 0.45 * sin(time * 0.12 + fi * 1.3)
+                ctx.stroke(path, with: .color(Color(hex: "#D9A62B").opacity(alpha(0.030) * pulse)), lineWidth: 7)
+                ctx.stroke(path, with: .color(Color(hex: "#D9A62B").opacity(alpha(0.058) * pulse)), lineWidth: 3.2)
+                ctx.stroke(path, with: .color(Color(hex: "#F2E4BC").opacity(alpha(0.10) * pulse)), lineWidth: 1.4)
+            }
         }
     }
 }
