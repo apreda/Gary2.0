@@ -246,7 +246,7 @@ describe('Football Picks overview', () => {
 });
 
 describe('Home MLB/NFL board parity', () => {
-  it('uses one canonical tabbed panel and changes only the selected sport accent', () => {
+  it('uses one canonical tabbed panel in the gold house language', () => {
     const homeSheet = views.slice(
       views.indexOf('@ViewBuilder private var homeSheet'),
       views.indexOf('// MARK: Tonight extras'),
@@ -258,7 +258,10 @@ describe('Home MLB/NFL board parity', () => {
 
     expect(homeSheet).toContain('ForEach(HomeBoardLeague.allCases');
     expect(homeSheet).toContain('homeSheetPanel(rows.filter { $0.league == selected.rawValue }');
-    expect(homeSheet).toContain('.stroke(selected.sport.accentColor.opacity(0.85), lineWidth: 1)');
+    // Aug 17 (founder): the sport-accent chrome retired with the Solid Gold
+    // ground — the board wears the same gold hairline as every card.
+    expect(homeSheet).toContain('.stroke(GaryColors.gold.opacity(0.16), lineWidth: 1)');
+    expect(homeSheet).not.toContain('selected.sport.accentColor');
     expect(homeSheet.match(/homeSheetPanel\(/g)).toHaveLength(2); // declaration + one render
     expect(homeSheet).not.toContain('ForEach(leagues');
     expect(rowBody).not.toContain('row.league ==');
