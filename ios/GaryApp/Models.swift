@@ -2246,6 +2246,20 @@ struct TomorrowPerson: Decodable {   // starters AND returns share this
     /// team alone — two same-team arms share a date on doubleheader days.
     let game_time: String?
     let game_number: Int?
+    /// Zero MLB data for this starter (no season ERA, no starts) — render the
+    /// honest empty state instead of a blank plate. Never fake zeros.
+    let no_mlb_starts: Bool?
+    /// His labeled minor-league season line (AAA/AA) when StatsAPI has one.
+    let milb: TomorrowMilb?
+}
+
+/// Minor-league season line for a debut starter — labeled by level so it can
+/// never pass as an MLB number.
+struct TomorrowMilb: Decodable {
+    let level: String?              // "AAA" | "AA"
+    let era: Double?
+    let ip: String?                 // "89.0" (thirds notation)
+    let k: Int?
 }
 
 struct TomorrowOuting: Decodable {

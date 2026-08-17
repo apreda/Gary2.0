@@ -80,6 +80,25 @@ export async function getMlbRecentGames(teamId, limit = 10) {
   return recent;
 }
 
+// Minor-league sportIds on the same StatsAPI host (AAA=11, AA=12). Serves the
+// debut-starter line: a probable with zero MLB data shows his labeled
+// minor-league season instead of a blank plate (founder GO, Aug 17 2026).
+const MILB_SPORT_IDS = { AAA: 11, AA: 12 };
+
+/** Raw season-pitching stats for one person at one minor-league level. */
+export async function getPitcherMilbSeasonRaw(personId, season, level) {
+  const sportId = MILB_SPORT_IDS[level];
+  if (!sportId) throw new Error(`Unknown MiLB level "${level}"`);
+  const key = `milb_season_${personId}_${season}_${level}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+  const data = await apiFetch(
+    `/people/${personId}/stats?stats=season&group=pitching&season=${season}&sportId=${sportId}`,
+  );
+  setCache(key, data);
+  return data;
+}
+
 /**
  * Upcoming (not-final) games for a team, tomorrow through +daysAhead days.
  * Feeds the scout report's SERIES STATE "of N" (Jul 9 2026): remaining
@@ -737,6 +756,7 @@ export default {
   getMlbSchedule,
   getMlbRecentGames,
   getMlbUpcomingGames,
+  getPitcherMilbSeasonRaw,
   getMlbTeams,
   findMlbTeam,
   getMlbStandings,

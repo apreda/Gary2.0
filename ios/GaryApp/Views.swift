@@ -23334,6 +23334,20 @@ struct GameScoutSection: View {
         if let t = vsOppText(st.vs_opp) { out.append(ArmRow(id: 2, label: "VS \(oppAbbr)", value: t)) }
         if let t = Self.restText(st.rest) { out.append(ArmRow(id: 3, label: "REST", value: t)) }
         if let t = seasonText(st) { out.append(ArmRow(id: 4, label: "SEASON", value: t)) }
+        // Debut arm (founder GO, Aug 17): zero MLB data reads as an honest
+        // state + his labeled AAA/AA line — never an empty ladder, never a
+        // fabricated MLB 0.00.
+        if st.no_mlb_starts == true {
+            out.append(ArmRow(id: 5, label: "SEASON", value: Text("No MLB starts")))
+            if let m = st.milb, let era = m.era {
+                var line = String(format: "%.2f ERA", era)
+                if let ip = m.ip {
+                    let ipShow = ip.hasSuffix(".0") ? String(ip.dropLast(2)) : ip
+                    line += " · \(ipShow) IP"
+                }
+                out.append(ArmRow(id: 6, label: m.level ?? "MILB", value: Text(line)))
+            }
+        }
         return out
     }
 
@@ -23764,6 +23778,17 @@ fileprivate struct ScoutArmsSection: View {
         if let rest = p.rest?.days { bits.append("\(rest) d") }
         return bits.isEmpty ? nil : bits.joined(separator: " · ")
     }
+    /// Labeled minor-league season line for a debut arm — real AAA/AA numbers
+    /// from the server, never a fabricated MLB 0.00.
+    private func milbLine(_ p: TomorrowPerson) -> String? {
+        guard let m = p.milb, let era = m.era else { return nil }
+        var s = String(format: "%.2f ERA", era)
+        if let ip = m.ip {
+            let ipShow = ip.hasSuffix(".0") ? String(ip.dropLast(2)) : ip
+            s += " · \(ipShow) IP"
+        }
+        return s
+    }
 
     @ViewBuilder private func stack(_ label: String, _ value: String?) -> some View {
         if let value {
@@ -23787,6 +23812,13 @@ fileprivate struct ScoutArmsSection: View {
                 stack("Season", seasonLine(p))
                 stack("Last out", lastOutLine(p))
                 stack("L3 · Rest", l3RestLine(p))
+                // Debut arm (founder GO, Aug 17): zero MLB data renders an
+                // honest state + his labeled AAA/AA line — never a blank
+                // plate, never a fabricated 0.00.
+                if p.no_mlb_starts == true {
+                    stack("Season", "No MLB starts")
+                    stack(p.milb?.level ?? "MiLB", milbLine(p))
+                }
             }
             .padding(12)
             // Both plates fill the pair's height (founder, Aug 6: "Perez's box

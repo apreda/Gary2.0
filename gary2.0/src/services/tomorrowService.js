@@ -73,8 +73,11 @@ import {
   getMlbStandings,
   getMlbTeams,
   getPitcherLastStarts,
+  getPitcherMilbSeasonRaw,
   getTeamVsHandSplits,
 } from './mlbStatsApiService.js';
+import { attachDebutContext, milbLineFromStatsReply } from './starterDebut.js';
+import { disambiguatePitcherHits } from './pitcherIdentity.js';
 import { getPitcherXStats } from './baseballSavantService.js';
 import { findParkData } from './agentic/tools/statRouters/mlbFetchers.js';
 import { ballDontLieService as bdl } from './ballDontLieService.js';
@@ -642,7 +645,10 @@ async function resolvePitcherBdlId(fullName, teamId) {
     const onTeam = byName.find((p) => (p.team?.id ?? p.team_id) === teamId);
     if (onTeam) return onTeam.id;
   }
-  if (byName.length > 1) return byName[0].id;
+  // Same exact full name on DIFFERENT teams and no team confirmation — the
+  // two-Will-Smiths class. Position is the remaining honest discriminator
+  // (we are resolving a starter); a surviving tie returns null, never a guess.
+  if (byName.length > 1) return disambiguatePitcherHits(byName);
   // No exact full-name hit — same last name + the right team is still safe.
   if (teamId != null) {
     const teamHits = players.filter((p) =>
@@ -736,6 +742,11 @@ async function enrichStartersWithOutings(starters, etDateStr, teamIndex) {
           try {
             const official = await getPitcherLastStarts(st.person_id, SEASON, 50);
             if (attachOfficialStartRows(st, official, etDateStr, teamIndex)) return;
+            // POSITIVE evidence from MLB's own log for HIS exact person id:
+            // zero starts this season. Only this stamp lets the debut pass
+            // flag him — a resolver/lookup failure below never can (a missing
+            // player is not a debuting player; finding-5 guard, Aug 18).
+            if (Array.isArray(official) && official.length === 0) st.mlb_log_confirmed_empty = true;
             console.warn(`[TomorrowBoard] official start log empty for ${st.full_name || st.name}; trying BDL`);
           } catch (e) {
             console.warn(`[TomorrowBoard] official start log failed for ${st.full_name || st.name}: ${e.message}; trying BDL`);
@@ -2110,6 +2121,18 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
     await enrichStartersWithOutings(starters, etDateStr, teamIndex);
   } catch (e) {
     console.warn(`[TomorrowBoard] starter outings failed (honest-empty): ${e.message}`);
+  }
+
+  // 2d. DEBUT STARTERS (founder GO, Aug 17) — a probable with zero MLB data
+  // gets an honest empty-state flag plus his labeled AAA/AA season line, so
+  // his plate never renders as a silent void or a fake 0.00.
+  try {
+    await attachDebutContext(starters, {
+      fetchLevel: async (personId, level) =>
+        milbLineFromStatsReply(await getPitcherMilbSeasonRaw(personId, SEASON, level), level),
+    });
+  } catch (e) {
+    console.warn(`[TomorrowBoard] debut-starter pass failed (honest-empty): ${e.message}`);
   }
 
   // 4. BIG GAMES.
