@@ -3224,7 +3224,7 @@ struct HomeView: View {
     /// One game on the sheet: title (matchup or live score), Gary's call(s),
     /// and a status that rolls scheduled time → live verdict → the stamp.
     struct HomeSheetRow: Identifiable {
-        enum Zone { case settled, live, upcoming }
+        enum Zone { case settled, live, interrupted, upcoming }
         let id: String
         let gameID: Int?
         let zone: Zone
@@ -3276,6 +3276,7 @@ struct HomeView: View {
             matches = exact.isEmpty
                 ? liveScoresNow.filter {
                     $0.game_id == nil
+                        && !$0.isInterrupted
                         && ($0.league ?? "").uppercased() == league
                         && abbrGameMatches($0.abbrGame, matchup: full)
                 }
@@ -3297,9 +3298,9 @@ struct HomeView: View {
             return only.isFinal && !hasStarted ? nil : only
         }
         if let live = matches.first(where: { $0.isLive }) { return live }
-        if hasStarted {
-            return matches.first { $0.isFinal } ?? matches.first { !$0.isFinal } ?? matches.first
-        }
+        if hasStarted, let final = matches.first(where: { $0.isFinal }) { return final }
+        if let interruption = matches.first(where: { $0.isInterrupted }) { return interruption }
+        if hasStarted { return matches.first { !$0.isFinal } ?? matches.first }
         return matches.first { !$0.isFinal } ?? matches.first { $0.isFinal } ?? matches.first
     }
 
@@ -3348,6 +3349,22 @@ struct HomeView: View {
     private static func homeBoardPick(_ pick: GaryPick, matches game: DailySlateRow) -> Bool {
         homeBoardPick(pick, league: game.league, gameID: game.bdl_game_id,
                       away: game.away_team, home: game.home_team)
+    }
+
+    /// Stable Home-marquee identity. Provider id is the normal contract; only
+    /// genuinely legacy id-less rows use matchup + 30-minute start bucket.
+    /// Returning nil when legacy time is missing deliberately fails closed —
+    /// two doubleheader games must never collapse into one membership key.
+    private static func homeMarqueeGameKey(league: String?, gameID: Int?,
+                                            matchup: String, commence: String?) -> String? {
+        let scopedLeague = (league ?? "").uppercased()
+        if let gameID { return "\(scopedLeague)|id:\(gameID)" }
+        guard let commence, let start = parseISO8601(commence) else { return nil }
+        let matchupKey = matchup.lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+            .joined(separator: "|")
+        return "\(scopedLeague)|legacy:\(matchupKey)|\(Int(start.timeIntervalSince1970 / 1800))"
     }
 
     /// A stored grade for this exact play. The pick signature strips only the
@@ -3410,6 +3427,20 @@ struct HomeView: View {
                 : calls.map { Self.homePickLabel($0.pick) }.joined(separator: "  ·  ")
             let ls = sheetLive(full, league: lgUpper, gameID: g.bdl_game_id,
                                commence: g.commence_time)
+            // A live-score row is the freshest authority. The exact slate row
+            // carries the interruption too, covering the short window before
+            // the live-score poll catches up. Never let a stale slate delay
+            // override an already-live/final snapshot.
+            let interruptionLabel: String? = {
+                if let liveLabel = ls?.interruptionLabel { return liveLabel }
+                guard ls == nil || ls?.status?.lowercased() == "scheduled" else { return nil }
+                return g.interruptionLabel
+            }()
+            let interruptionStatus: String? = {
+                if ls?.isInterrupted == true { return ls?.status?.lowercased() }
+                guard ls == nil || ls?.status?.lowercased() == "scheduled" else { return nil }
+                return g.isInterrupted ? g.game_status?.lowercased() : nil
+            }()
             let storedRows = sheetResults(for: full, away: away, home: home,
                                           league: (g.league ?? "").uppercased(),
                                           gameID: g.bdl_game_id)
@@ -3473,6 +3504,17 @@ struct HomeView: View {
                     statusText = calls.isEmpty ? "NO PICK" : "SWEATING"
                     statusColor = calls.isEmpty ? Color.white.opacity(0.62) : GaryColors.sweating
                 }
+            } else if let interruptionLabel {
+                // Provider state belongs beside the matchup, where STARTED /
+                // FINAL normally live. A delay/suspension can resume, while a
+                // postponement/cancellation is off today's board. Neither may
+                // masquerade as a live SWEAT or a settled result.
+                zone = .interrupted
+                clockText = interruptionLabel
+                let canResume = interruptionStatus == "delayed" || interruptionStatus == "suspended"
+                statusText = calls.isEmpty ? "NO PICK" : (canResume ? "ON HOLD" : "OFF BOARD")
+                statusColor = calls.isEmpty ? Color.white.opacity(0.62) : GaryColors.gold
+                pendingLine = nil
             } else if (ls?.isFinal ?? false) || !storedRows.isEmpty {
                 // A durable grade is just as authoritative as a live-score
                 // FINAL and outlives that transient feed until the 6am roll.
@@ -3513,7 +3555,8 @@ struct HomeView: View {
             // carries one "PICKS DROP 90 MIN BEFORE" note instead.)
             // The game has begun but the score feed hasn't caught it yet —
             // move it to LIVE honestly instead of listing a past start time.
-            if zone == .upcoming, let ct = g.commence_time, let d = parseISO8601(ct),
+            if zone == .upcoming, interruptionLabel == nil,
+               let ct = g.commence_time, let d = parseISO8601(ct),
                d.addingTimeInterval(180) < Date() {
                 if d.addingTimeInterval(6 * 60 * 60) < Date() {
                     // If both feeds are delayed, do not lie that a many-hours-old
@@ -3657,9 +3700,22 @@ struct HomeView: View {
             // Tonight's market, straight off the day board — the bottom row
             // carries real betting info instead of a third clock (founder, Jul 12).
             let bRow = todayBoard?.board.first { br in
-                Self.shortTeam(br.away_team).caseInsensitiveCompare(Self.shortTeam(away)) == .orderedSame
+                let sameLeague = (br.league ?? "").uppercased() == (big.league ?? "").uppercased()
+                guard sameLeague else { return false }
+                if let gameID = big.bdl_game_id {
+                    return br.bdl_game_id == gameID
+                }
+                // Legacy big-game rows have no provider id. Match the same
+                // teams AND start bucket; never borrow the other DH market.
+                guard let bigStart = big.commence_time.flatMap(parseISO8601),
+                      let boardStart = br.commence_time.flatMap(parseISO8601) else { return false }
+                return Self.shortTeam(br.away_team).caseInsensitiveCompare(Self.shortTeam(away)) == .orderedSame
                     && Self.shortTeam(br.home_team).caseInsensitiveCompare(Self.shortTeam(home)) == .orderedSame
+                    && Int(bigStart.timeIntervalSince1970 / 1800) == Int(boardStart.timeIntervalSince1970 / 1800)
             }
+            let slateInterruption = (ls == nil || ls?.status?.lowercased() == "scheduled")
+                ? bRow?.interruptionLabel : nil
+            if ls?.isInterrupted == true || slateInterruption != nil { result = nil }
             var oddsBits: [String] = []
             if let a = bRow?.ml_away, let h = bRow?.ml_home,
                let aAb = bRow?.away_abbr, let hAb = bRow?.home_abbr {
@@ -3678,7 +3734,7 @@ struct HomeView: View {
                 oddsBits.append("RL \(fav) \(line == line.rounded() ? String(Int(line)) : String(line))")
             }
             return HomeMarqueeTracker.Entry(
-                id: "mq-\(big.rank)-\(matchup)",
+                id: "mq-\(Self.homeMarqueeGameKey(league: big.league, gameID: big.bdl_game_id, matchup: matchup, commence: big.commence_time) ?? "rank:\(big.rank):\(matchup)")",
                 rank: big.rank,
                 league: big.league,
                 matchupFull: matchup,
@@ -3690,7 +3746,8 @@ struct HomeView: View {
                 oddsLine: oddsBits.isEmpty ? nil : oddsBits.joined(separator: " · "),
                 live: ls,
                 verdict: verdicts.first,
-                result: result
+                result: result,
+                slateInterruptionLabel: slateInterruption
             )
         }
         // HERO FILLERS (founder, Aug 4: the countdown counts to the NEXT game
@@ -3698,14 +3755,58 @@ struct HomeView: View {
         // Every slate game not already a big game becomes hero-eligible at
         // rank 99 (soonest wins the hero; rank only breaks ties) but never a
         // ribbon chip (railWorthy=false keeps the rail big-games-only).
-        let bigKeys = Set(bigs.compactMap { $0.matchup })
+        let bigKeys: Set<String> = Set(bigs.compactMap { big -> String? in
+            guard let matchup = big.matchup else { return nil }
+            return Self.homeMarqueeGameKey(league: big.league, gameID: big.bdl_game_id,
+                                            matchup: matchup, commence: big.commence_time)
+        })
         let fillers: [HomeMarqueeTracker.Entry] = (todayBoard?.board ?? []).compactMap { br -> HomeMarqueeTracker.Entry? in
             guard let a = br.away_team, let h = br.home_team else { return nil }
             let matchup = "\(a) @ \(h)"
-            guard !bigKeys.contains(matchup) else { return nil }
+            let boardKey = Self.homeMarqueeGameKey(league: br.league, gameID: br.bdl_game_id,
+                                                   matchup: matchup, commence: br.commence_time)
+            guard boardKey.map({ !bigKeys.contains($0) }) ?? true else { return nil }
             let calls = todayPicks.filter { p in
-                (p.awayTeam ?? "").caseInsensitiveCompare(a) == .orderedSame
-                    && (p.homeTeam ?? "").caseInsensitiveCompare(h) == .orderedSame
+                if let gameID = br.bdl_game_id {
+                    return p.game_id == gameID
+                        && (p.league ?? "").uppercased() == (br.league ?? "").uppercased()
+                }
+                return Self.homeBoardPick(p, league: br.league, gameID: nil, away: a, home: h)
+            }
+            let fillerLive = sheetLive(matchup, league: br.league ?? "", gameID: br.bdl_game_id,
+                                       commence: br.commence_time)
+            let storedRows = sheetResults(for: matchup, away: a, home: h,
+                                          league: (br.league ?? "").uppercased(),
+                                          gameID: br.bdl_game_id)
+            let verdicts = calls.map { p in
+                fillerLive.map { HomeLiveVerdict.evaluate(pick: p, live: $0) } ?? .neutral
+            }
+            let slateInterruption = (fillerLive == nil || fillerLive?.status?.lowercased() == "scheduled")
+                ? br.interruptionLabel : nil
+            var result: (String, Color)? = nil
+            if fillerLive?.isInterrupted != true, slateInterruption == nil {
+                if fillerLive?.isFinal == true {
+                    let cashed = verdicts.filter { $0 == .covering }.count
+                    let lost = verdicts.filter { $0 == .trailing }.count
+                    if cashed > 0 && lost == 0 { result = (AppFlags.storeSafe ? "✓ WON" : "✓ CASHED", GaryColors.win) }
+                    else if lost > 0 && cashed == 0 { result = ("✗ LOST", GaryColors.loss) }
+                    else if cashed > 0 && lost > 0 { result = ("✓✗ SPLIT", GaryColors.gold) }
+                    else { result = ("FINAL", Color.white.opacity(0.7)) }
+                } else if !storedRows.isEmpty {
+                    let outcomes: [String] = calls.compactMap { call in
+                        if let stored = sheetStoredOutcome(for: call, in: storedRows) { return stored }
+                        if calls.count == 1, storedRows.count == 1 { return storedRows.first?.result?.lowercased() }
+                        return nil
+                    }
+                    let cashed = outcomes.filter { ["won", "win", "w"].contains($0) }.count
+                    let lost = outcomes.filter { ["lost", "loss", "l"].contains($0) }.count
+                    let pushed = outcomes.filter { ["push", "p"].contains($0) }.count
+                    if cashed > 0 && lost == 0 { result = (AppFlags.storeSafe ? "✓ WON" : "✓ CASHED", GaryColors.win) }
+                    else if lost > 0 && cashed == 0 { result = ("✗ LOST", GaryColors.loss) }
+                    else if cashed > 0 && lost > 0 { result = ("✓✗ SPLIT", GaryColors.gold) }
+                    else if pushed > 0 { result = ("PUSH", GaryColors.gold) }
+                    else { result = ("FINAL", Color.white.opacity(0.7)) }
+                }
             }
             var oddsBits: [String] = []
             if let ml = br.ml_away, let mh = br.ml_home, let aAb = br.away_abbr, let hAb = br.home_abbr {
@@ -3716,7 +3817,7 @@ struct HomeView: View {
                 oddsBits.append("O/U \(t == t.rounded() ? String(Int(t)) : String(t))")
             }
             return HomeMarqueeTracker.Entry(
-                id: "mq-fill-\(matchup)",
+                id: "mq-fill-\(boardKey ?? "legacy:\(matchup):\(br.commence_time ?? "")")",
                 rank: 99,
                 league: br.league,
                 matchupFull: matchup,
@@ -3726,10 +3827,10 @@ struct HomeView: View {
                 pickLine: calls.isEmpty ? nil : calls.map { Self.homePickLabel($0.pick) }.joined(separator: "  ·  "),
                 pendingLine: nil,
                 oddsLine: oddsBits.isEmpty ? nil : oddsBits.joined(separator: " · "),
-                live: sheetLive(matchup, league: br.league ?? "", gameID: br.bdl_game_id,
-                                commence: br.commence_time),
-                verdict: nil,
-                result: nil,
+                live: fillerLive,
+                verdict: verdicts.first,
+                result: result,
+                slateInterruptionLabel: slateInterruption,
                 railWorthy: false
             )
         }
@@ -5223,14 +5324,22 @@ struct HomeMarqueeTracker: View {
         let live: LiveScore?
         let verdict: HomeLiveVerdict?
         let result: (String, Color)?   // settled stamp, nil until final
+        /// Exact daily-slate mirror while the live poll catches up.
+        var slateInterruptionLabel: String? = nil
         /// Hero-eligible but not a ribbon chip (Aug 4: every slate game can
         /// hold the countdown; the rail stays big-games-only).
         var railWorthy: Bool = true
         var isLive: Bool { live?.isLive == true }
+        var interruptionLabel: String? {
+            if live?.isLive == true || live?.isFinal == true { return nil }
+            return live?.interruptionLabel ?? slateInterruptionLabel
+        }
+        var isInterrupted: Bool { interruptionLabel != nil }
         var isFinal: Bool { result != nil }
         /// Begun by the clock, score feed not caught up yet.
         var started: Bool {
-            guard !isLive, !isFinal, let c = commence, let d = parseISO8601(c) else { return false }
+            guard !isLive, !isInterrupted, !isFinal,
+                  let c = commence, let d = parseISO8601(c) else { return false }
             return d.addingTimeInterval(180) < Date()
         }
     }
@@ -5269,7 +5378,7 @@ struct HomeMarqueeTracker: View {
         entries.filter { $0.id != hero?.id && $0.railWorthy }.sorted { a, b in
             func weight(_ e: Entry) -> Int {
                 if e.isLive { return 0 }
-                if e.started { return 1 }
+                if e.isInterrupted || e.started { return 1 }
                 if !e.isFinal { return 2 }
                 return 3
             }
@@ -5354,7 +5463,7 @@ struct HomeMarqueeTracker: View {
                         // Live/upcoming chips swap INTO the hero slot; a
                         // settled chip has nothing to sweat — it opens its
                         // game sheet directly.
-                        if e.isFinal || e.isLive || e.started {
+                        if e.isFinal || e.isLive || e.isInterrupted || e.started {
                             onOpenGame(e.matchupFull)
                         } else {
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
@@ -5419,6 +5528,10 @@ struct HomeMarqueeTracker: View {
                     .font(GaryFonts.mono(10.5, bold: true))
                     .foregroundStyle(GaryColors.win)
             }
+        } else if let interruption = e.interruptionLabel {
+            Text(interruption)
+                .font(GaryFonts.mono(10.5, bold: true))
+                .foregroundStyle(GaryColors.gold)
         } else if e.started {
             HStack(spacing: 5) {
                 Circle().fill(GaryColors.win).frame(width: 6, height: 6)
@@ -5482,7 +5595,17 @@ struct HomeMarqueeTracker: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.leading, 14).padding(.trailing, 12)
 
-                if let ct = e.commence, let d = parseISO8601(ct) {
+                if let interruption = e.interruptionLabel {
+                    Rectangle().fill(Color.white.opacity(0.07)).frame(width: 1)
+                        .padding(.vertical, 2)
+                    Text(interruption)
+                        .font(GaryFonts.mono(11, bold: true)).tracking(0.8)
+                        .foregroundStyle(GaryColors.gold)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.75)
+                        .frame(width: 88)
+                        .padding(.horizontal, 8)
+                } else if let ct = e.commence, let d = parseISO8601(ct) {
                     Rectangle().fill(Color.white.opacity(0.07)).frame(width: 1)
                         .padding(.vertical, 2)
                     // The timer, and under it the hour it's counting to
@@ -5999,7 +6122,10 @@ struct HomeSheetRowView: View {
                     if let clock = row.clockText {
                         Text(clock)
                             .font(.system(size: 13, weight: .semibold).monospacedDigit())
-                            .foregroundStyle(row.zone == .live ? GaryColors.gold : Color.white.opacity(0.55))
+                            .foregroundStyle(
+                                row.zone == .live || row.zone == .interrupted
+                                    ? GaryColors.gold : Color.white.opacity(0.55)
+                            )
                             .lineLimit(1).fixedSize()
                     }
                     if row.bigOne {
@@ -16177,6 +16303,9 @@ struct CompactPickRow: View {
     /// Game pages carry the score in the page hero (LiveScoreStrip), so their
     /// cards keep the plain start time in the slot. Everywhere else stays state-aware.
     var liveInSlot: Bool = true
+    /// Exact daily-slate mirror used while live_scores catches up. Game pages
+    /// supply this only from the same league + provider game id.
+    var interruptionLabel: String? = nil
     /// Billfold's recent picks are static (no flip) — they hide the affordance.
     var showTakeAffordance: Bool = true
     /// Overrides the eyebrow label (e.g. "FREE PICK" on the Tonight page).
@@ -16357,11 +16486,21 @@ struct CompactPickRow: View {
     private var confidenceValue: CGFloat {
         CGFloat(max(0.18, min(1.0, pick.confidence ?? 0.72)))
     }
+    private var interruptionOverride: String? {
+        guard let value = interruptionLabel?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty else { return nil }
+        return value.uppercased()
+    }
     private var resolvedResult: String? {
+        // The exact slate row may see the interruption before live_scores. It
+        // must suppress a stale matchup-keyed grade during that short window.
+        if interruptionOverride != nil { return nil }
         // Doubleheader guard: gameResult is MATCHUP-keyed, so a pick whose game shares a matchup
         // with another (a doubleheader) can borrow the OTHER game's graded result. If THIS pick's
         // own game (by game_id) is still live, suppress it so the card shows live, not a false FINAL.
-        if let gid = pick.game_id, liveCache.status(forGameId: gid)?.isLive == true { return nil }
+        if let gid = pick.game_id,
+           let status = liveCache.status(forGameId: gid, league: pick.league),
+           status.isLive || status.isInterrupted { return nil }
         guard let result = gameResult?.lowercased(), !result.isEmpty else { return nil }
         return result
     }
@@ -16406,7 +16545,11 @@ struct CompactPickRow: View {
     @State private var showPickInfo = false
     private var liveStatus: LiveScore? {
         guard liveInSlot, resolvedResult == nil else { return nil }
-        return liveCache.status(forGameId: pick.game_id) ?? liveCache.status(forMatchup: "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")")
+        if let gameId = pick.game_id {
+            return liveCache.status(forGameId: gameId, league: pick.league)
+        }
+        let legacy = liveCache.status(forMatchup: "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")")
+        return legacy?.isInterrupted == true ? nil : legacy
     }
 
     /// FINAL board for this matchup with no stored grade yet — feeds the
@@ -16415,7 +16558,13 @@ struct CompactPickRow: View {
     /// business everywhere, score-in-slot chrome is not.
     private var liveFinal: LiveScore? {
         guard resolvedResult == nil else { return nil }
-        let ls = liveCache.status(forGameId: pick.game_id) ?? liveCache.status(forMatchup: "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")")
+        let ls: LiveScore?
+        if let gameId = pick.game_id {
+            ls = liveCache.status(forGameId: gameId, league: pick.league)
+        } else {
+            let legacy = liveCache.status(forMatchup: "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")")
+            ls = legacy?.isInterrupted == true ? nil : legacy
+        }
         return (ls?.isFinal == true) ? ls : nil
     }
     private var liveGraded: String? {
@@ -16614,10 +16763,12 @@ struct CompactPickRow: View {
     /// Footer's gold state slot — the live line while the game runs, the
     /// final board before grading lands. Nil keeps the footer slim.
     private var footerStateText: String? {
-        guard displayResult == nil, let live = liveStatus else { return nil }
+        guard displayResult == nil else { return nil }
+        guard let live = liveStatus else { return interruptionOverride }
         if live.isLive { return liveSlotText(live, label: "LIVE") }
         if live.isFinal { return liveSlotText(live, label: "FINAL") }
-        return nil
+        if let interruption = live.interruptionLabel { return interruption }
+        return interruptionOverride
     }
 
     private enum LiveBetTone { case covering, trailing, neutral }
@@ -16678,10 +16829,11 @@ struct CompactPickRow: View {
             }
             return "FINAL"
         }
-        guard let ls = liveStatus else { return nil }
+        guard let ls = liveStatus else { return interruptionOverride }
         if ls.isLive { return liveLineRich(ls, label: "LIVE") }
         if ls.isFinal { return liveLineRich(ls, label: "FINAL") }
-        return nil
+        if let interruption = ls.interruptionLabel { return interruption }
+        return interruptionOverride
     }
 
     /// Start time, shown on the eyebrow row pre-game. Live/settled cards carry
@@ -16690,7 +16842,8 @@ struct CompactPickRow: View {
         // Pre-game shows the start time. Settled cards normally hide it, but the Winners
         // page (alwaysShowStartTime) keeps it visible since that page sorts by start time.
         if displayResult != nil { return alwaysShowStartTime ? (formattedTime.isEmpty ? nil : formattedTime) : nil }
-        if let live = liveStatus, live.isLive || live.isFinal { return nil }
+        if interruptionOverride != nil { return nil }
+        if let live = liveStatus, live.isLive || live.isFinal || live.isInterrupted { return nil }
         return formattedTime.isEmpty ? nil : formattedTime
     }
 
@@ -17042,6 +17195,7 @@ struct FlippablePickCard: View {
     var finalScore: String? = nil
     var showSportBadge: Bool = false
     var liveInSlot: Bool = true
+    var interruptionLabel: String? = nil
     /// 21B-S poured-gold front for entitled Winners cards (back stays dark).
     var premiumFinish: Bool = false
     /// Winners slot for the wordless edge-rail cue (front face only).
@@ -17059,7 +17213,7 @@ struct FlippablePickCard: View {
             // Front pinned to the uniform height so every pick card in a rail is
             // the same size (fixedHeight on CompactPickRow) — no per-card measuring,
             // which is what let 2-line heroes end up taller than 1-line ones.
-            CompactPickRow(pick: pick, gameResult: gameResult, finalScore: finalScore, showSportBadge: showSportBadge, liveInSlot: liveInSlot, eyebrowOverride: eyebrowOverride, alwaysShowStartTime: alwaysShowStartTime, fixedHeight: CompactPickRow.uniformHeight, premiumFinish: premiumFinish, winnersSlot: winnersSlot)
+            CompactPickRow(pick: pick, gameResult: gameResult, finalScore: finalScore, showSportBadge: showSportBadge, liveInSlot: liveInSlot, interruptionLabel: interruptionLabel, eyebrowOverride: eyebrowOverride, alwaysShowStartTime: alwaysShowStartTime, fixedHeight: CompactPickRow.uniformHeight, premiumFinish: premiumFinish, winnersSlot: winnersSlot)
                 .opacity(flipped ? 0 : 1)
 
             if flipped || hasEverFlipped {
@@ -18514,6 +18668,7 @@ struct FlippablePropCard: View {
     var finalScore: String? = nil
     var showSportBadge: Bool = false
     var liveInSlot: Bool = true
+    var interruptionLabel: String? = nil
     /// Passed straight to the front card — Winners shows the start time on settled
     /// cards (it sorts by time), mirroring the game card.
     var alwaysShowStartTime: Bool = false
@@ -18531,7 +18686,7 @@ struct FlippablePropCard: View {
             // Front pinned to the shared uniform height so prop cards match the
             // game cards exactly (fixedHeight on CompactPropRow) — no per-card
             // measuring, which is what let content-length drive different sizes.
-            CompactPropRow(prop: prop, gameResult: gameResult, finalScore: finalScore, showSportBadge: showSportBadge, liveInSlot: liveInSlot, alwaysShowStartTime: alwaysShowStartTime, fixedHeight: CompactPickRow.uniformHeight, premiumFinish: premiumFinish)
+            CompactPropRow(prop: prop, gameResult: gameResult, finalScore: finalScore, showSportBadge: showSportBadge, liveInSlot: liveInSlot, interruptionLabel: interruptionLabel, alwaysShowStartTime: alwaysShowStartTime, fixedHeight: CompactPickRow.uniformHeight, premiumFinish: premiumFinish)
                 .opacity(flipped ? 0 : 1)
 
             // The exact same back-face shell as game picks: same take preview,
@@ -19600,6 +19755,10 @@ final class LiveScoreCache: ObservableObject {
     /// ("sd|phi") → rows (the same fuzzy resolution as abbrGameMatches, but the
     /// keyword scan happens once per refresh, not once per card per tick).
     private var byGameId: [String: LiveScore] = [:]
+    /// league + provider id → row. Provider ids are only authoritative inside
+    /// their league; interruption UI never adopts a same-numbered game from a
+    /// different feed.
+    private var byLeagueGameId: [String: LiveScore] = [:]
     private var byMatchupKey: [String: [LiveScore]] = [:]
     /// Finals are part of the active slate until the 6 a.m. ET roll. The live
     /// poller may prune a completed row around wall-clock midnight, before the
@@ -19615,6 +19774,7 @@ final class LiveScoreCache: ObservableObject {
     /// poll fast; with nothing live (all scheduled/final) back off hard — the
     /// backend only writes every 1-2 min and an idle board doesn't change.
     private let liveInterval: UInt64 = 22_000_000_000   // ~22s while a game is live
+    private let interruptionInterval: UInt64 = 60_000_000_000 // catch resume/new-time updates promptly
     private let idleInterval: UInt64 = 180_000_000_000  // 3 min when nothing is live
     private let retryInterval: UInt64 = 30_000_000_000  // recover quickly from transport failure
 
@@ -19650,7 +19810,9 @@ final class LiveScoreCache: ObservableObject {
                 // Failed requests retry promptly. Successful requests derive the
                 // cadence from the merged cache, not raw response ordering.
                 let interval = fresh == nil ? self.retryInterval
-                    : (self.scores.contains(where: { $0.isLive }) ? self.liveInterval : self.idleInterval)
+                    : self.scores.contains(where: { $0.isLive }) ? self.liveInterval
+                    : self.scores.contains(where: { $0.isInterrupted }) ? self.interruptionInterval
+                    : self.idleInterval
                 await self.sleepOrWake(interval)
             }
         }
@@ -19742,7 +19904,9 @@ final class LiveScoreCache: ObservableObject {
     }
 
     private func scoreIdentity(_ score: LiveScore) -> String {
-        if let id = score.game_id, !id.isEmpty { return "id:\(id)" }
+        if let id = score.game_id, !id.isEmpty {
+            return "id:\((score.league ?? "").uppercased()):\(id)"
+        }
         return [score.league, score.away_abbr, score.home_abbr]
             .map { ($0 ?? "").uppercased() }
             .joined(separator: "|")
@@ -19784,15 +19948,26 @@ final class LiveScoreCache: ObservableObject {
     @MainActor
     private func rebuildIndexes() {
         var gid: [String: LiveScore] = [:]
+        var leagueGid: [String: LiveScore] = [:]
         var mk: [String: [LiveScore]] = [:]
         for s in scores {
-            if let id = s.game_id { gid[id] = s }
+            if let id = s.game_id {
+                gid[id] = s
+                leagueGid[Self.leagueGameKey(gameId: id, league: s.league)] = s
+            }
             if let key = liveScoreMatchupKey(awayAbbr: s.away_abbr, homeAbbr: s.home_abbr) {
                 mk[key, default: []].append(s)
             }
         }
         byGameId = gid
+        byLeagueGameId = leagueGid
         byMatchupKey = mk
+    }
+
+    private static func leagueGameKey(gameId: String, league: String?) -> String {
+        let raw = (league ?? "").uppercased()
+        let canonical = raw == "MLB HR" ? "MLB" : raw == "NFL TDS" ? "NFL" : raw
+        return "\(canonical)|\(gameId)"
     }
 
     func status(forMatchup matchup: String) -> LiveScore? {
@@ -19837,6 +20012,15 @@ final class LiveScoreCache: ObservableObject {
     func status(forGameId gameId: Int?) -> LiveScore? {
         guard let gid = gameId else { return nil }
         return byGameId[String(gid)]
+    }
+
+    /// Exact provider identity for status-sensitive UI. Interruption states
+    /// must use this league-scoped path and never infer identity from teams.
+    func status(forGameId gameId: Int?, league: String?) -> LiveScore? {
+        guard let gid = gameId,
+              let league = league?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !league.isEmpty else { return nil }
+        return byLeagueGameId[Self.leagueGameKey(gameId: String(gid), league: league)]
     }
 
     /// Settled final score string ("3-1") for a matchup, from game_results (today
@@ -21635,9 +21819,14 @@ struct PicksCarouselView: View {
     /// fallback only on single-game days — a doubleheader page never borrows
     /// its twin's scoreboard row.
     private func liveScore(for g: (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])) -> LiveScore? {
-        if let id = bdlGameId(for: g), let ls = liveCache.status(forGameId: id) { return ls }
+        if let id = bdlGameId(for: g) {
+            return liveCache.status(forGameId: id, league: gameLeague(g))
+        }
         if g.dh { return nil }
-        return liveCache.status(forMatchup: g.matchup)
+        let legacy = liveCache.status(forMatchup: g.matchup)
+        // Interruption is a game-identity claim and may never use the legacy
+        // team-name join. Existing id-less live/final behavior remains intact.
+        return legacy?.isInterrupted == true ? nil : legacy
     }
 
     /// Matchup-bar order: LIVE (0) → upcoming (1) → finished/graded (2). Reads the
@@ -22046,6 +22235,7 @@ struct PicksCarouselView: View {
                                       }(),
                                       gamePickResult: { store.gamePickResult($0, forYesterday: pickDay == .yesterday) }, resultForProp: { store.resultForProp($0, forYesterday: pickDay == .yesterday) },
                                       edges: edges(for: g), bdlGameId: bdlGameId(for: g),
+                                      interruptionLabel: interruptionLabel(for: g),
                                       onTapProp: { selectedProp = $0 },
                                       onSeeYesterday: { withAnimation(.easeInOut(duration: 0.25)) { pickDay = .yesterday; page = 0 } },
                                       pageLeagueHint: league(for: g))
@@ -22277,7 +22467,7 @@ struct PicksCarouselView: View {
         let league = gameLeague(g).uppercased()
 
         if let gameId = bdlGameId(for: g),
-           let live = liveCache.status(forGameId: gameId),
+           let live = liveCache.status(forGameId: gameId, league: league),
            (live.league ?? "").uppercased() == league,
            let away = live.away_abbr?.trimmingCharacters(in: .whitespacesAndNewlines),
            let home = live.home_abbr?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -22318,6 +22508,9 @@ struct PicksCarouselView: View {
             return ("FINAL · \(formatFinalScore(g.matchup, raw))", .white.opacity(0.45))
         }
         if let ls = liveScore(for: g) {
+            if let interruption = ls.interruptionLabel {
+                return (interruption, GaryColors.gold)
+            }
             if ls.isLive {
                 let score = ls.scoreLine.map { " · \($0)" } ?? ""
                 let det = (ls.detail?.isEmpty == false) ? " · \(ls.detail!)" : ""
@@ -22327,7 +22520,28 @@ struct PicksCarouselView: View {
                 return ("FINAL · \(formatFinalScore(g.matchup, score))", .white.opacity(0.45))
             }
         }
+        // The exact slate row closes the brief gap before live_scores picks up
+        // an interruption. Provider id + league are mandatory; a matchup-only
+        // row can never put one twin game's delay on the other.
+        if let interruption = interruptionLabel(for: g) {
+            return (interruption, GaryColors.gold)
+        }
         return nil
+    }
+
+    /// Exact interruption state for one Picks-page game. A live/final snapshot
+    /// outranks the daily-slate mirror; otherwise either exact source may carry
+    /// the provider's label while the other refreshes.
+    private func interruptionLabel(for g: (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])) -> String? {
+        if let live = liveScore(for: g) {
+            if live.isLive || live.isFinal { return nil }
+            if let label = live.interruptionLabel { return label }
+        }
+        guard pickDay == .today, let gameId = bdlGameId(for: g) else { return nil }
+        let league = gameLeague(g).uppercased()
+        return store.slate.first {
+            $0.bdl_game_id == gameId && ($0.league ?? "").uppercased() == league
+        }?.interruptionLabel
     }
 
     /// Three-letter team abbreviation from the league keyword maps (sibling of the
@@ -22668,10 +22882,21 @@ struct TeasedPickCard: View {
     /// Kickoff/first pitch — once it passes, "incoming" would be a lie (the
     /// window closed), so the card switches to the honest no-pick state.
     var commence: Date? = nil
+    /// Exact provider interruption for this game. When present, the old start
+    /// time cannot turn the placeholder into the false NO PICK state.
+    var interruptionLabel: String? = nil
     /// Optional footer-right action (the game pages link back to yesterday).
     var onSeeYesterday: (() -> Void)? = nil
 
-    private var gameStarted: Bool { commence.map { $0 <= Date() } ?? false }
+    private var providerStatus: String? {
+        guard let value = interruptionLabel?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty else { return nil }
+        return value.uppercased()
+    }
+    private var gameStarted: Bool {
+        guard providerStatus == nil else { return false }
+        return commence.map { $0 <= Date() } ?? false
+    }
     private var eventName: String {
         switch league?.uppercased() {
         case "NFL", "NCAAF": return "kickoff"
@@ -22693,10 +22918,10 @@ struct TeasedPickCard: View {
                 .padding(.bottom, 6)
 
                 VStack(alignment: .leading, spacing: -18) {
-                    Text(gameStarted ? "NO PICK" : "PICKS")
+                    Text(providerStatus != nil ? "GAME" : (gameStarted ? "NO PICK" : "PICKS"))
                         .font(GaryFonts.display(58))
                         .foregroundStyle(.white)
-                    Text(gameStarted ? "THIS GAME" : "INCOMING")
+                    Text(providerStatus ?? (gameStarted ? "THIS GAME" : "INCOMING"))
                         .font(GaryFonts.display(58))
                         .foregroundStyle(GaryColors.lightGold)
                         .lineLimit(1).minimumScaleFactor(0.5)
@@ -22704,7 +22929,9 @@ struct TeasedPickCard: View {
                 .padding(.top, -1)
                 .padding(.trailing, 52)
 
-                Text(gameStarted
+                Text(providerStatus != nil
+                     ? "The provider lists this game as \(providerStatus!.lowercased()). Gary's call stays off the live board."
+                     : gameStarted
                      ? "Gary's call didn't post for this one. The rest of the board is live."
                      : "Gary posts his call ~90 minutes before \(eventName)")
                     .font(GaryFonts.text(13.5, .medium))
@@ -22718,8 +22945,8 @@ struct TeasedPickCard: View {
                     .padding(.vertical, 12)
 
                 HStack(spacing: 10) {
-                    Text([league?.uppercased(), time].compactMap { $0 }.joined(separator: " · ")
-                         .isEmpty ? "TONIGHT" : [league?.uppercased(), time].compactMap { $0 }.joined(separator: " · "))
+                    Text([league?.uppercased(), providerStatus ?? time].compactMap { $0 }.joined(separator: " · ")
+                         .isEmpty ? "TONIGHT" : [league?.uppercased(), providerStatus ?? time].compactMap { $0 }.joined(separator: " · "))
                         .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
                         .foregroundStyle(GaryColors.gold)
                     Spacer()
@@ -23442,8 +23669,23 @@ fileprivate struct ScoutTrioData {
         awayStreakLongest = ra?.streak_longest ?? false; homeStreakLongest = rh?.streak_longest ?? false
         awayRunsPgL10 = ra?.runs_pg_l10; homeRunsPgL10 = rh?.runs_pg_l10
 
-        let w = board?.weather?.first {
+        let weatherCandidates = (board?.weather ?? []).filter {
             ($0.away_abbr == aAb && $0.home_abbr == hAb) || matches($0.matchup, matchup)
+        }
+        let w: TomorrowWeather?
+        if isDoubleheader {
+            // A twin bill can have materially different first-pitch weather.
+            // Require the same game-time bucket; never borrow the other game's
+            // forecast when this game's timestamp is absent or does not match.
+            if let myBucket = PicksCarouselView.timeBucket(commence) {
+                w = weatherCandidates.first {
+                    PicksCarouselView.timeBucket(parseISO8601($0.commence_time ?? "")) == myBucket
+                }
+            } else {
+                w = nil
+            }
+        } else {
+            w = weatherCandidates.first
         }
         venue = w?.venue ?? row?.venue
         tempF = w?.temp_f; windMph = w?.wind_mph; weatherNote = w?.note
@@ -23715,6 +23957,18 @@ fileprivate struct ScoutBigNumbersSection: View {
         let numeral: String
         let bold: String
         let rest: String
+        let fractionNumerator: Int?
+        let fractionDenominator: Int?
+
+        init(id: String, numeral: String, bold: String, rest: String,
+             fractionNumerator: Int? = nil, fractionDenominator: Int? = nil) {
+            self.id = id
+            self.numeral = numeral
+            self.bold = bold
+            self.rest = rest
+            self.fractionNumerator = fractionNumerator
+            self.fractionDenominator = fractionDenominator
+        }
     }
     // THE LADDER (founder GO, Aug 14 2026). Rows 1-2 are fixed (HR L5, pen ERA
     // L14). Rows 3-5 fill from a ranked list of conditional reads — line move,
@@ -23814,7 +24068,8 @@ fileprivate struct ScoutBigNumbersSection: View {
         }
         return Row(id: "nrfi", numeral: label,
                    bold: "First innings: \(d.awayName) \(a)/10 · \(d.homeName) \(h)/10 scoring in the 1st",
-                   rest: oddsBit)
+                   rest: oddsBit,
+                   fractionNumerator: max(a, h), fractionDenominator: 10)
     }
 
     /// FLOOR — the last guaranteed row: each club's scoring pace over its
@@ -23886,11 +24141,24 @@ fileprivate struct ScoutBigNumbersSection: View {
                     // 40pt numeral against a two-line sentence sat the words on
                     // the numeral's baseline, i.e. at its foot.
                     HStack(alignment: .center, spacing: 14) {
-                        Text(r.numeral)
-                            .font(GaryFonts.display(40))
-                            .foregroundStyle(i < 2 ? GaryColors.gold : ScoutMock.warm)
-                            .frame(minWidth: 64, alignment: .leading)
-                            .lineLimit(1).minimumScaleFactor(0.5)
+                        Group {
+                            if let numerator = r.fractionNumerator,
+                               let denominator = r.fractionDenominator {
+                                HStack(alignment: .top, spacing: 0) {
+                                    Text("\(numerator)/")
+                                        .font(GaryFonts.display(40))
+                                    Text("\(denominator)")
+                                        .font(GaryFonts.display(20))
+                                        .padding(.top, 2)
+                                }
+                            } else {
+                                Text(r.numeral)
+                                    .font(GaryFonts.display(40))
+                                    .lineLimit(1).minimumScaleFactor(0.5)
+                            }
+                        }
+                        .foregroundStyle(i < 2 ? GaryColors.gold : ScoutMock.warm)
+                        .frame(minWidth: 64, alignment: .leading)
                         (Text(r.bold).bold().foregroundColor(ScoutMock.warm)
                             + Text(r.rest).foregroundColor(ScoutMock.warm.opacity(0.85)))
                             .font(.system(size: 12.5).monospacedDigit())
@@ -23918,6 +24186,8 @@ struct PicksGamePage: View {
     /// This game's BDL id (from its slate row) — doubleheader-exact live-score
     /// lookups; nil when the slate hasn't landed.
     var bdlGameId: Int? = nil
+    /// Exact daily-slate/live-score interruption label for the no-pick card.
+    var interruptionLabel: String? = nil
     let onTapProp: (PropPick) -> Void
     /// Flips the whole Picks view to YESTERDAY's board/results — wired from the
     /// locked look-ahead card so a user with no pick yet can go see last night.
@@ -23987,8 +24257,12 @@ struct PicksGamePage: View {
     /// page never borrows its twin's score via the matchup-string fallback.
     @ObservedObject private var liveCache = LiveScoreCache.shared
     private var heroScore: LiveScore? {
-        if let bdlGameId, let ls = liveCache.status(forGameId: bdlGameId) { return ls }
-        return group.dh ? nil : liveCache.status(forMatchup: group.matchup)
+        if let bdlGameId {
+            return liveCache.status(forGameId: bdlGameId, league: pageLeague)
+        }
+        guard !group.dh else { return nil }
+        let legacy = liveCache.status(forMatchup: group.matchup)
+        return legacy?.isInterrupted == true ? nil : legacy
     }
 
     var body: some View {
@@ -24012,11 +24286,12 @@ struct PicksGamePage: View {
                             FlippablePickCard(pick: e.pick,
                                               gameResult: gamePickResult(e.pick),
                                               showSportBadge: false,
-                                              liveInSlot: true)
+                                              liveInSlot: true,
+                                              interruptionLabel: interruptionLabel)
                                 .frame(width: cardW)
                         }
                         ForEach(topProps) { p in
-                            FlippablePropCard(prop: p, gameResult: resultForProp(p), showSportBadge: true, liveInSlot: true)
+                            FlippablePropCard(prop: p, gameResult: resultForProp(p), showSportBadge: true, liveInSlot: true, interruptionLabel: interruptionLabel)
                                 .frame(width: cardW)
                         }
                     }
@@ -24034,6 +24309,7 @@ struct PicksGamePage: View {
                                // game timestamp is a defensive fallback for rows
                                // assembled before the slate finishes hydrating.
                                commence: group.commence ?? parseISO8601(group.props.first?.commence_time ?? ""),
+                               interruptionLabel: interruptionLabel,
                                onSeeYesterday: onSeeYesterday)
                     .padding(.horizontal, 16)
             }
@@ -24452,9 +24728,17 @@ struct LiveScoreStrip: View {
                 Text("LIVE")
                     .font(GaryFonts.mono(9.5, bold: true)).tracking(1.4)
                     .foregroundStyle(GaryColors.gold)
-            } else {
+            } else if let interruption = score.interruptionLabel {
+                Text(interruption)
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1.0)
+                    .foregroundStyle(GaryColors.gold)
+            } else if score.isFinal {
                 Text("FINAL")
                     .font(GaryFonts.mono(9.5, bold: true)).tracking(1.4)
+                    .foregroundStyle(.white.opacity(0.62))
+            } else {
+                Text("SCHEDULED")
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1.0)
                     .foregroundStyle(.white.opacity(0.62))
             }
             if let line = score.scoreLine {
@@ -25181,6 +25465,9 @@ struct CompactPropRow: View {
     /// Game pages carry the score in the page hero (LiveScoreStrip), so their
     /// cards keep the plain start time in the slot. Everywhere else stays state-aware.
     var liveInSlot: Bool = true
+    /// Exact daily-slate mirror used while live_scores catches up. Game pages
+    /// supply this only from the same league + provider game id.
+    var interruptionLabel: String? = nil
     /// Winners keeps the start time visible on settled cards (it sorts by time);
     /// elsewhere settled cards hide it. Mirrors the game card's flag exactly.
     /// Declared BEFORE fixedHeight to match CompactPickRow's field order (the
@@ -25203,11 +25490,18 @@ struct CompactPropRow: View {
         Sport.from(league: prop.effectiveLeague).accentGradient
             ?? LinearGradient(colors: [accentColor, accentColor], startPoint: .leading, endPoint: .trailing)
     }
+    private var interruptionOverride: String? {
+        guard let value = interruptionLabel?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty else { return nil }
+        return value.uppercased()
+    }
     // MARK: - Result Stamp Properties
     private var resolvedResult: String? {
+        if interruptionOverride != nil { return nil }
         // Doubleheader guard: suppress the matchup-keyed graded result when THIS prop's game
         // (by game_id) is still live — else it borrows the other doubleheader game's result.
-        if let gid = prop.game_id, liveCache.status(forGameId: gid)?.isLive == true { return nil }
+        if let status = identifiedGameStatus,
+           status.isLive || status.isInterrupted { return nil }
         if let result = gameResult?.lowercased(), !result.isEmpty { return result }
         // Game-card parity (founder, Jul 23): no stored grade yet, but the game
         // is FINAL and we hold the player's final line — grade it ourselves.
@@ -25234,7 +25528,7 @@ struct CompactPropRow: View {
     /// The game card's liveGraded, prop edition: FINAL board + final line →
     /// verdict now, instead of waiting on the grading cron's next pass.
     private var livePropGraded: String? {
-        guard liveCache.status(forMatchup: prop.matchup ?? "")?.isFinal == true,
+        guard identifiedGameStatus?.isFinal == true,
               let v = liveValue, let line = lineValue else { return nil }
         if Double(v) == line { return "push" }
         return (Double(v) > line) != isUnderBet ? "won" : "lost"
@@ -25338,9 +25632,16 @@ struct CompactPropRow: View {
     /// (story + square) and presents the system sheet.
     @State private var shareItem: PickShareItem? = nil
     @State private var showPickInfo = false
+    private var identifiedGameStatus: LiveScore? {
+        if let gameId = prop.game_id {
+            return liveCache.status(forGameId: gameId, league: prop.effectiveLeague)
+        }
+        let legacy = liveCache.status(forMatchup: prop.matchup ?? "")
+        return legacy?.isInterrupted == true ? nil : legacy
+    }
     private var liveStatus: LiveScore? {
         guard liveInSlot, resolvedResult == nil else { return nil }
-        return liveCache.status(forMatchup: prop.matchup ?? "")
+        return identifiedGameStatus
     }
 
     /// The actual line value (e.g. "24.5") for use inside the bet pill so
@@ -25445,7 +25746,8 @@ struct CompactPropRow: View {
     /// live cards hide it (the footer carries the live line instead).
     private var propFrontTime: String? {
         if resolvedResult != nil { return alwaysShowStartTime ? (formattedTime.isEmpty ? nil : formattedTime) : nil }
-        if let live = liveStatus, live.isLive || live.isFinal { return nil }
+        if interruptionOverride != nil { return nil }
+        if let live = liveStatus, live.isLive || live.isFinal || live.isInterrupted { return nil }
         return formattedTime.isEmpty ? nil : formattedTime
     }
 
@@ -25458,19 +25760,20 @@ struct CompactPropRow: View {
             let mk = prop.matchup ?? ""
             // Game-card parity: rich cache line only when it names the teams,
             // else the formatted score paths (never a bare "17-1" fragment).
-            if let ls = liveCache.status(forMatchup: mk),
+            if let ls = identifiedGameStatus,
                ls.isFinal, ls.away_score != nil, ls.home_score != nil,
                ls.away_abbr != nil, ls.home_abbr != nil {
                 return liveLineRich(ls, label: "FINAL")
             }
             if let fs = finalScore, !fs.isEmpty { return "FINAL · \(finalScoreLine(matchup: mk, raw: fs, league: prop.effectiveLeague))" }
             if let g = liveCache.gradedScore(forMatchup: mk) { return "FINAL · \(finalScoreLine(matchup: mk, raw: g, league: prop.effectiveLeague))" }
-            if let ls = liveCache.status(forMatchup: mk), ls.isFinal, let a = ls.away_score, let h = ls.home_score {
+            if let ls = identifiedGameStatus, ls.isFinal,
+               let a = ls.away_score, let h = ls.home_score {
                 return "FINAL · \(finalScoreLine(matchup: mk, raw: "\(a)-\(h)", league: prop.effectiveLeague))"
             }
             return "FINAL"
         }
-        guard let ls = liveStatus else { return nil }
+        guard let ls = liveStatus else { return interruptionOverride }
         if ls.isLive {
             // The sweat, live: the player's running value against the line
             // ("· 1/1.5") rides the game situation. Only when the tracker
@@ -25482,7 +25785,8 @@ struct CompactPropRow: View {
             return base
         }
         if ls.isFinal { return liveLineRich(ls, label: "FINAL") }
-        return nil
+        if let interruption = ls.interruptionLabel { return interruption }
+        return interruptionOverride
     }
 
     var body: some View {

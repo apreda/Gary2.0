@@ -16,6 +16,7 @@ import {
   NFL_KICKOFF_STATUS,
   resolveNflKickoff,
 } from './nflGamePolicy.js';
+import { normalizeMlbGameStatus } from '../../supabase/functions/_shared/mlbGameStatus.js';
 
 const BDL_NFL_ODDS_V1 = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/odds`;
 const BDL_NHL_ODDS_V1 = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/odds`;
@@ -903,6 +904,9 @@ export const ballDontLieOddsService = {
         ? (nflKickoff.status === NFL_KICKOFF_STATUS.CONFIRMED ? nflKickoff.iso : null)
         : (g.datetime || g.start_time_utc || (g.date?.includes?.('T') ? g.date : null));
       const estimated_time = nflKickoff?.estimated ?? false;
+      const mlbStatus = sportKey === 'baseball_mlb'
+        ? normalizeMlbGameStatus(g.status)
+        : null;
 
       if (nflKickoff?.status === NFL_KICKOFF_STATUS.DATE_ONLY) {
         console.log(`[BDL Odds] NFL Game ${g.id}: TIME TBD on ${nflKickoff.scheduledDate}`);
@@ -930,6 +934,10 @@ export const ballDontLieOddsService = {
         ...(nflKickoff ? {
           scheduled_date: nflKickoff.scheduledDate,
           kickoff_status: nflKickoff.status,
+        } : {}),
+        ...(mlbStatus ? {
+          game_status: mlbStatus.status,
+          status_detail: mlbStatus.detail,
         } : {}),
         estimated_time,
         venue: g.venue || null,

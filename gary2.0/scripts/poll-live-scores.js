@@ -8,9 +8,10 @@
  * cached call per league, upsert one row per game, exit. When nothing is live
  * the whole run is a couple of cheap cached reads — safe to fire all day.
  *
- * Status normalization: scheduled | live | final. `detail` is a short
- * render-ready string ("INN 7", "Q3 4:12", "64'") composed here so the app
- * stays dumb.
+ * Status normalization: scheduled | live | final, plus exact MLB interruption
+ * states delayed | postponed | suspended | cancelled. `detail` is a short
+ * render-ready string ("INN 7", "Q3 4:12", "DELAYED") composed here so the
+ * app stays dumb.
  *
  * Usage:
  *   node scripts/poll-live-scores.js              # today (EST)
@@ -37,6 +38,10 @@ import {
   resolveLiveScoreSourceGate,
   selectLiveScoreSources,
 } from '../supabase/functions/_shared/liveScoreSourceGate.js';
+import {
+  isRecoverableMlbGameInterruption,
+  normalizeMlbGameStatus,
+} from '../supabase/functions/_shared/mlbGameStatus.js';
 import {
   pendingGradeFiles,
   queueExactGradeRequest,
@@ -99,9 +104,10 @@ async function mlbRows() {
     ...((await bdl.getMlbGamesForDate(nextUtc)) || []),
   ].filter((g) => { const id = String(g.id); if (seenIds.has(id)) return false; seenIds.add(id); return true; });
   const rows = games.map((g) => {
-    const status = normStatus(g.status);
+    const normalizedStatus = normalizeMlbGameStatus(g.status);
+    const status = normalizedStatus.status;
     const detail = status === 'live' && Number.isFinite(Number(g.period))
-      ? `INN ${g.period}` : status === 'final' ? 'FINAL' : null;
+      ? `INN ${g.period}` : normalizedStatus.detail;
     return {
       league: 'MLB',
       game_id: String(g.id),
@@ -260,14 +266,15 @@ function numOrNull(v) {
 // 6:45am batch stays as a backstop for anything missed (e.g. a late game that
 // finalizes after midnight under the prior date).
 
-/** Game-ids that were ALREADY final in live_scores before this poll wrote. */
-async function fetchPrevFinalIds(date) {
+/** Exact game states already present before this poll writes. */
+async function fetchPrevScoreRows(date) {
   try {
     const { data } = await axios.get(
-      `${REST_URL}?date=eq.${date}&status=eq.final&select=league,game_id`,
+      `${REST_URL}?date=eq.${date}&select=league,game_id,status`,
       { headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` }, timeout: 10000 },
     );
-    return new Set((data || []).map((r) => `${r.league}:${r.game_id}`));
+    if (!Array.isArray(data)) throw new Error('live_scores returned a non-array state payload');
+    return data;
   } catch (error) {
     // Do not write a final frame when its prior state is unknown. Otherwise the
     // next poll sees it as already final and the one transition that triggers
@@ -397,7 +404,12 @@ async function mlbLiveEvents(gameId) {
 async function run() {
   // Which games were ALREADY final before this poll wrote — so we grade only the
   // ones that flip to final on THIS poll (each game triggers grading exactly once).
-  const prevFinalIds = dryRun ? null : await fetchPrevFinalIds(targetDate);
+  const prevScoreRows = dryRun ? null : await fetchPrevScoreRows(targetDate);
+  const prevFinalIds = prevScoreRows
+    ? new Set(prevScoreRows
+        .filter((row) => String(row?.status || '').toLowerCase() === 'final')
+        .map((row) => `${row.league}:${row.game_id}`))
+    : null;
 
   // Keep providers behind closures. Constructing promises here would spend the
   // BDL request before the daily_slate gate had a chance to exclude the league.
@@ -592,7 +604,15 @@ async function run() {
     (slateByLeague[r.league] ||= new Set()).add(String(r.game_id));
   }
   for (const [lg, ids] of Object.entries(slateByLeague)) {
-    const keep = [...ids].filter(Boolean);
+    // A delayed/postponed/suspended MLB game may vanish from one provider
+    // response. Keep its exact prior row until the provider returns a resumed,
+    // final, or cancelled frame; cleanup remains exact for every other row.
+    const retainedInterruptedIds = lg === 'MLB'
+      ? (prevScoreRows || [])
+          .filter((row) => row?.league === 'MLB' && isRecoverableMlbGameInterruption(row?.status))
+          .map((row) => String(row.game_id))
+      : [];
+    const keep = [...new Set([...ids, ...retainedInterruptedIds])].filter(Boolean);
     if (!keep.length) continue;
     try {
       await axios({

@@ -7,6 +7,8 @@ import {
   gameHasStarted,
   hasUrgentUpcomingTrigger,
   isFinalPendingTier,
+  isScheduleEntryHeld,
+  isScheduleEntryRetired,
   isSportFetchRetryEntry,
   makeSportFetchRetryEntry,
   ncaafClusterConcurrency,
@@ -21,11 +23,14 @@ import {
   partitionNflKickoffReadiness,
   partitionStartedEntries,
   reanchorGameSchedule,
+  retireGameSchedule,
   runIndependentDecisionLanes,
   runIndependentScheduleLanes,
   runPerGameDecisionPipeline,
   scheduleEntryKey,
+  setGameScheduleHold,
   schedulerChildArgs,
+  schedulerEntrySlateIdentity,
   schedulerSlateDateForSport,
   sportFetchRetryIsCurrent,
   sportFetchRetryDelayMs,
@@ -47,6 +52,16 @@ function entry({ sport = 'baseball_mlb', id = 1, start = '2026-08-15T18:00:00Z',
 }
 
 describe('scheduler reliability policy', () => {
+  it('carries canonical slate identity on scheduled MLB persistence entries', () => {
+    expect(schedulerEntrySlateIdentity('baseball_mlb', '2026-08-17'))
+      .toEqual({ slateDate: '2026-08-17' });
+    expect(schedulerEntrySlateIdentity('americanfootball_ncaaf', '2026-08-17'))
+      .toEqual({ slateDate: '2026-08-17' });
+    expect(schedulerEntrySlateIdentity('americanfootball_nfl', '2026-08-17'))
+      .toEqual({});
+    expect(() => schedulerEntrySlateIdentity('baseball_mlb', 'bad-date')).toThrow(/slate date/);
+  });
+
   it('schedules confirmed NCAAF games while isolating date-only games by exact id', () => {
     const result = partitionNcaafKickoffReadiness([
       { id: 10, date: '2026-08-29T16:00:00Z' },
@@ -480,6 +495,44 @@ describe('scheduler reliability policy', () => {
     expect(tiers.map((item) => item.triggerTime)).toEqual(originalTriggerRefs);
   });
 
+  it('holds interruption tiers outside trigger selection without coalescing them away', () => {
+    const tiers = [90, 60, 30, 15].map((lead) => entry({ lead }));
+    expect(setGameScheduleHold(tiers, tiers[0], 'delayed')).toBe(4);
+    expect(tiers.every(isScheduleEntryHeld)).toBe(true);
+    expect(nextTriggerBatch(tiers, { now: Date.parse('2026-08-15T18:00:00Z') })).toEqual([]);
+
+    const overdue = coalesceOverdueTiers(tiers, new Date('2026-08-15T19:00:00Z'));
+    expect(overdue.entries).toHaveLength(4);
+    expect(overdue.skipped).toEqual([]);
+  });
+
+  it('releases and reanchors only unfired tiers after an exact resumed start', () => {
+    const unfired = [60, 30, 15].map((lead) => entry({ lead }));
+    setGameScheduleHold(unfired, unfired[0], 'delayed');
+
+    expect(reanchorGameSchedule(
+      unfired,
+      unfired[0],
+      new Date('2026-08-15T20:00:00Z'),
+    )).toBe(3);
+    expect(setGameScheduleHold(unfired, unfired[0], null)).toBe(3);
+    expect(unfired.every((item) => !isScheduleEntryHeld(item))).toBe(true);
+    expect(unfired.map((item) => item.leadMin)).toEqual([60, 30, 15]);
+    expect(unfired.map((item) => item.triggerTime.toISOString())).toEqual([
+      '2026-08-15T19:00:00.000Z',
+      '2026-08-15T19:30:00.000Z',
+      '2026-08-15T19:45:00.000Z',
+    ]);
+  });
+
+  it('retires postponed or suspended games without exposing a stale tier', () => {
+    const tiers = [90, 60].map((lead) => entry({ lead }));
+    expect(retireGameSchedule(tiers, tiers[0], 'postponed')).toBe(2);
+    expect(tiers.every(isScheduleEntryRetired)).toBe(true);
+    expect(nextTriggerBatch(tiers)).toEqual([]);
+    expect(coalesceOverdueTiers(tiers).entries).toEqual([]);
+  });
+
   it('does not reinsert recovered game tiers that already existed or fired', () => {
     const existing = [
       { ...entry({ sport: 'americanfootball_ncaaf', id: 71, lead: 90 }), tier: 1 },
@@ -518,6 +571,28 @@ describe('scheduler reliability policy', () => {
     expect(schedulerSource).toContain('NCAAF_KICKOFF_CHECK_INTERVAL_MS = 10 * 60 * 1000');
     expect(schedulerSource).toContain("'americanfootball_ncaaf',\n          slateDate,\n          { gameIds }");
     expect(schedulerSource).toContain('reanchorGameSchedule(livePending, entry, nextStart)');
+  });
+
+  it('uses official MLB interruption holds and reanchors only the live pending queue', () => {
+    expect(schedulerSource).toContain("setGameScheduleHold(livePending, entry, 'delayed')");
+    expect(schedulerSource).toContain('reanchorGameSchedule(livePending, entry, match.start)');
+    expect(schedulerSource).toContain('retireGameSchedule(livePending, entry, match.status)');
+    expect(schedulerSource).toContain('await startMlbDriftGuard(() => pendingEntries)');
+    expect(schedulerSource).toContain("date: entry.slateDate,\n      gameId: entry.gameId,\n      status,");
+    expect(schedulerSource).toContain('{ commenceTime: match.start.toISOString() }');
+
+    const heldBranchStart = schedulerSource.indexOf('if (isScheduleEntryHeld(entry))');
+    const heldBranchEnd = schedulerSource.indexOf(
+      'if (Math.abs(deltaMs) < DRIFT_MIN_DELTA_MS)',
+      heldBranchStart,
+    );
+    const heldBranch = schedulerSource.slice(heldBranchStart, heldBranchEnd);
+    expect(heldBranch.indexOf('persistOfficialMlbStatusTransition(')).toBeGreaterThan(-1);
+    expect(heldBranch).toContain('commenceTime: match.start.toISOString()');
+    expect(heldBranch.indexOf('reanchorGameSchedule('))
+      .toBeGreaterThan(heldBranch.indexOf('persistOfficialMlbStatusTransition('));
+    expect(heldBranch.indexOf('setGameScheduleHold(livePending, entry, null)'))
+      .toBeGreaterThan(heldBranch.indexOf('reanchorGameSchedule('));
   });
 
   it('keeps the NCAAF slate key through exact pick, prop, and coverage paths', () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   constrainLiveScoreGateToWindow,
+  countLiveScoreStateChanges,
   evaluateLiveScoreSourceResults,
   isAuthoritativeSlateFullyFinal,
   resolveLiveScoreSourceGate,
@@ -207,6 +208,61 @@ describe('live-score polling window', () => {
     expect(gate.leagues).toEqual(['NFL']);
   });
 
+  it('keeps polling an interrupted MLB game after its stale start window', () => {
+    const rows = [{
+      league: 'MLB',
+      bdl_game_id: 7,
+      commence_time: '2026-08-15T12:00:00Z',
+      game_status: 'delayed',
+    }];
+    const gate = constrainLiveScoreGateToWindow(resolveLiveScoreSourceGate({
+      rows,
+      supportedLeagues: ['MLB'],
+    }), {
+      rows,
+      nowMs: Date.parse('2026-08-15T23:00:00Z'),
+    });
+    expect(gate.leagues).toEqual(['MLB']);
+  });
+
+  it('keeps polling until a stored interruption is replaced by resumed state', () => {
+    const rows = [{
+      league: 'MLB',
+      bdl_game_id: 8,
+      commence_time: '2026-08-15T12:00:00Z',
+      game_status: 'scheduled',
+    }];
+    const gate = constrainLiveScoreGateToWindow(resolveLiveScoreSourceGate({
+      rows,
+      supportedLeagues: ['MLB'],
+    }), {
+      rows,
+      storedRows: [{ league: 'MLB', game_id: '8', status: 'suspended' }],
+      nowMs: Date.parse('2026-08-15T23:00:00Z'),
+    });
+    expect(gate.leagues).toEqual(['MLB']);
+  });
+
+  it('polls a cancellation transition once, then treats it as terminal', () => {
+    const rows = [{
+      league: 'MLB',
+      bdl_game_id: 11,
+      commence_time: '2026-08-15T12:00:00Z',
+      game_status: 'cancelled',
+    }];
+    const base = resolveLiveScoreSourceGate({ rows, supportedLeagues: ['MLB'] });
+    expect(constrainLiveScoreGateToWindow(base, {
+      rows,
+      storedRows: [{ league: 'MLB', game_id: '11', status: 'scheduled' }],
+      nowMs: Date.parse('2026-08-15T23:00:00Z'),
+    }).leagues).toEqual(['MLB']);
+    expect(constrainLiveScoreGateToWindow(base, {
+      rows,
+      storedRows: [{ league: 'MLB', game_id: '11', status: 'cancelled' }],
+      nowMs: Date.parse('2026-08-15T23:00:00Z'),
+    }).leagues).toEqual([]);
+  });
+
   it('does not call an all-final early window the final slate while a later league is pending', () => {
     const rows = [
       { league: 'MLB', bdl_game_id: 1, commence_time: '2026-08-15T15:00:00Z' },
@@ -261,5 +317,23 @@ describe('live-score polling window', () => {
       slateRows: [{ league: 'NFL', bdl_game_id: null }],
       storedRows: [{ league: 'NFL', game_id: '2', status: 'final' }],
     })).toBe(false);
+  });
+});
+
+describe('live-score state changes', () => {
+  it('detects delayed and resumed transitions for an exact game', () => {
+    const stored = [{ league: 'MLB', game_id: '9', status: 'scheduled' }];
+    expect(countLiveScoreStateChanges([
+      { row: { league: 'MLB', game_id: '9', status: 'delayed' } },
+    ], stored)).toBe(1);
+    expect(countLiveScoreStateChanges([
+      { row: { league: 'MLB', game_id: '9', status: 'scheduled' } },
+    ], stored)).toBe(0);
+  });
+
+  it('treats a newly discovered exact game as state requiring persistence', () => {
+    expect(countLiveScoreStateChanges([
+      { row: { league: 'MLB', game_id: '10', status: 'scheduled' } },
+    ], [{ league: 'MLB', game_id: '9', status: 'final' }])).toBe(1);
   });
 });

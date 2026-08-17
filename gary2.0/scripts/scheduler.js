@@ -27,6 +27,8 @@ import {
   gameHasStarted,
   hasUrgentUpcomingTrigger,
   isFinalPendingTier,
+  isScheduleEntryHeld,
+  isScheduleEntryRetired,
   isSportFetchRetryEntry,
   makeSportFetchRetryEntry,
   ncaafClusterConcurrency,
@@ -39,11 +41,14 @@ import {
   partitionNflKickoffReadiness,
   partitionStartedEntries,
   reanchorGameSchedule,
+  retireGameSchedule,
   runIndependentDecisionLanes,
   runIndependentScheduleLanes,
   runPerGameDecisionPipeline,
   schedulerChildArgs,
+  schedulerEntrySlateIdentity,
   scheduleEntryKey,
+  setGameScheduleHold,
   sportFetchRetryIsCurrent,
 } from './lib/schedulerPolicy.js';
 import { requireNonFootballStart } from './lib/schedulerSourcePolicy.js';
@@ -58,6 +63,10 @@ import {
   nflSlateDateForKickoff,
   resolveNflKickoff,
 } from '../src/services/nflGamePolicy.js';
+import {
+  isInterruptedMlbGameStatus,
+  normalizeMlbGameStatus,
+} from '../supabase/functions/_shared/mlbGameStatus.js';
 
 const PROJECT_DIR = join(import.meta.dirname, '..');
 const LOG_DIR = join(PROJECT_DIR, 'logs', 'scheduler');
@@ -366,9 +375,15 @@ function scheduleGamesForSport(sport, games, etDateStr, { logGames = true } = {}
     const matchup = `${awayTeam} @ ${homeTeam}`;
     const startET = startTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
     const tierLabels = [];
-    const slateIdentity = sport.key === 'americanfootball_ncaaf'
-      ? { slateDate: etDateStr }
-      : {};
+    const slateIdentity = schedulerEntrySlateIdentity(sport.key, etDateStr);
+    const mlbStatus = sport.key === 'baseball_mlb'
+      ? normalizeMlbGameStatus(game.game_status ?? game.status)
+      : null;
+    const scheduleState = mlbStatus?.status === 'delayed'
+      ? { scheduleHold: 'delayed' }
+      : mlbStatus?.interrupted
+        ? { scheduleRetired: mlbStatus.status }
+        : {};
 
     if (sport.fixedTriggerET) {
       const base = instantForETDate(etDateStr, sport.fixedTriggerET.hour, sport.fixedTriggerET.minute);
@@ -379,7 +394,7 @@ function scheduleGamesForSport(sport, games, etDateStr, { logGames = true } = {}
           if (i === 0) triggerTime = latest;
           else continue;
         }
-        entries.push({ sport, matchup, homeTeam, awayTeam, startTime, triggerTime, gameId: game.id, tier: i + 1, leadMin: null, ...slateIdentity });
+        entries.push({ sport, matchup, homeTeam, awayTeam, startTime, triggerTime, gameId: game.id, tier: i + 1, leadMin: null, ...slateIdentity, ...scheduleState });
         const triggerET = triggerTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
         tierLabels.push(`fixed=${triggerET}`);
       }
@@ -387,7 +402,7 @@ function scheduleGamesForSport(sport, games, etDateStr, { logGames = true } = {}
       for (let i = 0; i < RETRY_LEAD_TIMES_MINUTES.length; i++) {
         const leadMin = RETRY_LEAD_TIMES_MINUTES[i];
         const triggerTime = new Date(startTime.getTime() - leadMin * 60 * 1000);
-        entries.push({ sport, matchup, homeTeam, awayTeam, startTime, triggerTime, gameId: game.id, tier: i + 1, leadMin, ...slateIdentity });
+        entries.push({ sport, matchup, homeTeam, awayTeam, startTime, triggerTime, gameId: game.id, tier: i + 1, leadMin, ...slateIdentity, ...scheduleState });
         const triggerET = triggerTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
         tierLabels.push(`T${leadMin}=${triggerET}`);
       }
@@ -751,7 +766,13 @@ async function fetchOfficialMlbStarts(etDateStr) {
     for (const g of day.games || []) {
       const start = new Date(g.gameDate);
       if (Number.isNaN(start.getTime())) continue;
-      games.push({ home: g.teams?.home?.team?.name || '', away: g.teams?.away?.team?.name || '', start });
+      const normalizedStatus = normalizeMlbGameStatus(g.status);
+      games.push({
+        home: g.teams?.home?.team?.name || '',
+        away: g.teams?.away?.team?.name || '',
+        start,
+        status: normalizedStatus.status,
+      });
     }
   }
   return games;
@@ -773,28 +794,133 @@ function matchOfficialGame(officialGames, entry) {
   return candidates[0];
 }
 
-function startMlbDriftGuard(schedule) {
+function markOfficialMlbStatus(entries, exemplar, status, commenceTime = null) {
+  const gameKey = scheduleEntryKey(exemplar);
+  for (const entry of entries || []) {
+    if (scheduleEntryKey(entry) !== gameKey) continue;
+    entry.officialMlbStatus = status;
+    entry.officialMlbCommenceTime = commenceTime;
+  }
+}
+
+async function persistOfficialMlbStatusTransition(
+  entries,
+  entry,
+  status,
+  { commenceTime = null } = {},
+) {
+  if (
+    entry.officialMlbStatus === status
+    && entry.officialMlbCommenceTime === commenceTime
+  ) return true;
+  try {
+    const { patchDailySlateMlbStatus } = await import('../src/services/dailySlateService.js');
+    await patchDailySlateMlbStatus({
+      date: entry.slateDate,
+      gameId: entry.gameId,
+      status,
+      ...(commenceTime ? { commenceTime } : {}),
+    });
+    markOfficialMlbStatus(entries, entry, status, commenceTime);
+    log(`📋 MLB STATUS SYNCED: ${entry.matchup} — ${status.toUpperCase()} on exact slate id ${entry.gameId}`);
+    return true;
+  } catch (error) {
+    log(`❌ MLB STATUS SYNC FAILED: ${entry.matchup} ${status.toUpperCase()} (id ${entry.gameId}) — ${error.message}; schedule state was not relaxed, and the next official check will retry`);
+    return false;
+  }
+}
+
+async function startMlbDriftGuard(getPendingEntries) {
   if (activeDriftTimer) { clearInterval(activeDriftTimer); activeDriftTimer = null; }
-  const mlbPrimaries = schedule.filter((e) => e.sport.key === 'baseball_mlb' && e.tier === 1);
-  if (mlbPrimaries.length === 0) return;
+  const initialMlb = getPendingEntries().filter(
+    (entry) => entry?.sport?.key === 'baseball_mlb' && !isScheduleEntryRetired(entry),
+  );
+  if (initialMlb.length === 0) return;
   let checking = false;
   const fmtET = (d) => d.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
 
-  activeDriftTimer = setInterval(async () => {
+  const check = async () => {
     if (checking) return;
     checking = true;
     try {
       const now = Date.now();
-      const pending = mlbPrimaries.filter((e) => e.startTime.getTime() > now - 60 * 60 * 1000);
+      const pendingByGame = new Map();
+      for (const entry of getPendingEntries()) {
+        if (entry?.sport?.key !== 'baseball_mlb' || isScheduleEntryRetired(entry)) continue;
+        if (!isScheduleEntryHeld(entry) && entry.startTime.getTime() <= now - 60 * 60 * 1000) continue;
+        if (!pendingByGame.has(scheduleEntryKey(entry))) {
+          pendingByGame.set(scheduleEntryKey(entry), entry);
+        }
+      }
+      const pending = [...pendingByGame.values()];
       if (pending.length === 0) return;
       const official = await fetchOfficialMlbStarts(getTodayETDateStr());
       for (const entry of pending) {
         const match = matchOfficialGame(official, entry);
         if (!match) continue;
+
+        const livePending = getPendingEntries();
+        if (match.status === 'delayed') {
+          const held = setGameScheduleHold(livePending, entry, 'delayed');
+          if (held > 0) {
+            log(`⏸️ MLB DELAY HOLD: ${entry.matchup} — ${held} remaining tier(s) paused; no replacement first-pitch time was assumed (id ${entry.gameId})`);
+          }
+          await persistOfficialMlbStatusTransition(livePending, entry, match.status);
+          continue;
+        }
+        if (isInterruptedMlbGameStatus(match.status)) {
+          setGameScheduleHold(livePending, entry, match.status);
+          const persisted = await persistOfficialMlbStatusTransition(
+            livePending,
+            entry,
+            match.status,
+          );
+          if (!persisted) continue;
+          const retired = retireGameSchedule(livePending, entry, match.status);
+          if (retired > 0) {
+            log(`⛔ MLB ${match.status.toUpperCase()}: ${entry.matchup} — ${retired} remaining pregame tier(s) retired for this slate (id ${entry.gameId})`);
+          }
+          continue;
+        }
+        if (match.status === 'live' || match.status === 'final') {
+          setGameScheduleHold(livePending, entry, match.status);
+          const persisted = await persistOfficialMlbStatusTransition(
+            livePending,
+            entry,
+            match.status,
+          );
+          if (!persisted) continue;
+          retireGameSchedule(livePending, entry, match.status);
+          continue;
+        }
+
         const deltaMs = match.start.getTime() - entry.startTime.getTime();
+        if (isScheduleEntryHeld(entry)) {
+          const persisted = await persistOfficialMlbStatusTransition(
+            livePending,
+            entry,
+            match.status,
+            { commenceTime: match.start.toISOString() },
+          );
+          if (!persisted) continue;
+          const previousStart = new Date(entry.startTime);
+          const changed = reanchorGameSchedule(livePending, entry, match.start);
+          const released = setGameScheduleHold(livePending, entry, null);
+          log(`▶️ MLB DELAY RESOLVED: ${entry.matchup} — official exact start ${fmtET(match.start)} ET; ${released} held tier(s) released (id ${entry.gameId})`);
+          if (changed > 0 && previousStart.getTime() !== match.start.getTime()) {
+            log(`🧭 DRIFT RE-ANCHORED: ${entry.matchup} — ${changed} remaining tier(s) moved from ${fmtET(previousStart)} ET to ${fmtET(match.start)} ET`);
+          }
+          continue;
+        }
+        await persistOfficialMlbStatusTransition(
+          livePending,
+          entry,
+          match.status,
+          { commenceTime: match.start.toISOString() },
+        );
         if (Math.abs(deltaMs) < DRIFT_MIN_DELTA_MS) continue;
         log(`🕐 START-TIME DRIFT: ${entry.matchup} — planned ${fmtET(entry.startTime)} ET, official now ${fmtET(match.start)} ET (${Math.round(deltaMs / 60000)} min)`);
-        const changed = reanchorGameSchedule(schedule, entry, match.start);
+        const changed = reanchorGameSchedule(livePending, entry, match.start);
         log(`🧭 DRIFT RE-ANCHORED: ${entry.matchup} — ${changed} unfired tier(s) now follow the official ${fmtET(match.start)} ET start (id ${entry.gameId})`);
       }
     } catch (e) {
@@ -802,8 +928,13 @@ function startMlbDriftGuard(schedule) {
     } finally {
       checking = false;
     }
-  }, DRIFT_CHECK_INTERVAL_MS);
-  log(`🕐 Drift guard armed: re-checking ${mlbPrimaries.length} MLB start time(s) vs statsapi every ${DRIFT_CHECK_INTERVAL_MS / 60000} min`);
+  };
+
+  activeDriftTimer = setInterval(check, DRIFT_CHECK_INTERVAL_MS);
+  // Resolve the first official frame before the dynamic queue can consume an
+  // already-due stale tier. Later checks remain on the existing interval.
+  await check();
+  log(`🕐 Drift guard armed: re-checking MLB exact pending games vs statsapi every ${DRIFT_CHECK_INTERVAL_MS / 60000} min`);
 }
 
 // NCAAF providers can replace a confirmed morning kickoff with a different
@@ -917,13 +1048,12 @@ async function executeDecisionLaneSchedule(schedule, {
     log('No games scheduled — nothing to run.');
     return;
   }
-  if (ownsMlbDriftGuard) startMlbDriftGuard(schedule);
-
   // Keep the queue dynamic. The official MLB drift guard mutates the same Date
   // objects when a first pitch moves, so each loop re-sorts and forms the next
   // anchored 15-minute batch from current truth. A moved-later game no longer
   // burns all four retries against its stale morning start time.
   let pendingEntries = [...schedule];
+  if (ownsMlbDriftGuard) await startMlbDriftGuard(() => pendingEntries);
   if (ownsNcaafKickoffGuard) startNcaafKickoffGuard(() => pendingEntries);
   log(`\n📦 Dynamic trigger queue armed for ${schedule.length} entries`);
 
@@ -944,12 +1074,15 @@ async function executeDecisionLaneSchedule(schedule, {
   const skippedStartedGames = new Set();
   const coverageCheckedGames = new Set();
   const deferredSlateRefreshDates = new Set();
+  let holdWaitLogged = false;
   let gameAlreadyHasPick = null;
   let nflGameAlreadyHasPick = null;
   try { ({ gameAlreadyHasPick, nflGameAlreadyHasPick } = await import('../src/services/picksService.js')); }
   catch (e) { log(`⚠️ Coverage check disabled — picksService load failed: ${e.message}`); }
 
   while (pendingEntries.length > 0) {
+    pendingEntries = pendingEntries.filter((entry) => !isScheduleEntryRetired(entry));
+    if (pendingEntries.length === 0) break;
     const overdue = coalesceOverdueTiers(pendingEntries, Date.now());
     pendingEntries = overdue.entries;
     for (const entry of overdue.skipped) {
@@ -961,6 +1094,18 @@ async function executeDecisionLaneSchedule(schedule, {
       now: Date.now(),
       crossLaneLookaheadMs: CROSS_LANE_TRIGGER_LOOKAHEAD_MS,
     });
+    if (batch.length === 0) {
+      if (!holdWaitLogged) {
+        const heldGames = new Set(
+          pendingEntries.filter(isScheduleEntryHeld).map(scheduleEntryKey),
+        ).size;
+        log(`⏸️ ${heldGames} interrupted MLB game(s) held without an assumed start; awaiting official resume/cancellation state`);
+        holdWaitLogged = true;
+      }
+      await sleepUntilWallClock(new Date(Date.now() + 60_000));
+      continue;
+    }
+    holdWaitLogged = false;
     const triggerTime = batch[0].triggerTime;
     const now = Date.now();
     const waitMs = triggerTime.getTime() - now;
@@ -1033,7 +1178,7 @@ async function executeDecisionLaneSchedule(schedule, {
       schedule.push(...recovered);
       for (const entry of recovered) uniqueGameIds.add(scheduleEntryKey(entry));
       if (ownsMlbDriftGuard && retry.sport.key === 'baseball_mlb' && recovered.length > 0) {
-        startMlbDriftGuard(schedule);
+        await startMlbDriftGuard(() => pendingEntries);
       }
       if (ownsNcaafKickoffGuard && recovered.length > 0) {
         startNcaafKickoffGuard(() => pendingEntries);

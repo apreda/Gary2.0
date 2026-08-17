@@ -9,8 +9,9 @@
 // BALLDONTLIE_API_KEY must be set as a function secret:
 //   supabase secrets set BALLDONTLIE_API_KEY=<key>
 //
-// Status normalization: scheduled | live | final. `detail` is a short
-// render-ready string ("INN 7", "67'", "FINAL") so the app stays dumb.
+// Status normalization: scheduled | live | final, plus exact MLB interruption
+// states delayed | postponed | suspended | cancelled. `detail` is a short
+// render-ready string ("INN 7", "DELAYED", "FINAL") so the app stays dumb.
 //
 // Freshness: cron fires every minute, but the function only does the (cheap but
 // non-zero) write when there is something worth refreshing — any game that is
@@ -31,11 +32,13 @@ import {
 } from "../_shared/liveScoreFootball.js";
 import {
   constrainLiveScoreGateToWindow,
+  countLiveScoreStateChanges,
   evaluateLiveScoreSourceResults,
   isAuthoritativeSlateFullyFinal,
   resolveLiveScoreSourceGate,
   selectLiveScoreSources,
 } from "../_shared/liveScoreSourceGate.js";
+import { normalizeMlbGameStatus } from "../_shared/mlbGameStatus.js";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -66,15 +69,6 @@ function etDateStr(iso: string | null | undefined): string | null {
     month: "2-digit",
     day: "2-digit",
   }).format(d);
-}
-
-function normStatus(raw: unknown): "scheduled" | "live" | "final" {
-  const s = String(raw ?? "").toUpperCase();
-  if (s.includes("FINAL")) return "final";
-  if (s.includes("SCHEDULED") || s.includes("POSTPONED") || s.includes("DELAYED")) return "scheduled";
-  if (/^\d{4}-\d{2}-\d{2}T/.test(String(raw ?? ""))) return "scheduled"; // ISO datetime = not started
-  if (!s) return "scheduled";
-  return "live";
 }
 
 async function bdlGet(path: string, params: Record<string, string | string[]>): Promise<any[]> {
@@ -126,13 +120,16 @@ async function mlbGames(date: string, now: string): Promise<Game[]> {
   return games.map((g: any): Game | null => {
     const gameDate = etDateStr(g.date);
     if (gameDate && gameDate !== date) return null;
-    const status = normStatus(g.status);
+    const normalizedStatus = normalizeMlbGameStatus(g.status);
+    const status = normalizedStatus.status;
     const detail = status === "live" && Number.isFinite(Number(g.period))
       ? `INN ${g.period}`
-      : status === "final" ? "FINAL" : null;
-    // When scheduled, BDL's status is the ISO start datetime.
-    const startAt = status === "scheduled" && /^\d{4}-\d{2}-\d{2}T/.test(String(g.status ?? ""))
-      ? String(g.status) : null;
+      : normalizedStatus.detail;
+    // A resumed game is schedulable only from a provider-supplied exact
+    // datetime. Interruption labels never become an invented replacement time.
+    const providerStart = g.date ?? g.datetime ?? g.start_time_utc ?? null;
+    const startAt = status === "scheduled" && /^\d{4}-\d{2}-\d{2}T/.test(String(providerStart ?? ""))
+      ? String(providerStart) : null;
     return {
       startAt,
       row: {
@@ -217,7 +214,7 @@ async function dailySlateSourceGate(
   try {
     const url = new URL(`${SUPABASE_URL}/rest/v1/daily_slate`);
     url.searchParams.set("date", `eq.${date}`);
-    url.searchParams.set("select", "league,bdl_game_id,commence_time");
+    url.searchParams.set("select", "league,bdl_game_id,commence_time,game_status,status_detail");
     const res = await fetch(url, {
       headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
     });
@@ -302,6 +299,7 @@ Deno.serve(async () => {
   const imminent = games.filter(
     (g) => g.row.status === "scheduled" && isImminent(g.startAt, nowMs),
   ).length;
+  const stateChanges = countLiveScoreStateChanges(games, stored);
 
   // Worth a write when something is in motion. We reach here only because the
   // cheap gate found the STORED slate is not yet all-final (or empty), so any
@@ -312,11 +310,11 @@ Deno.serve(async () => {
   // already on file (every game scheduled, none imminent, nothing live/final, and
   // rows already stored) — nothing to refresh, so don't churn the table or BDL.
   const firstPopulate = stored.length === 0 && games.length > 0;
-  const worthWriting = live > 0 || imminent > 0 || final > 0 || firstPopulate;
+  const worthWriting = live > 0 || imminent > 0 || final > 0 || firstPopulate || stateChanges > 0;
 
   if (!worthWriting) {
     return new Response(
-      JSON.stringify({ ok: errors.length === 0, date, skipped: "nothing-live", games: games.length, live, imminent, final, errors }),
+      JSON.stringify({ ok: errors.length === 0, date, skipped: "nothing-live", games: games.length, live, imminent, final, stateChanges, errors }),
       { status: errors.length ? 502 : 200, headers: { "Content-Type": "application/json" } },
     );
   }
@@ -329,7 +327,7 @@ Deno.serve(async () => {
     });
   }
 
-  return new Response(JSON.stringify({ ok: errors.length === 0, date, games: games.length, live, imminent, final, errors }), {
+  return new Response(JSON.stringify({ ok: errors.length === 0, date, games: games.length, live, imminent, final, stateChanges, errors }), {
     status: errors.length ? 502 : 200,
     headers: { "Content-Type": "application/json" },
   });

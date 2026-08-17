@@ -120,6 +120,42 @@ function nameKey(s) {
     .trim();
 }
 
+// The iOS game identity uses the same 30-minute bucket. MLB's schedule and
+// odds feeds can disagree by a few minutes after a first-pitch adjustment, but
+// doubleheader games remain hours apart. Bucketing preserves that safe join
+// without treating a harmless 5-minute feed skew as a different game.
+const GAME_TIME_BUCKET_MS = 30 * 60 * 1000;
+function gameTimeBucket(value) {
+  const time = typeof value === 'number' ? value : Date.parse(value);
+  return Number.isFinite(time) ? Math.floor(time / GAME_TIME_BUCKET_MS) : null;
+}
+
+function rowMatchup(row) {
+  return `${row?.away_abbr || row?.away_team || ''} @ ${row?.home_abbr || row?.home_team || ''}`;
+}
+
+function rowMatchupKey(row) {
+  return [row?.league, row?.away_abbr || row?.away_team, row?.home_abbr || row?.home_team]
+    .map(nameKey)
+    .join('|');
+}
+
+function repeatedMatchupKeys(rows) {
+  const counts = new Map();
+  for (const row of rows || []) {
+    const key = rowMatchupKey(row);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return new Set([...counts].filter(([, count]) => count > 1).map(([key]) => key));
+}
+
+// Stable identity carried through the model request/response. Prefer the
+// slate provider id; older rows still remain exact through matchup + start.
+function rowGameIdentity(row) {
+  if (row?.bdl_game_id != null) return `bdl:${row.bdl_game_id}`;
+  return `matchup:${rowMatchupKey(row)}|time:${row?.commence_time || 'unknown'}`;
+}
+
 // MLB's schedule and the player-stat providers do not always agree about
 // whether a suffix is present (or how it is punctuated). Treat suffixes as
 // identity metadata, never as the surname. This also prevents a probable such
@@ -1338,7 +1374,8 @@ async function openMeteoHour(lat, lon, dateKey, hourKey) {
  * context string is factual. Falls back to primetime + slate order so we
  * always surface 3 when there are >= 3 games.
  */
-function buildBigGames(board, { mlb }) {
+export function buildBigGames(board, { mlb }) {
+  const repeatedMatchups = repeatedMatchupKeys(board);
   const scored = board.map((row) => {
     let weight = 0;
     let reason = null;       // single highest-weight factor -> internal ranking trace
@@ -1391,8 +1428,17 @@ function buildBigGames(board, { mlb }) {
       // take the entry nearest this row's own start time, so game 2's card
       // never wears game 1's arms.
       const rowT = Date.parse(row.commence_time) || null;
+      const rowBucket = gameTimeBucket(row.commence_time);
+      const repeatedMatchup = repeatedMatchups.has(rowMatchupKey(row));
       const nearestEntry = (list) => {
         if (!Array.isArray(list) || list.length === 0) return null;
+        // A single posted probable in game 2 is still the wrong probable for
+        // game 1. Repeated matchups must resolve to this exact game's bucket;
+        // an absent match stays honestly undecided.
+        if (repeatedMatchup) {
+          if (rowBucket == null) return null;
+          return list.find((entry) => gameTimeBucket(entry?.t) === rowBucket) || null;
+        }
         if (rowT == null || list.length === 1) return list[0];
         return list.slice().sort((a, b) =>
           Math.abs((a.t ?? rowT) - rowT) - Math.abs((b.t ?? rowT) - rowT))[0];
@@ -1531,7 +1577,7 @@ function nick(fullName) {
  * DailySlateRow + precomputed abbreviations + is_marquee). All line fields stay
  * nullable => Swift renders "—".
  */
-function toBoardRow(row, marqueeKeys, teamIndex) {
+export function toBoardRow(row, marqueeKeys, teamIndex) {
   const awayAbbr = row.league === 'MLB' ? abbrFor(row.away_team, teamIndex) : null;
   const homeAbbr = row.league === 'MLB' ? abbrFor(row.home_team, teamIndex) : null;
   return {
@@ -1543,6 +1589,11 @@ function toBoardRow(row, marqueeKeys, teamIndex) {
     commence_time: row.commence_time ?? null,
     scheduled_date: row.scheduled_date ?? null,
     kickoff_status: row.kickoff_status ?? null,
+    // Preserve the exact provider state from this slate row. This is carried
+    // by provider game identity, never borrowed from another matchup row (in
+    // particular, the other game of a doubleheader).
+    game_status: row.game_status ?? null,
+    status_detail: row.status_detail ?? null,
     // Game identity (Jul 22 2026, doubleheader-safe) — pairs with the
     // starters' game_time so readers join board row ↔ arms BY GAME.
     bdl_game_id: row.bdl_game_id ?? null,
@@ -1552,7 +1603,7 @@ function toBoardRow(row, marqueeKeys, teamIndex) {
     ml_away: row.ml_away ?? null,
     total: row.total ?? null,
     ml_book: row.line_vendor ?? null,
-    is_marquee: marqueeKeys.has(`${row.league}|${row.away_team}|${row.home_team}`),
+    is_marquee: marqueeKeys.has(rowGameIdentity(row)),
     // PARK FACTOR (founder pick, Aug 14 2026 — replaces the weather-led row on
     // THE BIG NUMBERS; the wind/total fold into its sentence). Percentage, not
     // the raw factor, per his call: 1.03 ships as +3.
@@ -1563,6 +1614,20 @@ function toBoardRow(row, marqueeKeys, teamIndex) {
       return { name: pd.park, pct: Math.round((Number(pd.factor) - 1) * 100), type: pd.type ?? null };
     })(),
   };
+}
+
+/** Exact identities of the selected marquee games (doubleheader-safe). */
+export function marqueeGameKeys(bigGames) {
+  return new Set((bigGames || []).map((game) => {
+    const [awayTeam, homeTeam] = String(game?.matchup || '').split(' @ ');
+    return rowGameIdentity({
+      league: game?.league,
+      away_team: awayTeam,
+      home_team: homeTeam,
+      bdl_game_id: game?.bdl_game_id,
+      commence_time: game?.commence_time,
+    });
+  }));
 }
 
 /* ───────────────────────────── main assembler ───────────────────────────── */
@@ -1634,12 +1699,22 @@ For each game: TWO sentences on the game's two starting pitchers — whatever yo
  * then focused retries for any missed game. Throws while any eligible game is
  * incomplete so the caller cannot silently publish an old/template treatment.
  */
-async function attachArmsTakes(board, starters) {
+export async function attachArmsTakes(board, starters) {
+  const repeatedMatchups = repeatedMatchupKeys(board);
   const starterFor = (row, team) => {
-    const matchup = `${row.away_abbr || row.away_team} @ ${row.home_abbr || row.home_team}`;
+    const matchup = rowMatchup(row);
     const candidates = starters.filter((st) => st.league === 'MLB'
       && String(st.team || '').toUpperCase() === String(team || '').toUpperCase()
       && (!st.game || st.game === matchup));
+    if (!candidates.length) return null;
+    // Team + matchup is ambiguous on a twin bill even when only one probable
+    // has been announced. Require this row's time bucket before accepting any
+    // candidate so game 2 can never populate game 1 (or vice versa).
+    if (repeatedMatchups.has(rowMatchupKey(row))) {
+      const rowBucket = gameTimeBucket(row.commence_time);
+      if (rowBucket == null) return null;
+      return candidates.find((st) => gameTimeBucket(st.game_time) === rowBucket) || null;
+    }
     if (candidates.length <= 1) return candidates[0] || null;
     const rowTime = Date.parse(row.commence_time);
     if (!Number.isFinite(rowTime)) return candidates[0];
@@ -1668,8 +1743,13 @@ async function attachArmsTakes(board, starters) {
       partialCount++;
       continue;
     }
-    const matchup = `${r.away_abbr || r.away_team} @ ${r.home_abbr || r.home_team}`;
-    jobs.push({ row: r, matchup, facts: [a, h].filter(Boolean).join('\n') });
+    const matchup = rowMatchup(r);
+    jobs.push({
+      row: r,
+      matchup,
+      gameKey: rowGameIdentity(r),
+      facts: [a, h].filter(Boolean).join('\n'),
+    });
   }
   if (!jobs.length) {
     if (partialCount) console.log(`[TomorrowBoard] arms takes attached: 0 paired + ${partialCount} partial`);
@@ -1677,15 +1757,15 @@ async function attachArmsTakes(board, starters) {
   }
 
   const requestTakes = async (pending) => {
-    const userMessage = `${pending.map((j) => `## ${j.matchup}\n${j.facts}`).join('\n\n')}
+    const userMessage = `${pending.map((j) => `## GAME KEY: ${j.gameKey}\nMATCHUP: ${j.matchup}\n${j.facts}`).join('\n\n')}
 
 Output JSON only:
 
 \`\`\`json
-[{ "matchup": "AWY @ HOM", "take": "[the two sentences]" }]
+[{ "game_key": "[copy that game's exact GAME KEY]", "matchup": "AWY @ HOM", "take": "[the two sentences]" }]
 \`\`\`
 
-One entry per game listed above.`;
+One entry per game listed above. Copy each GAME KEY exactly into game_key.`;
 
     // Arms used to retry only GEMINI_PROPS_MODEL. When that points at the
     // Claude subscription and its weekly tank is empty, every retry hits the
@@ -1719,7 +1799,7 @@ One entry per game listed above.`;
     throw new Error(`arms takes: all providers failed (${failures.join(' | ')})`);
   };
 
-  const keyOf = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const matchupKeyOf = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   const validTake = (take) => typeof take === 'string'
     && take.trim().length >= 40
     && take.trim().length <= 420
@@ -1727,17 +1807,42 @@ One entry per game listed above.`;
     && !take.includes('...')
     && !/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(take);
   const attachEntries = (pending, entries) => {
+    const takeByGameKey = new Map();
     const takeByMatchup = new Map();
+    const duplicateGameKeys = new Set();
+    const duplicateMatchups = new Set();
     const inOrder = [];
     for (const e of entries) {
-      if (e?.matchup && typeof e.take === 'string') {
-        takeByMatchup.set(keyOf(e.matchup), e.take.trim());
+      if (typeof e?.take === 'string') {
+        const responseKey = e.game_key != null
+          ? String(e.game_key)
+          : (e.game_id != null ? `bdl:${e.game_id}` : null);
+        if (responseKey) {
+          if (takeByGameKey.has(responseKey)) duplicateGameKeys.add(responseKey);
+          else takeByGameKey.set(responseKey, e.take.trim());
+        }
+        if (e.matchup) {
+          const responseMatchup = matchupKeyOf(e.matchup);
+          if (takeByMatchup.has(responseMatchup)) duplicateMatchups.add(responseMatchup);
+          else takeByMatchup.set(responseMatchup, e.take.trim());
+        }
         inOrder.push(e.take.trim());
       }
     }
+    const matchupCounts = new Map();
+    for (const j of pending) {
+      const key = matchupKeyOf(j.matchup);
+      matchupCounts.set(key, (matchupCounts.get(key) || 0) + 1);
+    }
     for (const [i, j] of pending.entries()) {
-      const take = takeByMatchup.get(keyOf(j.matchup))
-        ?? (inOrder.length === pending.length ? inOrder[i] : undefined);
+      const matchupKey = matchupKeyOf(j.matchup);
+      const take = (duplicateGameKeys.has(j.gameKey) ? undefined : takeByGameKey.get(j.gameKey))
+        // Backward-compatible only when matchup identity is unambiguous.
+        ?? (matchupCounts.get(matchupKey) === 1 && !duplicateMatchups.has(matchupKey)
+          ? takeByMatchup.get(matchupKey)
+          : undefined)
+        // An isolated retry cannot cross-attach to another game.
+        ?? (pending.length === 1 && inOrder.length === 1 ? inOrder[i] : undefined);
       if (validTake(take)) j.row.arms_take = take.trim();
     }
   };
@@ -1763,7 +1868,7 @@ One entry per game listed above.`;
 
   const missed = jobs.filter((j) => !j.row.arms_take);
   if (missed.length) {
-    throw new Error(`arms takes incomplete for ${missed.map((j) => j.matchup).join(', ')}`);
+    throw new Error(`arms takes incomplete for ${missed.map((j) => `${j.matchup} (${j.gameKey})`).join(', ')}`);
   }
   console.log(`[TomorrowBoard] arms takes attached: ${jobs.length}/${jobs.length} paired + ${partialCount} partial`);
 }
@@ -2011,12 +2116,7 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
   const bigGames = buildBigGames(slateRows, {
     mlb: { teamIndex, standings, idByName, acesByGame, pitchersByGame },
   });
-  const marqueeKeys = new Set(
-    bigGames.map((b) => {
-      const [away, home] = String(b.matchup).split(' @ ');
-      return `${b.league}|${away}|${home}`;
-    }),
-  );
+  const marqueeKeys = marqueeGameKeys(bigGames);
 
   // 5. COUNTDOWN — earliest CONFIRMED commence_time across all slate rows.
   // A date-only NCAAF fixture belongs on the board but can never own a clock.

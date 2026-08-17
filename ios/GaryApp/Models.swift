@@ -400,14 +400,28 @@ struct LiveScore: Codable, Equatable {
     let home_abbr: String?
     let away_score: Int?
     let home_score: Int?
-    let status: String?    // scheduled | live | final
-    let detail: String?    // "INN 7" / "Q3 4:12" / "FINAL"
+    let status: String?    // scheduled | live | final | delayed | postponed | suspended | cancelled
+    let detail: String?    // "INN 7" / "Q3 4:12" / provider interruption text / "FINAL"
     let outs: Int?         // MLB live: 0-2 during play; nil otherwise
     let bases: String?     // MLB live: 3-char [first,second,third] occupancy, e.g. "101"
     let events: [LiveEvent]?   // cashed-prop events (nil until the events pass runs)
 
     var isLive: Bool { status == "live" }
     var isFinal: Bool { status == "final" }
+    var isInterrupted: Bool {
+        switch status?.lowercased() {
+        case "delayed", "postponed", "suspended", "cancelled": true
+        default: false
+        }
+    }
+    /// Provider-authored status text, with a canonical fallback for rows whose
+    /// detail is temporarily absent. Interrupted games are neither live nor final.
+    var interruptionLabel: String? {
+        guard isInterrupted else { return nil }
+        if let provider = detail?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !provider.isEmpty { return provider.uppercased() }
+        return status?.uppercased()
+    }
     /// "SD @ PHI" — matches the hub/deep-link abbreviation format.
     var abbrGame: String { "\(away_abbr ?? "") @ \(home_abbr ?? "")" }
     /// "SD 4 · PHI 6" — only for a game that has actually started (live/final).
@@ -538,6 +552,10 @@ struct DailySlateRow: Codable {
     /// commence_time is intentionally nil and the UI must render TIME TBD.
     var scheduled_date: String? = nil
     var kickoff_status: String? = nil  // confirmed | date_only (NCAAF); nil legacy/other sports
+    /// Canonical provider game state. Optional keeps prior cached slate rows
+    /// decodable while the status contract rolls forward.
+    var game_status: String? = nil
+    var status_detail: String? = nil
     /// BallDontLie game id — the game's identity (Jul 22 2026): lets readers
     /// tell doubleheader games apart and join edges/live scores per game.
     let bdl_game_id: Int?
@@ -546,6 +564,20 @@ struct DailySlateRow: Codable {
     let ml_home: Double?
     let ml_away: Double?
     let total: Double?
+
+    var isInterrupted: Bool {
+        switch game_status?.lowercased() {
+        case "delayed", "postponed", "suspended", "cancelled": true
+        default: false
+        }
+    }
+
+    var interruptionLabel: String? {
+        guard isInterrupted else { return nil }
+        if let provider = status_detail?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !provider.isEmpty { return provider.uppercased() }
+        return game_status?.uppercased()
+    }
 
     var hasConfirmedKickoff: Bool {
         kickoff_status != "date_only" && commence_time?.isEmpty == false
@@ -2073,6 +2105,8 @@ struct TomorrowBoardRow: Decodable {   // mirrors DailySlateRow + presentation e
     /// nil commence_time, and render TIME TBD rather than an invented hour.
     let scheduled_date: String?
     let kickoff_status: String?       // confirmed | date_only
+    let game_status: String?          // scheduled | live | final | interruption state
+    let status_detail: String?        // provider-authored render label
     /// BallDontLie game id (Jul 22 2026, doubleheader identity) — nil on
     /// rows written before the change.
     let bdl_game_id: Int?
@@ -2099,6 +2133,20 @@ struct TomorrowBoardRow: Decodable {   // mirrors DailySlateRow + presentation e
     /// starters, generated at board-publish time. nil = the section stays out
     /// until both probables are posted and the completed board refresh lands.
     let arms_take: String?
+
+    var isInterrupted: Bool {
+        switch game_status?.lowercased() {
+        case "delayed", "postponed", "suspended", "cancelled": true
+        default: false
+        }
+    }
+
+    var interruptionLabel: String? {
+        guard isInterrupted else { return nil }
+        if let provider = status_detail?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !provider.isEmpty { return provider.uppercased() }
+        return game_status?.uppercased()
+    }
 
     var hasConfirmedKickoff: Bool {
         kickoff_status != "date_only" && commence_time?.isEmpty == false

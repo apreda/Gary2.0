@@ -18,6 +18,10 @@ import axios from 'axios';
 import { oddsService } from './oddsService.js';
 import { ncaafSlateDateForInstant } from './ncaafGamePolicy.js';
 import { sourceFailure } from './sourceFailurePolicy.js';
+import {
+  isRecoverableMlbGameInterruption,
+  normalizeMlbGameStatus,
+} from '../../supabase/functions/_shared/mlbGameStatus.js';
 
 // Resolve Supabase config exactly like src/supabaseClient.js does for Node scripts.
 const supabaseUrl =
@@ -27,6 +31,15 @@ const supabaseAnonKey =
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const TABLE = 'daily_slate';
+const MLB_GAME_STATUSES = new Set([
+  'scheduled',
+  'live',
+  'final',
+  'delayed',
+  'postponed',
+  'suspended',
+  'cancelled',
+]);
 // Doubleheader-safe (Jul 22 2026, founder-directed after the Max Fried mixup):
 // commence_time joined the unique key, so one row per GAME — a same-matchup
 // doubleheader is two rows, never a collapse to the earliest kickoff.
@@ -76,8 +89,9 @@ export function dailySlateRowIdentity(row) {
 
 /**
  * Existing rows absent from a successfully fetched league are canceled or
- * disappeared provider rows. Failed leagues are deliberately excluded: one
- * sport outage must never delete another sport's last authoritative snapshot.
+ * disappeared provider rows. Recoverable MLB interruptions stay until their
+ * exact provider game returns; failed leagues are deliberately excluded so one
+ * sport outage never deletes another sport's last authoritative snapshot.
  */
 export function staleDailySlateRowIds(existingRows, freshRows, healthyLeagues) {
   if (!Array.isArray(existingRows)) {
@@ -89,6 +103,14 @@ export function staleDailySlateRowIds(existingRows, freshRows, healthyLeagues) {
   for (const row of existingRows) {
     if (!healthy.has(String(row?.league || '').toUpperCase())) continue;
     if (fresh.has(dailySlateRowIdentity(row))) continue;
+    // MLB providers can temporarily drop a delayed/postponed/suspended game
+    // from a date response. Its exact provider id remains authoritative; keep
+    // the last interruption frame until that game returns with a new state or
+    // exact time instead of making it disappear from the board.
+    if (
+      String(row?.league || '').toUpperCase() === 'MLB'
+      && isRecoverableMlbGameInterruption(row?.game_status)
+    ) continue;
     if (!/^\d+$/.test(String(row?.id ?? ''))) {
       throw new Error('daily_slate reconciliation row is missing a valid id');
     }
@@ -147,6 +169,74 @@ export class DailySlateSourceError extends Error {
     this.result = result;
     this.failures = result?.failures || [];
   }
+}
+
+/**
+ * Persist an official MLB state transition onto one exact daily-slate row.
+ * This is intentionally a PATCH, never an upsert: a missing/mismatched row is
+ * surfaced loudly instead of creating a partial or cross-wired board game.
+ */
+export async function patchDailySlateMlbStatus({ date, gameId, status, commenceTime = null }) {
+  const adminKey = supabaseServiceKey || supabaseAnonKey;
+  if (!supabaseUrl || !adminKey) {
+    throw new Error('patchDailySlateMlbStatus: Supabase configuration missing');
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) {
+    throw new TypeError('patchDailySlateMlbStatus: date must be YYYY-MM-DD');
+  }
+  if (!/^\d+$/.test(String(gameId ?? ''))) {
+    throw new TypeError('patchDailySlateMlbStatus: gameId must be an exact numeric provider id');
+  }
+
+  const requestedStatus = String(status ?? '').trim().toLowerCase();
+  if (!MLB_GAME_STATUSES.has(requestedStatus)) {
+    throw new TypeError(`patchDailySlateMlbStatus: unsupported status "${status}"`);
+  }
+  const normalized = normalizeMlbGameStatus(requestedStatus);
+  let exactCommenceTime = null;
+  if (commenceTime != null) {
+    if (requestedStatus !== 'scheduled') {
+      throw new TypeError('patchDailySlateMlbStatus: commenceTime is valid only for scheduled state');
+    }
+    if (
+      typeof commenceTime !== 'string'
+      || !/^\d{4}-\d{2}-\d{2}T/.test(commenceTime)
+      || Number.isNaN(Date.parse(commenceTime))
+    ) {
+      throw new TypeError('patchDailySlateMlbStatus: commenceTime must be an exact ISO datetime');
+    }
+    exactCommenceTime = new Date(commenceTime).toISOString();
+  }
+  const response = await axios({
+    method: 'PATCH',
+    url: `${supabaseUrl}/rest/v1/${TABLE}`,
+    params: {
+      date: `eq.${date}`,
+      league: 'eq.MLB',
+      bdl_game_id: `eq.${gameId}`,
+      select: 'id,date,league,bdl_game_id,game_status,status_detail',
+    },
+    data: {
+      game_status: normalized.status,
+      status_detail: normalized.detail,
+      ...(exactCommenceTime ? { commence_time: exactCommenceTime } : {}),
+    },
+    headers: {
+      apikey: adminKey,
+      Authorization: `Bearer ${adminKey}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    },
+    timeout: 15000,
+  });
+
+  if (!Array.isArray(response?.data) || response.data.length !== 1) {
+    const count = Array.isArray(response?.data) ? response.data.length : 'non-array';
+    throw new Error(
+      `patchDailySlateMlbStatus: expected one MLB row for ${date}/${gameId}, received ${count}`,
+    );
+  }
+  return response.data[0];
 }
 
 /**
@@ -234,6 +324,10 @@ export async function buildLeagueRows(sport, etDateStr) {
         scheduled_date: g.scheduled_date ?? etDateStr,
         kickoff_status: kickoffStatus,
       } : {}),
+      ...(sport.league === 'MLB' ? {
+        game_status: g.game_status ?? 'scheduled',
+        status_detail: g.status_detail ?? null,
+      } : {}),
       // The game's own identity — lets every reader (iOS pages, insight
       // attachment) tell doubleheader games apart without string games.
       bdl_game_id: gameId,
@@ -315,7 +409,7 @@ export async function writeDailySlate(etDateStr = getETDateStr(new Date())) {
     url: `${supabaseUrl}/rest/v1/${TABLE}`,
     params: {
       date: `eq.${etDateStr}`,
-      select: 'id,date,league,away_team,home_team,commence_time,bdl_game_id',
+      select: 'id,date,league,away_team,home_team,commence_time,bdl_game_id,game_status,status_detail',
     },
     headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
     timeout: 15000,

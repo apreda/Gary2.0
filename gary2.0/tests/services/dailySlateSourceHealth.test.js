@@ -14,7 +14,7 @@ vi.mock('axios', () => ({ default: mocks.axios }));
 process.env.SUPABASE_URL ||= 'https://example.supabase.test';
 process.env.SUPABASE_SERVICE_ROLE_KEY ||= 'service-test-key';
 
-const { DailySlateSourceError, writeDailySlate } = await import(
+const { DailySlateSourceError, patchDailySlateMlbStatus, writeDailySlate } = await import(
   '../../src/services/dailySlateService.js'
 );
 
@@ -26,6 +26,81 @@ beforeEach(() => {
 });
 
 describe('daily slate source health', () => {
+  it('patches one exact MLB provider row for an official status transition', async () => {
+    mocks.axios.mockResolvedValue({
+      data: [{
+        id: 41,
+        date: '2099-10-03',
+        league: 'MLB',
+        bdl_game_id: 900,
+        game_status: 'postponed',
+        status_detail: 'POSTPONED',
+      }],
+    });
+
+    await expect(patchDailySlateMlbStatus({
+      date: '2099-10-03',
+      gameId: 900,
+      status: 'postponed',
+    })).resolves.toMatchObject({ bdl_game_id: 900, game_status: 'postponed' });
+
+    expect(mocks.axios).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'PATCH',
+      params: expect.objectContaining({
+        date: 'eq.2099-10-03',
+        league: 'eq.MLB',
+        bdl_game_id: 'eq.900',
+      }),
+      data: { game_status: 'postponed', status_detail: 'POSTPONED' },
+      headers: expect.objectContaining({ Prefer: 'return=representation' }),
+    }));
+  });
+
+  it('fails loudly instead of upserting when the exact MLB slate row is missing', async () => {
+    mocks.axios.mockResolvedValue({ data: [] });
+
+    await expect(patchDailySlateMlbStatus({
+      date: '2099-10-03',
+      gameId: 901,
+      status: 'delayed',
+    })).rejects.toThrow(/expected one MLB row/);
+    expect(mocks.axios.mock.calls[0][0].method).toBe('PATCH');
+  });
+
+  it('patches a provider-exact commence time only with scheduled state', async () => {
+    mocks.axios.mockResolvedValue({
+      data: [{
+        id: 42,
+        date: '2099-10-03',
+        league: 'MLB',
+        bdl_game_id: 902,
+        game_status: 'scheduled',
+        commence_time: '2099-10-04T00:10:00.000Z',
+      }],
+    });
+
+    await patchDailySlateMlbStatus({
+      date: '2099-10-03',
+      gameId: 902,
+      status: 'scheduled',
+      commenceTime: '2099-10-04T00:10:00Z',
+    });
+    expect(mocks.axios.mock.calls[0][0].data).toEqual({
+      game_status: 'scheduled',
+      status_detail: null,
+      commence_time: '2099-10-04T00:10:00.000Z',
+    });
+
+    mocks.axios.mockClear();
+    await expect(patchDailySlateMlbStatus({
+      date: '2099-10-03',
+      gameId: 902,
+      status: 'delayed',
+      commenceTime: '2099-10-04T00:10:00Z',
+    })).rejects.toThrow(/only for scheduled state/);
+    expect(mocks.axios).not.toHaveBeenCalled();
+  });
+
   it('persists healthy leagues, then reports a failed league instead of a dark day', async () => {
     mocks.getUpcomingGames.mockImplementation(async (sportKey) => {
       if (sportKey === 'baseball_mlb') {
@@ -138,6 +213,47 @@ describe('daily slate source health', () => {
     await expect(writeDailySlate('2099-10-07')).resolves.toMatchObject({ total: 0 });
     expect(mocks.axios.mock.calls.map(([config]) => config.method)).toEqual(['GET', 'DELETE']);
     expect(mocks.axios.mock.calls[1][0].params).toEqual({ id: 'in.(11,12)' });
+  });
+
+  it('retains an interrupted MLB game when a healthy provider frame temporarily omits it', async () => {
+    mocks.getUpcomingGames.mockResolvedValue([]);
+    mocks.axios.mockImplementation(async (config) => (
+      config.method === 'GET'
+        ? { data: [{
+            id: 13,
+            date: '2099-10-07',
+            league: 'MLB',
+            bdl_game_id: 703,
+            away_team: 'Boston Red Sox',
+            home_team: 'New York Yankees',
+            commence_time: '2099-10-07T23:05:00.000Z',
+            game_status: 'delayed',
+            status_detail: 'DELAYED',
+          }] }
+        : { data: null }
+    ));
+
+    await expect(writeDailySlate('2099-10-07')).resolves.toMatchObject({ total: 0 });
+    expect(mocks.axios.mock.calls.map(([config]) => config.method)).toEqual(['GET']);
+  });
+
+  it('does not retain a cancelled MLB game after the authoritative provider omits it', async () => {
+    mocks.getUpcomingGames.mockResolvedValue([]);
+    mocks.axios.mockImplementation(async (config) => (
+      config.method === 'GET'
+        ? { data: [{
+            id: 14,
+            date: '2099-10-07',
+            league: 'MLB',
+            bdl_game_id: 704,
+            game_status: 'cancelled',
+          }] }
+        : { data: null }
+    ));
+
+    await expect(writeDailySlate('2099-10-07')).resolves.toMatchObject({ total: 0 });
+    expect(mocks.axios.mock.calls.map(([config]) => config.method)).toEqual(['GET', 'DELETE']);
+    expect(mocks.axios.mock.calls[1][0].params).toEqual({ id: 'in.(14)' });
   });
 
   it('never deletes rows belonging to a failed league during healthy-league reconciliation', async () => {

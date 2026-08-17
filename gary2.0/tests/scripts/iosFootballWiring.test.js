@@ -28,7 +28,7 @@ describe('iOS slate-only football page identity', () => {
   });
 
   it('uses exact provider identities for NCAAF strip abbreviations and never invents mascot prefixes', () => {
-    expect(views).toContain('liveCache.status(forGameId: gameId)');
+    expect(views).toContain('liveCache.status(forGameId: gameId, league: league)');
     expect(views).toContain('$0.bdl_game_id == gameId && ($0.league ?? "").uppercased() == league');
     expect(views).toContain('?? (lg == "NCAAF"');
     expect(views).toContain('? g.matchup.uppercased()');
@@ -188,7 +188,7 @@ describe('Football Picks overview', () => {
 
   it('observes the shared live cache so the matchup rail updates with its cards', () => {
     expect(views).toContain('@ObservedObject private var liveCache = LiveScoreCache.shared');
-    expect(views).toContain('let ls = liveCache.status(forGameId: id)');
+    expect(views).toContain('return liveCache.status(forGameId: id, league: gameLeague(g))');
     expect(views).toContain('let live = liveCache.scores.contains');
   });
 

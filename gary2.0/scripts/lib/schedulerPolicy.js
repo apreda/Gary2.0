@@ -42,6 +42,15 @@ export function schedulerSlateDateForSport(sportKey, value = Date.now()) {
     : etCalendarDate(value);
 }
 
+/** Carry stable slate identity on entries whose background guards persist it. */
+export function schedulerEntrySlateIdentity(sportKey, slateDate) {
+  if (sportKey !== 'baseball_mlb' && sportKey !== 'americanfootball_ncaaf') return {};
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(slateDate || ''))) {
+    throw new TypeError(`${sportKey} scheduler entry requires a canonical slate date`);
+  }
+  return { slateDate };
+}
+
 /** A prior NCAAF slate is still active only from midnight through 5:59:59 ET. */
 export function activeNcaafRecoverySlateDate(value = Date.now()) {
   const calendarDate = etCalendarDate(value);
@@ -129,6 +138,43 @@ export function isSportFetchRetryEntry(entry) {
   return entry?.kind === 'sport_fetch_retry';
 }
 
+export function isScheduleEntryHeld(entry) {
+  return !isSportFetchRetryEntry(entry) && Boolean(entry?.scheduleHold);
+}
+
+export function isScheduleEntryRetired(entry) {
+  return !isSportFetchRetryEntry(entry) && Boolean(entry?.scheduleRetired);
+}
+
+/** Hold or release only the still-pending tiers for one exact scheduled game. */
+export function setGameScheduleHold(entries, exemplar, reason = null) {
+  const gameKey = scheduleEntryKey(exemplar);
+  const nextReason = reason == null ? null : String(reason).trim().toLowerCase();
+  let changed = 0;
+  for (const entry of entries || []) {
+    if (scheduleEntryKey(entry) !== gameKey || isSportFetchRetryEntry(entry)) continue;
+    const previous = entry.scheduleHold || null;
+    if (nextReason) entry.scheduleHold = nextReason;
+    else delete entry.scheduleHold;
+    if (previous !== (entry.scheduleHold || null)) changed += 1;
+  }
+  return changed;
+}
+
+/** Permanently suppress the remaining pregame tiers for a game on this slate. */
+export function retireGameSchedule(entries, exemplar, reason) {
+  const gameKey = scheduleEntryKey(exemplar);
+  const retirement = String(reason || 'retired').trim().toLowerCase();
+  let changed = 0;
+  for (const entry of entries || []) {
+    if (scheduleEntryKey(entry) !== gameKey || isSportFetchRetryEntry(entry)) continue;
+    if (entry.scheduleRetired !== retirement) changed += 1;
+    entry.scheduleRetired = retirement;
+    delete entry.scheduleHold;
+  }
+  return changed;
+}
+
 export function gameHasStarted(entry, now = Date.now()) {
   if (isSportFetchRetryEntry(entry)) return false;
   const start = asMillis(entry?.startTime);
@@ -139,6 +185,7 @@ export function gameHasStarted(entry, now = Date.now()) {
 export function hasUrgentUpcomingTrigger(entries, now = Date.now(), horizonMs = 20 * 60_000) {
   const clock = asMillis(now);
   return (entries || []).some((entry) => {
+    if (isScheduleEntryHeld(entry) || isScheduleEntryRetired(entry)) return false;
     const start = asMillis(entry?.startTime);
     const trigger = asMillis(entry?.triggerTime);
     return Number.isFinite(start) && Number.isFinite(trigger)
@@ -333,6 +380,7 @@ export function childExecutionBudget({
   }
 
   const nextTrigger = (pendingEntries || [])
+    .filter((candidate) => !isScheduleEntryHeld(candidate) && !isScheduleEntryRetired(candidate))
     .filter((candidate) => isSportFetchRetryEntry(candidate) || !gameHasStarted(candidate, clock))
     .map((candidate) => asMillis(candidate?.triggerTime))
     .filter(Number.isFinite)
@@ -361,6 +409,7 @@ export function childExecutionBudget({
 export function pendingEntriesForDecisionLane(entry, pendingEntries = [], activeBatchLaneKeys = new Set()) {
   const laneKey = decisionLaneKey(entry);
   return (pendingEntries || []).filter((candidate) => {
+    if (isScheduleEntryHeld(candidate) || isScheduleEntryRetired(candidate)) return false;
     const candidateLaneKey = decisionLaneKey(candidate);
     return candidateLaneKey === laneKey || !activeBatchLaneKeys.has(candidateLaneKey);
   });
@@ -415,7 +464,10 @@ export function nextTriggerBatch(entries, options = DEFAULT_BATCH_WINDOW_MS) {
   const windowMs = Math.max(0, Number(config.windowMs ?? DEFAULT_BATCH_WINDOW_MS) || 0);
   const clock = asMillis(config.now ?? Date.now());
   const crossLaneLookaheadMs = Math.max(0, Number(config.crossLaneLookaheadMs) || 0);
-  const ordered = [...entries].sort((a, b) => asMillis(a.triggerTime) - asMillis(b.triggerTime));
+  const ordered = entries
+    .filter((entry) => !isScheduleEntryHeld(entry) && !isScheduleEntryRetired(entry))
+    .sort((a, b) => asMillis(a.triggerTime) - asMillis(b.triggerTime));
+  if (ordered.length === 0) return [];
   const anchor = asMillis(ordered[0].triggerTime);
   const anchored = ordered.filter((entry) => asMillis(entry.triggerTime) - anchor <= windowMs);
   const anchoredLanes = new Set(anchored.map(decisionLaneKey));
@@ -444,6 +496,7 @@ export function coalesceOverdueTiers(entries, now = Date.now()) {
   const clock = asMillis(now);
   const grouped = new Map();
   for (const entry of entries || []) {
+    if (isScheduleEntryRetired(entry)) continue;
     const key = scheduleEntryKey(entry);
     if (!grouped.has(key)) grouped.set(key, []);
     grouped.get(key).push(entry);
@@ -452,6 +505,12 @@ export function coalesceOverdueTiers(entries, now = Date.now()) {
   const kept = [];
   const skipped = [];
   for (const group of grouped.values()) {
+    if (group.some(isScheduleEntryHeld)) {
+      // Interruption time is not a pick deadline. Preserve every unfired tier;
+      // a resumed exact time will reanchor only these live queue entries.
+      kept.push(...group);
+      continue;
+    }
     const overdue = group
       .filter((entry) => asMillis(entry.triggerTime) <= clock)
       .sort((a, b) => asMillis(a.triggerTime) - asMillis(b.triggerTime));

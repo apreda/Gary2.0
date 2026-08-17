@@ -137,6 +137,37 @@ const DEFAULT_MAX_GAME_MINUTES = Object.freeze({
   NHL: 4 * 60,
 });
 
+const RECOVERABLE_INTERRUPTION_STATUSES = new Set([
+  'delayed',
+  'postponed',
+  'suspended',
+]);
+
+function liveScoreIdentity(row) {
+  const league = normalizeLeague(row?.league ?? row?.row?.league);
+  const gameId = String(row?.game_id ?? row?.row?.game_id ?? '');
+  return league && gameId ? `${league}|${gameId}` : null;
+}
+
+/** Count exact games whose fresh status is new or differs from stored state. */
+export function countLiveScoreStateChanges(freshGames = [], storedRows = []) {
+  const stored = new Map();
+  for (const row of Array.isArray(storedRows) ? storedRows : []) {
+    const identity = liveScoreIdentity(row);
+    if (!identity) continue;
+    stored.set(identity, String(row?.status || '').toLowerCase());
+  }
+
+  let changed = 0;
+  for (const game of Array.isArray(freshGames) ? freshGames : []) {
+    const identity = liveScoreIdentity(game);
+    if (!identity) continue;
+    const status = String(game?.status ?? game?.row?.status ?? '').toLowerCase();
+    if (!stored.has(identity) || stored.get(identity) !== status) changed += 1;
+  }
+  return changed;
+}
+
 /**
  * Narrow an authoritative daily-slate gate to leagues that can actually be
  * live soon. This runs before any provider request. A game already stored as
@@ -159,6 +190,17 @@ export function constrainLiveScoreGateToWindow(gate, {
       .filter((row) => String(row?.status || '').toLowerCase() === 'final')
       .map((row) => `${normalizeLeague(row?.league)}|${String(row?.game_id ?? '')}`),
   );
+  const interruptedGames = new Set(
+    (Array.isArray(storedRows) ? storedRows : [])
+      .filter((row) => RECOVERABLE_INTERRUPTION_STATUSES.has(String(row?.status || '').toLowerCase()))
+      .map((row) => `${normalizeLeague(row?.league)}|${String(row?.game_id ?? '')}`),
+  );
+  const storedStatusByGame = new Map(
+    (Array.isArray(storedRows) ? storedRows : []).map((row) => [
+      `${normalizeLeague(row?.league)}|${String(row?.game_id ?? '')}`,
+      String(row?.status || '').toLowerCase(),
+    ]),
+  );
   const active = new Set();
 
   for (const row of Array.isArray(rows) ? rows : []) {
@@ -166,6 +208,22 @@ export function constrainLiveScoreGateToWindow(gate, {
     if (!enabled.has(league) || active.has(league)) continue;
     const gameId = String(row?.bdl_game_id ?? row?.game_id ?? '');
     if (gameId && finalGames.has(`${league}|${gameId}`)) continue;
+    const slateStatus = String(row?.game_status ?? row?.status ?? '').toLowerCase();
+    if (slateStatus === 'cancelled') {
+      // Poll once to replace a stale live_scores frame, then treat cancelled as
+      // terminal instead of spending provider calls forever.
+      if (storedStatusByGame.get(`${league}|${gameId}`) !== 'cancelled') active.add(league);
+      continue;
+    }
+    if (
+      RECOVERABLE_INTERRUPTION_STATUSES.has(slateStatus)
+      || (gameId && interruptedGames.has(`${league}|${gameId}`))
+    ) {
+      // Keep polling through an interruption even after the old start window
+      // expires. This is how a resumed exact time replaces the held state.
+      active.add(league);
+      continue;
+    }
     const startMs = Date.parse(String(row?.commence_time ?? ''));
     if (!Number.isFinite(startMs)) {
       active.add(league); // malformed schedule: fail open for this league
