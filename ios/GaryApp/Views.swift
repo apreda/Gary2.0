@@ -3976,13 +3976,13 @@ struct HomeView: View {
                             .font(.system(size: 12.5, weight: .bold).monospacedDigit())
                             .tracking(1.4)
                             .foregroundStyle(league == selected
-                                ? league.sport.accentColor
+                                ? GaryColors.gold
                                 : Color.white.opacity(enabled ? 0.56 : 0.24))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
                             .overlay(alignment: .bottom) {
                                 if league == selected {
-                                    Rectangle().fill(league.sport.accentColor).frame(height: 2)
+                                    Rectangle().fill(GaryColors.gold.opacity(0.85)).frame(height: 2)
                                 }
                             }
                     }
@@ -4016,7 +4016,7 @@ struct HomeView: View {
                 // The component stays identical between tabs; only the selected
                 // sport's identity colors the single board outline.
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(selected.sport.accentColor.opacity(0.85), lineWidth: 1))
+                    .stroke(GaryColors.gold.opacity(0.16), lineWidth: 1))
         )
         .pageGutter()
     }
