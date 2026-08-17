@@ -195,6 +195,8 @@ private let depthStudies: [DepthStudy] = [
     .init(id: 5, name: "GAME NIGHT", cue: "VOLUMETRIC LIGHT · LIVE"),
     .init(id: 6, name: "THE MARKET", cue: "DATA TERRAIN · LIVE"),
     .init(id: 7, name: "THE VAULT", cue: "MONUMENTAL SCALE"),
+    .init(id: 8, name: "FIELD LEVEL", cue: "FULL SCENE · NO RULES · LIVE"),
+    .init(id: 9, name: "GOLDEN HOUR", cue: "COLOSSAL SKYBOX · NO RULES · LIVE"),
 ]
 
 struct DepthStudiesView: View {
@@ -265,7 +267,7 @@ private struct DepthStudyPage: View {
     var body: some View {
         ZStack {
             Group {
-                if (study.id == 5 || study.id == 6) && !reduceMotion {
+                if [5, 6, 8, 9].contains(study.id) && !reduceMotion {
                     // the LIVE studies: slow ambient animation at a throttled
                     // frame rate — atmosphere breathing, the market drawing
                     TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { tl in
@@ -278,8 +280,15 @@ private struct DepthStudyPage: View {
             }
             .offset(y: scrollY * 0.10)
             .ignoresSafeArea()
-            // occlusion scrim: the central column stays on quiet ground
-            LinearGradient(stops: [
+            // occlusion scrim: the central column stays on quiet ground.
+            // The NO RULES studies (8-9) run nearly bare — the cards fend
+            // for themselves against the full scene. That is the experiment.
+            LinearGradient(stops: study.id >= 8 ? [
+                .init(color: .black.opacity(0.22), location: 0),
+                .init(color: .black.opacity(0.04), location: 0.20),
+                .init(color: .black.opacity(0.10), location: 0.60),
+                .init(color: .black.opacity(0.40), location: 1),
+            ] : [
                 .init(color: .black.opacity(0.50), location: 0),
                 .init(color: .black.opacity(0.16), location: 0.18),
                 .init(color: .black.opacity(0.30), location: 0.55),
@@ -325,6 +334,8 @@ private struct DepthBackground: View {
                 case 5: gameNight(w: w, h: h)
                 case 6: market(w: w, h: h)
                 case 7: vault(w: w, h: h)
+                case 8: fieldLevel(w: w, h: h)
+                case 9: goldenHour(w: w, h: h)
                 default: Color.black
                 }
             }
@@ -660,6 +671,225 @@ private struct DepthBackground: View {
             .init(color: .black.opacity(0.38), location: 0.75),
             .init(color: .black.opacity(0.8), location: 1),
         ], center: .init(x: 0.5, y: 0.35), startRadius: 10, endRadius: h * 0.8)
+    }
+
+    // STUDY 9 — FIELD LEVEL (NO RULES). The whole scene, literally: you are
+    // standing at the plate during a packed night game. Grandstands climb
+    // both sides full of crowd, floodlight banks blaze with star flares,
+    // camera flashes pop at random through the stands, and the chalk of the
+    // infield runs under the tab bar. Every restraint rule broken on purpose.
+    @ViewBuilder private func fieldLevel(w: CGFloat, h: CGFloat) -> some View {
+        LinearGradient(colors: [Color(hex: "#0A1526"), Color(hex: "#0D1B30"), Color(hex: "#0B1420")],
+                       startPoint: .top, endPoint: .bottom)
+        Canvas { ctx, size in
+            let W = size.width, H = size.height
+            func P(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x * W, y: y * H) }
+            func quadFill(_ a: CGPoint, _ b: CGPoint, _ c: CGPoint, _ d: CGPoint, _ color: Color) {
+                var p = Path(); p.move(to: a); p.addLine(to: b); p.addLine(to: c); p.addLine(to: d); p.closeSubpath()
+                ctx.fill(p, with: .color(color))
+            }
+            func lerp(_ a: CGPoint, _ b: CGPoint, _ t: CGFloat) -> CGPoint {
+                CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t)
+            }
+            // grandstand slabs: [topLeft, topRight, bottomRight, bottomLeft]
+            let slabs: [(CGPoint, CGPoint, CGPoint, CGPoint, Color)] = [
+                (P(0.00, 0.14), P(0.40, 0.30), P(0.40, 0.44), P(0.00, 0.34), Color(hex: "#0C1119")),
+                (P(0.00, 0.36), P(0.42, 0.46), P(0.42, 0.60), P(0.00, 0.58), Color(hex: "#101620")),
+                (P(0.60, 0.30), P(1.00, 0.14), P(1.00, 0.34), P(0.60, 0.44), Color(hex: "#0C1119")),
+                (P(0.58, 0.46), P(1.00, 0.36), P(1.00, 0.58), P(0.58, 0.60), Color(hex: "#101620")),
+                (P(0.38, 0.335), P(0.62, 0.335), P(0.62, 0.435), P(0.38, 0.435), Color(hex: "#0A0F16")),
+            ]
+            for s in slabs { quadFill(s.0, s.1, s.2, s.3, s.4) }
+            // the crowd: ~640 souls, warm and cool, seeded into each slab
+            var rnd = DepthLCG(seed: 909)
+            let crowdColors = [Color(hex: "#C8B896"), Color(hex: "#8FA0B8"), Color(hex: "#B87F6F"), Color(hex: "#9BB39B")]
+            for s in slabs {
+                for _ in 0..<128 {
+                    let u = CGFloat(rnd.next()), v = CGFloat(rnd.next())
+                    let pt = lerp(lerp(s.0, s.1, u), lerp(s.3, s.2, u), v)
+                    let c = crowdColors[Int(rnd.next() * 4) % 4]
+                    let d = 1.0 + rnd.next() * 0.9
+                    ctx.fill(Path(ellipseIn: CGRect(x: pt.x, y: pt.y, width: d, height: d)),
+                             with: .color(c.opacity(alpha(0.22 + rnd.next() * 0.30))))
+                }
+            }
+            // camera flashes popping through the stands — the World Series tell
+            var frnd = DepthLCG(seed: 910)
+            for _ in 0..<14 {
+                let si = Int(frnd.next() * 5) % 5
+                let s = slabs[si]
+                let u = CGFloat(frnd.next()), v = CGFloat(frnd.next())
+                let pt = lerp(lerp(s.0, s.1, u), lerp(s.3, s.2, u), v)
+                let period = 1.4 + frnd.next() * 2.6
+                let offset = frnd.next() * period
+                let phase = ((time + offset).truncatingRemainder(dividingBy: period)) / period
+                if phase < 0.055 {
+                    let pop = sin(phase / 0.055 * .pi)
+                    ctx.fill(Path(ellipseIn: CGRect(x: pt.x - 1.6, y: pt.y - 1.6, width: 3.2, height: 3.2)),
+                             with: .color(.white.opacity(0.9 * pop)))
+                    ctx.fill(Path(ellipseIn: CGRect(x: pt.x - 5, y: pt.y - 5, width: 10, height: 10)),
+                             with: .color(.white.opacity(0.28 * pop)))
+                }
+            }
+            // floodlight banks, in frame and blazing
+            let breath = 0.88 + 0.12 * sin(time / 4.0)
+            for bank in [P(0.115, 0.075), P(0.885, 0.075)] {
+                quadFill(CGPoint(x: bank.x - 0.052 * W, y: bank.y - 0.016 * H),
+                         CGPoint(x: bank.x + 0.052 * W, y: bank.y - 0.016 * H),
+                         CGPoint(x: bank.x + 0.052 * W, y: bank.y + 0.016 * H),
+                         CGPoint(x: bank.x - 0.052 * W, y: bank.y + 0.016 * H),
+                         Color(hex: "#1A2130"))
+                var mast = Path()
+                mast.move(to: CGPoint(x: bank.x, y: bank.y + 0.016 * H))
+                mast.addLine(to: CGPoint(x: bank.x, y: bank.y + 0.09 * H))
+                ctx.stroke(mast, with: .color(Color(hex: "#1A2130")), lineWidth: 2.4)
+                for i in 0..<8 {
+                    let lx = bank.x + CGFloat(i % 4 - 2) * 0.021 * W + 0.0105 * W
+                    let ly = bank.y + (i < 4 ? -0.007 : 0.007) * H
+                    ctx.fill(Path(ellipseIn: CGRect(x: lx - 2.2, y: ly - 2.2, width: 4.4, height: 4.4)),
+                             with: .color(Color(hex: "#FFF4D6").opacity(0.95 * breath)))
+                }
+                ctx.fill(Path(ellipseIn: CGRect(x: bank.x - 0.16 * W, y: bank.y - 0.11 * H, width: 0.32 * W, height: 0.22 * H)),
+                         with: .radialGradient(Gradient(colors: [Color(hex: "#FFEDB8").opacity(0.34 * breath), .clear]),
+                                               center: bank, startRadius: 2, endRadius: 0.17 * W))
+                for (ddx, ddy, len) in [(CGFloat(1), CGFloat(0), 0.13 * W), (0, 1, 0.10 * W), (0.7, 0.7, 0.08 * W), (0.7, -0.7, 0.08 * W)] {
+                    var flare = Path()
+                    flare.move(to: CGPoint(x: bank.x - ddx * len, y: bank.y - ddy * len))
+                    flare.addLine(to: CGPoint(x: bank.x + ddx * len, y: bank.y + ddy * len))
+                    ctx.stroke(flare, with: .linearGradient(
+                        Gradient(colors: [.clear, Color(hex: "#FFF4D6").opacity(0.5 * breath), .clear]),
+                        startPoint: CGPoint(x: bank.x - ddx * len, y: bank.y - ddy * len),
+                        endPoint: CGPoint(x: bank.x + ddx * len, y: bank.y + ddy * len)), lineWidth: 1.3)
+                }
+            }
+            // the field: glowing grass, dirt arc, chalk, the mound
+            quadFill(P(0, 0.80), P(1, 0.80), P(1, 1.02), P(0, 1.02), Color(hex: "#1C3A24"))
+            ctx.fill(Path(ellipseIn: CGRect(x: -0.25 * W, y: 0.755 * H, width: 1.5 * W, height: 0.14 * H)),
+                     with: .color(Color(hex: "#274D2E")))
+            ctx.fill(Path(ellipseIn: CGRect(x: 0.18 * W, y: 0.86 * H, width: 0.64 * W, height: 0.30 * H)),
+                     with: .color(Color(hex: "#4A3524")))
+            ctx.fill(Path(ellipseIn: CGRect(x: 0.30 * W, y: 0.905 * H, width: 0.40 * W, height: 0.20 * H)),
+                     with: .color(Color(hex: "#245231")))
+            ctx.fill(Path(ellipseIn: CGRect(x: 0.44 * W, y: 0.940 * H, width: 0.12 * W, height: 0.045 * H)),
+                     with: .color(Color(hex: "#54402C")))
+            for target in [P(-0.05, 0.70), P(1.05, 0.70)] {
+                var foul = Path()
+                foul.move(to: P(0.5, 1.01))
+                foul.addLine(to: target)
+                ctx.stroke(foul, with: .color(Color(hex: "#EDE6D4").opacity(0.5)), lineWidth: 1.6)
+            }
+            // scoreboard glow over the far stand
+            ctx.fill(Path(CGRect(x: 0.415 * W, y: 0.295 * H, width: 0.17 * W, height: 0.028 * H)),
+                     with: .color(Color(hex: "#F5B93F").opacity(0.5 + 0.1 * sin(time / 2))))
+        }
+    }
+
+    // STUDY 10 — GOLDEN HOUR (NO RULES). One colossal gesture: a sun the
+    // width of half the screen sinks behind the skyline, god rays wheel in
+    // slow motion, birds cross the disc, and the whole world is Gary gold.
+    // Maximum luminance, zero apology.
+    @ViewBuilder private func goldenHour(w: CGFloat, h: CGFloat) -> some View {
+        Canvas { ctx, size in
+            let W = size.width, H = size.height
+            let sun = CGPoint(x: 0.5 * W, y: 0.60 * H)
+            let sunR = 0.42 * W
+            let horizonY = 0.665 * H
+            // sky: radiance falling off from the sun
+            ctx.fill(Path(CGRect(x: 0, y: 0, width: W, height: H)),
+                     with: .radialGradient(
+                        Gradient(stops: [
+                            .init(color: Color(hex: "#F7C868"), location: 0),
+                            .init(color: Color(hex: "#D99E37"), location: 0.22),
+                            .init(color: Color(hex: "#8A5A18"), location: 0.46),
+                            .init(color: Color(hex: "#3A250C"), location: 0.72),
+                            .init(color: Color(hex: "#120C05"), location: 1),
+                        ]),
+                        center: sun, startRadius: 0, endRadius: 1.25 * H))
+            // god rays, wheeling at one revolution per eight minutes
+            let baseAngle = time * 0.013
+            for k in 0..<14 {
+                let a = baseAngle + Double(k) * (.pi * 2 / 14)
+                let halfSpread = 0.055
+                let R = 1.6 * H
+                var wedge = Path()
+                wedge.move(to: sun)
+                wedge.addLine(to: CGPoint(x: sun.x + CGFloat(cos(a - halfSpread)) * R,
+                                          y: sun.y + CGFloat(sin(a - halfSpread)) * R))
+                wedge.addLine(to: CGPoint(x: sun.x + CGFloat(cos(a + halfSpread)) * R,
+                                          y: sun.y + CGFloat(sin(a + halfSpread)) * R))
+                wedge.closeSubpath()
+                let rayAlpha = (k % 2 == 0 ? 0.085 : 0.04)
+                ctx.fill(wedge, with: .radialGradient(
+                    Gradient(colors: [Color(hex: "#FFE9AE").opacity(rayAlpha), .clear]),
+                    center: sun, startRadius: sunR * 0.85, endRadius: R))
+            }
+            // the disc: white-hot core, gold limb, breathing halo
+            let breath = 0.9 + 0.1 * sin(time / 6.0)
+            ctx.fill(Path(ellipseIn: CGRect(x: sun.x - sunR * 1.55, y: sun.y - sunR * 1.55,
+                                            width: sunR * 3.1, height: sunR * 3.1)),
+                     with: .radialGradient(Gradient(colors: [Color(hex: "#FFDD8F").opacity(0.42 * breath), .clear]),
+                                           center: sun, startRadius: sunR * 0.8, endRadius: sunR * 1.55))
+            ctx.fill(Path(ellipseIn: CGRect(x: sun.x - sunR, y: sun.y - sunR, width: sunR * 2, height: sunR * 2)),
+                     with: .radialGradient(
+                        Gradient(stops: [
+                            .init(color: Color(hex: "#FFF7DE"), location: 0),
+                            .init(color: Color(hex: "#FFE49A"), location: 0.55),
+                            .init(color: Color(hex: "#F2B94E"), location: 0.85),
+                            .init(color: Color(hex: "#E0A030"), location: 1),
+                        ]),
+                        center: sun, startRadius: 0, endRadius: sunR))
+            // birds crossing the disc, forty-second loop
+            var brnd = DepthLCG(seed: 111)
+            for _ in 0..<5 {
+                let speed = 0.014 + brnd.next() * 0.012
+                let offset = brnd.next()
+                let yy = sun.y - sunR * CGFloat(0.15 + brnd.next() * 0.5)
+                let s = CGFloat(3.2 + brnd.next() * 2.6)
+                let t = ((time * speed + offset).truncatingRemainder(dividingBy: 1))
+                let xx = CGFloat(t) * (W + 120) - 60
+                let flap = CGFloat(0.75 + 0.25 * sin(time * 9 + offset * 40))
+                var bird = Path()
+                bird.move(to: CGPoint(x: xx - s, y: yy))
+                bird.addQuadCurve(to: CGPoint(x: xx, y: yy - s * 0.55 * flap),
+                                  control: CGPoint(x: xx - s * 0.5, y: yy - s * 0.95 * flap))
+                bird.addQuadCurve(to: CGPoint(x: xx + s, y: yy),
+                                  control: CGPoint(x: xx + s * 0.5, y: yy - s * 0.95 * flap))
+                ctx.stroke(bird, with: .color(Color(hex: "#1E1408").opacity(0.85)), lineWidth: 1.3)
+            }
+            // skyline + the stadium, pure silhouette against the blaze
+            var srnd = DepthLCG(seed: 112)
+            var x: Double = -6
+            while x < W + 10 {
+                let bw = 16 + srnd.next() * 30
+                let bh = 14 + srnd.next() * 52
+                ctx.fill(Path(CGRect(x: x, y: horizonY - bh, width: bw, height: bh)),
+                         with: .color(Color(hex: "#0B0704")))
+                if srnd.next() > 0.6 {
+                    ctx.fill(Path(CGRect(x: x + bw * 0.3, y: horizonY - bh - 7, width: 1.6, height: 7)),
+                             with: .color(Color(hex: "#0B0704")))
+                }
+                x += bw + 2 + srnd.next() * 5
+            }
+            var bowl = Path()
+            bowl.addArc(center: CGPoint(x: 0.30 * W, y: horizonY),
+                        radius: 0.115 * W, startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
+            bowl.closeSubpath()
+            ctx.fill(bowl, with: .color(Color(hex: "#0B0704")))
+            for mast in [-0.10, -0.04, 0.04, 0.10] {
+                var m = Path()
+                m.move(to: CGPoint(x: (0.30 + mast) * W, y: horizonY - 0.10 * W))
+                m.addLine(to: CGPoint(x: (0.30 + mast * 1.25) * W, y: horizonY - 0.155 * W))
+                ctx.stroke(m, with: .color(Color(hex: "#0B0704")), lineWidth: 1.5)
+            }
+            // ground and the sun road on it
+            ctx.fill(Path(CGRect(x: 0, y: horizonY, width: W, height: H - horizonY)),
+                     with: .color(Color(hex: "#0A0705")))
+            ctx.fill(Path(CGRect(x: sun.x - 0.11 * W, y: horizonY, width: 0.22 * W, height: H - horizonY)),
+                     with: .linearGradient(
+                        Gradient(colors: [Color(hex: "#F2B94E").opacity(0.30), Color(hex: "#F2B94E").opacity(0.02)]),
+                        startPoint: CGPoint(x: sun.x, y: horizonY),
+                        endPoint: CGPoint(x: sun.x, y: H)))
+        }
     }
 }
 
