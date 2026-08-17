@@ -192,6 +192,9 @@ private let depthStudies: [DepthStudy] = [
     .init(id: 2, name: "TERMINAL VOID", cue: "VANISHING POINT"),
     .init(id: 3, name: "THE TUNNEL", cue: "FOREGROUND OCCLUSION"),
     .init(id: 4, name: "NIGHT FLIGHT", cue: "AERIAL PERSPECTIVE"),
+    .init(id: 5, name: "GAME NIGHT", cue: "VOLUMETRIC LIGHT · LIVE"),
+    .init(id: 6, name: "THE MARKET", cue: "DATA TERRAIN · LIVE"),
+    .init(id: 7, name: "THE VAULT", cue: "MONUMENTAL SCALE"),
 ]
 
 struct DepthStudiesView: View {
@@ -211,7 +214,7 @@ struct DepthStudiesView: View {
 
             VStack(spacing: 8) {
                 HStack(spacing: 10) {
-                    Text("\(page + 1)/5")
+                    Text("\(page + 1)/\(depthStudies.count)")
                         .font(GaryFonts.display(13)).foregroundStyle(GaryColors.gold)
                     Text(depthStudies[page].name)
                         .font(GaryFonts.display(15)).foregroundStyle(Color(hex: "#F6F1E7"))
@@ -237,6 +240,13 @@ struct DepthStudiesView: View {
             .padding(.top, 6)
         }
         .preferredColorScheme(.dark)
+        .task { GaryTour.start() }
+        .onGaryTour { verb, arg in
+            // host-driven page flips for QA screenshots: `depth 6` jumps there
+            if verb == "depth", let i = Int(arg), depthStudies.indices.contains(i) {
+                page = i
+            }
+        }
     }
 }
 
@@ -250,11 +260,24 @@ private struct DepthStudyPage: View {
     let intensity: Double
     @State private var scrollY: CGFloat = 0
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         ZStack {
-            DepthBackground(study: study.id, intensity: intensity)
-                .offset(y: scrollY * 0.10)
-                .ignoresSafeArea()
+            Group {
+                if (study.id == 5 || study.id == 6) && !reduceMotion {
+                    // the LIVE studies: slow ambient animation at a throttled
+                    // frame rate — atmosphere breathing, the market drawing
+                    TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { tl in
+                        DepthBackground(study: study.id, intensity: intensity,
+                                        time: tl.date.timeIntervalSinceReferenceDate)
+                    }
+                } else {
+                    DepthBackground(study: study.id, intensity: intensity, time: 1234)
+                }
+            }
+            .offset(y: scrollY * 0.10)
+            .ignoresSafeArea()
             // occlusion scrim: the central column stays on quiet ground
             LinearGradient(stops: [
                 .init(color: .black.opacity(0.50), location: 0),
@@ -287,6 +310,7 @@ private struct DepthStudyPage: View {
 private struct DepthBackground: View {
     let study: Int
     let intensity: Double
+    var time: Double = 0
 
     var body: some View {
         GeometryReader { geo in
@@ -297,7 +321,11 @@ private struct DepthBackground: View {
                 case 1: rooftop(w: w, h: h)
                 case 2: terminalVoid(w: w, h: h)
                 case 3: tunnel(w: w, h: h)
-                default: nightFlight(w: w, h: h)
+                case 4: nightFlight(w: w, h: h)
+                case 5: gameNight(w: w, h: h)
+                case 6: market(w: w, h: h)
+                case 7: vault(w: w, h: h)
+                default: Color.black
                 }
             }
         }
@@ -447,6 +475,191 @@ private struct DepthBackground: View {
                 .blur(radius: 6)
                 .position(x: w / 2, y: h * (0.56 + Double(i) * 0.13))
         }
+    }
+
+    // STUDY 6 — GAME NIGHT. The light towers are OFF-frame: four volumetric
+    // beams rake in from above, dust drifts up through them, and the haze
+    // breathes on a slow cycle. An unseen source reads as a bigger world
+    // than any drawn one.
+    @ViewBuilder private func gameNight(w: CGFloat, h: CGFloat) -> some View {
+        LinearGradient(colors: [Color(hex: "#050707"), Color(hex: "#081009"), Color(hex: "#060807")],
+                       startPoint: .top, endPoint: .bottom)
+        Canvas { ctx, size in
+            let W = size.width, H = size.height
+            struct Beam { let o: CGPoint; let e: CGPoint; let w0: CGFloat; let w1: CGFloat; let phase: Double }
+            let beams: [Beam] = [
+                Beam(o: CGPoint(x: -0.10 * W, y: -0.08 * H), e: CGPoint(x: 0.62 * W, y: 1.04 * H), w0: 0.020 * W, w1: 0.30 * W, phase: 0.0),
+                Beam(o: CGPoint(x: 0.06 * W, y: -0.10 * H), e: CGPoint(x: 0.30 * W, y: 1.04 * H), w0: 0.016 * W, w1: 0.22 * W, phase: 1.9),
+                Beam(o: CGPoint(x: 1.10 * W, y: -0.06 * H), e: CGPoint(x: 0.40 * W, y: 1.04 * H), w0: 0.020 * W, w1: 0.30 * W, phase: 3.7),
+                Beam(o: CGPoint(x: 0.95 * W, y: -0.10 * H), e: CGPoint(x: 0.73 * W, y: 1.04 * H), w0: 0.016 * W, w1: 0.22 * W, phase: 5.2),
+            ]
+            for b in beams {
+                let breath = 0.80 + 0.20 * sin(time / 5.0 + b.phase)
+                let dx = b.e.x - b.o.x, dy = b.e.y - b.o.y
+                let len = max(sqrt(dx * dx + dy * dy), 1)
+                let px = -dy / len, py = dx / len
+                var quad = Path()
+                quad.move(to: CGPoint(x: b.o.x + px * b.w0 / 2, y: b.o.y + py * b.w0 / 2))
+                quad.addLine(to: CGPoint(x: b.o.x - px * b.w0 / 2, y: b.o.y - py * b.w0 / 2))
+                quad.addLine(to: CGPoint(x: b.e.x - px * b.w1 / 2, y: b.e.y - py * b.w1 / 2))
+                quad.addLine(to: CGPoint(x: b.e.x + px * b.w1 / 2, y: b.e.y + py * b.w1 / 2))
+                quad.closeSubpath()
+                ctx.fill(quad, with: .linearGradient(
+                    Gradient(colors: [Color(hex: "#F2E4BC").opacity(alpha(0.062) * breath),
+                                      Color(hex: "#F2E4BC").opacity(0)]),
+                    startPoint: b.o, endPoint: b.e))
+                // where the light lands: a faint pool at the beam's foot
+                let pool = CGRect(x: b.e.x - b.w1 * 0.7, y: H * 0.97, width: b.w1 * 1.4, height: H * 0.05)
+                ctx.fill(Path(ellipseIn: pool), with: .color(Color(hex: "#E8DCB0").opacity(alpha(0.030) * breath)))
+            }
+            // dust rising through the beams — position parameterized along
+            // each beam (s) and across it (u), so motes never leave the light
+            var rnd = DepthLCG(seed: 606)
+            for _ in 0..<44 {
+                let bi = Int(rnd.next() * 4) % 4
+                let b = beams[bi]
+                let s0 = rnd.next(), u = rnd.next() * 2 - 1
+                let speed = 0.008 + rnd.next() * 0.012
+                let dot = 1.0 + rnd.next() * 1.5
+                let s = (s0 + time * speed).truncatingRemainder(dividingBy: 1)
+                let dx = b.e.x - b.o.x, dy = b.e.y - b.o.y
+                let len = max(sqrt(dx * dx + dy * dy), 1)
+                let px = -dy / len, py = dx / len
+                let widthAtS = b.w0 + (b.w1 - b.w0) * s
+                let cx = b.o.x + dx * s + px * widthAtS * 0.5 * u
+                let cy = b.o.y + dy * s + py * widthAtS * 0.5 * u
+                let breath = 0.80 + 0.20 * sin(time / 5.0 + b.phase)
+                let op = alpha(0.30) * sin(.pi * s) * (1 - 0.55 * abs(u)) * breath
+                ctx.fill(Path(ellipseIn: CGRect(x: cx, y: cy, width: dot, height: dot)),
+                         with: .color(Color(hex: "#F6ECC8").opacity(op)))
+            }
+        }
+    }
+
+    // STUDY 7 — THE MARKET. Gary's actual landscape: three ridgelines that
+    // are line charts, stacked in aerial perspective. Squint and it is a
+    // mountain range at night; look and it is the number moving. A slow
+    // gold tracer draws the nearest ridge — the market never sleeps.
+    @ViewBuilder private func market(w: CGFloat, h: CGFloat) -> some View {
+        LinearGradient(colors: [Color(hex: "#07080B"), Color(hex: "#0B0D12"), Color(hex: "#080909")],
+                       startPoint: .top, endPoint: .bottom)
+        Canvas { ctx, size in
+            let W = size.width, H = size.height
+            func ridge(seed: UInt64, baseY: CGFloat, amp: CGFloat) -> (fill: Path, top: Path) {
+                var rnd = DepthLCG(seed: seed)
+                let n = 40
+                var v = [Double](repeating: 0, count: n)
+                var acc = 0.0
+                for i in 0..<n { acc += (rnd.next() - 0.5) * 0.9; acc = max(-1, min(1, acc)); v[i] = acc }
+                for _ in 0..<2 {
+                    for i in 1..<(n - 1) { v[i] = (v[i - 1] + v[i] * 2 + v[i + 1]) / 4 }
+                }
+                var top = Path()
+                for i in 0..<n {
+                    let x = -0.02 * W + (1.04 * W) * CGFloat(i) / CGFloat(n - 1)
+                    let y = baseY - amp * CGFloat(v[i])
+                    if i == 0 { top.move(to: CGPoint(x: x, y: y)) } else { top.addLine(to: CGPoint(x: x, y: y)) }
+                }
+                var fill = top
+                fill.addLine(to: CGPoint(x: 1.02 * W, y: H + 60))
+                fill.addLine(to: CGPoint(x: -0.02 * W, y: H + 60))
+                fill.closeSubpath()
+                return (fill, top)
+            }
+            let far = ridge(seed: 301, baseY: 0.40 * H, amp: 0.030 * H)
+            let mid = ridge(seed: 302, baseY: 0.50 * H, amp: 0.045 * H)
+            let near = ridge(seed: 303, baseY: 0.615 * H, amp: 0.065 * H)
+            ctx.drawLayer { far_ctx in
+                far_ctx.addFilter(.blur(radius: 1.6))
+                far_ctx.fill(far.fill, with: .color(Color(hex: "#12161E").opacity(alpha(0.55))))
+                far_ctx.stroke(far.top, with: .color(Color(hex: "#9FB0C8").opacity(alpha(0.045))), lineWidth: 0.8)
+            }
+            ctx.drawLayer { mid_ctx in
+                mid_ctx.addFilter(.blur(radius: 0.8))
+                mid_ctx.fill(mid.fill, with: .color(Color(hex: "#0C0F15").opacity(0.9)))
+                mid_ctx.stroke(mid.top, with: .color(Color(hex: "#B9C2D4").opacity(alpha(0.055))), lineWidth: 0.9)
+            }
+            ctx.fill(near.fill, with: .color(Color(hex: "#080A0E")))
+            ctx.stroke(near.top, with: .color(GaryColors.gold.opacity(alpha(0.10))), lineWidth: 1.0)
+            // node dots on the near ridge's swings
+            var prnd = DepthLCG(seed: 304)
+            for _ in 0..<5 {
+                let t = 0.08 + prnd.next() * 0.84
+                if let p = near.top.trimmedPath(from: 0, to: CGFloat(t)).currentPoint {
+                    ctx.fill(Path(ellipseIn: CGRect(x: p.x - 1.6, y: p.y - 1.6, width: 3.2, height: 3.2)),
+                             with: .color(GaryColors.gold.opacity(alpha(0.12))))
+                }
+            }
+            // the tracer: a bright segment endlessly re-drawing the line
+            let head = CGFloat((time * 0.045).truncatingRemainder(dividingBy: 1))
+            let tail = max(head - 0.07, 0)
+            let seg = near.top.trimmedPath(from: tail, to: head)
+            ctx.stroke(seg, with: .color(GaryColors.gold.opacity(alpha(0.30))), lineWidth: 1.5)
+            if let tip = seg.currentPoint {
+                ctx.fill(Path(ellipseIn: CGRect(x: tip.x - 2.1, y: tip.y - 2.1, width: 4.2, height: 4.2)),
+                         with: .color(GaryColors.gold.opacity(alpha(0.45))))
+            }
+        }
+    }
+
+    // STUDY 8 — THE VAULT. Vastness by architecture: colossal pilasters
+    // converge to a vanishing point ABOVE the screen, tie-bands compress as
+    // they climb, and a warm vault-light waits at the top. The head-tilt
+    // read — you are standing at the bottom of the house.
+    @ViewBuilder private func vault(w: CGFloat, h: CGFloat) -> some View {
+        Color(hex: "#0A0908")
+        Canvas { ctx, size in
+            let W = size.width, H = size.height
+            let vp = CGPoint(x: 0.5 * W, y: -0.18 * H)
+            let topY = 0.055 * H
+            func toward(_ p: CGPoint, atY y: CGFloat) -> CGPoint {
+                let t = (p.y - y) / (p.y - vp.y)
+                return CGPoint(x: p.x + (vp.x - p.x) * t, y: y)
+            }
+            let feet: [CGFloat] = [-0.55, -0.34, -0.155, 0.155, 0.34, 0.55]
+            let half = 0.045 * W
+            for f in feet {
+                let footL = CGPoint(x: (0.5 + f) * W - half, y: H + 40)
+                let footR = CGPoint(x: (0.5 + f) * W + half, y: H + 40)
+                let headL = toward(footL, atY: topY)
+                let headR = toward(footR, atY: topY)
+                var col = Path()
+                col.move(to: footL); col.addLine(to: headL)
+                col.addLine(to: headR); col.addLine(to: footR)
+                col.closeSubpath()
+                ctx.fill(col, with: .color(Color(hex: "#050505").opacity(0.88)))
+                var edgeL = Path(); edgeL.move(to: footL); edgeL.addLine(to: headL)
+                var edgeR = Path(); edgeR.move(to: footR); edgeR.addLine(to: headR)
+                ctx.stroke(edgeL, with: .color(GaryColors.gold.opacity(alpha(0.055))), lineWidth: 0.7)
+                ctx.stroke(edgeR, with: .color(GaryColors.gold.opacity(alpha(0.055))), lineWidth: 0.7)
+            }
+            // tie-bands: equal architecture, unequal spacing — foreshortening
+            for j in 1...8 {
+                let t = pow(Double(j) / 8.0, 1.65)
+                let y = H * (0.06 + 0.87 * CGFloat(t))
+                var band = Path()
+                band.move(to: CGPoint(x: 0, y: y))
+                band.addQuadCurve(to: CGPoint(x: W, y: y),
+                                  control: CGPoint(x: 0.5 * W, y: y + H * 0.014))
+                ctx.stroke(band, with: .color(Color(hex: "#EFE7D8").opacity(alpha(0.016 + 0.005 * Double(j)))), lineWidth: 0.7)
+            }
+            // dust hanging in the vault light
+            var rnd = DepthLCG(seed: 808)
+            for _ in 0..<16 {
+                let x = (0.30 + rnd.next() * 0.40) * W
+                let y = (0.04 + rnd.next() * 0.16) * H
+                ctx.fill(Path(ellipseIn: CGRect(x: x, y: y, width: 1.3, height: 1.3)),
+                         with: .color(Color(hex: "#F2E4BC").opacity(alpha(0.05 + rnd.next() * 0.05))))
+            }
+        }
+        RadialGradient(colors: [Color(hex: "#E8CE8C").opacity(alpha(0.11)),
+                                Color(hex: "#B08E3E").opacity(alpha(0.04)), .clear],
+                       center: .init(x: 0.5, y: 0.015), startRadius: 4, endRadius: w * 0.62)
+        RadialGradient(stops: [
+            .init(color: .clear, location: 0.42),
+            .init(color: .black.opacity(0.38), location: 0.75),
+            .init(color: .black.opacity(0.8), location: 1),
+        ], center: .init(x: 0.5, y: 0.35), startRadius: 10, endRadius: h * 0.8)
     }
 }
 
