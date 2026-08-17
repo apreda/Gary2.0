@@ -200,6 +200,8 @@ private let depthStudies: [DepthStudy] = [
     .init(id: 10, name: "MOLTEN", cue: "LIQUID GOLD · ABSTRACT · LIVE"),
     .init(id: 11, name: "THE GLOW", cue: "PURE RADIANCE · ABSTRACT · LIVE"),
     .init(id: 12, name: "OBSIDIAN", cue: "LIVING SURFACE · ABSTRACT · LIVE"),
+    .init(id: 13, name: "SOLID GOLD", cue: "FULL GOLD FIELD · ABSTRACT · LIVE"),
+    .init(id: 14, name: "THE BLAZE", cue: "RADIANT GOLD AIR · ABSTRACT · LIVE"),
 ]
 
 struct DepthStudiesView: View {
@@ -270,7 +272,7 @@ private struct DepthStudyPage: View {
     var body: some View {
         ZStack {
             Group {
-                if [5, 6, 8, 9, 10, 11, 12].contains(study.id) && !reduceMotion {
+                if [5, 6, 8, 9, 10, 11, 12, 13, 14].contains(study.id) && !reduceMotion {
                     // the LIVE studies: slow ambient animation at a throttled
                     // frame rate — atmosphere breathing, the market drawing
                     TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { tl in
@@ -342,6 +344,8 @@ private struct DepthBackground: View {
                 case 10: molten(w: w, h: h)
                 case 11: theGlow(w: w, h: h)
                 case 12: obsidian(w: w, h: h)
+                case 13: solidGold(w: w, h: h)
+                case 14: theBlaze(w: w, h: h)
                 default: Color.black
                 }
             }
@@ -1036,6 +1040,132 @@ private struct DepthBackground: View {
                 ctx.stroke(path, with: .color(Color(hex: "#D9A62B").opacity(alpha(0.030) * pulse)), lineWidth: 7)
                 ctx.stroke(path, with: .color(Color(hex: "#D9A62B").opacity(alpha(0.058) * pulse)), lineWidth: 3.2)
                 ctx.stroke(path, with: .color(Color(hex: "#F2E4BC").opacity(alpha(0.10) * pulse)), lineWidth: 1.4)
+            }
+        }
+    }
+
+    // STUDY 14 — SOLID GOLD. The inversion: gold IS the ground. A full-canvas
+    // molten field with a breathing bright core, and the depth comes from
+    // DARK smoke-currents drifting through the metal. The dark cards punch
+    // out of it like plates set on hot metal.
+    @ViewBuilder private func solidGold(w: CGFloat, h: CGFloat) -> some View {
+        LinearGradient(stops: [
+            .init(color: Color(hex: "#4A320C"), location: 0),
+            .init(color: Color(hex: "#9C7420"), location: 0.30),
+            .init(color: Color(hex: "#C9962C"), location: 0.55),
+            .init(color: Color(hex: "#8A611A"), location: 0.82),
+            .init(color: Color(hex: "#3A2708"), location: 1),
+        ], startPoint: .top, endPoint: .bottom)
+        Canvas { ctx, size in
+            let W = size.width, H = size.height
+            // the breathing core — heat inside the metal
+            let breath = 0.82 + 0.18 * sin(time / 6.0)
+            ctx.fill(Path(CGRect(x: 0, y: 0, width: W, height: H)),
+                     with: .radialGradient(
+                        Gradient(colors: [Color(hex: "#F7D77E").opacity(0.42 * breath),
+                                          Color(hex: "#E0B44A").opacity(0.16 * breath), .clear]),
+                        center: CGPoint(x: 0.5 * W, y: 0.44 * H), startRadius: 0, endRadius: 0.9 * H))
+            // dark currents drifting through the gold — depth by shadow
+            let shades = [Color(hex: "#1A1206"), Color(hex: "#2A1C08"), Color(hex: "#140D04")]
+            for ribbon in 0..<3 {
+                let tone = shades[ribbon]
+                let phase = Double(ribbon) * 2.3
+                let speed = 0.040 + 0.015 * Double(ribbon)
+                let baseY = H * (0.16 + 0.30 * CGFloat(ribbon))
+                let slope: CGFloat = ribbon % 2 == 0 ? -0.14 : 0.17
+                for k in 0..<52 {
+                    let u = Double(k) / 51.0
+                    let x = CGFloat(u) * (W * 1.3) - 0.15 * W
+                    let wave1 = H * 0.055 * CGFloat(sin(u * 3.8 * .pi + time * speed + phase))
+                    let wave2 = H * 0.020 * CGFloat(sin(u * 8.3 * .pi - time * speed * 1.5 + phase))
+                    let y = baseY + slope * (x - W / 2) + wave1 + wave2
+                    let r = W * (0.10 + 0.035 * CGFloat(sin(u * 3 * .pi + phase)))
+                    let a = 0.16 * sin(u * .pi)
+                    ctx.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)),
+                             with: .radialGradient(Gradient(colors: [tone.opacity(a), .clear]),
+                                                   center: CGPoint(x: x, y: y), startRadius: 0, endRadius: r))
+                }
+            }
+            // sparks in the melt
+            var rnd = DepthLCG(seed: 1313)
+            for _ in 0..<22 {
+                let x0 = rnd.next(), y0 = rnd.next()
+                let tw = 0.5 + 0.5 * sin(time * (1.0 + rnd.next() * 1.4) + y0 * 17)
+                let d = 1.0 + rnd.next() * 1.5
+                ctx.fill(Path(ellipseIn: CGRect(x: CGFloat(x0) * W, y: CGFloat(y0) * H, width: d, height: d)),
+                         with: .color(Color(hex: "#FFF2CC").opacity(0.35 * tw)))
+            }
+        }
+    }
+
+    // STUDY 15 — THE BLAZE. Gold as AIR instead of metal: the whole canvas is
+    // radiant light, shafts swaying up through it, shimmer bands rising like
+    // heat. The Golden Hour sky with the sun and the city deleted — only the
+    // hour itself remains.
+    @ViewBuilder private func theBlaze(w: CGFloat, h: CGFloat) -> some View {
+        Canvas { ctx, size in
+            let W = size.width, H = size.height
+            let core = CGPoint(x: 0.5 * W, y: 0.38 * H)
+            // the radiant field — bright heart, ember edges
+            ctx.fill(Path(CGRect(x: 0, y: 0, width: W, height: H)),
+                     with: .radialGradient(
+                        Gradient(stops: [
+                            .init(color: Color(hex: "#F2C963"), location: 0),
+                            .init(color: Color(hex: "#D9A62B"), location: 0.30),
+                            .init(color: Color(hex: "#9C6E1C"), location: 0.58),
+                            .init(color: Color(hex: "#4A320E"), location: 0.82),
+                            .init(color: Color(hex: "#1E1406"), location: 1),
+                        ]),
+                        center: core, startRadius: 0, endRadius: 1.05 * H))
+            let breath = 0.86 + 0.14 * sin(time / 6.5)
+            ctx.fill(Path(CGRect(x: 0, y: 0, width: W, height: H)),
+                     with: .radialGradient(
+                        Gradient(colors: [Color(hex: "#FFF2CC").opacity(0.30 * breath), .clear]),
+                        center: core, startRadius: 0, endRadius: 0.45 * H))
+            // shafts of brighter air, swaying
+            let source = CGPoint(x: 0.5 * W, y: 1.08 * H)
+            let sway = 0.06 * sin(time * 0.045)
+            for k in 0..<11 {
+                let spread = Double(k - 5) * 0.13
+                let a = -Double.pi / 2 + spread + sway
+                let halfSpread = 0.040
+                let R = 1.5 * H
+                var wedge = Path()
+                wedge.move(to: source)
+                wedge.addLine(to: CGPoint(x: source.x + CGFloat(cos(a - halfSpread)) * R,
+                                          y: source.y + CGFloat(sin(a - halfSpread)) * R))
+                wedge.addLine(to: CGPoint(x: source.x + CGFloat(cos(a + halfSpread)) * R,
+                                          y: source.y + CGFloat(sin(a + halfSpread)) * R))
+                wedge.closeSubpath()
+                let rayAlpha = (k % 2 == 0 ? 0.10 : 0.05) * breath
+                ctx.fill(wedge, with: .radialGradient(
+                    Gradient(colors: [Color(hex: "#FFEDB8").opacity(rayAlpha), .clear]),
+                    center: source, startRadius: 0.2 * H, endRadius: R))
+            }
+            // heat shimmer: soft bands rising through the light
+            for band in 0..<5 {
+                let off = Double(band) * 0.2
+                let prog = (time * 0.020 + off).truncatingRemainder(dividingBy: 1)
+                let y = (1.05 - CGFloat(prog) * 1.2) * H
+                let fade = sin(.pi * prog)
+                ctx.fill(Path(CGRect(x: -0.1 * W, y: y, width: 1.2 * W, height: 0.05 * H)),
+                         with: .linearGradient(
+                            Gradient(colors: [.clear, Color(hex: "#FFE9AE").opacity(0.10 * fade), .clear]),
+                            startPoint: CGPoint(x: 0, y: y),
+                            endPoint: CGPoint(x: 0, y: y + 0.05 * H)))
+            }
+            // drifting bright dust
+            var rnd = DepthLCG(seed: 1414)
+            for _ in 0..<30 {
+                let x0 = rnd.next(), off = rnd.next()
+                let speed = 0.010 + rnd.next() * 0.012
+                let prog = (off + time * speed).truncatingRemainder(dividingBy: 1)
+                let y = (1.02 - CGFloat(prog) * 1.1) * H
+                let x = CGFloat(x0) * W + 9 * CGFloat(sin(time * 0.5 + off * 12))
+                let d = 1.0 + rnd.next() * 1.6
+                let tw = 0.4 + 0.6 * sin(time * (1.2 + rnd.next()) + off * 15)
+                ctx.fill(Path(ellipseIn: CGRect(x: x, y: y, width: d, height: d)),
+                         with: .color(.white.opacity(0.30 * tw * sin(.pi * prog))))
             }
         }
     }
