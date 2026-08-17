@@ -2025,6 +2025,9 @@ struct HomeView: View {
     /// the initial load has finished (successfully or with an honest error).
     @State private var hasCompletedInitialHomeLoad = false
     @Environment(\.scenePhase) private var scenePhase
+    // The page's surface language — on .plated (Solid Gold) the old black-bg
+    // hairline rules disappear: gold air is the separator there.
+    @Environment(\.garySurface) private var surface
     @State private var animateIn = false
     @State private var yesterdayRecord: (wins: Int, losses: Int, pushes: Int) = (0, 0, 0)
     /// The record-box label — rolls "TODAY"/"LIVE" once today's slate (6am ET
@@ -2239,17 +2242,20 @@ struct HomeView: View {
             // content settles into near-black under the dock instead of
             // ghosting through the tab labels.
             VStack {
-                LinearGradient(colors: [Color(hex: "#0A0806").opacity(0.92),
-                                        Color(hex: "#0A0806").opacity(0)],
-                               startPoint: .top, endPoint: .bottom)
-                    .frame(height: 112)
+                LinearGradient(stops: [
+                    .init(color: Color(hex: "#0A0806").opacity(0.97), location: 0),
+                    .init(color: Color(hex: "#0A0806").opacity(0.82), location: 0.55),
+                    .init(color: Color(hex: "#0A0806").opacity(0), location: 1),
+                ], startPoint: .top, endPoint: .bottom)
+                    .frame(height: 118)
                 Spacer()
                 LinearGradient(stops: [
                     .init(color: Color(hex: "#0A0806").opacity(0), location: 0),
-                    .init(color: Color(hex: "#0A0806").opacity(0.62), location: 0.45),
-                    .init(color: Color(hex: "#0A0806").opacity(0.98), location: 1),
+                    .init(color: Color(hex: "#0A0806").opacity(0.78), location: 0.42),
+                    .init(color: Color(hex: "#0A0806").opacity(1.0), location: 0.85),
+                    .init(color: Color(hex: "#0A0806").opacity(1.0), location: 1),
                 ], startPoint: .top, endPoint: .bottom)
-                    .frame(height: 190)
+                    .frame(height: 205)
             }
             .ignoresSafeArea()
             .allowsHitTesting(false)
@@ -3104,8 +3110,11 @@ struct HomeView: View {
             || recapLabel == "LIVE" || recapLabel == "TODAY" {
             VStack(alignment: .leading, spacing: 12) {
                 // Bare rule — the scorecard's own YESTERDAY/LIVE cell already
-                // names the window; "THE RECORD" said it twice.
-                HomeSectionRule()
+                // names the window; "THE RECORD" said it twice. On the gold
+                // ground the plate is the separator and the rule retires.
+                if surface == .washed {
+                    HomeSectionRule()
+                }
                 scorecard
             }
         }
@@ -3942,7 +3951,11 @@ struct HomeView: View {
         if !rows.isEmpty {
             // The countdown/marquee-to-board boundary is neutral chrome. A
             // green rule read like a graded win and changed color mid-slate.
-            HomeSectionRule(tint: GaryColors.warmWhite)
+            // On the gold ground the rule retires — the gold gap IS the
+            // boundary; a floating hairline on raw gold read as a glitch.
+            if surface == .washed {
+                HomeSectionRule(tint: GaryColors.warmWhite)
+            }
             homeSheetPanel(rows.filter { $0.league == selected.rawValue },
                            selected: selected,
                            available: available)
@@ -3950,6 +3963,9 @@ struct HomeView: View {
                 // @ViewBuilder replicates onto each sibling, and the section
                 // rule above was getting its own plate (the black sliver).
                 .goldPlate()
+                // Every floating card shares the ONE gutter (founder crop
+                // review: the board ran wider than the approved cards).
+                .pageGutter()
         }
     }
 
