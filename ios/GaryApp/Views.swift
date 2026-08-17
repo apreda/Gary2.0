@@ -2243,11 +2243,11 @@ struct HomeView: View {
             // ghosting through the tab labels.
             VStack {
                 LinearGradient(stops: [
-                    .init(color: Color(hex: "#0A0806").opacity(0.97), location: 0),
-                    .init(color: Color(hex: "#0A0806").opacity(0.82), location: 0.55),
+                    .init(color: Color(hex: "#0A0806").opacity(0.92), location: 0),
+                    .init(color: Color(hex: "#0A0806").opacity(0.55), location: 0.6),
                     .init(color: Color(hex: "#0A0806").opacity(0), location: 1),
                 ], startPoint: .top, endPoint: .bottom)
-                    .frame(height: 118)
+                    .frame(height: 66)
                 Spacer()
                 LinearGradient(stops: [
                     .init(color: Color(hex: "#0A0806").opacity(0), location: 0),
@@ -3185,6 +3185,8 @@ struct HomeView: View {
         // THE RECORD always belongs directly under The Board. Its numbers still
         // roll from yesterday to today's live slate; only its position is fixed.
         recordBlock
+            .padding(.vertical, 12)
+            .padding(.horizontal, 8)
             .goldPlate()
             .pageGutter()
             .opacity(animateIn ? 1 : 0)
@@ -6222,7 +6224,7 @@ struct HomeSheetRowView: View {
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.62))
         }
-        .padding(.horizontal, 14).padding(.vertical, 10)
+        .padding(.horizontal, 14).padding(.vertical, 14)
         .contentShape(Rectangle())
     }
 }

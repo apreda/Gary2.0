@@ -413,7 +413,9 @@ struct SolidGoldBackground: View {
                     let tone = shades[ribbon]
                     let phase = Double(ribbon) * 2.3
                     let speed = 0.040 + 0.015 * Double(ribbon)
-                    let baseY = H * (0.16 + 0.30 * CGFloat(ribbon))
+                    // Currents live below the masthead zone: the top ribbon
+                    // drifting behind the header made it randomly unreadable.
+                    let baseY = H * (0.28 + 0.27 * CGFloat(ribbon))
                     let slope: CGFloat = ribbon % 2 == 0 ? -0.14 : 0.17
                     for k in 0..<52 {
                         let u = Double(k) / 51.0
