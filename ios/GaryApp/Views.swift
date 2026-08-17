@@ -2180,8 +2180,12 @@ struct HomeView: View {
 
     var body: some View {
         ZStack {
-            // Background
-            LiquidGlassBackground(grainDensity: 0.0009, grainOpacityRange: 0.008...0.018)
+            // Background — the Solid Gold molten ground (founder pick from the
+            // Aug 17 depth studies). The luminous field makes the dark cards
+            // read as near objects: the floating-container effect. The page
+            // speaks the .plated surface language: every garyPanel on Home
+            // renders as an opaque dark plate instead of a translucent wash.
+            SolidGoldBackground()
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {
@@ -3125,6 +3129,7 @@ struct HomeView: View {
                                    PicksFocusState.shared.focus(game: m)
                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 3 }
                                })
+                .goldPlate()
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
         }
@@ -3140,17 +3145,20 @@ struct HomeView: View {
             UserDefaults.standard.set("you", forKey: "billfoldScope")
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
         }
+        .goldPlate()
         .opacity(animateIn ? 1 : 0)
         .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
 
         // ── THE BOARD — every game, one list, all day.
         homeSheet
+            .goldPlate()
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
 
         // THE RECORD always belongs directly under The Board. Its numbers still
         // roll from yesterday to today's live slate; only its position is fixed.
         recordBlock
+            .goldPlate()
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.065), value: animateIn)
 
@@ -3176,6 +3184,7 @@ struct HomeView: View {
             UserDefaults.standard.set("hub", forKey: "hubScope")
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
         }
+        .goldPlate()
         // ── WINNERS — the sealed card, slip-styled (the one conversion door).
         HomeWinnersStub(onOpen: {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
@@ -3186,6 +3195,7 @@ struct HomeView: View {
             return ls.isEmpty ? nil : ls.joined(separator: " + ")
         }(),
         nextSeal: firstCallClock)
+        .goldPlate()
         .opacity(animateIn ? 1 : 0)
         .animation(.easeOut(duration: 0.6).delay(0.08), value: animateIn)
 

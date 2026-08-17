@@ -302,12 +302,44 @@ extension View {
 
     /// The one panel surface (fill + hairline stroke). Replaces quantPanel()
     /// and the six hand-rolled warm-white panels that had drifted 0.008 apart.
+    /// Adapts to the page's surface style: the classic translucent wash on
+    /// dark grounds, an opaque dark plate on the Solid Gold luminous ground
+    /// (washes vanish on gold — a panel must be a NEAR object there).
     func garyPanel(radius: CGFloat = GaryLayout.Radius.panel) -> some View {
-        background(
+        modifier(GaryPanelModifier(radius: radius))
+    }
+}
+
+/// Which surface language a page speaks. `.washed` = translucent panels on
+/// near-black (the app default). `.plated` = opaque dark plates for pages
+/// standing on a luminous ground (Home's Solid Gold).
+enum GarySurfaceStyle { case washed, plated }
+
+private struct GarySurfaceKey: EnvironmentKey {
+    static let defaultValue: GarySurfaceStyle = .washed
+}
+
+extension EnvironmentValues {
+    var garySurface: GarySurfaceStyle {
+        get { self[GarySurfaceKey.self] }
+        set { self[GarySurfaceKey.self] = newValue }
+    }
+}
+
+private struct GaryPanelModifier: ViewModifier {
+    let radius: CGFloat
+    @Environment(\.garySurface) private var surface
+
+    func body(content: Content) -> some View {
+        content.background(
             RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .fill(GaryColors.panelFill)
+                .fill(surface == .plated
+                      ? AnyShapeStyle(Color(hex: "#14100A").opacity(0.88))
+                      : AnyShapeStyle(GaryColors.panelFill))
                 .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .stroke(GaryColors.panelStroke, lineWidth: 1))
+                    .stroke(surface == .plated
+                            ? AnyShapeStyle(GaryColors.gold.opacity(0.16))
+                            : AnyShapeStyle(GaryColors.panelStroke), lineWidth: 1))
         )
     }
 }
@@ -329,3 +361,97 @@ struct BroadcastBar: View {
 // case, so the two systems needed a bridge to talk. Font.Weight is now the one
 // weight type; every existing `.semibold` / `.bold` / `.heavy` call site
 // resolved unchanged.)
+
+// MARK: - Solid Gold ground (founder pick, Aug 17 2026 depth studies)
+//
+// Home's luminous ground: a full-canvas molten gold field with a breathing
+// bright core, dark smoke-currents drifting through the metal, and sparks in
+// the melt. Bright, soft ground makes the dark, sharp cards read as NEAR —
+// the floating-container effect the founder chose from the 15-study deck.
+// Animation rides a throttled TimelineView and freezes under Reduce Motion.
+
+private struct GoldFieldLCG {
+    private var state: UInt64
+    init(seed: UInt64) { state = seed }
+    mutating func next() -> Double {
+        state = state &* 6364136223846793005 &+ 1442695040888963407
+        return Double(state >> 33) / Double(UInt64(1) << 31)
+    }
+}
+
+struct SolidGoldBackground: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { tl in
+            field(time: reduceMotion ? 1234 : tl.date.timeIntervalSinceReferenceDate)
+        }
+        .ignoresSafeArea()
+    }
+
+    private func field(time: Double) -> some View {
+        ZStack {
+            LinearGradient(stops: [
+                .init(color: Color(hex: "#4A320C"), location: 0),
+                .init(color: Color(hex: "#9C7420"), location: 0.30),
+                .init(color: Color(hex: "#C9962C"), location: 0.55),
+                .init(color: Color(hex: "#8A611A"), location: 0.82),
+                .init(color: Color(hex: "#3A2708"), location: 1),
+            ], startPoint: .top, endPoint: .bottom)
+            Canvas { ctx, size in
+                let W = size.width, H = size.height
+                // the breathing core — heat inside the metal
+                let breath = 0.82 + 0.18 * sin(time / 6.0)
+                ctx.fill(Path(CGRect(x: 0, y: 0, width: W, height: H)),
+                         with: .radialGradient(
+                            Gradient(colors: [Color(hex: "#F7D77E").opacity(0.42 * breath),
+                                              Color(hex: "#E0B44A").opacity(0.16 * breath), .clear]),
+                            center: CGPoint(x: 0.5 * W, y: 0.44 * H), startRadius: 0, endRadius: 0.9 * H))
+                // dark currents drifting through the gold — depth by shadow
+                let shades = [Color(hex: "#1A1206"), Color(hex: "#2A1C08"), Color(hex: "#140D04")]
+                for ribbon in 0..<3 {
+                    let tone = shades[ribbon]
+                    let phase = Double(ribbon) * 2.3
+                    let speed = 0.040 + 0.015 * Double(ribbon)
+                    let baseY = H * (0.16 + 0.30 * CGFloat(ribbon))
+                    let slope: CGFloat = ribbon % 2 == 0 ? -0.14 : 0.17
+                    for k in 0..<52 {
+                        let u = Double(k) / 51.0
+                        let x = CGFloat(u) * (W * 1.3) - 0.15 * W
+                        let wave1 = H * 0.055 * CGFloat(sin(u * 3.8 * .pi + time * speed + phase))
+                        let wave2 = H * 0.020 * CGFloat(sin(u * 8.3 * .pi - time * speed * 1.5 + phase))
+                        let y = baseY + slope * (x - W / 2) + wave1 + wave2
+                        let r = W * (0.10 + 0.035 * CGFloat(sin(u * 3 * .pi + phase)))
+                        let a = 0.16 * sin(u * .pi)
+                        ctx.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)),
+                                 with: .radialGradient(Gradient(colors: [tone.opacity(a), .clear]),
+                                                       center: CGPoint(x: x, y: y), startRadius: 0, endRadius: r))
+                    }
+                }
+                // sparks in the melt
+                var rnd = GoldFieldLCG(seed: 1313)
+                for _ in 0..<22 {
+                    let x0 = rnd.next(), y0 = rnd.next()
+                    let tw = 0.5 + 0.5 * sin(time * (1.0 + rnd.next() * 1.4) + y0 * 17)
+                    let d = 1.0 + rnd.next() * 1.5
+                    ctx.fill(Path(ellipseIn: CGRect(x: CGFloat(x0) * W, y: CGFloat(y0) * H, width: d, height: d)),
+                             with: .color(Color(hex: "#FFF2CC").opacity(0.35 * tw)))
+                }
+            }
+        }
+    }
+}
+
+extension View {
+    /// The dark plate a Home section stands on over the Solid Gold ground.
+    /// Translucent washes vanish on gold; an opaque near-black plate is what
+    /// makes a section read as a NEAR object floating in front of the light.
+    func goldPlate(radius: CGFloat = GaryLayout.Radius.panel) -> some View {
+        background(
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .fill(Color(hex: "#14100A").opacity(0.88))
+                .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .stroke(GaryColors.gold.opacity(0.16), lineWidth: 1))
+        )
+    }
+}
