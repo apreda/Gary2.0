@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
+  fallbackReasonPair,
   fallbackVerbatimPair,
   isVerbatimSnippet,
+  reasonCandidates,
   splitSentences,
 } from '../../supabase/functions/_shared/verbatimSnippets.js';
 
@@ -71,11 +73,45 @@ describe('fallbackVerbatimPair', () => {
   });
 });
 
+describe('reasonCandidates', () => {
+  const R = [
+    'Monday night at PNC Park, overcast sky, light breeze toward right, and two clubs trying to keep a fading playoff path alive.',
+    'Tarik Skubal has allowed two earned runs over his last 19 innings and the Pirates are hitting .211 against lefties.',
+    'The -153 is too much for an Angels team that has lost all six of his latest starts.',
+    'At -105, I\u2019ll put the $100 on Detroit to win outright.',
+  ].join('\n\n');
+
+  it('drops stake and wager-declaration sentences — the pick line already says the bet', () => {
+    const kept = reasonCandidates(R);
+    expect(kept.some((s) => s.includes('$100'))).toBe(false);
+    expect(kept.some((s) => s.includes('put the'))).toBe(false);
+  });
+
+  it('keeps price-critique sentences — a wrong price IS a reason', () => {
+    const kept = reasonCandidates(R);
+    expect(kept.some((s) => s.startsWith('The -153 is too much'))).toBe(true);
+  });
+
+  it('fallbackReasonPair prefers stat-bearing reasons over the scene-setting opener', () => {
+    const pair = fallbackReasonPair(R, 300);
+    expect(pair).not.toBe(null);
+    expect(pair.opening.includes('PNC Park')).toBe(false);
+    expect(pair.opening.includes('19 innings') || pair.closing.includes('19 innings')).toBe(true);
+    expect(isVerbatimSnippet(R, pair.opening)).toBe(true);
+    expect(pair.closing === '' || isVerbatimSnippet(R, pair.closing)).toBe(true);
+  });
+
+  it('never truncates: an unfittable candidate set falls back rather than cutting words', () => {
+    expect(fallbackReasonPair(R, 10)).toBe(null);
+  });
+});
+
 describe('composer wiring', () => {
   it('selects verbatim sentences instead of writing angle/edge prose', () => {
     expect(composerSrc).toContain('VERBATIM_RULES');
     expect(composerSrc).toContain('isVerbatimSnippet(');
-    expect(composerSrc).toContain('fallbackVerbatimPair(');
+    expect(composerSrc).toContain('reasonCandidates(');
+    expect(composerSrc).toContain('fallbackReasonPair(');
     expect(composerSrc).not.toContain('PICK_HOOK_SCHEMA');
     expect(composerSrc).not.toContain('Write the hook for a single bet');
   });

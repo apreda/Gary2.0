@@ -22,7 +22,7 @@
 // LLM: Google Gemini (GEMINI_API_KEY secret; model override via GEMINI_MODEL, default gemini-3.5-flash)
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { matchVerdicts, plainVerdict, buildVerdictPrompt, trimTweet } from "./verdicts.ts";
-import { fallbackVerbatimPair, isVerbatimSnippet, splitSentences } from "../_shared/verbatimSnippets.js";
+import { fallbackReasonPair, isVerbatimSnippet, reasonCandidates, splitSentences } from "../_shared/verbatimSnippets.js";
 import { computeStanding } from "./pl.ts";
 import { selectPicks, type Slot } from "./window.ts";
 import { marqueeScore } from "./marquee.ts";
@@ -466,22 +466,31 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
     // sentence choice when it is not. Sentences are never trimmed (no
     // ellipsis, ever) and never restyled — Gary's punctuation is Gary's.
     const rationaleText = String(chosen.rationale ?? "");
-    const sentences = splitSentences(rationaleText);
-    if (sentences.length === 0) {
+    const allSentences = splitSentences(rationaleText);
+    if (allSentences.length === 0) {
       throw new Error(`No rationale sentences for "${chosen.pick}", refusing to post`);
     }
+    // REASONS ONLY (founder, Aug 17): the two lines carry Gary's analysis.
+    // Stake/odds-restatement sentences never reach the candidate list — the
+    // injected pick line between them already says the bet.
+    const candidates = reasonCandidates(rationaleText);
+    const list = candidates.length >= 2 ? candidates : allSentences;
     // Two newline-pairs join the three segments; keep the whole post ≤ 278.
     const budget = 278 - pickLine.length - 4;
-    const numbered = sentences.map((s, i) => `${i + 1}. ${s}`).join("\n");
+    const numbered = list.map((s, i) => `${i + 1}. ${s}`).join("\n");
     const user = `Choose the two sentences for a single bet's post. Return ONLY JSON: {"opening": "...", "closing": "..."}.
 Both values MUST be sentences copied character-for-character from the numbered list below — different sentences, and their combined length must be at most ${budget} characters.
-opening: the strongest story/hook sentence. closing: the strongest reason or stance sentence (prefer one that carries Gary's stance).
+Both must be REASONS for the pick — concrete stats, form, matchup, or price-analysis facts. NEVER the scene-setting opener (weather, park, time of day, atmosphere) and NEVER a sentence that merely restates the bet or its odds. Prefer sentences carrying concrete numbers.
+opening: the strongest reason. closing: the second-strongest reason or the reason that carries Gary's stance.
 ${isTopPick ? "This is Gary's highest-conviction play on the whole board today — prefer the sentences that carry that certainty.\n" : ""}PICK: ${chosen.pick} | ${chosen.awayTeam} @ ${chosen.homeTeam} | league ${league}
 
 SENTENCES:
 ${numbered}`;
+    const norm = (s: string) => s.replace(/\s+/g, " ").trim();
+    const inList = (s: string) => list.some((c) => norm(c) === norm(s));
     const selectionOk = (o: string, c: string) =>
       isVerbatimSnippet(rationaleText, o) && isVerbatimSnippet(rationaleText, c)
+      && inList(o) && inList(c)
       && o.trim() !== c.trim() && (o.length + c.length) <= budget;
     let out = parseJsonBlock(await callLLM(VERBATIM_RULES, user, PICK_VERBATIM_SCHEMA));
     let opening = String(out.opening ?? "").trim();
@@ -490,14 +499,14 @@ ${numbered}`;
       // One retry with the violation named, then the deterministic fallback.
       out = parseJsonBlock(await callLLM(
         VERBATIM_RULES,
-        `${user}\n\nYour previous selection was rejected: each value must be COPIED EXACTLY from the numbered list (no edits, no merging) and the two must be different sentences fitting ${budget} characters combined.`,
+        `${user}\n\nYour previous selection was rejected: each value must be COPIED EXACTLY from the numbered list (no edits, no merging, only listed sentences) and the two must be different sentences fitting ${budget} characters combined.`,
         PICK_VERBATIM_SCHEMA,
       ));
       opening = String(out.opening ?? "").trim();
       closing = String(out.closing ?? "").trim();
     }
     if (!selectionOk(opening, closing)) {
-      const pair = fallbackVerbatimPair(rationaleText, budget);
+      const pair = fallbackReasonPair(rationaleText, budget);
       if (!pair) {
         throw new Error(`No verbatim sentence pair fits for "${chosen.pick}", refusing to post`);
       }

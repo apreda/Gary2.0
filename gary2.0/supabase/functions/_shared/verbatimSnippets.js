@@ -61,3 +61,54 @@ export function fallbackVerbatimPair(rationale, budget) {
   const solo = sentences.find((s) => s.length <= budget);
   return solo ? { opening: solo, closing: '' } : null;
 }
+
+// ── REASON-ONLY selection (founder, Aug 17 eve) ─────────────────────────────
+// The two tweet lines must be Gary's REASONS — never the scene-setting
+// opener, never a sentence that merely restates the bet, stake, or odds
+// (the injected pick line between them already says the bet).
+
+const STAKE = /\$\s?\d/;
+const ODDS = /[-+]\d{3,4}\b/;
+const WAGER_FIRST_PERSON = /\b(i(?:'|\u2019)?ll|i(?:'|\u2019)?m|i am)\b/i;
+
+/** A sentence that carries analysis rather than restating the wager.
+ *  Price-critique sentences ("-153 is too much for...") stay — a wrong
+ *  price IS a reason; a first-person wager declaration at a price is not. */
+export function isReasonSentence(sentence) {
+  const t = String(sentence ?? '');
+  if (STAKE.test(t)) return false;
+  if (ODDS.test(t) && WAGER_FIRST_PERSON.test(t)) return false;
+  return true;
+}
+
+/** The rationale's reason-bearing sentences, whole and in order. */
+export function reasonCandidates(rationale) {
+  return splitSentences(rationale).filter(isReasonSentence);
+}
+
+const digitGroups = (s) => (String(s).match(/\d[\d.,%]*/g) || []).length;
+
+/**
+ * Deterministic reason pair: stat-dense sentences first (concrete numbers
+ * beat atmosphere), stable by position, original order preserved between the
+ * two chosen. Sentences are never cut; nothing fitting returns null.
+ * @returns {{ opening: string, closing: string } | null}
+ */
+export function fallbackReasonPair(rationale, budget) {
+  const cands = reasonCandidates(rationale);
+  if (!cands.length) return fallbackVerbatimPair(rationale, budget);
+  const ranked = cands
+    .map((s, i) => ({ s, i, d: digitGroups(s) }))
+    .sort((a, b) => (b.d - a.d) || (a.i - b.i));
+  for (const first of ranked) {
+    for (const second of ranked) {
+      if (second.s === first.s) continue;
+      if (first.s.length + second.s.length <= budget) {
+        const [a, b] = first.i < second.i ? [first, second] : [second, first];
+        return { opening: a.s, closing: b.s };
+      }
+    }
+  }
+  const solo = ranked.find((r) => r.s.length <= budget);
+  return solo ? { opening: solo.s, closing: '' } : null;
+}
