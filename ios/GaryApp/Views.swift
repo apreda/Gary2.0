@@ -3178,6 +3178,7 @@ struct HomeView: View {
         // roll from yesterday to today's live slate; only its position is fixed.
         recordBlock
             .goldPlate()
+            .pageGutter()
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.065), value: animateIn)
 
@@ -3203,7 +3204,6 @@ struct HomeView: View {
             UserDefaults.standard.set("hub", forKey: "hubScope")
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
         }
-        .goldPlate()
         // ── WINNERS — the sealed card, slip-styled (the one conversion door).
         HomeWinnersStub(onOpen: {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
@@ -3214,7 +3214,6 @@ struct HomeView: View {
             return ls.isEmpty ? nil : ls.joined(separator: " + ")
         }(),
         nextSeal: firstCallClock)
-        .goldPlate()
         .opacity(animateIn ? 1 : 0)
         .animation(.easeOut(duration: 0.6).delay(0.08), value: animateIn)
 
@@ -12093,16 +12092,15 @@ struct TomorrowView {
             if !games.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
                     HubSectionHeader(eyebrow: "The Marquee", sub: "")
-                    VStack(spacing: 0) {
+                    // Each marquee game floats on its own plate — gold air
+                    // between the games is what sells the depth (founder,
+                    // Aug 17: "space between the games to get the effect").
+                    VStack(spacing: 12) {
                         ForEach(Array(games.enumerated()), id: \.element.rank) { idx, g in
                             bigGameRow(g, displayRank: idx + 1)
-                            if idx < games.count - 1 {
-                                Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1)
-                            }
+                                .quantPanel()
                         }
                     }
-                    .padding(.vertical, 4)
-                    .quantPanel()
                     .pageGutter()
                 }
             }
