@@ -67,6 +67,10 @@ enum GaryTour {
             topController()?.dismiss(animated: true)
         case "settings":
             NotificationCenter.default.post(name: Notification.Name("ShowSettingsMenu"), object: nil)
+        case "ground":
+            // depth-v2 studies: flip the Home ground live (real page, real data)
+            UserDefaults.standard.set(Int(arg) ?? -1, forKey: "garyGroundStudy")
+            NotificationCenter.default.post(name: Notification.Name("GaryGroundStudy"), object: nil)
         case "reveal":
             revealBudget = max(1, Int(arg) ?? 1)
             post(verb, arg)
