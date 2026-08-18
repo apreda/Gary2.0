@@ -31,6 +31,10 @@ export const MLB_CONSTITUTION = {
   // semantics (LOCKED) so the two never duplicate (Jul 7 sweep: Pass 1 was
   // rendering two near-identical MLB AWARENESS sections).
   pass1Context: `
+### MLB AWARENESS
+
+- A stat is a description of what happened, not a reason for what will happen. A pitcher's bad ERA is a fact about past games; whether it predicts tonight depends on opponent, ballpark, recent form, bullpen support, and sample size. Cite stats to describe the situation. Reason for yourself about whether they actually matter for THIS specific game.
+
 ### MLB INJURY LABELS (READ FROM SCOUT REPORT)
 
 MLB injuries use a simplified 3-tier system. The key question in baseball is: did this absence change who is pitching tonight?

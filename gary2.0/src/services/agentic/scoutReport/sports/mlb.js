@@ -12,6 +12,8 @@
  */
 
 import { openaiWebSearch } from '../../../pickdesk/webSearch.js';
+import { fetchStats } from '../../tools/statRouters/index.js';
+import { summarizeStatForContext } from '../../orchestrator/orchestratorHelpers.js';
 import { formatTokenMenu } from '../../tools/toolDefinitions.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
 import { ballDontLieService, getCachedOrFetch } from '../../../ballDontLieService.js';
@@ -45,6 +47,38 @@ import {
   mlbGamesMissedLabel,
   isMlbPitcherPosition,
 } from './mlbInjuryContext.js';
+
+// ═══════════════════════════════════════════════════════════════════════
+// THE MATCHUP SHELF (Aug 18 2026 — founder: "GARY NEEDS FULL CONTEXT AND
+// FULL DATA"). The desk has carried these six sections since the Aug 5-13
+// desk work; the engine's dossier never inherited them, so pen quality,
+// pen workload, park, defense, catchers and SP pitch types reached Gary
+// only when the researcher chose to summarize them. Now they are baseline.
+// Replicated from pickdesk/mlbDesk.js buildMatchupLab (importing it would
+// cycle: mlbDesk → scoutReportBuilder → this file).
+// ═══════════════════════════════════════════════════════════════════════
+const SCOUT_MATCHUP_SECTIONS = [
+  ['MLB_PITCH_TYPES_SP', '═══ SP PITCH TYPES (usage / whiff / xwOBA per pitch) ═══'],
+  ['MLB_TEAM_DEFENSE', '═══ TEAM DEFENSE ═══'],
+  ['MLB_CATCHER_DEFENSE', '═══ CATCHERS — the running game ═══'],
+  ['MLB_CLOSER_RELIEVER_STATS', '═══ THE PEN — high-leverage arms ═══'],
+  ['MLB_BULLPEN_WORKLOAD', '═══ BULLPEN WORKLOAD (recent appearances) ═══'],
+  ['MLB_PARK_FACTORS', '═══ THE PARK ═══'],
+];
+
+async function buildScoutMatchupShelf(game, homeTeam, awayTeam, gamePk) {
+  const opt = { game: { ...game, gamePk: gamePk ?? game.gamePk, id: game.id ?? game.bdl_game_id } };
+  const parts = await Promise.all(SCOUT_MATCHUP_SECTIONS.map(async ([token, header]) => {
+    try {
+      const r = await fetchStats('baseball_mlb', token, homeTeam, awayTeam, opt);
+      if (!r || r.error) return null;
+      const text = summarizeStatForContext(r, token, homeTeam, awayTeam);
+      if (!text || text.trim().length < 20) return null;
+      return `${header}\n${text.trim()}`;
+    } catch { return null; }
+  }));
+  return parts.filter(Boolean).join('\n\n');
+}
 
 export async function buildMlbScoutReport(game, options = {}) {
   // home_team/away_team are strings; team objects with IDs are in home_team_data/away_team_data
@@ -2052,6 +2086,8 @@ export async function buildMlbScoutReport(game, options = {}) {
   // Helper used above
   function lastWord(name) { return (name || '').toLowerCase().split(' ').pop(); }
 
+  const matchupShelfSection = await buildScoutMatchupShelf(game, homeTeam, awayTeam, gamePk).catch(() => '');
+
   // ═══════════════════════════════════════════════════════════════════
   // ASSEMBLE REPORT
   // ═══════════════════════════════════════════════════════════════════
@@ -2077,7 +2113,7 @@ ${confirmedLineupsSection}
 ═══ LINEUP RECENT BATTING (last 7 / last 15 days) ═══
 ${lineupRecentBattingSection}
 
-═══ BETTING CONTEXT ═══
+${matchupShelfSection ? matchupShelfSection + '\n\n' : ''}═══ BETTING CONTEXT ═══
 ${oddsSection}
 
 
