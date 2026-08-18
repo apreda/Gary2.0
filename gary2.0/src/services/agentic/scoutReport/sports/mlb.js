@@ -12,8 +12,6 @@
  */
 
 import { openaiWebSearch } from '../../../pickdesk/webSearch.js';
-import { fetchStats } from '../../tools/statRouters/index.js';
-import { summarizeStatForContext } from '../../orchestrator/orchestratorHelpers.js';
 import { formatTokenMenu } from '../../tools/toolDefinitions.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
 import { ballDontLieService, getCachedOrFetch } from '../../../ballDontLieService.js';
@@ -67,6 +65,11 @@ const SCOUT_MATCHUP_SECTIONS = [
 ];
 
 async function buildScoutMatchupShelf(game, homeTeam, awayTeam, gamePk) {
+  // Lazy imports — a top-level import of the stat router from inside the
+  // scout family creates an init-order cycle (router → fetchers → scout);
+  // at call time every module is initialized and the cycle is harmless.
+  const { fetchStats } = await import('../../tools/statRouters/index.js');
+  const { summarizeStatForContext } = await import('../../orchestrator/orchestratorHelpers.js');
   const opt = { game: { ...game, gamePk: gamePk ?? game.gamePk, id: game.id ?? game.bdl_game_id } };
   const parts = await Promise.all(SCOUT_MATCHUP_SECTIONS.map(async ([token, header]) => {
     try {
