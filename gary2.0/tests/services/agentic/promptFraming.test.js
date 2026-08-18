@@ -45,16 +45,22 @@ describe('J-series: judgment is licensed, numbers stay policed', () => {
   });
 });
 
-describe('MLB game lane is dead (Jul 26 rebuild)', () => {
-  it('the pass builders refuse MLB games', () => {
+describe('MLB game lane runs the restored June engine (Aug 18 restoration)', () => {
+  it('the pass builders route MLB games again', () => {
     const pb = src('orchestrator/passBuilders.js');
-    expect(pb).toContain('MLB game picks moved to pickdesk');
-    expect(pb).not.toContain('buildMlbPass1(');
+    expect(pb).toContain('MLB GAME LANE RESTORED');
+    expect(pb).toContain('return buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread)');
+    expect(pb).not.toContain('this lane is deleted');
+    // The bilateral ask and the symmetry rule ride Pass 1
+    expect(pb).toContain('THE SYMMETRY RULE');
+    expect(pb).toContain('Case for backing ${homeTeam} tonight');
   });
 
-  it('the factor file no longer exports MLB scaffolding', () => {
+  it('the factor file exports the founder-kept MLB scaffolding', () => {
     const f = src('orchestrator/spreadEvaluationFactors.js');
-    expect(f).not.toContain('export function getMlbSpreadFactors');
-    expect(f).not.toContain('export function getMlbSeasonAwareness');
+    expect(f).toContain('export function getMlbSpreadFactors');
+    expect(f).toContain('export function getMlbSeasonAwareness');
+    // The Jul 22 anti-template law is the load-bearing sentence
+    expect(f).toContain('reciting, not reading');
   });
 });

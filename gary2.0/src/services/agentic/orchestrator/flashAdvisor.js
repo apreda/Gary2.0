@@ -1,5 +1,7 @@
 import { createGeminiSession, sendToSessionWithRetry, resetSessionChat } from './sessionManager.js';
 import { getFlashInvestigationPrompt } from '../flashInvestigationPrompts.js';
+import { getMlbSeasonAwareness } from './spreadEvaluationFactors.js';
+import { MLB_RESEARCH_MODEL } from './orchestratorConfig.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, nflSeason } from '../../../utils/dateUtils.js';
 import { toolDefinitions, getTokensForSport } from '../tools/toolDefinitions.js';
@@ -249,9 +251,8 @@ Current preseason personnel, announced starter rest, rotations, injuries and coa
     const isNCAABSport = sport === 'basketball_ncaab' || sport === 'NCAAB';
     const isMLBSport = sport === 'baseball_mlb' || sport === 'MLB';
     const isNHLSport = sport === 'icehockey_nhl' || sport === 'NHL';
-    // (MLB awareness injection deleted Jul 26 2026 — MLB games run pickdesk,
-    // which never calls the Flash advisor.)
-    const mlbAwarenessBlock = '';
+    // (Restored Aug 18 2026 — the June engine returns for MLB games.)
+    const mlbAwarenessBlock = isMLBSport ? `\n\n${getMlbSeasonAwareness()}\n` : '';
 
     // All sports get high thinking + full output. Baseball especially needs depth
     // due to high variance, ballpark effects, and pitcher dominance.
@@ -260,7 +261,9 @@ Current preseason personnel, announced starter rest, rotations, injuries and coa
 
     const briefingSession = await createGeminiSession({
       _costTracker: options._costTracker || null,
-      modelName: 'gemini-3-flash-preview',
+      // MLB research runs the Anthropic API Haiku tier (June engine, Aug 18
+      // 2026 — no-Gemini law for the MLB pick lane); other sports unchanged.
+      modelName: isMLBSport ? MLB_RESEARCH_MODEL : 'gemini-3-flash-preview',
       systemPrompt: `You are the research assistant for a sports bettor named Gary. Your job is to find the full context and nuance behind the stats — the stuff a human bettor would know but raw numbers don't show.
 
 A stat by itself is just a number. Your job is to figure out WHY. An efficiency spike could be a real shift or 3 games against tanking teams. A player's absence could be devastating or already absorbed. A record could be misleading because of blowout variance. You find the story behind the data.
@@ -461,7 +464,16 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                 const query = args.query || '';
                 console.log(`  → [Research Grounding] "${query}" (${groundingCalls}/${MAX_GROUNDING_CALLS})`);
                 try {
-                  const groundingResult = await geminiGroundingSearch(query, { maxTokens: 2000 });
+                  // MLB rides the OpenAI search layer (no-Gemini law for the
+                  // MLB pick lane, Aug 18 2026) — same return contract, so the
+                  // unwrap below is provider-blind. Other sports unchanged.
+                  let groundingResult;
+                  if (isMLBSport) {
+                    const { openaiWebSearch } = await import('../../pickdesk/webSearch.js');
+                    groundingResult = await openaiWebSearch(query, { freshnessHours: 48 });
+                  } else {
+                    groundingResult = await geminiGroundingSearch(query, { maxTokens: 2000 });
+                  }
                   const groundingText = typeof groundingResult === 'string' ? groundingResult : (groundingResult?.data || groundingResult?.text || 'No results');
                   console.log(`    ✓ Grounding result (${groundingText.length} chars)`);
                   functionResponses.push({ name: functionName, content: groundingText });

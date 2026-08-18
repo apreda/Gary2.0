@@ -85,6 +85,27 @@ Rivalry intensity, conference title implications, and postseason positioning can
 Outdoor conditions and venue environment can change play-calling and efficiency profiles. Verify how these factors interact with each team's style rather than assuming a generic home-field effect.`;
 }
 
-// (getMlbSpreadFactors + getMlbSeasonAwareness deleted Jul 26 2026 — the MLB
-// game lane runs pickdesk; the two founder-kept awareness bullets moved
-// verbatim to src/services/pickdesk/garyBrain.js MLB_AWARENESS.)
+// (Restored Aug 18 2026 — the June engine returns for MLB games. These are the
+// founder's Jul 22 item-by-item survivors, verbatim.)
+export function getMlbSpreadFactors() {
+  return `A baseball game is not decided by a checklist, and the same two or three arguments do not decide every game. The starting pitchers are one piece: nine innings of lineups, the bullpens behind both starters, the park and its conditions, the schedule and series situation, the stakes, and plain variance decide the rest. Which of those matters TONIGHT is the actual question.
+
+Some nights one thing decides it; some nights it's the whole picture. Lead with what YOUR investigation of this game surfaces — not with what usually matters in baseball — and keep findings factual and symmetric across both teams. If you find yourself building tonight's case out of the same parts as yesterday's, that is a sign you are reciting, not reading.`;
+}
+
+/**
+ * MLB Awareness — injected at Pass 1 and in Flash research briefing.
+ * Jul 22 (founder, knowing item-by-item choice after reading the full prompt
+ * surface): ONLY the variance bullet and the momentum/streaks bullet survive —
+ * everything explaining how baseball works to the model was removed ("why do
+ * we have to tell a nearly super smart intelligence how starting pitching
+ * works"). The data on the desk carries series state, bullpen usage, parks,
+ * schedule; the model judges.
+ */
+export function getMlbSeasonAwareness() {
+  return `## MLB SEASON AWARENESS
+
+- **Baseball runs on heavy game-to-game variance.** The best team in baseball wins about 60% of its games — they lose 4 out of every 10. Hot streaks and losing streaks happen to every team multiple times per season. Investigate whether recent form reflects a real trend (pitcher struggles, lineup changes, bullpen fatigue) or normal variance.
+- **Baseball is more than numbers — the game has momentum.** Which team is rolling right now? Which pitcher is struggling? What happened in this series so far? A team that just got swept plays differently than a team that just swept. Streaks are real currency in this sport — riding a hot team against a cold one is legitimate baseball judgment; weigh it against tonight's matchup. These dynamics are real and worth investigating alongside the statistical matchup.`;
+}
+

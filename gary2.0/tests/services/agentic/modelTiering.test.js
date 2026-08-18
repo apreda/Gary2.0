@@ -25,9 +25,13 @@ describe('model tiering: props on their own Gemini tier (game brain = Sol throug
     expect(configSrc).toMatch(/GAME_PICK_MODEL = process\.env\.GARY_MODEL_OVERRIDE \|\| 'gpt-5\.6-sol'/);
   });
 
-  it('the research briefing stays on the Tier 2 model', () => {
+  it('the research briefing runs the cheap dedicated tier per sport', () => {
     const flashSrc = readFileSync(path.join(__dirname, '../../../src/services/agentic/orchestrator/flashAdvisor.js'), 'utf8');
-    expect(flashSrc).toContain("modelName: 'gemini-3-flash-preview'");
+    // MLB research = Anthropic Haiku (June engine restoration, no-Gemini law
+    // for the MLB pick lane); every other sport stays on Gemini Tier 2.
+    expect(flashSrc).toContain("modelName: isMLBSport ? MLB_RESEARCH_MODEL : 'gemini-3-flash-preview'");
+    const configSrc = readFileSync(path.join(__dirname, '../../../src/services/agentic/orchestrator/orchestratorConfig.js'), 'utf8');
+    expect(configSrc).toMatch(/MLB_RESEARCH_MODEL = process\.env\.GARY_MLB_RESEARCH_MODEL \|\| 'anthropic-claude-haiku-4-5'/);
     // The scout report rides the cached prefix, not the per-factor seeds.
     expect(flashSrc).toContain('## SCOUT REPORT (this game');
   });

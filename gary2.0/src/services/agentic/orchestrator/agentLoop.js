@@ -124,7 +124,12 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   const isPropsMode = options.mode === 'props';
   const isGamePicksMode = !isPropsMode;
   const bilateralFn = options.bilateralCasePrompt || null;
-  const modelOverride = process.env.GARY_MODEL_OVERRIDE || null;
+  // Per-call override outranks the env override: the June-engine MLB lane must
+  // pin a TOOLS-CAPABLE brain (API Sol) even while the scheduler plist's
+  // GARY_MODEL_OVERRIDE points the pickdesk lane at the tool-less codexCli
+  // bridge (Aug 18 2026). Nothing passes options.modelOverride today except
+  // that lane — every other sport's resolution is byte-identical.
+  const modelOverride = options.modelOverride || process.env.GARY_MODEL_OVERRIDE || null;
 
   // Model selection (May 2026):
   //   Game picks  → gemini-3.5-flash (Tier 1 — Gary's brain)
@@ -826,11 +831,20 @@ INVESTIGATION COMPLETE`;
           console.log(`  → [NARRATIVE_CONTEXT] for query: "${groundingQuery}"`);
 
           try {
-            const { geminiGroundingSearch } = await import('../scoutReport/scoutReportBuilder.js');
-
-            const searchResult = await geminiGroundingSearch(groundingQuery, {
-              maxTokens: 1000
-            });
+            // MLB rides the OpenAI search layer (no-Gemini law for the MLB
+            // pick lane, Aug 18 2026) — same {success, data} contract. Other
+            // sports keep Gemini grounding unchanged.
+            const isMLBGrounding = sport === 'baseball_mlb' || sport === 'MLB';
+            let searchResult;
+            if (isMLBGrounding) {
+              const { openaiWebSearch } = await import('../../pickdesk/webSearch.js');
+              searchResult = await openaiWebSearch(groundingQuery, { freshnessHours: 48 });
+            } else {
+              const { geminiGroundingSearch } = await import('../scoutReport/scoutReportBuilder.js');
+              searchResult = await geminiGroundingSearch(groundingQuery, {
+                maxTokens: 1000
+              });
+            }
 
             if (searchResult?.success && searchResult?.data) {
               const toolResponse = {
