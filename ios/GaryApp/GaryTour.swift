@@ -202,6 +202,18 @@ private let depthStudies: [DepthStudy] = [
     .init(id: 12, name: "OBSIDIAN", cue: "LIVING SURFACE · ABSTRACT · LIVE"),
     .init(id: 13, name: "SOLID GOLD", cue: "FULL GOLD FIELD · ABSTRACT · LIVE"),
     .init(id: 14, name: "THE BLAZE", cue: "RADIANT GOLD AIR · ABSTRACT · LIVE"),
+    // ── THE AMBIENCE SET (Aug 18) — living BLACK: ten quiet grounds that keep
+    //    the ink and differ only in what breathes behind it ─────────────────
+    .init(id: 15, name: "WAVES", cue: "AS SHIPPED · BASELINE · LIVE"),
+    .init(id: 16, name: "DEEP SWELL", cue: "3-LAYER PARALLAX · LIVE"),
+    .init(id: 17, name: "SMOKE", cue: "DARK CURRENTS · LIVE"),
+    .init(id: 18, name: "EMBERS", cue: "RISING SPARKS · LIVE"),
+    .init(id: 19, name: "CONSTELLATION", cue: "STAR FIELD · LIVE"),
+    .init(id: 20, name: "AURORA", cue: "BREATHING BANDS · LIVE"),
+    .init(id: 21, name: "TICKER RAIN", cue: "FALLING HAIRLINES · LIVE"),
+    .init(id: 22, name: "TOPO", cue: "DRIFTING CONTOURS · LIVE"),
+    .init(id: 23, name: "HORIZON GRID", cue: "FLOOR PERSPECTIVE · LIVE"),
+    .init(id: 24, name: "BREATH", cue: "PURE GLOW · MINIMAL · LIVE"),
 ]
 
 struct DepthStudiesView: View {
@@ -272,7 +284,7 @@ private struct DepthStudyPage: View {
     var body: some View {
         ZStack {
             Group {
-                if [5, 6, 8, 9, 10, 11, 12, 13, 14].contains(study.id) && !reduceMotion {
+                if [5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24].contains(study.id) && !reduceMotion {
                     // the LIVE studies: slow ambient animation at a throttled
                     // frame rate — atmosphere breathing, the market drawing
                     TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { tl in
@@ -346,6 +358,16 @@ private struct DepthBackground: View {
                 case 12: obsidian(w: w, h: h)
                 case 13: solidGold(w: w, h: h)
                 case 14: theBlaze(w: w, h: h)
+                case 15: ambWaves(w: w, h: h)
+                case 16: ambSwell(w: w, h: h)
+                case 17: ambSmoke(w: w, h: h)
+                case 18: ambEmbers(w: w, h: h)
+                case 19: ambConstellation(w: w, h: h)
+                case 20: ambAurora(w: w, h: h)
+                case 21: ambTickerRain(w: w, h: h)
+                case 22: ambTopo(w: w, h: h)
+                case 23: ambHorizonGrid(w: w, h: h)
+                case 24: ambBreath(w: w, h: h)
                 default: Color.black
                 }
             }
@@ -353,6 +375,255 @@ private struct DepthBackground: View {
     }
 
     private func alpha(_ base: Double) -> Double { min(base * intensity, 0.85) }
+
+    // ═════ THE AMBIENCE SET — shared ink ═════
+    @ViewBuilder private func ambInk() -> some View {
+        Color(hex: "#0C0B0A")
+        LinearGradient(colors: [Color(hex: "#151210"), Color(hex: "#0B0A09")], startPoint: .top, endPoint: .bottom)
+    }
+
+    // 15 — WAVES: the shipped ObsidianGround, verbatim opacities at SUBTLE.
+    @ViewBuilder private func ambWaves(w: CGFloat, h: CGFloat) -> some View {
+        ambInk()
+        Canvas { ctx, size in
+            let W = size.width, H = size.height
+            for i in 0..<14 {
+                let fi = Double(i)
+                let baseY = H * (0.05 + 0.068 * CGFloat(i))
+                var path = Path()
+                for s in 0...72 {
+                    let u = Double(s) / 72.0
+                    let x = CGFloat(u) * W
+                    let t1: Double = sin(u * 2.0 * .pi * 1.8 + time * 0.22 + fi * 0.9)
+                    let t2: Double = sin(u * 2.0 * .pi * 3.7 - time * 0.16 + fi * 1.7)
+                    let t3: Double = sin(u * 2.0 * .pi * 7.1 + time * 0.31 + fi * 2.6)
+                    let wob: Double = 0.018 * t1 + 0.011 * t2 + 0.0025 * t3
+                    let y = baseY + H * CGFloat(wob)
+                    if s == 0 { path.move(to: CGPoint(x: x, y: y)) } else { path.addLine(to: CGPoint(x: x, y: y)) }
+                }
+                let pulse = 0.55 + 0.45 * sin(time * 0.12 + fi * 1.3)
+                ctx.stroke(path, with: .color(Color(hex: "#D9A62B").opacity(alpha(0.012) * pulse)), lineWidth: 8)
+                ctx.stroke(path, with: .color(Color(hex: "#D9A62B").opacity(alpha(0.020) * pulse)), lineWidth: 3.4)
+                ctx.stroke(path, with: .color(Color(hex: "#F2E4BC").opacity(alpha(0.030) * pulse)), lineWidth: 1.2)
+            }
+        }
+    }
+
+    // 16 — DEEP SWELL: three wave strata at different speeds and weights —
+    // the parallax between them is the depth cue WAVES lacks.
+    @ViewBuilder private func ambSwell(w: CGFloat, h: CGFloat) -> some View {
+        ambInk()
+        Canvas { ctx, size in
+            let W = size.width, H = size.height
+            let strata: [(Double, Double, Double, Double)] = [
+                (0.10, 0.030, 5.5, 0.012),   // far: slow, small, dim
+                (0.17, 0.045, 3.4, 0.020),   // mid
+                (0.26, 0.065, 2.2, 0.034),   // near: faster, taller, brighter
+            ]
+            for (si, st) in strata.enumerated() {
+                let (speed, amp, waves, a) = st
+                for i in 0..<5 {
+                    let fi = Double(i)
+                    let baseY = H * (0.12 + 0.19 * CGFloat(i)) + CGFloat(si) * 14
+                    var path = Path()
+                    for s in 0...80 {
+                        let u = Double(s) / 80.0
+                        let x = CGFloat(u) * W
+                        let w1: Double = sin(u * 2.0 * .pi * waves + time * speed + fi * 1.1 + Double(si) * 2.2)
+                        let w2: Double = sin(u * 2.0 * .pi * waves * 2.3 - time * speed * 1.6 + fi)
+                        let wob: Double = amp * 0.5 * w1 + amp * 0.2 * w2
+                        let y = baseY + H * CGFloat(wob)
+                        if s == 0 { path.move(to: CGPoint(x: x, y: y)) } else { path.addLine(to: CGPoint(x: x, y: y)) }
+                    }
+                    ctx.stroke(path, with: .color(Color(hex: "#D9A62B").opacity(alpha(a))), lineWidth: si == 2 ? 1.4 : 1.0)
+                }
+            }
+        }
+    }
+
+    // 17 — SMOKE: the Solid Gold study's dark currents, exiled onto black —
+    // depth by shadow-on-shadow, no lines at all.
+    @ViewBuilder private func ambSmoke(w: CGFloat, h: CGFloat) -> some View {
+        ambInk()
+        Canvas { ctx, size in
+            let W = size.width, H = size.height
+            let tones = [Color(hex: "#1C1508"), Color(hex: "#221A0B"), Color(hex: "#171106")]
+            for ribbon in 0..<3 {
+                let tone = tones[ribbon]
+                let phase = Double(ribbon) * 2.3
+                let speed = 0.030 + 0.012 * Double(ribbon)
+                let baseY = H * (0.14 + 0.30 * CGFloat(ribbon))
+                var path = Path()
+                path.move(to: CGPoint(x: 0, y: baseY))
+                for s in 0...60 {
+                    let u = Double(s) / 60.0
+                    let x = CGFloat(u) * W
+                    let s1: Double = sin(u * 2.0 * .pi * 1.4 + time * speed + phase)
+                    let s2: Double = sin(u * 2.0 * .pi * 3.1 - time * speed * 1.7 + phase)
+                    let wob: Double = 0.10 * s1 + 0.05 * s2
+                    let y = baseY + H * CGFloat(wob)
+                    path.addLine(to: CGPoint(x: x, y: y))
+                }
+                path.addLine(to: CGPoint(x: W, y: baseY + H * 0.30))
+                for s in stride(from: 60, through: 0, by: -1) {
+                    let u = Double(s) / 60.0
+                    let x = CGFloat(u) * W
+                    let s3: Double = sin(u * 2.0 * .pi * 1.9 - time * speed * 0.8 + phase + 1.0)
+                    let y = baseY + H * 0.30 + H * CGFloat(0.08 * s3)
+                    path.addLine(to: CGPoint(x: x, y: y))
+                }
+                path.closeSubpath()
+                ctx.fill(path, with: .color(tone.opacity(alpha(0.55))))
+            }
+        }
+    }
+
+    // 18 — EMBERS: fourteen sparks rising off the bottom, swaying, dying at
+    // the masthead. The stadium at night, after.
+    @ViewBuilder private func ambEmbers(w: CGFloat, h: CGFloat) -> some View {
+        ambInk()
+        RadialGradient(colors: [Color(hex: "#D9A62B").opacity(alpha(0.05)), .clear],
+                       center: .init(x: 0.5, y: 1.05), startRadius: 10, endRadius: h * 0.5)
+        Canvas { ctx, size in
+            let W = size.width, H = size.height
+            var rnd = DepthLCG(seed: 4242)
+            for i in 0..<14 {
+                let sx = rnd.next(); let sSpeed = 0.018 + rnd.next() * 0.02
+                let sway = 18 + rnd.next() * 26; let phase = rnd.next() * 6.28
+                let cycle = (time * sSpeed + Double(i) * 0.31).truncatingRemainder(dividingBy: 1.0)
+                let y = H * CGFloat(1.02 - cycle * 1.05)
+                let x = W * CGFloat(sx) + CGFloat(sin(time * 0.5 + phase) * sway)
+                let fade = cycle < 0.12 ? cycle / 0.12 : (1 - cycle) // born dim, die at top
+                let r: CGFloat = 1.1 + CGFloat(rnd.next()) * 1.3
+                let rect = CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)
+                ctx.fill(Path(ellipseIn: rect), with: .color(Color(hex: "#F2C14E").opacity(alpha(0.30) * fade)))
+                ctx.fill(Path(ellipseIn: rect.insetBy(dx: -2.6, dy: -2.6)), with: .color(Color(hex: "#D9A62B").opacity(alpha(0.08) * fade)))
+            }
+        }
+    }
+
+    // 19 — CONSTELLATION: a fixed star chart in gold — the only motion is
+    // twinkle. Space without a single moving object.
+    @ViewBuilder private func ambConstellation(w: CGFloat, h: CGFloat) -> some View {
+        ambInk()
+        Canvas { ctx, size in
+            let W = size.width, H = size.height
+            var rnd = DepthLCG(seed: 1977)
+            for i in 0..<72 {
+                let x = W * CGFloat(rnd.next()); let y = H * CGFloat(rnd.next())
+                let big = rnd.next() > 0.92
+                let tw = 0.55 + 0.45 * sin(time * (0.35 + rnd.next() * 0.5) + Double(i))
+                let r: CGFloat = big ? 1.6 : 0.9
+                ctx.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)),
+                         with: .color(Color(hex: big ? "#F2E4BC" : "#D9A62B").opacity(alpha(big ? 0.34 : 0.16) * tw)))
+                if big {
+                    ctx.fill(Path(ellipseIn: CGRect(x: x - 4, y: y - 4, width: 8, height: 8)),
+                             with: .color(Color(hex: "#D9A62B").opacity(alpha(0.05) * tw)))
+                }
+            }
+        }
+    }
+
+    // 20 — AURORA: two broad bands of warm air breathing across the ink.
+    // No lines, no particles — pure atmosphere.
+    @ViewBuilder private func ambAurora(w: CGFloat, h: CGFloat) -> some View {
+        ambInk()
+        LinearGradient(colors: [.clear, Color(hex: "#D9A62B").opacity(alpha(0.05 + 0.018 * sin(time * 0.09))), .clear],
+                       startPoint: .topLeading, endPoint: .bottomTrailing)
+            .offset(x: CGFloat(sin(time * 0.05)) * w * 0.10, y: CGFloat(cos(time * 0.04)) * 24)
+        LinearGradient(colors: [.clear, Color(hex: "#8A6A1C").opacity(alpha(0.06 + 0.02 * sin(time * 0.07 + 2))), .clear],
+                       startPoint: .bottomLeading, endPoint: .topTrailing)
+            .offset(x: CGFloat(cos(time * 0.045)) * -w * 0.08, y: CGFloat(sin(time * 0.06)) * -20)
+    }
+
+    // 21 — TICKER RAIN: hairlines of light falling at their own speeds —
+    // the market raining quietly behind the night.
+    @ViewBuilder private func ambTickerRain(w: CGFloat, h: CGFloat) -> some View {
+        ambInk()
+        Canvas { ctx, size in
+            let W = size.width, H = size.height
+            var rnd = DepthLCG(seed: 808)
+            for i in 0..<26 {
+                let x = W * CGFloat(rnd.next())
+                let speed = 0.05 + rnd.next() * 0.06
+                let len = 40 + rnd.next() * 90
+                let bright = rnd.next() > 0.8
+                let cycle = (time * speed + Double(i) * 0.47).truncatingRemainder(dividingBy: 1.3)
+                let y = H * CGFloat(cycle) - CGFloat(len)
+                var path = Path()
+                path.move(to: CGPoint(x: x, y: y))
+                path.addLine(to: CGPoint(x: x, y: y + CGFloat(len)))
+                ctx.stroke(path, with: .color(Color(hex: bright ? "#F2E4BC" : "#D9A62B").opacity(alpha(bright ? 0.10 : 0.05))), lineWidth: 0.8)
+            }
+        }
+    }
+
+    // 22 — TOPO: elevation contours around two slow-wandering summits —
+    // the terrain of the night, redrawn as it drifts.
+    @ViewBuilder private func ambTopo(w: CGFloat, h: CGFloat) -> some View {
+        ambInk()
+        Canvas { ctx, size in
+            let W = size.width, H = size.height
+            let c1 = CGPoint(x: W * CGFloat(0.30 + 0.06 * sin(time * 0.05)), y: H * CGFloat(0.30 + 0.05 * cos(time * 0.04)))
+            let c2 = CGPoint(x: W * CGFloat(0.72 + 0.05 * cos(time * 0.045)), y: H * CGFloat(0.70 + 0.06 * sin(time * 0.055)))
+            for (ci, c) in [c1, c2].enumerated() {
+                for ring in 1...9 {
+                    let r = CGFloat(ring) * (W * 0.085) + CGFloat(6 * sin(time * 0.2 + Double(ring) + Double(ci) * 3))
+                    let a = alpha(0.030) * (1.0 - Double(ring) * 0.09)
+                    guard a > 0.003 else { continue }
+                    ctx.stroke(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r * 0.72, width: r * 2, height: r * 1.44)),
+                               with: .color(Color(hex: "#D9A62B").opacity(a)), lineWidth: 0.8)
+                }
+            }
+        }
+    }
+
+    // 23 — HORIZON GRID: a perspective floor crawling forward under the
+    // content's feet, vanishing into the dark — the depth lives at the
+    // bottom edge and leaves the reading surface alone.
+    @ViewBuilder private func ambHorizonGrid(w: CGFloat, h: CGFloat) -> some View {
+        ambInk()
+        Canvas { ctx, size in
+            let W = size.width, H = size.height
+            let horizonY = H * 0.66
+            let vp = CGPoint(x: W * 0.5, y: horizonY)
+            // converging rails
+            for i in stride(from: -8, through: 8, by: 1) {
+                var path = Path()
+                path.move(to: vp)
+                path.addLine(to: CGPoint(x: W * 0.5 + CGFloat(i) * W * 0.22, y: H * 1.05))
+                ctx.stroke(path, with: .color(Color(hex: "#D9A62B").opacity(alpha(0.028))), lineWidth: 0.7)
+            }
+            // sleepers crawling toward the viewer
+            let t = CGFloat((time * 0.06).truncatingRemainder(dividingBy: 1.0))
+            for k in 0..<10 {
+                let u = (CGFloat(k) / 10.0 + t).truncatingRemainder(dividingBy: 1.0)
+                let d = pow(u, 2.2) // perspective spacing
+                let y = horizonY + (H * 1.05 - horizonY) * d
+                let a = alpha(0.055) * Double(d) * (u > 0.9 ? Double((1.0 - u) * 10) : 1.0)
+                var path = Path()
+                path.move(to: CGPoint(x: 0, y: y))
+                path.addLine(to: CGPoint(x: W, y: y))
+                ctx.stroke(path, with: .color(Color(hex: "#D9A62B").opacity(a)), lineWidth: 0.8)
+            }
+            // glow at the vanishing line
+            ctx.fill(Path(CGRect(x: 0, y: 0, width: W, height: H)),
+                     with: .radialGradient(Gradient(colors: [Color(hex: "#D9A62B").opacity(alpha(0.06)), .clear]),
+                                           center: vp, startRadius: 0, endRadius: W * 0.5))
+        }
+    }
+
+    // 24 — BREATH: nothing but a slow warm breath low in the ink, and the
+    // faintest answering glow above. The minimal case — presence with zero
+    // geometry.
+    @ViewBuilder private func ambBreath(w: CGFloat, h: CGFloat) -> some View {
+        ambInk()
+        RadialGradient(colors: [Color(hex: "#D9A62B").opacity(alpha(0.07 + 0.03 * sin(time * 0.10))), .clear],
+                       center: .init(x: 0.5, y: 0.78), startRadius: 20, endRadius: h * 0.55)
+        RadialGradient(colors: [Color(hex: "#F2E4BC").opacity(alpha(0.025 + 0.012 * sin(time * 0.08 + 2.4))), .clear],
+                       center: .init(x: 0.5, y: 0.10), startRadius: 10, endRadius: h * 0.35)
+    }
+
 
     @ViewBuilder private func upperDeck(w: CGFloat, h: CGFloat) -> some View {
         LinearGradient(colors: [Color(hex: "#060707"), Color(hex: "#0B0D0E"), Color(hex: "#0D0E0C"), Color(hex: "#080706")],
