@@ -3986,7 +3986,7 @@ struct HomeView: View {
                             .tracking(1.4)
                             .foregroundStyle(league == selected
                                 ? GaryColors.gold
-                                : Color.white.opacity(enabled ? 0.56 : 0.24))
+                                : Color.white.opacity(enabled ? 0.62 : 0.45))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
                     }
