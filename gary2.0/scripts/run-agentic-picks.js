@@ -1888,9 +1888,16 @@ async function main() {
           }
 
           // Create clean pick object without large/unnecessary fields
-          // Use best available line if found, otherwise fall back to default
-          const finalSpread = bestLine?.spread ?? result.spread;
-          const finalSpreadOdds = bestLine?.spreadOdds ?? result.spreadOdds;
+          // Use best available line if found, otherwise fall back to default.
+          // iOS GaryPick types spread/spreadOdds as Double? — a string here
+          // (result.spread parsed from pick text) poisons the WHOLE picks-array
+          // decode on the phone (Aug 18 "BOARD DATA UNAVAILABLE" incident).
+          const asStoredNumber = (v) => {
+            const n = typeof v === 'string' ? parseFloat(v) : v;
+            return Number.isFinite(n) ? n : null;
+          };
+          const finalSpread = asStoredNumber(bestLine?.spread ?? result.spread);
+          const finalSpreadOdds = asStoredNumber(bestLine?.spreadOdds ?? result.spreadOdds);
           const isFootballPick = config.key === 'americanfootball_nfl' || config.key === 'americanfootball_ncaaf';
           const exactFootballBook = isFootballPick
             ? exactFootballMarketBook(sportsbookOdds, result)
@@ -2064,7 +2071,11 @@ async function main() {
             // Pre-computed Tale of the Tape from scout report (BDL verified stats)
             // Used when toolCallHistory is sparse (e.g., NHL, NCAAB)
             verifiedTaleOfTape: result.verifiedTaleOfTape || null,
-            injuries: result.injuries || null, // Structured injury data from BDL
+            // Structured injury data from BDL. iOS types this TeamInjuries? —
+            // the June engine's dossier carries injuries as a TEXT block, and a
+            // string in this field breaks the phone's whole-array decode
+            // (Aug 18 incident). Objects only; anything else stores null.
+            injuries: (result.injuries && typeof result.injuries === 'object') ? result.injuries : null,
             sportsbook_odds: sportsbookOdds, // Multi-book odds comparison (ML + Spread)
             isBeta: config.isBeta || false, // Beta flag for sports with limited data
             dataLimitationNote: config.isBeta

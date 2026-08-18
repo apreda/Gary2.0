@@ -67,7 +67,14 @@ export function isClaudeCliModel(modelName) {
 
 function runClaude(args, stdinText, timeoutMs = CALL_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
-    const proc = spawn(CLAUDE_BIN, args, { stdio: ['pipe', 'pipe', 'pipe'], cwd: neutralCwd() });
+    // The claude CLI prefers ANTHROPIC_API_KEY over the founder's subscription
+    // login when the env var is present. The key entered .env on Aug 18 for the
+    // June-engine researcher (which reads process.env in-process) — every CLI
+    // child MUST NOT see it, or the $0 sub bridge silently bills the API key
+    // (caught Aug 18: props desk burned real credits all evening).
+    const env = { ...process.env };
+    delete env.ANTHROPIC_API_KEY;
+    const proc = spawn(CLAUDE_BIN, args, { stdio: ['pipe', 'pipe', 'pipe'], cwd: neutralCwd(), env });
     let stdout = '';
     let stderr = '';
     const timer = setTimeout(() => {
