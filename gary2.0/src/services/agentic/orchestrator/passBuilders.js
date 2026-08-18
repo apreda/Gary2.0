@@ -3,6 +3,7 @@
 // week negative since the Jul 22-26 cutover). Pieces grafted verbatim from
 // the pre-deletion state (53962904^).
 import { getNbaSpreadFactors, getNcaabSpreadFactors, getNhlSpreadFactors, getNflSpreadFactors, getNcaafSpreadFactors, getMlbSpreadFactors, getMlbSeasonAwareness } from './spreadEvaluationFactors.js';
+import { GAME_ML_CAP } from './orchestratorConfig.js';
 
 /**
  * Build the PASS 1 user message - Identify battlegrounds, DO NOT pick a side yet
@@ -317,12 +318,18 @@ export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spo
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
   const lineLabel = (isNHL) ? 'moneyline or puck line' : (isMLB ? 'moneyline or run line' : 'spread');
   const betTypeNote = isNHL
-    ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). Choose the bet type that matches your read on the game.`
+    ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). Choose the bet type that matches your read on the game.
+
+**HOUSE LIMIT:** no moneyline heavier than ${GAME_ML_CAP} — a favorite priced past that is a puck-line ticket, not a moneyline ticket.`
     : isMLB
     ? `**BET TYPE:** Two options — MONEYLINE (team wins outright) or RUN LINE (standard -1.5/+1.5). The mechanics: -1.5 pays only on a win by 2+ runs — a one-run win pays the moneyline and LOSES -1.5; +1.5 cashes on a win or a one-run loss. They are different bets on different outcomes, not two prices for the same opinion — take the bet that pays if your read is right, not the one that makes a price you dislike look better.
 
-Check each offered line in both directions — does your read beat the price on either side of the moneyline, and on either side of the run line? A line can be wrong toward the favorite or toward the dog; the ticket is wherever your read and the number disagree — and if they nowhere disagree, your strongest conviction is still a real bet.`
-    : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`;
+Check each offered line in both directions — does your read beat the price on either side of the moneyline, and on either side of the run line? A line can be wrong toward the favorite or toward the dog; the ticket is wherever your read and the number disagree — and if they nowhere disagree, your strongest conviction is still a real bet.
+
+**HOUSE LIMIT:** no moneyline heavier than ${GAME_ML_CAP}. If the side you like is priced past that, its moneyline is off the menu — on a game priced like that, the bet is not who wins, it is the run line: that side -1.5 at its price, or the other side +1.5 at its price (the underdog's moneyline also stays legal). Which side of the 1.5 does your read take?`
+    : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.
+
+**HOUSE LIMIT:** no moneyline heavier than ${GAME_ML_CAP} — a favorite priced past that is a spread ticket, not a moneyline ticket.`;
   const homeSpread = spread >= 0 ? `+${spread.toFixed(1)}` : spread.toFixed(1);
   const awaySpread = (-spread) >= 0 ? `+${(-spread).toFixed(1)}` : (-spread).toFixed(1);
   let lineContext;
@@ -732,6 +739,22 @@ Do NOT default to the over — an over pick must beat the under on evidence, not
 </negative_constraints>
 </props_instructions>
 `.trim();
+}
+
+/**
+ * HOUSE-LIMIT corrective re-ask (founder, Aug 18): fired once when a parsed
+ * game pick's moneyline is heavier than the cap. Menu language only — the
+ * read stands; the instrument must be payout-legal.
+ */
+export function buildMlCapRetryMessage(sport, cap = GAME_ML_CAP) {
+  const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
+  const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
+  const market = isMLB
+    ? 'the run line — the side you like at -1.5, or the other side at +1.5 (the underdog\'s moneyline also stays legal)'
+    : isNHL
+      ? 'the puck line (±1.5) — or the underdog\'s moneyline'
+      : 'the spread — or the underdog\'s moneyline';
+  return `HOUSE LIMIT: no moneyline heavier than ${cap}. That moneyline is off the menu — on a game priced like this, the bet is not who wins, it is ${market}. Which side does your read take? Return your final JSON with the exact odds for that ticket.`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

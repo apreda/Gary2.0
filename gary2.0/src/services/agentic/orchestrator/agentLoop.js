@@ -1,10 +1,10 @@
-import { CONFIG, GEMINI_PRO_MODEL, GEMINI_PRO_FALLBACK, GEMINI_FLASH_MODEL, GEMINI_PROPS_MODEL, GAME_PICK_MODEL, validateGeminiModel, RESEARCH_BRIEFING_TIMEOUT_MS } from './orchestratorConfig.js';
+import { CONFIG, GEMINI_PRO_MODEL, GEMINI_PRO_FALLBACK, GEMINI_FLASH_MODEL, GEMINI_PROPS_MODEL, GAME_PICK_MODEL, GAME_ML_CAP, validateGeminiModel, RESEARCH_BRIEFING_TIMEOUT_MS } from './orchestratorConfig.js';
 import { isExplicitPropsPass } from '../propsSharedUtils.js';
 import { rotateToBackupKey, isUsingBackupKey, resetToPrimaryKey } from '../modelConfig.js';
 import { createGeminiSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
 import { extractTextualSummaryForModelSwitch, buildFlashResearchBriefing, extractResearcherQuestions, createResearcherFollowUpSession, askResearcher } from './flashAdvisor.js';
 import { createCostTracker } from './costTracker.js';
-import { buildPass1Message, buildPass25Message, buildPass25PropsMessage, buildPass3Unified, buildPass3Props, FINALIZE_PROPS_TOOL, getFinalizePropsToolForSport, PROPS_PICK_SCHEMA } from './passBuilders.js';
+import { buildPass1Message, buildPass25Message, buildPass25PropsMessage, buildPass3Unified, buildPass3Props, FINALIZE_PROPS_TOOL, getFinalizePropsToolForSport, PROPS_PICK_SCHEMA, buildMlCapRetryMessage } from './passBuilders.js';
 import { parseGaryResponse, parsePropsResponse, normalizePickFormat, determineCurrentPass } from './responseParser.js';
 import { auditPickRationale, auditPropsPicks, auditCountClaims, buildStatAuditRetryMessage } from './statAudit.js';
 import { isInvestigationSufficient, summarizeStatForContext, formatNum, formatPct, summarizePlayerGameLogs, summarizeMlbPlayerGameLogs, summarizePlayerStats, summarizeNbaPlayerAdvancedStats, pruneContextIfNeeded, normalizeSportToLeague, MAX_CONTEXT_MESSAGES, PRUNE_AFTER_ITERATION } from './orchestratorHelpers.js';
@@ -107,6 +107,18 @@ function validateBilateralCases(text = '', homeTeam = '', awayTeam = '') {
  * @param {string} awayTeam - Away team name
  * @param {Object} options - Additional options
  */
+// HOUSE LIMIT (founder, Aug 18 — restored from the pickdesk-era -179 rule):
+// a game pick's moneyline may never be heavier than GAME_ML_CAP. Payout law:
+// users cannot be sold "risk $184 to win $100" — past the cap the market is
+// the runline/spread, not the winner.
+function moneylinePastCap(pick, cap = GAME_ML_CAP) {
+  if (!pick || !/moneyline|^ml$/i.test(String(pick.type || ''))) return false;
+  const direct = Number(pick.odds);
+  if (Number.isFinite(direct) && direct !== 0) return direct < cap;
+  const m = String(pick.pick || '').match(/(-\d{3,4})\s*\)?\s*$/);
+  return m ? parseInt(m[1], 10) < cap : false;
+}
+
 export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, options = {}) {
   const provider = 'gemini';
   const isNFLSport = sport === 'americanfootball_nfl' || sport === 'NFL';
@@ -233,6 +245,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   let _pass3Injected = false;
   let _extraIterationsUsed = 0; // Allow up to 2 iteration rewinds when all stats are already gathered (no new work done)
   let _statAuditRetried = false; // One corrective retry when the rationale cites numbers absent from provided data
+  let _mlCapRetried = false; // One corrective re-ask when a moneyline breaks the house limit (payout law)
 
   // Flash Research Briefing state — comprehensive pre-game briefing (factual findings only)
   // Flash completes BEFORE Gary starts. Findings injected before Pass 1.
@@ -1944,6 +1957,23 @@ INVESTIGATION COMPLETE`
           console.warn(`[Orchestrator] Pass 2.5 parse-first attempt threw: ${e.message} — falling through to Pass 3 injection`);
         }
         if (earlyPick) {
+          // HOUSE LIMIT gate (before the stat audit — an illegal ticket gets
+          // re-asked, not polished): one corrective re-ask, then hard-fail so
+          // the lane's fallback rails take the game. A past-cap moneyline can
+          // never ship.
+          if (isGamePicksMode && moneylinePastCap(earlyPick)) {
+            if (!_mlCapRetried && iteration < effectiveMaxIterations) {
+              _mlCapRetried = true;
+              console.warn(`[Orchestrator] 🧱 HOUSE LIMIT: "${earlyPick.pick}" is heavier than ${GAME_ML_CAP} — corrective re-ask (the market is the runline/spread)`);
+              messages.push({ role: 'assistant', content: message.content });
+              const capMsg = { role: 'user', content: buildMlCapRetryMessage(sport, GAME_ML_CAP) };
+              messages.push(capMsg);
+              nextMessageToSend = capMsg;
+              continue;
+            }
+            console.error(`[Orchestrator] ❌ HOUSE LIMIT violated twice ("${earlyPick.pick}") — failing the game to the lane's fallback rails`);
+            return { error: `rails: moneyline past the ${GAME_ML_CAP} house limit` };
+          }
           // Stat audit: every high-risk number in the rationale must trace to
           // provided data. The corrective retry fires only for RETRYABLE claims
           // (stale-memory signatures a re-prompt can fix); windowed/derived
@@ -2082,6 +2112,21 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
     }
 
     if (pick) {
+      // HOUSE LIMIT gate (same contract as the Pass 2.5 short-circuit exit).
+      if (isGamePicksMode && moneylinePastCap(pick)) {
+        if (!_mlCapRetried && iteration < effectiveMaxIterations) {
+          _mlCapRetried = true;
+          console.warn(`[Orchestrator] 🧱 HOUSE LIMIT: "${pick.pick}" is heavier than ${GAME_ML_CAP} — corrective re-ask (the market is the runline/spread)`);
+          messages.push({ role: 'assistant', content: message.content });
+          const capMsg = { role: 'user', content: buildMlCapRetryMessage(sport, GAME_ML_CAP) };
+          messages.push(capMsg);
+          nextMessageToSend = capMsg;
+          continue;
+        }
+        console.error(`[Orchestrator] ❌ HOUSE LIMIT violated twice ("${pick.pick}") — failing the game to the lane's fallback rails`);
+        return { error: `rails: moneyline past the ${GAME_ML_CAP} house limit` };
+      }
+
       // Stat audit (same contract as the Pass 2.5 short-circuit exit above):
       // retry only for retryable claims; windowed/derived claims warn-only.
       const audit = auditGamePick(pick, messages);

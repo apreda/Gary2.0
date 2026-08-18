@@ -56,6 +56,13 @@ export const GAME_PICK_MODEL = process.env.GARY_MODEL_OVERRIDE || 'gpt-5.6-sol';
 export const GAME_RESEARCH_MODEL = process.env.GARY_RESEARCH_MODEL || 'anthropic-claude-haiku-4-5';
 export const MLB_RESEARCH_MODEL = process.env.GARY_MLB_RESEARCH_MODEL || GAME_RESEARCH_MODEL;
 export const MLB_JUNE_BRAIN_MODEL = process.env.GARY_MLB_BRAIN_MODEL || 'codex-gpt-5.6-sol';
+
+// HOUSE LIMIT (founder, Aug 18 — restored from the pickdesk-era -179 rule):
+// no moneyline heavier than this ships to users. Payout law, not value
+// steering: on a game priced past the cap the market is the runline/spread,
+// not the winner. Enforced belt-and-suspenders in agentLoop with one
+// corrective re-ask; the menu clause lives in Pass 2.5.
+export const GAME_ML_CAP = Number(process.env.GARY_ML_CAP || -179);
 // Legacy Gemini Tier 1 — research-era fallback references only.
 export const GEMINI_PRO_MODEL = 'gemini-3.5-flash';
 // Fallback when the primary errors / rate-limits.

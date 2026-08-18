@@ -67,6 +67,17 @@ describe('MLB game lane runs the restored June engine (Aug 18 restoration)', () 
     expect(advisor).toContain('Do NOT pick a side');
   });
 
+  it('the house limit caps every game moneyline (founder, Aug 18)', () => {
+    const pb = src('orchestrator/passBuilders.js');
+    expect(pb).toContain('HOUSE LIMIT');
+    expect(pb).toContain('export function buildMlCapRetryMessage');
+    const loop = src('orchestrator/agentLoop.js');
+    expect(loop).toContain('moneylinePastCap');
+    expect(loop).toContain('_mlCapRetried');
+    const cfg = src('orchestrator/orchestratorConfig.js');
+    expect(cfg).toMatch(/GAME_ML_CAP = Number\(process\.env\.GARY_ML_CAP \|\| -179\)/);
+  });
+
   it('the factor file exports the founder-kept MLB scaffolding', () => {
     const f = src('orchestrator/spreadEvaluationFactors.js');
     expect(f).toContain('export function getMlbSpreadFactors');
