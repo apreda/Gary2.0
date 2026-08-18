@@ -47,6 +47,11 @@ enum GaryTour {
         #endif
     }
 
+    // Driving note (Aug 18, iOS 26.4 runtime): post the notification INSIDE the
+    // sim's namespace — `xcrun simctl spawn $UDID notifyutil -p com.gary.tour`.
+    // A host-level `notifyutil -p` never crosses. And don't trust
+    // `simctl spawn defaults read` to verify effects — cfprefsd flush lag shows
+    // stale values while the app state is already switched; screenshot instead.
     private static func fire() {
         let path = NSTemporaryDirectory() + "gary-tour.txt"
         guard let raw = try? String(contentsOfFile: path, encoding: .utf8) else { return }

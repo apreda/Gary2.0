@@ -1810,45 +1810,64 @@ private let depthV4Names = ["WAVES (SHIPPED)", "CARD CORRIDOR", "STADIUM TUNNEL"
 struct HomeGroundSwitcher: View {
     @State private var study: Int = UserDefaults.standard.integer(forKey: "garyGroundStudy")
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            Group {
-                switch study {
-                case 1: DepthV4CardCorridor()
-                case 2: DepthV4StadiumTunnel()
-                case 3: DepthV4SkylineLayers()
-                case 4: DepthV4FloatingSheets()
-                case 5: DepthV4DustFlight()
-                case 6: DepthV4OrbitDepth()
-                case 7: DepthV4LightShafts()
-                case 8: DepthV4InfiniteDoors()
-                case 9: DepthV4DataRiver()
-                case 10: DepthV4Vault()
-                case 11: DepthV3Floor()
-                default: ObsidianGround()
-                }
+        Group {
+            switch study {
+            case 1: DepthV4CardCorridor()
+            case 2: DepthV4StadiumTunnel()
+            case 3: DepthV4SkylineLayers()
+            case 4: DepthV4FloatingSheets()
+            case 5: DepthV4DustFlight()
+            case 6: DepthV4OrbitDepth()
+            case 7: DepthV4LightShafts()
+            case 8: DepthV4InfiniteDoors()
+            case 9: DepthV4DataRiver()
+            case 10: DepthV4Vault()
+            case 11: DepthV3Floor()
+            default: ObsidianGround()
             }
-            #if DEBUG
-            Button {
-                let next = (study + 1) % 12
-                UserDefaults.standard.set(next, forKey: "garyGroundStudy")
-                study = next
-            } label: {
-                Text("\(study)/11 · \(depthV4Names[study]) · TAP")
-                    .font(.system(size: 10, weight: .bold))
-                    .tracking(0.8)
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 10).padding(.vertical, 6)
-                    .background(GaryColors.gold, in: Capsule())
-            }
-            .padding(.top, 52)
-            .padding(.trailing, 10)
-            #endif
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("GaryGroundStudy"))) { _ in
             study = UserDefaults.standard.integer(forKey: "garyGroundStudy")
         }
     }
 }
+
+#if DEBUG
+/// The self-serve browser chip. MUST mount ABOVE the ScrollView in Home's
+/// ZStack — the ground layer sits under the scroll surface, whose pan area
+/// covers the whole frame, so a button down there draws but never gets the
+/// tap. Sibling of the ground layer; they sync via the same GaryGroundStudy
+/// notification the tour `ground N` verb posts.
+struct GroundStudyChip: View {
+    @State private var study: Int = UserDefaults.standard.integer(forKey: "garyGroundStudy")
+    var body: some View {
+        VStack {
+            HStack {
+                Spacer()
+                Button {
+                    let next = (study + 1) % 12
+                    UserDefaults.standard.set(next, forKey: "garyGroundStudy")
+                    study = next
+                    NotificationCenter.default.post(name: Notification.Name("GaryGroundStudy"), object: nil)
+                } label: {
+                    Text("\(study)/11 · \(depthV4Names[study]) · TAP")
+                        .font(.system(size: 10, weight: .bold))
+                        .tracking(0.8)
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(GaryColors.gold, in: Capsule())
+                }
+                .padding(.trailing, 10)
+            }
+            .padding(.top, 52)
+            Spacer()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("GaryGroundStudy"))) { _ in
+            study = UserDefaults.standard.integer(forKey: "garyGroundStudy")
+        }
+    }
+}
+#endif
 
 private struct DepthV4Clock<Content: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -2774,6 +2793,12 @@ struct HomeView: View {
             }
 
             StatusBarScrim()
+
+            #if DEBUG
+            // Depth-study browser — topmost ZStack member so the tap actually
+            // lands (under the ScrollView it draws but never gets hit-tested).
+            GroundStudyChip()
+            #endif
         }
         .overlay {
             if showDailyRecap {
