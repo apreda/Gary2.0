@@ -2025,9 +2025,6 @@ struct HomeView: View {
     /// the initial load has finished (successfully or with an honest error).
     @State private var hasCompletedInitialHomeLoad = false
     @Environment(\.scenePhase) private var scenePhase
-    // The page's surface language — on .plated (Solid Gold) the old black-bg
-    // hairline rules disappear: gold air is the separator there.
-    @Environment(\.garySurface) private var surface
     @State private var animateIn = false
     @State private var yesterdayRecord: (wins: Int, losses: Int, pushes: Int) = (0, 0, 0)
     /// The record-box label — rolls "TODAY"/"LIVE" once today's slate (6am ET
@@ -2183,12 +2180,8 @@ struct HomeView: View {
 
     var body: some View {
         ZStack {
-            // Background — the Solid Gold molten ground (founder pick from the
-            // Aug 17 depth studies). The luminous field makes the dark cards
-            // read as near objects: the floating-container effect. The page
-            // speaks the .plated surface language: every garyPanel on Home
-            // renders as an opaque dark plate instead of a translucent wash.
-            SolidGoldBackground()
+            // Background
+            LiquidGlassBackground(grainDensity: 0.0009, grainOpacityRange: 0.008...0.018)
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {
@@ -2236,29 +2229,6 @@ struct HomeView: View {
             }
 
             StatusBarScrim()
-
-            // Gold-ground chrome fades. Top: board plates scroll under the
-            // clock, so the status area gets its own warm-black fade. Bottom:
-            // content settles into near-black under the dock instead of
-            // ghosting through the tab labels.
-            VStack {
-                LinearGradient(stops: [
-                    .init(color: Color(hex: "#0A0806").opacity(0.92), location: 0),
-                    .init(color: Color(hex: "#0A0806").opacity(0.55), location: 0.6),
-                    .init(color: Color(hex: "#0A0806").opacity(0), location: 1),
-                ], startPoint: .top, endPoint: .bottom)
-                    .frame(height: 66)
-                Spacer()
-                LinearGradient(stops: [
-                    .init(color: Color(hex: "#0A0806").opacity(0), location: 0),
-                    .init(color: Color(hex: "#0A0806").opacity(0.78), location: 0.42),
-                    .init(color: Color(hex: "#0A0806").opacity(1.0), location: 0.85),
-                    .init(color: Color(hex: "#0A0806").opacity(1.0), location: 1),
-                ], startPoint: .top, endPoint: .bottom)
-                    .frame(height: 205)
-            }
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
         }
         .overlay {
             if showDailyRecap {
@@ -3110,11 +3080,8 @@ struct HomeView: View {
             || recapLabel == "LIVE" || recapLabel == "TODAY" {
             VStack(alignment: .leading, spacing: 12) {
                 // Bare rule — the scorecard's own YESTERDAY/LIVE cell already
-                // names the window; "THE RECORD" said it twice. On the gold
-                // ground the plate is the separator and the rule retires.
-                if surface == .washed {
-                    HomeSectionRule()
-                }
+                // names the window; "THE RECORD" said it twice.
+                HomeSectionRule()
                 scorecard
             }
         }
@@ -3173,7 +3140,6 @@ struct HomeView: View {
             UserDefaults.standard.set("you", forKey: "billfoldScope")
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
         }
-        .goldPlate()
         .opacity(animateIn ? 1 : 0)
         .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
 
@@ -3185,10 +3151,6 @@ struct HomeView: View {
         // THE RECORD always belongs directly under The Board. Its numbers still
         // roll from yesterday to today's live slate; only its position is fixed.
         recordBlock
-            .padding(.vertical, 12)
-            .padding(.horizontal, 8)
-            .goldPlate()
-            .pageGutter()
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.065), value: animateIn)
 
@@ -3952,11 +3914,7 @@ struct HomeView: View {
         if !rows.isEmpty {
             // The countdown/marquee-to-board boundary is neutral chrome. A
             // green rule read like a graded win and changed color mid-slate.
-            // On the gold ground the rule retires — the gold gap IS the
-            // boundary; a floating hairline on raw gold read as a glitch.
-            if surface == .washed {
-                HomeSectionRule(tint: GaryColors.warmWhite)
-            }
+            HomeSectionRule(tint: GaryColors.warmWhite)
             homeSheetPanel(rows.filter { $0.league == selected.rawValue },
                            selected: selected,
                            available: available)
@@ -3976,16 +3934,22 @@ struct HomeView: View {
                             .font(.system(size: 12.5, weight: .bold).monospacedDigit())
                             .tracking(1.4)
                             .foregroundStyle(league == selected
-                                ? GaryColors.gold
+                                ? league.sport.accentColor
                                 : Color.white.opacity(enabled ? 0.56 : 0.24))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
+                            .overlay(alignment: .bottom) {
+                                if league == selected {
+                                    Rectangle().fill(league.sport.accentColor).frame(height: 2)
+                                }
+                            }
                     }
                     .buttonStyle(.plain)
                     .disabled(!enabled)
                     .accessibilityAddTraits(league == selected ? .isSelected : [])
                 }
             }
+            Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
             ForEach(Array(rows.enumerated()), id: \.element.id) { i, r in
                 Button {
                     PicksFocusState.shared.focus(game: r.matchupFull,
@@ -4004,13 +3968,11 @@ struct HomeView: View {
         .padding(.vertical, 3)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(surface == .plated
-                      ? AnyShapeStyle(Color(hex: "#14100A").opacity(0.88))
-                      : AnyShapeStyle(GaryColors.panelFill))
+                .fill(GaryColors.panelFill)
                 // The component stays identical between tabs; only the selected
                 // sport's identity colors the single board outline.
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(GaryColors.gold.opacity(0.16), lineWidth: 1))
+                    .stroke(selected.sport.accentColor.opacity(0.85), lineWidth: 1))
         )
         .pageGutter()
     }
@@ -5347,10 +5309,6 @@ struct HomeSectionRule: View {
 /// open the game; the footer unfolds the full ranked list, which stamps
 /// CASHED/LOST as the day settles and teases tomorrow's marquee once done.
 struct HomeMarqueeTracker: View {
-    // On the Solid Gold ground the card's translucent wash becomes an opaque
-    // dark plate — the marquee owns its full card design (corners, ticker,
-    // stroke, gutter), so ONLY the fill adapts. Never wrap it in a plate.
-    @Environment(\.garySurface) private var surface
     struct Entry: Identifiable {
         let id: String
         let rank: Int
@@ -5465,9 +5423,7 @@ struct HomeMarqueeTracker: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(surface == .plated
-                      ? AnyShapeStyle(Color(hex: "#14100A").opacity(0.88))
-                      : AnyShapeStyle(GaryColors.panelFill))
+                .fill(GaryColors.panelFill)
         )
         // The ribbon band is a square-cornered surface — clip it to the card
         // shape so it never pokes past the rounded border (Aug 3 polish).
@@ -6218,7 +6174,7 @@ struct HomeSheetRowView: View {
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.62))
         }
-        .padding(.horizontal, 14).padding(.vertical, 14)
+        .padding(.horizontal, 14).padding(.vertical, 10)
         .contentShape(Rectangle())
     }
 }
@@ -11995,8 +11951,6 @@ struct TomorrowView {
     /// The Tomorrow body — the scrolling content under the switcher. Lives inside
     /// Home's ScrollView, so it returns a VStack (no ScrollView/background here).
     struct Body: View {
-        // Gold labels flip to ink on the Solid Gold ground (gold-on-gold law).
-        @Environment(\.garySurface) private var surface
         let board: TomorrowBoard?
         // (Jul 5 redesign: the Hub/Today flag machinery — leagueFilter,
         // include*, dayLabel, liveStatus, the 1Hz ticker — left with its last
@@ -12104,15 +12058,16 @@ struct TomorrowView {
             if !games.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
                     HubSectionHeader(eyebrow: "The Marquee", sub: "")
-                    // Each marquee game floats on its own plate — gold air
-                    // between the games is what sells the depth (founder,
-                    // Aug 17: "space between the games to get the effect").
-                    VStack(spacing: 12) {
+                    VStack(spacing: 0) {
                         ForEach(Array(games.enumerated()), id: \.element.rank) { idx, g in
                             bigGameRow(g, displayRank: idx + 1)
-                                .quantPanel()
+                            if idx < games.count - 1 {
+                                Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1)
+                            }
                         }
                     }
+                    .padding(.vertical, 4)
+                    .quantPanel()
                     .pageGutter()
                 }
             }
@@ -12345,7 +12300,7 @@ struct TomorrowView {
                 HStack(spacing: 10) {
                     Text("Tomorrow's Board")
                         .font(GaryFonts.display(17))
-                        .foregroundStyle(surface == .plated ? AnyShapeStyle(GaryColors.ink.opacity(0.88)) : AnyShapeStyle(GaryColors.sectionHead))   // match "The Day Ahead" header
+                        .foregroundStyle(GaryColors.sectionHead)   // match "The Day Ahead" header
                     Spacer(minLength: 6)
                     legendDot(Color(hex: "#4FB14F"), "MLB")
                     legendDot(Color(hex: "#3FB6A8"), "WC")
@@ -25165,17 +25120,13 @@ final class HubFocusState: ObservableObject {
 struct HubSectionHeader: View {
     let eyebrow: String
     let sub: String
-    // Gold eyebrows die on the Solid Gold luminous ground (gold-on-gold law,
-    // Aug 17) — on a .plated page the header speaks dark ink instead.
-    @Environment(\.garySurface) private var surface
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(eyebrow)
                 .font(GaryFonts.display(17))
-                .foregroundStyle(surface == .plated ? AnyShapeStyle(GaryColors.ink.opacity(0.88)) : AnyShapeStyle(GaryColors.sectionHead))
+                .foregroundStyle(GaryColors.sectionHead)
             if !sub.isEmpty {
-                Text(sub).font(.system(size: 12))
-                    .foregroundStyle(surface == .plated ? AnyShapeStyle(GaryColors.ink.opacity(0.60)) : AnyShapeStyle(GaryColors.sectionSub))
+                Text(sub).font(.system(size: 12)).foregroundStyle(GaryColors.sectionSub)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
