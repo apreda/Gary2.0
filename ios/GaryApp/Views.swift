@@ -1799,26 +1799,428 @@ struct ObsidianGround: View {
 }
 
 
-// MARK: - Depth-V3 Ground Studies (design/home-depth-v2 — NEVER merges)
-// Round two, ported from the founder's reference implementation (the
-// agent-run-apps infinite-hero lab): REAL 3D-rotated grid planes under
-// perspective, flowing forever toward the viewer, at reference boldness —
-// not hand-drawn fake perspective at whisper opacity. `ground N` flips live.
+// MARK: - Depth-V4 Ground Studies (design/home-depth-v2 — NEVER merges)
+// Founder round three: ten NON-GRID mechanisms for the same effect — space
+// continuing behind the page via real perspective, scale, light and layered
+// parallax. Self-serve: the gold chip on Home cycles them by tap (DEBUG only).
+// ground 0 = shipped waves · 1-10 = the new set · 11 = THE FLOOR (grid, kept
+// as the proven reference point).
+private let depthV4Names = ["WAVES (SHIPPED)", "CARD CORRIDOR", "STADIUM TUNNEL", "SKYLINE LAYERS", "FLOATING SHEETS", "DUST FLIGHT", "ORBIT DEPTH", "LIGHT SHAFTS", "INFINITE DOORS", "DATA RIVER", "THE VAULT", "THE FLOOR (GRID)"]
+
 struct HomeGroundSwitcher: View {
     @State private var study: Int = UserDefaults.standard.integer(forKey: "garyGroundStudy")
     var body: some View {
-        Group {
-            switch study {
-            case 1: DepthV3Floor()
-            case 2: DepthV3Horizon()
-            case 3: DepthV3Hall()
-            case 4: DepthV3Wall()
-            default: ObsidianGround()
+        ZStack(alignment: .topTrailing) {
+            Group {
+                switch study {
+                case 1: DepthV4CardCorridor()
+                case 2: DepthV4StadiumTunnel()
+                case 3: DepthV4SkylineLayers()
+                case 4: DepthV4FloatingSheets()
+                case 5: DepthV4DustFlight()
+                case 6: DepthV4OrbitDepth()
+                case 7: DepthV4LightShafts()
+                case 8: DepthV4InfiniteDoors()
+                case 9: DepthV4DataRiver()
+                case 10: DepthV4Vault()
+                case 11: DepthV3Floor()
+                default: ObsidianGround()
+                }
             }
+            #if DEBUG
+            Button {
+                let next = (study + 1) % 12
+                UserDefaults.standard.set(next, forKey: "garyGroundStudy")
+                study = next
+            } label: {
+                Text("\(study)/11 · \(depthV4Names[study]) · TAP")
+                    .font(.system(size: 10, weight: .bold))
+                    .tracking(0.8)
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(GaryColors.gold, in: Capsule())
+            }
+            .padding(.top, 52)
+            .padding(.trailing, 10)
+            #endif
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("GaryGroundStudy"))) { _ in
             study = UserDefaults.standard.integer(forKey: "garyGroundStudy")
         }
+    }
+}
+
+private struct DepthV4Clock<Content: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let content: (Double) -> Content
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { tl in
+            content(reduceMotion ? 3.0 : tl.date.timeIntervalSinceReferenceDate)
+        }
+        .allowsHitTesting(false)
+        .ignoresSafeArea()
+    }
+}
+
+// 1 — CARD CORRIDOR: the app's own cards floating at depth stations, easing
+// forward almost imperceptibly. Interface objects in space, no lines.
+struct DepthV4CardCorridor: View {
+    var body: some View {
+        DepthV4Clock { time in
+            GeometryReader { geo in
+                let W = geo.size.width, H = geo.size.height
+                Canvas { ctx, size in
+                    let gold = Color(hex: "#D9A62B")
+                    let t = CGFloat((time / 36.0).truncatingRemainder(dividingBy: 1.0))
+                    for k in 0..<9 {
+                        let u = (CGFloat(k) / 9.0 + t).truncatingRemainder(dividingBy: 1.0)
+                        let sc = 0.08 + pow(u, 1.8) * 1.15
+                        let side: CGFloat = k % 2 == 0 ? -1 : 1
+                        let cx = W * 0.5 + side * W * (0.16 + 0.34 * u)
+                        let cy = H * (0.34 + 0.42 * u) - H * 0.1
+                        let w = W * 0.34 * sc, h = w * 0.62
+                        let nearFade: Double = u > 0.88 ? Double((1.0 - u) * 8.5) : 1.0
+                        let a: Double = 0.16 * pow(Double(u), 1.2) * nearFade + 0.012
+                        let r = CGRect(x: cx - w/2, y: cy - h/2, width: w, height: h)
+                        let rr = Path(roundedRect: r, cornerRadius: 10 * sc, style: .continuous)
+                        ctx.fill(rr, with: .color(Color.black.opacity(a * 0.9)))
+                        ctx.stroke(rr, with: .color(gold.opacity(a)), lineWidth: 1.0)
+                        var bar = Path()
+                        bar.move(to: CGPoint(x: r.minX + w*0.10, y: r.minY + h*0.30))
+                        bar.addLine(to: CGPoint(x: r.minX + w*0.62, y: r.minY + h*0.30))
+                        ctx.stroke(bar, with: .color(gold.opacity(a * 0.8)), lineWidth: max(2.5 * sc, 0.8))
+                        var bar2 = Path()
+                        bar2.move(to: CGPoint(x: r.minX + w*0.10, y: r.minY + h*0.52))
+                        bar2.addLine(to: CGPoint(x: r.minX + w*0.44, y: r.minY + h*0.52))
+                        ctx.stroke(bar2, with: .color(Color(hex: "#F2E4BC").opacity(a * 0.55)), lineWidth: max(2.0 * sc, 0.6))
+                    }
+                }
+                RadialGradient(colors: [Color(hex: "#D9A62B").opacity(0.06), .clear],
+                               center: .init(x: 0.5, y: 0.30), startRadius: 4, endRadius: W * 0.5)
+            }
+        }
+    }
+}
+
+// 2 — STADIUM TUNNEL: paired light banks receding to a lit mouth. Points
+// and glow only — the walk out to the field.
+struct DepthV4StadiumTunnel: View {
+    var body: some View {
+        DepthV4Clock { time in
+            GeometryReader { geo in
+                let W = geo.size.width, H = geo.size.height
+                Canvas { ctx, size in
+                    let gold = Color(hex: "#D9A62B")
+                    let cream = Color(hex: "#F2E4BC")
+                    let vpx = W * 0.5, vpy = H * 0.44
+                    let t = CGFloat((time / 22.0).truncatingRemainder(dividingBy: 1.0))
+                    for k in 0..<12 {
+                        let u = (CGFloat(k) / 12.0 + t).truncatingRemainder(dividingBy: 1.0)
+                        let d = pow(u, 2.0)
+                        let spread = W * (0.06 + 0.62 * d)
+                        let y = vpy + (H * 0.72 - vpy) * d * 0.4
+                        let r: CGFloat = 1.0 + 3.2 * d
+                        let nearFade: Double = u > 0.9 ? Double((1.0 - u) * 10) : 1.0
+                        let a: Double = (0.05 + 0.30 * Double(d)) * nearFade
+                        for side in [CGFloat(-1), CGFloat(1)] {
+                            let x = vpx + side * spread
+                            ctx.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r*2, height: r*2)),
+                                     with: .color(cream.opacity(a)))
+                            ctx.fill(Path(ellipseIn: CGRect(x: x - r*3, y: y - r*3, width: r*6, height: r*6)),
+                                     with: .color(gold.opacity(a * 0.30)))
+                        }
+                    }
+                }
+                RadialGradient(colors: [Color.white.opacity(0.10), Color(hex: "#D9A62B").opacity(0.10), .clear],
+                               center: .init(x: 0.5, y: 0.44), startRadius: 2, endRadius: W * 0.34)
+            }
+        }
+    }
+}
+
+// 3 — SKYLINE LAYERS: four silhouette bands sliding at different rates —
+// classic multiplane depth, nothing geometric.
+struct DepthV4SkylineLayers: View {
+    var body: some View {
+        DepthV4Clock { time in
+            GeometryReader { geo in
+                let W = geo.size.width, H = geo.size.height
+                Canvas { ctx, size in
+                    let layers: [(Double, Double, CGFloat, Double)] = [
+                        (4.0, 0.030, 0.52, 8),
+                        (7.0, 0.050, 0.62, 5),
+                        (11.0, 0.075, 0.72, 3),
+                        (16.0, 0.105, 0.84, 2),
+                    ]
+                    for (li, layer) in layers.enumerated() {
+                        let (speed, alpha, baseY, seed) = layer
+                        let drift = CGFloat((time * speed).truncatingRemainder(dividingBy: Double(W * 2)))
+                        var path = Path()
+                        path.move(to: CGPoint(x: -W, y: H))
+                        var rnd = DepthLCGv4(seed: UInt64(seed))
+                        var x: CGFloat = -W
+                        while x < W * 2 {
+                            let bw = CGFloat(30 + rnd.next() * 90)
+                            let bh = H * CGFloat(0.05 + rnd.next() * 0.16) * (1.0 + CGFloat(li) * 0.25)
+                            path.addLine(to: CGPoint(x: x, y: H * baseY))
+                            path.addLine(to: CGPoint(x: x, y: H * baseY - bh))
+                            path.addLine(to: CGPoint(x: x + bw, y: H * baseY - bh))
+                            path.addLine(to: CGPoint(x: x + bw, y: H * baseY))
+                            x += bw
+                        }
+                        path.addLine(to: CGPoint(x: W * 2, y: H))
+                        path.closeSubpath()
+                        var moved = path
+                        moved = moved.applying(CGAffineTransform(translationX: -drift, y: 0))
+                        ctx.fill(moved, with: .color(Color(hex: "#D9A62B").opacity(alpha * 0.5)))
+                        ctx.stroke(moved, with: .color(Color(hex: "#D9A62B").opacity(alpha)), lineWidth: 0.7)
+                    }
+                }
+                LinearGradient(colors: [.clear, Color(hex: "#0C0B0A").opacity(0.85)],
+                               startPoint: .init(x: 0.5, y: 0.55), endPoint: .bottom)
+            }
+        }
+    }
+}
+
+// 4 — FLOATING SHEETS: translucent page-panels hanging at different depths,
+// slightly turned, drifting at their own rates. Rooms without frames.
+struct DepthV4FloatingSheets: View {
+    var body: some View {
+        DepthV4Clock { time in
+            GeometryReader { geo in
+                let W = geo.size.width, H = geo.size.height
+                ZStack {
+                    ForEach(0..<5, id: \.self) { k in
+                        let fi = Double(k)
+                        let depth = 1.0 - fi * 0.17
+                        let drift = CGFloat(sin(time * (0.05 + fi * 0.013) + fi * 2.1)) * W * 0.06 * CGFloat(depth)
+                        Rectangle()
+                            .fill(Color(hex: "#D9A62B").opacity(0.016 + 0.012 * depth))
+                            .overlay(Rectangle().stroke(Color(hex: "#D9A62B").opacity(0.05 + 0.06 * depth), lineWidth: 0.8))
+                            .frame(width: W * (0.34 + 0.13 * CGFloat(depth)), height: H * (0.30 + 0.18 * CGFloat(depth)))
+                            .rotation3DEffect(.degrees(k % 2 == 0 ? 34 : -34), axis: (x: 0, y: 1, z: 0), perspective: 0.8)
+                            .position(x: W * (k % 2 == 0 ? 0.24 : 0.76) + drift,
+                                      y: H * (0.22 + 0.16 * CGFloat(k)))
+                            .opacity(0.9)
+                    }
+                    RadialGradient(colors: [Color(hex: "#F2E4BC").opacity(0.05), .clear],
+                                   center: .init(x: 0.5, y: 0.45), startRadius: 6, endRadius: W * 0.5)
+                }
+            }
+        }
+    }
+}
+
+// 5 — DUST FLIGHT: three particle strata and a slow zoom — flying through
+// the dark, no geometry at all.
+struct DepthV4DustFlight: View {
+    var body: some View {
+        DepthV4Clock { time in
+            GeometryReader { geo in
+                let W = geo.size.width, H = geo.size.height
+                Canvas { ctx, size in
+                    let gold = Color(hex: "#D9A62B")
+                    let cream = Color(hex: "#F2E4BC")
+                    var rnd = DepthLCGv4(seed: 909)
+                    for i in 0..<70 {
+                        let sx = CGFloat(rnd.next()), sy = CGFloat(rnd.next())
+                        let layer = i % 3
+                        let speed = 0.012 + Double(layer) * 0.012
+                        let u = CGFloat((time * speed + Double(i) * 0.037).truncatingRemainder(dividingBy: 1.0))
+                        let sc = 0.15 + pow(u, 1.7) * 1.3
+                        let x = W * 0.5 + (sx - 0.5) * W * 1.25 * sc
+                        let y = H * 0.42 + (sy - 0.42) * H * 1.25 * sc
+                        guard x > -8, x < W + 8, y > -8, y < H + 8 else { continue }
+                        let r: CGFloat = (0.5 + 1.4 * u) * (layer == 2 ? 1.35 : 1.0)
+                        let nearFade: Double = u > 0.86 ? Double((1.0 - u) * 7) : 1.0
+                        let a: Double = (0.04 + 0.24 * Double(u)) * nearFade
+                        ctx.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r*2, height: r*2)),
+                                 with: .color((layer == 2 ? cream : gold).opacity(a)))
+                    }
+                }
+                RadialGradient(colors: [Color(hex: "#D9A62B").opacity(0.045), .clear],
+                               center: .init(x: 0.5, y: 0.42), startRadius: 0, endRadius: W * 0.42)
+            }
+        }
+    }
+}
+
+// 6 — ORBIT DEPTH: three tilted rings turning against each other around a
+// breathing core — the reference's orbital workspace, bolder.
+struct DepthV4OrbitDepth: View {
+    var body: some View {
+        DepthV4Clock { time in
+            GeometryReader { geo in
+                let W = geo.size.width, H = geo.size.height
+                ZStack {
+                    ForEach(0..<3, id: \.self) { k in
+                        let fi = Double(k)
+                        let dia = W * (0.72 + 0.42 * CGFloat(k))
+                        Circle()
+                            .stroke(Color(hex: "#D9A62B").opacity(0.13 - fi * 0.032), lineWidth: 1.0)
+                            .frame(width: dia, height: dia)
+                            .rotation3DEffect(.degrees(72), axis: (x: 1, y: 0, z: 0), perspective: 0.7)
+                            .rotationEffect(.degrees((k % 2 == 0 ? 1 : -1) * time * (2.4 - fi * 0.6)))
+                            .position(x: W * 0.5, y: H * 0.50)
+                    }
+                    ForEach(0..<3, id: \.self) { k in
+                        let fi = Double(k)
+                        let ang = time * (k % 2 == 0 ? 0.10 : -0.075) + fi * 2.1
+                        let rx = W * (0.36 + 0.21 * CGFloat(k))
+                        let x = W * 0.5 + rx * CGFloat(cos(ang))
+                        let y = H * 0.50 + rx * 0.30 * CGFloat(sin(ang))
+                        Circle()
+                            .fill(Color(hex: "#F2E4BC").opacity(0.5 - fi * 0.12))
+                            .frame(width: 4.5 - CGFloat(k), height: 4.5 - CGFloat(k))
+                            .shadow(color: Color(hex: "#D9A62B").opacity(0.8), radius: 6)
+                            .position(x: x, y: y)
+                    }
+                    RadialGradient(colors: [Color(hex: "#F2E4BC").opacity(0.09 + 0.03 * sin(time * 0.2)),
+                                            Color(hex: "#D9A62B").opacity(0.04), .clear],
+                                   center: .init(x: 0.5, y: 0.50), startRadius: 0, endRadius: W * 0.26)
+                }
+            }
+        }
+    }
+}
+
+// 7 — LIGHT SHAFTS: two volumetric beams crossing at depth, motes drifting
+// inside them. Depth from light alone.
+struct DepthV4LightShafts: View {
+    var body: some View {
+        DepthV4Clock { time in
+            GeometryReader { geo in
+                let W = geo.size.width, H = geo.size.height
+                ZStack {
+                    Rectangle()
+                        .fill(LinearGradient(colors: [Color(hex: "#D9A62B").opacity(0.10), .clear],
+                                             startPoint: .top, endPoint: .bottom))
+                        .frame(width: W * 0.34, height: H * 1.3)
+                        .rotationEffect(.degrees(24))
+                        .position(x: W * 0.26, y: H * 0.42)
+                        .blur(radius: 18)
+                    Rectangle()
+                        .fill(LinearGradient(colors: [Color(hex: "#8A6A1C").opacity(0.09), .clear],
+                                             startPoint: .top, endPoint: .bottom))
+                        .frame(width: W * 0.26, height: H * 1.3)
+                        .rotationEffect(.degrees(-19))
+                        .position(x: W * 0.74, y: H * 0.5)
+                        .blur(radius: 22)
+                    Canvas { ctx, size in
+                        var rnd = DepthLCGv4(seed: 512)
+                        for i in 0..<26 {
+                            let inLeft = i % 2 == 0
+                            let baseX = inLeft ? W * 0.26 : W * 0.74
+                            let u = CGFloat((time * 0.02 + Double(i) * 0.077).truncatingRemainder(dividingBy: 1.0))
+                            let x = baseX + CGFloat(rnd.next() - 0.5) * W * 0.22 + CGFloat(sin(time * 0.3 + Double(i))) * 8
+                            let y = H * u
+                            let a = 0.16 * Double(sin(Double(u) * .pi))
+                            let r: CGFloat = 0.8 + CGFloat(rnd.next()) * 1.4
+                            ctx.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r*2, height: r*2)),
+                                     with: .color(Color(hex: "#F2E4BC").opacity(a)))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// 8 — INFINITE DOORS: door-shaped openings receding inward, alternately
+// turned — walking deeper into the house.
+struct DepthV4InfiniteDoors: View {
+    var body: some View {
+        DepthV4Clock { time in
+            GeometryReader { geo in
+                let W = geo.size.width, H = geo.size.height
+                ZStack {
+                    ForEach(0..<8, id: \.self) { k in
+                        let fi = Double(k)
+                        let t = (time / 24.0).truncatingRemainder(dividingBy: 1.0)
+                        let sc = pow(0.80, fi - t + 1.0)
+                        if sc > 0.06 && sc < 1.2 {
+                            let breathe = 1.0 + 0.008 * sin(time * 0.3 + fi)
+                            RoundedRectangle(cornerRadius: 14 * sc, style: .continuous)
+                                .stroke(Color(hex: "#D9A62B").opacity(min(0.16 * pow(sc, 1.2), 0.16)), lineWidth: 1.1)
+                                .frame(width: W * 0.5 * sc * breathe, height: H * 0.62 * sc * breathe)
+                                .rotation3DEffect(.degrees(k % 2 == 0 ? 10 : -10), axis: (x: 0, y: 1, z: 0), perspective: 0.7)
+                                .position(x: W * 0.5, y: H * 0.44)
+                        }
+                    }
+                    RadialGradient(colors: [Color(hex: "#F2E4BC").opacity(0.07), .clear],
+                                   center: .init(x: 0.5, y: 0.44), startRadius: 0, endRadius: W * 0.22)
+                }
+            }
+        }
+    }
+}
+
+// 9 — DATA RIVER: three depth lanes of stat fragments flowing by — far ones
+// small and quick, near ones large and slow. The night's numbers passing.
+struct DepthV4DataRiver: View {
+    var body: some View {
+        DepthV4Clock { time in
+            GeometryReader { geo in
+                let W = geo.size.width, H = geo.size.height
+                Canvas { ctx, size in
+                    let frags = ["-110", "+122", "O 8.5", "3.07", ".288", "-1.5", "+145", "U 9", "2.65", ".772", "-179", "+105"]
+                    let lanes: [(CGFloat, Double, CGFloat, Double)] = [
+                        (0.22, 26.0, 9, 0.10),
+                        (0.47, 17.0, 13, 0.16),
+                        (0.74, 11.0, 18, 0.22),
+                    ]
+                    for (li, lane) in lanes.enumerated() {
+                        let (laneY, speed, fs, alpha) = lane
+                        for i in 0..<6 {
+                            let u = CGFloat(((time / speed) + Double(i) / 6.0 + Double(li) * 0.21).truncatingRemainder(dividingBy: 1.0))
+                            let x = W * (1.15 - u * 1.3)
+                            let y = H * laneY + CGFloat(sin(time * 0.2 + Double(i) + Double(li))) * 6
+                            let text = Text(frags[(i + li * 4) % frags.count])
+                                .font(.system(size: fs, weight: .semibold, design: .monospaced))
+                                .foregroundColor(Color(hex: "#D9A62B").opacity(alpha))
+                            ctx.draw(text, at: CGPoint(x: x, y: y))
+                        }
+                    }
+                }
+                LinearGradient(colors: [Color(hex: "#0C0B0A").opacity(0.5), .clear, Color(hex: "#0C0B0A").opacity(0.5)],
+                               startPoint: .leading, endPoint: .trailing)
+            }
+        }
+    }
+}
+
+// 10 — THE VAULT: one colossal tilted ring turning imperceptibly behind
+// everything — monumental scale as the depth cue.
+struct DepthV4Vault: View {
+    var body: some View {
+        DepthV4Clock { time in
+            GeometryReader { geo in
+                let W = geo.size.width, H = geo.size.height
+                ZStack {
+                    ForEach(0..<2, id: \.self) { k in
+                        Circle()
+                            .stroke(Color(hex: "#D9A62B").opacity(k == 0 ? 0.14 : 0.06),
+                                    style: StrokeStyle(lineWidth: k == 0 ? 1.4 : 22))
+                            .frame(width: W * 2.1, height: W * 2.1)
+                            .rotation3DEffect(.degrees(76), axis: (x: 1, y: 0, z: 0), perspective: 0.6)
+                            .rotationEffect(.degrees(time * 0.7))
+                            .position(x: W * 0.5, y: H * 0.58)
+                    }
+                    RadialGradient(colors: [Color(hex: "#F2E4BC").opacity(0.06), Color(hex: "#D9A62B").opacity(0.025), .clear],
+                                   center: .init(x: 0.5, y: 0.58), startRadius: 10, endRadius: W * 0.6)
+                }
+            }
+        }
+    }
+}
+
+private struct DepthLCGv4 {
+    private var state: UInt64
+    init(seed: UInt64) { state = seed &* 2654435761 &+ 1 }
+    mutating func next() -> Double {
+        state = state &* 6364136223846793005 &+ 1442695040888963407
+        return Double(state >> 33) / Double(UInt64(1) << 31)
     }
 }
 
@@ -1834,10 +2236,6 @@ private struct DepthV3Clock<Content: View>: View {
     }
 }
 
-/// The flat grid pattern that gets 3D-rotated into a plane. Horizontal lines
-/// scroll by `phase` (the reference's background-position drift → the plane
-/// flows toward the viewer forever); vertical lines converge via the actual
-/// perspective transform.
 private struct DepthV3GridPattern: View {
     let phase: CGFloat
     let spacingY: CGFloat
@@ -1865,8 +2263,6 @@ private struct DepthV3GridPattern: View {
     }
 }
 
-// 1 — THE FLOOR: a full-width grid plane tilted away under the content,
-// flowing toward the viewer forever. The classic infinite floor.
 struct DepthV3Floor: View {
     var body: some View {
         DepthV3Clock { time in
@@ -1895,108 +2291,6 @@ struct DepthV3Floor: View {
     }
 }
 
-// 2 — THE HORIZON: the reference hero's composition — a grid plane angled in
-// from the side, a low sun burning on the horizon, one bright ray.
-struct DepthV3Horizon: View {
-    var body: some View {
-        DepthV3Clock { time in
-            GeometryReader { geo in
-                let W = geo.size.width, H = geo.size.height
-                ZStack {
-                    DepthV3GridPattern(phase: CGFloat(time * 26.0), spacingY: 58, spacingX: 68, alpha: 0.26)
-                        .frame(width: W * 2.6, height: H * 0.8)
-                        .rotation3DEffect(.degrees(64), axis: (x: 1, y: 0, z: 0), anchor: .top, perspective: 0.85)
-                        .rotation3DEffect(.degrees(-9), axis: (x: 0, y: 0, z: 1), anchor: .center, perspective: 0)
-                        .position(x: W * 0.60, y: H * 0.80)
-                        .mask(
-                            LinearGradient(stops: [
-                                .init(color: .clear, location: 0.06),
-                                .init(color: .black, location: 0.34),
-                                .init(color: .black, location: 0.84),
-                                .init(color: .clear, location: 1),
-                            ], startPoint: .top, endPoint: .bottom)
-                        )
-                    // the sun
-                    RadialGradient(colors: [Color.white.opacity(0.22),
-                                            Color(hex: "#D9A62B").opacity(0.30),
-                                            Color(hex: "#D9A62B").opacity(0.10), .clear],
-                                   center: .init(x: 0.74, y: 0.30), startRadius: 2, endRadius: W * 0.30)
-                    // the ray
-                    Rectangle()
-                        .fill(LinearGradient(colors: [Color(hex: "#D9A62B").opacity(0.55), .clear],
-                                             startPoint: .top, endPoint: .bottom))
-                        .frame(width: 1.2, height: H * 0.42)
-                        .shadow(color: Color(hex: "#D9A62B").opacity(0.6), radius: 14)
-                        .position(x: W * 0.74, y: H * 0.52)
-                }
-            }
-        }
-    }
-}
-
-// 3 — THE HALL: floor AND ceiling planes flowing at slightly different
-// rates — the page continues above and below, parallax between the two.
-struct DepthV3Hall: View {
-    var body: some View {
-        DepthV3Clock { time in
-            GeometryReader { geo in
-                let W = geo.size.width, H = geo.size.height
-                ZStack {
-                    DepthV3GridPattern(phase: CGFloat(time * 30.0), spacingY: 62, spacingX: 74, alpha: 0.26)
-                        .frame(width: W * 2.4, height: H * 0.8)
-                        .rotation3DEffect(.degrees(62), axis: (x: 1, y: 0, z: 0), anchor: .top, perspective: 0.9)
-                        .position(x: W * 0.5, y: H * 0.88)
-                        .mask(LinearGradient(stops: [
-                            .init(color: .clear, location: 0),
-                            .init(color: .black, location: 0.34),
-                            .init(color: .black, location: 0.88),
-                            .init(color: .clear, location: 1),
-                        ], startPoint: .top, endPoint: .bottom))
-                    DepthV3GridPattern(phase: CGFloat(time * 19.0), spacingY: 62, spacingX: 74, alpha: 0.16)
-                        .frame(width: W * 2.4, height: H * 0.55)
-                        .rotation3DEffect(.degrees(-62), axis: (x: 1, y: 0, z: 0), anchor: .bottom, perspective: 0.9)
-                        .position(x: W * 0.5, y: H * 0.075)
-                        .mask(LinearGradient(stops: [
-                            .init(color: .clear, location: 0),
-                            .init(color: .black, location: 0.10),
-                            .init(color: .black, location: 0.62),
-                            .init(color: .clear, location: 1),
-                        ], startPoint: .top, endPoint: .bottom))
-                    RadialGradient(colors: [Color(hex: "#F2E4BC").opacity(0.10),
-                                            Color(hex: "#D9A62B").opacity(0.04), .clear],
-                                   center: .init(x: 0.5, y: 0.47), startRadius: 4, endRadius: W * 0.5)
-                }
-            }
-        }
-    }
-}
-
-// 4 — THE WALL: a side plane running into the distance on the right — depth
-// leans away from the reading column; the corridor keeps going.
-struct DepthV3Wall: View {
-    var body: some View {
-        DepthV3Clock { time in
-            GeometryReader { geo in
-                let W = geo.size.width, H = geo.size.height
-                ZStack {
-                    DepthV3GridPattern(phase: CGFloat(time * 26.0), spacingY: 66, spacingX: 62, alpha: 0.26)
-                        .frame(width: W * 1.7, height: H * 1.3)
-                        .rotation3DEffect(.degrees(-58), axis: (x: 0, y: 1, z: 0), anchor: .trailing, perspective: 0.9)
-                        .position(x: W * 0.62, y: H * 0.5)
-                        .mask(LinearGradient(stops: [
-                            .init(color: .clear, location: 0.02),
-                            .init(color: .black, location: 0.30),
-                            .init(color: .black, location: 0.92),
-                            .init(color: .clear, location: 1),
-                        ], startPoint: .leading, endPoint: .trailing))
-                    RadialGradient(colors: [Color(hex: "#F2E4BC").opacity(0.12),
-                                            Color(hex: "#D9A62B").opacity(0.045), .clear],
-                                   center: .init(x: 0.88, y: 0.42), startRadius: 3, endRadius: W * 0.4)
-                }
-            }
-        }
-    }
-}
 
 // MARK: - Home View
 
