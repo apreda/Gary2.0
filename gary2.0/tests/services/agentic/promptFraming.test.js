@@ -56,6 +56,17 @@ describe('MLB game lane runs the restored June engine (Aug 18 restoration)', () 
     expect(pb).toContain('Case for backing ${homeTeam} tonight');
   });
 
+  it('the ask-the-researcher protocol is wired (founder GO, Aug 18)', () => {
+    const loop = src('orchestrator/agentLoop.js');
+    expect(loop).toContain('extractResearcherQuestions(message.content');
+    expect(loop).toContain('RESEARCHER_QUESTION_BUDGET');
+    expect(loop).toContain('ASK RESEARCHER:');
+    const advisor = src('orchestrator/flashAdvisor.js');
+    expect(advisor).toContain('export function extractResearcherQuestions');
+    expect(advisor).toContain('export async function askResearcher');
+    expect(advisor).toContain('Do NOT pick a side');
+  });
+
   it('the factor file exports the founder-kept MLB scaffolding', () => {
     const f = src('orchestrator/spreadEvaluationFactors.js');
     expect(f).toContain('export function getMlbSpreadFactors');

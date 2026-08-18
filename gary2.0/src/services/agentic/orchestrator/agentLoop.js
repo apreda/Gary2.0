@@ -2,7 +2,7 @@ import { CONFIG, GEMINI_PRO_MODEL, GEMINI_PRO_FALLBACK, GEMINI_FLASH_MODEL, GEMI
 import { isExplicitPropsPass } from '../propsSharedUtils.js';
 import { rotateToBackupKey, isUsingBackupKey, resetToPrimaryKey } from '../modelConfig.js';
 import { createGeminiSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
-import { extractTextualSummaryForModelSwitch, buildFlashResearchBriefing } from './flashAdvisor.js';
+import { extractTextualSummaryForModelSwitch, buildFlashResearchBriefing, extractResearcherQuestions, createResearcherFollowUpSession, askResearcher } from './flashAdvisor.js';
 import { createCostTracker } from './costTracker.js';
 import { buildPass1Message, buildPass25Message, buildPass25PropsMessage, buildPass3Unified, buildPass3Props, FINALIZE_PROPS_TOOL, getFinalizePropsToolForSport, PROPS_PICK_SCHEMA } from './passBuilders.js';
 import { parseGaryResponse, parsePropsResponse, normalizePickFormat, determineCurrentPass } from './responseParser.js';
@@ -237,6 +237,12 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // Flash Research Briefing state — comprehensive pre-game briefing (factual findings only)
   // Flash completes BEFORE Gary starts. Findings injected before Pass 1.
   let _researchBriefing = null;          // Briefing text from Flash (factual findings)
+  // ASK-THE-RESEARCHER (founder GO, Aug 18 2026): Gary can hand questions to
+  // the researcher during Pass 1; the harness answers them via a dedicated
+  // follow-up session. Budgeted so a curious brain can't loop forever.
+  let _researcherFollowUpSession = null;
+  let _researcherQuestionsUsed = 0;
+  const RESEARCHER_QUESTION_BUDGET = 6;
   // Tokens Flash already investigated. Seeded into Gary's dedup set so Gary
   // doesn't pay for round-trips that just return data already in the briefing.
   // The briefing IS Gary's data for these tokens.
@@ -310,8 +316,8 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       // investigate-further invitation.
       const brainHasTools = !['claude-cli', 'codex-cli'].includes(currentSession?.provider);
       const investigateAsk = brainHasTools
-        ? `Investigate further with your own fetch_stats calls wherever your read wants more evidence — duplicates of already-fetched stats return nothing new, so only novel requests cost anything.`
-        : `The scout report and this briefing are your complete evidence — no further fetching is available in this session. Work from what is on the desk; weigh the briefing's findings honestly rather than repeating them.`;
+        ? `Investigate further with your own fetch_stats calls wherever your read wants more evidence — duplicates of already-fetched stats return nothing new, so only novel requests cost anything. You can also hand a question to your research assistant: write a line starting with ASK RESEARCHER: followed by the question (one per line, up to 6 per game) and the answer comes back with verified figures.`
+        : `Your research assistant stays on call. To dig deeper into anything — a split the briefing summarized, a number you want verified, a factor it did not cover — write a line starting with ASK RESEARCHER: followed by the question (one per line, up to 6 per game). The answers come back with verified figures before you continue. Weigh the briefing's findings honestly rather than repeating them.`;
       const briefingBlock = `\n\n## RESEARCH BRIEFING (from your research assistant)\n\nYour research assistant investigated every factor with full tool access. These are structured, verified findings. Everything it covers is already fetched.\n\n${_researchBriefing}\n\n---\n\n${spreadLine}\n\n${investigateAsk}`;
       // Append to the user message Gary receives
       userMessage = userMessage + briefingBlock;
@@ -1807,6 +1813,44 @@ INVESTIGATION COMPLETE`;
     if (!_pass25Injected && iteration < effectiveMaxIterations) {
       const { categoryCount: gateCategories, totalCalls: gateCalls } = isInvestigationSufficient(toolCallHistory, iteration);
       const markedComplete = hasInvestigationCompleteMarker(message.content || '');
+
+      // ASK-THE-RESEARCHER (founder GO, Aug 18 2026): questions outrank a
+      // completion marker in the same message — the answers block tells Gary
+      // to re-emit INVESTIGATION COMPLETE when he is actually done.
+      if (isGamePicksMode && _researchBriefing) {
+        const remaining = RESEARCHER_QUESTION_BUDGET - _researcherQuestionsUsed;
+        const questions = remaining > 0 ? extractResearcherQuestions(message.content || '', remaining) : [];
+        if (questions.length > 0) {
+          messages.push({ role: 'assistant', content: message.content });
+          _researcherQuestionsUsed += questions.length;
+          console.log(`[Orchestrator] 🙋 ${questions.length} researcher question(s) from Gary (${_researcherQuestionsUsed}/${RESEARCHER_QUESTION_BUDGET} used): ${questions.map(q => q.slice(0, 80)).join(' | ')}`);
+          let answersText;
+          try {
+            if (!_researcherFollowUpSession) {
+              _researcherFollowUpSession = await createResearcherFollowUpSession({
+                scoutReportContent: options.scoutReport || '',
+                briefing: _researchBriefing,
+                sport, homeTeam, awayTeam,
+                _costTracker: costTracker,
+              });
+            }
+            answersText = await askResearcher(_researcherFollowUpSession, questions, { sport, homeTeam, awayTeam, options });
+          } catch (err) {
+            console.warn(`[Orchestrator] ⚠️ researcher follow-up failed: ${err.message}`);
+            answersText = `The researcher could not be reached (${err.message}). Work from the scout report and briefing.`;
+          }
+          const budgetLine = _researcherQuestionsUsed >= RESEARCHER_QUESTION_BUDGET
+            ? '\n\nYour question budget is exhausted — synthesize from what you have.'
+            : `\n\nYou may ask ${RESEARCHER_QUESTION_BUDGET - _researcherQuestionsUsed} more question(s) the same way.`;
+          const answersMsg = {
+            role: 'user',
+            content: `## RESEARCHER ANSWERS\n\n${answersText}${budgetLine}\n\nContinue Pass 1. When your synthesis is complete (including both cases), output exactly:\nINVESTIGATION COMPLETE`
+          };
+          messages.push(answersMsg);
+          nextMessageToSend = answersMsg;
+          continue;
+        }
+      }
 
       if (markedComplete) {
         if (isGamePicksMode) {

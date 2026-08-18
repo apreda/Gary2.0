@@ -714,3 +714,113 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
     return null;
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ASK-THE-RESEARCHER FOLLOW-UPS (founder GO, Aug 18 2026)
+// ═══════════════════════════════════════════════════════════════════════════
+// Gary's brain rides a tool-less sub bridge, but a human bettor with a
+// research assistant just ASKS for more. During Pass 1, lines of the form
+//   ASK RESEARCHER: <question>
+// are routed here: a dedicated researcher session (scout report + finished
+// briefing in the cached system prompt, full stat tools) answers each
+// question with verified figures, and the answers ride back into Gary's
+// conversation. The assistant answers — it never picks a side.
+
+const FOLLOW_UP_SPORT_LABELS = {
+  baseball_mlb: 'MLB', MLB: 'MLB',
+  americanfootball_nfl: 'NFL', NFL: 'NFL',
+  americanfootball_ncaaf: 'NCAAF', NCAAF: 'NCAAF',
+  basketball_nba: 'NBA', NBA: 'NBA',
+  icehockey_nhl: 'NHL', NHL: 'NHL',
+  basketball_ncaab: 'NCAAB', NCAAB: 'NCAAB',
+};
+
+/** Pure parser: pull ASK RESEARCHER questions out of a brain message. */
+export function extractResearcherQuestions(text, maxQuestions = 6) {
+  const out = [];
+  const rx = /^[\s>*-]*ASK RESEARCHER:\s*(.+?)\s*$/gim;
+  let m;
+  while ((m = rx.exec(String(text || ''))) !== null) {
+    const q = m[1].trim();
+    if (q && !out.includes(q)) out.push(q);
+    if (out.length >= maxQuestions) break;
+  }
+  return out;
+}
+
+/** One follow-up session per game, created lazily on Gary's first question. */
+export async function createResearcherFollowUpSession({ scoutReportContent, briefing, sport, homeTeam, awayTeam, _costTracker = null }) {
+  const systemPrompt = `You are the research assistant for a sports bettor named Gary. He read your briefing and has follow-up questions. Answer them factually.
+
+RULES:
+- Answer with exact figures for BOTH teams where the question allows — never vague words where a number exists.
+- Use your tools when the data is not already in the scout report or briefing; cite the sample window (which games, how many) for any trend.
+- Keep each answer under 130 words. Answer the question asked — no extra factors, no advice.
+- Do NOT pick a side, recommend a bet, or characterize what the answer "means for the pick." Facts only.
+- If the data genuinely is not available, say so plainly.
+
+## SCOUT REPORT (this game's data)
+${scoutReportContent}
+
+## YOUR EARLIER BRIEFING
+${briefing}`;
+  return createGeminiSession({
+    _costTracker,
+    modelName: GAME_RESEARCH_MODEL,
+    systemPrompt,
+    tools: toolDefinitions,
+    thinkingLevel: 'high',
+    enableCache: true,
+  });
+}
+
+/** Answer a batch of Gary's questions, running the researcher's tool loop. */
+export async function askResearcher(session, questions, { sport, homeTeam, awayTeam, options = {} } = {}) {
+  const label = FOLLOW_UP_SPORT_LABELS[sport] || sport;
+  let currentMessage = `Gary's follow-up question${questions.length > 1 ? 's' : ''}:\n\n${questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}\n\nAnswer each in order, numbered the same way.`;
+  let isFunctionResponse = false;
+  for (let iter = 0; iter < 6; iter++) {
+    const response = await sendToSessionWithRetry(session, currentMessage, { isFunctionResponse });
+    if (response.toolCalls && response.toolCalls.length > 0) {
+      const functionResponses = [];
+      for (const toolCall of response.toolCalls) {
+        const functionName = toolCall.function?.name || toolCall.type;
+        let args = {};
+        try { args = JSON.parse(toolCall.function?.arguments || '{}'); } catch { /* malformed args → handled below */ }
+        if (functionName === 'fetch_stats') {
+          const token = args.token || args.stat_type;
+          if (!token) { functionResponses.push({ name: functionName, content: 'Error: fetch_stats called without a "token" argument.' }); continue; }
+          const allowedTokens = getTokensForSport(label);
+          if (Array.isArray(allowedTokens) && allowedTokens.length > 0 && !allowedTokens.includes(token)) {
+            functionResponses.push({ name: functionName, content: `${token}: Not available for ${label}.` });
+            continue;
+          }
+          try {
+            const statResult = await fetchStats(sport, token, homeTeam, awayTeam, options);
+            functionResponses.push({ name: functionName, content: summarizeStatForContext(statResult, token, homeTeam, awayTeam) });
+          } catch (err) {
+            functionResponses.push({ name: functionName, content: `Error fetching ${token}: ${err.message}` });
+          }
+        } else if (functionName === 'fetch_narrative_context') {
+          try {
+            const { openaiWebSearch } = await import('../../pickdesk/webSearch.js');
+            const r = await openaiWebSearch(args.query || '', { freshnessHours: 48 });
+            functionResponses.push({ name: functionName, content: (typeof r === 'string' ? r : r?.data) || 'No results' });
+          } catch (err) {
+            functionResponses.push({ name: functionName, content: `Search error: ${err.message}` });
+          }
+        } else {
+          functionResponses.push({ name: functionName, content: `Tool ${functionName} is not available in follow-up mode.` });
+        }
+      }
+      currentMessage = functionResponses;
+      isFunctionResponse = true;
+      continue;
+    }
+    const answer = String(response.content || '').trim();
+    if (answer) return answer;
+    currentMessage = 'Write out your answers now, numbered to match the questions.';
+    isFunctionResponse = false;
+  }
+  return '(the researcher ran out of rounds — work from the briefing and scout report)';
+}
