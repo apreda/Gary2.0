@@ -304,7 +304,15 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       // new, so the order guaranteed wasted big-brain round-trips every game.
       // The briefing IS the investigation (the December design); Gary fetches
       // only what is genuinely missing.
-      const briefingBlock = `\n\n## RESEARCH BRIEFING (from your research assistant)\n\nYour research assistant investigated every factor with full tool access. These are structured, verified findings. Everything it covers is already fetched.\n\n${_researchBriefing}\n\n---\n\n${spreadLine}\n\nInvestigate further with your own fetch_stats calls wherever your read wants more evidence — duplicates of already-fetched stats return nothing new, so only novel requests cost anything.`;
+      // A brain on a CLI sub bridge (claude-cli / codex-cli) cannot call tools
+      // — never invite it to fetch (Aug 18 2026, June-engine cost config: the
+      // researcher carries all tool work; Gary reads). API brains keep the
+      // investigate-further invitation.
+      const brainHasTools = !['claude-cli', 'codex-cli'].includes(currentSession?.provider);
+      const investigateAsk = brainHasTools
+        ? `Investigate further with your own fetch_stats calls wherever your read wants more evidence — duplicates of already-fetched stats return nothing new, so only novel requests cost anything.`
+        : `The scout report and this briefing are your complete evidence — no further fetching is available in this session. Work from what is on the desk; weigh the briefing's findings honestly rather than repeating them.`;
+      const briefingBlock = `\n\n## RESEARCH BRIEFING (from your research assistant)\n\nYour research assistant investigated every factor with full tool access. These are structured, verified findings. Everything it covers is already fetched.\n\n${_researchBriefing}\n\n---\n\n${spreadLine}\n\n${investigateAsk}`;
       // Append to the user message Gary receives
       userMessage = userMessage + briefingBlock;
       nextMessageToSend = userMessage;

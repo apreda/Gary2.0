@@ -58,12 +58,19 @@ try {
 // MLB stays on pickdesk — the coverage policy (Gary picks EVERY game) is
 // never sacrificed to a missing credential.
 // ═══════════════════════════════════════════════════════════════════════════
+const { MLB_RESEARCH_MODEL } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
 const JUNE_ENGINE_ARMED = process.env.GARY_MLB_JUNE_ENGINE === '1';
-const JUNE_ENGINE_READY = JUNE_ENGINE_ARMED && !!process.env.ANTHROPIC_API_KEY;
+// The researcher's key requirement follows its provider: anthropic-* models
+// need ANTHROPIC_API_KEY; gpt-* models (Terra default) ride OPENAI_API_KEY,
+// which the brain needs anyway.
+const _researchKeyOk = MLB_RESEARCH_MODEL.startsWith('anthropic-')
+  ? !!process.env.ANTHROPIC_API_KEY
+  : !!process.env.OPENAI_API_KEY;
+const JUNE_ENGINE_READY = JUNE_ENGINE_ARMED && _researchKeyOk && !!process.env.OPENAI_API_KEY;
 if (JUNE_ENGINE_ARMED && !JUNE_ENGINE_READY) {
-  console.warn('[JuneEngine] GARY_MLB_JUNE_ENGINE=1 but ANTHROPIC_API_KEY is missing — MLB stays on pickdesk until the key lands in .env.');
+  console.warn(`[JuneEngine] GARY_MLB_JUNE_ENGINE=1 but the required API key is missing (researcher ${MLB_RESEARCH_MODEL}) — MLB stays on pickdesk until it lands in .env.`);
 } else if (JUNE_ENGINE_READY) {
-  console.log(`[JuneEngine] ⚾ ARMED — MLB games run the restored June engine (brain: ${MLB_JUNE_BRAIN_MODEL}, researcher: Anthropic Haiku).`);
+  console.log(`[JuneEngine] ⚾ ARMED — MLB games run the restored June engine (brain: ${MLB_JUNE_BRAIN_MODEL}, researcher: ${MLB_RESEARCH_MODEL}).`);
 }
 
 // Era stamp for the restored lane: hash of the engine's STATIC MLB prompt

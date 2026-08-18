@@ -37,15 +37,21 @@ export const GAME_PICK_MODEL = process.env.GARY_MODEL_OVERRIDE || 'gpt-5.6-sol';
 // JUNE ENGINE RESTORATION (Aug 18 2026, founder GO after the ledger
 // post-mortem: June +26u/58% on this engine, negative every week since the
 // Jul 22-26 cutover): MLB games return to the agentic orchestrator.
-// - Research assistant: Anthropic API Haiku — June's cheap-dedicated-researcher
-//   pattern on an ISOLATED pool (the CLI sub bridges are tool-less by
-//   construction, and research needs 25+ fetch_stats calls per game).
-// - Brain: Sol on the OpenAI API — the tools-capable session (metered; the
-//   $0 codexCli bridge cannot run Gary's mandatory self-verification tools).
-// Both env-overridable; the lane itself arms via GARY_MLB_JUNE_ENGINE=1 in
-// scripts/run-agentic-picks.js and requires ANTHROPIC_API_KEY.
+// - Research assistant: Anthropic API Haiku (founder's cost call, Aug 18:
+//   $1/$5 — the cheapest tools-capable tier anywhere; ~$3-6/night for the
+//   full slate). The CLI sub bridges are tool-less by construction and
+//   research needs 25+ fetch_stats calls per game, so the researcher is the
+//   ONE metered piece of the lane.
+// - Brain: Sol on the $0 codexCli bridge (founder's cost call, Aug 18) —
+//   tool-less, reads the researcher's briefing as its evidence (the football
+//   pattern). Full-June paid upgrade whenever he wants it:
+//   GARY_MLB_BRAIN_MODEL=gpt-5.6-sol → API Sol WITH self-verification tools
+//   (~$10-20/night more).
+// Both env-overridable; the lane arms via GARY_MLB_JUNE_ENGINE=1 in
+// scripts/run-agentic-picks.js (key requirement follows the research model's
+// provider).
 export const MLB_RESEARCH_MODEL = process.env.GARY_MLB_RESEARCH_MODEL || 'anthropic-claude-haiku-4-5';
-export const MLB_JUNE_BRAIN_MODEL = process.env.GARY_MLB_BRAIN_MODEL || 'gpt-5.6-sol';
+export const MLB_JUNE_BRAIN_MODEL = process.env.GARY_MLB_BRAIN_MODEL || 'codex-gpt-5.6-sol';
 // Legacy Gemini Tier 1 — research-era fallback references only.
 export const GEMINI_PRO_MODEL = 'gemini-3.5-flash';
 // Fallback when the primary errors / rate-limits.
