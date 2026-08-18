@@ -1762,9 +1762,19 @@ struct LiquidGlassBackground: View {
 /// Reduce Motion.
 struct ObsidianGround: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    // TabView keeps every visited page alive, so without a pause this layer
+    // ticks forever on EVERY tab — measured ~7% constant CPU from the Picks
+    // tab (Aug 18 perf sweep). Freeze whenever Home isn't the front tab or
+    // the app isn't active; the last frame stays painted, so nothing pops.
+    @AppStorage("selectedTab") private var selectedTab: Int = 0
+
+    private var frozen: Bool {
+        reduceMotion || selectedTab != 0 || scenePhase != .active
+    }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: reduceMotion)) { tl in
+        TimelineView(.animation(minimumInterval: 1.0 / 12.0, paused: frozen)) { tl in
             Canvas { ctx, size in
                 let time: Double = reduceMotion ? 0 : tl.date.timeIntervalSinceReferenceDate
                 let W = size.width, H = size.height
@@ -1772,7 +1782,7 @@ struct ObsidianGround: View {
                     let fi = Double(i)
                     let baseY = H * (0.05 + 0.068 * CGFloat(i))
                     var path = Path()
-                    let steps = 72
+                    let steps = 48
                     for s in 0...steps {
                         let u = Double(s) / Double(steps)
                         let x = CGFloat(u) * W
