@@ -1799,23 +1799,20 @@ struct ObsidianGround: View {
 }
 
 
-// MARK: - Depth-V2 Ground Studies (design/home-depth-v2 — NEVER merges)
-// The founder's brief, verbatim spirit: "a subtle spatial-parallax environment
-// where grids, frames, routes, and interface objects continuously recede or
-// advance through depth, making the hero feel larger than the viewport
-// without competing with the message." Six grounds behind the REAL Home —
-// flipped live via GaryTour `ground N` (0 = the shipped waves).
+// MARK: - Depth-V3 Ground Studies (design/home-depth-v2 — NEVER merges)
+// Round two, ported from the founder's reference implementation (the
+// agent-run-apps infinite-hero lab): REAL 3D-rotated grid planes under
+// perspective, flowing forever toward the viewer, at reference boldness —
+// not hand-drawn fake perspective at whisper opacity. `ground N` flips live.
 struct HomeGroundSwitcher: View {
     @State private var study: Int = UserDefaults.standard.integer(forKey: "garyGroundStudy")
     var body: some View {
         Group {
             switch study {
-            case 1: DepthV2VanishingGrid()
-            case 2: DepthV2InfiniteRooms()
-            case 3: DepthV2EndlessPortal()
-            case 4: DepthV2Orbital()
-            case 5: DepthV2Runway()
-            case 6: DepthV2DecisionTunnel()
+            case 1: DepthV3Floor()
+            case 2: DepthV3Horizon()
+            case 3: DepthV3Hall()
+            case 4: DepthV3Wall()
             default: ObsidianGround()
             }
         }
@@ -1825,279 +1822,177 @@ struct HomeGroundSwitcher: View {
     }
 }
 
-/// Shared scaffolding: throttled clock + whisper palette.
-private struct DepthV2Clock<Content: View>: View {
+private struct DepthV3Clock<Content: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let content: (Double) -> Content
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: reduceMotion)) { tl in
-            content(reduceMotion ? 7.3 : tl.date.timeIntervalSinceReferenceDate)
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { tl in
+            content(reduceMotion ? 2.0 : tl.date.timeIntervalSinceReferenceDate)
         }
         .allowsHitTesting(false)
         .ignoresSafeArea()
     }
 }
 
-// 1 — VANISHING GRID: floor and ceiling grids converge on the horizon and
-// crawl toward the viewer; ceiling drifts slower than the floor, so the two
-// layers separate in depth. The page continues behind the screen.
-struct DepthV2VanishingGrid: View {
+/// The flat grid pattern that gets 3D-rotated into a plane. Horizontal lines
+/// scroll by `phase` (the reference's background-position drift → the plane
+/// flows toward the viewer forever); vertical lines converge via the actual
+/// perspective transform.
+private struct DepthV3GridPattern: View {
+    let phase: CGFloat
+    let spacingY: CGFloat
+    let spacingX: CGFloat
+    let alpha: Double
+
     var body: some View {
-        DepthV2Clock { time in
-            Canvas { ctx, size in
-                let W = size.width, H = size.height
-                let vp = CGPoint(x: W * 0.5, y: H * 0.42)
-                let gold = Color(hex: "#D9A62B")
-                // longitudinal rays — floor and ceiling
-                for i in stride(from: -7, through: 7, by: 1) {
-                    let spread: CGFloat = CGFloat(i) * W * 0.16
-                    var floorRay = Path(); floorRay.move(to: vp)
-                    floorRay.addLine(to: CGPoint(x: W * 0.5 + spread * 2.4, y: H * 1.06))
-                    ctx.stroke(floorRay, with: .color(gold.opacity(0.030)), lineWidth: 0.7)
-                    var ceilRay = Path(); ceilRay.move(to: vp)
-                    ceilRay.addLine(to: CGPoint(x: W * 0.5 + spread * 2.4, y: -H * 0.06))
-                    ctx.stroke(ceilRay, with: .color(gold.opacity(0.020)), lineWidth: 0.7)
-                }
-                // transverse lines crawling out of the horizon — floor at t,
-                // ceiling at 0.62t (parallax between layers)
-                let tFloor = CGFloat((time * 0.055).truncatingRemainder(dividingBy: 1.0))
-                let tCeil = CGFloat((time * 0.034).truncatingRemainder(dividingBy: 1.0))
-                for k in 0..<12 {
-                    let uF = (CGFloat(k) / 12.0 + tFloor).truncatingRemainder(dividingBy: 1.0)
-                    let dF = pow(uF, 2.3)
-                    let yF = vp.y + (H * 1.06 - vp.y) * dF
-                    let nearFadeF: Double = uF > 0.92 ? Double((1.0 - uF) * 12.5) : 1.0
-                    let aF: Double = 0.052 * Double(dF) * nearFadeF
-                    var lnF = Path(); lnF.move(to: CGPoint(x: 0, y: yF)); lnF.addLine(to: CGPoint(x: W, y: yF))
-                    ctx.stroke(lnF, with: .color(gold.opacity(aF)), lineWidth: 0.8)
-                    let uC = (CGFloat(k) / 12.0 + tCeil).truncatingRemainder(dividingBy: 1.0)
-                    let dC = pow(uC, 2.3)
-                    let yC = vp.y - (vp.y + H * 0.06) * dC
-                    let nearFadeC: Double = uC > 0.92 ? Double((1.0 - uC) * 12.5) : 1.0
-                    let aC: Double = 0.034 * Double(dC) * nearFadeC
-                    var lnC = Path(); lnC.move(to: CGPoint(x: 0, y: yC)); lnC.addLine(to: CGPoint(x: W, y: yC))
-                    ctx.stroke(lnC, with: .color(gold.opacity(aC)), lineWidth: 0.7)
-                }
-                // horizon light — the far end never becomes a wall
-                ctx.fill(Path(CGRect(x: 0, y: 0, width: W, height: H)),
-                         with: .radialGradient(Gradient(colors: [gold.opacity(0.055), .clear]),
-                                               center: vp, startRadius: 0, endRadius: W * 0.42))
+        Canvas { ctx, size in
+            let gold = Color(hex: "#D9A62B")
+            var y: CGFloat = -spacingY + phase.truncatingRemainder(dividingBy: spacingY)
+            while y < size.height + spacingY {
+                var p = Path()
+                p.move(to: CGPoint(x: 0, y: y)); p.addLine(to: CGPoint(x: size.width, y: y))
+                ctx.stroke(p, with: .color(gold.opacity(alpha)), lineWidth: 1.0)
+                y += spacingY
+            }
+            var x: CGFloat = 0
+            while x < size.width + spacingX {
+                var p = Path()
+                p.move(to: CGPoint(x: x, y: 0)); p.addLine(to: CGPoint(x: x, y: size.height))
+                ctx.stroke(p, with: .color(gold.opacity(alpha * 0.85)), lineWidth: 1.0)
+                x += spacingX
             }
         }
     }
 }
 
-// 2 — INFINITE ROOMS: page-shaped frames recede room after room, each
-// breathing gently; odd rooms drift at a different rate, corner threads
-// sketch the corridor. The site keeps going inward.
-struct DepthV2InfiniteRooms: View {
+// 1 — THE FLOOR: a full-width grid plane tilted away under the content,
+// flowing toward the viewer forever. The classic infinite floor.
+struct DepthV3Floor: View {
     var body: some View {
-        DepthV2Clock { time in
-            Canvas { ctx, size in
-                let W = size.width, H = size.height
-                let vp = CGPoint(x: W * 0.5, y: H * 0.44)
-                let gold = Color(hex: "#D9A62B")
-                let cream = Color(hex: "#F2E4BC")
-                let ratio: CGFloat = 0.84
-                let tA = CGFloat((time / 20.0).truncatingRemainder(dividingBy: 1.0))
-                let tB = CGFloat((time / 26.0).truncatingRemainder(dividingBy: 1.0))
-                var corners: [[CGPoint]] = []
-                for k in 0..<11 {
-                    let layerT = (k % 2 == 0) ? tA : tB
-                    let breathe: CGFloat = 1.0 + 0.006 * CGFloat(sin(time * 0.30 + Double(k) * 0.9))
-                    let sBase = pow(ratio, CGFloat(k) - layerT + 1.0)
-                    let sc = sBase * breathe
-                    guard sc > 0.02, sc < 1.30 else { corners.append([]); continue }
-                    let w = W * 1.16 * sc, h = H * 1.16 * sc
-                    let r = CGRect(x: vp.x - w / 2, y: vp.y - h / 2, width: w, height: h)
-                    let depth = min(max(Double((sc - 0.02) / 1.0), 0), 1)
-                    let nearFade: Double = sc > 0.92 ? Double((1.30 - sc) / 0.38) : 1.0
-                    let a: Double = 0.050 * pow(depth, 1.5) * nearFade
-                    if a > 0.003 {
-                        let rr = Path(roundedRect: r, cornerRadius: max(24 * sc, 4), style: .continuous)
-                        ctx.stroke(rr, with: .color(gold.opacity(a)), lineWidth: 0.9)
-                        ctx.stroke(rr, with: .color(cream.opacity(a * 0.35)), lineWidth: 0.45)
-                    }
-                    corners.append([CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.maxX, y: r.minY),
-                                    CGPoint(x: r.minX, y: r.maxY), CGPoint(x: r.maxX, y: r.maxY)])
-                }
-                // corridor threads between consecutive same-layer rooms
-                for k in 0..<(corners.count - 2) where !corners[k].isEmpty && !corners[k + 2].isEmpty {
-                    for c in 0..<4 {
-                        var thread = Path()
-                        thread.move(to: corners[k][c]); thread.addLine(to: corners[k + 2][c])
-                        ctx.stroke(thread, with: .color(gold.opacity(0.014)), lineWidth: 0.5)
-                    }
+        DepthV3Clock { time in
+            GeometryReader { geo in
+                let W = geo.size.width, H = geo.size.height
+                ZStack {
+                    DepthV3GridPattern(phase: CGFloat(time * 34.0), spacingY: 64, spacingX: 76, alpha: 0.30)
+                        .frame(width: W * 2.4, height: H * 0.9)
+                        .rotation3DEffect(.degrees(62), axis: (x: 1, y: 0, z: 0), anchor: .top, perspective: 0.9)
+                        .position(x: W * 0.5, y: H * 0.86)
+                        .mask(
+                            LinearGradient(stops: [
+                                .init(color: .clear, location: 0),
+                                .init(color: .black, location: 0.30),
+                                .init(color: .black, location: 0.86),
+                                .init(color: .clear, location: 1),
+                            ], startPoint: .top, endPoint: .bottom)
+                        )
+                    // the horizon light the floor runs toward
+                    RadialGradient(colors: [Color(hex: "#F2E4BC").opacity(0.14),
+                                            Color(hex: "#D9A62B").opacity(0.05), .clear],
+                                   center: .init(x: 0.5, y: 0.585), startRadius: 4, endRadius: W * 0.45)
                 }
             }
         }
     }
 }
 
-// 3 — ENDLESS PORTAL: the rooms compress into a wormhole with a quietly
-// glowing center — restrained, product-made, no sci-fi shout.
-struct DepthV2EndlessPortal: View {
+// 2 — THE HORIZON: the reference hero's composition — a grid plane angled in
+// from the side, a low sun burning on the horizon, one bright ray.
+struct DepthV3Horizon: View {
     var body: some View {
-        DepthV2Clock { time in
-            Canvas { ctx, size in
-                let W = size.width, H = size.height
-                let vp = CGPoint(x: W * 0.5, y: H * 0.40)
-                let gold = Color(hex: "#D9A62B")
-                let t = CGFloat((time / 13.0).truncatingRemainder(dividingBy: 1.0))
-                for k in 0..<13 {
-                    let sc = pow(0.78, CGFloat(k) - t + 1.0)
-                    guard sc > 0.015, sc < 1.32 else { continue }
-                    let w = W * 1.2 * sc, h = H * 1.2 * sc
-                    let r = CGRect(x: vp.x - w / 2, y: vp.y - h / 2, width: w, height: h)
-                    let depth = min(max(Double((sc - 0.015) / 1.0), 0), 1)
-                    let nearFade: Double = sc > 0.90 ? Double((1.32 - sc) / 0.42) : 1.0
-                    let a: Double = 0.065 * pow(depth, 1.4) * nearFade
-                    guard a > 0.003 else { continue }
-                    let rr = Path(roundedRect: r, cornerRadius: max(26 * sc, 3), style: .continuous)
-                    ctx.stroke(rr, with: .color(gold.opacity(a)), lineWidth: 1.0 + 0.7 * sc)
+        DepthV3Clock { time in
+            GeometryReader { geo in
+                let W = geo.size.width, H = geo.size.height
+                ZStack {
+                    DepthV3GridPattern(phase: CGFloat(time * 26.0), spacingY: 58, spacingX: 68, alpha: 0.26)
+                        .frame(width: W * 2.6, height: H * 0.8)
+                        .rotation3DEffect(.degrees(64), axis: (x: 1, y: 0, z: 0), anchor: .top, perspective: 0.85)
+                        .rotation3DEffect(.degrees(-9), axis: (x: 0, y: 0, z: 1), anchor: .center, perspective: 0)
+                        .position(x: W * 0.60, y: H * 0.80)
+                        .mask(
+                            LinearGradient(stops: [
+                                .init(color: .clear, location: 0.06),
+                                .init(color: .black, location: 0.34),
+                                .init(color: .black, location: 0.84),
+                                .init(color: .clear, location: 1),
+                            ], startPoint: .top, endPoint: .bottom)
+                        )
+                    // the sun
+                    RadialGradient(colors: [Color.white.opacity(0.22),
+                                            Color(hex: "#D9A62B").opacity(0.30),
+                                            Color(hex: "#D9A62B").opacity(0.10), .clear],
+                                   center: .init(x: 0.74, y: 0.30), startRadius: 2, endRadius: W * 0.30)
+                    // the ray
+                    Rectangle()
+                        .fill(LinearGradient(colors: [Color(hex: "#D9A62B").opacity(0.55), .clear],
+                                             startPoint: .top, endPoint: .bottom))
+                        .frame(width: 1.2, height: H * 0.42)
+                        .shadow(color: Color(hex: "#D9A62B").opacity(0.6), radius: 14)
+                        .position(x: W * 0.74, y: H * 0.52)
                 }
-                for corner in [CGPoint(x: W * -0.08, y: H * -0.05), CGPoint(x: W * 1.08, y: H * -0.05),
-                               CGPoint(x: W * -0.08, y: H * 1.05), CGPoint(x: W * 1.08, y: H * 1.05)] {
-                    var ray = Path(); ray.move(to: vp); ray.addLine(to: corner)
-                    ctx.stroke(ray, with: .color(gold.opacity(0.022)), lineWidth: 0.7)
-                }
-                let breath: Double = 0.75 + 0.25 * sin(time * 0.24)
-                ctx.fill(Path(CGRect(x: 0, y: 0, width: W, height: H)),
-                         with: .radialGradient(Gradient(colors: [Color(hex: "#F2E4BC").opacity(0.10 * breath),
-                                                                 gold.opacity(0.035 * breath), .clear]),
-                                               center: vp, startRadius: 0, endRadius: W * 0.30))
             }
         }
     }
 }
 
-// 4 — ORBITAL: three rings at different depths turn in opposing directions
-// around one quiet center; small bright objects ride the rings. Interface
-// as a solar system, barely there.
-struct DepthV2Orbital: View {
+// 3 — THE HALL: floor AND ceiling planes flowing at slightly different
+// rates — the page continues above and below, parallax between the two.
+struct DepthV3Hall: View {
     var body: some View {
-        DepthV2Clock { time in
-            Canvas { ctx, size in
-                let W = size.width, H = size.height
-                let c = CGPoint(x: W * 0.5, y: H * 0.52)
-                let gold = Color(hex: "#D9A62B")
-                let cream = Color(hex: "#F2E4BC")
-                let rings: [(CGFloat, Double, Double, Double)] = [
-                    (0.46, 0.10, 0.040, 1.0),
-                    (0.72, -0.062, 0.030, 0.8),
-                    (1.02, 0.038, 0.022, 0.62),
-                ]
-                for (ri, ring) in rings.enumerated() {
-                    let (rw, rate, a, squash) = ring
-                    let rx = W * rw
-                    let ry = rx * 0.34 * CGFloat(squash)
-                    var orbit = Path()
-                    for s in 0...90 {
-                        let ang = Double(s) / 90.0 * 2.0 * .pi
-                        let x = c.x + rx * CGFloat(cos(ang))
-                        let y = c.y + ry * CGFloat(sin(ang))
-                        if s == 0 { orbit.move(to: CGPoint(x: x, y: y)) } else { orbit.addLine(to: CGPoint(x: x, y: y)) }
-                    }
-                    ctx.stroke(orbit, with: .color(gold.opacity(a)), lineWidth: 0.8)
-                    for obj in 0..<3 {
-                        let ang = time * rate + Double(obj) * 2.09 + Double(ri)
-                        let x = c.x + rx * CGFloat(cos(ang))
-                        let y = c.y + ry * CGFloat(sin(ang))
-                        let dotR: CGFloat = 1.6 + CGFloat(2 - ri) * 0.5
-                        ctx.fill(Path(ellipseIn: CGRect(x: x - dotR, y: y - dotR, width: dotR * 2, height: dotR * 2)),
-                                 with: .color(cream.opacity(a * 4.0)))
-                        ctx.fill(Path(ellipseIn: CGRect(x: x - dotR * 3, y: y - dotR * 3, width: dotR * 6, height: dotR * 6)),
-                                 with: .color(gold.opacity(a * 1.2)))
-                    }
+        DepthV3Clock { time in
+            GeometryReader { geo in
+                let W = geo.size.width, H = geo.size.height
+                ZStack {
+                    DepthV3GridPattern(phase: CGFloat(time * 30.0), spacingY: 62, spacingX: 74, alpha: 0.26)
+                        .frame(width: W * 2.4, height: H * 0.8)
+                        .rotation3DEffect(.degrees(62), axis: (x: 1, y: 0, z: 0), anchor: .top, perspective: 0.9)
+                        .position(x: W * 0.5, y: H * 0.88)
+                        .mask(LinearGradient(stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: .black, location: 0.34),
+                            .init(color: .black, location: 0.88),
+                            .init(color: .clear, location: 1),
+                        ], startPoint: .top, endPoint: .bottom))
+                    DepthV3GridPattern(phase: CGFloat(time * 19.0), spacingY: 62, spacingX: 74, alpha: 0.16)
+                        .frame(width: W * 2.4, height: H * 0.55)
+                        .rotation3DEffect(.degrees(-62), axis: (x: 1, y: 0, z: 0), anchor: .bottom, perspective: 0.9)
+                        .position(x: W * 0.5, y: H * 0.075)
+                        .mask(LinearGradient(stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: .black, location: 0.10),
+                            .init(color: .black, location: 0.62),
+                            .init(color: .clear, location: 1),
+                        ], startPoint: .top, endPoint: .bottom))
+                    RadialGradient(colors: [Color(hex: "#F2E4BC").opacity(0.10),
+                                            Color(hex: "#D9A62B").opacity(0.04), .clear],
+                                   center: .init(x: 0.5, y: 0.47), startRadius: 4, endRadius: W * 0.5)
                 }
-                let breath: Double = 0.7 + 0.3 * sin(time * 0.18)
-                ctx.fill(Path(CGRect(x: 0, y: 0, width: W, height: H)),
-                         with: .radialGradient(Gradient(colors: [gold.opacity(0.05 * breath), .clear]),
-                                               center: c, startRadius: 0, endRadius: W * 0.24))
             }
         }
     }
 }
 
-// 5 — RELEASE RUNWAY: ceiling and floor converge on one destination and
-// milestone bars travel the route out of the distance. Work arriving.
-struct DepthV2Runway: View {
+// 4 — THE WALL: a side plane running into the distance on the right — depth
+// leans away from the reading column; the corridor keeps going.
+struct DepthV3Wall: View {
     var body: some View {
-        DepthV2Clock { time in
-            Canvas { ctx, size in
-                let W = size.width, H = size.height
-                let vp = CGPoint(x: W * 0.5, y: H * 0.47)
-                let gold = Color(hex: "#D9A62B")
-                let cream = Color(hex: "#F2E4BC")
-                let halfSpan: CGFloat = W * 0.34
-                for i in stride(from: -3, through: 3, by: 1) {
-                    let x1 = W * 0.5 + CGFloat(i) / 3.0 * halfSpan * 2.6
-                    var floorRay = Path(); floorRay.move(to: vp); floorRay.addLine(to: CGPoint(x: x1, y: H * 1.05))
-                    ctx.stroke(floorRay, with: .color(gold.opacity(0.032)), lineWidth: 0.7)
-                    var ceilRay = Path(); ceilRay.move(to: vp); ceilRay.addLine(to: CGPoint(x: x1, y: -H * 0.05))
-                    ctx.stroke(ceilRay, with: .color(gold.opacity(0.018)), lineWidth: 0.6)
+        DepthV3Clock { time in
+            GeometryReader { geo in
+                let W = geo.size.width, H = geo.size.height
+                ZStack {
+                    DepthV3GridPattern(phase: CGFloat(time * 26.0), spacingY: 66, spacingX: 62, alpha: 0.26)
+                        .frame(width: W * 1.7, height: H * 1.3)
+                        .rotation3DEffect(.degrees(-58), axis: (x: 0, y: 1, z: 0), anchor: .trailing, perspective: 0.9)
+                        .position(x: W * 0.62, y: H * 0.5)
+                        .mask(LinearGradient(stops: [
+                            .init(color: .clear, location: 0.02),
+                            .init(color: .black, location: 0.30),
+                            .init(color: .black, location: 0.92),
+                            .init(color: .clear, location: 1),
+                        ], startPoint: .leading, endPoint: .trailing))
+                    RadialGradient(colors: [Color(hex: "#F2E4BC").opacity(0.12),
+                                            Color(hex: "#D9A62B").opacity(0.045), .clear],
+                                   center: .init(x: 0.88, y: 0.42), startRadius: 3, endRadius: W * 0.4)
                 }
-                let t = CGFloat((time * 0.05).truncatingRemainder(dividingBy: 1.0))
-                for k in 0..<8 {
-                    let u = (CGFloat(k) / 8.0 + t).truncatingRemainder(dividingBy: 1.0)
-                    let d = pow(u, 2.4)
-                    let y = vp.y + (H * 1.05 - vp.y) * d
-                    let half = halfSpan * (0.12 + 0.88 * d)
-                    let nearFade: Double = u > 0.90 ? Double((1.0 - u) * 10) : 1.0
-                    let a: Double = 0.07 * Double(d) * nearFade
-                    var bar = Path()
-                    bar.move(to: CGPoint(x: vp.x - half, y: y)); bar.addLine(to: CGPoint(x: vp.x + half, y: y))
-                    ctx.stroke(bar, with: .color(cream.opacity(a)), lineWidth: 1.1)
-                }
-                ctx.fill(Path(CGRect(x: 0, y: 0, width: W, height: H)),
-                         with: .radialGradient(Gradient(colors: [cream.opacity(0.075), gold.opacity(0.025), .clear]),
-                                               center: vp, startRadius: 0, endRadius: W * 0.30))
-            }
-        }
-    }
-}
-
-// 6 — DECISION TUNNEL: the whole effect leans right, leaving the reading
-// column calm; three route lines flow from the left into the destination.
-struct DepthV2DecisionTunnel: View {
-    var body: some View {
-        DepthV2Clock { time in
-            Canvas { ctx, size in
-                let W = size.width, H = size.height
-                let vp = CGPoint(x: W * 0.80, y: H * 0.42)
-                let gold = Color(hex: "#D9A62B")
-                let t = CGFloat((time / 16.0).truncatingRemainder(dividingBy: 1.0))
-                for k in 0..<11 {
-                    let sc = pow(0.80, CGFloat(k) - t + 1.0)
-                    guard sc > 0.02, sc < 1.25 else { continue }
-                    let w = W * 0.78 * sc, h = H * 0.92 * sc
-                    let r = CGRect(x: vp.x - w * 0.5, y: vp.y - h * 0.5, width: w, height: h)
-                    let depth = min(max(Double((sc - 0.02) / 1.0), 0), 1)
-                    let nearFade: Double = sc > 0.9 ? Double((1.25 - sc) / 0.35) : 1.0
-                    let a: Double = 0.055 * pow(depth, 1.5) * nearFade
-                    guard a > 0.003 else { continue }
-                    let rr = Path(roundedRect: r, cornerRadius: max(20 * sc, 3), style: .continuous)
-                    ctx.stroke(rr, with: .color(gold.opacity(a)), lineWidth: 0.9)
-                }
-                // the route: three lines flowing from the left edge into the VP
-                let flow = CGFloat((time * 0.07).truncatingRemainder(dividingBy: 1.0))
-                for r in 0..<3 {
-                    let y0 = H * (0.30 + 0.18 * CGFloat(r))
-                    var route = Path()
-                    for s in 0...50 {
-                        let u = CGFloat(s) / 50.0
-                        let x = u * vp.x
-                        let bend: CGFloat = sin(Double(u) * .pi) > 0 ? CGFloat(sin(Double(u) * .pi)) : 0
-                        let y = y0 + (vp.y - y0) * pow(u, 1.6) - bend * 10
-                        if s == 0 { route.move(to: CGPoint(x: x, y: y)) } else { route.addLine(to: CGPoint(x: x, y: y)) }
-                    }
-                    ctx.stroke(route, with: .color(gold.opacity(0.030)), style: StrokeStyle(lineWidth: 0.8, dash: [5, 9], dashPhase: -flow * 14))
-                }
-                let breath: Double = 0.75 + 0.25 * sin(time * 0.22)
-                ctx.fill(Path(CGRect(x: 0, y: 0, width: W, height: H)),
-                         with: .radialGradient(Gradient(colors: [Color(hex: "#F2E4BC").opacity(0.085 * breath),
-                                                                 gold.opacity(0.03 * breath), .clear]),
-                                               center: vp, startRadius: 0, endRadius: W * 0.26))
             }
         }
     }
@@ -4291,7 +4186,7 @@ struct HomeView: View {
                             .tracking(1.4)
                             .foregroundStyle(league == selected
                                 ? GaryColors.gold
-                                : Color.white.opacity(enabled ? 0.56 : 0.24))
+                                : Color.white.opacity(enabled ? 0.62 : 0.45))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
                     }
