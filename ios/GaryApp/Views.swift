@@ -21459,6 +21459,9 @@ struct PicksCarouselView: View {
     @State private var connectionLoadInFlight = false
     @State private var connectionErrorLeagues: Set<HubLeagueSel> = []
     @State private var sport = "ALL"
+    /// True while `sport` was set by the auto-snap rather than a user tap —
+    /// the only state the snap is allowed to correct once real data lands.
+    @State private var sportAutoSelected = false
     @State private var page = 0
     @State private var selectedProp: PropPick?
     /// PERF#1(b/c): memoized UNSORTED game set + precomputed per-game edge index.
@@ -21511,17 +21514,22 @@ struct PicksCarouselView: View {
         // The MLB HR lane is retired — guarantee no HR chip even if a non-HR prop
         // arrives mislabeled "MLB HR" (its card already routes to MLB via propSportKey).
         s.remove("MLB HR")
-        // Football-season priority: NFL, then NCAAF, then MLB. A league with a
-        // game today still outranks an idle league, so preseason/off-day tabs do
-        // not displace the active board.
-        // A league with games TODAY always outranks an idle one (founder,
-        // Jul 12: WC before MLB on a no-WC day made no sense); canonical
-        // priority only breaks ties inside each group.
+        // Where Gary's PICKS are leads (founder, Aug 18: preseason NFL — zero
+        // picks — defaulting over a full MLB board is wrong): a league with
+        // posted picks/props today outranks everything. Games on today's slate
+        // rank next, so the pre-post morning board still lands on the active
+        // sport. Canonical football-season priority (NFL, NCAAF, MLB) only
+        // breaks ties inside each group (founder, Jul 12: WC before MLB on a
+        // no-WC day made no sense).
+        let pickLeagues = Set(store.gamePicks.compactMap { ($0.league ?? "").uppercased() }.filter { !$0.isEmpty })
+            .union(store.allProps.filter { !isHomeRunProp($0) }.map { propSportKey($0) }.filter { !$0.isEmpty })
         let todayLeagues = Set(store.slate.compactMap { ($0.league ?? "").uppercased() })
         let priority: [String: Int] = ["NFL": 0, "NCAAF": 1, "MLB": 2, "WC": 3]
         // ALL is flag-gated (founder, Jul 13: league chips only) — the chip
         // drops but every ALL code path below survives for an easy restore.
         return (AppFlags.picksAllTab ? ["ALL"] : []) + s.sorted { a, b in
+            let pa = pickLeagues.contains(a), pb = pickLeagues.contains(b)
+            if pa != pb { return pa }
             let ta = todayLeagues.contains(a), tb = todayLeagues.contains(b)
             if ta != tb { return ta }
             let ra = priority[a] ?? 50, rb = priority[b] ?? 50
@@ -21529,14 +21537,30 @@ struct PicksCarouselView: View {
         }
     }
 
+    /// A league is "live" today when it has anything real — a posted pick or
+    /// prop, or a game on the slate. Forced chips (preseason football) exist
+    /// for reachability but never deserve the default over a live board.
+    private func leagueIsLiveToday(_ lg: String) -> Bool {
+        if store.slate.contains(where: { ($0.league ?? "").uppercased() == lg }) { return true }
+        if store.gamePicks.contains(where: { ($0.league ?? "").uppercased() == lg }) { return true }
+        return store.allProps.contains(where: { !isHomeRunProp($0) && propSportKey($0) == lg })
+    }
     /// With ALL hidden, `sport` must always sit on a real league: snap the
     /// "ALL" default (and any league that dropped off the board) to the day's
     /// first chip once data lands. No-op while the flag shows ALL.
+    /// A snap is remembered as AUTO: if it ran before the slate/picks resolved
+    /// (a failed fetch leaves only canonical priority, which puts preseason
+    /// NFL first), the next data arrival moves an idle default to the day's
+    /// live board. A chip the user tapped is never moved.
     private func snapSportIfAllHidden() {
-        guard !AppFlags.picksAllTab,
-              sport == "ALL" || !sports.contains(sport),
-              let first = sports.first(where: { $0 != "ALL" }) else { return }
-        sport = first
+        guard !AppFlags.picksAllTab, let first = sports.first(where: { $0 != "ALL" }) else { return }
+        if sport == "ALL" || !sports.contains(sport) {
+            sport = first
+            sportAutoSelected = true
+        } else if sportAutoSelected, sport != first,
+                  !leagueIsLiveToday(sport), leagueIsLiveToday(first) {
+            sport = first
+        }
     }
     /// A prop's tab key, with the MLB HR lane corrected to HOME-RUN props only.
     /// Non-HR props (total_bases, strikeouts) get mislabeled "MLB HR" upstream;
@@ -22112,7 +22136,7 @@ struct PicksCarouselView: View {
             switch verb {
             case "picks": if let idx = Int(arg) { withAnimation { page = idx } }
             case "picksday": withAnimation { pickDay = arg == "yesterday" ? .yesterday : .today }
-            case "picksport": sport = arg.uppercased()
+            case "picksport": sport = arg.uppercased(); sportAutoSelected = false
             default: break
             }
         }
@@ -22182,6 +22206,7 @@ struct PicksCarouselView: View {
             guard sports.contains(targetLeague) else { return }
             if sport != targetLeague {
                 sport = targetLeague
+                sportAutoSelected = false
                 return
             }
         }
@@ -22370,6 +22395,7 @@ struct PicksCarouselView: View {
         let full = opts + LeagueOverlayState.offSeasonOptions(excluding: Set(sports))
         LeagueOverlayState.shared.present(full) { picked in
             sport = picked
+            sportAutoSelected = false
         }
     }
 
