@@ -104,7 +104,9 @@ function extractJuneBilateralPaths(rawAnalysis, homeTeam, awayTeam) {
   const text = String(rawAnalysis || '');
   if (!text) return { path_home: null, path_away: null };
   const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const headerRx = (team) => new RegExp(`Case for (?:backing\\s+)?(?:the\\s+)?${esc(team)}[^\\n]*`, 'i');
+  // PRIMARY: the exact-heading contract (Aug 18 — "CASE FOR BACKING X TONIGHT:").
+  // LEGACY: the older loose "Case for (backing) X" phrasing, kept tolerant.
+  const headerRx = (team) => new RegExp(`CASE FOR (?:BACKING\\s+)?(?:THE\\s+)?${esc(team)}(?:\\s+TONIGHT)?:?[^\\n]*`, 'i');
   const headerFor = (team) => {
     let m = text.match(headerRx(team));
     if (!m) {
@@ -132,10 +134,11 @@ function extractJuneBilateralPaths(rawAnalysis, homeTeam, awayTeam) {
   };
   if (byHeader.path_home && byHeader.path_away) return byHeader;
 
-  // Fallback (Aug 18 bench finding): Gary sometimes writes the bilateral
-  // content without the literal headers — the loop's validator attributes
-  // paragraphs by team mention, so mirror that: nickname word-boundary per
-  // paragraph, home-paragraphs joined = home path (capped for storage).
+  // EMERGENCY ONLY (founder law, Aug 18: fallbacks are for emergencies, not
+  // a second main path): the Pass 1 ask now contracts EXACT headings, so
+  // landing here means the format contract failed — log it loudly so the
+  // contract gets fixed, then salvage by validator-style attribution.
+  console.warn(`[JuneEngine] ⚠️ bilateral heading contract MISSED (home=${!!byHeader.path_home}, away=${!!byHeader.path_away}) — salvaging paths by paragraph attribution. If this repeats, the Pass 1 heading contract needs attention.`);
   const nick = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').trim().split(/\s+/).filter(Boolean).pop() || '';
   const hN = nick(homeTeam), aN = nick(awayTeam);
   if (!hN || !aN || hN === aN) return byHeader;

@@ -779,10 +779,15 @@ Your job in this pass is the READ: investigate this game and build your honest r
 
 Use the scout report + research briefing as your starting point, then investigate with fetch_stats where you need deeper evidence.
 
-Before completing Pass 1, include BOTH sections:
-Case for backing ${homeTeam} tonight
-Case for backing ${awayTeam} tonight
-(Each case should be 2-3 paragraphs making the argument for that side as tonight's bet — how they win this game and what carries it. Use whatever reasoning you find most compelling — stats, matchup data, momentum, series context, pitcher feel, team energy, or any combination. There is no required formula. Some nights one factor dominates; other nights it's the full picture.)
+Before completing Pass 1, end your synthesis with BOTH sections, using these EXACT headings on their own lines (the system stores each case under its heading):
+
+CASE FOR BACKING ${homeTeam.toUpperCase()} TONIGHT:
+(2-3 paragraphs making the argument for that side as tonight's bet — how they win this game and what carries it.)
+
+CASE FOR BACKING ${awayTeam.toUpperCase()} TONIGHT:
+(2-3 paragraphs, same shape.)
+
+Use whatever reasoning you find most compelling — stats, matchup data, momentum, series context, pitcher feel, team energy, or any combination. There is no required formula. Some nights one factor dominates; other nights it's the full picture.
 
 Do NOT declare a side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
 INVESTIGATION COMPLETE

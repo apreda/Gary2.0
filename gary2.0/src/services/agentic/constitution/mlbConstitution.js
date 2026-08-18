@@ -60,10 +60,10 @@ Use the exact tag shown in the scout report for this game.
   // SECTION E: BILATERAL CASE PROMPT — injected at end of Pass 1
   // ═══════════════════════════════════════════════════════════════════════════
   bilateralCasePrompt: (homeTeam, awayTeam) =>
-    `Before outputting INVESTIGATION COMPLETE, include both sections in your Pass 1 synthesis:
-Case for backing ${homeTeam} tonight
-Case for backing ${awayTeam} tonight
-(Each case should be 2-3 paragraphs making the argument for that side as tonight's bet — how it wins this game and what carries it — based on the matchup evidence you investigated.)`
+    `Before outputting INVESTIGATION COMPLETE, end your Pass 1 synthesis with both sections, using these EXACT headings on their own lines (the system stores each case under its heading):
+CASE FOR BACKING ${homeTeam.toUpperCase()} TONIGHT:
+CASE FOR BACKING ${awayTeam.toUpperCase()} TONIGHT:
+(Each case: 2-3 paragraphs making the argument for that side as tonight's bet — how it wins this game and what carries it — based on the matchup evidence you investigated.)`
 };
 
 export default MLB_CONSTITUTION;

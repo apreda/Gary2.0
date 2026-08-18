@@ -53,7 +53,7 @@ describe('MLB game lane runs the restored June engine (Aug 18 restoration)', () 
     expect(pb).not.toContain('this lane is deleted');
     // The bilateral ask and the symmetry rule ride Pass 1
     expect(pb).toContain('THE SYMMETRY RULE');
-    expect(pb).toContain('Case for backing ${homeTeam} tonight');
+    expect(pb).toContain('CASE FOR BACKING ${homeTeam.toUpperCase()} TONIGHT:');
   });
 
   it('the ask-the-researcher protocol is wired (founder GO, Aug 18)', () => {
