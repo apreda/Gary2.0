@@ -12349,7 +12349,8 @@ struct TomorrowView {
                         .foregroundStyle(GaryColors.sectionHead)   // match "The Day Ahead" header
                     Spacer(minLength: 6)
                     legendDot(Color(hex: "#4FB14F"), "MLB")
-                    legendDot(Color(hex: "#3FB6A8"), "WC")
+                    // (WC dot removed Aug 18 2026 — the World Cup pipeline was
+                    // deleted Jul 21; the legend outlived it.)
                 }
                 .pageGutter()
 
