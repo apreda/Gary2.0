@@ -33,7 +33,7 @@ const { oddsService } = await import('../src/services/oddsService.js');
 const { picksService } = await import('../src/services/picksService.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
 const { findStaleInjuryMentions } = await import('../src/services/agentic/orchestrator/statAudit.js');
-const { GAME_PICK_MODEL } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
+const { GAME_PICK_MODEL, MLB_JUNE_BRAIN_MODEL } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
 const { analyzeGameDesk, PROMPT_SHA } = await import('../src/services/pickdesk/garyBrain.js');
 
 // ERA LIVE — this is a fresh process, so its module cache IS disk truth. One
@@ -46,6 +46,105 @@ try {
   console.log(`🧬 ERA LIVE: game ${PROMPT_SHA} · commit ${gitStamp()} @ ${PROJECT_DIR}`);
   recordEraRun('game', etToday, PROMPT_SHA);
 } catch (e) { console.log(`🧬 ERA LIVE: (unavailable — ${e.message})`); }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// JUNE ENGINE (MLB) — Aug 18 2026 restoration (founder GO after the ledger
+// post-mortem: June +26u/58% on the agentic engine, negative every week since
+// the Jul 22-26 pickdesk cutover). MLB game picks return to the orchestrator:
+// scout report → Haiku research briefing (checklist, hard-fail) → Sol brain
+// WITH tools → bilateral cases → Pass 2.5 decision (ML or RL, Gary's choice)
+// → Pass 3 + statAudit. Arms via GARY_MLB_JUNE_ENGINE=1 and requires
+// ANTHROPIC_API_KEY (the researcher's isolated pool). Unarmed or key-less,
+// MLB stays on pickdesk — the coverage policy (Gary picks EVERY game) is
+// never sacrificed to a missing credential.
+// ═══════════════════════════════════════════════════════════════════════════
+const JUNE_ENGINE_ARMED = process.env.GARY_MLB_JUNE_ENGINE === '1';
+const JUNE_ENGINE_READY = JUNE_ENGINE_ARMED && !!process.env.ANTHROPIC_API_KEY;
+if (JUNE_ENGINE_ARMED && !JUNE_ENGINE_READY) {
+  console.warn('[JuneEngine] GARY_MLB_JUNE_ENGINE=1 but ANTHROPIC_API_KEY is missing — MLB stays on pickdesk until the key lands in .env.');
+} else if (JUNE_ENGINE_READY) {
+  console.log(`[JuneEngine] ⚾ ARMED — MLB games run the restored June engine (brain: ${MLB_JUNE_BRAIN_MODEL}, researcher: Anthropic Haiku).`);
+}
+
+// Era stamp for the restored lane: hash of the engine's STATIC MLB prompt
+// surface (constitution + factors + pass builders with placeholder teams) —
+// same role as the pickdesk PROMPT_SHA, so the ledger reads eras cleanly.
+let _junePromptSha = null;
+async function junePromptSha() {
+  if (_junePromptSha) return _junePromptSha;
+  const { createHash } = await import('crypto');
+  const { MLB_CONSTITUTION } = await import('../src/services/agentic/constitution/mlbConstitution.js');
+  const { getMlbSpreadFactors, getMlbSeasonAwareness } = await import('../src/services/agentic/orchestrator/spreadEvaluationFactors.js');
+  const { buildPass1Message, buildPass25Message, buildPass3Unified } = await import('../src/services/agentic/orchestrator/passBuilders.js');
+  const staticSurface = [
+    MLB_CONSTITUTION.pass1Context,
+    MLB_CONSTITUTION.bilateralCasePrompt('HOME', 'AWAY'),
+    getMlbSpreadFactors(),
+    getMlbSeasonAwareness(),
+    buildPass1Message('SCOUT', 'HOME', 'AWAY', 'DATE', 'baseball_mlb', 0),
+    buildPass25Message('HOME', 'AWAY', 'MLB', 0, ''),
+    buildPass3Unified('HOME', 'AWAY', { sport: 'MLB' }),
+  ].join('\n⸻\n');
+  _junePromptSha = createHash('sha256').update(staticSurface).digest('hex').slice(0, 12);
+  return _junePromptSha;
+}
+
+// The June engine's Pass 1 bilateral cases ("Case for backing X tonight", or
+// the older "Case for X winning") map onto the app's path fields — June's
+// process stored in August's plumbing. Tolerant of full-name or mascot-only
+// headers; a miss stores null and the app renders without paths.
+function extractJuneBilateralPaths(rawAnalysis, homeTeam, awayTeam) {
+  const text = String(rawAnalysis || '');
+  if (!text) return { path_home: null, path_away: null };
+  const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const headerRx = (team) => new RegExp(`Case for (?:backing\\s+)?(?:the\\s+)?${esc(team)}[^\\n]*`, 'i');
+  const headerFor = (team) => {
+    let m = text.match(headerRx(team));
+    if (!m) {
+      const mascot = String(team).trim().split(/\s+/).pop();
+      if (mascot && mascot !== team) m = text.match(headerRx(mascot));
+    }
+    return m;
+  };
+  const findBlock = (team, otherTeam) => {
+    const m = headerFor(team);
+    if (!m) return null;
+    const start = m.index + m[0].length;
+    const rest = text.slice(start);
+    const otherM = headerFor(otherTeam) ? rest.match(headerRx(otherTeam)) || rest.match(headerRx(String(otherTeam).trim().split(/\s+/).pop())) : null;
+    const endByOther = otherM ? otherM.index : Infinity;
+    const doneIdx = rest.search(/INVESTIGATION COMPLETE/i);
+    const endByDone = doneIdx === -1 ? Infinity : doneIdx;
+    const end = Math.min(endByOther, endByDone, rest.length);
+    const block = rest.slice(0, end).trim();
+    return block.length >= 80 ? block : null;
+  };
+  return {
+    path_home: findBlock(homeTeam, awayTeam),
+    path_away: findBlock(awayTeam, homeTeam),
+  };
+}
+
+async function runMlbJuneEngine(game, runnerOptions) {
+  const engineOptions = { ...runnerOptions, modelOverride: MLB_JUNE_BRAIN_MODEL };
+  let result = await analyzeGame(game, 'baseball_mlb', engineOptions);
+  if (result?.error || !result?.pick) {
+    console.warn(`[JuneEngine] first attempt failed (${result?.error || 'no pick'}) — one retry`);
+    result = await analyzeGame(game, 'baseball_mlb', engineOptions);
+  }
+  if (result?.error || !result?.pick) {
+    console.warn(`[JuneEngine] ⚠️ engine failed twice (${result?.error || 'no pick'}) — pickdesk fallback for this game (coverage policy holds; era stamp will show pickdesk honestly).`);
+    return analyzeGameDesk(game, runnerOptions);
+  }
+  // Storage-contract parity with the pickdesk lane (paths, model, era stamp):
+  const raw = result.rawAnalysis || result._context?.rawAnalysis || '';
+  const paths = extractJuneBilateralPaths(raw, game.home_team, game.away_team);
+  result.path_home = result.path_home ?? paths.path_home;
+  result.path_away = result.path_away ?? paths.path_away;
+  result._modelUsed = result._modelUsed ?? MLB_JUNE_BRAIN_MODEL;
+  result._promptSha = result._promptSha ?? await junePromptSha();
+  return result;
+}
 
 // Map verifiedTaleOfTape tokens to iOS StatValues property names.
 // iOS StatValues.from(dict:) reads specific keys like "offensive_rating", "tempo", etc.;
@@ -1183,12 +1282,16 @@ async function main() {
         };
         let result;
         try {
-          // MLB game picks run the pickdesk brain — one desk, one read
-          // (spec 2026-07-26). Other sports still route through analyzeGame
-          // until their own rebuild days.
-          result = config.key === 'baseball_mlb'
-            ? await analyzeGameDesk(game, runnerOptions)
-            : await analyzeGame(game, config.key, runnerOptions);
+          // MLB game picks: the restored JUNE ENGINE when armed (Aug 18 2026,
+          // GARY_MLB_JUNE_ENGINE=1 + ANTHROPIC_API_KEY); pickdesk otherwise.
+          // Other sports route through analyzeGame as before.
+          if (config.key === 'baseball_mlb') {
+            result = JUNE_ENGINE_READY
+              ? await runMlbJuneEngine(game, runnerOptions)
+              : await analyzeGameDesk(game, runnerOptions);
+          } else {
+            result = await analyzeGame(game, config.key, runnerOptions);
+          }
         } catch (err) {
           if (err.message?.includes('USER_ABORTED') || err.message?.includes('aborted')) {
             console.log(`\n⚠️  Request aborted for ${game.away_team} @ ${game.home_team}. Skipping...`);

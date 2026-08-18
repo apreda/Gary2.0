@@ -26,6 +26,8 @@ const MODEL_RATES = {
   'claude-sonnet-5':          { input: 2.00, output: 10.00 },
   // GPT-5.6 family (GA on our account Jul 22 2026). Sol = the game-pick brain.
   'gpt-5.6-sol':              { input: 5.00, output: 30.00 },
+  // Anthropic API research tier (June engine restoration, Aug 18 2026).
+  'anthropic-claude-haiku-4-5': { input: 1.00, output: 5.00 },
   'gpt-5.6-terra':            { input: 2.50, output: 15.00 },
   'gpt-5.6-luna':             { input: 1.00, output: 6.00 },
 };

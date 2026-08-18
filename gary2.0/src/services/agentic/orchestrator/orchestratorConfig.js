@@ -33,6 +33,19 @@
 // fails. Unset the env var and the system is exactly the Sol architecture —
 // the API stack returns with the next balance top-up, zero code changes.
 export const GAME_PICK_MODEL = process.env.GARY_MODEL_OVERRIDE || 'gpt-5.6-sol';
+
+// JUNE ENGINE RESTORATION (Aug 18 2026, founder GO after the ledger
+// post-mortem: June +26u/58% on this engine, negative every week since the
+// Jul 22-26 cutover): MLB games return to the agentic orchestrator.
+// - Research assistant: Anthropic API Haiku — June's cheap-dedicated-researcher
+//   pattern on an ISOLATED pool (the CLI sub bridges are tool-less by
+//   construction, and research needs 25+ fetch_stats calls per game).
+// - Brain: Sol on the OpenAI API — the tools-capable session (metered; the
+//   $0 codexCli bridge cannot run Gary's mandatory self-verification tools).
+// Both env-overridable; the lane itself arms via GARY_MLB_JUNE_ENGINE=1 in
+// scripts/run-agentic-picks.js and requires ANTHROPIC_API_KEY.
+export const MLB_RESEARCH_MODEL = process.env.GARY_MLB_RESEARCH_MODEL || 'anthropic-claude-haiku-4-5';
+export const MLB_JUNE_BRAIN_MODEL = process.env.GARY_MLB_BRAIN_MODEL || 'gpt-5.6-sol';
 // Legacy Gemini Tier 1 — research-era fallback references only.
 export const GEMINI_PRO_MODEL = 'gemini-3.5-flash';
 // Fallback when the primary errors / rate-limits.

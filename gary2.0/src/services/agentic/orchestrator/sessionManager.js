@@ -4,6 +4,7 @@ import { GoogleAICacheManager } from '@google/generative-ai/server';
 import { isOpenAiModel, createOpenAISession, sendToOpenAISession, resetOpenAISessionChat } from './providerAdapters/openaiSession.js';
 import { isClaudeCliModel, createClaudeCliSession, sendToClaudeCliSession, resetClaudeCliSessionChat } from './providerAdapters/claudeCliSession.js';
 import { isCodexCliModel, createCodexCliSession, sendToCodexCliSession, resetCodexCliSessionChat } from './providerAdapters/codexCliSession.js';
+import { isAnthropicApiModel, createAnthropicApiSession, sendToAnthropicApiSession, resetAnthropicApiSessionChat } from './providerAdapters/anthropicApiSession.js';
 
 // Minimum cacheable content size (Gemini 3 Flash min is 1024 tokens; ~4K chars is safe).
 // Below this we skip caching — break-even doesn't work and the API rejects small caches.
@@ -43,6 +44,9 @@ export async function createGeminiSession(options = {}) {
   // is the only switch — agentLoop and the callers stay provider-blind.
   if (isOpenAiModel(options.modelName)) {
     return createOpenAISession(options);
+  }
+  if (isAnthropicApiModel(options.modelName)) {
+    return createAnthropicApiSession(options);
   }
   if (isClaudeCliModel(options.modelName)) {
     return createClaudeCliSession(options);
@@ -199,6 +203,9 @@ export function resetSessionChat(session, seedHistory = []) {
   if (session?.provider === 'openai') {
     return resetOpenAISessionChat(session, seedHistory);
   }
+  if (session?.provider === 'anthropic-api') {
+    return resetAnthropicApiSessionChat(session, seedHistory);
+  }
   if (session?.provider === 'claude-cli') {
     return resetClaudeCliSessionChat(session, seedHistory);
   }
@@ -226,6 +233,9 @@ export function resetSessionChat(session, seedHistory = []) {
 export async function sendToSession(session, message, options = {}) {
   if (session?.provider === 'openai') {
     return sendToOpenAISession(session, message, options);
+  }
+  if (session?.provider === 'anthropic-api') {
+    return sendToAnthropicApiSession(session, message, options);
   }
   if (session?.provider === 'claude-cli') {
     return sendToClaudeCliSession(session, message, options);
