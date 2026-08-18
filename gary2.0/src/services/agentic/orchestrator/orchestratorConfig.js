@@ -50,7 +50,11 @@ export const GAME_PICK_MODEL = process.env.GARY_MODEL_OVERRIDE || 'gpt-5.6-sol';
 // Both env-overridable; the lane arms via GARY_MLB_JUNE_ENGINE=1 in
 // scripts/run-agentic-picks.js (key requirement follows the research model's
 // provider).
-export const MLB_RESEARCH_MODEL = process.env.GARY_MLB_RESEARCH_MODEL || 'anthropic-claude-haiku-4-5';
+// Aug 18 PM (founder: "why keep Gemini for football — one system"): the
+// researcher is Haiku for EVERY game sport, not just MLB. Same checklist
+// walk, same tools, per-sport factor lists.
+export const GAME_RESEARCH_MODEL = process.env.GARY_RESEARCH_MODEL || 'anthropic-claude-haiku-4-5';
+export const MLB_RESEARCH_MODEL = process.env.GARY_MLB_RESEARCH_MODEL || GAME_RESEARCH_MODEL;
 export const MLB_JUNE_BRAIN_MODEL = process.env.GARY_MLB_BRAIN_MODEL || 'codex-gpt-5.6-sol';
 // Legacy Gemini Tier 1 — research-era fallback references only.
 export const GEMINI_PRO_MODEL = 'gemini-3.5-flash';

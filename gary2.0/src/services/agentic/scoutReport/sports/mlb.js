@@ -1609,7 +1609,14 @@ export async function buildMlbScoutReport(game, options = {}) {
     if (!awayHasLineup) missing.push(`${awayTeam} lineup (${awayData?.batters?.length || 0}/9 batters)`);
     if (!homeHasPitcher) missing.push(`${homeTeam} starting pitcher`);
     if (!awayHasPitcher) missing.push(`${awayTeam} starting pitcher`);
+    // TEST-ONLY bypass (Aug 18 2026): bench harnesses may run the full engine
+    // before lineups post. Never set in production paths — production keeps
+    // the hard gate (LOCKED pick coverage policy).
+    if (options.testAllowMissingLineups) {
+      console.warn(`[Scout Report] ⚠️ TEST RUN — lineup gate bypassed. Missing: ${missing.join(', ')}`);
+    } else {
     throw new Error(`[Scout Report] HARD FAIL — MLB requires lineups + starting pitchers for ${awayTeam} @ ${homeTeam} (checked BDL + MLB Stats API). Missing: ${missing.join(', ')}. Run picks closer to game time (per BDL docs, lineups typically appear 1-2 hours before first pitch — the T-90 tier can race the posting; later tiers pick it up).`);
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════

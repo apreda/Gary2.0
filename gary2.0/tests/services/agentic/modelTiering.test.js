@@ -25,13 +25,15 @@ describe('model tiering: props on their own Gemini tier (game brain = Sol throug
     expect(configSrc).toMatch(/GAME_PICK_MODEL = process\.env\.GARY_MODEL_OVERRIDE \|\| 'gpt-5\.6-sol'/);
   });
 
-  it('the research briefing runs the cheap dedicated tier per sport', () => {
+  it('the research briefing runs the Haiku tier for every game sport', () => {
     const flashSrc = readFileSync(path.join(__dirname, '../../../src/services/agentic/orchestrator/flashAdvisor.js'), 'utf8');
-    // MLB research = Anthropic Haiku (June engine restoration, no-Gemini law
-    // for the MLB pick lane); every other sport stays on Gemini Tier 2.
-    expect(flashSrc).toContain("modelName: isMLBSport ? MLB_RESEARCH_MODEL : 'gemini-3-flash-preview'");
+    // One system (founder, Aug 18): the researcher is Haiku for ALL game
+    // sports — no Gemini in any pick lane (it survives only as the OpenAI
+    // search layer's internal quota fallback).
+    expect(flashSrc).toContain('modelName: GAME_RESEARCH_MODEL');
+    expect(flashSrc).not.toContain("modelName: 'gemini-3-flash-preview'");
     const configSrc = readFileSync(path.join(__dirname, '../../../src/services/agentic/orchestrator/orchestratorConfig.js'), 'utf8');
-    expect(configSrc).toMatch(/MLB_RESEARCH_MODEL = process\.env\.GARY_MLB_RESEARCH_MODEL \|\| 'anthropic-claude-haiku-4-5'/);
+    expect(configSrc).toMatch(/GAME_RESEARCH_MODEL = process\.env\.GARY_RESEARCH_MODEL \|\| 'anthropic-claude-haiku-4-5'/);
     // The scout report rides the cached prefix, not the per-factor seeds.
     expect(flashSrc).toContain('## SCOUT REPORT (this game');
   });

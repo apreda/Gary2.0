@@ -839,20 +839,11 @@ INVESTIGATION COMPLETE`;
           console.log(`  → [NARRATIVE_CONTEXT] for query: "${groundingQuery}"`);
 
           try {
-            // MLB rides the OpenAI search layer (no-Gemini law for the MLB
-            // pick lane, Aug 18 2026) — same {success, data} contract. Other
-            // sports keep Gemini grounding unchanged.
-            const isMLBGrounding = sport === 'baseball_mlb' || sport === 'MLB';
-            let searchResult;
-            if (isMLBGrounding) {
-              const { openaiWebSearch } = await import('../../pickdesk/webSearch.js');
-              searchResult = await openaiWebSearch(groundingQuery, { freshnessHours: 48 });
-            } else {
-              const { geminiGroundingSearch } = await import('../scoutReport/scoutReportBuilder.js');
-              searchResult = await geminiGroundingSearch(groundingQuery, {
-                maxTokens: 1000
-              });
-            }
+            // ALL pick lanes ride the OpenAI search layer (Aug 18 2026,
+            // one-system law — Gemini remains only as its internal quota
+            // fallback). Same {success, data} contract.
+            const { openaiWebSearch } = await import('../../pickdesk/webSearch.js');
+            const searchResult = await openaiWebSearch(groundingQuery, { freshnessHours: 48 });
 
             if (searchResult?.success && searchResult?.data) {
               const toolResponse = {

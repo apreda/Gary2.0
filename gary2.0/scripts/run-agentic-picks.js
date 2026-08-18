@@ -143,8 +143,12 @@ async function runMlbJuneEngine(game, runnerOptions) {
     console.warn(`[JuneEngine] ⚠️ engine failed twice (${result?.error || 'no pick'}) — pickdesk fallback for this game (coverage policy holds; era stamp will show pickdesk honestly).`);
     return analyzeGameDesk(game, runnerOptions);
   }
-  // Storage-contract parity with the pickdesk lane (paths, model, era stamp):
-  const raw = result.rawAnalysis || result._context?.rawAnalysis || '';
+  // Storage-contract parity with the pickdesk lane (paths, model, era stamp).
+  // Bilateral cases live in the PASS 1 message — rawAnalysis holds only the
+  // LAST assistant message (Pass 2.5), so extract from the full narrative
+  // (Aug 18 now-test finding).
+  const raw = result._fullAssistantNarrative || result._context?.fullAssistantNarrative
+    || result.rawAnalysis || result._context?.rawAnalysis || '';
   const paths = extractJuneBilateralPaths(raw, game.home_team, game.away_team);
   result.path_home = result.path_home ?? paths.path_home;
   result.path_away = result.path_away ?? paths.path_away;

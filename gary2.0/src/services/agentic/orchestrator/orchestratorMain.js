@@ -95,7 +95,7 @@ export async function analyzeGame(game, sport, options = {}) {
     let scoutReportData = loadCachedScoutReport(homeTeam, awayTeam, sport, game);
     if (!scoutReportData) {
       console.log('[Orchestrator] Building scout report...');
-      scoutReportData = await buildScoutReport(game, sport, { sportsbookOdds: options.sportsbookOdds });
+      scoutReportData = await buildScoutReport(game, sport, { sportsbookOdds: options.sportsbookOdds, testAllowMissingLineups: options.testAllowMissingLineups });
       // Cache for props to reuse. Never persist an all-N/A football tape: a
       // transient BDL throttle must not poison every retry for three hours.
       if (shouldReuseScoutReport(scoutReportData, sport)) {
