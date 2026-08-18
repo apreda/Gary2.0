@@ -15,7 +15,7 @@ import { openaiWebSearch } from '../../../pickdesk/webSearch.js';
 import { formatTokenMenu } from '../../tools/toolDefinitions.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
 import { ballDontLieService, getCachedOrFetch } from '../../../ballDontLieService.js';
-import { getPitcherArsenal, getPitcherStatcastProfile } from '../../../baseballSavantService.js';
+import { getPitcherArsenal, getPitcherStatcastProfile, getPlayerXStats } from '../../../baseballSavantService.js';
 import {
   getTeamRoster,
   getMlbRecentGames,
@@ -31,7 +31,12 @@ import {
   getPitcherCareerProfile,
   getTeamVsHandSplits,
   getScoringFlowAttributed,
+  getPitcherSituationalSplits,
+  getMlbStandingsContext,
+  getMlbPeopleHands,
 } from '../../../mlbStatsApiService.js';
+import { computeSpVsHandByStart, computeSeasonBvpForLineup, computePitchTypeTrendByStart } from './mlbPlatoonRecency.js';
+import { computeTeamMonthArc, computeBounceBackLine, computeRecordSince } from './mlbSeasonContext.js';
 import { recentWindowLine, monthArcLine, longLayoffFlag, earlyCareerFlag, midSeasonGapFlag, singleStartDistortion, teamChangeFlags, seasonLineQualifier, matchupRecencyLine, homeRoadLine } from './pitcherArc.js';
 import { foldName } from '../../../../utils/nameUtils.js';
 import { findStandingsRow } from '../../../teamIdentity.js';
@@ -100,6 +105,10 @@ export async function buildMlbScoutReport(game, options = {}) {
 
   console.log(`[Scout Report] Building MLB report: ${awayTeam} @ ${homeTeam}`);
 
+  // Doubleheader awareness — filled by the schedule match below, or by the
+  // fallback probe when the gamePk arrived pre-resolved.
+  let dhInfo = null;
+
   // Resolve MLB Stats API gamePk + MLBAM team ids when missing (BDL/odds-feed
   // games have neither; the schedule match carries both).
   if ((!gamePk || !homeTeamId || !awayTeamId) && startTime) {
@@ -132,6 +141,11 @@ export async function buildMlbScoutReport(game, options = {}) {
           gamePk = gamePk || match.gamePk;
           homeTeamId = homeTeamId || match.teams?.home?.team?.id || null;
           awayTeamId = awayTeamId || match.teams?.away?.team?.id || null;
+          // DOUBLEHEADER (founder GO, Aug 18): the schedule row knows; the
+          // desk's only prior signal was a rest line reading "played today".
+          if (match.doubleHeader === 'Y' || match.doubleHeader === 'S') {
+            dhInfo = { gameNumber: match.gameNumber || null, split: match.doubleHeader === 'S' };
+          }
           break;
         }
       }
@@ -148,6 +162,20 @@ export async function buildMlbScoutReport(game, options = {}) {
   // MLB Stats API doesn't recognize, and the tool returns "not identified".
   if (gamePk && !game.gamePk) {
     game.gamePk = gamePk;
+  }
+
+  // DH fallback probe: a gamePk that arrived pre-resolved skipped the
+  // schedule match above — one cached schedule read fills the flag.
+  if (!dhInfo && gamePk && startTime) {
+    try {
+      const { getMlbSchedule } = await import('../../../mlbStatsApiService.js');
+      const etDate = new Date(startTime).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+      const schedule = await getMlbSchedule(etDate).catch(() => []);
+      const row = (schedule || []).find((g) => g.gamePk === gamePk);
+      if (row && (row.doubleHeader === 'Y' || row.doubleHeader === 'S')) {
+        dhInfo = { gameNumber: row.gameNumber || null, split: row.doubleHeader === 'S' };
+      }
+    } catch { /* flag is additive */ }
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -250,6 +278,24 @@ export async function buildMlbScoutReport(game, options = {}) {
   ]);
 
   console.log(`[Scout Report] BDL standings: ${bdlStandings?.length || 0} teams, BDL injuries: ${bdlInjuries?.length || 0}`);
+
+  // Opponent record lookup, shared by every ledger that names an opponent
+  // (founder GO, Aug 18: "3.10 ERA his last three — against WHOM?"). Exact
+  // whole-name match first; a bare nickname resolves only when it names ONE
+  // club (a bare "Sox" prints nothing — the shared-mascot lesson, Aug 17).
+  const standingsRecordOf = (teamNameStr) => {
+    const tn = String(teamNameStr || '').toLowerCase().trim();
+    if (!tn) return '';
+    const rows = bdlStandings || [];
+    const nameOf = (st) => (st.team?.display_name || st.team?.full_name || '').toLowerCase();
+    let row = rows.find((st) => nameOf(st) === tn);
+    if (!row) {
+      const nick = tn.split(' ').pop();
+      const candidates = rows.filter((st) => nameOf(st).split(' ').pop() === nick);
+      if (candidates.length === 1) row = candidates[0];
+    }
+    return row ? ` (${row.wins}-${row.losses})` : '';
+  };
 
   // ═══════════════════════════════════════════════════════════════════
   // TEAM SEASON STATS (BDL GOAT-tier — batting + pitching aggregates)
@@ -468,7 +514,7 @@ export async function buildMlbScoutReport(game, options = {}) {
         const mlbamId = pitcher.id;
         // (Career-vs-opponent fetch REMOVED — founder ruling, Aug 10: prior-
         // season numbers off the desk.)
-        const [arsenal, platoon, contact, seasonPitching, lastStarts, monthSplits, careerProfile] = await Promise.all([
+        const [arsenal, platoon, contact, seasonPitching, lastStarts, monthSplits, careerProfile, situational, xstats] = await Promise.all([
           getPitcherArsenal(mlbamId ?? pitcher.fullName, season).catch(() => null),
           mlbamId ? getPitcherPlatoonSplits(mlbamId, season).catch(() => null) : Promise.resolve(null),
           getPitcherStatcastProfile(mlbamId ?? pitcher.fullName, season).catch(() => null),
@@ -476,6 +522,11 @@ export async function buildMlbScoutReport(game, options = {}) {
           mlbamId ? getPitcherLastStarts(mlbamId, season, 6).catch(() => []) : Promise.resolve([]),
           mlbamId ? getPitcherMonthSplits(mlbamId, season).catch(() => []) : Promise.resolve([]),
           mlbamId ? getPitcherCareerProfile(mlbamId).catch(() => null) : Promise.resolve(null),
+          // Situational splits (founder GO, Aug 18 — the checklist asked, no
+          // data answered): first inning, ahead/behind in count.
+          mlbamId ? getPitcherSituationalSplits(mlbamId, season).catch(() => null) : Promise.resolve(null),
+          // Savant expected stats — xERA beside ERA, fetched not derived.
+          getPlayerXStats('pitcher', mlbamId ?? pitcher.fullName, season).catch(() => null),
         ]);
 
         // THE ARC (Aug 4 2026, founder GO — the Bieber/Chandler autopsy):
@@ -521,7 +572,9 @@ export async function buildMlbScoutReport(game, options = {}) {
           // founder: "team is 7-1 in his last 8" must arrive as the raw
           // ledger — dates, opponents, his line, who won — so the brain can
           // weigh WHY, not inherit a headline).
-          const fmtStart = (g) => `${g.date} ${g.isHome ? 'vs' : '@'} ${g.opponent}: ${g.ip}IP ${g.h}H ${g.er}ER ${g.k}K${g.bb ? ` ${g.bb}BB` : ''}${g.hr ? ` ${g.hr}HR` : ''}${g.pitches ? ` ${g.pitches}p` : ''}${g.win == null ? '' : g.win ? ' (team W)' : ' (team L)'}`;
+          // Opponent record beside every start (founder GO, Aug 18): the
+          // ledger's "against whom" now says how good the whom was.
+          const fmtStart = (g) => `${g.date} ${g.isHome ? 'vs' : '@'} ${g.opponent}${standingsRecordOf(g.opponent)}: ${g.ip}IP ${g.h}H ${g.er}ER ${g.k}K${g.bb ? ` ${g.bb}BB` : ''}${g.hr ? ` ${g.hr}HR` : ''}${g.pitches ? ` ${g.pitches}p` : ''}${g.win == null ? '' : g.win ? ' (team W)' : ' (team L)'}`;
           parts.push(`  Last ${lastStarts.length} start${lastStarts.length === 1 ? '' : 's'}: ${lastStarts.slice().reverse().map(fmtStart).join(' | ')}`);
           // The ledger's own arithmetic (Aug 4) — the recent window as a
           // number, as citable as the season figure above it.
@@ -703,6 +756,32 @@ export async function buildMlbScoutReport(game, options = {}) {
           if (whiffTrend) parts.push(`  Whiff% by start (oldest→newest): ${whiffTrend}`);
         } catch { /* trend optional */ }
 
+        // PLATOON RECENCY (founder GO, Aug 18 — Tier 3 of the gap audit):
+        // the season platoon split below has no time axis; these rows give it
+        // one — per-start vs-hand results, who did the hitting last time out,
+        // and each top pitch's own recent effectiveness. Same cached PA
+        // payloads the whiff device reads; facts only.
+        try {
+          const bdlPid = bdlRow?.player?.id;
+          if (bdlPid != null) {
+            const startLabels = new Map();
+            for (const g of pitcherArcData[side]?.starts || []) {
+              const nick = String(g.opponent || '').split(' ').pop();
+              startLabels.set(String(g.date || '').slice(0, 10), `${g.isHome ? 'vs' : '@'} ${nick}`);
+            }
+            const vsHand = await computeSpVsHandByStart({ pitcherBdlId: bdlPid, season, startLabels });
+            if (vsHand?.lines?.length) {
+              parts.push(`  Vs-hand by start:`);
+              for (const line of vsHand.lines) parts.push(`    ${line}`);
+              if (vsHand.damageLine) parts.push(`    ${vsHand.damageLine}`);
+            }
+            const chrono = await ballDontLieService.getMlbPlayerGameRowsChrono(bdlPid, season).catch(() => []);
+            const recentIds = (chrono || []).filter((r) => r?.ip != null && parseFloat(r.ip) > 0).slice(-3).map((r) => r.game_id);
+            const ptTrend = await computePitchTypeTrendByStart({ pitcherBdlId: bdlPid, gameIds: recentIds });
+            if (ptTrend) parts.push(`  ${ptTrend}`);
+          }
+        } catch { /* recency layer is additive — never sinks the starter block */ }
+
         if (platoon?.vsLeft || platoon?.vsRight) {
           const fmt = (p) => p ? `${p.avg ?? '—'} AVG / ${p.ops ?? '—'} OPS, ${p.hr ?? '—'} HR (${p.ab ?? '—'} AB)` : 'no data';
           parts.push(`  Platoon (opp batting): vs LHB ${fmt(platoon.vsLeft)} | vs RHB ${fmt(platoon.vsRight)}`);
@@ -720,6 +799,31 @@ export async function buildMlbScoutReport(game, options = {}) {
           parts.push(`  Contact quality allowed: ${bits.join(', ')}`);
         } else {
           parts.push(`  Contact quality allowed: NOT AVAILABLE — do not characterize ${pitcher.fullName}'s batted-ball profile`);
+        }
+
+        // xERA beside ERA (founder GO, Aug 18): Savant's expected line,
+        // FETCHED — the luck-vs-earned lens the checklist kept asking for.
+        if (xstats && xstats.xera != null) {
+          const eraBit = xstats.era != null ? ` vs ${Number(xstats.era).toFixed(2)} ERA` : '';
+          parts.push(`  Expected (Savant): ${Number(xstats.xera).toFixed(2)} xERA${eraBit}${xstats.est_woba != null ? `, ${Number(xstats.est_woba).toFixed(3).replace(/^0/, '')} xwOBA against` : ''}`);
+        }
+        // Situational splits (statsapi statSplits — verified sitCodes):
+        // the first-inning and count questions now have printed answers.
+        if (situational) {
+          const sBits = [];
+          if (situational.firstInning?.era != null) sBits.push(`1st inning ${situational.firstInning.era} ERA (${situational.firstInning.ip} IP)`);
+          if (situational.aheadInCount?.avg) sBits.push(`ahead in count .${String(situational.aheadInCount.avg).replace(/^0?\./, '')} opp AVG`);
+          if (situational.behindInCount?.avg) sBits.push(`behind in count .${String(situational.behindInCount.avg).replace(/^0?\./, '')} opp AVG`);
+          if (sBits.length) parts.push(`  Situational: ${sBits.join(' · ')}`);
+        }
+        // Running game vs him (season): completes the chain the catcher
+        // shelf starts — pitcher hold, catcher arm, team speed.
+        {
+          const sb = seasonPitching?.stolenBases;
+          const cs = seasonPitching?.caughtStealing;
+          if (sb != null && cs != null && (Number(sb) + Number(cs)) > 0) {
+            parts.push(`  Running game vs him: ${sb}-for-${Number(sb) + Number(cs)} stealing this season`);
+          }
         }
       } catch (e) {
         console.warn(`[Scout Report] SP detail enrichment failed for ${pitcher.fullName}: ${e.message}`);
@@ -816,11 +920,63 @@ export async function buildMlbScoutReport(game, options = {}) {
     ? smallSampleFlags.join('\n')
     : 'No mid-season team changes or home debuts for tonight\'s starting pitchers.';
 
-  // (DIVISION STANDINGS section REMOVED — founder, Aug 5 2026: "do we need
-  // league standings at all? doesn't seem relevant to picking each game
-  // night by night." THE STAKES lines + the tape's season-record row are
-  // the surviving standings surface; the bdlStandings fetch stays for them
-  // and the schedule lookahead.)
+  // ═══════════════════════════════════════════════════════════════════
+  // STANDINGS & SEASON SHAPE (removed Aug 5, RESTORED by founder order
+  // Aug 18: "bring back standings" — with his records-need-context law:
+  // every record prints beside the desk's ledgers and stories that carry
+  // what actually happened). Division tables from the already-fetched BDL
+  // standings; streak/ranks/run differential and the bettor split records
+  // (vs LH/RH starters, one-run, extra innings) FETCHED from the official
+  // standings feed — never derived. Month arcs + tonight's-spot lines
+  // compute from the cached season index.
+  // ═══════════════════════════════════════════════════════════════════
+  let standingsSection = '';
+  try {
+    const ctx = await getMlbStandingsContext(season).catch(() => new Map());
+    const ctxLine = (mlbamId, teamName) => {
+      const c = mlbamId != null ? ctx.get(mlbamId) : null;
+      if (!c) return null;
+      const bits = [];
+      if (c.divisionRank) bits.push(`division rank ${c.divisionRank}${c.gamesBack && c.gamesBack !== '-' ? ` (${c.gamesBack} GB)` : ''}`);
+      if (c.wildCardGamesBack && c.wildCardGamesBack !== '-') bits.push(`wild card ${c.wildCardGamesBack} back`);
+      if (c.streak) bits.push(`streak ${c.streak}`);
+      if (c.runDifferential != null) bits.push(`run differential ${c.runDifferential > 0 ? '+' : ''}${c.runDifferential} (${c.runsScored} scored / ${c.runsAllowed} allowed, ${c.gamesPlayed} G)`);
+      const s = c.splits || {};
+      const rec = [];
+      if (s.left) rec.push(`vs LH starters ${s.left}`);
+      if (s.right) rec.push(`vs RH starters ${s.right}`);
+      if (s.oneRun) rec.push(`one-run games ${s.oneRun}`);
+      if (s.extraInning) rec.push(`extra innings ${s.extraInning}`);
+      const line1 = `${teamName}: ${bits.join(' · ')}`;
+      return rec.length ? `${line1}\n  Records: ${rec.join(' | ')}` : line1;
+    };
+    const divisionOf = (teamName) => findStandingsRow(bdlStandings, teamName)?.division_name || null;
+    const divTable = (divName) => {
+      const rows = divName ? (bdlStandings || []).filter((t) => t.division_name === divName) : [];
+      if (!rows.length) return null;
+      const sorted = rows.slice().sort((a, b) => (b.wins || 0) - (a.wins || 0));
+      return `--- ${divName} ---\n${sorted.map((t) =>
+        `${t.team?.display_name || t.team?.full_name || '?'}: ${t.wins}-${t.losses} | L10 ${t.last_ten_games || '—'} | Streak ${t.streak || '—'} | GB ${t.division_games_behind ?? t.games_behind ?? '—'}`).join('\n')}`;
+    };
+    const parts = [];
+    const ctxLines = [ctxLine(homeTeamId, homeTeam), ctxLine(awayTeamId, awayTeam)].filter(Boolean);
+    if (ctxLines.length) parts.push(ctxLines.join('\n'));
+    for (const d of [...new Set([divisionOf(homeTeam), divisionOf(awayTeam)].filter(Boolean))]) {
+      const t = divTable(d);
+      if (t) parts.push(t);
+    }
+    const monthArcs = [
+      [homeTeamBdlId, homeTeam],
+      [awayTeamBdlId, awayTeam],
+    ].map(([id, nm]) => { const a = computeTeamMonthArc(seasonIndex, id); return a ? `${nm} ${a}` : null; }).filter(Boolean);
+    if (monthArcs.length) parts.push(`Season shape:\n${monthArcs.join('\n')}`);
+    const bounce = [
+      computeBounceBackLine(seasonIndex, homeTeamBdlId, homeTeam),
+      computeBounceBackLine(seasonIndex, awayTeamBdlId, awayTeam),
+    ].filter(Boolean);
+    if (bounce.length) parts.push(`Tonight's spot:\n${bounce.join('\n')}`);
+    standingsSection = parts.join('\n\n');
+  } catch { standingsSection = ''; }
 
   // ═══════════════════════════════════════════════════════════════════
   // L1-L4: INDIVIDUAL GAME RECAPS (what actually happened — narrative box scores)
@@ -1265,14 +1421,9 @@ export async function buildMlbScoutReport(game, options = {}) {
   {
     // Opponent records ride each row (founder, Aug 5 PM: "3-7 against WHOM —
     // you can tell a lot about the quality of a team even in the losses").
-    const recordOf = (teamNameStr) => {
-      const tn = String(teamNameStr || '').toLowerCase();
-      const row = (bdlStandings || []).find(st => {
-        const dn = (st.team?.display_name || st.team?.full_name || '').toLowerCase();
-        return dn && (tn === dn || tn.endsWith(dn.split(' ').pop()));
-      });
-      return row ? ` (${row.wins}-${row.losses})` : '';
-    };
+    // Shared helper (Aug 18): exact-name-first lookup — the old local copy
+    // could hand a Sox team the other Sox team's record.
+    const recordOf = standingsRecordOf;
     const formatRecentGames = (games, teamName) => {
       if (!games || games.length === 0) return `${teamName}: No recent games`;
       const lw = teamName.toLowerCase().split(' ').pop();
@@ -1629,9 +1780,27 @@ export async function buildMlbScoutReport(game, options = {}) {
       } catch { return null; }
     };
     const withSat = (formatted, satLine) => (satLine ? `${formatted}\n${satLine}` : formatted);
+    // HANDEDNESS COUNT (founder GO, Aug 18): the nine's composition against
+    // tonight's opposing starter, as arithmetic — not left for the brain to
+    // tally letter by letter.
+    const handsLine = (sideData, oppPitcher) => {
+      const counts = { L: 0, R: 0, S: 0 };
+      for (const b of sideData?.batters || []) {
+        const c = String(b.batsThrows || '').split('/')[0].toUpperCase();
+        if (counts[c] != null) counts[c] += 1;
+      }
+      const total = counts.L + counts.R + counts.S;
+      if (total < 9) return null;
+      const hand = oppPitcher?.pitchHand?.code || null;
+      const vs = oppPitcher?.fullName
+        ? ` vs ${hand ? `${hand}HP ` : ''}${String(oppPitcher.fullName).split(' ').pop()}`
+        : '';
+      return `  Handedness${vs}: ${counts.L} LHB, ${counts.R} RHB${counts.S ? `, ${counts.S} switch` : ''}`;
+    };
+    const withHands = (formatted, line) => (line ? `${formatted}\n${line}` : formatted);
     confirmedLineupsSection = [
-      withSat(formatLineup(homeData, homeTeam), satToday(homeTeam, homeData)),
-      withSat(formatLineup(awayData, awayTeam), satToday(awayTeam, awayData)),
+      withSat(withHands(formatLineup(homeData, homeTeam), handsLine(homeData, probablePitchersData?.away)), satToday(homeTeam, homeData)),
+      withSat(withHands(formatLineup(awayData, awayTeam), handsLine(awayData, probablePitchersData?.home)), satToday(awayTeam, awayData)),
     ].join('\n\n');
   }
 
@@ -1811,6 +1980,13 @@ export async function buildMlbScoutReport(game, options = {}) {
       if (lastPlayedLabel) dateBits.push(`last played ${lastPlayedLabel}`);
       else if (lastAppearance === null) dateBits.push('no appearances this season');
       if (updateLabel) dateBits.push(`update ${updateLabel}`);
+      // Team record since he last played (founder GO, Aug 18 — sources the
+      // "has the team's record changed since the injury" ask with data).
+      // Purely additive display; the LOCKED clock/label logic is untouched.
+      try {
+        const sinceRec = computeRecordSince(seasonIndex, sideKey === 'home' ? homeTeamBdlId : awayTeamBdlId, lastAppearance?.date);
+        if (sinceRec) dateBits.push(`team ${sinceRec.wins}-${sinceRec.losses} since`);
+      } catch { /* additive only */ }
       const clock = route.tag === 'SP SCRATCH'
         ? ''
         : ` — ${mlbGamesMissedLabel(gamesMissed, isMinimum)}`;
@@ -1861,7 +2037,8 @@ export async function buildMlbScoutReport(game, options = {}) {
     }
   } catch { /* contact layer optional */ }
 
-  const battingRollFor = async (batter) => {
+  const HITTER_MONTH_ORDER = { March: 3, April: 4, May: 5, June: 6, July: 7, August: 8, September: 9, October: 10 };
+  const battingRollFor = async (batter, seasonPool, oppFullName) => {
     if (batter?.playerId == null) return null;
     try {
       const splits = await ballDontLieService.getMlbPlayerSplits({ playerId: batter.playerId, season });
@@ -1881,20 +2058,147 @@ export async function buildMlbScoutReport(game, options = {}) {
       }
       const contact = hitterContactLine(contactByPid.get(String(batter.playerId)));
       const contactBit = contact ? `\n     Contact (recent): ${contact}` : '';
-      if (!l7 && !l15 && !dayBit && !contactBit) return null;
-      return `  ${batter.battingOrder}. ${batter.name}: ${l7 ? `L7 ${l7}` : ''}${l7 && l15 ? ' | ' : ''}${l15 ? `L15 ${l15}` : ''}${dayBit}${contactBit}`;
+      // SEASON ANCHOR (founder GO, Aug 18 — the audit's top fill): a roll
+      // means nothing without the baseline. Already-fetched season stats,
+      // finally printed beside the L7/L15 they qualify.
+      let seasonBit = '';
+      {
+        const target = foldName(batter.name);
+        const sRow = (seasonPool || []).find((s) => foldName(s.player?.full_name || `${s.player?.first_name || ''} ${s.player?.last_name || ''}`) === target);
+        if (sRow && (sRow.batting_ab || 0) > 0) {
+          const avg = sRow.batting_avg != null ? sRow.batting_avg.toFixed(3) : '—';
+          const ops = sRow.batting_ops != null ? sRow.batting_ops.toFixed(3) : '—';
+          seasonBit = `\n     Season: ${avg} AVG/${ops} OPS, ${sRow.batting_hr ?? 0} HR, ${sRow.batting_rbi ?? 0} RBI (${sRow.batting_ab} AB)`;
+        }
+      }
+      // PLATOON, HITTER GRAIN (founder GO, Aug 18 — high-level, bettor
+      // grade): both hands, samples visible. A sheltered platoon bat shows
+      // itself in the AB imbalance; what that means tonight is Gary's read.
+      let platoonBit = '';
+      {
+        const bd = splits?.byBreakdown || [];
+        const handRow = (nm) => bd.find((r) => r.category === 'batting' && r.split_name === nm && r.at_bats > 0);
+        const vl = handRow('vs. Left');
+        const vr = handRow('vs. Right');
+        const fmtHand = (r) => `${r.avg ?? '?'} AVG/${r.ops ?? '?'} OPS${r.home_runs ? `, ${r.home_runs} HR` : ''} (${r.at_bats} AB)`;
+        if (vl || vr) platoonBit = `\n     Platoon: vs LHP ${vl ? fmtHand(vl) : 'no ABs'} | vs RHP ${vr ? fmtHand(vr) : 'no ABs'}`;
+      }
+      // MONTH ARC (founder GO, Aug 18): "has he slumped like this before?"
+      // — the season's own months, from the same cached splits call.
+      let monthsBit = '';
+      {
+        const monthRows = rows
+          .filter((r) => r.category === 'batting' && HITTER_MONTH_ORDER[r.split_name] && r.at_bats > 0)
+          .sort((a, b) => HITTER_MONTH_ORDER[a.split_name] - HITTER_MONTH_ORDER[b.split_name]);
+        if (monthRows.length >= 2) {
+          monthsBit = `\n     By month: ${monthRows.map((r) => `${r.split_name.slice(0, 3)} ${r.avg ?? '?'}/${r.ops ?? '?'} (${r.at_bats} AB)`).join(' · ')}`;
+        }
+      }
+      // VS TONIGHT'S OPPONENT, THIS SEASON (same splits payload). Nickname
+      // resolves only when it names one club in his byOpponent rows — and
+      // BDL's legacy club names (e.g. Indians) simply skip the line.
+      let oppBit = '';
+      {
+        const oppNick = String(oppFullName || '').split(' ').pop().toLowerCase();
+        const cands = (splits?.byOpponent || []).filter((r) =>
+          r.category === 'batting' && r.at_bats > 0
+          && String(r.split_name || '').toLowerCase().split(' ').pop() === oppNick);
+        if (cands.length === 1) {
+          const r = cands[0];
+          oppBit = `\n     Vs ${String(oppFullName).split(' ').pop()} this season: ${r.hits}-${r.at_bats}${r.home_runs ? `, ${r.home_runs} HR` : ''} (${r.avg ?? '?'} AVG)`;
+        }
+      }
+      if (!l7 && !l15 && !dayBit && !contactBit && !seasonBit && !platoonBit) return null;
+      return `  ${batter.battingOrder}. ${batter.name}: ${l7 ? `L7 ${l7}` : ''}${l7 && l15 ? ' | ' : ''}${l15 ? `L15 ${l15}` : ''}${dayBit}${seasonBit}${platoonBit}${monthsBit}${oppBit}${contactBit}`;
     } catch { return null; }
   };
-  const battingRollsFor = async (data, teamName) => {
-    const lines = (await Promise.all((data?.batters || []).map(battingRollFor))).filter(Boolean);
+  const battingRollsFor = async (data, teamName, seasonPool, oppFullName) => {
+    const lines = (await Promise.all((data?.batters || []).map((b) => battingRollFor(b, seasonPool, oppFullName)))).filter(Boolean);
     return lines.length ? `${teamName}:\n${lines.join('\n')}` : null;
   };
   const [homeBattingRolls, awayBattingRolls] = await Promise.all([
-    battingRollsFor(homeData, homeTeam),
-    battingRollsFor(awayData, awayTeam),
+    battingRollsFor(homeData, homeTeam, homePlayerSeasonStats, awayTeam),
+    battingRollsFor(awayData, awayTeam, awayPlayerSeasonStats, homeTeam),
   ]);
   const lineupRecentBattingSection = [homeBattingRolls, awayBattingRolls].filter(Boolean).join('\n\n')
     || 'Recent batting rolls unavailable for tonight\'s starters.';
+
+  // ═══════════════════════════════════════════════════════════════════
+  // TONIGHT'S BATS VS TONIGHT'S ARMS — this season only (founder GO,
+  // Aug 18): the desk-legal batter-vs-pitcher, built from the PAs of the
+  // starter's own meetings with this club (Aug 10 no-prior-season ruling
+  // intact). One cached PA payload per meeting.
+  // ═══════════════════════════════════════════════════════════════════
+  let seasonBvpSection = '';
+  try {
+    const bvpFor = async (spSide, lineupData, lineupTeamName) => {
+      const sp = pitcherStats[spSide];
+      const bdlPid = sp?.player?.id;
+      const spName = sp?.name || probablePitchersData?.[spSide]?.fullName;
+      if (bdlPid == null || !spName || !(lineupData?.batters?.length >= 9)) return null;
+      const oppWord = lineupTeamName.toLowerCase().split(' ').pop();
+      const vsDates = new Set((pitcherArcData[spSide]?.starts || [])
+        .filter((g) => String(g.opponent || '').toLowerCase().endsWith(oppWord))
+        .map((g) => String(g.date || '').slice(0, 10)));
+      if (!vsDates.size) return null;
+      const chrono = await ballDontLieService.getMlbPlayerGameRowsChrono(bdlPid, season).catch(() => []);
+      const gameIds = (chrono || [])
+        .filter((r) => r?.ip != null && parseFloat(r.ip) > 0)
+        .filter((r) => vsDates.has(toEtDate(r._game?.date || r.game?.date || r.date || '')))
+        .map((r) => r.game_id);
+      if (!gameIds.length) return null;
+      return computeSeasonBvpForLineup({
+        pitcherBdlId: bdlPid,
+        pitcherLastName: String(spName).split(' ').pop(),
+        gameIds,
+        lineupBatters: lineupData.batters,
+      });
+    };
+    const [homeBvp, awayBvp] = await Promise.all([
+      bvpFor('away', homeData, homeTeam),
+      bvpFor('home', awayData, awayTeam),
+    ]);
+    seasonBvpSection = [homeBvp, awayBvp].filter(Boolean).join('\n');
+  } catch { seasonBvpSection = ''; }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // BENCH TONIGHT (founder GO, Aug 18): who is actually available to hit
+  // late — active roster minus the confirmed nine minus the IL, with bats
+  // side and the season line. The platoon caddy question, answered.
+  // ═══════════════════════════════════════════════════════════════════
+  let benchSection = '';
+  try {
+    const injuredFolds = new Set((bdlInjuries || [])
+      .map((i) => foldName(i?.player?.full_name || [i?.player?.first_name, i?.player?.last_name].filter(Boolean).join(' ')))
+      .filter(Boolean));
+    const benchFor = async (roster, sideData, seasonPool, teamName) => {
+      if (!roster?.length || !(sideData?.batters?.length >= 9)) return null;
+      const inLineup = new Set([
+        ...(sideData.batters || []).map((b) => foldName(b.name)),
+        sideData.pitcher?.name ? foldName(sideData.pitcher.name) : null,
+      ].filter(Boolean));
+      const bench = roster.filter((p) => p.positionType !== 'Pitcher'
+        && !/injured|60-day|15-day|10-day|7-day/i.test(String(p.ilStatus || ''))
+        && p.name && !inLineup.has(foldName(p.name))
+        && !injuredFolds.has(foldName(p.name)));
+      if (!bench.length) return null;
+      const hands = await getMlbPeopleHands(bench.map((p) => p.id)).catch(() => new Map());
+      const rows = bench.slice(0, 6).map((p) => {
+        const bat = hands.get(p.id)?.bat || '?';
+        const sRow = (seasonPool || []).find((s) => foldName(s.player?.full_name || `${s.player?.first_name || ''} ${s.player?.last_name || ''}`) === foldName(p.name));
+        const line = sRow && (sRow.batting_ab || 0) > 0
+          ? `${sRow.batting_avg != null ? sRow.batting_avg.toFixed(3) : '—'}/${sRow.batting_ops != null ? sRow.batting_ops.toFixed(3) : '—'}, ${sRow.batting_hr ?? 0} HR (${sRow.batting_ab} AB)`
+          : 'no season line in source';
+        return `${p.name} (${p.position}, bats ${bat}) ${line}`;
+      });
+      return `${teamName}: ${rows.join(' · ')}`;
+    };
+    const [homeBench, awayBench] = await Promise.all([
+      benchFor(homeRoster, homeData, homePlayerSeasonStats, homeTeam),
+      benchFor(awayRoster, awayData, awayPlayerSeasonStats, awayTeam),
+    ]);
+    benchSection = [homeBench, awayBench].filter(Boolean).join('\n');
+  } catch { benchSection = ''; }
 
   // Season head-to-head — computed from the cached season index, zero calls.
   const seasonSeries = computeMlbSeasonSeries(seasonIndex, homeTeamBdlId, awayTeamBdlId, homeTeam, awayTeam);
@@ -2101,6 +2405,7 @@ ${gameDesc ? `Context: ${gameDesc}` : ''}
 Venue: ${typeof venue === 'string' ? venue : venue?.name || 'Unknown'}
 ${startTime ? `Start: ${new Date(startTime).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })} ET` : ''}
 ${seriesLine ? seriesLine : ''}
+${dhInfo ? `DOUBLEHEADER today${dhInfo.gameNumber ? ` — this is game ${dhInfo.gameNumber}` : ''}${dhInfo.split ? ' (split doubleheader)' : ''}.` : ''}
 ${weatherSection}
 ══════════════════════════════════════════════════════════════════
 
@@ -2116,14 +2421,14 @@ ${confirmedLineupsSection}
 ═══ LINEUP RECENT BATTING (last 7 / last 15 days) ═══
 ${lineupRecentBattingSection}
 
-${matchupShelfSection ? matchupShelfSection + '\n\n' : ''}═══ BETTING CONTEXT ═══
+${seasonBvpSection ? `═══ TONIGHT'S BATS VS TONIGHT'S ARMS — THIS SEASON ═══\n${seasonBvpSection}\n\n` : ''}${benchSection ? `═══ THE BENCH TONIGHT ═══\n${benchSection}\n\n` : ''}${matchupShelfSection ? matchupShelfSection + '\n\n' : ''}═══ BETTING CONTEXT ═══
 ${oddsSection}
 
 
 ═══ TEAM SEASON STATS ═══
 ${teamSeasonStatsSection || 'No team season stats available.'}
 
-═══ INJURIES (BDL Structured) ═══
+${standingsSection ? `═══ STANDINGS & SEASON SHAPE ═══\n${standingsSection}\n\n` : ''}═══ INJURIES (BDL Structured) ═══
 ${injuriesSection || 'No structured injury data available.'}
 
 ═══ RECENT FORM ═══

@@ -19,7 +19,10 @@ import {
   getGameBoxScore,
   getPitcherPlatoonSplits,
   getPitcherEntryContext,
+  getMlbPeopleHands,
+  getPitcherGameLogRaw,
 } from '../../../mlbStatsApiService.js';
+import { computeRelieverUsagePattern } from '../../scoutReport/sports/mlbSeasonContext.js';
 import { getPitcherArsenal, getPitcherStatcastProfile } from '../../../baseballSavantService.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { formatSampleSuffix } from './statRouterCommon.js';
@@ -52,6 +55,29 @@ async function currentRosterFolds(teamName) {
     })());
   }
   return rosterFoldCache.get(teamName);
+}
+
+// Fold → MLBAM person id, same roster fetch — lets the pen sections reach a
+// man's official game log (usage patterns) and pitch hand (Aug 18 fills).
+const rosterIdCache = new Map();
+async function currentRosterIdsByFold(teamName) {
+  if (!rosterIdCache.has(teamName)) {
+    rosterIdCache.set(teamName, (async () => {
+      try {
+        const { findMlbTeam, getTeamRoster } = await import('../../../mlbStatsApiService.js');
+        const t = await findMlbTeam(teamName);
+        if (!t?.id) return null;
+        const roster = await getTeamRoster(t.id);
+        const map = new Map();
+        for (const r of roster || []) {
+          const f = foldName(r.name);
+          if (f && r.id != null) map.set(f, r.id);
+        }
+        return map.size ? map : null;
+      } catch { return null; }
+    })());
+  }
+  return rosterIdCache.get(teamName);
 }
 const goneTag = (rosterFolds, name) =>
   rosterFolds && !rosterFolds.has(foldName(name)) ? ' — not on current roster' : '';
@@ -2300,11 +2326,35 @@ export const mlbFetchers = {
           // to back, so unheadered arm lines read as ONE anonymous list —
           // Gary couldn't tell whose pen was whose (the Orioles-Twins miss).
           lines.push(`${teamName} pen${rosterFiltered ? ' (current roster)' : ''}:`);
+          // HANDEDNESS + SEASON USAGE PATTERN (founder GO, Aug 18): the arm's
+          // throwing side and the manager's actual rules for him — how often
+          // he works back-to-back days, his pitch loads, multi-inning use —
+          // from the official game log. Facts only; availability is the
+          // brain's read off these plus the recent-workload ledger.
+          const idByFold = await currentRosterIdsByFold(teamName).catch(() => null);
+          const armIds = idByFold ? relievers.map((a) => idByFold.get(foldName(a.name))).filter((id) => id != null) : [];
+          const hands = armIds.length ? await getMlbPeopleHands(armIds).catch(() => new Map()) : new Map();
+          const usageByFold = new Map();
+          if (idByFold) {
+            await Promise.all(relievers.map(async (a) => {
+              const mid = idByFold.get(foldName(a.name));
+              if (mid == null) return;
+              try {
+                const log = await getPitcherGameLogRaw(mid, currentYear);
+                const pattern = computeRelieverUsagePattern(log);
+                if (pattern) usageByFold.set(foldName(a.name), pattern);
+              } catch { /* usage line is additive */ }
+            }));
+          }
           for (const a of relievers) {
             const era = a.outs > 0 ? ((a.er * 27) / a.outs).toFixed(2) : '—';
             const whip = a.outs > 0 ? (a.whipOuts / a.outs).toFixed(2) : '—';
             const ip = `${Math.floor(a.outs / 3)}.${a.outs % 3}`;
-            lines.push(`  ${a.name}: ${a.sv} SV, ${a.hld} HLD, ${era} ERA, ${whip} WHIP, ${a.k} K, ${a.bb} BB in ${ip} IP${rosterFiltered ? '' : goneTag(rosterFolds, a.name)}`);
+            const mid = idByFold ? idByFold.get(foldName(a.name)) : null;
+            const throwsC = mid != null ? hands.get(mid)?.throw : null;
+            lines.push(`  ${a.name}${throwsC ? ` (${throwsC}HP)` : ''}: ${a.sv} SV, ${a.hld} HLD, ${era} ERA, ${whip} WHIP, ${a.k} K, ${a.bb} BB in ${ip} IP${rosterFiltered ? '' : goneTag(rosterFolds, a.name)}`);
+            const usage = usageByFold.get(foldName(a.name));
+            if (usage) lines.push(`    Usage (season): ${usage}`);
           }
           // THE PEN AS A UNIT (founder GO, Aug 6 eve: "the overall bullpen
           // stats too") — season aggregate over the arms printed above (the

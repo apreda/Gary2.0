@@ -667,6 +667,102 @@ export async function getPitcherLastStarts(personId, season, limit = 3) {
     }));
 }
 
+/** Raw season pitching game log for one person — shares the cache key with
+ *  getPitcherLastStarts, so starter devices and the pen usage patterns never
+ *  double-fetch the same log. Returns the statsapi splits verbatim. */
+export async function getPitcherGameLogRaw(personId, season) {
+  const key = `mlb_sp_log_${personId}_${season}`;
+  let splits = getCached(key);
+  if (!splits) {
+    const data = await apiFetch(`/people/${personId}/stats?stats=gameLog&season=${season}&group=pitching`);
+    splits = data.stats?.[0]?.splits || [];
+    setCache(key, splits);
+  }
+  return splits;
+}
+
+/** Situational splits for a pitcher: first inning, ahead in count, behind in
+ *  count (sitCodes i01/ac/bc — verified live Aug 18 2026). Times-through-the-
+ *  order codes do NOT exist on this endpoint; never ask this fn for TTO.
+ *  Null when the API returns nothing usable. */
+export async function getPitcherSituationalSplits(personId, season) {
+  const year = season || new Date().getFullYear();
+  const key = `mlb_sp_situational_${personId}_${year}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+  const data = await apiFetch(`/people/${personId}/stats?stats=statSplits&group=pitching&season=${year}&sitCodes=i01,ac,bc`);
+  const rows = data.stats?.[0]?.splits || [];
+  const find = (code) => rows.find((s) => s.split?.code === code)?.stat || null;
+  const fi = find('i01');
+  const ac = find('ac');
+  const bc = find('bc');
+  const out = {
+    firstInning: fi ? { era: fi.era ?? null, ip: fi.inningsPitched ?? null, avg: fi.avg ?? null } : null,
+    aheadInCount: ac ? { avg: ac.avg ?? null, ops: ac.ops ?? null } : null,
+    behindInCount: bc ? { avg: bc.avg ?? null, ops: bc.ops ?? null } : null,
+  };
+  if (!out.firstInning && !out.aheadInCount && !out.behindInCount) return null;
+  setCache(key, out);
+  return out;
+}
+
+/** League standings context keyed by MLBAM team id: FETCHED run differential
+ *  (never derived), streak, division rank, wild-card distance, and the split
+ *  records a bettor holds — vs LH/RH starters, one-run, extra innings, last
+ *  ten, home/road. One call for the whole league, 2h cache. */
+export async function getMlbStandingsContext(season) {
+  const year = season || new Date().getFullYear();
+  const key = `mlb_standings_ctx_${year}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+  const data = await apiFetch(`/standings?leagueId=103,104&season=${year}&standingsTypes=regularSeason`);
+  const byTeamId = new Map();
+  for (const rec of data.records || []) {
+    for (const tr of rec.teamRecords || []) {
+      const splits = {};
+      for (const s of tr.records?.splitRecords || []) {
+        if (s.type) splits[s.type] = `${s.wins}-${s.losses}`;
+      }
+      byTeamId.set(tr.team?.id, {
+        name: tr.team?.name || '',
+        wins: tr.wins ?? null,
+        losses: tr.losses ?? null,
+        streak: tr.streak?.streakCode || null,
+        divisionRank: tr.divisionRank || null,
+        gamesBack: tr.divisionGamesBack ?? tr.gamesBack ?? null,
+        wildCardGamesBack: tr.wildCardGamesBack ?? null,
+        runsScored: tr.runsScored ?? null,
+        runsAllowed: tr.runsAllowed ?? null,
+        runDifferential: tr.runDifferential ?? null,
+        gamesPlayed: tr.gamesPlayed ?? null,
+        splits,
+      });
+    }
+  }
+  if (byTeamId.size) setCache(key, byTeamId);
+  return byTeamId;
+}
+
+/** Batch bat-side / pitch-hand lookup: MLBAM person ids → { bat, throw }.
+ *  Handedness never changes, so hits cache for the life of the process. */
+const peopleHandsCache = new Map();
+export async function getMlbPeopleHands(personIds = []) {
+  const wanted = [...new Set(personIds.filter(Boolean))];
+  const need = wanted.filter((id) => !peopleHandsCache.has(id));
+  for (let i = 0; i < need.length; i += 40) {
+    const batch = need.slice(i, i + 40);
+    try {
+      const data = await apiFetch(`/people?personIds=${batch.join(',')}`);
+      for (const p of data.people || []) {
+        peopleHandsCache.set(p.id, { bat: p.batSide?.code || '?', throw: p.pitchHand?.code || '?' });
+      }
+    } catch { /* missing entries print '?' at the caller */ }
+  }
+  const out = new Map();
+  for (const id of wanted) if (peopleHandsCache.has(id)) out.set(id, peopleHandsCache.get(id));
+  return out;
+}
+
 /** A pitcher's season decomposed by month (byMonth splits). Rows sorted by
  *  month: [{ month, era, ip, gs, k, bb }]. Empty array when absent. */
 export async function getPitcherMonthSplits(personId, season) {
@@ -775,6 +871,10 @@ export default {
   getProbablePitchers,
   getMlbTransactions,
   getPitcherLastStarts,
+  getPitcherGameLogRaw,
+  getPitcherSituationalSplits,
+  getMlbStandingsContext,
+  getMlbPeopleHands,
   getPitcherMonthSplits,
   getPitcherCareerProfile,
   getPitcherVsTeam,

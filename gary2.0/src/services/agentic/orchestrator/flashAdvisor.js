@@ -283,6 +283,7 @@ CRITICAL RULES:
 - For search/grounding results, use factual events only. Ignore picks, predictions, and opinion content
 - Do NOT pick a side or recommend a bet — your job is factual research only
 - Do NOT fabricate stats — only report what comes from the scout report or your tool calls
+- Every figure you cite must exist verbatim in the scout report or a tool return. A metric neither provides (wRC+, FIP, SIERA, BABIP, DRS, pop time, and the like) is NOT AVAILABLE — say so instead of recalling or deriving a value. Never present arithmetic you performed (a computed differential, an inferred rate) as a fetched stat; if you must derive, label it as your own calculation from named inputs
 
 OUTPUT FORMAT — for each factor you investigate, write your findings as a JSON object:
 {"factor": "Factor name", "keyFinding": "1-2 sentence finding", "numbers": "Concrete stats for BOTH teams — repeat the exact figures in THIS field; never leave it empty", "context": "Opponent quality / who played / sample window context — never leave it empty"}

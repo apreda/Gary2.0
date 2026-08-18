@@ -5829,6 +5829,32 @@ const ballDontLieService = {
     }
   },
 
+  /**
+   * Batch MLB player lookup by BDL player ids — names + bats_throws for
+   * resolving who a plate-appearance row belongs to. Identity data is
+   * immutable, so the cache runs a full day.
+   */
+  async getMlbPlayersByIds(playerIds = [], ttlMinutes = 24 * 60) {
+    try {
+      const ids = [...new Set(playerIds.filter((id) => id != null))];
+      if (!ids.length) return [];
+      const cacheKey = `mlb_players_by_ids_${ids.slice().sort((a, b) => a - b).join('-')}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const out = [];
+        for (let i = 0; i < ids.length; i += 100) {
+          const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/players${buildQuery({ player_ids: ids.slice(i, i + 100), per_page: 100 })}`;
+          const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
+          out.push(...(response.data?.data || []));
+        }
+        console.log(`[BDL] MLB players by ids: ${out.length}/${ids.length} resolved`);
+        return out;
+      }, ttlMinutes);
+    } catch (error) {
+      console.error('[BDL] MLB players by ids error:', error?.response?.data || error.message);
+      return [];
+    }
+  },
+
   // ═══════════════════════════════════════════════════════════════════════════
   // MLB PITCH-TYPE STATS (GOAT tier) — per-pitch breakdowns
   // Returns: pitch_type, pitch_usage_percent, whiff_percent, chase_percent,
