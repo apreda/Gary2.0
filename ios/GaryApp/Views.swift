@@ -1750,6 +1750,54 @@ struct LiquidGlassBackground: View {
     }
 }
 
+// MARK: - Obsidian Ground (Home only)
+
+/// The infinite-depth layer WITHOUT leaving our black (founder, Aug 18: keep
+/// the ink, keep the design — bring back the "space behind the app" feeling
+/// the gold had). Ported from depth study 13 "OBSIDIAN": black glass whose
+/// surface carries slow gold caustics — fourteen breathing filaments, each
+/// stroked three times so it glows with zero blur filters. Rides ON TOP of
+/// LiquidGlassBackground, so the base ink and vignette are untouched; this is
+/// pure atmosphere at whisper opacity. Throttled to 20fps; freezes under
+/// Reduce Motion.
+struct ObsidianGround: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: reduceMotion)) { tl in
+            Canvas { ctx, size in
+                let time: Double = reduceMotion ? 0 : tl.date.timeIntervalSinceReferenceDate
+                let W = size.width, H = size.height
+                for i in 0..<14 {
+                    let fi = Double(i)
+                    let baseY = H * (0.05 + 0.068 * CGFloat(i))
+                    var path = Path()
+                    let steps = 72
+                    for s in 0...steps {
+                        let u = Double(s) / Double(steps)
+                        let x = CGFloat(u) * W
+                        let t1: Double = sin(u * 2.0 * .pi * 1.8 + time * 0.22 + fi * 0.9)
+                        let t2: Double = sin(u * 2.0 * .pi * 3.7 - time * 0.16 + fi * 1.7)
+                        let t3: Double = sin(u * 2.0 * .pi * 7.1 + time * 0.31 + fi * 2.6)
+                        let wobble: Double = 0.018 * t1 + 0.011 * t2 + 0.0025 * t3
+                        let y = baseY + H * CGFloat(wobble)
+                        if s == 0 { path.move(to: CGPoint(x: x, y: y)) } else { path.addLine(to: CGPoint(x: x, y: y)) }
+                    }
+                    // Brightness swells and fades per filament on its own cycle.
+                    // WHISPER level (first sim pass read as EKG lines through the
+                    // panels): the layer must be felt, not read.
+                    let pulse = 0.55 + 0.45 * sin(time * 0.12 + fi * 1.3)
+                    ctx.stroke(path, with: .color(Color(hex: "#D9A62B").opacity(0.012 * pulse)), lineWidth: 8)
+                    ctx.stroke(path, with: .color(Color(hex: "#D9A62B").opacity(0.020 * pulse)), lineWidth: 3.4)
+                    ctx.stroke(path, with: .color(Color(hex: "#F2E4BC").opacity(0.030 * pulse)), lineWidth: 1.2)
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .ignoresSafeArea()
+    }
+}
+
 // MARK: - Home View
 
 // The Front Page — yesterday's receipts, today's doors, no boxes.
@@ -2180,8 +2228,11 @@ struct HomeView: View {
 
     var body: some View {
         ZStack {
-            // Background
+            // Background — the house ink, plus the living obsidian layer
+            // (Home only; founder, Aug 18: the infinite feel without leaving
+            // our black).
             LiquidGlassBackground(grainDensity: 0.0009, grainOpacityRange: 0.008...0.018)
+            ObsidianGround()
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {
@@ -3934,22 +3985,16 @@ struct HomeView: View {
                             .font(.system(size: 12.5, weight: .bold).monospacedDigit())
                             .tracking(1.4)
                             .foregroundStyle(league == selected
-                                ? league.sport.accentColor
+                                ? GaryColors.gold
                                 : Color.white.opacity(enabled ? 0.56 : 0.24))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
-                            .overlay(alignment: .bottom) {
-                                if league == selected {
-                                    Rectangle().fill(league.sport.accentColor).frame(height: 2)
-                                }
-                            }
                     }
                     .buttonStyle(.plain)
                     .disabled(!enabled)
                     .accessibilityAddTraits(league == selected ? .isSelected : [])
                 }
             }
-            Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
             ForEach(Array(rows.enumerated()), id: \.element.id) { i, r in
                 Button {
                     PicksFocusState.shared.focus(game: r.matchupFull,
@@ -3969,10 +4014,11 @@ struct HomeView: View {
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(GaryColors.panelFill)
-                // The component stays identical between tabs; only the selected
-                // sport's identity colors the single board outline.
+                // House gold, whisper-quiet (founder, Aug 18: no sport-green
+                // chrome — the gold label names the tab, the outline barely
+                // exists).
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(selected.sport.accentColor.opacity(0.85), lineWidth: 1))
+                    .stroke(GaryColors.gold.opacity(0.16), lineWidth: 1))
         )
         .pageGutter()
     }
