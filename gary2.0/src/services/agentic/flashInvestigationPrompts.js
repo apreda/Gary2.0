@@ -735,7 +735,7 @@ The scout report already includes detailed context from both grounding searches 
 - How does each starter's pitch mix and velocity profile (per-pitch mph is in the MLB_PITCH_TYPES_SP output and scout report — cite ONLY those figures, never velocity from memory) match up against the opposing lineup's handedness and power profile?
 - Any pitch count concerns or workload management patterns? What has the front office's approach been to this pitcher's innings recently?
 - What does each starter's contact-quality-allowed profile look like (Barrel% allowed, Hard-hit% allowed, and GO/AO grounder-per-flyout ratio are in MLB_PITCHER_SCOUTING and the scout report)? True GB%/FB% rates are NOT available from our tools — characterize a batted-ball tendency only from the provided GO/AO and Barrel%/Hard-hit% figures; never estimate a GB% from memory.
-- What is each starter's FIP and ERA? Report both.
+- What is each starter's ERA and his xERA (both on the scout report)? Report both. FIP is NOT AVAILABLE — never estimate it.
 - How many innings has each starter averaged in recent starts — does their pitch count suggest a short outing (< 5 IP, early bullpen handoff) or a deep outing (6+ IP)?
 - What is each starter's home/away split this season? Some pitchers have large venue-dependent performance gaps.
 
@@ -747,7 +747,7 @@ The scout report already includes detailed context from both grounding searches 
 - Has command changed in recent starts (walks/hits per start are in the game log)? Per-start velocity readings are NOT available from our tools — season-average velocity is in MLB_PITCH_TYPES_SP; do not assert recent velocity changes without a sourced figure.
 - Did any recent starts include rain delays, early exits due to injury scares, or shortened outings that inflate or deflate the stat line?
 - What is the starter's pitch count trajectory — increasing (building up after IL stint or early season) or capped (managed workload, innings limit)?
-- What is the starter's strand rate (LOB%) in recent starts vs season? An extreme LOB% (above 80% or below 65%) is context for how sustainable his ERA is over time — note it, but it is not a prediction for tonight. A pitcher "due to regress" still throws gems.
+- Is his recent ERA earned or fortunate? Strand rate is NOT AVAILABLE — read sustainability from his xERA gap, his whiff-by-start trend, and the hits/walks in the start ledger. A pitcher "due to regress" still throws gems.
 
 ### 3. PLATOON SPLITS & BATTER VS PITCHER
 **Tokens:** MLB_PLAYER_SPLITS, MLB_BATTER_VS_PITCHER, MLB_KEY_HITTERS, MLB_LINEUP, MLB_PITCH_TYPES_HITTERS
@@ -780,7 +780,7 @@ The scout report already includes detailed context from both grounding searches 
 - How does the heart of the order (3-4-5 hitters) match up against tonight's opposing starter?
 - Are any key bats in a hot streak or extended slump? What does their recent game log show?
 - What is each team's OPS with RISP (runners in scoring position) over the last 30 days?
-- Any hitters on notable hot/cold streaks — what does the L7/L15 data show vs their season line? Investigate whether the streak is driven by BABIP luck or a real change in quality of contact.
+- Any hitters on notable hot/cold streaks — what does the L7/L15 data show vs the season line printed beside it? His month rows say whether he has run this hot or cold before. Read luck-vs-real from his "Contact (recent)" row (exit velo, barrels, whiff) — BABIP is NOT AVAILABLE.
 - What is the lineup's strikeout rate as a team? Compare it to tonight's starter's K rate — note the gap, then reason about whether it matters tonight (it may or may not, depending on context).
 
 ### 6. STANDINGS & DIVISION CONTEXT
@@ -808,7 +808,7 @@ The scout report already includes detailed context from both grounding searches 
 - What is the weather forecast for tonight's game? Report temperature, wind speed, and wind direction.
 - How have the starting pitchers and top 3-4 hitters on each team performed at this specific ballpark? Call MLB_PLAYER_SPLITS to check byArena data — report AVG, OPS, HR, and AB at tonight's venue for key players.
 
-### 10. INJURIES & ROSTER UPDATES
+### 9. INJURIES & ROSTER UPDATES
 **Tokens:** INJURIES, MLB_INJURIES
 - Any scratches, day-to-day concerns, or IL returns that affect tonight's lineup or bullpen?
 - Any recent callups or roster moves (September expanded rosters, trade deadline acquisitions)?
@@ -818,59 +818,57 @@ The scout report already includes detailed context from both grounding searches 
 - Investigate: Who replaces the injured player and what is the replacement's production profile?
 - Investigate: If a pitcher was scratched, who starts instead and what is their recent performance?
 - Investigate: For position player injuries, how does the replacement affect the lineup's overall production? Check the replacement's OPS, plate discipline, and defensive position.
-- Investigate: Has the team's record and run scoring changed since the injury? Pull team stats from games played without the injured player.
+- Investigate: Has the team's record changed since the injury? The scout report's injury line carries the team's W-L since the player last appeared — cite that figure; a runs-scored split for the absence window is NOT AVAILABLE, so do not construct one.
 
 **PRICED IN and SEASON-LONG injuries — market has fully adjusted:**
 - The team's current stats already reflect life without this player. Do not treat as new information.
 
 - If you cite an injury, you MUST include when it happened (date or "since last game" / "since [specific date]"). If you cannot determine when an injury occurred, do not include it in your findings.
 
-### 11. RUN LINE & TOTAL CONTEXT
+### 10. RUN LINE & TOTAL CONTEXT
 **Tokens:** MLB_RECENT_FORM, MLB_ODDS
 - Are either team's starters on an innings limit or pitch count that might cause an early hook regardless of game state?
-- How often does each team win by 2+ runs vs 1-run games?
+- How often does each team win by 2+ runs vs 1-run games? The scout report's STANDINGS section carries each team's fetched one-run record; margins in recent games are in the ledgers.
 - What is each team's scoring output over the last 10 games — trending up or down?
-- What does the runs-per-game average look like for both teams at this venue specifically?
 - How do bullpen state and park factors interact with tonight's total?
-- What is each team's record against the run line (ATS equivalent) this season? Do they tend to win/lose by comfortable margins or squeak by?
 - What is the combined ERA of both starters — how does that compare to the posted total?
-- What is each team's over/under record this season — do they consistently play in high-scoring or low-scoring games?
+- Run-line (ATS) and over/under season records are NOT AVAILABLE from our tools — never estimate or recall them; read margin tendencies from the fetched one-run record and the game-by-game ledgers instead.
 
-### 14. PITCHING MATCHUP DEEP DIVE
+### 11. PITCHING MATCHUP DEEP DIVE
 **Tokens:** MLB_PLAYER_SPLITS, MLB_BATTER_VS_PITCHER, MLB_PITCHER_SEASON_STATS, MLB_KEY_HITTERS
 - Call MLB_PITCHER_SCOUTING for the starting pitcher's platoon splits (vs LHB/RHB), home/away ERA, and day/night splits — where does tonight's context fall? (MLB_PLAYER_SPLITS covers hitters only.)
-- Call MLB_BATTER_VS_PITCHER for the top 4-5 hitters in the opposing lineup vs this pitcher specifically — are there batter-pitcher matchups with large sample sizes (20+ AB) that diverge sharply from the hitter's overall season line?
-- What is the pitcher's opponent AVG and OPS this season — is the underlying contact quality against him sustainable or is he getting lucky/unlucky on balls in play?
-- What is the pitcher's HR/9 rate and HR/FB% — is he suppressing or allowing home runs at an unusual rate relative to the park and his career norms?
-- How does the pitcher perform in different counts? What is his batting average allowed when behind in the count (1-0, 2-0, 2-1, 3-1) vs ahead?
-- What is the pitcher's first-inning ERA vs later innings? Some pitchers struggle early before settling in, which affects first-5-inning (F5) lines.
+- The scout report's "Vs-hand by start" rows give each platoon split its time axis — is the season split still true in his recent starts, and who actually did the hitting last time out?
+- Call MLB_BATTER_VS_PITCHER for the top 4-5 hitters in the opposing lineup vs this pitcher specifically — are there batter-pitcher matchups with large sample sizes (20+ AB) that diverge sharply from the hitter's overall season line? The scout report's "Tonight's bats vs tonight's arms" section carries the THIS-SEASON version.
+- What is the pitcher's opponent AVG and OPS this season — and does his xERA (on the scout report beside his ERA) say the results are earned or fortunate?
+- Is he suppressing or allowing home runs at an unusual rate? The start ledger's HR column and Barrel%/hard-hit% allowed are the available evidence; HR/FB% is NOT AVAILABLE — never estimate it.
+- How does the pitcher perform in different counts? The scout report's "Situational" line carries his opponent AVG ahead vs behind in the count — cite those figures only.
+- What is the pitcher's first-inning ERA? The "Situational" line carries it. Splits for later innings are NOT AVAILABLE.
 - **Pitcher situation check:** Is this starter returning from the IL (pitch count likely)? Is this his first start of the season or an MLB debut? Is he facing his former team? How many days rest since his last start — is he on normal rest (5 days), short rest (4), or extended rest (6+)?
-- How does the pitcher perform the third time through the lineup? Investigate whether the manager tends to pull this pitcher after 5-6 innings or lets him go deep.
-- Is either starter coming off a dominant outing (7+ IP, 0-1 ER) or a blowup (4- IP, 5+ ER)? Investigate whether any trend is mechanical/stuff-related or opponent-quality-related.
+- Times-through-the-order splits are NOT AVAILABLE from our tools — read how deep he goes from the start ledger's IP/pitch counts, and how the manager has actually handled him in recent starts: stretched him, pulled him quick, or matchup-managed.
+- Is either starter coming off a dominant outing (7+ IP, 0-1 ER) or a blowup (4- IP, 5+ ER)? Investigate whether any trend is mechanical/stuff-related or opponent-quality-related — every ledger row now carries the opponent's record.
 
-### 15. LINEUP DEPTH & OFFENSIVE IDENTITY
+### 12. LINEUP DEPTH & OFFENSIVE IDENTITY
 **Tokens:** MLB_KEY_HITTERS, MLB_LINEUP, MLB_PLAYER_SPLITS, MLB_RECENT_FORM
 - Is this team a power-hitting lineup (HR-dependent, high ISO, high fly ball rate) or a contact/manufacturing team (walks, singles, stolen bases, high ground ball rate)?
 - How does the team's offensive identity interact with tonight's opposing pitcher? Compare the starter's K%, ground ball rate, and HR/9 to the opposing lineup's K%, FB%, ISO, and HR rate. Note the gaps. Decide for yourself whether those gaps shape tonight — sometimes they do, sometimes they don't.
 - What is the team's AB/HR ratio and BB/K ratio — these define the shape of their offense and how they generate runs.
 - What is the lineup's OBP from the 6-9 hitters (bottom of the order)?
-- What is the team's stolen base frequency and success rate? Note the opposing pitcher's delivery time to the plate and the catcher's pop time. Investigate whether tonight's lineup is built to actually leverage that — many teams have raw speed but don't run.
-- How does the team perform with two outs?
+- What is the team's stolen base frequency and success rate? Pop times and delivery times are NOT AVAILABLE — the running game reads from the catcher's CS numbers (MLB_CATCHER_DEFENSE) and the "Running game vs him" line on each starter. Investigate whether tonight's lineup is built to actually leverage that — many teams have raw speed but don't run.
+- How do the key hitters perform with runners in scoring position and two outs? Per-hitter situational rows are in MLB_RISP_SITUATIONAL; a team-level two-out split is NOT AVAILABLE.
 
-### 16. CONTACT QUALITY & SUSTAINABILITY
+### 13. CONTACT QUALITY & SUSTAINABILITY
 **Tokens:** MLB_KEY_HITTERS, MLB_PITCHER_SEASON_STATS, MLB_TEAM_RECORD, MLB_RECENT_FORM, MLB_STATCAST
 These metrics describe underlying contact quality across a season-long sample. Report them with their samples; they are not a forecast of this single game.
 - Call MLB_STATCAST to get each team's recent contact quality from the last 3 games. The token returns the full Statcast surface: avg exit velocity, launch angle + sweet-spot rate, **xwOBA / xSLG / xBA** (expected outcomes), bat speed, barrel rate, and plate-discipline (whiff% + chase%). Use **xwOBA** as the headline contact-quality metric — it reflects quality of contact better than raw wOBA or BA.
 - Are any key hitters' teams showing a change in xwOBA vs their actual results? 
 - How do the two teams' bat-speed and whiff numbers compare?
-- Check BABIP (batting average on balls in play) for key hitters — what are the specific values for the top hitters in each lineup, and how do they compare to those hitters' career norms?
-- Report the specific FIP and ERA for each starter.
-- Is a team's run differential diverging from their record? Teams that win close games at an unsustainable rate (one-run game record significantly above .500) are regression candidates.
-- One-run game record — what is each team's record in 1-run games? Extreme records in either direction (e.g., 15-5 or 5-15) are candidates for regression toward .500.
-- What is each pitcher's xERA or SIERA if available — how does it compare to their actual ERA? These metrics strip out sequencing and defense.
+- BABIP and career norms are NOT AVAILABLE from our tools — read luck-vs-real from the Statcast expected stats (xwOBA vs actual) instead, and never cite a BABIP figure.
+- Report each starter's ERA beside his xERA — both are on the scout report. FIP and SIERA are NOT AVAILABLE; never estimate them.
+- Is a team's run differential diverging from their record? The STANDINGS section carries the FETCHED run differential — cite that figure, never one derived from the record.
+- One-run game record — the STANDINGS section carries each team's fetched one-run record. An extreme record is context for a team's true level, and the game ledgers show what those one-run games actually were.
 - How does each team's Statcast contact quality compare to their actual offensive results?
 
-### 17. GAME ENVIRONMENT & TOTAL CONTEXT
+### 14. GAME ENVIRONMENT & TOTAL CONTEXT
 **Tokens:** MLB_ODDS, MLB_PARK_FACTORS, MLB_WEATHER, MLB_BULLPEN, MLB_RECENT_FORM
 - What is the over/under total for this game? High totals (9+) suggest both offenses are expected to produce; low totals (7 or under) suggest a pitching duel.
 - How does the total compare to each team's recent scoring trends? Is the market projecting higher or lower than their actual recent run output over the last 10 games?
@@ -878,7 +876,6 @@ These metrics describe underlying contact quality across a season-long sample. R
 - Is this an indoor or outdoor game? Retractable roof open or closed?
 - What is the combined bullpen state for both teams? If both pens are taxed, the late innings could produce more runs than the starters' matchup alone would suggest.
 - How does the game time (day vs night) interact with each starter's day/night splits? Some pitchers have large performance gaps between day and night games.
-- What is the humidity level? High humidity can affect ball flight and pitcher grip, particularly for breaking ball pitchers.
 
 ## DEEP INVESTIGATION — MLB-SPECIFIC
 
@@ -886,21 +883,21 @@ These metrics describe underlying contact quality across a season-long sample. R
 The starting pitcher is the biggest single variable in an MLB game, but still only one piece — a starter covers ~6 of 18 half-innings, and the offense across all nine, the bullpen's three, the defense, and variance decide the rest. Investigate the starters thoroughly, then weight them honestly against everything else rather than treating the matchup as the whole game. When evaluating starters:
 - **Recent trajectory matters more than season line:** A pitcher with a 3.50 season ERA who has posted a 5.40 ERA over the last 5 starts is a different pitcher than his season line suggests. Investigate what changed.
 - **Pitch count trends:** Is the front office limiting this pitcher? Note his average pitch count and IP in recent starts. Investigate the bullpen state and reason about how an early exit would actually change the run projection — sometimes the bullpen is the strength.
-- **Quality of competition in recent starts:** Were those recent outings against top-10 or bottom-10 offenses?
-- **Handedness matchup depth:** Count the L/R hitters in the opposing lineup and compare to the starter's platoon splits.
-- **FIP-ERA gap:** What does the gap tell you about how much of the pitcher's results are within his control vs dependent on defense and sequencing?
-- **First-time through the order vs second/third time:** Does this pitcher's data show a meaningful drop-off later in games? Note his TTO splits. Look at how the manager has actually handled him in recent starts — stretched him, pulled him quick, or matchup-managed?
+- **Quality of competition in recent starts:** Who were those recent outings against, and were those clubs any good? Every row of the start ledger now carries the opponent's record — cite it.
+- **Handedness matchup depth:** The lineup section's handedness count and the starter's platoon splits carry both halves — and the "Vs-hand by start" rows say whether the season split is still true lately.
+- **xERA-ERA gap:** What does the gap (both figures on the scout report) tell you about how much of the pitcher's results are within his control vs dependent on defense and sequencing?
+- **How deep does he actually go:** Times-through-the-order splits are NOT AVAILABLE — read his depth from the ledger's IP and pitch counts, and look at how the manager has actually handled him in recent starts: stretched him, pulled him quick, or matchup-managed?
 
 ### BULLPEN INVESTIGATION
 After the starter exits, the bullpen takes over. Investigate:
-- **Available high-leverage arms:** Which relievers have NOT pitched in the last 2 days?
-- **Bullpen ERA split:** What does the pen look like in the 7th/8th/9th vs earlier innings?
-- **Closer availability:** If the closer pitched yesterday, who handles the 9th? What is the backup closer's save conversion rate?
+- **Available high-leverage arms:** Which relievers have NOT pitched in the last 2 days? The workload ledger names who worked and how hard; each arm's season usage line says whether he ever works back-to-back days at all.
+- **Pen quality:** The pen prints arm by arm with a unit season line and a rolling recent ERA — an inning-by-inning pen split is NOT AVAILABLE; never construct one.
+- **Closer availability:** If the closer pitched yesterday, who handles the 9th? Read the next arm's SV/HLD totals and recent appearance results; a save-conversion percentage is NOT AVAILABLE.
 - **Opener/bullpen game impact:** Has either team used an opener in this series or the previous series? That shifts the entire bullpen availability picture.
-- **Bullpen handedness:** What is the L/R composition of available bullpen arms, and how does that match up against the opposing lineup's handedness in the late innings?
+- **Bullpen handedness:** Each pen arm now carries his throwing side — how does the L/R composition of the AVAILABLE arms match up against the opposing lineup's handedness in the late innings, with the bench section saying who could hit for whom?
 
 ### SEASON SAMPLE SIZE
-- In April, team and pitcher stats are built on small samples — career trends and spring training form matter more
+- In April, team and pitcher stats are built on small samples — say so when citing them
 - By June/July, season-long numbers have stabilized — but recent form still matters for pitchers
 - Late-season stats (August-September) carry the most weight for both teams and pitchers
 - Always note the IP and games started count when citing a pitcher's season ERA
@@ -909,43 +906,40 @@ After the starter exits, the bullpen takes over. Investigate:
 ### TEAM IDENTITY
 - **Offensive identity**: Do they score via power (HRs, XBH) or manufacturing runs (walks, stolen bases, contact)?
 - **Pitching identity**: Is the strength in the rotation or the bullpen? Staff strikeout rate vs contact management?
-- **Run differential**: What does the run differential say about their true level vs their record?
-- **One-run game record**: A team that is 20-8 in one-run games may be overperforming their underlying quality
-- **Defensive quality**: What does the team's defensive runs saved (DRS) or OAA (outs above average) look like? Poor defense behind a ground ball pitcher inflates ERA relative to FIP.
+- **Run differential**: What does the run differential (fetched, in the STANDINGS section) say about their true level vs their record?
+- **One-run game record**: The STANDINGS section carries the fetched figure; a team that is 20-8 in one-run games may be overperforming their underlying quality
+- **Defensive quality**: Errors, fielding percentage, double plays, and recent errors are in MLB_TEAM_DEFENSE. DRS and OAA are NOT AVAILABLE — never cite them.
 - **Baserunning**: Is this an aggressive baserunning team (stolen bases, extra bases taken) or station-to-station? Note SB rate, success%, and extra bases taken. Reason about whether that style matters tonight given the matchup and score state — many runs are scored station-to-station.
 
 ### SUSTAINABILITY & TREND DETECTION
 When recent performance diverges from the season baseline, the question is what's real versus noise — and whether the price reflects it. These are season-long sustainability reads, NOT single-game predictions: a pitcher whose results outrun his expected stats can still throw a gem tonight.
 - What evidence distinguishes a real shift from variance?
 - Has the roster changed (trade deadline, IL returns)?
-- Is a key pitcher's ERA outrunning his expected stats (FIP/xERA gap)? Note whether his results look built to last or fragile — context for the price, not a forecast of tonight.
-- A team's BABIP and HR/FB rate can flag an unsustainable hot or cold stretch — investigate the gap as context for whether the price is fair.
-- Strand rate (LOB%) extremes (above 80% or below 65%) describe how sustainable a starter's ERA is over time, not what he does in this start.
-- Extreme 1-run / extra-inning records do not sustain over 162 games — useful for judging a team's true level, not tonight's outcome.
+- Is a key pitcher's ERA outrunning his expected stats? His xERA prints beside his ERA on the scout report — note whether his results look built to last or fragile. Context for the price, not a forecast of tonight. (FIP, BABIP, HR/FB, and strand rate are NOT AVAILABLE — the xERA gap and Statcast contact quality are the sustainability evidence.)
+- Extreme 1-run / extra-inning records (fetched, in the STANDINGS section) do not sustain over 162 games — useful for judging a team's true level, not tonight's outcome.
 
 ### HOME/AWAY PERFORMANCE
-- What are each team's home and road records and run scoring splits?
+- What are each team's home and road records (fetched — the STANDINGS section and the tape carry them)?
 - Pull home/away splits for both starters — some pitchers have large venue-dependent gaps
-- How does each team's bullpen perform at home vs on the road? Home bullpens get the crowd energy in late innings; road bullpens face more hostile environments.
-- What is the team's home/road OPS split — do they hit significantly better in their own park?
+- Team-level home/road OPS and bullpen home/road splits are NOT AVAILABLE — read venue form from each key hitter's Home/Away rows in MLB_PLAYER_SPLITS instead.
 
 ### CATCHER MATCHUP
 **Tokens:** MLB_CATCHER_DEFENSE, MLB_KEY_HITTERS
-- Who is catching for each team tonight? Note the catcher's framing metrics (called strikes above average / framing runs). Whether that translates to a meaningful edge tonight depends on the umpire, the starter's pitch mix, and the lineup's plate discipline — don't assume.
-- How does the catcher pair with tonight's starter? Some pitcher-catcher batteries have significantly better results together
-- What is the catcher's throwing arm — is the opposing team's stolen base threat neutralized or amplified by the catcher?
+- Who is catching for each team tonight? Framing metrics are NOT AVAILABLE — the catcher's throwing numbers (caught-stealing of attempts, MLB_CATCHER_DEFENSE) and his batting line are the available evidence.
+- How does the catcher pair with tonight's starter? No battery data exists in our tools — bring this only when the press layer actually reports it.
+- What is the catcher's throwing record — is the opposing team's stolen base threat neutralized or amplified? Pair the CS numbers with each starter's "Running game vs him" line.
 
 ### DEFENSIVE QUALITY
 **Tokens:** MLB_TEAM_DEFENSE
-- How does each team rank defensively? Errors, defensive runs saved (DRS), and outs above average (OAA) affect how many runs the pitching staff actually allows
-- Is either team notably weak at a specific defensive position? Note position-specific defensive metrics (DRS, OAA). Investigate whether the opposing lineup's batted-ball profile actually tests that position — most defensive weaknesses go unpunished on any given night.
-- How does the infield defense interact with the starter's ground ball rate? A high-groundball pitcher behind a strong infield defense is a different matchup than behind a weak one
+- How does each team rank defensively? Errors, fielding percentage, double plays, and recent errors/unearned runs (MLB_TEAM_DEFENSE) are the available evidence; DRS and OAA are NOT AVAILABLE — never cite them.
+- Is either team notably weak defensively right now? The recent-errors line and the game ledgers show where misplays actually happened; position-level defensive metrics are NOT AVAILABLE.
+- How does the infield defense interact with the starter's ground-ball lean (his GO/AO)? A grounder-leaning pitcher behind a clean infield is a different matchup than behind a sloppy one
 
 ### RUN SCORING PATTERNS
 **Tokens:** MLB_RISP_SITUATIONAL, MLB_PLAYER_SPLITS
-- When do these teams score their runs? Note their inning-by-inning scoring distribution. Reason about whether tonight's specific starter-and-bullpen matchup makes early-inning or late-inning scoring more likely.
-- What is each team's first-inning scoring rate? Some teams (and pitchers) are more volatile early
-- How do these teams perform with runners in scoring position (RISP)? Clutch hitting with RISP can diverge significantly from overall offensive numbers over short stretches
+- When do these teams score their runs? A season inning-by-inning distribution is NOT AVAILABLE — the scout report's "How it went" scoring flows show, inning by inning with the pitcher named, how the recent games' runs actually arrived.
+- Volatile early? Each starter's first-inning ERA is on his "Situational" line; a team-level first-inning scoring rate is NOT AVAILABLE.
+- How do these teams perform with runners in scoring position (RISP)? Per-hitter RISP rows are in MLB_RISP_SITUATIONAL, and the series ledger carries each recent game's team RISP line.
 
 ### MANAGER TENDENCIES
 **Tokens:** MLB_BULLPEN (bullpen usage data reveals manager patterns — no grounding needed)
@@ -955,9 +949,9 @@ When recent performance diverges from the season baseline, the question is what'
 
 ### BASERUNNING & SPEED
 **Tokens:** MLB_CATCHER_DEFENSE, MLB_KEY_HITTERS (season SB stats)
-- Does either team have a significant baserunning advantage? Note SB rate, success%, and baserunning runs if available. Investigate whether the manager actually uses that style in this matchup, and whether the projected score state makes running likely.
+- Does either team have a significant baserunning advantage? Note SB totals and success rate; "baserunning runs" is NOT AVAILABLE. Investigate whether the manager actually uses that style in this matchup, and whether the projected score state makes running likely.
 - What is each team's stolen base success rate and attempt frequency? An aggressive baserunning team changes how the game is played
-- How do the catchers' pop times and the pitchers' delivery times interact with the opposing team's speed threats?
+- The running-game triangle is fully on the desk: team SB numbers, the catchers' CS-of-attempts, and each starter's "Running game vs him" line. Pop times and delivery times are NOT AVAILABLE.
 
 ### MOMENTUM, STREAKS & THE HUMAN GAME
 Baseball is a 162-game marathon with real human dynamics. Beyond the stats, investigate:
