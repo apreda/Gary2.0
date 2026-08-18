@@ -126,9 +126,32 @@ function extractJuneBilateralPaths(rawAnalysis, homeTeam, awayTeam) {
     const block = rest.slice(0, end).trim();
     return block.length >= 80 ? block : null;
   };
-  return {
+  const byHeader = {
     path_home: findBlock(homeTeam, awayTeam),
     path_away: findBlock(awayTeam, homeTeam),
+  };
+  if (byHeader.path_home && byHeader.path_away) return byHeader;
+
+  // Fallback (Aug 18 bench finding): Gary sometimes writes the bilateral
+  // content without the literal headers — the loop's validator attributes
+  // paragraphs by team mention, so mirror that: nickname word-boundary per
+  // paragraph, home-paragraphs joined = home path (capped for storage).
+  const nick = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').trim().split(/\s+/).filter(Boolean).pop() || '';
+  const hN = nick(homeTeam), aN = nick(awayTeam);
+  if (!hN || !aN || hN === aN) return byHeader;
+  const hRe = new RegExp(`\\b${esc(hN)}\\b`, 'i'), aRe = new RegExp(`\\b${esc(aN)}\\b`, 'i');
+  const homeParas = [], awayParas = [];
+  for (const para of text.split(/\n\s*\n/)) {
+    const t = para.trim();
+    if (t.length < 80 || /INVESTIGATION COMPLETE/i.test(t)) continue;
+    const h = hRe.test(t), a = aRe.test(t);
+    if (h && !a) homeParas.push(t);
+    else if (a && !h) awayParas.push(t);
+  }
+  const join = (arr) => arr.length ? arr.join('\n\n').slice(0, 1600) : null;
+  return {
+    path_home: byHeader.path_home || join(homeParas),
+    path_away: byHeader.path_away || join(awayParas),
   };
 }
 
