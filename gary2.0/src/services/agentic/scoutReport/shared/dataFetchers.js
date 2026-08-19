@@ -21,6 +21,26 @@ import {
 } from './utilities.js';
 import { getGeminiClient, groundingSearch, geminiGroundingSearch } from './grounding.js';
 
+/**
+ * Do two club names refer to the same club? (shared-mascot class, Aug 19
+ * sweep): a bare last-word join reads "Ohio State" and "Oklahoma State" —
+ * or "Red Sox" and "White Sox" — as the same club. Match only when the
+ * shorter name appears in the longer one as a whole-word sequence, which
+ * keeps every honest pairing ("Ohio State" ↔ "Ohio State Buckeyes",
+ * "Red Sox" ↔ "Boston Red Sox") and rejects shared single words.
+ * (mlbSeriesState.clubMatches is suffix-only — right for MLB nicknames,
+ * wrong for college names where the school is the PREFIX.)
+ */
+export function namesRefer(a, b) {
+  const x = String(a || '').toLowerCase().trim();
+  const y = String(b || '').toLowerCase().trim();
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const [long, short] = x.length >= y.length ? [x, y] : [y, x];
+  const esc = short.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|\\s)${esc}(\\s|$)`).test(long);
+}
+
 // ============================================================================
 // TEAM PROFILE FUNCTIONS
 // ============================================================================
@@ -454,14 +474,9 @@ export function calculateRestSituation(recentGames, gameDate, teamName = null) {
   let lastGameWasHome = null;
   if (teamName && lastGame) {
     const homeTeamName = lastGame.home_team?.name || lastGame.home_team?.full_name || '';
-    const teamNameLower = teamName.toLowerCase();
-    const homeNameLower = homeTeamName.toLowerCase();
-    // Match by last word (e.g., "Celtics" from "Boston Celtics")
-    const teamLastWord = teamNameLower.split(' ').pop();
-    const homeLastWord = homeNameLower.split(' ').pop();
-    lastGameWasHome = teamLastWord === homeLastWord || 
-                      homeNameLower.includes(teamLastWord) || 
-                      teamNameLower.includes(homeLastWord);
+    // Whole-name match (see namesRefer) — a last-word join cross-wired
+    // shared-mascot clubs ("Ohio State" home vs "Oklahoma State" visiting).
+    lastGameWasHome = namesRefer(homeTeamName, teamName);
     console.log(`[Rest Calc] Last game was ${lastGameWasHome ? 'HOME' : 'ROAD'} for ${teamName}`);
   }
   
@@ -555,15 +570,17 @@ export function formatRecentForm(teamName, recentGames, count = 5) {
     // Determine if this team was home or away
     const homeTeamName = game.home_team?.name || game.home_team?.full_name || '';
     const awayTeamName = game.visitor_team?.name || game.visitor_team?.full_name || game.away_team?.name || game.away_team?.full_name || '';
-    const isHome = homeTeamName.toLowerCase().includes(teamName.toLowerCase().split(' ').pop()) ||
-                   teamName.toLowerCase().includes(homeTeamName.toLowerCase().split(' ').pop());
+    // Whole-name match (see namesRefer) — the last-word join here both
+    // painted every shared-mascot game as home AND deleted legit games via
+    // the opponent check below ("Ohio State" vs any other State school).
+    const isHome = namesRefer(homeTeamName, teamName);
 
     const teamScore = isHome ? (game.home_team_score ?? game.home_score ?? 0) : (game.visitor_team_score ?? game.away_team_score ?? game.away_score ?? 0);
     const oppScore = isHome ? (game.visitor_team_score ?? game.away_team_score ?? game.away_score ?? 0) : (game.home_team_score ?? game.home_score ?? 0);
     const oppName = isHome ? awayTeamName : homeTeamName;
 
-    // Skip if opponent name is empty or same as team
-    if (!oppName || oppName.toLowerCase().includes(teamName.toLowerCase().split(' ').pop())) {
+    // Skip if opponent name is empty or resolves to the team itself
+    if (!oppName || namesRefer(oppName, teamName)) {
       return null;
     }
 

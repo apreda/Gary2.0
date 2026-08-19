@@ -2041,18 +2041,28 @@ async function main() {
             // NCAAB conference data for app filtering
             homeConference: result.homeConference || null,
             awayConference: result.awayConference || null,
-            // Single conference field for app filtering (based on which team is in the pick)
+            // Single conference field for app filtering (based on which team is in the pick).
+            // Longest whole-word match wins (shared-mascot class, Aug 19 sweep): a bare
+            // last-word join reads "Michigan State" and "Ohio State" as the same school.
             conference: (() => {
-              const pickText = result.pick || '';
-              const homeTeam = result.homeTeam || '';
-              const awayTeam = result.awayTeam || '';
-              // Check which team is in the pick and use their conference
-              if (homeTeam && pickText.includes(homeTeam.split(' ').slice(-1)[0])) {
-                return result.homeConference || null;
-              } else if (awayTeam && pickText.includes(awayTeam.split(' ').slice(-1)[0])) {
-                return result.awayConference || null;
-              }
-              // Fallback: use home conference if available
+              const pickText = (result.pick || '').toLowerCase();
+              const matchLen = (teamName) => {
+                const name = String(teamName || '').toLowerCase().trim();
+                if (!name) return 0;
+                const words = name.split(' ');
+                // Full name, name-minus-last-word, last word — most specific first.
+                const forms = [name, words.slice(0, -1).join(' '), words.slice(-1)[0]].filter(Boolean);
+                for (const f of forms) {
+                  const esc = f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                  if (new RegExp(`(^|[^a-z])${esc}([^a-z]|$)`).test(pickText)) return f.length;
+                }
+                return 0;
+              };
+              const h = matchLen(result.homeTeam);
+              const a = matchLen(result.awayTeam);
+              if (h > a) return result.homeConference || null;
+              if (a > h) return result.awayConference || null;
+              // Tie or no match: use home conference if available
               return result.homeConference || result.awayConference || null;
             })(),
             statsUsed: statsUsed, // Token names for backwards compatibility
