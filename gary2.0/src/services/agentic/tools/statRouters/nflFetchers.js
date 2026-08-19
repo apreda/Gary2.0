@@ -1143,7 +1143,9 @@ export const nflFetchers = {
           : Promise.resolve([])
       ]);
 
-      const today = new Date().toISOString().split('T')[0];
+      // ET, never UTC (Aug 19 sweep — the recurring class): toISOString
+      // rolls past midnight at 8 PM ET, misfiling tonight's game.
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
       const formatSchedule = (games, teamName) => {
         const sorted = [...(games || [])].sort((a, b) => new Date(a.date || a.datetime) - new Date(b.date || b.datetime));
         const past = sorted.filter(g => g.status === 'Final').slice(-2);
@@ -1337,7 +1339,7 @@ export const nflFetchers = {
     console.log(`[Stat Router] WEATHER check for ${awayName} @ ${homeName} (${sport})`);
 
     try {
-      const dateStr = new Date().toISOString().slice(0, 10);
+      const dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
       const weather = await getGroundedWeather(homeName, awayName, dateStr);
 
       if (!weather) {
@@ -1414,7 +1416,7 @@ export const nflFetchers = {
 
     try {
       // First, get weather for the game via Gemini Grounding
-      const dateStr = new Date().toISOString().slice(0, 10);
+      const dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
       const weather = await getGroundedWeather(
         home.full_name || home.name,
         away.full_name || away.name,
