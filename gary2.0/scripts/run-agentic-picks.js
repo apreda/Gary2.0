@@ -54,9 +54,15 @@ try {
 // scout report → Haiku research briefing (checklist, hard-fail) → Sol brain
 // WITH tools → bilateral cases → Pass 2.5 decision (ML or RL, Gary's choice)
 // → Pass 3 + statAudit. Arms via GARY_MLB_JUNE_ENGINE=1 and requires
-// ANTHROPIC_API_KEY (the researcher's isolated pool). Unarmed or key-less,
-// MLB stays on pickdesk — the coverage policy (Gary picks EVERY game) is
-// never sacrificed to a missing credential.
+// ANTHROPIC_API_KEY (the researcher's isolated pool). Unarmed (=0), MLB
+// runs pickdesk — that is deliberate configuration, not a fallback.
+// ARMED but broken (missing key, engine failure) = NO PICK, loudly
+// (founder law, Aug 19 2026: "if our full system doesn't work it should
+// fail — I hate fallbacks that hide when things break"). The Aug 18
+// key-outage produced three silent pickdesk picks mid-slate and a day of
+// confusion; a missed pick with an alert beats a pick from a different
+// brain. Later window tiers still retry the ENGINE; a full-night failure
+// surfaces in the missed-pick coverage rollup.
 // ═══════════════════════════════════════════════════════════════════════════
 const { MLB_RESEARCH_MODEL } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
 const JUNE_ENGINE_ARMED = process.env.GARY_MLB_JUNE_ENGINE === '1';
@@ -68,7 +74,7 @@ const _researchKeyOk = MLB_RESEARCH_MODEL.startsWith('anthropic-')
   : !!process.env.OPENAI_API_KEY;
 const JUNE_ENGINE_READY = JUNE_ENGINE_ARMED && _researchKeyOk && !!process.env.OPENAI_API_KEY;
 if (JUNE_ENGINE_ARMED && !JUNE_ENGINE_READY) {
-  console.warn(`[JuneEngine] GARY_MLB_JUNE_ENGINE=1 but the required API key is missing (researcher ${MLB_RESEARCH_MODEL}) — MLB stays on pickdesk until it lands in .env.`);
+  console.warn(`[JuneEngine] ❌ GARY_MLB_JUNE_ENGINE=1 but the required API key is missing (researcher ${MLB_RESEARCH_MODEL}) — MLB games will make NO PICK until it lands in .env (no pickdesk fallback, founder law Aug 19).`);
 } else if (JUNE_ENGINE_READY) {
   console.log(`[JuneEngine] ⚾ ARMED — MLB games run the restored June engine (brain: ${MLB_JUNE_BRAIN_MODEL}, researcher: ${MLB_RESEARCH_MODEL}).`);
 }
@@ -196,8 +202,11 @@ async function runMlbJuneEngine(game, runnerOptions) {
     result = await analyzeGame(game, 'baseball_mlb', engineOptions);
   }
   if (result?.error || !result?.pick) {
-    console.warn(`[JuneEngine] ⚠️ engine failed twice (${result?.error || 'no pick'}) — pickdesk fallback for this game (coverage policy holds; era stamp will show pickdesk honestly).`);
-    return analyzeGameDesk(game, runnerOptions);
+    // Founder law (Aug 19 2026): an armed engine that fails makes NO pick —
+    // never a silent swap to another brain. The window tiers retry the
+    // engine; a game every tier misses lands in the coverage rollup WARN.
+    console.warn(`[JuneEngine] ❌ engine failed twice (${result?.error || 'no pick'}) — NO PICK for this game. No fallback; later tiers retry the engine.`);
+    return { error: `June engine failed twice: ${result?.error || 'no pick'}` };
   }
   // Storage-contract parity with the pickdesk lane (paths, model, era stamp).
   // Bilateral cases live in the PASS 1 message — rawAnalysis holds only the
@@ -1349,13 +1358,19 @@ async function main() {
         };
         let result;
         try {
-          // MLB game picks: the restored JUNE ENGINE when armed (Aug 18 2026,
-          // GARY_MLB_JUNE_ENGINE=1 + ANTHROPIC_API_KEY); pickdesk otherwise.
-          // Other sports route through analyzeGame as before.
+          // MLB game picks: the restored JUNE ENGINE when armed (Aug 18 2026).
+          // Armed-but-unrunnable = NO PICK, loudly (founder law Aug 19 — no
+          // silent brain swaps). Pickdesk runs ONLY when deliberately
+          // disarmed via GARY_MLB_JUNE_ENGINE=0. Other sports unchanged.
           if (config.key === 'baseball_mlb') {
-            result = JUNE_ENGINE_READY
-              ? await runMlbJuneEngine(game, runnerOptions)
-              : await analyzeGameDesk(game, runnerOptions);
+            if (JUNE_ENGINE_READY) {
+              result = await runMlbJuneEngine(game, runnerOptions);
+            } else if (JUNE_ENGINE_ARMED) {
+              console.warn(`[JuneEngine] ❌ armed but not runnable (missing API key) — NO PICK for ${game.away_team} @ ${game.home_team}.`);
+              result = { error: 'June engine armed but not runnable (missing API key) — no pick by founder law' };
+            } else {
+              result = await analyzeGameDesk(game, runnerOptions);
+            }
           } else {
             result = await analyzeGame(game, config.key, runnerOptions);
           }
