@@ -26,16 +26,19 @@ export const MLB_CONSTITUTION = {
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION B: PASS 1 CONTEXT — shown during investigation stage
   // ═══════════════════════════════════════════════════════════════════════════
-  // Awareness bullets live in getMlbSeasonAwareness (spreadEvaluationFactors.js),
-  // rendered once inside Pass 1 — this block carries ONLY the injury-label
-  // semantics (LOCKED) so the two never duplicate (Jul 7 sweep: Pass 1 was
-  // rendering two near-identical MLB AWARENESS sections).
+  // Season-shape awareness bullets live in getMlbSeasonAwareness
+  // (spreadEvaluationFactors.js), rendered once inside Pass 1 — this block
+  // carries the founder-approved epistemics bullets below plus the injury-label
+  // semantics (LOCKED); keep the two surfaces from duplicating (Jul 7 sweep:
+  // Pass 1 was rendering two near-identical MLB AWARENESS sections).
   pass1Context: `
 ### MLB AWARENESS
 
 - A stat is a description of what happened, not a reason for what will happen. A pitcher's bad ERA is a fact about past games; whether it predicts tonight depends on opponent, ballpark, recent form, bullpen support, and sample size. Cite stats to describe the situation. Reason for yourself about whether they actually matter for THIS specific game.
 
 - A short sample is a question, not a verdict. Whether a hot or cold stretch continues depends on who the player is — his track, role, and stuff — not on the stretch itself; extremes in small samples usually move toward the player's real level. Small samples are genuinely hard to read: the desk and your researcher carry more than the forward-facing rates — who a player is, how his outings actually went, what his club expects of him.
+
+- The market already knows what you know and what you don't: a thin sample, and the doubt that rides with it, is priced into the line before you ever read the matchup. The price is not a message about the game — it is simply what the bet costs. Certainty is never a reason to take a side and uncertainty is never a reason to avoid one; the pick is one game, and on every factor that matters in it, thin file or thick, judgment calls sometimes have to be made — the data and the stats are a recording of the past, not necessarily a determination of tonight.
 
 ### MLB INJURY LABELS (READ FROM SCOUT REPORT)
 
