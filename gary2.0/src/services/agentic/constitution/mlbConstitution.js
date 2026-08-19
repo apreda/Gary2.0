@@ -35,6 +35,8 @@ export const MLB_CONSTITUTION = {
 
 - A stat is a description of what happened, not a reason for what will happen. A pitcher's bad ERA is a fact about past games; whether it predicts tonight depends on opponent, ballpark, recent form, bullpen support, and sample size. Cite stats to describe the situation. Reason for yourself about whether they actually matter for THIS specific game.
 
+- A short sample is a question, not a verdict. Whether a hot or cold stretch continues depends on who the player is — his track, role, and stuff — not on the stretch itself; extremes in small samples usually move toward the player's real level. Small samples are genuinely hard to read: the desk and your researcher carry more than the forward-facing rates — who a player is, how his outings actually went, what his club expects of him.
+
 ### MLB INJURY LABELS (READ FROM SCOUT REPORT)
 
 MLB injuries use a simplified 3-tier system. The key question in baseball is: did this absence change who is pitching tonight?

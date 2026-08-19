@@ -99,9 +99,37 @@ describe('earlyCareerFlag', () => {
     expect(earlyCareerFlag({ name: 'R', label: 'home', careerGs: 12, seasonGs: 12 }))
       .toContain('All 12 of his career MLB starts have come this season.');
   });
-  it('stays silent for veterans and for tiny season samples', () => {
+  it('stays silent for veterans', () => {
     expect(earlyCareerFlag({ name: 'V', label: 'home', careerGs: 149, seasonGs: 8 })).toBeNull();
-    expect(earlyCareerFlag({ name: 'N', label: 'home', careerGs: 4, seasonGs: 4 })).toBeNull();
+  });
+  it('fires LOUDEST for tiny samples — the Jobe case (founder, Aug 19: the old sg<5 floor went silent for the exact arms that need it)', () => {
+    const two = earlyCareerFlag({ name: 'Jackson Jobe', label: 'away', careerGs: 2, seasonGs: 2 });
+    expect(two).toContain('only 2 MLB starts this season');
+    expect(two).toContain('rests on that sample');
+    const one = earlyCareerFlag({ name: 'R', label: 'home', careerGs: 1, seasonGs: 1 });
+    expect(one).toContain('ONE MLB start');
+    expect(earlyCareerFlag({ name: 'Z', label: 'home', careerGs: 0, seasonGs: 0 })).toBeNull();
+  });
+});
+
+import { whoHeIsLine } from '../../../src/services/agentic/scoutReport/sports/pitcherArc.js';
+
+describe('whoHeIsLine', () => {
+  it('carries the MiLB season, call-up, and role shape as one identity line', () => {
+    const line = whoHeIsLine({
+      seasonGs: 2,
+      reliefCount: 1,
+      milb: { level: 'AAA', era: 2.36, ip: '68.2', k: 89 },
+      callUp: '2026-08-05: Detroit Tigers recalled RHP Jackson Jobe from Toledo Mud Hens.',
+    });
+    expect(line).toContain('2 MLB starts this season');
+    expect(line).toContain('plus 1 relief appearance');
+    expect(line).toContain('AAA this season: 2.36 ERA over 68.2 IP, 89 K');
+    expect(line).toContain('recalled RHP Jackson Jobe');
+  });
+  it('is silent for established starters and when nothing beyond the count is known', () => {
+    expect(whoHeIsLine({ seasonGs: 12, milb: { level: 'AAA', era: 3, ip: '50' } })).toBeNull();
+    expect(whoHeIsLine({ seasonGs: 2, reliefCount: 0, milb: null, callUp: null })).toBeNull();
   });
 });
 

@@ -35,10 +35,13 @@ import {
   getTeamSituationalHitting,
   getMlbStandingsContext,
   getMlbPeopleHands,
+  getPitcherMilbSeasonRaw,
+  getPitcherGameLogRaw,
 } from '../../../mlbStatsApiService.js';
 import { computeSpVsHandByStart, computeSeasonBvpForLineup, computePitchTypeTrendByStart } from './mlbPlatoonRecency.js';
 import { computeTeamMonthArc, computeBounceBackLine, computeRecordSince, computeCurrentStreak, computeRecentQuality, computeVenueTransition } from './mlbSeasonContext.js';
-import { recentWindowLine, monthArcLine, longLayoffFlag, earlyCareerFlag, midSeasonGapFlag, singleStartDistortion, teamChangeFlags, seasonLineQualifier, matchupRecencyLine, homeRoadLine } from './pitcherArc.js';
+import { recentWindowLine, monthArcLine, longLayoffFlag, earlyCareerFlag, midSeasonGapFlag, singleStartDistortion, teamChangeFlags, seasonLineQualifier, matchupRecencyLine, homeRoadLine, whoHeIsLine } from './pitcherArc.js';
+import { milbLineFromStatsReply } from '../../../starterDebut.js';
 import { foldName } from '../../../../utils/nameUtils.js';
 import { findStandingsRow } from '../../../teamIdentity.js';
 import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbSeasonSeriesGroups, computeMlbScheduleShape, computeMlbRecentSeriesForm, groupGamesIntoSeries, situationalSeriesLine, toEtDate } from './mlbSeriesState.js';
@@ -568,6 +571,58 @@ export async function buildMlbScoutReport(game, options = {}) {
             const qual = seasonLineQualifier({ season, firstStartDate: pitcherArcData[side].firstStartDate, starts: allStarts });
             if (qual) parts[seasonLineIdx] = parts[seasonLineIdx].replace(/ starts\)$/, ` starts${qual})`);
           }
+
+          // WHO HE IS (founder GO, Aug 19 — the Jobe case): a short-sample
+          // starter gets his identity as DATA, not just a tiny ERA — his
+          // minor-league season this year, the call-up transaction as
+          // officially written, and his role shape. The press layer still
+          // carries the pedigree narrative; this is the numbers behind it.
+          try {
+            if (mlbamId && allStarts.length < 5) {
+              // MiLB season line: first level with a real line, AAA then AA.
+              let milb = null;
+              for (const level of ['AAA', 'AA']) {
+                milb = milbLineFromStatsReply(await getPitcherMilbSeasonRaw(mlbamId, season, level).catch(() => null), level);
+                if (milb) break;
+              }
+              // The call-up, as officially written — season-wide transaction
+              // scan for his name (recall/selection/purchase class only).
+              let callUp = null;
+              const sideTeamId = side === 'home' ? homeTeamId : awayTeamId;
+              if (sideTeamId) {
+                const seasonStart = `${season}-02-01`;
+                const rows = await getMlbTransactions(sideTeamId, seasonStart, todayIso).catch(() => []);
+                const lastName = String(pitcher.fullName || '').trim().split(' ').pop();
+                const mine = (rows || []).filter((r) =>
+                  String(r.description || '').includes(lastName)
+                  && /recall|select|purchas|called up|contract|reinstat|activat|returned/i.test(String(r.description || '')));
+                const last = mine[mine.length - 1];
+                if (last) {
+                  callUp = `${last.date}: ${last.description}`;
+                  // A returnee's activation says when, not why — ride the
+                  // placement's own reason clause when the IL is the story
+                  // (the Jobe case: "Recovering from Tommy John surgery").
+                  if (/injured list/i.test(last.description)) {
+                    const placed = (rows || []).filter((r) =>
+                      String(r.description || '').includes(lastName)
+                      && /placed/i.test(String(r.description || ''))
+                      && r.date < last.date);
+                    const reason = String(placed[placed.length - 1]?.description || '').match(/injured list\.\s*(.+)$/i)?.[1];
+                    if (reason) callUp += ` (${reason.trim()})`;
+                  }
+                }
+              }
+              // Role shape: relief outings beside the starts, from the same
+              // cached official game log the usage devices read.
+              let reliefCount = 0;
+              try {
+                const log = await getPitcherGameLogRaw(mlbamId, season);
+                reliefCount = (log || []).filter((g) => g?.stat?.inningsPitched != null && !(g.stat?.gamesStarted > 0)).length;
+              } catch { /* role shape optional */ }
+              const line = whoHeIsLine({ seasonGs: allStarts.length, reliefCount, milb, callUp });
+              if (line) parts.push(line);
+            }
+          } catch { /* identity line is additive — never sinks the starter block */ }
         }
 
         if (lastStarts.length) {

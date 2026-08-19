@@ -244,13 +244,43 @@ export function seasonLineQualifier({ season, firstStartDate, starts } = {}) {
 export function earlyCareerFlag({ name, label, careerGs, seasonGs }) {
   const cg = Number(careerGs) || 0;
   const sg = Number(seasonGs) || 0;
-  if (sg < 5 || cg < sg) return null;      // too early to say anything / bad data
+  if (sg < 1 || cg < sg) return null;      // nothing started yet / bad data
   const prior = cg - sg;
   if (prior > 4) return null;              // real prior track record exists
+  // SHORT-SAMPLE TIER (founder GO, Aug 19 2026 — the Jobe case): the old
+  // sg<5 floor made this flag SILENT for the shortest samples, the exact
+  // case that needs it most — a 2-start arm read as "no flags here". Now
+  // 1-4 starts prints the loudest provenance fact on the card.
+  if (sg < 5) {
+    const startWord = sg === 1 ? 'ONE MLB start' : `only ${sg} MLB starts`;
+    return `${name} (${label}): has made ${startWord} this season${prior === 0 ? ' — the first of his career' : ''}. Every season-long rate and split on this card rests on that sample; his Who-he-is line carries the season behind it.`;
+  }
   const lead = prior === 0
     ? `All ${cg} of his career MLB starts have come this season.`
     : `${sg} of his ${cg} career MLB starts have come this season.`;
   return `${name} (${label}): ${lead} Season-long splits and rate stats accumulate from his first MLB starts onward.`;
+}
+
+/**
+ * WHO HE IS — the short-sample identity line (founder GO, Aug 19 2026, the
+ * Jobe case: "a guy with 2 starts — is he a top prospect they called up
+ * expecting him to be good, or a roster filler?"). Facts only: MLB sample
+ * size, role shape, his minor-league season THIS year, and the call-up
+ * transaction as officially written. Null for established starters.
+ */
+export function whoHeIsLine({ seasonGs, reliefCount, milb, callUp }) {
+  const sg = Number(seasonGs) || 0;
+  if (sg >= 5) return null;
+  const bits = [];
+  bits.push(sg === 0 ? 'no MLB starts this season' : sg === 1 ? '1 MLB start this season' : `${sg} MLB starts this season`);
+  const rc = Number(reliefCount) || 0;
+  if (rc > 0) bits.push(`plus ${rc} relief appearance${rc === 1 ? '' : 's'}`);
+  if (milb?.level && milb?.era != null && milb?.ip) {
+    bits.push(`${milb.level} this season: ${Number(milb.era).toFixed(2)} ERA over ${milb.ip} IP${milb.k != null ? `, ${milb.k} K` : ''}`);
+  }
+  if (callUp) bits.push(callUp);
+  if (bits.length < 2) return null;   // the sample count alone adds nothing new
+  return `  Who he is: ${bits.join(' · ')}`;
 }
 
 /**
