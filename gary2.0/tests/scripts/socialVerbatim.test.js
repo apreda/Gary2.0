@@ -104,6 +104,19 @@ describe('reasonCandidates', () => {
   it('never truncates: an unfittable candidate set falls back rather than cutting words', () => {
     expect(fallbackReasonPair(R, 10)).toBe(null);
   });
+
+  it('the argument leads (founder, Aug 19): a stance sentence opens, the stat-dense reason closes', () => {
+    const card = [
+      'The rubber match is set at PNC Park, with two arms carrying very different certainty.',
+      'Skenes has held left-handed hitters to a .649 OPS, an important matchup against a lineup with five left-handed bats.',
+      'I’m backing Pittsburgh on the moneyline because the starting-pitching advantage is substantial enough without asking for a run line.',
+      'Jobe has worked only 8.2 innings in two starts, producing a 6.23 ERA.',
+    ].join('\n\n');
+    const pair = fallbackReasonPair(card, 400);
+    expect(pair.opening.startsWith('I’m backing Pittsburgh')).toBe(true);
+    expect(pair.closing.includes('8.2 innings') || pair.closing.includes('.649 OPS')).toBe(true);
+    expect(pair.opening.includes('PNC Park')).toBe(false);
+  });
 });
 
 describe('composer wiring', () => {

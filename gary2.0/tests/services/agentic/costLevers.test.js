@@ -31,12 +31,16 @@ describe('#2 MLB research walk runs 8 factor chats with the full token union', (
 
   it('keeps every token from the 12-factor layout (merge loses no data access)', () => {
     const union = new Set(Object.values(INVESTIGATION_FACTORS.baseball_mlb).flat());
+    // MLB_PITCH_TYPES_HITTERS deliberately left the walk (founder, Aug 19
+    // 2026: hitter-vs-pitch-type crossover is micro matching-stats fuel, not
+    // context). The token itself stays registered and ASK-able — this list
+    // asserts the WALK's union, so it is excluded here by ruling.
     const twelveFactorTokens = [
       'MLB_STARTING_PITCHERS', 'MLB_PITCHER_SEASON_STATS', 'MLB_PITCH_TYPES_SP',
       'MLB_PITCHER_RECENT_FORM', 'MLB_PITCHER_SCOUTING',
       'MLB_BULLPEN', 'MLB_BULLPEN_WORKLOAD', 'MLB_CLOSER_RELIEVER_STATS',
       'MLB_KEY_HITTERS', 'MLB_LINEUP', 'MLB_RISP_SITUATIONAL', 'MLB_PLAYER_SPLITS', 'MLB_STATCAST',
-      'MLB_BATTER_VS_PITCHER', 'MLB_PITCH_TYPES_HITTERS',
+      'MLB_BATTER_VS_PITCHER',
       'MLB_CATCHER_DEFENSE', 'MLB_TEAM_DEFENSE',
       'MLB_STANDINGS_STRUCTURED', 'MLB_RECENT_FORM_STRUCTURED', 'MLB_RECENT_RESULTS',
       'H2H_HISTORY', 'MLB_H2H',

@@ -79,57 +79,16 @@ if (JUNE_ENGINE_ARMED && !JUNE_ENGINE_READY) {
   console.log(`[JuneEngine] ⚾ ARMED — MLB games run the restored June engine (brain: ${MLB_JUNE_BRAIN_MODEL}, researcher: ${MLB_RESEARCH_MODEL}).`);
 }
 
-// Era stamp for the restored lane: hash of the engine's STATIC MLB prompt
-// surface (constitution + factors + pass builders with placeholder teams) —
-// same role as the pickdesk PROMPT_SHA, so the ledger reads eras cleanly.
-let _junePromptSha = null;
+// Era stamp for the restored lane: one hash over the engine's full surface —
+// static prompts AND the dossier-surface files (see junePromptSha.js; the
+// factor-plan file rode in Aug 19 with the situation-first walk). Shared
+// with production-truth so the live June era is always visible.
+let _junePromptShaFn = null;
 async function junePromptSha() {
-  if (_junePromptSha) return _junePromptSha;
-  const { createHash } = await import('crypto');
-  const { MLB_CONSTITUTION } = await import('../src/services/agentic/constitution/mlbConstitution.js');
-  const { getMlbSpreadFactors, getMlbSeasonAwareness } = await import('../src/services/agentic/orchestrator/spreadEvaluationFactors.js');
-  const { buildPass1Message, buildPass25Message, buildPass3Unified } = await import('../src/services/agentic/orchestrator/passBuilders.js');
-  // THE DOSSIER IS PART OF THE ERA (founder's ledger law, extended Aug 19
-  // 2026): twice in 24 hours the dossier generation changed with no era
-  // change, and the ledger could not see it — the Aug 18 fills shipped
-  // mid-slate invisibly, and the "3-0 new dossier" misread came straight
-  // from that blindness. The stamp now hashes the FILES that build what
-  // Gary reads (scout builder family, shelf renderers, researcher
-  // checklist, advisor prompt) alongside the static prompt surface. Any
-  // edit to these files — content or code — is a new era by definition;
-  // cheap era churn beats an unreadable ledger.
-  const { readFileSync } = await import('fs');
-  const { fileURLToPath } = await import('url');
-  const path = await import('path');
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  const DOSSIER_SURFACE_FILES = [
-    '../src/services/agentic/scoutReport/sports/mlb.js',
-    '../src/services/agentic/scoutReport/sports/mlbPlatoonRecency.js',
-    '../src/services/agentic/scoutReport/sports/mlbSeasonContext.js',
-    '../src/services/agentic/scoutReport/sports/mlbSeriesState.js',
-    '../src/services/agentic/scoutReport/sports/mlbContactQuality.js',
-    '../src/services/agentic/scoutReport/sports/mlbInjuryContext.js',
-    '../src/services/agentic/scoutReport/sports/pitcherArc.js',
-    '../src/services/agentic/tools/statRouters/mlbFetchers.js',
-    '../src/services/agentic/flashInvestigationPrompts.js',
-    '../src/services/agentic/orchestrator/flashAdvisor.js',
-  ];
-  const dossierSurface = DOSSIER_SURFACE_FILES.map((rel) => {
-    try { return readFileSync(path.join(here, rel), 'utf8'); }
-    catch { return `missing:${rel}`; }
-  }).join('\n⸻\n');
-  const staticSurface = [
-    MLB_CONSTITUTION.pass1Context,
-    MLB_CONSTITUTION.bilateralCasePrompt('HOME', 'AWAY'),
-    getMlbSpreadFactors(),
-    getMlbSeasonAwareness(),
-    buildPass1Message('SCOUT', 'HOME', 'AWAY', 'DATE', 'baseball_mlb', 0),
-    buildPass25Message('HOME', 'AWAY', 'MLB', 0, ''),
-    buildPass3Unified('HOME', 'AWAY', { sport: 'MLB' }),
-    dossierSurface,
-  ].join('\n⸻\n');
-  _junePromptSha = createHash('sha256').update(staticSurface).digest('hex').slice(0, 12);
-  return _junePromptSha;
+  if (!_junePromptShaFn) {
+    ({ junePromptSha: _junePromptShaFn } = await import('../src/services/agentic/orchestrator/junePromptSha.js'));
+  }
+  return _junePromptShaFn();
 }
 
 // The June engine's Pass 1 bilateral cases ("Case for backing X tonight", or

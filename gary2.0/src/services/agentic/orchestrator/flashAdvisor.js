@@ -324,7 +324,6 @@ The full scout report for this game is in your system context — it is your bas
 
 Investigate using fetch_stats for tokens that ADD information beyond the scout report:
 - MLB_PITCH_TYPES_SP — per-pitch xwOBA/whiff%/chase% for both probable starters (NEW signal not in scout)
-- MLB_PITCH_TYPES_HITTERS — how top hitters perform vs each pitch type
 - MLB_PLAYER_SPLITS — L/R, day/night, byArena splits
 - MLB_BATTER_VS_PITCHER — career BvP history
 - MLB_BULLPEN, MLB_BULLPEN_WORKLOAD, MLB_CLOSER_RELIEVER_STATS — bullpen depth + day-of availability
