@@ -59,6 +59,10 @@ async function currentRosterFolds(teamName) {
 
 // Fold → MLBAM person id, same roster fetch — lets the pen sections reach a
 // man's official game log (usage patterns) and pitch hand (Aug 18 fills).
+// Aug 19: also carries a fold-set of actual PITCHERS, so a position player's
+// mop-up innings can never list him as a pen arm (the Straw case — an
+// outfielder rendered as "Myles Straw (RHP)" because his 3.0 garbage-time
+// innings cleared the membership floor).
 const rosterIdCache = new Map();
 async function currentRosterIdsByFold(teamName) {
   if (!rosterIdCache.has(teamName)) {
@@ -69,11 +73,16 @@ async function currentRosterIdsByFold(teamName) {
         if (!t?.id) return null;
         const roster = await getTeamRoster(t.id);
         const map = new Map();
+        const pitcherFolds = new Set();
         for (const r of roster || []) {
           const f = foldName(r.name);
-          if (f && r.id != null) map.set(f, r.id);
+          if (!f || r.id == null) continue;
+          map.set(f, r.id);
+          if (String(r.positionType || r.position || '') === 'Pitcher' || String(r.position || '') === 'P') pitcherFolds.add(f);
         }
-        return map.size ? map : null;
+        if (!map.size) return null;
+        map.pitcherFolds = pitcherFolds.size ? pitcherFolds : null;
+        return map;
       } catch { return null; }
     })());
   }
@@ -2318,7 +2327,7 @@ export const mlbFetchers = {
         // data mismatch. Unknown roster keeps everyone untagged, as before.
         const onRoster = rosterFolds ? merged.filter(a => rosterFolds.has(foldName(a.name))) : merged;
         const rosterFiltered = Boolean(rosterFolds) && onRoster.length > 0;
-        const relievers = rosterFiltered ? onRoster : merged;
+        let relievers = rosterFiltered ? onRoster : merged;
 
         if (relievers.length > 0) {
           usedBdl = true;
@@ -2332,6 +2341,12 @@ export const mlbFetchers = {
           // from the official game log. Facts only; availability is the
           // brain's read off these plus the recent-workload ledger.
           const idByFold = await currentRosterIdsByFold(teamName).catch(() => null);
+          // Position players out of the pen (Aug 19, the Straw case): when
+          // the roster knows who the actual pitchers are, only they list.
+          // Fail-open — an unknown roster excludes no one.
+          if (idByFold?.pitcherFolds) {
+            relievers = relievers.filter((a) => idByFold.pitcherFolds.has(foldName(a.name)));
+          }
           const armIds = idByFold ? relievers.map((a) => idByFold.get(foldName(a.name))).filter((id) => id != null) : [];
           const hands = armIds.length ? await getMlbPeopleHands(armIds).catch(() => new Map()) : new Map();
           const usageByFold = new Map();
