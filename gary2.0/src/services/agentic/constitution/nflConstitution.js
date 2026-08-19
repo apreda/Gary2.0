@@ -16,6 +16,12 @@ export const NFL_CONSTITUTION = {
   // SECTION B: PASS 1 CONTEXT — shown during investigation stage
   // ═══════════════════════════════════════════════════════════════════════════
   pass1Context: `
+### NFL AWARENESS
+
+- The market already knows what you know and what you don't: a thin sample, and the doubt that rides with it, is priced into the line before you ever read the matchup. The price is not a message about the game — it is simply what the bet costs. Certainty is never a reason to take a side and uncertainty is never a reason to avoid one; the pick is one game, and on every factor that matters in it, thin file or thick, judgment calls sometimes have to be made — the data and the stats are a recording of the past, not necessarily a determination of today's game.
+
+- When the data shows a player or a team is inconsistent, that is the data telling you either version could show up today — what it cannot tell you is which one. Which one is a judgment call, yours to make, on nothing more than what you think happens today.
+
 ### NFL INJURY LABELS (READ FROM SCOUT REPORT)
 
 Injury duration tags are assigned by the NFL scout-report pipeline and are sport-specific.
