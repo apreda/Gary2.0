@@ -1805,7 +1805,7 @@ struct ObsidianGround: View {
 // parallax. Self-serve: the gold chip on Home cycles them by tap (DEBUG only).
 // ground 0 = shipped waves · 1-10 = the new set · 11 = THE FLOOR (grid, kept
 // as the proven reference point).
-private let depthV4Names = ["WAVES (SHIPPED)", "CARD CORRIDOR", "STADIUM TUNNEL", "SKYLINE LAYERS", "FLOATING SHEETS", "DUST FLIGHT", "ORBIT DEPTH", "LIGHT SHAFTS", "INFINITE DOORS", "DATA RIVER", "THE VAULT", "THE FLOOR (GRID)"]
+private let depthV4Names = ["WAVES (SHIPPED)", "CARD CORRIDOR", "STADIUM TUNNEL", "SKYLINE LAYERS", "FLOATING SHEETS", "DUST FLIGHT", "ORBIT DEPTH", "LIGHT SHAFTS", "INFINITE DOORS", "DATA RIVER", "THE VAULT", "THE FLOOR (GRID)", "THE FLOOR · STILL"]
 
 struct HomeGroundSwitcher: View {
     @State private var study: Int = UserDefaults.standard.integer(forKey: "garyGroundStudy")
@@ -1823,6 +1823,7 @@ struct HomeGroundSwitcher: View {
             case 9: DepthV4DataRiver()
             case 10: DepthV4Vault()
             case 11: DepthV3Floor()
+            case 12: DepthV4StaticFloorFull()
             default: ObsidianGround()
             }
         }
@@ -1845,12 +1846,12 @@ struct GroundStudyChip: View {
             HStack {
                 Spacer()
                 Button {
-                    let next = (study + 1) % 12
+                    let next = (study + 1) % 13
                     UserDefaults.standard.set(next, forKey: "garyGroundStudy")
                     study = next
                     NotificationCenter.default.post(name: Notification.Name("GaryGroundStudy"), object: nil)
                 } label: {
-                    Text("\(study)/11 · \(depthV4Names[study]) · TAP")
+                    Text("\(study)/12 · \(depthV4Names[min(max(study, 0), depthV4Names.count - 1)]) · TAP")
                         .font(.system(size: 10, weight: .bold))
                         .tracking(0.8)
                         .foregroundStyle(.black)
@@ -2279,6 +2280,39 @@ private struct DepthV3GridPattern: View {
                 x += spacingX
             }
         }
+    }
+}
+
+// 12 — THE FLOOR · STILL: founder round four ("some of these effects can
+// fully do the effect without moving") — the grid covers the FULL page and
+// never moves. Pure geometry carries the depth: one 3D-folded plane from
+// the bottom edge up to a horizon just under the masthead, no clock — the
+// layer costs nothing after its first frame.
+struct DepthV4StaticFloorFull: View {
+    var body: some View {
+        GeometryReader { geo in
+            let W = geo.size.width, H = geo.size.height
+            ZStack {
+                DepthV3GridPattern(phase: 0, spacingY: 64, spacingX: 76, alpha: 0.30)
+                    .frame(width: W * 2.6, height: H * 1.5)
+                    .rotation3DEffect(.degrees(63), axis: (x: 1, y: 0, z: 0), anchor: .top, perspective: 0.9)
+                    .position(x: W * 0.5, y: H * 0.85)
+                    .mask(
+                        LinearGradient(stops: [
+                            .init(color: .clear, location: 0.02),
+                            .init(color: .black, location: 0.20),
+                            .init(color: .black, location: 0.88),
+                            .init(color: .black.opacity(0.35), location: 1),
+                        ], startPoint: .top, endPoint: .bottom)
+                    )
+                // the horizon light the whole page runs toward
+                RadialGradient(colors: [Color(hex: "#F2E4BC").opacity(0.13),
+                                        Color(hex: "#D9A62B").opacity(0.045), .clear],
+                               center: .init(x: 0.5, y: 0.12), startRadius: 4, endRadius: W * 0.5)
+            }
+        }
+        .allowsHitTesting(false)
+        .ignoresSafeArea()
     }
 }
 
