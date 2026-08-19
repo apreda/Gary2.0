@@ -16166,22 +16166,26 @@ struct MembersWrap<Content: View>: View {
     @State private var burstOn = false
 
     var body: some View {
-        ZStack {
-            MembersOnlyCardFace(state: .pickIn(firstPitch: commence.map { Self.pitchClock($0) }),
-                                tease: tease, leagueTag: league, kicker: sealKicker,
-                                silverSeal: silverSeal,
-                                fillsContainer: true)
-                .opacity(revealed ? 0 : 1)
-            content()
-                .opacity(revealed ? 1 : 0)
-                .allowsHitTesting(revealed)
-                .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
-        }
-        // The seal ALWAYS wears the uniform game-card footprint (founder,
-        // Aug 19: the cover ran taller than the pick card behind it, so the
-        // rail's heights snapped on reveal and misaligned while scrolling).
-        // The revealed content keeps its own exact size — untouched.
-        .frame(height: revealed ? nil : (sealedHeight ?? CompactPickRow.uniformHeight))
+        // The face rides as an OVERLAY of the content, never a ZStack sibling
+        // (founder, Aug 19 round two: the invisible face kept its intrinsic
+        // height in the slot after reveal, so revealed cards floated ~20pt
+        // low in the rail). The CARD alone drives layout in both states —
+        // the cover is literally the same size as the pick behind it.
+        content()
+            .opacity(revealed ? 1 : 0)
+            .allowsHitTesting(revealed)
+            .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+            .overlay {
+                MembersOnlyCardFace(state: .pickIn(firstPitch: commence.map { Self.pitchClock($0) }),
+                                    tease: tease, leagueTag: league, kicker: sealKicker,
+                                    silverSeal: silverSeal,
+                                    fillsContainer: true)
+                    .opacity(revealed ? 0 : 1)
+                    .allowsHitTesting(!revealed)
+            }
+        // Prop stacks still seal at ONE card's height (sealedHeight), then
+        // grow to the real stack on reveal.
+        .frame(height: revealed ? nil : sealedHeight)
         .rotation3DEffect(.degrees(revealed ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
         .animation(.spring(response: 0.7, dampingFraction: 0.8), value: revealed)
         // In-place reveal FX (founder call, Jul 3: on the page, never a popup).
@@ -18698,6 +18702,12 @@ private struct GaryTakeCardBack<Tail: View>: View {
                                 .font(GaryFonts.text(14.5))
                                 .foregroundStyle(.white.opacity(0.88))
                                 .lineSpacing(3.5)
+                                // fixedSize = the text renders at FULL height
+                                // and the window clips it mid-line under the
+                                // fade. Without it, SwiftUI ellipsized the
+                                // last visible line ("…") inside the fixed
+                                // frame — the hard no-ellipsis law (Aug 19).
+                                .fixedSize(horizontal: false, vertical: true)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .frame(height: 108, alignment: .top)
                                 .clipped()
@@ -18803,6 +18813,15 @@ func propPickStyled(_ s: String) -> Text {
 func cleanPropAnalysis(_ text: String) -> String {
     // Raw markdown bold ("**THE PICK:**") reads as a glitch on-card — drop it.
     var cleaned = text.replacingOccurrences(of: "**", with: "")
+    // The brain sometimes opens with its own "Gary's Take" heading — the card
+    // already says GARY'S TAKE in the kicker, so on-card it read twice
+    // (founder caught it Aug 19). Same strip splitTake does for game cards.
+    let lowered = cleaned.lowercased()
+    if lowered.hasPrefix("gary's take") || lowered.hasPrefix("garys take") {
+        cleaned = String(cleaned.dropFirst(cleaned.lowercased().hasPrefix("gary's take") ? "gary's take".count : "garys take".count))
+        if cleaned.hasPrefix(":") { cleaned.removeFirst() }
+        cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
     let labels = ["HYPOTHESIS:", "EVIDENCE:", "CONVERGENCE", "IF WRONG:", "THE EDGE:", "THE VERDICT:", "RISK:"]
     for label in labels {
         if let r = cleaned.range(of: label, options: .caseInsensitive) {

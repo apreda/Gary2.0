@@ -599,44 +599,75 @@ struct TailFadeRow: View {
     }
 
     private func stakePicker(_ side: String) -> some View {
-        HStack(spacing: 10) {
-            Text(side.uppercased())
-                .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
-                .foregroundStyle(side == "tail" ? GaryColors.gold : Color(hex: "#8B93A7"))
-            Stepper(value: $stake, in: 0.5...5, step: 0.5) {
+        // TWO ROWS (founder, Aug 19: the armed state "has a bug" — the old
+        // one-line HStack packed ~500pt of controls into a ~330pt card back,
+        // so everything compressed/clipped; the native gray Stepper also
+        // read foreign on the house card). Row 1: side + house −/+ stake.
+        // Row 2: streak toggle, then Back / Lock it in.
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Text(side == "tail" ? "BET WITH GARY" : "FADE THE BEAR")
+                    .font(GaryFonts.mono(10.5, bold: true)).tracking(1.2)
+                    .foregroundStyle(side == "tail" ? GaryColors.gold : Color(hex: "#8B93A7"))
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                Spacer(minLength: 6)
+                stakeStep("minus") { stake = max(0.5, stake - 0.5) }
                 Text(BookMoney.stake(stake))
-                    .font(GaryFonts.mono(12, bold: true))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .font(GaryFonts.mono(13, bold: true))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .frame(minWidth: 46)
+                stakeStep("plus") { stake = min(5, stake + 0.5) }
             }
-            .fixedSize()
-            // One play a day rides the streak — claiming it here releases any
-            // other claim the user holds for the date (server-enforced).
-            Button { streakOn.toggle() } label: {
-                VStack(spacing: 3) {
-                    Text("STREAK")
-                        .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
-                        .foregroundStyle(streakOn ? Color(hex: "#E5844B") : .white.opacity(0.5))
-                    Rectangle().fill(streakOn ? Color(hex: "#E5844B") : .clear).frame(height: 1.5)
+            HStack(spacing: 10) {
+                // One play a day rides the streak — claiming it here releases
+                // any other claim the user holds for the date (server-enforced).
+                Button { streakOn.toggle() } label: {
+                    VStack(spacing: 3) {
+                        Text("STREAK")
+                            .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
+                            .foregroundStyle(streakOn ? Color(hex: "#E5844B") : .white.opacity(0.5))
+                        Rectangle().fill(streakOn ? Color(hex: "#E5844B") : .clear).frame(height: 1.5)
+                    }
+                    .fixedSize()
                 }
-                .fixedSize()
+                .buttonStyle(.plain)
+                Spacer(minLength: 6)
+                Button { arming = nil } label: {
+                    Text("Back")
+                        .font(GaryFonts.mono(10))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .padding(.vertical, 7).padding(.horizontal, 4)
+                }
+                .buttonStyle(.plain)
+                Button { place(side) } label: {
+                    Text("Lock it in")
+                        .font(GaryFonts.mono(11, bold: true))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 14).padding(.vertical, 7)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(GaryColors.gold))
+                }
+                .buttonStyle(.plain)
+                .disabled(busy)
             }
-            .buttonStyle(.plain)
-            Button { place(side) } label: {
-                Text("Lock it in")
-                    .font(GaryFonts.mono(11, bold: true))
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 12).padding(.vertical, 7)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(GaryColors.gold))
-            }
-            .buttonStyle(.plain)
-            .disabled(busy)
-            Button { arming = nil } label: {
-                Text("Back")
-                    .font(GaryFonts.mono(10))
-                    .foregroundStyle(.white.opacity(0.5))
-            }
-            .buttonStyle(.plain)
         }
+    }
+
+    /// House stepper chip — the native gray Stepper read foreign on the card.
+    private func stakeStep(_ symbol: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.white.opacity(0.85))
+                .frame(width: 30, height: 30)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.white.opacity(0.07))
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(Color.white.opacity(0.10), lineWidth: 1))
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func placedChip(_ bet: UserBet) -> some View {
@@ -1402,32 +1433,60 @@ struct PropTailFadeRow: View {
     }
 
     private func stakePicker(_ side: String) -> some View {
-        HStack(spacing: 10) {
-            Text(side.uppercased())
-                .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
-                .foregroundStyle(side == "tail" ? GaryColors.silverLight : Color(hex: "#8B93A7"))
-            Stepper(value: $stake, in: 0.5...5, step: 0.5) {
+        // TWO ROWS — exact twin of the game card's armed state (founder,
+        // Aug 19), silver lock button = the props lane's one tint difference.
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Text(side == "tail" ? "BET WITH GARY" : "FADE THE BEAR")
+                    .font(GaryFonts.mono(10.5, bold: true)).tracking(1.2)
+                    .foregroundStyle(side == "tail" ? GaryColors.silverLight : Color(hex: "#8B93A7"))
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                Spacer(minLength: 6)
+                stakeStep("minus") { stake = max(0.5, stake - 0.5) }
                 Text(BookMoney.stake(stake))
-                    .font(GaryFonts.mono(12, bold: true))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .font(GaryFonts.mono(13, bold: true))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .frame(minWidth: 46)
+                stakeStep("plus") { stake = min(5, stake + 0.5) }
             }
-            .fixedSize()
-            Button { place(side) } label: {
-                Text("Lock it in")
-                    .font(GaryFonts.mono(11, bold: true))
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 12).padding(.vertical, 7)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(GaryColors.silverLight))
+            HStack(spacing: 10) {
+                Spacer(minLength: 6)
+                Button { arming = nil } label: {
+                    Text("Back")
+                        .font(GaryFonts.mono(10))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .padding(.vertical, 7).padding(.horizontal, 4)
+                }
+                .buttonStyle(.plain)
+                Button { place(side) } label: {
+                    Text("Lock it in")
+                        .font(GaryFonts.mono(11, bold: true))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 14).padding(.vertical, 7)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(GaryColors.silverLight))
+                }
+                .buttonStyle(.plain)
+                .disabled(busy)
             }
-            .buttonStyle(.plain)
-            .disabled(busy)
-            Button { arming = nil } label: {
-                Text("Back")
-                    .font(GaryFonts.mono(10))
-                    .foregroundStyle(.white.opacity(0.5))
-            }
-            .buttonStyle(.plain)
         }
+    }
+
+    /// House stepper chip — same as the game card's.
+    private func stakeStep(_ symbol: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.white.opacity(0.85))
+                .frame(width: 30, height: 30)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.white.opacity(0.07))
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(Color.white.opacity(0.10), lineWidth: 1))
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func placedChip(_ bet: UserBet) -> some View {
