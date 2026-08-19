@@ -1319,7 +1319,7 @@ INVESTIGATION COMPLETE`;
             } else if (args.stat_type === 'LEADERS') {
               // Get league leaders for a specific stat
               const leaderType = args.leader_type || 'points';
-              const leaders = await ballDontLieService.getNhlPlayerStatsLeaders(season, leaderType);
+              const leaders = await ballDontLieService.getNhlPlayerStatsLeadersByType(season, leaderType);
               statResult.data = (leaders || []).slice(0, 10).map(l => ({
                 player: l.player?.full_name,
                 team: l.player?.teams?.[0]?.full_name || 'Unknown',

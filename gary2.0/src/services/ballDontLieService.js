@@ -1273,7 +1273,11 @@ const ballDontLieService = {
    * @param {string} type - Stat type (points, goals, assists, etc.)
    * @returns {Array} - Array of leader objects
    */
-  async getNhlPlayerStatsLeaders(season = getCurrentNhlSeason(), type = 'points', ttlMinutes = 60) {
+  // Renamed Aug 19 2026: this array-returning variant was silently shadowed
+  // by the later map-returning getNhlPlayerStatsLeaders (duplicate object
+  // key — same class as the props-name outage). agentLoop's LEADERS branch
+  // is its caller and now reaches it under the unambiguous name.
+  async getNhlPlayerStatsLeadersByType(season = getCurrentNhlSeason(), type = 'points', ttlMinutes = 60) {
     try {
       const cacheKey = `nhl_player_stats_leaders_${season}_${type}`;
       return await getCachedOrFetch(cacheKey, async () => {
@@ -5829,31 +5833,10 @@ const ballDontLieService = {
     }
   },
 
-  /**
-   * Batch MLB player lookup by BDL player ids — names + bats_throws for
-   * resolving who a plate-appearance row belongs to. Identity data is
-   * immutable, so the cache runs a full day.
-   */
-  async getMlbPlayersByIds(playerIds = [], ttlMinutes = 24 * 60) {
-    try {
-      const ids = [...new Set(playerIds.filter((id) => id != null))];
-      if (!ids.length) return [];
-      const cacheKey = `mlb_players_by_ids_${ids.slice().sort((a, b) => a - b).join('-')}`;
-      return await getCachedOrFetch(cacheKey, async () => {
-        const out = [];
-        for (let i = 0; i < ids.length; i += 100) {
-          const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/players${buildQuery({ player_ids: ids.slice(i, i + 100), per_page: 100 })}`;
-          const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
-          out.push(...(response.data?.data || []));
-        }
-        console.log(`[BDL] MLB players by ids: ${out.length}/${ids.length} resolved`);
-        return out;
-      }, ttlMinutes);
-    } catch (error) {
-      console.error('[BDL] MLB players by ids error:', error?.response?.data || error.message);
-      return [];
-    }
-  },
+  // (A second getMlbPlayersByIds briefly lived here, Aug 18-19 — a duplicate
+  // object key that silently SHADOWED the map-returning original above and
+  // took the props board's name resolution down for a night. One name, one
+  // method: the original at its definition site is the only one.)
 
   // ═══════════════════════════════════════════════════════════════════════════
   // MLB PITCH-TYPE STATS (GOAT tier) — per-pitch breakdowns

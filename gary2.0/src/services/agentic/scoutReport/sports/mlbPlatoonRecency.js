@@ -90,11 +90,14 @@ export async function computeSpVsHandByStart({ pitcherBdlId, season, startLabels
 
   // WHO did the damage in his most recent start — names + the side they hit
   // from (founder's literal question). Identity lookup is one cached call.
+  // getMlbPlayersByIds returns a MAP keyed by player id ({ name, ... }) —
+  // the props board's name resolution shares this exact method (Aug 19: a
+  // same-named duplicate briefly shadowed it and took the props lane down).
   let damageLine = null;
   const latest = perStart[perStart.length - 1];
   if (latest?.hitters?.length) {
-    const players = await ballDontLieService.getMlbPlayersByIds(latest.hitters.map((h) => h.batterId)).catch(() => []);
-    const nameOf = new Map(players.map((p) => [String(p.id), p.last_name || p.full_name || '?']));
+    const playerMap = await ballDontLieService.getMlbPlayersByIds(latest.hitters.map((h) => h.batterId)).catch(() => ({}));
+    const nameOf = new Map(Object.entries(playerMap || {}).map(([id, p]) => [String(id), String(p?.name || '?').split(' ').pop()]));
     const byBatter = new Map();
     for (const h of latest.hitters) {
       const key = String(h.batterId);
