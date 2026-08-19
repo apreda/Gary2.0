@@ -725,13 +725,23 @@ Do NOT use fetch_narrative_context for:
 
 The scout report already includes detailed context from both grounding searches and BDL structured data. Use it as your baseline before making additional calls.
 
-### 1. STARTING PITCHER MATCHUP
+### 1. THE SITUATION — STREAKS, SPOTS & THE SCHEDULE
+**Tokens:** MLB_RECENT_FORM, MLB_STANDINGS (the scout report's THE SITUATION section is the baseline)
+The situation leads (founder, Aug 19): meet the teams before the matchup math — who each club is RIGHT NOW, the way a bettor holds the game.
+- What is each club's current run of results, and what is actually BEHIND it? The SITUATION section lists the streak's own games with opponents and records; the ledgers and stories carry what happened in them. Decompose, don't headline: was it built on dominant starts, timely hitting, pen escapes, or soft opposition?
+- Read the last week with its exceptions: a 5-2 stretch where both losses came against a first-place club is a different 5-2 than one with losses to the league's worst. The SITUATION line names the exception games — pull their ledger entries.
+- Where is each club in its travel schedule? First game home after a trip, deep into a road swing, a getaway day — the SITUATION and SCHEDULE SHAPE lines state it. Investigate whether the spot's fatigue or comfort actually shows in the recent games.
+- Is tonight a division game? The SITUATION section carries each club's record vs this division and the season series. Familiarity cuts both ways — investigate how the prior meetings actually went (SERIES STATE has them as written).
+- How has each club actually answered wins and losses? The SITUATION section carries the after-win/after-loss record AND the bats' line in those games, instantiated to what last night actually was.
+- Tie the fresh roster changes into the spot: a club opening a home stand without its catcher is a different club than the season line says. SITUATION FLAGS names tonight's fresh changes.
+
+### 2. STARTING PITCHER MATCHUP
 **Tokens:** MLB_STARTING_PITCHERS, MLB_PITCHER_SEASON_STATS, MLB_PLAYER_SPLITS, MLB_PITCH_TYPES_SP
 - Who is starting for each team? What are their current season stats (ERA, WHIP, K/9, BB/9, IP, W-L)?
 - Call MLB_PITCH_TYPES_SP to get per-pitch breakdown for BOTH probable starters: usage%, whiff%, chase%, xwOBA, BA per pitch type (4-seam, slider, curveball, changeup, etc.).
 - **SAMPLE SIZE IS REQUIRED CONTEXT.** Each pitch line shows its pitch count. A pitch type thrown under ~75-100 pitches on the season (or any rate stat off a tiny sample) is NOISE, not a reliable signal — do not treat a flashy whiff% or xwOBA on a rarely-thrown pitch as a real edge. Weight a pitcher's primary pitches (high usage, large sample) heavily and treat his rare pitches as footnotes. Report the sample alongside any pitch stat you cite.
 - Which pitch is each starter's best (lowest xwOBA, highest whiff%)? Which is the weakest (highest xwOBA)? Only draw this conclusion from pitches with a meaningful sample.
-- Does the pitcher rely heavily on one pitch (50%+ usage) — does the opposing lineup's hitters perform well or poorly against that pitch type? (Cross-reference with MLB_PITCH_TYPES_HITTERS in section 3.)
+- Does the pitcher rely heavily on one pitch (50%+ usage)? Note the concentration on its own terms — how that pitch has actually performed for HIM (usage, whiff, xwOBA are in his per-pitch data). Per-hitter pitch-type crossovers are not used on this desk (founder, Aug 19: micro matching, not context).
 - How does each starter's pitch mix and velocity profile (per-pitch mph is in the MLB_PITCH_TYPES_SP output and scout report — cite ONLY those figures, never velocity from memory) match up against the opposing lineup's handedness and power profile?
 - Any pitch count concerns or workload management patterns? What has the front office's approach been to this pitcher's innings recently?
 - What does each starter's contact-quality-allowed profile look like (Barrel% allowed, Hard-hit% allowed, and GO/AO grounder-per-flyout ratio are in MLB_PITCHER_SCOUTING and the scout report)? True GB%/FB% rates are NOT available from our tools — characterize a batted-ball tendency only from the provided GO/AO and Barrel%/Hard-hit% figures; never estimate a GB% from memory.
@@ -739,7 +749,7 @@ The scout report already includes detailed context from both grounding searches 
 - How many innings has each starter averaged in recent starts — does their pitch count suggest a short outing (< 5 IP, early bullpen handoff) or a deep outing (6+ IP)?
 - What is each starter's home/away split this season? Some pitchers have large venue-dependent performance gaps.
 
-### 2. PITCHER RECENT FORM
+### 3. PITCHER RECENT FORM
 **Tokens:** MLB_PITCHER_RECENT_FORM, MLB_PITCHER_SCOUTING
 - What do each starter's last 3-5 outings look like — ERA, innings pitched, pitch count, strikeouts, walks, hits allowed per start?
 - Is the recent trajectory improving or declining? Compare L5 starts to season averages — is there a meaningful divergence?
@@ -749,10 +759,10 @@ The scout report already includes detailed context from both grounding searches 
 - What is the starter's pitch count trajectory — increasing (building up after IL stint or early season) or capped (managed workload, innings limit)?
 - Is his recent ERA earned or fortunate? Read it from how the runs actually arrived — the ledger's hits/walks/HR columns, his whiff-by-start trend, and his contact quality allowed. Strand rate, FIP, and xERA are not used — never cite them. A pitcher "due to regress" still throws gems.
 
-### 3. PLATOON SPLITS & BATTER VS PITCHER
-**Tokens:** MLB_PLAYER_SPLITS, MLB_BATTER_VS_PITCHER, MLB_KEY_HITTERS, MLB_LINEUP, MLB_PITCH_TYPES_HITTERS
+### 4. PLATOON SPLITS & BATTER VS PITCHER
+**Tokens:** MLB_PLAYER_SPLITS, MLB_BATTER_VS_PITCHER, MLB_KEY_HITTERS, MLB_LINEUP
 - Call MLB_PLAYER_SPLITS to get L/R splits for top hitters on both teams — what is each hitter's AVG/OPS vs LHP vs RHP?
-- Call MLB_PITCH_TYPES_HITTERS to get how the top hitters on each team perform against each pitch type (BA, xwOBA, SLG per pitch). Cross-reference with the opposing SP's primary pitch mix (from MLB_PITCH_TYPES_SP in section 1): which hitters perform best against the pitches tonight's starter throws most often?
+- Hitter-vs-pitch-type crossovers left the walk (founder, Aug 19: tiny samples per cell dressed up as matchup science). Read hitter quality from the L/R splits, the current form beside the season line, and the contact-quality rows instead.
 - **SAMPLE SIZE IS REQUIRED CONTEXT.** Each hitter pitch-type line shows its PA count. A split under ~10 PA against a pitch type is NOISE — a .571 BA or 1.100 xwOBA off 6 PA is not a real "he crushes sliders" signal, it is small-sample variance. Only treat a pitch-type split as meaningful when the PA sample is reasonable (~25+ PA is solid, ~10-25 is suggestive, under 10 is noise). When you cite a hitter's pitch-type performance, state the PA sample and weight it accordingly. Do NOT build a pick around a tiny-sample split.
 - Call MLB_BATTER_VS_PITCHER to get career matchup data: how have each team's top hitters fared against tonight's opposing pitchers specifically?
 - Which hitters have significant platoon vulnerabilities (big gap between L/R OPS)?
@@ -762,7 +772,7 @@ The scout report already includes detailed context from both grounding searches 
 - For the batter vs pitcher matchups, what are the sample sizes? Small samples (< 10 AB) are noise, not signal — flag any matchup data built on fewer than 10 AB.
 - Pitcher platoon splits (vs LHB / vs RHB opponent batting lines) are in MLB_PITCHER_SCOUTING (MLB_PLAYER_SPLITS covers hitters only) — how do the pitcher's vs-LHB and vs-RHB lines compare with the opposing lineup's handedness mix? Use ONLY the fetched vs-LHB/vs-RHB lines; if the scouting output says platoon data is NOT AVAILABLE, report that instead of characterizing the split.
 
-### 4. BULLPEN DEPTH & WORKLOAD
+### 5. BULLPEN DEPTH & WORKLOAD
 **Tokens:** MLB_BULLPEN, MLB_BULLPEN_WORKLOAD
 - The scout report's LAST GAME section shows which bullpen arms pitched yesterday and how many outs each recorded — use this to determine who is available tonight
 - Who pitched in the last 1-3 games for each team? What was their pitch count and innings in each appearance? (MLB_BULLPEN_WORKLOAD lists IP + actual pitch counts per appearance — characterize workload from those numbers only, e.g. a 15-pitch outing is NOT a heavy load even across 4+ outs.)
@@ -773,7 +783,7 @@ The scout report already includes detailed context from both grounding searches 
 - Has either team used an opener or bullpen game in the last week? If so, does that shift who is available tonight?
 - What is the bullpen's K/BB ratio over the last 7 days — are the available arms sharp or spraying walks?
 
-### 5. KEY HITTERS & LINEUP
+### 6. KEY HITTERS & LINEUP
 **Tokens:** MLB_KEY_HITTERS, MLB_LINEUP, MLB_PLAYER_SPLITS
 - Who are the top 3-4 hitters in each lineup? What are their season stats (AVG, OBP, SLG, OPS) and recent form (last 7-14 days)?
 - Are there confirmed batting orders? Any notable lineup changes from the typical alignment?
@@ -783,7 +793,7 @@ The scout report already includes detailed context from both grounding searches 
 - Any hitters on notable hot/cold streaks — what does the L7/L15 data show vs the season line printed beside it? His month rows say whether he has run this hot or cold before. Read luck-vs-real from his "Contact (recent)" row (exit velo, barrels, whiff) — BABIP is NOT AVAILABLE.
 - What is the lineup's strikeout rate as a team? Compare it to tonight's starter's K rate — note the gap, then reason about whether it matters tonight (it may or may not, depending on context).
 
-### 6. STANDINGS & DIVISION CONTEXT
+### 7. STANDINGS & DIVISION CONTEXT
 **Tokens:** MLB_TEAM_RECORD, STANDINGS, MLB_RECENT_FORM
 - Where does each team sit in the division standings? Games back from first?
 - What is each team's record over the last 10 games? Any winning or losing streaks?
@@ -793,7 +803,7 @@ The scout report already includes detailed context from both grounding searches 
 - Check Pythagorean W-L (expected record based on runs scored/allowed) vs actual record — a gap describes how sustainable a team's record is over a season, not what happens tonight. Use it as context for whether a team's reputation matches its real level, not as a single-game forecast.
 - What is each team's record vs winning teams (.500+) vs losing teams?
 
-### 7. HEAD-TO-HEAD & SEASON SERIES
+### 8. HEAD-TO-HEAD & SEASON SERIES
 **Tokens:** H2H_HISTORY, MLB_H2H
 - How have these teams performed against each other this season? What is the season series record?
 - Were previous meetings with the same starters? Did a specific pitcher dominate or struggle against this lineup?
@@ -802,13 +812,13 @@ The scout report already includes detailed context from both grounding searches 
 - In previous meetings, what was the bullpen usage pattern? Did either team's pen get exposed or dominate?
 - Were the H2H results driven by a specific player or matchup (e.g., one hitter went 5-for-8 in the series) that may or may not repeat tonight?
 
-### 8. PARK & WEATHER
+### 9. PARK & WEATHER
 **Tokens:** MLB_PARK_FACTORS, MLB_WEATHER, MLB_PLAYER_SPLITS
 - What is tonight's ballpark and what are its characteristics? Report the park factor, dimensions, and any notable features neutrally.
 - What is the weather forecast for tonight's game? Report temperature, wind speed, and wind direction.
 - How have the starting pitchers and top 3-4 hitters on each team performed at this specific ballpark? Call MLB_PLAYER_SPLITS to check byArena data — report AVG, OPS, HR, and AB at tonight's venue for key players.
 
-### 9. INJURIES & ROSTER UPDATES
+### 10. INJURIES & ROSTER UPDATES
 **Tokens:** INJURIES, MLB_INJURIES
 - Any scratches, day-to-day concerns, or IL returns that affect tonight's lineup or bullpen?
 - Any recent callups or roster moves (September expanded rosters, trade deadline acquisitions)?
@@ -825,7 +835,7 @@ The scout report already includes detailed context from both grounding searches 
 
 - If you cite an injury, you MUST include when it happened (date or "since last game" / "since [specific date]"). If you cannot determine when an injury occurred, do not include it in your findings.
 
-### 10. RUN LINE & TOTAL CONTEXT
+### 11. RUN LINE & TOTAL CONTEXT
 **Tokens:** MLB_RECENT_FORM, MLB_ODDS
 - Are either team's starters on an innings limit or pitch count that might cause an early hook regardless of game state?
 - How often does each team win by 2+ runs vs 1-run games? The scout report's STANDINGS section carries each team's fetched one-run record; margins in recent games are in the ledgers.
@@ -834,7 +844,7 @@ The scout report already includes detailed context from both grounding searches 
 - What is the combined ERA of both starters — how does that compare to the posted total?
 - Run-line (ATS) and over/under season records are NOT AVAILABLE from our tools — never estimate or recall them; read margin tendencies from the fetched one-run record and the game-by-game ledgers instead.
 
-### 11. PITCHING MATCHUP DEEP DIVE
+### 12. PITCHING MATCHUP DEEP DIVE
 **Tokens:** MLB_PLAYER_SPLITS, MLB_BATTER_VS_PITCHER, MLB_PITCHER_SEASON_STATS, MLB_KEY_HITTERS
 - Call MLB_PITCHER_SCOUTING for the starting pitcher's platoon splits (vs LHB/RHB), home/away ERA, and day/night splits — where does tonight's context fall? (MLB_PLAYER_SPLITS covers hitters only.)
 - The scout report's "Vs-hand by start" rows give each platoon split its time axis — is the season split still true in his recent starts, and who actually did the hitting last time out?
@@ -846,7 +856,7 @@ The scout report already includes detailed context from both grounding searches 
 - Times-through-the-order splits are NOT AVAILABLE from our tools — read how deep he goes from the start ledger's IP/pitch counts, and how the manager has actually handled him in recent starts: stretched him, pulled him quick, or matchup-managed.
 - Is either starter coming off a dominant outing (7+ IP, 0-1 ER) or a blowup (4- IP, 5+ ER)? Investigate whether any trend is mechanical/stuff-related or opponent-quality-related — every ledger row now carries the opponent's record.
 
-### 12. LINEUP DEPTH & OFFENSIVE IDENTITY
+### 13. LINEUP DEPTH & OFFENSIVE IDENTITY
 **Tokens:** MLB_KEY_HITTERS, MLB_LINEUP, MLB_PLAYER_SPLITS, MLB_RECENT_FORM
 - Is this team a power-hitting lineup (HR-dependent, high ISO, high fly ball rate) or a contact/manufacturing team (walks, singles, stolen bases, high ground ball rate)?
 - How does the team's offensive identity interact with tonight's opposing pitcher? Compare the starter's K%, ground ball rate, and HR/9 to the opposing lineup's K%, FB%, ISO, and HR rate. Note the gaps. Decide for yourself whether those gaps shape tonight — sometimes they do, sometimes they don't.
@@ -855,7 +865,7 @@ The scout report already includes detailed context from both grounding searches 
 - What is the team's stolen base frequency and success rate? Pop times and delivery times are NOT AVAILABLE — the running game reads from the catcher's CS numbers (MLB_CATCHER_DEFENSE) and the "Running game vs him" line on each starter. Investigate whether tonight's lineup is built to actually leverage that — many teams have raw speed but don't run.
 - How do the key hitters perform with runners in scoring position and two outs? Per-hitter situational rows are in MLB_RISP_SITUATIONAL; a team-level two-out split is NOT AVAILABLE.
 
-### 13. CONTACT QUALITY & SUSTAINABILITY
+### 14. CONTACT QUALITY & SUSTAINABILITY
 **Tokens:** MLB_KEY_HITTERS, MLB_PITCHER_SEASON_STATS, MLB_TEAM_RECORD, MLB_RECENT_FORM, MLB_STATCAST
 These metrics describe underlying contact quality across a season-long sample. Report them with their samples; they are not a forecast of this single game.
 - Call MLB_STATCAST to get each team's recent contact quality from the last 3 games. The token returns the full Statcast surface: avg exit velocity, launch angle + sweet-spot rate, **xwOBA / xSLG / xBA** (expected outcomes), bat speed, barrel rate, and plate-discipline (whiff% + chase%). Use **xwOBA** as the headline contact-quality metric — it reflects quality of contact better than raw wOBA or BA.
@@ -866,15 +876,6 @@ These metrics describe underlying contact quality across a season-long sample. R
 - Is a team's run differential diverging from their record? The STANDINGS section carries the FETCHED run differential — cite that figure, never one derived from the record.
 - One-run game record — the STANDINGS section carries each team's fetched one-run record. An extreme record is context for a team's true level, and the game ledgers show what those one-run games actually were.
 - How does each team's Statcast contact quality compare to their actual offensive results?
-
-### 14. THE SITUATION — STREAKS, SPOTS & THE SCHEDULE
-**Tokens:** MLB_RECENT_FORM, MLB_STANDINGS (the scout report's THE SITUATION section is the baseline)
-- What is each club's current run of results, and what is actually BEHIND it? The SITUATION section lists the streak's own games with opponents and records; the ledgers and stories carry what happened in them. Decompose, don't headline: was it built on dominant starts, timely hitting, pen escapes, or soft opposition?
-- Read the last week with its exceptions: a 5-2 stretch where both losses came against a first-place club is a different 5-2 than one with losses to the league's worst. The SITUATION line names the exception games — pull their ledger entries.
-- Where is each club in its travel schedule? First game home after a trip, deep into a road swing, a getaway day — the SITUATION and SCHEDULE SHAPE lines state it. Investigate whether the spot's fatigue or comfort actually shows in the recent games.
-- Is tonight a division game? The SITUATION section carries each club's record vs this division and the season series. Familiarity cuts both ways — investigate how the prior meetings actually went (SERIES STATE has them as written).
-- How has each club actually answered wins and losses? The SITUATION section carries the after-win/after-loss record AND the bats' line in those games, instantiated to what last night actually was.
-- Tie the fresh roster changes into the spot: a club opening a home stand without its catcher is a different club than the season line says. SITUATION FLAGS names tonight's fresh changes.
 
 ### 15. GAME ENVIRONMENT & TOTAL CONTEXT
 **Tokens:** MLB_ODDS, MLB_PARK_FACTORS, MLB_WEATHER, MLB_BULLPEN, MLB_RECENT_FORM

@@ -55,6 +55,12 @@ try {
   line('Game era (disk)', eras.game);
   line('Props era (disk)', eras.props);
 } catch (e) { line('Eras', `(unavailable: ${e.message})`); }
+// The June engine's own era — the full dossier surface (Aug 19: this is
+// the stamp MLB game picks actually carry while the engine is armed).
+try {
+  const { junePromptSha } = await import('../src/services/agentic/orchestrator/junePromptSha.js');
+  line('June era (disk)', junePromptSha());
+} catch (e) { line('June era (disk)', `(unavailable: ${e.message})`); }
 
 // 4. Model overrides launchd injects (the plist, not this shell's env).
 try {

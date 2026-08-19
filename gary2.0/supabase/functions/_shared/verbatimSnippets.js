@@ -88,27 +88,40 @@ export function reasonCandidates(rationale) {
 
 const digitGroups = (s) => (String(s).match(/\d[\d.,%]*/g) || []).length;
 
+/** Gary's stance/thesis sentence class — the first-person read that says WHY
+ *  the bet exists ("I'm backing… because", "My read is…"). Priced wager
+ *  declarations are already excluded upstream by isReasonSentence. */
+const STANCE = /\b(i(?:'|’)?m backing|i(?:'|’)?m taking|i(?:'|’)?ll take|my read|my ticket|i want|i trust|this sets up)\b/i;
+
 /**
- * Deterministic reason pair: stat-dense sentences first (concrete numbers
- * beat atmosphere), stable by position, original order preserved between the
- * two chosen. Sentences are never cut; nothing fitting returns null.
+ * Deterministic reason pair — THE ARGUMENT LEADS (founder, Aug 19 2026: the
+ * Skenes tweet led with a platoon fragment while the card's actual thesis
+ * sat unquoted; stat density is not the argument). Opening = Gary's
+ * stance/thesis sentence when one exists, else the first reason in card
+ * order — always printed first. Closing = the most stat-dense OTHER reason
+ * that fits: the evidence under the argument. Sentences are never cut;
+ * nothing fitting returns null.
  * @returns {{ opening: string, closing: string } | null}
  */
 export function fallbackReasonPair(rationale, budget) {
   const cands = reasonCandidates(rationale);
   if (!cands.length) return fallbackVerbatimPair(rationale, budget);
-  const ranked = cands
-    .map((s, i) => ({ s, i, d: digitGroups(s) }))
-    .sort((a, b) => (b.d - a.d) || (a.i - b.i));
-  for (const first of ranked) {
-    for (const second of ranked) {
-      if (second.s === first.s) continue;
-      if (first.s.length + second.s.length <= budget) {
-        const [a, b] = first.i < second.i ? [first, second] : [second, first];
-        return { opening: a.s, closing: b.s };
-      }
-    }
+  const stanceIdx = cands.findIndex((s) => STANCE.test(s));
+  // Opening preference: the stance sentence, then digit-bearing reasons in
+  // card order (a digit-less non-stance sentence is usually atmosphere —
+  // the scene-setter must stay a last resort), then everything else.
+  const rest = cands.map((_, i) => i).filter((i) => i !== stanceIdx);
+  const withDigits = rest.filter((i) => digitGroups(cands[i]) > 0);
+  const noDigits = rest.filter((i) => digitGroups(cands[i]) === 0);
+  const openingOrder = [...(stanceIdx >= 0 ? [stanceIdx] : []), ...withDigits, ...noDigits];
+  for (const oi of openingOrder) {
+    const opening = cands[oi];
+    const evidence = cands
+      .map((s, i) => ({ s, i, d: digitGroups(s) }))
+      .filter((r) => r.i !== oi && opening.length + r.s.length <= budget)
+      .sort((a, b) => (b.d - a.d) || (a.i - b.i));
+    if (evidence.length) return { opening, closing: evidence[0].s };
   }
-  const solo = ranked.find((r) => r.s.length <= budget);
-  return solo ? { opening: solo.s, closing: '' } : null;
+  const solo = cands.find((s) => s.length <= budget);
+  return solo ? { opening: solo, closing: '' } : null;
 }
