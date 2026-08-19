@@ -1347,9 +1347,11 @@ struct PropTailFadeRow: View {
                 stakePicker(side)
             } else {
                 HStack(spacing: 8) {
-                    // Same words as the game card back (founder, Aug 6).
-                    bigButton("BET WITH GARY", tint: GaryColors.silverLight, solid: true) { arm("tail") }
-                    bigButton("FADE THE BEAR", tint: Color(hex: "#8B93A7"), solid: false) { arm("fade") }
+                    // Same words AND same buttons as the game card back
+                    // (founder, Aug 19: "exactly the same colors, look, and
+                    // everything" — the silver solid/outline pair retired).
+                    bigButton("BET WITH GARY") { arm("tail") }
+                    bigButton("FADE THE BEAR") { arm("fade") }
                 }
             }
             if let e = errorText {
@@ -1374,20 +1376,24 @@ struct PropTailFadeRow: View {
         .sheet(isPresented: $showAuth) { AuthView() }
     }
 
-    private func bigButton(_ label: String, tint: Color, solid: Bool, action: @escaping () -> Void) -> some View {
+    /// EXACT twin of the game card's tailFadeButton (founder, Aug 19: prop
+    /// bet/fade buttons match the game buttons in colors, look, everything).
+    private func bigButton(_ label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .font(GaryFonts.mono(12, bold: true)).tracking(1.4)
-                .foregroundStyle(solid ? GaryColors.ink : tint)
+                .font(GaryFonts.mono(11, bold: true)).tracking(1.4)
+                .foregroundStyle(.white.opacity(0.85))
                 // The longer words scale before they ever wrap or clip.
                 .lineLimit(1).minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 11)
+                .padding(.vertical, 9)
                 .background(
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(solid ? GaryColors.silverLight : Color.clear)
-                        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .stroke(tint.opacity(solid ? 0 : 0.55), lineWidth: 1))
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.white.opacity(0.07))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                        )
                 )
                 .contentShape(Rectangle())
         }

@@ -3269,11 +3269,14 @@ struct HomeView: View {
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
 
-        // THE RECORD always belongs directly under The Board. Its numbers still
-        // roll from yesterday to today's live slate; only its position is fixed.
-        recordBlock
-            .opacity(animateIn ? 1 : 0)
-            .animation(.easeOut(duration: 0.6).delay(0.065), value: animateIn)
+        // THE RECORD moved INSIDE the board card (Aug 19) — homeSheetPanel's
+        // last section. On a day-state with NO board rows it still renders
+        // standalone here, so the honesty band never disappears.
+        if sheetRows.isEmpty {
+            recordBlock
+                .opacity(animateIn ? 1 : 0)
+                .animation(.easeOut(duration: 0.6).delay(0.065), value: animateIn)
+        }
 
         // (The second headlines instance that used to sit here came out Aug 5 —
         // the rail lives at the top of the page now, in every day-state.)
@@ -4079,6 +4082,15 @@ struct HomeView: View {
                     Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1).padding(.leading, 14)
                 }
             }
+            // THE RECORD rides INSIDE the board card (founder, Aug 19: "put
+            // the stuff above it inside of the board at the end, so it's all
+            // wrapped up") — the board's own bottom line, behind one divider.
+            if gamesNightRecord.w + gamesNightRecord.l + gamesNightRecord.p > 0
+                || recapLabel == "LIVE" || recapLabel == "TODAY" {
+                Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+                scorecard
+                    .padding(.horizontal, 14).padding(.vertical, 12)
+            }
         }
         .padding(.vertical, 3)
         .background(
@@ -4089,11 +4101,15 @@ struct HomeView: View {
                 // cannot read `solidPanels`: HomeView sets that env on its own
                 // subtree, and a view never sees its own environment writes.)
                 .fill(GaryColors.panelFillOpaque)
-                // House gold, whisper-quiet (founder, Aug 18: no sport-green
-                // chrome — the gold label names the tab, the outline barely
-                // exists).
+                // The lit rim replaces the gold whisper (founder, Aug 19: the
+                // board gets the exact headline-card float — the gold outline
+                // read flat next to the light-caught cards above it).
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(GaryColors.gold.opacity(0.16), lineWidth: 1))
+                    .stroke(LinearGradient(stops: [
+                        .init(color: GaryColors.warmWhite.opacity(0.16), location: 0),
+                        .init(color: GaryColors.warmWhite.opacity(0.06), location: 0.35),
+                        .init(color: GaryColors.warmWhite.opacity(0.025), location: 1),
+                    ], startPoint: .top, endPoint: .bottom), lineWidth: 1))
                 // Floating over THE FLOOR (Aug 19) — the shadow puddle darkens
                 // the grid beneath, so the board hovers instead of sitting flat.
                 .shadow(color: .black.opacity(0.55), radius: 18, y: 10)
@@ -5567,10 +5583,16 @@ struct HomeMarqueeTracker: View {
             ], startPoint: .top, endPoint: .bottom), lineWidth: 1))
         .shadow(color: .black.opacity(solidPanels ? 0.55 : 0.0), radius: 18, y: 10)
         .shadow(color: .black.opacity(solidPanels ? 0.65 : 0.0), radius: 4, y: 2)
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(hero?.isLive == true ? GaryColors.win.opacity(0.35) : GaryColors.gold.opacity(0.3), lineWidth: 1)
-        )
+        // The old gold 0.3 outline sat over the lit rim and read as a flat
+        // gold box (founder, Aug 19: the countdown "doesn't have that same
+        // effect" as the headline cards). The rim carries the float now; the
+        // LIVE green survives as a state signal, never as chrome.
+        .overlay {
+            if hero?.isLive == true {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(GaryColors.win.opacity(0.35), lineWidth: 1)
+            }
+        }
         .pageGutter()
     }
 
@@ -16155,7 +16177,11 @@ struct MembersWrap<Content: View>: View {
                 .allowsHitTesting(revealed)
                 .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
         }
-        .frame(height: revealed ? nil : sealedHeight)
+        // The seal ALWAYS wears the uniform game-card footprint (founder,
+        // Aug 19: the cover ran taller than the pick card behind it, so the
+        // rail's heights snapped on reveal and misaligned while scrolling).
+        // The revealed content keeps its own exact size — untouched.
+        .frame(height: revealed ? nil : (sealedHeight ?? CompactPickRow.uniformHeight))
         .rotation3DEffect(.degrees(revealed ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
         .animation(.spring(response: 0.7, dampingFraction: 0.8), value: revealed)
         // In-place reveal FX (founder call, Jul 3: on the page, never a popup).
@@ -21643,7 +21669,13 @@ struct PicksCarouselView: View {
     /// NFL first), the next data arrival moves an idle default to the day's
     /// live board. A chip the user tapped is never moved.
     private func snapSportIfAllHidden() {
-        guard !AppFlags.picksAllTab, let first = sports.first(where: { $0 != "ALL" }) else { return }
+        // The default chip is the day's first LIVE league (founder, Aug 19:
+        // "prioritized by what games are that day" — NFL > MLB > CFB order
+        // only breaks ties between leagues that actually play today). The
+        // canonical first is only a fallback while nothing has loaded, and a
+        // pull-refresh that transiently empties the store self-heals below.
+        guard !AppFlags.picksAllTab, let canonicalFirst = sports.first(where: { $0 != "ALL" }) else { return }
+        let first = sports.first(where: { $0 != "ALL" && leagueIsLiveToday($0) }) ?? canonicalFirst
         if sport == "ALL" || !sports.contains(sport) {
             sport = first
             sportAutoSelected = true

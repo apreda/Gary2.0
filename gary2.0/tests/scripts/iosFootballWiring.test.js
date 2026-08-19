@@ -258,7 +258,10 @@ describe('Home MLB/NFL board parity', () => {
 
     expect(homeSheet).toContain('ForEach(HomeBoardLeague.allCases');
     expect(homeSheet).toContain('homeSheetPanel(rows.filter { $0.league == selected.rawValue }');
-    expect(homeSheet).toContain('.stroke(GaryColors.gold.opacity(0.16), lineWidth: 1)');
+    // Aug 19: the gold whisper gave way to the lit rim — the board wears the
+    // exact headline-card float, and THE RECORD rides inside the board card.
+    expect(homeSheet).not.toContain('.stroke(GaryColors.gold.opacity(0.16), lineWidth: 1)');
+    expect(homeSheet).toContain('scorecard');
     expect(homeSheet).not.toContain('sport.accentColor');
     expect(homeSheet.match(/homeSheetPanel\(/g)).toHaveLength(2); // declaration + one render
     expect(homeSheet).not.toContain('ForEach(leagues');
