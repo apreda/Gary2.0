@@ -332,12 +332,33 @@ struct GaryPanelSurface: ViewModifier {
     @Environment(\.solidPanels) private var solidPanels
     let radius: CGFloat
     func body(content: Content) -> some View {
-        content.background(
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .fill(solidPanels ? GaryColors.panelFillOpaque : GaryColors.panelFill)
-                .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .stroke(GaryColors.panelStroke, lineWidth: 1))
-        )
+        if solidPanels {
+            // FLOATING treatment over THE FLOOR (founder, Aug 19: containers
+            // "super close... the background super far away... without going
+            // to a gold background"). Black-on-black depth is light + shadow:
+            // a lit top rim — the horizon light catching the card's near
+            // edge — and a soft shadow puddle that visibly darkens the grid
+            // beneath, so the card reads as hovering OVER the floor.
+            content.background(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(GaryColors.panelFillOpaque)
+                    .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
+                        .stroke(LinearGradient(stops: [
+                            .init(color: GaryColors.warmWhite.opacity(0.16), location: 0),
+                            .init(color: GaryColors.warmWhite.opacity(0.06), location: 0.35),
+                            .init(color: GaryColors.warmWhite.opacity(0.025), location: 1),
+                        ], startPoint: .top, endPoint: .bottom), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.55), radius: 18, y: 10)
+                    .shadow(color: .black.opacity(0.65), radius: 4, y: 2)
+            )
+        } else {
+            content.background(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(GaryColors.panelFill)
+                    .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
+                        .stroke(GaryColors.panelStroke, lineWidth: 1))
+            )
+        }
     }
 }
 

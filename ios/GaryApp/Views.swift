@@ -1789,22 +1789,39 @@ private struct FloorGridPattern: View {
     }
 }
 
+/// Scroll → ground drift, held OUTSIDE HomeView's state so a scroll frame
+/// re-renders only the ground layer, never the page (perf law from the
+/// Aug 18 sweep: nothing on Home may invalidate the whole body per frame).
+final class GroundParallax: ObservableObject {
+    @Published var offsetY: CGFloat = 0
+}
+
+private struct HomeScrollOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
 struct HomeFloorGround: View {
+    @ObservedObject var parallax: GroundParallax
+
     var body: some View {
         GeometryReader { geo in
             let W = geo.size.width, H = geo.size.height
             ZStack {
                 // Round-five tune (founder: "a little less obvious there's a
                 // grid behind all this"): wide cells, low contrast — the
-                // depth stays, the graph paper goes.
-                FloorGridPattern(spacingY: 88, spacingX: 100, alpha: 0.16)
+                // depth stays, the graph paper goes. Round six deepens the
+                // world: the near field reads a touch crisper, the far half
+                // dims away toward the horizon (atmospheric depth in black).
+                FloorGridPattern(spacingY: 88, spacingX: 100, alpha: 0.19)
                     .frame(width: W * 2.6, height: H * 1.5)
                     .rotation3DEffect(.degrees(63), axis: (x: 1, y: 0, z: 0), anchor: .top, perspective: 0.9)
                     .position(x: W * 0.5, y: H * 0.85)
                     .mask(
                         LinearGradient(stops: [
                             .init(color: .clear, location: 0.02),
-                            .init(color: .black, location: 0.20),
+                            .init(color: .black.opacity(0.5), location: 0.18),
+                            .init(color: .black, location: 0.50),
                             .init(color: .black, location: 0.88),
                             .init(color: .black.opacity(0.35), location: 1),
                         ], startPoint: .top, endPoint: .bottom)
@@ -1814,6 +1831,12 @@ struct HomeFloorGround: View {
                                         Color(hex: "#D9A62B").opacity(0.045), .clear],
                                center: .init(x: 0.5, y: 0.12), startRadius: 4, endRadius: W * 0.5)
             }
+            // The multiplane cue (founder, Aug 19: cards close, world far):
+            // the floor drifts at a tenth of the scroll, clamped so the
+            // horizon never leaves the page. drawingGroup keeps the drift a
+            // GPU transform — the grid is never re-rasterized by scrolling.
+            .drawingGroup()
+            .offset(y: parallax.offsetY)
         }
         .allowsHitTesting(false)
         .ignoresSafeArea()
@@ -2080,6 +2103,10 @@ struct HomeView: View {
     /// briefly report Home as selected while the root was already restoring a
     /// different tab, consuming the first-open recap offscreen.
     @Binding var selectedTab: Int
+    // Parallax model for THE FLOOR. @State only STORES the instance across
+    // re-inits — it does not observe it, so scroll frames never invalidate
+    // HomeView's body; only the ground layer subscribes.
+    @State private var groundParallax = GroundParallax()
     @State private var freePick: GaryPick?
     @State private var freeProp: PropPick?
     @State private var loading = true
@@ -2254,7 +2281,7 @@ struct HomeView: View {
             // (Home only; founder, Aug 18: the infinite feel without leaving
             // our black).
             LiquidGlassBackground(grainDensity: 0.0009, grainOpacityRange: 0.008...0.018)
-            HomeFloorGround()
+            HomeFloorGround(parallax: groundParallax)
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {
@@ -2295,10 +2322,27 @@ struct HomeView: View {
                         .animation(.easeOut(duration: 0.6).delay(0.3), value: animateIn)
                 }
                 .padding(.bottom, 110)
+                // Parallax probe — a background measurement, never a layout
+                // row (a zero-height VStack child still costs one 18pt
+                // spacing gap above the masthead).
+                .background(GeometryReader { g in
+                    Color.clear.preference(key: HomeScrollOffsetKey.self,
+                                           value: g.frame(in: .named("homeScroll")).minY)
+                })
             }
             .refreshable {
                 homeNonce &+= 1
                 try? await Task.sleep(nanoseconds: 800_000_000)   // let the pull spinner show while the keyed .task reloads
+            }
+            .coordinateSpace(name: "homeScroll")
+            // NOTE: the page scroll keeps its clip — unclipping it let rows
+            // bleed through the status bar. The Jul 7 unclippedRail law is
+            // for horizontal card rails only; shadows clipping at the SCREEN
+            // edge are invisible anyway.
+            .onPreferenceChange(HomeScrollOffsetKey.self) { minY in
+                // A tenth of the scroll, clamped so the horizon stays on the
+                // page. Writes go to the model — only the ground re-renders.
+                groundParallax.offsetY = max(-48, min(0, minY) * 0.10)
             }
 
             StatusBarScrim()
@@ -4050,6 +4094,10 @@ struct HomeView: View {
                 // exists).
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(GaryColors.gold.opacity(0.16), lineWidth: 1))
+                // Floating over THE FLOOR (Aug 19) — the shadow puddle darkens
+                // the grid beneath, so the board hovers instead of sitting flat.
+                .shadow(color: .black.opacity(0.55), radius: 18, y: 10)
+                .shadow(color: .black.opacity(0.65), radius: 4, y: 2)
         )
         .pageGutter()
     }
@@ -5508,6 +5556,17 @@ struct HomeMarqueeTracker: View {
         // The ribbon band is a square-cornered surface — clip it to the card
         // shape so it never pokes past the rounded border (Aug 3 polish).
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        // Floating over THE FLOOR (Aug 19): lit near edge + shadow puddle on
+        // the grid — same treatment as every solid Home panel. Applied after
+        // the clip so the shadow itself never gets cut.
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .stroke(LinearGradient(stops: [
+                .init(color: GaryColors.warmWhite.opacity(solidPanels ? 0.16 : 0.0), location: 0),
+                .init(color: GaryColors.warmWhite.opacity(solidPanels ? 0.06 : 0.0), location: 0.35),
+                .init(color: GaryColors.warmWhite.opacity(solidPanels ? 0.025 : 0.0), location: 1),
+            ], startPoint: .top, endPoint: .bottom), lineWidth: 1))
+        .shadow(color: .black.opacity(solidPanels ? 0.55 : 0.0), radius: 18, y: 10)
+        .shadow(color: .black.opacity(solidPanels ? 0.65 : 0.0), radius: 4, y: 2)
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(hero?.isLive == true ? GaryColors.win.opacity(0.35) : GaryColors.gold.opacity(0.3), lineWidth: 1)

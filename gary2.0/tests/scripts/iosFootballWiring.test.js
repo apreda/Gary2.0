@@ -271,13 +271,21 @@ describe('Home MLB/NFL board parity', () => {
     // horizon under the masthead. Pairs with opaque card fills scoped to
     // Home via the solidPanels environment; every other page keeps the wash.
     expect(views).toContain('struct HomeFloorGround: View');
-    expect(views).toContain('HomeFloorGround()');
+    expect(views).toContain('HomeFloorGround(parallax: groundParallax)');
     expect(views).toContain('.environment(\\.solidPanels, true)');
+    // Floating cards + living world (founder, Aug 19 round six): shadow
+    // puddles on the grid, lit near edges, and the floor drifting at a tenth
+    // of the scroll through an isolated model — never HomeView state.
+    expect(views).toContain('class GroundParallax: ObservableObject');
+    expect(views).toContain('groundParallax.offsetY = max(-48, min(0, minY) * 0.10)');
+    expect(views).toContain('.onPreferenceChange(HomeScrollOffsetKey.self)');
+    expect(designSystem).toContain('.shadow(color: .black.opacity(0.55), radius: 18, y: 10)');
     expect(views).not.toContain('struct ObsidianGround');
     expect(views).not.toContain('TimelineView(.animation(minimumInterval: 1.0 / 12.0');
     expect(designSystem).toContain('static let panelFillOpaque');
     expect(designSystem).toContain('var solidPanels: Bool');
-    expect(designSystem).toContain('solidPanels ? GaryColors.panelFillOpaque : GaryColors.panelFill');
+    expect(designSystem).toContain('struct GaryPanelSurface: ViewModifier');
+    expect(designSystem).toContain('@Environment(\\.solidPanels) private var solidPanels');
   });
 
   it('joins picks and results by exact provider game id before legacy names', () => {
