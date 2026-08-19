@@ -484,6 +484,9 @@ export async function getMlbGameLineups(gamePk) {
         name: p?.person?.fullName || 'Unknown',
         position: p?.position?.abbreviation || '—',
         batsThrows: `${bats}/${throws}`,
+        // MLBAM person id (Aug 19 bug fix): without it, downstream hand
+        // hydration was impossible and fallback lineups rendered [Bats: ?].
+        personId: p?.person?.id ?? (typeof rawId === 'number' ? rawId : null),
       };
     }).filter(Boolean);
 
@@ -496,11 +499,13 @@ export async function getMlbGameLineups(gamePk) {
       ? {
           name: probable.fullName || probable.name || 'Unknown',
           batsThrows: `${probable.batSide?.code || '?'}/${probable.pitchHand?.code || '?'}`,
+          personId: probable.id ?? null,
         }
       : pitcherPlayer
         ? {
             name: pitcherPlayer.person?.fullName || 'Unknown',
             batsThrows: `${pitcherPlayer.person?.batSide?.code || '?'}/${pitcherPlayer.person?.pitchHand?.code || '?'}`,
+            personId: pitcherPlayer.person?.id ?? firstPitcherId ?? null,
           }
         : null;
 

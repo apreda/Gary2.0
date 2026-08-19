@@ -1867,6 +1867,45 @@ export async function buildMlbScoutReport(game, options = {}) {
     }
   }
 
+  // LINEUP NORMALIZATION (bug fix, Aug 19 eve — the [Bats: ?] render): a
+  // statsapi-fallback lineup carries no handedness (needs person hydration)
+  // and no BDL player ids — which silently blanked the handedness chain AND
+  // the entire per-hitter enrichment (rolls, season anchor, platoon, month
+  // arc, vs-opponent) on fallback nights. Hydrate hands from the people
+  // batch; join BDL ids by folded name against the season stats already in
+  // memory. BDL-sourced lineups pass through untouched.
+  try {
+    const needHands = [];
+    for (const sideData of [homeData, awayData]) {
+      for (const b of sideData?.batters || []) {
+        if (String(b.batsThrows || '?').startsWith('?') && b.personId) needHands.push(b.personId);
+      }
+      const pt = sideData?.pitcher;
+      if (pt && String(pt.batsThrows || '').split('/')[1] === '?' && pt.personId) needHands.push(pt.personId);
+    }
+    const lineupHands = needHands.length ? await getMlbPeopleHands(needHands).catch(() => new Map()) : new Map();
+    const normalizeSide = (sideData, pool) => {
+      for (const b of sideData?.batters || []) {
+        const h = b.personId != null ? lineupHands.get(b.personId) : null;
+        if (h && String(b.batsThrows || '?').startsWith('?')) b.batsThrows = `${h.bat}/${h.throw}`;
+        if (b.playerId == null) {
+          const row = (pool || []).find((s) =>
+            foldName(s.player?.full_name || `${s.player?.first_name || ''} ${s.player?.last_name || ''}`) === foldName(b.name));
+          if (row?.player?.id != null) b.playerId = row.player.id;
+        }
+      }
+      const pt = sideData?.pitcher;
+      if (pt) {
+        const h = pt.personId != null ? lineupHands.get(pt.personId) : null;
+        if (h && String(pt.batsThrows || '').split('/')[1] === '?') {
+          pt.batsThrows = `${String(pt.batsThrows || '').split('/')[0] || h.bat}/${h.throw}`;
+        }
+      }
+    };
+    normalizeSide(homeData, homePlayerSeasonStats);
+    normalizeSide(awayData, awayPlayerSeasonStats);
+  } catch { /* normalization is additive — never blocks the lineup gate */ }
+
   if (homeData || awayData) {
     // SAT TODAY (founder GO, Aug 12): series batters missing from tonight's
     // confirmed nine, with their series line — bare facts, no read. 2+ series
@@ -1893,7 +1932,10 @@ export async function buildMlbScoutReport(game, options = {}) {
     const handsLine = (sideData, oppPitcher) => {
       const counts = { L: 0, R: 0, S: 0 };
       for (const b of sideData?.batters || []) {
-        const c = String(b.batsThrows || '').split('/')[0].toUpperCase();
+        // BDL says S for switch, statsapi says B — one bucket (Aug 19 fix:
+        // a B-coded switch hitter made the count come up 8/9 and vanish).
+        let c = String(b.batsThrows || '').split('/')[0].toUpperCase();
+        if (c === 'B') c = 'S';
         if (counts[c] != null) counts[c] += 1;
       }
       const total = counts.L + counts.R + counts.S;
@@ -2286,6 +2328,22 @@ export async function buildMlbScoutReport(game, options = {}) {
     const injuredFolds = new Set((bdlInjuries || [])
       .map((i) => foldName(i?.player?.full_name || [i?.player?.first_name, i?.player?.last_name].filter(Boolean).join(' ')))
       .filter(Boolean));
+    // FRESH IL placements (bug fix, Aug 19 eve — the Mesa contradiction: a
+    // man the desk itself flags as a fresh absence was listed on the bench).
+    // Same 3-day transaction window the SITUATION FLAGS parse uses; rosters
+    // and the structured injury feed can both lag a day-of placement.
+    try {
+      const threeDaysAgoB = new Date(Date.now() - 3 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+      const todayEtB = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+      for (const tid of [homeTeamId, awayTeamId]) {
+        if (!tid) continue;
+        const rows = await getMlbTransactions(tid, threeDaysAgoB, todayEtB).catch(() => []);
+        for (const r of rows) {
+          const m = String(r.description || '').match(/placed\s+(?:[A-Z0-9]{1,3}\s+)?(.+?)\s+on the .*injured list/i);
+          if (m) injuredFolds.add(foldName(m[1]));
+        }
+      }
+    } catch { /* additive guard */ }
     const benchFor = async (roster, sideData, seasonPool, teamName) => {
       if (!roster?.length || !(sideData?.batters?.length >= 9)) return null;
       const inLineup = new Set([
