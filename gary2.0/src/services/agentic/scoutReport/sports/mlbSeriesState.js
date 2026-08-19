@@ -21,6 +21,22 @@ function sideMatches(fullName, nickname) {
     fullName.toLowerCase().includes(nickname.toLowerCase());
 }
 
+/**
+ * Whole-name club matching (Aug 19 2026 — the shared-mascot sweep): a
+ * last-word join reads "Red Sox" and "White Sox" as the same club, so any
+ * `split(' ').pop()` comparison cross-wires a Sox-vs-Sox game. Match the
+ * WHOLE nickname or name with a word boundary — "boston red sox" matches
+ * "Red Sox" and "Boston Red Sox", never "White Sox". Callers must pass at
+ * least the proper nickname, never a bare mascot word.
+ */
+export function clubMatches(candidate, teamName) {
+  const x = String(candidate || '').toLowerCase().trim();
+  const y = String(teamName || '').toLowerCase().trim();
+  if (!x || !y) return false;
+  if (x === y) return true;
+  return x.endsWith(` ${y}`) || y.endsWith(` ${x}`);
+}
+
 /** True when this game entry is between tonight's two teams. */
 function isPairGame(game, teamA, teamB) {
   const away = game?.teams?.away?.team?.name;
@@ -295,9 +311,7 @@ export function computeMlbSituationalRecords(seasonIndex, teamBdlId, teamName) {
 export function computeMlbRecentSeriesForm(games, teamNick, maxSeries = 4, ongoingOppNick = null) {
   const series = groupGamesIntoSeries(games, teamNick);
   if (!series.length) return null;
-  const word = String(teamNick).toLowerCase().split(' ').pop();
-  const sideOf = (g) => ((g.teams.home.team.name || '').toLowerCase().endsWith(word) ? 'home' : 'away');
-  const oppWord = ongoingOppNick ? String(ongoingOppNick).toLowerCase().split(' ').pop() : null;
+  const sideOf = (g) => (clubMatches(g.teams.home.team.name, teamNick) ? 'home' : 'away');
   const recent = series.slice(-maxSeries);
   return recent.map((s, i) => {
     let w = 0, l = 0;
@@ -308,7 +322,7 @@ export function computeMlbRecentSeriesForm(games, teamNick, maxSeries = 4, ongoi
       if (us == null || them == null) continue;
       if (us > them) w += 1; else if (them > us) l += 1;
     }
-    const ongoing = i === recent.length - 1 && oppWord && s.opp.toLowerCase().endsWith(oppWord);
+    const ongoing = i === recent.length - 1 && !!ongoingOppNick && clubMatches(s.opp, ongoingOppNick);
     // Nickname = last word, except the league's two-word nicknames.
     const nick = /\b(Blue Jays|Red Sox|White Sox)$/.test(s.opp)
       ? s.opp.match(/\b(Blue Jays|Red Sox|White Sox)$/)[1]
@@ -324,8 +338,7 @@ export function groupGamesIntoSeries(games, teamNick) {
   const rows = (Array.isArray(games) ? games : [])
     .filter(g => g?.teams?.home?.team?.name && g?.teams?.away?.team?.name);
   if (!rows.length || !teamNick) return [];
-  const word = String(teamNick).toLowerCase().split(' ').pop();
-  const sideOf = (g) => ((g.teams.home.team.name || '').toLowerCase().endsWith(word) ? 'home' : 'away');
+  const sideOf = (g) => (clubMatches(g.teams.home.team.name, teamNick) ? 'home' : 'away');
   const series = [];
   for (const g of rows) {
     const side = sideOf(g);

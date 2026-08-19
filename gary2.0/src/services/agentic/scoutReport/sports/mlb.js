@@ -44,7 +44,7 @@ import { recentWindowLine, monthArcLine, longLayoffFlag, earlyCareerFlag, midSea
 import { milbLineFromStatsReply } from '../../../starterDebut.js';
 import { foldName } from '../../../../utils/nameUtils.js';
 import { findStandingsRow } from '../../../teamIdentity.js';
-import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbSeasonSeriesGroups, computeMlbScheduleShape, computeMlbRecentSeriesForm, groupGamesIntoSeries, situationalSeriesLine, toEtDate } from './mlbSeriesState.js';
+import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbSeasonSeriesGroups, computeMlbScheduleShape, computeMlbRecentSeriesForm, groupGamesIntoSeries, situationalSeriesLine, toEtDate, clubMatches } from './mlbSeriesState.js';
 import { computeHitterContact, hitterContactLine, computePitcherWhiffByStart } from './mlbContactQuality.js';
 import {
   completedMlbTeamGames,
@@ -128,13 +128,8 @@ export async function buildMlbScoutReport(game, options = {}) {
       const etNext = new Date(startMs + 86400000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
       for (const d of [etDate, etNext]) {
         const schedule = await getMlbSchedule(d).catch(() => []);
-        const candidates = schedule.filter(g => {
-          const hName = (g.teams?.home?.team?.name || '').toLowerCase();
-          const aName = (g.teams?.away?.team?.name || '').toLowerCase();
-          const homeLast = homeTeam.toLowerCase().split(' ').pop();
-          const awayLast = awayTeam.toLowerCase().split(' ').pop();
-          return hName.includes(homeLast) && aName.includes(awayLast);
-        });
+        const candidates = schedule.filter(g =>
+          clubMatches(g.teams?.home?.team?.name, homeTeam) && clubMatches(g.teams?.away?.team?.name, awayTeam));
         // Doubleheaders share teams + date — take the game whose scheduled
         // first pitch is closest to this game's start, never just the first.
         const match = candidates.sort((a, b) =>
@@ -294,8 +289,9 @@ export async function buildMlbScoutReport(game, options = {}) {
     const nameOf = (st) => (st.team?.display_name || st.team?.full_name || '').toLowerCase();
     let row = rows.find((st) => nameOf(st) === tn);
     if (!row) {
-      const nick = tn.split(' ').pop();
-      const candidates = rows.filter((st) => nameOf(st).split(' ').pop() === nick);
+      // Whole-nickname fallback via clubMatches (Aug 19): "Red Sox" resolves
+      // uniquely; a bare ambiguous word still prints nothing over guessing.
+      const candidates = rows.filter((st) => clubMatches(nameOf(st), tn));
       if (candidates.length === 1) row = candidates[0];
     }
     return row ? ` (${row.wins}-${row.losses})` : '';
@@ -675,8 +671,8 @@ export async function buildMlbScoutReport(game, options = {}) {
           // SEASON VS TONIGHT'S OPPONENT (Plan A5): every meeting this year,
           // aggregated — the matchup-recency line above carries the latest.
           {
-            const oppWord = (side === 'home' ? awayTeam : homeTeam).toLowerCase().split(' ').pop();
-            const vsOpp = seasonStarts.filter((g) => String(g.opponent || '').toLowerCase().endsWith(oppWord));
+            const oppTeamName = side === 'home' ? awayTeam : homeTeam;
+            const vsOpp = seasonStarts.filter((g) => clubMatches(g.opponent, oppTeamName));
             if (vsOpp.length) {
               let vOuts = 0, vEr = 0;
               let ok = true;
@@ -1104,18 +1100,16 @@ export async function buildMlbScoutReport(game, options = {}) {
     const picked = new Map();
     for (const g of finals.slice(-3)) picked.set(g.gamePk, g);
     // Trailing consecutive finals vs tonight's opponent = this series so far.
-    const oppWord = (oppNick || '').toLowerCase().split(' ').pop();
     for (let i = finals.length - 1; i >= 0; i--) {
       const g = finals[i];
-      const names = [g.teams?.home?.team?.name, g.teams?.away?.team?.name].map(n => (n || '').toLowerCase());
-      if (!names.some(n => n.endsWith(oppWord))) break;
+      const names = [g.teams?.home?.team?.name, g.teams?.away?.team?.name];
+      if (!names.some((n) => clubMatches(n, oppNick))) break;
       picked.set(g.gamePk, g);
     }
     return [...picked.values()].sort((a, b) => new Date(a.gameDate || a.officialDate || 0) - new Date(b.gameDate || b.officialDate || 0));
   };
   const wireLabel = (g, teamNick) => {
-    const word = (teamNick || '').toLowerCase().split(' ').pop();
-    const homeSide = (g.teams?.home?.team?.name || '').toLowerCase().endsWith(word);
+    const homeSide = clubMatches(g.teams?.home?.team?.name, teamNick);
     const us = homeSide ? g.teams?.home : g.teams?.away;
     const them = homeSide ? g.teams?.away : g.teams?.home;
     const date = String(g.officialDate || g.gameDate || '').slice(0, 10);
@@ -1226,15 +1220,14 @@ export async function buildMlbScoutReport(game, options = {}) {
           : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
       };
       const rowsFor = async (games, nick) => {
-        const word = nick.toLowerCase().split(' ').pop();
         const out = [];
         for (const g of (games || []).slice(-3)) {
           if (!g?.gamePk) continue;
           const box = await fetchGameSituational(g.gamePk);
           if (!box) continue;
-          const us = (box.home?.name || '').toLowerCase().endsWith(word) ? box.home : box.away;
+          const us = clubMatches(box.home?.name, nick) ? box.home : box.away;
           if (!us) continue;
-          const mySide = (g.teams?.home?.team?.name || '').toLowerCase().endsWith(word) ? 'home' : 'away';
+          const mySide = clubMatches(g.teams?.home?.team?.name, nick) ? 'home' : 'away';
           const myRuns = g.teams?.[mySide]?.score;
           const theirRuns = g.teams?.[mySide === 'home' ? 'away' : 'home']?.score;
           const oneRun = myRuns != null && theirRuns != null && Math.abs(myRuns - theirRuns) === 1;
@@ -1249,8 +1242,7 @@ export async function buildMlbScoutReport(game, options = {}) {
         const groups = groupGamesIntoSeries(games, nick);
         const cur = groups[groups.length - 1] || null;
         const prev = groups[groups.length - 2] || null;
-        const oppWord = oppNick.toLowerCase().split(' ').pop();
-        const curIsTonight = cur && cur.opp.toLowerCase().endsWith(oppWord);
+        const curIsTonight = cur && clubMatches(cur.opp, oppNick);
         if (curIsTonight) {
           const l1 = situationalSeriesLine(`${nick}, this series`, await rowsFor(cur.games, nick));
           if (l1) lines.push(l1);
@@ -1293,7 +1285,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     const arcLine = (games, nick) => {
       const finals = (games || []).filter((g) => g?.teams?.home?.score != null && g?.teams?.away?.score != null);
       if (finals.length < 5) return null;
-      const isUs = (side) => String(side?.team?.name || '').toLowerCase().endsWith(nick.toLowerCase().split(' ').pop());
+      const isUs = (side) => clubMatches(side?.team?.name, nick);
       const rows = finals.map((g) => {
         const us = isUs(g.teams.home) ? g.teams.home : g.teams.away;
         const them = isUs(g.teams.home) ? g.teams.away : g.teams.home;
@@ -1343,9 +1335,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     // Build per-game recap from BDL box stats + game result
     const formatGameRecap = (game, teamName, bdlCandidates) => {
       if (!game) return null;
-      const tLast = lastWord(teamName);
-      const homeName = (game.teams?.home?.team?.name || '').toLowerCase();
-      const isHome = homeName.includes(tLast);
+      const isHome = clubMatches(game.teams?.home?.team?.name, teamName);
       const teamScore = isHome ? (game.teams?.home?.score ?? 0) : (game.teams?.away?.score ?? 0);
       const oppScore = isHome ? (game.teams?.away?.score ?? 0) : (game.teams?.home?.score ?? 0);
       const oppName = isHome ? (game.teams?.away?.team?.name || 'Opp') : (game.teams?.home?.team?.name || 'Opp');
@@ -1357,7 +1347,7 @@ export async function buildMlbScoutReport(game, options = {}) {
       // then keep only this team's own player lines.
       const bdlId = resolveBdlId(game, bdlCandidates);
       const gameStats = ((bdlId != null && recentBoxStatsById.get(bdlId)) || [])
-        .filter(s => (s.team_name || '').toLowerCase().includes(tLast));
+        .filter(s => clubMatches(s.team_name, teamName));
       let spLine = '';
       let bullpenLines = [];
       let keyHitters = [];
@@ -1415,12 +1405,10 @@ export async function buildMlbScoutReport(game, options = {}) {
       if (!games || games.length === 0) return null;
       const slice = games.slice(-count);
       let wins = 0, losses = 0, runsFor = 0, runsAgainst = 0;
-      const tLast = lastWord(teamName);
       for (const g of slice) {
-        const homeName = (g.teams?.home?.team?.name || '').toLowerCase();
         const homeScore = g.teams?.home?.score ?? 0;
         const awayScore = g.teams?.away?.score ?? 0;
-        const isHome = homeName.includes(tLast);
+        const isHome = clubMatches(g.teams?.home?.team?.name, teamName);
         if (isHome) {
           runsFor += homeScore; runsAgainst += awayScore;
           homeScore > awayScore ? wins++ : losses++;
@@ -1464,11 +1452,10 @@ export async function buildMlbScoutReport(game, options = {}) {
   let thisSeriesHotSection = '';
   try {
     const pairGame = (g) => {
-      const an = (g?.teams?.away?.team?.name || '').toLowerCase();
-      const hn = (g?.teams?.home?.team?.name || '').toLowerCase();
-      const hl = homeTeam.toLowerCase().split(' ').pop();
-      const al = awayTeam.toLowerCase().split(' ').pop();
-      return (an.includes(al) && hn.includes(hl)) || (an.includes(hl) && hn.includes(al));
+      const an = g?.teams?.away?.team?.name;
+      const hn = g?.teams?.home?.team?.name;
+      return (clubMatches(an, awayTeam) && clubMatches(hn, homeTeam))
+        || (clubMatches(an, homeTeam) && clubMatches(hn, awayTeam));
     };
     const seriesGames = [];
     for (let i = (homeRecentGames || []).length - 1; i >= 0; i--) {
@@ -1476,12 +1463,18 @@ export async function buildMlbScoutReport(game, options = {}) {
       else break;
     }
     if (seriesGames.length >= 1 && recentBoxStatsById.size > 0) {
-      const perTeam = new Map(); // teamLastWord -> Map(player -> agg)
+      // Keys = the box rows' FULL folded team names; lookups scan with
+      // clubMatches because the desk's team labels are NICKNAMES ("Rays")
+      // while BDL box rows carry full names ("Tampa Bay Rays") — and a
+      // last-word bridge is exactly the shared-mascot bug (Aug 19 sweep).
+      const perTeam = new Map(); // foldName(full team name) -> Map(player -> agg)
       for (const g of seriesGames) {
         const bdlId = resolveBdlId(g, homeBdlGames);
         const rows = (bdlId != null && recentBoxStatsById.get(bdlId)) || [];
         for (const r of rows) {
-          const tKey = (r.team_name || '').toLowerCase().split(' ').pop();
+          // Keyed by the FULL folded name (Aug 19 shared-mascot sweep): a
+          // last-word key merged both Sox clubs' hitters into one bucket.
+          const tKey = foldName(r.team_name || '');
           if (!perTeam.has(tKey)) perTeam.set(tKey, new Map());
           const players = perTeam.get(tKey);
           const nm = r.player?.last_name || '?';
@@ -1492,7 +1485,8 @@ export async function buildMlbScoutReport(game, options = {}) {
         }
       }
       const teamLine = (nick) => {
-        const players = perTeam.get(nick.toLowerCase().split(' ').pop());
+        const key = [...perTeam.keys()].find((k) => clubMatches(k, nick));
+        const players = key ? perTeam.get(key) : null;
         if (!players) return null;
         const bats = [...players.entries()].filter(([, a]) => a.ab > 0)
           .sort((x, y) => (y[1].h + y[1].hr * 2) - (x[1].h + x[1].hr * 2)).slice(0, 5)
@@ -1512,7 +1506,7 @@ export async function buildMlbScoutReport(game, options = {}) {
         if (bats.size) seriesBattersByTeam.set(tKey, bats);
       }
     }
-  } catch { thisSeriesHotSection = ''; }
+  } catch (e) { console.warn(`[Scout Report] series-hot failed: ${e.message}`); thisSeriesHotSection = ''; }
 
   // ═══════════════════════════════════════════════════════════════════
   // (SITUATIONAL RECORDS section REMOVED — founder, Aug 5 PM: "record tells
@@ -1533,12 +1527,11 @@ export async function buildMlbScoutReport(game, options = {}) {
     const recordOf = standingsRecordOf;
     const formatRecentGames = (games, teamName) => {
       if (!games || games.length === 0) return `${teamName}: No recent games`;
-      const lw = teamName.toLowerCase().split(' ').pop();
       const lines = games.map(g => {
         const home = g.teams?.home;
         const away = g.teams?.away;
         const date = g.officialDate || g.gameDate?.split('T')[0] || '';
-        const homeIsUs = (home?.team?.name || '').toLowerCase().endsWith(lw);
+        const homeIsUs = clubMatches(home?.team?.name, teamName);
         const awayTag = homeIsUs ? recordOf(away?.team?.name) : '';
         const homeTag = homeIsUs ? '' : recordOf(home?.team?.name);
         return `  ${date}: ${away?.team?.name}${awayTag} ${away?.score || 0} @ ${home?.team?.name}${homeTag} ${home?.score || 0}`;
@@ -1551,9 +1544,8 @@ export async function buildMlbScoutReport(game, options = {}) {
     const runShape = (games, teamName) => {
       const rows = (games || []).filter(g => g?.teams);
       if (rows.length < 5) return null;
-      const lw = teamName.toLowerCase().split(' ').pop();
       const per = rows.map(g => {
-        const homeSide = (g.teams.home?.team?.name || '').toLowerCase().endsWith(lw);
+        const homeSide = clubMatches(g.teams.home?.team?.name, teamName);
         const us = homeSide ? g.teams.home : g.teams.away;
         const them = homeSide ? g.teams.away : g.teams.home;
         return {
@@ -1618,13 +1610,10 @@ export async function buildMlbScoutReport(game, options = {}) {
 
       // Series detection — count consecutive recent games vs the same opponent (today's opponent)
       // Walk backwards through recent games to find how many were against today's opponent
-      const oppLastWord = opponentName.toLowerCase().split(' ').pop();
       let seriesGames = 0;
       for (let i = recentGames.length - 1; i >= 0; i--) {
         const g = recentGames[i];
-        const homeT = (g?.teams?.home?.team?.name || '').toLowerCase();
-        const awayT = (g?.teams?.away?.team?.name || '').toLowerCase();
-        if (homeT.includes(oppLastWord) || awayT.includes(oppLastWord)) {
+        if (clubMatches(g?.teams?.home?.team?.name, opponentName) || clubMatches(g?.teams?.away?.team?.name, opponentName)) {
           seriesGames++;
         } else {
           break;
@@ -1675,8 +1664,7 @@ export async function buildMlbScoutReport(game, options = {}) {
       const dateFormatted = date ? new Date(date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
 
       // Determine if this team was home or away, and W/L
-      const teamLastWord = teamName.toLowerCase().split(' ').pop();
-      const wasHome = homeName.toLowerCase().includes(teamLastWord);
+      const wasHome = clubMatches(homeName, teamName);
       const teamScore = wasHome ? homeScore : awayScore;
       const oppScore = wasHome ? awayScore : homeScore;
       const oppName = wasHome ? awayName : homeName;
@@ -1836,7 +1824,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     return out;
   };
   const matchLineupSide = (data, abbr, teamName) =>
-    data?.[abbr] || Object.values(data || {}).find(t => t.teamName?.toLowerCase().includes(teamName.toLowerCase().split(' ').pop()));
+    data?.[abbr] || Object.values(data || {}).find(t => clubMatches(t.teamName, teamName));
   const lineupShort = d => !(d?.batters?.length >= 9) || !d?.pitcher?.name;
 
   let confirmedLineupsSection = 'Lineups not yet posted — check closer to game time.';
@@ -1913,7 +1901,8 @@ export async function buildMlbScoutReport(game, options = {}) {
     // tolerates BDL last_name vs full-name differences (De La Cruz).
     const satToday = (nick, sideData) => {
       try {
-        const players = seriesBattersByTeam.get(nick.toLowerCase().split(' ').pop());
+        const satKey = [...seriesBattersByTeam.keys()].find((k) => clubMatches(k, nick));
+        const players = satKey ? seriesBattersByTeam.get(satKey) : null;
         if (!players || !(sideData?.batters?.length >= 9)) return null;
         const inTonight = sideData.batters.map((b) => foldName(String(b.name || ''))).filter(Boolean);
         const out = [...players.entries()]
@@ -2248,10 +2237,8 @@ export async function buildMlbScoutReport(game, options = {}) {
       // BDL's legacy club names (e.g. Indians) simply skip the line.
       let oppBit = '';
       {
-        const oppNick = String(oppFullName || '').split(' ').pop().toLowerCase();
         const cands = (splits?.byOpponent || []).filter((r) =>
-          r.category === 'batting' && r.at_bats > 0
-          && String(r.split_name || '').toLowerCase().split(' ').pop() === oppNick);
+          r.category === 'batting' && r.at_bats > 0 && clubMatches(r.split_name, oppFullName));
         if (cands.length === 1) {
           const r = cands[0];
           oppBit = `\n     Vs ${String(oppFullName).split(' ').pop()} this season: ${r.hits}-${r.at_bats}${r.home_runs ? `, ${r.home_runs} HR` : ''} (${r.avg ?? '?'} AVG)`;
@@ -2285,9 +2272,8 @@ export async function buildMlbScoutReport(game, options = {}) {
       const bdlPid = sp?.player?.id;
       const spName = sp?.name || probablePitchersData?.[spSide]?.fullName;
       if (bdlPid == null || !spName || !(lineupData?.batters?.length >= 9)) return null;
-      const oppWord = lineupTeamName.toLowerCase().split(' ').pop();
       const meetings = (pitcherArcData[spSide]?.starts || [])
-        .filter((g) => String(g.opponent || '').toLowerCase().endsWith(oppWord));
+        .filter((g) => clubMatches(g.opponent, lineupTeamName));
       if (!meetings.length) return null;
       const vsDates = new Set(meetings.map((g) => String(g.date || '').slice(0, 10)));
       const chrono = await ballDontLieService.getMlbPlayerGameRowsChrono(bdlPid, season).catch(() => []);
@@ -2630,22 +2616,20 @@ export async function buildMlbScoutReport(game, options = {}) {
   let seriesLine = '';
   {
     // Detect current series by looking at recent games between these two teams
-    const homeLast = lastWord(homeTeam);
-    const awayLast = lastWord(awayTeam);
     const recentAll = [...(homeRecentGames || [])].reverse(); // most recent first
     let seriesGames = 0;
     let homeWins = 0;
     let awayWins = 0;
     for (const g of recentAll) {
-      const hName = (g.teams?.home?.team?.name || '').toLowerCase();
-      const aName = (g.teams?.away?.team?.name || '').toLowerCase();
-      const isSeriesGame = (hName.includes(homeLast) && aName.includes(awayLast)) ||
-                           (hName.includes(awayLast) && aName.includes(homeLast));
+      const hName = g.teams?.home?.team?.name;
+      const aName = g.teams?.away?.team?.name;
+      const isSeriesGame = (clubMatches(hName, homeTeam) && clubMatches(aName, awayTeam))
+        || (clubMatches(hName, awayTeam) && clubMatches(aName, homeTeam));
       if (!isSeriesGame) break;
       seriesGames++;
       const hScore = g.teams?.home?.score ?? 0;
       const aScore = g.teams?.away?.score ?? 0;
-      if (hName.includes(homeLast)) {
+      if (clubMatches(hName, homeTeam)) {
         hScore > aScore ? homeWins++ : awayWins++;
       } else {
         aScore > hScore ? homeWins++ : awayWins++;
@@ -2657,7 +2641,8 @@ export async function buildMlbScoutReport(game, options = {}) {
     }
   }
 
-  // Helper used above
+  // Retained for the LOCKED injury block's name-fallback only (its primary
+  // path is team-ID based). Every other join uses clubMatches (Aug 19).
   function lastWord(name) { return (name || '').toLowerCase().split(' ').pop(); }
 
   const matchupShelfSection = await buildScoutMatchupShelf(game, homeTeam, awayTeam, gamePk).catch(() => '');
@@ -2724,7 +2709,16 @@ ${(() => {
     const row = (bdlStandings || []).find(r => r.team?.id === id);
     return row?.team?.display_name?.split(' ').pop() || null;
   };
-  const tzOf = (id) => { const n = nameOf(id); return n ? (TZ[n.toLowerCase()] || null) : null; };
+  // TZ keys include the two-word Sox nicknames — match the FULL display name
+  // against each key (Aug 19 sweep: the one-word pop meant neither Sox club
+  // ever resolved a timezone and their travel lines silently dropped it).
+  const tzOf = (id) => {
+    const row = (bdlStandings || []).find(r => r.team?.id === id);
+    const full = (row?.team?.display_name || '').toLowerCase();
+    if (!full) return null;
+    const key = Object.keys(TZ).find((k) => full.endsWith(k));
+    return key ? TZ[key] : null;
+  };
   const line = (teamId, teamName) => {
     if (!teamId || !seasonIndex?.entries) return null;
     let next = null;
@@ -2771,12 +2765,9 @@ ${storylinesGrounding ? `\n— THE STORYLINES —\n${storylinesGrounding}` : ''}
   {
     const findBdlTeamStanding = (teamName) => {
       if (!bdlStandings || bdlStandings.length === 0) return null;
-      const lastWord = teamName.toLowerCase().split(' ').pop();
-      return bdlStandings.find(s => {
-        const name = (s.team?.display_name || s.team?.full_name || '').toLowerCase();
-        const abbr = (s.team?.abbreviation || '').toLowerCase();
-        return name.includes(lastWord) || abbr === lastWord;
-      }) || null;
+      return bdlStandings.find(s =>
+        clubMatches(s.team?.display_name || s.team?.full_name, teamName)
+        || (s.team?.abbreviation || '').toLowerCase() === teamName.toLowerCase()) || null;
     };
     const homeBdlStanding = findBdlTeamStanding(homeTeam);
     const awayBdlStanding = findBdlTeamStanding(awayTeam);
@@ -2896,7 +2887,7 @@ ${storylinesGrounding ? `\n— THE STORYLINES —\n${storylinesGrounding}` : ''}
   // Structured runs-scored history (chronological) — feeds the count-claim
   // verifier in the pick engine; same MLB Stats API games the recaps use.
   const runsFor = (games, teamName) => (games || []).map(g => {
-    const isHome = (g.teams?.home?.team?.name || '').toLowerCase().includes(lastWord(teamName));
+    const isHome = clubMatches(g.teams?.home?.team?.name, teamName);
     return isHome ? (g.teams?.home?.score ?? null) : (g.teams?.away?.score ?? null);
   }).filter(r => r != null);
   const recentScores = {
