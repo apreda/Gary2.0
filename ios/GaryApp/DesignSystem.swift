@@ -117,6 +117,26 @@ enum GaryColors {
     // over warm black reads as a cool blue-grey cast).
     static let panelFill = warmWhite.opacity(0.03)
     static let panelStroke = warmWhite.opacity(0.07)
+    // Depth-v2 study 12 (founder, Aug 19): a see-through wash over a patterned
+    // ground lets the grid bleed through every card. This is the SAME color a
+    // 3% warm-white wash reads as over the plain ink — locked opaque, so cards
+    // sit ON the world instead of dissolving into it.
+    static let panelFillOpaque = Color(hex: "#141210")
+}
+
+/// Reactive panel surface — flips to the opaque fill while the full-page
+/// static grid (study 12) is the Home ground, live on chip taps.
+struct GaryPanelSurface: ViewModifier {
+    @AppStorage("garyGroundStudy") private var groundStudy: Int = 0
+    let radius: CGFloat
+    func body(content: Content) -> some View {
+        content.background(
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .fill(groundStudy == 12 ? GaryColors.panelFillOpaque : GaryColors.panelFill)
+                .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .stroke(GaryColors.panelStroke, lineWidth: 1))
+        )
+    }
 }
 
 // MARK: - Layout (single source of truth)
@@ -302,13 +322,10 @@ extension View {
 
     /// The one panel surface (fill + hairline stroke). Replaces quantPanel()
     /// and the six hand-rolled warm-white panels that had drifted 0.008 apart.
+    /// Depth-v2: goes opaque under the static-grid study so the ground reads
+    /// BEHIND the cards, never through them.
     func garyPanel(radius: CGFloat = GaryLayout.Radius.panel) -> some View {
-        background(
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .fill(GaryColors.panelFill)
-                .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .stroke(GaryColors.panelStroke, lineWidth: 1))
-        )
+        modifier(GaryPanelSurface(radius: radius))
     }
 }
 

@@ -2293,7 +2293,10 @@ struct DepthV4StaticFloorFull: View {
         GeometryReader { geo in
             let W = geo.size.width, H = geo.size.height
             ZStack {
-                DepthV3GridPattern(phase: 0, spacingY: 64, spacingX: 76, alpha: 0.30)
+                // Round-five tune (founder: "a little less obvious there's a
+                // grid behind all this"): wider cells, lower contrast — the
+                // depth stays, the graph paper goes.
+                DepthV3GridPattern(phase: 0, spacingY: 88, spacingX: 100, alpha: 0.16)
                     .frame(width: W * 2.6, height: H * 1.5)
                     .rotation3DEffect(.degrees(63), axis: (x: 1, y: 0, z: 0), anchor: .top, perspective: 0.9)
                     .position(x: W * 0.5, y: H * 0.85)
@@ -2605,6 +2608,9 @@ struct HomeView: View {
     /// briefly report Home as selected while the root was already restoring a
     /// different tab, consuming the first-open recap offscreen.
     @Binding var selectedTab: Int
+    // Depth-v2 study surface: the board draws its own card, so it adapts its
+    // fill here (doctrine: self-contained cards adapt FILLS, not plates).
+    @AppStorage("garyGroundStudy") private var groundStudy: Int = 0
     @State private var freePick: GaryPick?
     @State private var freeProp: PropPick?
     @State private var loading = true
@@ -4566,7 +4572,7 @@ struct HomeView: View {
         .padding(.vertical, 3)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(GaryColors.panelFill)
+                .fill(groundStudy == 12 ? GaryColors.panelFillOpaque : GaryColors.panelFill)
                 // House gold, whisper-quiet (founder, Aug 18: no sport-green
                 // chrome — the gold label names the tab, the outline barely
                 // exists).
@@ -5908,6 +5914,8 @@ struct HomeSectionRule: View {
 /// open the game; the footer unfolds the full ranked list, which stamps
 /// CASHED/LOST as the day settles and teases tomorrow's marquee once done.
 struct HomeMarqueeTracker: View {
+    // Depth-v2 study surface (see HomeView.groundStudy).
+    @AppStorage("garyGroundStudy") private var groundStudy: Int = 0
     struct Entry: Identifiable {
         let id: String
         let rank: Int
@@ -6022,7 +6030,7 @@ struct HomeMarqueeTracker: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(GaryColors.panelFill)
+                .fill(groundStudy == 12 ? GaryColors.panelFillOpaque : GaryColors.panelFill)
         )
         // The ribbon band is a square-cornered surface — clip it to the card
         // shape so it never pokes past the rounded border (Aug 3 polish).
