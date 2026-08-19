@@ -119,7 +119,9 @@ export async function computeSpVsHandByStart({ pitcherBdlId, season, startLabels
  * Tonight's confirmed hitters vs tonight's opposing starter, THIS SEASON —
  * the desk-legal batter-vs-pitcher (current season only, per the Aug 10
  * no-prior-season ruling). Built from the PAs of his starts against this
- * club. Returns a single line or null.
+ * club. Founder refinement (Aug 19): never a lone hitter anecdote — the
+ * club's combined line rides with it and samples are explicit, so a 2-for-4
+ * reads as exactly that. Returns { hittersLine, teamLine } or null.
  */
 export async function computeSeasonBvpForLineup({ pitcherBdlId, pitcherLastName, gameIds = [], lineupBatters = [] }) {
   if (pitcherBdlId == null || !gameIds.length || !lineupBatters.length) return null;
@@ -131,14 +133,17 @@ export async function computeSeasonBvpForLineup({ pitcherBdlId, pitcherLastName,
   if (!wanted.size) return null;
 
   const agg = new Map(); // batterId -> { ab, h, hr, bb, k }
+  const club = emptySide(); // the whole club vs him in those meetings
   for (const gid of gameIds) {
     const pas = await ballDontLieService.getMlbPlateAppearances(gid).catch(() => []);
     for (const pa of pas || []) {
       if (String(pa.pitcher_id) !== pid) continue;
+      const cls = classifyPaResult(pa.result);
+      foldInto(club, cls);
       const bid = String(pa.batter_id);
       if (!wanted.has(bid)) continue;
       const acc = agg.get(bid) || emptySide();
-      foldInto(acc, classifyPaResult(pa.result));
+      foldInto(acc, cls);
       agg.set(bid, acc);
     }
   }
@@ -146,9 +151,13 @@ export async function computeSeasonBvpForLineup({ pitcherBdlId, pitcherLastName,
     .filter(([, a]) => a.ab > 0 || a.bb > 0)
     .sort((x, y) => (y[1].h + y[1].hr) - (x[1].h + x[1].hr))
     .map(([bid, a]) => `${wanted.get(bid)} ${fmtSide(a)}`);
-  return parts.length
-    ? `Tonight's hitters vs ${pitcherLastName} this season: ${parts.join(' | ')}`
+  const teamLine = (club.ab > 0 || club.bb > 0)
+    ? `The club vs ${pitcherLastName} in those meetings: ${fmtSide(club)}`
     : null;
+  const hittersLine = parts.length
+    ? `Tonight's hitters vs ${pitcherLastName}: ${parts.join(' | ')}`
+    : null;
+  return (hittersLine || teamLine) ? { hittersLine, teamLine } : null;
 }
 
 /**

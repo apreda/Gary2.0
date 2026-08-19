@@ -681,27 +681,40 @@ export async function getPitcherGameLogRaw(personId, season) {
   return splits;
 }
 
-/** Situational splits for a pitcher: first inning, ahead in count, behind in
- *  count (sitCodes i01/ac/bc — verified live Aug 18 2026). Times-through-the-
- *  order codes do NOT exist on this endpoint; never ask this fn for TTO.
+/** Situational splits for a pitcher — FIRST INNING only (sitCode i01,
+ *  verified live Aug 18 2026). Ahead/behind-count splits were dropped by
+ *  founder ruling Aug 19: too granular for the desk — context stays
+ *  high-level. Times-through-the-order codes do NOT exist on this endpoint.
  *  Null when the API returns nothing usable. */
 export async function getPitcherSituationalSplits(personId, season) {
   const year = season || new Date().getFullYear();
-  const key = `mlb_sp_situational_${personId}_${year}`;
+  const key = `mlb_sp_situational_i01_${personId}_${year}`;
   const cached = getCached(key);
   if (cached) return cached;
-  const data = await apiFetch(`/people/${personId}/stats?stats=statSplits&group=pitching&season=${year}&sitCodes=i01,ac,bc`);
+  const data = await apiFetch(`/people/${personId}/stats?stats=statSplits&group=pitching&season=${year}&sitCodes=i01`);
+  const rows = data.stats?.[0]?.splits || [];
+  const fi = rows.find((s) => s.split?.code === 'i01')?.stat || null;
+  if (!fi) return null;
+  const out = { firstInning: { era: fi.era ?? null, ip: fi.inningsPitched ?? null, avg: fi.avg ?? null } };
+  setCache(key, out);
+  return out;
+}
+
+/** Team batting in games following a win / following a loss (sitCodes
+ *  taw/tal — verified live Aug 19 2026). The founder's bounce-back context:
+ *  not just the record after losses, but how the bats actually swing there.
+ *  Null when the API has nothing. */
+export async function getTeamSituationalHitting(teamId, season) {
+  const year = season || new Date().getFullYear();
+  const key = `mlb_team_situ_hitting_${teamId}_${year}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+  const data = await apiFetch(`/teams/${teamId}/stats?stats=statSplits&group=hitting&season=${year}&sitCodes=taw,tal`);
   const rows = data.stats?.[0]?.splits || [];
   const find = (code) => rows.find((s) => s.split?.code === code)?.stat || null;
-  const fi = find('i01');
-  const ac = find('ac');
-  const bc = find('bc');
-  const out = {
-    firstInning: fi ? { era: fi.era ?? null, ip: fi.inningsPitched ?? null, avg: fi.avg ?? null } : null,
-    aheadInCount: ac ? { avg: ac.avg ?? null, ops: ac.ops ?? null } : null,
-    behindInCount: bc ? { avg: bc.avg ?? null, ops: bc.ops ?? null } : null,
-  };
-  if (!out.firstInning && !out.aheadInCount && !out.behindInCount) return null;
+  const shape = (s) => (s ? { avg: s.avg ?? null, ops: s.ops ?? null, games: s.gamesPlayed ?? null } : null);
+  const out = { afterWin: shape(find('taw')), afterLoss: shape(find('tal')) };
+  if (!out.afterWin && !out.afterLoss) return null;
   setCache(key, out);
   return out;
 }
@@ -723,8 +736,15 @@ export async function getMlbStandingsContext(season) {
       for (const s of tr.records?.splitRecords || []) {
         if (s.type) splits[s.type] = `${s.wins}-${s.losses}`;
       }
+      // Record vs each division (Aug 19, founder's division-context ask) —
+      // keyed by division name, e.g. "American League Central": "19-9".
+      const divisionRecords = {};
+      for (const d of tr.records?.divisionRecords || []) {
+        if (d.division?.name) divisionRecords[d.division.name] = `${d.wins}-${d.losses}`;
+      }
       byTeamId.set(tr.team?.id, {
         name: tr.team?.name || '',
+        divisionRecords,
         wins: tr.wins ?? null,
         losses: tr.losses ?? null,
         streak: tr.streak?.streakCode || null,
@@ -873,6 +893,7 @@ export default {
   getPitcherLastStarts,
   getPitcherGameLogRaw,
   getPitcherSituationalSplits,
+  getTeamSituationalHitting,
   getMlbStandingsContext,
   getMlbPeopleHands,
   getPitcherMonthSplits,

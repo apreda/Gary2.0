@@ -32,11 +32,12 @@ import {
   getTeamVsHandSplits,
   getScoringFlowAttributed,
   getPitcherSituationalSplits,
+  getTeamSituationalHitting,
   getMlbStandingsContext,
   getMlbPeopleHands,
 } from '../../../mlbStatsApiService.js';
 import { computeSpVsHandByStart, computeSeasonBvpForLineup, computePitchTypeTrendByStart } from './mlbPlatoonRecency.js';
-import { computeTeamMonthArc, computeBounceBackLine, computeRecordSince } from './mlbSeasonContext.js';
+import { computeTeamMonthArc, computeBounceBackLine, computeRecordSince, computeCurrentStreak, computeRecentQuality, computeVenueTransition } from './mlbSeasonContext.js';
 import { recentWindowLine, monthArcLine, longLayoffFlag, earlyCareerFlag, midSeasonGapFlag, singleStartDistortion, teamChangeFlags, seasonLineQualifier, matchupRecencyLine, homeRoadLine } from './pitcherArc.js';
 import { foldName } from '../../../../utils/nameUtils.js';
 import { findStandingsRow } from '../../../teamIdentity.js';
@@ -784,6 +785,36 @@ export async function buildMlbScoutReport(game, options = {}) {
           }
         } catch { /* recency layer is additive — never sinks the starter block */ }
 
+        // HIS RUNS, AS THEY ARRIVED (founder GO, Aug 19 — ERA context is
+        // decomposition, never another model's number): the official scoring
+        // plays off HIM in each recent start — one big inning or a trickle,
+        // homers or strung singles, in the feed's own words. Same cached
+        // play-by-play the team recaps read.
+        try {
+          const starterLast = String(pitcher.fullName || '').trim().split(' ').pop();
+          if (starterLast && lastStarts.length) {
+            const runLines = [];
+            let hrPlays = 0;
+            let totalPlays = 0;
+            for (const g of lastStarts) {
+              if (!g?.gamePk) continue;
+              const flow = await getScoringFlowAttributed(g.gamePk).catch(() => []);
+              const mine = (flow || []).filter((l) => l.includes(`off ${starterLast}`));
+              if (!mine.length) continue;
+              totalPlays += mine.length;
+              for (const l of mine) if (/homers|home run/i.test(l)) hrPlays++;
+              runLines.push(`    ${g.date} ${g.isHome ? 'vs' : '@'} ${g.opponent}: ${mine.map((l) => l.replace(` — off ${starterLast}`, '')).join(' · ')}`);
+            }
+            if (runLines.length) {
+              parts.push(`  His runs, as they arrived (every scoring play off him, recent starts):`);
+              parts.push(...runLines);
+              if (totalPlays >= 3) {
+                parts.push(`    Across these starts: ${totalPlays} scoring plays off him — ${hrPlays} via home runs, ${totalPlays - hrPlays} without leaving the yard`);
+              }
+            }
+          }
+        } catch { /* decomposition is additive */ }
+
         if (platoon?.vsLeft || platoon?.vsRight) {
           const fmt = (p) => p ? `${p.avg ?? '—'} AVG / ${p.ops ?? '—'} OPS, ${p.hr ?? '—'} HR (${p.ab ?? '—'} AB)` : 'no data';
           parts.push(`  Platoon (opp batting): vs LHB ${fmt(platoon.vsLeft)} | vs RHB ${fmt(platoon.vsRight)}`);
@@ -803,14 +834,10 @@ export async function buildMlbScoutReport(game, options = {}) {
           parts.push(`  Contact quality allowed: NOT AVAILABLE — do not characterize ${pitcher.fullName}'s batted-ball profile`);
         }
 
-        // Situational splits (statsapi statSplits — verified sitCodes):
-        // the first-inning and count questions now have printed answers.
-        if (situational) {
-          const sBits = [];
-          if (situational.firstInning?.era != null) sBits.push(`1st inning ${situational.firstInning.era} ERA (${situational.firstInning.ip} IP)`);
-          if (situational.aheadInCount?.avg) sBits.push(`ahead in count .${String(situational.aheadInCount.avg).replace(/^0?\./, '')} opp AVG`);
-          if (situational.behindInCount?.avg) sBits.push(`behind in count .${String(situational.behindInCount.avg).replace(/^0?\./, '')} opp AVG`);
-          if (sBits.length) parts.push(`  Situational: ${sBits.join(' · ')}`);
+        // First inning (statsapi statSplits). Ahead/behind-count splits were
+        // dropped Aug 19 (founder: too granular — context stays high-level).
+        if (situational?.firstInning?.era != null) {
+          parts.push(`  First inning: ${situational.firstInning.era} ERA (${situational.firstInning.ip} IP)`);
         }
         // Running game vs him (season): completes the chain the catcher
         // shelf starts — pitcher hold, catcher arm, team speed.
@@ -966,11 +993,7 @@ export async function buildMlbScoutReport(game, options = {}) {
       [awayTeamBdlId, awayTeam],
     ].map(([id, nm]) => { const a = computeTeamMonthArc(seasonIndex, id); return a ? `${nm} ${a}` : null; }).filter(Boolean);
     if (monthArcs.length) parts.push(`Season shape:\n${monthArcs.join('\n')}`);
-    const bounce = [
-      computeBounceBackLine(seasonIndex, homeTeamBdlId, homeTeam),
-      computeBounceBackLine(seasonIndex, awayTeamBdlId, awayTeam),
-    ].filter(Boolean);
-    if (bounce.length) parts.push(`Tonight's spot:\n${bounce.join('\n')}`);
+    // (The tonight's-spot lines moved to THE SITUATION, Aug 19 — one home.)
     standingsSection = parts.join('\n\n');
   } catch { standingsSection = ''; }
 
@@ -2133,28 +2156,36 @@ export async function buildMlbScoutReport(game, options = {}) {
       const spName = sp?.name || probablePitchersData?.[spSide]?.fullName;
       if (bdlPid == null || !spName || !(lineupData?.batters?.length >= 9)) return null;
       const oppWord = lineupTeamName.toLowerCase().split(' ').pop();
-      const vsDates = new Set((pitcherArcData[spSide]?.starts || [])
-        .filter((g) => String(g.opponent || '').toLowerCase().endsWith(oppWord))
-        .map((g) => String(g.date || '').slice(0, 10)));
-      if (!vsDates.size) return null;
+      const meetings = (pitcherArcData[spSide]?.starts || [])
+        .filter((g) => String(g.opponent || '').toLowerCase().endsWith(oppWord));
+      if (!meetings.length) return null;
+      const vsDates = new Set(meetings.map((g) => String(g.date || '').slice(0, 10)));
       const chrono = await ballDontLieService.getMlbPlayerGameRowsChrono(bdlPid, season).catch(() => []);
       const gameIds = (chrono || [])
         .filter((r) => r?.ip != null && parseFloat(r.ip) > 0)
         .filter((r) => vsDates.has(toEtDate(r._game?.date || r.game?.date || r.date || '')))
         .map((r) => r.game_id);
       if (!gameIds.length) return null;
-      return computeSeasonBvpForLineup({
+      const spLast = String(spName).split(' ').pop();
+      const bvp = await computeSeasonBvpForLineup({
         pitcherBdlId: bdlPid,
-        pitcherLastName: String(spName).split(' ').pop(),
+        pitcherLastName: spLast,
         gameIds,
         lineupBatters: lineupData.batters,
       });
+      if (!bvp) return null;
+      // The meetings themselves anchor the sample (founder, Aug 19: when
+      // were those games, what happened — never a floating anecdote).
+      const meetingBits = meetings.map((g) =>
+        `${g.date} ${g.isHome ? 'vs' : '@'} (${g.ip} IP, ${g.er} ER${g.win == null ? '' : g.win ? ', team W' : ', team L'})`);
+      const header = `${spLast} has faced the ${lineupTeamName} ${meetings.length === 1 ? 'once' : `${meetings.length} times`} this season: ${meetingBits.join(' · ')}`;
+      return [header, bvp.teamLine, bvp.hittersLine].filter(Boolean).join('\n');
     };
     const [homeBvp, awayBvp] = await Promise.all([
       bvpFor('away', homeData, homeTeam),
       bvpFor('home', awayData, awayTeam),
     ]);
-    seasonBvpSection = [homeBvp, awayBvp].filter(Boolean).join('\n');
+    seasonBvpSection = [homeBvp, awayBvp].filter(Boolean).join('\n\n');
   } catch { seasonBvpSection = ''; }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -2288,6 +2319,100 @@ export async function buildMlbScoutReport(game, options = {}) {
     : '';
 
   // ═══════════════════════════════════════════════════════════════════
+  // THE SITUATION (founder GO, Aug 19 — "the environment of baseball"):
+  // each club's spot, stated plainly in one place the way a fan holds it —
+  // the current run of results WITH the games behind it, the last week
+  // with its exceptions named, where they are in the travel schedule,
+  // whether tonight is a division game, and how they've actually answered
+  // wins and losses. Facts only; what the spot means tonight is the
+  // brain's read. Streaks stay natural (founder: don't tunnel on the
+  // word) — a 2-game run prints as one quiet line, a real run brings its
+  // own ledger.
+  // ═══════════════════════════════════════════════════════════════════
+  let situationSection = '';
+  try {
+    const teamNameOfBdlId = new Map((bdlStandings || []).filter((t) => t.team?.id != null)
+      .map((t) => [String(t.team.id), t.team.display_name || t.team.full_name || '?']));
+    const nickOfId = (id) => String(teamNameOfBdlId.get(String(id)) || '?');
+    const situationCtx = await getMlbStandingsContext(season).catch(() => new Map());
+    const [homeSituHit, awaySituHit] = await Promise.all([
+      homeTeamId ? getTeamSituationalHitting(homeTeamId, season).catch(() => null) : null,
+      awayTeamId ? getTeamSituationalHitting(awayTeamId, season).catch(() => null) : null,
+    ]);
+    const homeDiv = findStandingsRow(bdlStandings, homeTeam)?.division_name || null;
+    const awayDiv = findStandingsRow(bdlStandings, awayTeam)?.division_name || null;
+
+    const spotFor = (teamName, bdlId, isHome, situHit) => {
+      const lines = [];
+      const streak = computeCurrentStreak(seasonIndex, bdlId);
+      if (streak && streak.len >= 3) {
+        const games = streak.games.map((g) => {
+          const opp = nickOfId(g.oppId);
+          return `${g.date.slice(5)} ${g.won ? 'W' : 'L'} ${g.rf}-${g.ra} ${g.home ? 'vs' : '@'} ${opp.split(' ').pop()}${standingsRecordOf(opp)}`;
+        });
+        lines.push(`${streak.won ? `Won ${streak.len} straight` : `Lost ${streak.len} straight`}: ${games.join(' · ')}`);
+      } else if (streak && streak.len === 2) {
+        lines.push(streak.won ? 'Won their last 2.' : 'Lost their last 2.');
+      }
+      const q = computeRecentQuality(seasonIndex, bdlId, 7);
+      if (q) {
+        if (q.exceptions.length && q.exceptions.length <= 2) {
+          const exBits = q.exceptions.map((g) => {
+            const opp = nickOfId(g.oppId);
+            return `${g.date.slice(5)} ${g.home ? 'vs' : '@'} ${opp.split(' ').pop()}${standingsRecordOf(opp)} ${g.won ? 'W' : 'L'} ${g.rf}-${g.ra}`;
+          });
+          const label = q.wins > q.losses
+            ? (q.losses === 1 ? 'the loss' : 'the losses')
+            : (q.wins === 1 ? 'the win' : 'the wins');
+          lines.push(`Last 7: ${q.wins}-${q.losses} — ${label}: ${exBits.join('; ')}`);
+        } else {
+          lines.push(`Last 7: ${q.wins}-${q.losses}`);
+        }
+      }
+      const vt = computeVenueTransition(seasonIndex, bdlId, isHome);
+      if (vt) lines.push(`Tonight: ${vt}.`);
+      const bounce = computeBounceBackLine(seasonIndex, bdlId, teamName);
+      if (bounce) {
+        let bLine = bounce;
+        const lastWon = / won their last game /.test(bounce);
+        const s = lastWon ? situHit?.afterWin : situHit?.afterLoss;
+        if (s?.avg && s?.ops) {
+          bLine += ` In games ${lastWon ? 'after a win' : 'after a loss'} this season their bats hit ${s.avg}/${s.ops} (${s.games} G).`;
+        }
+        lines.push(bLine);
+      }
+      return lines.length ? `${teamName}:\n${lines.map((l) => `  ${l}`).join('\n')}` : null;
+    };
+
+    const parts = [
+      spotFor(awayTeam, awayTeamBdlId, false, awaySituHit),
+      spotFor(homeTeam, homeTeamBdlId, true, homeSituHit),
+    ].filter(Boolean);
+
+    if (homeDiv && awayDiv && homeDiv === awayDiv) {
+      const divRec = (id) => situationCtx.get(id)?.divisionRecords?.[homeDiv] || null;
+      const bits = [`Division game (${homeDiv}).`];
+      const hd = divRec(homeTeamId);
+      const ad = divRec(awayTeamId);
+      if (hd) bits.push(`${homeTeam} vs the division this season: ${hd}.`);
+      if (ad) bits.push(`${awayTeam}: ${ad}.`);
+      if (seasonSeries?.line) bits.push(seasonSeries.line);
+      parts.push(bits.join(' '));
+    }
+
+    // Fresh roster changes ride the spot — names only, detail stays in
+    // SITUATION FLAGS (the founder's injuries-tie-into-the-situation ask).
+    if (situationFlagsSection) {
+      const names = situationFlagsSection.split('\n').map((l) => {
+        const m = l.match(/^(FRESH ABSENCE|JUST BACK): ([^(]+) \(/);
+        return m ? `${m[2].trim()} (${m[1] === 'FRESH ABSENCE' ? 'fresh absence' : 'just back'})` : null;
+      }).filter(Boolean);
+      if (names.length) parts.push(`Fresh roster changes in this game — ${names.join(' · ')} (detail in SITUATION FLAGS).`);
+    }
+    situationSection = parts.join('\n\n');
+  } catch { situationSection = ''; }
+
+  // ═══════════════════════════════════════════════════════════════════
   // TEAM SEASON STATS — FORMAT COMPARISON SECTION
   // ═══════════════════════════════════════════════════════════════════
   let teamSeasonStatsSection = '';
@@ -2405,7 +2530,7 @@ ${dhInfo ? `DOUBLEHEADER today${dhInfo.gameNumber ? ` — this is game ${dhInfo.
 ${weatherSection}
 ══════════════════════════════════════════════════════════════════
 
-═══ PROBABLE PITCHERS ═══
+${situationSection ? `═══ THE SITUATION ═══\n${situationSection}\n\n` : ''}═══ PROBABLE PITCHERS ═══
 ${probablePitchersSection}
 
 ═══ PITCHER SAMPLE CONTEXT ═══

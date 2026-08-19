@@ -841,8 +841,7 @@ The scout report already includes detailed context from both grounding searches 
 - Call MLB_BATTER_VS_PITCHER for the top 4-5 hitters in the opposing lineup vs this pitcher specifically — are there batter-pitcher matchups with large sample sizes (20+ AB) that diverge sharply from the hitter's overall season line? The scout report's "Tonight's bats vs tonight's arms" section carries the THIS-SEASON version.
 - What is the pitcher's opponent AVG and OPS this season — and does his contact quality allowed (Barrel%, hard-hit%) say the results are earned or fortunate?
 - Is he suppressing or allowing home runs at an unusual rate? The start ledger's HR column and Barrel%/hard-hit% allowed are the available evidence; HR/FB% is NOT AVAILABLE — never estimate it.
-- How does the pitcher perform in different counts? The scout report's "Situational" line carries his opponent AVG ahead vs behind in the count — cite those figures only.
-- What is the pitcher's first-inning ERA? The "Situational" line carries it. Splits for later innings are NOT AVAILABLE.
+- What is the pitcher's first-inning ERA? The "First inning" line carries it. Count-based splits and later-inning splits are not used on this desk — never cite them.
 - **Pitcher situation check:** Is this starter returning from the IL (pitch count likely)? Is this his first start of the season or an MLB debut? Is he facing his former team? How many days rest since his last start — is he on normal rest (5 days), short rest (4), or extended rest (6+)?
 - Times-through-the-order splits are NOT AVAILABLE from our tools — read how deep he goes from the start ledger's IP/pitch counts, and how the manager has actually handled him in recent starts: stretched him, pulled him quick, or matchup-managed.
 - Is either starter coming off a dominant outing (7+ IP, 0-1 ER) or a blowup (4- IP, 5+ ER)? Investigate whether any trend is mechanical/stuff-related or opponent-quality-related — every ledger row now carries the opponent's record.
@@ -868,7 +867,16 @@ These metrics describe underlying contact quality across a season-long sample. R
 - One-run game record — the STANDINGS section carries each team's fetched one-run record. An extreme record is context for a team's true level, and the game ledgers show what those one-run games actually were.
 - How does each team's Statcast contact quality compare to their actual offensive results?
 
-### 14. GAME ENVIRONMENT & TOTAL CONTEXT
+### 14. THE SITUATION — STREAKS, SPOTS & THE SCHEDULE
+**Tokens:** MLB_RECENT_FORM, MLB_STANDINGS (the scout report's THE SITUATION section is the baseline)
+- What is each club's current run of results, and what is actually BEHIND it? The SITUATION section lists the streak's own games with opponents and records; the ledgers and stories carry what happened in them. Decompose, don't headline: was it built on dominant starts, timely hitting, pen escapes, or soft opposition?
+- Read the last week with its exceptions: a 5-2 stretch where both losses came against a first-place club is a different 5-2 than one with losses to the league's worst. The SITUATION line names the exception games — pull their ledger entries.
+- Where is each club in its travel schedule? First game home after a trip, deep into a road swing, a getaway day — the SITUATION and SCHEDULE SHAPE lines state it. Investigate whether the spot's fatigue or comfort actually shows in the recent games.
+- Is tonight a division game? The SITUATION section carries each club's record vs this division and the season series. Familiarity cuts both ways — investigate how the prior meetings actually went (SERIES STATE has them as written).
+- How has each club actually answered wins and losses? The SITUATION section carries the after-win/after-loss record AND the bats' line in those games, instantiated to what last night actually was.
+- Tie the fresh roster changes into the spot: a club opening a home stand without its catcher is a different club than the season line says. SITUATION FLAGS names tonight's fresh changes.
+
+### 15. GAME ENVIRONMENT & TOTAL CONTEXT
 **Tokens:** MLB_ODDS, MLB_PARK_FACTORS, MLB_WEATHER, MLB_BULLPEN, MLB_RECENT_FORM
 - What is the over/under total for this game? High totals (9+) suggest both offenses are expected to produce; low totals (7 or under) suggest a pitching duel.
 - How does the total compare to each team's recent scoring trends? Is the market projecting higher or lower than their actual recent run output over the last 10 games?
@@ -895,6 +903,7 @@ After the starter exits, the bullpen takes over. Investigate:
 - **Closer availability:** If the closer pitched yesterday, who handles the 9th? Read the next arm's SV/HLD totals and recent appearance results; a save-conversion percentage is NOT AVAILABLE.
 - **Opener/bullpen game impact:** Has either team used an opener in this series or the previous series? That shifts the entire bullpen availability picture.
 - **Bullpen handedness:** Each pen arm now carries his throwing side — how does the L/R composition of the AVAILABLE arms match up against the opposing lineup's handedness in the late innings, with the bench section saying who could hit for whom?
+- **The manager's actual rules:** Each arm's usage line carries his season pattern — back-to-back tolerance, pitch loads, whether a short outing means he's available again tomorrow for THIS manager. Where the pattern is ambiguous, search beat coverage for how the manager has said he deploys his pen — reported usage philosophy only, attributed.
 
 ### SEASON SAMPLE SIZE
 - In April, team and pitcher stats are built on small samples — say so when citing them

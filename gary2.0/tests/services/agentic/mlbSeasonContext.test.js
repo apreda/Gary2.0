@@ -5,6 +5,9 @@ import {
   computeBounceBackLine,
   computeRecordSince,
   computeRelieverUsagePattern,
+  computeCurrentStreak,
+  computeRecentQuality,
+  computeVenueTransition,
 } from '../../../src/services/agentic/scoutReport/sports/mlbSeasonContext.js';
 import { classifyPaResult } from '../../../src/services/agentic/scoutReport/sports/mlbPlatoonRecency.js';
 
@@ -98,6 +101,77 @@ describe('computeRelieverUsagePattern', () => {
   });
   it('returns null on thin logs', () => {
     expect(computeRelieverUsagePattern([app('2026-07-01', 10)])).toBeNull();
+  });
+});
+
+describe('computeCurrentStreak', () => {
+  it('returns the live run with its games', () => {
+    const games = [
+      final('2026-08-10', 1, 2, 2, 5),
+      final('2026-08-11', 1, 3, 4, 1),
+      final('2026-08-12', 4, 1, 0, 6),   // team 1 away, won
+      final('2026-08-13', 1, 5, 3, 2),
+    ];
+    const s = computeCurrentStreak(idx(games), 1);
+    expect(s.won).toBe(true);
+    expect(s.len).toBe(3);
+    expect(s.games[0].oppId).toBe(3);
+    expect(s.games[1].home).toBe(false);
+  });
+});
+
+describe('computeRecentQuality', () => {
+  it('names the minority-result games', () => {
+    const games = [];
+    for (let d = 10; d <= 15; d++) games.push(final(`2026-08-${d}`, 1, 2, 6, 1));
+    games.push(final('2026-08-16', 9, 1, 7, 2)); // the one loss, on the road vs team 9
+    const q = computeRecentQuality(idx(games), 1, 7);
+    expect(q.wins).toBe(6);
+    expect(q.losses).toBe(1);
+    expect(q.exceptions).toHaveLength(1);
+    expect(q.exceptions[0].oppId).toBe(9);
+    expect(q.exceptions[0].home).toBe(false);
+  });
+  it('stays plain on a mixed week', () => {
+    const games = [];
+    for (let d = 10; d <= 16; d++) games.push(final(`2026-08-${d}`, 1, 2, d % 2 ? 5 : 1, d % 2 ? 1 : 5));
+    const q = computeRecentQuality(idx(games), 1, 7);
+    expect(q.exceptions.length).toBeGreaterThan(2);
+  });
+});
+
+describe('computeVenueTransition', () => {
+  const road = (d, n) => final(d, 2, 1, 1, 4, {});           // team 1 away, won
+  it('flags the first home game after a road trip', () => {
+    const games = [
+      final('2026-08-08', 1, 3, 5, 2),
+      road('2026-08-10'), road('2026-08-11'), road('2026-08-12'),
+    ];
+    expect(computeVenueTransition(idx(games), 1, true)).toBe('first home game after a 3-game road trip');
+  });
+  it('counts continuation of a road trip', () => {
+    const games = [road('2026-08-10'), road('2026-08-11')];
+    expect(computeVenueTransition(idx(games), 1, false)).toBe('game 3 of the current road trip');
+  });
+  it('is quiet when a homestand simply continues', () => {
+    const games = [final('2026-08-10', 1, 2, 3, 1), final('2026-08-11', 1, 2, 3, 1)];
+    expect(computeVenueTransition(idx(games), 1, true)).toBeNull();
+  });
+});
+
+describe('computeRelieverUsagePattern — conditional back-to-back', () => {
+  const app = (date, pitches, ip = '1.0', gs = 0) => ({ date, stat: { numberOfPitches: pitches, inningsPitched: ip, gamesStarted: gs } });
+  it('splits next-day availability by the prior outing load', () => {
+    const log = [
+      app('2026-07-01', 10), app('2026-07-02', 12),   // light → worked next day
+      app('2026-07-05', 11),                          // light → did not
+      app('2026-07-08', 30), app('2026-07-10', 28),   // heavy → never next day
+      app('2026-07-13', 9),                           // light → did not
+      app('2026-07-15', 26),
+    ];
+    const line = computeRelieverUsagePattern(log);
+    expect(line).toContain('after ≤15-pitch outings: worked next day 1 of 4');
+    expect(line).toContain('after 25+ pitches: next day 0 of 3');
   });
 });
 
