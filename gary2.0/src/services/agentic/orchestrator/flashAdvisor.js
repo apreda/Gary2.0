@@ -3,7 +3,7 @@ import { getFlashInvestigationPrompt } from '../flashInvestigationPrompts.js';
 import { getMlbSeasonAwareness } from './spreadEvaluationFactors.js';
 import { GAME_RESEARCH_MODEL } from './orchestratorConfig.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
-import { nbaSeason, nflSeason } from '../../../utils/dateUtils.js';
+import { nbaSeason, nflSeason, getESTDate, toESTDate } from '../../../utils/dateUtils.js';
 import { toolDefinitions, getTokensForSport } from '../tools/toolDefinitions.js';
 import { fetchStats } from '../tools/statRouters/index.js';
 import { summarizeStatForContext, summarizeNbaPlayerAdvancedStats, summarizeMlbPlayerGameLogs } from './orchestratorHelpers.js';
@@ -216,11 +216,12 @@ export async function buildFlashResearchBriefing(scoutReportContent, sport, home
     const _flashTokenCache = new Map();
     // Accumulated factor findings — Flash writes each factor incrementally
     const _accumulatedFactors = [];
-    // Game date (YYYY-MM-DD) for tools that need it (e.g., fetch_team_recent_stats / Tank01 L-N stats).
-    // Falls back to today if commence_time isn't on the game object.
+    // Game date (YYYY-MM-DD, ET calendar day — a 9 PM ET first pitch is the
+    // next UTC day, so toISOString would hand tools tomorrow's date).
+    // Falls back to today (ET) if commence_time isn't on the game object.
     const gameDate = options.gameTime
-      ? new Date(options.gameTime).toISOString().split('T')[0]
-      : new Date().toISOString().split('T')[0];
+      ? toESTDate(options.gameTime)
+      : getESTDate();
     const hasResearchSeason = options.researchSeason !== null &&
       options.researchSeason !== undefined &&
       options.researchSeason !== '' &&
@@ -604,7 +605,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                 const tank01 = (await import('../../tank01DfsService.js')).default;
                 const numGames = args.num_games || 5;
                 const teamAbv = (args.team || '').toUpperCase().replace(/[^A-Z]/g, '');
-                const dateStr = gameDate || new Date().toISOString().split('T')[0];
+                const dateStr = gameDate || getESTDate();
                 const result = await tank01.fetchTeamLStats(teamAbv, numGames, dateStr);
                 const content = JSON.stringify(result);
                 functionResponses.push({ name: functionName, content });

@@ -6,7 +6,7 @@
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { fetchNbaInjuriesForGame } from '../../../nbaInjuryReportService.js';
 import axios from 'axios';
-import { nflSeason, formatSeason } from '../../../../utils/dateUtils.js';
+import { nflSeason, formatSeason, getESTDate, toESTDate } from '../../../../utils/dateUtils.js';
 import {
   seasonForSport,
   playerNamesMatch,
@@ -336,13 +336,12 @@ export async function fetchRecentGames(teamName, sport, count = 5) {
         per_page: 100  // NHL plays 82 games; 100 covers full season for all sports
       };
     } else {
-      // NBA/etc: Use date range filtering
-      const today = new Date();
-      const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+      // NBA/etc: Use date range filtering (ET calendar days — after 8 PM ET
+      // toISOString is already tomorrow, the recurring UTC-date class)
       params = {
         team_ids: [team.id],
-        start_date: thirtyDaysAgo.toISOString().split('T')[0],
-        end_date: today.toISOString().split('T')[0],
+        start_date: toESTDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),
+        end_date: getESTDate(),
         per_page: 20
       };
     }
@@ -350,14 +349,15 @@ export async function fetchRecentGames(teamName, sport, count = 5) {
     const recentGames = await ballDontLieService.getGames(bdlSport, params);
     
     // Sort by date descending and return the requested count
-    // For sports with season fetch, also filter to only completed games
-    const today = new Date();
+    // For sports with season fetch, also filter to only completed games.
+    // "Today" must be the ET calendar day: after 8 PM ET the UTC date is
+    // already tomorrow, which made tonight's in-progress game read as past.
+    const todayStr = getESTDate();
     const sorted = (recentGames || [])
       .filter(g => {
         const rawDate = g.date || g.datetime;
         const hasDate = !!rawDate;
         const gameDateStr = (rawDate || '').split('T')[0];
-        const todayStr = today.toISOString().split('T')[0];
         const isPast = gameDateStr < todayStr;
         if (usesSeasonParam) {
           const status = (g.status || '').toLowerCase();
