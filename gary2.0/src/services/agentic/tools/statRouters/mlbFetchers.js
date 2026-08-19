@@ -2352,7 +2352,12 @@ export const mlbFetchers = {
             const ip = `${Math.floor(a.outs / 3)}.${a.outs % 3}`;
             const mid = idByFold ? idByFold.get(foldName(a.name)) : null;
             const throwsC = mid != null ? hands.get(mid)?.throw : null;
-            lines.push(`  ${a.name}${throwsC ? ` (${throwsC}HP)` : ''}: ${a.sv} SV, ${a.hld} HLD, ${era} ERA, ${whip} WHIP, ${a.k} K, ${a.bb} BB in ${ip} IP${rosterFiltered ? '' : goneTag(rosterFolds, a.name)}`);
+            // Short-sample honesty (founder GO, Aug 19 — same law as the
+            // starters): a 3.2-IP arm's 9.82 ERA is a sample, not a season.
+            const tiny = a.outs > 0 && a.outs < 30
+              ? ` — every rate here rests on ${ip} IP`
+              : '';
+            lines.push(`  ${a.name}${throwsC ? ` (${throwsC}HP)` : ''}: ${a.sv} SV, ${a.hld} HLD, ${era} ERA, ${whip} WHIP, ${a.k} K, ${a.bb} BB in ${ip} IP${tiny}${rosterFiltered ? '' : goneTag(rosterFolds, a.name)}`);
             const usage = usageByFold.get(foldName(a.name));
             if (usage) lines.push(`    Usage (season): ${usage}`);
           }

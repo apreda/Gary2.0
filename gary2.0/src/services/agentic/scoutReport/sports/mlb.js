@@ -555,14 +555,29 @@ export async function buildMlbScoutReport(game, options = {}) {
           // starter with a venue split and the other without.
           const hrl = homeRoadLine(allStarts);
           if (hrl) parts.push(`  ${hrl}`);
-          // DAYS REST (founder GO, Aug 12): the number was derivable from the
-          // ledger dates; now it's a printed fact.
+          // DAYS REST (founder GO, Aug 12; swingman fix Aug 19): the rest
+          // line reads from his last APPEARANCE, not just his last start —
+          // "23 days rest" for an arm who threw in relief three days ago is
+          // a lie of omission (the Basso case). Both facts print when they
+          // differ.
           const lastStartDate = allStarts.length ? allStarts[allStarts.length - 1]?.date : null;
           if (lastStartDate) {
             const todayEt = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-            const restDays = Math.round((new Date(todayEt) - new Date(lastStartDate)) / 86400000) - 1;
-            if (Number.isFinite(restDays) && restDays >= 0 && restDays <= 60) {
-              parts.push(`  Rest: ${restDays} days since his last start`);
+            const daysSince = (d) => Math.round((new Date(todayEt) - new Date(d)) / 86400000) - 1;
+            const startRest = daysSince(lastStartDate);
+            let lastAppDate = lastStartDate;
+            try {
+              const log = mlbamId ? await getPitcherGameLogRaw(mlbamId, season) : [];
+              const apps = (log || []).filter((g) => g?.date && g.date < todayEt && g?.stat?.inningsPitched != null);
+              if (apps.length) lastAppDate = apps[apps.length - 1].date;
+            } catch { /* appearance refinement is additive */ }
+            const appRest = daysSince(lastAppDate);
+            if (Number.isFinite(startRest) && startRest >= 0 && startRest <= 60) {
+              if (lastAppDate !== lastStartDate && Number.isFinite(appRest) && appRest >= 0) {
+                parts.push(`  Rest: ${startRest} days since his last START — but he pitched in relief ${lastAppDate} (${appRest} day${appRest === 1 ? '' : 's'} ago)`);
+              } else {
+                parts.push(`  Rest: ${startRest} days since his last start`);
+              }
             }
           }
           // Fuse the sample qualifier INTO the season line's parenthetical
@@ -980,7 +995,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     try {
       rows = await ballDontLieService.getMlbPlayerGameRowsChrono(pitcherId, season);
     } catch (_) { return; }
-    smallSampleFlags.push(...teamChangeFlags({
+    const changeFlags = teamChangeFlags({
       name: pitcher.fullName,
       label,
       season,
@@ -991,7 +1006,25 @@ export async function buildMlbScoutReport(game, options = {}) {
         [bdlTeam?.location, bdlTeam?.name].filter(Boolean).join(' '),
       ],
       rows,
-    }));
+    });
+    if (changeFlags.length) {
+      // THE MOVE, AS WRITTEN (founder GO, Aug 19): a mid-season team change
+      // carries its official transaction — trade, claim, or signing — so
+      // "his numbers were built for another club" travels with the why. The
+      // press layer carries the move's reported shape on top.
+      try {
+        const teamIdForTx = side === 'home' ? homeTeamId : awayTeamId;
+        if (teamIdForTx) {
+          const txRows = await getMlbTransactions(teamIdForTx, `${season}-02-01`, todayIso).catch(() => []);
+          const lastNm = String(pitcher.fullName || '').trim().split(' ').pop();
+          const moves = (txRows || []).filter((r) => String(r.description || '').includes(lastNm)
+            && /trade|claim|acquir|sign/i.test(String(r.description || '')));
+          const mv = moves[moves.length - 1];
+          if (mv) changeFlags[changeFlags.length - 1] += `\n  The move, as written: ${mv.date}: ${mv.description}`;
+        }
+      } catch { /* move line is additive */ }
+      smallSampleFlags.push(...changeFlags);
+    }
   })).catch(() => {});
 
   const smallSampleFlagsSection = smallSampleFlags.length
