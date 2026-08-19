@@ -6,7 +6,7 @@
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { fetchNbaInjuriesForGame } from '../../../nbaInjuryReportService.js';
 import axios from 'axios';
-import { nflSeason, formatSeason, getESTDate, toESTDate } from '../../../../utils/dateUtils.js';
+import { formatSeason, getESTDate, toESTDate } from '../../../../utils/dateUtils.js';
 import {
   seasonForSport,
   playerNamesMatch,
