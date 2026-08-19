@@ -117,6 +117,11 @@ enum GaryColors {
     // over warm black reads as a cool blue-grey cast).
     static let panelFill = warmWhite.opacity(0.03)
     static let panelStroke = warmWhite.opacity(0.07)
+    // THE FLOOR pairing (founder, Aug 19): over a patterned ground the 3% wash
+    // is see-through — this is the SAME color that wash reads as over the plain
+    // ink, locked opaque, so cards sit ON the world instead of dissolving into
+    // it. Applied wherever the `solidPanels` environment is set (Home).
+    static let panelFillOpaque = Color(hex: "#141210")
 }
 
 // MARK: - Layout (single source of truth)
@@ -303,9 +308,33 @@ extension View {
     /// The one panel surface (fill + hairline stroke). Replaces quantPanel()
     /// and the six hand-rolled warm-white panels that had drifted 0.008 apart.
     func garyPanel(radius: CGFloat = GaryLayout.Radius.panel) -> some View {
-        background(
+        modifier(GaryPanelSurface(radius: radius))
+    }
+}
+
+/// Whether panels in this subtree draw the opaque fill instead of the wash.
+/// Set by Home (THE FLOOR ground, Aug 19); false everywhere else, so the
+/// rest of the app keeps the translucent surface language untouched.
+private struct SolidPanelsKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var solidPanels: Bool {
+        get { self[SolidPanelsKey.self] }
+        set { self[SolidPanelsKey.self] = newValue }
+    }
+}
+
+/// The one panel surface, surface-aware: opaque over a patterned ground
+/// (`solidPanels`), the classic warm wash everywhere else.
+struct GaryPanelSurface: ViewModifier {
+    @Environment(\.solidPanels) private var solidPanels
+    let radius: CGFloat
+    func body(content: Content) -> some View {
+        content.background(
             RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .fill(GaryColors.panelFill)
+                .fill(solidPanels ? GaryColors.panelFillOpaque : GaryColors.panelFill)
                 .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .stroke(GaryColors.panelStroke, lineWidth: 1))
         )

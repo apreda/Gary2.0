@@ -266,6 +266,20 @@ describe('Home MLB/NFL board parity', () => {
     expect(views).toContain('if verb == "homeboard", let league = HomeBoardLeague(rawValue: arg.uppercased())');
   });
 
+  it('Home stands on THE FLOOR with solid panels (founder GO, Aug 19)', () => {
+    // The official ground: full-page STATIC grid (no clock — renders once),
+    // horizon under the masthead. Pairs with opaque card fills scoped to
+    // Home via the solidPanels environment; every other page keeps the wash.
+    expect(views).toContain('struct HomeFloorGround: View');
+    expect(views).toContain('HomeFloorGround()');
+    expect(views).toContain('.environment(\\.solidPanels, true)');
+    expect(views).not.toContain('struct ObsidianGround');
+    expect(views).not.toContain('TimelineView(.animation(minimumInterval: 1.0 / 12.0');
+    expect(designSystem).toContain('static let panelFillOpaque');
+    expect(designSystem).toContain('var solidPanels: Bool');
+    expect(designSystem).toContain('solidPanels ? GaryColors.panelFillOpaque : GaryColors.panelFill');
+  });
+
   it('joins picks and results by exact provider game id before legacy names', () => {
     expect(models).toContain('let game_id: String?');
     expect(views).toContain('if let gameID, let pickID = pick.game_id');

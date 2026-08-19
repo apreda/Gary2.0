@@ -1750,57 +1750,69 @@ struct LiquidGlassBackground: View {
     }
 }
 
-// MARK: - Obsidian Ground (Home only)
+// MARK: - Home Floor Ground (Home only)
 
-/// The infinite-depth layer WITHOUT leaving our black (founder, Aug 18: keep
-/// the ink, keep the design — bring back the "space behind the app" feeling
-/// the gold had). Ported from depth study 13 "OBSIDIAN": black glass whose
-/// surface carries slow gold caustics — fourteen breathing filaments, each
-/// stroked three times so it glows with zero blur filters. Rides ON TOP of
-/// LiquidGlassBackground, so the base ink and vignette are untouched; this is
-/// pure atmosphere at whisper opacity. Throttled to 20fps; freezes under
-/// Reduce Motion.
-struct ObsidianGround: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.scenePhase) private var scenePhase
-    // TabView keeps every visited page alive, so without a pause this layer
-    // ticks forever on EVERY tab — measured ~7% constant CPU from the Picks
-    // tab (Aug 18 perf sweep). Freeze whenever Home isn't the front tab or
-    // the app isn't active; the last frame stays painted, so nothing pops.
-    @AppStorage("selectedTab") private var selectedTab: Int = 0
-
-    private var frozen: Bool {
-        reduceMotion || selectedTab != 0 || scenePhase != .active
-    }
+/// THE FLOOR · STILL — the official Home ground (founder, Aug 19: "I like the
+/// home page now so put that in officially", after five study rounds on the
+/// depth-v2 browser). The vanishing-point effect with ZERO motion: one
+/// 3D-folded gold grid plane covers the full page, running from the bottom
+/// edge up to a horizon just under the masthead, with the warm horizon light
+/// the whole page recedes toward. Rides ON TOP of LiquidGlassBackground.
+/// No clock, no freeze machinery — it renders once and costs nothing after
+/// its first frame (replaced the 12fps ObsidianGround waves, retired here).
+/// Pairs with SOLID card fills (`solidPanels` environment): over a patterned
+/// ground the 3% wash lets the grid bleed through every container, so Home
+/// cards lock to the opaque color the wash reads as on plain ink.
+private struct FloorGridPattern: View {
+    let spacingY: CGFloat
+    let spacingX: CGFloat
+    let alpha: Double
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 12.0, paused: frozen)) { tl in
-            Canvas { ctx, size in
-                let time: Double = reduceMotion ? 0 : tl.date.timeIntervalSinceReferenceDate
-                let W = size.width, H = size.height
-                for i in 0..<14 {
-                    let fi = Double(i)
-                    let baseY = H * (0.05 + 0.068 * CGFloat(i))
-                    var path = Path()
-                    let steps = 48
-                    for s in 0...steps {
-                        let u = Double(s) / Double(steps)
-                        let x = CGFloat(u) * W
-                        let t1: Double = sin(u * 2.0 * .pi * 1.8 + time * 0.22 + fi * 0.9)
-                        let t2: Double = sin(u * 2.0 * .pi * 3.7 - time * 0.16 + fi * 1.7)
-                        let t3: Double = sin(u * 2.0 * .pi * 7.1 + time * 0.31 + fi * 2.6)
-                        let wobble: Double = 0.018 * t1 + 0.011 * t2 + 0.0025 * t3
-                        let y = baseY + H * CGFloat(wobble)
-                        if s == 0 { path.move(to: CGPoint(x: x, y: y)) } else { path.addLine(to: CGPoint(x: x, y: y)) }
-                    }
-                    // Brightness swells and fades per filament on its own cycle.
-                    // WHISPER level (first sim pass read as EKG lines through the
-                    // panels): the layer must be felt, not read.
-                    let pulse = 0.55 + 0.45 * sin(time * 0.12 + fi * 1.3)
-                    ctx.stroke(path, with: .color(Color(hex: "#D9A62B").opacity(0.012 * pulse)), lineWidth: 8)
-                    ctx.stroke(path, with: .color(Color(hex: "#D9A62B").opacity(0.020 * pulse)), lineWidth: 3.4)
-                    ctx.stroke(path, with: .color(Color(hex: "#F2E4BC").opacity(0.030 * pulse)), lineWidth: 1.2)
-                }
+        Canvas { ctx, size in
+            let gold = Color(hex: "#D9A62B")
+            var y: CGFloat = 0
+            while y < size.height + spacingY {
+                var p = Path()
+                p.move(to: CGPoint(x: 0, y: y)); p.addLine(to: CGPoint(x: size.width, y: y))
+                ctx.stroke(p, with: .color(gold.opacity(alpha)), lineWidth: 1.0)
+                y += spacingY
+            }
+            var x: CGFloat = 0
+            while x < size.width + spacingX {
+                var p = Path()
+                p.move(to: CGPoint(x: x, y: 0)); p.addLine(to: CGPoint(x: x, y: size.height))
+                ctx.stroke(p, with: .color(gold.opacity(alpha * 0.85)), lineWidth: 1.0)
+                x += spacingX
+            }
+        }
+    }
+}
+
+struct HomeFloorGround: View {
+    var body: some View {
+        GeometryReader { geo in
+            let W = geo.size.width, H = geo.size.height
+            ZStack {
+                // Round-five tune (founder: "a little less obvious there's a
+                // grid behind all this"): wide cells, low contrast — the
+                // depth stays, the graph paper goes.
+                FloorGridPattern(spacingY: 88, spacingX: 100, alpha: 0.16)
+                    .frame(width: W * 2.6, height: H * 1.5)
+                    .rotation3DEffect(.degrees(63), axis: (x: 1, y: 0, z: 0), anchor: .top, perspective: 0.9)
+                    .position(x: W * 0.5, y: H * 0.85)
+                    .mask(
+                        LinearGradient(stops: [
+                            .init(color: .clear, location: 0.02),
+                            .init(color: .black, location: 0.20),
+                            .init(color: .black, location: 0.88),
+                            .init(color: .black.opacity(0.35), location: 1),
+                        ], startPoint: .top, endPoint: .bottom)
+                    )
+                // the horizon light the whole page runs toward
+                RadialGradient(colors: [Color(hex: "#F2E4BC").opacity(0.13),
+                                        Color(hex: "#D9A62B").opacity(0.045), .clear],
+                               center: .init(x: 0.5, y: 0.12), startRadius: 4, endRadius: W * 0.5)
             }
         }
         .allowsHitTesting(false)
@@ -2242,7 +2254,7 @@ struct HomeView: View {
             // (Home only; founder, Aug 18: the infinite feel without leaving
             // our black).
             LiquidGlassBackground(grainDensity: 0.0009, grainOpacityRange: 0.008...0.018)
-            ObsidianGround()
+            HomeFloorGround()
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {
@@ -2291,6 +2303,10 @@ struct HomeView: View {
 
             StatusBarScrim()
         }
+        // THE FLOOR pairs with solid cards (founder, Aug 19): over a patterned
+        // ground, the translucent panel wash lets the grid bleed through every
+        // container — Home's subtree locks panels to the opaque ink-equivalent.
+        .environment(\.solidPanels, true)
         .overlay {
             if showDailyRecap {
                 DailyRecapOverlay(record: dailyRecapRecord,
@@ -4023,7 +4039,12 @@ struct HomeView: View {
         .padding(.vertical, 3)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(GaryColors.panelFill)
+                // Self-contained card: adapts its own FILL for the ground
+                // (surface doctrine). Home always stands on THE FLOOR now, and
+                // this board only renders here — solid, unconditionally. (It
+                // cannot read `solidPanels`: HomeView sets that env on its own
+                // subtree, and a view never sees its own environment writes.)
+                .fill(GaryColors.panelFillOpaque)
                 // House gold, whisper-quiet (founder, Aug 18: no sport-green
                 // chrome — the gold label names the tab, the outline barely
                 // exists).
@@ -5365,6 +5386,9 @@ struct HomeSectionRule: View {
 /// open the game; the footer unfolds the full ranked list, which stamps
 /// CASHED/LOST as the day settles and teases tomorrow's marquee once done.
 struct HomeMarqueeTracker: View {
+    // Self-contained card: adapts its own FILL for the ground (surface
+    // doctrine) — solid over THE FLOOR grid when Home sets `solidPanels`.
+    @Environment(\.solidPanels) private var solidPanels
     struct Entry: Identifiable {
         let id: String
         let rank: Int
@@ -5479,7 +5503,7 @@ struct HomeMarqueeTracker: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(GaryColors.panelFill)
+                .fill(solidPanels ? GaryColors.panelFillOpaque : GaryColors.panelFill)
         )
         // The ribbon band is a square-cornered surface — clip it to the card
         // shape so it never pokes past the rounded border (Aug 3 polish).
