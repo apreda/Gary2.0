@@ -589,7 +589,14 @@ function getStatValue(sport, data, name, type, playerId = null) {
       // checked before the individual rbi/hit tests below or it gets intercepted by them
       // and graded on RBI count alone instead of the hits+runs+rbi sum.
       if (t.includes('hits_runs_rbi') || t.includes('h+r+rbi')) return (p.hits || 0) + (p.runs || 0) + (p.rbi || 0);
-      if (t.includes('hit') && !t.includes('run') && !t.includes('allow')) return p.hits ?? 0;
+      // PITCHER props must be tested BEFORE their batter cousins — every one
+      // contains the batter word as a substring ('pitcher_walks' ⊃ 'walk'),
+      // and the generic branch graded Skenes' 4-walk start on batter-bb 0
+      // (Aug 19: "pitcher walks over 1.5" settled LOST on a 4-walk night).
+      if (t.includes('pitcher_walk') || t.includes('walks_allowed')) return p.p_bb ?? 0;
+      if (t.includes('pitcher_hit') || t.includes('hits_allowed')) return p.p_hits ?? 0;
+      if (t.includes('pitcher_home_run') || t.includes('home_runs_allowed')) return p.p_hr ?? 0;
+      if (t.includes('hit') && !t.includes('run') && !t.includes('allow') && !t.includes('pitcher')) return p.hits ?? 0;
       if (t.includes('home_run') || t.includes('homer')) return p.hr ?? p.home_runs ?? 0;
       if (t.includes('total_base')) {
         // BDL doesn't have total_bases — compute from hits if we have component data
@@ -599,7 +606,7 @@ function getStatValue(sport, data, name, type, playerId = null) {
       }
       if (t.includes('rbi') || t.includes('runs_batted')) return p.rbi ?? 0;
       if (t.includes('runs_scored') || t === 'runs') return p.runs ?? 0;
-      if (t.includes('walk') || t.includes('bases_on_ball')) return p.bb ?? 0;
+      if ((t.includes('walk') || t.includes('bases_on_ball')) && !t.includes('pitcher')) return p.bb ?? 0;
       if (t.includes('stolen_base') || t.includes('steal')) {
         if (p.stolen_bases != null) return p.stolen_bases;
         if (p.sb != null) return p.sb;
@@ -628,8 +635,6 @@ function getStatValue(sport, data, name, type, playerId = null) {
         return null;
       }
       if (t.includes('pitcher_earned') || t.includes('earned_run')) return p.er ?? 0;
-      if (t.includes('pitcher_hit') || t.includes('hits_allowed')) return p.p_hits ?? 0;
-      if (t.includes('pitcher_walk')) return p.p_bb ?? 0;
       console.warn(`    [Stat] MLB: Found ${name} but no match for prop type "${type}"`);
     }
   }
