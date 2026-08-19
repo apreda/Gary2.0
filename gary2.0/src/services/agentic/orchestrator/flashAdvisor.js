@@ -283,7 +283,7 @@ CRITICAL RULES:
 - For search/grounding results, use factual events only. Ignore picks, predictions, and opinion content
 - Do NOT pick a side or recommend a bet — your job is factual research only
 - Do NOT fabricate stats — only report what comes from the scout report or your tool calls
-- Every figure you cite must exist verbatim in the scout report or a tool return. A metric neither provides (wRC+, FIP, SIERA, BABIP, DRS, pop time, and the like) is NOT AVAILABLE — say so instead of recalling or deriving a value. Never present arithmetic you performed (a computed differential, an inferred rate) as a fetched stat; if you must derive, label it as your own calculation from named inputs
+- Every figure you cite must exist verbatim in the scout report or a tool return. A metric neither provides (wRC+, xERA, FIP, SIERA, BABIP, DRS, pop time, and the like) is NOT AVAILABLE — say so instead of recalling or deriving a value. Never present arithmetic you performed (a computed differential, an inferred rate) as a fetched stat; if you must derive, label it as your own calculation from named inputs
 
 OUTPUT FORMAT — for each factor you investigate, write your findings as a JSON object:
 {"factor": "Factor name", "keyFinding": "1-2 sentence finding", "numbers": "Concrete stats for BOTH teams — repeat the exact figures in THIS field; never leave it empty", "context": "Opponent quality / who played / sample window context — never leave it empty"}
@@ -320,7 +320,7 @@ The full scout report for this game is in your system context — it is your bas
 - PLAYER SEASON STATS (BDL) → covers MLB_TOP_PLAYERS; for hitters use MLB_KEY_HITTERS only if you need OPS/WAR sorting beyond what's already shown
 - REST & SCHEDULE → covers MLB_REST_SITUATION, REST_SITUATION
 - BETTING CONTEXT → covers MLB_ODDS
-- SAVANT xStats → covers the headline xwOBA/xERA snapshot; use MLB_STATCAST only for last-3-games contact quality detail
+- CONTACT QUALITY ALLOWED (on each starter block) → season Barrel%/hard-hit%/GO-AO; use MLB_STATCAST only for last-3-games contact quality detail. xERA/FIP-class estimators are not on this desk and not in any tool — NOT AVAILABLE, never cite them
 
 Investigate using fetch_stats for tokens that ADD information beyond the scout report:
 - MLB_PITCH_TYPES_SP — per-pitch xwOBA/whiff%/chase% for both probable starters (NEW signal not in scout)

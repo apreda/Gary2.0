@@ -735,7 +735,7 @@ The scout report already includes detailed context from both grounding searches 
 - How does each starter's pitch mix and velocity profile (per-pitch mph is in the MLB_PITCH_TYPES_SP output and scout report — cite ONLY those figures, never velocity from memory) match up against the opposing lineup's handedness and power profile?
 - Any pitch count concerns or workload management patterns? What has the front office's approach been to this pitcher's innings recently?
 - What does each starter's contact-quality-allowed profile look like (Barrel% allowed, Hard-hit% allowed, and GO/AO grounder-per-flyout ratio are in MLB_PITCHER_SCOUTING and the scout report)? True GB%/FB% rates are NOT available from our tools — characterize a batted-ball tendency only from the provided GO/AO and Barrel%/Hard-hit% figures; never estimate a GB% from memory.
-- What is each starter's ERA and his xERA (both on the scout report)? Report both. FIP is NOT AVAILABLE — never estimate it.
+- What is each starter's ERA — and how did it actually come up? The start ledger shows which outings built it, the sample-context flags say when one blowup is doing the lifting, and contact quality allowed says what's underneath. FIP and xERA are not used on this desk — never cite or estimate them.
 - How many innings has each starter averaged in recent starts — does their pitch count suggest a short outing (< 5 IP, early bullpen handoff) or a deep outing (6+ IP)?
 - What is each starter's home/away split this season? Some pitchers have large venue-dependent performance gaps.
 
@@ -747,7 +747,7 @@ The scout report already includes detailed context from both grounding searches 
 - Has command changed in recent starts (walks/hits per start are in the game log)? Per-start velocity readings are NOT available from our tools — season-average velocity is in MLB_PITCH_TYPES_SP; do not assert recent velocity changes without a sourced figure.
 - Did any recent starts include rain delays, early exits due to injury scares, or shortened outings that inflate or deflate the stat line?
 - What is the starter's pitch count trajectory — increasing (building up after IL stint or early season) or capped (managed workload, innings limit)?
-- Is his recent ERA earned or fortunate? Strand rate is NOT AVAILABLE — read sustainability from his xERA gap, his whiff-by-start trend, and the hits/walks in the start ledger. A pitcher "due to regress" still throws gems.
+- Is his recent ERA earned or fortunate? Read it from how the runs actually arrived — the ledger's hits/walks/HR columns, his whiff-by-start trend, and his contact quality allowed. Strand rate, FIP, and xERA are not used — never cite them. A pitcher "due to regress" still throws gems.
 
 ### 3. PLATOON SPLITS & BATTER VS PITCHER
 **Tokens:** MLB_PLAYER_SPLITS, MLB_BATTER_VS_PITCHER, MLB_KEY_HITTERS, MLB_LINEUP, MLB_PITCH_TYPES_HITTERS
@@ -839,7 +839,7 @@ The scout report already includes detailed context from both grounding searches 
 - Call MLB_PITCHER_SCOUTING for the starting pitcher's platoon splits (vs LHB/RHB), home/away ERA, and day/night splits — where does tonight's context fall? (MLB_PLAYER_SPLITS covers hitters only.)
 - The scout report's "Vs-hand by start" rows give each platoon split its time axis — is the season split still true in his recent starts, and who actually did the hitting last time out?
 - Call MLB_BATTER_VS_PITCHER for the top 4-5 hitters in the opposing lineup vs this pitcher specifically — are there batter-pitcher matchups with large sample sizes (20+ AB) that diverge sharply from the hitter's overall season line? The scout report's "Tonight's bats vs tonight's arms" section carries the THIS-SEASON version.
-- What is the pitcher's opponent AVG and OPS this season — and does his xERA (on the scout report beside his ERA) say the results are earned or fortunate?
+- What is the pitcher's opponent AVG and OPS this season — and does his contact quality allowed (Barrel%, hard-hit%) say the results are earned or fortunate?
 - Is he suppressing or allowing home runs at an unusual rate? The start ledger's HR column and Barrel%/hard-hit% allowed are the available evidence; HR/FB% is NOT AVAILABLE — never estimate it.
 - How does the pitcher perform in different counts? The scout report's "Situational" line carries his opponent AVG ahead vs behind in the count — cite those figures only.
 - What is the pitcher's first-inning ERA? The "Situational" line carries it. Splits for later innings are NOT AVAILABLE.
@@ -863,7 +863,7 @@ These metrics describe underlying contact quality across a season-long sample. R
 - Are any key hitters' teams showing a change in xwOBA vs their actual results? 
 - How do the two teams' bat-speed and whiff numbers compare?
 - BABIP and career norms are NOT AVAILABLE from our tools — read luck-vs-real from the Statcast expected stats (xwOBA vs actual) instead, and never cite a BABIP figure.
-- Report each starter's ERA beside his xERA — both are on the scout report. FIP and SIERA are NOT AVAILABLE; never estimate them.
+- Report each starter's ERA with how it came up — which starts built it (the ledger) and what the contact quality says underneath. FIP, SIERA, and xERA are not used on this desk — never cite or estimate them.
 - Is a team's run differential diverging from their record? The STANDINGS section carries the FETCHED run differential — cite that figure, never one derived from the record.
 - One-run game record — the STANDINGS section carries each team's fetched one-run record. An extreme record is context for a team's true level, and the game ledgers show what those one-run games actually were.
 - How does each team's Statcast contact quality compare to their actual offensive results?
@@ -885,7 +885,7 @@ The starting pitcher is the biggest single variable in an MLB game, but still on
 - **Pitch count trends:** Is the front office limiting this pitcher? Note his average pitch count and IP in recent starts. Investigate the bullpen state and reason about how an early exit would actually change the run projection — sometimes the bullpen is the strength.
 - **Quality of competition in recent starts:** Who were those recent outings against, and were those clubs any good? Every row of the start ledger now carries the opponent's record — cite it.
 - **Handedness matchup depth:** The lineup section's handedness count and the starter's platoon splits carry both halves — and the "Vs-hand by start" rows say whether the season split is still true lately.
-- **xERA-ERA gap:** What does the gap (both figures on the scout report) tell you about how much of the pitcher's results are within his control vs dependent on defense and sequencing?
+- **How the ERA came up:** an ERA is a season of specific outings — the ledger shows which games built it, the distortion flag says when one start is doing the lifting, and contact quality allowed says whether the results are earned or defense-and-sequencing luck.
 - **How deep does he actually go:** Times-through-the-order splits are NOT AVAILABLE — read his depth from the ledger's IP and pitch counts, and look at how the manager has actually handled him in recent starts: stretched him, pulled him quick, or matchup-managed?
 
 ### BULLPEN INVESTIGATION
@@ -915,7 +915,7 @@ After the starter exits, the bullpen takes over. Investigate:
 When recent performance diverges from the season baseline, the question is what's real versus noise — and whether the price reflects it. These are season-long sustainability reads, NOT single-game predictions: a pitcher whose results outrun his expected stats can still throw a gem tonight.
 - What evidence distinguishes a real shift from variance?
 - Has the roster changed (trade deadline, IL returns)?
-- Is a key pitcher's ERA outrunning his expected stats? His xERA prints beside his ERA on the scout report — note whether his results look built to last or fragile. Context for the price, not a forecast of tonight. (FIP, BABIP, HR/FB, and strand rate are NOT AVAILABLE — the xERA gap and Statcast contact quality are the sustainability evidence.)
+- Is a key pitcher's ERA outrunning how he's actually throwing? Read it from the desk's decomposition — the start ledger, his whiff-by-start trend, and Statcast contact quality allowed. Modeled estimators (xERA, FIP, SIERA, BABIP, HR/FB, strand rate) are not used — never cite them. Context for the price, not a forecast of tonight.
 - Extreme 1-run / extra-inning records (fetched, in the STANDINGS section) do not sustain over 162 games — useful for judging a team's true level, not tonight's outcome.
 
 ### HOME/AWAY PERFORMANCE

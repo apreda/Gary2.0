@@ -15,7 +15,7 @@ import { openaiWebSearch } from '../../../pickdesk/webSearch.js';
 import { formatTokenMenu } from '../../tools/toolDefinitions.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
 import { ballDontLieService, getCachedOrFetch } from '../../../ballDontLieService.js';
-import { getPitcherArsenal, getPitcherStatcastProfile, getPlayerXStats } from '../../../baseballSavantService.js';
+import { getPitcherArsenal, getPitcherStatcastProfile } from '../../../baseballSavantService.js';
 import {
   getTeamRoster,
   getMlbRecentGames,
@@ -514,7 +514,7 @@ export async function buildMlbScoutReport(game, options = {}) {
         const mlbamId = pitcher.id;
         // (Career-vs-opponent fetch REMOVED — founder ruling, Aug 10: prior-
         // season numbers off the desk.)
-        const [arsenal, platoon, contact, seasonPitching, lastStarts, monthSplits, careerProfile, situational, xstats] = await Promise.all([
+        const [arsenal, platoon, contact, seasonPitching, lastStarts, monthSplits, careerProfile, situational] = await Promise.all([
           getPitcherArsenal(mlbamId ?? pitcher.fullName, season).catch(() => null),
           mlbamId ? getPitcherPlatoonSplits(mlbamId, season).catch(() => null) : Promise.resolve(null),
           getPitcherStatcastProfile(mlbamId ?? pitcher.fullName, season).catch(() => null),
@@ -524,9 +524,11 @@ export async function buildMlbScoutReport(game, options = {}) {
           mlbamId ? getPitcherCareerProfile(mlbamId).catch(() => null) : Promise.resolve(null),
           // Situational splits (founder GO, Aug 18 — the checklist asked, no
           // data answered): first inning, ahead/behind in count.
+          // (xERA was here for one night — founder ruling Aug 19 re-affirmed
+          // the Aug 10 purge: modeled ERA estimators are off the desk. The
+          // ERA's context arrives as decomposition — ledger, flows, contact —
+          // never as another model's number.)
           mlbamId ? getPitcherSituationalSplits(mlbamId, season).catch(() => null) : Promise.resolve(null),
-          // Savant expected stats — xERA beside ERA, fetched not derived.
-          getPlayerXStats('pitcher', mlbamId ?? pitcher.fullName, season).catch(() => null),
         ]);
 
         // THE ARC (Aug 4 2026, founder GO — the Bieber/Chandler autopsy):
@@ -801,12 +803,6 @@ export async function buildMlbScoutReport(game, options = {}) {
           parts.push(`  Contact quality allowed: NOT AVAILABLE — do not characterize ${pitcher.fullName}'s batted-ball profile`);
         }
 
-        // xERA beside ERA (founder GO, Aug 18): Savant's expected line,
-        // FETCHED — the luck-vs-earned lens the checklist kept asking for.
-        if (xstats && xstats.xera != null) {
-          const eraBit = xstats.era != null ? ` vs ${Number(xstats.era).toFixed(2)} ERA` : '';
-          parts.push(`  Expected (Savant): ${Number(xstats.xera).toFixed(2)} xERA${eraBit}${xstats.est_woba != null ? `, ${Number(xstats.est_woba).toFixed(3).replace(/^0/, '')} xwOBA against` : ''}`);
-        }
         // Situational splits (statsapi statSplits — verified sitCodes):
         // the first-inning and count questions now have printed answers.
         if (situational) {
