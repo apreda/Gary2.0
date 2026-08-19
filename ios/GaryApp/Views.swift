@@ -5649,16 +5649,10 @@ struct HomeMarqueeTracker: View {
                             .lineLimit(1).minimumScaleFactor(0.7)
                     }
                     VStack(alignment: .leading, spacing: 4) {
-                        if let pick = e.pickLine {
-                            // ONE pick per line — the words always fit; the
-                            // design never falls back to an ellipsis.
-                            ForEach(pick.components(separatedBy: "  ·  "), id: \.self) { line in
-                                Text(line)
-                                    .font(GaryFonts.mono(12.5, bold: true))
-                                    .foregroundStyle(GaryColors.gold)
-                                    .lineLimit(1).minimumScaleFactor(0.75)
-                            }
-                        }
+                        // NO pick on the hero (founder, Aug 19: "it's just a
+                        // countdown") — the card reads identically before and
+                        // after the pick lands, so the spacing never shifts.
+                        // The pick lives on the board rows and the Picks tab.
                         // The rest of the board — total and run line — rides
                         // as one dim market row whether or not a pick posted.
                         // STORE-SAFE BRIDGE: the market row IS market data — off.
@@ -5942,22 +5936,15 @@ struct HeadlineFlipCard: View {
                 }
                 Text(story.headline)
                     // The words are the ONLY thing allowed to give (founder,
-                    // Aug 5). The headline claims every point between the
-                    // kicker and the pick, so the block is identical on every
-                    // card and a long story just uses more of it.
-                    .font(GaryFonts.text(11.5, .semibold))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .lineLimit(5).minimumScaleFactor(0.75)
+                    // Aug 5). Aug 19 round two: the STORY owns the whole left
+                    // column now — the bet and the cash moved into the box
+                    // column, so the headline runs bigger and deeper.
+                    .font(GaryFonts.text(15, .semibold))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .lineLimit(5).minimumScaleFactor(0.7)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .padding(.top, 7)
-                // The pick owns the full column width now, so it reads at one
-                // size card to card. The floor is a last resort for a very
-                // long pick, never the everyday case.
-                Text(story.receiptPick)
-                    .font(GaryFonts.mono(10.5, bold: true)).tracking(0.7)
-                    .foregroundStyle(GaryColors.gold)
-                    .lineLimit(1).minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -5982,38 +5969,44 @@ struct HeadlineFlipCard: View {
                         // so it shouldn't look like a caption stapled under one.
                         HStack(alignment: .firstTextBaseline, spacing: 0) {
                             Text("HOMERS")
-                                .font(GaryFonts.mono(12.5, bold: true)).tracking(0.6)
+                                .font(GaryFonts.mono(11.5, bold: true)).tracking(0.6)
                                 .foregroundStyle(.white.opacity(0.55))
                             Spacer(minLength: 4)
                             // The game's total, not a split (founder, Aug 5).
                             Text("\(a + h)")
-                                .font(GaryFonts.mono(15, bold: true))
+                                .font(GaryFonts.mono(13.5, bold: true))
                                 .foregroundStyle(.white.opacity(0.62))
                         }
                     }
                 }
-                Spacer(minLength: 6)
-                // Money and price on ONE line (founder, Aug 5), the figure
-                // smaller and the price in gold beside it.
+                Spacer(minLength: 4)
+                // Aug 19 round two (founder): the BET and the CASH live in the
+                // box column now, under the homers — the story column keeps
+                // every point of height for the words.
+                Text(story.receiptPick)
+                    .font(GaryFonts.mono(10.5, bold: true)).tracking(0.6)
+                    .foregroundStyle(GaryColors.gold)
+                    .lineLimit(1).minimumScaleFactor(0.65)
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    // Money, price and the pick on the left are now ONE type
-                    // treatment (founder, Aug 5): same size, same tracking.
-                    // They were already the same point size — the pick's
-                    // letter-spacing was what made it read bigger.
+                    // Money and price on ONE line (founder, Aug 5). Scale, never
+                    // truncate — an ellipsis is never acceptable.
                     Text(moneyText)
-                        .font(GaryFonts.mono(10.5, bold: true)).tracking(1.1)
+                        .font(GaryFonts.mono(10.5, bold: true)).tracking(0.6)
                         .foregroundStyle(resultColor)
-                        .lineLimit(1).minimumScaleFactor(0.85)
+                        .lineLimit(1).minimumScaleFactor(0.65)
                     Spacer(minLength: 3)
                     if !story.odds.isEmpty {
                         Text(story.odds)
-                            .font(GaryFonts.mono(10.5, bold: true)).tracking(1.1)
+                            .font(GaryFonts.mono(10.5, bold: true)).tracking(0.6)
                             .foregroundStyle(GaryColors.gold)
-                            .lineLimit(1)
+                            .lineLimit(1).minimumScaleFactor(0.65)
                     }
                 }
+                .padding(.top, 2)
             }
-            .frame(width: 122, alignment: .leading)
+            // Narrower box column (Aug 19, with the smaller box type) — the
+            // freed points go to the story column the founder wants leading.
+            .frame(width: 112, alignment: .leading)
         }
         .padding(.horizontal, 15).padding(.vertical, 14)
         .frame(width: Self.W, height: Self.H, alignment: .topLeading)
@@ -6034,13 +6027,17 @@ struct HeadlineFlipCard: View {
         HStack(alignment: .firstTextBaseline, spacing: 0) {
             // Abbreviated, like a real box — the headline beside it already
             // names both clubs in full.
+            // Aug 19 (founder): the box is the SUPPORTING column — one step
+            // below the headline beside it, same internal law as before.
+            // Round two: a touch back up ("to the right... a little bit
+            // bigger maybe too") now that the bet+cash rows joined the box.
             Text(teamAbbrevFromName(name, league: story.league))
-                .font(GaryFonts.mono(12.5, bold: true)).tracking(0.6)
+                .font(GaryFonts.mono(11.5, bold: true)).tracking(0.6)
                 .foregroundStyle(winner ? GaryColors.warmGold : .white.opacity(0.55))
                 .lineLimit(1).minimumScaleFactor(0.6)
             Spacer(minLength: 4)
             Text("\(runs)")
-                .font(GaryFonts.mono(15, bold: true))
+                .font(GaryFonts.mono(13.5, bold: true))
                 .foregroundStyle(winner ? GaryColors.warmGold : .white.opacity(0.62))
         }
     }
