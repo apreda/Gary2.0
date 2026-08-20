@@ -1564,133 +1564,58 @@ enum SupabaseAPI {
     
     /// Fetch only the historical pick facts Billfold actually displays.
     ///
-    /// A `daily_picks.picks` row also contains full rationales, stat packs,
-    /// injury objects, and sportsbook snapshots. Pulling that entire JSON for
-    /// 90 days was a 12–13 MB request and made the page feel frozen. PostgREST
-    /// can project individual JSON-array fields, cutting the same request to
-    /// roughly 0.2 MB. NFL lives in canonical `weekly_nfl_picks`, so that table
-    /// gets the same narrow projection in parallel; we derive each NFL item's
-    /// Eastern game date from `commence_time` instead of assigning an entire
-    /// weekly row to one day. Thirty slots covers the observed daily maximum
-    /// (27) and a full NFL week with room to spare; game props live separately.
+    /// History lives in `pick_history_summary` — a server-side materialized
+    /// view (refreshed every 15 minutes) that flattens `daily_picks` +
+    /// canonical `weekly_nfl_picks` into one thin row per pick, with each
+    /// NFL date already derived from `commence_time` in Eastern time. The
+    /// previous shape — a 30-slot `picks->N->>…` projection over 90 days of
+    /// large jsonb rows, from every phone — was killed by the database's
+    /// statement timeout under the Aug 20 2026 late-morning load and blanked
+    /// the Picks surfaces. This read is a plain index scan (~0.5 ms measured)
+    /// and still covers ALL history, so every range's ledger math stays exact.
     static func fetchBillfoldPickMetadata(
         since dateFilter: String,
         forceRefresh: Bool = false
     ) async throws -> [BillfoldPickMetadata] {
-        // v2 invalidates the old daily-only payload immediately after this ships.
-        let cacheKey = "billfoldPickMetadataV2_\(dateFilter)_\(billfoldSnapshotWindowKey())"
+        // v3: the summary-view payload invalidates the old projection caches.
+        let cacheKey = "billfoldPickMetadataV3_\(dateFilter)_\(billfoldSnapshotWindowKey())"
         if !forceRefresh,
            let cached: [BillfoldPickMetadata] = await APICache.shared.get(cacheKey, ttl: APICache.billfoldTTL) {
             return cached
         }
 
-        var dailyProjection = ["date"]
-        var nflProjection = ["week_start"]
-        for index in 0..<30 {
-            let fields = [
-                "p\(index)_pick:picks->\(index)->>pick",
-                "p\(index)_confidence:picks->\(index)->>confidence",
-                "p\(index)_top:picks->\(index)->>is_top_pick"
-            ]
-            dailyProjection.append(contentsOf: fields)
-            dailyProjection.append("p\(index)_league:picks->\(index)->>league")
-            nflProjection.append(contentsOf: fields)
-            nflProjection.append("p\(index)_commence:picks->\(index)->>commence_time")
-        }
-
-        let dailyURL = buildURL(table: "daily_picks", query: [
-            URLQueryItem(name: "select", value: dailyProjection.joined(separator: ",")),
-            URLQueryItem(name: "date", value: "gte.\(dateFilter)"),
-            URLQueryItem(name: "order", value: "date.desc")
+        let url = buildURL(table: "pick_history_summary", query: [
+            URLQueryItem(name: "select", value: "game_date,pick,confidence,is_top_pick"),
+            URLQueryItem(name: "game_date", value: "gte.\(dateFilter)"),
+            URLQueryItem(name: "order", value: "game_date.desc")
         ])
 
-        // A week can start up to six days before the requested history window.
-        // Query the containing Tuesday, then filter each pick back to dateFilter
-        // after deriving its actual ET game date from commence_time.
-        let nflSince = getNFLWeekStart(for: dateFilter) ?? dateFilter
-        let nflURL = buildURL(table: "weekly_nfl_picks", query: [
-            URLQueryItem(name: "select", value: nflProjection.joined(separator: ",")),
-            URLQueryItem(name: "week_start", value: "gte.\(nflSince)"),
-            URLQueryItem(name: "order", value: "week_start.desc")
-        ])
-
-        // Both payloads are small and independent. Running them concurrently
-        // preserves Billfold's first-frame latency while adding NFL history.
-        async let dailyPayload = fetchBillfoldMetadataPayload(dailyURL, source: "daily_picks")
-        async let nflPayload = fetchBillfoldMetadataPayload(nflURL, source: "weekly_nfl_picks")
-        let (dailyData, nflData) = await (dailyPayload, nflPayload)
-
-        var result: [BillfoldPickMetadata] = []
-        let dailyRows = dailyData.flatMap {
-            try? JSONSerialization.jsonObject(with: $0) as? [[String: Any]]
-        } ?? []
-        let nflRows = nflData.flatMap {
-            try? JSONSerialization.jsonObject(with: $0) as? [[String: Any]]
-        } ?? []
-        result.reserveCapacity((dailyRows.count * 15) + (nflRows.count * 16))
-
-        func appendRows(_ rows: [[String: Any]], nfl: Bool) {
-            for row in rows {
-                for index in 0..<30 {
-                    guard let pick = row["p\(index)_pick"] as? String, !pick.isEmpty else { continue }
-                    // Weekly storage is canonical for NFL. Ignore any legacy
-                    // daily copy so one pick cannot calibrate twice.
-                    if !nfl, (row["p\(index)_league"] as? String)?.uppercased() == "NFL" {
-                        continue
-                    }
-
-                    let date: String?
-                    if nfl {
-                        date = (row["p\(index)_commence"] as? String)
-                            .flatMap { easternCalendarDate(ofISO8601: $0) }
-                    } else {
-                        date = row["date"] as? String
-                    }
-                    guard let date, date >= dateFilter else { continue }
-
-                    let confidence: Double?
-                    if let value = row["p\(index)_confidence"] as? String {
-                        confidence = Double(value)
-                    } else if let value = row["p\(index)_confidence"] as? NSNumber {
-                        confidence = value.doubleValue
-                    } else {
-                        confidence = nil
-                    }
-
-                    let topValue = row["p\(index)_top"]
-                    let isTopPick = (topValue as? Bool)
-                        ?? ((topValue as? String)?.lowercased() == "true")
-                    result.append(BillfoldPickMetadata(
-                        date: date,
-                        pick: pick,
-                        confidence: confidence,
-                        isTopPick: isTopPick
-                    ))
-                }
-            }
+        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            print("[SupabaseAPI] fetchBillfoldPickMetadata failed: HTTP \(status)")
+            throw NSError(domain: "SupabaseAPI.fetchBillfoldPickMetadata", code: status,
+                          userInfo: [NSLocalizedDescriptionKey: "Pick history returned HTTP \(status)"])
         }
 
-        appendRows(dailyRows, nfl: false)
-        appendRows(nflRows, nfl: true)
+        struct SummaryRow: Decodable {
+            let game_date: String
+            let pick: String
+            let confidence: Double?
+            let is_top_pick: Bool?
+        }
+        let rows = try JSONDecoder().decode([SummaryRow].self, from: data)
+        let result = rows.map {
+            BillfoldPickMetadata(
+                date: $0.game_date,
+                pick: $0.pick,
+                confidence: $0.confidence,
+                isTopPick: $0.is_top_pick ?? false
+            )
+        }
 
         await APICache.shared.set(cacheKey, value: result)
         return result
-    }
-
-    /// Fetch one narrow Billfold metadata projection. A failure in one storage
-    /// lane does not erase metadata returned by the other lane.
-    private static func fetchBillfoldMetadataPayload(_ url: URL, source: String) async -> Data? {
-        do {
-            let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
-            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-                print("[SupabaseAPI] Billfold \(source) metadata fetch failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
-                return nil
-            }
-            return data
-        } catch {
-            print("[SupabaseAPI] Billfold \(source) metadata fetch failed: \(error.localizedDescription)")
-            return nil
-        }
     }
 
     /// Fetch prop results with optional date filter
