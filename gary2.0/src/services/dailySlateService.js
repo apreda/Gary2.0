@@ -418,10 +418,17 @@ export async function writeDailySlate(etDateStr = getETDateStr(new Date())) {
 
   const upsert = async (data, conflictKey) => {
     if (data.length === 0) return;
+    // PostgREST bulk upsert requires an IDENTICAL key set on every object —
+    // PGRST102 "All object keys must match". The first mixed MLB+football
+    // slate of the fall (Aug 20) had per-league row shapes, the whole batch
+    // 400'd, and Home's board rendered empty all morning. Union the keys and
+    // null-fill so a mixed-league day always posts.
+    const keys = [...new Set(data.flatMap((row) => Object.keys(row)))];
+    const uniform = data.map((row) => Object.fromEntries(keys.map((k) => [k, row[k] ?? null])));
     await axios({
       method: 'POST',
       url: `${supabaseUrl}/rest/v1/${TABLE}`,
-      data,
+      data: uniform,
       params: { on_conflict: conflictKey },
       headers: {
         apikey: adminKey,
