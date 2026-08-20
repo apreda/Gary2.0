@@ -2279,10 +2279,8 @@ struct ProfileView: View {
             .buttonStyle(.plain)
             Button {
                 dismiss()
-                // The Book tab is the full tracker's home now (Aug 20) —
-                // land on MY BETS, not the Billfold YOU scope.
-                UserDefaults.standard.set("bets", forKey: "bookScope")
-                selectedTab = 5
+                billfoldScope = "you"
+                selectedTab = 4
             } label: {
                 Text("FULL BOOK \u{203A}")
                     .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
@@ -2347,18 +2345,18 @@ struct ProfileView: View {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// THE BOOK TAB (Aug 20 2026, founder build order)
+// THE BOOK (Aug 20 2026, founder build order; folded INTO the Billfold the
+// same day — "a tab in the Billfold page, not its own page in the nav bar")
 //
-// Tab 5: the bettor's own surface. Two scopes on one page — MY BETS (the
-// betslip: record tiles, open slips with live context, the settled ledger,
-// quick-log) and THE BOARD (the classic leaderboard: name · record · win% ·
-// the streak they're riding). MY BETS reuses UserBookSection's expanded
-// tracker wholesale — same machinery the Billfold YOU page mounts, one
-// source of truth. The board reads your_book_leaderboard_v2: streaks are
-// computed from DESIGNATED plays (streak_pick — the "star the bet that
-// counts" mechanic), falling back to a player's full verified run until
-// they star one. Verified-ledger-only ranking carries over: self-graded
-// manual bets show in YOUR tracker, never on the public board.
+// The bettor's own surface, living as Billfold header scopes: YOU (the
+// betslip: split book, open slips with live context, the settled ledger,
+// quick-log — UserBookSection expanded) and BOARD (ClassicLeaderboardView:
+// podium + classic table, name · record · win% · the streak they're riding).
+// The board reads your_book_leaderboard_v2: streaks are computed from
+// DESIGNATED plays (streak_pick — the "star the bet that counts" mechanic),
+// falling back to a player's full verified run until they star one.
+// Verified-ledger-only ranking carries over: self-graded manual bets show
+// in YOUR tracker, never on the public board.
 // ═════════════════════════════════════════════════════════════════════════════
 
 extension UserBookAPI {
@@ -2469,53 +2467,6 @@ extension UserBookAPI {
                           pushes: pushes, units: settled.reduce(0) { $0 + $1.units },
                           win_pct: pct, streak_len: curLen, streak_kind: curKind,
                           best_streak: best)
-    }
-}
-
-// ── The Book page (tab 5) ───────────────────────────────────────────────────
-
-struct BookTabView: View {
-    @AppStorage("bookScope") private var scope = "bets"   // bets | board
-
-    var body: some View {
-        ZStack {
-            LiquidGlassBackground()
-
-            VStack(spacing: 0) {
-                GaryPageHeader(title: "The", goldPart: "Book", trailing: {
-                    HStack(spacing: 14) {
-                        bookTab("MY BETS", isOn: scope == "bets") { scope = "bets" }
-                        bookTab("THE BOARD", isOn: scope == "board") { scope = "board" }
-                    }
-                })
-
-                ScrollView(showsIndicators: false) {
-                    if scope == "board" {
-                        ClassicLeaderboardView()
-                            .padding(.top, 6)
-                            .padding(.bottom, 120)
-                    } else {
-                        UserBookSection(expanded: true, showBoard: false)
-                            .padding(.top, 6)
-                            .padding(.bottom, 120)
-                    }
-                }
-            }
-        }
-    }
-
-    /// House selector grammar: text + underline bar, never a pill.
-    private func bookTab(_ label: String, isOn: Bool, tap: @escaping () -> Void) -> some View {
-        Button(action: tap) {
-            VStack(spacing: 3) {
-                Text(label)
-                    .font(GaryFonts.mono(10, bold: true)).tracking(1)
-                    .foregroundStyle(isOn ? GaryColors.gold : .white.opacity(0.5))
-                Rectangle().fill(isOn ? GaryColors.gold : .clear).frame(height: 1.5)
-            }
-            .fixedSize()
-        }
-        .buttonStyle(.plain)
     }
 }
 
