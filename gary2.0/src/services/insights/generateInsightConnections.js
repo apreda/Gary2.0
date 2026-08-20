@@ -63,6 +63,9 @@ import { computeNbaOwned } from './computers/nbaOwned.js';
 import { computeFootballTeamEdges } from './computers/footballTeamEdges.js';
 import { computeFootballMarketEdges } from './computers/footballMarketEdges.js';
 import { computeFootballMarketRange } from './computers/footballMarketRange.js';
+import { computeFootballAvailability } from './computers/footballAvailability.js';
+import { computeFootballQbWatch } from './computers/footballQbWatch.js';
+import { computeFootballSituational } from './computers/footballSituational.js';
 import { computeNflFantasyEdges } from './computers/nflFantasyEdges.js';
 import { computeNcaafFantasyEdges } from './computers/ncaafFantasyEdges.js';
 import { computeNcaafNextSlate } from './computers/ncaafNextSlate.js';
@@ -110,6 +113,12 @@ const FOOTBALL_COMPUTERS = [
   computeFootballTeamEdges,
   computeFootballMarketEdges,
   computeFootballMarketRange,
+  // NFL-native depth lanes (founder, Aug 20: the football Picks page carries
+  // the same depth of info as MLB's — NFL sections, not baseball's). Each
+  // no-ops for NCAAF: its feeds are NFL endpoints.
+  computeFootballAvailability,
+  computeFootballQbWatch,
+  computeFootballSituational,
 ];
 
 const NFL_COMPUTERS = [

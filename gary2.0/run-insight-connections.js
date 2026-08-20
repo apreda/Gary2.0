@@ -69,6 +69,13 @@ const REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/${TABLE}` : null;
 const VOLATILE_CATEGORIES = new Set([
   'streaking',
   'streak',
+  // Football availability + named starters change through a game day (a
+  // Questionable becomes an Out; a QB1 flips on a late depth-chart move) — a
+  // frozen morning snapshot would show a stale status at kickoff. Scoped by
+  // construction: MLB's replacement lane writes category 'beneficiary', so
+  // these two names replace-in-place only where football writes them.
+  'injury',
+  'quarterback',
   'pace_script',
   'market_range',
   'next_slate',

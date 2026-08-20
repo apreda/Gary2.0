@@ -10,10 +10,20 @@ const bdl = vi.hoisted(() => ({
   getNflAdvancedReceivingStats: vi.fn(),
   getNflPlayerGameLogsBatch: vi.fn(),
   getNcaafPlayerSeasonStats: vi.fn(),
+  getNflPlayerInjuries: vi.fn(),
+  getNflRosterDepth: vi.fn(),
+  getNflStandings: vi.fn(),
+  getNflPlayerSeasonStats: vi.fn(),
 }));
 
 vi.mock('../../../src/services/ballDontLieService.js', () => ({
   ballDontLieService: bdl,
+}));
+
+// The Gary layer is a live content-model call; tests keep the computed detail
+// by letting the read attach deterministically.
+vi.mock('../../../src/services/insights/solText.js', () => ({
+  generateSolText: vi.fn(async () => JSON.stringify({ reads: [] })),
 }));
 
 const {
@@ -69,6 +79,10 @@ beforeEach(() => {
   bdl.getNflAdvancedReceivingStats.mockResolvedValue([]);
   bdl.getNflPlayerGameLogsBatch.mockResolvedValue({});
   bdl.getNcaafPlayerSeasonStats.mockResolvedValue([]);
+  bdl.getNflPlayerInjuries.mockResolvedValue([]);
+  bdl.getNflRosterDepth.mockResolvedValue({ home: [], away: [] });
+  bdl.getNflStandings.mockResolvedValue([]);
+  bdl.getNflPlayerSeasonStats.mockResolvedValue([]);
 });
 
 describe('football season and exact-date slates', () => {
@@ -775,5 +789,121 @@ describe('football generator registration and row contract', () => {
       total: 36.5,
       row: { vendor: 'FanDuel' },
     });
+  });
+});
+
+describe('NFL depth lanes (availability, QB watch, situational)', () => {
+  // An August-dated run needs an August slate game — the ET slate filter
+  // rightly drops a September kickoff from an Aug 20 request.
+  const preseasonSlateGame = { ...nflSlateGame, date: '2026-08-21T00:00:00.000Z' };
+
+  const injuryReport = (overrides = {}) => ({
+    player: {
+      id: 112,
+      first_name: 'Tank',
+      last_name: 'Dell',
+      position: 'Wide Receiver',
+      position_abbreviation: 'WR',
+      team: { id: 2, abbreviation: 'MIA', full_name: 'Miami Dolphins', name: 'Dolphins' },
+    },
+    status: 'Questionable',
+    comment: 'Dell (knee) participated in full-team drills Monday, a beat reporter reports.',
+    date: '2026-09-08T15:00:00.000Z',
+    ...overrides,
+  });
+
+  it('carries the wire injury report verbatim with its date, capped and severity-first', async () => {
+    bdl.getGames.mockResolvedValue([nflSlateGame]);
+    bdl.getNflPlayerInjuries.mockResolvedValue([
+      injuryReport(),
+      injuryReport({
+        player: { id: 500, first_name: 'Left', last_name: 'Tackle', position_abbreviation: 'OT',
+                  team: { id: 1, abbreviation: 'BUF', full_name: 'Buffalo Bills', name: 'Bills' } },
+        status: 'Out',
+        comment: 'Tackle (back) has been ruled out.',
+      }),
+    ]);
+
+    const result = await generateInsightConnections({ date: '2026-09-10', league: 'NFL' });
+    const injuries = result.connections.filter((r) => r.category === 'injury');
+
+    expect(injuries.length).toBe(2);
+    // The season-ending word outranks the maybe.
+    expect(injuries[0].headline).toContain('Left Tackle (OT) is out for BUF');
+    expect(injuries[0].tone).toBe('bad');   // makeRow canon: caution -> bad
+    expect(injuries[0].value).toBe('OUT');
+    const dell = injuries.find((r) => r.player_id === 112);
+    expect(dell.detail).toContain('full-team drills');
+    expect(dell.detail).toContain('Reported Sep 8');
+    expect(dell.meta.source).toBe('balldontlie_player_injuries');
+    expect(injuries.every((r) => r.game_id === 900)).toBe(true);
+  });
+
+  it('names each starter with a real season line, labeling a prior-season line as such', async () => {
+    bdl.getGames.mockResolvedValue([preseasonSlateGame]);
+    bdl.getNflRosterDepth.mockResolvedValue({
+      home: [{ id: 57, name: 'Quality Starter', position: 'QB', depth: 1, college: 'Ohio State', experience: '4th Season', injuryStatus: null }],
+      away: [{ id: 91, name: 'Rookie Arm', position: 'QB', depth: 1, college: 'Oregon', experience: 'Rookie', injuryStatus: 'Questionable' }],
+    });
+    bdl.getNflPlayerSeasonStats.mockImplementation(async ({ playerId, season }) => {
+      if (playerId === 57 && season === 2025) {
+        return [{
+          games_played: 17, passing_yards: 4100, passing_completion_pct: 66.8,
+          yards_per_pass_attempt: 7.6, passing_touchdowns: 24, passing_interceptions: 9,
+        }];
+      }
+      return [];
+    });
+
+    const result = await generateInsightConnections({ date: '2026-08-20', league: 'NFL' });
+    const qbs = result.connections.filter((r) => r.category === 'quarterback' && r.player_id != null);
+
+    expect(qbs.length).toBe(2);
+    const vet = qbs.find((r) => r.player_id === 57);
+    expect(vet.headline).toBe('Quality Starter starts at quarterback for MIA');
+    expect(vet.detail).toContain('His 2025 season line');
+    expect(vet.detail).toContain('24-9 TD-INT');
+    expect(vet.meta.prior_season_line).toBe(true);
+    const rookie = qbs.find((r) => r.player_id === 91);
+    expect(rookie.detail).toContain('No 2026 or 2025 passing line on file yet');
+    expect(rookie.detail).toContain('listed questionable');
+  });
+
+  it('reads the standings as a preseason ledger in August and as the real table in season', async () => {
+    bdl.getGames.mockImplementation(async (sport, params) =>
+      (params?.dates?.[0] === '2026-08-20' ? [preseasonSlateGame] : [nflSlateGame]));
+    bdl.getNflStandings.mockResolvedValue([
+      { team: { id: 1, abbreviation: 'BUF', conference: 'AFC', division: 'EAST' },
+        wins: 1, losses: 0, ties: 0, overall_record: '1-0', home_record: '0-0', road_record: '1-0',
+        win_streak: 1, points_for: 28, points_against: 9, point_differential: 19 },
+      { team: { id: 2, abbreviation: 'MIA', conference: 'AFC', division: 'EAST' },
+        wins: 0, losses: 1, ties: 0, overall_record: '0-1', home_record: '0-1', road_record: '0-0',
+        win_streak: -1, points_for: 16, points_against: 24, point_differential: -8 },
+    ]);
+
+    const preseason = await generateInsightConnections({ date: '2026-08-20', league: 'NFL' });
+    const preRow = preseason.connections.find((r) => r.category === 'situational');
+    expect(preRow.detail).toContain('in the preseason');
+    expect(preRow.meta.preseason).toBe(true);
+    expect(preRow.headline).not.toContain('division game');
+
+    const inSeason = await generateInsightConnections({ date: '2026-09-10', league: 'NFL' });
+    const row = inSeason.connections.find((r) => r.category === 'situational');
+    expect(row.detail).toContain('this season');
+    expect(row.headline).toContain('a division game');
+    expect(row.detail).toContain('BUF is 1-0 on the road');
+    expect(row.meta.source).toBe('balldontlie_standings');
+  });
+
+  it('keeps every NFL depth lane an NCAAF no-op because its feeds are NFL endpoints', async () => {
+    bdl.getGames.mockResolvedValue([]);
+    bdl.getTeams.mockResolvedValue([]);
+    bdl.getNflPlayerInjuries.mockResolvedValue([injuryReport()]);
+
+    const result = await generateInsightConnections({ date: '2026-09-12', league: 'NCAAF' });
+    expect(result.connections.filter((r) => ['injury', 'situational'].includes(r.category))).toEqual([]);
+    expect(bdl.getNflPlayerInjuries).not.toHaveBeenCalled();
+    expect(bdl.getNflStandings).not.toHaveBeenCalled();
+    expect(bdl.getNflRosterDepth).not.toHaveBeenCalled();
   });
 });

@@ -347,6 +347,23 @@ function pointsFor(row, teamId) {
   return null;
 }
 
+// The other side of the same final: a team's box row carries the full game
+// object, so points allowed is the opponent's score — no extra fetch, and no
+// join against boxes we never pulled.
+function pointsAgainst(row, teamId) {
+  const game = row?.game;
+  if (!game) return null;
+  const homeId = game?.home_team?.id ?? game?.home_team_id;
+  const awayId = game?.away_team?.id ?? game?.visitor_team?.id ?? game?.away_team_id ?? game?.visitor_team_id;
+  if (String(teamId) === String(homeId)) {
+    return finiteValue(game?.visitor_team_score ?? game?.away_score);
+  }
+  if (String(teamId) === String(awayId)) {
+    return finiteValue(game?.home_team_score ?? game?.home_score);
+  }
+  return null;
+}
+
 function accumulator(teamId) {
   return {
     teamId,
@@ -386,6 +403,7 @@ export function aggregateFootballTeamStats(rows, { league } = {}) {
     add(acc, 'sacks', row?.sacks);
     add(acc, 'possessionSeconds', possessionSeconds(row?.possession_time));
     add(acc, 'points', pointsFor(row, teamId));
+    add(acc, 'pointsAllowed', pointsAgainst(row, teamId));
 
     const made = finiteValue(row?.third_down_conversions);
     const attempts = finiteValue(row?.third_down_attempts);
@@ -418,6 +436,7 @@ export function aggregateFootballTeamStats(rows, { league } = {}) {
       sacksPerGame: average('sacks'),
       possessionSecondsPerGame: average('possessionSeconds'),
       pointsPerGame: average('points'),
+      pointsAllowedPerGame: average('pointsAllowed'),
       thirdDownPct: acc.thirdDownAttempts > 0
         ? (acc.thirdDownMade / acc.thirdDownAttempts) * 100
         : null,

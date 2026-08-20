@@ -6,10 +6,20 @@
 // assumptions, SP+, FPI, EPA, havoc, or missing-data substitution appears here.
 
 import { makeRow, TONES } from '../shared.js';
+import { attachLaneReads, detailFact } from '../laneReads.js';
 import {
   aggregateFootballTeamStats,
   loadFootballTeamGameStats,
 } from '../footballData.js';
+
+// Possession renders as minutes, not raw seconds — "31:24 per game".
+function clockText(seconds) {
+  const n = Number(seconds);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const mins = Math.floor(n / 60);
+  const secs = Math.round(n % 60);
+  return `${mins}:${String(secs).padStart(2, '0')}`;
+}
 
 const METRICS = Object.freeze([
   Object.freeze({
@@ -61,6 +71,37 @@ const METRICS = Object.freeze([
     better: 'high',
     threshold: { nfl: 0.4, ncaaf: 0.5 },
     headline: (leader, gap) => `${leader} owns a +${gap} yards-per-play gap`,
+  }),
+  Object.freeze({
+    key: 'pointsAllowedPerGame',
+    category: 'pace_script',
+    label: 'points allowed per game',
+    short: 'PTS ALLOWED / G',
+    decimals: 1,
+    better: 'low',
+    threshold: { nfl: 3, ncaaf: 4 },
+    headline: (leader, gap) => `${leader}'s defense gives up ${gap} fewer points per game`,
+  }),
+  Object.freeze({
+    key: 'thirdDownPct',
+    category: 'situational',
+    label: 'third-down conversion rate',
+    short: '3RD DOWN %',
+    decimals: 1,
+    better: 'high',
+    threshold: { nfl: 5, ncaaf: 6 },
+    headline: (leader, gap) => `${leader} converts third downs at a +${gap}% clip`,
+  }),
+  Object.freeze({
+    key: 'possessionSecondsPerGame',
+    category: 'pace_script',
+    label: 'time of possession per game',
+    short: 'POSSESSION',
+    decimals: 0,
+    better: 'high',
+    display: clockText,
+    threshold: { nfl: 120, ncaaf: 150 },
+    headline: (leader, gap) => `${leader} holds the ball ${gap} longer per game`,
   }),
   Object.freeze({
     // In the official NFL team box schema, `sacks` lives with the passing
@@ -164,9 +205,10 @@ export async function computeFootballTeamEdges(ctx) {
         ? Number(awayValue) < Number(homeValue)
         : Number(awayValue) > Number(homeValue);
       const leader = awayLeads ? sides.away : sides.home;
-      const gapText = fixed(gap, metric.decimals);
-      const awayText = fixed(awayValue, metric.decimals);
-      const homeText = fixed(homeValue, metric.decimals);
+      const show = metric.display || ((v) => fixed(v, metric.decimals));
+      const gapText = show(gap);
+      const awayText = show(awayValue);
+      const homeText = show(homeValue);
       if (gapText == null || awayText == null || homeText == null) continue;
 
       rows.push(makeRow({
@@ -195,6 +237,10 @@ export async function computeFootballTeamEdges(ctx) {
       }));
     }
   }
+
+  await attachLaneReads('footballTeamEdges', rows, detailFact, {
+    ask: 'what this statistical gap actually means for how the game gets played — who dictates the style, how it collides with the other side\'s identity, and where the sample could mislead',
+  });
 
   console.log(`[footballTeamEdges] ${league.toUpperCase()} ${date}: ${raw.length} BDL team boxes -> ${rows.length} row(s)`);
   return rows;

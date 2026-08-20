@@ -3,6 +3,7 @@
 // the same exact-date slate. Missing/incomplete markets simply emit nothing.
 
 import { makeRow, TONES, median } from '../shared.js';
+import { attachLaneReads, detailFact } from '../laneReads.js';
 import { selectFootballOddsByGame } from '../footballData.js';
 
 const DEVIATION_MIN = Object.freeze({ nfl: 3.5, ncaaf: 4 });
@@ -73,6 +74,10 @@ export async function computeFootballMarketEdges(ctx) {
       },
     }));
   }
+
+  await attachLaneReads('footballMarketEdges', rows, detailFact, {
+    ask: 'what a total sitting this far from the slate median says about how scoring is expected to arrive in this one — and what would have to be true tonight for that expectation to crack',
+  });
 
   console.log(`[footballMarketEdges] ${league.toUpperCase()} ${date}: ${slateTotals.length} totals -> ${rows.length} row(s)`);
   return rows;
