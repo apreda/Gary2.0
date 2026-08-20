@@ -20,6 +20,11 @@ struct FootballGameIntelView: View {
     /// only after the pick lands at T-90).
     var wire: [SupabaseAPI.WireItem] = []
 
+    /// THE TRACK RECORD source — Gary's own graded history with these two
+    /// franchises (founder, Aug 20: sections ESPN can't run; the receipts
+    /// ARE the app). Football era only, so the window starts at camp.
+    @State private var trackResults: [GameResult] = []
+
     private var normalizedLeague: String { league.uppercased() }
     private var isCollege: Bool { normalizedLeague == "NCAAF" }
     private var accent: Color {
@@ -124,6 +129,57 @@ struct FootballGameIntelView: View {
         morningRows([.paceScript, .turnoverEdge, .explosivePlay, .trenches], cap: 5)
     }
     private var standingsRows: [Signal] { morningRows([.situational], cap: 2) }
+    private var mismatchRow: Signal? { morningRows([.mismatch], cap: 1).first }
+
+    // THE TRACK RECORD: Gary's graded record on each franchise's games,
+    // the run he's on with them, and his last call — from game_results,
+    // the same public ledger every record on the site reads.
+    struct TeamTrack {
+        let label: String
+        let wins: Int
+        let losses: Int
+        let pushes: Int
+        let runLabel: String?
+        let lastLine: String?
+        var record: String { "\(wins)-\(losses)\(pushes > 0 ? "-\(pushes)" : "")" }
+    }
+
+    private func teamTrack(sideLabel: String, fullName: String?) -> TeamTrack? {
+        let keys = [sideLabel, (fullName ?? "").components(separatedBy: " ").last ?? ""]
+            .map { $0.lowercased() }.filter { !$0.isEmpty }
+        let mine = trackResults.filter { r in
+            guard (r.league ?? "").uppercased() == normalizedLeague,
+                  let m = r.matchup?.lowercased() else { return false }
+            return keys.contains(where: { m.contains($0) })
+        }
+        let decided = mine.filter { ["won", "lost", "push"].contains(($0.result ?? "").lowercased()) }
+            .sorted { ($0.game_date ?? "") > ($1.game_date ?? "") }
+        guard !decided.isEmpty else { return nil }
+        let wins = decided.filter { $0.result?.lowercased() == "won" }.count
+        let losses = decided.filter { $0.result?.lowercased() == "lost" }.count
+        let pushes = decided.filter { $0.result?.lowercased() == "push" }.count
+        let winLoss = decided.filter { ["won", "lost"].contains(($0.result ?? "").lowercased()) }
+        var runLabel: String? = nil
+        if let first = winLoss.first {
+            let kind = first.result?.lowercased() == "won" ? "W" : "L"
+            let len = winLoss.prefix(while: { ($0.result ?? "").lowercased() == first.result?.lowercased() }).count
+            runLabel = "\(kind)\(len)"
+        }
+        var lastLine: String? = nil
+        if let last = decided.first, let pick = last.pick_text, !pick.isEmpty {
+            let verdict = (last.result ?? "").uppercased()
+            let day = (last.game_date ?? "").suffix(5).replacingOccurrences(of: "-", with: "/")
+            lastLine = "LAST: \(verdict) \(day) — \(pick)"
+        }
+        return TeamTrack(label: sideLabel, wins: wins, losses: losses, pushes: pushes,
+                         runLabel: runLabel, lastLine: lastLine)
+    }
+
+    private var trackRecords: [TeamTrack] {
+        [teamTrack(sideLabel: sides.away, fullName: primaryPick?.awayTeam ?? row?.away_team),
+         teamTrack(sideLabel: sides.home, fullName: primaryPick?.homeTeam ?? row?.home_team)]
+            .compactMap { $0 }
+    }
 
     /// One line per team off the wire: today's injury first, else today's
     /// pace/line note — the same selection the MLB scout uses. Team keys are
@@ -166,8 +222,14 @@ struct FootballGameIntelView: View {
                 if !qbRows.isEmpty {
                     FootballQBSection(rows: qbRows, accent: accent)
                 }
+                if let mismatchRow {
+                    FootballMismatchSection(signal: mismatchRow, accent: accent)
+                }
                 if availability.isEmpty, !injuryWireRows.isEmpty {
                     FootballInjuryWireSection(rows: injuryWireRows, accent: accent)
+                }
+                if !trackRecords.isEmpty {
+                    FootballTrackRecordSection(tracks: trackRecords, accent: accent)
                 }
                 if !numberRailRows.isEmpty {
                     FootballNumbersSection(rows: numberRailRows, accent: accent)
@@ -202,11 +264,19 @@ struct FootballGameIntelView: View {
                     FootballQBSection(rows: qbRows, accent: accent)
                 }
 
+                if let mismatchRow {
+                    FootballMismatchSection(signal: mismatchRow, accent: accent)
+                }
+
                 // The dossier's availability block (with the pick, below)
                 // supersedes the raw wire once Gary has spoken — each fact
                 // lives once on the page.
                 if availability.isEmpty, !injuryWireRows.isEmpty {
                     FootballInjuryWireSection(rows: injuryWireRows, accent: accent)
+                }
+
+                if !trackRecords.isEmpty {
+                    FootballTrackRecordSection(tracks: trackRecords, accent: accent)
                 }
 
                 if !numberRailRows.isEmpty {
@@ -234,6 +304,17 @@ struct FootballGameIntelView: View {
                 FootballSweatSection(signals: sweatSignals, accent: accent)
             }
         }
+        .task { await loadTrackRecord() }
+    }
+
+    /// One cached ledger read per page life — the same public game_results
+    /// every record on the site derives from. Football-era window; an empty
+    /// or failed read stores nothing (day-cache law).
+    private func loadTrackRecord() async {
+        guard trackResults.isEmpty else { return }
+        guard let rows = try? await SupabaseAPI.fetchAllGameResults(since: "2026-08-01") else { return }
+        let mine = rows.filter { ($0.league ?? "").uppercased() == normalizedLeague }
+        if !mine.isEmpty { trackResults = mine }
     }
 }
 
@@ -1285,16 +1366,17 @@ struct FootballPicksBoard: View {
         // game page, where that identity is available.
         case .marketRange: return nil
         case .injury: return 3
-        case .trenches: return 4
-        case .quarterback: return 5
-        case .passRush: return 6
-        case .paceScript: return 7
-        case .redZone: return 8
-        case .turnoverEdge: return 9
-        case .explosivePlay: return 10
-        case .coverage: return 11
-        case .specialTeams: return 12
-        case .situational, .coaching: return 13
+        case .mismatch: return 4
+        case .trenches: return 5
+        case .quarterback: return 6
+        case .passRush: return 7
+        case .paceScript: return 8
+        case .redZone: return 9
+        case .turnoverEdge: return 10
+        case .explosivePlay: return 11
+        case .coverage: return 12
+        case .specialTeams: return 13
+        case .situational, .coaching: return 14
         default: return nil
         }
     }
@@ -1355,6 +1437,7 @@ private struct FootballPicksBoardRow: View {
         case .injury: return "AVAILABILITY"
         case .trenches: return "GROUND GAME"
         case .quarterback: return "QB WATCH"
+        case .mismatch: return "THE MISMATCH"
         case .passRush: return "PASS RUSH"
         case .paceScript: return "GAME TOTAL"
         case .redZone: return "RED ZONE"
@@ -1888,6 +1971,92 @@ private struct FootballStandingsSection: View {
                 }
             }
             .footballPanel(accent: accent)
+            .padding(.horizontal, 16)
+        }
+    }
+}
+
+// MARK: - THE MISMATCH + THE TRACK RECORD (Aug 20, founder's two-new-sections order)
+
+// THE MISMATCH — the game's single widest unit gap, named as a collision.
+// One computed row per game (footballMismatch.js, same verified team boxes
+// as the numbers rail); Gary's read rides in signal.detail.
+private struct FootballMismatchSection: View {
+    let signal: Signal
+    let accent: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FootballSectionTitle(title: "The Mismatch", accent: accent)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(signal.headline)
+                    .font(GaryFonts.text(15, .semibold))
+                    .foregroundStyle(GaryColors.warmWhite)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !signal.value.isEmpty {
+                    Text(signal.value)
+                        .font(GaryFonts.display(24)).tracking(0.5)
+                        .foregroundStyle(GaryColors.gold)
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                }
+                if !signal.detail.isEmpty {
+                    Text(signal.detail)
+                        .font(GaryFonts.text(13))
+                        .foregroundStyle(.white.opacity(0.62))
+                        .lineSpacing(3.5)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
+            .footballPanel(accent: accent)
+            .padding(.horizontal, 16)
+        }
+    }
+}
+
+// THE TRACK RECORD — Gary's own graded history with each franchise: his
+// record on their games, the run he's riding with them, and his last call
+// with its verdict. The one section no other outlet can print.
+private struct FootballTrackRecordSection: View {
+    let tracks: [FootballGameIntelView.TeamTrack]
+    let accent: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FootballSectionTitle(title: "The Track Record", accent: accent, trailing: "GARY ON THESE TEAMS")
+            HStack(spacing: 8) {
+                ForEach(Array(tracks.enumerated()), id: \.offset) { _, track in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(track.label.uppercased())
+                            .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
+                            .foregroundStyle(.white.opacity(0.5))
+                        HStack(alignment: .firstTextBaseline, spacing: 7) {
+                            Text(track.record)
+                                .font(GaryFonts.text(22, .heavy))
+                                .foregroundStyle(GaryColors.warmWhite)
+                            if let run = track.runLabel {
+                                Text(run)
+                                    .font(GaryFonts.mono(11, bold: true))
+                                    .foregroundStyle(run.hasPrefix("W") ? GaryColors.gold : HubPalette.red)
+                            }
+                        }
+                        if let last = track.lastLine {
+                            Text(last)
+                                .font(GaryFonts.mono(8.5)).tracking(0.3)
+                                .foregroundStyle(.white.opacity(0.45))
+                                .lineLimit(2).minimumScaleFactor(0.8)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 11)
+                    .footballPanel(accent: accent)
+                }
+            }
             .padding(.horizontal, 16)
         }
     }

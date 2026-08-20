@@ -66,6 +66,7 @@ import { computeFootballMarketRange } from './computers/footballMarketRange.js';
 import { computeFootballAvailability } from './computers/footballAvailability.js';
 import { computeFootballQbWatch } from './computers/footballQbWatch.js';
 import { computeFootballSituational } from './computers/footballSituational.js';
+import { computeFootballMismatch } from './computers/footballMismatch.js';
 import { computeNflFantasyEdges } from './computers/nflFantasyEdges.js';
 import { computeNcaafFantasyEdges } from './computers/ncaafFantasyEdges.js';
 import { computeNcaafNextSlate } from './computers/ncaafNextSlate.js';
@@ -119,6 +120,7 @@ const FOOTBALL_COMPUTERS = [
   computeFootballAvailability,
   computeFootballQbWatch,
   computeFootballSituational,
+  computeFootballMismatch,
 ];
 
 const NFL_COMPUTERS = [

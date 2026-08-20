@@ -20878,6 +20878,9 @@ enum SignalKind {
     // labels, so an NFL/NCAAF edge always says exactly what its source measured.
     case trenches, quarterback, passRush, coverage, paceScript
     case redZone, turnoverEdge, explosivePlay, specialTeams, coaching
+    // THE MISMATCH (Aug 20): the game's single widest unit gap, one row per
+    // game from the same verified team boxes teamEdges reads.
+    case mismatch
     // Football-only product modules: live factor tracking on a game page and
     // the post-publish market receipt in The Hub.
     case theSweat, afterGary, marketRange, nextSlate
@@ -20914,6 +20917,7 @@ enum SignalKind {
         case .bullpenFatigue: return "bolt.slash.fill"
         case .trenches: return "shield.lefthalf.filled"
         case .quarterback: return "football.fill"
+        case .mismatch: return "arrow.right.and.line.vertical.and.arrow.left"
         case .passRush: return "bolt.fill"
         case .coverage: return "lock.shield.fill"
         case .paceScript: return "metronome.fill"
@@ -20980,6 +20984,7 @@ enum SignalKind {
         case .bullpenFatigue: return "BULLPEN"
         case .trenches: return "THE TRENCHES"
         case .quarterback: return "QUARTERBACKS"
+        case .mismatch: return "THE MISMATCH"
         case .passRush: return "PASS RUSH"
         case .coverage: return "COVERAGE"
         case .paceScript: return "PACE & SCRIPT"
@@ -25128,6 +25133,7 @@ extension SignalKind {
         // honest UI label instead of being dropped as unknown.
         case "trenches", "the_trenches", "ol_dl", "line_play", "line_of_scrimmage": return .trenches
         case "quarterback", "quarterbacks", "qb", "qb_matchup": return .quarterback
+        case "mismatch", "the_mismatch": return .mismatch
         case "pass_rush", "pressure", "pressure_rate": return .passRush
         case "coverage", "secondary", "coverage_matchup": return .coverage
         case "pace_script", "pace_and_script", "game_script", "tempo": return .paceScript

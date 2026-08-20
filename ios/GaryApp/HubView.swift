@@ -750,7 +750,7 @@ struct HubView: View {
              .runningGame, .parkWeather:             anchor = "matchups"
         case .tournament, .advancement:              anchor = "cup"
         case .xgRegression, .xgRecap:                anchor = "numbers"
-        case .trenches, .passRush:                   anchor = "edges"
+        case .trenches, .passRush, .mismatch:        anchor = "edges"
         case .quarterback:                           anchor = "edges"
         case .coverage, .paceScript, .redZone,
              .turnoverEdge, .explosivePlay,
