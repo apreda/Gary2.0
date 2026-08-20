@@ -997,9 +997,11 @@ struct UserBookSection: View {
         func half(_ title: String, _ r: (w: Int, l: Int, p: Int, units: Double),
                   decided: Int, run: String?, stroked: Bool) -> some View {
             VStack(alignment: .leading, spacing: 3) {
+                // Mock 15: both labels stay quiet — the gold STROKE alone
+                // marks the verified half.
                 Text(title)
                     .font(GaryFonts.mono(8, bold: true)).tracking(0.9)
-                    .foregroundStyle(stroked ? GaryColors.gold.opacity(0.9) : .white.opacity(0.4))
+                    .foregroundStyle(.white.opacity(0.4))
                 Text("\(r.w)-\(r.l)\(r.p > 0 ? "-\(r.p)" : "")")
                     .font(GaryFonts.text(24, .heavy))
                     .foregroundStyle(.white.opacity(0.92))
@@ -1008,8 +1010,10 @@ struct UserBookSection: View {
                         Text(String(format: "%.1f%%", Double(r.w) / Double(decided) * 100))
                     }
                     if let run {
+                        if decided > 0 { Text("·").foregroundStyle(.white.opacity(0.3)) }
                         Text(run).foregroundStyle(run.hasPrefix("W") ? GaryColors.gold : GaryColors.loss)
                     }
+                    if decided > 0 || run != nil { Text("·").foregroundStyle(.white.opacity(0.3)) }
                     Text(BookMoney.netTotal(r.units))
                         .foregroundStyle(r.units >= 0 ? GaryColors.win : GaryColors.loss)
                 }
@@ -2633,43 +2637,55 @@ struct ClassicLeaderboardView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - The podium (founder pick, mock 03)
+    // MARK: - The podium (founder pick, mock 03 — built to the mock's exact
+    // metrics: 1fr / 1.25fr / 1fr columns bottom-aligned, 12px side padding
+    // vs 18px on first, place kicker 15 on every tile, streak numeral 22 on
+    // first / 15 on the sides, 2-3-5 stack gaps).
+
+    private func podiumTile(_ place: String, _ row: UserBookAPI.BoardRowV2, first: Bool) -> some View {
+        let isGary = row.display_name == "GARY A.I."
+        return VStack(spacing: 0) {
+            Text(place)
+                .font(GaryFonts.display(15)).tracking(0.8)
+                .foregroundStyle(GaryColors.gold)
+            Text(row.display_name)
+                .font(GaryFonts.text(12, .bold))
+                .foregroundStyle(isGary ? GaryColors.gold : .white.opacity(0.92))
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .padding(.top, 2)
+            Text("\(row.record) · \(String(format: "%.1f", row.win_pct))%")
+                .font(GaryFonts.mono(10.5))
+                .foregroundStyle(.white.opacity(0.6))
+                .padding(.top, 3)
+            Text(row.streakLabel)
+                .font(GaryFonts.mono(first ? 22 : 15, bold: true))
+                .foregroundStyle(streakColor(row))
+                .padding(.top, 5)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, first ? 18 : 12)
+        .padding(.horizontal, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(GaryColors.cardBg)
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(first ? GaryColors.gold.opacity(0.45) : Color.white.opacity(0.08), lineWidth: 1))
+        )
+    }
 
     private var podium: some View {
         let top = Array(sorted.prefix(3))
-        func tile(_ place: String, _ row: UserBookAPI.BoardRowV2, first: Bool) -> some View {
-            let isGary = row.display_name == "GARY A.I."
-            return VStack(spacing: 3) {
-                Text(place)
-                    .font(GaryFonts.display(first ? 15 : 13)).tracking(0.8)
-                    .foregroundStyle(GaryColors.gold)
-                Text(row.display_name)
-                    .font(GaryFonts.text(first ? 13.5 : 12, .bold))
-                    .foregroundStyle(isGary ? GaryColors.gold : .white.opacity(0.92))
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                Text("\(row.record) · \(String(format: "%.1f", row.win_pct))%")
-                    .font(GaryFonts.mono(9.5))
-                    .foregroundStyle(.white.opacity(0.55))
-                Text(row.streakLabel)
-                    .font(GaryFonts.mono(first ? 19 : 14, bold: true))
-                    .foregroundStyle(streakColor(row))
-                    .padding(.top, 1)
+        return GeometryReader { geo in
+            let gap: CGFloat = 8
+            let side = (geo.size.width - gap * 2) / 3.25
+            HStack(alignment: .bottom, spacing: gap) {
+                if top.count > 1 { podiumTile("2ND", top[1], first: false).frame(width: side) }
+                podiumTile("1ST", top[0], first: true).frame(width: side * 1.25)
+                if top.count > 2 { podiumTile("3RD", top[2], first: false).frame(width: side) }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, first ? 16 : 11)
-            .padding(.horizontal, 4)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(GaryColors.cardBg)
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(first ? GaryColors.gold.opacity(0.45) : Color.white.opacity(0.08), lineWidth: 1))
-            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         }
-        return HStack(alignment: .bottom, spacing: 8) {
-            if top.count > 1 { tile("2ND", top[1], first: false) }
-            tile("1ST", top[0], first: true)
-            if top.count > 2 { tile("3RD", top[2], first: false) }
-        }
+        .frame(height: 126)
     }
 
     // MARK: - The board card
@@ -2680,11 +2696,9 @@ struct ClassicLeaderboardView: View {
         return VStack(spacing: 0) {
             columnHeader
             ForEach(field, id: \.element.id) { index, row in
+                // Mock grammar: full-width hairline between rows, no inset.
+                Rectangle().fill(Color.white.opacity(0.05)).frame(height: 0.5)
                 boardRow(rank: index + 1, row: row)
-                if row.id != field.last?.element.id {
-                    Rectangle().fill(Color.white.opacity(0.05)).frame(height: 0.5)
-                        .padding(.leading, 44)
-                }
             }
         }
         .background(
@@ -2697,14 +2711,14 @@ struct ClassicLeaderboardView: View {
 
     private var columnHeader: some View {
         HStack(spacing: 10) {
-            Text("#").frame(width: 26, alignment: .leading)
+            Text("#").frame(width: 22, alignment: .leading)
             Text("PLAYER").frame(maxWidth: .infinity, alignment: .leading)
             Text("W-L").frame(width: 52, alignment: .trailing)
-            Text("WIN%").frame(width: 46, alignment: .trailing)
-            Text("STRK").frame(width: 40, alignment: .trailing)
+            Text("WIN%").frame(width: 44, alignment: .trailing)
+            Text("STRK").frame(width: 36, alignment: .trailing)
         }
-        .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
-        .foregroundStyle(.white.opacity(0.38))
+        .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
+        .foregroundStyle(.white.opacity(0.35))
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
     }
@@ -2716,7 +2730,7 @@ struct ClassicLeaderboardView: View {
             Text("\(rank)")
                 .font(GaryFonts.mono(12, bold: rank <= 3))
                 .foregroundStyle(rank <= 3 ? GaryColors.gold : .white.opacity(0.45))
-                .frame(width: 26, alignment: .leading)
+                .frame(width: 22, alignment: .leading)
 
             HStack(spacing: 6) {
                 if isGary {
@@ -2728,7 +2742,7 @@ struct ClassicLeaderboardView: View {
                 Text(row.display_name)
                     .font(GaryFonts.text(14, .semibold))
                     .foregroundStyle(isGary ? GaryColors.gold : .white.opacity(0.92))
-                    .lineLimit(1)
+                    .lineLimit(1).minimumScaleFactor(0.75)
                 if isMe {
                     Text("YOU")
                         .font(GaryFonts.mono(8, bold: true)).tracking(0.8)
@@ -2739,20 +2753,25 @@ struct ClassicLeaderboardView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
+            // Scale-never-truncate on the number columns: Gary's 209-176 is
+            // wider than any player record the width was drawn for.
             Text(row.record)
                 .font(GaryFonts.mono(12))
                 .foregroundStyle(.white.opacity(0.85))
+                .lineLimit(1).minimumScaleFactor(0.7)
                 .frame(width: 52, alignment: .trailing)
 
             Text(String(format: "%.1f", row.win_pct))
                 .font(GaryFonts.mono(12))
                 .foregroundStyle(.white.opacity(0.6))
-                .frame(width: 46, alignment: .trailing)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .frame(width: 44, alignment: .trailing)
 
             Text(row.streakLabel)
                 .font(GaryFonts.mono(12, bold: row.streak_len >= 3))
                 .foregroundStyle(streakColor(row))
-                .frame(width: 40, alignment: .trailing)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .frame(width: 36, alignment: .trailing)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
