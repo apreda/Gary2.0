@@ -1185,24 +1185,19 @@ struct FootballPicksBoard: View {
 
     var body: some View {
         if !rows.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                FootballSectionTitle(
-                    title: isCollege ? "Saturday Board" : "Slate Read",
-                    accent: accent,
-                    trailing: "\(rows.count) GAMES"
-                )
-
-                VStack(spacing: 0) {
-                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, signal in
-                        FootballPicksBoardRow(signal: signal, accent: accent)
-                        if index < rows.count - 1 {
-                            Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
-                        }
+            // NO section header (founder, Aug 20: "remove the dash and the
+            // header name") — the rows' own kickers carry the identity; the
+            // card leads directly.
+            VStack(spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, signal in
+                    FootballPicksBoardRow(signal: signal, accent: accent)
+                    if index < rows.count - 1 {
+                        Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
                     }
                 }
-                .footballPanel(accent: accent)
-                .padding(.horizontal, 16)
             }
+            .footballPanel(accent: accent)
+            .padding(.horizontal, 16)
         }
     }
 }
