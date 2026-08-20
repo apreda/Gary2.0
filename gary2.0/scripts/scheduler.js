@@ -87,6 +87,21 @@ if (!existsSync(LOG_DIR)) mkdirSync(LOG_DIR, { recursive: true });
 const LEAD_TIME_MINUTES = 90;       // Primary trigger (kept for any external reference)
 const RETRY_LEAD_TIMES_MINUTES = [90, 60, 30, 15]; // First → fallbacks → final
 
+// Football fires EARLY (founder, Aug 20): starters and depth charts are known
+// days out — college publishes no inactives report at all, and the NFL's
+// official inactives land at exactly T-90, which is why the old ladder began
+// there. Waiting cost the page the whole afternoon. Football's first attempt
+// now fires at T-240; T-90 stays in the ladder so a slate whose earlier tiers
+// failed still gets a look at the inactives moment, with T-30 as the final
+// net. MLB's ladder is untouched — its T-90 start is the LINEUP gate, not a
+// preference.
+const FOOTBALL_RETRY_LEAD_TIMES_MINUTES = [240, 180, 90, 30];
+function retryLeadTimesFor(sportKey) {
+  return (sportKey === 'americanfootball_nfl' || sportKey === 'americanfootball_ncaaf')
+    ? FOOTBALL_RETRY_LEAD_TIMES_MINUTES
+    : RETRY_LEAD_TIMES_MINUTES;
+}
+
 const SPORTS = [
   { key: 'americanfootball_nfl', flag: '--nfl', label: 'NFL', propsScript: 'run-agentic-nfl-props.js' },
   // Live college props come from The Odds API and are BDL roster/stat
@@ -399,8 +414,9 @@ function scheduleGamesForSport(sport, games, etDateStr, { logGames = true } = {}
         tierLabels.push(`fixed=${triggerET}`);
       }
     } else {
-      for (let i = 0; i < RETRY_LEAD_TIMES_MINUTES.length; i++) {
-        const leadMin = RETRY_LEAD_TIMES_MINUTES[i];
+      const leadTimes = retryLeadTimesFor(sport.key);
+      for (let i = 0; i < leadTimes.length; i++) {
+        const leadMin = leadTimes[i];
         const triggerTime = new Date(startTime.getTime() - leadMin * 60 * 1000);
         entries.push({ sport, matchup, homeTeam, awayTeam, startTime, triggerTime, gameId: game.id, tier: i + 1, leadMin, ...slateIdentity, ...scheduleState });
         const triggerET = triggerTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
