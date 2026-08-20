@@ -18,6 +18,12 @@ extension AppFlags {
     /// surface rides the bridge and returns automatically when `storeSafe`
     /// flips off (the pre-bridge value was a plain `true`).
     static var userBookEnabled: Bool { !storeSafe }
+
+    /// Pre-launch sample players on the classic board (founder, Aug 20).
+    /// FLIP TO FALSE AT LAUNCH (Sep 5) — the launch board is real records
+    /// only; the labeled stand-ins exist so the board reads like a board
+    /// while the real ledger is empty.
+    static let bookPreviewCast = true
 }
 
 struct UserBet: Codable, Identifiable {
@@ -764,6 +770,9 @@ struct UserBookSection: View {
     /// Compact = inline module; expanded = the Billfold YOU page (more slips,
     /// sign-in button instead of a pitch line).
     var expanded: Bool = false
+    /// The Book tab hosts the standings in its own THE BOARD scope — it
+    /// mounts this section with showBoard=false so the board lives once.
+    var showBoard: Bool = true
     @State private var bets: [UserBet] = []
     @State private var loading = true
     @State private var showQuickLog = false
@@ -858,11 +867,12 @@ struct UserBookSection: View {
                     .foregroundStyle(.white.opacity(0.6))
                     .fixedSize(horizontal: false, vertical: true)
             } else if expanded {
-                // The full tracker: crown, filters, records, tiles, the profit
-                // line, open slips with live context, then the day ledger.
+                // The full tracker: crown, filters, the split book (founder
+                // pick Aug 20, mock 15 — verified half vs self-graded half),
+                // tiles, the profit line, open slips, then the day ledger.
                 streakCrown
                 trackerFilters
-                ledgerHeader
+                splitBookHeader
                 statTiles
                 if profitPoints.count >= 2 { profitChart }
                 pendingBlock
@@ -871,7 +881,7 @@ struct UserBookSection: View {
                 ledgerHeader
                 slipsList
             }
-            if expanded { UserBookLeaderboard() }
+            if expanded, showBoard { UserBookLeaderboard() }
         }
         .padding(16)
         .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.035)))
@@ -957,6 +967,70 @@ struct UserBookSection: View {
         for b in graded { if b.status == "won" { count += 1 } else { break } }
         guard count >= 2 else { return nil }
         return "Riding a \(count)-bet heater"
+    }
+
+    /// "W5" / "L2" — the newest-back run through a lane's settled rows,
+    /// pushes skipped. Nil until the lane has a decided bet.
+    private func runLabel(_ rows: [UserBet]) -> String? {
+        let decided = rows
+            .filter { $0.status == "won" || $0.status == "lost" }
+            .sorted { a, b in
+                a.game_date == b.game_date
+                    ? (a.placed_at ?? "") > (b.placed_at ?? "")
+                    : a.game_date > b.game_date
+            }
+        guard let first = decided.first else { return nil }
+        let kind = first.status
+        let len = decided.prefix(while: { $0.status == kind }).count
+        return "\(kind == "won" ? "W" : "L")\(len)"
+    }
+
+    /// THE SPLIT BOOK (founder pick Aug 20, mock 15): the verified WITH GARY
+    /// half wears the gold stroke; the self-graded YOUR PLAYS half stays
+    /// neutral and labeled. The two ledgers never mix — this panel is the
+    /// page saying so.
+    private var splitBookHeader: some View {
+        let g = record(scopedWithGary.filter { !$0.isPending })
+        let m = record(scopedYourPlays.filter { !$0.isPending })
+        let gDecided = g.w + g.l
+        let mDecided = m.w + m.l
+        func half(_ title: String, _ r: (w: Int, l: Int, p: Int, units: Double),
+                  decided: Int, run: String?, stroked: Bool) -> some View {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(GaryFonts.mono(8, bold: true)).tracking(0.9)
+                    .foregroundStyle(stroked ? GaryColors.gold.opacity(0.9) : .white.opacity(0.4))
+                Text("\(r.w)-\(r.l)\(r.p > 0 ? "-\(r.p)" : "")")
+                    .font(GaryFonts.text(24, .heavy))
+                    .foregroundStyle(.white.opacity(0.92))
+                HStack(spacing: 5) {
+                    if decided > 0 {
+                        Text(String(format: "%.1f%%", Double(r.w) / Double(decided) * 100))
+                    }
+                    if let run {
+                        Text(run).foregroundStyle(run.hasPrefix("W") ? GaryColors.gold : GaryColors.loss)
+                    }
+                    Text(BookMoney.netTotal(r.units))
+                        .foregroundStyle(r.units >= 0 ? GaryColors.win : GaryColors.loss)
+                }
+                .font(GaryFonts.mono(10, bold: true))
+                .foregroundStyle(.white.opacity(0.55))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.white.opacity(0.04))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(stroked ? GaryColors.gold.opacity(0.4) : Color.white.opacity(0.1), lineWidth: 1))
+            )
+        }
+        return HStack(spacing: 8) {
+            half("WITH GARY · VERIFIED", g, decided: gDecided,
+                 run: runLabel(scopedWithGary), stroked: true)
+            half("YOUR PLAYS · SELF-GRADED", m, decided: mDecided,
+                 run: runLabel(scopedYourPlays), stroked: false)
+        }
     }
 
     private var ledgerHeader: some View {
@@ -1575,16 +1649,33 @@ private struct UserBetSlipRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
+            // Founder pick Aug 20 (mock 12/15): the source rides as a stroked
+            // chip — TAIL/FADE gold (verified lane), YOURS neutral — and the
+            // play-of-the-day star sits beside the pick it marks.
             Text(kindLabel)
-                .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
-                .foregroundStyle(bet.kind == "fade" ? Color(hex: "#8B93A7") : GaryColors.gold)
-                .frame(width: 38, alignment: .leading)
+                .font(GaryFonts.mono(8, bold: true)).tracking(0.7)
+                .foregroundStyle(bet.kind == "manual" ? .white.opacity(0.5) : GaryColors.gold)
+                .padding(.horizontal, 6).padding(.vertical, 3)
+                .background(
+                    Capsule().stroke(
+                        bet.kind == "manual" ? Color.white.opacity(0.18) : GaryColors.gold.opacity(0.45),
+                        lineWidth: 1)
+                )
+                .frame(width: 46, alignment: .leading)
             VStack(alignment: .leading, spacing: 2) {
-                Text(bet.pick_text)
-                    .font(GaryFonts.text(13))
-                    .foregroundStyle(.white.opacity(0.85))
-                    .lineLimit(2).minimumScaleFactor(0.8)
-                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 5) {
+                    Text(bet.pick_text)
+                        .font(GaryFonts.text(13))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .lineLimit(2).minimumScaleFactor(0.8)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if bet.streak_pick == true {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(Color(hex: "#E5844B"))
+                            .accessibilityLabel("Play of the day")
+                    }
+                }
                 // Conviction-vs-Gary read: your stake beside Gary's own tier.
                 Text("\(bet.game_date) · You \(BookMoney.stake(bet.stake_units))\(bet.odds_american.map { " · \($0 > 0 ? "+" : "")\($0)" } ?? "")\(bet.gary_confidence.map { " · Gary \(convictionTier($0))" } ?? "")")
                     .font(GaryFonts.mono(9))
@@ -2400,7 +2491,7 @@ struct BookTabView: View {
                             .padding(.top, 6)
                             .padding(.bottom, 120)
                     } else {
-                        UserBookSection(expanded: true)
+                        UserBookSection(expanded: true, showBoard: false)
                             .padding(.top, 6)
                             .padding(.bottom, 120)
                     }
@@ -2438,6 +2529,24 @@ struct ClassicLeaderboardView: View {
     @State private var showClaim = false
     @State private var showAuth = false
     @State private var signedIn = false
+    @State private var showsPreviewCast = false
+
+    /// Pre-launch stand-ins (founder, Aug 20: "fake users until we actually
+    /// launch so I can see an actual leaderboard"). They fill the board only
+    /// while fewer than eight real players rank, are labeled under the table,
+    /// and retire with one flag flip — never presented as real records after
+    /// launch. Kill switch: AppFlags.bookPreviewCast.
+    private static let previewCast: [UserBookAPI.BoardRowV2] = [
+        .init(display_name: "BigSarge", wins: 24, losses: 11, pushes: 1, units: 9.6, win_pct: 68.6, streak_len: 7, streak_kind: "W", best_streak: 9),
+        .init(display_name: "MToro22", wins: 31, losses: 22, pushes: 2, units: 6.2, win_pct: 58.5, streak_len: 5, streak_kind: "W", best_streak: 6),
+        .init(display_name: "TheLedger", wins: 9, losses: 6, pushes: 0, units: 2.1, win_pct: 60.0, streak_len: 3, streak_kind: "W", best_streak: 3),
+        .init(display_name: "NightcapNina", wins: 22, losses: 14, pushes: 1, units: 5.4, win_pct: 61.1, streak_len: 2, streak_kind: "W", best_streak: 5),
+        .init(display_name: "DogHouseDan", wins: 18, losses: 21, pushes: 0, units: -2.3, win_pct: 46.2, streak_len: 1, streak_kind: "W", best_streak: 4),
+        .init(display_name: "SweatEquity", wins: 15, losses: 12, pushes: 1, units: 1.8, win_pct: 55.6, streak_len: 1, streak_kind: "L", best_streak: 4),
+        .init(display_name: "FadeTheBear", wins: 21, losses: 25, pushes: 2, units: -3.9, win_pct: 45.7, streak_len: 2, streak_kind: "L", best_streak: 3),
+        .init(display_name: "ParlayPat", wins: 18, losses: 15, pushes: 0, units: 0.9, win_pct: 54.5, streak_len: 3, streak_kind: "L", best_streak: 5),
+        .init(display_name: "ColdBrewKev", wins: 12, losses: 19, pushes: 1, units: -5.2, win_pct: 38.7, streak_len: 6, streak_kind: "L", best_streak: 2),
+    ]
 
     private var sorted: [UserBookAPI.BoardRowV2] {
         switch sort {
@@ -2463,7 +2572,17 @@ struct ClassicLeaderboardView: View {
             } else if rows.isEmpty {
                 emptyState
             } else {
+                // Founder pick Aug 20 (mock 03): the top three get the podium
+                // stage; the table picks up at fourth.
+                if sorted.count >= 3 { podium }
                 boardCard
+                if showsPreviewCast {
+                    Text("SAMPLE PLAYERS HOLD THE BOARD UNTIL LAUNCH — REAL RECORDS REPLACE THEM AS RIDERS SETTLE")
+                        .font(GaryFonts.mono(8, bold: true)).tracking(0.7)
+                        .foregroundStyle(.white.opacity(0.3))
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .multilineTextAlignment(.center)
+                }
             }
             joinLine
         }
@@ -2514,14 +2633,55 @@ struct ClassicLeaderboardView: View {
         .buttonStyle(.plain)
     }
 
+    // MARK: - The podium (founder pick, mock 03)
+
+    private var podium: some View {
+        let top = Array(sorted.prefix(3))
+        func tile(_ place: String, _ row: UserBookAPI.BoardRowV2, first: Bool) -> some View {
+            let isGary = row.display_name == "GARY A.I."
+            return VStack(spacing: 3) {
+                Text(place)
+                    .font(GaryFonts.display(first ? 15 : 13)).tracking(0.8)
+                    .foregroundStyle(GaryColors.gold)
+                Text(row.display_name)
+                    .font(GaryFonts.text(first ? 13.5 : 12, .bold))
+                    .foregroundStyle(isGary ? GaryColors.gold : .white.opacity(0.92))
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                Text("\(row.record) · \(String(format: "%.1f", row.win_pct))%")
+                    .font(GaryFonts.mono(9.5))
+                    .foregroundStyle(.white.opacity(0.55))
+                Text(row.streakLabel)
+                    .font(GaryFonts.mono(first ? 19 : 14, bold: true))
+                    .foregroundStyle(streakColor(row))
+                    .padding(.top, 1)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, first ? 16 : 11)
+            .padding(.horizontal, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(GaryColors.cardBg)
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(first ? GaryColors.gold.opacity(0.45) : Color.white.opacity(0.08), lineWidth: 1))
+            )
+        }
+        return HStack(alignment: .bottom, spacing: 8) {
+            if top.count > 1 { tile("2ND", top[1], first: false) }
+            tile("1ST", top[0], first: true)
+            if top.count > 2 { tile("3RD", top[2], first: false) }
+        }
+    }
+
     // MARK: - The board card
 
     private var boardCard: some View {
-        VStack(spacing: 0) {
+        // Ranks 1-3 live on the podium; the table carries the field.
+        let field = sorted.count >= 3 ? Array(sorted.enumerated().dropFirst(3)) : Array(sorted.enumerated())
+        return VStack(spacing: 0) {
             columnHeader
-            ForEach(Array(sorted.enumerated()), id: \.element.id) { index, row in
+            ForEach(field, id: \.element.id) { index, row in
                 boardRow(rank: index + 1, row: row)
-                if row.id != sorted.last?.id {
+                if row.id != field.last?.element.id {
                     Rectangle().fill(Color.white.opacity(0.05)).frame(height: 0.5)
                         .padding(.leading, 44)
                 }
@@ -2658,7 +2818,17 @@ struct ClassicLeaderboardView: View {
         signedIn = AuthManager.shared.bearerToken != nil
         if force { rows = [] }
         loading = rows.isEmpty
-        let fresh = await UserBookAPI.fetchLeaderboardV2(window: window)
+        var fresh = await UserBookAPI.fetchLeaderboardV2(window: window)
+        // Pre-launch: sample players fill in beneath any real ones (and
+        // Gary) until eight real records rank, then retire on their own.
+        let realPlayers = fresh.filter { $0.display_name != "GARY A.I." }
+        if AppFlags.bookPreviewCast, realPlayers.count < 8 {
+            let taken = Set(fresh.map { $0.display_name.lowercased() })
+            fresh += Self.previewCast.filter { !taken.contains($0.display_name.lowercased()) }
+            showsPreviewCast = true
+        } else {
+            showsPreviewCast = false
+        }
         // Day-cache law: never store an empty async result over live rows.
         if !fresh.isEmpty { rows = fresh }
         loading = false

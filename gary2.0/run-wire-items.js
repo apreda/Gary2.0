@@ -166,6 +166,76 @@ function yesterdayOf(dateStr) {
   return d.toISOString().slice(0, 10);
 }
 
+/** N days before dateStr, as YYYY-MM-DD. */
+function daysBefore(dateStr, n) {
+  const d = new Date(`${dateStr}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Injury headlines this feed already ran in the week before targetDate.
+ * Grounded search can't date its snippets, so the model kept re-reporting
+ * ongoing IL stints as fresh moves (Aug 19: "Reds place Hunter Greene on IL"
+ * — four days AFTER this same feed ran his season-ending Tommy John story).
+ * The published history is the one dated record we hold; it feeds both the
+ * prompt (prevention) and the repeat-player gate below (enforcement).
+ */
+async function fetchRecentInjuryHeadlines(targetDate, league, days = 7) {
+  try {
+    const { data } = await axios({
+      method: 'GET',
+      url: REST_URL,
+      headers: restHeaders,
+      params: {
+        select: 'date,headline,subline',
+        league: `eq.${league}`,
+        kind: 'eq.injury',
+        date: `gte.${daysBefore(targetDate, days)}`,
+        and: `(date.lt.${targetDate})`,
+        order: 'date.desc',
+        limit: 60,
+      },
+    });
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return []; // best-effort: no history just means no extra guard material
+  }
+}
+
+/**
+ * Capitalized 2-3 word runs that survive team-token stripping — the player
+ * names in a headline. "Texans' Jayden Higgins out for season" → jayden
+ * higgins. Name-level (not surname) so Riley Greene never collides with
+ * Hunter Greene.
+ */
+function personNames(text, teamTokenSet) {
+  const names = new Set();
+  if (!text) return names;
+  const matches = String(text).match(/\b[A-Z][a-zA-Z'’.-]*(?:\s+[A-Z][a-zA-Z'’.-]*){1,2}\b/g) || [];
+  const isTeamWord = (w) => {
+    const t = w.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return t.length < 2 || teamTokenSet.has(t);
+  };
+  for (const seq of matches) {
+    const words = seq.split(/\s+/);
+    while (words.length && isTeamWord(words[0])) words.shift();
+    while (words.length && isTeamWord(words[words.length - 1])) words.pop();
+    if (words.length >= 2 && words.length <= 3) {
+      const name = words.join(' ').toLowerCase().replace(/[^a-z\s'-]/g, '').replace(/\s+/g, ' ').trim();
+      if (name.includes(' ')) names.add(name);
+    }
+  }
+  return names;
+}
+
+/**
+ * A repeat-player injury item may still run when it reports a MATERIAL new
+ * phase — the story moving forward, not the original move re-told.
+ */
+const INJURY_ESCALATION =
+  /\b(surgery|torn|out for (?:the )?season|season-ending|activated|returns?|returning|reinstated|setback|shut down|60-day)\b/i;
+
 /**
  * Pull one day's graded game_results rows for a league. The grader writes each
  * game minutes after its final, so an evening run sees TONIGHT's finished games
@@ -370,9 +440,12 @@ function isItemGrounded(item, allowTokens) {
 // Prompt + Gemini call (grounded)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildPrompt({ date, league, todayFinals, ydayFinals, allowNames }) {
+function buildPrompt({ date, league, todayFinals, ydayFinals, allowNames, recentInjuries = [] }) {
   const yday = yesterdayOf(date);
   const clock = nowClockET();
+  const injuryHistoryBlock = recentInjuries.length
+    ? recentInjuries.map((r) => `- [${r.date}] ${r.headline}`).join('\n')
+    : '(none on file)';
   const finalsLine = (rows) =>
     rows
       .map((r) => `- ${r.matchup || '?'} | final ${r.final_score || '?'}${r.note ? ` | ${r.note}` : ''}`)
@@ -401,6 +474,13 @@ function buildPrompt({ date, league, todayFinals, ydayFinals, allowNames }) {
     `happening on the real ${date} schedule, omit it:\n${teamsBlock}\n\n` +
     `Games already FINAL today, ${date} (freshest material — lead here):\n${todayBlock}\n\n` +
     `Yesterday's finals, ${yday} (usable ONLY under the freshness rules below):\n${ydayBlock}\n\n` +
+    `INJURY NEWS THIS FEED ALREADY PUBLISHED in the last 7 days — the reader has seen every one ` +
+    `of these; they are OLD news:\n${injuryHistoryBlock}\n` +
+    `An injury item runs ONLY for something NEW TODAY: a new injury, or a MATERIAL new phase of ` +
+    `one listed above (surgery decided, ruled out for the season, activated/returning, a setback). ` +
+    `NEVER re-report a stint from that list, and NEVER report the ORIGINAL move of a player whose ` +
+    `story has since advanced — search results are often days or weeks old and do not say so. ` +
+    `An injury story you cannot date to today does not run.\n\n` +
     `Use Google Search to find REAL, current information about these teams: tonight's standout ` +
     `individual performances and game stories, today's injury news, line moves on the upcoming slate, ` +
     `and scoring-environment notes.\n\n` +
@@ -656,7 +736,8 @@ async function run() {
         continue;
       }
 
-      const prompt = buildPrompt({ date: targetDate, league, todayFinals, ydayFinals, allowNames: allow.names });
+      const recentInjuries = await fetchRecentInjuryHeadlines(targetDate, league);
+      const prompt = buildPrompt({ date: targetDate, league, todayFinals, ydayFinals, allowNames: allow.names, recentInjuries });
       const text = await callWireModel(prompt);
       const parsed = parseWireItems(text);
 
@@ -689,6 +770,26 @@ async function run() {
         console.log(`   🚫 Dropped ${dropped} moment(s) about games with no verified notes.`);
       }
       rows = withNotes;
+
+      // ENFORCED injury freshness (the prompt law alone did not hold: Aug 19
+      // re-ran Hunter Greene's original IL move four days after this feed
+      // published his season-ending surgery). A player this feed covered in
+      // the last week only returns for a MATERIAL new phase.
+      const coveredNames = new Set();
+      for (const h of recentInjuries) {
+        for (const n of personNames(`${h.headline || ''} ${h.subline || ''}`, allow.tokens)) coveredNames.add(n);
+      }
+      const freshInjuries = rows.filter((r) => {
+        if (r.kind !== 'injury' || coveredNames.size === 0) return true;
+        const copy = `${r.headline} ${r.subline || ''}`;
+        const repeat = [...personNames(copy, allow.tokens)].some((n) => coveredNames.has(n));
+        return !repeat || INJURY_ESCALATION.test(copy);
+      });
+      dropped = rows.length - freshInjuries.length;
+      if (dropped > 0) {
+        console.log(`   🚫 Dropped ${dropped} re-reported injury item(s) (player already covered this week).`);
+      }
+      rows = freshInjuries;
 
       if (rows.length === 0) {
         console.log(`   No grounded wire items for ${league} on ${targetDate}.`);

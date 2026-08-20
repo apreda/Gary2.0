@@ -23260,17 +23260,25 @@ enum TodayBoardCache {
 /// for the scout capsules. One fetch pair shared by every game page.
 @MainActor
 enum ScoutWireCache {
-    private static var stored: (day: String, items: [SupabaseAPI.WireItem])? = nil
+    private static var stored: (day: String, items: [SupabaseAPI.WireItem], fetchedAt: Date)? = nil
+    /// The wire is written mid-morning (and again through the day) — an
+    /// all-day cache kept serving yesterday's headlines to anyone who opened
+    /// the app before the day's first write (founder screenshot, Aug 20:
+    /// a stale IL line at 9:48 AM). Twenty minutes keeps the page current
+    /// without hammering the table.
+    private static let ttl: TimeInterval = 20 * 60
     static func get() async -> [SupabaseAPI.WireItem] {
         let day = SupabaseAPI.todayEST()
-        if let stored, stored.day == day, !stored.items.isEmpty { return stored.items }
+        if let stored, stored.day == day, !stored.items.isEmpty,
+           Date().timeIntervalSince(stored.fetchedAt) < ttl { return stored.items }
         async let today = SupabaseAPI.fetchWireItems(date: day, limit: 24)
         async let prior = SupabaseAPI.fetchWireItems(date: shiftDay(day, -1), limit: 24)
         let items = await today + prior
         // NEVER cache an empty read — a page swipe cancels in-flight .tasks and
         // the cancelled fetch returns [], which would poison every later page.
-        if !items.isEmpty { stored = (day, items) }
-        return items
+        // On a failed refresh, the previous non-empty copy keeps serving.
+        if !items.isEmpty { stored = (day, items, Date()) }
+        return stored?.day == day ? (stored?.items ?? items) : items
     }
     private static func shiftDay(_ iso: String, _ delta: Int) -> String {
         let f = DateFormatter()
@@ -23936,7 +23944,11 @@ fileprivate struct ScoutTrioData {
             let k = key.lowercased()
             guard !k.isEmpty else { return nil }
             let mine = wire.filter { ($0.league ?? "").uppercased() == lg && ($0.headline ?? "").lowercased().contains(k) }
-            if let inj = mine.first(where: { $0.kind == "injury" }) { return inj.headline }
+            // TODAY'S injury outranks yesterday's — the cache carries both
+            // days, and taking the first match let a stale headline sit on
+            // the page all morning (founder, Aug 20: most recent news, always).
+            let injuries = mine.filter { $0.kind == "injury" }
+            if let inj = injuries.first(where: { $0.date == today }) ?? injuries.first { return inj.headline }
             return mine.first(where: { (($0.kind == "line_move" && !AppFlags.storeSafe) || $0.kind == "pace") && $0.date == today })?.headline
         }
         var lines: [String] = []
