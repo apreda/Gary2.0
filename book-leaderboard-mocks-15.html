@@ -1,0 +1,387 @@
+<title>The Book Mocks</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap">
+<style>
+  :root{
+    --ink:#0A0908; --page:#0C0B0B; --card:#131211; --card2:#0F0D0D;
+    --gold:#C9A227; --lgold:#E8D48B; --heat:#E5844B; --cold:#C96A55;
+    --w92:rgba(255,255,255,.92); --w60:rgba(255,255,255,.6); --w45:rgba(255,255,255,.45);
+    --w35:rgba(255,255,255,.35); --hair:rgba(255,255,255,.08); --hair2:rgba(255,255,255,.05);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--ink);color:var(--w92);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;
+    padding:34px 22px 80px}
+  .display{font-family:"Bebas Neue","Arial Narrow",sans-serif;font-weight:400;letter-spacing:.5px}
+  .tab-num{font-variant-numeric:tabular-nums;font-weight:600}
+  header.page{max-width:1240px;margin:0 auto 30px}
+  header.page h1{font-size:44px;line-height:1}
+  header.page h1 em{font-style:normal;color:var(--gold)}
+  header.page p{color:var(--w60);font-size:13.5px;margin-top:8px;max-width:62ch;line-height:1.55}
+  .grid{max-width:1240px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(372px,1fr));gap:34px 26px}
+  .mock{display:flex;flex-direction:column;gap:10px}
+  .mock>.tag{display:flex;align-items:baseline;gap:8px}
+  .mock>.tag .n{font-family:"Bebas Neue",sans-serif;font-size:20px;color:var(--gold)}
+  .mock>.tag .t{font-size:11px;font-weight:700;letter-spacing:1.2px;color:var(--w60)}
+  .phone{background:var(--page);border:1px solid var(--hair);border-radius:28px;padding:18px 14px 22px;min-height:560px}
+  .ph-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding:0 4px}
+  .ph-head .wordmark{font-family:"Bebas Neue",sans-serif;font-size:22px}
+  .ph-head .wordmark em{font-style:normal;color:var(--gold)}
+  .lens{display:flex;gap:13px;align-items:flex-end}
+  .lens span{font-size:9px;font-weight:700;letter-spacing:1px;color:var(--w45);padding-bottom:3px}
+  .lens span.on{color:var(--gold);border-bottom:1.5px solid var(--gold)}
+  .win{font-size:9px;font-weight:600;letter-spacing:.8px;color:var(--w45)}
+  .card{background:var(--card);border:1px solid var(--hair);border-radius:14px;overflow:hidden}
+  .cols{display:flex;gap:10px;padding:10px 14px;font-size:8.5px;font-weight:700;letter-spacing:.8px;color:var(--w35)}
+  .row{display:flex;gap:10px;align-items:center;padding:11px 14px;border-top:.5px solid var(--hair2);font-size:13px}
+  .rk{width:22px;color:var(--w45)}.rk.top{color:var(--gold);font-weight:700}
+  .nm{flex:1;font-weight:600;display:flex;align-items:center;gap:6px;min-width:0;white-space:nowrap}
+  .rec{width:48px;text-align:right;color:var(--w92)}
+  .pct{width:44px;text-align:right;color:var(--w60)}
+  .stk{width:36px;text-align:right;font-weight:600}
+  .W{color:var(--gold)}.L{color:var(--cold)}.Z{color:var(--w35)}
+  .you{background:var(--gold);color:#0A0908;font-size:7.5px;font-weight:800;letter-spacing:.8px;border-radius:99px;padding:2px 6px}
+  .gary{color:var(--gold)}
+  .bear{width:15px;height:15px;border-radius:4px;background:var(--gold);color:#0A0908;display:inline-flex;align-items:center;justify-content:center;font-family:"Bebas Neue",sans-serif;font-size:11px;flex:none}
+  .cta{margin-top:12px;background:var(--gold);color:#0A0908;border-radius:99px;text-align:center;padding:12px;font-size:11px;font-weight:800;letter-spacing:1px}
+  .note{font-size:11.5px;color:var(--w45);line-height:1.5;max-width:40ch}
+  /* variant helpers */
+  .rail{position:relative}
+  .rail::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:2px;background:var(--gold);opacity:var(--o,0)}
+  .rail.cold::before{background:var(--cold)}
+  .podium{display:grid;grid-template-columns:1fr 1.25fr 1fr;gap:8px;align-items:end;margin-bottom:10px}
+  .pod{background:var(--card);border:1px solid var(--hair);border-radius:12px;text-align:center;padding:12px 6px}
+  .pod .place{font-family:"Bebas Neue",sans-serif;color:var(--gold);font-size:15px}
+  .pod .who{font-size:12px;font-weight:700;margin-top:2px}
+  .pod .line{font-size:10.5px;color:var(--w60);margin-top:3px}
+  .pod .s{font-size:15px;font-weight:700;margin-top:5px}
+  .pod.first{padding:18px 6px;border-color:rgba(201,162,39,.45)}
+  .badge{width:44px;height:38px;border-radius:9px;display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none}
+  .badge .b1{font-family:"Bebas Neue",sans-serif;font-size:17px;line-height:1}
+  .badge .b2{font-size:7px;font-weight:700;letter-spacing:.6px;color:var(--w45)}
+  .badge.hot{background:rgba(201,162,39,.13);border:1px solid rgba(201,162,39,.35)}
+  .badge.hot .b1{color:var(--gold)}
+  .badge.cold{background:rgba(201,106,85,.10);border:1px solid rgba(201,106,85,.3)}
+  .badge.cold .b1{color:var(--cold)}
+  .sect{font-size:9px;font-weight:800;letter-spacing:1.4px;margin:14px 4px 8px}
+  .marquee{background:linear-gradient(135deg,rgba(201,162,39,.16),rgba(201,162,39,.04));border:1px solid rgba(201,162,39,.4);border-radius:14px;padding:14px;margin-bottom:10px}
+  .marquee .k{font-size:8.5px;font-weight:800;letter-spacing:1.4px;color:var(--lgold)}
+  .marquee .who{font-family:"Bebas Neue",sans-serif;font-size:30px;margin-top:2px}
+  .marquee .who em{font-style:normal;color:var(--gold)}
+  .marquee .line{font-size:11px;color:var(--w60);margin-top:2px}
+  .flames{display:flex;gap:4px;margin-top:9px}
+  .flames i{flex:1;height:5px;border-radius:3px;background:var(--gold)}
+  .flames i.dim{opacity:.18}
+  .rungs{display:flex;gap:3px;margin-top:4px}
+  .rungs i{width:9px;height:4px;border-radius:2px;background:var(--gold)}
+  .rungs i.l{background:var(--cold)}
+  .r2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .rcpt{background:var(--card);border:1px solid var(--hair);border-radius:11px;padding:11px}
+  .rcpt .who{font-size:12.5px;font-weight:700}
+  .rcpt .line{font-size:10.5px;color:var(--w60);margin-top:2px}
+  .rcpt .stamp{display:inline-block;margin-top:8px;font-family:"Bebas Neue",sans-serif;font-size:15px;border:1.5px solid;border-radius:6px;padding:1px 7px;transform:rotate(-4deg)}
+  .term{border:1px solid rgba(201,162,39,.35);border-radius:10px;overflow:hidden}
+  .term .thead{background:rgba(201,162,39,.1);padding:8px 12px;font-size:9px;font-weight:800;letter-spacing:1.6px;color:var(--lgold);display:flex;justify-content:space-between}
+  .trow{display:flex;gap:10px;padding:9px 12px;border-top:.5px solid var(--hair2);font-size:12px}
+  .tile3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
+  .tile{background:var(--card);border:1px solid var(--hair);border-radius:12px;padding:11px 10px}
+  .tile .k{font-size:8px;font-weight:800;letter-spacing:1px;color:var(--w35)}
+  .tile .v{font-size:19px;font-weight:800;margin-top:4px}
+  .slip{background:var(--card);border:1px solid var(--hair);border-radius:12px;padding:12px 13px;margin-bottom:8px}
+  .slip .top{display:flex;justify-content:space-between;font-size:12.5px;font-weight:600}
+  .slip .sub{display:flex;justify-content:space-between;font-size:10.5px;color:var(--w60);margin-top:4px}
+  .live{color:var(--heat);font-weight:700}
+  .ticket{background:var(--card);border-radius:12px;padding:12px 13px;margin-bottom:10px;position:relative;
+    -webkit-mask:radial-gradient(circle 7px at 0 68%,transparent 98%,#000) left/51% 100% no-repeat,
+                 radial-gradient(circle 7px at 100% 68%,transparent 98%,#000) right/51% 100% no-repeat}
+  .dash{border-top:1.5px dashed rgba(255,255,255,.14);margin:10px 0 8px}
+  .stack{position:relative;padding-top:14px}
+  .stack .slip{box-shadow:0 -6px 14px rgba(0,0,0,.5)}
+  .stack .under{margin:0 10px -34px;transform:scale(.96);opacity:.55}
+  .stack .under2{margin:0 20px -34px;transform:scale(.92);opacity:.3}
+  .day{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border-top:.5px solid var(--hair2);font-size:12.5px}
+  .net-pos{color:var(--gold);font-weight:700}.net-neg{color:var(--cold);font-weight:700}
+  .chip{font-size:7.5px;font-weight:800;letter-spacing:.6px;border-radius:99px;padding:2px 7px;border:1px solid var(--hair);color:var(--w45)}
+  .chip.g{border-color:rgba(201,162,39,.4);color:var(--gold)}
+  .star{color:var(--heat)}
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+  .half{background:var(--card);border:1px solid var(--hair);border-radius:12px;padding:12px}
+  .half .k{font-size:8px;font-weight:800;letter-spacing:1px;color:var(--w35)}
+  .half .v{font-size:22px;font-weight:800;margin-top:3px}
+  .half .s{font-size:10px;color:var(--w60);margin-top:2px}
+</style>
+
+<header class="page">
+  <h1 class="display">THE BOOK <em>— 15 MOCKS</em></h1>
+  <p>Ten treatments of the classic leaderboard and five of the betslip page. Mock 01 and mock 11 are what is wired in the simulator right now — same data, same components. Every board ranks by the streak lens by default; the cast and numbers are identical across mocks so only the design changes.</p>
+</header>
+
+<div class="grid">
+
+<!-- ═══ 01 AS BUILT BOARD ═══ -->
+<div class="mock"><div class="tag"><span class="n">01</span><span class="t">AS BUILT — LIVE IN THE SIM</span></div>
+<div class="phone">
+  <div class="ph-head"><div class="wordmark">THE <em>BOOK</em></div><div class="lens"><span>MY BETS</span><span class="on">THE BOARD</span></div></div>
+  <div class="lens" style="margin:0 4px 10px"><span class="on">STREAKS</span><span>WINS</span><span>LOSSES</span><span>RECORD</span><span style="margin-left:auto">SEASON ▾</span></div>
+  <div class="card">
+    <div class="cols"><span style="width:22px">#</span><span style="flex:1">PLAYER</span><span style="width:48px;text-align:right">W-L</span><span style="width:44px;text-align:right">WIN%</span><span style="width:36px;text-align:right">STRK</span></div>
+    <div class="row"><span class="rk top tab-num">1</span><span class="nm">BigSarge</span><span class="rec tab-num">24-11</span><span class="pct tab-num">68.6</span><span class="stk W tab-num">W7</span></div>
+    <div class="row"><span class="rk top tab-num">2</span><span class="nm">MToro22 <span class="you">YOU</span></span><span class="rec tab-num">31-22</span><span class="pct tab-num">58.5</span><span class="stk W tab-num">W5</span></div>
+    <div class="row"><span class="rk top tab-num">3</span><span class="nm gary"><span class="bear">G</span>GARY A.I.</span><span class="rec tab-num">209-176</span><span class="pct tab-num">54.3</span><span class="stk W tab-num">W4</span></div>
+    <div class="row"><span class="rk tab-num">4</span><span class="nm">TheLedger</span><span class="rec tab-num">9-6</span><span class="pct tab-num">60.0</span><span class="stk W tab-num">W3</span></div>
+    <div class="row"><span class="rk tab-num">5</span><span class="nm">NightcapNina</span><span class="rec tab-num">22-14</span><span class="pct tab-num">61.1</span><span class="stk W tab-num">W2</span></div>
+    <div class="row"><span class="rk tab-num">6</span><span class="nm">DogHouseDan</span><span class="rec tab-num">18-21</span><span class="pct tab-num">46.2</span><span class="stk W tab-num">W1</span></div>
+    <div class="row"><span class="rk tab-num">7</span><span class="nm">SweatEquity</span><span class="rec tab-num">15-12</span><span class="pct tab-num">55.6</span><span class="stk L tab-num">L1</span></div>
+    <div class="row"><span class="rk tab-num">8</span><span class="nm">FadeTheBear</span><span class="rec tab-num">21-25</span><span class="pct tab-num">45.7</span><span class="stk L tab-num">L2</span></div>
+    <div class="row"><span class="rk tab-num">9</span><span class="nm">ParlayPat</span><span class="rec tab-num">18-15</span><span class="pct tab-num">54.5</span><span class="stk L tab-num">L3</span></div>
+    <div class="row"><span class="rk tab-num">10</span><span class="nm">ColdBrewKev</span><span class="rec tab-num">12-19</span><span class="pct tab-num">38.7</span><span class="stk L tab-num">L6</span></div>
+  </div>
+  <div class="cta">CLAIM YOUR HANDLE</div>
+</div></div>
+
+<!-- ═══ 02 HEATER RAIL ═══ -->
+<div class="mock"><div class="tag"><span class="n">02</span><span class="t">HEATER RAIL — STREAK AS EDGE-RAIL WEIGHT</span></div>
+<div class="phone">
+  <div class="ph-head"><div class="wordmark">THE <em>BOARD</em></div><div class="win">SEASON ▾</div></div>
+  <div class="lens" style="margin:0 4px 10px"><span class="on">STREAKS</span><span>WINS</span><span>LOSSES</span><span>RECORD</span></div>
+  <div class="card">
+    <div class="row rail" style="--o:1"><span class="rk top tab-num">1</span><span class="nm">BigSarge</span><span class="rec tab-num">24-11</span><span class="pct tab-num">68.6</span><span class="stk W tab-num">W7</span></div>
+    <div class="row rail" style="--o:.75"><span class="rk top tab-num">2</span><span class="nm">MToro22 <span class="you">YOU</span></span><span class="rec tab-num">31-22</span><span class="pct tab-num">58.5</span><span class="stk W tab-num">W5</span></div>
+    <div class="row rail" style="--o:.6"><span class="rk top tab-num">3</span><span class="nm gary"><span class="bear">G</span>GARY A.I.</span><span class="rec tab-num">209-176</span><span class="pct tab-num">54.3</span><span class="stk W tab-num">W4</span></div>
+    <div class="row rail" style="--o:.45"><span class="rk tab-num">4</span><span class="nm">TheLedger</span><span class="rec tab-num">9-6</span><span class="pct tab-num">60.0</span><span class="stk W tab-num">W3</span></div>
+    <div class="row rail" style="--o:.3"><span class="nm" style="padding-left:22px">NightcapNina</span><span class="rec tab-num">22-14</span><span class="pct tab-num">61.1</span><span class="stk W tab-num">W2</span></div>
+    <div class="row rail" style="--o:.18"><span class="nm" style="padding-left:22px">DogHouseDan</span><span class="rec tab-num">18-21</span><span class="pct tab-num">46.2</span><span class="stk W tab-num">W1</span></div>
+    <div class="row rail cold" style="--o:.3"><span class="nm" style="padding-left:22px">SweatEquity</span><span class="rec tab-num">15-12</span><span class="pct tab-num">55.6</span><span class="stk L tab-num">L1</span></div>
+    <div class="row rail cold" style="--o:.5"><span class="nm" style="padding-left:22px">FadeTheBear</span><span class="rec tab-num">21-25</span><span class="pct tab-num">45.7</span><span class="stk L tab-num">L2</span></div>
+    <div class="row rail cold" style="--o:.7"><span class="nm" style="padding-left:22px">ParlayPat</span><span class="rec tab-num">18-15</span><span class="pct tab-num">54.5</span><span class="stk L tab-num">L3</span></div>
+    <div class="row rail cold" style="--o:1"><span class="nm" style="padding-left:22px">ColdBrewKev</span><span class="rec tab-num">12-19</span><span class="pct tab-num">38.7</span><span class="stk L tab-num">L6</span></div>
+  </div>
+  <p class="note" style="margin-top:10px">The Winners edge-rail cue, reused: rail opacity scales with the run. Gold burns hotter as the streak grows; cold runs flip the rail to the loss color.</p>
+</div></div>
+
+<!-- ═══ 03 PODIUM ═══ -->
+<div class="mock"><div class="tag"><span class="n">03</span><span class="t">PODIUM — TOP THREE STAGED</span></div>
+<div class="phone">
+  <div class="ph-head"><div class="wordmark">THE <em>BOARD</em></div><div class="win">SEASON ▾</div></div>
+  <div class="podium">
+    <div class="pod"><div class="place">2ND</div><div class="who">MToro22</div><div class="line tab-num">31-22 · 58.5%</div><div class="s W tab-num">W5</div></div>
+    <div class="pod first"><div class="place">1ST</div><div class="who">BigSarge</div><div class="line tab-num">24-11 · 68.6%</div><div class="s W tab-num" style="font-size:22px">W7</div></div>
+    <div class="pod"><div class="place">3RD</div><div class="who gary">GARY A.I.</div><div class="line tab-num">209-176 · 54.3%</div><div class="s W tab-num">W4</div></div>
+  </div>
+  <div class="card">
+    <div class="row"><span class="rk tab-num">4</span><span class="nm">TheLedger</span><span class="rec tab-num">9-6</span><span class="pct tab-num">60.0</span><span class="stk W tab-num">W3</span></div>
+    <div class="row"><span class="rk tab-num">5</span><span class="nm">NightcapNina</span><span class="rec tab-num">22-14</span><span class="pct tab-num">61.1</span><span class="stk W tab-num">W2</span></div>
+    <div class="row"><span class="rk tab-num">6</span><span class="nm">DogHouseDan</span><span class="rec tab-num">18-21</span><span class="pct tab-num">46.2</span><span class="stk W tab-num">W1</span></div>
+    <div class="row"><span class="rk tab-num">7</span><span class="nm">SweatEquity</span><span class="rec tab-num">15-12</span><span class="pct tab-num">55.6</span><span class="stk L tab-num">L1</span></div>
+    <div class="row"><span class="rk tab-num">8</span><span class="nm">FadeTheBear</span><span class="rec tab-num">21-25</span><span class="pct tab-num">45.7</span><span class="stk L tab-num">L2</span></div>
+    <div class="row"><span class="rk tab-num">9</span><span class="nm">ParlayPat</span><span class="rec tab-num">18-15</span><span class="pct tab-num">54.5</span><span class="stk L tab-num">L3</span></div>
+  </div>
+</div></div>
+
+<!-- ═══ 04 STREAK BADGE ═══ -->
+<div class="mock"><div class="tag"><span class="n">04</span><span class="t">BADGE LEDGER — THE RUN LEADS EVERY ROW</span></div>
+<div class="phone">
+  <div class="ph-head"><div class="wordmark">THE <em>BOARD</em></div><div class="win">SEASON ▾</div></div>
+  <div class="card" style="background:none;border:none">
+    <div class="row" style="border:1px solid var(--hair);border-radius:12px;background:var(--card);margin-bottom:7px"><span class="badge hot"><span class="b1 tab-num">W7</span><span class="b2">RIDING</span></span><span class="nm">BigSarge</span><span class="rec tab-num" style="width:70px">24-11 <i style="font-style:normal;color:var(--w45)">· 68.6</i></span></div>
+    <div class="row" style="border:1px solid var(--hair);border-radius:12px;background:var(--card);margin-bottom:7px"><span class="badge hot"><span class="b1 tab-num">W5</span><span class="b2">RIDING</span></span><span class="nm">MToro22 <span class="you">YOU</span></span><span class="rec tab-num" style="width:70px">31-22 <i style="font-style:normal;color:var(--w45)">· 58.5</i></span></div>
+    <div class="row" style="border:1px solid rgba(201,162,39,.4);border-radius:12px;background:var(--card);margin-bottom:7px"><span class="badge hot"><span class="b1 tab-num">W4</span><span class="b2">RIDING</span></span><span class="nm gary"><span class="bear">G</span>GARY A.I.</span><span class="rec tab-num" style="width:78px">209-176 <i style="font-style:normal;color:var(--w45)">· 54.3</i></span></div>
+    <div class="row" style="border:1px solid var(--hair);border-radius:12px;background:var(--card);margin-bottom:7px"><span class="badge hot"><span class="b1 tab-num">W3</span><span class="b2">RIDING</span></span><span class="nm">TheLedger</span><span class="rec tab-num" style="width:70px">9-6 <i style="font-style:normal;color:var(--w45)">· 60.0</i></span></div>
+    <div class="row" style="border:1px solid var(--hair);border-radius:12px;background:var(--card);margin-bottom:7px"><span class="badge hot"><span class="b1 tab-num">W2</span><span class="b2">RIDING</span></span><span class="nm">NightcapNina</span><span class="rec tab-num" style="width:70px">22-14 <i style="font-style:normal;color:var(--w45)">· 61.1</i></span></div>
+    <div class="row" style="border:1px solid var(--hair);border-radius:12px;background:var(--card);margin-bottom:7px"><span class="badge cold"><span class="b1 tab-num">L3</span><span class="b2">SKIDDING</span></span><span class="nm">ParlayPat</span><span class="rec tab-num" style="width:70px">18-15 <i style="font-style:normal;color:var(--w45)">· 54.5</i></span></div>
+    <div class="row" style="border:1px solid var(--hair);border-radius:12px;background:var(--card)"><span class="badge cold"><span class="b1 tab-num">L6</span><span class="b2">SKIDDING</span></span><span class="nm">ColdBrewKev</span><span class="rec tab-num" style="width:70px">12-19 <i style="font-style:normal;color:var(--w45)">· 38.7</i></span></div>
+  </div>
+</div></div>
+
+<!-- ═══ 05 HEATERS / COLD ═══ -->
+<div class="mock"><div class="tag"><span class="n">05</span><span class="t">TWO STACKS — HEATERS AND THE COLD</span></div>
+<div class="phone">
+  <div class="ph-head"><div class="wordmark">THE <em>BOARD</em></div><div class="win">SEASON ▾</div></div>
+  <div class="sect" style="color:var(--gold)">🔥 THE HEATERS</div>
+  <div class="card">
+    <div class="row"><span class="rk top tab-num">1</span><span class="nm">BigSarge</span><span class="rec tab-num">24-11</span><span class="stk W tab-num">W7</span></div>
+    <div class="row"><span class="rk top tab-num">2</span><span class="nm">MToro22 <span class="you">YOU</span></span><span class="rec tab-num">31-22</span><span class="stk W tab-num">W5</span></div>
+    <div class="row"><span class="rk top tab-num">3</span><span class="nm gary"><span class="bear">G</span>GARY A.I.</span><span class="rec tab-num">209-176</span><span class="stk W tab-num">W4</span></div>
+    <div class="row"><span class="rk tab-num">4</span><span class="nm">TheLedger</span><span class="rec tab-num">9-6</span><span class="stk W tab-num">W3</span></div>
+    <div class="row"><span class="rk tab-num">5</span><span class="nm">NightcapNina</span><span class="rec tab-num">22-14</span><span class="stk W tab-num">W2</span></div>
+  </div>
+  <div class="sect" style="color:var(--cold)">🧊 THE COLD</div>
+  <div class="card">
+    <div class="row"><span class="rk tab-num">1</span><span class="nm">ColdBrewKev</span><span class="rec tab-num">12-19</span><span class="stk L tab-num">L6</span></div>
+    <div class="row"><span class="rk tab-num">2</span><span class="nm">ParlayPat</span><span class="rec tab-num">18-15</span><span class="stk L tab-num">L3</span></div>
+    <div class="row"><span class="rk tab-num">3</span><span class="nm">FadeTheBear</span><span class="rec tab-num">21-25</span><span class="stk L tab-num">L2</span></div>
+  </div>
+</div></div>
+
+<!-- ═══ 06 MARQUEE ═══ -->
+<div class="mock"><div class="tag"><span class="n">06</span><span class="t">MARQUEE — THE LEADER GETS A BANNER</span></div>
+<div class="phone">
+  <div class="ph-head"><div class="wordmark">THE <em>BOARD</em></div><div class="win">SEASON ▾</div></div>
+  <div class="marquee">
+    <div class="k">LONGEST ACTIVE RUN</div>
+    <div class="who">BIGSARGE <em>· W7</em></div>
+    <div class="line tab-num">24-11 season · 68.6% · best run W9</div>
+    <div class="flames"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="dim"></i><i class="dim"></i></div>
+  </div>
+  <div class="card">
+    <div class="row"><span class="rk top tab-num">2</span><span class="nm">MToro22 <span class="you">YOU</span></span><span class="rec tab-num">31-22</span><span class="pct tab-num">58.5</span><span class="stk W tab-num">W5</span></div>
+    <div class="row"><span class="rk top tab-num">3</span><span class="nm gary"><span class="bear">G</span>GARY A.I.</span><span class="rec tab-num">209-176</span><span class="pct tab-num">54.3</span><span class="stk W tab-num">W4</span></div>
+    <div class="row"><span class="rk tab-num">4</span><span class="nm">TheLedger</span><span class="rec tab-num">9-6</span><span class="pct tab-num">60.0</span><span class="stk W tab-num">W3</span></div>
+    <div class="row"><span class="rk tab-num">5</span><span class="nm">NightcapNina</span><span class="rec tab-num">22-14</span><span class="pct tab-num">61.1</span><span class="stk W tab-num">W2</span></div>
+    <div class="row"><span class="rk tab-num">6</span><span class="nm">DogHouseDan</span><span class="rec tab-num">18-21</span><span class="pct tab-num">46.2</span><span class="stk W tab-num">W1</span></div>
+    <div class="row"><span class="rk tab-num">7</span><span class="nm">SweatEquity</span><span class="rec tab-num">15-12</span><span class="pct tab-num">55.6</span><span class="stk L tab-num">L1</span></div>
+  </div>
+</div></div>
+
+<!-- ═══ 07 TAPE ROWS ═══ -->
+<div class="mock"><div class="tag"><span class="n">07</span><span class="t">THE TAPE — DENSE STANDINGS, MORE ROWS</span></div>
+<div class="phone">
+  <div class="ph-head"><div class="wordmark">STANDINGS</div><div class="lens"><span class="on">STREAKS</span><span>RECORD</span></div></div>
+  <div class="card">
+    <div class="cols"><span style="width:22px">#</span><span style="flex:1">PLAYER</span><span style="width:48px;text-align:right">W-L</span><span style="width:44px;text-align:right">PCT</span><span style="width:36px;text-align:right">STRK</span></div>
+    <div class="row" style="padding:7px 14px;background:var(--card2)"><span class="rk top tab-num">1</span><span class="nm">BigSarge</span><span class="rec tab-num">24-11</span><span class="pct tab-num">.686</span><span class="stk W tab-num">W7</span></div>
+    <div class="row" style="padding:7px 14px"><span class="rk top tab-num">2</span><span class="nm">MToro22 <span class="you">YOU</span></span><span class="rec tab-num">31-22</span><span class="pct tab-num">.585</span><span class="stk W tab-num">W5</span></div>
+    <div class="row" style="padding:7px 14px;background:var(--card2)"><span class="rk top tab-num">3</span><span class="nm gary"><span class="bear">G</span>GARY A.I.</span><span class="rec tab-num">209-176</span><span class="pct tab-num">.543</span><span class="stk W tab-num">W4</span></div>
+    <div class="row" style="padding:7px 14px"><span class="rk tab-num">4</span><span class="nm">TheLedger</span><span class="rec tab-num">9-6</span><span class="pct tab-num">.600</span><span class="stk W tab-num">W3</span></div>
+    <div class="row" style="padding:7px 14px;background:var(--card2)"><span class="rk tab-num">5</span><span class="nm">NightcapNina</span><span class="rec tab-num">22-14</span><span class="pct tab-num">.611</span><span class="stk W tab-num">W2</span></div>
+    <div class="row" style="padding:7px 14px"><span class="rk tab-num">6</span><span class="nm">DogHouseDan</span><span class="rec tab-num">18-21</span><span class="pct tab-num">.462</span><span class="stk W tab-num">W1</span></div>
+    <div class="row" style="padding:7px 14px;background:var(--card2)"><span class="rk tab-num">7</span><span class="nm">SweatEquity</span><span class="rec tab-num">15-12</span><span class="pct tab-num">.556</span><span class="stk L tab-num">L1</span></div>
+    <div class="row" style="padding:7px 14px"><span class="rk tab-num">8</span><span class="nm">FadeTheBear</span><span class="rec tab-num">21-25</span><span class="pct tab-num">.457</span><span class="stk L tab-num">L2</span></div>
+    <div class="row" style="padding:7px 14px;background:var(--card2)"><span class="rk tab-num">9</span><span class="nm">ParlayPat</span><span class="rec tab-num">18-15</span><span class="pct tab-num">.545</span><span class="stk L tab-num">L3</span></div>
+    <div class="row" style="padding:7px 14px"><span class="rk tab-num">10</span><span class="nm">ColdBrewKev</span><span class="rec tab-num">12-19</span><span class="pct tab-num">.387</span><span class="stk L tab-num">L6</span></div>
+    <div class="row" style="padding:7px 14px;background:var(--card2)"><span class="rk tab-num">11</span><span class="nm">SundaySweats</span><span class="rec tab-num">8-7</span><span class="pct tab-num">.533</span><span class="stk Z tab-num">—</span></div>
+  </div>
+</div></div>
+
+<!-- ═══ 08 LADDER ═══ -->
+<div class="mock"><div class="tag"><span class="n">08</span><span class="t">THE LADDER — RUNGS COUNT THE RUN</span></div>
+<div class="phone">
+  <div class="ph-head"><div class="wordmark">THE <em>LADDER</em></div><div class="win">SEASON ▾</div></div>
+  <div class="card">
+    <div class="row" style="align-items:flex-start"><span class="rk top tab-num">1</span><div class="nm" style="flex-direction:column;align-items:flex-start;gap:0"><span>BigSarge</span><span class="rungs"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div><span class="rec tab-num">24-11</span><span class="stk W tab-num">W7</span></div>
+    <div class="row" style="align-items:flex-start"><span class="rk top tab-num">2</span><div class="nm" style="flex-direction:column;align-items:flex-start;gap:0"><span>MToro22 <span class="you">YOU</span></span><span class="rungs"><i></i><i></i><i></i><i></i><i></i></span></div><span class="rec tab-num">31-22</span><span class="stk W tab-num">W5</span></div>
+    <div class="row" style="align-items:flex-start"><span class="rk top tab-num">3</span><div class="nm" style="flex-direction:column;align-items:flex-start;gap:0"><span class="gary">GARY A.I.</span><span class="rungs"><i></i><i></i><i></i><i></i></span></div><span class="rec tab-num">209-176</span><span class="stk W tab-num">W4</span></div>
+    <div class="row" style="align-items:flex-start"><span class="rk tab-num">4</span><div class="nm" style="flex-direction:column;align-items:flex-start;gap:0"><span>TheLedger</span><span class="rungs"><i></i><i></i><i></i></span></div><span class="rec tab-num">9-6</span><span class="stk W tab-num">W3</span></div>
+    <div class="row" style="align-items:flex-start"><span class="rk tab-num">5</span><div class="nm" style="flex-direction:column;align-items:flex-start;gap:0"><span>NightcapNina</span><span class="rungs"><i></i><i></i></span></div><span class="rec tab-num">22-14</span><span class="stk W tab-num">W2</span></div>
+    <div class="row" style="align-items:flex-start"><span class="rk tab-num">6</span><div class="nm" style="flex-direction:column;align-items:flex-start;gap:0"><span>ParlayPat</span><span class="rungs"><i class="l"></i><i class="l"></i><i class="l"></i></span></div><span class="rec tab-num">18-15</span><span class="stk L tab-num">L3</span></div>
+    <div class="row" style="align-items:flex-start"><span class="rk tab-num">7</span><div class="nm" style="flex-direction:column;align-items:flex-start;gap:0"><span>ColdBrewKev</span><span class="rungs"><i class="l"></i><i class="l"></i><i class="l"></i><i class="l"></i><i class="l"></i><i class="l"></i></span></div><span class="rec tab-num">12-19</span><span class="stk L tab-num">L6</span></div>
+  </div>
+</div></div>
+
+<!-- ═══ 09 RECEIPTS ═══ -->
+<div class="mock"><div class="tag"><span class="n">09</span><span class="t">RECEIPT WALL — EVERY PLAYER A STAMPED CARD</span></div>
+<div class="phone">
+  <div class="ph-head"><div class="wordmark">THE <em>WALL</em></div><div class="win">SEASON ▾</div></div>
+  <div class="r2">
+    <div class="rcpt" style="border-color:rgba(201,162,39,.45)"><div class="who">BigSarge</div><div class="line tab-num">24-11 · 68.6%</div><span class="stamp W tab-num" style="border-color:var(--gold)">W7 HEATER</span></div>
+    <div class="rcpt"><div class="who">MToro22</div><div class="line tab-num">31-22 · 58.5%</div><span class="stamp W tab-num" style="border-color:var(--gold)">W5</span></div>
+    <div class="rcpt"><div class="who gary">GARY A.I.</div><div class="line tab-num">209-176 · 54.3%</div><span class="stamp W tab-num" style="border-color:var(--gold)">W4</span></div>
+    <div class="rcpt"><div class="who">TheLedger</div><div class="line tab-num">9-6 · 60.0%</div><span class="stamp W tab-num" style="border-color:var(--gold)">W3</span></div>
+    <div class="rcpt"><div class="who">NightcapNina</div><div class="line tab-num">22-14 · 61.1%</div><span class="stamp W tab-num" style="border-color:var(--gold)">W2</span></div>
+    <div class="rcpt"><div class="who">ParlayPat</div><div class="line tab-num">18-15 · 54.5%</div><span class="stamp L tab-num" style="border-color:var(--cold)">L3 COLD</span></div>
+  </div>
+</div></div>
+
+<!-- ═══ 10 QUANT DESK ═══ -->
+<div class="mock"><div class="tag"><span class="n">10</span><span class="t">DESK TERMINAL — PROPS-HUB LANGUAGE</span></div>
+<div class="phone">
+  <div class="ph-head"><div class="wordmark">THE <em>DESK</em></div><div class="win">SEASON ▾</div></div>
+  <div class="term">
+    <div class="thead"><span>PUBLIC BOOK · STANDINGS</span><span class="tab-num">100 SEATS</span></div>
+    <div class="trow"><span class="rk top tab-num">01</span><span class="nm">BigSarge</span><span class="rec tab-num">24-11</span><span class="pct tab-num">68.6</span><span class="stk W tab-num">W7</span></div>
+    <div class="trow"><span class="rk top tab-num">02</span><span class="nm">MToro22 <span class="you">YOU</span></span><span class="rec tab-num">31-22</span><span class="pct tab-num">58.5</span><span class="stk W tab-num">W5</span></div>
+    <div class="trow" style="background:rgba(201,162,39,.06)"><span class="rk top tab-num">03</span><span class="nm gary">GARY A.I.</span><span class="rec tab-num">209-176</span><span class="pct tab-num">54.3</span><span class="stk W tab-num">W4</span></div>
+    <div class="trow"><span class="rk tab-num">04</span><span class="nm">TheLedger</span><span class="rec tab-num">9-6</span><span class="pct tab-num">60.0</span><span class="stk W tab-num">W3</span></div>
+    <div class="trow"><span class="rk tab-num">05</span><span class="nm">NightcapNina</span><span class="rec tab-num">22-14</span><span class="pct tab-num">61.1</span><span class="stk W tab-num">W2</span></div>
+    <div class="trow"><span class="rk tab-num">06</span><span class="nm">DogHouseDan</span><span class="rec tab-num">18-21</span><span class="pct tab-num">46.2</span><span class="stk W tab-num">W1</span></div>
+    <div class="trow"><span class="rk tab-num">07</span><span class="nm">SweatEquity</span><span class="rec tab-num">15-12</span><span class="pct tab-num">55.6</span><span class="stk L tab-num">L1</span></div>
+    <div class="trow"><span class="rk tab-num">08</span><span class="nm">ParlayPat</span><span class="rec tab-num">18-15</span><span class="pct tab-num">54.5</span><span class="stk L tab-num">L3</span></div>
+  </div>
+  <p class="note" style="margin-top:10px">Same “Quant Terminal” register the Props Hub speaks: boxed panel, tinted header strip, Gary’s seat tinted gold.</p>
+</div></div>
+
+<!-- ═══ 11 AS BUILT BETSLIP ═══ -->
+<div class="mock"><div class="tag"><span class="n">11</span><span class="t">AS BUILT — MY BETS, LIVE IN THE SIM</span></div>
+<div class="phone">
+  <div class="ph-head"><div class="wordmark">THE <em>BOOK</em></div><div class="lens"><span class="on">MY BETS</span><span>THE BOARD</span></div></div>
+  <div class="tile3">
+    <div class="tile"><div class="k">RECORD</div><div class="v tab-num">31-22</div></div>
+    <div class="tile"><div class="k">WIN%</div><div class="v tab-num">58.5</div></div>
+    <div class="tile"><div class="k">STREAK</div><div class="v W tab-num">W5</div></div>
+  </div>
+  <div class="sect">OPEN SLIPS</div>
+  <div class="slip"><div class="top"><span>DODGERS WIN <span class="chip g">TAIL</span></span><span class="tab-num">-142</span></div><div class="sub"><span class="live tab-num">4-2 · INN 7</span><span class="tab-num">1.0u</span></div></div>
+  <div class="slip"><div class="top"><span>SUZUKI 2+ HITS <span class="chip g">TAIL</span> <span class="star">★</span></span><span class="tab-num">+120</span></div><div class="sub"><span class="tab-num">9:40 PM ET</span><span class="tab-num">0.5u</span></div></div>
+  <div class="slip"><div class="top"><span>PADRES ML PARLAY <span class="chip">MANUAL</span></span><span class="tab-num">+260</span></div><div class="sub"><span>DraftKings entry, self-graded</span><span class="tab-num">1.0u</span></div></div>
+  <div class="sect">THE LEDGER</div>
+  <div class="card">
+    <div class="day"><span>TUE AUG 19</span><span class="net-pos tab-num">+2.4u</span></div>
+    <div class="day"><span>MON AUG 18</span><span class="net-neg tab-num">-1.0u</span></div>
+    <div class="day"><span>SUN AUG 17</span><span class="net-pos tab-num">+3.1u</span></div>
+  </div>
+  <div class="cta">+ LOG A BET</div>
+</div></div>
+
+<!-- ═══ 12 TICKETS ═══ -->
+<div class="mock"><div class="tag"><span class="n">12</span><span class="t">TICKET STUBS — PERFORATED SLIPS, RESULT STAMPS</span></div>
+<div class="phone">
+  <div class="ph-head"><div class="wordmark">MY <em>TICKETS</em></div><div class="win">AUG 20 ▾</div></div>
+  <div class="ticket"><div class="slip" style="background:none;border:none;padding:0;margin:0"><div class="top"><span>YANKEES BY 2+</span><span class="tab-num">-118</span></div><div class="sub"><span>Tail · locks 7:05 PM ET</span><span class="tab-num">1.0u</span></div></div><div class="dash"></div><div class="sub" style="display:flex;justify-content:space-between;font-size:10px;color:var(--w45)"><span>NYY at BAL</span><span class="star">★ PLAY OF THE DAY</span></div></div>
+  <div class="ticket"><div class="slip" style="background:none;border:none;padding:0;margin:0"><div class="top"><span>OHTANI OVER 1.5 TB</span><span class="tab-num">-135</span></div><div class="sub"><span>Manual · FanDuel</span><span class="tab-num">0.5u</span></div></div><div class="dash"></div><div class="sub" style="display:flex;justify-content:space-between;font-size:10px;color:var(--w45)"><span>LAD at COL</span><span class="live tab-num">LIVE · TOP 3</span></div></div>
+  <div class="ticket" style="opacity:.85"><div class="slip" style="background:none;border:none;padding:0;margin:0"><div class="top"><span>DODGERS WIN</span><span class="tab-num">-142</span></div><div class="sub"><span>Tail · settled Aug 19</span><span class="tab-num">1.0u</span></div></div><div class="dash"></div><div class="sub" style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:var(--w45)">FINAL 6-2</span><span class="stamp W tab-num" style="border-color:var(--gold);margin:0">WON +0.70u</span></div></div>
+  <div class="ticket" style="opacity:.85"><div class="slip" style="background:none;border:none;padding:0;margin:0"><div class="top"><span>CUBS UNDER 8.5</span><span class="tab-num">-108</span></div><div class="sub"><span>Manual · settled Aug 19</span><span class="tab-num">1.0u</span></div></div><div class="dash"></div><div class="sub" style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:var(--w45)">FINAL 6-4</span><span class="stamp L tab-num" style="border-color:var(--cold);margin:0">LOST -1.00u</span></div></div>
+</div></div>
+
+<!-- ═══ 13 SLIP STACK ═══ -->
+<div class="mock"><div class="tag"><span class="n">13</span><span class="t">THE STACK — TONIGHT RIDES ON TOP</span></div>
+<div class="phone">
+  <div class="ph-head"><div class="wordmark">MY <em>BOOK</em></div><div class="win tab-num">W5 STREAK</div></div>
+  <div class="stack">
+    <div class="slip under2"><div class="top"><span>PADRES ML</span></div></div>
+    <div class="slip under"><div class="top"><span>SUZUKI 2+ HITS</span><span class="tab-num">+120</span></div></div>
+    <div class="slip"><div class="top"><span>DODGERS WIN <span class="chip g">TAIL</span> <span class="star">★</span></span><span class="tab-num">-142</span></div><div class="sub"><span class="live tab-num">4-2 · INN 7 · LIVE</span><span class="tab-num">1.0u TO WIN 0.70u</span></div></div>
+  </div>
+  <div class="sect" style="margin-top:18px">SETTLED THIS WEEK <span style="color:var(--gold)" class="tab-num">+4.5u</span></div>
+  <div class="card">
+    <div class="row"><span class="nm">BRAVES WIN</span><span class="chip g">TAIL</span><span class="stk W tab-num" style="width:70px">WON +0.65u</span></div>
+    <div class="row"><span class="nm">METS BY 2+</span><span class="chip">MANUAL</span><span class="stk W tab-num" style="width:70px">WON +0.90u</span></div>
+    <div class="row"><span class="nm">ROYALS WIN</span><span class="chip g">FADE</span><span class="stk L tab-num" style="width:70px">LOST -1.00u</span></div>
+    <div class="row"><span class="nm">ALONSO HR</span><span class="chip">MANUAL</span><span class="stk W tab-num" style="width:70px">WON +2.80u</span></div>
+  </div>
+</div></div>
+
+<!-- ═══ 14 DAY LEDGER ═══ -->
+<div class="mock"><div class="tag"><span class="n">14</span><span class="t">LEDGER BOOK — DAYS FIRST, SLIPS INSIDE</span></div>
+<div class="phone">
+  <div class="ph-head"><div class="wordmark">THE <em>LEDGER</em></div><div class="win tab-num">SEASON +11.2u</div></div>
+  <div class="card">
+    <div class="day" style="border:none"><span style="font-weight:700">WED AUG 20 <i style="font-style:normal;color:var(--heat)">· 2 OPEN</i></span><span class="win tab-num">RIDING 1.5u</span></div>
+    <div class="row" style="padding-left:26px"><span class="nm" style="font-weight:500">DODGERS WIN <span class="star">★</span></span><span class="live tab-num">INN 7</span></div>
+    <div class="row" style="padding-left:26px"><span class="nm" style="font-weight:500">SUZUKI 2+ HITS</span><span class="win tab-num">9:40 PM</span></div>
+    <div class="day"><span style="font-weight:700">TUE AUG 19</span><span class="net-pos tab-num">+2.40u</span></div>
+    <div class="row" style="padding-left:26px"><span class="nm" style="font-weight:500">BRAVES WIN</span><span class="stk W tab-num" style="width:64px">+0.65u</span></div>
+    <div class="row" style="padding-left:26px"><span class="nm" style="font-weight:500">ALONSO HR</span><span class="stk W tab-num" style="width:64px">+2.80u</span></div>
+    <div class="row" style="padding-left:26px"><span class="nm" style="font-weight:500">ROYALS WIN</span><span class="stk L tab-num" style="width:64px">-1.00u</span></div>
+    <div class="day"><span style="font-weight:700">MON AUG 18</span><span class="net-neg tab-num">-1.00u</span></div>
+    <div class="row" style="padding-left:26px"><span class="nm" style="font-weight:500">CUBS UNDER 8.5</span><span class="stk L tab-num" style="width:64px">-1.00u</span></div>
+  </div>
+  <div class="cta">+ LOG A BET</div>
+</div></div>
+
+<!-- ═══ 15 SPLIT BOOK ═══ -->
+<div class="mock"><div class="tag"><span class="n">15</span><span class="t">SPLIT BOOK — WITH GARY VS YOUR PLAYS</span></div>
+<div class="phone">
+  <div class="ph-head"><div class="wordmark">MY <em>BOOK</em></div><div class="lens"><span class="on">ALL</span><span>TAILS</span><span>FADES</span><span>MINE</span></div></div>
+  <div class="split">
+    <div class="half" style="border-color:rgba(201,162,39,.4)"><div class="k">WITH GARY · VERIFIED</div><div class="v tab-num">19-12</div><div class="s tab-num">61.3% · W5 · +6.8u</div></div>
+    <div class="half"><div class="k">YOUR PLAYS · SELF-GRADED</div><div class="v tab-num">12-10</div><div class="s tab-num">54.5% · L1 · +4.4u</div></div>
+  </div>
+  <div class="sect">TONIGHT</div>
+  <div class="slip"><div class="top"><span>DODGERS WIN <span class="chip g">TAIL</span> <span class="star">★</span></span><span class="tab-num">-142</span></div><div class="sub"><span class="live tab-num">4-2 · INN 7</span><span class="tab-num">1.0u</span></div></div>
+  <div class="slip"><div class="top"><span>GUARDIANS WIN <span class="chip g">FADE</span></span><span class="tab-num">+124</span></div><div class="sub"><span>Gary took the White Sox — you crossed him</span><span class="tab-num">1.0u</span></div></div>
+  <div class="slip"><div class="top"><span>OHTANI OVER 1.5 TB <span class="chip">MANUAL</span></span><span class="tab-num">-135</span></div><div class="sub"><span>FanDuel</span><span class="tab-num">0.5u</span></div></div>
+  <p class="note" style="margin-top:6px">The two ledgers never mix — the verified line is the shareable one, and the board only ever reads it.</p>
+</div></div>
+
+</div>
+</body>
+</html>

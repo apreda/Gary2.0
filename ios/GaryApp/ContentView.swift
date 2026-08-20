@@ -73,6 +73,7 @@ class PicksFocusState: ObservableObject {
 //   2: GARY (center) — Hub ⟷ Talk to Gary
 //   3: Picks    (player prop picks per game — was "Props")
 //   4: Billfold
+//   5: Book     (your bets + the classic leaderboard — added Aug 20)
 // Fantasy moved out of the tab bar (still accessible if linked from elsewhere).
 struct ContentView: View {
     @EnvironmentObject var authManager: AuthManager
@@ -87,7 +88,7 @@ struct ContentView: View {
 
     private let garyTabIndex: Int = 2
     private let billfoldTabIndex: Int = 4
-    private let lastValidTabIndex: Int = 4
+    private let lastValidTabIndex: Int = 5
 
     @ViewBuilder
     private func tabPage<Content: View>(_ index: Int, @ViewBuilder content: () -> Content) -> some View {
@@ -109,6 +110,7 @@ struct ContentView: View {
                     tabPage(2) { GaryPage(selectedTab: $selectedTab) }   // Hub ⟷ Talk to Gary
                     tabPage(3) { PicksCarouselView() }                   // "Picks" — per-game swipe carousel
                     tabPage(4) { BillfoldView() }
+                    tabPage(5) { BookTabView() }                         // "Book" — your bets + the board
                 }
                 .transaction { transaction in
                     if !PerformanceMode.current.useExpensiveEffects {
@@ -433,6 +435,7 @@ struct GaryCenteredTabBar: View {
     ]
     private let rightTabs: [TabItem] = [
         TabItem(icon: "list.bullet.rectangle.fill", label: "PICKS", index: 3),
+        TabItem(icon: "book.closed.fill", label: "BOOK", index: 5),
         TabItem(icon: "banknote.fill", label: "BILLFOLD", index: 4),
     ]
     private let garyIndex: Int = 2
@@ -440,11 +443,20 @@ struct GaryCenteredTabBar: View {
     private let logoSize: CGFloat = 46
 
     var body: some View {
+        // Sides are balanced as GROUPS (2 tabs left, 3 right since BOOK
+        // joined Aug 20) — each half gets equal width so the bear stays
+        // DEAD CENTER, the dock's one non-negotiable.
         HStack(alignment: .bottom, spacing: 0) {
-            ForEach(leftTabs, id: \.index) { sideTab($0) }
+            HStack(alignment: .bottom, spacing: 0) {
+                ForEach(leftTabs, id: \.index) { sideTab($0) }
+            }
+            .frame(maxWidth: .infinity)
             centerHub
-                .frame(maxWidth: .infinity)
-            ForEach(rightTabs, id: \.index) { sideTab($0) }
+                .fixedSize()
+            HStack(alignment: .bottom, spacing: 0) {
+                ForEach(rightTabs, id: \.index) { sideTab($0) }
+            }
+            .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, 14)
         .padding(.top, 30)

@@ -3,6 +3,7 @@ import SwiftUI
 // MARK: - Access View (Onboarding/Landing)
 
 struct AccessView: View {
+    @ObservedObject private var authManager = AuthManager.shared
     @State private var showDisclaimer = true
     @State private var showSignIn = false
     @AppStorage("hasEntered") private var hasEntered: Bool = false
@@ -100,17 +101,33 @@ struct AccessView: View {
 
                     // Returning-user path — the standard "Already have an account?
                     // Sign In" line (was a near-invisible grey footnote).
-                    Button {
-                        showSignIn = true
-                    } label: {
-                        HStack(spacing: 5) {
-                            Text("Already have an account?")
-                                .foregroundStyle(.white.opacity(0.55))
-                            Text("Sign In")
+                    // SIGNED-IN STATE (App Store 2.1a, Aug 19): a successful
+                    // sign-in used to land back here with this row unchanged —
+                    // reading as "nothing happened" and inviting doomed retries.
+                    // The row now confirms the signed-in account.
+                    if authManager.isAuthenticated {
+                        HStack(spacing: 6) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(GaryColors.gold)
+                            Text("Signed in\(signedInName.isEmpty ? "" : " as \(signedInName)")")
+                                .foregroundStyle(.white.opacity(0.75))
                         }
                         .font(GaryFonts.text(13.5, .semibold))
                         .padding(.vertical, 8)
+                    } else {
+                        Button {
+                            showSignIn = true
+                        } label: {
+                            HStack(spacing: 5) {
+                                Text("Already have an account?")
+                                    .foregroundStyle(.white.opacity(0.55))
+                                Text("Sign In")
+                                    .foregroundStyle(GaryColors.gold)
+                            }
+                            .font(GaryFonts.text(13.5, .semibold))
+                            .padding(.vertical, 8)
+                        }
                     }
                 }
                 .padding(.horizontal, 24)
@@ -134,6 +151,14 @@ struct AccessView: View {
         .sheet(isPresented: $showSignIn) {
             AuthView()
         }
+    }
+
+    /// Display identity for the signed-in row: claimed handle first, then a
+    /// readable email prefix (private-relay addresses read as noise in full).
+    private var signedInName: String {
+        if let h = UserDefaults.standard.string(forKey: "myHandle"), !h.isEmpty { return h }
+        let email = authManager.currentUser?.email ?? ""
+        return email.components(separatedBy: "@").first ?? ""
     }
 }
 

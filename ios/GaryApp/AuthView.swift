@@ -251,6 +251,14 @@ struct AuthView: View {
             // Signed in — the sheet's job is done.
             if isAuth { dismiss() }
         }
+        // Dismiss on the FACT of being signed in, not only the transition.
+        // App Store 2.1a (Aug 19, 3rd SIWA rejection): the reviewer's Apple
+        // sign-ins all succeeded server-side, but re-opening this sheet while
+        // already authenticated meant isAuthenticated went true→true — no
+        // change, no onChange, the sheet sat there looking dead.
+        .onAppear {
+            if authManager.isAuthenticated { dismiss() }
+        }
         .sheet(isPresented: $showForgotPassword) {
             ForgotPasswordSheet(
                 email: $resetEmail,
@@ -434,6 +442,14 @@ final class AppleSignInCoordinator: NSObject, ASAuthorizationControllerDelegate,
                 try await authManager.signInWithApple(credential: credential)
             } catch {
                 print("[AppleSignIn] token exchange failed: \(error.localizedDescription)")
+                // Network/decode throws don't set errorMessage inside
+                // signInWithApple — surface them here so no failure path is
+                // ever silent (the same guard the Google button carries).
+                await MainActor.run {
+                    if authManager.errorMessage == nil {
+                        authManager.errorMessage = "Apple sign-in couldn't finish. Please try again."
+                    }
+                }
             }
         }
     }
