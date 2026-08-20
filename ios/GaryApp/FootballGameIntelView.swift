@@ -173,7 +173,7 @@ struct FootballGameIntelView: View {
                     FootballNumbersSection(rows: numberRailRows, accent: accent)
                 }
                 if !standingsRows.isEmpty {
-                    FootballStandingsSection(rows: standingsRows, accent: accent)
+                    FootballStandingsSection(rows: standingsRows, accent: accent, title: "The Rankings")
                 }
 
                 if !shapeRows.isEmpty {
@@ -1848,10 +1848,13 @@ private struct FootballNumbersSection: View {
 private struct FootballStandingsSection: View {
     let rows: [Signal]
     let accent: Color
+    /// College's situational truth is the AP poll, not a standings table —
+    /// the section wears the honest name per league.
+    var title: String = "The Standings"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FootballSectionTitle(title: "The Standings", accent: accent)
+            FootballSectionTitle(title: title, accent: accent)
             VStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, s in
                     VStack(alignment: .leading, spacing: 5) {
