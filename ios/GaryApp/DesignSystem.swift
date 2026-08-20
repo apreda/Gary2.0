@@ -102,7 +102,11 @@ enum GaryColors {
     // NFL cobalt — an accessibility-lifted blue rooted in the league's shield
     // identity. Green belongs to MLB/positive-result semantics in Gary, while
     // red already carries NCAAF and loss meaning.
-    static let nflAccent = Color(hex: "#2C7EDB")
+    // NFL wears the HOUSE gold (founder, Aug 20: "clean up the design that
+    // GPT did" — the cobalt saturated whole modules on the Picks page and
+    // read foreign next to the gold app; the fall flagship sport wears the
+    // house color instead).
+    static let nflAccent = gold
 
     // MLB label/eyebrow accent — a SOLID light grass green (user call, Jun 26):
     // the old green→dirt-brown→white field gradient was retired for a clean,

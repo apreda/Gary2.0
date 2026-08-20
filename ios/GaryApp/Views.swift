@@ -21659,7 +21659,15 @@ struct PicksCarouselView: View {
         let pickLeagues = Set(store.gamePicks.compactMap { ($0.league ?? "").uppercased() }.filter { !$0.isEmpty })
             .union(store.allProps.filter { !isHomeRunProp($0) }.map { propSportKey($0) }.filter { !$0.isEmpty })
         let todayLeagues = Set(store.slate.compactMap { ($0.league ?? "").uppercased() })
-        let priority: [String: Int] = ["NFL": 0, "NCAAF": 1, "MLB": 2, "WC": 3]
+        // PRESEASON DEMOTION (founder, Aug 20: "default to the MLB tab until
+        // we are out of NFL preseason") — football only outranks MLB once the
+        // NFL regular season begins (kickoff Thu Sep 10 2026; Sep 9 = the
+        // eve). Before then MLB leads every tie-break; the football chips
+        // stay reachable, they just never win the default.
+        let nflRegularSeason = SupabaseAPI.todayEST() >= "2026-09-09"
+        let priority: [String: Int] = nflRegularSeason
+            ? ["NFL": 0, "NCAAF": 1, "MLB": 2, "WC": 3]
+            : ["MLB": 0, "NFL": 1, "NCAAF": 2, "WC": 3]
         // ALL is flag-gated (founder, Jul 13: league chips only) — the chip
         // drops but every ALL code path below survives for an easy restore.
         return (AppFlags.picksAllTab ? ["ALL"] : []) + s.sorted { a, b in
