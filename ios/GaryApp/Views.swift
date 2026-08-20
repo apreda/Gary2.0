@@ -24613,7 +24613,8 @@ struct PicksGamePage: View {
                     picks: entries.map(\.pick),
                     props: topProps,
                     row: scoutRow,
-                    edges: edges
+                    edges: edges,
+                    wire: scoutWire
                 )
             } else {
             // The Scout Trio (founder, Jul 22): the three approved mocks
