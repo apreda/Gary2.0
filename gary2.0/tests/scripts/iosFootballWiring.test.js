@@ -395,10 +395,15 @@ describe('Home MLB/NFL board parity', () => {
     expect(views).toContain('slate = []');
   });
 
-  it('uses one accessible cobalt token for NFL identity surfaces', () => {
-    expect(designSystem).toContain('static let nflAccent = Color(hex: "#2C7EDB")');
+  it('uses one HOUSE-GOLD token for NFL identity surfaces (founder, Aug 20)', () => {
+    // The cobalt read foreign next to the gold app — NFL wears the house
+    // color through the ONE token; every surface still routes through it.
+    expect(designSystem).toContain('static let nflAccent = gold');
+    expect(designSystem).not.toContain('nflAccent = Color(hex: "#2C7EDB")');
     expect(views).toContain('case .nflTDs: return GaryColors.nflAccent');
     expect(supabaseApi).toContain('case "NFL": return GaryColors.nflAccent');
+    // Share-card sport skins keep their own identity palette (exported
+    // images are the one surface where sport color is the point).
     expect(views).toContain('case .nfl, .nflTDs: return (Color(hex: "#1F65B3"), Color(hex: "#103D73"))');
   });
 });
