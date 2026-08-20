@@ -13688,9 +13688,18 @@ struct BillfoldView: View {
                 if AppFlags.userBookEnabled, billfoldScope == "you" {
                     // YOUR book takes the whole page below the header —
                     // Gary's tabs/timeframes are his-book controls only.
+                    // The standings live in the BOARD scope (founder, Aug 20:
+                    // the whole Book rides inside the Billfold, not the dock).
                     ScrollView(showsIndicators: false) {
-                        UserBookSection(expanded: true)
+                        UserBookSection(expanded: true, showBoard: false)
                             .padding(.top, 6)
+                            .padding(.bottom, 120)
+                    }
+                } else if AppFlags.userBookEnabled, billfoldScope == "board" {
+                    // THE BOARD — the classic leaderboard (podium + table).
+                    ScrollView(showsIndicators: false) {
+                        ClassicLeaderboardView()
+                            .padding(.top, 10)
                             .padding(.bottom, 120)
                     }
                 } else {
@@ -13988,8 +13997,9 @@ struct BillfoldView: View {
     /// grammar: text + underline bar, never a pill (founder law, Jul 26).
     private var bookScopeToggle: some View {
         HStack(spacing: 14) {
-            bookScopeTab("GARY", isOn: billfoldScope != "you") { billfoldScope = "gary" }
+            bookScopeTab("GARY", isOn: billfoldScope != "you" && billfoldScope != "board") { billfoldScope = "gary" }
             bookScopeTab("YOU", isOn: billfoldScope == "you") { billfoldScope = "you" }
+            bookScopeTab("BOARD", isOn: billfoldScope == "board") { billfoldScope = "board" }
         }
     }
 
@@ -23012,7 +23022,13 @@ struct PicksCarouselView: View {
         let retained = connections.filter { failures.contains($0.league) }
         connections = retained + successful.values.flatMap { $0 }
         connectionErrorLeagues = failures
-        connLoaded = true
+        // A fully-failed load (every league errored — e.g. the FIRST fetch
+        // cancelled by a quick tab switch) must not latch `connLoaded`: with
+        // nothing retained and nothing fetched, latching tells the .task
+        // re-entry guard the board is loaded and parks an empty board on the
+        // 90-second timer (the founder's Aug 20 blank slate-read). Any real
+        // success — including a legitimately empty day — still latches.
+        if !successful.isEmpty { connLoaded = true }
     }
 }
 

@@ -1120,10 +1120,11 @@ struct FootballNextSlatePreview: View {
 
 // MARK: - Football Picks slate board
 
-/// The Picks overview is intentionally not the Hub feed or the baseball edge
-/// carousel. It gives each football game one scan-first state, preferring live
-/// proof, Gary's immutable number, then the strongest verified matchup read.
-/// Full evidence remains on the game page and in The Hub.
+/// The Picks board carries the slate at full depth (founder, Aug 20: the NFL
+/// page holds "the same depth of info" as MLB's — NFL-native sections, not
+/// baseball's). Each game gets its own panel: live proof and Gary's number
+/// first, then availability and the matchup reads, every row with its full
+/// written read visible — never a bare one-liner.
 struct FootballPicksBoard: View {
     let league: String
     let signals: [Signal]
@@ -1131,7 +1132,17 @@ struct FootballPicksBoard: View {
     private var isCollege: Bool { league.uppercased() == "NCAAF" }
     private var accent: Color { isCollege ? Sport.ncaaf.accentColor : Sport.nfl.accentColor }
 
-    private var rows: [Signal] {
+    /// Rows a single game may show, and how many of those one lane may take —
+    /// depth without letting one lane (four injury reports) crowd out the rest.
+    private static let rowsPerGame = 5
+    private static let rowsPerKind = 2
+
+    private struct GamePanel: Identifiable {
+        let id: String
+        let rows: [Signal]
+    }
+
+    private var panels: [GamePanel] {
         let candidates = signals.enumerated()
             .filter { boardPriority($0.element) != nil }
             .sorted { lhs, rhs in
@@ -1140,16 +1151,24 @@ struct FootballPicksBoard: View {
                 return left == right ? lhs.offset < rhs.offset : left < right
             }
 
-        var seen = Set<String>()
-        var output: [Signal] = []
+        var order: [String] = []
+        var byGame: [String: [Signal]] = [:]
+        var kindCounts: [String: Int] = [:]
         for candidate in candidates {
             let signal = candidate.element
             let gameKey = signal.gameId ?? normalized(signal.game)
-            guard !gameKey.isEmpty, seen.insert(gameKey).inserted else { continue }
-            output.append(signal)
-            if output.count == 6 { break }
+            guard !gameKey.isEmpty else { continue }
+            if byGame[gameKey] == nil { order.append(gameKey); byGame[gameKey] = [] }
+            guard (byGame[gameKey]?.count ?? 0) < Self.rowsPerGame else { continue }
+            let kindKey = "\(gameKey)|\(signal.kind)"
+            guard (kindCounts[kindKey] ?? 0) < Self.rowsPerKind else { continue }
+            kindCounts[kindKey] = (kindCounts[kindKey] ?? 0) + 1
+            byGame[gameKey]?.append(signal)
         }
-        return output
+        return order.compactMap { key in
+            guard let rows = byGame[key], !rows.isEmpty else { return nil }
+            return GamePanel(id: key, rows: rows)
+        }
     }
 
     private func boardPriority(_ signal: Signal) -> Int? {
@@ -1184,19 +1203,36 @@ struct FootballPicksBoard: View {
     }
 
     var body: some View {
-        if !rows.isEmpty {
+        if !panels.isEmpty {
             // NO section header (founder, Aug 20: "remove the dash and the
-            // header name") — the rows' own kickers carry the identity; the
-            // card leads directly.
-            VStack(spacing: 0) {
-                ForEach(Array(rows.enumerated()), id: \.element.id) { index, signal in
-                    FootballPicksBoardRow(signal: signal, accent: accent)
-                    if index < rows.count - 1 {
-                        Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+            // header name") — each game panel leads with its own matchup line;
+            // the rows' kickers carry the lane identity.
+            VStack(spacing: 12) {
+                ForEach(panels) { panel in
+                    VStack(spacing: 0) {
+                        if let matchup = panel.rows.first?.game, !matchup.isEmpty {
+                            HStack(spacing: 8) {
+                                Rectangle().fill(accent.opacity(0.85)).frame(width: 3, height: 10)
+                                Text(matchup.uppercased())
+                                    .font(GaryFonts.mono(9.5, bold: true))
+                                    .tracking(1.1)
+                                    .foregroundStyle(.white.opacity(0.72))
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.top, 12)
+                            .padding(.bottom, 4)
+                        }
+                        ForEach(Array(panel.rows.enumerated()), id: \.element.id) { index, signal in
+                            FootballPicksBoardRow(signal: signal, accent: accent, showGame: false)
+                            if index < panel.rows.count - 1 {
+                                Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+                            }
+                        }
                     }
+                    .footballPanel(accent: accent)
                 }
             }
-            .footballPanel(accent: accent)
             .padding(.horizontal, 16)
         }
     }
@@ -1205,6 +1241,8 @@ struct FootballPicksBoard: View {
 private struct FootballPicksBoardRow: View {
     let signal: Signal
     let accent: Color
+    /// The panel header already names the matchup; standalone uses keep it.
+    var showGame: Bool = true
 
     private var label: String {
         switch signal.kind {
@@ -1270,34 +1308,48 @@ private struct FootballPicksBoardRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 7) {
-                    Text(label)
-                        .font(GaryFonts.mono(8, bold: true))
-                        .tracking(0.7)
-                        .foregroundStyle(accent)
-                    if !signal.game.isEmpty {
-                        Text(signal.game.uppercased())
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 7) {
+                        Text(label)
                             .font(GaryFonts.mono(8, bold: true))
-                            .tracking(0.45)
-                            .foregroundStyle(.white.opacity(0.38))
-                            .lineLimit(1)
+                            .tracking(0.7)
+                            .foregroundStyle(accent)
+                        if showGame, !signal.game.isEmpty {
+                            Text(signal.game.uppercased())
+                                .font(GaryFonts.mono(8, bold: true))
+                                .tracking(0.45)
+                                .foregroundStyle(.white.opacity(0.38))
+                                .lineLimit(1)
+                        }
                     }
+                    // The headline wraps in full — never a scaled-to-fit
+                    // single line hiding the second half of the sentence.
+                    Text(headline)
+                        .font(GaryFonts.text(13.5, .semibold))
+                        .foregroundStyle(GaryColors.warmWhite)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Text(headline)
-                    .font(GaryFonts.text(13.5, .semibold))
-                    .foregroundStyle(GaryColors.warmWhite)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
+                Spacer(minLength: 8)
+                if let trailingValue {
+                    Text(trailingValue)
+                        .font(GaryFonts.data(11.5, .bold))
+                        .foregroundStyle(accent)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
             }
-            Spacer(minLength: 8)
-            if let trailingValue {
-                Text(trailingValue)
-                    .font(GaryFonts.data(11.5, .bold))
-                    .foregroundStyle(accent)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+            // The written read, in full (founder, Aug 20: MLB-depth on the
+            // football board) — the same always-visible treatment the MLB
+            // edge rows give Gary's read. Live-proof lanes carry their own
+            // structured render and stay one-line.
+            if signal.kind != .theSweat, signal.kind != .afterGary, signal.kind != .marketRange,
+               !signal.detail.isEmpty {
+                Text(signal.detail)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(.white.opacity(0.65))
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.horizontal, 14)
