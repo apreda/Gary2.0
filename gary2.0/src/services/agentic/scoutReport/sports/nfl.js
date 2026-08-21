@@ -194,6 +194,10 @@ async function fetchQBStatsByName(qbName, teamName, season = footballSeasonForDa
       passingCompletionPct: qb.passing_completion_pct,
       qbRating: qb.qbr || qb.qb_rating,
       gamesPlayed: gamesPlayed,
+      // Which season this stat line describes — the formatter labels the line
+      // with it ("2025-26 season:"), so a prior-season fallback never reads as
+      // the current season.
+      statsSeason,
       isRookie: isRookie,
       isInexperienced: isInexperienced,
       experienceNote: experienceNote
