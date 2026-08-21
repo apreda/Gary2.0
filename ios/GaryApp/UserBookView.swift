@@ -830,6 +830,10 @@ struct UserBookSection: View {
                 showUnitSheet = true
             }
         }
+        .onGaryTour { verb, _ in
+            // QA harness: open the add-a-bet directory without a tap.
+            if verb == "logbet" { showQuickLog = true }
+        }
         .sheet(isPresented: $showUnitSheet) { UnitSizeSheet() }
         .sheet(isPresented: $showQuickLog) {
             QuickLogSheet { newBet in bets.insert(newBet, at: 0) }
@@ -2035,15 +2039,19 @@ struct QuickLogSheet: View {
                 }
             } label: {
                 HStack(spacing: 10) {
+                    // One line always — the old 38pt column wrapped "GAME"
+                    // into "GAM E" (wrapping is clipping; seen live Aug 21).
                     Text(entry.isProp ? "PROP" : "GAME")
                         .font(GaryFonts.mono(8, bold: true)).tracking(0.7)
                         .foregroundStyle(.white.opacity(0.45))
-                        .frame(width: 38, alignment: .leading)
+                        .lineLimit(1).fixedSize()
+                        .frame(width: 44, alignment: .leading)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(entry.title)
                             .font(GaryFonts.text(13.5, .semibold))
                             .foregroundStyle(.white.opacity(0.9))
-                            .lineLimit(1).minimumScaleFactor(0.75)
+                            // Scale, never truncate — no ellipsis, ever.
+                            .lineLimit(1).minimumScaleFactor(0.5)
                         Text(entry.subtitle)
                             .font(GaryFonts.mono(9))
                             .foregroundStyle(.white.opacity(0.4))
@@ -2298,7 +2306,10 @@ struct QuickLogSheet: View {
             if let c = etClock(p.commence_time) { subBits.append(c) }
             rows.append(DirectoryEntry(
                 id: "prop-\(player)-\(propText)-\(p.game_id.map(String.init) ?? "")",
-                title: "\(player) \(betWord) \(propText)",
+                // The app's own prop grammar ("pitcher_earned_runs 2.5" reads
+                // "Pitcher Earned Runs 2.5") — raw tokens ran long enough to
+                // truncate, and an ellipsis is never acceptable.
+                title: "\(player) \(betWord) \(Formatters.propDisplay(propText, league: p.effectiveLeague))",
                 subtitle: subBits.filter { !$0.isEmpty }.joined(separator: " · "),
                 isProp: true,
                 gameDate: etDate(p.commence_time),
@@ -2767,10 +2778,12 @@ struct ProfileView: View {
                 Text("THE BOARD")
                     .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
                     .foregroundStyle(GaryColors.gold)
-                Text("STANDINGS · STREAKS · GARY RIDES TOO")
+                // Short enough for the room it has — the longer line ran into
+                // an ellipsis beside the title (never acceptable).
+                Text("STANDINGS · STREAKS")
                     .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
                     .foregroundStyle(.white.opacity(0.45))
-                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .lineLimit(1).minimumScaleFactor(0.6)
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.system(size: 10, weight: .semibold))

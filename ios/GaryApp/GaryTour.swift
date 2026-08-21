@@ -18,6 +18,8 @@ import UIKit
 //   winners today                back to the live board
 //   winners date 2026-07-02      Winners historical board
 //   plans | auth | settings      present those sheets
+//   profile                      present the profile sheet
+//   logbet                       open the add-a-bet directory (Billfold YOU)
 //   flip                         flip every pick card (games + prop slips)
 //   reveal                       open the first sealed Members card (in-place FX)
 //   reseal                       clear the revealed ledger + re-seal cards
@@ -67,6 +69,8 @@ enum GaryTour {
             topController()?.dismiss(animated: true)
         case "settings":
             NotificationCenter.default.post(name: Notification.Name("ShowSettingsMenu"), object: nil)
+        case "profile":
+            NotificationCenter.default.post(name: Notification.Name("ShowProfile"), object: nil)
         case "reveal":
             revealBudget = max(1, Int(arg) ?? 1)
             post(verb, arg)
