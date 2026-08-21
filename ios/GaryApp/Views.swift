@@ -2225,6 +2225,9 @@ struct HomeView: View {
     @State private var picksByGameId: [String: GaryPick] = [:]
     @State private var initialLive: [LiveScore] = []
     @ObservedObject private var liveCache = LiveScoreCache.shared
+    /// The signed-in user's bets for TODAY — feeds the board's YOU tab
+    /// (founder, Aug 20). Loaded with the home refresh; empty when signed out.
+    @State private var myTodayBets: [UserBet] = []
 
     /// Time-aware front page: results lead in the morning, the slate leads
     /// pre-game, the tape + takeover lead while Gary's games are in progress.
@@ -2376,6 +2379,19 @@ struct HomeView: View {
             if verb == "today" { selectedPhase = todayClockPhase }
             if verb == "homeboard", let league = HomeBoardLeague(rawValue: arg.uppercased()) {
                 selectedHomeBoardLeague = league
+            }
+        }
+        .task(id: homeNonce) {
+            // The board's YOU tab: today's tails/fades (founder, Aug 20) — its
+            // own load so EVERY home refresh path carries it. Signed-out =
+            // empty = no tab. Day-cache law: never latch a cancelled empty
+            // fetch over rows already showing.
+            if AppFlags.userBookEnabled, AuthManager.shared.bearerToken != nil {
+                let today = SupabaseAPI.todayEST()
+                let mine = await UserBookAPI.fetchMyBets().filter { $0.game_date == today }
+                if !mine.isEmpty || myTodayBets.isEmpty { myTodayBets = mine }
+            } else {
+                myTodayBets = []
             }
         }
         .task(id: homeNonce) {
@@ -3373,6 +3389,9 @@ struct HomeView: View {
     private enum HomeBoardLeague: String, CaseIterable, Hashable {
         case mlb = "MLB"
         case nfl = "NFL"
+        /// The user's own slate (founder, Aug 20: "a You tab next to NFL") —
+        /// same board, same rows, THEIR side's standing in the verdict slot.
+        case you = "YOU"
 
         var sport: Sport { self == .mlb ? .mlb : .nfl }
     }
@@ -3720,6 +3739,127 @@ struct HomeView: View {
         return out.sorted { $0.commence < $1.commence }
     }
 
+    // ── The YOU tab (founder, Aug 20: "a You tab next to NFL... Covering
+    // Sweating or Losing would match up with the actual result THEY took").
+    // Same board, same row grammar — the verdict slot answers for the USER's
+    // side: a fade inverts Gary's live standing, and a settled row reads the
+    // server-graded user outcome straight off the bet.
+
+    /// Their side's live standing: Gary's verdict, flipped when they faded him.
+    private func youLiveStatus(_ bet: UserBet, verdicts: [HomeLiveVerdict]) -> (String, Color) {
+        let isFade = bet.kind == "fade"
+        let winning = verdicts.contains(isFade ? .trailing : .covering)
+        let losing = verdicts.contains(isFade ? .covering : .trailing)
+        if winning && !losing { return ("COVERING", GaryColors.win) }
+        if losing && !winning { return ("LOSING", GaryColors.loss) }
+        return ("SWEATING", GaryColors.sweating)
+    }
+
+    private var youSheetRows: [HomeSheetRow] {
+        guard AppFlags.userBookEnabled, !myTodayBets.isEmpty else { return [] }
+        var out: [HomeSheetRow] = []
+        for (i, bet) in myTodayBets.enumerated() {
+            let kindWord = bet.kind == "fade" ? "FADING" : bet.kind == "tail" ? "RIDING" : "YOURS"
+            var call = "\(kindWord) · \(Self.homePickLabel(bet.pick_text))"
+            if bet.streak_pick == true { call += " · STREAK" }
+
+            // Game tails/fades join the slate for the live score + verdict.
+            let pick = bet.pick_type == "game"
+                ? todayPicks.first(where: { ($0.pick ?? "") == bet.pick_text })
+                : nil
+            let matchupFull: String = {
+                if let a = pick?.awayTeam, let h = pick?.homeTeam, !a.isEmpty, !h.isEmpty {
+                    return "\(a) @ \(h)"
+                }
+                return bet.matchup ?? ""
+            }()
+            let lgUpper = (bet.league ?? pick?.league ?? "").uppercased()
+            let commence = pick?.commence_time ?? bet.lock_at ?? ""
+            let ls: LiveScore? = matchupFull.isEmpty ? nil
+                : sheetLive(matchupFull, league: lgUpper, gameID: pick?.game_id, commence: commence)
+
+            var zone: HomeSheetRow.Zone = .upcoming
+            var title = matchupFull.isEmpty
+                ? lgUpper
+                : {
+                    let sides = matchupFull.components(separatedBy: " @ ")
+                    return sides.count == 2
+                        ? "\(Self.teamAbbrev(sides[0], league: lgUpper)) @ \(Self.teamAbbrev(sides[1], league: lgUpper))"
+                        : matchupFull
+                }()
+            var clockText: String? = nil
+            var statusText = ""
+            var statusColor = Color.white.opacity(0.62)
+
+            if bet.status == "won" {
+                zone = .settled
+                clockText = "FINAL"
+                if let score = ls?.scoreLine { title = score.uppercased() }
+                statusText = AppFlags.storeSafe ? "✓ WON" : "✓ CASHED"
+                statusColor = GaryColors.win
+                call += " · \(BookMoney.net(bet.units_net ?? 0))"
+            } else if bet.status == "lost" {
+                zone = .settled
+                clockText = "FINAL"
+                if let score = ls?.scoreLine { title = score.uppercased() }
+                statusText = "✗ LOST"
+                statusColor = GaryColors.loss
+                call += " · \(BookMoney.net(bet.units_net ?? 0))"
+            } else if bet.status == "push" || bet.status == "void" {
+                zone = .settled
+                clockText = "FINAL"
+                statusText = bet.status.uppercased()
+                statusColor = GaryColors.gold
+            } else if let ls, ls.isLive, let pick {
+                zone = .live
+                title = ls.scoreLine ?? title
+                clockText = "▶ \((ls.detail ?? "LIVE").uppercased())"
+                let (word, color) = youLiveStatus(bet, verdicts: [HomeLiveVerdict.evaluate(pick: pick, live: ls)])
+                statusText = word
+                statusColor = color
+            } else if let ls, ls.isFinal {
+                zone = .settled
+                title = ls.scoreLine ?? title
+                clockText = "FINAL"
+                statusText = "SETTLING"
+                statusColor = Color.white.opacity(0.55)
+            } else if let d = parseISO8601(commence) {
+                statusText = Self.etClock(d)
+            } else {
+                statusText = "OPEN"
+            }
+
+            out.append(HomeSheetRow(
+                id: "you-\(bet.id)-\(i)",
+                gameID: pick?.game_id,
+                zone: zone,
+                league: lgUpper,
+                matchupFull: matchupFull,
+                title: title,
+                callLine: call,
+                pendingLine: nil,
+                clockText: clockText,
+                statusText: statusText,
+                statusColor: statusColor,
+                bigOne: false,
+                commence: commence,
+                hitLines: []
+            ))
+        }
+        return out.sorted { a, b in
+            a.zone == b.zone ? a.commence < b.commence : zoneRank(a.zone) < zoneRank(b.zone)
+        }
+    }
+
+    private func zoneRank(_ z: HomeSheetRow.Zone) -> Int {
+        switch z {
+        case .live: return 0
+        case .upcoming: return 1
+        case .interrupted: return 2
+        case .settled: return 3
+        }
+    }
+
     /// Cashed-prop events -> render lines: "IBRAHIM GOAL 15'", "ATTIA ASSIST",
     /// "PEDRI CARDED", "JUDGE HR x2", "WITT STEAL", "SKENES 8 KS".
     static func liveHitStrings(_ ls: LiveScore) -> [String] {
@@ -4030,16 +4170,23 @@ struct HomeView: View {
         let rows = sheetRows
             .filter { $0.league == HomeBoardLeague.mlb.rawValue || $0.league == HomeBoardLeague.nfl.rawValue }
             .sorted { $0.commence < $1.commence }
-        let available = Set(rows.compactMap { HomeBoardLeague(rawValue: $0.league) })
+        let youRows = youSheetRows
+        let available: Set<HomeBoardLeague> = {
+            var set = Set(rows.compactMap { HomeBoardLeague(rawValue: $0.league) })
+            // YOUR slate rides the same board as its own tab (founder, Aug 20)
+            // — present only when the signed-in user has bets down today.
+            if !youRows.isEmpty { set.insert(.you) }
+            return set
+        }()
         let selected = available.contains(selectedHomeBoardLeague)
             ? selectedHomeBoardLeague
             : (available.contains(.mlb) ? .mlb : .nfl)
 
-        if !rows.isEmpty {
+        if !rows.isEmpty || !youRows.isEmpty {
             // The countdown/marquee-to-board boundary is neutral chrome. A
             // green rule read like a graded win and changed color mid-slate.
             HomeSectionRule(tint: GaryColors.warmWhite)
-            homeSheetPanel(rows.filter { $0.league == selected.rawValue },
+            homeSheetPanel(selected == .you ? youRows : rows.filter { $0.league == selected.rawValue },
                            selected: selected,
                            available: available)
         }
@@ -4050,26 +4197,31 @@ struct HomeView: View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 ForEach(HomeBoardLeague.allCases, id: \.self) { league in
-                    let enabled = available.contains(league)
-                    Button {
-                        selectedHomeBoardLeague = league
-                    } label: {
-                        Text(league.rawValue)
-                            .font(.system(size: 12.5, weight: .bold).monospacedDigit())
-                            .tracking(1.4)
-                            .foregroundStyle(league == selected
-                                ? GaryColors.gold
-                                : Color.white.opacity(enabled ? 0.62 : 0.45))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
+                    // The YOU tab exists only when the user has bets down
+                    // today — an empty personal slate never renders a dead tab.
+                    if league != .you || available.contains(.you) {
+                        let enabled = available.contains(league)
+                        Button {
+                            selectedHomeBoardLeague = league
+                        } label: {
+                            Text(league.rawValue)
+                                .font(.system(size: 12.5, weight: .bold).monospacedDigit())
+                                .tracking(1.4)
+                                .foregroundStyle(league == selected
+                                    ? GaryColors.gold
+                                    : Color.white.opacity(enabled ? 0.62 : 0.45))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!enabled)
+                        .accessibilityAddTraits(league == selected ? .isSelected : [])
                     }
-                    .buttonStyle(.plain)
-                    .disabled(!enabled)
-                    .accessibilityAddTraits(league == selected ? .isSelected : [])
                 }
             }
             ForEach(Array(rows.enumerated()), id: \.element.id) { i, r in
                 Button {
+                    guard !r.matchupFull.isEmpty else { return }
                     PicksFocusState.shared.focus(game: r.matchupFull,
                                                  league: r.league,
                                                  gameID: r.gameID)
@@ -4085,7 +4237,14 @@ struct HomeView: View {
             // THE RECORD rides INSIDE the board card (founder, Aug 19: "put
             // the stuff above it inside of the board at the end, so it's all
             // wrapped up") — the board's own bottom line, behind one divider.
-            if gamesNightRecord.w + gamesNightRecord.l + gamesNightRecord.p > 0
+            // On the YOU tab the bottom line is THEIR day, not Gary's.
+            if selected == .you {
+                if let line = youDayLine {
+                    Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+                    line
+                        .padding(.horizontal, 14).padding(.vertical, 12)
+                }
+            } else if gamesNightRecord.w + gamesNightRecord.l + gamesNightRecord.p > 0
                 || recapLabel == "LIVE" || recapLabel == "TODAY" {
                 Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
                 scorecard
@@ -4116,6 +4275,35 @@ struct HomeView: View {
                 .shadow(color: .black.opacity(0.65), radius: 4, y: 2)
         )
         .pageGutter()
+    }
+
+    /// The YOU tab's bottom line: their settled day in money, open count beside.
+    private var youDayLine: AnyView? {
+        let settled = myTodayBets.filter { ["won", "lost", "push"].contains($0.status) }
+        let open = myTodayBets.filter { $0.isPending }.count
+        guard !settled.isEmpty || open > 0 else { return nil }
+        let w = settled.filter { $0.status == "won" }.count
+        let l = settled.filter { $0.status == "lost" }.count
+        let net = settled.reduce(0.0) { $0 + ($1.units_net ?? 0) }
+        return AnyView(HStack(spacing: 8) {
+            Text("YOUR DAY")
+                .font(.system(size: 11, weight: .bold).monospacedDigit()).tracking(1.2)
+                .foregroundStyle(GaryColors.gold)
+            if w + l > 0 {
+                Text("\(w)\u{2013}\(l)")
+                    .font(.system(size: 13, weight: .bold).monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.9))
+                Text(BookMoney.netTotal(net))
+                    .font(.system(size: 13, weight: .bold).monospacedDigit())
+                    .foregroundStyle(net >= 0 ? GaryColors.win : GaryColors.loss)
+            }
+            if open > 0 {
+                Text("\(open) OPEN")
+                    .font(.system(size: 11, weight: .semibold).monospacedDigit()).tracking(0.8)
+                    .foregroundStyle(.white.opacity(0.55))
+            }
+            Spacer()
+        })
     }
 
     // MARK: Tonight extras — the bettor's read on the DAY
@@ -5947,10 +6135,6 @@ struct HeadlineFlipCard: View {
 
     private var leagueAccent: Color { Sport.from(league: story.league).accentColor }
 
-    private var resultColor: Color {
-        story.verdict == "PUSH" ? GaryColors.gold : (story.cashed ? GaryColors.win : GaryColors.loss)
-    }
-
     var body: some View {
         ZStack {
             front.opacity(flipped ? 0 : 1)
@@ -6061,29 +6245,13 @@ struct HeadlineFlipCard: View {
                     }
                 }
                 Spacer(minLength: 4)
-                // Aug 19 round two (founder): the BET and the CASH live in the
-                // box column now, under the homers — the story column keeps
-                // every point of height for the words.
+                // Aug 20 (founder): the money and the odds came OFF the card —
+                // just the pick, sitting on the bottom line where they were.
+                // Scale, never truncate — an ellipsis is never acceptable.
                 Text(story.receiptPick)
                     .font(GaryFonts.mono(10.5, bold: true)).tracking(0.6)
                     .foregroundStyle(GaryColors.gold)
                     .lineLimit(1).minimumScaleFactor(0.65)
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    // Money and price on ONE line (founder, Aug 5). Scale, never
-                    // truncate — an ellipsis is never acceptable.
-                    Text(moneyText)
-                        .font(GaryFonts.mono(10.5, bold: true)).tracking(0.6)
-                        .foregroundStyle(resultColor)
-                        .lineLimit(1).minimumScaleFactor(0.65)
-                    Spacer(minLength: 3)
-                    if !story.odds.isEmpty {
-                        Text(story.odds)
-                            .font(GaryFonts.mono(10.5, bold: true)).tracking(0.6)
-                            .foregroundStyle(GaryColors.gold)
-                            .lineLimit(1).minimumScaleFactor(0.65)
-                    }
-                }
-                .padding(.top, 2)
             }
             // Narrower box column (Aug 19, with the smaller box type) — the
             // freed points go to the story column the founder wants leading.
@@ -6136,19 +6304,8 @@ struct HeadlineFlipCard: View {
         return (away: (clubs[0], runs[0]), home: (clubs[1], runs[1]))
     }
 
-    /// The money, or the verdict word when the price wouldn't parse — the card
-    /// never shows a dollar figure it couldn't compute.
-    private var moneyText: String {
-        guard let net = story.netOnFlat else { return story.verdict }
-        if net == 0 { return "$0.00" }
-        let sign = net > 0 ? "+" : "−"
-        return String(format: "%@$%.2f", sign, abs(net))
-    }
-
-    private var footMeta: String {
-        story.netOnFlat == nil ? story.league.uppercased()
-                               : "ON $100 · \(story.league.uppercased())"
-    }
+    // (moneyText/footMeta deleted Aug 20 — the founder took the money and the
+    // odds off the card front; the pick alone holds the bottom line.)
 
     // MARK: back — what else hit
 
@@ -13691,7 +13848,7 @@ struct BillfoldView: View {
                     // The standings live in the BOARD scope (founder, Aug 20:
                     // the whole Book rides inside the Billfold, not the dock).
                     ScrollView(showsIndicators: false) {
-                        UserBookSection(expanded: true, showBoard: false)
+                        UserBookSection()
                             .padding(.top, 6)
                             .padding(.bottom, 120)
                     }
@@ -24125,9 +24282,10 @@ fileprivate struct ScoutArmsSection: View {
                     .foregroundStyle(GaryColors.gold)
                 // Gary's two sentences on the two starters (founder, Aug 4 —
                 // "whatever two sentences Gary wants to say").
-                // The take reads exactly as it did before (founder, Aug 6:
-                // the drop cap came back out — "it was fine how it was") —
-                // a hairline gold border is the only frame it wears now.
+                // The take stands on the same container the plates below it
+                // wear (founder, Aug 20: "the words feel like they are propped
+                // up, the same depth as the containers below it") — soft fill
+                // plus the gold hairline, never bare text on the page ground.
                 Text(take)
                     .font(.system(size: 15))
                     .foregroundStyle(ScoutMock.warm.opacity(0.92))
@@ -24135,6 +24293,9 @@ fileprivate struct ScoutArmsSection: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 13).padding(.vertical, 11)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(ScoutMock.warm.opacity(0.04)))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .stroke(GaryColors.gold.opacity(0.32), lineWidth: 0.6))

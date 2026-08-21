@@ -52,43 +52,45 @@ struct UserBet: Codable, Identifiable {
     var isPending: Bool { status == "pending" }
 }
 
-// ── Money display (founder, Jul 26: "don't do units, do money") ─────────────
+// ── Money display (founder, Jul 26: "don't do units, do money"; Aug 20:
+// "use money pretty much everywhere over units") ────────────────────────────
 // Stakes/results STORE as units (the server math is unit-based and unfakeable);
-// the DISPLAY is dollars once the user tells us what a unit is worth to them.
-// Until they do, units show — and the YOU page asks them right there, inline,
-// never a trip to Settings.
+// the DISPLAY is always dollars — at the user's own unit size once they set
+// one, at the house's hypothetical $100/bet until then (the same convention
+// Gary's Billfold uses, under the same HYPOTHETICAL framing). Units never
+// show on this surface again.
 enum BookMoney {
+    /// The house display convention while no personal unit size is set.
+    static let defaultUnitDollars: Double = 100
+
     static var unitDollars: Double {
-        UserDefaults.standard.double(forKey: "userUnitDollars")
+        let v = UserDefaults.standard.double(forKey: "userUnitDollars")
+        return v > 0 ? v : defaultUnitDollars
     }
-    static var isSet: Bool { unitDollars > 0 }
+    /// Whether the user has told us their own unit size (drives the one-time
+    /// inline ask — display no longer depends on it).
+    static var isSet: Bool { UserDefaults.standard.double(forKey: "userUnitDollars") > 0 }
 
     private static func dollars(_ value: Double) -> String {
         let v = (value * 100).rounded() / 100
         return v == v.rounded() ? String(format: "$%.0f", v) : String(format: "$%.2f", v)
     }
 
-    /// A stake: "$25" once the unit is set, else "1.0u".
+    /// A stake: "$100".
     static func stake(_ units: Double) -> String {
-        isSet ? dollars(units * unitDollars) : String(format: "%.1fu", units)
+        dollars(units * unitDollars)
     }
 
-    /// A net result: "+$63" / "-$25", else "+0.63u" / "-1.00u".
+    /// A net result: "+$63" / "-$25".
     static func net(_ units: Double) -> String {
-        if isSet {
-            let d = units * unitDollars
-            return (d >= 0 ? "+" : "-") + dollars(abs(d))
-        }
-        return String(format: "%+.2fu", units)
+        let d = units * unitDollars
+        return (d >= 0 ? "+" : "-") + dollars(abs(d))
     }
 
-    /// Ledger totals, one decimal in unit mode: "+$140" / "+1.4u".
+    /// Ledger totals: "+$140".
     static func netTotal(_ units: Double) -> String {
-        if isSet {
-            let d = units * unitDollars
-            return (d >= 0 ? "+" : "-") + dollars(abs(d))
-        }
-        return String(format: "%+.1fu", units)
+        let d = units * unitDollars
+        return (d >= 0 ? "+" : "-") + dollars(abs(d))
     }
 }
 
@@ -113,7 +115,7 @@ struct UnitSizeSheet: View {
             Text("WHAT'S A UNIT WORTH TO YOU?")
                 .font(GaryFonts.mono(12, bold: true)).tracking(1.2)
                 .foregroundStyle(GaryColors.gold)
-            Text("Your typical bet, in dollars. Your book shows real money from then on — change it anytime in Settings.")
+            Text("Your typical bet, in dollars. Until you set one, your book prices every bet at a hypothetical $100 — change it anytime in Settings.")
                 .font(GaryFonts.text(13))
                 .foregroundStyle(.white.opacity(0.65))
                 .fixedSize(horizontal: false, vertical: true)
@@ -151,7 +153,7 @@ struct UnitSizeSheet: View {
                 }
                 dismiss()
             } label: {
-                Text(Double(amountText).map { $0 > 0 } == true ? "Save" : "Keep units for now")
+                Text(Double(amountText).map { $0 > 0 } == true ? "Save" : "Keep $100 for now")
                     .font(GaryFonts.mono(12, bold: true)).tracking(0.5)
                     .foregroundStyle(.black)
                     .frame(maxWidth: .infinity)
@@ -293,98 +295,9 @@ enum UserBookAPI {
         return (try? JSONDecoder().decode([UserStreak].self, from: data))?.first
     }
 
-    struct BoardRow: Codable, Identifiable {
-        let display_name: String
-        let wins: Int
-        let losses: Int
-        let pushes: Int
-        let units: Double
-        let best_streak: Int
-        var id: String { display_name }
-    }
-
-    /// Public standings (aggregate-only RPC; anon-readable by design).
-    static func fetchLeaderboard(window: String) async -> [BoardRow] {
-        async let garyRow = fetchGaryLeaderboardRow(window: window)
-        guard let url = URL(string: "\(Secrets.supabaseURL.absoluteString)/rest/v1/rpc/your_book_leaderboard") else { return [] }
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue(Secrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
-        req.setValue("Bearer \(Secrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try? JSONSerialization.data(withJSONObject: ["p_window": window])
-        let users: [BoardRow]
-        if let (data, resp) = try? await URLSession.shared.data(for: req),
-           (resp as? HTTPURLResponse)?.statusCode == 200 {
-            users = (try? JSONDecoder().decode([BoardRow].self, from: data)) ?? []
-        } else {
-            users = []
-        }
-        guard let gary = await garyRow else { return users }
-        // Gary is an official comparator on the same units board, derived from
-        // the public graded ledger rather than a fake auth account. Manual user
-        // bets remain excluded; only system-graded Tail/Fade rows rank users.
-        return (users.filter { $0.display_name.caseInsensitiveCompare(gary.display_name) != .orderedSame } + [gary])
-            .sorted { $0.units == $1.units ? $0.display_name < $1.display_name : $0.units > $1.units }
-    }
-
-    private static func fetchGaryLeaderboardRow(window: String) async -> BoardRow? {
-        func officialUnits(result: String, odds: String?) -> Double {
-            switch result {
-            case "lost": return -1
-            case "push": return 0
-            case "won":
-                let price = Double((odds ?? "-110").replacingOccurrences(of: "+", with: "")) ?? -110
-                return price > 0 ? price / 100 : 100 / abs(price)
-            default: return 0
-            }
-        }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "America/New_York") ?? calendar.timeZone
-        let days = window.lowercased() == "7d" ? -7 : (window.lowercased() == "season" ? nil : -30)
-        let since: String
-        if let days, let date = calendar.date(byAdding: .day, value: days, to: Date()) {
-            let f = DateFormatter(); f.calendar = calendar; f.timeZone = calendar.timeZone; f.dateFormat = "yyyy-MM-dd"
-            since = f.string(from: date)
-        } else {
-            since = "2026-03-01"
-        }
-
-        async let gameLoad = try? SupabaseAPI.fetchAllGameResults(since: since)
-        async let propLoad = try? SupabaseAPI.fetchPropResults(since: since)
-        let games = await gameLoad ?? []
-        let props = (await propLoad ?? []).filter { !$0.isHRResult }
-
-        struct Settled {
-            let date: String
-            let result: String
-            let units: Double
-        }
-        var settled: [Settled] = []
-        for g in games {
-            guard let result = g.result?.lowercased(), ["won", "lost", "push"].contains(result) else { continue }
-            settled.append(Settled(date: g.game_date ?? "", result: result,
-                                   units: officialUnits(result: result, odds: g.effectiveOdds)))
-        }
-        for p in props {
-            guard let result = p.result?.lowercased(), ["won", "lost", "push"].contains(result) else { continue }
-            settled.append(Settled(date: p.game_date ?? "", result: result,
-                                   units: officialUnits(result: result, odds: p.odds?.value)))
-        }
-        guard !settled.isEmpty else { return nil }
-
-        let wins = settled.filter { $0.result == "won" }.count
-        let losses = settled.filter { $0.result == "lost" }.count
-        let pushes = settled.filter { $0.result == "push" }.count
-        var running = 0, best = 0
-        for row in settled.sorted(by: { $0.date < $1.date }) {
-            if row.result == "won" { running += 1; best = max(best, running) }
-            else if row.result == "lost" { running = 0 }
-        }
-        return BoardRow(display_name: "GARY A.I.", wins: wins, losses: losses,
-                        pushes: pushes, units: settled.reduce(0) { $0 + $1.units },
-                        best_streak: best)
-    }
+    // (The v1 units leaderboard — BoardRow / fetchLeaderboard /
+    // fetchGaryLeaderboardRow — came out Aug 20: ONE board now, the classic
+    // streak-first ClassicLeaderboardView on the Billfold's BOARD scope.)
 
     /// The signed-in user's claimed handle, if any (owner-only select).
     @MainActor static func fetchMyHandle() async -> String? {
@@ -458,6 +371,28 @@ enum UserBookAPI {
         comps.queryItems = [URLQueryItem(name: "id", value: "eq.\(id)")]
         guard let url = comps.url, let req = try? authedRequest(url, method: "DELETE") else { return false }
         return (try? await run(req)) != nil
+    }
+
+    /// Star an EXISTING bet as the day's streak play (founder, Aug 20: "enter
+    /// or star the bet they want to go towards their streak"). One play a day:
+    /// every other claim the user holds for that date is released first, then
+    /// the starred row takes it. Owner-only RLS scopes both writes to the
+    /// signed-in user. Pass star=false to just release the claim.
+    @MainActor static func setStreakPick(id: String, gameDate: String, star: Bool) async -> Bool {
+        func patch(_ query: [URLQueryItem], _ payload: [String: Any]) async -> Bool {
+            guard var comps = URLComponents(url: rest.appendingPathComponent("user_bets"), resolvingAgainstBaseURL: false) else { return false }
+            comps.queryItems = query
+            guard let body = try? JSONSerialization.data(withJSONObject: payload),
+                  let url = comps.url,
+                  let req = try? authedRequest(url, method: "PATCH", body: body) else { return false }
+            return (try? await run(req)) != nil
+        }
+        if star {
+            _ = await patch([URLQueryItem(name: "game_date", value: "eq.\(gameDate)"),
+                             URLQueryItem(name: "streak_pick", value: "eq.true")],
+                            ["streak_pick": false])
+        }
+        return await patch([URLQueryItem(name: "id", value: "eq.\(id)")], ["streak_pick": star])
     }
 
     /// Public riders/faders counts per pick for a date (aggregate only — the
@@ -632,13 +567,15 @@ struct TailFadeRow: View {
             HStack(spacing: 10) {
                 // One play a day rides the streak — claiming it here releases
                 // any other claim the user holds for the date (server-enforced).
+                // The star IS the streak grammar app-wide (founder, Aug 20).
                 Button { streakOn.toggle() } label: {
-                    VStack(spacing: 3) {
+                    HStack(spacing: 4) {
+                        Image(systemName: streakOn ? "star.fill" : "star")
+                            .font(.system(size: 10, weight: .semibold))
                         Text("STREAK")
                             .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
-                            .foregroundStyle(streakOn ? Color(hex: "#E5844B") : .white.opacity(0.5))
-                        Rectangle().fill(streakOn ? Color(hex: "#E5844B") : .clear).frame(height: 1.5)
                     }
+                    .foregroundStyle(streakOn ? Color(hex: "#E5844B") : .white.opacity(0.5))
                     .fixedSize()
                 }
                 .buttonStyle(.plain)
@@ -763,16 +700,14 @@ struct TailFadeRow: View {
     }
 }
 
-// ── YOUR BOOK (Billfold section) ────────────────────────────────────────────
+// ── YOUR BOOK (the Billfold's YOU page) ─────────────────────────────────────
 // Two ledgers, never mixed: WITH GARY = system-graded tails/fades (the
 // flagship, unfakeable number); YOUR PLAYS = self-logged bets, labeled.
+// Founder, Aug 20: "the You part should be very very close to the Gary
+// billfold page" — same card grammar (soft-fill cards on the page ground,
+// 14pt radius, 18pt section rhythm), same wallet-header voice, the pieces
+// only a user has (streak, filters, split book, slips) as its own sections.
 struct UserBookSection: View {
-    /// Compact = inline module; expanded = the Billfold YOU page (more slips,
-    /// sign-in button instead of a pitch line).
-    var expanded: Bool = false
-    /// The Book tab hosts the standings in its own THE BOARD scope — it
-    /// mounts this section with showBoard=false so the board lives once.
-    var showBoard: Bool = true
     @State private var bets: [UserBet] = []
     @State private var loading = true
     @State private var showQuickLog = false
@@ -804,18 +739,94 @@ struct UserBookSection: View {
         return (w, l, p, u)
     }
 
+    /// The Gary-page card surface, verbatim (BillfoldView.paperCard).
+    private func bookCard(radius: CGFloat = 14) -> some View {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .fill(Color.white.opacity(0.055))
+            .overlay(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .stroke(Color.white.opacity(0.10), lineWidth: 1)
+            )
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 18) {
+            if AuthManager.shared.bearerToken == nil {
+                signedOutCard
+            } else if loading {
+                ProgressView().tint(.white.opacity(0.4))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 60)
+            } else if withGary.isEmpty && yourPlays.isEmpty {
+                emptyBookCard
+            } else {
+                // The book, in the Gary page's own order: the wallet header
+                // (record + money + win%), the ride, then the pieces only a
+                // user has — streak, filters, the split book, tiles, slips,
+                // the day ledger.
+                walletHeader
+                if profitPoints.count >= 2 { profitChart }
+                streakCrown
+                VStack(alignment: .leading, spacing: 14) {
+                    trackerFilters
+                    splitBookHeader
+                    statTiles
+                }
+                .padding(14)
+                .background(bookCard())
+                pendingBlock
+                settledByDay
+            }
+        }
+        .padding(.horizontal, 16)
+        .task {
+            guard AuthManager.shared.bearerToken != nil else { loading = false; return }
+            let rows = await UserBookAPI.fetchMyBets()
+            // Day-cache law: a cancelled fetch returns [] — never latch it
+            // over data we already have.
+            if !rows.isEmpty || bets.isEmpty { bets = rows }
+            if let s = await UserBookAPI.fetchMyStreak() { streak = s }
+            // Live context for open slips: today's picks carry the game_id
+            // bridge into live_scores (slip pick_text == pick.pick is the
+            // system-wide identity). Cancellation-safe: never latch empties.
+            let today = SupabaseAPI.todayEST()
+            if let picks = try? await SupabaseAPI.fetchDailyPicks(date: today), !picks.isEmpty {
+                todayPicks = picks
+            }
+            let scores = await SupabaseAPI.fetchLiveScores(date: today)
+            if let scores, !scores.isEmpty { liveScores = scores }
+            loading = false
+            // First landing on YOUR page without a unit size: ask right here,
+            // inline — never send anyone to Settings (founder, Jul 26).
+            if !BookMoney.isSet, !unitPromptShownThisSession {
+                unitPromptShownThisSession = true
+                showUnitSheet = true
+            }
+        }
+        .sheet(isPresented: $showUnitSheet) { UnitSizeSheet() }
+        .sheet(isPresented: $showQuickLog) {
+            QuickLogSheet { newBet in bets.insert(newBet, at: 0) }
+        }
+        .sheet(isPresented: $showAuthSheet) { AuthView() }
+        .sheet(item: $shareImage) { item in
+            UserBookShareSheet(items: [item.image])
+        }
+    }
+
+    // ── The wallet header — the Gary page's own top block, for YOUR numbers:
+    // verified record big, the money beside it, win% + the run + the share
+    // and log actions on the kicker row.
+    private var walletHeader: some View {
+        let g = record(withGary.filter { !$0.isPending })
+        let decided = g.w + g.l
+        return VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("YOUR BOOK")
-                    .font(GaryFonts.mono(11, bold: true)).tracking(1.4)
+                Text("YOUR BOOK · GRADED BY THE MACHINE")
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1.3)
                     .foregroundStyle(GaryColors.gold)
                 Spacer()
                 if withGary.contains(where: { !$0.isPending }) {
                     Button {
-                        let g = record(withGary.filter { !$0.isPending })
-                        // Server streak leads the card when it's alive; the
-                        // ledger heater line is the fallback flavor.
                         let line = (streak?.current ?? 0) >= 2
                             ? "Day \(streak!.current) of the streak"
                             : currentStreakText(withGary)
@@ -832,121 +843,129 @@ struct UserBookSection: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Share your record")
                 }
-                Button {
-                    showQuickLog = true
-                } label: {
-                    Text("+ Log a bet")
-                        .font(GaryFonts.mono(10, bold: true))
-                        .foregroundStyle(.white.opacity(0.7))
+                Button { showQuickLog = true } label: {
+                    Text("+ LOG A BET")
+                        .font(GaryFonts.mono(9.5, bold: true)).tracking(0.8)
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(Capsule().fill(GaryColors.gold))
                 }
                 .buttonStyle(.plain)
             }
-
-            if AuthManager.shared.bearerToken == nil {
-                Text("Sign in and every pick you tail or fade goes on your own record — graded by the same system that grades Gary.")
-                    .font(GaryFonts.text(13))
-                    .foregroundStyle(.white.opacity(0.6))
-                    .fixedSize(horizontal: false, vertical: true)
-                if expanded {
-                    Button {
-                        showAuthSheet = true
-                    } label: {
-                        Text("Sign in")
-                            .font(GaryFonts.mono(11, bold: true)).tracking(1)
-                            .foregroundStyle(.black)
-                            .padding(.horizontal, 16).padding(.vertical, 8)
-                            .background(RoundedRectangle(cornerRadius: 7).fill(GaryColors.gold))
-                    }
-                    .buttonStyle(.plain)
-                }
-            } else if loading {
-                ProgressView().tint(.white.opacity(0.4)).frame(maxWidth: .infinity)
-            } else if withGary.isEmpty && yourPlays.isEmpty {
-                Text("No entries yet. Tail or fade any pick from its card — your side locks at first pitch and grades itself.")
-                    .font(GaryFonts.text(13))
-                    .foregroundStyle(.white.opacity(0.6))
-                    .fixedSize(horizontal: false, vertical: true)
-            } else if expanded {
-                // The full tracker: crown, filters, the split book (founder
-                // pick Aug 20, mock 15 — verified half vs self-graded half),
-                // tiles, the profit line, open slips, then the day ledger.
-                streakCrown
-                trackerFilters
-                splitBookHeader
-                statTiles
-                if profitPoints.count >= 2 { profitChart }
-                pendingBlock
-                settledByDay
-            } else {
-                ledgerHeader
-                slipsList
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text("\(g.w)\u{2013}\(g.l)\(g.p > 0 ? "\u{2013}\(g.p)" : "")")
+                    .font(GaryFonts.text(40, .heavy))
+                    .foregroundStyle(GaryColors.warmWhite)
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                Text(BookMoney.netTotal(g.units))
+                    .font(GaryFonts.mono(18, bold: true))
+                    .foregroundStyle(g.units >= 0 ? GaryColors.win : GaryColors.loss)
+                Spacer(minLength: 0)
             }
-            if expanded, showBoard { UserBookLeaderboard() }
+            HStack(spacing: 8) {
+                if decided > 0 {
+                    Text(String(format: "%.1f%% WIN", Double(g.w) / Double(decided) * 100))
+                }
+                if let run = runLabel(withGary) {
+                    Text("·").foregroundStyle(.white.opacity(0.3))
+                    Text(run).foregroundStyle(run.hasPrefix("W") ? GaryColors.gold : GaryColors.loss)
+                }
+                Text("·").foregroundStyle(.white.opacity(0.3))
+                Text("LOCKED AT FIRST PITCH")
+                Spacer()
+            }
+            .font(GaryFonts.mono(9.5, bold: true)).tracking(0.7)
+            .foregroundStyle(.white.opacity(0.5))
         }
         .padding(16)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.035)))
-        .padding(.horizontal, 16)
-        .task {
-            guard AuthManager.shared.bearerToken != nil else { loading = false; return }
-            let rows = await UserBookAPI.fetchMyBets()
-            // Day-cache law: a cancelled fetch returns [] — never latch it
-            // over data we already have.
-            if !rows.isEmpty || bets.isEmpty { bets = rows }
-            if expanded, let s = await UserBookAPI.fetchMyStreak() { streak = s }
-            if expanded {
-                // Live context for open slips: today's picks carry the game_id
-                // bridge into live_scores (slip pick_text == pick.pick is the
-                // system-wide identity). Cancellation-safe: never latch empties.
-                let today = SupabaseAPI.todayEST()
-                if let picks = try? await SupabaseAPI.fetchDailyPicks(date: today), !picks.isEmpty {
-                    todayPicks = picks
-                }
-                let scores = await SupabaseAPI.fetchLiveScores(date: today)
-                if let scores, !scores.isEmpty { liveScores = scores }
-            }
-            loading = false
-            // First landing on YOUR page without a unit size: ask right here,
-            // inline — never send anyone to Settings (founder, Jul 26).
-            if expanded, !BookMoney.isSet, !unitPromptShownThisSession {
-                unitPromptShownThisSession = true
-                showUnitSheet = true
-            }
-        }
-        .sheet(isPresented: $showUnitSheet) { UnitSizeSheet() }
-        .sheet(isPresented: $showQuickLog) {
-            QuickLogSheet { newBet in bets.insert(newBet, at: 0) }
-        }
-        .sheet(isPresented: $showAuthSheet) { AuthView() }
-        .sheet(item: $shareImage) { item in
-            UserBookShareSheet(items: [item.image])
-        }
+        .background(bookCard())
     }
 
-    /// THE STREAK crown — the one-play-a-day game. Server-written numbers only.
+    private var signedOutCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("YOUR BOOK")
+                .font(GaryFonts.mono(11, bold: true)).tracking(1.4)
+                .foregroundStyle(GaryColors.gold)
+            Text("Sign in and every pick you tail or fade goes on your own record — graded by the same system that grades Gary.")
+                .font(GaryFonts.text(13))
+                .foregroundStyle(.white.opacity(0.6))
+                .fixedSize(horizontal: false, vertical: true)
+            Button { showAuthSheet = true } label: {
+                Text("Sign in")
+                    .font(GaryFonts.mono(11, bold: true)).tracking(1)
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 16).padding(.vertical, 8)
+                    .background(RoundedRectangle(cornerRadius: 7).fill(GaryColors.gold))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(bookCard())
+    }
+
+    private var emptyBookCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("YOUR BOOK")
+                .font(GaryFonts.mono(11, bold: true)).tracking(1.4)
+                .foregroundStyle(GaryColors.gold)
+            Text("No entries yet. Tail or fade any pick from its card — your side locks at first pitch and grades itself.")
+                .font(GaryFonts.text(13))
+                .foregroundStyle(.white.opacity(0.6))
+                .fixedSize(horizontal: false, vertical: true)
+            Button { showQuickLog = true } label: {
+                Text("+ LOG A BET")
+                    .font(GaryFonts.mono(10, bold: true)).tracking(0.8)
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .background(Capsule().fill(GaryColors.gold))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(bookCard())
+    }
+
+    /// THE STREAK crown — the one-play-a-day game, wearing the board's own
+    /// streak grammar (founder, Aug 20: the streak reads like mock 03 — the
+    /// run IS the headline). Server-written numbers only.
     private var streakCrown: some View {
         let todayPlay = bets.first { $0.streak_pick == true && $0.isPending }
-        return HStack(alignment: .firstTextBaseline, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
+        let ember = Color(hex: "#E5844B")
+        let current = streak?.current ?? 0
+        return HStack(alignment: .center, spacing: 14) {
+            // The run, board-style: "W4" alive, "0" waiting — the numeral
+            // carries the card exactly as STRK carries the podium.
+            VStack(spacing: 1) {
+                Text(current > 0 ? "W\(current)" : "0")
+                    .font(GaryFonts.mono(30, bold: true))
+                    .foregroundStyle(current > 0 ? ember : .white.opacity(0.4))
+                Text("BEST \(streak?.best ?? 0)")
+                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
+                    .foregroundStyle(.white.opacity(0.45))
+            }
+            .frame(width: 78)
+            Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1)
+                .padding(.vertical, 2)
+            VStack(alignment: .leading, spacing: 3) {
                 Text("THE STREAK")
-                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                    .foregroundStyle(Color(hex: "#E5844B"))
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1.1)
+                    .foregroundStyle(ember)
                 Text(streakStateLine(todayPlay: todayPlay))
-                    .font(GaryFonts.text(13))
+                    .font(GaryFonts.text(12.5))
                     .foregroundStyle(.white.opacity(0.6))
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 0) {
-                Text("\(streak?.current ?? 0)")
-                    .font(GaryFonts.text(30, .heavy))
-                    .foregroundStyle((streak?.current ?? 0) > 0 ? Color(hex: "#E5844B") : .white.opacity(0.45))
-                Text("BEST \(streak?.best ?? 0)")
-                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
-                    .foregroundStyle(.white.opacity(0.4))
-            }
+            Spacer(minLength: 0)
         }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color(hex: "#E5844B").opacity(0.07)))
+        .padding(.horizontal, 14).padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(ember.opacity(0.06))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(ember.opacity(current > 0 ? 0.35 : 0.15), lineWidth: 1))
+        )
     }
 
     private func streakStateLine(todayPlay: UserBet?) -> String {
@@ -1037,57 +1056,8 @@ struct UserBookSection: View {
         }
     }
 
-    private var ledgerHeader: some View {
-        let g = record(scopedWithGary.filter { !$0.isPending })
-        let m = record(scopedYourPlays.filter { !$0.isPending })
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text("WITH GARY")
-                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                    .foregroundStyle(.white.opacity(0.5))
-                Text("\(g.w)-\(g.l)\(g.p > 0 ? "-\(g.p)" : "")")
-                    .font(GaryFonts.text(22, .heavy))
-                    .foregroundStyle(.white.opacity(0.92))
-                Text(BookMoney.netTotal(g.units))
-                    .font(GaryFonts.mono(13, bold: true))
-                    .foregroundStyle(g.units >= 0 ? GaryColors.win : GaryColors.loss)
-                Spacer()
-            }
-            if !yourPlays.isEmpty {
-                HStack(spacing: 10) {
-                    Text("YOUR PLAYS")
-                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                        .foregroundStyle(.white.opacity(0.4))
-                    Text("\(m.w)-\(m.l)\(m.p > 0 ? "-\(m.p)" : "")")
-                        .font(GaryFonts.mono(12, bold: true))
-                        .foregroundStyle(.white.opacity(0.65))
-                    Text(BookMoney.netTotal(m.units))
-                        .font(GaryFonts.mono(11, bold: true))
-                        .foregroundStyle(m.units >= 0 ? GaryColors.win.opacity(0.8) : GaryColors.loss.opacity(0.8))
-                    Text("self-tracked")
-                        .font(GaryFonts.mono(8.5)).tracking(0.5)
-                        .foregroundStyle(.white.opacity(0.35))
-                    Spacer()
-                }
-            }
-        }
-    }
-
-    private var slipsList: some View {
-        let visible = Array(bets.prefix(expanded ? 50 : 12))
-        return VStack(spacing: 0) {
-            ForEach(visible) { bet in
-                UserBetSlipRow(bet: bet) { updated in
-                    if let i = bets.firstIndex(where: { $0.id == updated.id }) { bets[i] = updated }
-                } onDelete: {
-                    bets.removeAll { $0.id == bet.id }
-                }
-                if bet.id != visible.last?.id {
-                    Rectangle().fill(.white.opacity(0.05)).frame(height: 0.5)
-                }
-            }
-        }
-    }
+    // (ledgerHeader/slipsList — the old compact inline module — came out
+    // Aug 20 with the facelift: the section renders only as the full page.)
 
     // ── Tracker: scope filters ──────────────────────────────────────────────
 
@@ -1110,8 +1080,8 @@ struct UserBookSection: View {
             inTimeframe(b) && (kindFilter == "all" || b.kind == kindFilter)
         }
     }
-    private var scopedWithGary: [UserBet] { expanded ? scopedBets.filter { $0.isVerified } : withGary }
-    private var scopedYourPlays: [UserBet] { expanded ? scopedBets.filter { $0.kind == "manual" } : yourPlays }
+    private var scopedWithGary: [UserBet] { scopedBets.filter { $0.isVerified } }
+    private var scopedYourPlays: [UserBet] { scopedBets.filter { $0.kind == "manual" } }
     private var scopedSettled: [UserBet] { scopedBets.filter { !$0.isPending } }
     /// Open slips ignore the timeframe — a pending bet is always "now".
     private var openSlips: [UserBet] {
@@ -1119,34 +1089,39 @@ struct UserBookSection: View {
             .sorted { ($0.lock_at ?? "9999") < ($1.lock_at ?? "9999") }
     }
 
+    /// One line, the board's own control grammar (founder, Aug 20: "the
+    /// filters need some TLC"): source lenses as underline tabs, the window
+    /// as the quiet dropdown ClassicLeaderboardView already speaks.
     private var trackerFilters: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                filterChip("7D", key: "7d", group: 0)
-                filterChip("30D", key: "30d", group: 0)
-                filterChip("SEASON", key: "season", group: 0)
-                filterChip("ALL", key: "all", group: 0)
-                Spacer()
-            }
-            HStack(spacing: 6) {
-                filterChip("EVERYTHING", key: "all", group: 1)
-                filterChip("TAILS", key: "tail", group: 1)
-                filterChip("FADES", key: "fade", group: 1)
-                filterChip("YOUR PLAYS", key: "manual", group: 1)
-                Spacer()
+        HStack(alignment: .bottom, spacing: 14) {
+            filterChip("ALL", key: "all")
+            filterChip("TAILS", key: "tail")
+            filterChip("FADES", key: "fade")
+            filterChip("YOURS", key: "manual")
+            Spacer()
+            Menu {
+                Button("Last 7 days") { timeframe = "7d" }
+                Button("Last 30 days") { timeframe = "30d" }
+                Button("Season") { timeframe = "season" }
+                Button("All time") { timeframe = "all" }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(timeframe == "season" ? "SEASON" : timeframe == "all" ? "ALL TIME" : timeframe.uppercased())
+                        .font(GaryFonts.mono(10)).tracking(0.8)
+                    Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold))
+                }
+                .foregroundStyle(.white.opacity(0.55))
             }
         }
     }
 
-    private func filterChip(_ label: String, key: String, group: Int) -> some View {
+    private func filterChip(_ label: String, key: String) -> some View {
         // Underline-tab grammar — never a pill (founder law, Jul 26).
-        let isOn = group == 0 ? timeframe == key : kindFilter == key
-        return Button {
-            if group == 0 { timeframe = key } else { kindFilter = key }
-        } label: {
+        let isOn = kindFilter == key
+        return Button { kindFilter = key } label: {
             VStack(spacing: 3) {
                 Text(label)
-                    .font(GaryFonts.mono(9, bold: true)).tracking(0.6)
+                    .font(GaryFonts.mono(10, bold: true)).tracking(1)
                     .foregroundStyle(isOn ? GaryColors.gold : .white.opacity(0.5))
                 Rectangle().fill(isOn ? GaryColors.gold : .clear).frame(height: 1.5)
             }
@@ -1165,8 +1140,18 @@ struct UserBookSection: View {
         let staked = decisive.reduce(0.0) { $0 + $1.stake_units }
         let net = settled.reduce(0.0) { $0 + ($1.units_net ?? 0) }
         let roi = staked > 0 ? net / staked * 100 : nil
-        let oddsVals = decisive.compactMap { $0.odds_american }
-        let avgOdds = oddsVals.isEmpty ? nil : oddsVals.reduce(0, +) / oddsVals.count
+        // American odds never average by arithmetic mean — a +100 and a -108
+        // "averaged" to -4 (seen live Aug 20). Average in implied-probability
+        // space, then convert back to a real American price.
+        let oddsVals = decisive.compactMap { $0.odds_american }.map(Double.init)
+        let avgOdds: Int? = {
+            guard !oddsVals.isEmpty else { return nil }
+            let probs = oddsVals.map { o in o > 0 ? 100 / (o + 100) : -o / (-o + 100) }
+            let p = probs.reduce(0, +) / Double(probs.count)
+            guard p > 0, p < 1 else { return nil }
+            let american = p >= 0.5 ? -(p / (1 - p)) * 100 : ((1 - p) / p) * 100
+            return Int(american.rounded())
+        }()
         let bestDay = dayGroups.map { $0.net }.max()
 
         return HStack(spacing: 8) {
@@ -1209,54 +1194,83 @@ struct UserBookSection: View {
         return settled.map { running += ($0.units_net ?? 0); return running }
     }
 
+    /// THE RIDE — the user's equity curve, drawn to the Gary chart's own
+    /// standard (founder, Aug 20: the YOU page reads like the Gary page):
+    /// taller stage, the high-water and low-water marks priced in money,
+    /// gradient under the line, the current position as a lit endpoint.
     private var profitChart: some View {
         let pts = profitPoints
         let lo = min(0, pts.min() ?? 0), hi = max(0, pts.max() ?? 0)
         let span = max(hi - lo, 0.001)
         let final = pts.last ?? 0
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 Text("THE RIDE")
-                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1.1)
                     .foregroundStyle(.white.opacity(0.5))
+                Text("\(pts.count) settled")
+                    .font(GaryFonts.mono(9))
+                    .foregroundStyle(.white.opacity(0.35))
                 Spacer()
                 Text(BookMoney.netTotal(final))
-                    .font(GaryFonts.mono(13, bold: true))
+                    .font(GaryFonts.mono(15, bold: true))
                     .foregroundStyle(final >= 0 ? GaryColors.win : GaryColors.loss)
             }
             GeometryReader { geo in
                 let w = geo.size.width, h = geo.size.height
                 let x = { (i: Int) in pts.count > 1 ? w * CGFloat(i) / CGFloat(pts.count - 1) : 0 }
                 let y = { (v: Double) in h - h * CGFloat((v - lo) / span) }
-                ZStack {
+                ZStack(alignment: .topLeading) {
                     // zero baseline
                     Path { p in
                         p.move(to: CGPoint(x: 0, y: y(0)))
                         p.addLine(to: CGPoint(x: w, y: y(0)))
                     }
                     .stroke(Color.white.opacity(0.12), style: StrokeStyle(lineWidth: 0.5, dash: [3, 4]))
-                    // area
+                    // area under the line
                     Path { p in
                         p.move(to: CGPoint(x: 0, y: y(0)))
                         for (i, v) in pts.enumerated() { p.addLine(to: CGPoint(x: x(i), y: y(v))) }
                         p.addLine(to: CGPoint(x: w, y: y(0)))
                         p.closeSubpath()
                     }
-                    .fill(GaryColors.gold.opacity(0.10))
-                    // line
+                    .fill(LinearGradient(colors: [GaryColors.gold.opacity(0.18), GaryColors.gold.opacity(0.02)],
+                                         startPoint: .top, endPoint: .bottom))
+                    // the line
                     Path { p in
                         for (i, v) in pts.enumerated() {
                             let pt = CGPoint(x: x(i), y: y(v))
                             i == 0 ? p.move(to: pt) : p.addLine(to: pt)
                         }
                     }
-                    .stroke(GaryColors.gold, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                    .stroke(GaryColors.gold, style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+                    // the current position, lit
+                    if let last = pts.last {
+                        Circle()
+                            .fill(GaryColors.gold)
+                            .frame(width: 5, height: 5)
+                            .position(x: x(pts.count - 1), y: y(last))
+                            .shadow(color: GaryColors.gold.opacity(0.8), radius: 3)
+                    }
+                    // high/low water marks, priced
+                    if hi > 0 {
+                        Text(BookMoney.netTotal(hi))
+                            .font(GaryFonts.mono(8))
+                            .foregroundStyle(.white.opacity(0.35))
+                            .offset(x: 2, y: max(y(hi) - 11, 0))
+                    }
+                    if lo < 0 {
+                        Text(BookMoney.netTotal(lo))
+                            .font(GaryFonts.mono(8))
+                            .foregroundStyle(.white.opacity(0.35))
+                            .offset(x: 2, y: min(y(lo) + 3, h - 10))
+                    }
                 }
             }
-            .frame(height: 72)
+            .frame(height: 108)
         }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.03)))
+        .padding(14)
+        .background(bookCard())
     }
 
     // ── Tracker: open slips with live context ───────────────────────────────
@@ -1288,6 +1302,15 @@ struct UserBookSection: View {
                     .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
                     .foregroundStyle(.white.opacity(0.5))
                     .padding(.bottom, 4)
+                openSlipRows
+            }
+            .padding(14)
+            .background(bookCard())
+        }
+    }
+
+    private var openSlipRows: some View {
+        Group {
                 ForEach(openSlips) { bet in
                     HStack(spacing: 10) {
                         Text(bet.kind == "fade" ? "FADE" : bet.kind == "tail" ? "TAIL" : "YOURS")
@@ -1318,7 +1341,6 @@ struct UserBookSection: View {
                         Rectangle().fill(.white.opacity(0.05)).frame(height: 0.5)
                     }
                 }
-            }
         }
     }
 
@@ -1405,6 +1427,8 @@ struct UserBookSection: View {
                     }
                 }
             }
+            .padding(14)
+            .background(bookCard())
         }
     }
 }
@@ -1438,6 +1462,7 @@ struct PropTailFadeRow: View {
     @State private var errorText: String? = nil
     @State private var showAuth = false
     @State private var loaded = false
+    @State private var streakOn = false
 
     /// The board's prop token ("total_bases 1.5" → "total_bases") — the same
     /// key the grader settles user prop bets on.
@@ -1533,6 +1558,20 @@ struct PropTailFadeRow: View {
                 stakeStep("plus") { stake = min(5, stake + 0.5) }
             }
             HStack(spacing: 10) {
+                // Props ride the streak too (founder, Aug 20: star the bet
+                // that counts) — the RPC has no streak param, so the star
+                // lands as its own claim right after booking.
+                Button { streakOn.toggle() } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: streakOn ? "star.fill" : "star")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("STREAK")
+                            .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
+                    }
+                    .foregroundStyle(streakOn ? Color(hex: "#E5844B") : .white.opacity(0.5))
+                    .fixedSize()
+                }
+                .buttonStyle(.plain)
                 Spacer(minLength: 6)
                 Button { arming = nil } label: {
                     Text("Back")
@@ -1619,8 +1658,19 @@ struct PropTailFadeRow: View {
         Task {
             defer { busy = false }
             do {
-                mine = try await UserBookAPI.placePropBet(
+                var bet = try await UserBookAPI.placePropBet(
                     gameDate: dateStr, player: player, propType: propToken, kind: side, stake: stake)
+                if streakOn, await UserBookAPI.setStreakPick(id: bet.id, gameDate: bet.game_date, star: true) {
+                    bet = UserBet(id: bet.id, kind: bet.kind, pick_type: bet.pick_type,
+                        game_date: bet.game_date, league: bet.league, pick_text: bet.pick_text,
+                        matchup: bet.matchup, player_name: bet.player_name, prop_type: bet.prop_type,
+                        description: bet.description, odds_american: bet.odds_american,
+                        odds_estimated: bet.odds_estimated, stake_units: bet.stake_units,
+                        gary_confidence: bet.gary_confidence, streak_pick: true,
+                        status: bet.status, units_net: bet.units_net, lock_at: bet.lock_at,
+                        placed_at: bet.placed_at, graded_by: bet.graded_by)
+                }
+                mine = bet
                 arming = nil
             } catch {
                 errorText = error.localizedDescription
@@ -1659,13 +1709,16 @@ private struct UserBetSlipRow: View {
             Text(kindLabel)
                 .font(GaryFonts.mono(8, bold: true)).tracking(0.7)
                 .foregroundStyle(bet.kind == "manual" ? .white.opacity(0.5) : GaryColors.gold)
+                // One line always — the chip's column width squeezed "FADE"
+                // into "FAD E" (seen live Aug 20; wrapping is clipping).
+                .lineLimit(1).fixedSize()
                 .padding(.horizontal, 6).padding(.vertical, 3)
                 .background(
                     Capsule().stroke(
                         bet.kind == "manual" ? Color.white.opacity(0.18) : GaryColors.gold.opacity(0.45),
                         lineWidth: 1)
                 )
-                .frame(width: 46, alignment: .leading)
+                .frame(width: 50, alignment: .leading)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 5) {
                     Text(bet.pick_text)
@@ -1673,7 +1726,39 @@ private struct UserBetSlipRow: View {
                         .foregroundStyle(.white.opacity(0.85))
                         .lineLimit(2).minimumScaleFactor(0.8)
                         .fixedSize(horizontal: false, vertical: true)
-                    if bet.streak_pick == true {
+                    // The star IS the streak designation (founder, Aug 20:
+                    // "enter or star the bet they want to go towards their
+                    // streak"). Pending rows toggle it — one play a day, the
+                    // server-side claim moves with the tap. Settled rows keep
+                    // it as the record of which play carried the day.
+                    if bet.isPending {
+                        Button {
+                            let turningOn = bet.streak_pick != true
+                            busy = true
+                            Task {
+                                defer { busy = false }
+                                if await UserBookAPI.setStreakPick(id: bet.id, gameDate: bet.game_date, star: turningOn) {
+                                    onUpdate(UserBet(id: bet.id, kind: bet.kind, pick_type: bet.pick_type,
+                                        game_date: bet.game_date, league: bet.league, pick_text: bet.pick_text,
+                                        matchup: bet.matchup, player_name: bet.player_name, prop_type: bet.prop_type,
+                                        description: bet.description, odds_american: bet.odds_american,
+                                        odds_estimated: bet.odds_estimated, stake_units: bet.stake_units,
+                                        gary_confidence: bet.gary_confidence, streak_pick: turningOn,
+                                        status: bet.status, units_net: bet.units_net, lock_at: bet.lock_at,
+                                        placed_at: bet.placed_at, graded_by: bet.graded_by))
+                                }
+                            }
+                        } label: {
+                            Image(systemName: bet.streak_pick == true ? "star.fill" : "star")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(bet.streak_pick == true ? Color(hex: "#E5844B") : .white.opacity(0.35))
+                                .frame(width: 20, height: 20)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(busy)
+                        .accessibilityLabel(bet.streak_pick == true ? "Streak play — tap to unstar" : "Star as your streak play")
+                    } else if bet.streak_pick == true {
                         Image(systemName: "star.fill")
                             .font(.system(size: 9, weight: .semibold))
                             .foregroundStyle(Color(hex: "#E5844B"))
@@ -1741,55 +1826,467 @@ private struct UserBetSlipRow: View {
     }
 }
 
-// ── Quick-log sheet (manual outside bets) ───────────────────────────────────
+// ── Add-a-bet sheet — the DIRECTORY (founder, Aug 20: "a directory search
+// look up of all the bets they could have be their streak, then its a simple
+// click rather than like a full log of the bet") ────────────────────────────
+// Tonight's whole board — every game pick and prop Gary published — behind
+// one search field. Tap a bet, pick your side, it books through the same
+// lock-checked RPCs as the card buttons (VERIFIED lane, streak-eligible).
+// The old free-text form survives underneath as "an outside bet" for plays
+// that aren't on Gary's board (self-graded, YOUR PLAYS lane).
 struct QuickLogSheet: View {
     var onLogged: (UserBet) -> Void
     @Environment(\.dismiss) private var dismiss
-    @State private var draft = UserBookAPI.ManualBetDraft()
-    @State private var oddsText = ""
+
+    private struct DirectoryEntry: Identifiable {
+        let id: String
+        let title: String        // "CARDINALS ML -108" / "Aaron Judge total_bases 1.5"
+        let subtitle: String     // "MLB · STL @ CHC · 7:45 PM"
+        let isProp: Bool
+        let gameDate: String
+        let pickText: String     // game lane identity (pick.pick)
+        let player: String?      // prop lane identity
+        let propToken: String?
+        let pickId: String?
+        let locked: Bool
+    }
+
+    @State private var entries: [DirectoryEntry] = []
+    @State private var loadingBoard = true
+    @State private var search = ""
+    @State private var armedId: String? = nil
+    @State private var side = "tail"
+    @State private var stake: Double = 1.0
+    @State private var streakOn = false
     @State private var busy = false
     @State private var errorText: String? = nil
-    private let leagues = ["MLB", "NFL", "NBA", "NHL", "OTHER"]
+    @State private var showOutside = false
+    @State private var draft = UserBookAPI.ManualBetDraft()
+    @State private var oddsText = ""
+    private let leagues = ["MLB", "NFL", "NCAAF", "NBA", "NHL", "OTHER"]
+    private let ember = Color(hex: "#E5844B")
 
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("The bet") {
-                    Picker("League", selection: $draft.league) {
-                        ForEach(leagues, id: \.self) { Text($0) }
-                    }
-                    TextField("What did you bet? (Yankees ML, Over 8.5, a parlay)", text: $draft.description, axis: .vertical)
-                    TextField("Odds (American, like -120 or +145)", text: $oddsText)
-                        .keyboardType(.numbersAndPunctuation)
-                    Stepper(value: $draft.stake, in: 0.5...10, step: 0.5) {
-                        Text("Stake: \(BookMoney.stake(draft.stake))")
-                    }
-                    Toggle(isOn: $draft.streakPick) {
-                        HStack(spacing: 6) {
-                            Image(systemName: draft.streakPick ? "star.fill" : "star")
-                                .foregroundStyle(Color(hex: "#E5844B"))
-                            Text("My play of the day")
-                        }
-                    }
-                    .tint(Color(hex: "#E5844B"))
-                }
-                if let e = errorText { Section { Text(e).foregroundStyle(.red) } }
-                Section {
-                    Button(busy ? "Saving" : "Add to Your Plays") { save() }
-                        .disabled(busy || draft.description.trimmingCharacters(in: .whitespaces).isEmpty)
-                } footer: {
-                    Text("Self-tracked entries stay in YOUR PLAYS — separate from your verified record with Gary.")
-                }
-            }
-            .navigationTitle("Log a bet")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
+    private var filtered: [DirectoryEntry] {
+        let q = search.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return entries }
+        return entries.filter {
+            $0.title.lowercased().contains(q) || $0.subtitle.lowercased().contains(q)
         }
     }
 
-    private func save() {
+    var body: some View {
+        ZStack {
+            Color(hex: "#141212").ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 0) {
+                header
+                searchField
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        if loadingBoard {
+                            ProgressView().tint(.white.opacity(0.4))
+                                .frame(maxWidth: .infinity).padding(.vertical, 40)
+                        } else if filtered.isEmpty {
+                            Text(entries.isEmpty
+                                 ? "Tonight's board hasn't posted yet. You can still log an outside bet below."
+                                 : "Nothing on tonight's board matches that.")
+                                .font(GaryFonts.text(12.5))
+                                .foregroundStyle(.white.opacity(0.5))
+                                .padding(.vertical, 24)
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            ForEach(filtered) { entry in
+                                directoryRow(entry)
+                                if entry.id != filtered.last?.id {
+                                    Rectangle().fill(.white.opacity(0.05)).frame(height: 0.5)
+                                }
+                            }
+                        }
+                        outsideBetBlock
+                    }
+                    .padding(.bottom, 30)
+                }
+            }
+            .padding(.horizontal, 18)
+        }
+        .task { await loadBoard() }
+    }
+
+    private var header: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("ADD A BET")
+                    .font(GaryFonts.mono(12, bold: true)).tracking(1.4)
+                    .foregroundStyle(GaryColors.gold)
+                Text("Tonight's board — tap a bet, pick a side. Star it and it rides your streak.")
+                    .font(GaryFonts.text(12))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Button { dismiss() } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(Color.white.opacity(0.06)))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.top, 18).padding(.bottom, 12)
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.4))
+            TextField("Search a team, player, or market", text: $search)
+                .font(GaryFonts.text(14))
+                .foregroundStyle(.white)
+                .autocorrectionDisabled()
+            if !search.isEmpty {
+                Button { search = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white.opacity(0.35))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.white.opacity(0.10), lineWidth: 1))
+        )
+        .padding(.bottom, 6)
+    }
+
+    @ViewBuilder private func directoryRow(_ entry: DirectoryEntry) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                errorText = nil
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    armedId = armedId == entry.id ? nil : entry.id
+                    side = "tail"; streakOn = false
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Text(entry.isProp ? "PROP" : "GAME")
+                        .font(GaryFonts.mono(8, bold: true)).tracking(0.7)
+                        .foregroundStyle(.white.opacity(0.45))
+                        .frame(width: 38, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(entry.title)
+                            .font(GaryFonts.text(13.5, .semibold))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .lineLimit(1).minimumScaleFactor(0.75)
+                        Text(entry.subtitle)
+                            .font(GaryFonts.mono(9))
+                            .foregroundStyle(.white.opacity(0.4))
+                            .lineLimit(1).minimumScaleFactor(0.8)
+                    }
+                    Spacer(minLength: 8)
+                    if entry.locked {
+                        Text("LOCKED")
+                            .font(GaryFonts.mono(8.5, bold: true)).tracking(0.7)
+                            .foregroundStyle(.white.opacity(0.35))
+                    } else {
+                        Image(systemName: armedId == entry.id ? "chevron.up" : "plus")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(GaryColors.gold.opacity(0.8))
+                    }
+                }
+                .padding(.vertical, 10)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(entry.locked)
+
+            if armedId == entry.id, !entry.locked {
+                armedControls(entry)
+                    .padding(.bottom, 10)
+            }
+        }
+    }
+
+    private func armedControls(_ entry: DirectoryEntry) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                sideChip("RIDE IT", key: "tail", tint: GaryColors.gold)
+                sideChip("FADE IT", key: "fade", tint: Color(hex: "#8B93A7"))
+                Spacer(minLength: 6)
+                stepChip("minus") { stake = max(0.5, stake - 0.5) }
+                Text(BookMoney.stake(stake))
+                    .font(GaryFonts.mono(12.5, bold: true))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .frame(minWidth: 44)
+                stepChip("plus") { stake = min(5, stake + 0.5) }
+            }
+            HStack(spacing: 10) {
+                Button { streakOn.toggle() } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: streakOn ? "star.fill" : "star")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text("STREAK PLAY")
+                            .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
+                    }
+                    .foregroundStyle(streakOn ? ember : .white.opacity(0.5))
+                }
+                .buttonStyle(.plain)
+                Spacer()
+                Button { place(entry) } label: {
+                    Text(busy ? "Booking" : "Lock it in")
+                        .font(GaryFonts.mono(11, bold: true))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 14).padding(.vertical, 7)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(GaryColors.gold))
+                }
+                .buttonStyle(.plain)
+                .disabled(busy)
+            }
+            if let e = errorText {
+                Text(e)
+                    .font(GaryFonts.mono(9.5))
+                    .foregroundStyle(GaryColors.loss.opacity(0.9))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.045)))
+    }
+
+    private func sideChip(_ label: String, key: String, tint: Color) -> some View {
+        Button { side = key } label: {
+            Text(label)
+                .font(GaryFonts.mono(10, bold: true)).tracking(0.8)
+                .foregroundStyle(side == key ? tint : .white.opacity(0.5))
+                .padding(.horizontal, 10).padding(.vertical, 7)
+                .background(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(side == key ? tint.opacity(0.12) : Color.white.opacity(0.05))
+                        .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .stroke(side == key ? tint.opacity(0.5) : Color.white.opacity(0.10), lineWidth: 1))
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func stepChip(_ symbol: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.white.opacity(0.85))
+                .frame(width: 26, height: 26)
+                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.white.opacity(0.07)))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // ── The outside-bet fallback (self-graded, YOUR PLAYS lane) ─────────────
+    @ViewBuilder private var outsideBetBlock: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showOutside.toggle() } } label: {
+                HStack(spacing: 6) {
+                    Text("OR LOG AN OUTSIDE BET")
+                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                        .foregroundStyle(.white.opacity(0.55))
+                    Image(systemName: showOutside ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.4))
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 18)
+
+            if showOutside {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 12) {
+                        ForEach(leagues, id: \.self) { lg in
+                            let isOn = draft.league == lg
+                            Button { draft.league = lg } label: {
+                                VStack(spacing: 3) {
+                                    Text(lg)
+                                        .font(GaryFonts.mono(9, bold: true)).tracking(0.6)
+                                        .foregroundStyle(isOn ? GaryColors.gold : .white.opacity(0.5))
+                                    Rectangle().fill(isOn ? GaryColors.gold : .clear).frame(height: 1.5)
+                                }
+                                .fixedSize()
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    TextField("What did you bet? (Yankees ML, Over 8.5, a parlay)", text: $draft.description, axis: .vertical)
+                        .font(GaryFonts.text(13.5))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 11).padding(.vertical, 9)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.06)))
+                    HStack(spacing: 10) {
+                        TextField("Odds (-120, +145)", text: $oddsText)
+                            .keyboardType(.numbersAndPunctuation)
+                            .font(GaryFonts.mono(12.5))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 11).padding(.vertical, 9)
+                            .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.06)))
+                            .frame(width: 140)
+                        stepChip("minus") { draft.stake = max(0.5, draft.stake - 0.5) }
+                        Text(BookMoney.stake(draft.stake))
+                            .font(GaryFonts.mono(12.5, bold: true))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .frame(minWidth: 44)
+                        stepChip("plus") { draft.stake = min(10, draft.stake + 0.5) }
+                        Spacer()
+                    }
+                    HStack {
+                        Button { draft.streakPick.toggle() } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: draft.streakPick ? "star.fill" : "star")
+                                    .font(.system(size: 11, weight: .semibold))
+                                Text("MY PLAY OF THE DAY")
+                                    .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
+                            }
+                            .foregroundStyle(draft.streakPick ? ember : .white.opacity(0.5))
+                        }
+                        .buttonStyle(.plain)
+                        Spacer()
+                        Button { saveManual() } label: {
+                            Text(busy ? "Saving" : "Add to Your Plays")
+                                .font(GaryFonts.mono(11, bold: true))
+                                .foregroundStyle(.black)
+                                .padding(.horizontal, 14).padding(.vertical, 7)
+                                .background(RoundedRectangle(cornerRadius: 6).fill(GaryColors.gold))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(busy || draft.description.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                    Text("Self-tracked entries stay in YOUR PLAYS — separate from your verified record with Gary.")
+                        .font(GaryFonts.mono(8.5)).tracking(0.3)
+                        .foregroundStyle(.white.opacity(0.35))
+                        .fixedSize(horizontal: false, vertical: true)
+                    if showOutside, let e = errorText {
+                        Text(e)
+                            .font(GaryFonts.mono(9.5))
+                            .foregroundStyle(GaryColors.loss.opacity(0.9))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Data + booking ──────────────────────────────────────────────────────
+
+    private func loadBoard() async {
+        let today = SupabaseAPI.todayEST()
+        async let gameLoad = try? SupabaseAPI.fetchDailyPicks(date: today)
+        async let propLoad = try? SupabaseAPI.fetchPropPicks(date: today)
+        let games = (await gameLoad) ?? []
+        let props = (await propLoad) ?? []
+
+        func etDate(_ iso: String?) -> String {
+            guard let iso, let d = ISO8601DateFormatter().date(from: iso) else { return today }
+            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+            f.timeZone = TimeZone(identifier: "America/New_York")
+            return f.string(from: d)
+        }
+        func etClock(_ iso: String?) -> String? {
+            guard let iso, let d = ISO8601DateFormatter().date(from: iso) else { return nil }
+            let f = DateFormatter(); f.dateFormat = "h:mm a"
+            f.timeZone = TimeZone(identifier: "America/New_York")
+            return f.string(from: d)
+        }
+        func isLocked(_ iso: String?) -> Bool {
+            guard let iso, let d = ISO8601DateFormatter().date(from: iso) else { return false }
+            return Date() >= d
+        }
+
+        var rows: [DirectoryEntry] = []
+        for p in games {
+            guard let text = p.pick, !text.isEmpty else { continue }
+            var subBits = [(p.league ?? "").uppercased()]
+            if let away = p.awayTeam, let home = p.homeTeam, !away.isEmpty, !home.isEmpty {
+                subBits.append("\(away) @ \(home)")
+            }
+            if let c = etClock(p.commence_time) { subBits.append(c) }
+            rows.append(DirectoryEntry(
+                id: "game-\(p.game_id.map(String.init) ?? text)",
+                title: text,
+                subtitle: subBits.filter { !$0.isEmpty }.joined(separator: " · "),
+                isProp: false,
+                gameDate: etDate(p.commence_time),
+                pickText: text,
+                player: nil, propToken: nil,
+                pickId: p.pick_id,
+                locked: isLocked(p.commence_time)))
+        }
+        for p in props {
+            guard let player = p.player, let propText = p.prop, !propText.isEmpty else { continue }
+            let betWord = (p.bet ?? "over").uppercased()
+            var subBits = [(p.league ?? p.sport ?? "").uppercased()]
+            if let m = p.matchup { subBits.append(m) }
+            if let c = etClock(p.commence_time) { subBits.append(c) }
+            rows.append(DirectoryEntry(
+                id: "prop-\(player)-\(propText)-\(p.game_id.map(String.init) ?? "")",
+                title: "\(player) \(betWord) \(propText)",
+                subtitle: subBits.filter { !$0.isEmpty }.joined(separator: " · "),
+                isProp: true,
+                gameDate: etDate(p.commence_time),
+                pickText: propText,
+                player: player,
+                propToken: String(propText.split(separator: " ").first ?? "").lowercased(),
+                pickId: nil,
+                locked: isLocked(p.commence_time)))
+        }
+        // Open bets first, each lane in board order.
+        let sorted = rows.sorted { a, b in
+            a.locked == b.locked ? (a.isProp == b.isProp ? a.title < b.title : !a.isProp) : !a.locked
+        }
+        if !sorted.isEmpty || entries.isEmpty { entries = sorted }
+        loadingBoard = false
+    }
+
+    private func place(_ entry: DirectoryEntry) {
+        busy = true
+        errorText = nil
+        Task {
+            defer { busy = false }
+            do {
+                var bet: UserBet
+                if entry.isProp, let player = entry.player, let token = entry.propToken {
+                    bet = try await UserBookAPI.placePropBet(
+                        gameDate: entry.gameDate, player: player, propType: token,
+                        kind: side, stake: stake)
+                    // Props book through an RPC without a streak param — the
+                    // star lands as its own claim right after.
+                    if streakOn, await UserBookAPI.setStreakPick(id: bet.id, gameDate: bet.game_date, star: true) {
+                        bet = UserBet(id: bet.id, kind: bet.kind, pick_type: bet.pick_type,
+                            game_date: bet.game_date, league: bet.league, pick_text: bet.pick_text,
+                            matchup: bet.matchup, player_name: bet.player_name, prop_type: bet.prop_type,
+                            description: bet.description, odds_american: bet.odds_american,
+                            odds_estimated: bet.odds_estimated, stake_units: bet.stake_units,
+                            gary_confidence: bet.gary_confidence, streak_pick: true,
+                            status: bet.status, units_net: bet.units_net, lock_at: bet.lock_at,
+                            placed_at: bet.placed_at, graded_by: bet.graded_by)
+                    }
+                } else {
+                    bet = try await UserBookAPI.placeBet(
+                        gameDate: entry.gameDate, pickId: entry.pickId,
+                        pickText: entry.pickText, kind: side, stake: stake, streak: streakOn)
+                }
+                onLogged(bet)
+                dismiss()
+            } catch { errorText = error.localizedDescription }
+        }
+    }
+
+    private func saveManual() {
         draft.odds = Int(oddsText.replacingOccurrences(of: "+", with: ""))
         busy = true
+        errorText = nil
         Task {
             defer { busy = false }
             do {
@@ -1850,112 +2347,9 @@ func renderRideShareImage(record: (w: Int, l: Int, p: Int, units: Double), strea
     return renderer.uiImage
 }
 
-// ── LEADERBOARD (YOU page) ──────────────────────────────────────────────────
-// Standings nobody can fake: verified tail/fade ledgers only, opt-in by
-// handle, five decided plays to appear. Units are the board's shared
-// currency (a viewer's own dollar setting never re-prices someone else).
-struct UserBookLeaderboard: View {
-    @State private var window = "30d"
-    @State private var rows: [UserBookAPI.BoardRow] = []
-    @State private var myHandle: String? = nil
-    @State private var checkedHandle = false
-    @State private var showClaim = false
-    private let windows = [("7d", "7D"), ("30d", "30D"), ("season", "SEASON")]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                Text("LEADERBOARD")
-                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                    .foregroundStyle(.white.opacity(0.5))
-                Spacer()
-                ForEach(windows, id: \.0) { w in
-                    Button {
-                        window = w.0
-                        Task { await load(force: true) }
-                    } label: {
-                        VStack(spacing: 3) {
-                            Text(w.1)
-                                .font(GaryFonts.mono(9, bold: true)).tracking(0.6)
-                                .foregroundStyle(window == w.0 ? GaryColors.gold : .white.opacity(0.5))
-                            Rectangle().fill(window == w.0 ? GaryColors.gold : .clear).frame(height: 1.5)
-                        }
-                        .fixedSize()
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
-            if rows.isEmpty {
-                Text("Standings appear once verified books cross five graded plays. Yours can be first.")
-                    .font(GaryFonts.text(12.5))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(rows.prefix(10).enumerated()), id: \.element.id) { i, r in
-                        HStack(spacing: 10) {
-                            Text("\(i + 1)")
-                                .font(GaryFonts.mono(10, bold: true))
-                                .foregroundStyle(i == 0 ? GaryColors.gold : .white.opacity(0.45))
-                                .frame(width: 18, alignment: .leading)
-                            Text(r.display_name)
-                                .font(GaryFonts.text(13, .semibold))
-                                .foregroundStyle(r.display_name == myHandle ? GaryColors.gold : .white.opacity(0.88))
-                                .lineLimit(1)
-                            if r.best_streak >= 3 {
-                                Text("BEST \(r.best_streak)")
-                                    .font(GaryFonts.mono(8, bold: true)).tracking(0.6)
-                                    .foregroundStyle(Color(hex: "#E5844B").opacity(0.85))
-                            }
-                            Spacer()
-                            Text("\(r.wins)-\(r.losses)")
-                                .font(GaryFonts.mono(11, bold: true))
-                                .foregroundStyle(.white.opacity(0.6))
-                            Text(String(format: "%+.1fu", r.units))
-                                .font(GaryFonts.mono(11, bold: true))
-                                .foregroundStyle(r.units >= 0 ? GaryColors.win : GaryColors.loss)
-                                .frame(width: 52, alignment: .trailing)
-                        }
-                        .padding(.vertical, 6)
-                        if i < min(rows.count, 10) - 1 {
-                            Rectangle().fill(.white.opacity(0.04)).frame(height: 0.5)
-                        }
-                    }
-                }
-            }
-
-            if checkedHandle, myHandle == nil, AuthManager.shared.bearerToken != nil {
-                Button {
-                    showClaim = true
-                } label: {
-                    Text("Claim a handle to enter the standings")
-                        .font(GaryFonts.mono(10, bold: true)).tracking(0.5)
-                        .foregroundStyle(GaryColors.gold)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.top, 6)
-        .task { await load(force: false) }
-        .sheet(isPresented: $showClaim) {
-            HandleClaimSheet { claimed in myHandle = claimed }
-        }
-    }
-
-    private func load(force: Bool) async {
-        let fresh = await UserBookAPI.fetchLeaderboard(window: window)
-        // Cancellation guard: never latch an empty result over live rows
-        // unless this is an explicit window switch.
-        if force || !fresh.isEmpty || rows.isEmpty { rows = fresh }
-        if !checkedHandle, AuthManager.shared.bearerToken != nil {
-            myHandle = await UserBookAPI.fetchMyHandle()
-            checkedHandle = true
-        } else if AuthManager.shared.bearerToken == nil {
-            checkedHandle = true
-        }
-    }
-}
+// (UserBookLeaderboard — the profile's duplicate units board — deleted
+// Aug 20: ONE leaderboard, the classic streak-first board on the
+// Billfold's BOARD scope. The profile links to it instead.)
 
 /// Inline handle claim — same philosophy as the unit-size ask: do it right
 /// here, save, land back where you were.
@@ -2106,10 +2500,15 @@ struct ProfileView: View {
                     } else if loading {
                         ProgressView().tint(GaryColors.gold).frame(maxWidth: .infinity).padding(.top, 30)
                     } else {
+                        // The profile is the person: identity, their streak,
+                        // their record, their open action — the standings
+                        // live ONCE, on the Billfold's BOARD scope (founder,
+                        // Aug 20: "we don't need two leaderboards").
+                        streakCard
                         recordPanel
                         actionRow
+                        boardDoor
                         if !openSlips.isEmpty { openSlipsBlock }
-                        UserBookLeaderboard()
                         signOutRow
                     }
                 }
@@ -2211,6 +2610,79 @@ struct ProfileView: View {
         .padding(.top, 6)
     }
 
+    // ── THE STREAK — the profile's crown, in the board's own streak grammar
+    // (founder, Aug 20: the streak card reads like mock 03 in both places).
+    private var streakCard: some View {
+        let ember = Color(hex: "#E5844B")
+        let current = streak?.current ?? 0
+        let todayPlay = bets.first { $0.streak_pick == true && $0.isPending }
+        return HStack(alignment: .center, spacing: 14) {
+            VStack(spacing: 1) {
+                Text(current > 0 ? "W\(current)" : "0")
+                    .font(GaryFonts.mono(30, bold: true))
+                    .foregroundStyle(current > 0 ? ember : .white.opacity(0.4))
+                Text("BEST \(streak?.best ?? 0)")
+                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
+                    .foregroundStyle(.white.opacity(0.45))
+            }
+            .frame(width: 78)
+            Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1)
+                .padding(.vertical, 2)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("THE STREAK")
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1.1)
+                    .foregroundStyle(ember)
+                Text(todayPlay.map { "Tonight's play is set: \($0.pick_text)" }
+                     ?? (current > 0
+                         ? "One play a day keeps it alive. Star tonight's from any card."
+                         : "One play a day. Win and it grows, lose and it resets. Star any bet as your streak play."))
+                    .font(GaryFonts.text(12.5))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(ember.opacity(0.06))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(ember.opacity(current > 0 ? 0.35 : 0.15), lineWidth: 1))
+        )
+    }
+
+    /// The one leaderboard's front door — the Billfold BOARD scope.
+    private var boardDoor: some View {
+        Button {
+            dismiss()
+            billfoldScope = "board"
+            selectedTab = 4
+        } label: {
+            HStack(spacing: 8) {
+                Text("THE BOARD")
+                    .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
+                    .foregroundStyle(GaryColors.gold)
+                Text("STANDINGS · STREAKS · GARY RIDES TOO")
+                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
+                    .foregroundStyle(.white.opacity(0.45))
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+            .padding(.horizontal, 14).padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.white.opacity(0.03))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.white.opacity(0.07), lineWidth: 1))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
     // ── The record: verified WITH GARY line first, self-tracked under it,
     // the streak beside — the numbers the Billfold YOU page shows, compressed.
     private var recordPanel: some View {
@@ -2240,20 +2712,6 @@ struct ProfileView: View {
                     Text("\(m.w)\u{2013}\(m.l)\(m.p > 0 ? "\u{2013}\(m.p)" : "")")
                         .font(GaryFonts.mono(14, bold: true))
                         .foregroundStyle(.white.opacity(0.8))
-                }
-            }
-            if let s = streak, s.best > 0 {
-                HStack(spacing: 6) {
-                    Text("STREAK")
-                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1.2)
-                        .foregroundStyle(.white.opacity(0.5))
-                    Text("\(s.current)")
-                        .font(GaryFonts.mono(14, bold: true))
-                        .foregroundStyle(s.current > 0 ? GaryColors.gold : .white.opacity(0.7))
-                    Text("BEST \(s.best)")
-                        .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
-                        .foregroundStyle(.white.opacity(0.45))
-                    Spacer()
                 }
             }
         }
@@ -2617,10 +3075,24 @@ struct ClassicLeaderboardView: View {
         .padding(.vertical, first ? 18 : 12)
         .padding(.horizontal, 6)
         .background(
+            // The podium FLOATS (founder, Aug 20: "prop up the design of the
+            // leaderboard significantly") — the same lit-rim + shadow-puddle
+            // float the Home board wears, first place catching the most light
+            // and a whisper of gold wash inside its stroke.
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(GaryColors.cardBg)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(first ? GaryColors.gold.opacity(0.045) : Color.clear)
+                )
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(first ? GaryColors.gold.opacity(0.45) : Color.white.opacity(0.08), lineWidth: 1))
+                    .stroke(LinearGradient(stops: [
+                        .init(color: first ? GaryColors.gold.opacity(0.55) : GaryColors.warmWhite.opacity(0.18), location: 0),
+                        .init(color: first ? GaryColors.gold.opacity(0.30) : GaryColors.warmWhite.opacity(0.07), location: 0.4),
+                        .init(color: first ? GaryColors.gold.opacity(0.18) : GaryColors.warmWhite.opacity(0.03), location: 1),
+                    ], startPoint: .top, endPoint: .bottom), lineWidth: 1))
+                .shadow(color: .black.opacity(first ? 0.5 : 0.4), radius: first ? 14 : 10, y: first ? 8 : 6)
+                .shadow(color: .black.opacity(0.55), radius: 3, y: 2)
         )
     }
 
@@ -2653,10 +3125,17 @@ struct ClassicLeaderboardView: View {
             }
         }
         .background(
+            // The table floats with the podium — lit rim, shadow puddle.
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(GaryColors.cardBg)
                 .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 1))
+                    .stroke(LinearGradient(stops: [
+                        .init(color: GaryColors.warmWhite.opacity(0.16), location: 0),
+                        .init(color: GaryColors.warmWhite.opacity(0.06), location: 0.35),
+                        .init(color: GaryColors.warmWhite.opacity(0.025), location: 1),
+                    ], startPoint: .top, endPoint: .bottom), lineWidth: 1))
+                .shadow(color: .black.opacity(0.45), radius: 14, y: 8)
+                .shadow(color: .black.opacity(0.55), radius: 3, y: 2)
         )
     }
 
