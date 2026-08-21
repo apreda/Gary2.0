@@ -21097,7 +21097,7 @@ struct EdgesSection: View {
     /// (Situational, Platoon Edge…) instead of scrolling the mixed feed. Off by
     /// default, so per-game GAME INTEL keeps its plain list.
     var tabbed: Bool = false
-    @State private var selectedKind: SignalKind? = nil   // nil = THE SHOW
+    @State private var selectedKind: SignalKind? = nil   // nil = the mixed feed (THE SHOW / ALL-22)
 
     /// Unique categories present, in first-appearance (feed) order.
     private var kinds: [SignalKind] {
@@ -21170,8 +21170,17 @@ struct EdgesSection: View {
         }
     }
 
+    /// The mixed-feed tab wears each sport's own slang for "the whole picture":
+    /// baseball's THE SHOW, football's ALL-22 — the coaches' film angle that has
+    /// every player on the field (founder, Aug 20: "not the show because that's
+    /// baseball"). Same tab, same behavior; only the word changes.
+    private var showTabTitle: String {
+        let league = edges.first?.league
+        return (league == .nfl || league == .ncaaf) ? "ALL-22" : "THE SHOW"
+    }
+
     private var showTab: some View {
-        categoryTabLabel(icon: "sparkles", title: "THE SHOW", active: activeKind == nil) {
+        categoryTabLabel(icon: "sparkles", title: showTabTitle, active: activeKind == nil) {
             selectedKind = nil
         }
     }
