@@ -10,6 +10,18 @@ const hubView = readFileSync(new URL('../../../ios/GaryApp/HubView.swift', impor
 const designSystem = readFileSync(new URL('../../../ios/GaryApp/DesignSystem.swift', import.meta.url), 'utf8');
 const contentView = readFileSync(new URL('../../../ios/GaryApp/ContentView.swift', import.meta.url), 'utf8');
 
+/// Text of ONE declaration, from its opening line to the next top-level one.
+/// Slicing to end-of-file instead silently widens every `not.toContain` in a
+/// body assertion to "anything later in the file" — which is how THE MISMATCH
+/// section broke the fantasy-row pin without touching it.
+function sliceStruct(source, declaration) {
+  const start = source.indexOf(declaration);
+  if (start < 0) throw new Error(`declaration not found: ${declaration}`);
+  const rest = source.slice(start + declaration.length);
+  const next = rest.search(/\n(?:\/\/ MARK: -|private struct |private enum |struct |enum |extension )/);
+  return next < 0 ? rest : rest.slice(0, next);
+}
+
 describe('iOS football pick decoding', () => {
   it('keeps market fields when the app uses the manual dictionary parser', () => {
     expect(models).toContain('spread: number("spread")');
@@ -128,9 +140,7 @@ describe('Football Field density', () => {
 describe('Football Fantasy density', () => {
   it('lets the selected league and lane title speak for themselves', () => {
     expect(footballIntel).not.toContain('Text(isNFL ? "NFL FANTASY" : "COLLEGE PLAYER BOARD")');
-    const rowBody = footballIntel.slice(
-      footballIntel.indexOf('private struct FootballFantasyRow'),
-    );
+    const rowBody = sliceStruct(footballIntel, 'private struct FootballFantasyRow');
     expect(rowBody).not.toContain('Text(signal.kind.chip)');
     expect(rowBody).not.toContain('Text(signal.headline)');
     expect(rowBody).not.toContain('Text(signal.detail)');
@@ -155,14 +165,26 @@ describe('Football Fantasy density', () => {
 });
 
 describe('Football Picks overview', () => {
-  it('uses a scan-first football board instead of the baseball edge carousel', () => {
-    expect(views).toContain('FootballPicksBoard(league: scopeLeague, signals: edges)');
+  // Founder, Aug 20 eve: the football Today page is "the same as MLB literally
+  // — the categories and then how it works". The bespoke board is gone; NFL and
+  // NCAAF render MLB's own tabbed EdgesSection, gated only by the proof contract.
+  it('runs MLB\'s own tabbed edges section, never a bespoke football board', () => {
     expect(views).toMatch(/scopeLeague == "NFL" \|\| scopeLeague == "NCAAF"/);
-    expect(footballIntel).toContain('struct FootballPicksBoard: View');
-    // Founder, Aug 20: the board leads with its CARD — no "Slate Read"
-    // section title, no leading dash; the rows' kickers carry identity.
+    expect(views).toContain('edges: FootballTodayFeed.rows(edges), tabbed: true)');
+    expect(views).not.toContain('FootballPicksBoard(');
+    expect(footballIntel).not.toContain('struct FootballPicksBoard');
     expect(footballIntel).not.toContain('"Slate Read"');
-    expect(footballIntel).toContain('let gameKey = signal.gameId ?? normalized(signal.game)');
+  });
+
+  it('keeps unproven market and live rows off the football Today feed', () => {
+    const feed = sliceStruct(footballIntel, 'enum FootballTodayFeed');
+    // A category alone never earns a market or live-state claim here.
+    expect(feed).toContain('FootballProofContract.isRenderableSweat(signal, includeWatch: false)');
+    expect(feed).toContain('FootballProofContract.isRenderableAfterGary(signal)');
+    // MARKET RANGE has no authoritative slate row to prove kickoff against on
+    // this surface, and the season series belongs to its own game page.
+    expect(feed).toContain('case .marketRange: return false');
+    expect(feed).toContain('case .h2h:         return false');
   });
 
   it('turns an NCAAF dark day into a grounded next-slate preview', () => {

@@ -561,10 +561,16 @@ describe('football generator registration and row contract', () => {
     expect(result.gameCount).toBe(1);
     expect(new Set(result.connections.map((row) => row.category))).toEqual(new Set([
       'trenches', 'quarterback', 'turnover_edge', 'explosive_play', 'pass_rush', 'pace_script',
+      // THE MISMATCH (the widest single unit gap) and the defensive lane, which
+      // reads the opposing box from the same verified games.
+      'mismatch', 'coverage',
     ]));
     expect(result.connections.every((row) => row.game_id === 900)).toBe(true);
     expect(result.connections.every((row) => row.game === 'BUF @ MIA')).toBe(true);
-    expect(result.connections.every((row) => row.meta?.source === 'balldontlie_team_stats')).toBe(true);
+    // Every row still traces to a recorded BDL team box — the team's own, or
+    // its opponents' from the games it has already played. No third source.
+    expect(result.connections.every((row) => ['balldontlie_team_stats', 'balldontlie_team_stats_opponents']
+      .includes(row.meta?.source))).toBe(true);
     expect(result.connections.some((row) => /SP\+|FPI|EPA|havoc/i.test(`${row.headline} ${row.detail}`))).toBe(false);
   });
 

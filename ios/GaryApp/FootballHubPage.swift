@@ -392,8 +392,7 @@ private struct FootballHubSlateRail: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 13) {
             FootballHubSectionTitle(title: league == .ncaaf ? "Saturday Windows" : "Game Windows",
-                                    count: rows.count,
-                                    accent: accent)
+                                    count: rows.count)
 
             VStack(alignment: .leading, spacing: 14) {
                 ForEach(groups) { group in
@@ -499,7 +498,7 @@ private struct FootballHubReceiptSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
-            FootballHubSectionTitle(title: "Gary's Number", count: rows.count, accent: accent)
+            FootballHubSectionTitle(title: "Gary's Number", count: rows.count)
             VStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, signal in
                     FootballHubReceiptRow(signal: signal, accent: accent) { onTap(signal) }
@@ -676,7 +675,7 @@ private struct FootballHubGameBoard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
-            FootballHubSectionTitle(title: "Game Board", count: rows.count, accent: accent)
+            FootballHubSectionTitle(title: "Game Board", count: rows.count)
             VStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, signal in
                     FootballHubSignalRow(signal: signal, accent: accent) { onTap(signal) }
@@ -757,7 +756,7 @@ private struct FootballHubSweatSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
-            FootballHubSectionTitle(title: "Live With Gary", count: rows.count, accent: accent)
+            FootballHubSectionTitle(title: "Live With Gary", count: rows.count)
             VStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, signal in
                     FootballHubSweatRow(signal: signal, accent: accent) { onTap(signal) }
@@ -855,16 +854,13 @@ private struct FootballHubProofValue: View {
 
 // MARK: - Shared football Hub chrome
 
+// Header runs bare — no accent tick (founder, Aug 20).
 private struct FootballHubSectionTitle: View {
     let title: String
     let count: Int
-    let accent: Color
 
     var body: some View {
         HStack(alignment: .center, spacing: 9) {
-            RoundedRectangle(cornerRadius: 1.5)
-                .fill(accent)
-                .frame(width: 3, height: 17)
             Text(title.uppercased())
                 .font(GaryFonts.mono(12.5, bold: true))
                 .tracking(1.35)

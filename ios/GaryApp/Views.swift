@@ -23064,7 +23064,11 @@ struct PicksTodayPage: View {
             if scopeLeague == "WC" {
                 WCTodaySection(edges: edges)
             } else if scopeLeague == "NFL" || scopeLeague == "NCAAF" {
-                FootballPicksBoard(league: scopeLeague, signals: edges)
+                // Football runs the same section as MLB — same category tabs,
+                // same feed — through a proof gate that keeps unverified
+                // market/live rows off this surface (founder, Aug 20).
+                EdgesSection(title: "TODAY'S EDGES",
+                             edges: FootballTodayFeed.rows(edges), tabbed: true)
             } else {
                 // The season series belongs to its GAME, not the day's list
                 // (founder, Aug 6: "Head to Head should not be on the Today's

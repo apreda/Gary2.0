@@ -67,6 +67,8 @@ import { computeFootballAvailability } from './computers/footballAvailability.js
 import { computeFootballQbWatch } from './computers/footballQbWatch.js';
 import { computeFootballSituational } from './computers/footballSituational.js';
 import { computeFootballMismatch } from './computers/footballMismatch.js';
+import { computeFootballDefensiveEdges } from './computers/footballDefensiveEdges.js';
+import { computeFootballStandings } from './computers/footballStandings.js';
 import { computeNflFantasyEdges } from './computers/nflFantasyEdges.js';
 import { computeNcaafFantasyEdges } from './computers/ncaafFantasyEdges.js';
 import { computeNcaafNextSlate } from './computers/ncaafNextSlate.js';
@@ -121,11 +123,19 @@ const FOOTBALL_COMPUTERS = [
   computeFootballQbWatch,
   computeFootballSituational,
   computeFootballMismatch,
+  // The defensive half of the same team boxes — pass/rush yards allowed,
+  // third downs allowed, takeaways, pressure. Reads the OPPONENT's row from
+  // every game each side has played, so nothing here is a rating or estimate.
+  computeFootballDefensiveEdges,
 ];
 
 const NFL_COMPUTERS = [
   ...FOOTBALL_COMPUTERS,
   computeNflFantasyEdges,
+  // Form and record lanes off the NFL standings row. NFL-only: the college
+  // standings route answers one conference at a time, so a Saturday slate has
+  // no single authoritative call to read.
+  computeFootballStandings,
 ];
 
 const NCAAF_COMPUTERS = [

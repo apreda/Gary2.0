@@ -19,6 +19,10 @@ const FOOTBALL = Object.freeze({
 // Four teams × a full 18-game pro season remains below the endpoint's
 // 100-row page; the same bound safely covers a college regular season.
 const TEAM_CHUNK_SIZE = 4;
+// Opponent boxes are fetched by game id, and a game returns exactly two rows —
+// so a wider chunk still lands inside the endpoint's 100-row page while cutting
+// a full NFL slate's fan-out from ~60 calls to a handful.
+const GAME_CHUNK_SIZE = 40;
 const FOOTBALL_BOOK_PRIORITY = Object.freeze([
   'fanduel', 'draftkings', 'betrivers', 'caesars', 'betmgm',
   'fanatics', 'betway', 'ballybet', 'betparx', 'rebet',
@@ -314,6 +318,88 @@ export async function loadFootballTeamGameStats({ bdl, league, season, date, gam
   return output;
 }
 
+/**
+ * Fetch the OTHER box from each game a slate team already played, keyed by the
+ * slate team it was played against. That is what turns an offence-only feed
+ * into a defensive one: a team's pass yards allowed is simply the opponent's
+ * passing line in the games it played, with no rating, projection, or
+ * league-average substitution anywhere in the chain.
+ *
+ * Takes the already-verified own-team rows so the sample is identical: same
+ * season, same finals, same pre-slate ET cutoff. Fetching by `game_ids`
+ * returns both sides of each game, and the own-team row is dropped on the way
+ * through.
+ *
+ * The provider only honours `game_ids` when `seasons` rides along, and NFL
+ * wants `season_type` as a scalar — an array silently returns nothing. Both
+ * are mirrored from the own-team call so this sample cannot drift from it.
+ *
+ * @returns {Map<string, object[]>} slate team id -> opponent box rows
+ */
+export async function loadFootballOpponentGameStats({ bdl, league, season, games, ownRows }) {
+  const key = leagueKey(league);
+  const cfg = FOOTBALL[key];
+  if (!bdl || !cfg || !Number.isInteger(Number(season))) return new Map();
+  if (!Array.isArray(ownRows) || ownRows.length === 0) return new Map();
+
+  // gameId -> the slate teams whose verified sample contains that game. A
+  // single game can belong to two slate teams (they played each other), so
+  // this is a set, not a single id.
+  const slateTeamsByGame = new Map();
+  for (const row of ownRows) {
+    const teamId = teamIdFromRow(row);
+    const gameId = gameIdFromRow(row);
+    if (teamId == null || gameId == null) continue;
+    const bucket = slateTeamsByGame.get(String(gameId)) || new Set();
+    bucket.add(String(teamId));
+    slateTeamsByGame.set(String(gameId), bucket);
+  }
+  const gameIds = [...slateTeamsByGame.keys()];
+  if (gameIds.length === 0) return new Map();
+
+  const nflSeasonTypes = new Set(
+    key === 'nfl' ? (games || []).map(nflSeasonTypeForGame) : [],
+  );
+
+  const byTeam = new Map();
+  const seen = new Set();
+  for (const group of chunks(gameIds, GAME_CHUNK_SIZE)) {
+    let rows = [];
+    try {
+      const params = {
+        game_ids: group.map(Number),
+        seasons: [Number(season)],
+        per_page: 100,
+      };
+      if (key === 'nfl' && nflSeasonTypes.size === 1) {
+        params.season_type = [...nflSeasonTypes][0];
+      }
+      rows = await bdl.getTeamStats(cfg.sportKey, params, 10);
+    } catch (err) {
+      console.warn(`[footballInsights] ${key.toUpperCase()} opponent-box chunk omitted: ${err?.message || err}`);
+      continue;
+    }
+    for (const row of Array.isArray(rows) ? rows : []) {
+      const teamId = teamIdFromRow(row);
+      const gameId = gameIdFromRow(row);
+      if (teamId == null || gameId == null) continue;
+      const slateTeams = slateTeamsByGame.get(String(gameId));
+      if (!slateTeams) continue;
+      for (const slateTeamId of slateTeams) {
+        // The slate team's own box is not its defence.
+        if (String(teamId) === slateTeamId) continue;
+        const identity = `${slateTeamId}|${gameId}|${teamId}`;
+        if (seen.has(identity)) continue;
+        seen.add(identity);
+        const bucket = byTeam.get(slateTeamId) || [];
+        bucket.push(row);
+        byTeam.set(slateTeamId, bucket);
+      }
+    }
+  }
+  return byTeam;
+}
+
 function parseEfficiency(value) {
   if (!value || typeof value !== 'string') return null;
   const match = value.trim().match(/^(\d+)\s*[-/]\s*(\d+)$/);
@@ -372,6 +458,13 @@ function accumulator(teamId) {
     counts: Object.create(null),
     thirdDownMade: 0,
     thirdDownAttempts: 0,
+    // Down/red-zone conversion is a made-over-attempted rate, so it is summed
+    // as two counters and divided once — never averaged from per-game rates,
+    // which would weight a 1-for-1 night the same as a 5-for-7 night.
+    fourthDownMade: 0,
+    fourthDownAttempts: 0,
+    redZoneScores: 0,
+    redZoneAttempts: 0,
   };
 }
 
@@ -404,6 +497,18 @@ export function aggregateFootballTeamStats(rows, { league } = {}) {
     add(acc, 'possessionSeconds', possessionSeconds(row?.possession_time));
     add(acc, 'points', pointsFor(row, teamId));
     add(acc, 'pointsAllowed', pointsAgainst(row, teamId));
+    // Fields the NFL box carries and NCAAF's does not. `add` skips a missing
+    // value outright, so a college row simply contributes nothing here and the
+    // metric stays absent rather than being averaged over a partial sample.
+    add(acc, 'penalties', row?.penalties);
+    add(acc, 'penaltyYards', row?.penalty_yards);
+    add(acc, 'offensivePlays', row?.total_offensive_plays);
+    add(acc, 'drives', row?.total_drives);
+    add(acc, 'yardsPerPass', row?.yards_per_pass);
+    add(acc, 'yardsPerRushAttempt', row?.yards_per_rush_attempt);
+    add(acc, 'sackYardsLost', row?.sack_yards_lost);
+    add(acc, 'fumblesLost', row?.fumbles_lost);
+    add(acc, 'interceptionsThrown', row?.interceptions_thrown);
 
     const made = finiteValue(row?.third_down_conversions);
     const attempts = finiteValue(row?.third_down_attempts);
@@ -413,6 +518,23 @@ export function aggregateFootballTeamStats(rows, { league } = {}) {
     if (parsed) {
       acc.thirdDownMade += parsed.made;
       acc.thirdDownAttempts += parsed.attempts;
+    }
+
+    const fourthMade = finiteValue(row?.fourth_down_conversions);
+    const fourthAttempts = finiteValue(row?.fourth_down_attempts);
+    const fourth = fourthMade != null && fourthAttempts != null && fourthAttempts > 0
+      ? { made: fourthMade, attempts: fourthAttempts }
+      : parseEfficiency(row?.fourth_down_efficiency);
+    if (fourth) {
+      acc.fourthDownMade += fourth.made;
+      acc.fourthDownAttempts += fourth.attempts;
+    }
+
+    const redScores = finiteValue(row?.red_zone_scores);
+    const redAttempts = finiteValue(row?.red_zone_attempts);
+    if (redScores != null && redAttempts != null && redAttempts > 0) {
+      acc.redZoneScores += redScores;
+      acc.redZoneAttempts += redAttempts;
     }
 
     byTeam.set(id, acc);
@@ -440,6 +562,33 @@ export function aggregateFootballTeamStats(rows, { league } = {}) {
       thirdDownPct: acc.thirdDownAttempts > 0
         ? (acc.thirdDownMade / acc.thirdDownAttempts) * 100
         : null,
+      penaltiesPerGame: average('penalties'),
+      penaltyYardsPerGame: average('penaltyYards'),
+      offensivePlaysPerGame: average('offensivePlays'),
+      drivesPerGame: average('drives'),
+      yardsPerPass: average('yardsPerPass'),
+      yardsPerRushAttempt: average('yardsPerRushAttempt'),
+      sackYardsLostPerGame: average('sackYardsLost'),
+      fumblesLostPerGame: average('fumblesLost'),
+      interceptionsThrownPerGame: average('interceptionsThrown'),
+      fourthDownPct: acc.fourthDownAttempts > 0
+        ? (acc.fourthDownMade / acc.fourthDownAttempts) * 100
+        : null,
+      fourthDownAttemptsPerGame: acc.games > 0 && acc.fourthDownAttempts > 0
+        ? acc.fourthDownAttempts / acc.games
+        : null,
+      redZonePct: acc.redZoneAttempts > 0
+        ? (acc.redZoneScores / acc.redZoneAttempts) * 100
+        : null,
+      redZoneTripsPerGame: acc.games > 0 && acc.redZoneAttempts > 0
+        ? acc.redZoneAttempts / acc.games
+        : null,
+      redZoneScores: acc.redZoneScores,
+      redZoneAttempts: acc.redZoneAttempts,
+      fourthDownMade: acc.fourthDownMade,
+      fourthDownAttempts: acc.fourthDownAttempts,
+      thirdDownMade: acc.thirdDownMade,
+      thirdDownAttempts: acc.thirdDownAttempts,
     });
   }
   return result;

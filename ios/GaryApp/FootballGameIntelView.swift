@@ -524,16 +524,15 @@ private enum FootballEvidence {
 
 // MARK: - Shared football presentation
 
+// No accent tick before the title (founder, Aug 20: the little coloured bar
+// comes off every NFL/NCAAF header) — the gold word carries the section on its
+// own, the same way MLB's headers do.
 private struct FootballSectionTitle: View {
     let title: String
-    let accent: Color
     var trailing: String? = nil
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 9) {
-            Capsule()
-                .fill(accent)
-                .frame(width: 3, height: 15)
             Text(title.uppercased())
                 .font(GaryFonts.mono(13, bold: true))
                 .tracking(1.35)
@@ -604,7 +603,7 @@ private struct FootballMarketSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FootballSectionTitle(title: title, accent: accent, trailing: receiptLine)
+            FootballSectionTitle(title: title, trailing: receiptLine)
 
             VStack(alignment: .leading, spacing: 13) {
                 if !selection.isEmpty {
@@ -707,7 +706,7 @@ private struct FootballMarketRangeSection: View {
     var body: some View {
         if let low = meta?.low, let high = meta?.high {
             VStack(alignment: .leading, spacing: 10) {
-                FootballSectionTitle(title: "Market Range", accent: accent, trailing: bookLabel)
+                FootballSectionTitle(title: "Market Range", trailing: bookLabel)
 
                 VStack(spacing: 12) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -791,7 +790,7 @@ private struct FootballGameShapeSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FootballSectionTitle(title: "Game Shape", accent: accent, trailing: scope)
+            FootballSectionTitle(title: "Game Shape", trailing: scope)
 
             VStack(spacing: 0) {
                 HStack(alignment: .center, spacing: 10) {
@@ -866,7 +865,7 @@ private struct FootballAvailabilitySection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FootballSectionTitle(title: "Availability", accent: accent)
+            FootballSectionTitle(title: "Availability")
 
             VStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, player in
@@ -923,7 +922,7 @@ private struct FootballSaturdayReadSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FootballSectionTitle(title: "Saturday Read", accent: accent)
+            FootballSectionTitle(title: "Saturday Read")
             VStack(alignment: .leading, spacing: 10) {
                 Text(read)
                     .font(GaryFonts.text(13.5, .medium))
@@ -982,7 +981,7 @@ private struct FootballSweatSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FootballSectionTitle(title: "The Sweat", accent: accent, trailing: summary)
+            FootballSectionTitle(title: "The Sweat", trailing: summary)
             VStack(spacing: 0) {
                 ForEach(Array(signals.enumerated()), id: \.element.id) { index, signal in
                     FootballSweatRow(signal: signal, accent: accent)
@@ -1300,244 +1299,32 @@ struct FootballNextSlatePreview: View {
     }
 }
 
-// MARK: - Football Picks slate board
+// MARK: - Football Today feed
 
-/// The Picks board carries the slate at full depth (founder, Aug 20: the NFL
-/// page holds "the same depth of info" as MLB's — NFL-native sections, not
-/// baseball's). Each game gets its own panel: live proof and Gary's number
-/// first, then availability and the matchup reads, every row with its full
-/// written read visible — never a bare one-liner.
-struct FootballPicksBoard: View {
-    let league: String
-    let signals: [Signal]
-
-    private var isCollege: Bool { league.uppercased() == "NCAAF" }
-    private var accent: Color { isCollege ? Sport.ncaaf.accentColor : Sport.nfl.accentColor }
-
-    /// Rows a single game may show, and how many of those one lane may take —
-    /// depth without letting one lane (four injury reports) crowd out the rest.
-    private static let rowsPerGame = 5
-    private static let rowsPerKind = 2
-
-    private struct GamePanel: Identifiable {
-        let id: String
-        let rows: [Signal]
-    }
-
-    private var panels: [GamePanel] {
-        let candidates = signals.enumerated()
-            .filter { boardPriority($0.element) != nil }
-            .sorted { lhs, rhs in
-                let left = boardPriority(lhs.element) ?? Int.max
-                let right = boardPriority(rhs.element) ?? Int.max
-                return left == right ? lhs.offset < rhs.offset : left < right
-            }
-
-        var order: [String] = []
-        var byGame: [String: [Signal]] = [:]
-        var kindCounts: [String: Int] = [:]
-        for candidate in candidates {
-            let signal = candidate.element
-            let gameKey = signal.gameId ?? normalized(signal.game)
-            guard !gameKey.isEmpty else { continue }
-            if byGame[gameKey] == nil { order.append(gameKey); byGame[gameKey] = [] }
-            guard (byGame[gameKey]?.count ?? 0) < Self.rowsPerGame else { continue }
-            let kindKey = "\(gameKey)|\(signal.kind)"
-            guard (kindCounts[kindKey] ?? 0) < Self.rowsPerKind else { continue }
-            kindCounts[kindKey] = (kindCounts[kindKey] ?? 0) + 1
-            byGame[gameKey]?.append(signal)
-        }
-        return order.compactMap { key in
-            guard let rows = byGame[key], !rows.isEmpty else { return nil }
-            return GamePanel(id: key, rows: rows)
-        }
-    }
-
-    private func boardPriority(_ signal: Signal) -> Int? {
-        switch signal.kind {
-        case .theSweat:
-            guard FootballProofContract.isRenderableSweat(signal, includeWatch: false) else { return nil }
-            return 0
-        case .afterGary:
-            guard FootballProofContract.isRenderableAfterGary(signal) else { return nil }
-            return 1
-        // This summary surface has no authoritative slate row to prove an
-        // exact confirmed future kickoff. Market Range remains on the Hub and
-        // game page, where that identity is available.
-        case .marketRange: return nil
-        case .injury: return 3
-        case .mismatch: return 4
-        case .trenches: return 5
-        case .quarterback: return 6
-        case .passRush: return 7
-        case .paceScript: return 8
-        case .redZone: return 9
-        case .turnoverEdge: return 10
-        case .explosivePlay: return 11
-        case .coverage: return 12
-        case .specialTeams: return 13
-        case .situational, .coaching: return 14
-        default: return nil
-        }
-    }
-
-    private func normalized(_ value: String) -> String {
-        value.lowercased().filter { $0.isLetter || $0.isNumber }
-    }
-
-    var body: some View {
-        if !panels.isEmpty {
-            // NO section header (founder, Aug 20: "remove the dash and the
-            // header name") — each game panel leads with its own matchup line;
-            // the rows' kickers carry the lane identity.
-            VStack(spacing: 12) {
-                ForEach(panels) { panel in
-                    VStack(spacing: 0) {
-                        if let matchup = panel.rows.first?.game, !matchup.isEmpty {
-                            HStack(spacing: 8) {
-                                Rectangle().fill(accent.opacity(0.85)).frame(width: 3, height: 10)
-                                Text(matchup.uppercased())
-                                    .font(GaryFonts.mono(9.5, bold: true))
-                                    .tracking(1.1)
-                                    .foregroundStyle(.white.opacity(0.72))
-                                Spacer(minLength: 0)
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.top, 12)
-                            .padding(.bottom, 4)
-                        }
-                        ForEach(Array(panel.rows.enumerated()), id: \.element.id) { index, signal in
-                            FootballPicksBoardRow(signal: signal, accent: accent, showGame: false)
-                            if index < panel.rows.count - 1 {
-                                Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
-                            }
-                        }
-                    }
-                    .footballPanel(accent: accent)
-                }
-            }
-            .padding(.horizontal, 16)
-        }
-    }
-}
-
-private struct FootballPicksBoardRow: View {
-    let signal: Signal
-    let accent: Color
-    /// The panel header already names the matchup; standalone uses keep it.
-    var showGame: Bool = true
-
-    private var label: String {
-        switch signal.kind {
-        case .theSweat:
-            guard let state = FootballProofContract.sweatState(signal) else { return "PROOF" }
-            return [.held, .missed, .push].contains(state) ? "FINAL RECEIPT" : "LIVE"
-        case .afterGary: return "GARY'S NUMBER"
-        case .marketRange: return "MARKET RANGE"
-        case .injury: return "AVAILABILITY"
-        case .trenches: return "GROUND GAME"
-        case .quarterback: return "QB WATCH"
-        case .mismatch: return "THE MISMATCH"
-        case .passRush: return "PASS RUSH"
-        case .paceScript: return "GAME TOTAL"
-        case .redZone: return "RED ZONE"
-        case .turnoverEdge: return "BALL SECURITY"
-        case .explosivePlay: return "EXPLOSIVES"
-        case .coverage: return "COVERAGE"
-        case .specialTeams: return "SPECIAL TEAMS"
-        case .coaching: return "COACHING"
-        default: return "MATCHUP"
-        }
-    }
-
-    private var headline: String {
-        if signal.kind == .afterGary,
-           let label = signal.afterGary?.pick_label,
-           let published = marketQuote(signal.afterGary?.published),
-           let current = marketQuote(signal.afterGary?.current) {
-            return "\(label.uppercased()) \(published) → \(current)"
-        }
-        if signal.kind == .marketRange,
-           let low = signal.marketRange?.low,
-           let high = signal.marketRange?.high {
-            return "\(compact(low)) — \(compact(high))"
-        }
-        return signal.headline
-    }
-
-    private var trailingValue: String? {
-        guard signal.kind == .afterGary, let movement = signal.afterGary?.movement else {
-            let value = signal.value.trimmingCharacters(in: .whitespacesAndNewlines)
-            return value.isEmpty ? nil : value.uppercased()
-        }
-        let advantage = (movement.advantage ?? "same").lowercased()
-        guard advantage != "same", let value = movement.primary_value, value > 0 else { return "NO MOVE" }
-        let number = compact(value).replacingOccurrences(of: "+", with: "")
-        let unit = movement.primary_unit?.lowercased() == "probability_points" ? "PP" : "PTS"
-        return "\(advantage == "gary" ? "GARY" : "NOW") +\(number) \(unit)"
-    }
-
-    private func marketQuote(_ snapshot: FootballMarketSnapshot?) -> String? {
-        guard let snapshot else { return nil }
-        if let line = snapshot.line { return compact(line) }
-        if let odds = snapshot.odds { return compact(odds) }
-        return nil
-    }
-
-    private func compact(_ value: Double) -> String {
-        let body = value.rounded() == value ? String(Int(value)) : String(format: "%.2f", value)
-            .replacingOccurrences(of: #"0+$"#, with: "", options: .regularExpression)
-            .replacingOccurrences(of: #"\.$"#, with: "", options: .regularExpression)
-        return value > 0 ? "+\(body)" : body
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 7) {
-                        Text(label)
-                            .font(GaryFonts.mono(8, bold: true))
-                            .tracking(0.7)
-                            .foregroundStyle(accent)
-                        if showGame, !signal.game.isEmpty {
-                            Text(signal.game.uppercased())
-                                .font(GaryFonts.mono(8, bold: true))
-                                .tracking(0.45)
-                                .foregroundStyle(.white.opacity(0.38))
-                                .lineLimit(1)
-                        }
-                    }
-                    // The headline wraps in full — never a scaled-to-fit
-                    // single line hiding the second half of the sentence.
-                    Text(headline)
-                        .font(GaryFonts.text(13.5, .semibold))
-                        .foregroundStyle(GaryColors.warmWhite)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 8)
-                if let trailingValue {
-                    Text(trailingValue)
-                        .font(GaryFonts.data(11.5, .bold))
-                        .foregroundStyle(accent)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                }
-            }
-            // The written read, in full (founder, Aug 20: MLB-depth on the
-            // football board) — the same always-visible treatment the MLB
-            // edge rows give Gary's read. Live-proof lanes carry their own
-            // structured render and stay one-line.
-            if signal.kind != .theSweat, signal.kind != .afterGary, signal.kind != .marketRange,
-               !signal.detail.isEmpty {
-                Text(signal.detail)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(.white.opacity(0.65))
-                    .fixedSize(horizontal: false, vertical: true)
+/// The football Picks page runs MLB's exact mechanism (founder, Aug 20: the NFL
+/// Today page is "the same as MLB literally — the categories and then how it
+/// works", only the lanes differ). So there is no bespoke football board any
+/// more: the slate's signals go straight into `EdgesSection(tabbed:)`, which
+/// draws THE SHOW plus one tab per live lane and the same row feed underneath.
+///
+/// What stays football-specific is the proof gate. A category alone never earns
+/// a market or live-state claim on this surface, so THE SWEAT and AFTER GARY
+/// must pass their structured contracts, and MARKET RANGE stays off entirely —
+/// this summary carries no authoritative slate row to prove an exact confirmed
+/// kickoff against, which the Hub and the game page do.
+enum FootballTodayFeed {
+    static func rows(_ signals: [Signal]) -> [Signal] {
+        signals.filter { signal in
+            switch signal.kind {
+            case .theSweat:    return FootballProofContract.isRenderableSweat(signal, includeWatch: false)
+            case .afterGary:   return FootballProofContract.isRenderableAfterGary(signal)
+            case .marketRange: return false
+            // The season series belongs to its game page, not the day's list
+            // (the same rule MLB's Today feed follows).
+            case .h2h:         return false
+            default:           return true
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
     }
 }
 
@@ -1668,7 +1455,7 @@ private struct FootballFantasyLane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FootballSectionTitle(title: title, accent: accent)
+            FootballSectionTitle(title: title)
             VStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, signal in
                     Button { onTap(signal) } label: {
@@ -1776,7 +1563,7 @@ private struct FootballNewsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FootballSectionTitle(title: "The News", accent: accent)
+            FootballSectionTitle(title: "The News")
             Text(lines.joined(separator: " · "))
                 .font(GaryFonts.text(13.5))
                 .foregroundStyle(.white.opacity(0.88))
@@ -1797,7 +1584,7 @@ private struct FootballQBSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FootballSectionTitle(title: "The Quarterbacks", accent: accent)
+            FootballSectionTitle(title: "The Quarterbacks")
             VStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, s in
                     VStack(alignment: .leading, spacing: 6) {
@@ -1843,7 +1630,7 @@ private struct FootballInjuryWireSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FootballSectionTitle(title: "The Injury Wire", accent: accent)
+            FootballSectionTitle(title: "The Injury Wire")
             VStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, s in
                     VStack(alignment: .leading, spacing: 5) {
@@ -1890,7 +1677,7 @@ private struct FootballNumbersSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FootballSectionTitle(title: "The Numbers", accent: accent)
+            FootballSectionTitle(title: "The Numbers")
             VStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, s in
                     HStack(alignment: .center, spacing: 14) {
@@ -1937,7 +1724,7 @@ private struct FootballStandingsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FootballSectionTitle(title: title, accent: accent)
+            FootballSectionTitle(title: title)
             VStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, s in
                     VStack(alignment: .leading, spacing: 5) {
@@ -1987,7 +1774,7 @@ private struct FootballMismatchSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FootballSectionTitle(title: "The Mismatch", accent: accent)
+            FootballSectionTitle(title: "The Mismatch")
             VStack(alignment: .leading, spacing: 8) {
                 Text(signal.headline)
                     .font(GaryFonts.text(15, .semibold))
@@ -2026,7 +1813,7 @@ private struct FootballTrackRecordSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FootballSectionTitle(title: "The Track Record", accent: accent, trailing: "GARY ON THESE TEAMS")
+            FootballSectionTitle(title: "The Track Record", trailing: "GARY ON THESE TEAMS")
             HStack(spacing: 8) {
                 ForEach(Array(tracks.enumerated()), id: \.offset) { _, track in
                     VStack(alignment: .leading, spacing: 4) {
