@@ -2393,7 +2393,7 @@ struct HomeView: View {
             // fetch over rows already showing.
             if AppFlags.userBookEnabled, AuthManager.shared.bearerToken != nil {
                 let today = SupabaseAPI.todayEST()
-                let mine = await UserBookAPI.fetchMyBets().filter { $0.game_date == today }
+                let mine = (await UserBookAPI.fetchMyBets() ?? []).filter { $0.game_date == today }
                 if !mine.isEmpty || myTodayBets.isEmpty { myTodayBets = mine }
             } else {
                 myTodayBets = []
@@ -3784,14 +3784,17 @@ struct HomeView: View {
                 : sheetLive(matchupFull, league: lgUpper, gameID: pick?.game_id, commence: commence)
 
             var zone: HomeSheetRow.Zone = .upcoming
-            var title = matchupFull.isEmpty
-                ? lgUpper
-                : {
-                    let sides = matchupFull.components(separatedBy: " @ ")
-                    return sides.count == 2
-                        ? "\(Self.teamAbbrev(sides[0], league: lgUpper)) @ \(Self.teamAbbrev(sides[1], league: lgUpper))"
-                        : matchupFull
-                }()
+            // A prop slip whose game the slate can't name still gets a real
+            // title — the player it rides — never a bare league word.
+            var title: String = {
+                if matchupFull.isEmpty {
+                    return (bet.player_name?.uppercased()).flatMap { $0.isEmpty ? nil : $0 } ?? lgUpper
+                }
+                let sides = matchupFull.components(separatedBy: " @ ")
+                return sides.count == 2
+                    ? "\(Self.teamAbbrev(sides[0], league: lgUpper)) @ \(Self.teamAbbrev(sides[1], league: lgUpper))"
+                    : matchupFull
+            }()
             var clockText: String? = nil
             var statusText = ""
             var statusColor = Color.white.opacity(0.62)

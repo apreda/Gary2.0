@@ -121,7 +121,7 @@ struct HomeYourNight: View {
     @MainActor private func load() async {
         defer { loaded = true }
         guard AuthManager.shared.bearerToken != nil else { return }
-        let bets = await UserBookAPI.fetchMyBets()
+        let bets = await UserBookAPI.fetchMyBets() ?? []
         let open = bets.filter { $0.isPending && $0.kind != "manual" }
             .sorted { ($0.lock_at ?? "9999") < ($1.lock_at ?? "9999") }
         if !open.isEmpty { slips = open }

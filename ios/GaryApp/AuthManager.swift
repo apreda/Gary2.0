@@ -457,6 +457,27 @@ final class AuthManager: ObservableObject {
         accessToken.isEmpty ? nil : accessToken
     }
 
+    /// Refresh the access token on demand, for a caller that just took a 401
+    /// (Aug 21 2026: a view whose `.task` fires while `checkExistingSession`
+    /// is still refreshing sent the stale token and read the 401 as an EMPTY
+    /// book — the page then told the user their record was gone). Returns the
+    /// fresh token, or nil when the session is genuinely dead. Never clears
+    /// the session on a network failure: only a refused refresh signs the
+    /// user out, exactly as `checkExistingSession` does.
+    @discardableResult
+    func renewSessionIfPossible() async -> String? {
+        guard !refreshToken.isEmpty else { return nil }
+        do {
+            try await refreshSession()
+            return bearerToken
+        } catch AuthError.unauthorized {
+            clearSession()
+            return nil
+        } catch {
+            return nil   // transient — keep the session, let the caller retry later
+        }
+    }
+
     private func fetchCurrentUser() async throws -> GaryUser {
         let url = try authURL("/auth/v1/user")
         var request = URLRequest(url: url)

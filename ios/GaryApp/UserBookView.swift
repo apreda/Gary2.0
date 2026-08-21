@@ -195,8 +195,22 @@ enum UserBookAPI {
     }
 
     private static func run(_ req: URLRequest) async throws -> Data {
-        let (data, response) = try await URLSession.shared.data(for: req)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode
+        var (data, response) = try await URLSession.shared.data(for: req)
+        var statusCode = (response as? HTTPURLResponse)?.statusCode
+
+        // 401 → RENEW ONCE, then retry (Aug 21 2026): a book view whose task
+        // fires while the launch-time session refresh is still in flight sent
+        // the stale token, took a 401, and the page rendered it as "no
+        // entries" — telling the user their record had vanished. A refused
+        // renewal signs them out honestly; a transient one falls through to
+        // the throw below, which the callers now surface as unavailable.
+        if statusCode == 401, let fresh = await AuthManager.shared.renewSessionIfPossible() {
+            var retry = req
+            retry.setValue("Bearer \(fresh)", forHTTPHeaderField: "Authorization")
+            (data, response) = try await URLSession.shared.data(for: retry)
+            statusCode = (response as? HTTPURLResponse)?.statusCode
+        }
+
         guard let statusCode, (200...299).contains(statusCode) else {
             // Keep the diagnostic in developer logs, never in user-facing copy.
             // Gateways sometimes return raw JSON such as
@@ -268,14 +282,20 @@ enum UserBookAPI {
         return try JSONDecoder().decode(UserBet.self, from: data)
     }
 
-    @MainActor static func fetchMyBets() async -> [UserBet] {
-        guard var comps = URLComponents(url: rest.appendingPathComponent("user_bets"), resolvingAgainstBaseURL: false) else { return [] }
+    /// The signed-in user's bets, or NIL when the book could not be read
+    /// (Aug 21 2026). An unreadable book is never the same thing as an empty
+    /// one: the old `[]`-on-any-error contract let an expired session render
+    /// as "No entries yet" over a real record. Callers that only decorate
+    /// (`?? []`) stay lenient; the pages that SHOW the record surface the
+    /// honest unavailable state instead.
+    @MainActor static func fetchMyBets() async -> [UserBet]? {
+        guard var comps = URLComponents(url: rest.appendingPathComponent("user_bets"), resolvingAgainstBaseURL: false) else { return nil }
         comps.queryItems = [URLQueryItem(name: "select", value: "*"),
                             URLQueryItem(name: "order", value: "placed_at.desc"),
                             URLQueryItem(name: "limit", value: "400")]
-        guard let url = comps.url, let req = try? authedRequest(url) else { return [] }
-        guard let data = try? await run(req) else { return [] }
-        return (try? JSONDecoder().decode([UserBet].self, from: data)) ?? []
+        guard let url = comps.url, let req = try? authedRequest(url) else { return nil }
+        guard let data = try? await run(req) else { return nil }
+        return try? JSONDecoder().decode([UserBet].self, from: data)
     }
 
     struct UserStreak: Codable {
@@ -490,7 +510,7 @@ struct TailFadeRow: View {
                 if let c = counts[pick.pick ?? ""] { riders = c }
             }
             guard !loaded, AuthManager.shared.bearerToken != nil else { return }
-            let all = await UserBookAPI.fetchMyBets()
+            let all = await UserBookAPI.fetchMyBets() ?? []
             // Cancellation guard: never latch an empty result over a live row.
             if !all.isEmpty {
                 mine = all.first { $0.pick_text == (pick.pick ?? "") && $0.pick_type == "game" }
@@ -721,6 +741,8 @@ struct UserBookSection: View {
     @State private var kindFilter = "all"         // all | tail | fade | manual
     @State private var liveScores: [LiveScore] = []
     @State private var todayPicks: [GaryPick] = []
+    /// The book couldn't be read (network/session), as opposed to being empty.
+    @State private var loadFailed = false
 
     private var withGary: [UserBet] { bets.filter { $0.isVerified } }
     private var yourPlays: [UserBet] { bets.filter { $0.kind == "manual" } }
@@ -757,6 +779,8 @@ struct UserBookSection: View {
                 ProgressView().tint(.white.opacity(0.4))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 60)
+            } else if loadFailed {
+                unavailableCard
             } else if withGary.isEmpty && yourPlays.isEmpty {
                 emptyBookCard
             } else {
@@ -782,9 +806,12 @@ struct UserBookSection: View {
         .task {
             guard AuthManager.shared.bearerToken != nil else { loading = false; return }
             let rows = await UserBookAPI.fetchMyBets()
+            // An unreadable book is NOT an empty one (Aug 21) — the page says
+            // so instead of printing "no entries" over a real record.
+            loadFailed = rows == nil && bets.isEmpty
             // Day-cache law: a cancelled fetch returns [] — never latch it
             // over data we already have.
-            if !rows.isEmpty || bets.isEmpty { bets = rows }
+            if let rows, !rows.isEmpty || bets.isEmpty { bets = rows }
             if let s = await UserBookAPI.fetchMyStreak() { streak = s }
             // Live context for open slips: today's picks carry the game_id
             // bridge into live_scores (slip pick_text == pick.pick is the
@@ -896,6 +923,38 @@ struct UserBookSection: View {
                     .foregroundStyle(.black)
                     .padding(.horizontal, 16).padding(.vertical, 8)
                     .background(RoundedRectangle(cornerRadius: 7).fill(GaryColors.gold))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(bookCard())
+    }
+
+    /// Honest state when the book can't be read — never "no entries" over a
+    /// record that exists (founder law: an unavailable surface says so).
+    private var unavailableCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("YOUR BOOK")
+                .font(GaryFonts.mono(11, bold: true)).tracking(1.4)
+                .foregroundStyle(GaryColors.gold)
+            Text("Couldn't reach your book just now. Your record is safe — pull to refresh, or sign in again if this keeps up.")
+                .font(GaryFonts.text(13))
+                .foregroundStyle(.white.opacity(0.6))
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                Task {
+                    loading = true
+                    let rows = await UserBookAPI.fetchMyBets()
+                    if let rows { bets = rows; loadFailed = false } else { loadFailed = true }
+                    loading = false
+                }
+            } label: {
+                Text("TRY AGAIN")
+                    .font(GaryFonts.mono(10, bold: true)).tracking(0.8)
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .background(Capsule().fill(GaryColors.gold))
             }
             .buttonStyle(.plain)
         }
@@ -1502,7 +1561,7 @@ struct PropTailFadeRow: View {
         }
         .task(id: prop.id) {
             guard !loaded, AuthManager.shared.bearerToken != nil else { return }
-            let all = await UserBookAPI.fetchMyBets()
+            let all = await UserBookAPI.fetchMyBets() ?? []
             if !all.isEmpty {
                 mine = all.first {
                     $0.pick_type == "prop"
@@ -1849,6 +1908,9 @@ struct QuickLogSheet: View {
         let propToken: String?
         let pickId: String?
         let locked: Bool
+        /// Already on their book — the row shows the receipt instead of an
+        /// arm button, so the directory can never double-book a play.
+        var booked: String? = nil
     }
 
     @State private var entries: [DirectoryEntry] = []
@@ -1988,7 +2050,12 @@ struct QuickLogSheet: View {
                             .lineLimit(1).minimumScaleFactor(0.8)
                     }
                     Spacer(minLength: 8)
-                    if entry.locked {
+                    if let booked = entry.booked {
+                        Text(booked)
+                            .font(GaryFonts.mono(8.5, bold: true)).tracking(0.7)
+                            .foregroundStyle(GaryColors.gold.opacity(0.75))
+                            .lineLimit(1).fixedSize()
+                    } else if entry.locked {
                         Text("LOCKED")
                             .font(GaryFonts.mono(8.5, bold: true)).tracking(0.7)
                             .foregroundStyle(.white.opacity(0.35))
@@ -2002,9 +2069,9 @@ struct QuickLogSheet: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .disabled(entry.locked)
+            .disabled(entry.locked || entry.booked != nil)
 
-            if armedId == entry.id, !entry.locked {
+            if armedId == entry.id, !entry.locked, entry.booked == nil {
                 armedControls(entry)
                     .padding(.bottom, 10)
             }
@@ -2241,9 +2308,36 @@ struct QuickLogSheet: View {
                 pickId: nil,
                 locked: isLocked(p.commence_time)))
         }
-        // Open bets first, each lane in board order.
+        // What's already on their book — a bet you hold shows its receipt
+        // instead of an arm button, so the directory can't double-book it.
+        let mine = AuthManager.shared.bearerToken == nil ? [] : (await UserBookAPI.fetchMyBets() ?? [])
+        let byGamePick = Dictionary(
+            mine.filter { $0.pick_type != "prop" }.map { ($0.pick_text.lowercased(), $0) },
+            uniquingKeysWith: { first, _ in first })
+        let byProp = Dictionary(
+            mine.filter { $0.pick_type == "prop" }.compactMap { bet -> (String, UserBet)? in
+                guard let player = bet.player_name, let type = bet.prop_type else { return nil }
+                return ("\(player.lowercased())|\(type.lowercased())", bet)
+            }, uniquingKeysWith: { first, _ in first })
+        rows = rows.map { entry in
+            var e = entry
+            let held = e.isProp
+                ? byProp["\((e.player ?? "").lowercased())|\((e.propToken ?? "").lowercased())"]
+                : byGamePick[e.pickText.lowercased()]
+            if let held {
+                let word = held.kind == "fade" ? "FADED" : held.kind == "tail" ? "RIDING" : "YOURS"
+                e.booked = "\(word) · \(BookMoney.stake(held.stake_units))"
+            }
+            return e
+        }
+
+        // Open bets first, each lane in board order; anything already booked
+        // sinks below the plays they can still take.
+        let rank = { (e: DirectoryEntry) -> Int in e.locked ? 2 : (e.booked != nil ? 1 : 0) }
         let sorted = rows.sorted { a, b in
-            a.locked == b.locked ? (a.isProp == b.isProp ? a.title < b.title : !a.isProp) : !a.locked
+            rank(a) == rank(b)
+                ? (a.isProp == b.isProp ? a.title < b.title : !a.isProp)
+                : rank(a) < rank(b)
         }
         if !sorted.isEmpty || entries.isEmpty { entries = sorted }
         loadingBoard = false
@@ -2470,6 +2564,8 @@ struct ProfileView: View {
     @State private var showQuickLog = false
     @State private var showAuth = false
     @State private var signedIn = AuthManager.shared.bearerToken != nil
+    /// The book couldn't be read (network/session), as opposed to being empty.
+    @State private var loadFailed = false
 
     private var withGary: [UserBet] { bets.filter { $0.isVerified } }
     private var yourPlays: [UserBet] { bets.filter { $0.kind == "manual" } }
@@ -2504,6 +2600,15 @@ struct ProfileView: View {
                         // their record, their open action — the standings
                         // live ONCE, on the Billfold's BOARD scope (founder,
                         // Aug 20: "we don't need two leaderboards").
+                        if loadFailed, bets.isEmpty {
+                            Text("Couldn't reach your book just now — your record is safe. Pull to refresh, or sign in again if this keeps up.")
+                                .font(GaryFonts.text(13))
+                                .foregroundStyle(GaryColors.gold.opacity(0.85))
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(12)
+                                .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(GaryColors.gold.opacity(0.07)))
+                        }
                         streakCard
                         recordPanel
                         actionRow
@@ -2796,7 +2901,10 @@ struct ProfileView: View {
         // Handle first — the identity row and header chip hang off it.
         if let h = await UserBookAPI.fetchMyHandle() { myHandle = h }
         let all = await UserBookAPI.fetchMyBets()
-        if !all.isEmpty { bets = all }
+        // Unreadable ≠ empty (Aug 21): a failed read leaves whatever the
+        // profile already showed and flags the banner, never a 0-0 record.
+        loadFailed = all == nil
+        if let all, !all.isEmpty { bets = all }
         streak = await UserBookAPI.fetchMyStreak()
         loading = false
     }
