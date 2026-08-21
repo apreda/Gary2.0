@@ -44,7 +44,7 @@ const METRICS = Object.freeze([
     decimals: 2,
     leagues: new Set(['nfl']),
     threshold: { nfl: 0.4 },
-    headline: (leader, gap) => `${leader}'s defence surrenders ${gap} fewer yards a snap`,
+    headline: (leader, gap) => `${leader}'s defense surrenders ${gap} fewer yards a snap`,
   }),
   Object.freeze({
     key: 'thirdDownPct',
@@ -56,7 +56,7 @@ const METRICS = Object.freeze([
     headline: (leader, gap) => `${leader} gets off the field on third down ${gap}% more often`,
   }),
   Object.freeze({
-    // The opponent's giveaways are this defence's takeaways — the other half of
+    // The opponent's giveaways are this defense's takeaways — the other half of
     // turnover margin, which an offence-only feed cannot see at all.
     key: 'turnoversPerGame',
     category: 'turnover_edge',
@@ -65,7 +65,7 @@ const METRICS = Object.freeze([
     better: 'high',
     decimals: 2,
     threshold: { nfl: 0.35, ncaaf: 0.4 },
-    headline: (leader, gap) => `${leader}'s defence takes the ball away ${gap} more times per game`,
+    headline: (leader, gap) => `${leader}'s defense takes the ball away ${times(gap)} per game`,
   }),
   Object.freeze({
     key: 'redZonePct',
@@ -86,7 +86,7 @@ const METRICS = Object.freeze([
     decimals: 2,
     leagues: new Set(['nfl']),
     threshold: { nfl: 0.5 },
-    headline: (leader, gap) => `${leader}'s rush gets home ${gap} more times per game`,
+    headline: (leader, gap) => `${leader}'s rush gets home ${times(gap)} per game`,
   }),
 ]);
 
@@ -102,6 +102,11 @@ function fixed(value, decimals) {
   const n = Number(value);
   if (!Number.isFinite(n)) return null;
   return n.toFixed(decimals).replace(/\.0+$|(?<=\.[0-9])0+$/g, '');
+}
+
+/** "2 more times" / "1 more time" — a count headline must agree with its number. */
+function times(gap) {
+  return `${gap} more time${String(gap) === '1' ? '' : 's'}`;
 }
 
 function sampleWord(n) {
@@ -190,7 +195,7 @@ export async function computeFootballDefensiveEdges(ctx) {
       const gap = Math.abs(Number(awayValue) - Number(homeValue));
       if (gap < (metric.threshold?.[league] ?? Infinity)) continue;
 
-      // Defaults to 'low' — for an allowed stat, fewer is the better defence.
+      // Defaults to 'low' — for an allowed stat, fewer is the better defense.
       const awayLeads = metric.better === 'high'
         ? Number(awayValue) > Number(homeValue)
         : Number(awayValue) < Number(homeValue);

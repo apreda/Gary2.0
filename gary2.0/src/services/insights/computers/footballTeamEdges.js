@@ -126,7 +126,7 @@ const METRICS = Object.freeze([
     better: 'high',
     leagues: new Set(['nfl']),
     threshold: { nfl: 0.7 },
-    headline: (leader, gap) => `${leader} gets inside the 20 ${gap} more times per game`,
+    headline: (leader, gap) => `${leader} gets inside the 20 ${times(gap)} per game`,
   }),
   Object.freeze({
     // Penalties are the one discipline fact both leagues' boxes carry.
@@ -147,7 +147,7 @@ const METRICS = Object.freeze([
     decimals: 2,
     better: 'high',
     threshold: { nfl: 0.6, ncaaf: 0.8 },
-    headline: (leader, gap) => `${leader}'s staff goes for it ${gap} more times per game on fourth down`,
+    headline: (leader, gap) => `${leader}'s staff goes for it ${times(gap)} per game on fourth down`,
   }),
   Object.freeze({
     key: 'fourthDownPct',
@@ -167,7 +167,7 @@ const METRICS = Object.freeze([
     decimals: 1,
     better: 'high',
     threshold: { nfl: 2.5, ncaaf: 3 },
-    headline: (leader, gap) => `${leader} moves the chains +${gap} more times per game`,
+    headline: (leader, gap) => `${leader} moves the chains ${times(gap)} per game`,
   }),
   Object.freeze({
     key: 'yardsPerPass',
@@ -264,6 +264,11 @@ function fixed(value, decimals) {
 
 function teamName(team) {
   return team?.abbreviation || team?.name || team?.full_name || 'TEAM';
+}
+
+/** "2 more times" / "1 more time" — a count headline must agree with its number. */
+function times(gap) {
+  return `${gap} more time${String(gap) === '1' ? '' : 's'}`;
 }
 
 function sampleWord(n) {
