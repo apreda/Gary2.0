@@ -94,9 +94,15 @@ export function mergeGameResults(nflRows: NflResultRow[], gameRows: GameResultRo
   // dedupe a no-op; nfl_results is the authoritative NFL source.
   const nonNflGameRows = gameRows.filter(r => (r.league ?? '').trim().toUpperCase() !== 'NFL');
 
+  // PRESEASON NEVER COUNTS (founder law, Aug 21 2026). Exhibition football is
+  // graded and kept in the table, but it must not reach a record, streak, net,
+  // or league tile anywhere. This merge is the single funnel every public
+  // record derives from, so the law is enforced once, here.
+  const counting = (r: GameResultRow) => r.season_type !== 1;
+
   const seen = new Set<string>();
   const out: GameResultRow[] = [];
-  for (const r of [...nflRows.map(r => ({ ...r, league: r.league ?? 'NFL' })), ...nonNflGameRows]) {
+  for (const r of [...nflRows.map(r => ({ ...r, league: r.league ?? 'NFL' })), ...nonNflGameRows].filter(counting)) {
     const k = dedupeKey(r);
     if (seen.has(k)) continue;
     seen.add(k);
@@ -162,7 +168,7 @@ export async function fetchAllGameResults(revalidate = 3600): Promise<GameResult
     restAll<GameResultRow>(
       'game_results?select=game_date,league,matchup,pick_text,result,final_score,confidence&order=game_date.desc', { revalidate }),
     restAll<NflResultRow>(
-      'nfl_results?select=game_date,matchup,pick_text,result,final_score,confidence,week_number,season,home_team,away_team,home_score,away_score&order=game_date.desc', { revalidate }),
+      'nfl_results?select=game_date,matchup,pick_text,result,final_score,confidence,week_number,season,season_type,home_team,away_team,home_score,away_score&order=game_date.desc', { revalidate }),
   ]);
   return mergeGameResults(nfl, games);
 }

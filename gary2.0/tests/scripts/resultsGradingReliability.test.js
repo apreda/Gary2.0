@@ -70,6 +70,32 @@ describe('NFL result persistence mapping', () => {
     });
   });
 
+  // Founder law, Aug 21 2026: preseason never counts toward a Gary record.
+  // The grade-time stamp is what every record surface filters on, so it must
+  // ride both write paths and only ever hold BDL's 1/2/3 numbering.
+  it('stamps the season type on both write paths so preseason can be excluded downstream', () => {
+    const insert = buildNflResultWritePayload({
+      mode: 'insert', weeklyRow, pick: preseasonPick, nflPickId: weeklyRow.id,
+      gameDate: '2026-08-15', result: 'won', homeScore: 24, awayScore: 7, seasonType: 1,
+    });
+    expect(insert.season_type).toBe(1);
+
+    const update = buildNflResultWritePayload({
+      mode: 'update', weeklyRow, pick: preseasonPick,
+      result: 'won', homeScore: 24, awayScore: 7, seasonType: 2,
+    });
+    expect(update.season_type).toBe(2);
+
+    // An unknown/garbage season type is omitted rather than written as a
+    // number that would silently read as preseason.
+    for (const bad of [null, undefined, 0, 4, 'preseason', NaN]) {
+      expect(buildNflResultWritePayload({
+        mode: 'insert', weeklyRow, pick: preseasonPick, gameDate: '2026-08-15',
+        result: 'won', homeScore: 24, awayScore: 7, seasonType: bad,
+      })).not.toHaveProperty('season_type');
+    }
+  });
+
   it('repairs the same metadata on the idempotent update path without changing the grade', () => {
     const payload = buildNflResultWritePayload({
       mode: 'update',

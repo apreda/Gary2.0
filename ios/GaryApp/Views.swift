@@ -1122,6 +1122,11 @@ private enum BillfoldCompute {
         topPickRows: [BillfoldTopPickCandidate],
         confidenceIndex: [String: Double]
     ) -> BillfoldDerivedState {
+        // The Billfold is the record book: preseason football never counts in
+        // it and never lists in it (founder law, Aug 21 2026). The picks stay
+        // graded on the pick surfaces — the board's result stamps ride the
+        // unfiltered resultLookup, which is built outside this derive.
+        let gameResults = gameResults.countable
         let timeframeCutoff = BillfoldView.sinceDateValueStatic(for: timeframe)
         let sportTimeframeCutoff = BillfoldView.sinceDateValueStatic(for: sportTimeframe)
         let validProps = propResults.filter(isLegitPropResult)
@@ -2670,7 +2675,7 @@ struct HomeView: View {
                     // YESTERDAY's final record.
                     let slateDay = SupabaseAPI.todayEST()
                     var w = 0, l = 0, p = 0
-                    for r in recentGameResults where r.game_date == slateDay {
+                    for r in recentGameResults.countable where r.game_date == slateDay {
                         switch (r.result ?? "").lowercased() {
                         case "won", "win", "w": w += 1
                         case "lost", "loss", "l": l += 1
@@ -2689,7 +2694,7 @@ struct HomeView: View {
                         recordBoxLabel = "YESTERDAY"
                         if let rd = recapDay {
                             var yw = 0, yl = 0, yp = 0
-                            for r in recentGameResults where r.game_date == rd {
+                            for r in recentGameResults.countable where r.game_date == rd {
                                 switch (r.result ?? "").lowercased() {
                                 case "won", "win", "w": yw += 1
                                 case "lost", "loss", "l": yl += 1
@@ -3077,7 +3082,7 @@ struct HomeView: View {
             gamesLiveNow = liveRows.filter(\.isLive).count
             if cycleStarted {
                 var w = 0, l = 0, p = 0
-                for row in cycleRows {
+                for row in cycleRows.countable {
                     switch (row.result ?? "").lowercased() {
                     case "won", "win", "w": w += 1
                     case "lost", "loss", "l": l += 1
@@ -4522,7 +4527,7 @@ struct HomeView: View {
         func tally(_ day: String?, _ league: String) -> (Int, Int, Int) {
             guard let day = day else { return (0, 0, 0) }
             var w = 0, l = 0, p = 0
-            for r in games where r.game_date == day && (r.league ?? "").uppercased() == league {
+            for r in games.countable where r.game_date == day && (r.league ?? "").uppercased() == league {
                 switch (r.result ?? "").lowercased() {
                 case "won", "win", "w":   w += 1
                 case "lost", "loss", "l": l += 1
@@ -4789,7 +4794,7 @@ struct HomeView: View {
     /// Uses BillfoldCompute so the math matches the Billfold exactly.
     /// Nil until at least three results have settled.
     private static func buildForm(games: [GameResult]) -> HomeGarysForm.Model? {
-        let graded = games
+        let graded = games.countable
             .filter { ["won", "lost", "push"].contains($0.result ?? "") }
             .sorted { ($0.game_date ?? "") > ($1.game_date ?? "") }   // newest first
         guard graded.count >= 3 else { return nil }
@@ -4922,7 +4927,9 @@ struct HomeView: View {
     private static func buildLastNight(games: [GameResult], props: [PropResult], includeToday: Bool = true)
         -> (story: HomeMarqueeHero.Story?, marqueeGame: GameResult?, cashes: [HomeCashesSection.Row], rollCashes: [HomeCashesSection.Row], beat: HomeCashesSection.Row?, net: Double, graded: Int, bestOdds: Double?, record: (w: Int, l: Int, p: Int)) {
 
-        let settledGames = games.filter { $0.result == "won" || $0.result == "lost" || $0.result == "push" }
+        // Preseason football never enters the recap/record math — the rows
+        // stay graded on their own pick surfaces (founder law, Aug 21 2026).
+        let settledGames = games.countable.filter { $0.result == "won" || $0.result == "lost" || $0.result == "push" }
         let settledProps = props.filter { $0.result == "won" || $0.result == "lost" || $0.result == "push" }
         let days = settledGames.compactMap { $0.game_date } + settledProps.compactMap { $0.game_date }
         guard !days.isEmpty else { return (nil, nil, [], [], nil, 0, 0, nil, (0, 0, 0)) }
@@ -9613,7 +9620,7 @@ struct PremiumPicksView: View {
 
         // Last-10 graded record per sport (newest first) for the storefront tail.
         var sRec: [String: (w: Int, l: Int)] = [:]
-        let recordRows = (try? await recordResultsF) ?? []
+        let recordRows = ((try? await recordResultsF) ?? []).countable
         let byLeague = Dictionary(grouping: recordRows.filter { $0.result == "won" || $0.result == "lost" },
                                   by: { $0.effectiveLeague ?? "?" })
         for (lg, rows) in byLeague {
@@ -10297,8 +10304,9 @@ struct PlansSheetView: View {
 
         // GAME picks only — the same ledger the website's THE RECORD shows.
         // (Props graded separately; mixing them here would contradict the
-        // public number on betwithgary.ai.)
-        let games = (try? await SupabaseAPI.fetchAllGameResults(since: nil)) ?? []
+        // public number on betwithgary.ai.) Preseason football is excluded
+        // from every record surface (founder law, Aug 21 2026).
+        let games = ((try? await SupabaseAPI.fetchAllGameResults(since: nil)) ?? []).countable
 
         func norm(_ s: String?) -> String? {
             switch s?.lowercased() {

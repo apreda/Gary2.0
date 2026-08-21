@@ -44,6 +44,8 @@ export interface GameResultRow {
   game_date: string | null; league: string | null; matchup: string | null;
   pick_text: string | null; result: string | null; final_score: string | null;
   confidence: number | null;
+  /** BDL numbering, nfl_results only: 1 = preseason, 2 = regular, 3 = postseason. */
+  season_type?: number | null;
 }
 
 export interface NflResultRow extends GameResultRow {

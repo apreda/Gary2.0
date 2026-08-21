@@ -1147,6 +1147,9 @@ async function processGenericGames(table, date, leagueFilter = null, { settlemen
               homeScore: hs,
               awayScore: vs,
               isWinnersPick,
+              // The helper's own date fallback covers a missing matched game
+              // (July/August ET = preseason), so the stamp is always present.
+              seasonType: nflSeasonTypeForGame(matchedGame ?? { date: gameDate }),
             })
           : {
               pick_id: perPickId, game_date: gameDate, league, result: res,
@@ -1195,6 +1198,7 @@ async function processGenericGames(table, date, leagueFilter = null, { settlemen
                 homeScore: hs,
                 awayScore: vs,
                 isWinnersPick,
+                seasonType: nflSeasonTypeForGame(matchedGame ?? { date: gameDate }),
               })
             : {
                 result: res,

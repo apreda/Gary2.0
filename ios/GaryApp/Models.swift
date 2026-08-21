@@ -1844,13 +1844,16 @@ struct GameResult: Decodable {
     let result: String?
     let odds: StringOrNumber?
     let final_score: String?
+    /// BDL numbering carried only by nfl_results rows (1 = preseason,
+    /// 2 = regular, 3 = postseason); game_results rows decode nil.
+    let season_type: Int?
 
     enum CodingKeys: String, CodingKey {
-        case game_id, game_date, league, matchup, pick_text, result, odds, final_score
+        case game_id, game_date, league, matchup, pick_text, result, odds, final_score, season_type
     }
 
     /// Memberwise initializer for creating from NFLResult
-    init(game_id: String? = nil, game_date: String?, league: String?, matchup: String?, pick_text: String?, result: String?, odds: StringOrNumber?, final_score: String?) {
+    init(game_id: String? = nil, game_date: String?, league: String?, matchup: String?, pick_text: String?, result: String?, odds: StringOrNumber?, final_score: String?, season_type: Int? = nil) {
         self.game_id = game_id
         self.game_date = game_date
         self.league = league
@@ -1859,7 +1862,13 @@ struct GameResult: Decodable {
         self.result = result
         self.odds = odds
         self.final_score = final_score
+        self.season_type = season_type
     }
+
+    /// Preseason football never counts in any Gary record (founder law,
+    /// Aug 21 2026). The row itself stays graded and visible — only the
+    /// record/net/streak math excludes it, via `[GameResult].countable`.
+    var isPreseasonResult: Bool { season_type == 1 }
     
     /// Get the effective league (normalized to match Sport enum values)
     var effectiveLeague: String? {
@@ -1902,6 +1911,7 @@ struct NFLResult: Decodable {
     let game_date: String?
     let week_number: Int?
     let season: Int?
+    let season_type: Int?
     let matchup: String?
     let pick_text: String?
     let result: String?
@@ -1910,12 +1920,12 @@ struct NFLResult: Decodable {
     let home_team: String?
     let away_team: String?
     let pick_type: String?
-    
+
     enum CodingKeys: String, CodingKey {
-        case game_id, game_date, week_number, season, matchup, pick_text, result, odds, final_score
+        case game_id, game_date, week_number, season, season_type, matchup, pick_text, result, odds, final_score
         case home_team, away_team, pick_type
     }
-    
+
     /// Convert to GameResult for unified display
     func toGameResult() -> GameResult {
         GameResult(
@@ -1926,9 +1936,17 @@ struct NFLResult: Decodable {
             pick_text: pick_text,
             result: result,
             odds: odds,
-            final_score: final_score
+            final_score: final_score,
+            season_type: season_type
         )
     }
+}
+
+extension Array where Element == GameResult {
+    /// Rows that count toward Gary's records. Preseason football is graded
+    /// and shown on its pick rows, but it never enters a record, net, form,
+    /// or streak computation (founder law, Aug 21 2026).
+    var countable: [GameResult] { filter { !$0.isPreseasonResult } }
 }
 
 struct PropResult: Decodable {

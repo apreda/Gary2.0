@@ -309,11 +309,13 @@ struct FootballGameIntelView: View {
 
     /// One cached ledger read per page life — the same public game_results
     /// every record on the site derives from. Football-era window; an empty
-    /// or failed read stores nothing (day-cache law).
+    /// or failed read stores nothing (day-cache law). Preseason never counts
+    /// toward Gary's record (founder law, Aug 21 2026), so this section stays
+    /// dark until the first regular-season call grades.
     private func loadTrackRecord() async {
         guard trackResults.isEmpty else { return }
         guard let rows = try? await SupabaseAPI.fetchAllGameResults(since: "2026-08-01") else { return }
-        let mine = rows.filter { ($0.league ?? "").uppercased() == normalizedLeague }
+        let mine = rows.countable.filter { ($0.league ?? "").uppercased() == normalizedLeague }
         if !mine.isEmpty { trackResults = mine }
     }
 }

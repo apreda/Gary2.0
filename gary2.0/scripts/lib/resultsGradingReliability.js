@@ -41,9 +41,14 @@ export function buildNflResultWritePayload({
   awayScore = null,
   isWinnersPick = false,
   updatedAt = null,
+  seasonType = null,
 } = {}) {
   const season = finiteNumber(weeklyRow?.season ?? pick?.season);
   const weekNumber = finiteNumber(weeklyRow?.week_number ?? pick?.week_number ?? pick?.week);
+  // 1=preseason, 2=regular, 3=postseason (BDL numbering). Preseason rows are
+  // excluded from every Gary record surface, so the stamp must ride both
+  // inserts and idempotent updates.
+  const normalizedSeasonType = [1, 2, 3].includes(Number(seasonType)) ? Number(seasonType) : null;
   const confidence = nflResultConfidence(pick?.confidence);
   const normalizedHomeScore = finiteNumber(homeScore);
   const normalizedAwayScore = finiteNumber(awayScore);
@@ -65,6 +70,7 @@ export function buildNflResultWritePayload({
     away_score: normalizedAwayScore,
     is_winners_pick: isWinnersPick,
     ...(normalizedGameId ? { game_id: normalizedGameId } : {}),
+    ...(normalizedSeasonType != null ? { season_type: normalizedSeasonType } : {}),
   };
 
   if (mode === 'update') {

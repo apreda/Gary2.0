@@ -92,6 +92,23 @@ describe('mergeGameResults (NFL split across two tables)', () => {
     expect(result.some(r => r.game_date === '2026-01-10' && (r.league ?? '').toUpperCase() === 'NFL')).toBe(false);
   });
 
+  // Founder law, Aug 21 2026: preseason never counts toward any Gary record.
+  // The rows stay graded in nfl_results; they must not reach a public record.
+  it('drops preseason football from every record surface', () => {
+    const preseason = makeNflRow({ pick_text: 'Raiders +1.5 -118', game_date: '2026-08-20', result: 'won', season_type: 1 });
+    const regular = makeNflRow({ pick_text: 'Chiefs -3 -110', game_date: '2026-09-13', result: 'won', season_type: 2 });
+    const merged = mergeGameResults([preseason, regular], []);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].pick_text).toBe('Chiefs -3 -110');
+    expect(computeRecord(merged)).toMatchObject({ wins: 1, losses: 0, graded: 1 });
+  });
+
+  it('keeps football whose season_type is unknown or postseason', () => {
+    const postseason = makeNflRow({ pick_text: 'Ravens -4 -110', game_date: '2026-01-18', result: 'won', season_type: 3 });
+    const unstamped = makeNflRow({ pick_text: 'Bills -2 -110', game_date: '2026-01-11', result: 'lost' });
+    expect(mergeGameResults([postseason, unstamped], [])).toHaveLength(2);
+  });
+
   it('dedupes re-grade duplicates within a table', () => {
     const dup1 = row({ league: 'MLB', pick_text: 'Phillies ML -120', game_date: '2026-01-10' });
     const dup2 = row({ league: 'MLB', pick_text: 'Phillies ML -120', game_date: '2026-01-10' });
