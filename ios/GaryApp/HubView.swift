@@ -739,16 +739,16 @@ struct HubView: View {
         let anchor: String
         switch lane {
         case .regression:                            anchor = "regression"
-        case .streak:                                anchor = (sel == .nfl || sel == .ncaaf) ? "form" : "streaks"
+        case .streak:                                anchor = isFootball ? "form" : "streaks"
         case .fantasyPickups, .twoStart,
              .closerWatch, .returnWatch, .cutList:   anchor = "fantasy"
         case .hot, .cold, .platoon, .batterVsArm:    anchor = "bats"
         case .hrThreat:                              anchor = HubView.hrThreatsLive ? "hr" : "bats"
         case .starterForm,
              .bullpenFatigue, .ballpark:             anchor = sel == .wc ? "matchups" : "arms"
-        case .teamRecord:                            anchor = (sel == .nfl || sel == .ncaaf) ? "form" : (sel == .wc ? "matchups" : "arms")
-        case .situational:                           anchor = (sel == .nfl || sel == .ncaaf) ? "form" : (sel == .wc ? "matchups" : "arms")
-        case .injury:                                anchor = (sel == .nfl || sel == .ncaaf) ? "field" : "matchups"
+        case .teamRecord:                            anchor = isFootball ? "form" : (sel == .wc ? "matchups" : "arms")
+        case .situational:                           anchor = isFootball ? "form" : (sel == .wc ? "matchups" : "arms")
+        case .injury:                                anchor = isFootball ? "field" : "matchups"
         case .h2h, .firstInning,
              .runningGame, .parkWeather:             anchor = "matchups"
         case .tournament, .advancement:              anchor = "cup"
@@ -760,7 +760,7 @@ struct HubView: View {
              .turnoverEdge, .explosivePlay,
              .specialTeams, .coaching:               anchor = "edges"
         case .afterGary:                              anchor = "afterGary"
-        case .marketRange:                            anchor = "edges"
+        case .marketRange:                            anchor = isFootball ? "edges" : "more"
         case .nextSlate:                              anchor = "nextSlate"
         case .theSweat:                               anchor = "theSweat"
         case .fantasyUsage, .fantasyRedZone,
@@ -781,7 +781,33 @@ struct HubView: View {
         return f.string(from: shifted)
     }
 
-    private var leagueSignals: [Signal] { fetched.filter { $0.league == sel } }
+    /// The page's rows for the selected league. Football's fail-closed proof
+    /// contract runs HERE — the one funnel every football surface downstream
+    /// (the lead, the board, the beats, the overflow net, the jump nav, page
+    /// search) draws from, so an unverifiable receipt or market range can
+    /// never appear anywhere on the Hub, in any component.
+    private var isFootball: Bool { sel == .nfl || sel == .ncaaf }
+
+    private var leagueSignals: [Signal] {
+        let rows = fetched.filter { $0.league == sel }
+        guard isFootball else { return rows }
+        return rows.filter { signal in
+            switch signal.kind {
+            case .afterGary:
+                return FootballProofContract.isRenderableAfterGary(signal)
+            case .theSweat:
+                return FootballProofContract.isRenderableSweat(signal, includeWatch: false)
+            case .marketRange:
+                // NCAAF only, and only against a confirmed slate row.
+                guard sel == .ncaaf, let id = signal.gameId.flatMap(Int.init) else { return false }
+                return FootballProofContract.isRenderableMarketRange(
+                    signal, slateRow: slateRows.first(where: { $0.bdl_game_id == id })
+                )
+            default:
+                return true
+            }
+        }
+    }
     private var wcIntelSignals: [Signal] { fetched.filter { $0.league == .wc && $0.confirmedXI != nil } }
     private func wcEdges(for game: String) -> [Signal] { fetched.filter { $0.league == .wc && $0.game == game } }
 
@@ -839,7 +865,22 @@ struct HubView: View {
     /// These are complete product modules, not editorial stories. Keeping them
     /// out of The Lead / Best of the Board prevents the same receipt from
     /// appearing once as a hero and again in its purpose-built section.
-    private static let moduleKinds: Set<SignalKind> = [.theSweat, .afterGary]
+    /// Rows that own a module of their own and must never be told as a story.
+    /// `.nextSlate` is the dark-day schedule card — it would otherwise headline
+    /// an empty NCAAF Tuesday as if a schedule were an insight.
+    private static let moduleKinds: Set<SignalKind> = [.theSweat, .afterGary, .nextSlate]
+
+    /// Rows that can actually carry the front page. Modules render in their own
+    /// slots, so they must not decide whether the page reads as empty.
+    private var storyRows: [Signal] {
+        leagueSignals.filter { !Self.moduleKinds.contains($0.kind) && $0.confirmedXI == nil }
+    }
+
+    /// The dark-day schedule card stands in for the slate strip on a football
+    /// day with no games — and takes the morning notice's place while it shows.
+    private var showsNextSlateCard: Bool {
+        slateRows.isEmpty && leagueSignals.contains { $0.kind == .nextSlate }
+    }
 
     /// Relevance-ranked stories across every lane (rows arrive relevance-
     /// ordered per league): no look-ahead regression, no confirmed-XI cards,
@@ -906,19 +947,28 @@ struct HubView: View {
                 Beat(anchor: "matchups", title: "The Matchups", kinds: [.h2h, .situational, .ballpark, .streak]),
             ]
         }
+        // Football speaks MLB's beat grammar (founder, Aug 21): the same
+        // sections, the same renderers, football's lanes. THE MISMATCH leads —
+        // it is football's marquee board, the way the Regression Board leads
+        // MLB's long tail. Every football kind is named in exactly one beat so
+        // nothing falls through to the More Edges net unnamed.
         if sel == .nfl {
             return [
+                Beat(anchor: "mismatch", title: "The Mismatch", kinds: [.mismatch]),
                 Beat(anchor: "trenches", title: "The Trenches", kinds: [.trenches, .passRush]),
                 Beat(anchor: "field", title: "The Field", kinds: [.quarterback, .injury]),
-                Beat(anchor: "edges", title: "The Edges", kinds: [.coverage, .paceScript, .redZone, .turnoverEdge, .explosivePlay, .situational, .coaching]),
+                Beat(anchor: "edges", title: "The Edges", kinds: [.coverage, .paceScript, .redZone, .turnoverEdge, .explosivePlay, .coaching]),
+                Beat(anchor: "form", title: "The Form", kinds: [.situational, .streak, .teamRecord]),
                 Beat(anchor: "afterGary", title: "After Gary", kinds: [.afterGary]),
             ]
         }
         if sel == .ncaaf {
             return [
+                Beat(anchor: "mismatch", title: "The Mismatch", kinds: [.mismatch]),
                 Beat(anchor: "trenches", title: "The Trenches", kinds: [.trenches, .passRush]),
                 Beat(anchor: "field", title: "The Field", kinds: [.quarterback, .injury]),
-                Beat(anchor: "edges", title: "The Edges", kinds: [.paceScript, .specialTeams, .redZone, .turnoverEdge, .explosivePlay, .situational, .coaching]),
+                Beat(anchor: "edges", title: "The Edges", kinds: [.coverage, .paceScript, .specialTeams, .redZone, .turnoverEdge, .explosivePlay, .coaching, .marketRange]),
+                Beat(anchor: "form", title: "The Form", kinds: [.situational, .streak, .teamRecord]),
                 Beat(anchor: "afterGary", title: "After Gary", kinds: [.afterGary]),
             ]
         }
@@ -988,7 +1038,7 @@ struct HubView: View {
         // "the H2H parts here doesnt need to be on The Hub") — the team season
         // series lives on the Picks page game view, where the ledger renders.
         // Without this it would fall through to More Edges and reappear.
-        var placed: Set<SignalKind> = Self.fantasyKinds.union([.regression, .streak, .h2h, .theSweat])
+        var placed: Set<SignalKind> = Self.fantasyKinds.union([.regression, .streak, .h2h, .theSweat, .nextSlate])
         for b in beats { for k in b.kinds { placed.insert(k) } }
         return leagueSignals.filter { !placed.contains($0.kind) && $0.confirmedXI == nil }
     }
@@ -1269,18 +1319,11 @@ struct HubView: View {
             && nightRows.isEmpty && streakRows.isEmpty {
             return AnyView(hubError)
         }
-        if sel == .nfl || sel == .ncaaf {
-            return AnyView(
-                FootballHubPage(
-                    league: sel,
-                    slateRows: slateRows,
-                    signals: leagueSignals,
-                    loaded: didLoad,
-                    onGame: { row in gameSheet = HubGameSel(row: row) },
-                    onSignal: { signal in openSignal(signal) }
-                )
-            )
-        }
+        // NFL and NCAAF run THIS page — the founder's call (Aug 21): the Hub
+        // is MLB's layout, design and mechanics exactly, carrying football's
+        // own lanes. The only football-specific machinery left is the proof
+        // gate on `leagueSignals` (which rows may be shown at all) and the
+        // dark-day next-slate card in the empty slot.
         return AnyView(hubLoadedContent)
     }
 
@@ -1292,10 +1335,17 @@ struct HubView: View {
                 }
             }
 
-            if leagueSignals.isEmpty {
-                hubMorningNotice
-            } else {
+            // NCAAF dark day: no slate to strip, so the verified next kickoff
+            // takes the strip's place rather than leaving the page headless.
+            if showsNextSlateCard, let next = leagueSignals.first(where: { $0.kind == .nextSlate }) {
+                FootballNextSlatePreview(signal: next, accent: GaryColors.gold)
+                    .id("nextSlate")
+            }
+
+            if !storyRows.isEmpty {
                 frontPageBoards
+            } else if !showsNextSlateCard {
+                hubMorningNotice
             }
 
             // (League Pulse moved to the reference shelf at the bottom
@@ -1510,45 +1560,19 @@ struct HubView: View {
     }
 
     /// Lane label for a row's kicker (VENUE for WC "ballpark" reads).
+    /// One lane label for every row on the page. Routes through the shared
+    /// renamer so football's `.injury` reads AVAILABILITY (MLB's REPLACEMENT
+    /// misnames "Mertz is out") and WC's `.ballpark` reads VENUE.
     private func kickerText(_ s: Signal) -> String {
-        (s.kind == .ballpark && s.league == .wc) ? "VENUE" : s.kind.chip
+        signalChipLabel(kind: s.kind, league: s.league)
     }
 
     /// Jump-bar entries — only sections that exist right now, in page order.
     private var jumpItems: [(anchor: String, label: String)] {
-        if (sel == .nfl || sel == .ncaaf), hubScope == "hub" {
-            var football: [(String, String)] = []
-            if !slateRows.isEmpty { football.append(("slate", "Windows")) }
-            if sel == .ncaaf,
-               slateRows.isEmpty,
-               leagueSignals.contains(where: { $0.kind == .nextSlate }) {
-                football.append(("nextSlate", "Next Slate"))
-            }
-            if leagueSignals.contains(where: { FootballHubPage.storyKinds.contains($0.kind) }) {
-                football.append(("lead", "The Best"))
-            }
-            if leagueSignals.contains(where: { $0.kind == .mismatch }) {
-                football.append(("mismatch", "Mismatch"))
-            }
-            if leagueSignals.contains(where: { $0.kind == .afterGary }) {
-                football.append(("afterGary", "Gary's Number"))
-            }
-            for beat in FootballHubPage.beatDefs {
-                let kinds = Set(beat.kinds)
-                if leagueSignals.contains(where: { kinds.contains($0.kind) }) {
-                    football.append((beat.anchor, beat.title.replacingOccurrences(of: "The ", with: "")))
-                }
-            }
-            let hasLiveSweat = leagueSignals.contains { signal in
-                guard signal.kind == .theSweat else { return false }
-                let state = signal.sweat?.state?.lowercased() ?? ""
-                return !["watch", "scheduled", "pregame"].contains(state)
-            }
-            if hasLiveSweat { football.append(("theSweat", "Live")) }
-            return football
-        }
-
+        // One generic index for every league — the football branch is gone with
+        // the football page (founder, Aug 21: the Hub is MLB's, everywhere).
         var out: [(String, String)] = []
+        if showsNextSlateCard { out.append(("nextSlate", "Next Slate")) }
         if !leagueSignals.isEmpty {
             let selection = frontPageSelection
             if selection.lead != nil || !selection.best.isEmpty { out.append(("lead", "The Best")) }
@@ -1850,7 +1874,10 @@ fileprivate struct HubSlateStrip: View {
                         .font(HubFont.data(9.5, .medium))
                         .foregroundStyle(.white.opacity(0.55))
                 } else {
-                    Text(TomorrowView.etTime(r.commence_time, withZone: false, meridiem: true))
+                    // A college row filed date-only carries no real kickoff —
+                    // say so instead of printing a placeholder as a time.
+                    Text(r.kickoffTimeLabel
+                         ?? TomorrowView.etTime(r.commence_time, withZone: false, meridiem: true))
                         .font(HubFont.data(9.5, .medium))
                         .foregroundStyle(marquee ? GaryColors.gold : .white.opacity(0.55))
                     // STORE-SAFE BRIDGE: the strip is a schedule — no totals.

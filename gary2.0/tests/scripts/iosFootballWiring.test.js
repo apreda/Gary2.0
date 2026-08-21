@@ -167,51 +167,68 @@ describe('Football Fantasy density', () => {
   });
 });
 
-describe('Football Hub editorial layer', () => {
-  // Aug 20: the football Hub carries MLB's editorial order — THE LEAD, Best
-  // of the Board, THE MISMATCH, then the beats — instead of one flat board.
-  it('mounts the editorial sections in MLB order', () => {
-    const body = footballHub.slice(
-      footballHub.indexOf('var body: some View'),
-      footballHub.indexOf('private func deduped'),
-    );
-    const order = ['FootballHubLead', 'FootballHubBestOf', 'FootballHubMismatchBoard',
-      'FootballHubReceiptSection', 'FootballHubBeatSection', 'FootballHubSweatSection'];
-    const positions = order.map((name) => body.indexOf(name));
-    positions.forEach((p) => expect(p).toBeGreaterThan(-1));
-    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
-  });
-
-  it('keeps every football lane on the page — mismatch, streak, and record included', () => {
-    // These three were silently dropped by the old boardRank switch.
-    expect(footballHub).toContain('deduped(signals.filter { $0.kind == .mismatch })');
-    expect(footballHub).toMatch(/storyKinds: Set<SignalKind> = \[[\s\S]*?\.streak, \.teamRecord,/);
+describe('Football Hub runs MLB\'s page', () => {
+  // Founder, Aug 21 2026: the Hub for NFL and NCAAF "needs to look 100% the
+  // same as MLB just with NFL info". There is no football Hub page any more —
+  // HubView's own MLB page renders every league.
+  it('has no football-specific Hub page left to diverge', () => {
+    expect(footballHub).not.toContain('struct FootballHubPage');
+    expect(footballHub).not.toContain('FootballHubLead');
+    expect(footballHub).not.toContain('FootballHubBestOf');
+    expect(footballHub).not.toContain('FootballHubSignalRow');
+    expect(footballHub).not.toContain('FootballHubBeatSection');
     expect(footballHub).not.toContain('boardRank');
+    expect(hubView).not.toContain('FootballHubPage(');
+    // The proof contract is the one thing that stays — it is integrity, not layout.
+    expect(footballHub).toContain('enum FootballProofContract');
   });
 
-  it('shows the Gary read in place and never clips a headline', () => {
-    const row = footballHub.slice(
-      footballHub.indexOf('private struct FootballHubSignalRow'),
-      footballHub.indexOf('// MARK: - Live proof'),
-    );
-    expect(row).toContain('if expanded, !read.isEmpty {');
-    expect(row).toMatch(/Text\(signal\.headline\)[\s\S]*?\.fixedSize\(horizontal: false, vertical: true\)/);
-    expect(row).not.toMatch(/Text\(signal\.headline\)\s*\n\s*\.font[\s\S]{0,200}?\.lineLimit\(2\)/);
+  it('routes every league through the same loaded page', () => {
+    const state = sliceStruct(hubView, 'private var hubEditorialStateContent: AnyView {');
+    expect(state).toContain('return AnyView(hubLoadedContent)');
+    expect(state).not.toMatch(/sel == \.nfl \|\| sel == \.ncaaf/);
   });
 
-  it('caps a beat at four rows behind SEE ALL so a full Saturday cannot wall the page', () => {
-    expect(footballHub).toContain('showAll ? rows : Array(rows.prefix(4))');
-    expect(footballHub).toContain('"SEE ALL \\(rows.count)"');
+  it('applies the fail-closed proof gate once, at the page-wide row funnel', () => {
+    const signals = sliceStruct(hubView, 'private var leagueSignals: [Signal] {');
+    expect(signals).toContain('FootballProofContract.isRenderableAfterGary(signal)');
+    expect(signals).toContain('FootballProofContract.isRenderableSweat(signal, includeWatch: false)');
+    expect(signals).toContain('FootballProofContract.isRenderableMarketRange(');
+    // NCAAF-only market ranges, and only against a confirmed slate row.
+    expect(signals).toContain('guard sel == .ncaaf');
   });
 
-  it('counting lanes make the board but never headline the page', () => {
-    const lead = footballHub.slice(
-      footballHub.indexOf('private static let leadKinds'),
-      footballHub.indexOf('/// Story rows in arrival order'),
-    );
-    expect(lead).not.toContain('.streak');
-    expect(lead).not.toContain('.teamRecord');
-    expect(lead).not.toContain('.situational');
+  it('names every football lane in exactly one beat so none falls through unnamed', () => {
+    const beats = sliceStruct(hubView, 'private var beats: [Beat] {');
+    for (const league of ['sel == .nfl', 'sel == .ncaaf']) {
+      const branch = beats.slice(beats.indexOf(league), beats.indexOf(league) + 900);
+      for (const kind of ['.mismatch', '.trenches', '.passRush', '.quarterback', '.injury',
+        '.coverage', '.paceScript', '.redZone', '.turnoverEdge', '.explosivePlay',
+        '.coaching', '.situational', '.streak', '.teamRecord', '.afterGary']) {
+        expect(branch).toContain(kind);
+      }
+    }
+    // THE MISMATCH leads football's long tail the way the Regression Board
+    // leads MLB's.
+    expect(beats.indexOf('"The Mismatch"')).toBeLessThan(beats.indexOf('"The Trenches"'));
+  });
+
+  it('keeps modules out of the story feed and gives the dark day its own card', () => {
+    expect(hubView).toContain('moduleKinds: Set<SignalKind> = [.theSweat, .afterGary, .nextSlate]');
+    expect(hubView).toContain('FootballNextSlatePreview(signal: next, accent: GaryColors.gold)');
+    expect(hubView).toContain('slateRows.isEmpty && leagueSignals.contains { $0.kind == .nextSlate }');
+    // The card stands in for the morning notice rather than stacking with it.
+    expect(hubView).toContain('} else if !showsNextSlateCard {');
+  });
+
+  it('labels football lanes through the shared renamer, not a bespoke map', () => {
+    expect(hubView).toContain('signalChipLabel(kind: s.kind, league: s.league)');
+    expect(hubView).not.toContain('footballHubKindLabel');
+  });
+
+  it('never prints a date-only college placeholder as a kickoff time', () => {
+    const strip = sliceStruct(hubView, 'fileprivate struct HubSlateStrip: View {');
+    expect(strip).toContain('r.kickoffTimeLabel');
   });
 });
 
@@ -249,8 +266,11 @@ describe('Football Picks overview', () => {
   });
 
   it('uses next-slate only as the no-current-slate Hub state', () => {
-    expect(footballHub).toContain('if slateRows.isEmpty, let nextSlate');
-    expect(footballHub).toContain('if !hasIntel && !(slateRows.isEmpty && nextSlate != nil)');
+    // Moved to HubView with the football page's removal (Aug 21): the card
+    // shows only when there is no slate, and never as a story.
+    expect(hubView).toContain('slateRows.isEmpty && leagueSignals.contains { $0.kind == .nextSlate }');
+    expect(hubView).toContain('if showsNextSlateCard, let next = leagueSignals.first(where: { $0.kind == .nextSlate })');
+    expect(hubView).toContain('moduleKinds: Set<SignalKind> = [.theSweat, .afterGary, .nextSlate]');
   });
 
   it('merges stale date-only and confirmed rows by exact provider game id', () => {
@@ -488,14 +508,13 @@ describe('Home MLB/NFL board parity', () => {
 
 describe('Gary\'s Number receipt identity', () => {
   it('keeps the selected side visible and labels only pre-kick market phases', () => {
-    expect(footballHub).toContain('private var selection: String?');
+    // The structured receipt renders on the GAME PAGE; the Hub shows it through
+    // MLB's own After Gary section and opens the full receipt on tap.
     expect(models).toContain('let pick_label: String?');
-    expect(footballHub).toContain('signal.afterGary?.pick_label?');
-    expect(footballHub).toContain('if movement != nil, let selection');
-    expect(footballHub).toContain('Text(selection)');
-    expect(footballHub).toContain('"LAST PREGAME"');
+    expect(footballIntel).toContain('meta?.pick_label?');
     expect(footballIntel).toContain('"LAST PREGAME"');
-    expect(footballHub).not.toContain('"LAST SEEN"');
+    expect(footballIntel).not.toContain('"LAST SEEN"');
+    expect(hubView).toContain('HubAfterGarySection(');
   });
 
   it('requires exact structured provenance and never parses receipt prose', () => {
