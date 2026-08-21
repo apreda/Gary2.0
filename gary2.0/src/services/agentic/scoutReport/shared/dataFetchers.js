@@ -31,6 +31,18 @@ import { getGeminiClient, groundingSearch, geminiGroundingSearch } from './groun
  * (mlbSeriesState.clubMatches is suffix-only — right for MLB nicknames,
  * wrong for college names where the school is the PREFIX.)
  */
+/** The GAME's ET calendar date as display text ("August 27, 2026") for
+ * narrative search queries — never the wall clock (a dossier rendered ahead
+ * of a weekly game must not search "today's" matchup). Falls back to today
+ * on a missing/bad timestamp. */
+export function etGameDateLong(commenceTime) {
+  const d = commenceTime ? new Date(commenceTime) : new Date();
+  const instant = Number.isNaN(d.getTime()) ? new Date() : d;
+  return instant.toLocaleDateString('en-US', {
+    month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/New_York',
+  });
+}
+
 export function namesRefer(a, b) {
   const x = String(a || '').toLowerCase().trim();
   const y = String(b || '').toLowerCase().trim();
@@ -367,32 +379,64 @@ export async function fetchRecentGames(teamName, sport, count = 5) {
     }
     
     const recentGames = await ballDontLieService.getGames(bdlSport, params);
-    
+
+    // FOOTBALL COVERAGE HOLES (probed live Aug 20 2026): /games?seasons[]
+    // returns REGULAR-season rows only — preseason rides the SCALAR
+    // season_type=1 (the array form silently returns zero rows) — so every
+    // August dossier printed "Recent games unavailable"/"Rest data
+    // unavailable" while both clubs had played. Merge preseason rows for the
+    // NFL; and when the current football season still has fewer finished
+    // games than requested (Week 0/1), backfill from the prior season — each
+    // line carries its date, so the season stays self-evident.
+    const isFootball = bdlSport === 'americanfootball_nfl' || bdlSport === 'americanfootball_ncaaf';
+    let pooledGames = recentGames || [];
+    if (bdlSport === 'americanfootball_nfl') {
+      try {
+        const preseason = await ballDontLieService.getGames(bdlSport, { ...params, season_type: 1 });
+        if (Array.isArray(preseason) && preseason.length) pooledGames = [...pooledGames, ...preseason];
+      } catch { /* additive only — never costs the regular fetch */ }
+    }
+
     // Sort by date descending and return the requested count
     // For sports with season fetch, also filter to only completed games.
     // "Today" must be the ET calendar day: after 8 PM ET the UTC date is
     // already tomorrow, which made tonight's in-progress game read as past.
     const todayStr = getESTDate();
-    const sorted = (recentGames || [])
-      .filter(g => {
-        const rawDate = g.date || g.datetime;
-        const hasDate = !!rawDate;
-        const gameDateStr = (rawDate || '').split('T')[0];
-        const isPast = gameDateStr < todayStr;
-        if (usesSeasonParam) {
-          const status = (g.status || '').toLowerCase();
-          const isFinished = status === 'final' || status === 'post' || status === 'off';
-          return hasDate && (isPast || isFinished);
-        }
-        return hasDate && isPast;
-      })
-      .sort((a, b) => {
-        const dateA = new Date(a.date || a.datetime);
-        const dateB = new Date(b.date || b.datetime);
-        return dateB - dateA;
-      })
-      .slice(0, count);
-    
+    const finishedSorted = (rows) => {
+      const seen = new Set();
+      return (rows || [])
+        .filter(g => {
+          if (g?.id != null) {
+            if (seen.has(String(g.id))) return false;
+            seen.add(String(g.id));
+          }
+          const rawDate = g.date || g.datetime;
+          const hasDate = !!rawDate;
+          const gameDateStr = (rawDate || '').split('T')[0];
+          const isPast = gameDateStr < todayStr;
+          if (usesSeasonParam) {
+            const status = (g.status || '').toLowerCase();
+            const isFinished = status.startsWith('final') || status === 'post' || status === 'off';
+            return hasDate && (isPast || isFinished);
+          }
+          return hasDate && isPast;
+        })
+        .sort((a, b) => {
+          const dateA = new Date(a.date || a.datetime);
+          const dateB = new Date(b.date || b.datetime);
+          return dateB - dateA;
+        })
+        .slice(0, count);
+    };
+
+    let sorted = finishedSorted(pooledGames);
+    if (isFootball && sorted.length < count) {
+      try {
+        const prior = await ballDontLieService.getGames(bdlSport, { ...params, seasons: [seasonForSport(sport) - 1] });
+        if (Array.isArray(prior) && prior.length) sorted = finishedSorted([...pooledGames, ...prior]);
+      } catch { /* prior-season backfill is additive only */ }
+    }
+
     return sorted;
   } catch (error) {
     console.warn(`[Scout Report] Error fetching recent games for ${teamName}:`, error.message);
@@ -425,9 +469,16 @@ export function calculateRestSituation(recentGames, gameDate, teamName = null) {
   const gamesWithDates = recentGames
     .filter(g => g.date || g.datetime)
     .map(g => {
-      // BDL may return date as full ISO timestamp (e.g., "2025-12-20T05:00:00.000Z") or just "YYYY-MM-DD"
+      // BDL may return date as full ISO timestamp (e.g., "2025-12-20T05:00:00.000Z") or just "YYYY-MM-DD".
+      // A timestamp resolves to its ET calendar day (the recurring UTC class:
+      // an 8 PM ET kickoff is the NEXT UTC day — the dossier printed "last
+      // game Aug 14" for an Aug 13 ET game and shorted daysRest by one).
       let rawDate = g.date || g.datetime;
-      const dateStr = rawDate ? rawDate.split('T')[0] : null;
+      const dateStr = rawDate
+        ? (rawDate.includes('T')
+            ? new Date(rawDate).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+            : rawDate)
+        : null;
       // Check if game has completed (has scores)
       const homeScore = g.home_team_score || 0;
       const awayScore = g.visitor_team_score || 0;
@@ -1139,12 +1190,12 @@ ${h2hData.message}`;
  * - NBA: RapidAPI is PRIMARY (structured injury status, no Grounding)
  * - NHL/NCAAB: Rotowire via Gemini Grounding is PRIMARY
  */
-export async function fetchInjuries(homeTeam, awayTeam, sport) {
+export async function fetchInjuries(homeTeam, awayTeam, sport, gameDate = null) {
   try {
     const bdlSport = sportToBdlKey(sport);
-    const isFootball = sport === 'NFL' || sport === 'NCAAF' || 
+    const isFootball = sport === 'NFL' || sport === 'NCAAF' ||
                        bdlSport === 'americanfootball_nfl' || bdlSport === 'americanfootball_ncaaf';
-    
+
     // =============================================================================
     // NFL/NCAAF: Use BDL as PRIMARY source for injury data
     // BDL has official practice report data (Questionable/Doubtful/Out status)
@@ -1153,10 +1204,13 @@ export async function fetchInjuries(homeTeam, awayTeam, sport) {
     if (isFootball && bdlSport) {
       console.log(`[Scout Report] NFL/NCAAF: Fetching BDL injuries (official practice reports)`);
 
-      // Fetch current state for narratives and additional context
+      // Fetch current state for narratives and additional context. The GAME's
+      // date rides the matchup/weather queries — anchored to the wall clock,
+      // a dossier rendered ahead of a weekly game pulled TONIGHT'S other
+      // game's preview into its narrative (seen live Aug 20).
       let narrativeContext = null;
       try {
-        const currentState = await fetchCurrentState(homeTeam, awayTeam, sport);
+        const currentState = await fetchCurrentState(homeTeam, awayTeam, sport, gameDate);
         narrativeContext = currentState?.groundedRaw || null;
       } catch (e) {
         console.log(`[Scout Report] Failed to fetch ${sport} current state: ${e.message}`);
@@ -1215,7 +1269,9 @@ export async function fetchInjuries(homeTeam, awayTeam, sport) {
               daysSinceReport,
               reportDateStr: injuryDate ? injuryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null,
               freshness,
-              comment: inj.comment?.substring(0, 150) || '',
+              // Verbatim comment, never cut (founder law) — the 150-char cut
+              // fed the report formatter already-truncated text.
+              comment: inj.comment || '',
               source: 'BDL'
             };
 
@@ -3459,8 +3515,11 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
   const formatPlayer = (i) => {
     const name = `${i.player?.first_name || i.firstName || ''} ${i.player?.last_name || i.lastName || ''}`.trim() || i.name || 'Unknown';
     const pos = i.player?.position_abbreviation || i.player?.position || i.position || '';
-    const reason = i.description || i.comment || i.injury || '';
-    const shortReason = reason ? ` - ${reason.split('.')[0].substring(0, 60)}` : '';
+    // VERBATIM, never cut (founder law: truncation never acceptable — the old
+    // first-sentence + 60-char cut printed "did not participate in Monday's
+    // practic" into the dossier, live Aug 20). Newlines fold to spaces only.
+    const reason = (i.description || i.comment || i.injury || '').replace(/\s+/g, ' ').trim();
+    const shortReason = reason ? ` - ${reason}` : '';
 
     // Build duration tag with ACTUAL DATE, days, and games missed for Gary to see clearly
     let durationTag = '';
@@ -3666,7 +3725,8 @@ export function formatOdds(game, sport = '') {
     lines.push('NHL IS MONEYLINE ONLY - No puck lines, no spreads');
     spreadValue = null; // Explicitly null for NHL
     spreadOdds = null;
-  } else if (game.spread_home !== undefined && game.spread_home !== null) {
+  } else if (game.spread_home !== undefined && game.spread_home !== null
+      && Number.isFinite(parseFloat(game.spread_home))) {
     const homeSpread = parseFloat(game.spread_home);
     const awaySpread = -homeSpread;
     spreadValue = homeSpread;
@@ -3679,15 +3739,19 @@ export function formatOdds(game, sport = '') {
     lines.push('Spread: Not available');
   }
 
-  // Moneyline
+  // Moneyline. A game object can carry the keys with null values (a board
+  // fetched before books post lines) — that used to print "Rams NaN | Chargers
+  // NaN" straight into the dossier (seen live Aug 20 on a game a week out).
   let mlHome = null;
   let mlAway = null;
-  if (game.moneyline_home !== undefined && game.moneyline_away !== undefined) {
+  if (Number.isFinite(parseFloat(game.moneyline_home)) && Number.isFinite(parseFloat(game.moneyline_away))) {
     mlHome = game.moneyline_home;
     mlAway = game.moneyline_away;
     lines.push(`Moneyline: ${game.away_team} ${formatMoneyline(mlAway)} | ${game.home_team} ${formatMoneyline(mlHome)}`);
   } else if (game.h2h) {
     lines.push(`Moneyline: ${game.h2h}`);
+  } else {
+    lines.push('Moneyline: Not available');
   }
 
   // Total - parse for database storage but do NOT display to Gary

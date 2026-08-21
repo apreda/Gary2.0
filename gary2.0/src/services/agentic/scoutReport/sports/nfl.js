@@ -18,6 +18,7 @@ import {
   fetchTeamProfile,
   fetchInjuries,
   fetchRecentGames,
+  etGameDateLong,
   fetchH2HData,
   scrubNarrative,
   formatInjuryReport,
@@ -94,13 +95,10 @@ async function fetchQBStatsByName(qbName, teamName, season = footballSeasonForDa
     // Reuse the service-level cache shared with fetchKeyPlayers. The previous
     // direct axios request hit this exact endpoint outside the cache, then the
     // key-player pass downloaded the same team's season stats again.
-    const allStats = await ballDontLieService.getNflSeasonStatsByTeam(team.id, season);
-
     // Find this specific QB by name (fuzzy match)
     const searchName = qbName.toLowerCase().trim();
     const searchParts = searchName.split(' ');
-
-    const qbStats = allStats.filter(p => {
+    const findQbRows = (allStats) => (allStats || []).filter(p => {
       const isQB = p.player?.position === 'Quarterback' ||
                    p.player?.position_abbreviation === 'QB' ||
                    p.player?.position?.toLowerCase() === 'qb';
@@ -117,6 +115,22 @@ async function fetchQBStatsByName(qbName, teamName, season = footballSeasonForDa
       return false;
     });
 
+    let statsSeason = season;
+    let qbStats = findQbRows(await ballDontLieService.getNflSeasonStatsByTeam(team.id, statsSeason));
+    // PRESEASON / SEASON-OPEN FALLBACK (the qbWatch pattern, founder GO Aug
+    // 20): the current season's stat rows are empty until real games are
+    // played — before this, August dossiers printed Herbert as "? GP | 0 yds"
+    // and the experience notes below called him a debutant. Fall to the PRIOR
+    // season, LABELED, whenever the current season has no played games.
+    if (!qbStats.length || !(Number(qbStats[0]?.games_played) > 0)) {
+      const prior = findQbRows(await ballDontLieService.getNflSeasonStatsByTeam(team.id, season - 1));
+      if (prior.length && Number(prior[0]?.games_played) > 0) {
+        qbStats = prior;
+        statsSeason = season - 1;
+        console.log(`[Scout Report] QB ${qbName}: no ${season} games yet — using labeled ${statsSeason} season line`);
+      }
+    }
+
     if (qbStats.length === 0) {
       console.log(`[Scout Report] No BDL stats found for QB "${qbName}" on ${teamName} - may be new/backup`);
       // Return QB info without stats (they might be a new backup)
@@ -127,6 +141,7 @@ async function fetchQBStatsByName(qbName, teamName, season = footballSeasonForDa
         passingYards: 0,
         passingTds: 0,
         gamesPlayed: 0,
+        statsSeason: null,
         isBackup: true,
         note: 'New/backup QB - limited season stats'
       };
@@ -136,30 +151,31 @@ async function fetchQBStatsByName(qbName, teamName, season = footballSeasonForDa
     const gamesPlayed = qb.games_played || 0;
     const passingYards = qb.passing_yards || 0;
 
-    // Flag rookie/inexperienced QB situations - this is CRITICAL betting context
-    const isRookie = gamesPlayed <= 2;
-    const isInexperienced = gamesPlayed <= 4;
-    let experienceNote = null;
-
-    if (gamesPlayed === 0) {
-      experienceNote = 'MAKING NFL DEBUT - No NFL game experience';
-      console.log(`[Scout Report] ${qbName} is making their NFL DEBUT (0 GP)`);
-    } else if (gamesPlayed === 1) {
-      experienceNote = `SECOND CAREER START - Only 1 NFL game (${passingYards} yds)`;
-      console.log(`[Scout Report] ${qbName} is making SECOND CAREER START (1 GP, ${passingYards} yds)`);
-    } else if (isRookie) {
-      experienceNote = `ROOKIE QB - Only ${gamesPlayed} career starts`;
-      console.log(`[Scout Report] ${qbName} is a ROOKIE QB (${gamesPlayed} GP)`);
-    } else if (isInexperienced) {
-      experienceNote = `Limited experience - ${gamesPlayed} career starts`;
-      console.log(`[Scout Report] ${qbName} has LIMITED EXPERIENCE (${gamesPlayed} GP)`);
-    } else {
-      console.log(`[Scout Report] ✓ Found BDL stats for ${qbName}: ${passingYards} yds, ${qb.passing_touchdowns || 0} TDs, ${gamesPlayed} GP`);
-    }
-
     // Get the OFFICIAL experience from BDL (e.g., "2nd Season", "7th Season")
-    // This is authoritative - do NOT use games_played to infer rookie status
+    // This is authoritative - do NOT use games_played to infer rookie status.
+    // (The old notes did exactly that: season GP worded as "career starts" —
+    // an early-September vet after Week 1 printed as "SECOND CAREER START".)
     const officialExperience = qb.player?.experience || null;
+    const expYears = (() => {
+      const m = String(officialExperience || '').match(/^(\d+)/);
+      return m ? Number(m[1]) : null;
+    })();
+    const isRookie = officialExperience
+      ? /^(1st|rookie)/i.test(String(officialExperience))
+      : gamesPlayed === 0;
+    const isInexperienced = isRookie || (gamesPlayed <= 4 && (expYears == null || expYears <= 2));
+    let experienceNote = null;
+    if (isRookie) {
+      experienceNote = gamesPlayed === 0
+        ? 'ROOKIE QB — no NFL regular-season games on file'
+        : `ROOKIE QB — ${gamesPlayed} NFL game${gamesPlayed === 1 ? '' : 's'} on file`;
+      console.log(`[Scout Report] ${qbName} is a ROOKIE QB (${officialExperience || '0 GP'})`);
+    } else if (isInexperienced) {
+      experienceNote = `Limited NFL sample — ${gamesPlayed} game${gamesPlayed === 1 ? '' : 's'} in his ${statsSeason} season line`;
+      console.log(`[Scout Report] ${qbName} has a LIMITED SAMPLE (${gamesPlayed} GP, ${statsSeason})`);
+    } else {
+      console.log(`[Scout Report] ✓ Found BDL stats for ${qbName}: ${passingYards} yds, ${qb.passing_touchdowns || 0} TDs, ${gamesPlayed} GP (${statsSeason})`);
+    }
 
     return {
       id: qb.player?.id,
@@ -1042,17 +1058,40 @@ function formatStartingQBs(homeTeam, awayTeam, qbs) {
   let homeQbChangeSituation = null;
   let awayQbChangeSituation = null;
 
-  if (qbs.home) {
-    const qb = qbs.home;
+  // One QB block for either side. Facts only, and only facts that EXIST:
+  // the old line printed "? GP | 0 yds | ?% | Rating: ?" whenever the current
+  // season had no rows yet (every August dossier — live Aug 20). The season
+  // line now carries its OWN season label (prior season when the current one
+  // is empty, per the fetch fallback) and unknown fields are omitted, never
+  // rendered as question marks.
+  const pushQbBlock = (sideLabel, teamName, qb) => {
+    if (!qb) {
+      lines.push(`[${sideLabel}] ${teamName}: QB data unavailable`);
+      return null;
+    }
     const backupLabel = qb.isBackup ? ' BACKUP STARTING (starter injured)' : '';
     // Include official BDL experience (e.g., "2nd Season") to prevent training data hallucinations
     const expLabel = qb.experience ? ` (${qb.experience})` : '';
-    // Handle both old (passingInterceptions) and new (passingInts) property names
-    const ints = qb.passingInterceptions || qb.passingInts || 0;
-    const compPct = qb.passingCompletionPct || qb.completionPct || '?';
-    const rating = qb.qbRating || qb.passingRating || '?';
-    lines.push(`[HOME] ${homeTeam}: ${qb.name}${expLabel} (#${qb.jerseyNumber || '?'})${backupLabel}`);
-    lines.push(`   Season: ${qb.gamesPlayed || '?'} GP | ${qb.passingYards || 0} yds | ${qb.passingTds || 0} TD / ${ints} INT | ${typeof compPct === 'number' ? compPct.toFixed(1) : compPct}% | Rating: ${typeof rating === 'number' ? rating.toFixed(1) : rating}`);
+    const jersey = qb.jerseyNumber ? ` (#${qb.jerseyNumber})` : '';
+    lines.push(`[${sideLabel}] ${teamName}: ${qb.name}${expLabel}${jersey}${backupLabel}`);
+
+    const seasonLabel = qb.statsSeason != null ? `${footballSeasonLabel(qb.statsSeason)} season` : 'Season';
+    if ((qb.gamesPlayed || 0) > 0) {
+      // Handle both old (passingInterceptions) and new (passingInts) property names
+      const ints = qb.passingInterceptions || qb.passingInts || 0;
+      const compPct = qb.passingCompletionPct ?? qb.completionPct;
+      const rating = qb.qbRating ?? qb.passingRating;
+      const parts = [
+        `${qb.gamesPlayed} GP`,
+        `${qb.passingYards || 0} yds`,
+        `${qb.passingTds || 0} TD / ${ints} INT`,
+      ];
+      if (Number.isFinite(parseFloat(compPct))) parts.push(`${parseFloat(compPct).toFixed(1)}%`);
+      if (Number.isFinite(parseFloat(rating))) parts.push(`Rating: ${parseFloat(rating).toFixed(1)}`);
+      lines.push(`   ${seasonLabel}: ${parts.join(' | ')}`);
+    } else {
+      lines.push(`   No NFL regular-season stat line on file.`);
+    }
 
     // Add game logs if available (NCAAF enhanced QB data)
     if (qb.gameLogs && qb.gameLogs.length > 0) {
@@ -1064,55 +1103,22 @@ function formatStartingQBs(homeTeam, awayTeam, qbs) {
       });
     }
 
-    // Add experience warning for rookie/inexperienced QBs
+    // Add experience warning for rookie/inexperienced QBs. Only a REAL
+    // situation (rookie/limited-sample note or an elevated backup) rows here
+    // — the old "<= 5 games played" catch-all promoted every vet into a QB
+    // SITUATION for the first month of each season.
     if (qb.experienceNote) {
       lines.push(`   ${qb.experienceNote}`);
-      homeQbChangeSituation = { name: qb.name, gamesPlayed: qb.gamesPlayed || 0, isBackup: qb.isBackup };
-    } else if (qb.isBackup) {
-      homeQbChangeSituation = { name: qb.name, gamesPlayed: qb.gamesPlayed || 0, isBackup: true };
-    } else if ((qb.gamesPlayed || 0) <= 5) {
-      // Even if not flagged as backup, very few games = new starter this season
-      homeQbChangeSituation = { name: qb.name, gamesPlayed: qb.gamesPlayed || 0, isBackup: false };
+      return { name: qb.name, gamesPlayed: qb.gamesPlayed || 0, statsSeason: qb.statsSeason ?? null, isBackup: qb.isBackup };
     }
-  } else {
-    lines.push(`[HOME] ${homeTeam}: QB data unavailable`);
-  }
-
-  if (qbs.away) {
-    const qb = qbs.away;
-    const backupLabel = qb.isBackup ? ' BACKUP STARTING (starter injured)' : '';
-    // Include official BDL experience (e.g., "2nd Season") to prevent training data hallucinations
-    const expLabel = qb.experience ? ` (${qb.experience})` : '';
-    // Handle both old (passingInterceptions) and new (passingInts) property names
-    const ints = qb.passingInterceptions || qb.passingInts || 0;
-    const compPct = qb.passingCompletionPct || qb.completionPct || '?';
-    const rating = qb.qbRating || qb.passingRating || '?';
-    lines.push(`[AWAY] ${awayTeam}: ${qb.name}${expLabel} (#${qb.jerseyNumber || '?'})${backupLabel}`);
-    lines.push(`   Season: ${qb.gamesPlayed || '?'} GP | ${qb.passingYards || 0} yds | ${qb.passingTds || 0} TD / ${ints} INT | ${typeof compPct === 'number' ? compPct.toFixed(1) : compPct}% | Rating: ${typeof rating === 'number' ? rating.toFixed(1) : rating}`);
-
-    // Add game logs if available (NCAAF enhanced QB data)
-    if (qb.gameLogs && qb.gameLogs.length > 0) {
-      lines.push(`   RECENT GAMES (L${qb.gameLogs.length}):`);
-      qb.gameLogs.forEach((g, i) => {
-        const compAtt = g.attempts > 0 ? `${g.completions}/${g.attempts}` : 'N/A';
-        const pct = g.attempts > 0 ? ((g.completions / g.attempts) * 100).toFixed(0) : '?';
-        lines.push(`     ${g.date || 'Game ' + (i+1)}: ${g.yards} yds, ${g.tds} TD/${g.ints} INT (${compAtt}, ${pct}%)${g.rating ? ` Rating: ${g.rating.toFixed(1)}` : ''}`);
-      });
+    if (qb.isBackup) {
+      return { name: qb.name, gamesPlayed: qb.gamesPlayed || 0, statsSeason: qb.statsSeason ?? null, isBackup: true };
     }
+    return null;
+  };
 
-    // Add experience warning for rookie/inexperienced QBs
-    if (qb.experienceNote) {
-      lines.push(`   ${qb.experienceNote}`);
-      awayQbChangeSituation = { name: qb.name, gamesPlayed: qb.gamesPlayed || 0, isBackup: qb.isBackup };
-    } else if (qb.isBackup) {
-      awayQbChangeSituation = { name: qb.name, gamesPlayed: qb.gamesPlayed || 0, isBackup: true };
-    } else if ((qb.gamesPlayed || 0) <= 5) {
-      // Even if not flagged as backup, very few games = new starter this season
-      awayQbChangeSituation = { name: qb.name, gamesPlayed: qb.gamesPlayed || 0, isBackup: false };
-    }
-  } else {
-    lines.push(`[AWAY] ${awayTeam}: QB data unavailable`);
-  }
+  homeQbChangeSituation = pushQbBlock('HOME', homeTeam, qbs.home);
+  awayQbChangeSituation = pushQbBlock('AWAY', awayTeam, qbs.away);
 
   lines.push('');
 
@@ -1122,23 +1128,22 @@ function formatStartingQBs(homeTeam, awayTeam, qbs) {
     lines.push('QB SITUATION');
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-    if (homeQbChangeSituation) {
-      const qb = homeQbChangeSituation;
-      lines.push(`${homeTeam}:`);
-      lines.push(`   Current QB: ${qb.name} (${qb.gamesPlayed} career starts)`);
-    }
-
-    if (awayQbChangeSituation) {
-      const qb = awayQbChangeSituation;
-      lines.push(`${awayTeam}:`);
-      lines.push(`   Current QB: ${qb.name} (${qb.gamesPlayed} career starts)`);
+    // Factual, season-scoped wording — never "career starts" derived from a
+    // single season's GP.
+    for (const [teamName, qb] of [[homeTeam, homeQbChangeSituation], [awayTeam, awayQbChangeSituation]]) {
+      if (!qb) continue;
+      const sample = qb.statsSeason != null
+        ? `${qb.gamesPlayed} game${qb.gamesPlayed === 1 ? '' : 's'} in his ${footballSeasonLabel(qb.statsSeason)} season line`
+        : 'no NFL stat line on file';
+      lines.push(`${teamName}:`);
+      lines.push(`   Current QB: ${qb.name} (${sample})${qb.isBackup ? ' — backup starting' : ''}`);
     }
 
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     lines.push('');
   }
 
-  lines.push(`QB data from BDL (${footballSeasonLabel(qbs.season)} season).`);
+  lines.push(`QB data from BDL.`);
   lines.push('');
 
   return lines.join('\n');
@@ -1161,7 +1166,7 @@ export async function buildNflScoutReport(game, options = {}) {
   const [homeProfile, awayProfile, injuries, recentHome, recentAway, standingsSnapshot] = await Promise.all([
     fetchTeamProfile(homeTeam, sportKey),
     fetchTeamProfile(awayTeam, sportKey),
-    fetchInjuries(homeTeam, awayTeam, sportKey),
+    fetchInjuries(homeTeam, awayTeam, sportKey, etGameDateLong(game.commence_time)),
     fetchRecentGames(homeTeam, sportKey, 8),
     fetchRecentGames(awayTeam, sportKey, 8),
     fetchStandingsSnapshot(sportKey, homeTeam, awayTeam)
