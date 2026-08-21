@@ -377,12 +377,17 @@ describe('run-all-results wiring', () => {
     expect(runner).toContain("const nflFinalIds = new Set(nflGames.filter(g => isFinalGameStatus(g.status))");
     expect(runner).toContain("dataSport === 'NFL' && gameId == null");
     expect(runner).toContain("dataSport === 'NFL' && !nflFinalIds.has(gameId)");
-    expect(runner).toContain("getStatValue('NFL', statsForGame(nflStats, gameId), name, type)");
+    // Football stat lookups share one exact-game branch with the DNP-void
+    // (Aug 20 2026): populated final box + absent player = push; provider
+    // holes stay pending; grounding never settles football in ANY pass.
+    expect(runner).toContain("statsForGame(dataSport === 'NFL' ? nflStats : ncaafStats, gameId)");
+    expect(runner).toContain("!lookupMeta.playerFound && gameRows.length >= 10");
+    expect(runner).toContain('footballDnpVoid = true');
+    expect(runner).toContain("footballDnpVoid ? 'push' : gradePropResult(actual, line, bet)");
     expect(runner).toContain('season_type=${seasonType}&per_page=100');
     expect(runner).toContain('normalizeStoredPropType(rawProp)');
-    expect(runner).toContain('gradePropResult(actual, line, bet)');
     expect(runner).toContain("_game_id: String(gameId)");
-    expect(runner).toContain("['NFL', 'NCAAF'].includes(dataSport) && settlementOnly");
+    expect(runner).toContain("} else if (['NFL', 'NCAAF'].includes(dataSport)) {");
   });
 
   it('fails the cloud settlement lane on read/write/readback coverage gaps', () => {
@@ -400,7 +405,7 @@ describe('run-all-results wiring', () => {
     expect(runner).toContain("timeZone: 'America/New_York'");
     expect(runner).toContain("dataSport === 'NCAAF' && gameId == null");
     expect(runner).toContain("dataSport === 'NCAAF' && !ncaafFinalIds.has(gameId)");
-    expect(runner).toContain("getStatValue('NCAAF', statsForGame(ncaafStats, gameId), name, type, p.player_id)");
+    expect(runner).toContain("dataSport === 'NCAAF' ? p.player_id : null");
     expect(runner).toContain('findExactNcaafStatRow(data, playerId)');
     expect(runner).toContain("bdlFetch('ncaaf/v1/player_stats', `game_ids[]=${gameId}&per_page=100${cursorParam}`)");
     expect(runner).toContain("String(row?.game?.id ?? '') === String(gameId)");

@@ -458,17 +458,21 @@ describe('Gary\'s Number receipt identity', () => {
 });
 
 describe('Billfold canonical NFL metadata', () => {
-  it('loads the narrow daily and weekly projections concurrently', () => {
-    expect(supabaseApi).toContain('buildURL(table: "weekly_nfl_picks"');
-    expect(supabaseApi).toContain('p\\(index)_commence:picks->\\(index)->>commence_time');
-    expect(supabaseApi).toContain('async let dailyPayload = fetchBillfoldMetadataPayload');
-    expect(supabaseApi).toContain('async let nflPayload = fetchBillfoldMetadataPayload');
+  // a1a1e5f5 (Aug 20 2026): history reads pick_history_summary — a server-side
+  // materialized view that flattens daily_picks + canonical weekly_nfl_picks
+  // with NFL dates already ET-derived from commence_time. The old two-source
+  // concurrent jsonb projection (which these pins used to assert) died by
+  // statement timeout under load and is deleted.
+  it('reads the flattened pick_history_summary view, not per-phone jsonb projections', () => {
+    expect(supabaseApi).toContain('buildURL(table: "pick_history_summary"');
+    expect(supabaseApi).toContain('"game_date,pick,confidence,is_top_pick"');
+    expect(supabaseApi).not.toContain('fetchBillfoldMetadataPayload');
+    expect(supabaseApi).not.toContain('p\\(index)_commence:picks->\\(index)->>commence_time');
   });
 
-  it('uses each NFL game date and excludes legacy daily NFL copies', () => {
-    expect(supabaseApi).toContain('let nflSince = getNFLWeekStart(for: dateFilter) ?? dateFilter');
-    expect(supabaseApi).toContain('.flatMap { easternCalendarDate(ofISO8601: $0) }');
-    expect(supabaseApi).toContain('(row["p\\(index)_league"] as? String)?.uppercased() == "NFL"');
-    expect(supabaseApi).toContain('billfoldPickMetadataV2_');
+  it('caches under the v3 summary key so stale projection caches never serve', () => {
+    expect(supabaseApi).toContain('billfoldPickMetadataV3_');
+    expect(supabaseApi).not.toContain('billfoldPickMetadataV2_');
+    expect(supabaseApi).toContain('"game_date", value: "gte.\\(dateFilter)"');
   });
 });

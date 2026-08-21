@@ -497,7 +497,11 @@ function gradeGame(pickText, homeTeam, awayTeam, hScore, vScore) {
 /**
  * Prop Value Extraction
  */
-function getStatValue(sport, data, name, type, playerId = null) {
+// `meta` is an out-param for the football DNP-void (Aug 20 2026):
+// meta.playerFound = the player's stat row was located in the (exact-game)
+// pool, so a null return means the TYPE has no mapping — never a DNP. Only
+// the NFL/NCAAF branches set it; other sports leave it untouched.
+function getStatValue(sport, data, name, type, playerId = null, meta = {}) {
   const target = normalizeName(name), t = type.toLowerCase();
   if (!data || data.length === 0) return null;
 
@@ -569,13 +573,13 @@ function getStatValue(sport, data, name, type, playerId = null) {
     }
   } else if (sport === 'NFL') {
     const p = findPlayerFlat(data);
-    if (p) return nflActualFromStatRow(p, type, data);
+    if (p) { meta.playerFound = true; return nflActualFromStatRow(p, type, data); }
   } else if (sport === 'NCAAF') {
     // Generation stamps the exact BDL roster id. Require it here too: a
     // college game can contain duplicate/similar names, so name-only matching
     // is not authoritative enough to settle money.
     const p = findExactNcaafStatRow(data, playerId);
-    if (p) return ncaafActualFromStatRow(p, type);
+    if (p) { meta.playerFound = true; return ncaafActualFromStatRow(p, type); }
   } else if (sport === 'MLB') {
     // BDL /mlb/v1/stats returns flat array with player objects
     const p = findPlayerFlat(data) || findPlayerInGames(data);
@@ -1480,6 +1484,7 @@ async function processPropBets(date, sportFilter = null, { settlementOnly = fals
       // above prevent partial/live stats from creating one in the first place.
       let actual = null;
       let source = 'none';
+      let footballDnpVoid = false;
       if (dataSport === 'NBA') actual = getStatValue('NBA', nbaBox, name, type);
       else if (dataSport === 'NHL') actual = getStatValue('NHL', nhlBox, name, type);
       else if (dataSport === 'MLB') {
@@ -1494,16 +1499,34 @@ async function processPropBets(date, sportFilter = null, { settlementOnly = fals
           : mlbStats;
         actual = getStatValue('MLB', pool, name, type);
       }
-      else if (dataSport === 'NFL') actual = getStatValue('NFL', statsForGame(nflStats, gameId), name, type);
-      else if (dataSport === 'NCAAF') actual = getStatValue('NCAAF', statsForGame(ncaafStats, gameId), name, type, p.player_id);
+      else if (['NFL', 'NCAAF'].includes(dataSport)) {
+        const gameRows = statsForGame(dataSport === 'NFL' ? nflStats : ncaafStats, gameId);
+        const lookupMeta = {};
+        actual = getStatValue(dataSport, gameRows, name, type,
+          dataSport === 'NCAAF' ? p.player_id : null, lookupMeta);
+        // FOOTBALL DNP VOID (Aug 20 2026 — the MLB Aug 3 semantics): the game
+        // is FINAL (finality gates above), its box is POPULATED, and this
+        // player has no stat row — an inactive; the book voids the bet and the
+        // ledger records a push (these used to sit pending forever: 106 of
+        // 108 legacy anytime-TD picks never graded). A thin/empty box is a
+        // provider hole, never a slate of DNPs — those stay pending. A row
+        // that WAS found with an unmapped type is also never a DNP.
+        if (actual === null && !lookupMeta.playerFound && gameRows.length >= 10) {
+          footballDnpVoid = true;
+          console.log(`    [DNP Void] ${dataSport}: ${name} absent from final game ${gameId} box (${gameRows.length} rows) — push`);
+        }
+      }
 
       if (actual !== null) {
         source = 'api';
-      } else if (['NFL', 'NCAAF'].includes(dataSport) && settlementOnly) {
-        // The laptop-independent football pass never lets a model settle a
-        // wager. Exact final-game BDL stats are the grading authority; a
-        // provider hole stays pending, makes the structured coverage outcome
-        // fail, and can self-heal on a later idempotent run.
+      } else if (footballDnpVoid) {
+        source = 'api';
+      } else if (['NFL', 'NCAAF'].includes(dataSport)) {
+        // Football never lets a model settle a wager — in ANY pass, not just
+        // the cloud settlement lane (Aug 20; previously the laptop path fell
+        // through to grounding for football). Exact final-game BDL stats are
+        // the grading authority; a provider hole stays pending and self-heals
+        // on a later idempotent run.
         console.error(`    [BDL Miss] ${dataSport}: ${name} "${type}" missing from exact game ${gameId}; leaving pending`);
         stats.unresolvedFinal++;
         continue;
@@ -1513,8 +1536,8 @@ async function processPropBets(date, sportFilter = null, { settlementOnly = fals
         if (actual !== null) source = 'grounding';
       }
 
-      if (actual !== null) {
-        const res = gradePropResult(actual, line, bet);
+      if (actual !== null || footballDnpVoid) {
+        const res = footballDnpVoid ? 'push' : gradePropResult(actual, line, bet);
         if (res == null) {
           if (['NFL', 'NCAAF'].includes(dataSport)) stats.unresolvedFinal++;
           console.error(`  ❌ ${sport}: ${name} ${type} — invalid grade inputs (${bet} ${line}, actual ${actual}).`);
