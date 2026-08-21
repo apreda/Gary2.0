@@ -331,7 +331,14 @@ describe('Home MLB/NFL board parity', () => {
     );
 
     expect(homeSheet).toContain('ForEach(HomeBoardLeague.allCases');
-    expect(homeSheet).toContain('homeSheetPanel(rows.filter { $0.league == selected.rawValue }');
+    // Aug 20 (founder): the YOU tab rides the same ONE BOARD — a ternary
+    // routes the user's slate through the exact same panel, and the league
+    // tabs still render from the league filter, never a second panel.
+    expect(homeSheet).toContain('homeSheetPanel(selected == .you ? youRows : rows.filter { $0.league == selected.rawValue }');
+    // The YOU tab exists only when the user has bets down today, and the
+    // user's rows carry THEIR side's verdict (fade inverts Gary's standing).
+    expect(homeSheet).toContain('if !youRows.isEmpty { set.insert(.you) }');
+    expect(views).toContain('private func youLiveStatus(_ bet: UserBet, verdicts: [HomeLiveVerdict])');
     // Aug 19: the gold whisper gave way to the lit rim — the board wears the
     // exact headline-card float, and THE RECORD rides inside the board card.
     expect(homeSheet).not.toContain('.stroke(GaryColors.gold.opacity(0.16), lineWidth: 1)');
