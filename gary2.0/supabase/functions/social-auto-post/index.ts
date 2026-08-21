@@ -445,6 +445,22 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
   const results: any[] = [];
   let threadsSoFar = pickThreads.length;
 
+  // Sentence SELECTION only — never composition. A failure returns nothing so
+  // the caller's deterministic verbatim chooser runs instead of the pick dying.
+  // Latched for the run: once the vendor is confirmed unreachable, the rest of
+  // the slate goes straight to the fallback rather than re-timing-out per pick.
+  let llmDown = false;
+  const selectHookSentences = async (prompt: string): Promise<Record<string, unknown>> => {
+    if (llmDown) return {};
+    try {
+      return parseJsonBlock(await callLLM(VERBATIM_RULES, prompt, PICK_VERBATIM_SCHEMA));
+    } catch (e) {
+      llmDown = true;
+      console.error(`HOOK_LLM_DOWN: sentence selection unavailable, posting Gary's own sentences instead -> ${String(e)}`);
+      return {};
+    }
+  };
+
   // Each pick composes and posts INDEPENDENTLY inside its own try/catch. Before Aug 5 a single failure (an
   // empty Gemini hook tripping the guard below, an X API blip) threw out of runPickMode and forfeited the
   // entire run — and the next attempt was a full hour later, by which point the game had usually started
@@ -492,16 +508,23 @@ ${numbered}`;
       isVerbatimSnippet(rationaleText, o) && isVerbatimSnippet(rationaleText, c)
       && inList(o) && inList(c)
       && o.trim() !== c.trim() && (o.length + c.length) <= budget;
-    let out = parseJsonBlock(await callLLM(VERBATIM_RULES, user, PICK_VERBATIM_SCHEMA));
+    // OUTAGE PATH (Aug 21 2026). The model only SELECTS which two of Gary's own
+    // sentences to run — `fallbackReasonPair` below chooses from the identical
+    // list, so the posted words are the same either way. Before this, a THROWN
+    // API error skipped that chooser entirely and forfeited the pick: today's
+    // Gemini billing 403 turned "one dead vendor" into "the account tweets
+    // nothing", every pick, all day. A selection failure now costs the model's
+    // judgement, never the tweet. `llmDown` is per-run, so a hard outage burns
+    // one failed call for the whole slate instead of two per pick.
+    const out0 = await selectHookSentences(user);
+    let out = out0;
     let opening = String(out.opening ?? "").trim();
     let closing = String(out.closing ?? "").trim();
     if (!selectionOk(opening, closing)) {
       // One retry with the violation named, then the deterministic fallback.
-      out = parseJsonBlock(await callLLM(
-        VERBATIM_RULES,
+      out = await selectHookSentences(
         `${user}\n\nYour previous selection was rejected: each value must be COPIED EXACTLY from the numbered list (no edits, no merging, only listed sentences) and the two must be different sentences fitting ${budget} characters combined.`,
-        PICK_VERBATIM_SCHEMA,
-      ));
+      );
       opening = String(out.opening ?? "").trim();
       closing = String(out.closing ?? "").trim();
     }
@@ -710,6 +733,15 @@ async function runArcUpdateMode(today: string, dryRun: boolean) {
 // Hashtags are drawn from whichever leagues actually appear that day, so they stay genuinely relevant
 // instead of static filler.
 async function runRecapMode(today: string, dryRun: boolean) {
+  // RETIRED Aug 21 2026 (founder: "we should not do a recap tweets anymore they
+  // dont do well at all"). The morning ledger never earned its slot — it is a
+  // results table posted to people who were not following the card live, and it
+  // consistently under-performed the pick threads and the verdict quote-tweets,
+  // which carry the same receipts at the moment anyone actually cares.
+  // Same shape as the retired personality post: the live path early-returns,
+  // the dry-run path below still composes so it can be previewed. To revert,
+  // delete this line.
+  if (!dryRun) return { posted: false, reason: "recap post retired (founder, Aug 21 2026)" };
   const { data: existing } = await sb.from("social_post_log").select("id").eq("post_date", today).eq("thread_format", "recap").limit(1);
   if (existing?.length && !dryRun) return { posted: false, reason: "recap already posted today" };
   const y = yesterdayOf(today);
