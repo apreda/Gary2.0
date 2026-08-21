@@ -21327,13 +21327,21 @@ struct EdgesSection: View {
         }
     }
 
+    /// League-specific wording applies only when the WHOLE feed is one league.
+    /// The ALL scope mixes leagues in whatever order the desks flattened, so
+    /// keying slang off `edges.first` made the strip's identity depend on
+    /// Dictionary order — nil here means "mixed", which wears the defaults.
+    private var uniformLeague: HubLeagueSel? {
+        guard let first = edges.first?.league else { return nil }
+        return edges.allSatisfy { $0.league == first } ? first : nil
+    }
+
     /// The mixed-feed tab wears each sport's own slang for "the whole picture":
     /// baseball's THE SHOW, football's ALL-22 — the coaches' film angle that has
     /// every player on the field (founder, Aug 20: "not the show because that's
     /// baseball"). Same tab, same behavior; only the word changes.
     private var showTabTitle: String {
-        let league = edges.first?.league
-        return (league == .nfl || league == .ncaaf) ? "ALL-22" : "THE SHOW"
+        (uniformLeague == .nfl || uniformLeague == .ncaaf) ? "ALL-22" : "THE SHOW"
     }
 
     private var showTab: some View {
@@ -21346,7 +21354,7 @@ struct EdgesSection: View {
     private func categoryTab(_ kind: SignalKind) -> some View {
         categoryTabLabel(
             icon: kind.icon,
-            title: signalChipLabel(kind: kind, league: edges.first?.league),
+            title: signalChipLabel(kind: kind, league: uniformLeague),
             active: activeKind == kind
         ) {
             selectedKind = kind
@@ -23247,8 +23255,13 @@ struct PicksTodayPage: View {
                 // The season series belongs to its GAME, not the day's list
                 // (founder, Aug 6: "Head to Head should not be on the Today's
                 // page ONLY under the the matchup/game of the two teams").
+                // The football gate rides here too: the ALL scope mixes every
+                // league's signals, and without it football's structured proof
+                // rows (THE SWEAT factor lines, AFTER GARY receipts) leak into
+                // the mixed feed as gibberish prose. No-op for MLB kinds.
                 EdgesSection(title: "TODAY'S EDGES",
-                             edges: edges.filter { $0.kind != .h2h }, tabbed: true)
+                             edges: FootballTodayFeed.rows(edges.filter { $0.kind != .h2h }),
+                             tabbed: true)
             }
         }
     }

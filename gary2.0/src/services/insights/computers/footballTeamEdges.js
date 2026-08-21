@@ -345,6 +345,7 @@ export async function computeFootballTeamEdges(ctx) {
         : Number(awayValue) > Number(homeValue);
       const leader = awayLeads ? sides.away : sides.home;
       const show = metric.display || ((v) => fixed(v, metric.decimals));
+      const pct = metric.short === '%' ? '%' : '';
       const gapText = show(gap);
       const awayText = show(awayValue);
       const homeText = show(homeValue);
@@ -354,8 +355,8 @@ export async function computeFootballTeamEdges(ctx) {
         category: metric.category,
         headline: metric.headline(teamName(leader.team), gapText),
         detail:
-          `${teamName(awayTeam)} is at ${awayText} ${metric.label} over ${sampleWord(awayStats.games)}; ` +
-          `${teamName(homeTeam)} is at ${homeText} over ${sampleWord(homeStats.games)}. ` +
+          `${teamName(awayTeam)} is at ${awayText}${pct} ${metric.label} over ${sampleWord(awayStats.games)}; ` +
+          `${teamName(homeTeam)} is at ${homeText}${pct} over ${sampleWord(homeStats.games)}. ` +
           `Those are current-${season} team-game results through ${through}.`,
         game: helpers.gameLabel(game),
         value: metric.short === '%' ? `${gapText}%` : `${gapText} ${metric.short}`,

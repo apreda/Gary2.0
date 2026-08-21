@@ -71,7 +71,11 @@ function streakRow({ side, opponent, game, helpers, season, through }) {
     tone: won ? TONES.HOT : TONES.COLD,
     // A longer run is a louder fact; six straight caps the scale.
     relevance_score: Math.min(88, 56 + length * 5),
-    team_id: side.team?.id,
+    // The football grader's contract: row.team_id names the side that held
+    // the EDGE, graded hit iff that side won. A winning streak is that claim;
+    // a losing streak is a caution about the same team — attaching its id
+    // would stamp "hit" when the cold team wins. Cold rows stay context.
+    ...(won ? { team_id: side.team?.id } : {}),
     game_id: game?.id,
     meta: {
       source: 'balldontlie_standings',
@@ -172,7 +176,8 @@ function divisionRow({ away, home, game, helpers, season, through }) {
     value: 'DIVISION',
     tone: TONES.EDGE,
     relevance_score: 74,
-    team_id: home.team?.id,
+    // Neutral context — naming either side as row.team_id would make the
+    // grader read this as "that side held the edge". No side did.
     game_id: game?.id,
     meta: {
       source: 'balldontlie_standings',

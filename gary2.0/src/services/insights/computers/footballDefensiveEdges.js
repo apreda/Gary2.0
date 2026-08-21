@@ -200,6 +200,7 @@ export async function computeFootballDefensiveEdges(ctx) {
         ? Number(awayValue) > Number(homeValue)
         : Number(awayValue) < Number(homeValue);
       const leaderTeam = awayLeads ? awayTeam : homeTeam;
+      const pct = metric.short === '%' ? '%' : '';
       const gapText = fixed(gap, metric.decimals);
       const awayText = fixed(awayValue, metric.decimals);
       const homeText = fixed(homeValue, metric.decimals);
@@ -208,9 +209,12 @@ export async function computeFootballDefensiveEdges(ctx) {
       rows.push(makeRow({
         category: metric.category,
         headline: metric.headline(teamName(leaderTeam), gapText),
+        // The aggregated number is the TEAM's defensive fact (what it allowed,
+        // what it took away) — naming "opponents" as the subject inverted the
+        // takeaways claim and mislabeled every "allowed" stat.
         detail:
-          `${teamName(awayTeam)}'s opponents are at ${awayText} ${metric.label} over ${sampleWord(awayAllowed.games)}; ` +
-          `${teamName(homeTeam)}'s are at ${homeText} over ${sampleWord(homeAllowed.games)}. ` +
+          `${teamName(awayTeam)} is at ${awayText}${pct} ${metric.label} over ${sampleWord(awayAllowed.games)}; ` +
+          `${teamName(homeTeam)} is at ${homeText}${pct} over ${sampleWord(homeAllowed.games)}. ` +
           `Those come from the opposing team boxes in the games each side has already played this ${season} season, through ${through}.`,
         game: helpers.gameLabel(game),
         value: metric.short === '%' ? `${gapText}%` : `${gapText} ${metric.short}`,
