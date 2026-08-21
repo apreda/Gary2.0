@@ -209,9 +209,11 @@ enum FootballProofContract {
 
 // MARK: - Football Hub
 //
-// NFL and NCAAF use a football-native front page instead of the generic
-// editorial lead/best/beat stack. This surface only rearranges already decoded
-// slate and insight rows; it does not infer a kickoff, market, or matchup fact.
+// NFL and NCAAF read as a football-native front page in MLB's editorial
+// order: the slate windows, THE LEAD, the Best of the Board, THE MISMATCH,
+// Gary's locked-number receipts, the beats, then the live proof. This surface
+// only rearranges already decoded slate and insight rows; it does not infer
+// a kickoff, market, or matchup fact.
 
 struct FootballHubPage: View {
     let league: HubLeagueSel
@@ -220,6 +222,41 @@ struct FootballHubPage: View {
     let loaded: Bool
     let onGame: (TomorrowBoardRow) -> Void
     let onSignal: (Signal) -> Void
+
+    /// One human section of the board's long tail.
+    struct BeatDef: Identifiable {
+        let anchor: String
+        let title: String
+        let kinds: [SignalKind]
+        var id: String { anchor }
+    }
+
+    /// The football beats in page order. HubView's jump nav reads the same
+    /// definitions, so the pop-out never invents a section this page can't mount.
+    static let beatDefs: [BeatDef] = [
+        BeatDef(anchor: "trenches", title: "The Trenches", kinds: [.trenches, .passRush]),
+        BeatDef(anchor: "field", title: "The Field", kinds: [.quarterback, .injury]),
+        BeatDef(anchor: "edges", title: "The Edges",
+                kinds: [.marketRange, .coverage, .paceScript, .redZone,
+                        .turnoverEdge, .explosivePlay, .specialTeams, .coaching]),
+        BeatDef(anchor: "form", title: "The Form", kinds: [.situational, .streak, .teamRecord]),
+    ]
+
+    /// Kinds eligible for THE LEAD / Best of the Board. The mismatch has its
+    /// own board below, and proof modules (receipts, ranges, live factors)
+    /// are evidence, not stories.
+    static let storyKinds: Set<SignalKind> = [
+        .trenches, .passRush, .quarterback, .injury, .coverage, .paceScript,
+        .redZone, .turnoverEdge, .explosivePlay, .specialTeams, .situational,
+        .coaching, .streak, .teamRecord,
+    ]
+
+    /// Counting lanes (streaks, records, standings) make the board but never
+    /// headline the page — the MLB lead law (founder, Aug 3).
+    private static let leadKinds: Set<SignalKind> = [
+        .trenches, .passRush, .quarterback, .injury, .coverage, .paceScript,
+        .redZone, .turnoverEdge, .explosivePlay, .specialTeams, .coaching,
+    ]
 
     private var accent: Color {
         league == .ncaaf ? Sport.ncaaf.accentColor : Sport.nfl.accentColor
@@ -240,18 +277,46 @@ struct FootballHubPage: View {
         return signals.first { $0.kind == .nextSlate }
     }
 
-    private var gameBoard: [Signal] {
-        let ordered = signals.enumerated()
-            .compactMap { index, signal -> (Int, Int, Signal)? in
-                guard let rank = boardRank(signal.kind) else { return nil }
-                guard signal.kind != .marketRange || marketRangeIsPregame(signal) else { return nil }
-                return (rank, index, signal)
+    /// Story rows in arrival order (the fetch delivers relevance-ranked rows),
+    /// max 2 per lane, top 7 — so the front of the page mixes lanes.
+    private var ranked: [Signal] {
+        var counts: [SignalKind: Int] = [:]
+        var out: [Signal] = []
+        for signal in deduped(signals.filter { Self.storyKinds.contains($0.kind) }) {
+            let count = counts[signal.kind] ?? 0
+            guard count < 2 else { continue }
+            counts[signal.kind] = count + 1
+            out.append(signal)
+            if out.count == 7 { break }
+        }
+        return out
+    }
+
+    /// THE LEAD and its remainder from one ranked snapshot (the MLB shape:
+    /// resolve once, never rebuild `ranked` inside a filter closure).
+    private var frontPage: (lead: Signal?, best: [Signal]) {
+        let rows = ranked
+        let lead = rows.first(where: { Self.leadKinds.contains($0.kind) }) ?? rows.first
+        guard let lead else { return (nil, []) }
+        return (lead, rows.filter { $0.id != lead.id })
+    }
+
+    private var mismatchRows: [Signal] {
+        deduped(signals.filter { $0.kind == .mismatch })
+    }
+
+    /// A beat's rows: everything the front page didn't already feature, in
+    /// arrival order. Market ranges stay NCAAF-only and must validate against
+    /// tonight's slate row before they may render (the proof contract).
+    private func beatRows(_ beat: BeatDef, featured: Set<UUID>) -> [Signal] {
+        let kinds = Set(beat.kinds)
+        return deduped(signals.filter { signal in
+            guard kinds.contains(signal.kind), !featured.contains(signal.id) else { return false }
+            if signal.kind == .marketRange {
+                return league == .ncaaf && marketRangeIsPregame(signal)
             }
-            .sorted { lhs, rhs in
-                lhs.0 == rhs.0 ? lhs.1 < rhs.1 : lhs.0 < rhs.0
-            }
-            .map(\.2)
-        return deduped(ordered)
+            return true
+        })
     }
 
     private func marketRangeIsPregame(_ signal: Signal) -> Bool {
@@ -261,7 +326,9 @@ struct FootballHubPage: View {
     }
 
     private var hasIntel: Bool {
-        !receipts.isEmpty || !gameBoard.isEmpty || !sweat.isEmpty
+        if !receipts.isEmpty || !sweat.isEmpty || !mismatchRows.isEmpty { return true }
+        if frontPage.lead != nil { return true }
+        return Self.beatDefs.contains { !beatRows($0, featured: []).isEmpty }
     }
 
     var body: some View {
@@ -289,14 +356,35 @@ struct FootballHubPage: View {
                         .id("nextSlate")
                 }
 
+                let page = frontPage
+                let featured = Set(([page.lead].compactMap { $0 } + page.best).map(\.id))
+
+                if let lead = page.lead {
+                    FootballHubLead(signal: lead, accent: accent, onTap: onSignal)
+                        .id("lead")
+                }
+
+                if !page.best.isEmpty {
+                    FootballHubBestOf(rows: page.best, accent: accent, onTap: onSignal)
+                        .id("bestof")
+                }
+
+                if !mismatchRows.isEmpty {
+                    FootballHubMismatchBoard(rows: mismatchRows, accent: accent, onTap: onSignal)
+                        .id("mismatch")
+                }
+
                 if !receipts.isEmpty {
                     FootballHubReceiptSection(rows: receipts, accent: accent, onTap: onSignal)
                         .id("afterGary")
                 }
 
-                if !gameBoard.isEmpty {
-                    FootballHubGameBoard(rows: gameBoard, accent: accent, onTap: onSignal)
-                        .id("edges")
+                ForEach(Self.beatDefs) { beat in
+                    let rows = beatRows(beat, featured: featured)
+                    if !rows.isEmpty {
+                        FootballHubBeatSection(beat: beat, rows: rows, accent: accent, onTap: onSignal)
+                            .id(beat.anchor)
+                    }
                 }
 
                 if !sweat.isEmpty {
@@ -309,25 +397,6 @@ struct FootballHubPage: View {
                         .id("edges")
                 }
             }
-        }
-    }
-
-    private func boardRank(_ kind: SignalKind) -> Int? {
-        switch kind {
-        case .marketRange: return league == .ncaaf ? 0 : nil
-        case .trenches: return 1
-        case .passRush: return 2
-        case .quarterback: return 3
-        case .injury: return 4
-        case .coverage: return 5
-        case .paceScript: return 6
-        case .redZone: return 7
-        case .turnoverEdge: return 8
-        case .explosivePlay: return 9
-        case .specialTeams: return 10
-        case .situational: return 11
-        case .coaching: return 12
-        default: return nil
         }
     }
 
@@ -619,6 +688,8 @@ private struct FootballHubReceiptRow: View {
                     Spacer(minLength: 4)
 
                     if let valueText {
+                        // Scale, never clip (the no-ellipsis law): the capsule
+                        // sits beside two market points and loses the width war.
                         Text(valueText)
                             .font(GaryFonts.mono(9, bold: true))
                             .tracking(0.45)
@@ -627,6 +698,8 @@ private struct FootballHubReceiptRow: View {
                             .padding(.vertical, 5)
                             .background(Capsule().fill(GaryColors.gold.opacity(0.11)))
                             .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                            .layoutPriority(1)
                     }
                 }
 
@@ -666,19 +739,118 @@ private struct FootballHubMarketPoint: View {
     }
 }
 
-// MARK: - Game board
+// MARK: - The Lead
 
-private struct FootballHubGameBoard: View {
+/// The page's #1 story, worn open on the page — the only element outside a
+/// panel, so the hierarchy reads at a glance. Two sentences of the Gary read
+/// run under the headline; the gold link opens the full read.
+private struct FootballHubLead: View {
+    let signal: Signal
+    let accent: Color
+    let onTap: (Signal) -> Void
+
+    /// The hero number is for compact stats only — a sentence-shaped value
+    /// already lives in the headline.
+    private var heroValue: String? {
+        let value = signal.value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty, value.count <= 8,
+              !footballHubValueEchoesHeadline(value, signal.headline) else { return nil }
+        return value
+    }
+
+    /// The read under the headline — first two sentences, tight (MLB's lead
+    /// clamp; the overlay carries the rest).
+    private var read: String {
+        let detail = signal.detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard detail != signal.headline else { return "" }
+        var count = 0
+        var idx = detail.startIndex
+        while idx < detail.endIndex, count < 2 {
+            guard let r = detail.range(of: ". ", range: idx..<detail.endIndex) else { return detail }
+            count += 1
+            idx = r.upperBound
+        }
+        return count == 2 ? String(detail[..<idx]).trimmingCharacters(in: .whitespaces) : detail
+    }
+
+    var body: some View {
+        Button { onTap(signal) } label: {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 8) {
+                    Text("THE LEAD")
+                        .font(GaryFonts.mono(10.5, bold: true))
+                        .tracking(1.3)
+                        .foregroundStyle(accent)
+                    Rectangle().fill(accent.opacity(0.35)).frame(width: 26, height: 1)
+                    Text(footballHubKindLabel(signal.kind))
+                        .font(GaryFonts.mono(9, bold: true))
+                        .tracking(0.8)
+                        .foregroundStyle(.white.opacity(0.55))
+                    Spacer(minLength: 8)
+                    if !signal.game.isEmpty {
+                        Text(signal.game.uppercased())
+                            .font(GaryFonts.mono(9, bold: true))
+                            .tracking(0.55)
+                            .foregroundStyle(.white.opacity(0.55))
+                            .lineLimit(1)
+                    }
+                }
+                Text(signal.headline)
+                    .font(GaryFonts.display(23))
+                    .tracking(0.3)
+                    .foregroundStyle(GaryColors.warmWhite)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
+                    .padding(.top, 10)
+                if let heroValue {
+                    Text(heroValue)
+                        .font(GaryFonts.data(36, .bold))
+                        .foregroundStyle(signal.tone.color)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .padding(.top, 8)
+                }
+                if !read.isEmpty {
+                    Text(read)
+                        .font(GaryFonts.text(13.5))
+                        .foregroundStyle(.white.opacity(0.78))
+                        .lineSpacing(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 10)
+                }
+                HStack(spacing: 5) {
+                    Text("THE FULL READ")
+                        .font(GaryFonts.mono(9.5, bold: true))
+                        .tracking(1.1)
+                        .foregroundStyle(GaryColors.gold)
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(GaryColors.gold)
+                }
+                .padding(.top, 12)
+            }
+            .padding(.horizontal, GaryLayout.gutter)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Best of the Board
+
+/// Ranked 01… by the same relevance order MLB's board uses — the number rail
+/// IS the rank, the one place ordering itself is the information.
+private struct FootballHubBestOf: View {
     let rows: [Signal]
     let accent: Color
     let onTap: (Signal) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
-            FootballHubSectionTitle(title: "Game Board", count: rows.count)
+            FootballHubSectionTitle(title: "Best of the Board", count: rows.count)
             VStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, signal in
-                    FootballHubSignalRow(signal: signal, accent: accent) { onTap(signal) }
+                    FootballHubBestOfRow(rank: index + 1, signal: signal, accent: accent) { onTap(signal) }
                     if index < rows.count - 1 { FootballHubDivider() }
                 }
             }
@@ -688,41 +860,46 @@ private struct FootballHubGameBoard: View {
     }
 }
 
-private struct FootballHubSignalRow: View {
+private struct FootballHubBestOfRow: View {
+    let rank: Int
     let signal: Signal
     let accent: Color
     let onTap: () -> Void
 
     private var compactValue: String? {
         let value = signal.value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty, value.count <= 14, !signal.headline.localizedCaseInsensitiveContains(value) else {
-            return nil
-        }
+        guard !value.isEmpty, value.count <= 14,
+              !footballHubValueEchoesHeadline(value, signal.headline) else { return nil }
         return value
     }
 
     var body: some View {
         Button(action: onTap) {
-            HStack(alignment: .center, spacing: 12) {
-                Text(footballHubKindLabel(signal.kind))
-                    .font(GaryFonts.mono(8.5, bold: true))
-                    .tracking(0.65)
-                    .foregroundStyle(accent)
-                    .frame(width: 76, alignment: .leading)
-                    .lineLimit(2)
+            HStack(alignment: .top, spacing: 12) {
+                Text(String(format: "%02d", rank))
+                    .font(GaryFonts.data(12.5, .semibold))
+                    .foregroundStyle(.white.opacity(0.42))
+                    .frame(width: 22, alignment: .leading)
+                    .padding(.top, 2)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    if !signal.game.isEmpty {
-                        Text(signal.game.uppercased())
+                    HStack(spacing: 8) {
+                        Text(footballHubKindLabel(signal.kind))
                             .font(GaryFonts.mono(8.5, bold: true))
-                            .tracking(0.55)
-                            .foregroundStyle(.white.opacity(0.42))
-                            .lineLimit(1)
+                            .tracking(0.65)
+                            .foregroundStyle(accent)
+                        if !signal.game.isEmpty {
+                            Text(signal.game.uppercased())
+                                .font(GaryFonts.mono(8.5, bold: true))
+                                .tracking(0.55)
+                                .foregroundStyle(.white.opacity(0.42))
+                                .lineLimit(1)
+                        }
                     }
                     Text(signal.headline)
                         .font(GaryFonts.ui(14.5, .semibold))
                         .foregroundStyle(GaryColors.warmWhite)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                         .multilineTextAlignment(.leading)
                 }
 
@@ -730,14 +907,227 @@ private struct FootballHubSignalRow: View {
 
                 if let compactValue {
                     Text(compactValue)
-                        .font(GaryFonts.data(12.5, .bold))
+                        .font(GaryFonts.data(14, .bold))
                         .foregroundStyle(signal.tone.color)
                         .lineLimit(1)
+                        .padding(.top, 12)
                 }
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.3))
+                    .padding(.top, 14)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - The Mismatch
+
+/// The day's widest unit gaps, one collision per game — the football analog
+/// of MLB's Regression Board. Reads run open here; this is the page's
+/// showcase board, so nothing on it collapses.
+private struct FootballHubMismatchBoard: View {
+    let rows: [Signal]
+    let accent: Color
+    let onTap: (Signal) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            FootballHubSectionTitle(title: "The Mismatch", count: rows.count)
+            VStack(spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, signal in
+                    FootballHubMismatchRow(signal: signal) { onTap(signal) }
+                    if index < rows.count - 1 { FootballHubDivider() }
+                }
+            }
+            .footballHubPanel(accent: accent)
+            .padding(.horizontal, GaryLayout.gutter)
+        }
+    }
+}
+
+private struct FootballHubMismatchRow: View {
+    let signal: Signal
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 7) {
+                if !signal.game.isEmpty {
+                    Text(signal.game.uppercased())
+                        .font(GaryFonts.mono(8.5, bold: true))
+                        .tracking(0.55)
+                        .foregroundStyle(.white.opacity(0.42))
+                }
+                Text(signal.headline)
+                    .font(GaryFonts.text(14.5, .semibold))
+                    .foregroundStyle(GaryColors.warmWhite)
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
+                if !signal.value.isEmpty {
+                    Text(signal.value)
+                        .font(GaryFonts.display(22))
+                        .tracking(0.5)
+                        .foregroundStyle(GaryColors.gold)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                }
+                if !signal.detail.isEmpty {
+                    Text(signal.detail)
+                        .font(GaryFonts.text(12.5))
+                        .foregroundStyle(.white.opacity(0.62))
+                        .lineSpacing(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - The beats
+
+/// One human section of the long tail. Four rows lead; the rest sit behind
+/// SEE ALL so a 40-game Saturday can't wall the page.
+private struct FootballHubBeatSection: View {
+    let beat: FootballHubPage.BeatDef
+    let rows: [Signal]
+    let accent: Color
+    let onTap: (Signal) -> Void
+    @State private var showAll = false
+
+    private var visible: [Signal] { showAll ? rows : Array(rows.prefix(4)) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            FootballHubSectionTitle(title: beat.title, count: rows.count)
+            VStack(spacing: 0) {
+                ForEach(Array(visible.enumerated()), id: \.element.id) { index, signal in
+                    FootballHubSignalRow(signal: signal, accent: accent) { onTap(signal) }
+                    if index < visible.count - 1 { FootballHubDivider() }
+                }
+                if rows.count > 4 {
+                    FootballHubDivider()
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) { showAll.toggle() }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(showAll ? "SHOW FEWER" : "SEE ALL \(rows.count)")
+                                .font(GaryFonts.mono(9, bold: true))
+                                .tracking(0.9)
+                                .foregroundStyle(GaryColors.gold)
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(GaryColors.gold)
+                                .rotationEffect(.degrees(showAll ? 180 : 0))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .footballHubPanel(accent: accent)
+            .padding(.horizontal, GaryLayout.gutter)
+        }
+    }
+}
+
+/// One board row. Tap opens the Gary read in place (the MLB drop-down law:
+/// the read elaborates, never restates); rows without a read navigate to the
+/// edge overlay instead.
+private struct FootballHubSignalRow: View {
+    let signal: Signal
+    let accent: Color
+    let onTap: () -> Void
+    @State private var expanded = false
+
+    private var read: String {
+        let detail = signal.detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        return detail == signal.headline ? "" : detail
+    }
+
+    private var compactValue: String? {
+        let value = signal.value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty, value.count <= 14,
+              !footballHubValueEchoesHeadline(value, signal.headline) else {
+            return nil
+        }
+        return value
+    }
+
+    var body: some View {
+        Button {
+            if read.isEmpty {
+                onTap()
+            } else {
+                withAnimation(.easeInOut(duration: 0.18)) { expanded.toggle() }
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .center, spacing: 12) {
+                    Text(footballHubKindLabel(signal.kind))
+                        .font(GaryFonts.mono(8.5, bold: true))
+                        .tracking(0.65)
+                        .foregroundStyle(accent)
+                        .frame(width: 76, alignment: .leading)
+                        .lineLimit(2)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        if !signal.game.isEmpty {
+                            Text(signal.game.uppercased())
+                                .font(GaryFonts.mono(8.5, bold: true))
+                                .tracking(0.55)
+                                .foregroundStyle(.white.opacity(0.42))
+                                .lineLimit(1)
+                        }
+                        Text(signal.headline)
+                            .font(GaryFonts.ui(14.5, .semibold))
+                            .foregroundStyle(GaryColors.warmWhite)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .multilineTextAlignment(.leading)
+                    }
+
+                    Spacer(minLength: 4)
+
+                    if let compactValue {
+                        Text(compactValue)
+                            .font(GaryFonts.data(12.5, .bold))
+                            .foregroundStyle(signal.tone.color)
+                            .lineLimit(1)
+                    }
+
+                    if read.isEmpty {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.3))
+                    } else {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.3))
+                            .rotationEffect(.degrees(expanded ? 180 : 0))
+                    }
+                }
+
+                if expanded, !read.isEmpty {
+                    Text(read)
+                        .font(GaryFonts.text(12.5))
+                        .foregroundStyle(.white.opacity(0.68))
+                        .lineSpacing(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 8)
+                }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 11)
@@ -935,6 +1325,16 @@ private extension View {
 
 private func footballHubNormalized(_ value: String) -> String {
     value.lowercased().filter { $0.isLetter || $0.isNumber }
+}
+
+/// The MLB echo law: a right-side value never repeats the headline's number.
+/// Checks the whole value AND its leading numeric token ("3.7 Y/A" echoes
+/// "…+3.7 yards every time it drops back").
+private func footballHubValueEchoesHeadline(_ value: String, _ headline: String) -> Bool {
+    if headline.localizedCaseInsensitiveContains(value) { return true }
+    let token = value.drop(while: { !$0.isNumber }).prefix(while: { $0.isNumber || $0 == "." })
+    guard !token.isEmpty else { return false }
+    return headline.contains(token)
 }
 
 private func footballHubSide(_ abbreviation: String?, _ name: String?, league: String?) -> String {

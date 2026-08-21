@@ -399,11 +399,13 @@ struct HubView: View {
     /// fantasy signals open their own grounded evidence. Team-backed rows use
     /// the team card, with the compact signal overlay as the safe fallback.
     private func openSignal(_ s: Signal) {
-        // Football fantasy lanes are already the grounded product: their
-        // headline/detail/meta describe the verified role or scoring context.
-        // The legacy player-card pipeline is MLB-only, so routing an NFL/NCAAF
-        // row there creates a permanent "building" screen that can never fill.
-        if (sel == .nfl || sel == .ncaaf), Self.fantasyKinds.contains(s.kind) {
+        // EVERY football row opens the edge overlay: the player-card and
+        // team-card pipelines are MLB intel surfaces (player_insight_cards +
+        // the team seed) and can never fill for NFL/NCAAF ids — routing a
+        // football row there parks the user on a permanent "building" screen.
+        // (This used to guard only the fantasy lanes; quarterback/availability
+        // rows carry player_id and fell through the same hole.)
+        if sel == .nfl || sel == .ncaaf {
             selectedSignal = s
         }
         else if s.playerId != nil { breakdownSignal = s }
@@ -737,21 +739,23 @@ struct HubView: View {
         let anchor: String
         switch lane {
         case .regression:                            anchor = "regression"
-        case .streak:                                anchor = "streaks"
+        case .streak:                                anchor = (sel == .nfl || sel == .ncaaf) ? "form" : "streaks"
         case .fantasyPickups, .twoStart,
              .closerWatch, .returnWatch, .cutList:   anchor = "fantasy"
         case .hot, .cold, .platoon, .batterVsArm:    anchor = "bats"
         case .hrThreat:                              anchor = HubView.hrThreatsLive ? "hr" : "bats"
-        case .starterForm, .teamRecord,
+        case .starterForm,
              .bullpenFatigue, .ballpark:             anchor = sel == .wc ? "matchups" : "arms"
-        case .situational:                           anchor = (sel == .nfl || sel == .ncaaf) ? "edges" : (sel == .wc ? "matchups" : "arms")
-        case .injury:                                anchor = (sel == .nfl || sel == .ncaaf) ? "edges" : "matchups"
+        case .teamRecord:                            anchor = (sel == .nfl || sel == .ncaaf) ? "form" : (sel == .wc ? "matchups" : "arms")
+        case .situational:                           anchor = (sel == .nfl || sel == .ncaaf) ? "form" : (sel == .wc ? "matchups" : "arms")
+        case .injury:                                anchor = (sel == .nfl || sel == .ncaaf) ? "field" : "matchups"
         case .h2h, .firstInning,
              .runningGame, .parkWeather:             anchor = "matchups"
         case .tournament, .advancement:              anchor = "cup"
         case .xgRegression, .xgRecap:                anchor = "numbers"
-        case .trenches, .passRush, .mismatch:        anchor = "edges"
-        case .quarterback:                           anchor = "edges"
+        case .trenches, .passRush:                   anchor = "trenches"
+        case .mismatch:                              anchor = "mismatch"
+        case .quarterback:                           anchor = "field"
         case .coverage, .paceScript, .redZone,
              .turnoverEdge, .explosivePlay,
              .specialTeams, .coaching:               anchor = "edges"
@@ -1520,16 +1524,20 @@ struct HubView: View {
                leagueSignals.contains(where: { $0.kind == .nextSlate }) {
                 football.append(("nextSlate", "Next Slate"))
             }
+            if leagueSignals.contains(where: { FootballHubPage.storyKinds.contains($0.kind) }) {
+                football.append(("lead", "The Best"))
+            }
+            if leagueSignals.contains(where: { $0.kind == .mismatch }) {
+                football.append(("mismatch", "Mismatch"))
+            }
             if leagueSignals.contains(where: { $0.kind == .afterGary }) {
                 football.append(("afterGary", "Gary's Number"))
             }
-            let boardKinds: Set<SignalKind> = [
-                .trenches, .passRush, .quarterback, .injury, .coverage,
-                .paceScript, .redZone, .turnoverEdge, .explosivePlay,
-                .specialTeams, .situational, .coaching,
-            ]
-            if leagueSignals.contains(where: { boardKinds.contains($0.kind) }) {
-                football.append(("edges", "Game Board"))
+            for beat in FootballHubPage.beatDefs {
+                let kinds = Set(beat.kinds)
+                if leagueSignals.contains(where: { kinds.contains($0.kind) }) {
+                    football.append((beat.anchor, beat.title.replacingOccurrences(of: "The ", with: "")))
+                }
             }
             let hasLiveSweat = leagueSignals.contains { signal in
                 guard signal.kind == .theSweat else { return false }

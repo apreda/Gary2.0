@@ -159,8 +159,59 @@ describe('Football Fantasy density', () => {
   });
 
   it('opens grounded football evidence instead of the MLB-only player-card placeholder', () => {
-    expect(hubView).toContain('(sel == .nfl || sel == .ncaaf), Self.fantasyKinds.contains(s.kind)');
-    expect(hubView).toMatch(/Self\.fantasyKinds\.contains\(s\.kind\)[\s\S]*?selectedSignal = s[\s\S]*?else if s\.playerId != nil \{ breakdownSignal = s \}/);
+    // Aug 20: the guard grew from fantasy-only to EVERY football row —
+    // quarterback/availability rows carry player_id and fell through to the
+    // MLB-only PlayerInsightSheet (a permanent "building" screen for NFL ids).
+    expect(hubView).toMatch(/if sel == \.nfl \|\| sel == \.ncaaf \{\s*\n\s*selectedSignal = s\s*\n\s*\}\s*\n\s*else if s\.playerId != nil \{ breakdownSignal = s \}/);
+    expect(hubView).not.toContain('(sel == .nfl || sel == .ncaaf), Self.fantasyKinds.contains(s.kind)');
+  });
+});
+
+describe('Football Hub editorial layer', () => {
+  // Aug 20: the football Hub carries MLB's editorial order — THE LEAD, Best
+  // of the Board, THE MISMATCH, then the beats — instead of one flat board.
+  it('mounts the editorial sections in MLB order', () => {
+    const body = footballHub.slice(
+      footballHub.indexOf('var body: some View'),
+      footballHub.indexOf('private func deduped'),
+    );
+    const order = ['FootballHubLead', 'FootballHubBestOf', 'FootballHubMismatchBoard',
+      'FootballHubReceiptSection', 'FootballHubBeatSection', 'FootballHubSweatSection'];
+    const positions = order.map((name) => body.indexOf(name));
+    positions.forEach((p) => expect(p).toBeGreaterThan(-1));
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+  });
+
+  it('keeps every football lane on the page — mismatch, streak, and record included', () => {
+    // These three were silently dropped by the old boardRank switch.
+    expect(footballHub).toContain('deduped(signals.filter { $0.kind == .mismatch })');
+    expect(footballHub).toMatch(/storyKinds: Set<SignalKind> = \[[\s\S]*?\.streak, \.teamRecord,/);
+    expect(footballHub).not.toContain('boardRank');
+  });
+
+  it('shows the Gary read in place and never clips a headline', () => {
+    const row = footballHub.slice(
+      footballHub.indexOf('private struct FootballHubSignalRow'),
+      footballHub.indexOf('// MARK: - Live proof'),
+    );
+    expect(row).toContain('if expanded, !read.isEmpty {');
+    expect(row).toMatch(/Text\(signal\.headline\)[\s\S]*?\.fixedSize\(horizontal: false, vertical: true\)/);
+    expect(row).not.toMatch(/Text\(signal\.headline\)\s*\n\s*\.font[\s\S]{0,200}?\.lineLimit\(2\)/);
+  });
+
+  it('caps a beat at four rows behind SEE ALL so a full Saturday cannot wall the page', () => {
+    expect(footballHub).toContain('showAll ? rows : Array(rows.prefix(4))');
+    expect(footballHub).toContain('"SEE ALL \\(rows.count)"');
+  });
+
+  it('counting lanes make the board but never headline the page', () => {
+    const lead = footballHub.slice(
+      footballHub.indexOf('private static let leadKinds'),
+      footballHub.indexOf('/// Story rows in arrival order'),
+    );
+    expect(lead).not.toContain('.streak');
+    expect(lead).not.toContain('.teamRecord');
+    expect(lead).not.toContain('.situational');
   });
 });
 
