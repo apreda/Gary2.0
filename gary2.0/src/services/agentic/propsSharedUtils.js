@@ -121,33 +121,34 @@ export function applyPropsPerGameConstraint(picks, gameId) {
     return { constrainedPicks: [], droppedPicks: [], garySpecials: [] };
   }
 
-  // HR RULE (user, Jun 18): AT MOST ONE home-run prop per game. HR props are
-  // lottery-style, so the dedicated MLB HR lane should surface a single best HR
-  // threat per matchup — never stack two on the same game. Skim HR off the top,
-  // keep the highest-confidence one per game, then run the normal 2-per-game
-  // logic on the rest. (HR props only reach this lane — the regular MLB slate
-  // excludes them — so this is effectively the MLB HR lane's per-game cap.)
+  // FUN-LANE RULE: AT MOST ONE fun-lane prop per game, kept OUTSIDE the
+  // 2-per-game core cap. HR (user, Jun 18): lottery-style — surface a single
+  // best HR threat per matchup, never stack two. Anytime TD (founder GO,
+  // Aug 20 2026 — football on the same system as MLB): the exact analog, one
+  // best scorer per game, never competing with core props for the 2 slots.
+  // Skim the fun lane off the top, keep the highest-confidence one per game,
+  // then run the normal 2-per-game logic on the rest.
   const hrConstrained = [];
   const hrDropped = [];
   {
-    const hrByGame = {};
+    const funByGame = {};
     const rest = [];
     for (const pick of picks) {
-      const isHr = (pick.prop || '').toLowerCase().includes('home_run')
-        || (pick.prop_type || '').toLowerCase().includes('home_run');
+      const token = `${(pick.prop || '')} ${(pick.prop_type || '')}`.toLowerCase();
+      const isFunLane = token.includes('home_run') || /anytime_?(?:td|touchdown)/.test(token);
       const mu = (pick.matchup || '').toLowerCase();
-      if (isHr && mu) { (hrByGame[mu] = hrByGame[mu] || []).push(pick); }
+      if (isFunLane && mu) { (funByGame[mu] = funByGame[mu] || []).push(pick); }
       else { rest.push(pick); }
     }
-    for (const mu of Object.keys(hrByGame)) {
-      const g = hrByGame[mu].sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+    for (const mu of Object.keys(funByGame)) {
+      const g = funByGame[mu].sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
       hrConstrained.push(g[0]);
       if (g.length > 1) {
         hrDropped.push(...g.slice(1));
-        console.log(`[Props Constraint] 🏠 1-HR-per-game: kept ${g[0].player} ${g[0].prop} (${Math.round((g[0].confidence || 0) * 100)}%), dropped ${g.length - 1} other HR pick(s) for ${mu}`);
+        console.log(`[Props Constraint] 🏠 1-fun-lane-per-game: kept ${g[0].player} ${g[0].prop} (${Math.round((g[0].confidence || 0) * 100)}%), dropped ${g.length - 1} other fun-lane pick(s) for ${mu}`);
       }
     }
-    picks = rest;  // the 2-per-game logic below now only sees non-HR picks
+    picks = rest;  // the 2-per-game logic below now only sees core picks
   }
 
   // Group picks by GAME (using matchup field) — NOT by team

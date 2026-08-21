@@ -4,12 +4,21 @@ import { readFileSync } from 'node:fs';
 const source = (path) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 
 describe('NCAAF props runner wiring', () => {
-  it('uses the shared nonzero-outcome runner with the NCAAF context', () => {
+  it('uses the shared nonzero-outcome runner on the props desk lane', () => {
     const runner = source('scripts/run-agentic-ncaaf-props.js');
     expect(runner).toContain("sportKey: 'americanfootball_ncaaf'");
     expect(runner).toContain("leagueLabel: 'NCAAF'");
-    expect(runner).toContain('buildContext: buildNcaafPropsAgenticContext');
+    // Desk-lane cutover (Aug 20 2026): no context builder param — the desk is
+    // the context (footballPropsDesk still calls the NCAAF validator inside).
+    expect(runner).not.toContain('buildContext');
     expect(runner).toContain('exitAfterFlushing(1)');
+  });
+
+  it('routes NCAAF through the football props desk in the CLI', () => {
+    const cli = source('scripts/run-agentic-props-cli.js');
+    expect(cli).toContain('FOOTBALL_PROP_LEAGUES.has(leagueLabel)');
+    expect(cli).toContain('analyzeFootballPropsDesk(game, playerProps');
+    expect(cli).toContain('playerProps = deskRes.boardProps');
   });
 
   it('dispatches NCAAF to the current-event market adapter', () => {

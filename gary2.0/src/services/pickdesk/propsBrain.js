@@ -171,8 +171,12 @@ const isHrType = (propType) => norm(propType).includes('home_run');
  * book offers both) to one primary market per player+prop_type.
  * Returns { rows, stats } — stats is the board-composition record stamped
  * onto stored picks so the ledger can segment board eras.
+ *
+ * `isFunLane` names the sport's sanctioned one-sided market family (MLB: home
+ * runs; football: anytime TD) — the only markets whose yes-priced rungs stay
+ * on the board without an opposing price.
  */
-export function selectPrimaryMarkets(marketRows) {
+export function selectPrimaryMarkets(marketRows, { isFunLane = isHrType } = {}) {
   const pairs = new Map();
   for (const p of marketRows || []) {
     if (!p?.player || !p?.prop_type) continue;
@@ -185,8 +189,8 @@ export function selectPrimaryMarkets(marketRows) {
   let droppedOneSidedPairs = 0;
   let droppedNoTakeableSide = 0;
   for (const candidates of pairs.values()) {
-    if (isHrType(candidates[0].prop_type)) {
-      // Fun-lane exception: every HR rung with a takeable yes-price stays.
+    if (isFunLane(candidates[0].prop_type)) {
+      // Fun-lane exception: every rung with a takeable yes-price stays.
       for (const c of candidates) {
         if (propOddsService.isOddsTakeable(c.over_odds, c.prop_type)) rows.push(c);
       }
@@ -235,7 +239,17 @@ export function selectPrimaryMarkets(marketRows) {
  * Sides are always labeled; a one-priced HR rung prints "Over +240", never a
  * bare "+240" that reads as the default bet.
  */
-export function buildPropBoardV2(marketRows, { lineupNames = null, hrOnly = false, chronoByPlayer = null } = {}) {
+export function buildPropBoardV2(marketRows, {
+  lineupNames = null,
+  hrOnly = false,
+  chronoByPlayer = null,
+  // Sport hooks (football desk, Aug 20 2026) — every default is the exact MLB
+  // behavior, so the MLB board is byte-identical with none of them passed.
+  isFunLane = undefined,
+  clearedClauseFor = null,
+  headerLabel = `tonight's live prop prices`,
+  excludedNote = `(Players not in tonight's lineups are off the board.)`,
+} = {}) {
   let rows = (marketRows || []).filter(p => p?.player && p?.prop_type);
   if (hrOnly) rows = rows.filter(p => isHrType(p.prop_type));
   let excluded = 0;
@@ -246,7 +260,7 @@ export function buildPropBoardV2(marketRows, { lineupNames = null, hrOnly = fals
   }
   if (!rows.length) return { text: '', players: new Set(), stats: null };
 
-  const { rows: primaries, stats } = selectPrimaryMarkets(rows);
+  const { rows: primaries, stats } = selectPrimaryMarkets(rows, isFunLane ? { isFunLane } : {});
 
   const byPlayer = new Map();
   for (const p of primaries) {
@@ -259,7 +273,9 @@ export function buildPropBoardV2(marketRows, { lineupNames = null, hrOnly = fals
     if (!price) continue;
     const key = norm(p.player);
     if (!byPlayer.has(key)) byPlayer.set(key, { player: p.player, team: p.team, entries: [] });
-    const cleared = chronoByPlayer ? clearedClause(chronoByPlayer.get(key), p.prop_type, p.line) : null;
+    const cleared = clearedClauseFor
+      ? clearedClauseFor(key, p.prop_type, p.line)
+      : (chronoByPlayer ? clearedClause(chronoByPlayer.get(key), p.prop_type, p.line) : null);
     byPlayer.get(key).entries.push(`${p.prop_type} ${p.line} (${price})${cleared ? ` — ${cleared}` : ''}`);
   }
   if (!byPlayer.size) return { text: '', players: new Set(), stats };
@@ -268,9 +284,9 @@ export function buildPropBoardV2(marketRows, { lineupNames = null, hrOnly = fals
     .sort((a, b) => a.player.localeCompare(b.player))
     .map(g => `  ${g.player}${g.team ? ` (${g.team})` : ''}: ${g.entries.join(' · ')}`);
 
-  const note = excluded > 0 ? `\n(Players not in tonight's lineups are off the board.)` : '';
+  const note = excluded > 0 ? `\n${excludedNote}` : '';
   return {
-    text: `═══ THE PROP BOARD (tonight's live prop prices) ═══\n${lines.join('\n')}${note}`,
+    text: `═══ THE PROP BOARD (${headerLabel}) ═══\n${lines.join('\n')}${note}`,
     players: new Set(byPlayer.keys()),
     stats,
     // The priced markets themselves, for the menu snapshot. Tonight's prices
@@ -294,7 +310,7 @@ const MENU_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const MENU_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
   || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
 
-async function snapshotPropMenu({ markets, matchup, gameId, gameDate }) {
+export async function snapshotPropMenu({ markets, matchup, gameId, gameDate, league = 'MLB' }) {
   if (!MENU_URL || !MENU_KEY || !Array.isArray(markets) || !markets.length || gameId == null) return;
   try {
     let rows = markets.map((m) => ({
@@ -314,7 +330,7 @@ async function snapshotPropMenu({ markets, matchup, gameId, gameDate }) {
     let existingId = null;
     try {
       const prior = await fetch(
-        `${MENU_URL}/rest/v1/prop_menu?select=id,markets&league=eq.MLB`
+        `${MENU_URL}/rest/v1/prop_menu?select=id,markets&league=eq.${encodeURIComponent(league)}`
           + `&bdl_game_id=eq.${encodeURIComponent(gameId)}`,
         { headers: { apikey: MENU_KEY, Authorization: `Bearer ${MENU_KEY}` } },
       );
@@ -342,7 +358,7 @@ async function snapshotPropMenu({ markets, matchup, gameId, gameDate }) {
         Prefer: 'return=minimal',
       },
       body: JSON.stringify({
-        game_date: gameDate, league: 'MLB', matchup,
+        game_date: gameDate, league, matchup,
         bdl_game_id: gameId ?? null, markets: rows,
       }),
     });
@@ -368,6 +384,118 @@ const parsePicksJson = (t) => {
 const todayLong = () => new Date().toLocaleDateString('en-US', {
   weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/New_York',
 });
+export { todayLong };
+
+/**
+ * ONE props desk brain pass over a finished desk+board user message — the
+ * shared core of every props desk lane (MLB since Jul 26 2026, football since
+ * Aug 20 2026). Owns: session creation, JSON parse + one re-ask, the statAudit
+ * rail with ONE corrective retry then per-pick drops, the subscription-first
+ * model cascade with overload retries, and the responder stamp. Sport adapters
+ * own everything upstream (desk text, board, validation) and downstream (pick
+ * mapping, lane stamps).
+ */
+export async function runPropsDeskBrain({ systemPrompt, userMessage, corpus, recentScores = null }) {
+  // Rail: audit every pick's rationale against the desk+board corpus; on any
+  // issue, ONE corrective retry for the full set, then drop failing picks.
+  const auditOne = (rationale) => {
+    const a = auditPickRationale({ rationale }, corpus);
+    const c = recentScores ? auditCountClaims(rationale, recentScores) : [];
+    return { issues: [...a.retryable, ...c], warnings: a.warnOnly?.length ? a.warnOnly : null };
+  };
+
+  // One full props pass on one model. Invalid output is a provider failure,
+  // not an organic pass, so it must enter the same cascade as quota/network
+  // failures after the one repair request is exhausted.
+  const runPropsPass = async (modelName) => {
+    const session = await createGeminiSession({
+      modelName,
+      systemPrompt,
+      tools: [],
+      thinkingLevel: modelName.startsWith('gemini') ? 'high' : 'xhigh',
+    });
+
+    const usage = { in: 0, out: 0 };
+    const bump = (res) => { usage.in += res.usage?.prompt_tokens || 0; usage.out += res.usage?.completion_tokens || 0; };
+
+    let res = await sendToSessionWithRetry(session, userMessage, {});
+    bump(res);
+    let parsed = parsePicksJson(res.content);
+    if (!parsed) {
+      res = await sendToSessionWithRetry(session, 'Return your final JSON now.', {});
+      bump(res);
+      parsed = parsePicksJson(res.content);
+      if (!parsed) throw new Error('parse: no valid picks JSON after re-ask');
+    }
+    let explicitPass = parsed.picks.length === 0;
+
+    let audits = parsed.picks.map(p => auditOne(p.rationale));
+    if (audits.some(a => a.issues.length)) {
+      const allIssues = audits.flatMap(a => a.issues);
+      console.warn(`   [Rail] ${allIssues.length} issue(s) across ${audits.filter(a => a.issues.length).length} pick(s) — one corrective retry`);
+      res = await sendToSessionWithRetry(session, buildStatAuditRetryMessage(allIssues), {});
+      bump(res);
+      const rp = parsePicksJson(res.content);
+      if (rp) {
+        parsed = rp;
+        explicitPass = parsed.picks.length === 0;
+        audits = parsed.picks.map(p => auditOne(p.rationale));
+      }
+      const keep = parsed.picks.filter((_, i) => !audits[i].issues.length);
+      if (keep.length !== parsed.picks.length) {
+        console.warn(`   [Rail] dropped ${parsed.picks.length - keep.length} pick(s) that failed statAudit after retry`);
+      }
+      parsed = { ...parsed, picks: keep };
+      audits = audits.filter(a => !a.issues.length);
+    }
+
+    const [inRate, outRate] = DESK_COST_PER_M[modelName] || [0, 0];
+    const cost = (usage.in * inRate + usage.out * outRate) / 1e6;
+    console.log(`   [Props Brain] one call (${modelName}), ${usage.in.toLocaleString()} in / ${usage.out.toLocaleString()} out ≈ $${cost.toFixed(3)} — ${parsed.picks.length} pick(s)`);
+    return { parsed, audits, usage, explicitPass };
+  };
+
+  // Match the game-desk resilience policy: subscription primary, the other
+  // subscription provider, then the metered Gemini fallbacks. De-duplicate so
+  // an override can never retry the same exhausted model under another slot.
+  const cascade = [...new Set([GEMINI_PROPS_MODEL, ...DESK_FALLBACK_MODELS, GEMINI_PRO_FALLBACK])];
+  // RESPONDER STAMP + OVERLOAD RETRY (founder GO, Aug 12): mirrors the game
+  // lane. Server-busy errors retry the SAME brain before cascading (a 529 is
+  // not a cap), and the brain that actually answered stamps every pick — a
+  // props cascade was invisible in the ledger before this.
+  const isOverloaded = (err) => err?.isOverloaded === true
+    || (!err?.isQuotaError && /overloaded|\b(?:529|503|502)\b/i.test(err?.message || ''));
+  const OVERLOAD_RETRIES = 2;
+  const OVERLOAD_BACKOFF_MS = process.env.VITEST ? [0, 0] : [30_000, 60_000];
+  let pass = null;
+  let respondingModel = null;
+  cascadeLoop: for (let i = 0; i < cascade.length; i++) {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        pass = await runPropsPass(cascade[i]);
+        respondingModel = cascade[i];
+        if (i > 0) console.warn(`   [Props Brain] FALLBACK brain produced this pass: ${cascade[i]}`);
+        break cascadeLoop;
+      } catch (err) {
+        if (isOverloaded(err) && attempt < OVERLOAD_RETRIES) {
+          const waitMs = OVERLOAD_BACKOFF_MS[attempt] ?? 60_000;
+          console.warn(`   [Props Brain] ${cascade[i]} overloaded (server-side, attempt ${attempt + 1}/${OVERLOAD_RETRIES + 1}) — retrying the same brain in ${Math.round(waitMs / 1000)}s`);
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+          continue;
+        }
+        const reason = err?.isQuotaError ? 'quota/429'
+          : (isOverloaded(err) ? `overloaded after ${attempt + 1} attempts` : (err?.message || 'provider error'));
+        if (i < cascade.length - 1) {
+          console.warn(`   [Props Brain] ${cascade[i]} failed (${reason}) — cascading to ${cascade[i + 1]}`);
+          continue cascadeLoop;
+        }
+        console.error(`   [Props Brain] ${cascade[i]} failed (${reason}) — cascade exhausted`);
+        throw err; // props CLI's per-game catch owns the miss, unchanged
+      }
+    }
+  }
+  return { ...pass, respondingModel };
+}
 
 /** Names from the exact BDL + official-MLB fallback lineups the desk resolved. */
 export function resolvedConfirmedLineupNames(scout) {
@@ -453,106 +581,12 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
 
   const userMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskText}${gameCall}\n\n${board.text}\n\n${THE_PROPS_ASK}`;
 
-  // Rail: audit every pick's rationale against the desk+board corpus; on any
-  // issue, ONE corrective retry for the full set, then drop failing picks.
-  const corpus = [{ content: `${desk.deskText}${gameCall}\n${board.text}` }];
-  const auditOne = (rationale) => {
-    const a = auditPickRationale({ rationale }, corpus);
-    const c = desk.recentScores ? auditCountClaims(rationale, desk.recentScores) : [];
-    return { issues: [...a.retryable, ...c], warnings: a.warnOnly?.length ? a.warnOnly : null };
-  };
-
-  // One full props pass on one model. Invalid output is a provider failure,
-  // not an organic pass, so it must enter the same cascade as quota/network
-  // failures after the one repair request is exhausted.
-  const runPropsPass = async (modelName) => {
-    const session = await createGeminiSession({
-      modelName,
-      systemPrompt: buildGaryPropsSystemPrompt(todayLong()),
-      tools: [],
-      thinkingLevel: modelName.startsWith('gemini') ? 'high' : 'xhigh',
-    });
-
-    const usage = { in: 0, out: 0 };
-    const bump = (res) => { usage.in += res.usage?.prompt_tokens || 0; usage.out += res.usage?.completion_tokens || 0; };
-
-    let res = await sendToSessionWithRetry(session, userMessage, {});
-    bump(res);
-    let parsed = parsePicksJson(res.content);
-    if (!parsed) {
-      res = await sendToSessionWithRetry(session, 'Return your final JSON now.', {});
-      bump(res);
-      parsed = parsePicksJson(res.content);
-      if (!parsed) throw new Error('parse: no valid picks JSON after re-ask');
-    }
-    let explicitPass = parsed.picks.length === 0;
-
-    let audits = parsed.picks.map(p => auditOne(p.rationale));
-    if (audits.some(a => a.issues.length)) {
-      const allIssues = audits.flatMap(a => a.issues);
-      console.warn(`   [Rail] ${allIssues.length} issue(s) across ${audits.filter(a => a.issues.length).length} pick(s) — one corrective retry`);
-      res = await sendToSessionWithRetry(session, buildStatAuditRetryMessage(allIssues), {});
-      bump(res);
-      const rp = parsePicksJson(res.content);
-      if (rp) {
-        parsed = rp;
-        explicitPass = parsed.picks.length === 0;
-        audits = parsed.picks.map(p => auditOne(p.rationale));
-      }
-      const keep = parsed.picks.filter((_, i) => !audits[i].issues.length);
-      if (keep.length !== parsed.picks.length) {
-        console.warn(`   [Rail] dropped ${parsed.picks.length - keep.length} pick(s) that failed statAudit after retry`);
-      }
-      parsed = { ...parsed, picks: keep };
-      audits = audits.filter(a => !a.issues.length);
-    }
-
-    const [inRate, outRate] = DESK_COST_PER_M[modelName] || [0, 0];
-    const cost = (usage.in * inRate + usage.out * outRate) / 1e6;
-    console.log(`   [Props Brain] one call (${modelName}), ${usage.in.toLocaleString()} in / ${usage.out.toLocaleString()} out ≈ $${cost.toFixed(3)} — ${parsed.picks.length} pick(s)`);
-    return { parsed, audits, usage, explicitPass };
-  };
-
-  // Match the game-desk resilience policy: subscription primary, the other
-  // subscription provider, then the metered Gemini fallbacks. De-duplicate so
-  // an override can never retry the same exhausted model under another slot.
-  const cascade = [...new Set([GEMINI_PROPS_MODEL, ...DESK_FALLBACK_MODELS, GEMINI_PRO_FALLBACK])];
-  // RESPONDER STAMP + OVERLOAD RETRY (founder GO, Aug 12): mirrors the game
-  // lane. Server-busy errors retry the SAME brain before cascading (a 529 is
-  // not a cap), and the brain that actually answered stamps every pick — a
-  // props cascade was invisible in the ledger before this.
-  const isOverloaded = (err) => err?.isOverloaded === true
-    || (!err?.isQuotaError && /overloaded|\b(?:529|503|502)\b/i.test(err?.message || ''));
-  const OVERLOAD_RETRIES = 2;
-  const OVERLOAD_BACKOFF_MS = process.env.VITEST ? [0, 0] : [30_000, 60_000];
-  let pass = null;
-  let respondingModel = null;
-  cascadeLoop: for (let i = 0; i < cascade.length; i++) {
-    for (let attempt = 0; ; attempt++) {
-      try {
-        pass = await runPropsPass(cascade[i]);
-        respondingModel = cascade[i];
-        if (i > 0) console.warn(`   [Props Brain] FALLBACK brain produced this pass: ${cascade[i]}`);
-        break cascadeLoop;
-      } catch (err) {
-        if (isOverloaded(err) && attempt < OVERLOAD_RETRIES) {
-          const waitMs = OVERLOAD_BACKOFF_MS[attempt] ?? 60_000;
-          console.warn(`   [Props Brain] ${cascade[i]} overloaded (server-side, attempt ${attempt + 1}/${OVERLOAD_RETRIES + 1}) — retrying the same brain in ${Math.round(waitMs / 1000)}s`);
-          await new Promise((resolve) => setTimeout(resolve, waitMs));
-          continue;
-        }
-        const reason = err?.isQuotaError ? 'quota/429'
-          : (isOverloaded(err) ? `overloaded after ${attempt + 1} attempts` : (err?.message || 'provider error'));
-        if (i < cascade.length - 1) {
-          console.warn(`   [Props Brain] ${cascade[i]} failed (${reason}) — cascading to ${cascade[i + 1]}`);
-          continue cascadeLoop;
-        }
-        console.error(`   [Props Brain] ${cascade[i]} failed (${reason}) — cascade exhausted`);
-        throw err; // props CLI's per-game catch owns the miss, unchanged
-      }
-    }
-  }
-  const { parsed, audits, usage, explicitPass } = pass;
+  const { parsed, audits, usage, explicitPass, respondingModel } = await runPropsDeskBrain({
+    systemPrompt: buildGaryPropsSystemPrompt(todayLong()),
+    userMessage,
+    corpus: [{ content: `${desk.deskText}${gameCall}\n${board.text}` }],
+    recentScores: desk.recentScores || null,
+  });
 
   const picks = parsed.picks.map((p, i) => ({
     player: p.player,

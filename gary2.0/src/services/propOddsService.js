@@ -167,6 +167,20 @@ export const propOddsService = {
         return `${year}-${month}-${day}`;
       };
 
+      // BDL /games endpoints are UTC-keyed: an ET evening kickoff files under
+      // the NEXT UTC day, so a single ET-date fetch returns 0 games after
+      // ~8 PM ET (seen live Aug 20 2026 — only the exact-game-id fallback
+      // saved the lookup). Every game-locating fetch below spans both days;
+      // an exact id from the caller still wins outright.
+      const nextUtcDay = (d) => new Date(Date.parse(`${d}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
+      const fetchGamesBothDays = async (fetchForDate, dateStr) => {
+        const [dayOf, dayAfter] = await Promise.all([
+          fetchForDate(dateStr),
+          fetchForDate(nextUtcDay(dateStr)),
+        ]);
+        return [...(dayOf || []), ...(dayAfter || [])];
+      };
+
       // Normalize team names for flexible matching (uses shared city alias mappings)
       const normalizedHomeTeam = normalizeTeamName(homeTeam);
       const normalizedAwayTeam = normalizeTeamName(awayTeam);
@@ -191,10 +205,10 @@ export const propOddsService = {
         console.log(`[PropOdds] Using Ball Don't Lie for NHL player props`);
 
         const dateStr = getGameDateEST();
-        console.log(`[PropOdds] NHL: Searching for games on EST date: ${dateStr}`);
-        
+        console.log(`[PropOdds] NHL: Searching for games on EST date: ${dateStr} (+ next UTC day)`);
+
         // Find the game ID from BDL
-        const nhlGames = await ballDontLieService.getNhlGamesForDate(dateStr);
+        const nhlGames = await fetchGamesBothDays((d) => ballDontLieService.getNhlGamesForDate(d), dateStr);
 
         // Exact id from the caller wins; name matching is the manual-run fallback
         const matchingGame = gameId != null
@@ -210,15 +224,20 @@ export const propOddsService = {
         });
 
         if (!matchingGame) {
-          console.warn(`[PropOdds] No BDL game found for ${homeTeam} vs ${awayTeam}`);
-          // Fall through to Odds API fallback below
+          console.warn(`[PropOdds] No BDL NHL game found for ${homeTeam} vs ${awayTeam} — returning empty board`);
+          return [];
         } else {
           console.log(`✅ Found BDL NHL game ID: ${matchingGame.id}`);
-          
+
           // Fetch player props from BDL
           const bdlProps = await ballDontLieService.getNhlPlayerProps(matchingGame.id);
-          
-          if (bdlProps && bdlProps.length > 0) {
+
+          if (!bdlProps || bdlProps.length === 0) {
+            console.log(`[PropOdds] BDL lists 0 NHL player props for game ${matchingGame.id} — returning empty board`);
+            return [];
+          }
+
+          if (bdlProps.length > 0) {
             // Get unique player IDs to resolve names
             const playerIds = [...new Set(bdlProps.map(p => p.player_id).filter(Boolean))];
             const playerMap = await ballDontLieService.getNhlPlayersByIds(playerIds);
@@ -279,10 +298,10 @@ export const propOddsService = {
         console.log(`[PropOdds] Using Ball Don't Lie for NFL player props`);
 
         const dateStr = getGameDateEST();
-        console.log(`[PropOdds] NFL: Searching for games on EST date: ${dateStr}`);
+        console.log(`[PropOdds] NFL: Searching for games on EST date: ${dateStr} (+ next UTC day)`);
 
         // Find the game ID from BDL
-        const nflGames = await ballDontLieService.getNflGamesForDate(dateStr);
+        const nflGames = await fetchGamesBothDays((d) => ballDontLieService.getNflGamesForDate(d), dateStr);
 
         // Exact id from the caller wins; name matching is the manual-run fallback
         const matchingGame = gameId != null
@@ -298,14 +317,23 @@ export const propOddsService = {
         });
 
         if (!matchingGame) {
-          console.warn(`[PropOdds] No BDL game found for ${homeTeam} vs ${awayTeam}`);
+          console.warn(`[PropOdds] No BDL NFL game found for ${homeTeam} vs ${awayTeam} — returning empty board`);
+          return [];
         } else {
           console.log(`✅ Found BDL NFL game ID: ${matchingGame.id}`);
 
           // Fetch player props from BDL
           const bdlProps = await ballDontLieService.getNflPlayerProps(matchingGame.id);
 
-          if (bdlProps && bdlProps.length > 0) {
+          // Honest empty board: BDL matched the game but lists no props (the
+          // norm for preseason). The old fall-through printed the misleading
+          // "sport not supported" line for a fully supported league.
+          if (!bdlProps || bdlProps.length === 0) {
+            console.log(`[PropOdds] BDL lists 0 NFL player props for game ${matchingGame.id} — returning empty board`);
+            return [];
+          }
+
+          if (bdlProps.length > 0) {
             // Get unique player IDs to resolve names
             const playerIds = [...new Set(bdlProps.map(p => p.player_id).filter(Boolean))];
             const playerMap = await ballDontLieService.getNflPlayersByIds(playerIds);
@@ -372,10 +400,10 @@ export const propOddsService = {
         console.log(`[PropOdds] Using Ball Don't Lie for NBA player props`);
 
         const dateStr = getGameDateEST();
-        console.log(`[PropOdds] NBA: Searching for games on EST date: ${dateStr}`);
+        console.log(`[PropOdds] NBA: Searching for games on EST date: ${dateStr} (+ next UTC day)`);
 
         // Find the game ID from BDL
-        const nbaGames = await ballDontLieService.getNbaGamesForDate(dateStr);
+        const nbaGames = await fetchGamesBothDays((d) => ballDontLieService.getNbaGamesForDate(d), dateStr);
 
         // Exact id from the caller wins; name matching is the manual-run fallback
         const matchingGame = gameId != null
@@ -391,14 +419,20 @@ export const propOddsService = {
         });
 
         if (!matchingGame) {
-          console.warn(`[PropOdds] No BDL game found for ${homeTeam} vs ${awayTeam}`);
+          console.warn(`[PropOdds] No BDL NBA game found for ${homeTeam} vs ${awayTeam} — returning empty board`);
+          return [];
         } else {
           console.log(`✅ Found BDL NBA game ID: ${matchingGame.id}`);
 
           // Fetch player props from BDL
           const bdlProps = await ballDontLieService.getNbaPlayerProps(matchingGame.id);
 
-          if (bdlProps && bdlProps.length > 0) {
+          if (!bdlProps || bdlProps.length === 0) {
+            console.log(`[PropOdds] BDL lists 0 NBA player props for game ${matchingGame.id} — returning empty board`);
+            return [];
+          }
+
+          if (bdlProps.length > 0) {
             // Get unique player IDs to resolve names
             const playerIds = [...new Set(bdlProps.map(p => p.player_id).filter(Boolean))];
             const playerMap = await ballDontLieService.getNbaPlayersByIds(playerIds);

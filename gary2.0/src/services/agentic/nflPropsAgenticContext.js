@@ -27,8 +27,11 @@ const SPORT_KEY = 'americanfootball_nfl';
 
 // ── NFL prop type filtering ─────────────────────────────────────────────────
 
-/** Props we CAN analyze (predictable with data) */
-const VALID_NFL_PROP_TYPES = [
+/** Props we CAN analyze (predictable with data). Exported so the grading
+ * contract test can pin that EVERY publishable type maps to a canonical
+ * grader type (scripts/lib/resultsGradingReliability.js) — board and grader
+ * share one list, drift fails CI. */
+export const VALID_NFL_PROP_TYPES = [
   'passing_yards', 'player_pass_yds', 'pass_yds',
   'rushing_yards', 'player_rush_yds', 'rush_yds',
   'receiving_yards', 'player_rec_yds', 'rec_yds',

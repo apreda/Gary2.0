@@ -24,6 +24,7 @@ const { propOddsService } = await import('../src/services/propOddsService.js');
 const { getPropsConstitution, applyPropsPerGameConstraint, isExplicitPropsPass, normalizePropBetDirection, stripInternalFields } = await import('../src/services/agentic/propsSharedUtils.js');
 const { analyzeGame } = await import('../src/services/agentic/orchestrator/index.js');
 const { analyzeMlbPropsDesk, PROPS_PROMPT_SHA } = await import('../src/services/pickdesk/propsBrain.js');
+const { analyzeFootballPropsDesk, FOOTBALL_PROPS_PROMPT_SHA } = await import('../src/services/pickdesk/footballPropsDesk.js');
 
 // ERA LIVE — fresh process, module cache == disk truth. Ledger append feeds
 // the grading-side drift check (see scripts/lib/eraTruth.js). Fail-open.
@@ -33,6 +34,10 @@ try {
   console.log(`🧬 ERA LIVE: props ${PROPS_PROMPT_SHA} · commit ${gitStamp()} @ ${PROJECT_DIR}`);
   recordEraRun('props', etToday, PROPS_PROMPT_SHA);
 } catch (e) { console.log(`🧬 ERA LIVE: (unavailable — ${e.message})`); }
+
+// Football props leagues: provider-empty boards are market reality (preseason
+// NFL, small-school NCAAF Saturdays) and grade as a verified pass below.
+const FOOTBALL_PROP_LEAGUES = new Set(['NFL', 'NCAAF']);
 
 const defaultArgv = process.argv.slice(2);
 
@@ -91,9 +96,10 @@ export async function runAgenticPropsCli({
   regularOnly = false,  // If true for NFL, only generate yards/receptions props (no TDs - use when TDs already stored)
   hrOnly = false         // If true for MLB HR, only include home_runs props
 }) {
-  // MLB rides the desk lane (propsBrain) and carries no context builder;
-  // every other sport still requires one for the orchestrator path.
-  if (!sportKey || (!buildContext && sportKey !== 'baseball_mlb')) {
+  // Desk-lane sports (MLB, NFL, NCAAF) carry no context builder — the desk IS
+  // the context. NBA/NHL still require one for the orchestrator path.
+  const DESK_LANE_SPORTS = new Set(['baseball_mlb', 'americanfootball_nfl', 'americanfootball_ncaaf']);
+  if (!sportKey || (!buildContext && !DESK_LANE_SPORTS.has(sportKey))) {
     throw new Error('runAgenticPropsCli requires sportKey and buildContext');
   }
 
@@ -141,12 +147,24 @@ export async function runAgenticPropsCli({
     return outcome;
   };
 
+  // Era ledger truth for the football desk lane: football picks stamp their
+  // own prompt sha, so the drift guard needs a matching ledger entry per run
+  // (the module-scope ERA LIVE line above records the MLB desk sha).
+  if (FOOTBALL_PROP_LEAGUES.has(leagueLabel)) {
+    try {
+      const { recordEraRun } = await import('./lib/eraTruth.js');
+      console.log(`🧬 ERA LIVE (football props desk): ${FOOTBALL_PROPS_PROMPT_SHA}`);
+      recordEraRun('props', getESTDate(), FOOTBALL_PROPS_PROMPT_SHA);
+    } catch (e) { console.log(`🧬 ERA LIVE (football props desk): unavailable — ${e.message}`); }
+  }
+
+  const isDeskLane = DESK_LANE_SPORTS.has(sportKey);
   console.log(`\n🏈 Agentic ${leagueLabel} Props Runner Starting...`);
   console.log(`${'='.repeat(50)}`);
   console.log(`📅 Date: ${requestedSlateDate || getESTDate()}`);
   console.log(`🎯 Sport: ${leagueLabel}`);
   console.log(`📊 Games limit: ${limit}`);
-  console.log(`🔧 Pipeline: ORCHESTRATOR (multi-pass)`);
+  console.log(`🔧 Pipeline: ${isDeskLane ? 'PROPS DESK (one call over the desk + board)' : 'ORCHESTRATOR (multi-pass)'}`);
   console.log(`💾 Store: ${shouldStore ? 'Yes' : 'No (pass --store=1 to save)'}${useTestTable ? ' (TEST MODE → test_prop_picks)' : ''}`);
   if (cliRegularOnly && leagueLabel === 'NFL') console.log(`🏈 Mode: Regular props only (yards/receptions - TDs handled separately)`);
   if (matchupFilter) console.log(`🔍 Matchup filter: ${matchupFilter}`);
@@ -280,7 +298,29 @@ export async function runAgenticPropsCli({
         }
         console.log(`✅ Found ${playerProps.length} prop lines`);
       } catch (propsError) {
-        throw new Error(`Could not fetch prop lines for ${matchup}: ${propsError.message}`, { cause: propsError });
+        // NCAAF's market adapter throws a typed error when the matched game
+        // simply has no posted player-prop markets — that is the same
+        // no-board-exists condition as an empty NFL fetch, not a failure.
+        // Every OTHER code (credentials, unmatched event, payload mismatch)
+        // stays fatal.
+        if (FOOTBALL_PROP_LEAGUES.has(leagueLabel) && propsError?.code === 'NO_LIVE_PROP_MARKETS') {
+          playerProps = [];
+        } else {
+          throw new Error(`Could not fetch prop lines for ${matchup}: ${propsError.message}`, { cause: propsError });
+        }
+      }
+
+      // PROVIDER-EMPTY BOARD = VERIFIED PASS for football (founder GO, Aug 20
+      // 2026): books list few or no props for NFL preseason games and for many
+      // college games, so a game where the provider offers NOTHING has no
+      // board to pick from — that is a pass, not a crash (the old throw fired
+      // a props-miss alert every preseason night). A fetch FAILURE above still
+      // fails loud, and MLB keeps its hard fail: an empty MLB board on a real
+      // slate game means a provider hole, never market reality.
+      if (playerProps.length === 0 && FOOTBALL_PROP_LEAGUES.has(leagueLabel)) {
+        console.log(`↪️ No player-prop markets posted for ${matchup} — verified pass (no board exists to pick from)`);
+        passedGameIds.push(String(gameId));
+        continue;
       }
 
       // HR-only mode: filter to home_runs props only
@@ -304,12 +344,14 @@ export async function runAgenticPropsCli({
       let result;
 
       {
-        // PROPS DESK LANE (Jul 26 2026): MLB props read the SAME desk as game
-        // picks — one Sol xhigh call over buildMlbDesk + THE PROP BOARD (spec
+        // PROPS DESK LANE (MLB Jul 26 2026; NFL+NCAAF Aug 20 2026 — founder:
+        // "the same system as MLB"): props read the SAME desk as game picks —
+        // one call over the sport's dossier + THE PROP BOARD (spec
         // docs/superpowers/specs/2026-07-26-props-desk.md). The validated pool
-        // is the board's players (lineup-filtered when lineups are posted).
-        // NBA/NFL/NHL keep the orchestrator path. Every gate below (no-stats,
-        // odds reconciliation + hard gate, caps, HR routing) is shared chassis.
+        // is the board's players (MLB: lineup-filtered; football: roster/stat
+        // validated). NBA/NHL keep the orchestrator path until their revival
+        // pass. Every gate below (no-stats, odds reconciliation + hard gate,
+        // caps, HR/TD routing) is shared chassis.
         let validatedPlayerNames;
         if (sportKey === 'baseball_mlb') {
           const deskRes = await analyzeMlbPropsDesk(game, playerProps, { nocache, hrOnly });
@@ -319,6 +361,24 @@ export async function runAgenticPropsCli({
             explicitPass: deskRes.explicitPass === true,
           };
           validatedPlayerNames = deskRes.validatedPlayers || new Set();
+        } else if (FOOTBALL_PROP_LEAGUES.has(leagueLabel)) {
+          const deskRes = await analyzeFootballPropsDesk(game, playerProps, {
+            league: leagueLabel,
+            nocache,
+            regularOnly: cliRegularOnly,
+          });
+          if (deskRes.error) throw new Error(`${leagueLabel} props desk failed: ${deskRes.error}`);
+          result = {
+            picks: deskRes.picks || [],
+            explicitPass: deskRes.explicitPass === true,
+          };
+          validatedPlayerNames = deskRes.validatedPlayers || new Set();
+          // Adopt the desk's validated board for BOTH the odds reconciliation
+          // and the NCAAF player-id stamp below — it is the narrowed market
+          // set that passed roster/stat validation (exact BDL ids attached).
+          if (Array.isArray(deskRes.boardProps) && deskRes.boardProps.length) {
+            playerProps = deskRes.boardProps;
+          }
         } else {
           console.log(`[Orchestrator Props] Building context for ${matchup}...`);
           const context = await buildContext(game, playerProps, { nocache, regularOnly: cliRegularOnly });

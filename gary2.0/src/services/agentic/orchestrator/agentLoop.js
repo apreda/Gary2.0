@@ -1,4 +1,4 @@
-import { CONFIG, GEMINI_PRO_MODEL, GEMINI_PRO_FALLBACK, GEMINI_FLASH_MODEL, GEMINI_PROPS_MODEL, GAME_PICK_MODEL, GAME_ML_CAP, validateGeminiModel, RESEARCH_BRIEFING_TIMEOUT_MS } from './orchestratorConfig.js';
+import { CONFIG, GEMINI_PRO_MODEL, GEMINI_PRO_FALLBACK, GEMINI_FLASH_MODEL, GEMINI_PROPS_MODEL, GAME_PICK_MODEL, GAME_ML_CAP, DESK_FALLBACK_MODELS, validateGeminiModel, RESEARCH_BRIEFING_TIMEOUT_MS } from './orchestratorConfig.js';
 import { isExplicitPropsPass } from '../propsSharedUtils.js';
 import { rotateToBackupKey, isUsingBackupKey, resetToPrimaryKey } from '../modelConfig.js';
 import { createGeminiSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
@@ -226,6 +226,9 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
 
   let iteration = 0;
   const toolCallHistory = [];
+  // Models already exhausted by the provider-agnostic quota cascade below —
+  // an exhausted brain must never be retried under another cascade slot.
+  const triedQuotaModels = new Set();
 
   // ═══════════════════════════════════════════════════════════════════════════
   // PERSISTENT SESSION STATE TRACKING
@@ -530,6 +533,54 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           finishReason = retryResponse.finishReason;
           if (message.content || message.tool_calls) {
             messages.push(message);
+          }
+        } else if (error.isQuotaError) {
+          // ═══════════════════════════════════════════════════════════════════
+          // PROVIDER-AGNOSTIC QUOTA CASCADE (founder GO, Aug 20 2026): the two
+          // branches above only recognize the Gemini tier names, so a 429 or
+          // credits-empty on any OTHER brain (API Sol with no env override, a
+          // bridge quota cap) fell straight through to `throw` — reproduced as
+          // a silent 0-pick football slate. Walk the shared desk fallback
+          // chain instead, transplanting the textual context exactly as the
+          // Gemini branches do. Bridge models are tool-less by construction;
+          // the pass structure already tolerates a text-only brain (the
+          // football lane runs on the codex bridge in production).
+          // ═══════════════════════════════════════════════════════════════════
+          triedQuotaModels.add(currentModelName);
+          const textualContext = extractTextualSummaryForModelSwitch(messages, toolCallHistory);
+          if (textualContext.length < 2000) {
+            console.warn(`[Orchestrator] LOW CONTEXT WARNING: Only ${textualContext.length} chars for model switch`);
+          }
+          const remaining = [...new Set([...DESK_FALLBACK_MODELS, GEMINI_PRO_FALLBACK])]
+            .filter((m) => !triedQuotaModels.has(m));
+          let rescued = false;
+          for (const nextModel of remaining) {
+            try {
+              console.log(`[Orchestrator] ⚠️ ${currentModelName} quota/credits exhausted — cascading to ${nextModel}`);
+              currentSession = await createGeminiSession({ _costTracker: costTracker,
+                modelName: nextModel,
+                systemPrompt: systemPrompt + '\n\n' + textualContext,
+                tools: currentPass === 'evaluation' ? [] : activeTools,
+                thinkingLevel: 'medium'
+              });
+              currentModelName = nextModel;
+              const retryResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
+              message = { role: 'assistant', content: retryResponse.content, tool_calls: retryResponse.toolCalls };
+              finishReason = retryResponse.finishReason;
+              if (message.content || message.tool_calls) { messages.push(message); }
+              rescued = true;
+              break;
+            } catch (cascadeError) {
+              if (cascadeError.isQuotaError || cascadeError.status === 429) {
+                triedQuotaModels.add(nextModel);
+                continue; // next model in the chain
+              }
+              throw cascadeError;
+            }
+          }
+          if (!rescued) {
+            console.error(`[Orchestrator] 🚫 Quota cascade exhausted (${[...triedQuotaModels].join(', ')}) — HARD FAIL`);
+            throw new Error(`[Orchestrator] All brains in the quota cascade are exhausted (${[...triedQuotaModels].join(', ')}). Cannot produce pick.`);
           }
         } else if (error.message?.includes('MALFORMED_FUNCTION_CALL')) {
           // MALFORMED_FUNCTION_CALL after retries — tell Gary the tool call failed and continue

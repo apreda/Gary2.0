@@ -33,7 +33,9 @@ export const NCAAF_PROP_MARKETS = Object.freeze([
   'player_anytime_td',
 ]);
 
-const MARKET_TYPE_MAP = Object.freeze({
+// Exported so the grading contract test can pin that every published NCAAF
+// prop type carries BDL stat evidence (src/services/ncaafPropStats.js).
+export const MARKET_TYPE_MAP = Object.freeze({
   player_pass_yds: 'passing_yards',
   player_pass_tds: 'passing_touchdowns',
   player_pass_attempts: 'passing_attempts',
