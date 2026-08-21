@@ -1307,22 +1307,22 @@ struct FootballNextSlatePreview: View {
 /// more: the slate's signals go straight into `EdgesSection(tabbed:)`, which
 /// draws THE SHOW plus one tab per live lane and the same row feed underneath.
 ///
-/// What stays football-specific is the proof gate. A category alone never earns
-/// a market or live-state claim on this surface, so THE SWEAT and AFTER GARY
-/// must pass their structured contracts, and MARKET RANGE stays off entirely —
-/// this summary carries no authoritative slate row to prove an exact confirmed
-/// kickoff against, which the Hub and the game page do.
+/// What stays football-specific is the exclusion list. THE SWEAT and AFTER
+/// GARY are structured proof surfaces ("GROUND | 121.6 · 106.9", a receipt's
+/// line move) — they render through their own Hub and game-page components and
+/// read as gibberish through a prose row, so they never enter this feed.
+/// MARKET RANGE stays off for its own reason: this summary carries no
+/// authoritative slate row to prove an exact confirmed kickoff against, which
+/// the Hub and the game page do.
 enum FootballTodayFeed {
     static func rows(_ signals: [Signal]) -> [Signal] {
         signals.filter { signal in
             switch signal.kind {
-            case .theSweat:    return FootballProofContract.isRenderableSweat(signal, includeWatch: false)
-            case .afterGary:   return FootballProofContract.isRenderableAfterGary(signal)
-            case .marketRange: return false
+            case .theSweat, .afterGary, .marketRange: return false
             // The season series belongs to its game page, not the day's list
             // (the same rule MLB's Today feed follows).
-            case .h2h:         return false
-            default:           return true
+            case .h2h: return false
+            default: return true
             }
         }
     }

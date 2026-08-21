@@ -21078,6 +21078,16 @@ struct Signal: Identifiable {
 // top. Edges come from the real insight_connections — NO mock fallback; honest
 // empty / "90-min" states instead.
 
+/// One chip label per (kind, league). MLB's names stay exactly as locked; the
+/// two league-specific renames both existed as founder calls: WC venue intel
+/// rides .ballpark, and football availability reports ride .injury, where
+/// "REPLACEMENT" (MLB's who-fills-in lane) would misname a status report.
+func signalChipLabel(kind: SignalKind, league: HubLeagueSel?) -> String {
+    if kind == .ballpark && league == .wc { return "VENUE" }
+    if kind == .injury && (league == .nfl || league == .ncaaf) { return "AVAILABILITY" }
+    return kind.chip
+}
+
 /// A labeled list of edge cards (insight_connections), or a note when none exist yet.
 struct EdgesSection: View {
     let title: String
@@ -21117,8 +21127,6 @@ struct EdgesSection: View {
         guard let k = activeKind else { return showMix }
         return edges.filter { $0.kind == k }
     }
-    // WC tags its venue/stadium intel as .ballpark; label it "VENUE" for soccer, not "Ballpark".
-    private var isWC: Bool { edges.first?.league == .wc }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -21172,7 +21180,7 @@ struct EdgesSection: View {
     private func categoryTab(_ kind: SignalKind) -> some View {
         categoryTabLabel(
             icon: kind.icon,
-            title: (kind == .ballpark && isWC) ? "VENUE" : kind.chip,
+            title: signalChipLabel(kind: kind, league: edges.first?.league),
             active: activeKind == kind
         ) {
             selectedKind = kind
@@ -25640,7 +25648,10 @@ struct SignalRow: View {
         Button { onTap?(s.game) } label: {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
-                    Text((s.kind == .ballpark && s.league == .wc) ? "VENUE" : s.kind.chip).font(GaryFonts.mono(9, bold: true)).tracking(1.3).foregroundStyle(GaryColors.gold)
+                    // League-aware chip labels: WC's venue intel is tagged .ballpark, and
+                    // football availability reports ride .injury — MLB's "REPLACEMENT"
+                    // label would misname a status report (founder design pass, Aug 20).
+                    Text(signalChipLabel(kind: s.kind, league: s.league)).font(GaryFonts.mono(9, bold: true)).tracking(1.3).foregroundStyle(GaryColors.gold)
                     Spacer()
                     Text(s.game.uppercased()).font(GaryFonts.mono(9, bold: false)).tracking(0.6).foregroundStyle(.white.opacity(0.62)).lineLimit(1)
                 }

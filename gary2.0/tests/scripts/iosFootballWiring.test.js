@@ -176,15 +176,14 @@ describe('Football Picks overview', () => {
     expect(footballIntel).not.toContain('"Slate Read"');
   });
 
-  it('keeps unproven market and live rows off the football Today feed', () => {
+  it('keeps structured proof surfaces and market rows off the football Today feed', () => {
     const feed = sliceStruct(footballIntel, 'enum FootballTodayFeed');
-    // A category alone never earns a market or live-state claim here.
-    expect(feed).toContain('FootballProofContract.isRenderableSweat(signal, includeWatch: false)');
-    expect(feed).toContain('FootballProofContract.isRenderableAfterGary(signal)');
-    // MARKET RANGE has no authoritative slate row to prove kickoff against on
-    // this surface, and the season series belongs to its own game page.
-    expect(feed).toContain('case .marketRange: return false');
-    expect(feed).toContain('case .h2h:         return false');
+    // THE SWEAT / AFTER GARY are structured factor + receipt rows with their
+    // own Hub and game-page renderers — through MLB's prose row they read as
+    // gibberish. MARKET RANGE has no authoritative slate row to prove kickoff
+    // against here, and the season series belongs to its own game page.
+    expect(feed).toContain('case .theSweat, .afterGary, .marketRange: return false');
+    expect(feed).toContain('case .h2h: return false');
   });
 
   it('turns an NCAAF dark day into a grounded next-slate preview', () => {
