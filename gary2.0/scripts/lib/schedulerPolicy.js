@@ -347,6 +347,30 @@ export function pendingNcaafKickoffRefreshEntries(
 }
 
 /**
+ * Resolve the stable ET slate dates owned by still-pending MLB entries.
+ *
+ * The drift guard can remain alive across midnight for a delayed West Coast
+ * game. In that case the wall-clock "today" is no longer the schedule date
+ * that owns the pending game, so every official refresh must use the entry's
+ * immutable slate identity instead. Missing identity fails loudly rather than
+ * querying the wrong MLB schedule and leaving a held game unmatched forever.
+ */
+export function pendingMlbSlateDates(entries = []) {
+  const dates = new Set();
+  for (const entry of entries || []) {
+    if (isSportFetchRetryEntry(entry)) continue;
+    if (entry?.sport?.key !== 'baseball_mlb') continue;
+    if (isScheduleEntryRetired(entry)) continue;
+    const slateDate = String(entry?.slateDate || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(slateDate)) {
+      throw new TypeError(`MLB scheduler entry ${entry?.gameId ?? 'unknown'} requires a canonical slateDate`);
+    }
+    dates.add(slateDate);
+  }
+  return [...dates].sort();
+}
+
+/**
  * Give one child only the wall-clock time that is actually available before
  * the scheduler must service another deadline. The absolute deadline is the
  * earliest of:

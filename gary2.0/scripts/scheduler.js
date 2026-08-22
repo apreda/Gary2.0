@@ -35,6 +35,7 @@ import {
   nextTriggerBatch,
   laneOwnsMlbDriftGuard,
   newScheduleEntries,
+  pendingMlbSlateDates,
   pendingNcaafKickoffRefreshEntries,
   pendingEntriesForChildBudget,
   partitionNcaafKickoffReadiness,
@@ -870,9 +871,17 @@ async function startMlbDriftGuard(getPendingEntries) {
       }
       const pending = [...pendingByGame.values()];
       if (pending.length === 0) return;
-      const official = await fetchOfficialMlbStarts(getTodayETDateStr());
+      // A delayed late game can keep this queue alive across midnight. Query
+      // the stable slate date carried by each pending entry, never the new
+      // wall-clock "today", or the prior-day game becomes unmatchable and its
+      // hold can block the shared lane (and therefore the next daily plan)
+      // forever.
+      const officialBySlateDate = new Map();
+      for (const slateDate of pendingMlbSlateDates(pending)) {
+        officialBySlateDate.set(slateDate, await fetchOfficialMlbStarts(slateDate));
+      }
       for (const entry of pending) {
-        const match = matchOfficialGame(official, entry);
+        const match = matchOfficialGame(officialBySlateDate.get(entry.slateDate) || [], entry);
         if (!match) continue;
 
         const livePending = getPendingEntries();

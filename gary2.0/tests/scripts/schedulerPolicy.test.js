@@ -15,6 +15,7 @@ import {
   nextTriggerBatch,
   laneOwnsMlbDriftGuard,
   newScheduleEntries,
+  pendingMlbSlateDates,
   pendingNcaafKickoffRefreshEntries,
   partitionDecisionLaneSchedules,
   pendingEntriesForChildBudget,
@@ -571,6 +572,33 @@ describe('scheduler reliability policy', () => {
     expect(schedulerSource).toContain('NCAAF_KICKOFF_CHECK_INTERVAL_MS = 10 * 60 * 1000');
     expect(schedulerSource).toContain("'americanfootball_ncaaf',\n          slateDate,\n          { gameIds }");
     expect(schedulerSource).toContain('reanchorGameSchedule(livePending, entry, nextStart)');
+  });
+
+  it('keeps MLB drift refreshes on each pending game\'s stable slate across midnight', () => {
+    const priorSlate = {
+      ...entry({ sport: 'baseball_mlb', id: 91, start: '2026-08-23T03:30:00Z' }),
+      slateDate: '2026-08-22',
+      scheduleHold: 'delayed',
+    };
+    const currentSlate = {
+      ...entry({ sport: 'baseball_mlb', id: 92, start: '2026-08-24T00:10:00Z' }),
+      slateDate: '2026-08-23',
+    };
+    const retired = {
+      ...entry({ sport: 'baseball_mlb', id: 93 }),
+      slateDate: '2026-08-21',
+      scheduleRetired: 'postponed',
+    };
+    const nfl = entry({ sport: 'americanfootball_nfl', id: 94 });
+
+    expect(pendingMlbSlateDates([currentSlate, retired, priorSlate, nfl]))
+      .toEqual(['2026-08-22', '2026-08-23']);
+    expect(() => pendingMlbSlateDates([
+      entry({ sport: 'baseball_mlb', id: 95 }),
+    ])).toThrow(/canonical slateDate/);
+    expect(schedulerSource).toContain('for (const slateDate of pendingMlbSlateDates(pending))');
+    expect(schedulerSource).toContain('officialBySlateDate.get(entry.slateDate)');
+    expect(schedulerSource).not.toContain('fetchOfficialMlbStarts(getTodayETDateStr())');
   });
 
   it('uses official MLB interruption holds and reanchors only the live pending queue', () => {
