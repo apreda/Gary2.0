@@ -5,6 +5,7 @@
 import { ballDontLieService } from './ballDontLieService.js';
 import { ballDontLieOddsService } from './ballDontLieOddsService.js';
 import { ncaafSlateDateForInstant } from './ncaafGamePolicy.js';
+import { americanImpliedProbability, finiteMarketNumber } from './marketTruth.js';
 
 // Track in-flight requests to prevent duplicates
 const inFlightRequests = new Map();
@@ -85,22 +86,27 @@ const extractFromBookmaker = (bookmaker, homeTeam, awayTeam) => {
 
 // Check if spread and moneyline agree on which team is favored
 // NOTE: MLB is exempt — run line is always 1.5 regardless of ML favorite
-const validateSpreadMLDirection = (odds, bookmakerKey, sport) => {
-  const { spread_home, moneyline_home } = odds;
-  // Can't validate if either is missing — allow it through
-  if (spread_home == null || moneyline_home == null) return true;
+export const validateSpreadMLDirection = (odds, bookmakerKey, sport) => {
+  const spreadHome = finiteMarketNumber(odds?.spread_home);
+  const homeProbability = americanImpliedProbability(odds?.moneyline_home);
+  const awayProbability = americanImpliedProbability(odds?.moneyline_away);
+  // Can't determine direction without both sides of the moneyline — abstain
+  // from rejecting the vendor rather than guessing from the home sign alone.
+  if (spreadHome === null || homeProbability === null || awayProbability === null) return true;
   // Spread 0 (pick'em) is consistent with any ML
-  if (spread_home === 0) return true;
+  if (spreadHome === 0) return true;
   // MLB: run line is always ±1.5 regardless of who's favored on ML — skip this check
   if (sport && (sport.includes('baseball') || sport.includes('mlb'))) return true;
 
-  // ML < 0 means home favored → spread should be < 0 (home giving points)
-  // ML > 0 means home underdog → spread should be > 0 (home getting points)
-  const mlFavorsHome = moneyline_home < 0;
-  const spreadFavorsHome = spread_home < 0;
+  // Both sides can legitimately be negative around pick'em because of vig.
+  // Compare their implied probabilities instead of treating every negative
+  // home price as proof that the home team is favored.
+  if (Math.abs(homeProbability - awayProbability) < 1e-9) return true;
+  const mlFavorsHome = homeProbability > awayProbability;
+  const spreadFavorsHome = spreadHome < 0;
 
   if (mlFavorsHome !== spreadFavorsHome) {
-    console.warn(`[Odds Service] SPREAD/ML MISMATCH from ${bookmakerKey}: spread_home=${spread_home}, ML_home=${moneyline_home} — skipping vendor`);
+    console.warn(`[Odds Service] SPREAD/ML MISMATCH from ${bookmakerKey}: spread_home=${spreadHome}, ML_home=${odds.moneyline_home}, ML_away=${odds.moneyline_away} — skipping vendor`);
     return false;
   }
   return true;

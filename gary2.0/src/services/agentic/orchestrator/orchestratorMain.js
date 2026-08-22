@@ -13,6 +13,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from 'fs
 import { join } from 'path';
 import { createHash } from 'crypto';
 import { resolveNflResearchBaseline } from './footballResearchPolicy.js';
+import { homeSpreadReference } from '../../marketTruth.js';
+import { footballPromptSha } from './footballPromptSha.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SCOUT REPORT CACHE — share full scout report between game picks → props
@@ -81,6 +83,12 @@ export async function analyzeGame(game, sport, options = {}) {
   const startTime = Date.now();
   let homeTeam = game.home_team;
   let awayTeam = game.away_team;
+  // Every downstream prompt expects the spread from the HOME perspective.
+  // If a partial feed supplies only the away line, negate it instead of
+  // silently reversing the board.
+  const canonicalHomeSpread = homeSpreadReference(game, 0);
+  const isFootballGame = sport === 'americanfootball_nfl' || sport === 'NFL' ||
+    sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
 
   console.log(`\n${'═'.repeat(70)}`);
   console.log(`🐻 GARY AGENTIC ANALYSIS: ${awayTeam} @ ${homeTeam}`);
@@ -196,7 +204,7 @@ export async function analyzeGame(game, sport, options = {}) {
     if (isPropsMode) {
       userMessage = buildPass1PropsMessage(garyText, homeTeam, awayTeam, today, sport);
     } else {
-      userMessage = buildPass1Message(garyText, homeTeam, awayTeam, today, sport, game.spread_home ?? game.spread_away ?? 0, { homeSeed: game.homeSeed, awaySeed: game.awaySeed });
+      userMessage = buildPass1Message(garyText, homeTeam, awayTeam, today, sport, canonicalHomeSpread, { homeSeed: game.homeSeed, awaySeed: game.awaySeed });
     }
     // Optional sport-specific Pass 1 context (phase-aligned, not always-on)
     if (typeof constitution === 'object' && constitution.pass1Context && !isPropsMode) {
@@ -241,7 +249,7 @@ context for player-level evaluation. Investigate the game thoroughly first.
       ...options,
       gameTime: game.commence_time || null,
       // Pass spread for Pass 2.5 context (use home spread as reference, typically negative for favorite)
-      spread: game.spread_home ?? game.spread_away ?? 0,
+      spread: canonicalHomeSpread,
       // Pass game object for odds fallback in pick normalization
       game,
       // Props mode context
@@ -316,6 +324,9 @@ context for player-level evaluation. Investigate the game thoroughly first.
     // Ensure result contains the canonical matchup strings used by the UI
     result.homeTeam = homeTeam;
     result.awayTeam = awayTeam;
+    if (!result.error && isFootballGame) {
+      result._promptSha = footballPromptSha(sport);
+    }
 
     // Attach investigation artifacts for downstream logging/debugging (the
     // pick_context table + Talk-to-Gary feature that once consumed these was
@@ -425,6 +436,11 @@ export function buildSystemPrompt(constitution, sport) {
   const constitutionBlock = constitutionText && String(constitutionText).trim()
     ? `<constitution>\n${constitutionText}\n</constitution>\n\n`
     : '';
+  const isFootball = sport === 'americanfootball_nfl' || sport === 'NFL' ||
+    sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
+  const judgmentExamples = isFootball
+    ? `A read on a team's character, the feel of a spot, what one great player means to a match, or which way a game script breaks — a sharp bettor's best calls often rest on judgment the data cannot prove yet.`
+    : `A read on a team's character, the feel of a spot, what one great player means to a match, which way a game script breaks, a favorite that looks ripe to be caught sleeping — a sharp bettor's best calls often rest on judgment the data cannot prove yet.`;
 
   return `
 ${constitutionBlock}<identity>
@@ -458,7 +474,7 @@ You don't copy betting advice. You do your own homework.
 
 The rules above police FACTS: numbers, stats, rosters, injuries, results, tactical claims about THIS game. They are absolute and nothing below loosens them.
 
-Your JUDGMENT is a different thing, and it is yours. A read on a team's character, the feel of a spot, what one great player means to a match, which way a game script breaks, a favorite that looks ripe to be caught sleeping — a sharp bettor's best calls often rest on judgment the data cannot prove yet. That is not fabrication; that is the job. The bettors who only bet what the spreadsheet proves are the ones the books love.
+Your JUDGMENT is a different thing, and it is yours. ${judgmentExamples} That is not fabrication; that is the job. The bettors who only bet what the spreadsheet proves are the ones the books love.
 
 Voice judgment AS judgment — "my read is", "I think this side in this spot", "this sets up like" — never dressed up as a statistic, and never propped up with an invented number, quote, or event. One honest opinion you own outright beats three decorative stats. And when your judgment and the data point different ways, YOU decide which to trust tonight — and say so plainly on the card.
 

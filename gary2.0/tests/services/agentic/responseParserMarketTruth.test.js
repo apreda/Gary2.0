@@ -83,4 +83,72 @@ describe('game-pick market truth', () => {
       odds: 140,
     });
   });
+
+  it('rejects an ambiguous shared-mascot pick instead of defaulting to away', () => {
+    const parsed = parseGaryResponse(
+      response({ pick: 'Bulldogs +3.5 -999', type: 'spread' }),
+      'Georgia Bulldogs',
+      'Mississippi State Bulldogs',
+      'americanfootball_ncaaf',
+      {
+        spread_home: -3.5,
+        spread_away: 3.5,
+        spread_home_odds: -108,
+        spread_away_odds: -112,
+      },
+    );
+
+    expect(parsed).toBeNull();
+  });
+
+  it('preserves an explicit away line instead of deriving it from home', () => {
+    const parsed = parseGaryResponse(
+      response({ pick: 'Carolina Panthers +0.0 -999', type: 'spread' }),
+      'Buffalo Bills',
+      'Carolina Panthers',
+      'americanfootball_nfl',
+      {
+        spread_home: -3.5,
+        spread_away: 4,
+        spread_home_odds: -108,
+        spread_away_odds: -112,
+      },
+    );
+
+    expect(parsed).toMatchObject({
+      pick: 'Carolina Panthers +4 -112',
+      spread: 4,
+      spreadOdds: -112,
+    });
+  });
+
+  it('uses an away-only line and rejects a selected side with no line', () => {
+    const awayOnly = parseGaryResponse(
+      response({ pick: 'Carolina Panthers +0.0 -999', type: 'spread' }),
+      'Buffalo Bills',
+      'Carolina Panthers',
+      'americanfootball_nfl',
+      {
+        spread_home: null,
+        spread_away: 4,
+        spread_home_odds: null,
+        spread_away_odds: -112,
+      },
+    );
+    expect(awayOnly).toMatchObject({ pick: 'Carolina Panthers +4 -112', spread: 4 });
+
+    const noLine = parseGaryResponse(
+      response({ pick: 'Carolina Panthers +0.0 -999', type: 'spread' }),
+      'Buffalo Bills',
+      'Carolina Panthers',
+      'americanfootball_nfl',
+      {
+        spread_home: null,
+        spread_away: null,
+        spread_home_odds: null,
+        spread_away_odds: -112,
+      },
+    );
+    expect(noLine).toBeNull();
+  });
 });

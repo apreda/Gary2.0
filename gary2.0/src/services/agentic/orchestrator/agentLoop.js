@@ -29,8 +29,52 @@ const NBA_CASE_MIN_CHARS = 200;
  * paragraph as belonging to both teams. Falls back to whole-name word matching for
  * paragraphs that omit the nickname.
  */
-function validateBilateralCases(text = '', homeTeam = '', awayTeam = '') {
+export function validateBilateralCases(text = '', homeTeam = '', awayTeam = '', options = {}) {
   const input = String(text || '').replace(/\n?\s*\**INVESTIGATION COMPLETE\**\s*\n?/gi, '\n');
+  const requireExplicitHeadings = options.requireExplicitHeadings === true;
+
+  if (requireExplicitHeadings) {
+    const escHeading = (s) => String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const headingFor = (team) => new RegExp(
+      `(?:^|\\n)\\s*(?:#{1,6}\\s*)?(?:\\*\\*)?CASE FOR ${escHeading(String(team).toUpperCase())} COVERING THE SPREAD:(?:\\*\\*)?\\s*(?=\\n|$)`,
+      'i'
+    );
+    const homeHeading = headingFor(homeTeam).exec(input);
+    const awayHeading = headingFor(awayTeam).exec(input);
+
+    if (!homeHeading || !awayHeading) {
+      return {
+        valid: false,
+        reason: !homeHeading && !awayHeading ? 'both_headings_missing' :
+          !homeHeading ? 'home_heading_missing' : 'away_heading_missing',
+        homeLen: 0,
+        awayLen: 0
+      };
+    }
+
+    const genericCaseHeading = /(?:^|\n)\s*(?:#{1,6}\s*)?(?:\*\*)?CASE FOR [^\n:]+ COVERING THE SPREAD:(?:\*\*)?\s*(?=\n|$)/i;
+    const sectionLength = (heading) => {
+      const start = heading.index + heading[0].length;
+      const remaining = input.slice(start);
+      const nextHeading = genericCaseHeading.exec(remaining);
+      const end = nextHeading ? start + nextHeading.index : input.length;
+      return input.slice(start, end).trim().length;
+    };
+    const homeLen = sectionLength(homeHeading);
+    const awayLen = sectionLength(awayHeading);
+
+    if (homeLen >= NBA_CASE_MIN_CHARS && awayLen >= NBA_CASE_MIN_CHARS) {
+      return { valid: true, reason: '', homeLen, awayLen };
+    }
+
+    return {
+      valid: false,
+      reason: homeLen < NBA_CASE_MIN_CHARS && awayLen < NBA_CASE_MIN_CHARS ? 'both_sections_thin' :
+        homeLen < NBA_CASE_MIN_CHARS ? 'home_section_thin' : 'away_section_thin',
+      homeLen,
+      awayLen
+    };
+  }
 
   // Nickname extraction (last word of team name)
   const getNick = (team) => String(team || '').toLowerCase()
@@ -241,6 +285,51 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // Persistent pass-injection flags (survive context pruning)
   let _pass25Injected = false;
   let _pass25JustInjected = false; // True for ONE iteration after Pass 2.5 is injected (for response logging)
+
+  // Every route into Pass 2.5 goes through this one gate. Football cannot use
+  // a timeout/stall shortcut to bypass the exact two-sided Pass 1 contract.
+  // Other sports and props retain their existing progression behavior.
+  const injectPass25 = (currentAssistantText = '') => {
+    const latestAssistant = [...messages].reverse().find(m => m.role === 'assistant');
+    if (currentAssistantText && latestAssistant?.content !== currentAssistantText) {
+      messages.push({ role: 'assistant', content: currentAssistantText });
+    }
+
+    const strictFootballCases = isGamePicksMode && (isNFLSport || isNCAAFSport);
+    if (strictFootballCases) {
+      const allAssistantText = messages
+        .filter(m => m.role === 'assistant')
+        .map(m => m.content || '')
+        .join('\n\n');
+      const caseCheck = validateBilateralCases(allAssistantText, homeTeam, awayTeam, {
+        requireExplicitHeadings: true
+      });
+
+      if (!caseCheck.valid) {
+        console.warn(`[Orchestrator] ⚠️ Football bilateral case contract failed (${caseCheck.reason}; homeLen=${caseCheck.homeLen}, awayLen=${caseCheck.awayLen}) — keeping Pass 1 active`);
+        const casePrompt = bilateralFn
+          ? bilateralFn(homeTeam, awayTeam)
+          : `CASE FOR ${homeTeam.toUpperCase()} COVERING THE SPREAD:\nCASE FOR ${awayTeam.toUpperCase()} COVERING THE SPREAD:`;
+        const retryMessage = `You are still in Pass 1. Your response did not satisfy the required two-sided football case format. Do not make a pick yet.\n\n${casePrompt}\n\nUse verified evidence for both sections. Then output exactly:\nINVESTIGATION COMPLETE`;
+        messages.push({ role: 'user', content: retryMessage });
+        nextMessageToSend = retryMessage;
+        return false;
+      }
+
+      console.log(`[Orchestrator] Bilateral cases verified (homeLen=${caseCheck.homeLen}, awayLen=${caseCheck.awayLen})`);
+    }
+
+    const propsPass25Constitution = (isPropsMode && typeof propContext?.propsConstitution === 'object')
+      ? propContext.propsConstitution.pass25 || '' : '';
+    const pass25Content = isPropsMode
+      ? buildPass25PropsMessage(homeTeam, awayTeam, sport, propsPass25Constitution)
+      : buildPass25Message(homeTeam, awayTeam, sport, options.spread ?? null, options.pass25DecisionGuards || '');
+    messages.push({ role: 'user', content: pass25Content });
+    nextMessageToSend = pass25Content;
+    _pass25Injected = true;
+    _pass25JustInjected = true;
+    return true;
+  };
 
   // Investigation stall detection — nudge completion marker if investigation loops
   let _lastCategoryCount = 0;
@@ -632,15 +721,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           // Empty completion + late iteration = Gary is stuck. Force him to commit instead of looping to MAX.
           if (iteration >= effectiveMaxIterations - 3) {
             console.warn(`[Orchestrator] FORCE-PROGRESSION (empty response): iteration ${iteration}/${effectiveMaxIterations} with ${totalCalls} stats across ${categoryCount} categories — injecting Pass 2.5 to avoid pipeline timeout`);
-            const propsPass25Constitution = (isPropsMode && typeof propContext?.propsConstitution === 'object')
-              ? propContext.propsConstitution.pass25 || '' : '';
-            const pass25Content = (isPropsMode
-              ? buildPass25PropsMessage(homeTeam, awayTeam, sport, propsPass25Constitution)
-              : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || ''));
-            messages.push({ role: 'user', content: pass25Content });
-            nextMessageToSend = pass25Content;
-            _pass25Injected = true;
-            _pass25JustInjected = true;
+            injectPass25();
             continue;
           }
           // Enough investigation — tell Gary to wrap up investigation (NOT to decide)
@@ -1789,18 +1870,7 @@ INVESTIGATION COMPLETE`;
 
         if (stalledWithEnoughData) {
           console.warn(`[Orchestrator] FORCE-PROGRESSION (stall-based, tool-call path): ${_investigationStallCount} stalls, ${totalCalls} stats, ${categoryCount} categories at iter ${iteration}/${effectiveMaxIterations} — injecting Pass 2.5 directly to avoid MAX_ITERATIONS timeout`);
-          messages.push({ role: 'assistant', content: message.content });
-          // Use the mode-appropriate Pass 2.5 builder. Props gets the props
-          // evaluation prompt; game picks get the bilateral decision guards.
-          const propsPass25Constitution = (isPropsMode && typeof propContext?.propsConstitution === 'object')
-            ? propContext.propsConstitution.pass25 || '' : '';
-          const pass25Content = isPropsMode
-            ? buildPass25PropsMessage(homeTeam, awayTeam, sport, propsPass25Constitution)
-            : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || '');
-          messages.push({ role: 'user', content: pass25Content });
-          nextMessageToSend = pass25Content;
-          _pass25Injected = true;
-          _pass25JustInjected = true;
+          injectPass25(message.content);
         } else if (_investigationStallCount >= 3) {
           console.log(`[Orchestrator] Pass 1 stall detected at ${categoryCount} categories — nudging Gary to emit INVESTIGATION COMPLETE marker`);
           const casePromptStall = (isGamePicksMode && bilateralFn)
@@ -1917,9 +1987,12 @@ INVESTIGATION COMPLETE`;
       }
 
       if (markedComplete) {
-        if (isGamePicksMode) {
-          // Soft check: verify bilateral cases exist but don't block/retry if parser can't find them.
-          // Gary writes the analysis — the content is in the conversation history regardless.
+        if (isGamePicksMode && !isNFLSport && !isNCAAFSport) {
+          // Football's first-turn prompt carries an exact two-sided section
+          // contract. Do not let generic matchup prose masquerade as both
+          // cases: that failure produced one-sided preseason decisions while
+          // the old nickname counter logged a false success. Other sports
+          // retain their existing soft parser behavior.
           const allAssistantText = messages.filter(m => m.role === 'assistant').map(m => m.content || '').join('\n\n') + '\n\n' + (message.content || '');
           const caseCheck = validateBilateralCases(allAssistantText, homeTeam, awayTeam);
           if (caseCheck.valid) {
@@ -1930,17 +2003,10 @@ INVESTIGATION COMPLETE`;
         }
 
         // Explicit completion marker (text-only path) — inject Pass 2.5
-        messages.push({ role: 'assistant', content: message.content });
-        console.log(`[Orchestrator] Pipeline gate: INVESTIGATION COMPLETE received — injecting Pass 2.5 (${gateCategories} categories, ${gateCalls} calls)`);
-        const propsPass25Constitution = (isPropsMode && typeof propContext?.propsConstitution === 'object')
-          ? propContext.propsConstitution.pass25 || '' : '';
-        const pass25Content = (isPropsMode
-          ? buildPass25PropsMessage(homeTeam, awayTeam, sport, propsPass25Constitution)
-          : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || ''));
-        messages.push({ role: 'user', content: pass25Content });
-        nextMessageToSend = pass25Content;
-        _pass25Injected = true;
-        _pass25JustInjected = true;
+        const pass25Ready = injectPass25(message.content);
+        if (pass25Ready) {
+          console.log(`[Orchestrator] Pipeline gate: INVESTIGATION COMPLETE received — injecting Pass 2.5 (${gateCategories} categories, ${gateCalls} calls)`);
+        }
         continue;
       }
 
@@ -1950,16 +2016,7 @@ INVESTIGATION COMPLETE`;
       const forceProgress = (iteration >= effectiveMaxIterations - 3) && gateCalls >= 12;
       if (forceProgress) {
         console.warn(`[Orchestrator] FORCE-PROGRESSION: iteration ${iteration}/${effectiveMaxIterations} with ${gateCalls} stats across ${gateCategories} categories — injecting Pass 2.5 without INVESTIGATION COMPLETE marker to avoid pipeline timeout`);
-        messages.push({ role: 'assistant', content: message.content });
-        const propsPass25Constitution = (isPropsMode && typeof propContext?.propsConstitution === 'object')
-          ? propContext.propsConstitution.pass25 || '' : '';
-        const pass25Content = (isPropsMode
-          ? buildPass25PropsMessage(homeTeam, awayTeam, sport, propsPass25Constitution)
-          : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || ''));
-        messages.push({ role: 'user', content: pass25Content });
-        nextMessageToSend = pass25Content;
-        _pass25Injected = true;
-        _pass25JustInjected = true;
+        injectPass25(message.content);
         continue;
       }
 

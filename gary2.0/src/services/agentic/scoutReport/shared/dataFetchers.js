@@ -20,6 +20,8 @@ import {
   escapeRegex
 } from './utilities.js';
 import { getGeminiClient, groundingSearch, geminiGroundingSearch } from './grounding.js';
+import { fetchAnthropicFootballCurrentState } from './anthropicFootballGrounding.js';
+import { spreadForSide } from '../../../marketTruth.js';
 
 /**
  * Do two club names refer to the same club? (shared-mascot class, Aug 19
@@ -1553,10 +1555,25 @@ export async function fetchInjuries(homeTeam, awayTeam, sport, gameDate = null) 
 // ============================================================================
 
 export async function fetchCurrentState(homeTeam, awayTeam, sport, gameDate) {
+  const isNFL = sport === 'NFL' || sport === 'americanfootball_nfl';
+  const isNCAAF = sport === 'NCAAF' || sport === 'americanfootball_ncaaf';
+  const isFootball = isNFL || isNCAAF;
+  const footballFallback = async (reason) => {
+    console.warn(`[Scout Report] Football current state falling back to Anthropic (${reason})`);
+    const result = await fetchAnthropicFootballCurrentState({
+      homeTeam, awayTeam, sport, gameDate,
+    });
+    return result ? {
+      groundedRaw: result.data,
+      groundingUsed: true,
+      groundingProvider: result.provider,
+    } : null;
+  };
+
   const genAI = getGeminiClient();
   if (!genAI) {
     console.log('[Scout Report] Gemini not available for current state');
-    return null;
+    return isFootball ? footballFallback('Gemini unavailable') : null;
   }
 
   try {
@@ -1573,9 +1590,6 @@ export async function fetchCurrentState(homeTeam, awayTeam, sport, gameDate) {
       'NCAAF': 'college football', 'americanfootball_ncaaf': 'college football'
     }[sport] || sport;
 
-    const isNFL = sport === 'NFL' || sport === 'americanfootball_nfl';
-    const isNCAAF = sport === 'NCAAF' || sport === 'americanfootball_ncaaf';
-    const isFootball = isNFL || isNCAAF;
     const isNBA = sport === 'NBA' || sport === 'basketball_nba';
 
     console.log(`[Scout Report] Fetching CURRENT STATE for ${awayTeam} @ ${homeTeam} (2-phase: Flash search → narrative)...`);
@@ -1778,7 +1792,7 @@ RULES:
 
   } catch (error) {
     console.warn(`[Scout Report] Current state fetch failed: ${error.message}`);
-    return null;
+    return isFootball ? footballFallback(error.message) : null;
   }
 }
 
@@ -3719,20 +3733,21 @@ export function formatOdds(game, sport = '') {
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
 
   // Spread - SKIP FOR NHL (NHL is moneyline only, no puck lines)
-  let spreadValue = null;
-  let spreadOdds = null;
+  let spreadHome = null;
+  let spreadAway = null;
+  let spreadHomeOdds = null;
+  let spreadAwayOdds = null;
   if (isNHL) {
     lines.push('NHL IS MONEYLINE ONLY - No puck lines, no spreads');
-    spreadValue = null; // Explicitly null for NHL
-    spreadOdds = null;
-  } else if (game.spread_home !== undefined && game.spread_home !== null
-      && Number.isFinite(parseFloat(game.spread_home))) {
-    const homeSpread = parseFloat(game.spread_home);
-    const awaySpread = -homeSpread;
-    spreadValue = homeSpread;
-    spreadOdds = game.spread_home_odds || game.spread_odds || null;
+  } else if (spreadForSide(game, 'home') !== null || spreadForSide(game, 'away') !== null) {
+    spreadHome = spreadForSide(game, 'home');
+    spreadAway = spreadForSide(game, 'away');
+    // `spread_odds` is a legacy HOME-side field. It may fill a missing home
+    // price, but it must never be borrowed for the away ticket.
+    spreadHomeOdds = game.spread_home_odds ?? game.spread_odds ?? null;
+    spreadAwayOdds = game.spread_away_odds ?? null;
     // Always present away @ home convention for deterministic data presentation
-    lines.push(`Spread: ${game.away_team} ${awaySpread > 0 ? '+' : ''}${awaySpread.toFixed(1)} | ${game.home_team} ${homeSpread > 0 ? '+' : ''}${homeSpread.toFixed(1)} (${spreadOdds})`);
+    lines.push(`Spread: ${game.away_team} ${formatSignedSpread(spreadAway)} (${formatAmericanPrice(spreadAwayOdds)}) | ${game.home_team} ${formatSignedSpread(spreadHome)} (${formatAmericanPrice(spreadHomeOdds)})`);
   } else if (game.spreads) {
     lines.push(`Spread: ${game.spreads}`);
   } else {
@@ -3768,13 +3783,26 @@ export function formatOdds(game, sport = '') {
     lines.push('  spreadOdds: null');
   } else {
     lines.push('RAW ODDS VALUES (copy these to your JSON output):');
-    lines.push(`  spread: ${spreadValue !== null ? spreadValue : 'null'}`);
-    lines.push(`  spreadOdds: ${spreadOdds}`);
+    lines.push(`  spreadHome: ${spreadHome !== null ? spreadHome : 'null'}`);
+    lines.push(`  spreadHomeOdds: ${spreadHomeOdds ?? 'null'}`);
+    lines.push(`  spreadAway: ${spreadAway !== null ? spreadAway : 'null'}`);
+    lines.push(`  spreadAwayOdds: ${spreadAwayOdds ?? 'null'}`);
   }
   lines.push(`  moneylineHome: ${mlHome !== null ? mlHome : 'null'}`);
   lines.push(`  moneylineAway: ${mlAway !== null ? mlAway : 'null'}`);
 
   return lines.join('\n') || 'Odds not available';
+}
+
+function formatSignedSpread(value) {
+  return `${value > 0 ? '+' : ''}${value.toFixed(1)}`;
+}
+
+function formatAmericanPrice(value) {
+  if (value === null || value === undefined || value === '') return 'price unavailable';
+  const num = Number(value);
+  if (!Number.isFinite(num)) return 'price unavailable';
+  return num > 0 ? `+${num}` : String(num);
 }
 
 function formatMoneyline(ml) {

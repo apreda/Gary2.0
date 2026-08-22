@@ -26,6 +26,7 @@ import {
   classifyNcaafFbsGames,
   ncaafSlateDateForInstant,
 } from '../src/services/ncaafGamePolicy.js';
+import { classifyPickMarketSide } from './lib/pickSideClassification.js';
 
 // Now import modules that depend on env vars
 const { analyzeGame } = await import('../src/services/agentic/orchestrator/index.js');
@@ -2180,15 +2181,19 @@ async function main() {
               return false;
             }
 
-            // Determine if this is an underdog pick
-            // Spread: underdog gets + points. ML: positive odds = underdog, negative = favorite
-            const isUnderdogPick =
-              (p.type === 'spread' && p.pick.includes('+')) ||
-              (p.type === 'moneyline' && p.odds != null && Number(p.odds) > 0);
-
+            // Classify the actual market side. Searching the rendered pick for
+            // "+" also sees plus-money juice (for example -0.5 +100) and used
+            // to mislabel favorites as dogs in the production audit log.
+            const marketSide = classifyPickMarketSide(p);
             const pickType = p.type === 'moneyline' ? '💰ML' : '📊SPREAD';
-            const dogTag = isUnderdogPick ? '🐕DOG' : '🏆FAV';
-            console.log(`  ✅ PICK: ${p.pick} [${pickType}] [${dogTag}]`);
+            const sideTag = marketSide === 'underdog'
+              ? '🐕DOG'
+              : marketSide === 'favorite'
+                ? '🏆FAV'
+                : marketSide === 'pickem'
+                  ? 'PK'
+                  : 'UNKNOWN';
+            console.log(`  ✅ PICK: ${p.pick} [${pickType}] [${sideTag}]`);
 
             return true;
           });

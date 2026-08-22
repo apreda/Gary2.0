@@ -20,13 +20,54 @@ describe('formatOdds never prints NaN', () => {
     expect(text).not.toContain('NaN');
   });
 
-  it('real numbers still render as before', () => {
+  it('renders each spread with its own price', () => {
     const text = formatOdds({
       home_team: 'Houston Texans', away_team: 'Las Vegas Raiders',
-      moneyline_home: -150, moneyline_away: 130, spread_home: -3.5, spread_home_odds: -110,
+      moneyline_home: -150, moneyline_away: 130,
+      spread_home: -3.5, spread_home_odds: -110,
+      spread_away: 3.5, spread_away_odds: -118,
     }, 'americanfootball_nfl');
     expect(text).toContain('Moneyline: Las Vegas Raiders +130 | Houston Texans -150');
-    expect(text).toContain('Spread: Las Vegas Raiders +3.5 | Houston Texans -3.5 (-110)');
+    expect(text).toContain('Spread: Las Vegas Raiders +3.5 (-118) | Houston Texans -3.5 (-110)');
+    expect(text).toContain('spreadHome: -3.5');
+    expect(text).toContain('spreadHomeOdds: -110');
+    expect(text).toContain('spreadAway: 3.5');
+    expect(text).toContain('spreadAwayOdds: -118');
+    expect(text).not.toMatch(/^\s*spreadOdds:/m);
+  });
+
+  it('supports an away favorite without deriving the wrong side', () => {
+    const text = formatOdds({
+      home_team: 'Home Team', away_team: 'Away Team',
+      spread_home: 2.5, spread_home_odds: 102,
+      spread_away: -2.5, spread_away_odds: -122,
+    }, 'americanfootball_ncaaf');
+
+    expect(text).toContain('Spread: Away Team -2.5 (-122) | Home Team +2.5 (+102)');
+  });
+
+  it('never borrows the home price when the away price is missing', () => {
+    const text = formatOdds({
+      home_team: 'Houston Texans', away_team: 'Las Vegas Raiders',
+      spread_home: -1.5, spread_home_odds: 100,
+      spread_away: 1.5, spread_away_odds: null,
+    }, 'americanfootball_nfl');
+
+    expect(text).toContain('Las Vegas Raiders +1.5 (price unavailable)');
+    expect(text).toContain('Houston Texans -1.5 (+100)');
+    expect(text).toContain('spreadAwayOdds: null');
+  });
+
+  it('renders an away-only spread from the correct team perspective', () => {
+    const text = formatOdds({
+      home_team: 'Home Team', away_team: 'Away Team',
+      spread_home: null, spread_home_odds: null,
+      spread_away: 4, spread_away_odds: -112,
+    }, 'americanfootball_ncaaf');
+
+    expect(text).toContain('Spread: Away Team +4.0 (-112) | Home Team -4.0 (price unavailable)');
+    expect(text).toContain('spreadHome: -4');
+    expect(text).toContain('spreadAway: 4');
   });
 });
 

@@ -15898,21 +15898,23 @@ private struct BillfoldMarketPoint: Identifiable {
 // MARK: - Pick Text Helper (shared spread-sign fix)
 
 extension GaryPick {
-    /// Formatted pick text with spread sign correction from sportsbook odds
+    /// Formatted pick text with spread sign correction from the elected server line.
     var formattedPickParts: (pick: String, odds: String) {
         var parts = Formatters.splitPickAndOdds(self.pick)
-        // Spread sign fix using sportsbook odds (picked team perspective)
+        // The backend has already elected the authoritative best line and
+        // stores it in `spread`. A raw book row may be an outlier or even cross
+        // zero, so it is only a compatibility fallback for historical rows.
         if let pickType = self.type, pickType == "spread",
-           let books = self.sportsbook_odds, let firstSpread = books.compactMap({ $0.spread }).first {
+           let displaySpread = self.spread ?? self.sportsbook_odds?.compactMap({ $0.spread }).first {
             var text = parts.0
             if let regex = try? NSRegularExpression(pattern: #"([+-]?)(\d{1,2}\.?\d*)\s*$"#),
                let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
                let signRange = Range(match.range(at: 1), in: text),
                let fullRange = Range(match.range(at: 0), in: text) {
                 let sign = String(text[signRange])
-                let correctSign = firstSpread >= 0 ? "+" : "-"
+                let correctSign = displaySpread >= 0 ? "+" : "-"
                 if sign.isEmpty || sign != correctSign {
-                    let num = abs(firstSpread)
+                    let num = abs(displaySpread)
                     let s = num.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(num)) : String(num)
                     text = text.replacingCharacters(in: fullRange, with: "\(correctSign)\(s)")
                     parts = (text, parts.1)

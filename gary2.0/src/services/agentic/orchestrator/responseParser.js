@@ -1,4 +1,5 @@
 import { normalizeSportToLeague } from './orchestratorHelpers.js';
+import { spreadForSide } from '../../marketTruth.js';
 
 /**
  * Parse props response — extract finalize_props tool call or JSON from Gary's response
@@ -279,13 +280,16 @@ export function validatePickTeam(pickText, homeTeam, awayTeam) {
   const pickLower = pickText.toLowerCase();
   const homeWords = homeTeam.toLowerCase().split(' ');
   const awayWords = awayTeam.toLowerCase().split(' ');
-  // Check if ANY significant word (3+ chars) from home or away team appears in pick
+  // Keep the long-standing cross-sport compatibility check here. Football
+  // applies its stricter unambiguous-side requirement inside normalizePickFormat.
   const homeMatch = homeWords.some(w => w.length >= 3 && pickLower.includes(w));
   const awayMatch = awayWords.some(w => w.length >= 3 && pickLower.includes(w));
   return homeMatch || awayMatch;
 }
 
 export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds = {}) {
+  const isFootball = sport === 'americanfootball_nfl' || sport === 'NFL' ||
+    sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
   // CRITICAL: Support both legacy format (pick) and new format (final_pick)
   // The new Pass 2.5 format uses "final_pick" instead of "pick"
   if (!parsed.pick && parsed.final_pick) {
@@ -447,18 +451,30 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   // Ensure pick text includes odds if not already present
   // Use CORRECT odds for pick type — spread picks get spread odds, ML picks get ML odds
   // NEVER default to -110 or use ML odds for a spread pick
+  const selectedSide = parsed.type === 'total'
+    ? null
+    : detectPickedTeam(parsed.pick, homeTeam, awayTeam);
+  if (isFootball && parsed.type !== 'total' && selectedSide === null) {
+    console.error(`[Orchestrator] REJECTED: pick side is ambiguous in "${pickText}" for ${homeTeam} vs ${awayTeam}`);
+    return null;
+  }
+
   let odds;
+  let verifiedSpread = null;
   if (parsed.type === 'spread') {
     // The feed is authoritative. Gary may only repeat a price supplied in the
     // game market; model-authored odds are a fallback when the feed truly has
     // no side price, never an override of a verified sportsbook number.
-    const sideSpread = detectPickedTeam(parsed.pick, homeTeam, awayTeam);
-    const pickedHomeSpread = sideSpread === 'home';
+    const pickedHomeSpread = selectedSide === 'home';
+    verifiedSpread = isFootball ? spreadForSide(gameOdds, selectedSide) : null;
     odds = (pickedHomeSpread ? gameOdds.spread_home_odds : gameOdds.spread_away_odds) ?? null;
+    if (isFootball && verifiedSpread === null) {
+      console.error(`[Orchestrator] REJECTED: no verified sportsbook line for ${selectedSide} spread pick "${pickText}"`);
+      return null;
+    }
   } else {
     // For ML picks: determine which team was picked and use their ML odds
-    const sideOdds = detectPickedTeam(parsed.pick, homeTeam, awayTeam);
-    const pickedHome = sideOdds === 'home';
+    const pickedHome = selectedSide === 'home';
     odds = (pickedHome ? gameOdds.moneyline_home : gameOdds.moneyline_away) ?? null;
   }
 
@@ -483,7 +499,10 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
 
   // SPREAD SIGN VALIDATION: Ensure the spread in pick text has the correct sign
   // Gary sometimes omits the sign or uses the wrong one (especially NCAAB)
-  if (parsed.type === 'spread' && gameOdds.spread_home != null) {
+  const hasSpreadForSignValidation = isFootball
+    ? verifiedSpread !== null
+    : gameOdds.spread_home != null;
+  if (parsed.type === 'spread' && hasSpreadForSignValidation) {
     const spreadInText = pickText.match(/\s([+-]?)(\d+\.?\d*)\s/);
     if (spreadInText) {
       const currentSign = spreadInText[1]; // '+', '-', or '' (missing)
@@ -492,14 +511,20 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
       // Determine if picked team is home or away (full-name → nickname → word-fallback,
       // handling same-city collisions like Lakers vs Clippers and same-mascot NCAA cases
       // like Georgia Bulldogs vs Mississippi State Bulldogs).
-      const sideSign = detectPickedTeam(pickText, homeTeam, awayTeam);
-      let pickedHome = sideSign === 'home';
-      let pickedAway = sideSign === 'away';
+      const signSide = isFootball
+        ? selectedSide
+        : detectPickedTeam(pickText, homeTeam, awayTeam);
+      const pickedHome = signSide === 'home';
+      const pickedAway = signSide === 'away';
 
-      // Calculate correct spread from picked team's perspective
-      const homeSpread = parseFloat(gameOdds.spread_home);
-      if (!isNaN(homeSpread) && (pickedHome || pickedAway)) {
-        const correctSpread = pickedHome ? homeSpread : -homeSpread;
+      // Use the explicit selected-side line when present. Only derive by
+      // negating the opposite side when the selected-side field is absent.
+      if (pickedHome || pickedAway) {
+        const correctSpread = isFootball
+          ? verifiedSpread
+          : pickedHome
+            ? Number(gameOdds.spread_home)
+            : -Number(gameOdds.spread_home);
         const correctSign = correctSpread >= 0 ? '+' : '-';
         const correctAbs = Math.abs(correctSpread);
 
@@ -510,7 +535,8 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
           const correctStr = correctSpread >= 0 ? `+${correctAbs}` : `-${correctAbs}`;
           const newFragment = ` ${correctStr} `;
           pickText = pickText.replace(oldFragment, newFragment);
-          console.log(`[Orchestrator] 🔧 SPREAD SIGN FIX: "${oldFragment.trim()}" → "${correctStr}" (home_spread=${homeSpread}, picked=${pickedHome ? 'home' : 'away'})`);
+          const sourceLabel = isFootball ? `selected_spread=${correctSpread}` : `home_spread=${gameOdds.spread_home}`;
+          console.log(`[Orchestrator] 🔧 SPREAD SIGN FIX: "${oldFragment.trim()}" → "${correctStr}" (${sourceLabel}, picked=${pickedHome ? 'home' : 'away'})`);
         }
       }
     }
@@ -592,14 +618,16 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     odds = parseInt(odds, 10) || null;
   }
 
-  const finalSide = detectPickedTeam(pickText, homeTeam, awayTeam);
+  const finalSide = isFootball ? selectedSide : detectPickedTeam(pickText, homeTeam, awayTeam);
   const pickedHomeFinal = finalSide === 'home';
   const pickedAwayFinal = finalSide === 'away';
-  const marketSpread = pickedHomeFinal
-    ? gameOdds.spread_home
-    : pickedAwayFinal
-      ? (gameOdds.spread_away ?? (gameOdds.spread_home != null ? -Number(gameOdds.spread_home) : null))
-      : null;
+  const marketSpread = isFootball && parsed.type === 'spread'
+    ? verifiedSpread
+    : pickedHomeFinal
+      ? gameOdds.spread_home
+      : pickedAwayFinal
+        ? (gameOdds.spread_away ?? (gameOdds.spread_home != null ? -Number(gameOdds.spread_home) : null))
+        : null;
   const marketSpreadOdds = pickedHomeFinal
     ? gameOdds.spread_home_odds
     : pickedAwayFinal

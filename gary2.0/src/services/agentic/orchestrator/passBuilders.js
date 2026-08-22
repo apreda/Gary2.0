@@ -32,11 +32,11 @@ export function buildPass1Message(scoutReport, homeTeam, awayTeam, today, sport 
   }
 
   if (isNFL) {
-    return buildNflPass1(scoutReport, today);
+    return buildNflPass1(scoutReport, today, homeTeam, awayTeam, spread);
   }
 
   if (isNCAAF) {
-    return buildNcaafPass1(scoutReport, today);
+    return buildNcaafPass1(scoutReport, today, homeTeam, awayTeam, spread);
   }
 
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
@@ -210,8 +210,15 @@ INVESTIGATION COMPLETE
  * NFL-specific Pass 1 — concise spread evaluation factors
  * 7 named factors tuned to NFL market dynamics.
  */
-function buildNflPass1(scoutReport, today) {
+function buildNflPass1(scoutReport, today, homeTeam, awayTeam, spread) {
   const factors = getNflSpreadFactors();
+  const homeSpread = Number(spread);
+  const awaySpread = Number.isFinite(homeSpread) ? -homeSpread : null;
+  const formatSpread = (value) => {
+    if (!Number.isFinite(value)) return 'unposted';
+    if (value === 0) return 'PK';
+    return `${value > 0 ? '+' : ''}${value}`;
+  };
 
   return `
 <scout_report>
@@ -242,11 +249,19 @@ ${factors}
 <instructions>
 ## YOUR TASK: PASS 1 - INVESTIGATE THE SPREAD
 
+Posted spread: ${homeTeam} ${formatSpread(homeSpread)} / ${awayTeam} ${formatSpread(awaySpread)}
+
 Your end goal in this game is to choose the best side of this spread. In this pass, stay neutral: verify/disconfirm key claims and build decision-ready evidence through the factors above.
 
 Use the scout report + research briefing as your starting point, then investigate with fetch_stats where you need additional evidence to verify, disconfirm, or clarify critical gaps before synthesis.
 
 TREND AWARENESS (L5/L10): Treat recent trend data as a clue, not a conclusion. Synthesize whether it could continue, regress, or be overvalued/undervalued at this spread number. Use sample context (opponents faced, who played, game-window conditions) to ground that assessment.
+
+Before completing Pass 1, include BOTH sections under these exact headings:
+CASE FOR ${homeTeam.toUpperCase()} COVERING THE SPREAD:
+CASE FOR ${awayTeam.toUpperCase()} COVERING THE SPREAD:
+
+Each case should be 2-3 paragraphs explaining that team's strongest verified four-quarter path to covering this posted spread and the strongest verified obstacle to that path.
 
 Do NOT declare a side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
 INVESTIGATION COMPLETE
@@ -258,8 +273,15 @@ INVESTIGATION COMPLETE
  * NCAAF-specific Pass 1 — concise spread evaluation factors
  * 7 named factors tuned to college football market dynamics.
  */
-function buildNcaafPass1(scoutReport, today) {
+function buildNcaafPass1(scoutReport, today, homeTeam, awayTeam, spread) {
   const factors = getNcaafSpreadFactors();
+  const homeSpread = Number(spread);
+  const awaySpread = Number.isFinite(homeSpread) ? -homeSpread : null;
+  const formatSpread = (value) => {
+    if (!Number.isFinite(value)) return 'unposted';
+    if (value === 0) return 'PK';
+    return `${value > 0 ? '+' : ''}${value}`;
+  };
 
   return `
 <scout_report>
@@ -290,11 +312,19 @@ ${factors}
 <instructions>
 ## YOUR TASK: PASS 1 - INVESTIGATE THE SPREAD
 
+Posted spread: ${homeTeam} ${formatSpread(homeSpread)} / ${awayTeam} ${formatSpread(awaySpread)}
+
 Your end goal in this game is to choose the best side of this spread. In this pass, stay neutral: verify/disconfirm key claims and build decision-ready evidence through the factors above.
 
 Use the scout report + research briefing as your starting point, then investigate with fetch_stats where you need additional evidence to verify, disconfirm, or clarify critical gaps before synthesis.
 
 TREND AWARENESS (L5/L10): Treat recent trend data as a clue, not a conclusion. Synthesize whether it could continue, regress, or be overvalued/undervalued at this spread number. Use sample context (opponents faced, who played, game-window conditions) to ground that assessment.
+
+Before completing Pass 1, include BOTH sections under these exact headings:
+CASE FOR ${homeTeam.toUpperCase()} COVERING THE SPREAD:
+CASE FOR ${awayTeam.toUpperCase()} COVERING THE SPREAD:
+
+Each case should be 2-3 paragraphs explaining that team's strongest verified four-quarter path to covering this posted spread and the strongest verified obstacle to that path.
 
 Do NOT declare a side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
 INVESTIGATION COMPLETE
@@ -316,6 +346,8 @@ INVESTIGATION COMPLETE
 export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '', spread = 0, decisionGuards = '') {
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
+  const isFootball = sport === 'americanfootball_nfl' || sport === 'NFL' ||
+    sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
   const lineLabel = (isNHL) ? 'moneyline or puck line' : (isMLB ? 'moneyline or run line' : 'spread');
   const betTypeNote = isNHL
     ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). Choose the bet type that matches your read on the game.
@@ -345,6 +377,9 @@ Check each offered line in both directions — does your read beat the price on 
   const useOpenDecision = isNCAAB;
 
   const finalDecisionInstruction = `Final Decision: [your side at this ${lineLabel}]`;
+  const spreadOddsRule = (isNHL || isMLB)
+    ? '3. For spread picks: use "spreadOdds" value (e.g., -105, -115)'
+    : '3. For spread picks: copy the selected team\'s exact pair. A home pick uses "spreadHome" + "spreadHomeOdds"; an away pick uses "spreadAway" + "spreadAwayOdds". Never borrow the opponent\'s price or invent a missing price.';
 
   const structuredOutputFormat = `Format:
 
@@ -360,6 +395,14 @@ Check each offered line in both directions — does your read beat the price on 
 
 Your JSON must include all three fields: "final_pick", "rationale", AND "confidence_score". Missing confidence_score will cause a system error.`;
 
+  // Football receives a side-neutral synthesis. The shared wording's vivid
+  // underdog example ("price pays far more...") was harmless in two-option
+  // moneyline lanes but became an anchor in low-information preseason spread
+  // decisions. Keep every other sport byte-for-byte on its existing surface.
+  const synthesis = isFootball
+    ? `You've done your investigation and formed your read of this game. Your research assistant investigated independently and surfaced their findings. Now make the betting decision from the two posted sides. The sign of the spread is not evidence and neither side starts with a lower burden of proof. Hold each team's verified four-quarter cover path against this exact number, decide where your read differs from the market, and take the ticket you would put your own money on. Commit now and draft the exact rationale that should appear on the pick card.`
+    : `You've done your investigation and formed your read of this game. Your research assistant investigated independently and surfaced their findings. Now the actual job: the betting options in front of you are what you are picking from — you are not being asked who is better or who wins on paper; the prices already say what the world thinks. You are picking the BEST BET on this board: hold your read of tonight against the options and take the ticket you would put your own money on. Sometimes that is the favorite at a fair price. Sometimes it is the underdog, because the price pays far more than your read of a close game requires. And sometimes your read simply says a side gets it done regardless of the numbers — that conviction, owned plainly, is a real sports betting decision. Commit now and draft the exact rationale that should appear on the pick card.`;
+
   return `
 <decision_checkpoint>
 ## PASS 2.5 - FINAL DECISION CHECKPOINT
@@ -371,7 +414,7 @@ Do NOT restart analysis. Do NOT run a full re-investigation. Only call more tool
 </decision_checkpoint>
 
 <synthesis>
-You've done your investigation and formed your read of this game. Your research assistant investigated independently and surfaced their findings. Now the actual job: the betting options in front of you are what you are picking from — you are not being asked who is better or who wins on paper; the prices already say what the world thinks. You are picking the BEST BET on this board: hold your read of tonight against the options and take the ticket you would put your own money on. Sometimes that is the favorite at a fair price. Sometimes it is the underdog, because the price pays far more than your read of a close game requires. And sometimes your read simply says a side gets it done regardless of the numbers — that conviction, owned plainly, is a real sports betting decision. Commit now and draft the exact rationale that should appear on the pick card.
+${synthesis}
 </synthesis>
 ${useOpenDecision ? `
 <decision_freedom>
@@ -420,7 +463,7 @@ ${betTypeNote}
 **CRITICAL ODDS RULES:**
 1. Use the EXACT odds shown in the scout report's betting lines — never default to -110. The pick field must carry them: "[Team] ML -192" NOT "[Team] ML -110"
 2. For ML picks: use "moneylineHome" or "moneylineAway" value (e.g., -192, +160)
-3. For spread picks: use "spreadOdds" value (e.g., -105, -115)
+${spreadOddsRule}
 
 ${structuredOutputFormat}
 </instructions>
@@ -510,6 +553,9 @@ export function buildPass3Unified(homeTeam = '[HOME]', awayTeam = '[AWAY]', opti
   const sport = options.sport || '';
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
+  const spreadOddsRule = (isNHL || isMLB)
+    ? '3. For spread picks: use "spreadOdds" value (e.g., -105, -115)'
+    : '3. For spread picks: copy the selected team\'s exact pair. A home pick uses "spreadHome" + "spreadHomeOdds"; an away pick uses "spreadAway" + "spreadAwayOdds". Never borrow the opponent\'s price or invent a missing price.';
 
   // Build records reminder if available (anti-hallucination for Pass 3)
   const homeRecord = options.homeRecord;
@@ -544,7 +590,7 @@ ${isNHL ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to w
 **CRITICAL ODDS RULES:**
 1. Use the EXACT odds shown in the scout report's betting lines — never default to -110. The pick field must carry them: "[Team] ML -192" NOT "[Team] ML -110"
 2. For ML picks: use "moneylineHome" or "moneylineAway" value (e.g., -192, +160)
-3. For spread picks: use "spreadOdds" value (e.g., -105, -115)
+${spreadOddsRule}
 
 Output your final pick as JSON:
 

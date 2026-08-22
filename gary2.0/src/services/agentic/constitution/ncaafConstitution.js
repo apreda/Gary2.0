@@ -51,7 +51,13 @@ Use the exact tag shown in the scout report for this game.
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION C: PASS 2.5 DECISION GUARDS — optional stage-specific reminders
   // ═══════════════════════════════════════════════════════════════════════════
-  pass25DecisionGuards: ``,
+  pass25DecisionGuards: `
+### FOOTBALL SIDE-INDEPENDENCE CHECK
+
+- Treat the posted favorite and underdog as equally open conclusions; the sign of the spread is not evidence.
+- An unresolved factor remains unresolved. Do not turn missing rotation, usage, or matchup evidence into support for either side.
+- Before finalizing, compare the strongest verified four-quarter cover path for each team at this number and the strongest verified obstacle to each path. Choose from this game's evidence; do not seek a favorite/underdog mix across the slate.
+`,
 
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION D: STRUCTURAL GUARDRAILS (Hard rules — always enforced)
@@ -59,10 +65,10 @@ Use the exact tag shown in the scout report for this game.
   guardrails: ``,
 
   bilateralCasePrompt: (homeTeam, awayTeam) =>
-    `Before outputting INVESTIGATION COMPLETE, include both sections in your Pass 1 synthesis:
-Case for ${homeTeam} winning/covering
-Case for ${awayTeam} winning/covering
-(Each case should be 2-3 paragraphs explaining why that team covers the spread in this game.)`
+    `Before outputting INVESTIGATION COMPLETE, include both sections under these exact headings:
+CASE FOR ${homeTeam.toUpperCase()} COVERING THE SPREAD:
+CASE FOR ${awayTeam.toUpperCase()} COVERING THE SPREAD:
+(Each case should be 2-3 paragraphs explaining that team's strongest verified four-quarter path to covering this posted spread and the strongest verified obstacle to that path.)`
 };
 
 
