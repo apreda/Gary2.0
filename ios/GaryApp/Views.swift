@@ -21888,34 +21888,23 @@ struct PicksCarouselView: View {
         }
     }
 
-    /// A league is "live" today when it has anything real — a posted pick or
-    /// prop, or a game on the slate. Forced chips (preseason football) exist
-    /// for reachability but never deserve the default over a live board.
-    private func leagueIsLiveToday(_ lg: String) -> Bool {
-        if store.slate.contains(where: { ($0.league ?? "").uppercased() == lg }) { return true }
-        if store.gamePicks.contains(where: { ($0.league ?? "").uppercased() == lg }) { return true }
-        return store.allProps.contains(where: { !isHomeRunProp($0) && propSportKey($0) == lg })
-    }
     /// With ALL hidden, `sport` must always sit on a real league: snap the
     /// "ALL" default (and any league that dropped off the board) to the day's
     /// first chip once data lands. No-op while the flag shows ALL.
     /// A snap is remembered as AUTO: if it ran before the slate/picks resolved
-    /// (a failed fetch leaves only canonical priority, which puts preseason
-    /// NFL first), the next data arrival moves an idle default to the day's
-    /// live board. A chip the user tapped is never moved.
+    /// (or while the independent slate/picks/props requests are still landing),
+    /// the next data arrival follows the newly authoritative first desk. A chip
+    /// the user tapped is never moved.
     private func snapSportIfAllHidden() {
-        // The default chip is the day's first LIVE league (founder, Aug 19:
-        // "prioritized by what games are that day" — NFL > MLB > CFB order
-        // only breaks ties between leagues that actually play today). The
-        // canonical first is only a fallback while nothing has loaded, and a
-        // pull-refresh that transiently empties the store self-heals below.
-        guard !AppFlags.picksAllTab, let canonicalFirst = sports.first(where: { $0 != "ALL" }) else { return }
-        let first = sports.first(where: { $0 != "ALL" && leagueIsLiveToday($0) }) ?? canonicalFirst
+        guard !AppFlags.picksAllTab,
+              let first = sports.first(where: { $0 != "ALL" }) else { return }
         if sport == "ALL" || !sports.contains(sport) {
             sport = first
             sportAutoSelected = true
-        } else if sportAutoSelected, sport != first,
-                  !leagueIsLiveToday(sport), leagueIsLiveToday(first) {
+        } else if sportAutoSelected, sport != first {
+            // `sports` already ranks posted picks/props above slate-only desks.
+            // Do not let a slate row make an earlier automatic choice sticky
+            // when a more authoritative picks desk arrives during refresh.
             sport = first
         }
     }
