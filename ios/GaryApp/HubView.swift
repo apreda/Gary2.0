@@ -1836,9 +1836,18 @@ fileprivate struct HubGameSel: Identifiable {
 
 /// WC board rows carry no abbreviations — fall back to the first three
 /// letters of the team name ("France" → FRA) so labels never read "—".
-fileprivate func hubSideLabel(_ abbr: String?, _ team: String?) -> String {
+/// Provider abbreviation when the row carries one; otherwise the league's own
+/// abbreviation map. The old fallback took the first three LETTERS of the team
+/// name, which is wrong far more often than it looks: "Green Bay Packers" came
+/// out "GRE" instead of GB, and both Chicago clubs collapsed to "CHI" — two
+/// different games showing the same side. `teamAbbrevFromName` already owns the
+/// per-league keyword maps every other surface uses; the strip now shares them,
+/// and only falls back to the blind prefix when the league is unknown.
+fileprivate func hubSideLabel(_ abbr: String?, _ team: String?, league: String? = nil) -> String {
     if let a = abbr, !a.isEmpty { return a }
     guard let t = team, !t.isEmpty else { return "—" }
+    let mapped = teamAbbrevFromName(t, league: league)
+    if !mapped.isEmpty { return mapped.uppercased() }
     return String(t.uppercased().filter { $0.isLetter }.prefix(3))
 }
 
@@ -1864,11 +1873,11 @@ fileprivate struct HubSlateStrip: View {
         }
     }
 
-    private func side(_ abbr: String?, _ team: String?) -> String { hubSideLabel(abbr, team) }
+    private func side(_ abbr: String?, _ team: String?, _ league: String?) -> String { hubSideLabel(abbr, team, league: league) }
 
     @ViewBuilder private func block(_ r: TomorrowBoardRow) -> some View {
         let marquee = r.is_marquee == true
-        let matchup = "\(side(r.away_abbr, r.away_team)) @ \(side(r.home_abbr, r.home_team))"
+        let matchup = "\(side(r.away_abbr, r.away_team, r.league)) @ \(side(r.home_abbr, r.home_team, r.league))"
         // The live lookup resolves through team-NAME keywords — feed it the
         // full names ("Pirates @ Nationals"); "PIT @ WSH" resolves to nothing.
         let ls = live.status(forMatchup: "\(r.away_team ?? "") @ \(r.home_team ?? "")")
@@ -2468,6 +2477,7 @@ fileprivate struct HubStreakWatch: View {
                     .font(HubFont.body(17, .semibold))
                     .foregroundStyle(.white.opacity(0.92))
                     .lineLimit(1)
+                    .minimumScaleFactor(0.6)
                 if let d = cleanDetail(r, badgeText: b.text) {
                     Text(d)
                         .font(HubFont.body(13.5))
@@ -2753,11 +2763,17 @@ fileprivate struct HubSwapRow: View {
                             .font(.system(size: 9, weight: .heavy))
                             .foregroundStyle(HubPalette.red)
                             .frame(width: 14)
+                        // The NAME outranks its note for width and scales
+                        // rather than clipping — "Gabriel Rincones Jr." beside
+                        // a full BATS/OPS note otherwise ellipsized the player
+                        // right out of his own row (no-ellipsis law).
                         Text(swap.out_name ?? "—")
                             .font(HubFont.body(14, .semibold))
                             .strikethrough(true, color: HubPalette.red.opacity(0.7))
                             .foregroundStyle(.white.opacity(0.55))
                             .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                            .layoutPriority(1)
                         Spacer(minLength: 6)
                         if let note = swap.out_note, !note.isEmpty {
                             Text(note)
@@ -2775,6 +2791,8 @@ fileprivate struct HubSwapRow: View {
                             .font(HubFont.body(15, .bold))
                             .foregroundStyle(.white)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                            .layoutPriority(1)
                         Spacer(minLength: 6)
                         if let note = swap.in_note, !note.isEmpty {
                             Text(note)
@@ -3608,7 +3626,7 @@ fileprivate struct HubTeamCardSheet: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let t = tonight {
-                Text("\(hubSideLabel(t.away_abbr, t.away_team)) @ \(hubSideLabel(t.home_abbr, t.home_team))".uppercased())
+                Text("\(hubSideLabel(t.away_abbr, t.away_team, league: t.league)) @ \(hubSideLabel(t.home_abbr, t.home_team, league: t.league))".uppercased())
                     .font(GaryFonts.mono(11, bold: true)).foregroundStyle(PCV4.mut2)
             } else if !signal.game.isEmpty {
                 Text(signal.game.uppercased())
@@ -3719,8 +3737,8 @@ fileprivate struct HubTeamCardSheet: View {
                 // The lines — abbr-labeled tiles, only the numbers the board has.
                 let tiles: [(String, String)] = {
                     var out: [(String, String)] = []
-                    if let a = t.ml_away { out.append((hubSideLabel(t.away_abbr, t.away_team), fmtML(a))) }
-                    if let h = t.ml_home { out.append((hubSideLabel(t.home_abbr, t.home_team), fmtML(h))) }
+                    if let a = t.ml_away { out.append((hubSideLabel(t.away_abbr, t.away_team, league: t.league), fmtML(a))) }
+                    if let h = t.ml_home { out.append((hubSideLabel(t.home_abbr, t.home_team, league: t.league), fmtML(h))) }
                     if let tot = t.total { out.append(("O/U", HubFmt.stat(tot))) }
                     return out
                 }()
@@ -3825,7 +3843,7 @@ fileprivate struct HubTeamCardSheet: View {
                     // the leader reads big and gold, the trailer smaller and dim.
                     let awayLeads = aw >= hw
                     HStack(alignment: .lastTextBaseline, spacing: 10) {
-                        Text(hubSideLabel(t.away_abbr, t.away_team))
+                        Text(hubSideLabel(t.away_abbr, t.away_team, league: t.league))
                             .font(GaryFonts.accent(13)).foregroundStyle(awayLeads ? PCV4.ink : PCV4.mut2)
                         Text("\(aw)")
                             .font(GaryFonts.display(awayLeads ? 30 : 22))
@@ -3834,7 +3852,7 @@ fileprivate struct HubTeamCardSheet: View {
                         Text("\(hw)")
                             .font(GaryFonts.display(awayLeads ? 22 : 30))
                             .foregroundStyle(awayLeads ? PCV4.mut2 : PCV4.gold)
-                        Text(hubSideLabel(t.home_abbr, t.home_team))
+                        Text(hubSideLabel(t.home_abbr, t.home_team, league: t.league))
                             .font(GaryFonts.accent(13)).foregroundStyle(awayLeads ? PCV4.mut2 : PCV4.ink)
                     }
                 }
@@ -4254,7 +4272,7 @@ fileprivate struct HubGameSheet: View {
     @State private var namedCard: PlayerInsightCardRow? = nil
 
     private var abbrMatchup: String {
-        "\(hubSideLabel(row.away_abbr, row.away_team)) @ \(hubSideLabel(row.home_abbr, row.home_team))"
+        "\(hubSideLabel(row.away_abbr, row.away_team, league: row.league)) @ \(hubSideLabel(row.home_abbr, row.home_team, league: row.league))"
     }
     private var ls: LiveScore? {
         live.status(forMatchup: "\(row.away_team ?? "") @ \(row.home_team ?? "")")
@@ -4347,10 +4365,10 @@ fileprivate struct HubGameSheet: View {
                 HStack(spacing: 22) {
                     if let t = row.total { numberStat("O/U", HubFmt.stat(t)) }
                     if let sp = row.spread {
-                        numberStat("Spread \(hubSideLabel(row.home_abbr, row.home_team))", HubFmt.stat(sp))
+                        numberStat("Spread \(hubSideLabel(row.home_abbr, row.home_team, league: row.league))", HubFmt.stat(sp))
                     }
                     if let mh = row.ml_home, let ma = row.ml_away {
-                        numberStat("ML", "\(hubSideLabel(row.home_abbr, row.home_team)) \(fmtML(mh)) · \(hubSideLabel(row.away_abbr, row.away_team)) \(fmtML(ma))")
+                        numberStat("ML", "\(hubSideLabel(row.home_abbr, row.home_team, league: row.league)) \(fmtML(mh)) · \(hubSideLabel(row.away_abbr, row.away_team, league: row.league)) \(fmtML(ma))")
                     }
                 }
                 .padding(.top, 6)
