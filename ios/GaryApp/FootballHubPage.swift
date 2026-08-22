@@ -33,14 +33,25 @@ enum FootballProofContract {
         text(value?.display)
     }
 
+    // PERF: these were allocated per call. One receipt runs `date()` seven
+    // times, and the contract runs for every row on every pass of the page's
+    // funnel — that is hundreds of formatter allocations per render for a
+    // parse that never changes shape. ISO8601DateFormatter is thread-safe for
+    // parsing, so one shared pair does the whole app's football proof work.
+    private static let isoFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoStandard: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
     private static func date(_ value: String?) -> Date? {
         guard let value = text(value) else { return nil }
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let parsed = fractional.date(from: value) { return parsed }
-        let standard = ISO8601DateFormatter()
-        standard.formatOptions = [.withInternetDateTime]
-        return standard.date(from: value)
+        return isoFractional.date(from: value) ?? isoStandard.date(from: value)
     }
 
     private static func finite(_ value: Double?) -> Double? {

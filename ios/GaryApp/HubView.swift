@@ -1004,18 +1004,27 @@ struct HubView: View {
     /// tomorrow." String compare works on ISO dates.
     static var hrThreatsLive: Bool { SupabaseAPI.todayEST() >= "2026-07-23" }
 
+    /// The stories already told at the top of the page. Football's thinner
+    /// feeds made the same signal appear as THE LEAD, BEST OF THE BOARD, and
+    /// again in its beat; once featured above, the beat keeps only the extras.
+    ///
+    /// PERF (measured Aug 21 2026): this used to be rebuilt INSIDE `beatRows`,
+    /// so every beat — and every pass of the jump nav over the beats — rebuilt
+    /// `frontPageSelection`, which rebuilds `ranked`, which rebuilds
+    /// `leagueSignals` (proof-gated, date-parsing). Twelve tab switches cost
+    /// 506 `leagueSignals` evaluations and 231 `ranked` rebuilds. The callers
+    /// now compute this ONCE per pass and thread it in — the same "resolve the
+    /// snapshot once" rule `frontPageSelection` itself was written for.
+    private var featuredStoryIDs: Set<UUID> {
+        guard isFootball else { return [] }
+        let selection = frontPageSelection
+        return Set(([selection.lead].compactMap { $0 } + selection.best).map(\.id))
+    }
+
     /// Rows for a beat, in the feed's relevance order (each row keeps its own
     /// lane kicker). Regression rows live on the board, never in a beat.
-    private func beatRows(_ beat: Beat) -> [Signal] {
+    private func beatRows(_ beat: Beat, featured: Set<UUID>) -> [Signal] {
         let kinds = Set(beat.kinds)
-        // Football's thinner preseason feeds made the same signal appear as
-        // THE LEAD, BEST OF THE BOARD, and again in its beat. Once a story is
-        // featured above, keep the lower beat for additional reads only.
-        let featured: Set<UUID> = {
-            guard sel == .nfl || sel == .ncaaf else { return [] }
-            let selection = frontPageSelection
-            return Set(([selection.lead].compactMap { $0 } + selection.best).map(\.id))
-        }()
         return leagueSignals.filter {
             kinds.contains($0.kind)
                 && !featured.contains($0.id)
@@ -1053,8 +1062,8 @@ struct HubView: View {
         }
     }
 
-    @ViewBuilder private func beatView(_ beat: Beat) -> some View {
-        let rows = beatRows(beat)
+    @ViewBuilder private func beatView(_ beat: Beat, featured: Set<UUID>) -> some View {
+        let rows = beatRows(beat, featured: featured)
         // (The second HR block — "Gary's HR Calls Tonight / Longshot Lane",
         // HubHRCallsBlock — was removed Aug 4 2026 on the founder's call: two
         // HR sections back to back was one too many. The gold-priced Home Run
@@ -1133,8 +1142,10 @@ struct HubView: View {
 
     // The beats + WC intel + the overflow net, one extracted run.
     @ViewBuilder private var beatsAndOverflow: some View {
+        // ONE snapshot for the whole run (see `featuredStoryIDs`).
+        let featured = featuredStoryIDs
         ForEach(beats) { beat in
-            beatView(beat)
+            beatView(beat, featured: featured)
         }
 
         if sel == .wc, !wcIntelSignals.isEmpty {
@@ -1582,7 +1593,8 @@ struct HubView: View {
         if sel == .mlb, !pulseRows.isEmpty { out.append(("pulse", "Pulse")) }
         if !selStreakRows.isEmpty { out.append(("streaks", "Streaks")) }
         if !leagueSignals.isEmpty {
-            for beat in beats where !beatRows(beat).isEmpty {
+            let featured = featuredStoryIDs
+            for beat in beats where !beatRows(beat, featured: featured).isEmpty {
                 out.append((beat.anchor, beat.title.replacingOccurrences(of: "The ", with: "")))
             }
             if sel == .wc, !wcIntelSignals.isEmpty { out.append(("wcIntel", "Intel")) }
