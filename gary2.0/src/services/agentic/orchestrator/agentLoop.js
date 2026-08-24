@@ -163,7 +163,10 @@ function moneylinePastCap(pick, cap = GAME_ML_CAP) {
 }
 
 export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, options = {}) {
-  const provider = 'gemini';
+  // Internal branch tag for the session-based path (the name predates the
+  // provider seam; every session now routes to a codex/claude/anthropic/gpt
+  // adapter — Gemini itself is retired, Aug 24 2026).
+  const provider = 'session';
   const isNFLSport = sport === 'americanfootball_nfl' || sport === 'NFL';
   const isNCAAFSport = sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
   const isNCAABSport = sport === 'basketball_ncaab' || sport === 'NCAAB';
@@ -186,15 +189,10 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // that lane — every other sport's resolution is byte-identical.
   const modelOverride = options.modelOverride || process.env.GARY_MODEL_OVERRIDE || null;
 
-  // Model selection (May 2026):
-  //   Game picks  → gemini-3.5-flash (Tier 1 — Gary's brain)
-  //   Props / DFS → gemini-3-flash-preview (Tier 2 — cheaper, sufficient)
-  //   Research assistant is always Tier 2 (separate session, configured below)
-  //
-  // 3.5 Flash outperforms 3.1 Pro on agentic+coding benchmarks while costing
-  // 25% less, so the previous sport-specific "use Pro for MLB / playoffs"
-  // branching is no longer needed — every sport gets the same upgraded brain.
-  // F-9 (Jul 5 2026) upgraded props to the 3.5 brain estimating ~$0.04/game;
+  // Model selection (Aug 24 2026, Gemini retired): every model resolves
+  // through orchestratorConfig — the codex bridge for game/props brains,
+  // Anthropic for research and the legacy non-MLB lanes. The provider seam
+  // (sessionManager) routes by name; this loop stays provider-blind.
   // measured reality (Jul 8 cost audit): ~$0.35-0.45/game ≈ half the monthly
   // LLM bill — and the lane showed NO quality gain on the big brain (36.6%
   // over 82 picks Jul 5-7 vs 43.1% over 355 on Tier 2 with the debiased
@@ -243,25 +241,21 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     ? [...baseTools, getFinalizePropsToolForSport(sport)]
     : baseTools;
 
-  // PERSISTENT SESSION SETUP (Gemini 3 Thought Signature Compliance)
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Game picks: 3.5 Flash (Tier 1 — Gary's brain) with high reasoning. 3.1 Pro is the 429 cascade fallback.
-  // Props: Flash 3 (Tier 2 — cheaper, sufficient) with high reasoning.
-  // SDK automatically handles thought signatures when using persistent sessions.
+  // PERSISTENT SESSION SETUP — one session per brain, adapter-routed.
   let currentSession = await createGeminiSession({ _costTracker: costTracker,
     modelName: primaryModel,
     systemPrompt: systemPrompt,
     tools: activeTools,
     // Game picks run Sol at its TOP reasoning tier (founder GO Jul 22 eve —
-    // the WC specials precedent); props stay on the Gemini path unchanged.
+    // the WC specials precedent); props ride their own desk model.
     thinkingLevel: isPropsMode ? 'high' : 'xhigh',
     enableCache: true  // Cache system prompt + tools (~10K stable tokens, 90% off on reuse)
   });
   let currentModelName = currentSession.modelName;
   console.log(`[Orchestrator] ${modelLabel} session created (${currentModelName}, ${sport}, thinking: high)`);
 
-  // Messages array for state tracking (pass detection)
-  // Note: For Gemini, actual API calls go through the persistent session
+  // Messages array for state tracking (pass detection) — API calls go
+  // through the persistent session
   let messages = [
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userMessage }
@@ -361,7 +355,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // to investigate deeper. Gary waits for Flash to finish so he has the
   // full per-factor findings from the very first iteration.
   if (options.scoutReport && !isPropsMode) {
-    console.log(`[Research Briefing] 🔬 Running Flash research briefing (Gemini Flash with tools) — Gary waits for completion`);
+    console.log(`[Research Briefing] 🔬 Running the research briefing (Haiku with tools) — Gary waits for completion`);
     try {
       const briefingResult = await Promise.race([
         buildFlashResearchBriefing(options.scoutReport, sport, homeTeam, awayTeam, { ...options, _costTracker: costTracker }),
@@ -451,9 +445,9 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     let message;
     let finishReason;
 
-    if (provider === 'gemini' && currentSession) {
+    if (provider === 'session' && currentSession) {
       // ═══════════════════════════════════════════════════════════════════════
-      // PERSISTENT SESSION API CALL (Gemini 3 with thought signature handling)
+      // PERSISTENT SESSION API CALL
       // ═══════════════════════════════════════════════════════════════════════
       const currentPass = determineCurrentPass(messages);
       
@@ -602,13 +596,13 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
         }
       }
 
-    } else if (provider === 'gemini') {
+    } else if (provider === 'session') {
       // No session available — this should never happen in normal operation
       throw new Error('No active Gemini session available');
     }
 
     // Handle empty response from Gemini (common when model is confused)
-    if (provider === 'gemini' && !message.content && !message.tool_calls) {
+    if (provider === 'session' && !message.content && !message.tool_calls) {
       // Check what pass we're in to provide appropriate nudge
       let nudgeContent;
 
@@ -1808,7 +1802,7 @@ INVESTIGATION COMPLETE`;
       // ═══════════════════════════════════════════════════════════════════════
       // Extract tool responses added to messages array during this iteration
       // Convert to format needed for sendToSession
-      if (provider === 'gemini' && currentSession) {
+      if (provider === 'session' && currentSession) {
           const lastAssistantIdx = messages.findLastIndex(m => m.role === 'assistant');
           const toolResponses = messages.slice(lastAssistantIdx + 1).filter(m => m.role === 'tool');
 
