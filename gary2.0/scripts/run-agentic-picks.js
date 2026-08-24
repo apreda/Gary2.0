@@ -1975,6 +1975,38 @@ async function main() {
               })
             : 'TBD';
 
+          // TICKET RESTATEMENT (founder GO, Aug 24: "fix the bugs"): the
+          // preseason audit found 10/16 football cards arguing a different
+          // spread or price than the elected ticket — composition happens
+          // before best-line election by necessity (the best line depends on
+          // the side Gary picks), so when the prose quotes numbers that
+          // contradict the final ticket, Gary restates HIS OWN card against
+          // it. One corrective call, arguments unchanged, fail-soft: any
+          // failure keeps the original card and the pick ships on time.
+          if (config.key !== 'baseball_mlb' && result.type === 'spread'
+              && finalSpread != null && result.rationale) {
+            try {
+              const { ticketNumbersDrift, restateAgainstTicket } = await import('./lib/ticketRestate.js');
+              if (ticketNumbersDrift(result.rationale, finalSpread, finalSpreadOdds)) {
+                console.log(`   🎫 [Ticket Restate] card quotes numbers that differ from the elected ticket (${finalPickText}) — asking Gary to restate`);
+                const restated = await restateAgainstTicket({
+                  rationale: result.rationale,
+                  pickText: finalPickText,
+                  spread: finalSpread,
+                  spreadOdds: finalSpreadOdds,
+                  book: bestLineBook,
+                  model: result.model || null,
+                });
+                if (restated) {
+                  result.rationale = restated;
+                  console.log('   ✅ [Ticket Restate] card now argues the actual ticket');
+                }
+              }
+            } catch (restateErr) {
+              console.warn(`   ⚠️ [Ticket Restate] skipped (${restateErr.message})`);
+            }
+          }
+
           // WINNERS JUDGE v2 (founder GO, Aug 10): a separate brain scores
           // the sealed case against its own desk — the Winners-page rank.
           // Selection only; fail-soft null can never delay a stored pick.
