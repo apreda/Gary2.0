@@ -37,7 +37,11 @@ export const detailFact = (r) => {
  * @param {Function} factFor row -> one-line grounded fact sheet (null skips)
  * @param {object} opts      { ask, sentences, limit } — the lane-specific question
  */
-export async function attachLaneReads(lane, rows, factFor, { ask, sentences = '3-5', limit = SHIP_CAP } = {}) {
+// Default register = MLB's measured card length (founder, Aug 24: football
+// rows under the picks ran 600-960 chars against MLB's 200-300 — "those super
+// long text parts... should be the same size we have for MLB parts"). The old
+// '3-5' default was the whole gap: no football lane overrode it.
+export async function attachLaneReads(lane, rows, factFor, { ask, sentences = '2-3', limit = SHIP_CAP } = {}) {
   // Only what SHIPS gets a read. The orchestrator keeps the strongest
   // SHIP_CAP rows per category (postProcess), so a lane handing us 25 hot
   // bats would otherwise buy 17 reads that never reach a screen. Sort a copy
