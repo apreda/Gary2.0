@@ -44,6 +44,26 @@ DO NOT edit injury handling code without explicit user confirmation. This includ
 
 Always double-check with the user before touching ANY injury-related code, labels, or duration logic.
 
+## Session-End Law: Repo = Production (founder, Aug 24 2026)
+
+"If we change something here I assume it was changed in production too —
+that needs to be the case at the end of each session." Before ending ANY
+session that touched code, run `node scripts/production-truth.js` and get a
+green result: its DEPLOY PARITY section verifies every edge function's
+deployed timestamp against its last local change (including `_shared/`),
+and it flags uncommitted work and unpushed commits. Mid-experiment state is
+allowed ONLY while the session is still going or when the handoff says so
+explicitly — silence means parity. If the user says a behavior is retired
+or changed, that must be true in the RUNNING system before the session
+ends, not just in the repo.
+
+## Model Vendors (founder, Aug 24 2026)
+
+Gemini is retired: "no more gemini for anything." Every lane runs Anthropic
+(subscription bridge or API) or ChatGPT (codex bridge or OpenAI API). Never
+add a gemini-* model as a primary, fallback, or default — the session seam
+(`validateGeminiModel` in orchestratorConfig.js) refuses them at runtime.
+
 ## A Fix Isn't Fixed Until It's Deployed
 
 For anything that runs in the cloud — Supabase edge functions, migrations, cron jobs — committing the fix to the repo is HALF the fix. Production keeps running the old code until you deploy. Every bug-fix to a `supabase/functions/*` file MUST end with `npx supabase functions deploy <fn> --project-ref xuttubsfgdcjfgmskcol` and a verification call; every migration file MUST actually be applied. (Jul 2 2026: the phantom-grade ET-filter fix sat committed-but-undeployed for a day and silently mis-graded ~48 picks across a week. Same session, the DFS drop migration had sat unapplied.) When reporting a fix as done, say whether it is deployed, not just committed.
