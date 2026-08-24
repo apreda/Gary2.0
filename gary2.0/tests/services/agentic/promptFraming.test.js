@@ -61,7 +61,7 @@ describe('MLB game lane runs the restored June engine (Aug 18 restoration)', () 
     expect(loop).toContain('extractResearcherQuestions(message.content');
     expect(loop).toContain('RESEARCHER_QUESTION_BUDGET');
     expect(loop).toContain('ASK RESEARCHER:');
-    const advisor = src('orchestrator/flashAdvisor.js');
+    const advisor = src('orchestrator/researchBriefing.js');
     expect(advisor).toContain('export function extractResearcherQuestions');
     expect(advisor).toContain('export async function askResearcher');
     expect(advisor).toContain('Do NOT pick a side');

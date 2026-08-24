@@ -16,7 +16,7 @@ import {
   getInjuryStatusFromMap,
   isPlayerOutFromMap
 } from '../shared/utilities.js';
-import { geminiGroundingSearch, fetchStandingsSnapshot } from '../shared/grounding.js';
+import { groundedWebSearch, fetchStandingsSnapshot } from '../shared/grounding.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
 import {
   fetchTeamProfile,
@@ -683,7 +683,7 @@ NEUTRAL_SITE: [yes or no]
 VENUE: [arena name, city]
 ---END_CONTEXT---`;
 
-    const contextResult = await geminiGroundingSearch(contextQuery, {
+    const contextResult = await groundedWebSearch(contextQuery, {
       maxTokens: 1500
     });
 

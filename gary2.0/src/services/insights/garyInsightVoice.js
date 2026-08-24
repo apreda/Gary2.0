@@ -13,7 +13,7 @@
  * insights plist) writes the reads at $0; with balances live it follows
  * GAME_PICK_MODEL (Sol) exactly as before.
  */
-import { createGeminiSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
+import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { contentModel, contentModelCascade } from './solText.js';
 
 // Lanes whose detail is already Gary's prose (sourced from a pick rationale or
@@ -91,7 +91,7 @@ export async function applyGaryVoice(rows, { league = 'mlb' } = {}) {
     let reads = null;
     for (const modelName of contentModelCascade()) {
       try {
-        const session = await createGeminiSession({
+        const session = await createModelSession({
           modelName,
           systemPrompt: systemPrompt(todayLong()),
           tools: [],

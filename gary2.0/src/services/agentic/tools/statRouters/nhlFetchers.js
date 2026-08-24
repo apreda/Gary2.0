@@ -1,4 +1,4 @@
-import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, geminiGroundingSearch, isPostseasonOptions } from './statRouterCommon.js';
+import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, groundedWebSearch, isPostseasonOptions } from './statRouterCommon.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { getTeamStats as getMoneyPuckTeamStats, getGoalieStats as getMoneyPuckGoalieStats } from '../../../moneyPuckService.js';
 import { getTeamPercentages as getNhlApiPercentages } from '../../../nhlStatsApiService.js';
@@ -1195,7 +1195,7 @@ export const nhlFetchers = {
         Return whatever lineup data is available: forward lines, defense pairings, PP units, expected starting goalies.
         Return ONLY factual lineup data found.`;
 
-      const groundingResult = await geminiGroundingSearch(query, {
+      const groundingResult = await groundedWebSearch(query, {
         systemMessage: 'Return whatever current NHL lineup and line combination data you find for both teams. Include forward lines, defense pairings, power play units, and expected starting goalies if available. Return ONLY the data.',
         maxTokens: 2500
       });

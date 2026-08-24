@@ -8,7 +8,7 @@
 //       from ~February on; in July it misdirects MLB queries.
 //       Fix: describeSportsCalendar(date) in dateUtils — a truthful,
 //       month-derived line.
-//   (b) UNWRAP-BUG FAMILY — geminiGroundingSearch returns {success, data,
+//   (b) UNWRAP-BUG FAMILY — groundedWebSearch returns {success, data,
 //       raw}, but several stat-router fetchers were written for an older
 //       `.content` shape: MLB_BULLPEN's day-of news note was dead code
 //       (paid for the search, then discarded), MLB_GAME_PREVIEW leaked the

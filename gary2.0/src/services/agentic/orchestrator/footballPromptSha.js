@@ -11,7 +11,7 @@ const SHARED_SURFACE = [
   './orchestratorMain.js',
   './spreadEvaluationFactors.js',
   './footballResearchPolicy.js',
-  './flashAdvisor.js',
+  './researchBriefing.js',
   './investigationFactors.js',
   './responseParser.js',
   '../flashInvestigationPrompts.js',

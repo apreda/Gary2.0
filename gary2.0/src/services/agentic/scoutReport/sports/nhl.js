@@ -15,7 +15,7 @@ import {
   formatGameTime,
   getInjuryStatusFromMap
 } from '../shared/utilities.js';
-import { geminiGroundingSearch, fetchStandingsSnapshot } from '../shared/grounding.js';
+import { groundedWebSearch, fetchStandingsSnapshot } from '../shared/grounding.js';
 import {
   fetchTeamProfile,
   fetchInjuries,
@@ -77,8 +77,8 @@ Extract these THREE sections for ${teamName} from that page:
 Use EXACT player names as shown on the page. No commentary.`;
 
       const [awayMegaResponse, homeMegaResponse] = await Promise.all([
-        geminiGroundingSearch(makeNhlMegaQuery(awayTeam, homeTeam), { temperature: 1.0, maxTokens: 3000 }),
-        geminiGroundingSearch(makeNhlMegaQuery(homeTeam, awayTeam), { temperature: 1.0, maxTokens: 3000 })
+        groundedWebSearch(makeNhlMegaQuery(awayTeam, homeTeam), { temperature: 1.0, maxTokens: 3000 }),
+        groundedWebSearch(makeNhlMegaQuery(homeTeam, awayTeam), { temperature: 1.0, maxTokens: 3000 })
       ]);
 
       const parseLineupOnly = (text, teamName) => {
@@ -254,24 +254,24 @@ NO introduction. NO explanation. ONLY the format above with exact player names.`
       const MAX_RETRIES = 2;
 
       if (retriesUsed < MAX_RETRIES && countUnknownLineup(awayParsed) >= 3) {
-        const retry = await geminiGroundingSearch(makeLineupQuery(awayTeam, homeTeam, true), { temperature: 1.0, maxTokens: 2000 });
+        const retry = await groundedWebSearch(makeLineupQuery(awayTeam, homeTeam, true), { temperature: 1.0, maxTokens: 2000 });
         awayParsed = retry?.success ? parseTeamLineup(retry.data, awayTeam) : awayParsed;
         retriesUsed++;
       }
       if (retriesUsed < MAX_RETRIES && countUnknownLineup(homeParsed) >= 3) {
-        const retry = await geminiGroundingSearch(makeLineupQuery(homeTeam, awayTeam, true), { temperature: 1.0, maxTokens: 2000 });
+        const retry = await groundedWebSearch(makeLineupQuery(homeTeam, awayTeam, true), { temperature: 1.0, maxTokens: 2000 });
         homeParsed = retry?.success ? parseTeamLineup(retry.data, homeTeam) : homeParsed;
         retriesUsed++;
       }
       if (retriesUsed < MAX_RETRIES && countPP1Unknown(awayPP) >= 3) {
         console.log(`[Scout Report] PP1 incomplete for ${awayTeam} - retrying...`);
-        const retry = await geminiGroundingSearch(makePowerPlayQuery(awayTeam, homeTeam, true), { maxTokens: 2000 });
+        const retry = await groundedWebSearch(makePowerPlayQuery(awayTeam, homeTeam, true), { maxTokens: 2000 });
         if (retry?.success) { awayPP = parsePowerPlay(retry.data, awayTeam); }
         retriesUsed++;
       }
       if (retriesUsed < MAX_RETRIES && countPP1Unknown(homePP) >= 3) {
         console.log(`[Scout Report] PP1 incomplete for ${homeTeam} - retrying...`);
-        const retry = await geminiGroundingSearch(makePowerPlayQuery(homeTeam, awayTeam, true), { maxTokens: 2000 });
+        const retry = await groundedWebSearch(makePowerPlayQuery(homeTeam, awayTeam, true), { maxTokens: 2000 });
         if (retry?.success) { homePP = parsePowerPlay(retry.data, homeTeam); }
         retriesUsed++;
       }
@@ -1117,7 +1117,7 @@ NEUTRAL_SITE: [yes or no]
 VENUE: [arena name, city]
 ---END_CONTEXT---`;
 
-    const contextResult = await geminiGroundingSearch(contextQuery, {
+    const contextResult = await groundedWebSearch(contextQuery, {
       maxTokens: 1500
     });
 

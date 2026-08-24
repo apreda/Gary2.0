@@ -83,9 +83,9 @@ import { findParkData } from './agentic/tools/statRouters/mlbFetchers.js';
 import { ballDontLieService as bdl } from './ballDontLieService.js';
 import {
   DESK_FALLBACK_MODELS,
-  GEMINI_PROPS_MODEL,
+  PROPS_DESK_MODEL,
 } from './agentic/orchestrator/orchestratorConfig.js';
-import { createGeminiSession, sendToSessionWithRetry } from './agentic/orchestrator/sessionManager.js';
+import { createModelSession, sendToSessionWithRetry } from './agentic/orchestrator/sessionManager.js';
 import { sourceFailure } from './sourceFailurePolicy.js';
 
 const supabaseUrl =
@@ -1778,15 +1778,15 @@ Output JSON only:
 
 One entry per game listed above. Copy each GAME KEY exactly into game_key.`;
 
-    // Arms used to retry only GEMINI_PROPS_MODEL. When that points at the
+    // Arms used to retry only PROPS_DESK_MODEL. When that points at the
     // Claude subscription and its weekly tank is empty, every retry hits the
     // same wall and the entire day stays blank. Use the same independent
     // provider chain as Gary's desks: Claude -> Codex/GPT -> Gemini.
-    const models = [...new Set([GEMINI_PROPS_MODEL, ...DESK_FALLBACK_MODELS])];
+    const models = [...new Set([PROPS_DESK_MODEL, ...DESK_FALLBACK_MODELS])];
     const failures = [];
     for (const modelName of models) {
       try {
-        const session = await createGeminiSession({
+        const session = await createModelSession({
           modelName,
           systemPrompt: ARMS_VOICE_CONTRACT,
           tools: [],
@@ -1798,7 +1798,7 @@ One entry per game listed above. Copy each GAME KEY exactly into game_key.`;
         if (!m) throw new Error('no JSON in response');
         const entries = JSON.parse(m[1]);
         if (!Array.isArray(entries)) throw new Error('JSON was not an array');
-        if (modelName !== GEMINI_PROPS_MODEL) {
+        if (modelName !== PROPS_DESK_MODEL) {
           console.warn(`[TomorrowBoard] arms provider recovered on ${modelName}`);
         }
         return entries;

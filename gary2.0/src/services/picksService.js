@@ -277,17 +277,12 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null, options = {
     return 0;
   };
 
-  // Simplify pick structure to only include essential fields from Gemini output
+  // ONE mapper (Aug 24 2026): the old `rawGeminiOutput` extraction branch
+  // that sat here was a reader for a shape NOTHING has produced since the
+  // orchestrator era began — `rawAnalysis` is a string, so the branch could
+  // never fire and every pick always flowed through the mapper below. Dead
+  // branch deleted with the vendor; this is the pick's one road to the DB.
   const validPicks = picks.map((pick, index) => {
-    // Extract the Gemini output fields which contain the essential pick data
-    let geminiOutput = null;
-    
-    // First try to get the data from the standardized paths
-    if (pick.rawAnalysis?.rawGeminiOutput) {
-      geminiOutput = pick.rawAnalysis.rawGeminiOutput;
-    } else if (pick.analysis?.rawGeminiOutput) {
-      geminiOutput = pick.analysis.rawGeminiOutput;
-    }
     
     // Generate a consistent pick ID for this pick
     const generatePickId = (pickData, date, index) => {
@@ -304,106 +299,6 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null, options = {
       return `pick-${date}-${pickString}`;
     };
     
-    // If we found the Gemini output, return just those fields
-    if (geminiOutput) {
-      const pickData = {
-        pick: geminiOutput.pick || pick.pick,
-        time: geminiOutput.time || pick.time,
-        type: geminiOutput.type || pick.type,
-        odds: geminiOutput.odds || pick.odds,
-        league: geminiOutput.league || pick.league,
-        revenge: geminiOutput.revenge || false,
-        awayTeam: geminiOutput.awayTeam || pick.awayTeam,
-        homeTeam: geminiOutput.homeTeam || pick.homeTeam,
-        momentum: geminiOutput.momentum || 0,
-        rationale: geminiOutput.rationale || pick.rationale,
-        trapAlert: geminiOutput.trapAlert || false,
-        confidence: geminiOutput.confidence || pick.confidence,
-        superstition: geminiOutput.superstition || false,
-        // Include sport for filtering
-        sport: pick.sport,
-        // Include agentic system fields (CRITICAL - was missing!)
-        statsUsed: pick.statsUsed || [],
-        statsData: pick.statsData || [], // Full stat values for Tale of the Tape
-        injuries: pick.injuries || null, // Structured injury data from BDL
-        commence_time: pick.commence_time || null,
-        // Football-only immutable market receipt. Conditional spreads preserve
-        // every non-football JSON shape byte-for-byte.
-        ...(pick.published_at ? { published_at: pick.published_at } : {}),
-        ...(pick.published_market ? { published_market: pick.published_market } : {}),
-        ...(pick.season_type != null ? { season_type: pick.season_type } : {}),
-        ...(pick.homeTeamAbbreviation ? { homeTeamAbbreviation: pick.homeTeamAbbreviation } : {}),
-        ...(pick.awayTeamAbbreviation ? { awayTeamAbbreviation: pick.awayTeamAbbreviation } : {}),
-        // BDL game id — disambiguates doubleheaders for dedupe
-        game_id: pick.bdl_game_id ?? pick.game_id ?? null,
-        // Venue/tournament context (for NBA Cup, neutral site games, CFP games, etc.)
-        venue: pick.venue || null,
-        isNeutralSite: pick.isNeutralSite || false,
-        tournamentContext: pick.tournamentContext || null,
-        gameSignificance: pick.gameSignificance || null,
-        // CFP-specific fields for NCAAF
-        cfpRound: pick.cfpRound || null,
-        homeSeed: pick.homeSeed || null,
-        awaySeed: pick.awaySeed || null,
-        // NCAAB conference data for app filtering
-        conference: pick.conference || null,
-        homeConference: pick.homeConference || null,
-        awayConference: pick.awayConference || null,
-        // NCAAB AP Poll rankings for pick cards
-        homeRanking: pick.homeRanking || null,
-        awayRanking: pick.awayRanking || null,
-        // Odds data (spread, moneyline, total)
-        spread: pick.spread ?? null,
-        spreadOdds: pick.spreadOdds ?? null,
-        bestLineBook: pick.bestLineBook || null,
-        moneylineHome: pick.moneylineHome ?? null,
-        moneylineAway: pick.moneylineAway ?? null,
-        total: pick.total ?? null,
-        // Soccer (World Cup) fields
-        soccer_match_id: pick.soccer_match_id ?? null,
-        soccer_three_way_ml: pick.soccer_three_way_ml ?? null,
-        soccer_competition: pick.soccer_competition || null,
-        soccer_stage: pick.soccer_stage || null,
-        soccer_round: pick.soccer_round || null,
-        soccer_group: pick.soccer_group || null,
-        goal_line: pick.goal_line ?? null,
-        handicap: pick.handicap ?? null,
-        // Multi-book sportsbook odds comparison (for iOS app display)
-        sportsbook_odds: pick.sportsbook_odds || null,
-        // World Cup side/total tag — set by run-agentic-picks; carry it through so
-        // the two WC plays per match stay distinguishable (was being dropped → null).
-        pick_category: pick.pick_category ?? null,
-        // (rationale_plain REMOVED — founder ruling, Aug 12: one organic
-        // rationale, no middleman. Historical rows keep their stored field.)
-        // Contract-era hash (Jul 30: the whitelist here silently ate the Jul 29
-        // stamp — every era read joins on this; never drop it again).
-        prompt_sha: pick.prompt_sha || null,
-        // THE BLIND SPLIT read (Aug 5): the whitelist ate these on day one —
-        // same trap as the Jul 29 sha above. The sealed pre-lines winner and
-        // why; the era's whole audit trail rides on them.
-        read_winner: pick.read_winner ?? null,
-        game_read: pick.game_read ?? null,
-        // THE BLIND REPORT (Aug 12): both win paths — added to the whitelist
-        // in the same change that created them.
-        path_away: pick.path_away ?? null,
-        path_home: pick.path_home ?? null,
-        // WINNERS rank fields (Aug 12: the whitelist ate these on the judge's
-        // first live run — THIRD time this trap fires; see prompt_sha and
-        // read_winner notes above). v1 class/score + v2 judge object.
-        winners_class: pick.winners_class ?? null,
-        winners_score: pick.winners_score ?? null,
-        winners_judge: pick.winners_judge ?? null,
-        // Which brain produced this pick — fields absent from this object never reach the DB.
-        model: pick.model || null
-      };
-
-      // Add the generated pick ID
-      pickData.pick_id = generatePickId(pickData, currentDateString, index);
-
-      return pickData;
-    }
-
-    // Fallback to original fields if we can't find the Gemini output
     const pickData = {
       pick: pick.pick,
       time: pick.time,
@@ -472,22 +367,19 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null, options = {
       pick_category: pick.pick_category ?? null,
       // (rationale_plain REMOVED — founder ruling, Aug 12: one organic
       // rationale, no middleman.)
-      // Contract-era hash — THIS is the branch agentic picks actually flow
-      // through (cleanPick has no rawGeminiOutput); the Jul 30 morning fix
-      // only reached the other branch, so stamps kept dropping here.
+      // Contract-era hash. (Historical: a dead twin branch above this mapper
+      // ate field additions three times — sha, blind-split, winners — before
+      // it was excised Aug 24. There is ONE mapper now; new fields go here.)
       prompt_sha: pick.prompt_sha || null,
-      // THE BLIND SPLIT read (Aug 5): this branch is the one agentic picks
-      // take — the whitelist ate both fields on day one (Cubs/Astros 12:45 PM
-      // picks stored readless). Same trap as the sha above, third occurrence.
+      // THE BLIND SPLIT read (Aug 5): the whitelist ate both fields on day
+      // one (Cubs/Astros stored readless) — the trap's third catch.
       read_winner: pick.read_winner ?? null,
       game_read: pick.game_read ?? null,
-      // THE BLIND REPORT (Aug 12): both win paths — THIS branch is the one
-      // agentic picks actually take.
+      // THE BLIND REPORT (Aug 12): both win paths.
       path_away: pick.path_away ?? null,
       path_home: pick.path_home ?? null,
-      // WINNERS rank fields (Aug 12: whitelist ate these on the judge's first
-      // live run — and THIS branch is the one agentic picks actually take.
-      // Fourth occurrence of the whitelist trap; see the notes above.
+      // WINNERS rank fields (Aug 12: the whitelist trap's fourth catch —
+      // see the mapper note above).
       winners_class: pick.winners_class ?? null,
       winners_score: pick.winners_score ?? null,
       winners_judge: pick.winners_judge ?? null,

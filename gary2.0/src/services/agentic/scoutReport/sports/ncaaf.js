@@ -14,7 +14,7 @@ import { ballDontLieService } from '../../../ballDontLieService.js';
 import { generateGameSignificance } from '../gameSignificanceGenerator.js';
 import { formatTokenMenu } from '../../tools/toolDefinitions.js';
 import { sportToBdlKey, findTeam, escapeRegex, formatGameTime } from '../shared/utilities.js';
-import { geminiGroundingSearch, fetchStandingsSnapshot } from '../shared/grounding.js';
+import { groundedWebSearch, fetchStandingsSnapshot } from '../shared/grounding.js';
 import {
   fetchTeamProfile,
   fetchInjuries,
@@ -552,7 +552,7 @@ For the ${teamName} college football team, provide their COMPLETE ${seasonLabel}
 Format as a concise bullet list. If ${teamName} is NOT in the ${seasonLabel} CFP, say "Not in ${seasonLabel} CFP".
 ONLY report ACTUAL games that have been PLAYED - do not predict future games.`;
 
-    const result = await geminiGroundingSearch(query, {
+    const result = await groundedWebSearch(query, {
       maxTokens: 1200
     });
 

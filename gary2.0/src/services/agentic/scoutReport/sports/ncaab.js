@@ -18,7 +18,7 @@ import {
   formatGameTime,
   getInjuryStatusFromMap
 } from '../shared/utilities.js';
-import { geminiGroundingSearch, fetchStandingsSnapshot } from '../shared/grounding.js';
+import { groundedWebSearch, fetchStandingsSnapshot } from '../shared/grounding.js';
 import {
   fetchTeamProfile,
   fetchInjuries,
@@ -295,8 +295,8 @@ STATUS KEY: GTD = Game Time Decision, Out = Confirmed NOT playing, OFS = Out For
 List ALL injuries shown on RotoWire. If no injuries, write "None".`;
 
         const [awayLineupResult, homeLineupResult] = await Promise.all([
-          geminiGroundingSearch(buildLineupQuery(awayTeam), { maxTokens: 2000 }),
-          geminiGroundingSearch(buildLineupQuery(homeTeam), { maxTokens: 2000 })
+          groundedWebSearch(buildLineupQuery(awayTeam), { maxTokens: 2000 }),
+          groundedWebSearch(buildLineupQuery(homeTeam), { maxTokens: 2000 })
         ]);
 
         const awayLineupText = awayLineupResult?.data || '';
@@ -762,7 +762,7 @@ AWAY_SEED: [number or N/A]
 VENUE: [arena/stadium name where this game is being played, or UNKNOWN if not found]
 ---END_CONTEXT---`;
 
-    const contextResult = await geminiGroundingSearch(contextQuery, {
+    const contextResult = await groundedWebSearch(contextQuery, {
       maxTokens: 1500
     });
 
@@ -1088,8 +1088,8 @@ STATUS KEY: GTD = Game Time Decision, Out = Confirmed NOT playing, OFS = Out For
 CRITICAL: Be precise. Only include what's actually shown on RotoWire. List ALL injuries.`;
 
           const [awayResult, homeResult] = await Promise.all([
-            geminiGroundingSearch(buildTeamQuery(awayTeam, awayShort), { maxTokens: 2000 }),
-            geminiGroundingSearch(buildTeamQuery(homeTeam, homeShort), { maxTokens: 2000 })
+            groundedWebSearch(buildTeamQuery(awayTeam, awayShort), { maxTokens: 2000 }),
+            groundedWebSearch(buildTeamQuery(homeTeam, homeShort), { maxTokens: 2000 })
           ]);
 
           cleanAway = ((awayResult?.data || '').trim()).replace(/\*\*/g, '');

@@ -354,7 +354,7 @@ Do NOT include ATS records, betting trends, or against-the-spread statistics.`;
   }
 }
 
-export async function geminiGroundingSearch(query, options = {}) {
+export async function groundedWebSearch(query, options = {}) {
   const now = Date.now();
   pruneGroundingCache(now);
   const cacheKey = buildGroundingCacheKey(query, options);
@@ -594,7 +594,7 @@ Include:
 
 Be specific and factual. Only report what current forecasts actually say.`;
 
-  const result = await geminiGroundingSearch(query, { maxTokens: 1500 });
+  const result = await groundedWebSearch(query, { maxTokens: 1500 });
 
   if (result.success && result.data) {
     return parseWeatherFromText(result.data);

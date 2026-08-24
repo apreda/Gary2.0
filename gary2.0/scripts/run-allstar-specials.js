@@ -26,7 +26,7 @@
  *   node scripts/run-allstar-specials.js --derby --dry-run  # print, don't store
  */
 import 'dotenv/config';
-import { geminiGroundingSearch } from '../src/services/agentic/scoutReport/shared/grounding.js';
+import { groundedWebSearch } from '../src/services/agentic/scoutReport/shared/grounding.js';
 import { getBatterXStats, getPitcherXStats } from '../src/services/baseballSavantService.js';
 import { auditPickRationale, buildStatAuditRetryMessage } from '../src/services/agentic/orchestrator/statAudit.js';
 import { createOpenAISession, sendToOpenAISession } from '../src/services/agentic/orchestrator/providerAdapters/openaiSession.js';
@@ -66,7 +66,7 @@ const exactRow = (rows, fullName) =>
   rows.find(r => norm(`${r.first_name} ${r.last_name}`) === norm(fullName)) || null;
 const groundedText = (r) => (typeof r === 'string' ? r : (r?.data || r?.raw || ''));
 
-async function ground(q) { return groundedText(await geminiGroundingSearch(q, { sport: 'baseball_mlb' })); }
+async function ground(q) { return groundedText(await groundedWebSearch(q, { sport: 'baseball_mlb' })); }
 
 async function buildDerbyData() {
   const [news, fanBrief, winnerBoard, advanceBoard, propBoard] = [

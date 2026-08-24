@@ -6,7 +6,7 @@ import { buildScoutReport } from '../scoutReport/scoutReportBuilder.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, nhlSeason, nflSeason, ncaabSeason } from '../../../utils/dateUtils.js';
 import { CONFIG } from './orchestratorConfig.js';
-import { createGeminiSession, sendToSession } from './sessionManager.js';
+import { createModelSession, sendToSession } from './sessionManager.js';
 import { shouldReuseScoutReport } from '../statsSubstance.js';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from 'fs';
 import { join } from 'path';
@@ -65,7 +65,7 @@ function saveCachedScoutReport(homeTeam, awayTeam, sport, game, data) {
     console.warn(`[Orchestrator] Scout report cache write failed: ${e.message}`);
   }
 }
-import { buildFlashResearchBriefing } from './flashAdvisor.js';
+import { buildResearchBriefing } from './researchBriefing.js';
 import { buildPass1Message, buildPass1PropsMessage } from './passBuilders.js';
 import { runAgentLoop } from './agentLoop.js';
 import { normalizeSportToLeague } from './orchestratorHelpers.js';

@@ -1,4 +1,4 @@
-import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, fetchNBATeamScoringStats, fetchNBATeamAdvancedStats, fetchNBALeaders, fetchNBATeamBaseStats, fetchNBATeamOpponentStats, fetchNBATeamDefenseStats, fetchTopPlayersForTeam, formatRecentGames, buildPaceAnalysis, BDL_API_KEY, _nbaBaseStatsCache, _nbaAdvancedStatsCache, _nbaOpponentStatsCache, _nbaDefenseStatsCache, _nbaTeamScoringStatsCache, geminiGroundingSearch, isGameCompleted, getBarttovikRatings, isPostseasonOptions } from './statRouterCommon.js';
+import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, fetchNBATeamScoringStats, fetchNBATeamAdvancedStats, fetchNBALeaders, fetchNBATeamBaseStats, fetchNBATeamOpponentStats, fetchNBATeamDefenseStats, fetchTopPlayersForTeam, formatRecentGames, buildPaceAnalysis, BDL_API_KEY, _nbaBaseStatsCache, _nbaAdvancedStatsCache, _nbaOpponentStatsCache, _nbaDefenseStatsCache, _nbaTeamScoringStatsCache, groundedWebSearch, isGameCompleted, getBarttovikRatings, isPostseasonOptions } from './statRouterCommon.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { ncaabFetchers } from './ncaabFetchers.js';
 
@@ -1737,7 +1737,7 @@ export const nbaFetchers = {
         4. Death lineup or closing lineup if they have one
         Include minutes played for key lineups.`;
       
-      const groundingResult = await geminiGroundingSearch(query, {
+      const groundingResult = await groundedWebSearch(query, {
         systemMessage: 'You are an NBA lineup analyst. Provide lineup net ratings for starters, bench, and key 5-man combinations for both teams.'
       });
       
@@ -1746,7 +1746,7 @@ export const nbaFetchers = {
         source: 'Gemini Grounding (Live Search)',
         home: { team: home.full_name || home.name },
         away: { team: away.full_name || away.name },
-        // Jul 8 2026 fix: geminiGroundingSearch returns {success, data, raw} —
+        // Jul 8 2026 fix: groundedWebSearch returns {success, data, raw} —
         // the old .content read always fell through to 'Data unavailable'.
         grounding_data: groundingResult?.data || 'Data unavailable',
         comparison: 'Bench scoring and depth data for both teams.',

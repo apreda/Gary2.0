@@ -14,7 +14,7 @@
  * Fail-soft: any error, any unparseable reply → null
  * — a missing judge score can never delay or block a stored pick.
  */
-import { createGeminiSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
+import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 
 const JUDGE_MODEL =
   process.env.GARY_JUDGE_MODEL_OVERRIDE ||
@@ -56,7 +56,7 @@ const clamp = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(100, Mat
 export async function judgeWinnersCase(input) {
   try {
     if (!input?.finalPick || !input?.deskText) return null;
-    const session = await createGeminiSession({
+    const session = await createModelSession({
       modelName: JUDGE_MODEL,
       systemPrompt: JUDGE_SYSTEM,
       tools: [],

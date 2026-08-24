@@ -25,7 +25,7 @@ import '../src/loadEnv.js';
 import { writeFileSync, mkdirSync } from 'fs';
 import { createClient } from '@supabase/supabase-js';
 import { buildGarySystemPrompt } from '../src/services/pickdesk/garyBrain.js';
-import { createGeminiSession, sendToSessionWithRetry } from '../src/services/agentic/orchestrator/sessionManager.js';
+import { createModelSession, sendToSessionWithRetry } from '../src/services/agentic/orchestrator/sessionManager.js';
 
 // STALE twice over: morningBoardLine was deleted from the desk (Aug 4 2026)
 // and the blind split (Aug 5 2026) replaced THE_ASK with a three-turn
@@ -85,7 +85,7 @@ function injectMorningLine(desk, line) {
 }
 
 async function runArm(desk, matchup) {
-  const session = await createGeminiSession({
+  const session = await createModelSession({
     modelName: MODEL,
     systemPrompt: buildGarySystemPrompt(todayLong()),
     tools: [],

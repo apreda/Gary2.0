@@ -1,4 +1,4 @@
-import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, geminiGroundingSearch, getNcaabVenue, getBarttovikRatings } from './statRouterCommon.js';
+import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, groundedWebSearch, getNcaabVenue, getBarttovikRatings } from './statRouterCommon.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 
 export const ncaabFetchers = {
@@ -435,12 +435,12 @@ Only report numbers from ncaa.com. If not found, write "not found".`;
       };
 
       const [homeResponse, awayResponse] = await Promise.all([
-        geminiGroundingSearch(buildNetQuery(homeTeamName), groundingOpts),
-        geminiGroundingSearch(buildNetQuery(awayTeamName), groundingOpts)
+        groundedWebSearch(buildNetQuery(homeTeamName), groundingOpts),
+        groundedWebSearch(buildNetQuery(awayTeamName), groundingOpts)
       ]);
 
       const extractNetData = (response) => {
-        // Jul 8 2026 fix: geminiGroundingSearch returns {success, data, raw} —
+        // Jul 8 2026 fix: groundedWebSearch returns {success, data, raw} —
         // the old .content / OpenAI-choices reads always produced ''.
         let content = (response?.data || '').toLowerCase();
         // grounding.js now PRESERVES the model's staleness self-corrections
@@ -556,7 +556,7 @@ Quad 2: [W-L]
 Quad 3: [W-L]
 Quad 4: [W-L]`;
 
-      const response = await geminiGroundingSearch(query, {
+      const response = await groundedWebSearch(query, {
         temperature: 1.0,
         maxTokens: 2500,
         systemMessage: 'You are a college basketball expert specializing in NCAA tournament metrics. Provide accurate Quad records with complete data for BOTH teams. Format each team separately.'

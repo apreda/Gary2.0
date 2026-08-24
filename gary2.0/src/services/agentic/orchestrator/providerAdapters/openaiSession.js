@@ -7,7 +7,7 @@
  * that sessionManager produces. This adapter implements that exact contract
  * over the RESPONSES API (/v1/responses) so GARY_MODEL_OVERRIDE=gpt-5.5 swaps
  * the decision brain per run with zero agentLoop changes. Research
- * (flashAdvisor) stays on Gemini for every brain — only the Gary session moves.
+ * (researchBriefing) stays on Gemini for every brain — only the Gary session moves.
  *
  * Why /v1/responses: gpt-5.5 rejects function tools + reasoning_effort on
  * /v1/chat/completions ("Please use /v1/responses instead" — verified live

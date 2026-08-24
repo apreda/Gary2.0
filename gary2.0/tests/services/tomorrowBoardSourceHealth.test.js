@@ -40,11 +40,11 @@ vi.mock('../../src/services/ballDontLieService.js', () => ({
 
 vi.mock('../../src/services/agentic/orchestrator/orchestratorConfig.js', () => ({
   DESK_FALLBACK_MODELS: [],
-  GEMINI_PROPS_MODEL: 'test-model',
+  PROPS_DESK_MODEL: 'test-model',
 }));
 
 vi.mock('../../src/services/agentic/orchestrator/sessionManager.js', () => ({
-  createGeminiSession: vi.fn(),
+  createModelSession: vi.fn(),
   sendToSessionWithRetry: vi.fn(),
 }));
 

@@ -17,7 +17,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 process.env.OPENAI_API_KEY ||= 'test-key';
 process.env.GEMINI_API_KEY ||= 'test-key';
 
-const { createGeminiSession, sendToSession, resetSessionChat } = await import(
+const { createModelSession, sendToSession, resetSessionChat } = await import(
   '../../../src/services/agentic/orchestrator/sessionManager.js'
 );
 
@@ -66,8 +66,8 @@ describe('provider seam: gpt-* models route to the OpenAI adapter (Responses API
   beforeEach(() => vi.stubGlobal('fetch', vi.fn()));
   afterEach(() => vi.unstubAllGlobals());
 
-  it('createGeminiSession delegates gpt-5.5 to an OpenAI session (no Gemini validation coercion)', async () => {
-    const session = await createGeminiSession({ modelName: 'gpt-5.5', systemPrompt: 'You are Gary.', tools: [] });
+  it('createModelSession delegates gpt-5.5 to an OpenAI session (no Gemini validation coercion)', async () => {
+    const session = await createModelSession({ modelName: 'gpt-5.5', systemPrompt: 'You are Gary.', tools: [] });
     expect(session.provider).toBe('openai');
     expect(session.modelName).toBe('gpt-5.5');
     expect(session.previousResponseId).toBeNull();
@@ -76,7 +76,7 @@ describe('provider seam: gpt-* models route to the OpenAI adapter (Responses API
   it('sendToSession posts to /v1/responses with instructions, flat tools, and reasoning effort', async () => {
     fetch.mockResolvedValueOnce(textResponse('resp_1', 'INVESTIGATION COMPLETE'));
     const tools = [{ type: 'function', function: { name: 'fetch_stats', description: 'd', parameters: { type: 'object' } } }];
-    const session = await createGeminiSession({ modelName: 'gpt-5.5', systemPrompt: 'sys', tools });
+    const session = await createModelSession({ modelName: 'gpt-5.5', systemPrompt: 'sys', tools });
     const res = await sendToSession(session, 'Pass 1 please');
 
     const [url, req] = fetch.mock.calls[0];
@@ -102,7 +102,7 @@ describe('provider seam: gpt-* models route to the OpenAI adapter (Responses API
     fetch
       .mockResolvedValueOnce(textResponse('resp_1', 'first'))
       .mockResolvedValueOnce(textResponse('resp_2', 'second'));
-    const session = await createGeminiSession({ modelName: 'gpt-5.5', systemPrompt: 'sys', tools: [] });
+    const session = await createModelSession({ modelName: 'gpt-5.5', systemPrompt: 'sys', tools: [] });
     await sendToSession(session, 'turn one');
     await sendToSession(session, 'turn two');
 
@@ -120,7 +120,7 @@ describe('provider seam: gpt-* models route to the OpenAI adapter (Responses API
       ]))
       .mockResolvedValueOnce(textResponse('resp_2', 'thanks'));
 
-    const session = await createGeminiSession({ modelName: 'gpt-5.5', systemPrompt: 'sys', tools: [] });
+    const session = await createModelSession({ modelName: 'gpt-5.5', systemPrompt: 'sys', tools: [] });
     const first = await sendToSession(session, 'go');
     // Normalized to the chat-completions toolCalls shape agentLoop consumes.
     expect(first.toolCalls).toHaveLength(2);
@@ -151,7 +151,7 @@ describe('provider seam: gpt-* models route to the OpenAI adapter (Responses API
       ]))
       .mockResolvedValueOnce(textResponse('resp_2', 'proceeding'));
 
-    const session = await createGeminiSession({ modelName: 'gpt-5.5', systemPrompt: 'sys', tools: [] });
+    const session = await createModelSession({ modelName: 'gpt-5.5', systemPrompt: 'sys', tools: [] });
     await sendToSession(session, 'go');
     await sendToSession(session, 'All stats already gathered — proceed with your synthesis.');
 
@@ -178,7 +178,7 @@ describe('provider seam: gpt-* models route to the OpenAI adapter (Responses API
       ]))
       .mockResolvedValueOnce(textResponse('resp_2', 'ok'));
 
-    const session = await createGeminiSession({ modelName: 'gpt-5.5', systemPrompt: 'sys', tools: [] });
+    const session = await createModelSession({ modelName: 'gpt-5.5', systemPrompt: 'sys', tools: [] });
     await sendToSession(session, 'go');
     // Loop executed only two of the three (one deduped away).
     await sendToSession(session, [
@@ -197,13 +197,13 @@ describe('provider seam: gpt-* models route to the OpenAI adapter (Responses API
 
   it('flags 429s as quota errors for the loop cascade', async () => {
     fetch.mockResolvedValueOnce({ ok: false, status: 429, json: async () => ({ error: { message: 'rate limited' } }), text: async () => 'rate limited' });
-    const session = await createGeminiSession({ modelName: 'gpt-5.5', systemPrompt: 'sys', tools: [] });
+    const session = await createModelSession({ modelName: 'gpt-5.5', systemPrompt: 'sys', tools: [] });
     await expect(sendToSession(session, 'go')).rejects.toMatchObject({ isQuotaError: true });
   });
 
   it('resetSessionChat drops the chain and re-seeds retry context as the next turn preface', async () => {
     fetch.mockResolvedValueOnce(textResponse('resp_1', 'hi'));
-    const session = await createGeminiSession({ modelName: 'gpt-5.5', systemPrompt: 'sys', tools: [] });
+    const session = await createModelSession({ modelName: 'gpt-5.5', systemPrompt: 'sys', tools: [] });
     await sendToSession(session, 'hello');
     expect(session.previousResponseId).toBe('resp_1');
 

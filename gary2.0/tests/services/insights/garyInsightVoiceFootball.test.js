@@ -6,7 +6,7 @@ const sessions = vi.hoisted(() => ({
 }));
 
 vi.mock('../../../src/services/agentic/orchestrator/sessionManager.js', () => ({
-  createGeminiSession: sessions.create,
+  createModelSession: sessions.create,
   sendToSessionWithRetry: sessions.send,
 }));
 

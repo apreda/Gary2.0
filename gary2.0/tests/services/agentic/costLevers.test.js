@@ -71,8 +71,8 @@ describe('#3 briefing contract: no ordered re-investigation, no leash (Jul 22 ev
 });
 
 describe('#4 grounding budget: NHL 10 / stat-rich sports 4', () => {
-  it('flashAdvisor carries the tiered cap', () => {
-    const flash = src('orchestrator/flashAdvisor.js');
+  it('researchBriefing carries the tiered cap', () => {
+    const flash = src('orchestrator/researchBriefing.js');
     expect(flash).toContain('isNHLSport ? 10 : 4');
     expect(flash).not.toContain('isNHLSport ? 10 : 8');
   });

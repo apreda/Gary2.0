@@ -29,7 +29,7 @@ const DOSSIER_SURFACE_FILES = [
   '../scoutReport/sports/pitcherArc.js',
   '../tools/statRouters/mlbFetchers.js',
   '../flashInvestigationPrompts.js',
-  './flashAdvisor.js',
+  './researchBriefing.js',
   // The factor PLAN is dossier surface too — its order is the briefing's
   // order (added Aug 19 with the situation-first walk).
   './investigationFactors.js',

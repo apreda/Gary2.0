@@ -21,7 +21,7 @@
  * Same lesson as the ANTHROPIC_API_KEY hijack: the default has to be the
  * thing we actually run, or the env is load-bearing in a way nobody can see.
  */
-import { createGeminiSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
+import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { DESK_FALLBACK_MODELS } from '../agentic/orchestrator/orchestratorConfig.js';
 
 export const contentModel = () => process.env.GARY_CONTENT_MODEL_OVERRIDE || 'claude-sonnet-5';
@@ -31,7 +31,7 @@ export async function generateSolText(prompt, { maxTokens = 4000, effort = 'high
   const failures = [];
   for (const modelName of contentModelCascade()) {
     try {
-      const session = await createGeminiSession({
+      const session = await createModelSession({
         modelName,
         systemPrompt: '',
         tools: [],

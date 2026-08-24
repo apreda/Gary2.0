@@ -19,7 +19,7 @@ import {
   formatStreak,
   escapeRegex
 } from './utilities.js';
-import { groundingSearch, geminiGroundingSearch } from './grounding.js';
+import { groundingSearch, groundedWebSearch } from './grounding.js';
 import { generateSolText } from '../../../insights/solText.js';
 import { fetchAnthropicFootballCurrentState } from './anthropicFootballGrounding.js';
 import { spreadForSide } from '../../../marketTruth.js';
@@ -2030,7 +2030,7 @@ Only names and positions. No extra text.`;
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     const query = buildQuery(attempt);
-    const response = await geminiGroundingSearch(query, { maxTokens: 4000 });
+    const response = await groundedWebSearch(query, { maxTokens: 4000 });
     if (!response?.success || !response?.data) {
       if (attempt === 2) throw new Error('NBA lineup grounding returned no data after 2 attempts');
       console.warn(`[Scout Report] NBA lineup grounding attempt ${attempt} returned no data — retrying`);
@@ -2126,8 +2126,8 @@ Report whether the goalie is "Confirmed" or "Expected" based on what RotoWire sh
       if (teamIds.length < 2) console.warn(`[Scout Report] ⚠️ NHL injury: Only ${teamIds.length} team IDs resolved: [${teamIds.join(', ')}] — may fetch incomplete injury data`);
 
       const [awayGoalieResponse, homeGoalieResponse, bdlInjuries] = await Promise.all([
-        geminiGroundingSearch(makeNhlGoalieQuery(awayTeam, homeTeam), { maxTokens: 500 }),
-        geminiGroundingSearch(makeNhlGoalieQuery(homeTeam, awayTeam), { maxTokens: 500 }),
+        groundedWebSearch(makeNhlGoalieQuery(awayTeam, homeTeam), { maxTokens: 500 }),
+        groundedWebSearch(makeNhlGoalieQuery(homeTeam, awayTeam), { maxTokens: 500 }),
         ballDontLieService.getNhlPlayerInjuries(teamIds)
       ]);
 

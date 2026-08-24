@@ -1,4 +1,4 @@
-import { validateGeminiModel } from './orchestratorConfig.js';
+import { validateSessionModel } from './orchestratorConfig.js';
 import { isOpenAiModel, createOpenAISession, sendToOpenAISession, resetOpenAISessionChat } from './providerAdapters/openaiSession.js';
 import { isClaudeCliModel, createClaudeCliSession, sendToClaudeCliSession, resetClaudeCliSessionChat } from './providerAdapters/claudeCliSession.js';
 import { isCodexCliModel, createCodexCliSession, sendToCodexCliSession, resetCodexCliSessionChat } from './providerAdapters/codexCliSession.js';
@@ -6,7 +6,7 @@ import { isAnthropicApiModel, createAnthropicApiSession, sendToAnthropicApiSessi
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PERSISTENT SESSION MANAGEMENT — the provider seam.
-// The function names keep their Gemini-era spellings (createGeminiSession /
+// The function names keep their Gemini-era spellings (createModelSession /
 // sendToSession…) for call-site stability, but since Aug 24 2026 every session
 // routes to an adapter: OpenAI API, Anthropic API, Claude CLI bridge, or the
 // codex CLI bridge. Gemini itself is retired (founder: "no more gemini for
@@ -24,14 +24,14 @@ import { isAnthropicApiModel, createAnthropicApiSession, sendToAnthropicApiSessi
  * @param {string} options.thinkingLevel - Thinking level: 'low', 'medium', 'high' (default: 'high')
  * @returns {Object} - Provider session object
  */
-export async function createGeminiSession(options = {}) {
+export async function createModelSession(options = {}) {
   // VENDOR BAN FIRST (founder, Aug 24 2026: "no more gemini for anything").
-  // validateGeminiModel refuses any gemini-* or unknown name and reroutes it
+  // validateSessionModel refuses any gemini-* or unknown name and reroutes it
   // to the research default — BEFORE adapter routing, so the coerced name
   // lands in a real adapter below. Every family the validator allows has an
   // adapter (gpt- / anthropic- / claude / codex-), which makes the old
   // Gemini session tail below unreachable; it now throws if ever entered.
-  const requestedModel = validateGeminiModel(options.modelName);
+  const requestedModel = validateSessionModel(options.modelName);
   if (requestedModel !== options.modelName) {
     options = { ...options, modelName: requestedModel };
   }
@@ -50,7 +50,7 @@ export async function createGeminiSession(options = {}) {
   if (isCodexCliModel(options.modelName)) {
     return createCodexCliSession(options);
   }
-  throw new Error(`[Session] Gemini session path is retired (founder, Aug 24 2026) — "${options.modelName}" reached the dead tail; validateGeminiModel should have rerouted it`);
+  throw new Error(`[Session] Gemini session path is retired (founder, Aug 24 2026) — "${options.modelName}" reached the dead tail; validateSessionModel should have rerouted it`);
 }
 
 export function resetSessionChat(session, seedHistory = []) {
@@ -74,7 +74,7 @@ export function resetSessionChat(session, seedHistory = []) {
  * Handles both text messages and function responses (single or batched)
  * SDK automatically preserves thought signatures
  *
- * @param {Object} session - Session from createGeminiSession
+ * @param {Object} session - Session from createModelSession
  * @param {string|Array} message - Text content OR array of function responses
  * @param {Object} options - Additional options
  * @param {boolean} options.isFunctionResponse - True if message contains function responses

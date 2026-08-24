@@ -202,7 +202,7 @@ export async function sendToClaudeCliSession(session, message, _options = {}) {
 
 /**
  * Grounded web search on the subscription — WebSearch tool only, nothing else.
- * Same return contract as openaiWebSearch/geminiGroundingSearch:
+ * Same return contract as openaiWebSearch/groundedWebSearch:
  * { success, data, raw }. Defaults to Sonnet (its own weekly bucket) so news
  * lookups don't eat the all-models cap the Fable brains draw from.
  */

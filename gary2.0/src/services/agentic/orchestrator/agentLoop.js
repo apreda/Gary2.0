@@ -1,7 +1,7 @@
-import { CONFIG, GEMINI_PRO_MODEL, GEMINI_PRO_FALLBACK, GEMINI_FLASH_MODEL, GEMINI_PROPS_MODEL, GAME_PICK_MODEL, GAME_ML_CAP, DESK_FALLBACK_MODELS, validateGeminiModel, RESEARCH_BRIEFING_TIMEOUT_MS } from './orchestratorConfig.js';
+import { CONFIG, LEGACY_BRAIN_MODEL, LEGACY_BRAIN_FALLBACK, LEGACY_RESEARCH_MODEL, PROPS_DESK_MODEL, GAME_PICK_MODEL, GAME_ML_CAP, DESK_FALLBACK_MODELS, validateSessionModel, RESEARCH_BRIEFING_TIMEOUT_MS } from './orchestratorConfig.js';
 import { isExplicitPropsPass } from '../propsSharedUtils.js';
-import { createGeminiSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
-import { extractTextualSummaryForModelSwitch, buildFlashResearchBriefing, extractResearcherQuestions, createResearcherFollowUpSession, askResearcher } from './flashAdvisor.js';
+import { createModelSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
+import { extractTextualSummaryForModelSwitch, buildResearchBriefing, extractResearcherQuestions, createResearcherFollowUpSession, askResearcher } from './researchBriefing.js';
 import { createCostTracker } from './costTracker.js';
 import { buildPass1Message, buildPass25Message, buildPass25PropsMessage, buildPass3Unified, buildPass3Props, FINALIZE_PROPS_TOOL, getFinalizePropsToolForSport, PROPS_PICK_SCHEMA, buildMlCapRetryMessage } from './passBuilders.js';
 import { parseGaryResponse, parsePropsResponse, normalizePickFormat, determineCurrentPass } from './responseParser.js';
@@ -199,7 +199,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // prompts, Jun 25-Jul 4). Founder reverted props to the documented Tier 2
   // on Jul 8; props win-rate stays on the nightly watch — one-line re-upgrade
   // if the lane sags.
-  const primaryModel = modelOverride ? modelOverride : (isPropsMode ? GEMINI_PROPS_MODEL : GAME_PICK_MODEL);
+  const primaryModel = modelOverride ? modelOverride : (isPropsMode ? PROPS_DESK_MODEL : GAME_PICK_MODEL);
   // Game-pick audit = numeric-corpus trace + count-claim verification over the
   // structured recent scores (both feed the same corrective-retry rail).
   const auditGamePick = (p, messages) => {
@@ -242,7 +242,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     : baseTools;
 
   // PERSISTENT SESSION SETUP — one session per brain, adapter-routed.
-  let currentSession = await createGeminiSession({ _costTracker: costTracker,
+  let currentSession = await createModelSession({ _costTracker: costTracker,
     modelName: primaryModel,
     systemPrompt: systemPrompt,
     tools: activeTools,
@@ -358,7 +358,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     console.log(`[Research Briefing] 🔬 Running the research briefing (Haiku with tools) — Gary waits for completion`);
     try {
       const briefingResult = await Promise.race([
-        buildFlashResearchBriefing(options.scoutReport, sport, homeTeam, awayTeam, { ...options, _costTracker: costTracker }),
+        buildResearchBriefing(options.scoutReport, sport, homeTeam, awayTeam, { ...options, _costTracker: costTracker }),
         new Promise((_, reject) => setTimeout(() => reject(new Error(`Flash research timed out after ${RESEARCH_BRIEFING_TIMEOUT_MS / 1000}s`)), RESEARCH_BRIEFING_TIMEOUT_MS))
       ]);
       if (briefingResult && typeof briefingResult === 'object') {
@@ -538,13 +538,13 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           if (textualContext.length < 2000) {
             console.warn(`[Orchestrator] LOW CONTEXT WARNING: Only ${textualContext.length} chars for model switch`);
           }
-          const remaining = [...new Set([...DESK_FALLBACK_MODELS, GEMINI_PRO_FALLBACK])]
+          const remaining = [...new Set([...DESK_FALLBACK_MODELS, LEGACY_BRAIN_FALLBACK])]
             .filter((m) => !triedQuotaModels.has(m));
           let rescued = false;
           for (const nextModel of remaining) {
             try {
               console.log(`[Orchestrator] ⚠️ ${currentModelName} quota/credits exhausted — cascading to ${nextModel}`);
-              currentSession = await createGeminiSession({ _costTracker: costTracker,
+              currentSession = await createModelSession({ _costTracker: costTracker,
                 modelName: nextModel,
                 systemPrompt: systemPrompt + '\n\n' + textualContext,
                 tools: currentPass === 'evaluation' ? [] : activeTools,

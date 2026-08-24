@@ -1,4 +1,4 @@
-import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, geminiGroundingSearch, getGroundedWeather, isGameCompleted } from './statRouterCommon.js';
+import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, groundedWebSearch, getGroundedWeather, isGameCompleted } from './statRouterCommon.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 
 export const nflFetchers = {
@@ -554,7 +554,7 @@ export const nflFetchers = {
         4. Yards per first down
         5. Negative play rate on early downs`;
       
-      const groundingResult = await geminiGroundingSearch(query, {
+      const groundingResult = await groundedWebSearch(query, {
         systemMessage: 'You are an NFL analyst. Use data from Pro Football Reference or Football Outsiders. Provide exact early down success metrics for both teams.'
       });
       
@@ -795,7 +795,7 @@ export const nflFetchers = {
         4. Sacks allowed this season
         5. Adjusted Line Yards (Football Outsiders)`;
       
-      const groundingResult = await geminiGroundingSearch(query, {
+      const groundingResult = await groundedWebSearch(query, {
         systemMessage: 'You are an NFL analyst. Use data from NFL Next Gen Stats for pass block win rate, and PFF/Football Outsiders for grades. Provide exact offensive line rankings and grades for both teams.'
       });
       
@@ -834,7 +834,7 @@ export const nflFetchers = {
         4. Run defense grade/Adjusted Line Yards allowed
         5. Key pass rushers and their individual win rates`;
       
-      const groundingResult = await geminiGroundingSearch(query, {
+      const groundingResult = await groundedWebSearch(query, {
         systemMessage: 'You are an NFL analyst. Use data from NFL Next Gen Stats for pass rush win rate, and PFF/Football Outsiders for grades. Provide exact defensive line rankings and pass rush data for both teams.'
       });
       
@@ -870,7 +870,7 @@ export const nflFetchers = {
         Include: average release time, % of quick throws (<2.5s), % of deep drops (>3s).
         Next Gen Stats data preferred.`;
       
-      const groundingResult = await geminiGroundingSearch(query, {
+      const groundingResult = await groundedWebSearch(query, {
         systemMessage: 'You are an NFL analyst. Use data from NFL Next Gen Stats or Pro Football Reference. Provide exact time to throw data for both teams QBs.'
       });
       
@@ -908,7 +908,7 @@ export const nflFetchers = {
         3. Short yardage conversion rate (3rd/4th and 1-2)
         4. Stuffed rate on goal line`;
       
-      const groundingResult = await geminiGroundingSearch(query, {
+      const groundingResult = await groundedWebSearch(query, {
         systemMessage: 'You are an NFL analyst. Use data from Pro Football Reference or Football Outsiders. Provide exact goal line and short yardage efficiency for both teams.'
       });
       
@@ -946,7 +946,7 @@ export const nflFetchers = {
         3. QB performance in hurry-up/no-huddle
         4. Game-winning drives this season`;
       
-      const groundingResult = await geminiGroundingSearch(query, {
+      const groundingResult = await groundedWebSearch(query, {
         systemMessage: 'You are an NFL analyst. Use data from Pro Football Reference or ESPN. Provide exact two minute drill efficiency for both teams.'
       });
       
@@ -985,7 +985,7 @@ export const nflFetchers = {
         4. Punting average and inside 20 %
         5. Kicker name and any recent misses`;
       
-      const groundingResult = await geminiGroundingSearch(query, {
+      const groundingResult = await groundedWebSearch(query, {
         systemMessage: 'You are an NFL analyst. Use data from Pro Football Reference or ESPN. Provide exact kicking and punting stats for both teams.'
       });
       
@@ -1024,7 +1024,7 @@ export const nflFetchers = {
         4. Punt return average
         5. Special Teams DVOA (if available)`;
       
-      const groundingResult = await geminiGroundingSearch(query, {
+      const groundingResult = await groundedWebSearch(query, {
         systemMessage: 'You are an NFL analyst. Use data from Football Outsiders or Pro Football Reference. Provide exact field position and return game data for both teams.'
       });
       
@@ -1062,7 +1062,7 @@ export const nflFetchers = {
         3. Points per game in primetime vs regular games
         4. Any notable primetime wins/losses`;
       
-      const groundingResult = await geminiGroundingSearch(query, {
+      const groundingResult = await groundedWebSearch(query, {
         systemMessage: 'You are an NFL analyst. Use data from Pro Football Reference or ESPN. Provide exact primetime game performance for both teams.'
       });
       
@@ -1101,7 +1101,7 @@ export const nflFetchers = {
         4. Aggressiveness rank
         5. 4th down behavior when trailing vs leading`;
       
-      const groundingResult = await geminiGroundingSearch(query, {
+      const groundingResult = await groundedWebSearch(query, {
         systemMessage: 'You are an NFL analyst. Use data from NFL Next Gen Stats, Pro Football Reference, or NFL.com. Provide exact 4th down decision rates and conversion percentages for both teams.'
       });
       
@@ -1468,7 +1468,7 @@ For each team's starting QB:
 
 Be factual with historical stats where available.`;
 
-      const qbResult = await geminiGroundingSearch(qbQuery, { temperature: 1.0, maxTokens: 1500 });
+      const qbResult = await groundedWebSearch(qbQuery, { temperature: 1.0, maxTokens: 1500 });
 
       return {
         category: 'QB Cold/Adverse Weather History',

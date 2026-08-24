@@ -119,9 +119,9 @@ describe('F-9 REVERSED (Jul 8 cost audit): props run on Tier 2', () => {
   // gain (36.6% on Tier 1 vs 43.1% on Tier 2 under the same debiased
   // prompts). Founder reverted Jul 8; modelTiering.test.js carries the
   // canonical pin — this one just documents that props stay on their own
-  // cheap tier (GEMINI_PROPS_MODEL since Jul 22 2026), never the big brain.
+  // cheap tier (PROPS_DESK_MODEL since Jul 22 2026), never the big brain.
   it('props mode selects the props-tier model, not the big brain', () => {
     const loop = src('src/services/agentic/orchestrator/agentLoop.js');
-    expect(loop).toContain('isPropsMode ? GEMINI_PROPS_MODEL : GAME_PICK_MODEL');
+    expect(loop).toContain('isPropsMode ? PROPS_DESK_MODEL : GAME_PICK_MODEL');
   });
 });

@@ -90,9 +90,9 @@ export function createCostTracker(pipelineLabel) {
 
       console.log(`\n[Cost] ═══ ${pipelineLabel} ═══`);
       for (const b of breakdown) {
-        let shortModel = 'Flash';
-        if (b.model.includes('3.5-flash')) shortModel = 'Flash 3.5';
-        else if (b.model.includes('pro')) shortModel = 'Pro';
+        // Print the real model, minus provider prefixes — the old 'Flash'/'Pro'
+        // nicknames were Gemini-era labels on non-Gemini calls (Aug 24 2026).
+        const shortModel = b.model.replace(/^(anthropic-|codex-)/, '');
         console.log(`[Cost]   ${shortModel}: ${b.calls} calls, ${(b.inputTokens / 1000).toFixed(1)}K in ($${b.inputCost.toFixed(2)}), ${(b.outputTokens / 1000).toFixed(1)}K out ($${b.outputCost.toFixed(2)}) = $${b.modelCost.toFixed(2)}`);
       }
       if (gc > 0) {

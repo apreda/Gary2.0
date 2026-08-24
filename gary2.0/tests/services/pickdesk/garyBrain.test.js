@@ -12,12 +12,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../../src/services/pickdesk/mlbDesk.js', () => ({ buildMlbDesk: vi.fn() }));
 vi.mock('../../../src/services/agentic/orchestrator/sessionManager.js', () => ({
-  createGeminiSession: vi.fn(),
+  createModelSession: vi.fn(),
   sendToSessionWithRetry: vi.fn(),
 }));
 
 import { buildMlbDesk } from '../../../src/services/pickdesk/mlbDesk.js';
-import { createGeminiSession, sendToSessionWithRetry } from '../../../src/services/agentic/orchestrator/sessionManager.js';
+import { createModelSession, sendToSessionWithRetry } from '../../../src/services/agentic/orchestrator/sessionManager.js';
 import { GAME_PICK_MODEL, DESK_FALLBACK_MODELS } from '../../../src/services/agentic/orchestrator/orchestratorConfig.js';
 import { analyzeGameDesk, mapFinalPick, THE_READ_ASK, buildTicketAsk, buildRunLineTicketAsk, buildCardAsk, buildGarySystemPrompt } from '../../../src/services/pickdesk/garyBrain.js';
 
@@ -61,7 +61,7 @@ const stage = (contents) => {
 beforeEach(() => {
   vi.clearAllMocks();
   buildMlbDesk.mockResolvedValue(DESK);
-  createGeminiSession.mockImplementation(async ({ modelName }) => ({ modelName }));
+  createModelSession.mockImplementation(async ({ modelName }) => ({ modelName }));
 });
 
 describe('analyzeGameDesk — the blind report → priced decision (Aug 12 contract)', () => {
@@ -138,9 +138,9 @@ describe('analyzeGameDesk — quota cascade (Jul 29 law, current chain)', () => 
       return { content, usage: {}, _message: message };
     });
     const r = await analyzeGameDesk({ id: 1 }, {});
-    expect(createGeminiSession.mock.calls[0][0].modelName).toBe(GAME_PICK_MODEL);
-    expect(createGeminiSession.mock.calls[1][0].modelName).toBe(DESK_FALLBACK_MODELS[0]);
-    expect(createGeminiSession.mock.calls[1][0].systemPrompt).toBe(createGeminiSession.mock.calls[0][0].systemPrompt);
+    expect(createModelSession.mock.calls[0][0].modelName).toBe(GAME_PICK_MODEL);
+    expect(createModelSession.mock.calls[1][0].modelName).toBe(DESK_FALLBACK_MODELS[0]);
+    expect(createModelSession.mock.calls[1][0].systemPrompt).toBe(createModelSession.mock.calls[0][0].systemPrompt);
     expect(r.pick).toBe('Cardinals ML -104');
     expect(r._modelUsed).toBe(DESK_FALLBACK_MODELS[0]);
   });
@@ -149,7 +149,7 @@ describe('analyzeGameDesk — quota cascade (Jul 29 law, current chain)', () => 
     const quotaErr = Object.assign(new Error('429: insufficient_quota'), { isQuotaError: true });
     sendToSessionWithRetry.mockRejectedValue(quotaErr);
     await expect(analyzeGameDesk({ id: 1 }, {})).rejects.toThrow();
-    expect(createGeminiSession).toHaveBeenCalledTimes(1 + DESK_FALLBACK_MODELS.length);
+    expect(createModelSession).toHaveBeenCalledTimes(1 + DESK_FALLBACK_MODELS.length);
   });
 });
 

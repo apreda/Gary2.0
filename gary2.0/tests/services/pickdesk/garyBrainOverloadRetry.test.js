@@ -10,12 +10,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../../src/services/pickdesk/mlbDesk.js', () => ({ buildMlbDesk: vi.fn() }));
 vi.mock('../../../src/services/agentic/orchestrator/sessionManager.js', () => ({
-  createGeminiSession: vi.fn(),
+  createModelSession: vi.fn(),
   sendToSessionWithRetry: vi.fn(),
 }));
 
 import { buildMlbDesk } from '../../../src/services/pickdesk/mlbDesk.js';
-import { createGeminiSession, sendToSessionWithRetry } from '../../../src/services/agentic/orchestrator/sessionManager.js';
+import { createModelSession, sendToSessionWithRetry } from '../../../src/services/agentic/orchestrator/sessionManager.js';
 import { GAME_PICK_MODEL, DESK_FALLBACK_MODELS } from '../../../src/services/agentic/orchestrator/orchestratorConfig.js';
 import { analyzeGameDesk } from '../../../src/services/pickdesk/garyBrain.js';
 
@@ -56,7 +56,7 @@ const OVERLOAD_ERR = () => Object.assign(
 beforeEach(() => {
   vi.clearAllMocks();
   buildMlbDesk.mockResolvedValue(DESK);
-  createGeminiSession.mockImplementation(async ({ modelName }) => ({ modelName }));
+  createModelSession.mockImplementation(async ({ modelName }) => ({ modelName }));
 });
 
 describe('analyzeGameDesk — overload retry policy', () => {

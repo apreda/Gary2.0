@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  createGeminiSession: vi.fn(),
+  createModelSession: vi.fn(),
   sendToSessionWithRetry: vi.fn(),
 }));
 
@@ -33,11 +33,11 @@ vi.mock('../../src/services/ballDontLieService.js', () => ({
 
 vi.mock('../../src/services/agentic/orchestrator/orchestratorConfig.js', () => ({
   DESK_FALLBACK_MODELS: [],
-  GEMINI_PROPS_MODEL: 'test-model',
+  PROPS_DESK_MODEL: 'test-model',
 }));
 
 vi.mock('../../src/services/agentic/orchestrator/sessionManager.js', () => ({
-  createGeminiSession: mocks.createGeminiSession,
+  createModelSession: mocks.createModelSession,
   sendToSessionWithRetry: mocks.sendToSessionWithRetry,
 }));
 
@@ -81,7 +81,7 @@ function starter(fullName, team, gameTime, era) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.createGeminiSession.mockResolvedValue({});
+  mocks.createModelSession.mockResolvedValue({});
 });
 
 describe('tomorrow board doubleheader identity', () => {
@@ -94,7 +94,7 @@ describe('tomorrow board doubleheader identity', () => {
     expect(board[0].arms_take).toBeUndefined();
     expect(board[1].arms_take).toContain('Rhett Lowder');
     expect(board[1].arms_take).toContain('Cardinals have not announced their starter');
-    expect(mocks.createGeminiSession).not.toHaveBeenCalled();
+    expect(mocks.createModelSession).not.toHaveBeenCalled();
     expect(mocks.sendToSessionWithRetry).not.toHaveBeenCalled();
   });
 

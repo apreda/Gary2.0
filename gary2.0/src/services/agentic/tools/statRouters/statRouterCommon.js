@@ -158,7 +158,7 @@
  */
 
 import { ballDontLieService } from '../../../ballDontLieService.js';
-import { geminiGroundingSearch, getGroundedWeather } from '../../scoutReport/scoutReportBuilder.js';
+import { groundedWebSearch, getGroundedWeather } from '../../scoutReport/scoutReportBuilder.js';
 import { isGameCompleted, formatStatValue, safeStatValue } from '../../sharedUtils.js';
 // Highlightly API — venue, H2H, last-five-games
 import { getNcaabVenue, getH2H, getLastFiveGames } from '../../../ncaabVenueService.js';
@@ -1325,7 +1325,7 @@ function buildPaceAnalysis(homeStats, awayStats) {
 export { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, fetchNBATeamScoringStats, fetchNBATeamAdvancedStats, fetchNBALeaders, fetchNBATeamBaseStats, fetchNBATeamOpponentStats, fetchNBATeamDefenseStats, fetchTopPlayersForTeam, formatRecentGames, buildPaceAnalysis, BDL_API_KEY, DEPRECATED_TOKENS, SPORT_SPECIFIC_ROUTING, _nbaBaseStatsCache, _nbaAdvancedStatsCache, _nbaOpponentStatsCache, _nbaDefenseStatsCache, _nbaTeamScoringStatsCache };
 
 // Re-export imported dependencies for fetcher sub-modules
-export { geminiGroundingSearch, getGroundedWeather } from '../../scoutReport/scoutReportBuilder.js';
+export { groundedWebSearch, getGroundedWeather } from '../../scoutReport/scoutReportBuilder.js';
 export { isGameCompleted } from '../../sharedUtils.js';
 export { getNcaabVenue } from '../../../ncaabVenueService.js';
 export { getTeamRatings as getBarttovikRatings } from '../../../ncaabMetricsService.js';

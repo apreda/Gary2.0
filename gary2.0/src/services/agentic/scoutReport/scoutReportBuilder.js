@@ -15,8 +15,8 @@ import { buildNcaafScoutReport } from './sports/ncaaf.js';
 import { buildMlbScoutReport } from './sports/mlb.js';
 
 // Re-export shared utilities for external consumers
-// (orchestrator/, flashAdvisor, statRouters/, dfsToolDefinitions, etc.)
-export { geminiGroundingSearch, getGroundedWeather } from './shared/grounding.js';
+// (orchestrator/, researchBriefing, statRouters/, dfsToolDefinitions, etc.)
+export { groundedWebSearch, getGroundedWeather } from './shared/grounding.js';
 export { fetchPropLineMovement, getPlayerPropMovement, fetchComprehensivePropsNarrative } from './shared/propsUtilities.js';
 export { buildVerifiedTaleOfTape } from './shared/taleOfTape.js';
 export { fetchCurrentState } from './shared/dataFetchers.js';

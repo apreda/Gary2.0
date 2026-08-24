@@ -11,12 +11,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../../src/services/pickdesk/mlbDesk.js', () => ({ buildMlbDesk: vi.fn() }));
 vi.mock('../../../src/services/agentic/orchestrator/sessionManager.js', () => ({
-  createGeminiSession: vi.fn(),
+  createModelSession: vi.fn(),
   sendToSessionWithRetry: vi.fn(),
 }));
 
 import { buildMlbDesk } from '../../../src/services/pickdesk/mlbDesk.js';
-import { createGeminiSession, sendToSessionWithRetry } from '../../../src/services/agentic/orchestrator/sessionManager.js';
+import { createModelSession, sendToSessionWithRetry } from '../../../src/services/agentic/orchestrator/sessionManager.js';
 import { analyzeGameDesk, THE_READ_ASK, buildTicketAsk, buildRunLineTicketAsk } from '../../../src/services/pickdesk/garyBrain.js';
 
 const RL_DESK = {
@@ -56,7 +56,7 @@ const stage = (contents) => {
 beforeEach(() => {
   vi.clearAllMocks();
   buildMlbDesk.mockResolvedValue(RL_DESK);
-  createGeminiSession.mockImplementation(async ({ modelName }) => ({ modelName }));
+  createModelSession.mockImplementation(async ({ modelName }) => ({ modelName }));
 });
 
 describe('analyzeGameDesk — run-line games read blind (Aug 12 contract)', () => {

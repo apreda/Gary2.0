@@ -1,4 +1,4 @@
-import { createGeminiSession, sendToSessionWithRetry, resetSessionChat } from './sessionManager.js';
+import { createModelSession, sendToSessionWithRetry, resetSessionChat } from './sessionManager.js';
 import { getFlashInvestigationPrompt } from '../flashInvestigationPrompts.js';
 import { getMlbSeasonAwareness } from './spreadEvaluationFactors.js';
 import { GAME_RESEARCH_MODEL } from './orchestratorConfig.js';
@@ -7,7 +7,7 @@ import { nbaSeason, nflSeason, getESTDate, toESTDate } from '../../../utils/date
 import { toolDefinitions, getTokensForSport } from '../tools/toolDefinitions.js';
 import { fetchStats } from '../tools/statRouters/index.js';
 import { summarizeStatForContext, summarizeNbaPlayerAdvancedStats, summarizeMlbPlayerGameLogs } from './orchestratorHelpers.js';
-import { geminiGroundingSearch } from '../scoutReport/scoutReportBuilder.js';
+import { groundedWebSearch } from '../scoutReport/scoutReportBuilder.js';
 import {
   buildResearchFactorPlan,
   findMissingRequiredResearchFactors,
@@ -193,7 +193,7 @@ export function extractTextualSummaryForModelSwitch(messages, toolCallHistory = 
  * @param {Object} options - Game options (passed through to fetchStats)
  * @returns {{ briefing: string, calledTokens: Array }|null} - Research briefing + called tokens, or null on failure
  */
-export async function buildFlashResearchBriefing(scoutReportContent, sport, homeTeam, awayTeam, options = {}) {
+export async function buildResearchBriefing(scoutReportContent, sport, homeTeam, awayTeam, options = {}) {
   const startTime = Date.now();
   try {
     // Strip every league-family prefix BDL uses, otherwise sportLabel ends up as
@@ -260,7 +260,7 @@ Current preseason personnel, announced starter rest, rotations, injuries and coa
     const flashThinkingLevel = 'high';
     const flashMaxOutput = undefined; // use CONFIG.maxTokens default
 
-    const briefingSession = await createGeminiSession({
+    const briefingSession = await createModelSession({
       _costTracker: options._costTracker || null,
       // EVERY game sport's research runs the Haiku tier (June engine, Aug 18
       // 2026 — the founder's one-system law: no Gemini in any pick lane).
@@ -765,7 +765,7 @@ ${scoutReportContent}
 
 ## YOUR EARLIER BRIEFING
 ${briefing}`;
-  return createGeminiSession({
+  return createModelSession({
     _costTracker,
     modelName: GAME_RESEARCH_MODEL,
     systemPrompt,

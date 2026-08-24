@@ -17,8 +17,8 @@
  */
 import { createHash } from 'crypto';
 import { buildMlbDesk, fetchTonightsGameCall } from './mlbDesk.js';
-import { GEMINI_PROPS_MODEL, GEMINI_PRO_FALLBACK, DESK_FALLBACK_MODELS, DESK_COST_PER_M } from '../agentic/orchestrator/orchestratorConfig.js';
-import { createGeminiSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
+import { PROPS_DESK_MODEL, LEGACY_BRAIN_FALLBACK, DESK_FALLBACK_MODELS, DESK_COST_PER_M } from '../agentic/orchestrator/orchestratorConfig.js';
+import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { normalizePropBetDirection } from '../agentic/propsSharedUtils.js';
 import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from '../agentic/orchestrator/statAudit.js';
 import { ballDontLieService } from '../ballDontLieService.js';
@@ -408,7 +408,7 @@ export async function runPropsDeskBrain({ systemPrompt, userMessage, corpus, rec
   // not an organic pass, so it must enter the same cascade as quota/network
   // failures after the one repair request is exhausted.
   const runPropsPass = async (modelName) => {
-    const session = await createGeminiSession({
+    const session = await createModelSession({
       modelName,
       systemPrompt,
       tools: [],
@@ -458,7 +458,7 @@ export async function runPropsDeskBrain({ systemPrompt, userMessage, corpus, rec
   // Match the game-desk resilience policy: subscription primary, the other
   // subscription provider, then the remaining desk fallbacks. De-duplicate so
   // an override can never retry the same exhausted model under another slot.
-  const cascade = [...new Set([GEMINI_PROPS_MODEL, ...DESK_FALLBACK_MODELS, GEMINI_PRO_FALLBACK])];
+  const cascade = [...new Set([PROPS_DESK_MODEL, ...DESK_FALLBACK_MODELS, LEGACY_BRAIN_FALLBACK])];
   // RESPONDER STAMP + OVERLOAD RETRY (founder GO, Aug 12): mirrors the game
   // lane. Server-busy errors retry the SAME brain before cascading (a 529 is
   // not a cap), and the brain that actually answered stamps every pick — a

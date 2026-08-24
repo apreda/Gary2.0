@@ -25,7 +25,7 @@ import { createHash } from 'crypto';
 import { buildMlbDesk } from './mlbDesk.js';
 import { pickSideByName } from '../teamIdentity.js';
 import { GAME_PICK_MODEL, DESK_FALLBACK_MODELS, DESK_COST_PER_M } from '../agentic/orchestrator/orchestratorConfig.js';
-import { createGeminiSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
+import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from '../agentic/orchestrator/statAudit.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -259,7 +259,7 @@ const topThinkingLevel = (modelName) => (modelName.startsWith('gemini') ? 'high'
  * THROW — the cascade in analyzeGameDesk owns those.
  */
 async function runBrainPass(modelName, systemPrompt, firstMessage, boardText, auditAll, runLineGame = false) {
-  const session = await createGeminiSession({
+  const session = await createModelSession({
     modelName,
     systemPrompt,
     tools: [],

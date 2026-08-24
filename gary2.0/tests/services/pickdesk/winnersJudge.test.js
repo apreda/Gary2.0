@@ -6,11 +6,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../../src/services/agentic/orchestrator/sessionManager.js', () => ({
-  createGeminiSession: vi.fn(),
+  createModelSession: vi.fn(),
   sendToSessionWithRetry: vi.fn(),
 }));
 
-import { createGeminiSession, sendToSessionWithRetry } from '../../../src/services/agentic/orchestrator/sessionManager.js';
+import { createModelSession, sendToSessionWithRetry } from '../../../src/services/agentic/orchestrator/sessionManager.js';
 import { judgeWinnersCase, buildJudgeAsk, JUDGE_SYSTEM } from '../../../src/services/pickdesk/winnersJudge.js';
 
 const INPUT = {
@@ -23,7 +23,7 @@ const INPUT = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  createGeminiSession.mockResolvedValue({ modelName: 'judge' });
+  createModelSession.mockResolvedValue({ modelName: 'judge' });
 });
 
 describe('judgeWinnersCase', () => {

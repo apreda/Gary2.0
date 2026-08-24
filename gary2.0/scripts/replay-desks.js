@@ -18,7 +18,7 @@ import '../src/loadEnv.js';
 import { writeFileSync, mkdirSync } from 'fs';
 import { createClient } from '@supabase/supabase-js';
 import { buildGarySystemPrompt } from '../src/services/pickdesk/garyBrain.js';
-import { createGeminiSession, sendToSessionWithRetry } from '../src/services/agentic/orchestrator/sessionManager.js';
+import { createModelSession, sendToSessionWithRetry } from '../src/services/agentic/orchestrator/sessionManager.js';
 
 // STALE since the blind split (Aug 5 2026): the live contract is three turns
 // (blind read → lines+ticket → card) and THE_ASK no longer exists. A faithful
@@ -81,7 +81,7 @@ function pickedSide(finalPick, board) {
 }
 
 async function runArm(desk, matchup, ask) {
-  const session = await createGeminiSession({
+  const session = await createModelSession({
     modelName: MODEL,
     systemPrompt: buildGarySystemPrompt(todayLong()),
     tools: [],
