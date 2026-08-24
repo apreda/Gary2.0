@@ -1,4 +1,3 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { toolDefinitions, getTokensForSport } from '../tools/toolDefinitions.js';
 import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js';
 import { getConstitution } from '../constitution/index.js';
@@ -6,7 +5,7 @@ import { getFlashInvestigationPrompt } from '../flashInvestigationPrompts.js';
 import { buildScoutReport } from '../scoutReport/scoutReportBuilder.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, nhlSeason, nflSeason, ncaabSeason } from '../../../utils/dateUtils.js';
-import { CONFIG, GEMINI_PRO_MODEL } from './orchestratorConfig.js';
+import { CONFIG } from './orchestratorConfig.js';
 import { createGeminiSession, sendToSession } from './sessionManager.js';
 import { shouldReuseScoutReport } from '../statsSubstance.js';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from 'fs';

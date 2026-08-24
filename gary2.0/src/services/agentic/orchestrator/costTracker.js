@@ -5,19 +5,11 @@
 // Output tokens include thinking tokens (Gemini API bundles them together).
 //
 // Pricing (May 2026, Gemini Developer API):
-//   Flash 3.5:  $1.50/1M input,  $9.00/1M output — primary brain (GA)
-//   Pro 3.1:    $2.00/1M input, $12.00/1M output — fallback only
-//   Flash 3:    $0.50/1M input,  $3.00/1M output — research + props + DFS
-//   Grounding:  $14.00/1K queries (after 5K free/month)
+//   Rates for the live model families (Gemini retired Aug 24 2026 —
+//   its rows left the table with the vendor).
 // ═══════════════════════════════════════════════════════════════════════════
 
 const MODEL_RATES = {
-  'gemini-3.5-flash':         { input: 1.50, output: 9.00 },
-  'gemini-3.1-pro-preview':   { input: 2.00, output: 12.00 },
-  'gemini-3-flash-preview':   { input: 0.50, output: 3.00 },
-  // Released Jul 22 2026; launch pricing not yet published — carrying the
-  // 3-flash-preview rates until verified. VERIFY when Google posts pricing.
-  'gemini-3.6-flash':         { input: 0.50, output: 3.00 },
   // Bake-off brains (verified Jul 6 2026 via web + the account's model list).
   // gpt-5.5 (Apr 2026): $5/$30, cached input $0.50.
   // Sonnet 5 at intro pricing (through 2026-08-31; list is $3/$15).
@@ -46,7 +38,7 @@ export function createCostTracker(pipelineLabel) {
   return {
     /**
      * Record token usage from one API response.
-     * @param {string} model - Model name (e.g. 'gemini-3-flash-preview')
+     * @param {string} model - Model name (e.g. 'anthropic-claude-haiku-4-5')
      * @param {Object} usage - { prompt_tokens, completion_tokens }
      */
     addUsage(model, usage) {
@@ -68,7 +60,7 @@ export function createCostTracker(pipelineLabel) {
       const breakdown = [];
 
       for (const [model, b] of Object.entries(buckets)) {
-        const rates = MODEL_RATES[model] || MODEL_RATES['gemini-3-flash-preview'];
+        const rates = MODEL_RATES[model] || MODEL_RATES['anthropic-claude-haiku-4-5'];
         const inputCost = (b.inputTokens / 1_000_000) * rates.input;
         const outputCost = (b.outputTokens / 1_000_000) * rates.output;
         const modelCost = inputCost + outputCost;
