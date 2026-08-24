@@ -83,5 +83,87 @@ try {
   line(`Stored (${etToday})`, picks.length === 0 ? 'no game picks yet' : `${picks.length} picks · eras [${eras.join(', ')}] · models [${models.join(', ')}]`);
 } catch (e) { line('Stored picks', `(unavailable: ${e.message})`); }
 
+// 6. DEPLOY PARITY (founder law, Aug 24 2026: "if we change something here I
+//    assume it was changed in production too — that needs to be the case at
+//    the end of each session"). For every edge function: compare the last
+//    LOCAL change (latest git commit touching its folder — or _shared/ when
+//    the function imports from it — plus any uncommitted edits, which always
+//    count as newer) against the DEPLOYED version's updated_at from the
+//    Supabase API. Local newer than deployed = the repo is lying about
+//    production → the whole check fails.
+console.log('\n─── DEPLOY PARITY (edge functions) ───');
+try {
+  const { readdirSync, readFileSync, existsSync, statSync } = await import('fs');
+  const { join } = await import('path');
+  const fnRoot = join(PROJECT_DIR, 'supabase', 'functions');
+  const deployed = JSON.parse(execSync(
+    'npx supabase functions list --project-ref xuttubsfgdcjfgmskcol -o json',
+    { shell: '/bin/bash', cwd: PROJECT_DIR, timeout: 60_000 },
+  ).toString());
+  const deployedBySlug = new Map(deployed.map((f) => [f.slug, f]));
+
+  const gitLastMs = (relPath) => {
+    try {
+      const out = execSync(`git log -1 --format=%ct -- ${JSON.stringify(relPath)}`, { cwd: PROJECT_DIR }).toString().trim();
+      return out ? Number(out) * 1000 : 0;
+    } catch { return 0; }
+  };
+  const isDirty = (relPath) => {
+    try {
+      return execSync(`git status --porcelain -- ${JSON.stringify(relPath)}`, { cwd: PROJECT_DIR }).toString().trim().length > 0;
+    } catch { return false; }
+  };
+  const sharedLastMs = gitLastMs('supabase/functions/_shared');
+  const sharedDirty = isDirty('supabase/functions/_shared');
+
+  const localFns = readdirSync(fnRoot).filter((name) => {
+    if (name.startsWith('_') || name.startsWith('.')) return false;
+    try { return statSync(join(fnRoot, name)).isDirectory() && existsSync(join(fnRoot, name, 'index.ts')); }
+    catch { return false; }
+  });
+
+  for (const fn of localFns) {
+    const rel = `supabase/functions/${fn}`;
+    const usesShared = (() => {
+      try {
+        return readdirSync(join(fnRoot, fn))
+          .filter((f) => f.endsWith('.ts') || f.endsWith('.js'))
+          .some((f) => readFileSync(join(fnRoot, fn, f), 'utf8').includes('_shared/'));
+      } catch { return false; }
+    })();
+    const dirty = isDirty(rel) || (usesShared && sharedDirty);
+    const localMs = Math.max(gitLastMs(rel), usesShared ? sharedLastMs : 0);
+    const row = deployedBySlug.get(fn);
+    if (!row) {
+      line(fn, '🚨 NEVER DEPLOYED (no remote function with this slug)');
+      failed = true;
+      continue;
+    }
+    const deployedMs = Number(row.updated_at || 0);
+    if (dirty) {
+      line(fn, `🚨 UNCOMMITTED LOCAL EDITS — deployed copy is behind by definition`);
+      failed = true;
+    } else if (localMs > deployedMs + 30 * 60_000) {
+      // 30-min tolerance: the historical workflow deploys first and commits
+      // minutes later — that ordering is parity, not drift.
+      line(fn, `🚨 LOCAL NEWER THAN DEPLOYED (local ${new Date(localMs).toISOString()} > deployed ${new Date(deployedMs).toISOString()}) — deploy it`);
+      failed = true;
+    } else {
+      line(fn, `✅ deployed ${new Date(deployedMs).toISOString().slice(0, 16)}Z (v${row.version})`);
+    }
+  }
+} catch (e) {
+  line('Edge parity', `⚠️ UNVERIFIED (${String(e.message).slice(0, 120)}) — do not claim parity without this check`);
+}
+
+// 7. Git truth: uncommitted work and unpushed commits are drift too.
+try {
+  const dirtyCount = execSync('git status --porcelain', { cwd: PROJECT_DIR }).toString().trim().split('\n').filter(Boolean).length;
+  line('Working tree', dirtyCount === 0 ? '✅ clean' : `⚠️ ${dirtyCount} uncommitted change(s)`);
+  const unpushed = execSync('git rev-list --count @{u}..HEAD', { cwd: PROJECT_DIR }).toString().trim();
+  if (unpushed !== '0') { line('Unpushed', `⚠️ ${unpushed} commit(s) not on origin`); }
+  else line('Unpushed', '✅ none');
+} catch (e) { line('Git truth', `(unavailable: ${e.message})`); }
+
 console.log(`\n${failed ? '🚨 PRODUCTION IS NOT THIS REPO — see flags above' : '✅ Production is this repo.'}\n`);
 process.exit(failed ? 1 : 0);
