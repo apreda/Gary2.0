@@ -851,7 +851,11 @@ Deno.serve(async (req) => {
     }
     if (metricsOnly) return Response.json({ metrics_only: true, metrics });
 
-    if (!ANTHROPIC_KEY) return Response.json({ error: "ANTHROPIC_API_KEY secret not set — add it in Supabase dashboard → Project Settings → Edge Functions → Secrets", metrics }, { status: 500 });
+    // Missing key is a WARNING, never a run-killer: sentence SELECTION is the
+    // only thing the model does here, and the deterministic verbatim chooser
+    // covers it — the Aug 21 outage law says a dead vendor must never silence
+    // the account. callLLM throws per-call and the per-pick catch handles it.
+    if (!ANTHROPIC_KEY) console.error("ANTHROPIC_API_KEY secret not set — posts run on the verbatim fallback until it is added (Supabase dashboard → Project Settings → Edge Functions → Secrets)");
 
     // Verdict loop rides every unforced hourly run: finals detected within ~1hr, quote-tweeted.
     let verdict: any = undefined;
