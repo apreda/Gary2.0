@@ -1266,7 +1266,7 @@ struct HubView: View {
                         league: sel,
                         signals: leagueSignals.filter {
                             Self.fantasyKinds.contains($0.kind)
-                                || (sel == .ncaaf && $0.kind == .nextSlate)
+                                || $0.kind == .nextSlate
                         },
                         loaded: didLoad
                     ) { s in openSignal(s) }
@@ -1328,8 +1328,9 @@ struct HubView: View {
                 }
             }
 
-            // NCAAF dark day: no slate to strip, so the verified next kickoff
-            // takes the strip's place rather than leaving the page headless.
+            // Football dark day (NFL + NCAAF since Aug 24): no slate to strip,
+            // so the verified next kickoff takes the strip's place rather than
+            // leaving the page headless.
             if showsNextSlateCard, let next = leagueSignals.first(where: { $0.kind == .nextSlate }) {
                 FootballNextSlatePreview(signal: next, accent: GaryColors.gold)
                     .id("nextSlate")

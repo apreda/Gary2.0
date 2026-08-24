@@ -212,7 +212,11 @@ enum SupabaseAPI {
         guard let results = try? await fetchAllGameResults(since: since) else { return nil }
         var w = 0, l = 0
         let normalizedLeague = league?.uppercased()
-        for r in results where !AppFlags.hidesWorldCupRow(r.league) {
+        // PRESEASON NEVER COUNTS (founder law, Aug 21): this header record was
+        // the one tally that skipped `.countable`, so the NFL Picks page wore
+        // an all-exhibition "L7 10-5 · 67%" (caught in the Aug 24 parity
+        // sweep). Rows stay graded on their cards; only the math excludes.
+        for r in results.countable where !AppFlags.hidesWorldCupRow(r.league) {
             if let normalizedLeague, r.effectiveLeague?.uppercased() != normalizedLeague {
                 continue
             }

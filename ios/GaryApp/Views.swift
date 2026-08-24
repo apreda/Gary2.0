@@ -16826,6 +16826,19 @@ struct CompactPickRow: View {
     private var isCFP: Bool { pick.isCFP }
     private var pickParts: (pick: String, odds: String) { pick.formattedPickParts }
 
+    /// Either side's abbreviation for the compact meta row (long-tag cards).
+    /// NCAAF prefers the pick's own stored abbreviations; every other league
+    /// resolves through the shared keyword maps.
+    private func metaTeamAbbrev(homeSide: Bool) -> String {
+        if (pick.league ?? "").uppercased() == "NCAAF" {
+            let stored = homeSide ? pick.homeTeamAbbreviation : pick.awayTeamAbbreviation
+            if let value = stored?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty {
+                return value.uppercased()
+            }
+        }
+        return teamAbbrevFromName(homeSide ? homeName : awayName, league: pick.league)
+    }
+
     /// Picked team's standard abbreviation (PHI, NYK, VGK, ...) via the league
     /// keyword maps, with a mascot-initials fallback for other leagues.
     private func teamAbbrev(_ shortName: String) -> String {
@@ -17137,9 +17150,17 @@ struct CompactPickRow: View {
         // Specials: the event name already leads the page strip — repeating
         // "HR Derby @ Philly" here just ellipsizes the price off the row.
         if (pick.type ?? "") == "special" { return "" }
-        let opponent = homeIsPicked ? "vs \(awayName)"
-            : awayIsPicked ? "@ \(homeName)"
-            : "\(awayName) @ \(homeName)"
+        // A long tag ("NFL PRESEASON", playoff labels) squeezes this row until
+        // a full nickname has to truncate — the Aug 24 sweep caught
+        // "vs Seaha…". When the tag carries words beyond the bare league, the
+        // matchup rides abbreviations instead (the board's own register), and
+        // the price keeps its fixed slot either way. No ellipsis, ever.
+        let compact = significanceTag != (pick.league ?? "").uppercased()
+        let awayLabel = compact ? metaTeamAbbrev(homeSide: false) : awayName
+        let homeLabel = compact ? metaTeamAbbrev(homeSide: true) : homeName
+        let opponent = homeIsPicked ? "vs \(awayLabel)"
+            : awayIsPicked ? "@ \(homeLabel)"
+            : "\(awayLabel) @ \(homeLabel)"
         let parts = [opponent]
         // The final score + LIVE/FINAL state now ride the FOOTER strip on every card
         // (user call, Jun 18) — meta keeps just the matchup; odds render after it.

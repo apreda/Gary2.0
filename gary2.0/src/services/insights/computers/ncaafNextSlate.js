@@ -53,7 +53,9 @@ function detailForCounts(gameCount, confirmedCount, timeTbdCount) {
     const verb = timeTbdCount === 1 ? 'remains' : 'remain';
     return `${prefix} ${confirmedCount} have confirmed kickoff times; ${timeTbdCount} ${verb} TIME TBD.`;
   }
-  return `${prefix} All ${confirmedCount} kickoff times are confirmed.`;
+  return confirmedCount === 1
+    ? `${prefix} Its kickoff time is confirmed.`
+    : `${prefix} All ${confirmedCount} kickoff times are confirmed.`;
 }
 
 /** Build the single persisted context row after provider validation. */

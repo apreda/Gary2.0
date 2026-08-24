@@ -1220,13 +1220,20 @@ private extension View {
     }
 }
 
-// MARK: - Grounded NCAAF next slate
+// MARK: - Grounded football next slate (NCAAF + NFL — one card, Aug 24 2026)
 
 struct FootballNextSlatePreview: View {
     let signal: Signal
     let accent: Color
 
     private var meta: SwapMeta? { signal.nextSlate }
+
+    /// "NEXT NFL SLATE" / "NEXT NCAAF SLATE" — the card follows its signal's
+    /// league (founder parity order, Aug 24: both football pages share one
+    /// dark-day format).
+    private var titleLabel: String {
+        "NEXT \(signal.league.label) SLATE"
+    }
 
     private var dateLabel: String {
         guard let raw = meta?.scheduled_date else { return "DATE PENDING" }
@@ -1271,7 +1278,7 @@ struct FootballNextSlatePreview: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
-                Text("NEXT NCAAF SLATE")
+                Text(titleLabel)
                     .font(GaryFonts.mono(9, bold: true))
                     .tracking(1)
                     .foregroundStyle(accent)

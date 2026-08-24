@@ -72,6 +72,7 @@ import { computeFootballStandings } from './computers/footballStandings.js';
 import { computeNflFantasyEdges } from './computers/nflFantasyEdges.js';
 import { computeNcaafFantasyEdges } from './computers/ncaafFantasyEdges.js';
 import { computeNcaafNextSlate } from './computers/ncaafNextSlate.js';
+import { computeNflNextSlate } from './computers/nflNextSlate.js';
 
 /**
  * Registry of computers per league. Each entry is an async fn:
@@ -211,11 +212,14 @@ export async function generateInsightConnections({ date, league = 'mlb', options
   }
 
   if (!Array.isArray(games) || games.length === 0) {
-    if (leagueKey === 'ncaaf') {
+    // Football dark days publish the NEXT SLATE context card — one format for
+    // both football pages (founder parity order, Aug 24; NCAAF-only before).
+    if (leagueKey === 'ncaaf' || leagueKey === 'nfl') {
       const season = seasonForDate(dateStr, leagueKey);
+      const computeNextSlate = leagueKey === 'ncaaf' ? computeNcaafNextSlate : computeNflNextSlate;
       let raw;
       try {
-        raw = await computeNcaafNextSlate({
+        raw = await computeNextSlate({
           date: dateStr,
           season,
           league: leagueKey,
@@ -225,7 +229,7 @@ export async function generateInsightConnections({ date, league = 'mlb', options
           helpers: { gameLabel },
         });
       } catch (err) {
-        throw new Error(`[insights] Failed to discover next NCAAF slate: ${err?.message || err}`);
+        throw new Error(`[insights] Failed to discover next ${leagueKey.toUpperCase()} slate: ${err?.message || err}`);
       }
       const connections = postProcess(raw, {
         slateGameIds: new Set(),
@@ -234,7 +238,7 @@ export async function generateInsightConnections({ date, league = 'mlb', options
         maxPerCategory,
       });
       console.log(
-        `[insights] No NCAAF games found for ${dateStr}; ` +
+        `[insights] No ${leagueKey.toUpperCase()} games found for ${dateStr}; ` +
           `${connections.length ? 'published the next verified slate.' : 'no verified slate found in the discovery window.'}`,
       );
       return {
