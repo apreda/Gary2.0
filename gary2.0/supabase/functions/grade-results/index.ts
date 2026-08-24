@@ -57,16 +57,12 @@ const EdgeRuntime = (globalThis as typeof globalThis & {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const BDL_KEY = Deno.env.get("BALLDONTLIE_API_KEY") ?? "";
-const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
 const BDL_BASE = "https://api.balldontlie.io";
-// Same model the local recap writer uses (GEMINI_FLASH_MODEL in
-// orchestratorConfig.js) — cheap Flash, one call per graded game.
-const GEMINI_MODEL = "gemini-3-flash-preview";
-const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
-// Anthropic failover for the recap writer (Aug 24 2026) — see recapGenerate.
+// Recap writer vendor (Aug 24 2026): Anthropic ONLY — Gemini is retired
+// (founder: "no more gemini for anything"; its billing dunning blanked
+// game_recaps Aug 20-23). Same content brain as the rest of production.
 const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const RECAP_ANTHROPIC_MODEL = Deno.env.get("RECAP_ANTHROPIC_MODEL") ?? "claude-sonnet-5";
-const RECAP_GEMINI_TIMEOUT_MS = 12_000;
 
 // ── date helpers (ET) ───────────────────────────────────────────────────────
 function estDate(offset = 0): string {
@@ -186,7 +182,6 @@ const RECAP_MAX_RECAP_CHARS = 700;
 // Kept in lockstep with MAX_BULLET_CHARS in src/services/gameRecap.js.
 const RECAP_MAX_BULLET_CHARS = 56;
 const RECAP_MAX_BULLETS = 4;
-const RECAP_GEMINI_RETRIES = 4; // hardened (local writer retries twice) — 3-4 with backoff
 
 // ── evidence pack (port of buildGameEvidence in factCheck.js) ────────────────
 function recapFormatIp(ip: unknown): string {
@@ -404,44 +399,17 @@ async function recapGenerate(args: { pick: any; result: string; evidence: string
   { headline: string; recap: string; bullets: string[] } | null
 > {
   const { pick, result, evidence } = args;
-  if (!pick?.pick || !evidence || (!GEMINI_KEY && !ANTHROPIC_KEY)) return null;
+  if (!pick?.pick || !evidence || !ANTHROPIC_KEY) return null;
 
   const prompt = recapBuildPrompt({ pick, result, evidence });
-  const url = `${GEMINI_API_BASE}/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_KEY}`;
-  const body = {
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0.3, responseMimeType: "application/json" },
-    safetySettings: [
-      { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-      { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-      { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-      { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
-    ],
-  };
-
-  let json: any = null;
-  for (let attempt = 1; attempt <= RECAP_GEMINI_RETRIES && !json && GEMINI_KEY; attempt++) {
-    try {
-      const r = await fetch(url, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-        signal: AbortSignal.timeout(RECAP_GEMINI_TIMEOUT_MS),
-      });
-      if (!r.ok) throw new Error(`Gemini ${r.status}: ${(await r.text()).slice(0, 300)}`);
-      json = await r.json();
-    } catch (e) {
-      console.warn(`  [Recap] Flash attempt ${attempt}/${RECAP_GEMINI_RETRIES} failed: ${(e as Error).message}`);
-      if (attempt < RECAP_GEMINI_RETRIES) await new Promise((res) => setTimeout(res, 800 * attempt));
-    }
+  // Two attempts with a short backoff — recapCallAnthropic contains its own
+  // timeout and never throws.
+  let text: string | null = null;
+  for (let attempt = 1; attempt <= 2 && !text; attempt++) {
+    text = await recapCallAnthropic(prompt);
+    if (!text && attempt < 2) await new Promise((res) => setTimeout(res, 800));
   }
-
-  let text = (json?.candidates?.[0]?.content?.parts || [])
-    .filter((p: any) => p.text && !p.thought).map((p: any) => p.text).join("").trim();
-  if (!text) {
-    const fallbackText = await recapCallAnthropic(prompt);
-    if (!fallbackText) return null;
-    console.log(`  [Recap] Gemini unavailable — recap written by Anthropic failover (${RECAP_ANTHROPIC_MODEL})`);
-    text = fallbackText;
-  }
+  if (!text) return null;
   const parsed = recapParseResponse(text);
   if (!parsed) return null;
 
@@ -596,12 +564,12 @@ async function writeRecap(args: {
   menuCache: Map<string, string>;
 }): Promise<"recap" | "regenerated" | "exists" | "skip" | "fail"> {
   const { pick, league, gameDate, result, hScore, vScore, mlbGameId, statsCache, propsCache, menuCache } = args;
-  if (!GEMINI_KEY) return "skip";
+  if (!ANTHROPIC_KEY) return "skip";
   const matchup = `${pick.awayTeam} @ ${pick.homeTeam}`;
 
   // Idempotency: a recap already on file (from the cloud or a prior local run) whose
   // result still matches the freshly-computed grade is a no-op — avoids a needless
-  // Gemini call. But if game_results was corrected since this recap was written
+  // model call. But if game_results was corrected since this recap was written
   // (recapIsStale — Jul 10 2026 fix; game_recaps has no updated_at, so this result
   // comparison is the only signal), regenerate instead of trusting the stale copy.
   const existing = await sbGet("game_recaps",

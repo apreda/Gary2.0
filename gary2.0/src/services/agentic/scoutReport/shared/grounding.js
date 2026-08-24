@@ -1,23 +1,26 @@
 /**
  * Shared Grounding Functions for Scout Report Builders
  *
- * Contains all Gemini grounding-related functions used across
+ * Grounded web search + standings + weather for the scout builders.
+ * Aug 24 2026: Gemini is retired — transport = Claude subscription bridge
+ * (WebSearch, $0) with Anthropic server web-search as the metered fallback,
+ * shared freshness protocol and caches unchanged. Used across
  * multiple per-sport modules and external files.
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { describeSportsCalendar } from '../../../../utils/dateUtils.js';
 import { seasonForSport, findTeamInStandings, sportToBdlKey } from './utilities.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
+import { claudeCliWebSearch } from '../../orchestrator/providerAdapters/claudeCliSession.js';
+import { anthropicWebSearchRaw } from './anthropicWebSearch.js';
 import { createHash } from 'crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync, statSync } from 'fs';
 import { join } from 'path';
 
-// Lazy-initialize Gemini for grounded searches (supports key rotation)
-import { isUsingBackupKey } from '../../modelConfig.js';
-
-let geminiClient = null;
-let _groundingKeyIsBackup = false;
+// GEMINI ERADICATED (founder, Aug 24 2026): grounded search runs on the
+// Claude subscription bridge (WebSearch tool, $0 marginal) with the Anthropic
+// server web-search API as the metered fallback. The Gemini client, its key
+// rotation, and the Flash/Pro 429 cascade are gone with the vendor.
 const GROUNDING_CACHE_TTL_MS = 90 * 1000; // in-memory: 90s (dedup within single run)
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -81,33 +84,12 @@ function pruneDiskCache() {
 // Prune on startup
 pruneDiskCache();
 const _groundingSearchCache = new Map();
-export function getGeminiClient() {
-  // Recreate client if key was rotated
-  if (geminiClient && isUsingBackupKey() !== _groundingKeyIsBackup) {
-    geminiClient = null;
-  }
-  if (!geminiClient) {
-    const apiKey = isUsingBackupKey()
-      ? (process.env.GEMINI_API_KEY_BACKUP || process.env.GEMINI_API_KEY)
-      : process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      console.warn('[Scout Report] GEMINI_API_KEY not set - Grounding disabled');
-      return null;
-    }
-    geminiClient = new GoogleGenerativeAI(apiKey);
-    _groundingKeyIsBackup = isUsingBackupKey();
-  }
-  return geminiClient;
-}
-
 function buildGroundingCacheKey(query, options = {}) {
   return JSON.stringify({
-    backupKey: isUsingBackupKey(),
     query,
     maxTokens: options.maxTokens ?? 2000,
     temperature: options.temperature ?? 1.0,
     thinkingLevel: options.thinkingLevel ?? 'high',
-    useProFallback: !!options._useProFallback
   });
 }
 
@@ -331,26 +313,29 @@ ${snapshot.join('\n')}
 }
 
 /**
- * Internal helper: Gemini grounding search with Flash primary, Pro 429 fallback.
- * Used by data fetchers for fetchCurrentState.
+ * Two-rail grounded transport (Aug 24 2026): the Claude subscription bridge
+ * first ($0), the Anthropic server web-search API second. Both take a full
+ * prompt and return { success, data }.
  */
-export async function groundingSearch(genAI, query, todayFull) {
-  const searchModel = genAI.getGenerativeModel({
-    model: 'gemini-3-flash-preview',
-    tools: [{ google_search: {} }],
-    generationConfig: {
-      // Gemini 3.x: temperature/topP/topK omitted per Google migration guide
-      thinkingConfig: { thinkingLevel: 'high' }
-    },
-    safetySettings: [
-      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-    ]
+async function groundedTransport(prompt, options = {}) {
+  const viaBridge = await claudeCliWebSearch(prompt, {
+    timeoutMs: options.timeoutMs ?? 5 * 60 * 1000,
   });
+  if (viaBridge.success && viaBridge.data) return viaBridge;
+  console.warn('[Grounding Search] claude bridge empty/failed — trying Anthropic server web search');
+  return anthropicWebSearchRaw(prompt, {
+    maxTokens: Math.max(options.maxTokens ?? 2000, 2000),
+    timeoutMs: options.timeoutMs ?? 90_000,
+  });
+}
 
-  const prompt = `<date_anchor>Today is ${todayFull}. Your training data is from 2024 — it is NOW 2026. You MUST use Google Search.</date_anchor>
+/**
+ * Simple grounded search used by data fetchers for fetchCurrentState.
+ * (Signature kept from the Gemini era: the first param was the genAI client
+ * and is now ignored — callers pass null.) Returns text or null.
+ */
+export async function groundingSearch(_client, query, todayFull) {
+  const prompt = `<date_anchor>Today is ${todayFull}. Your training data is from 2024 — it is NOW 2026. You MUST use live web search.</date_anchor>
 
 Search for: ${query}
 
@@ -361,55 +346,12 @@ If you find multiple articles, report details from EACH one.
 Do NOT include ATS records, betting trends, or against-the-spread statistics.`;
 
   try {
-    const result = await searchModel.generateContent(prompt);
-    return result.response.text() || '';
+    const result = await groundedTransport(prompt, { maxTokens: 4000 });
+    return result.success ? (result.data || '') : null;
   } catch (error) {
-    const errorMsg = error.message?.toLowerCase() || '';
-    const is429 = error.status === 429 ||
-      error.message?.includes('429') ||
-      errorMsg.includes('resource has been exhausted') ||
-      errorMsg.includes('quota');
-
-    if (is429) {
-      // On 429: retry with backup API key on Flash (gemini-3-pro is dead since March 2026)
-      console.warn(`[groundingSearch] Flash 429 - retrying with backup key: ${error.message?.slice(0, 80)}`);
-      try {
-        const proModel = genAI.getGenerativeModel({
-          model: 'gemini-3-flash-preview',
-          tools: [{ google_search: {} }],
-          generationConfig: {},
-          safetySettings: [
-            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-          ]
-        });
-        const proResult = await proModel.generateContent(prompt);
-        return proResult.response.text() || '';
-      } catch (proError) {
-        console.error(`[groundingSearch] Pro fallback also failed: ${proError.message?.slice(0, 80)}`);
-        return null;
-      }
-    }
-
-    // Non-429 errors: log and return null
-    console.error(`[groundingSearch] Error (non-retryable): ${error.message?.slice(0, 80)}`);
+    console.error(`[groundingSearch] Error: ${error.message?.slice(0, 80)}`);
     return null;
   }
-}
-
-// GEMINI MODEL POLICY (HARDCODED - DO NOT CHANGE)
-// Flash is PRIMARY for grounding. 2.5 Flash as 429 fallback (gemini-3-pro is dead since March 2026).
-// ═══════════════════════════════════════════════════════════════════════════
-const ALLOWED_GROUNDING_MODELS = ['gemini-3-flash-preview'];
-
-export function validateGroundingModel(model) {
-  if (!ALLOWED_GROUNDING_MODELS.includes(model)) {
-    console.error(`[GROUNDING MODEL POLICY VIOLATION] Attempted to use "${model}" - ONLY Gemini 3 allowed!`);
-    return 'gemini-3-flash-preview'; // Default to Flash for grounding
-  }
-  return model;
 }
 
 export async function geminiGroundingSearch(query, options = {}) {
@@ -438,7 +380,7 @@ export async function geminiGroundingSearch(query, options = {}) {
   }
 
   // 3. Make the actual grounding call
-  const requestPromise = runGeminiGroundingSearch(query, options)
+  const requestPromise = runGroundedSearch(query, options)
     .then(result => {
       if (result?.success && result?.data) {
         _groundingSearchCache.set(cacheKey, {
@@ -465,45 +407,11 @@ export async function geminiGroundingSearch(query, options = {}) {
   return requestPromise;
 }
 
-async function runGeminiGroundingSearch(query, options = {}) {
-  const genAI = getGeminiClient();
-  if (!genAI) {
-    console.warn('[Grounding Search] Gemini not available');
-    return { success: false, data: null, error: 'Gemini API not configured' };
-  }
-
-  const maxRetries = options.maxRetries ?? 3;
-  let lastError;
-  // Track if we've already tried Pro fallback (to avoid infinite loops)
-  let usedProFallback = options._usedProFallback ?? false;
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      // Flash for all grounding (gemini-3-pro is dead since March 2026)
-      const requestedModel = process.env.GEMINI_FLASH_MODEL || 'gemini-3-flash-preview';
-      const modelName = validateGroundingModel(requestedModel);
-
-      const model = genAI.getGenerativeModel({
-        model: modelName,
-        tools: [{
-          google_search: {}
-        }],
-        generationConfig: {
-          // Gemini 3.x: temperature/topP/topK omitted per Google migration guide
-          maxOutputTokens: options.maxTokens ?? 2000,
-          thinkingConfig: { thinkingLevel: options.thinkingLevel ?? 'high' }
-        },
-        safetySettings: [
-          { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-          { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-        ]
-      });
-
+async function runGroundedSearch(query, options = {}) {
+  try {
       // ═══════════════════════════════════════════════════════════════════════════
       // 2026 GROUNDING FRESHNESS PROTOCOL
-      // Prevents "Concept Drift" where Gemini's training data clashes with 2026 reality
+      // Prevents "Concept Drift" where a model's training data clashes with 2026 reality
       // ═══════════════════════════════════════════════════════════════════════════
       const today = new Date();
       // ET-forced (Jul 30): on a UTC container (Railway) the locale default
@@ -531,7 +439,7 @@ async function runGeminiGroundingSearch(query, options = {}) {
      your training is an "Amnesia Gap" - USE THE SEARCH RESULT
 
   FRESHNESS RULES:
-  1. Initialize Google Search for this query - DO NOT skip the search
+  1. Run live web search for this query - DO NOT skip the search
   2. ONLY use search results from the past 48 hours. Anything older is stale and must be ignored.
   3. If a search result is dated prior to ${new Date(Date.now() - 48 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}, DO NOT use it for current analysis
   4. EVIDENCE SUPREMACY: Surrender intuition to Search Tool results. Search results ARE the facts.
@@ -551,15 +459,16 @@ ${query}
 
 CRITICAL REMINDER: Today is ${todayStr}. Use ONLY fresh search results. Your 2024 training data is outdated.`;
 
-      const result = await model.generateContent(dateAwareQuery);
-      const response = result.response;
-
-      // Debug: Log raw response structure for troubleshooting
-      if (!response || !response.text) {
-        console.error(`[Grounding Search] Invalid response object from ${modelName}:`, JSON.stringify(response || 'null', null, 2).substring(0, 500));
+      const result = await groundedTransport(dateAwareQuery, {
+        maxTokens: options.maxTokens ?? 2000,
+        timeoutMs: options.timeoutMs,
+      });
+      if (!result.success || !result.data) {
+        console.warn(`[Grounding Search] both transports failed: ${result.error || 'no data'}`);
+        return { success: false, data: null, error: result.error || 'grounded transports failed' };
       }
 
-      let text = response.text();
+      let text = result.data;
 
       // Clean up cosmetic chain-of-thought noise that sometimes leaks into responses.
       //
@@ -631,86 +540,16 @@ CRITICAL REMINDER: Today is ${todayStr}. Use ONLY fresh search results. Your 202
         data: text,
         raw: text
       };
-    } catch (error) {
-      lastError = error;
-      const errorMsg = error.message?.toLowerCase() || '';
-
-      // Check for 429 rate limit - fall back to Pro if Flash is exhausted
-      const is429 = error.status === 429 ||
-        error.message?.includes('429') ||
-        errorMsg.includes('resource has been exhausted') ||
-        errorMsg.includes('quota');
-
-      if (is429 && !usedProFallback && !options._useProFallback) {
-        console.log(`[Grounding Search] ⚠️ Flash quota exceeded (429) - falling back to Pro`);
-        // Recursive call with Pro model
-        return runGeminiGroundingSearch(query, {
-          ...options,
-          _useProFallback: true,
-          _usedProFallback: true
-        });
-      }
-
-      // Reverse fallback: Pro 429 → try rotating API key, then Flash
-      if (is429 && options._useProFallback) {
-        if (!isUsingBackupKey()) {
-          const { rotateToBackupKey } = await import('../../modelConfig.js');
-          if (rotateToBackupKey()) {
-            console.log(`[Grounding Search] ⚠️ Pro quota exceeded — rotated to backup API key, retrying`);
-            geminiClient = null; // Force client recreation with new key
-            return runGeminiGroundingSearch(query, {
-              ...options,
-              _useProFallback: false,
-              _usedProFallback: false
-            });
-          }
-        }
-        console.log(`[Grounding Search] ⚠️ Pro also quota exceeded (429) - falling back to Flash`);
-        return runGeminiGroundingSearch(query, {
-          ...options,
-          _useProFallback: false,
-          _usedProFallback: true
-        });
-      }
-
-      // Check if this is a retryable network error
-      const isRetryable =
-        error.status >= 500 ||
-        error.message?.includes('500') ||
-        error.message?.includes('503') ||
-        errorMsg.includes('fetch failed') ||
-        errorMsg.includes('econnreset') ||
-        errorMsg.includes('etimedout') ||
-        errorMsg.includes('enotfound') ||
-        errorMsg.includes('socket hang up') ||
-        errorMsg.includes('network') ||
-        errorMsg.includes('connection') ||
-        error.code === 'ECONNRESET' ||
-        error.code === 'ETIMEDOUT' ||
-        error.code === 'ENOTFOUND' ||
-        error.code === 'UND_ERR_CONNECT_TIMEOUT';
-
-      if (isRetryable && attempt < maxRetries) {
-        // Exponential backoff: 2s, 4s, 8s
-        const delay = Math.pow(2, attempt) * 1000;
-        console.log(`[Grounding Search] ⚠️ Retryable error (attempt ${attempt}/${maxRetries}): ${error.message?.slice(0, 60)}...`);
-        console.log(`[Grounding Search] 🔄 Waiting ${delay/1000}s before retry...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        continue;
-      }
-
-      console.error('[Grounding Search] Error:', error.message);
-      return { success: false, data: null, error: error.message };
-    }
+  } catch (error) {
+    // Both rails handle their own timeouts and containment; anything that
+    // still throws here is unexpected — log it and fail soft like always.
+    console.error('[Grounding Search] Error:', error.message);
+    return { success: false, data: null, error: error.message };
   }
-
-  // Should not reach here, but just in case
-  console.error('[Grounding Search] Max retries exceeded:', lastError?.message);
-  return { success: false, data: null, error: lastError?.message || 'Max retries exceeded' };
 }
 
 /**
- * Get game weather using Gemini Grounding
+ * Get game weather via grounded web search (claude bridge → Anthropic API)
  * @param {string} homeTeam - Home team name
  * @param {string} awayTeam - Away team name
  * @param {string} dateStr - Game date string

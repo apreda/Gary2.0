@@ -63,54 +63,58 @@ export const MLB_JUNE_BRAIN_MODEL = process.env.GARY_MLB_BRAIN_MODEL || 'codex-g
 // not the winner. Enforced belt-and-suspenders in agentLoop with one
 // corrective re-ask; the menu clause lives in Pass 2.5.
 export const GAME_ML_CAP = Number(process.env.GARY_ML_CAP || -179);
-// Legacy Gemini Tier 1 — research-era fallback references only.
-export const GEMINI_PRO_MODEL = 'gemini-3.5-flash';
-// Fallback when the primary errors / rate-limits.
-export const GEMINI_PRO_FALLBACK = 'gemini-3.1-pro-preview';
-// Cheaper Flash for research and tool-calling investigation.
-export const GEMINI_FLASH_MODEL = 'gemini-3-flash-preview';
-// Props lane (Jul 22 2026, founder call): 3.6 Flash released today —
-// verified live on our key before wiring. Jul 29 (founder): ALL props desks
-// (MLB main + HR) now run 3.6 Flash primary — Sol's $5/$30 stays reserved
-// for game picks.
-export const GEMINI_PROPS_MODEL = process.env.GARY_PROPS_MODEL_OVERRIDE || 'gemini-3.6-flash';
+// ═══ GEMINI ERADICATED (founder order, Aug 24 2026) ═══
+// "no more gemini for anything" — after the Google billing dunning
+// (project 704963887148) silently killed recaps, the Wire, and the tweet
+// composer for four days, every lane runs Anthropic (API or subscription
+// bridge) or ChatGPT (codex bridge / OpenAI API). No Gemini model may be a
+// primary, a fallback, or a default anywhere. The legacy constants below
+// now resolve to the brains we actually run so an env-less spawn can never
+// land on a dead vendor (same lesson as solText, Aug 21).
+// Legacy lanes do TOOL-CALLING, and the Claude CLI adapter is deliberately
+// tools-free (brain calls only) — so these route to the Anthropic API
+// adapter ('anthropic-' prefix), which carries tools. ⚑Verify the NBA/NHL/
+// NCAAB pick paths on these models before their seasons open (~Oct 1).
+export const GEMINI_PRO_MODEL = 'anthropic-claude-sonnet-5';
+export const GEMINI_PRO_FALLBACK = 'anthropic-claude-haiku-4-5';
+// Research / tool-calling investigation for the legacy non-MLB lanes — the
+// same Haiku the June engine's researcher runs (Anthropic API pool).
+export const GEMINI_FLASH_MODEL = 'anthropic-claude-haiku-4-5';
+// Props lane default = the brain the plists actually set (codex bridge).
+export const GEMINI_PROPS_MODEL = process.env.GARY_PROPS_MODEL_OVERRIDE || 'codex-gpt-5.6-sol';
 
 // Quota cascade for the desk lanes (founder approved Jul 29, after the Jul 28
 // OpenAI balance outage shipped 6 games with no pick): when a desk brain
 // throws — quota/429 first among the causes — the SAME desk re-runs on these
-// models in order at their top thinking level. 3.6 Flash first (newest Gemini,
-// Jul 21 GA; the Flash line WAS Gary's brain until the Jul 22 Sol cutover),
-// 3.1 Pro as the different-family second layer.
-// Two subscription tanks, then pennies (founder GO, Aug 6): whichever bridge
-// is PRIMARY, the other backs it up before the metered Gemini last resorts.
+// models in order at their top thinking level.
+// Two subscription tanks, then the third Anthropic tier (Aug 24: the two
+// metered Gemini last resorts are gone with the vendor).
 // The chain filters out the primary so a quota error never retries itself.
-export const DESK_FALLBACK_MODELS = ['codex-gpt-5.6-sol', 'claude-opus-5', 'gemini-3.6-flash', 'gemini-3.1-pro-preview'].filter((m) => m !== GAME_PICK_MODEL);
+export const DESK_FALLBACK_MODELS = ['codex-gpt-5.6-sol', 'claude-opus-5', 'claude-sonnet-5'].filter((m) => m !== GAME_PICK_MODEL);
 
 // $ per 1M tokens [input, output] — desk-lane cost logging only, not billing.
 // Claude entries are $0: the subscription bridge has no marginal token cost.
 export const DESK_COST_PER_M = {
   'gpt-5.6-sol': [5, 30],
-  'gemini-3.6-flash': [1.5, 7.5],
-  'gemini-3.1-pro-preview': [2, 12],
   'claude-fable-5': [0, 0],
   'claude-opus-5': [0, 0],
   'claude-sonnet-5': [0, 0],
 };
 
-export const ALLOWED_GEMINI_MODELS = [
-  'gemini-3.5-flash',         // legacy brain (game picks are Sol now)
-  'gemini-3-flash-preview',   // research, DFS
-  'gemini-3.6-flash',         // ALL props desks (Jul 29) + game-pick quota fallback
-  'gemini-3.1-pro-preview',   // second-layer fallback
-];
-
+// Session-model gate (name kept for import stability — it validated Gemini
+// names for years). Post-eradication it enforces the founder's Aug 24 vendor
+// ban at the ONE seam every session passes through: Anthropic and ChatGPT
+// families pass; any gemini-* name is refused loudly and rerouted to the
+// research default so a stale caller can never resurrect the dead vendor.
 export function validateGeminiModel(model) {
-  if (!ALLOWED_GEMINI_MODELS.includes(model)) {
-    console.error(`[MODEL POLICY VIOLATION] Attempted to use "${model}" - not in allowed list!`);
-    console.error(`[MODEL POLICY] Allowed models: ${ALLOWED_GEMINI_MODELS.join(', ')}`);
-    return 'gemini-3-flash-preview';
+  const name = String(model || '');
+  if (/gemini/i.test(name)) {
+    console.error(`[MODEL POLICY] "${name}" refused — Gemini is retired (founder, Aug 24 2026). Routing to ${GEMINI_FLASH_MODEL}.`);
+    return GEMINI_FLASH_MODEL;
   }
-  return model;
+  if (/^(codex-|claude-|anthropic-|gpt-)/.test(name)) return model;
+  console.error(`[MODEL POLICY VIOLATION] Attempted to use "${name}" — unknown model family. Routing to ${GEMINI_FLASH_MODEL}.`);
+  return GEMINI_FLASH_MODEL;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

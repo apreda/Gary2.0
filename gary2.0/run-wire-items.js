@@ -6,8 +6,8 @@
  * the league TODAY — notable in-game moments (multi-HR nights, no-hitters,
  * milestone lines, wild finals), injury news with its consequence, line moves
  * on tonight's slate, and totals-relevant environment notes. ONE grounded
- * call per league (Claude bridge WebSearch when GARY_GROUNDING_VIA_CLAUDE=1,
- * grounded Gemini otherwise — Aug 24 2026) returns a strict
+ * call per league (Claude bridge WebSearch first, Anthropic server web
+ * search fallback — Gemini retired Aug 24 2026) returns a strict
  * JSON array; the runner normalizes those to flat `wire_items` rows and writes
  * them with the same service-role DELETE-then-INSERT idempotency as
  * run-insight-connections.js. iOS reads via the anon SELECT policy.
@@ -34,7 +34,6 @@
 import './src/loadEnv.js';
 
 import axios from 'axios';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getESTDate } from './src/utils/dateUtils.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -43,9 +42,6 @@ import { getESTDate } from './src/utils/dateUtils.js';
 
 // Leagues the Wire covers. Mirrors run-insight-connections.js ACTIVE_LEAGUES.
 const ACTIVE_LEAGUES = ['MLB', 'NFL', 'NCAAF', 'NBA'];
-
-// Cheap grounding model — same as the insights pipeline.
-const WIRE_MODEL = 'gemini-3-flash-preview';
 
 // Resolve Supabase config exactly like src/supabaseClient.js does for Node scripts.
 const supabaseUrl =
@@ -73,8 +69,6 @@ const RECAPS_REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/game_recaps` : nul
 // NBA pipeline has produced nothing real).
 const DAILY_PICKS_REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/daily_picks` : null;
 const DAILY_SLATE_REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/daily_slate` : null;
-
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Arg parsing (mirrors run-insight-connections.js)
@@ -143,19 +137,12 @@ if (!dryRun) {
   }
 }
 
-// VENDOR RESILIENCE (Aug 24 2026): the Wire was Gemini-only, and when the
-// Gemini project went 403-dunning (~Aug 20) wire_items went dark for four
-// days. The Claude subscription bridge (claudeCliWebSearch, WebSearch tool,
-// $0 marginal) now carries the grounded call whenever it's available —
-// GARY_GROUNDING_VIA_CLAUDE=1, same flag the pick desks honor — with Gemini
-// as the other lane, in either order. Only BOTH vendors missing is fatal.
-const CLAUDE_BRIDGE_ARMED = process.env.GARY_GROUNDING_VIA_CLAUDE === '1';
-if (!GEMINI_API_KEY && !CLAUDE_BRIDGE_ARMED) {
-  console.error('❌ No grounded vendor — set GEMINI_API_KEY or GARY_GROUNDING_VIA_CLAUDE=1; the Wire needs grounded search to generate items.');
-  process.exit(1);
-}
-
-const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
+// GEMINI RETIRED (founder, Aug 24 2026: "no more gemini for anything"). The
+// Wire's grounded call runs on the Claude subscription bridge
+// (claudeCliWebSearch, WebSearch tool, $0 marginal) with the Anthropic server
+// web-search API as the metered fallback. The Aug 20-23 blackout — four days
+// of an empty Wire while the Gemini project 403-dunned — is why single-vendor
+// lanes are banned.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Grounding context (yesterday's Gary-relevant results from game_results)
@@ -445,7 +432,7 @@ function isItemGrounded(item, allowTokens) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Prompt + Gemini call (grounded)
+// Prompt + grounded call
 // ─────────────────────────────────────────────────────────────────────────────
 
 function buildPrompt({ date, league, todayFinals, ydayFinals, allowNames, recentInjuries = [] }) {
@@ -534,49 +521,21 @@ function buildPrompt({ date, league, todayFinals, ydayFinals, allowNames, recent
 /**
  * One grounded call per league. Returns raw model text (or null on error).
  *
- * Two transports, tried in order (Aug 24 2026): the Claude subscription
- * bridge first when GARY_GROUNDING_VIA_CLAUDE=1 (WebSearch tool, $0
- * marginal — the same bridge the pick desks ride), then grounded Gemini
- * (google_search) — and the reverse order when the flag is off. The prompt,
+ * Two transports, tried in order (Aug 24 2026, Gemini retired): the Claude
+ * subscription bridge (WebSearch tool, $0 marginal — the same bridge the
+ * pick desks ride), then the Anthropic server web-search API. The prompt,
  * the strict-JSON contract, and every downstream validation gate are
  * identical either way; only the transport changes.
  */
-async function callWireGemini(prompt) {
-  const model = genAI.getGenerativeModel({
-    model: WIRE_MODEL,
-    tools: [{ google_search: {} }],
-    safetySettings: [
-      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-    ],
-  });
-  const result = await model.generateContent(prompt);
-  return result.response.text();
-}
-
-async function callWireClaude(prompt) {
-  const { claudeCliWebSearch } = await import('./src/services/agentic/orchestrator/providerAdapters/claudeCliSession.js');
-  const res = await claudeCliWebSearch(prompt, { timeoutMs: 5 * 60 * 1000 });
-  if (!res.success || !res.data) throw new Error(res.error || 'claude bridge returned empty output');
-  return res.data;
-}
-
 async function callWireModel(prompt) {
-  const lanes = CLAUDE_BRIDGE_ARMED
-    ? [['claude-bridge', callWireClaude], ...(genAI ? [['gemini', callWireGemini]] : [])]
-    : [...(genAI ? [['gemini', callWireGemini]] : []), ['claude-bridge', callWireClaude]];
-  let lastError;
-  for (const [lane, call] of lanes) {
-    try {
-      return await call(prompt);
-    } catch (e) {
-      lastError = e;
-      console.warn(`   ⚠️ [Wire] ${lane} transport failed — trying the next lane: ${String(e.message || e).slice(0, 200)}`);
-    }
-  }
-  throw lastError;
+  const { claudeCliWebSearch } = await import('./src/services/agentic/orchestrator/providerAdapters/claudeCliSession.js');
+  const viaBridge = await claudeCliWebSearch(prompt, { timeoutMs: 5 * 60 * 1000 });
+  if (viaBridge.success && viaBridge.data) return viaBridge.data;
+  console.warn(`   ⚠️ [Wire] claude bridge failed — trying Anthropic server web search: ${String(viaBridge.error || 'empty output').slice(0, 200)}`);
+  const { anthropicWebSearchRaw } = await import('./src/services/agentic/scoutReport/shared/anthropicWebSearch.js');
+  const viaApi = await anthropicWebSearchRaw(prompt, { maxTokens: 6000 });
+  if (viaApi.success && viaApi.data) return viaApi.data;
+  throw new Error(viaApi.error || 'both grounded transports failed');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -679,7 +638,7 @@ function toRow(item, league, date) {
       item.body != null && String(item.body).trim()
         ? { body: String(item.body).trim() }
         : null,
-    generated_by: 'run-wire-items.js@gemini-3-flash-preview',
+    generated_by: 'run-wire-items.js@claude-grounded',
   };
 }
 

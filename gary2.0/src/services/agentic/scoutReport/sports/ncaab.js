@@ -18,7 +18,7 @@ import {
   formatGameTime,
   getInjuryStatusFromMap
 } from '../shared/utilities.js';
-import { getGeminiClient, geminiGroundingSearch, fetchStandingsSnapshot } from '../shared/grounding.js';
+import { geminiGroundingSearch, fetchStandingsSnapshot } from '../shared/grounding.js';
 import {
   fetchTeamProfile,
   fetchInjuries,
@@ -269,18 +269,9 @@ async function fetchNcaabKeyPlayers(homeTeam, awayTeam, sport) {
 
     let rotoWireLineups = null;
     try {
-      const gemini = getGeminiClient();
-      if (gemini) {
-        const model = gemini.getGenerativeModel({
-          model: 'gemini-3-flash-preview', // Flash for grounding searches only
-          tools: [{ google_search: {} }],
-          safetySettings: [
-            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-          ]
-        });
+      {
+        // Grounded search rides the shared two-rail transport (Aug 24 2026,
+        // Gemini retired): claude bridge → Anthropic server web search.
 
         // Fetch EACH team separately to prevent truncation (single-query approach cut off second team)
         const buildLineupQuery = (teamName) => `<date_anchor>Today is ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. Use ONLY current 2025-26 season data.</date_anchor>
@@ -304,19 +295,19 @@ STATUS KEY: GTD = Game Time Decision, Out = Confirmed NOT playing, OFS = Out For
 List ALL injuries shown on RotoWire. If no injuries, write "None".`;
 
         const [awayLineupResult, homeLineupResult] = await Promise.all([
-          model.generateContent(buildLineupQuery(awayTeam)),
-          model.generateContent(buildLineupQuery(homeTeam))
+          geminiGroundingSearch(buildLineupQuery(awayTeam), { maxTokens: 2000 }),
+          geminiGroundingSearch(buildLineupQuery(homeTeam), { maxTokens: 2000 })
         ]);
 
-        const awayLineupText = awayLineupResult.response?.text() || '';
-        const homeLineupText = homeLineupResult.response?.text() || '';
+        const awayLineupText = awayLineupResult?.data || '';
+        const homeLineupText = homeLineupResult?.data || '';
         const combinedLineupText = `═══ ${awayTeam} (AWAY) ═══\n${awayLineupText}\n\n═══ ${homeTeam} (HOME) ═══\n${homeLineupText}`;
 
         if (combinedLineupText.length > 100) {
-          console.log(`[Scout Report] Gemini Grounding returned NCAAB lineup data: ${awayTeam} (${awayLineupText.length} chars), ${homeTeam} (${homeLineupText.length} chars)`);
+          console.log(`[Scout Report] Grounded search returned NCAAB lineup data: ${awayTeam} (${awayLineupText.length} chars), ${homeTeam} (${homeLineupText.length} chars)`);
           rotoWireLineups = {
             content: combinedLineupText,
-            source: 'Gemini Grounding (site:rotowire.com)',
+            source: 'Grounded search (site:rotowire.com)',
             fetchedAt: new Date().toISOString(),
             // Store per-team raw texts so the GTD block can reuse them (avoids duplicate Grounding calls)
             awayRaw: awayLineupText,
@@ -325,7 +316,7 @@ List ALL injuries shown on RotoWire. If no injuries, write "None".`;
         }
       }
     } catch (groundingError) {
-      console.warn(`[Scout Report] Gemini Grounding for NCAAB lineups failed: ${groundingError.message}`);
+      console.warn(`[Scout Report] Grounded search for NCAAB lineups failed: ${groundingError.message}`);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -339,7 +330,7 @@ List ALL injuries shown on RotoWire. If no injuries, write "None".`;
       console.warn('[Scout Report] Could not find team IDs for NCAAB roster lookup');
       // If we have RotoWire data, return that alone
       if (rotoWireLineups) {
-        return { rotoWireLineups, source: 'Gemini Grounding' };
+        return { rotoWireLineups, source: 'Grounded search' };
       }
       return null;
     }
@@ -1071,20 +1062,9 @@ VENUE: [arena/stadium name where this game is being played, or UNKNOWN if not fo
         cleanHome = (ncaabKeyPlayers.rotoWireLineups.homeRaw || '').replace(/\*\*/g, '');
       } else {
         // Fallback: fetch directly if fetchNcaabKeyPlayers didn't provide data
+        // (shared two-rail grounded transport — Aug 24 2026, Gemini retired).
         console.log(`[Scout Report] Fetching RotoWire lineups and GTD status for ${awayTeam} @ ${homeTeam}...`);
-        const gemini = getGeminiClient();
-        if (gemini) {
-          const model = gemini.getGenerativeModel({
-            model: 'gemini-3-flash-preview',
-            tools: [{ google_search: {} }],
-            safetySettings: [
-              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-            ]
-          });
-
+        {
           const buildTeamQuery = (teamName, teamShort) => `<date_anchor>Today is ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. Use ONLY current 2025-26 season data.</date_anchor>
 Search RotoWire NCAAB/CBB lineups page (rotowire.com/daily/ncaab/lineups.php) for ${teamShort} ${new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' })}
 
@@ -1108,12 +1088,12 @@ STATUS KEY: GTD = Game Time Decision, Out = Confirmed NOT playing, OFS = Out For
 CRITICAL: Be precise. Only include what's actually shown on RotoWire. List ALL injuries.`;
 
           const [awayResult, homeResult] = await Promise.all([
-            model.generateContent(buildTeamQuery(awayTeam, awayShort)),
-            model.generateContent(buildTeamQuery(homeTeam, homeShort))
+            geminiGroundingSearch(buildTeamQuery(awayTeam, awayShort), { maxTokens: 2000 }),
+            geminiGroundingSearch(buildTeamQuery(homeTeam, homeShort), { maxTokens: 2000 })
           ]);
 
-          cleanAway = ((awayResult.response?.text() || '').trim()).replace(/\*\*/g, '');
-          cleanHome = ((homeResult.response?.text() || '').trim()).replace(/\*\*/g, '');
+          cleanAway = ((awayResult?.data || '').trim()).replace(/\*\*/g, '');
+          cleanHome = ((homeResult?.data || '').trim()).replace(/\*\*/g, '');
         }
       }
 

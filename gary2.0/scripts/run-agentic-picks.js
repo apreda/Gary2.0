@@ -662,7 +662,9 @@ if (sportsToRun.length === 0) {
 // Check environment variables
 function checkEnv() {
   const checks = [
-    { name: 'GEMINI_API_KEY', alts: [] },
+    // ANTHROPIC_API_KEY powers the researcher pool + grounded-search fallback
+    // (GEMINI_API_KEY was required here until Aug 24 2026 — vendor retired).
+    { name: 'ANTHROPIC_API_KEY', alts: [] },
     { name: 'SUPABASE_URL', alts: ['VITE_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_URL'] },
     { name: 'SUPABASE_SERVICE_ROLE_KEY', alts: ['SUPABASE_SERVICE_KEY', 'VITE_SUPABASE_SERVICE_ROLE_KEY'] }
   ];
@@ -698,7 +700,7 @@ async function main() {
 ║                                                                  ║
 ║              🐻 GARY AGENTIC PICKS GENERATOR 🐻                  ║
 ║                                                                  ║
-║        Stats-First Analysis | Gemini Function Calling            ║
+║        Stats-First Analysis | Tool-Calling Research              ║
 ║                                                                  ║
 ╚══════════════════════════════════════════════════════════════════╝
 `);

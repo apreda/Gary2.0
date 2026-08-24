@@ -39,9 +39,19 @@ export const GEMINI_CACHE_TTL_SECONDS = 60 * 60;
  * @returns {Object} - { chat, model, modelName } - Chat session and model reference
  */
 export async function createGeminiSession(options = {}) {
+  // VENDOR BAN FIRST (founder, Aug 24 2026: "no more gemini for anything").
+  // validateGeminiModel refuses any gemini-* or unknown name and reroutes it
+  // to the research default — BEFORE adapter routing, so the coerced name
+  // lands in a real adapter below. Every family the validator allows has an
+  // adapter (gpt- / anthropic- / claude / codex-), which makes the old
+  // Gemini session tail below unreachable; it now throws if ever entered.
+  const requestedModel = validateGeminiModel(options.modelName);
+  if (requestedModel !== options.modelName) {
+    options = { ...options, modelName: requestedModel };
+  }
   // Provider seam (Jul 6 2026 bake-off): non-Gemini brains route to their
-  // adapter BEFORE any Gemini validation/coercion. GARY_MODEL_OVERRIDE=gpt-5
-  // is the only switch — agentLoop and the callers stay provider-blind.
+  // adapter. GARY_MODEL_OVERRIDE is the only switch — agentLoop and the
+  // callers stay provider-blind.
   if (isOpenAiModel(options.modelName)) {
     return createOpenAISession(options);
   }
@@ -54,6 +64,8 @@ export async function createGeminiSession(options = {}) {
   if (isCodexCliModel(options.modelName)) {
     return createCodexCliSession(options);
   }
+  throw new Error(`[Session] Gemini session path is retired (founder, Aug 24 2026) — "${options.modelName}" reached the dead tail; validateGeminiModel should have rerouted it`);
+  // eslint-disable-next-line no-unreachable
   const {
     modelName = 'gemini-3-flash-preview',
     systemPrompt = '',

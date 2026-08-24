@@ -18,7 +18,7 @@ import {
 import { stampFootballTdCategory, storePropPicksAtomic } from './lib/propPicksStorage.js';
 import { ncaafSlateDateForInstant } from '../src/services/ncaafGamePolicy.js';
 
-// Dynamic imports after env is loaded (so geminiService gets correct proxy URL)
+// Dynamic imports after env is loaded (services read env at import time)
 const { oddsService } = await import('../src/services/oddsService.js');
 const { propOddsService } = await import('../src/services/propOddsService.js');
 const { getPropsConstitution, applyPropsPerGameConstraint, isExplicitPropsPass, normalizePropBetDirection, stripInternalFields } = await import('../src/services/agentic/propsSharedUtils.js');

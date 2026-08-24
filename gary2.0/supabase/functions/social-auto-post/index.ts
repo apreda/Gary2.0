@@ -21,8 +21,8 @@
 //     (absorbed the retired personality post, Jul 5). Falls back to plain per-sport lines if the LLM fails.
 //
 // Query params: ?dry_run=1 (compose, don't post/log), ?force_mode=pick|recap|personality|verdict|arc, ?preview=1 (dry-run: compose top pick ignoring timing), ?metrics_only=1
-// LLM: Google Gemini primary (GEMINI_API_KEY secret; model override via GEMINI_MODEL, default gemini-3.5-flash),
-//      Anthropic failover (ANTHROPIC_API_KEY secret; SOCIAL_ANTHROPIC_MODEL, default claude-sonnet-5) — Aug 24 2026.
+// LLM: Anthropic ONLY (ANTHROPIC_API_KEY secret; SOCIAL_ANTHROPIC_MODEL, default claude-sonnet-5).
+//      Gemini is fully retired (founder, Aug 24 2026: "no more gemini for anything").
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { matchVerdicts, plainVerdict, buildVerdictPrompt, trimTweet } from "./verdicts.ts";
 import { fallbackReasonPair, isVerbatimSnippet, reasonCandidates, splitSentences } from "../_shared/verbatimSnippets.js";
@@ -33,20 +33,10 @@ import { marqueeScore } from "./marquee.ts";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
-// Verdict v3.3 (Jul 29 2026, founder: "for the tweets we can use Gemini — whatever model gets the
-// job done for cheap"): verdicts run a NAKED Gemini call (VERDICT_MODEL secret, default 3.6 Flash).
-// v3-v3.2 ran gpt-5.6-sol; the register contract and box-score grounding are unchanged —
-// brain that makes the picks, zero system prompt, zero persona — grounded by the full game report
-// from grade-results ?evidence=1. See buildVerdictPrompt in verdicts.ts for the approved contract.
-const VERDICT_MODEL = Deno.env.get("VERDICT_MODEL") ?? "gemini-3.6-flash";
-// Voice work gets its own model knob: SOCIAL_GEMINI_MODEL upgrades the WRITER (captions, verdicts, recap)
-// without touching grade-results or anything else that shares the global GEMINI_MODEL secret.
-const GEMINI_MODEL = Deno.env.get("SOCIAL_GEMINI_MODEL") ?? Deno.env.get("GEMINI_MODEL") ?? "gemini-3.5-flash";
-// FAILOVER VENDOR (Aug 24 2026): Anthropic takes any callLLM call Gemini
-// fails — the Gemini project spent Aug 20-24 403-dunning on Google billing
-// and every post silently degraded to the deterministic fallback. Sonnet
-// matches the content brain the rest of production runs on.
+// THE VENDOR (Aug 24 2026): Anthropic only. The Gemini project spent Aug
+// 20-24 403-dunning on Google billing and every post silently degraded to
+// the deterministic fallback; the founder retired the vendor outright.
+// Sonnet matches the content brain the rest of production runs on.
 const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const ANTHROPIC_MODEL = Deno.env.get("SOCIAL_ANTHROPIC_MODEL") ?? "claude-sonnet-5";
 // Base origin for the Vercel OG image routes (results-card, pick-card). Override (e.g. localhost) for dry-run rendering.
@@ -124,30 +114,6 @@ function ordinalDate(ymd: string): string {
 
 type JsonSchema = Record<string, unknown>;
 
-async function callGeminiLLM(system: string, user: string, responseSchema?: JsonSchema): Promise<string> {
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
-    method: "POST",
-    headers: { "x-goog-api-key": GEMINI_KEY, "content-type": "application/json" },
-    body: JSON.stringify({
-      system_instruction: { parts: [{ text: system }] },
-      contents: [{ role: "user", parts: [{ text: user }] }],
-      // Pro models THINK before answering and the thoughts bill against maxOutputTokens — without capping
-      // thinking, long social prompts burn the whole budget and return empty (every call fell to fallback).
-      generationConfig: {
-        maxOutputTokens: 8000,
-        responseMimeType: "application/json",
-        ...(responseSchema ? { responseSchema } : {}),
-        ...(GEMINI_MODEL.includes("pro") ? { thinkingConfig: { thinkingLevel: "low" } } : {}),
-      },
-    }),
-  });
-  const j = await r.json();
-  if (!r.ok) throw new Error(`Gemini ${r.status}: ${JSON.stringify(j).slice(0, 300)}`);
-  const text = j.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ?? "";
-  if (!text) throw new Error("Gemini returned empty output: " + JSON.stringify(j).slice(0, 300));
-  return text;
-}
-
 async function callAnthropicLLM(system: string, user: string): Promise<string> {
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -167,22 +133,10 @@ async function callAnthropicLLM(system: string, user: string): Promise<string> {
   return text;
 }
 
-// VENDOR FAILOVER (Aug 24 2026): the Gemini project has been 403-dunning
-// (Google billing) since ~Aug 20, which silently degraded every composed post
-// to the deterministic fallback for days. One dead vendor must never decide
-// what the account sounds like: Gemini stays primary (founder, Jul 29:
-// "whatever model gets the job done for cheap"), Anthropic takes the call
-// when Gemini fails, and only then does the verbatim fallback run.
-async function callLLM(system: string, user: string, responseSchema?: JsonSchema): Promise<string> {
-  if (GEMINI_KEY) {
-    try {
-      return await callGeminiLLM(system, user, responseSchema);
-    } catch (e) {
-      if (!ANTHROPIC_KEY) throw e;
-      console.error(`LLM_FAILOVER: Gemini failed (${String(e).slice(0, 200)}) — retrying on Anthropic ${ANTHROPIC_MODEL}`);
-    }
-  }
-  if (!ANTHROPIC_KEY) throw new Error("No LLM vendor available: GEMINI_API_KEY and ANTHROPIC_API_KEY are both unset");
+// Anthropic only (founder, Aug 24 2026). responseSchema is accepted for
+// call-site stability but shape is enforced by the prompt + parseJsonBlock.
+async function callLLM(system: string, user: string, _responseSchema?: JsonSchema): Promise<string> {
+  if (!ANTHROPIC_KEY) throw new Error("ANTHROPIC_API_KEY secret not set");
   return await callAnthropicLLM(system, user);
 }
 
@@ -655,22 +609,17 @@ async function fetchGameEvidence(c: { postDate: string; matchup: string }): Prom
 
 // Naked model call: no system prompt, no persona — the grounded evidence in the user prompt is
 // the entire contract. clean() (emoji/dash strip) + trimTweet stay as mechanical backstops.
+// (Verdict lane is retired; this composes for ?dry_run=1 preview only. Anthropic, Aug 24 2026.)
 async function nakedLLM(user: string): Promise<string> {
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${VERDICT_MODEL}:generateContent`, {
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: { "x-goog-api-key": GEMINI_KEY, "content-type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: user }] }],
-      generationConfig: { maxOutputTokens: 2000 },
-    }),
+    headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({ model: ANTHROPIC_MODEL, max_tokens: 2000, messages: [{ role: "user", content: user }] }),
   });
   const j = await r.json();
-  if (!r.ok) throw new Error(`Gemini ${r.status}: ${JSON.stringify(j).slice(0, 300)}`);
-  const text = (j.candidates?.[0]?.content?.parts ?? [])
-    .filter((p: any) => p.text && !p.thought)
-    .map((p: any) => p.text)
-    .join("");
-  if (!text.trim()) throw new Error("Gemini returned empty output");
+  if (!r.ok) throw new Error(`Anthropic ${r.status}: ${JSON.stringify(j).slice(0, 300)}`);
+  const text = (j.content ?? []).map((c: any) => c?.text ?? "").join("");
+  if (!text.trim()) throw new Error("Anthropic returned empty output");
   return text.trim();
 }
 
@@ -902,7 +851,7 @@ Deno.serve(async (req) => {
     }
     if (metricsOnly) return Response.json({ metrics_only: true, metrics });
 
-    if (!GEMINI_KEY && !ANTHROPIC_KEY) return Response.json({ error: "No LLM secret set (GEMINI_API_KEY or ANTHROPIC_API_KEY) — add one in Supabase dashboard → Project Settings → Edge Functions → Secrets", metrics }, { status: 500 });
+    if (!ANTHROPIC_KEY) return Response.json({ error: "ANTHROPIC_API_KEY secret not set — add it in Supabase dashboard → Project Settings → Edge Functions → Secrets", metrics }, { status: 500 });
 
     // Verdict loop rides every unforced hourly run: finals detected within ~1hr, quote-tweeted.
     let verdict: any = undefined;

@@ -19,7 +19,8 @@ import {
   formatStreak,
   escapeRegex
 } from './utilities.js';
-import { getGeminiClient, groundingSearch, geminiGroundingSearch } from './grounding.js';
+import { groundingSearch, geminiGroundingSearch } from './grounding.js';
+import { generateSolText } from '../../../insights/solText.js';
 import { fetchAnthropicFootballCurrentState } from './anthropicFootballGrounding.js';
 import { spreadForSide } from '../../../marketTruth.js';
 
@@ -1570,12 +1571,6 @@ export async function fetchCurrentState(homeTeam, awayTeam, sport, gameDate) {
     } : null;
   };
 
-  const genAI = getGeminiClient();
-  if (!genAI) {
-    console.log('[Scout Report] Gemini not available for current state');
-    return isFootball ? footballFallback('Gemini unavailable') : null;
-  }
-
   try {
     const now = new Date();
     const today = gameDate || now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -1618,7 +1613,7 @@ export async function fetchCurrentState(homeTeam, awayTeam, sport, gameDate) {
     const searchResults = await Promise.all(
       searchQueries.map((q, i) => {
         const label = queryLabels[i] || `QUERY_${i}`;
-        return groundingSearch(genAI, q, todayFull)
+        return groundingSearch(null, q, todayFull)
           .then(text => {
             if (!text) {
               console.warn(`[Scout Report] Search ${label}: returned null/empty`);
@@ -1647,20 +1642,6 @@ export async function fetchCurrentState(homeTeam, awayTeam, sport, gameDate) {
     if (totalSearchChars < 200) {
       throw new Error(`Search phase returned insufficient data (${totalSearchChars} chars total). Searches may have failed.`);
     }
-
-    const narrativeModel = genAI.getGenerativeModel({
-      model: 'gemini-3-flash-preview',
-      generationConfig: {
-        // Gemini 3.x: temperature/topP/topK omitted per Google migration guide
-        thinkingConfig: { thinkingLevel: 'high' }
-      },
-      safetySettings: [
-        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-      ]
-    });
 
     const isNHL = sport === 'NHL' || sport === 'icehockey_nhl';
 
@@ -1722,32 +1703,10 @@ RULES:
 - Write in a knowledgeable, factual tone. Think beat writer, not hype man.`;
 
     const narrativeStart = Date.now();
-    let text;
-    try {
-      const result = await narrativeModel.generateContent(narrativePrompt);
-      text = result.response.text();
-    } catch (flashError) {
-      const flashMsg = flashError.message?.toLowerCase() || '';
-      const isFlash429 = flashError.status === 429 || flashError.message?.includes('429') || flashMsg.includes('quota');
-      if (isFlash429) {
-        console.log(`[Scout Report] Flash 429 for narrative — retrying with Flash (backup key)`);
-        const proModel = genAI.getGenerativeModel({
-          model: 'gemini-3-flash-preview',
-          // Gemini 3.x: temperature/topP/topK omitted per Google migration guide
-          generationConfig: {},
-          safetySettings: [
-            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-          ]
-        });
-        const proResult = await proModel.generateContent(narrativePrompt);
-        text = proResult.response.text();
-      } else {
-        throw flashError;
-      }
-    }
+    // Narrative synthesis is a pure content pass over the search results —
+    // it rides the content cascade (claude-sonnet-5 on the bridge first;
+    // Aug 24 2026, Gemini retired) like every other content lane.
+    const text = await generateSolText(narrativePrompt, { maxTokens: 8000, effort: 'high' });
     const narrativeDuration = Date.now() - narrativeStart;
     const totalDuration = Date.now() - startTime;
     console.log(`[Scout Report] Phase 2 (narrative) completed in ${narrativeDuration}ms. Total: ${totalDuration}ms`);
@@ -1807,20 +1766,7 @@ export async function scrubNarrative(narrative, allowedPlayers, homeTeam, awayTe
 
   console.log(`[Scout Report] Narrative scrub triggered: ${scrubCheck.reasons.join(', ')}`);
 
-  const genAI = getGeminiClient();
-  if (!genAI) return narrative;
-
   try {
-    const model = genAI.getGenerativeModel({ 
-      model: 'gemini-3-flash-preview',
-      safetySettings: [
-        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-      ]
-    });
-    
     const excludedSection = excludedPlayers.length > 0
       ? `\n### EXCLUDED PLAYERS (NEVER PLAYED THIS SEASON - 0 GAMES - ALWAYS REMOVE):\n${excludedPlayers.join(', ')}\nThese players have 0 games played this season. They have been out all year — the team has fully adjusted and the line reflects their absence. Remove ALL mentions.\n`
       : '';
@@ -1851,9 +1797,10 @@ ${narrative}
 
 Cleaned Report:`;
 
-    const result = await model.generateContent(prompt);
-    const cleaned = (result.response?.text() || narrative).trim();
-    
+    // Content pass on the cascade (Aug 24 2026, Gemini retired).
+    const scrubbed = await generateSolText(prompt, { maxTokens: 8000, effort: 'low' }).catch(() => null);
+    const cleaned = (scrubbed || narrative).trim();
+
     if (cleaned.length < 50 && narrative.length > 500) {
       console.warn(`[Scout Report] Scrubbing was too aggressive, falling back to original narrative`);
       return narrative;
@@ -2652,7 +2599,7 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
         durationNote: durationInfo.note,
         reportDateStr: durationInfo.outSinceDate,
         daysSinceReport: durationInfo.daysSinceOut,
-        source: 'gemini_grounding'
+        source: 'grounded_search'
       });
     };
 
@@ -3347,7 +3294,7 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
           durationNote: durationInfo.note,
           reportDateStr: durationInfo.outSinceDate,
           daysSinceReport: durationInfo.daysSinceOut,
-          source: 'gemini_grounding'
+          source: 'grounded_search'
         });
       }
     }
@@ -3389,7 +3336,7 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
         const injury = {
           player: { first_name: nameParts[0], last_name: nameParts.slice(1).join(' '), position: '' },
           status: normalizeStatus(status),
-          source: 'gemini_grounding'
+          source: 'grounded_search'
         };
         
         if (context.includes(homeTeam.toLowerCase()) || context.includes(homeTeam.split(' ').pop().toLowerCase())) {

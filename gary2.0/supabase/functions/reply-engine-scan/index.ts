@@ -8,8 +8,8 @@ import { barePick, isPublishableReply } from "../social-auto-post/barepick.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
-const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.5-flash";
+const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+const ANTHROPIC_MODEL = Deno.env.get("SOCIAL_ANTHROPIC_MODEL") ?? "claude-sonnet-5";
 const sb = createClient(SB_URL, SERVICE_KEY);
 const GARY_ID = "2001291581446631424"; // @BetwithGary numeric user id (from x-api-probe)
 
@@ -38,13 +38,21 @@ async function signedGet(baseUrl: string, qp: Record<string, string>): Promise<a
 }
 
 async function callLLM(system: string, user: string): Promise<string> {
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
-    method: "POST", headers: { "x-goog-api-key": GEMINI_KEY, "content-type": "application/json" },
-    body: JSON.stringify({ system_instruction: { parts: [{ text: system }] }, contents: [{ role: "user", parts: [{ text: user }] }], generationConfig: { maxOutputTokens: 1500, responseMimeType: "application/json" } }),
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({
+      model: ANTHROPIC_MODEL,
+      max_tokens: 2000,
+      system,
+      messages: [{ role: "user", content: `${user}\n\nReturn ONLY the JSON object - no code fences, no commentary.` }],
+    }),
   });
   const j = await r.json();
-  if (!r.ok) throw new Error(`Gemini ${r.status}`);
-  return j.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ?? "";
+  if (!r.ok) throw new Error(`Anthropic ${r.status}: ${JSON.stringify(j).slice(0, 300)}`);
+  const text = (j.content ?? []).map((c: any) => c?.text ?? "").join("");
+  if (!text) throw new Error("Anthropic returned empty output");
+  return text;
 }
 function parseJson(t: string): any { try { return JSON.parse(t); } catch (_) {} const m = t.match(/\{[\s\S]*\}/); if (!m) throw new Error("no json"); return JSON.parse(m[0]); }
 function clean(s: string): string {

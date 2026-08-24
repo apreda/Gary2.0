@@ -11,8 +11,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
-const GEMINI_MODEL = Deno.env.get("SOCIAL_GEMINI_MODEL") ?? Deno.env.get("GEMINI_MODEL") ?? "gemini-3.5-flash";
+const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+const ANTHROPIC_MODEL = Deno.env.get("SOCIAL_ANTHROPIC_MODEL") ?? "claude-sonnet-5";
 const X_API_KEY = (Deno.env.get("X_API_KEY") || "").trim();
 const X_API_SECRET = (Deno.env.get("X_API_SECRET") || "").trim();
 const X_ACCESS_TOKEN = (Deno.env.get("X_ACCESS_TOKEN") || "").trim();
@@ -61,24 +61,22 @@ async function xGet(baseUrl: string, params: Record<string, string>): Promise<an
   return j;
 }
 
-// ---------- Gemini (identical to social-auto-post) ----------
+// ---------- Anthropic (Gemini retired — founder, Aug 24 2026) ----------
 async function callLLM(system: string, user: string): Promise<string> {
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: { "x-goog-api-key": GEMINI_KEY, "content-type": "application/json" },
+    headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({
-      system_instruction: { parts: [{ text: system }] },
-      contents: [{ role: "user", parts: [{ text: user }] }],
-      // thinkingLevel 'low' = a deliberate careful-reading pass (keeps each stat tied to the right player) without the
-      // cost/latency of full reasoning. Same level the pick engine uses for its fact-retrieval/grounding work.
-      generationConfig: { maxOutputTokens: 2000, responseMimeType: "application/json", thinkingConfig: { thinkingLevel: "low" } },
+      model: ANTHROPIC_MODEL,
+      max_tokens: 2000,
+      system,
+      messages: [{ role: "user", content: `${user}\n\nReturn ONLY the JSON object - no code fences, no commentary.` }],
     }),
   });
   const j = await r.json();
-  if (!r.ok) throw new Error(`Gemini ${r.status}: ${JSON.stringify(j).slice(0, 300)}`);
-  // Exclude thinking parts (thought:true) so the reasoning trace never lands in the parsed answer.
-  const text = (j.candidates?.[0]?.content?.parts ?? []).filter((p: any) => !p.thought && typeof p.text === "string").map((p: any) => p.text).join("");
-  if (!text) throw new Error("Gemini empty: " + JSON.stringify(j).slice(0, 300));
+  if (!r.ok) throw new Error(`Anthropic ${r.status}: ${JSON.stringify(j).slice(0, 300)}`);
+  const text = (j.content ?? []).map((c: any) => c?.text ?? "").join("");
+  if (!text) throw new Error("Anthropic returned empty output");
   return text;
 }
 // Extract the FIRST complete top-level {...} object (handles any trailing content after the JSON).
@@ -258,7 +256,7 @@ Deno.serve(async (req) => {
     const showAll = url.searchParams.get("all") === "1"; // dry-only: ignore the recency guard (for previewing replies to existing mentions)
     try { const b = await req.json(); if (b?.dry) dry = true; } catch { /* no body */ }
 
-    if (!GEMINI_KEY) return Response.json({ ok: false, error: "GEMINI_API_KEY not set" }, { status: 500 });
+    if (!ANTHROPIC_KEY) return Response.json({ ok: false, error: "ANTHROPIC_API_KEY not set" }, { status: 500 });
 
     // Prompt test harness (no X, no post): ?test=<question> composes a reply to that question against today's real slate.
     const testQ = url.searchParams.get("test");

@@ -1,7 +1,8 @@
 /**
  * Content-pass text adapter for the insights pipeline (Jul 27 2026, Sol-only
  * mandate; provider seam Jul 29): the drop-in replacement for
- * geminiService.generateResponse in the hub/fantasy computers. One prompt in,
+ * the retired geminiService.generateResponse in the hub/fantasy computers (that
+ * file was deleted Aug 24 2026 with the vendor). One prompt in,
  * prose/JSON text out, no tools, low reasoning — these are content passes,
  * not picks.
  *

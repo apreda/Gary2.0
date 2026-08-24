@@ -1,24 +1,19 @@
 /**
- * OpenAI web-search grounding for the MLB game lane (founder GO, Jul 26 2026 —
- * de-Gemini step one). Same return contract as geminiGroundingSearch
- * ({ success, data, raw }) so call sites swap without unwrap changes.
+ * Web-search grounding facade for the pick desks (founder GO, Jul 26 2026 —
+ * de-Gemini step one; Gemini fully retired Aug 24 2026). Return contract
+ * ({ success, data, raw }) is stable across every rung.
  *
  * The 2026 Freshness Protocol is ported from shared/grounding.js — the rules
- * are prompt text and provider-agnostic. Search runs through the Responses
- * API's built-in web_search tool; failures degrade to empty data (the desk
- * renders "No same-day breaking news." — never blocks a pick).
- *
- * Quota fallback (founder approved Jul 29, after the Jul 28 balance outage
- * built news-less desks all evening): a 429/quota failure — and only that —
- * re-runs the query through geminiGroundingSearch (same return contract,
- * its own freshness protocol). OpenAI stays the preferred provider.
+ * are prompt text and provider-agnostic. Chain: Claude subscription bridge
+ * (when GARY_GROUNDING_VIA_CLAUDE=1, $0) → OpenAI Responses web_search →
+ * Anthropic server web search on quota failures. Failures degrade to empty
+ * data (the desk renders "No same-day breaking news." — never blocks a pick).
  */
 import { createHash } from 'crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { describeSportsCalendar } from '../../utils/dateUtils.js';
-import { geminiGroundingSearch } from '../agentic/scoutReport/shared/grounding.js';
 import { claudeCliWebSearch } from '../agentic/orchestrator/providerAdapters/claudeCliSession.js';
 
 // SEARCH CACHE (founder GO, Aug 10): the props tiers re-build the desk per
@@ -174,11 +169,15 @@ export async function openaiWebSearch(query, options = {}) {
   } catch (e) {
     const msg = String(e.message || '');
     if (msg.includes('429') || msg.toLowerCase().includes('quota')) {
-      console.warn(`[Web Search] OpenAI quota/429 — falling back to Gemini grounding`);
+      // Aug 24 2026: the old third rung here was Gemini grounding — retired
+      // with the vendor. Anthropic server web search is the last resort now.
+      console.warn(`[Web Search] OpenAI quota/429 — falling back to Anthropic server web search`);
       try {
-        return cachePut(await geminiGroundingSearch(query, options));
+        const { anthropicWebSearchRaw } = await import('../agentic/scoutReport/shared/anthropicWebSearch.js');
+        const viaApi = await anthropicWebSearchRaw(freshnessPrompt(query, options.freshnessHours), { maxTokens: options.maxTokens || 2000 });
+        return viaApi.success ? cachePut({ success: true, data: viaApi.data, raw: null }) : { success: false, data: '', raw: null, error: viaApi.error };
       } catch (g) {
-        console.warn(`[Web Search] Gemini grounding fallback also failed: ${g.message}`);
+        console.warn(`[Web Search] Anthropic fallback also failed: ${g.message}`);
         return { success: false, data: '', raw: null, error: g.message };
       }
     }

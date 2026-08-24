@@ -6,35 +6,25 @@
  * and related parsing utilities.
  */
 
-import { getGeminiClient } from './grounding.js';
+import { claudeCliWebSearch } from '../../orchestrator/providerAdapters/claudeCliSession.js';
+import { anthropicWebSearchRaw } from './anthropicWebSearch.js';
+
+// Grounded transport (Aug 24 2026, Gemini retired): Claude subscription
+// bridge first ($0), Anthropic server web-search second. Prompts here carry
+// their own date anchors, so no extra wrapping. Returns text or null.
+async function groundedPropsSearch(prompt, { maxTokens = 3000 } = {}) {
+  const viaBridge = await claudeCliWebSearch(prompt, { timeoutMs: 5 * 60 * 1000 });
+  if (viaBridge.success && viaBridge.data) return viaBridge.data;
+  console.warn('[Props Search] claude bridge empty/failed — trying Anthropic server web search');
+  const viaApi = await anthropicWebSearchRaw(prompt, { maxTokens });
+  return viaApi.success ? viaApi.data : null;
+}
 
 // ─── fetchComprehensivePropsNarrative ───────────────────────────────────────
 
 export async function fetchComprehensivePropsNarrative(homeTeam, awayTeam, sport, gameDate, options = {}) {
-  const genAI = getGeminiClient();
-  if (!genAI) {
-    console.log('[Props Narrative] Gemini not available');
-    return null;
-  }
-
   try {
     const today = gameDate || new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-
-    // Flash for grounding searches (Pro as 429 fallback only)
-    const modelName = 'gemini-3-flash-preview';
-
-    const model = genAI.getGenerativeModel({
-      model: modelName,
-      tools: [{ google_search: {} }],
-      // Gemini 3.x: temperature/topP/topK omitted per Google migration guide
-      generationConfig: {},
-      safetySettings: [
-        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-      ]
-    });
 
     // Sport-specific comprehensive prompts
     let prompt;
@@ -414,13 +404,12 @@ Be factual. Do NOT make predictions.`;
     const dateAnchor = `<date_anchor>Today is ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. Use ONLY current 2025-26 season data.</date_anchor>\n`;
     prompt = dateAnchor + prompt;
 
-    console.log(`[Props Narrative] Fetching comprehensive ${sport} context via Gemini...`);
+    console.log(`[Props Narrative] Fetching comprehensive ${sport} context via grounded search...`);
 
-    const result = await model.generateContent(prompt);
-    const text = result?.response?.text?.() || '';
+    const text = await groundedPropsSearch(prompt, { maxTokens: 6000 }) || '';
 
     if (!text || text.length < 100) {
-      console.warn('[Props Narrative] Gemini returned insufficient content');
+      console.warn('[Props Narrative] grounded search returned insufficient content');
       return null;
     }
 
@@ -526,32 +515,8 @@ export function parseNarrativeSections(text) {
  * @returns {Object} Map of player_propType -> lineMovement data
  */
 export async function fetchPropLineMovement(sport, gameDate, homeTeam, awayTeam, playerProps = []) {
-  const genAI = getGeminiClient();
-  if (!genAI) {
-    console.log('[Line Movement] Gemini not available');
-    return { movements: {}, source: 'UNAVAILABLE' };
-  }
-
   try {
     const dateStr = gameDate || new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-
-    // Use Flash model for efficiency
-    const modelName = process.env.GEMINI_FLASH_MODEL || 'gemini-3-flash-preview';
-
-    const model = genAI.getGenerativeModel({
-      model: modelName,
-      tools: [{ google_search: {} }],
-      generationConfig: {
-        // Gemini 3.x: temperature/topP/topK omitted per Google migration guide
-        maxOutputTokens: 3000
-      },
-      safetySettings: [
-        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-      ]
-    });
 
     // Build sport-specific prop types and star players to search
     let propTypes = '';
@@ -581,14 +546,12 @@ Example format:
 
 Focus on significant moves (1+ point difference). List as many as you can find from ScoresAndOdds or BettingPros prop pages.`;
 
-    console.log(`[Line Movement] Querying Gemini for ${sport} props: ${awayTeam} @ ${homeTeam}`);
+    console.log(`[Line Movement] Grounded search for ${sport} props: ${awayTeam} @ ${homeTeam}`);
 
-    const result = await model.generateContent(query);
-    const response = result.response;
-    const text = response.text();
+    const text = await groundedPropsSearch(query, { maxTokens: 3000 });
 
     if (!text) {
-      console.log('[Line Movement] No response from Gemini');
+      console.log('[Line Movement] No response from grounded search');
       return { movements: {}, source: 'NO_DATA' };
     }
 

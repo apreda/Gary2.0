@@ -576,7 +576,7 @@ function processGoalieData(bdlGoalieData, advancedStats, homeTeam, awayTeam) {
       } else {
         result.home = {
           name: groundingGoalies.home_starter,
-          source: 'gemini_grounding',
+          source: 'grounded_search',
           save_pct: groundingGoalies.home_sv_pct,
           isConfirmedStarter: true
         };
@@ -594,7 +594,7 @@ function processGoalieData(bdlGoalieData, advancedStats, homeTeam, awayTeam) {
       } else {
         result.away = {
           name: groundingGoalies.away_starter,
-          source: 'gemini_grounding',
+          source: 'grounded_search',
           save_pct: groundingGoalies.away_sv_pct,
           isConfirmedStarter: true
         };

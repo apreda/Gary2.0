@@ -10,8 +10,8 @@
  *   coherence     — read, ticket, and card pointing the same way
  *   specificity   — a named, checkable edge vs generic attribute-stacking
  *
- * Model rides the props lane's bucket (Sonnet on the bridge, $0 marginal);
- * API era falls to flash. Fail-soft: any error, any unparseable reply → null
+ * Model rides the props lane bucket (Sonnet on the bridge, $0 marginal);
+ * Fail-soft: any error, any unparseable reply → null
  * — a missing judge score can never delay or block a stored pick.
  */
 import { createGeminiSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
@@ -19,7 +19,7 @@ import { createGeminiSession, sendToSessionWithRetry } from '../agentic/orchestr
 const JUDGE_MODEL =
   process.env.GARY_JUDGE_MODEL_OVERRIDE ||
   process.env.GARY_PROPS_MODEL_OVERRIDE ||
-  'gemini-3.6-flash';
+  'claude-sonnet-5';
 
 export const JUDGE_SYSTEM = `You are the selection desk for a sports betting page. You do not make picks, change picks, or predict games. You read one sealed pick — its pre-lines read, its published card, and the desk of facts it was built from — and you score the CASE the way a sharp reader would:
 

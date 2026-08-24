@@ -2,7 +2,7 @@
  * THE PROPS BRAIN — one call over the complete desk + THE PROP BOARD
  * (spec docs/superpowers/specs/2026-07-26-props-desk.md).
  *
- * Brain: gemini-3.6-flash at top thinking level (founder, Jul 29 2026 —
+ * Brain: the props desk model (codex-gpt-5.6-sol via plist; Gemini retired Aug 24 2026 —
  * props off Sol's $5/$30; Sol stays reserved for game picks), with 3.1 Pro
  * as the quota/provider fallback. Sessions route through the sessionManager
  * provider seam, so the model is config, not plumbing.
@@ -412,7 +412,7 @@ export async function runPropsDeskBrain({ systemPrompt, userMessage, corpus, rec
       modelName,
       systemPrompt,
       tools: [],
-      thinkingLevel: modelName.startsWith('gemini') ? 'high' : 'xhigh',
+      thinkingLevel: 'xhigh',
     });
 
     const usage = { in: 0, out: 0 };
@@ -456,7 +456,7 @@ export async function runPropsDeskBrain({ systemPrompt, userMessage, corpus, rec
   };
 
   // Match the game-desk resilience policy: subscription primary, the other
-  // subscription provider, then the metered Gemini fallbacks. De-duplicate so
+  // subscription provider, then the remaining desk fallbacks. De-duplicate so
   // an override can never retry the same exhausted model under another slot.
   const cascade = [...new Set([GEMINI_PROPS_MODEL, ...DESK_FALLBACK_MODELS, GEMINI_PRO_FALLBACK])];
   // RESPONDER STAMP + OVERLOAD RETRY (founder GO, Aug 12): mirrors the game

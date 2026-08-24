@@ -7,13 +7,12 @@
  * - Night highlights (league-wide standout stat lines → night_highlights)
  * - Streaks (team W/L + O/U runs, player hit/hitless/HR runs → streaks)
  * - Uses BallDontLie (BDL) as primary source
- * - Uses Gemini Grounding (Google Search) as fallback
+ * - Uses grounded web search (Claude bridge → Anthropic API; Gemini retired Aug 24 2026) as fallback
  * 
  * Usage: node scripts/run-all-results.js [YYYY-MM-DD]
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { pickSide, matchGame } from '../src/services/teamMatch.js';
 import { factCheckPick, buildGameEvidence } from '../src/services/factCheck.js';
 import { generateRecap, filterPropsForGame, headlineNeedsRepair } from '../src/services/gameRecap.js';
@@ -56,7 +55,6 @@ const RUN_OPTIONS = parseResultsRunArgs(process.argv.slice(2));
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 const BDL_API_KEY = process.env.BALLDONTLIE_API_KEY || process.env.VITE_BALL_DONT_LIE_API_KEY || process.env.BALL_DONT_LIE_API_KEY;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('❌ Missing Supabase credentials.');
@@ -72,16 +70,11 @@ console.log(`\n🚀 GARY'S ULTIMATE RESULTS ENGINE`);
 console.log(`════════════════════════════════════════`);
 console.log(`🔑 Supabase:  ✅ ${SUPABASE_URL}`);
 console.log(`📡 BDL API:   ✅`);
-console.log(`📡 Grounding: ${GEMINI_API_KEY ? '✅ (Gemini 3 Flash)' : '❌ (Missing API Key)'}`);
+console.log(`📡 Grounding: ✅ (claude bridge → Anthropic web search)`);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false }
 });
-
-let genAI = null;
-if (GEMINI_API_KEY) {
-  genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-}
 
 // Caching
 const cache = { games: new Map(), stats: new Map(), box: new Map(), propRows: new Map() };
@@ -119,25 +112,25 @@ function normalizeName(name) {
 }
 
 /**
- * Gemini Grounding (Google Search) Fallback
+ * Grounded web-search fallback (Aug 24 2026, Gemini retired): Claude
+ * subscription bridge first ($0), Anthropic server web search second.
+ * Same contract as the old Gemini helper — text or null, never throws.
  */
 async function geminiGrounding(query) {
-  if (!genAI) return null;
   try {
-    const model = genAI.getGenerativeModel({
-      model: "gemini-3-flash-preview",
-      tools: [{ google_search: {} }],
-      safetySettings: [
-        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-      ]
-    });
-    const result = await model.generateContent(query);
-    const text = result.response.text();
-    console.log(`    [Grounding] Result: ${text.substring(0, 80)}...`);
-    return text;
+    const { claudeCliWebSearch } = await import('../src/services/agentic/orchestrator/providerAdapters/claudeCliSession.js');
+    const viaBridge = await claudeCliWebSearch(query, { timeoutMs: 3 * 60 * 1000 });
+    if (viaBridge.success && viaBridge.data) {
+      console.log(`    [Grounding] Result: ${viaBridge.data.substring(0, 80)}...`);
+      return viaBridge.data;
+    }
+    const { anthropicWebSearchRaw } = await import('../src/services/agentic/scoutReport/shared/anthropicWebSearch.js');
+    const viaApi = await anthropicWebSearchRaw(query, { maxTokens: 2000 });
+    if (viaApi.success && viaApi.data) {
+      console.log(`    [Grounding] Result (anthropic): ${viaApi.data.substring(0, 80)}...`);
+      return viaApi.data;
+    }
+    return null;
   } catch (e) {
     console.warn(`    [Grounding] Error: ${e.message}`);
     return null;

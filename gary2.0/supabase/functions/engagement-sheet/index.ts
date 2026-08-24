@@ -15,8 +15,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 // ---------- env ----------
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
-const GEMINI_MODEL = Deno.env.get("SOCIAL_GEMINI_MODEL") ?? Deno.env.get("GEMINI_MODEL") ?? "gemini-3.5-flash";
+const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+const ANTHROPIC_MODEL = Deno.env.get("SOCIAL_ANTHROPIC_MODEL") ?? "claude-sonnet-5";
 const X_API_KEY = (Deno.env.get("X_API_KEY") || "").trim();
 const X_API_SECRET = (Deno.env.get("X_API_SECRET") || "").trim();
 const X_ACCESS_TOKEN = (Deno.env.get("X_ACCESS_TOKEN") || "").trim();
@@ -65,21 +65,22 @@ async function xGet(baseUrl: string, params: Record<string, string>): Promise<an
   return j;
 }
 
-// ---------- Gemini ----------
+// ---------- Anthropic (Gemini retired — founder, Aug 24 2026) ----------
 async function callLLM(system: string, user: string): Promise<string> {
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: { "x-goog-api-key": GEMINI_KEY, "content-type": "application/json" },
+    headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({
-      system_instruction: { parts: [{ text: system }] },
-      contents: [{ role: "user", parts: [{ text: user }] }],
-      generationConfig: { maxOutputTokens: 2000, responseMimeType: "application/json", thinkingConfig: { thinkingLevel: "low" } },
+      model: ANTHROPIC_MODEL,
+      max_tokens: 2000,
+      system,
+      messages: [{ role: "user", content: `${user}\n\nReturn ONLY the JSON object - no code fences, no commentary.` }],
     }),
   });
   const j = await r.json();
-  if (!r.ok) throw new Error(`Gemini ${r.status}: ${JSON.stringify(j).slice(0, 300)}`);
-  const text = (j.candidates?.[0]?.content?.parts ?? []).filter((p: any) => !p.thought && typeof p.text === "string").map((p: any) => p.text).join("");
-  if (!text) throw new Error("Gemini returned empty output");
+  if (!r.ok) throw new Error(`Anthropic ${r.status}: ${JSON.stringify(j).slice(0, 300)}`);
+  const text = (j.content ?? []).map((c: any) => c?.text ?? "").join("");
+  if (!text) throw new Error("Anthropic returned empty output");
   return text;
 }
 function parseJsonBlock(text: string): any {

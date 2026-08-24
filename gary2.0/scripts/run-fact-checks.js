@@ -36,10 +36,6 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('❌ Missing Supabase credentials.');
   process.exit(1);
 }
-if (!process.env.GEMINI_API_KEY) {
-  console.error('❌ Missing GEMINI_API_KEY — fact checks need Flash.');
-  process.exit(1);
-}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false }
