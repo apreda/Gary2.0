@@ -2,8 +2,9 @@
  * Fact Check — grades Gary's pre-game rationale claim-by-claim against what
  * actually happened in the game.
  *
- * One cheap Flash call per graded game pick (no grounding, no tools): the model
- * gets the rationale, the pick + result, and an evidence pack (final score plus
+ * One cheap content call per graded game pick (no grounding, no tools —
+ * generateSolText's cascade since Aug 24 2026, claude-sonnet-5 first): the
+ * model gets the rationale, the pick + result, and an evidence pack (final score plus
  * whatever one cheap fetch provides — for MLB, the BDL per-game player stats we
  * already pull at grading time). It extracts the 3-6 most load-bearing
  * factual/predictive claims and grades each: right / wrong / unclear.
@@ -18,23 +19,8 @@
  * scripts/run-fact-checks.js (manual/backfill).
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import {
-  GEMINI_FLASH_MODEL,
-  GEMINI_SAFETY_SETTINGS,
-} from './agentic/orchestrator/orchestratorConfig.js';
-
 const VALID_VERDICTS = new Set(['right', 'wrong', 'unclear']);
 const MAX_CLAIM_CHARS = 90;
-
-let genAI = null;
-function getClient() {
-  if (genAI) return genAI;
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
-  genAI = new GoogleGenerativeAI(apiKey);
-  return genAI;
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Evidence pack
@@ -139,7 +125,7 @@ export function buildGameEvidence({ league, homeTeam, awayTeam, homeScore, awayS
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Prompt + Flash call
+// Prompt + content call
 // ─────────────────────────────────────────────────────────────────────────────
 
 function buildPrompt({ pick, result, evidence }) {
@@ -217,7 +203,7 @@ function toClaim(item) {
 }
 
 /**
- * Fact-check one graded game pick. ONE Flash call, low temperature, evidence
+ * Fact-check one graded game pick. ONE content call, low temperature, evidence
  * only — no tools, no search, no fabrication.
  *
  * @param {object} args
@@ -228,23 +214,20 @@ function toClaim(item) {
  */
 export async function factCheckPick({ pick, result, evidence }) {
   if (!pick?.rationale || !String(pick.rationale).trim()) return null;
-  const client = getClient();
-  if (!client) {
-    console.warn('    [FactCheck] GEMINI_API_KEY missing — skipping fact check.');
+
+  // CONTENT CASCADE (Aug 24 2026): this was a direct Gemini Flash call and
+  // died silently through the Aug 20-24 Gemini billing dunning, exactly like
+  // the recap lane. It now rides generateSolText — claude-sonnet-5 first on
+  // the subscription bridge, desk fallback chain (Gemini included) behind it.
+  let text;
+  try {
+    const { generateSolText } = await import('./insights/solText.js');
+    text = await generateSolText(buildPrompt({ pick, result, evidence }), { maxTokens: 2000, effort: 'low' });
+  } catch (e) {
+    console.warn(`    [FactCheck] content cascade failed (${e.message}) — skipping fact check.`);
     return null;
   }
-
-  const model = client.getGenerativeModel({
-    model: GEMINI_FLASH_MODEL,
-    safetySettings: GEMINI_SAFETY_SETTINGS,
-    generationConfig: {
-      temperature: 0.1,
-      responseMimeType: 'application/json',
-    },
-  });
-
-  const response = await model.generateContent(buildPrompt({ pick, result, evidence }));
-  const parsed = parseFactCheckResponse(response.response.text());
+  const parsed = parseFactCheckResponse(text);
   if (!parsed) return null;
 
   const claims = parsed.claims.map(toClaim).filter(Boolean);

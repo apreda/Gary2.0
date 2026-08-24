@@ -3,13 +3,14 @@
  * The headline describes the game itself; the body may explain the price Gary
  * took, how the game swung, and the bet's fate.
  *
- * One cheap Flash call per graded game pick (no grounding, no tools): the model
- * gets the pick + odds + graded result and the same evidence pack the fact
- * checker grades against (final score plus, for MLB, the BDL per-game player
- * stats we already pull at grading time). Every fact in the recap must come
- * from that evidence — the model is forbidden from inventing innings, stats,
- * or prices it wasn't given. Other leagues get the final score only, so their
- * recaps stay score-and-price stories. Mirrors src/services/factCheck.js.
+ * One cheap content call per graded game pick (no grounding, no tools —
+ * generateSolText's cascade since Aug 24 2026, claude-sonnet-5 first): the
+ * model gets the pick + odds + graded result and the same evidence pack the
+ * fact checker grades against (final score plus, for MLB, the BDL per-game
+ * player stats we already pull at grading time). Every fact in the recap must
+ * come from that evidence — the model is forbidden from inventing innings,
+ * stats, or prices it wasn't given. Other leagues get the final score only, so
+ * their recaps stay score-and-price stories. Mirrors src/services/factCheck.js.
  *
  * Rows land in `game_recaps` (see supabase/migrations/
  * 20260610_create_game_recaps.sql); the iOS app reads them under the anon role
@@ -19,12 +20,7 @@
  * scripts/run-game-recaps.js (manual/backfill).
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { matchupIncludesBothTeams } from './teamIdentity.js';
-import {
-  GEMINI_FLASH_MODEL,
-  GEMINI_SAFETY_SETTINGS,
-} from './agentic/orchestrator/orchestratorConfig.js';
 
 const MAX_HEADLINE_CHARS = 90;
 const MAX_RECAP_CHARS = 700;
@@ -33,25 +29,13 @@ const MAX_RECAP_CHARS = 700;
 // hard slice, so a tight ceiling would chop the second price off mid-token.
 const MAX_BULLET_CHARS = 56;
 const MAX_BULLETS = 4;
-// A stalled connection to the Gemini API otherwise hangs the whole nightly
-// run — observed during the June 10 backfill (calls hung 8+ minutes).
-const REQUEST_TIMEOUT_MS = 90_000;
 const BETTING_HEADLINE_RE =
   /\b(?:bet(?:s|ting)?|cash(?:ed|es|ing)?|cover(?:ed|s|ing)?|moneyline|spread|favorite|underdog|chalk|odds?|prices?)\b|\bML\b|\b(?:over|under)\s+\d+(?:\.\d+)?\b|(?<!\d)[+-]\d{2,4}\b/i;
 const SCORE_ONLY_HEADLINE_RE =
   /\b(?:beat(?:s)?|defeat(?:s|ed)?|edge(?:s|d)?|top(?:s|ped)?|down(?:s|ed)?|win(?:s)?|won|lose(?:s)?|lost|fall(?:s)?)\b.*\b\d{1,2}\s*[-–]\s*\d{1,2}\s*$/i;
 
-let genAI = null;
-function getClient() {
-  if (genAI) return genAI;
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
-  genAI = new GoogleGenerativeAI(apiKey);
-  return genAI;
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
-// Prompt + Flash call
+// Prompt + content call
 // ─────────────────────────────────────────────────────────────────────────────
 
 function describeBetForPrompt(pick) {
@@ -297,31 +281,25 @@ export function gameOnlyHeadline(generatedHeadline, evidence) {
  */
 export async function generateRecap({ pick, result, evidence }) {
   if (!pick?.pick || !evidence) return null;
-  const client = getClient();
-  if (!client) {
-    console.warn('    [GameRecap] GEMINI_API_KEY missing — skipping recap.');
+
+  // CONTENT CASCADE (Aug 24 2026): recaps used to be a direct Gemini Flash
+  // call, and when the Gemini project went 403-dunning (~Aug 20) this lane
+  // died SILENTLY — game_recaps went dark for four days and the Home
+  // headlines with it, while the backfill job kept exiting 0. Recaps now ride
+  // generateSolText: the same content brain as every other content pass
+  // (claude-sonnet-5 on the subscription bridge, $0 marginal), with the desk
+  // fallback chain — Gemini included — behind it. One dead vendor can no
+  // longer blank the Home page.
+  const prompt = buildPrompt({ pick, result, evidence });
+  let text;
+  try {
+    const { generateSolText } = await import('./insights/solText.js');
+    text = await generateSolText(prompt, { maxTokens: 2000, effort: 'low' });
+  } catch (e) {
+    console.warn(`    [GameRecap] content cascade failed (${e.message}) — no recap this pass`);
     return null;
   }
-
-  const model = client.getGenerativeModel({
-    model: GEMINI_FLASH_MODEL,
-    safetySettings: GEMINI_SAFETY_SETTINGS,
-    generationConfig: {
-      temperature: 0.3,
-      responseMimeType: 'application/json',
-    },
-  }, { timeout: REQUEST_TIMEOUT_MS });
-
-  const prompt = buildPrompt({ pick, result, evidence });
-  let response;
-  try {
-    response = await model.generateContent(prompt);
-  } catch (e) {
-    // One retry — covers the stalled-connection timeout above and transient 5xx.
-    console.warn(`    [GameRecap] Flash call failed (${e.message}) — retrying once`);
-    response = await model.generateContent(prompt);
-  }
-  const parsed = parseRecapResponse(response.response.text());
+  const parsed = parseRecapResponse(text);
   if (!parsed) return null;
 
   const headline = gameOnlyHeadline(parsed.headline, evidence);

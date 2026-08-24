@@ -63,6 +63,9 @@ const BDL_BASE = "https://api.balldontlie.io";
 // orchestratorConfig.js) — cheap Flash, one call per graded game.
 const GEMINI_MODEL = "gemini-3-flash-preview";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
+// Anthropic failover for the recap writer (Aug 24 2026) — see recapGenerate.
+const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+const RECAP_ANTHROPIC_MODEL = Deno.env.get("RECAP_ANTHROPIC_MODEL") ?? "claude-sonnet-5";
 const RECAP_GEMINI_TIMEOUT_MS = 12_000;
 
 // ── date helpers (ET) ───────────────────────────────────────────────────────
@@ -367,12 +370,41 @@ function recapSanitizeBulletPrices(bullet: string, evidence: string): string {
   return out.replace(/\s{2,}/g, " ").replace(/\s+([.,;)])/g, "$1").trim();
 }
 
-// ── Gemini Flash call (REST; hardened 3-4 retries with backoff) ──────────────
+// ── Recap LLM call (Gemini REST, hardened retries; Anthropic failover) ───────
+// VENDOR FAILOVER (Aug 24 2026): the Gemini project 403-dunned on Google
+// billing from ~Aug 20 and this writer — the lane that fills game_recaps as
+// games finish — silently produced nothing for four days, blanking the Home
+// headlines. When every Gemini attempt fails, one Anthropic attempt
+// (ANTHROPIC_API_KEY secret, RECAP_ANTHROPIC_MODEL default claude-sonnet-5)
+// carries the identical prompt; the parse/sanitize gates below are shared.
+async function recapCallAnthropic(prompt: string): Promise<string | null> {
+  if (!ANTHROPIC_KEY) return null;
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model: RECAP_ANTHROPIC_MODEL,
+        max_tokens: 2000,
+        messages: [{ role: "user", content: `${prompt}\n\nReturn ONLY the JSON object — no code fences, no commentary.` }],
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!r.ok) throw new Error(`Anthropic ${r.status}: ${(await r.text()).slice(0, 300)}`);
+    const j = await r.json();
+    const text = (j.content ?? []).map((c: any) => c?.text ?? "").join("").trim();
+    return text || null;
+  } catch (e) {
+    console.warn(`  [Recap] Anthropic failover failed: ${(e as Error).message}`);
+    return null;
+  }
+}
+
 async function recapGenerate(args: { pick: any; result: string; evidence: string }): Promise<
   { headline: string; recap: string; bullets: string[] } | null
 > {
   const { pick, result, evidence } = args;
-  if (!pick?.pick || !evidence || !GEMINI_KEY) return null;
+  if (!pick?.pick || !evidence || (!GEMINI_KEY && !ANTHROPIC_KEY)) return null;
 
   const prompt = recapBuildPrompt({ pick, result, evidence });
   const url = `${GEMINI_API_BASE}/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_KEY}`;
@@ -388,7 +420,7 @@ async function recapGenerate(args: { pick: any; result: string; evidence: string
   };
 
   let json: any = null;
-  for (let attempt = 1; attempt <= RECAP_GEMINI_RETRIES && !json; attempt++) {
+  for (let attempt = 1; attempt <= RECAP_GEMINI_RETRIES && !json && GEMINI_KEY; attempt++) {
     try {
       const r = await fetch(url, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
@@ -401,10 +433,15 @@ async function recapGenerate(args: { pick: any; result: string; evidence: string
       if (attempt < RECAP_GEMINI_RETRIES) await new Promise((res) => setTimeout(res, 800 * attempt));
     }
   }
-  if (!json) return null;
 
-  const text = (json?.candidates?.[0]?.content?.parts || [])
+  let text = (json?.candidates?.[0]?.content?.parts || [])
     .filter((p: any) => p.text && !p.thought).map((p: any) => p.text).join("").trim();
+  if (!text) {
+    const fallbackText = await recapCallAnthropic(prompt);
+    if (!fallbackText) return null;
+    console.log(`  [Recap] Gemini unavailable — recap written by Anthropic failover (${RECAP_ANTHROPIC_MODEL})`);
+    text = fallbackText;
+  }
   const parsed = recapParseResponse(text);
   if (!parsed) return null;
 

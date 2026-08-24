@@ -6,7 +6,8 @@
  * the league TODAY — notable in-game moments (multi-HR nights, no-hitters,
  * milestone lines, wild finals), injury news with its consequence, line moves
  * on tonight's slate, and totals-relevant environment notes. ONE grounded
- * Gemini call per league (cheap Flash model + google_search) returns a strict
+ * call per league (Claude bridge WebSearch when GARY_GROUNDING_VIA_CLAUDE=1,
+ * grounded Gemini otherwise — Aug 24 2026) returns a strict
  * JSON array; the runner normalizes those to flat `wire_items` rows and writes
  * them with the same service-role DELETE-then-INSERT idempotency as
  * run-insight-connections.js. iOS reads via the anon SELECT policy.
@@ -142,12 +143,19 @@ if (!dryRun) {
   }
 }
 
-if (!GEMINI_API_KEY) {
-  console.error('❌ GEMINI_API_KEY missing — the Wire needs grounded Gemini to generate items.');
+// VENDOR RESILIENCE (Aug 24 2026): the Wire was Gemini-only, and when the
+// Gemini project went 403-dunning (~Aug 20) wire_items went dark for four
+// days. The Claude subscription bridge (claudeCliWebSearch, WebSearch tool,
+// $0 marginal) now carries the grounded call whenever it's available —
+// GARY_GROUNDING_VIA_CLAUDE=1, same flag the pick desks honor — with Gemini
+// as the other lane, in either order. Only BOTH vendors missing is fatal.
+const CLAUDE_BRIDGE_ARMED = process.env.GARY_GROUNDING_VIA_CLAUDE === '1';
+if (!GEMINI_API_KEY && !CLAUDE_BRIDGE_ARMED) {
+  console.error('❌ No grounded vendor — set GEMINI_API_KEY or GARY_GROUNDING_VIA_CLAUDE=1; the Wire needs grounded search to generate items.');
   process.exit(1);
 }
 
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Grounding context (yesterday's Gary-relevant results from game_results)
@@ -524,10 +532,16 @@ function buildPrompt({ date, league, todayFinals, ydayFinals, allowNames, recent
 }
 
 /**
- * One grounded Gemini call per league. Returns raw model text (or null on error).
- * Mirrors the geminiGrounding() helper in scripts/run-all-results.js.
+ * One grounded call per league. Returns raw model text (or null on error).
+ *
+ * Two transports, tried in order (Aug 24 2026): the Claude subscription
+ * bridge first when GARY_GROUNDING_VIA_CLAUDE=1 (WebSearch tool, $0
+ * marginal — the same bridge the pick desks ride), then grounded Gemini
+ * (google_search) — and the reverse order when the flag is off. The prompt,
+ * the strict-JSON contract, and every downstream validation gate are
+ * identical either way; only the transport changes.
  */
-async function callWireModel(prompt) {
+async function callWireGemini(prompt) {
   const model = genAI.getGenerativeModel({
     model: WIRE_MODEL,
     tools: [{ google_search: {} }],
@@ -540,6 +554,29 @@ async function callWireModel(prompt) {
   });
   const result = await model.generateContent(prompt);
   return result.response.text();
+}
+
+async function callWireClaude(prompt) {
+  const { claudeCliWebSearch } = await import('./src/services/agentic/orchestrator/providerAdapters/claudeCliSession.js');
+  const res = await claudeCliWebSearch(prompt, { timeoutMs: 5 * 60 * 1000 });
+  if (!res.success || !res.data) throw new Error(res.error || 'claude bridge returned empty output');
+  return res.data;
+}
+
+async function callWireModel(prompt) {
+  const lanes = CLAUDE_BRIDGE_ARMED
+    ? [['claude-bridge', callWireClaude], ...(genAI ? [['gemini', callWireGemini]] : [])]
+    : [...(genAI ? [['gemini', callWireGemini]] : []), ['claude-bridge', callWireClaude]];
+  let lastError;
+  for (const [lane, call] of lanes) {
+    try {
+      return await call(prompt);
+    } catch (e) {
+      lastError = e;
+      console.warn(`   ⚠️ [Wire] ${lane} transport failed — trying the next lane: ${String(e.message || e).slice(0, 200)}`);
+    }
+  }
+  throw lastError;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
