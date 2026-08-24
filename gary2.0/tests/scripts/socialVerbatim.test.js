@@ -105,6 +105,23 @@ describe('reasonCandidates', () => {
     expect(fallbackReasonPair(R, 10)).toBe(null);
   });
 
+  it('section headings never reach a tweet line (Aug 24: "Gary\'s Take" posted as a closing during the Gemini outage)', () => {
+    const card = [
+      'I’m laying 1.5 runs with the Phillies at even money because the strongest edges in my read all point toward separation rather than another coin-flip finish.',
+      "Gary's Take",
+      'The bullpen carries a 3.43 ERA and 1.21 WHIP, compared with a 3.71 ERA and 1.25 WHIP for the other side.',
+    ].join('\n\n');
+    const cands = reasonCandidates(card);
+    expect(cands.some((s) => /gary'?s take/i.test(s))).toBe(false);
+    // Even with a budget so tight only the tiny heading would fit as a
+    // closing, the pair must never include it.
+    const long = fallbackReasonPair(card, 200);
+    if (long) {
+      expect(/gary'?s take/i.test(long.opening)).toBe(false);
+      expect(/gary'?s take/i.test(long.closing)).toBe(false);
+    }
+  });
+
   it('the argument leads (founder, Aug 19): a stance sentence opens, the stat-dense reason closes', () => {
     const card = [
       'The rubber match is set at PNC Park, with two arms carrying very different certainty.',

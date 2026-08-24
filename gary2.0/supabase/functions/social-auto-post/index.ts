@@ -1,8 +1,10 @@
-// social-auto-post — server-side @BetwithGary auto-poster (picks drip + daily recap + metrics refresh)
-// Cron: every 15 min (was hourly at :45 UTC until Aug 5 2026). Every run: refresh metrics, run the verdict
-// loop, attempt the morning recap (idempotent, 10a-2p ET), then post every pick whose FIRST PITCH is still
-// 5-120 min away. Posting is game-paced, not clock-paced — see the LEAD_* constants below.
+// social-auto-post — server-side @BetwithGary auto-poster (picks drip + metrics refresh)
+// Cron: every 15 min (was hourly at :45 UTC until Aug 5 2026). Every run: refresh metrics, then post every
+// pick whose FIRST PITCH is still 5-120 min away. Posting is game-paced, not clock-paced — see the LEAD_*
+// constants below.
 // (The noon personality post is RETIRED as of Jun 29 2026 — runPersonalityMode early-returns; dry-run preview only.)
+// (The morning recap ledger is RETIRED as of Aug 21 2026 — runRecapMode early-returns; dry-run preview only.)
+// (The verdict quote-tweets are RETIRED as of Aug 24 2026 — runVerdictMode early-returns; dry-run preview only.)
 // (The /api/take-card and /api/pick-card-app routes are no longer used here.)
 // Metrics: every run also refreshes impressions/likes/replies/retweets for posts from the last 6 days (KPI stays live 24/7).
 //          Each row's numbers = SUM across all tweets in the thread = total thread reach.
@@ -19,7 +21,8 @@
 //     (absorbed the retired personality post, Jul 5). Falls back to plain per-sport lines if the LLM fails.
 //
 // Query params: ?dry_run=1 (compose, don't post/log), ?force_mode=pick|recap|personality|verdict|arc, ?preview=1 (dry-run: compose top pick ignoring timing), ?metrics_only=1
-// LLM: Google Gemini (GEMINI_API_KEY secret; model override via GEMINI_MODEL, default gemini-3.5-flash)
+// LLM: Google Gemini primary (GEMINI_API_KEY secret; model override via GEMINI_MODEL, default gemini-3.5-flash),
+//      Anthropic failover (ANTHROPIC_API_KEY secret; SOCIAL_ANTHROPIC_MODEL, default claude-sonnet-5) — Aug 24 2026.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { matchVerdicts, plainVerdict, buildVerdictPrompt, trimTweet } from "./verdicts.ts";
 import { fallbackReasonPair, isVerbatimSnippet, reasonCandidates, splitSentences } from "../_shared/verbatimSnippets.js";
@@ -40,6 +43,12 @@ const VERDICT_MODEL = Deno.env.get("VERDICT_MODEL") ?? "gemini-3.6-flash";
 // Voice work gets its own model knob: SOCIAL_GEMINI_MODEL upgrades the WRITER (captions, verdicts, recap)
 // without touching grade-results or anything else that shares the global GEMINI_MODEL secret.
 const GEMINI_MODEL = Deno.env.get("SOCIAL_GEMINI_MODEL") ?? Deno.env.get("GEMINI_MODEL") ?? "gemini-3.5-flash";
+// FAILOVER VENDOR (Aug 24 2026): Anthropic takes any callLLM call Gemini
+// fails — the Gemini project spent Aug 20-24 403-dunning on Google billing
+// and every post silently degraded to the deterministic fallback. Sonnet
+// matches the content brain the rest of production runs on.
+const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+const ANTHROPIC_MODEL = Deno.env.get("SOCIAL_ANTHROPIC_MODEL") ?? "claude-sonnet-5";
 // Base origin for the Vercel OG image routes (results-card, pick-card). Override (e.g. localhost) for dry-run rendering.
 const CARD_BASE = Deno.env.get("CARD_BASE_URL") ?? "https://www.betwithgary.ai";
 const sb = createClient(SB_URL, SERVICE_KEY);
@@ -115,7 +124,7 @@ function ordinalDate(ymd: string): string {
 
 type JsonSchema = Record<string, unknown>;
 
-async function callLLM(system: string, user: string, responseSchema?: JsonSchema): Promise<string> {
+async function callGeminiLLM(system: string, user: string, responseSchema?: JsonSchema): Promise<string> {
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
     method: "POST",
     headers: { "x-goog-api-key": GEMINI_KEY, "content-type": "application/json" },
@@ -137,6 +146,44 @@ async function callLLM(system: string, user: string, responseSchema?: JsonSchema
   const text = j.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ?? "";
   if (!text) throw new Error("Gemini returned empty output: " + JSON.stringify(j).slice(0, 300));
   return text;
+}
+
+async function callAnthropicLLM(system: string, user: string): Promise<string> {
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({
+      model: ANTHROPIC_MODEL,
+      max_tokens: 2000,
+      system,
+      // parseJsonBlock tolerates prose-wrapped JSON, but ask plainly anyway.
+      messages: [{ role: "user", content: `${user}\n\nReturn ONLY the JSON object — no code fences, no commentary.` }],
+    }),
+  });
+  const j = await r.json();
+  if (!r.ok) throw new Error(`Anthropic ${r.status}: ${JSON.stringify(j).slice(0, 300)}`);
+  const text = (j.content ?? []).map((c: any) => c?.text ?? "").join("");
+  if (!text) throw new Error("Anthropic returned empty output: " + JSON.stringify(j).slice(0, 300));
+  return text;
+}
+
+// VENDOR FAILOVER (Aug 24 2026): the Gemini project has been 403-dunning
+// (Google billing) since ~Aug 20, which silently degraded every composed post
+// to the deterministic fallback for days. One dead vendor must never decide
+// what the account sounds like: Gemini stays primary (founder, Jul 29:
+// "whatever model gets the job done for cheap"), Anthropic takes the call
+// when Gemini fails, and only then does the verbatim fallback run.
+async function callLLM(system: string, user: string, responseSchema?: JsonSchema): Promise<string> {
+  if (GEMINI_KEY) {
+    try {
+      return await callGeminiLLM(system, user, responseSchema);
+    } catch (e) {
+      if (!ANTHROPIC_KEY) throw e;
+      console.error(`LLM_FAILOVER: Gemini failed (${String(e).slice(0, 200)}) — retrying on Anthropic ${ANTHROPIC_MODEL}`);
+    }
+  }
+  if (!ANTHROPIC_KEY) throw new Error("No LLM vendor available: GEMINI_API_KEY and ANTHROPIC_API_KEY are both unset");
+  return await callAnthropicLLM(system, user);
 }
 
 function parseJsonBlock(text: string): any {
@@ -642,6 +689,14 @@ async function groundedVerdict(
 }
 
 async function runVerdictMode(today: string, dryRun: boolean) {
+  // VERDICT RETIRED (founder, Aug 24 2026: "it still is doing the recap like
+  // hit or miss tweets and i dont want those"). Same one-line shape as the
+  // retired recap and personality posts: the live path returns before any
+  // work, the dry-run below still composes so ?dry_run=1&force_mode=verdict
+  // can preview, and one line reverts it. Context: with the Gemini vendor
+  // 403-dunning, groundedVerdict degraded every verdict to a naked
+  // "Hit. Final 4-2." quote-tweet — ten a night of exactly what he retired.
+  if (!dryRun) return { posted: false, reason: "verdict post retired (founder, Aug 24 2026)" };
   const dates = [today, yesterdayOf(today)];
   const { data: logRows, error: logErr } = await sb.from("social_post_log")
     .select("id, post_date, league, pick_text, thread_format, hook_tweet_id, post_text")
@@ -847,7 +902,7 @@ Deno.serve(async (req) => {
     }
     if (metricsOnly) return Response.json({ metrics_only: true, metrics });
 
-    if (!GEMINI_KEY) return Response.json({ error: "GEMINI_API_KEY secret not set — add it in Supabase dashboard → Project Settings → Edge Functions → Secrets", metrics }, { status: 500 });
+    if (!GEMINI_KEY && !ANTHROPIC_KEY) return Response.json({ error: "No LLM secret set (GEMINI_API_KEY or ANTHROPIC_API_KEY) — add one in Supabase dashboard → Project Settings → Edge Functions → Secrets", metrics }, { status: 500 });
 
     // Verdict loop rides every unforced hourly run: finals detected within ~1hr, quote-tweeted.
     let verdict: any = undefined;

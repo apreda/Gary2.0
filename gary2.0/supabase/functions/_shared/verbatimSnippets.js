@@ -78,6 +78,14 @@ export function isReasonSentence(sentence) {
   const t = String(sentence ?? '');
   if (STAKE.test(t)) return false;
   if (ODDS.test(t) && WAGER_FIRST_PERSON.test(t)) return false;
+  // HEADINGS ARE NOT SENTENCES (Aug 24 2026): stored rationales carry section
+  // labels ("Gary's Take") as bare unpunctuated lines, and splitSentences
+  // keeps paragraph tails whole. During the Aug 21+ Gemini outage the
+  // deterministic fallback ran every pick, and with a long opening the tiny
+  // heading was often the only "closing" that fit the budget — so posts went
+  // out reading `Royals ML -104 ⏎ Gary's Take`. A tweet line must be a real
+  // sentence: it ends in terminal punctuation (closing quote/paren allowed).
+  if (!/[.!?]["'”’)\]]?$/.test(t.trim())) return false;
   return true;
 }
 
