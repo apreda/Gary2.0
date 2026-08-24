@@ -47,7 +47,7 @@
         "npm:eslint@^9.39.5",
         "npm:firebase-admin@^13.10.0",
         "npm:globals@^15.15.0",
-        "npm:vitest@^4.1.10"
+        "npm:vitest@^4.1.11"
       ],
       "overrides": {
         "@grpc/grpc-js": "^1.14.4",

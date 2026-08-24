@@ -5,6 +5,7 @@
 import { supabase, supabaseAdmin } from '../supabaseClient.js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { getESTDate, toESTDate } from '../utils/dateUtils.js';
+import { withTransientRetry, isTransientDbError } from '../utils/transientRetry.js';
 
 // Storage lock to prevent concurrent writes
 let isStoringPicks = false;
@@ -196,9 +197,20 @@ async function pickAlreadyStoredByGameId(league, gameDate, gameId) {
       source = 'daily_picks';
     }
 
-    const { data, error } = await query;
+    // SHORT RETRY (Aug 24 2026): on Aug 23 a Supabase outage made this read
+    // fail open, so retry tiers re-ran the FULL research pipeline for games
+    // whose picks were already durably stored — burning the sequential MLB
+    // lane until later games' windows expired. Two quick retries ride out a
+    // blip; a real outage still fails open (coverage beats cost).
+    const { data, error } = await withTransientRetry(async () => {
+      const res = await query;
+      // Only infra errors throw (and therefore retry); contract errors
+      // return as-is and keep today's fail-open shape.
+      if (res.error?.message && isTransientDbError(res.error)) throw new Error(res.error.message);
+      return res;
+    }, { label: 'exact-ID pick preflight', delaysMs: [10_000, 20_000] }).catch((e) => ({ data: null, error: e }));
     if (error) {
-      console.warn(`⚠️ Exact-ID pick preflight read failed (${source}): ${error.message || error.code || 'unknown'}`);
+      console.warn(`⚠️ Exact-ID pick preflight read failed (${source}): ${error.message || error.code || 'unknown'} — FAIL-OPEN: this game may re-run research even if its pick is already stored`);
       return { exists: false, existingPick: null, source, error: error.message || 'read failed' };
     }
 
@@ -228,7 +240,7 @@ async function pickAlreadyStoredByGameId(league, gameDate, gameId) {
 }
 
 // Helper: Store picks in database
-async function storeDailyPicksInDatabase(picks, overrideDate = null) {
+async function storeDailyPicksInDatabase(picks, overrideDate = null, options = {}) {
   if (!picks || !Array.isArray(picks) || picks.length === 0)
     return { success: false, message: 'No picks provided' };
 
@@ -517,8 +529,6 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
   // row. Every daily sport uses the same Postgres transaction instead. This
   // keeps MLB/NBA behavior intact while allowing NCAAF games to finish in
   // parallel without replacing each other (or a simultaneous MLB pick).
-  await ensureValidSupabaseSession();
-  const writer = supabaseAdmin || supabase;
   try {
     const sanitizedPicks = JSON.parse(JSON.stringify(validPicks));
     const missingNcaafGameId = sanitizedPicks.find((pick) => {
@@ -536,18 +546,24 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
       };
     }
 
-    const { data, error } = await writer.rpc('append_daily_picks_atomic', {
-      p_date: currentDateString,
-      p_new_picks: sanitizedPicks,
-    });
-
-    if (error) {
-      console.error('❌ Atomic daily-picks RPC failed:', error);
-      // There is intentionally no direct-table fallback. Any client-side
-      // read/merge/upsert can lose a concurrent sport's write, which is worse
-      // than failing this run loudly and retrying it.
-      return { success: false, error: error.message || 'Atomic daily-picks RPC failed' };
-    }
+    // TRANSIENT RETRY (Aug 24 2026, Aug 23 outage post-mortem): the pick in
+    // hand cost ~$0.30 and 5–9 minutes of research; this RPC is one idempotent
+    // HTTP call. A Cloudflare 525 / gateway timeout / statement timeout gets
+    // ~4 more attempts over ~3 minutes before we declare failure — the session
+    // is re-validated per attempt in case the token expired mid-outage.
+    // There is intentionally no direct-table fallback. Any client-side
+    // read/merge/upsert can lose a concurrent sport's write, which is worse
+    // than failing this run loudly and retrying it.
+    const data = await withTransientRetry(async () => {
+      await ensureValidSupabaseSession();
+      const writer = supabaseAdmin || supabase;
+      const { data: rpcData, error } = await writer.rpc('append_daily_picks_atomic', {
+        p_date: currentDateString,
+        p_new_picks: sanitizedPicks,
+      });
+      if (error) throw new Error(error.message || 'Atomic daily-picks RPC failed');
+      return rpcData;
+    }, { label: 'daily-picks atomic RPC', beforeRetry: options.beforeRetry || null });
 
     const added = Number(data?.added ?? 0);
     const skipped = Number(data?.skipped ?? 0);
@@ -664,17 +680,18 @@ async function storeWeeklyNFLPicks(picks) {
       };
     }
 
-    const { data, error } = await writer.rpc('append_weekly_nfl_picks_atomic', {
-      p_week_start: weekStart,
-      p_week_number: weekNumber,
-      p_season: season,
-      p_new_picks: sanitizedPicks,
-    });
-
-    if (error) {
-      console.error('Error atomically storing NFL picks:', error);
-      return { success: false, error: error.message };
-    }
+    // TRANSIENT RETRY (Aug 24 2026): same outage armor as the daily writer —
+    // a generated NFL pick never dies on one failed HTTP call.
+    const data = await withTransientRetry(async () => {
+      const { data: rpcData, error } = await writer.rpc('append_weekly_nfl_picks_atomic', {
+        p_week_start: weekStart,
+        p_week_number: weekNumber,
+        p_season: season,
+        p_new_picks: sanitizedPicks,
+      });
+      if (error) throw new Error(error.message || 'Atomic weekly-NFL RPC failed');
+      return rpcData;
+    }, { label: 'weekly-NFL atomic RPC' });
 
     const added = Number(data?.added ?? 0);
     const skipped = Number(data?.skipped ?? 0);

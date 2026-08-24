@@ -46,6 +46,13 @@ try {
   const etToday = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   console.log(`🧬 ERA LIVE: game ${PROMPT_SHA} · commit ${gitStamp()} @ ${PROJECT_DIR}`);
   recordEraRun('game', etToday, PROMPT_SHA);
+  // The June engine stamps ITS OWN era on stored MLB picks (junePromptSha, not
+  // the pickdesk PROMPT_SHA above). Record both, or the drift guard cries
+  // "another writer made production picks" every single graded day — which it
+  // did from the Aug 18 restoration until Aug 24, training everyone to ignore
+  // the one alarm built to catch a real foreign writer.
+  const { junePromptSha: juneEra } = await import('../src/services/agentic/orchestrator/junePromptSha.js');
+  recordEraRun('game', etToday, juneEra());
 } catch (e) { console.log(`🧬 ERA LIVE: (unavailable — ${e.message})`); }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -697,6 +704,32 @@ async function main() {
 `);
 
   checkEnv();
+
+  // OUTBOX FLUSH (Aug 24 2026, Aug 23 outage post-mortem): a pick generated
+  // during a storage outage is spooled to disk instead of discarded (see
+  // storePicks below). Flushing here — before any research — means a retry
+  // tier after an outage lands the rescued pick in seconds instead of
+  // re-running the whole pipeline, and the exact-game preflight then sees it
+  // stored. No-ops in dry-run/test modes and when the outbox is empty.
+  if (shouldStore && !useTestTable && !process.argv.includes('--dry-run')) {
+    try {
+      const { flushOutbox } = await import('./lib/pickOutbox.js');
+      const etToday = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+      const flushed = await flushOutbox({
+        dateStr: etToday,
+        assertStillPregame: assertPicksStillPregame,
+        storeDaily: (spooledPicks, spoolDate) => picksService.storeDailyPicksInDatabase(
+          spooledPicks,
+          spoolDate || null,
+          { beforeRetry: () => assertPicksStillPregame(spooledPicks) },
+        ),
+        storeNflWeekly: (spooledPicks) => picksService.storeWeeklyNFLPicks(spooledPicks),
+      });
+      for (const flushedId of flushed.flushed) existingPickGameIds.add(String(flushedId));
+    } catch (e) {
+      console.warn(`⚠️ [Outbox] flush pass failed (non-fatal): ${e.message}`);
+    }
+  }
 
   // Clear cache if --nocache or --fresh flag is passed (ensures fresh injury/lineup data)
   if (process.argv.includes('--nocache') || process.argv.includes('--fresh')) {
@@ -2378,22 +2411,38 @@ async function storePicks(picks) {
   const nflPicks = picks.filter(p => p.league === 'NFL');
   const otherPicks = picks.filter(p => p.league !== 'NFL');
 
+  // WRITE-AHEAD SPOOL (Aug 24 2026, Aug 23 outage post-mortem): the generated
+  // pick becomes durable ON DISK before the network write, and the spool is
+  // deleted only after the atomic RPC confirms it. If storage stays down
+  // through every retry — or the scheduler SIGKILLs this child mid-retry —
+  // the pick survives in logs/pick-outbox/ and the next run's flush stores it
+  // in seconds instead of re-running research. Spooling failure never blocks
+  // the live write.
+  const { writeSpool, removeSpool } = await import('./lib/pickOutbox.js');
+  const etToday = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+
   // Store NFL picks in weekly table
   if (nflPicks.length > 0) {
+    const nflSpool = writeSpool('nfl_weekly', etToday, nflPicks);
     console.log(`🏈 Storing ${nflPicks.length} NFL picks in weekly table...`);
     const nflResult = await picksService.storeWeeklyNFLPicks(nflPicks);
     if (!nflResult.success) {
       throw new Error(`NFL storage failed: ${nflResult.error || nflResult.message || 'unknown error'}`);
     }
+    removeSpool(nflSpool);
     console.log(`✅ NFL: Stored ${nflResult.count} new picks (${nflResult.total || nflResult.count} total for week)`);
   }
 
   // Store other sports in daily table
   if (otherPicks.length > 0) {
-    const result = await picksService.storeDailyPicksInDatabase(otherPicks, dateFilter || null);
+    const dailySpool = writeSpool('daily', dateFilter || etToday, otherPicks);
+    const result = await picksService.storeDailyPicksInDatabase(otherPicks, dateFilter || null, {
+      beforeRetry: () => assertPicksStillPregame(otherPicks),
+    });
     if (!result.success) {
       throw new Error(`Daily-picks storage failed: ${result.error || result.message || 'unknown error'}`);
     }
+    removeSpool(dailySpool);
     console.log(`✅ Successfully stored ${otherPicks.length} picks in daily table`);
   }
   return { success: true, count: picks.length };

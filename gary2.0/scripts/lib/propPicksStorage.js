@@ -1,3 +1,5 @@
+import { withTransientRetry } from '../../src/utils/transientRetry.js';
+
 const FOOTBALL_SPORTS = new Set(['NFL', 'NCAAF']);
 const ANYTIME_TD_PROP_TYPES = new Set([
   'anytime_touchdown',
@@ -130,16 +132,21 @@ export async function storePropPicksAtomic({
     forceRun,
   });
 
-  const { data, error } = await client.rpc('upsert_prop_picks_atomic', {
-    p_date: String(date),
-    p_sport: sport,
-    p_new_picks: storagePicks,
-    p_replace_game_ids: forceRun ? gameIds : [],
-  });
-
-  if (error) {
-    throw new Error(`Could not atomically store prop_picks row for ${date}: ${error.message || error}`);
-  }
+  // TRANSIENT RETRY (Aug 24 2026, Aug 23 outage post-mortem): a generated
+  // props slate never dies on one failed HTTP call — Cloudflare 5xx and
+  // statement timeouts get ~4 more attempts over ~3 minutes before failing.
+  const data = await withTransientRetry(async () => {
+    const { data: rpcData, error } = await client.rpc('upsert_prop_picks_atomic', {
+      p_date: String(date),
+      p_sport: sport,
+      p_new_picks: storagePicks,
+      p_replace_game_ids: forceRun ? gameIds : [],
+    });
+    if (error) {
+      throw new Error(`Could not atomically store prop_picks row for ${date}: ${error.message || error}`);
+    }
+    return rpcData;
+  }, { label: 'prop-picks atomic RPC' });
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     throw new Error(`Atomic prop storage returned an invalid result for ${date}`);
   }
