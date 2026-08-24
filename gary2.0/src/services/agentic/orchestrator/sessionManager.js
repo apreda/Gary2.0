@@ -1,42 +1,28 @@
-import { CONFIG, GEMINI_SAFETY_SETTINGS, validateGeminiModel } from './orchestratorConfig.js';
-import { getGeminiClient } from '../modelConfig.js';
-import { GoogleAICacheManager } from '@google/generative-ai/server';
+import { validateGeminiModel } from './orchestratorConfig.js';
 import { isOpenAiModel, createOpenAISession, sendToOpenAISession, resetOpenAISessionChat } from './providerAdapters/openaiSession.js';
 import { isClaudeCliModel, createClaudeCliSession, sendToClaudeCliSession, resetClaudeCliSessionChat } from './providerAdapters/claudeCliSession.js';
 import { isCodexCliModel, createCodexCliSession, sendToCodexCliSession, resetCodexCliSessionChat } from './providerAdapters/codexCliSession.js';
 import { isAnthropicApiModel, createAnthropicApiSession, sendToAnthropicApiSession, resetAnthropicApiSessionChat } from './providerAdapters/anthropicApiSession.js';
 
-// Minimum cacheable content size (Gemini 3 Flash min is 1024 tokens; ~4K chars is safe).
-// Below this we skip caching — break-even doesn't work and the API rejects small caches.
-const MIN_CACHE_CHAR_THRESHOLD = 4000;
-// The scheduler permits an agent child to run for 45 minutes. The explicit
-// Gemini cache must outlive that entire process: once an attached cache expires,
-// Gemini rejects the next chat turn with 403 `CachedContent not found` and the
-// evidence run is lost. Keep a full 15-minute margin beyond the child bound.
-export const GEMINI_CACHE_TTL_SECONDS = 60 * 60;
-
 // ═══════════════════════════════════════════════════════════════════════════
-// PERSISTENT SESSION MANAGEMENT (Gemini 3 Thought Signatures)
-// ═══════════════════════════════════════════════════════════════════════════
-// Gemini 3 requires thought signatures to be preserved across multi-turn
-// function calling. The SDK handles this automatically when using persistent
-// chat sessions via startChat() + sendMessage().
-//
-// CRITICAL: Thought signatures are MODEL-SPECIFIC!
-// - Cannot pass Flash signatures to Pro (causes 400 error)
-// - When switching models, extract TEXTUAL content only
+// PERSISTENT SESSION MANAGEMENT — the provider seam.
+// The function names keep their Gemini-era spellings (createGeminiSession /
+// sendToSession…) for call-site stability, but since Aug 24 2026 every session
+// routes to an adapter: OpenAI API, Anthropic API, Claude CLI bridge, or the
+// codex CLI bridge. Gemini itself is retired (founder: "no more gemini for
+// anything"); its client, explicit-cache machinery, and response parsing were
+// excised with the vendor.
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Create a persistent Gemini chat session
- * SDK automatically handles thought signatures when using persistent sessions
- * 
+ * Create a persistent chat session on whichever adapter the model name selects.
+ *
  * @param {Object} options - Session configuration
- * @param {string} options.modelName - Model to use (gemini-3-flash-preview or gemini-3-pro-preview)
+ * @param {string} options.modelName - Model to use (codex-, claude-, anthropic-, or gpt- family)
  * @param {string} options.systemPrompt - System instruction for the session
  * @param {Array} options.tools - Function calling tools (optional)
  * @param {string} options.thinkingLevel - Thinking level: 'low', 'medium', 'high' (default: 'high')
- * @returns {Object} - { chat, model, modelName } - Chat session and model reference
+ * @returns {Object} - Provider session object
  */
 export async function createGeminiSession(options = {}) {
   // VENDOR BAN FIRST (founder, Aug 24 2026: "no more gemini for anything").
@@ -65,152 +51,8 @@ export async function createGeminiSession(options = {}) {
     return createCodexCliSession(options);
   }
   throw new Error(`[Session] Gemini session path is retired (founder, Aug 24 2026) — "${options.modelName}" reached the dead tail; validateGeminiModel should have rerouted it`);
-  // eslint-disable-next-line no-unreachable
-  const {
-    modelName = 'gemini-3-flash-preview',
-    systemPrompt = '',
-    tools = [],
-    thinkingLevel = 'high',
-    maxOutputTokens = CONFIG.maxTokens,
-    enableCache = false,
-    _costTracker = null
-  } = options;
-
-  const genAI = getGeminiClient({ beta: true });
-  const validatedModel = validateGeminiModel(modelName);
-
-  // Convert tool definitions to Gemini function declarations
-  const functionDeclarations = tools
-    .filter(tool => tool.type === 'function')
-    .map(tool => ({
-      name: tool.function.name,
-      description: tool.function.description,
-      parameters: tool.function.parameters
-    }));
-
-  // Build tools array (function calling OR grounding, not both)
-  const geminiTools = [];
-  if (functionDeclarations.length > 0) {
-    geminiTools.push({ functionDeclarations });
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // CONTEXT CACHING (Gemini explicit cache)
-  // Caches systemInstruction + tools at 90% off input rate. Falls back silently
-  // if cache creation fails — never blocks pick generation.
-  // ═══════════════════════════════════════════════════════════════════════════
-  let cachedContentName = null;
-  let cacheObject = null;
-  if (enableCache && systemPrompt && systemPrompt.length >= MIN_CACHE_CHAR_THRESHOLD) {
-    try {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) throw new Error('GEMINI_API_KEY not set');
-      const cacheManager = new GoogleAICacheManager(apiKey);
-      const cacheRequest = {
-        model: `models/${validatedModel}`,
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        ttlSeconds: GEMINI_CACHE_TTL_SECONDS,
-      };
-      if (geminiTools.length > 0) {
-        cacheRequest.tools = geminiTools;
-      }
-      const cache = await cacheManager.create(cacheRequest);
-      cacheObject = cache;
-      cachedContentName = cache.name;
-      console.log(`[Session] 💾 Cache created (${systemPrompt.length} char system prompt, TTL ${GEMINI_CACHE_TTL_SECONDS}): ${cachedContentName}`);
-    } catch (e) {
-      console.warn(`[Session] ⚠️ Cache creation failed (${e.message}) — proceeding without cache`);
-      cacheObject = null;
-      cachedContentName = null;
-    }
-  }
-
-  // Create the model. When a cache was created, build the model FROM the cache
-  // OBJECT via getGenerativeModelFromCachedContent — this is what actually
-  // attaches the cache (systemInstruction + tools are sourced from the cache),
-  // so the stable prefix bills at the cached rate.
-  // DO NOT pass the cache *name string* to getGenerativeModel({ cachedContent }):
-  // the SDK reads `cachedContent?.name`, which is `undefined` on a string, so the
-  // cache silently never attaches AND — because startChat below then sends
-  // systemInstruction: undefined assuming the cache supplies it — the system
-  // prompt gets dropped entirely. (That was the latent bug this replaces.)
-  let model = null;
-  let usingCache = false;
-  if (cacheObject) {
-    try {
-      model = genAI.getGenerativeModelFromCachedContent(
-        cacheObject,
-        {
-          safetySettings: GEMINI_SAFETY_SETTINGS,
-          // Gemini 3.x: temperature / topP / topK omitted per Google's May 2026
-          // migration guide — the model is optimized for its own defaults.
-          generationConfig: {
-            maxOutputTokens,
-            thinkingConfig: {
-              includeThoughts: true,
-              thinkingLevel: thinkingLevel
-            }
-          }
-        },
-        { apiVersion: 'v1beta' }
-      );
-      usingCache = true;
-    } catch (e) {
-      console.warn(`[Session] ⚠️ Cache attach failed (${e.message}) — proceeding without cache (system prompt sent inline)`);
-      model = null;
-      usingCache = false;
-    }
-  }
-  if (!model) {
-    model = genAI.getGenerativeModel({
-      model: validatedModel,
-      tools: geminiTools.length > 0 ? geminiTools : undefined,
-      safetySettings: GEMINI_SAFETY_SETTINGS,
-      generationConfig: {
-        maxOutputTokens,
-        thinkingConfig: {
-          includeThoughts: true,
-          thinkingLevel: thinkingLevel
-        }
-      }
-    });
-  }
-
-  // Start the chat session. When the cache is attached, systemInstruction + tools
-  // already live in the cache, so pass undefined here. When NOT cached (no cache,
-  // or attach failed), send the system prompt inline so Gary always gets his
-  // full playbook — never a naked session.
-  const chat = model.startChat({
-    history: [],
-    systemInstruction: usingCache ? undefined : (systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined)
-  });
-
-  console.log(`[Session] Created ${validatedModel} session (thinkingLevel: ${thinkingLevel}, tools: ${functionDeclarations.length}, cached: ${usingCache ? 'yes' : 'no'})`);
-
-  return {
-    chat,
-    model,
-    modelName: validatedModel,
-    thinkingLevel,
-    cachedContentName, // exposed so callers can delete cache manually if desired
-    _costTracker,
-    _systemPrompt: systemPrompt, // for resetSessionChat to re-seed inline when not cached
-    _usingCache: usingCache      // whether the cache actually attached (vs inline system prompt)
-  };
 }
 
-/**
- * Replace a session's chat with a fresh one seeded with `seedHistory`, reusing the
- * SAME cached model (no new cache, no network call). Used to drop accumulated raw
- * tool-result history between research factors (Lever 1) WITHOUT losing Gary's
- * system prompt: when the session is cache-backed the systemInstruction lives in the
- * cache; when it is NOT (cache create/attach failed), we re-attach the system prompt
- * inline so a per-factor chat is never a naked session.
- *
- * @param {Object} session - Session from createGeminiSession (mutated in place: session.chat)
- * @param {Array} seedHistory - Gemini chat history turns to seed the new chat with
- * @returns {Object} the same session (chat swapped)
- */
 export function resetSessionChat(session, seedHistory = []) {
   if (session?.provider === 'openai') {
     return resetOpenAISessionChat(session, seedHistory);
@@ -224,11 +66,7 @@ export function resetSessionChat(session, seedHistory = []) {
   if (session?.provider === 'codex-cli') {
     return resetCodexCliSessionChat(session, seedHistory);
   }
-  const systemInstruction = session._usingCache
-    ? undefined
-    : (session._systemPrompt ? { parts: [{ text: session._systemPrompt }] } : undefined);
-  session.chat = session.model.startChat({ history: seedHistory, systemInstruction });
-  return session;
+  throw new Error(`[Session] unknown provider "${session?.provider}" — Gemini sessions are retired (Aug 24 2026)`);
 }
 
 /**
@@ -255,145 +93,7 @@ export async function sendToSession(session, message, options = {}) {
   if (session?.provider === 'codex-cli') {
     return sendToCodexCliSession(session, message, options);
   }
-  const { isFunctionResponse = false } = options;
-  const startTime = Date.now();
-  
-  try {
-    let result;
-
-    // gemini-3.6+ rejects the legacy 'function' role our SDK (0.24.1) stamps
-    // on functionResponse parts ("Role 'function' is not supported", found on
-    // the Jul 22 3.6-flash props smoke test). For those models, deliver tool
-    // results as a name-tagged plain-text user turn instead — same content,
-    // accepted role. Older models keep the structured functionResponse parts.
-    const modelRejectsFunctionRole = /^gemini-3\.[6-9]|^gemini-[4-9]/.test(session.modelName || '');
-    const asToolResultText = (frs) => frs
-      .map(fr => `[Result of your ${fr.name} call]\n${typeof fr.content === 'string' ? fr.content : JSON.stringify(fr.content)}`)
-      .join('\n\n');
-
-    if (isFunctionResponse && Array.isArray(message)) {
-      if (modelRejectsFunctionRole) {
-        result = await session.chat.sendMessage(asToolResultText(message));
-      } else {
-        // Gemini expects array of: { functionResponse: { name, response: { content } } }
-        const functionResponseParts = message.map(fr => ({
-          functionResponse: {
-            name: fr.name,
-            response: { content: typeof fr.content === 'string' ? fr.content : JSON.stringify(fr.content) }
-          }
-        }));
-        result = await session.chat.sendMessage(functionResponseParts);
-      }
-    } else if (isFunctionResponse) {
-      if (modelRejectsFunctionRole) {
-        result = await session.chat.sendMessage(asToolResultText([message]));
-      } else {
-        // Single function response (legacy support)
-        const functionResponseParts = [{
-          functionResponse: {
-            name: message.name,
-            response: { content: typeof message.content === 'string' ? message.content : JSON.stringify(message.content) }
-          }
-        }];
-        result = await session.chat.sendMessage(functionResponseParts);
-      }
-    } else {
-      // Send text message
-      result = await session.chat.sendMessage(message);
-    }
-    
-    const response = await result.response;
-    const duration = Date.now() - startTime;
-    
-    // Parse the response
-    const candidate = response.candidates?.[0];
-    const parts = candidate?.content?.parts || [];
-    
-    // Check for blocked response or malformed function call
-    const blockReason = response.promptFeedback?.blockReason || candidate?.finishReason;
-    if (blockReason && blockReason !== 'STOP' && parts.length === 0) {
-      // Enhanced diagnostics for specific block reasons
-      if (blockReason === 'MALFORMED_FUNCTION_CALL') {
-        // This happens when the model generates invalid function call JSON
-        // Possible causes: complex context, ambiguous schemas, or model confusion
-        const tokenCount = response.usageMetadata?.promptTokenCount || 'unknown';
-        console.log(`[Session] ⚠️ MALFORMED_FUNCTION_CALL detected`);
-        console.log(`[Session]    Context size: ${tokenCount} tokens`);
-        console.log(`[Session]    This is a model-side issue (invalid function call JSON) - retrying`);
-
-        // Check if candidate has any partial data we can log for debugging
-        if (candidate?.content) {
-          const partialContent = JSON.stringify(candidate.content).slice(0, 200);
-          console.log(`[Session]    Partial response: ${partialContent}...`);
-        }
-      } else if (blockReason === 'UNEXPECTED_TOOL_CALL') {
-        // This happens when the model tries to make tool calls when none were expected
-        // Often occurs when sending function responses and model wants more data
-        const tokenCount = response.usageMetadata?.promptTokenCount || 'unknown';
-        console.log(`[Session] ⚠️ UNEXPECTED_TOOL_CALL detected`);
-        console.log(`[Session]    Context size: ${tokenCount} tokens`);
-        console.log(`[Session]    Model tried to call tools when not expected - retrying with fresh context`);
-      } else {
-        console.log(`[Session] ⚠️ Response blocked/filtered: ${blockReason}`);
-      }
-      throw new Error(`Gemini response blocked: ${blockReason}. Retry may succeed.`);
-    }
-    
-    // Extract function calls and text (exclude thinking parts — Gemini 3 marks them with thought: true)
-    const functionCallParts = parts.filter(p => p.functionCall);
-    const textParts = parts.filter(p => p.text && !p.thought).map(p => p.text);
-    
-    // Build tool_calls array (normalized format for downstream code)
-    let toolCalls = null;
-    if (functionCallParts.length > 0) {
-      toolCalls = functionCallParts.map((fc, index) => ({
-        id: `call_${Date.now()}_${index}`,
-        type: 'function',
-        function: {
-          name: fc.functionCall.name,
-          arguments: JSON.stringify(fc.functionCall.args || {})
-        },
-        // Note: thought signatures are handled internally by SDK
-        _hasSignature: !!fc.thoughtSignature
-      }));
-      console.log(`[Session] 🔧 ${toolCalls.length} function call(s) requested`);
-    }
-    
-    const usage = {
-      prompt_tokens: response.usageMetadata?.promptTokenCount || 0,
-      completion_tokens: response.usageMetadata?.candidatesTokenCount || 0,
-      total_tokens: response.usageMetadata?.totalTokenCount || 0,
-      cached_tokens: response.usageMetadata?.cachedContentTokenCount || 0
-    };
-
-    // Feed cost tracker if attached to session
-    if (session._costTracker) {
-      session._costTracker.addUsage(session.modelName, usage);
-    }
-
-    console.log(`[Session] Response in ${duration}ms (tokens: ${usage.total_tokens}, cached: ${usage.cached_tokens})`);
-    
-    return {
-      content: toolCalls ? null : textParts.join(''),
-      toolCalls,
-      finishReason: candidate?.finishReason === 'MAX_TOKENS' ? 'max_tokens' :
-                    candidate?.finishReason === 'STOP' ? 'stop' :
-                    functionCallParts.length > 0 ? 'tool_calls' : 'stop',
-      usage,
-      raw: response
-    };
-    
-  } catch (error) {
-    const duration = Date.now() - startTime;
-    console.error(`[Session] Error after ${duration}ms:`, error.message);
-    
-    // Check for quota errors (429)
-    if (error.status === 429 || error.message?.includes('429') || error.message?.includes('quota')) {
-      error.isQuotaError = true;
-    }
-    
-    throw error;
-  }
+  throw new Error(`[Session] unknown provider "${session?.provider}" — Gemini sessions are retired (Aug 24 2026)`);
 }
 
 /**

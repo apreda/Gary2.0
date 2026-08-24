@@ -1,6 +1,5 @@
 import { CONFIG, GEMINI_PRO_MODEL, GEMINI_PRO_FALLBACK, GEMINI_FLASH_MODEL, GEMINI_PROPS_MODEL, GAME_PICK_MODEL, GAME_ML_CAP, DESK_FALLBACK_MODELS, validateGeminiModel, RESEARCH_BRIEFING_TIMEOUT_MS } from './orchestratorConfig.js';
 import { isExplicitPropsPass } from '../propsSharedUtils.js';
-import { rotateToBackupKey, isUsingBackupKey, resetToPrimaryKey } from '../modelConfig.js';
 import { createGeminiSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
 import { extractTextualSummaryForModelSwitch, buildFlashResearchBriefing, extractResearcherQuestions, createResearcherFollowUpSession, askResearcher } from './flashAdvisor.js';
 import { createCostTracker } from './costTracker.js';
@@ -528,112 +527,17 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
         }
 
       } catch (error) {
-        // ═══════════════════════════════════════════════════════════════════
-        // 429 QUOTA CASCADE: Each model tries primary key → backup key before
-        // falling to the next tier. 3.5 Flash (primary) → 3.1 Pro (fallback) → HARD FAIL.
-        // ═══════════════════════════════════════════════════════════════════
-        // Primary 429 → try backup key, else cascade to 3.1 Pro fallback (reset to primary key)
-        if (error.isQuotaError && currentModelName === GEMINI_PRO_MODEL) {
-          const textualContext = extractTextualSummaryForModelSwitch(messages, toolCallHistory);
-          if (textualContext.length < 2000) {
-            console.warn(`[Orchestrator] LOW CONTEXT WARNING: Only ${textualContext.length} chars for model switch`);
-          }
-
-          if (!isUsingBackupKey() && rotateToBackupKey()) {
-            console.log(`[Orchestrator] ⚠️ Flash quota exceeded — rotated to backup API key, retrying with Flash`);
-            currentSession = await createGeminiSession({ _costTracker: costTracker,
-              modelName: GEMINI_PRO_MODEL,
-              systemPrompt: systemPrompt + '\n\n' + textualContext,
-              tools: currentPass === 'evaluation' ? [] : activeTools,
-              thinkingLevel: 'medium'
-            });
-
-            // Try backup key — if it also 429s, cascade to 3.1 Pro
-            try {
-              console.log(`[Orchestrator] 🔄 Created Flash session (backup key), retrying...`);
-              const retryResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
-              message = { role: 'assistant', content: retryResponse.content, tool_calls: retryResponse.toolCalls };
-              finishReason = retryResponse.finishReason;
-              if (message.content || message.tool_calls) { messages.push(message); }
-            } catch (backupError) {
-              if (backupError.isQuotaError || backupError.status === 429) {
-                console.log(`[Orchestrator] ⚠️ Backup key also exhausted — cascading to 3.1 Pro`);
-                resetToPrimaryKey();
-                currentSession = await createGeminiSession({ _costTracker: costTracker,
-                  modelName: GEMINI_PRO_FALLBACK,
-                  systemPrompt: systemPrompt + '\n\n' + textualContext,
-                  tools: currentPass === 'evaluation' ? [] : activeTools,
-                  thinkingLevel: 'medium'
-                });
-                currentModelName = GEMINI_PRO_FALLBACK;
-                const proResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
-                message = { role: 'assistant', content: proResponse.content, tool_calls: proResponse.toolCalls };
-                finishReason = proResponse.finishReason;
-                if (message.content || message.tool_calls) { messages.push(message); }
-              } else {
-                throw backupError;
-              }
-            }
-          } else {
-            // Already on backup key or no backup — cascade straight to 3.1 Pro
-            resetToPrimaryKey();
-            console.log(`[Orchestrator] ⚠️ Flash exhausted on both keys — cascading to 3.1 Pro (primary key)`);
-            currentSession = await createGeminiSession({ _costTracker: costTracker,
-              modelName: GEMINI_PRO_FALLBACK,
-              systemPrompt: systemPrompt + '\n\n' + textualContext,
-              tools: currentPass === 'evaluation' ? [] : activeTools,
-              thinkingLevel: 'medium'
-            });
-            currentModelName = GEMINI_PRO_FALLBACK;
-
-            console.log(`[Orchestrator] 🔄 Created 3.1 Pro session, retrying...`);
-            const retryResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
-            message = { role: 'assistant', content: retryResponse.content, tool_calls: retryResponse.toolCalls };
-            finishReason = retryResponse.finishReason;
-            if (message.content || message.tool_calls) { messages.push(message); }
-          }
-        }
-        // 3.1 Pro fallback 429 → try backup key, else HARD FAIL (no tier left)
-        else if (error.isQuotaError && currentModelName === GEMINI_PRO_FALLBACK) {
-          const textualContext = extractTextualSummaryForModelSwitch(messages, toolCallHistory);
-
-          if (!isUsingBackupKey() && rotateToBackupKey()) {
-            console.log(`[Orchestrator] ⚠️ 3.1 Pro fallback quota exceeded — rotated to backup key, retrying`);
-            currentSession = await createGeminiSession({ _costTracker: costTracker,
-              modelName: GEMINI_PRO_FALLBACK,
-              systemPrompt: systemPrompt + '\n\n' + textualContext,
-              tools: currentPass === 'evaluation' ? [] : activeTools,
-              thinkingLevel: 'medium'
-            });
-          } else {
-            // Both tiers on both keys exhausted — nothing left to fall back to
-            resetToPrimaryKey();
-            console.error(`[Orchestrator] 🚫 All models exhausted (Flash + 3.1 Pro, both keys) — HARD FAIL`);
-            throw new Error(`[Orchestrator] All model quotas exhausted on both API keys (Flash + 3.1 Pro). Cannot produce pick.`);
-          }
-
-          console.log(`[Orchestrator] 🔄 Created 3.1 Pro session (backup key), retrying...`);
-          const retryResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
-          message = {
-            role: 'assistant',
-            content: retryResponse.content,
-            tool_calls: retryResponse.toolCalls
-          };
-          finishReason = retryResponse.finishReason;
-          if (message.content || message.tool_calls) {
-            messages.push(message);
-          }
-        } else if (error.isQuotaError) {
+        if (error.isQuotaError) {
           // ═══════════════════════════════════════════════════════════════════
-          // PROVIDER-AGNOSTIC QUOTA CASCADE (founder GO, Aug 20 2026): the two
-          // branches above only recognize the Gemini tier names, so a 429 or
-          // credits-empty on any OTHER brain (API Sol with no env override, a
-          // bridge quota cap) fell straight through to `throw` — reproduced as
-          // a silent 0-pick football slate. Walk the shared desk fallback
-          // chain instead, transplanting the textual context exactly as the
-          // Gemini branches do. Bridge models are tool-less by construction;
-          // the pass structure already tolerates a text-only brain (the
-          // football lane runs on the codex bridge in production).
+          // PROVIDER-AGNOSTIC QUOTA CASCADE (founder GO, Aug 20 2026): a 429
+          // or credits-empty on ANY brain walks the shared desk fallback
+          // chain, transplanting the textual context. Bridge models are
+          // tool-less by construction; the pass structure already tolerates a
+          // text-only brain (the football lane runs on the codex bridge in
+          // production). The two Gemini-era branches that used to sit above
+          // this — Flash/Pro tier names, primary→backup key rotation — were
+          // excised with the vendor (founder, Aug 24 2026); this cascade is
+          // now the ONLY quota handler.
           // ═══════════════════════════════════════════════════════════════════
           triedQuotaModels.add(currentModelName);
           const textualContext = extractTextualSummaryForModelSwitch(messages, toolCallHistory);

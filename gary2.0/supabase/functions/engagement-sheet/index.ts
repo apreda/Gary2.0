@@ -9,7 +9,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 //   GET ?token=SECRET&generate=1&dry_run=1 → build + return JSON without writing rows
 // Deployed --no-verify-jwt (a phone browser sends no JWT); SHEET_TOKEN secret is the gate.
 // Targets live in the engagement_targets table (founder-editable, no redeploys). Outbound ONLY — replies
-// to Gary's own posts @-mention him, so gary-mention-reply already answers those.
+// to Gary's own posts @-mention him — those are direct conversations, not targets.
 // Spec: docs/superpowers/specs/2026-07-05-social-growth-three-engines-design.md §6.
 
 // ---------- env ----------
@@ -30,7 +30,7 @@ const DRAFT_CANDIDATES = 14;   // score this many, keep the first SHEET_MAX non-
 const MIN_ENG = 5;             // weighted engagement floor (likes + 2*replies + 3*rts)
 const WINDOW_MS = 6 * 3600_000; // only tweets from the last 6h
 
-// ---------- OAuth 1.0a (identical signing to gary-mention-reply / post-tweet-media) ----------
+// ---------- OAuth 1.0a (identical signing to post-tweet-media) ----------
 async function hmacSha1(key: Uint8Array, message: string): Promise<string> {
   const enc = new TextEncoder();
   const k = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
@@ -101,7 +101,7 @@ function etDate(d = new Date()): string {
   return `${p.year}-${p.month}-${p.day}`;
 }
 
-// ---------- voice (verbatim from social-auto-post / gary-mention-reply) ----------
+// ---------- voice (verbatim from social-auto-post) ----------
 const VOICE_RULES = `You write posts for @BetwithGary as "Gary", a sharp, confident sports-betting handicapper who calls and sweats every game. Voice: the sharpest friend in the group chat. Sharp, honest, in it with you. ABSOLUTE RULE: the provided rationale/stats are GROUND TRUTH (it is 2026, past your training data). Never correct player-team assignments or import outside facts. Only ensure internal consistency (right stat to the right player to the right team).
 HARD RULES (breaking any one fails the post):
 (1) ZERO emojis. Not one, ever. No sport emojis, no symbols, no arrows, nothing.
