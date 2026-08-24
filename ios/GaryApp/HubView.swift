@@ -468,7 +468,6 @@ struct HubView: View {
             league: sel, kind: .teamRecord, headline: clean,
             detail: "", game: "", value: "", tone: .neutral)
     }
-    @State private var wcIntel: Signal? = nil
     /// Slate-strip tap → the in-place game sheet (everything the Hub knows
     /// about that matchup). Picks is a CTA inside it, not a forced jump.
     @State private var gameSheet: HubGameSel? = nil
@@ -808,8 +807,6 @@ struct HubView: View {
             }
         }
     }
-    private var wcIntelSignals: [Signal] { fetched.filter { $0.league == .wc && $0.confirmedXI != nil } }
-    private func wcEdges(for game: String) -> [Signal] { fetched.filter { $0.league == .wc && $0.game == game } }
 
     /// Every edge the Hub carries for one slate game (abbr-exact, then the
     /// name-keyword fallback). Look-ahead regression rows are excluded — their
@@ -1146,21 +1143,6 @@ struct HubView: View {
         let featured = featuredStoryIDs
         ForEach(beats) { beat in
             beatView(beat, featured: featured)
-        }
-
-        if sel == .wc, !wcIntelSignals.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                HubHead(title: "Game Intel", count: wcIntelSignals.count)
-                VStack(spacing: 0) {
-                    ForEach(wcIntelSignals) { s in
-                        HubStoryRow(s: s, kicker: kickerText(s), expandable: false,
-                                    showsChevron: true,
-                                    onTap: { wcIntel = s }, onProfile: nil)
-                        HubRule(inset: 18)
-                    }
-                }
-            }
-            .id("wcIntel")
         }
 
         // Fantasy lives on its OWN page behind the header toggle
@@ -1542,18 +1524,6 @@ struct HubView: View {
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.88), value: gameSheet?.id)
-        .fullScreenCover(item: $wcIntel) { s in
-            ZStack(alignment: .top) {
-                GaryColors.darkBg.ignoresSafeArea()
-                ScrollView(showsIndicators: false) {
-                    WCGameIntelView(matchup: s.game,
-                                    confirmedXI: s.confirmedXI,
-                                    read: s,
-                                    edges: wcEdges(for: s.game),
-                                    onClose: { wcIntel = nil })
-                }
-            }
-        }
         .onChange(of: pendingScrollAnchor) { anchor in
             guard let anchor else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
@@ -1597,7 +1567,6 @@ struct HubView: View {
             for beat in beats where !beatRows(beat, featured: featured).isEmpty {
                 out.append((beat.anchor, beat.title.replacingOccurrences(of: "The ", with: "")))
             }
-            if sel == .wc, !wcIntelSignals.isEmpty { out.append(("wcIntel", "Intel")) }
         }
         if !selNightRows.isEmpty { out.append(("lastNight", nightLabel)) }
         return out

@@ -2177,6 +2177,13 @@ struct HomeView: View {
     /// One physical Home board, switched between the two active pro-football /
     /// baseball desks. Rows keep the canonical MLB geometry in both tabs.
     @State private var selectedHomeBoardLeague: HomeBoardLeague = .mlb
+    /// True once the user has tapped a board tab THIS session. Before that,
+    /// the in-season league auto-leads; after it, their choice sticks — an
+    /// empty league shows its own "no games" line instead of snapping away
+    /// (founder, Aug 24: "if a user click NFL and is on MLB they expect to
+    /// see NFL and if there are no games thats fine the tab should just say
+    /// that").
+    @State private var userPickedBoardLeague = false
     /// Date key actually backing `slateGames`. Keeping it beside the payload
     /// avoids mixing yesterday's rows with today's results during the 6am reload.
     @State private var loadedSlateDate = ""
@@ -2383,6 +2390,9 @@ struct HomeView: View {
             if verb == "tomorrow" { selectedPhase = .tomorrow }
             if verb == "today" { selectedPhase = todayClockPhase }
             if verb == "homeboard", let league = HomeBoardLeague(rawValue: arg.uppercased()) {
+                // The QA verb mirrors a real finger: an explicit choice sticks,
+                // so an empty league shows its "no games" line (Aug 24).
+                userPickedBoardLeague = true
                 selectedHomeBoardLeague = league
             }
         }
@@ -2601,6 +2611,20 @@ struct HomeView: View {
                     }
                     let cycleDayRows = recentGameResults.filter { $0.game_date == SupabaseAPI.todayEST() }
 
+                    // THE BOARD COMMITS THE MOMENT ITS DATA EXISTS (founder,
+                    // Aug 24: "that same board seems not to load right away
+                    // like everything else"). These three used to commit ~180
+                    // lines below, behind the wire/pulse/ledger/edges awaits
+                    // and their fallback chains — so the day's slate sat
+                    // invisible for seconds while editorial lanes fetched.
+                    // Board + its durable grades still commit together under
+                    // the SAME captured date (the 6am-rollover pairing rule).
+                    sheetGameResults = recentGameResults.filter {
+                        $0.game_date == date && ["won", "lost", "push"].contains(($0.result ?? "").lowercased())
+                    }
+                    slateGames = slateRowsResolved
+                    loadedSlateDate = date
+
                     // Fresh-day recap pop-up — GAME picks only, once per day. Its
                     // receipt is always the last completed day, even when the user first
                     // opens Home after today's slate has started. It must not share the
@@ -2769,14 +2793,8 @@ struct HomeView: View {
                     let recapsToday = await recapsTodayF
                     nightRecaps = recapsToday.isEmpty ? await recapsGradedF : recapsToday
                     HomeHeadlinesCache.save(headlineStories)   // write-through; no-op if empty
-                    // Commit the board and its durable grades under the SAME
-                    // captured date. A 6am rollover during this async load can
-                    // never pair one day's schedule with the other day's results.
-                    sheetGameResults = recentGameResults.filter {
-                        $0.game_date == date && ["won", "lost", "push"].contains(($0.result ?? "").lowercased())
-                    }
-                    slateGames = slateRowsResolved   // slateF resolved above for the cycle clock
-                    loadedSlateDate = date
+                    // (Board + durable grades committed at the top of the
+                    // cycle-clock block — the moment slateF resolved.)
                     tomorrowBoard = await tomorrowBoardF
                     todayBoard = await todayBoardF
                     homeStreaks = await streaksF
@@ -4186,9 +4204,17 @@ struct HomeView: View {
             if !youRows.isEmpty { set.insert(.you) }
             return set
         }()
-        let selected = available.contains(selectedHomeBoardLeague)
-            ? selectedHomeBoardLeague
-            : (available.contains(.mlb) ? .mlb : .nfl)
+        // An explicit tap is final — MLB/NFL render their own (possibly
+        // empty) board. Only YOU still snaps away when it has no rows: that
+        // tab HIDES entirely without bets, so it can never sit selected.
+        // Before any tap, the in-season league auto-leads as always.
+        let selected: HomeBoardLeague = {
+            if userPickedBoardLeague && selectedHomeBoardLeague != .you { return selectedHomeBoardLeague }
+            if selectedHomeBoardLeague == .you && available.contains(.you) { return .you }
+            return available.contains(selectedHomeBoardLeague)
+                ? selectedHomeBoardLeague
+                : (available.contains(.mlb) ? .mlb : .nfl)
+        }()
 
         if !rows.isEmpty || !youRows.isEmpty {
             // The countdown/marquee-to-board boundary is neutral chrome. A
@@ -4207,9 +4233,14 @@ struct HomeView: View {
                 ForEach(HomeBoardLeague.allCases, id: \.self) { league in
                     // The YOU tab exists only when the user has bets down
                     // today — an empty personal slate never renders a dead tab.
+                    // MLB/NFL are ALWAYS tappable (founder, Aug 24): a
+                    // disabled tab didn't consume the touch, so tapping "NFL"
+                    // on an MLB-only day fell through and read as a jump to
+                    // the Picks page. An empty league now selects normally
+                    // and the panel says "no games" in its own words.
                     if league != .you || available.contains(.you) {
-                        let enabled = available.contains(league)
                         Button {
+                            userPickedBoardLeague = true
                             selectedHomeBoardLeague = league
                         } label: {
                             Text(league.rawValue)
@@ -4217,15 +4248,25 @@ struct HomeView: View {
                                 .tracking(1.4)
                                 .foregroundStyle(league == selected
                                     ? GaryColors.gold
-                                    : Color.white.opacity(enabled ? 0.62 : 0.45))
+                                    : Color.white.opacity(0.62))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 10)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .disabled(!enabled)
                         .accessibilityAddTraits(league == selected ? .isSelected : [])
                     }
                 }
+            }
+            // A selected league with no slate says so in place — the tab
+            // switch always lands ON the board, never anywhere else.
+            if rows.isEmpty {
+                Text("NO \(selected.rawValue) GAMES TODAY")
+                    .font(.system(size: 12.5, weight: .semibold).monospacedDigit())
+                    .tracking(1.4)
+                    .foregroundStyle(Color.white.opacity(0.45))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 22)
             }
             ForEach(Array(rows.enumerated()), id: \.element.id) { i, r in
                 Button {
@@ -17292,12 +17333,23 @@ struct CompactPickRow: View {
                         .foregroundStyle(leagueTint)
                         .lineLimit(1)
                         .layoutPriority(1)
-                    (Text(metaLine).foregroundColor(metaBodyTint)
-                        + Text(pickParts.odds.isEmpty ? "" : " · ").foregroundColor(metaDotTint)
-                        + Text(pickParts.odds).foregroundColor(oddsTint))
+                    // PRICE NEVER TRUNCATES (founder, Aug 24: the NFL card's
+                    // long "NFL PRESEASON" tag squeezed this row until the odds
+                    // ellipsized to "-..." — a hard-law violation). The odds are
+                    // their own fixed-size Text with top layout priority; the
+                    // opponent scales down instead. No ellipsis, ever.
+                    (Text(metaLine).foregroundColor(metaBodyTint))
                         .font(GaryFonts.text(13.5 * pf, .medium))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                        .minimumScaleFactor(0.6)
+                    if !pickParts.odds.isEmpty {
+                        (Text("· ").foregroundColor(metaDotTint)
+                            + Text(pickParts.odds).foregroundColor(oddsTint))
+                            .font(GaryFonts.text(13.5 * pf, .medium))
+                            .lineLimit(1)
+                            .fixedSize()
+                            .layoutPriority(2)
+                    }
                     Spacer(minLength: 4)
                     // ⓘ — the how-it-works pop (drop, grading, flat-$100 money).
                     Button { showPickInfo = true } label: {
@@ -23242,12 +23294,11 @@ struct PicksTodayPage: View {
             topSinglePick
             // LEAGUE PULSE moved to The Hub (founder, Jul 30) — the Picks page
             // stays picks + edges.
-            // World Cup gets a bespoke section (4 fan-legible lanes + a tap-through
-            // team-news card) instead of the generic MLB-shaped EdgesSection. WC-only:
-            // the shared EdgesSection / locked MLB design is never touched.
-            if scopeLeague == "WC" {
-                WCTodaySection(edges: edges)
-            } else if scopeLeague == "NFL" || scopeLeague == "NCAAF" {
+            // (The World Cup's bespoke section was deleted with the WC UI on
+            // Aug 24 2026 — the 2026 tournament ended Jul 19, pipeline removed
+            // Jul 21, and the founder's cleanup order finished the job. A 2030
+            // revival is a rebuild, not a revert — see the Jul 21 removal.)
+            if scopeLeague == "NFL" || scopeLeague == "NCAAF" {
                 // Football runs the same section as MLB — same category tabs,
                 // same feed — through a proof gate that keeps unverified
                 // market/live rows off this surface (founder, Aug 20).
@@ -26375,12 +26426,20 @@ struct CompactPropRow: View {
                         .foregroundStyle(propLeagueTint)
                         .lineLimit(1)
                         .layoutPriority(1)
-                    (Text(metaLine).foregroundColor(metaBodyTint)
-                        + Text((oddsText.isEmpty || metaLine.isEmpty) ? "" : " · ").foregroundColor(metaDotTint)
-                        + Text(oddsText).foregroundColor(oddsTint))
+                    // PRICE NEVER TRUNCATES — same split as the game card
+                    // (founder, Aug 24): odds fixed-size, meta scales.
+                    (Text(metaLine).foregroundColor(metaBodyTint))
                         .font(GaryFonts.text(13.5 * pf, .medium))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                        .minimumScaleFactor(0.6)
+                    if !oddsText.isEmpty {
+                        (Text(metaLine.isEmpty ? "" : "· ").foregroundColor(metaDotTint)
+                            + Text(oddsText).foregroundColor(oddsTint))
+                            .font(GaryFonts.text(13.5 * pf, .medium))
+                            .lineLimit(1)
+                            .fixedSize()
+                            .layoutPriority(2)
+                    }
                     Spacer(minLength: 4)
                     // ⓘ — parity with the game face's how-it-works pop.
                     Button { showPickInfo = true } label: {

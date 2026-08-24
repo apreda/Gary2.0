@@ -30,7 +30,6 @@
 		848433E84732600F7F27F78B /* KeychainStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = C98E3F91D643EAE8E4199E0A /* KeychainStorage.swift */; };
 		8B47B0D0D084C52747EA7346 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0616A3C8A2F0268B8A05C4D /* Secrets.swift */; };
 		8C34DF13E8B667CE889F3001 /* RacingSansOne.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E7DD2F4D55F5FFFEE8EE459E /* RacingSansOne.ttf */; };
-		8E8BCBC1B8A327B4D27BB651 /* WCGameIntelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4842B8C63C570D1C368D182A /* WCGameIntelView.swift */; };
 		938E3FFBE59972BA9FD4D008 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = FBB94BA05B70C7412D0F1576 /* PrivacyInfo.xcprivacy */; };
 		96156A39CD944FAC812763CE /* Teko-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 71B2F4F02C72B63F4E81FD2D /* Teko-Bold.ttf */; };
 		962A345642B263A7E4B5145D /* ChakraPetch-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4DB2A6343A5BCF41DD4C3664 /* ChakraPetch-Bold.ttf */; };
@@ -74,7 +73,6 @@
 		423887686C6839DEC44C0DEA /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		430996827B4DF85995FED6C0 /* SecretsLocal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecretsLocal.swift; sourceTree = "<group>"; };
 		44D1E52AFB4EED7E97F55C36 /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
-		4842B8C63C570D1C368D182A /* WCGameIntelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WCGameIntelView.swift; sourceTree = "<group>"; };
 		49489C7FC0ABE55881B19E13 /* GaryApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaryApp.swift; sourceTree = "<group>"; };
 		4D7626B616BEDAF94E8687F9 /* AppStoreMetadata.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = AppStoreMetadata.md; sourceTree = "<group>"; };
 		4DB2A6343A5BCF41DD4C3664 /* ChakraPetch-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "ChakraPetch-Bold.ttf"; sourceTree = "<group>"; };
@@ -170,7 +168,6 @@
 				58C162EF98D65308171329E2 /* SupabaseAPI.swift */,
 				0110A48840365DDC8DBFCABF /* UserBookView.swift */,
 				44D1E52AFB4EED7E97F55C36 /* Views.swift */,
-				4842B8C63C570D1C368D182A /* WCGameIntelView.swift */,
 			);
 			name = GaryApp;
 			path = .;
@@ -347,7 +344,6 @@
 				D810CCA6C81972A7A21BD77F /* SupabaseAPI.swift in Sources */,
 				0E2DFD72AAC6F9DA0E624548 /* UserBookView.swift in Sources */,
 				B313EC36BDDDB18E9F687643 /* Views.swift in Sources */,
-				8E8BCBC1B8A327B4D27BB651 /* WCGameIntelView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
