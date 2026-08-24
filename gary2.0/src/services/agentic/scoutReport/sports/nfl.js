@@ -583,7 +583,8 @@ export async function fetchKeyPlayers(homeTeam, awayTeam, sport, season = footba
 
     return {
       home: homeKeyPlayers,
-      away: awayKeyPlayers
+      away: awayKeyPlayers,
+      season
     };
   } catch (error) {
     console.error('[Scout Report] Error fetching key players:', error.message);
@@ -688,8 +689,11 @@ ${awayReceivers.length > 0 ? awayReceivers.map(formatReceiverLine).join('\n') : 
   const homeSection = formatTeamSection(homeTeam, keyPlayers.home, true);
   const awaySection = formatTeamSection(awayTeam, keyPlayers.away, false);
 
+  const statsVintage = keyPlayers.season != null
+    ? ` — stat lines are ${footballSeasonLabel(keyPlayers.season)} season totals`
+    : '';
   return `${topReceiversSection}
-KEY PLAYERS (CURRENT ROSTER)
+KEY PLAYERS (CURRENT ROSTER${statsVintage})
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${homeSection}
 
@@ -1176,6 +1180,17 @@ export async function buildNflScoutReport(game, options = {}) {
     fetchStandingsSnapshot(sportKey, homeTeam, awayTeam)
   ]);
 
+
+  // ═══════════════════════════════════════════════════════════════════
+  // HARD DATA GATE (founder, Aug 24: football brought to MLB's shape —
+  // the analog of MLB's lineup gate). Two requirements, fail-closed:
+  // the official injury feed must have ANSWERED (an errored fetch is not
+  // an empty report), and both starting QBs must be resolved. A refused
+  // tier is retried by the scheduler's later tiers, exactly like MLB.
+  // ═══════════════════════════════════════════════════════════════════
+  if (injuries && injuries.sourceOk === false) {
+    throw new Error(`[Scout Report] HARD FAIL — NFL requires the official injury feed for ${awayTeam} @ ${homeTeam}; the BDL injury source did not answer (a failed fetch is not an empty report). Later tiers retry.`);
+  }
   // ===================================================================
   // Step B: Set venue from NFL stadium mapping
   // ===================================================================
@@ -1190,6 +1205,12 @@ export async function buildNflScoutReport(game, options = {}) {
   // Step C: Fetch starting QBs (pass injuries to filter out IR/Out players)
   // ===================================================================
   const startingQBs = await fetchStartingQBs(homeTeam, awayTeam, sportKey, injuries, nflSeasonYear);
+  // Second half of the hard gate: no pick without both starting QBs.
+  if (!startingQBs?.home?.name || !startingQBs?.away?.name) {
+    const missing = [!startingQBs?.home?.name ? homeTeam : null, !startingQBs?.away?.name ? awayTeam : null].filter(Boolean).join(', ');
+    throw new Error(`[Scout Report] HARD FAIL — NFL requires resolved starting QBs for ${awayTeam} @ ${homeTeam} (missing: ${missing}). Later tiers retry.`);
+  }
+
 
   // ===================================================================
   // Step D: Fetch key players (roster + stats) to prevent hallucinations

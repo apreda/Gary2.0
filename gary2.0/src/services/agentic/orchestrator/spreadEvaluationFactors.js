@@ -109,3 +109,35 @@ export function getMlbSeasonAwareness() {
 - **Baseball is more than numbers — the game has momentum.** Which team is rolling right now? Which pitcher is struggling? What happened in this series so far? A team that just got swept plays differently than a team that just swept. Streaks are real currency in this sport — riding a hot team against a cold one is legitimate baseball judgment; weigh it against tonight's matchup. These dynamics are real and worth investigating alongside the statistical matchup.`;
 }
 
+
+
+/**
+ * Football season awareness (founder GO, Aug 24 — parity with MLB's
+ * getMlbSeasonAwareness). Date-derived CALENDAR FACTS only — where the
+ * season is and what that phase is known for. Awareness, never conclusions.
+ */
+export function getFootballSeasonAwareness(sport = 'NFL', now = new Date()) {
+  const isCollege = sport === 'NCAAF' || sport === 'americanfootball_ncaaf';
+  const month = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', month: 'numeric' }).format(now));
+  const lines = [`## ${isCollege ? 'NCAAF' : 'NFL'} SEASON AWARENESS`];
+
+  if (month === 8) {
+    lines.push(isCollege
+      ? '- **Late August: opening weeks.** Rosters carry heavy transfer-portal and freshman turnover from last season; prior-season team identities may not describe this roster. Investigate who is actually on the field now.'
+      : '- **August is preseason.** Playing-time plans, not talent gaps, decide these games. Starter-phase and reserve-phase evidence are different currencies — the scout report labels which phase each fact belongs to.');
+  } else if (month === 9) {
+    lines.push('- **September: small-sample season.** Every team stat rests on a handful of games; one blowout can distort a per-game average. Prior-season data still carries real signal this early — weigh both, and investigate which one describes the roster on the field this week.');
+  } else if (month === 10 || month === 11) {
+    lines.push('- **Mid-season: the sample is real now.** Current-season unit stats describe this team better than last year does. Injuries accumulate; depth gets tested; investigate how each roster has changed since September.');
+    if (isCollege && month === 11) lines.push('- **November: conference races and rivalry games.** Stakes diverge sharply between teams — investigate what each program is playing for.');
+  } else if (month === 12 || month === 1) {
+    lines.push(isCollege
+      ? '- **Bowl/CFP season.** Opt-outs, transfers, coaching changes, and long layoffs reshape rosters between the regular season and the bowl. The November version of a team may not be the one playing tonight — verify who plays.'
+      : '- **Late season.** Playoff positioning diverges: some teams fight for seeding, others are eliminated, and in Week 18 clinched teams may rest starters. Weather is a real factor in outdoor venues. Investigate what this game means to each side and who actually plays.');
+  } else {
+    lines.push('- Offseason-adjacent date: verify the game context from the scout report rather than assuming a season phase.');
+  }
+  // The football week runs on unequal rest by design.
+  lines.push('- **Rest is structural in football.** Thursday, Monday, and bye-week schedules create real rest gaps — the scout report carries each team\'s days of rest; treat equal rest as no factor at all.');
+  return lines.join('\n');
+}

@@ -1870,7 +1870,16 @@ async function main() {
               // MLB is exempt (Jul 26 2026, founder: one standard book —
               // Gary quotes the chosen book's line; electing a different
               // book's price here would contradict the card).
-              if (config.key !== 'baseball_mlb' && sportsbookOdds && sportsbookOdds.length > 0 && result.type === 'spread') {
+              // FOOTBALL is exempt too (founder, Aug 24: "so NFL is as good
+              // as MLB" — one-book quoting brought to MLB's shape). The
+              // preseason audit showed election-after-compose made 11/16
+              // cards argue a different number than their ticket; the desk's
+              // posted line IS the ticket now, and the ticket-restate guard
+              // stays behind it as belt-and-suspenders.
+              const electionExempt = config.key === 'baseball_mlb'
+                || config.key === 'americanfootball_nfl'
+                || config.key === 'americanfootball_ncaaf';
+              if (!electionExempt && sportsbookOdds && sportsbookOdds.length > 0 && result.type === 'spread') {
                 const validOdds = sportsbookOdds.filter(o => typeof o.spread === 'number' && !isNaN(o.spread));
                 if (validOdds.length > 0) {
                   const firstSpread = validOdds[0].spread;

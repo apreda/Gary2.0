@@ -2106,10 +2106,7 @@ INVESTIGATION COMPLETE`
         role: 'user',
         content: truncatedRationale
           ? `Your rationale was CUT OFF mid-sentence (token limit). Rewrite your pick JSON with a CONCISE but COMPLETE rationale — 2-3 paragraphs max. Use stat abbreviations (AdjEM, ORtg, DRtg, eFG%, TS%) to save space. The rationale MUST end with a complete sentence.`
-          : `Your rationale is too short. Provide your FULL analysis:
-1. "Gary's Take\\n\\n" header, then open with an announcer-style scene-setter (1-2 sentences setting the stage)
-2. 3-4 paragraphs (~300-400 words) explaining your reasoning with key stats
-3. Lead with your thesis — why you like this side tonight
+          : `Your rationale is too short for a pick card. Provide your FULL analysis — your pick and the real reasons you landed on it, with the key evidence, in your own words and your own shape.
 
 Output your complete pick JSON with the full rationale in the "rationale" field.`
       });

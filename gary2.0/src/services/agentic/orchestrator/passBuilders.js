@@ -2,7 +2,7 @@
 // (founder GO after the ledger post-mortem: June +26u on this engine, every
 // week negative since the Jul 22-26 cutover). Pieces grafted verbatim from
 // the pre-deletion state (53962904^).
-import { getNbaSpreadFactors, getNcaabSpreadFactors, getNhlSpreadFactors, getNflSpreadFactors, getNcaafSpreadFactors, getMlbSpreadFactors, getMlbSeasonAwareness } from './spreadEvaluationFactors.js';
+import { getNbaSpreadFactors, getNcaabSpreadFactors, getNhlSpreadFactors, getNflSpreadFactors, getNcaafSpreadFactors, getMlbSpreadFactors, getMlbSeasonAwareness, getFootballSeasonAwareness } from './spreadEvaluationFactors.js';
 import { GAME_ML_CAP } from './orchestratorConfig.js';
 
 /**
@@ -212,6 +212,7 @@ INVESTIGATION COMPLETE
  */
 function buildNflPass1(scoutReport, today, homeTeam, awayTeam, spread) {
   const factors = getNflSpreadFactors();
+  const seasonAwareness = getFootballSeasonAwareness('NFL');
   const homeSpread = Number(spread);
   const awaySpread = Number.isFinite(homeSpread) ? -homeSpread : null;
   const formatSpread = (value) => {
@@ -226,6 +227,10 @@ function buildNflPass1(scoutReport, today, homeTeam, awayTeam, spread) {
 
 ${scoutReport}
 </scout_report>
+
+<season_context>
+${seasonAwareness}
+</season_context>
 
 <investigation_rules>
 ## INVESTIGATION RULES
@@ -275,6 +280,7 @@ INVESTIGATION COMPLETE
  */
 function buildNcaafPass1(scoutReport, today, homeTeam, awayTeam, spread) {
   const factors = getNcaafSpreadFactors();
+  const seasonAwareness = getFootballSeasonAwareness('NCAAF');
   const homeSpread = Number(spread);
   const awaySpread = Number.isFinite(homeSpread) ? -homeSpread : null;
   const formatSpread = (value) => {
@@ -289,6 +295,10 @@ function buildNcaafPass1(scoutReport, today, homeTeam, awayTeam, spread) {
 
 ${scoutReport}
 </scout_report>
+
+<season_context>
+${seasonAwareness}
+</season_context>
 
 <investigation_rules>
 ## INVESTIGATION RULES
@@ -344,11 +354,26 @@ INVESTIGATION COMPLETE
  * @param {string} decisionGuards - Optional sport-specific Pass 2.5 guard text
  */
 export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '', spread = 0, decisionGuards = '') {
+  // Sport-flavored provenance examples (founder GO, Aug 24): the hard rule
+  // is identical for every sport; only the named examples follow the sport.
+  const _fb = sport === 'americanfootball_nfl' || sport === 'NFL' || sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
+  const statExamples = _fb
+    ? 'EPA figures, success rates, pressure rates, yards per play, snap counts or snap shares, target/carry counts, prior-season passing lines, penalty yardage'
+    : 'velocity in mph, ERA, xwOBA, whiff%, batting splits, X-for-Y batter-vs-pitcher lines, PA/AB counts, runs-per-game figures, pitch counts';
+  const descriptorExamples = _fb
+    ? 'do not call a line "elite in pass protection," describe a "rising pressure rate," characterize a usage split, or call a rotation "settled"/"in flux" unless the underlying metric or report was provided.'
+    : 'do not call a pitcher a "ground-ball specialist," describe "declining velocity," characterize a platoon split, or call a reliever\'s workload "heavy"/"fresh" unless the underlying metric was provided.';
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
   const isFootball = sport === 'americanfootball_nfl' || sport === 'NFL' ||
     sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
-  const lineLabel = (isNHL) ? 'moneyline or puck line' : (isMLB ? 'moneyline or run line' : 'spread');
+  // Football menu = MLB's shape (founder, Aug 24: "so NFL is as good as
+  // MLB") — spread or moneyline, Gary's choice. The generic bet-type note
+  // below always offered both; the old 'spread' label here contradicted it
+  // and forced 16/16 preseason spreads.
+  const lineLabel = (isNHL) ? 'moneyline or puck line'
+    : (isMLB ? 'moneyline or run line'
+    : (isFootball ? 'spread or moneyline' : 'spread'));
   const betTypeNote = isNHL
     ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). Choose the bet type that matches your read on the game.
 
@@ -369,6 +394,8 @@ Check each offered line in both directions — does your read beat the price on 
     lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away). Choose ML or Puck Line based on your investigation.`;
   } else if (isMLB) {
     lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away). Choose ML or Run Line — whichever ticket your read actually calls.`;
+  } else if (isFootball) {
+    lineContext = `Line context: ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}. Both moneylines are posted in your market data — choose Spread or ML, whichever ticket your read actually calls.`;
   } else {
     lineContext = `Line context: ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}.`;
   }
@@ -386,7 +413,7 @@ Check each offered line in both directions — does your read beat the price on 
 \`\`\`json
 {
   "final_pick": "[Team] [spread/ML] [odds]",
-  "rationale": "Gary's Take\\n\\n[paste the prose Gary's Take above into this field]",
+  "rationale": "[paste your card prose above into this field]",
   "confidence_score": 0.XX
 }
 \`\`\`
@@ -432,12 +459,9 @@ Use this exact format:
 
 ${finalDecisionInstruction}
 
-Gary's Take
+[Your card rationale — plain text prose]
 
-[3 paragraphs, plain text, ~250-400 words]
-
-This "Gary's Take" draft is the rationale that appears on the pick card: your pick, and the real reasons you landed on it.
-Opening requirement: start with a brief matchup intro in an announcer-style scene-setter voice (1-2 sentences), then continue with your reasoning naturally.
+This draft is the rationale that appears on the pick card: your pick, and the real reasons you landed on it, in your own words and your own shape. No mandated structure, no required opening move — write it the way this game deserves.
 
 **ESTABLISHED INJURY RULE:**
 If a player has been out for multiple games, that absence is not new information — the line was SET with that absence already factored in. The team's recent stats, form, and record already reflect life without that player. Citing a non-fresh injury as a reason for your pick is the same as citing something the line already knows. The only injuries that can inform your pick are FRESH ones (0-2 games missed) where the market may not have fully adjusted yet. If you name a player listed under ESTABLISHED ABSENCES in your rationale, you are using old news that is already in the price.
@@ -450,7 +474,7 @@ CRITICAL CONSTRAINTS (all system prompt rules apply — these are reminders of t
 1. PLAYER NAMES: Only from roster section. Your training data pre-dates tonight — every number from scout report, tools, or grounding.
 2. RECORDS: Records describe what happened, not what will happen.
 3. Do NOT predict your own margin or final score.
-4. NO FABRICATION — STAT PROVENANCE (HARD RULE): Every specific number you write (velocity in mph, ERA, xwOBA, whiff%, batting splits, X-for-Y batter-vs-pitcher lines, PA/AB counts, runs-per-game figures, pitch counts) must appear VERBATIM in this conversation's scout report, tool responses, or grounding results. Your training-data numbers pre-date this season and citing one is a fabrication even if it sounds plausible. This also covers QUANTITATIVE DESCRIPTORS: do not call a pitcher a "ground-ball specialist," describe "declining velocity," characterize a platoon split, or call a reliever's workload "heavy"/"fresh" unless the underlying metric was provided. If a stat you want is not in your data, OMIT THE CLAIM and write around it — a rationale with fewer numbers is fine; a rationale with an invented number is not.
+4. NO FABRICATION — STAT PROVENANCE (HARD RULE): Every specific number you write (${statExamples}) must appear VERBATIM in this conversation's scout report, tool responses, or grounding results. Your training-data numbers pre-date this season and citing one is a fabrication even if it sounds plausible. This also covers QUANTITATIVE DESCRIPTORS: ${descriptorExamples} If a stat you want is not in your data, OMIT THE CLAIM and write around it — a rationale with fewer numbers is fine; a rationale with an invented number is not.
 5. NO EMOJIS. No tactical/scheme/film claims the provided data can't support.
 </negative_constraints>
 
@@ -515,6 +539,15 @@ INVESTIGATION COMPLETE
  * @param {string} pass25Constitution - Props constitution pass25 content (evaluation awareness)
  */
 export function buildPass25PropsMessage(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '', pass25Constitution = '') {
+  // Sport-flavored provenance examples (founder GO, Aug 24): the hard rule
+  // is identical for every sport; only the named examples follow the sport.
+  const _fb = sport === 'americanfootball_nfl' || sport === 'NFL' || sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
+  const statExamples = _fb
+    ? 'EPA figures, success rates, pressure rates, yards per play, snap counts or snap shares, target/carry counts, prior-season passing lines, penalty yardage'
+    : 'velocity in mph, ERA, xwOBA, whiff%, batting splits, X-for-Y batter-vs-pitcher lines, PA/AB counts, runs-per-game figures, pitch counts';
+  const descriptorExamples = _fb
+    ? 'do not call a line "elite in pass protection," describe a "rising pressure rate," characterize a usage split, or call a rotation "settled"/"in flux" unless the underlying metric or report was provided.'
+    : 'do not call a pitcher a "ground-ball specialist," describe "declining velocity," characterize a platoon split, or call a reliever\'s workload "heavy"/"fresh" unless the underlying metric was provided.';
   return `
 ${pass25Constitution ? `<props_evaluation_framework>\n${pass25Constitution}\n</props_evaluation_framework>\n\n` : ''}<synthesis>
 You've completed your game investigation. You have the full picture — pace, matchups, injuries, role changes, game script expectations. If you need more data, you can still call tools. Take a moment to sit with everything before you make your picks.
@@ -531,7 +564,7 @@ CRITICAL CONSTRAINTS (all system prompt rules apply — these are reminders of t
 1. PLAYER NAMES: Only from roster section. Your training data pre-dates tonight — every number from scout report, tools, or grounding.
 2. RECORDS: Records describe what happened, not what will happen.
 3. Do NOT predict your own margin or final score.
-4. NO FABRICATION — STAT PROVENANCE (HARD RULE): Every specific number you write (velocity in mph, ERA, xwOBA, whiff%, batting splits, X-for-Y batter-vs-pitcher lines, PA/AB counts, runs-per-game figures, pitch counts) must appear VERBATIM in this conversation's scout report, tool responses, or grounding results. Your training-data numbers pre-date this season and citing one is a fabrication even if it sounds plausible. This also covers QUANTITATIVE DESCRIPTORS: do not call a pitcher a "ground-ball specialist," describe "declining velocity," characterize a platoon split, or call a reliever's workload "heavy"/"fresh" unless the underlying metric was provided. If a stat you want is not in your data, OMIT THE CLAIM and write around it — a rationale with fewer numbers is fine; a rationale with an invented number is not.
+4. NO FABRICATION — STAT PROVENANCE (HARD RULE): Every specific number you write (${statExamples}) must appear VERBATIM in this conversation's scout report, tool responses, or grounding results. Your training-data numbers pre-date this season and citing one is a fabrication even if it sounds plausible. This also covers QUANTITATIVE DESCRIPTORS: ${descriptorExamples} If a stat you want is not in your data, OMIT THE CLAIM and write around it — a rationale with fewer numbers is fine; a rationale with an invented number is not.
 5. NO EMOJIS. No tactical/scheme/film claims the provided data can't support.
 </negative_constraints>
 </instructions>`.trim();
@@ -597,7 +630,7 @@ Output your final pick as JSON:
 \`\`\`json
 {
   "final_pick": "[Team] [spread/ML] [odds]",
-  "rationale": "Gary's Take\\n\\n[Your reasoning]",
+  "rationale": "[Your reasoning]",
   "confidence_score": 0.XX
 }
 \`\`\`

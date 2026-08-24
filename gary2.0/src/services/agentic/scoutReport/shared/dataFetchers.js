@@ -1206,6 +1206,11 @@ export async function fetchInjuries(homeTeam, awayTeam, sport, gameDate = null) 
     // =============================================================================
     if (isFootball && bdlSport) {
       console.log(`[Scout Report] NFL/NCAAF: Fetching BDL injuries (official practice reports)`);
+      // A FAILED FETCH IS NOT AN EMPTY REPORT (founder gate order, Aug 24):
+      // sourceOk carries whether the official feed actually answered, so the
+      // builders can refuse to pick blind instead of reading an error as
+      // "no injuries". Labels/freshness below are untouched (LOCKED).
+      let injurySourceOk = false;
 
       // Fetch current state for narratives and additional context. The GAME's
       // date rides the matchup/weather queries — anchored to the wall clock,
@@ -1291,6 +1296,7 @@ export async function fetchInjuries(homeTeam, awayTeam, sport, gameDate = null) 
           }
 
           console.log(`[Scout Report] NFL injuries parsed: ${homeInjuries.length} for ${homeTeam}, ${awayInjuries.length} for ${awayTeam}`);
+          injurySourceOk = true;
         }
       } catch (e) {
         console.warn(`[Scout Report] Failed to fetch BDL NFL injuries: ${e.message}`);
@@ -1300,7 +1306,8 @@ export async function fetchInjuries(homeTeam, awayTeam, sport, gameDate = null) 
         home: homeInjuries,
         away: awayInjuries,
         lineups: { home: [], away: [] },
-        narrativeContext
+        narrativeContext,
+        sourceOk: injurySourceOk
       };
     }
     

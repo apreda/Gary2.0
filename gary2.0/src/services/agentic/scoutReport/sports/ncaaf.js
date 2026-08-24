@@ -993,6 +993,14 @@ export async function buildNcaafScoutReport(game, options = {}) {
     fetchStandingsSnapshot(sportKey, homeTeam, awayTeam)
   ]);
 
+  // HARD DATA GATE (founder, Aug 24: football to MLB's shape). NCAAF has no
+  // per-game starting-QB resolution (college rosters ride fetchNcaafKeyPlayers),
+  // so the gate here is the injury-feed half only: the official feed must have
+  // ANSWERED — an errored fetch is not an empty report. Later tiers retry.
+  if (injuries && injuries.sourceOk === false) {
+    throw new Error(`[Scout Report] HARD FAIL — NCAAF requires the official injury feed for ${awayTeam} @ ${homeTeam}; the BDL injury source did not answer (a failed fetch is not an empty report). Later tiers retry.`);
+  }
+
   // For NCAAF, fetch key players (roster + stats) to prevent hallucinations
   let ncaafKeyPlayers = null;
   ncaafKeyPlayers = await fetchNcaafKeyPlayers(homeTeam, awayTeam, sportKey, ncaafSeasonYear);
