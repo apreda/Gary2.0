@@ -17,6 +17,16 @@ const SHARED_SURFACE = [
   '../flashInvestigationPrompts.js',
   '../scoutReport/shared/dataFetchers.js',
   '../scoutReport/shared/anthropicFootballGrounding.js',
+  // The stat routers ARE the evidence surface: what a factor returns decides
+  // what Gary reads. Before Aug 24 2026 they were unhashed, so ten fetchers
+  // reading nonexistent BDL fields — and their repair — left the era stamp
+  // unchanged. MLB extended junePromptSha over its dossier surface for the
+  // same reason (e3f5e350); football now matches. Refactors churn the era too,
+  // which is intended.
+  '../tools/statRouters/index.js',
+  '../tools/statRouters/statRouterCommon.js',
+  '../tools/statRouters/footballTeamGames.js',
+  '../tools/toolDefinitions.js',
   '../../marketTruth.js',
   '../../oddsService.js',
 ];
@@ -25,10 +35,14 @@ const SPORT_SURFACE = {
   NFL: [
     '../constitution/nflConstitution.js',
     '../scoutReport/sports/nfl.js',
+    '../tools/statRouters/nflFetchers.js',
   ],
   NCAAF: [
     '../constitution/ncaafConstitution.js',
     '../scoutReport/sports/ncaaf.js',
+    '../tools/statRouters/ncaafFetchers.js',
+    // NCAAF's TRENCHES factor routes to the NFL fetchers for OL/DL/pressure.
+    '../tools/statRouters/nflFetchers.js',
   ],
 };
 
