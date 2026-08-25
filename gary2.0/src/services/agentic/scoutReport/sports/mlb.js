@@ -45,6 +45,7 @@ import { milbLineFromStatsReply } from '../../../starterDebut.js';
 import { foldName } from '../../../../utils/nameUtils.js';
 import { findStandingsRow } from '../../../teamIdentity.js';
 import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbSeasonSeriesGroups, computeMlbScheduleShape, computeMlbRecentSeriesForm, groupGamesIntoSeries, situationalSeriesLine, toEtDate, clubMatches } from './mlbSeriesState.js';
+import { aggregateRecentWindow } from './mlbRecentWindow.js';
 import { computeHitterContact, hitterContactLine, computePitcherWhiffByStart } from './mlbContactQuality.js';
 import {
   completedMlbTeamGames,
@@ -1400,26 +1401,6 @@ export async function buildMlbScoutReport(game, options = {}) {
       return recap;
     };
 
-    // L5/L10 aggregate
-    const aggregateGames = (games, teamName, count) => {
-      if (!games || games.length === 0) return null;
-      const slice = games.slice(-count);
-      let wins = 0, losses = 0, runsFor = 0, runsAgainst = 0;
-      for (const g of slice) {
-        const homeScore = g.teams?.home?.score ?? 0;
-        const awayScore = g.teams?.away?.score ?? 0;
-        const isHome = clubMatches(g.teams?.home?.team?.name, teamName);
-        if (isHome) {
-          runsFor += homeScore; runsAgainst += awayScore;
-          homeScore > awayScore ? wins++ : losses++;
-        } else {
-          runsFor += awayScore; runsAgainst += homeScore;
-          awayScore > homeScore ? wins++ : losses++;
-        }
-      }
-      const gp = slice.length;
-      return gp > 0 ? `${wins}-${losses} (${(runsFor / gp).toFixed(1)} R/G, ${(runsAgainst / gp).toFixed(1)} RA/G)` : null;
-    };
 
     const formatTeamRecent = (teamName, games, bdlCandidates) => {
       if (!games || games.length === 0) return `${teamName}: No recent games`;
@@ -1430,11 +1411,16 @@ export async function buildMlbScoutReport(game, options = {}) {
         const recap = formatGameRecap(last4[i], teamName, bdlCandidates);
         if (recap) lines.push(`  [L${i + 1}]${recap.trim().startsWith(' ') ? recap : ' ' + recap.trim()}`);
       }
-      // L5/L10: aggregates
-      const l5 = aggregateGames(games, teamName, 5);
-      const l10 = aggregateGames(games, teamName, 10);
-      if (l5) lines.push(`  [L5 aggregate] ${l5}`);
-      if (l10) lines.push(`  [L10 aggregate] ${l10}`);
+      // L5/L10: aggregates. The bracket names the window ASKED for; the line
+      // itself states how many games were actually available, so the two can
+      // never quietly disagree. When the club has played 5 or fewer, the L10
+      // window is the same games — print it once instead of twice.
+      const l5 = aggregateRecentWindow(games, teamName, 5);
+      if (l5) lines.push(`  [Last 5] ${l5}`);
+      if (games.length > 5) {
+        const l10 = aggregateRecentWindow(games, teamName, 10);
+        if (l10) lines.push(`  [Last 10] ${l10}`);
+      }
       return lines.join('\n');
     };
 
