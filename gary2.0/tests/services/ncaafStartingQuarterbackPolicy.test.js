@@ -7,6 +7,11 @@ const ncaafScoutSource = readFileSync(
   'utf8',
 );
 
+const nflScoutSource = readFileSync(
+  new URL('../../src/services/agentic/scoutReport/sports/nfl.js', import.meta.url),
+  'utf8',
+);
+
 describe('NCAAF starting-quarterback evidence policy', () => {
   it('never labels a passing leader or fallback sentinel as a confirmed starter', () => {
     const unsupported = {
@@ -22,5 +27,30 @@ describe('NCAAF starting-quarterback evidence policy', () => {
     expect(ncaafScoutSource).not.toContain('fetchStartingQBs');
     expect(ncaafScoutSource).not.toContain('formatStartingQBs');
     expect(ncaafScoutSource).not.toContain('STARTING QUARTERBACKS THIS WEEK');
+  });
+
+  /**
+   * The reverse direction, added Aug 25 2026 on the founder's order to stop
+   * sports leaking into each other.
+   *
+   * sports/nfl.js used to carry NCAAF's starting-QB resolution behind
+   * `isNCAAF` branches — 131 lines that NOTHING could reach, because
+   * buildNcaafScoutReport is college's entry point and the only caller here
+   * passes a hardcoded 'NFL'. Unreachable code in a file named for another
+   * sport is where a defect hides longest: one of those branches called a
+   * ballDontLieService method that had never been defined, inside a
+   * try/catch, and nobody noticed for as long as it existed.
+   *
+   * The rail in formatStartingQBs stays — it is policy, not routing.
+   */
+  it('keeps college fetch logic out of the NFL scout builder', () => {
+    expect(nflScoutSource).not.toContain('isNCAAF');
+    expect(nflScoutSource).not.toContain('fetchNCAAFStartingQBFromStats');
+    expect(nflScoutSource).not.toContain('americanfootball_ncaaf');
+  });
+
+  it('still refuses to present a college passing leader as a confirmed starter', () => {
+    // Routing moved; the anti-fabrication guard did not.
+    expect(nflScoutSource).toContain("=== 'NCAAF') return ''");
   });
 });

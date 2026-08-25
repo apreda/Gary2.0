@@ -211,7 +211,7 @@ async function fetchQBStatsByName(qbName, teamName, season = footballSeasonForDa
 
 // =========================================================================
 // fetchStartingQBs
-// Fetch starting QBs for both teams (NFL/NCAAF only)
+// Fetch starting QBs for both teams (NFL only)
 //
 // APPROACH: Use BDL's Team Roster with Depth Chart (most reliable)
 // 1. Get roster with depth chart positions (depth=1 is starter)
@@ -222,15 +222,23 @@ async function fetchQBStatsByName(qbName, teamName, season = footballSeasonForDa
 // - Season stat leaders (returns inactive players like Joe Flacco)
 // - Fallback sources (can be wrong/outdated)
 // =========================================================================
+/**
+ * NFL ONLY. College never reached this function: buildNcaafScoutReport is
+ * NCAAF's entry point and does not call it, and the sole caller here passes a
+ * hardcoded 'NFL'. The NCAAF branches that used to live in this file were
+ * therefore unreachable — and unreachable code in a file named for another
+ * sport is where a defect hides longest (Aug 25 2026: a service method these
+ * branches called had never been defined, and nothing ever noticed).
+ * NCAAF resolves its quarterbacks through fetchNcaafKeyPlayers in ncaaf.js.
+ */
 async function fetchStartingQBs(homeTeam, awayTeam, sport, injuries = null, season = footballSeasonForDate(sport)) {
   try {
     const bdlSport = sportToBdlKey(sport);
-    if (!bdlSport || (bdlSport !== 'americanfootball_nfl' && bdlSport !== 'americanfootball_ncaaf')) {
+    if (bdlSport !== 'americanfootball_nfl') {
       return null;
     }
 
-    const sportLabel = bdlSport === 'americanfootball_ncaaf' ? 'NCAAF' : 'NFL';
-    const isNCAAF = bdlSport === 'americanfootball_ncaaf';
+    const sportLabel = 'NFL';
 
     // Get team IDs
     const teams = await ballDontLieService.getTeams(bdlSport);
@@ -244,15 +252,8 @@ async function fetchStartingQBs(homeTeam, awayTeam, sport, injuries = null, seas
 
     console.log(`[Scout Report] Fetching ${sportLabel} starting QBs from depth chart: ${awayTeam} @ ${homeTeam}`);
 
-    // NFL has a true depth chart. BDL's NCAAF roster has no depth ordering, so
-    // selecting the first roster QB would manufacture a starter; for college,
-    // use the current-season passing leader and otherwise leave it unconfirmed.
-    const [homeQBDepth, awayQBDepth] = isNCAAF
-      ? await Promise.all([
-          homeTeamData ? fetchNCAAFStartingQBFromStats(homeTeamData.id, homeTeam, season) : null,
-          awayTeamData ? fetchNCAAFStartingQBFromStats(awayTeamData.id, awayTeam, season) : null
-        ])
-      : await Promise.all([
+    // NFL has a true depth chart, so the starter is read rather than inferred.
+    const [homeQBDepth, awayQBDepth] = await Promise.all([
           homeTeamData ? ballDontLieService.getStartingQBFromDepthChart(homeTeamData.id, season, bdlSport) : null,
           awayTeamData ? ballDontLieService.getStartingQBFromDepthChart(awayTeamData.id, season, bdlSport) : null
         ]);
@@ -262,43 +263,20 @@ async function fetchStartingQBs(homeTeam, awayTeam, sport, injuries = null, seas
     let homeQB = homeQBDepth;
     let awayQB = awayQBDepth;
 
-    if (homeQBDepth && !isNCAAF) {
+    if (homeQBDepth) {
       const stats = await fetchQBStatsByName(homeQBDepth.name, homeTeam, season);
       if (stats) {
         homeQB = { ...homeQBDepth, ...stats, isBackup: homeQBDepth.isBackup };
       }
     }
 
-    if (awayQBDepth && !isNCAAF) {
+    if (awayQBDepth) {
       const stats = await fetchQBStatsByName(awayQBDepth.name, awayTeam, season);
       if (stats) {
         awayQB = { ...awayQBDepth, ...stats, isBackup: awayQBDepth.isBackup };
       }
     }
 
-    // NCAAF FALLBACK: If BDL depth chart failed (common for college), extract QB names from player season stats
-    // This is more reliable than Grounding since BDL has actual passing stats
-    if (isNCAAF) {
-      if (!homeQB || homeQB.name === 'undefined undefined') {
-        console.log(`[Scout Report] NCAAF fallback: Getting QB from season stats for ${homeTeam}`);
-        const fallbackQB = await fetchNCAAFStartingQBFromStats(homeTeamData?.id, homeTeam, season);
-        if (fallbackQB) {
-          homeQB = fallbackQB;
-        } else {
-          // Last resort: create placeholder that Gemini Grounding already populated
-          homeQB = { name: 'See grounded context', source: 'grounding' };
-        }
-      }
-      if (!awayQB || awayQB.name === 'undefined undefined') {
-        console.log(`[Scout Report] NCAAF fallback: Getting QB from season stats for ${awayTeam}`);
-        const fallbackQB = await fetchNCAAFStartingQBFromStats(awayTeamData?.id, awayTeam, season);
-        if (fallbackQB) {
-          awayQB = fallbackQB;
-        } else {
-          awayQB = { name: 'See grounded context', source: 'grounding' };
-        }
-      }
-    }
 
     // Log results - INCLUDE EXPERIENCE to prevent training data leakage (e.g., calling a 2nd-year QB a "rookie")
     if (homeQB && homeQB.name !== 'See grounded context') {
@@ -306,126 +284,17 @@ async function fetchStartingQBs(homeTeam, awayTeam, sport, injuries = null, seas
       const injuryNote = homeQB.injuryStatus ? ` (${homeQB.injuryStatus})` : '';
       const expLabel = homeQB.experience ? ` [${homeQB.experience}]` : '';
       console.log(`[Scout Report] Home QB: ${homeQB.name}${expLabel} (${homeQB.passingYards || 0} yds, ${homeQB.passingTds || 0} TDs, ${homeQB.gamesPlayed || 0} GP)${backupNote}${injuryNote}`);
-    } else if (isNCAAF) {
-      console.log(`[Scout Report] Home QB: Retrieved via Gemini Grounding (BDL depth chart unavailable)`);
     }
     if (awayQB && awayQB.name !== 'See grounded context') {
       const backupNote = awayQB.isBackup ? ' [BACKUP - starter injured]' : '';
       const injuryNote = awayQB.injuryStatus ? ` (${awayQB.injuryStatus})` : '';
       const expLabel = awayQB.experience ? ` [${awayQB.experience}]` : '';
       console.log(`[Scout Report] Away QB: ${awayQB.name}${expLabel} (${awayQB.passingYards || 0} yds, ${awayQB.passingTds || 0} TDs, ${awayQB.gamesPlayed || 0} GP)${backupNote}${injuryNote}`);
-    } else if (isNCAAF) {
-      console.log(`[Scout Report] Away QB: Retrieved via Gemini Grounding (BDL depth chart unavailable)`);
     }
 
     return { home: homeQB, away: awayQB, season, sport: sportLabel };
   } catch (error) {
     console.error('[Scout Report] Error fetching starting QBs:', error.message);
-    return null;
-  }
-}
-
-
-// =========================================================================
-// fetchNCAAFStartingQBFromStats
-// NCAAF Fallback: Get starting QB from player season stats (by most passing yards)
-// BDL depth chart is sparse for college - this uses actual season stats instead
-// Falls back to Gemini Grounding if BDL has no data
-// =========================================================================
-async function fetchNCAAFStartingQBFromStats(teamId, teamName, season = footballSeasonForDate('NCAAF')) {
-  try {
-    if (!teamId) return null;
-
-    // Fetch player season stats for the team - use OPTIONS OBJECT format
-    console.log(`[Scout Report] Fetching NCAAF QB stats from BDL for ${teamName} (teamId: ${teamId}, season: ${season})`);
-    const stats = await ballDontLieService.getNcaafPlayerSeasonStats({ teamId, season });
-    console.log(`[Scout Report] BDL returned ${stats?.length || 0} player stats for ${teamName}`);
-
-    if (stats && stats.length > 0) {
-      // Filter to QBs and sort by passing yards
-      const qbStats = stats.filter(p =>
-        (p.player?.position === 'Quarterback' || p.player?.position === 'QB' ||
-         p.player?.position_abbreviation === 'QB') &&
-        (p.passing_yards || 0) > 0
-      ).sort((a, b) => (b.passing_yards || 0) - (a.passing_yards || 0));
-
-      console.log(`[Scout Report] Found ${qbStats.length} QB(s) with passing yards for ${teamName}`);
-
-      if (qbStats.length > 0) {
-        const startingQB = qbStats[0];
-        const qbName = `${startingQB.player?.first_name || ''} ${startingQB.player?.last_name || ''}`.trim();
-        const qbId = startingQB.player?.id;
-
-        console.log(`[Scout Report] ✓ BDL Starting QB for ${teamName}: ${qbName} (${startingQB.passing_yards} yds, ${startingQB.passing_touchdowns} TDs)`);
-
-        // Fetch game-by-game stats for this QB (last 5 games)
-        let gameLogs = [];
-        if (qbId) {
-          try {
-            const gameStats = await ballDontLieService.getNcaafPlayerGameStats({ playerId: qbId, season });
-            if (gameStats && gameStats.length > 0) {
-              // Sort by game date (most recent first) and take last 5
-              gameLogs = gameStats
-                .filter(g => g.passing_yards !== null || g.passing_touchdowns !== null)
-                .sort((a, b) => new Date(b.game?.date || 0) - new Date(a.game?.date || 0))
-                .slice(0, 5)
-                .map(g => ({
-                  date: g.game?.date ? new Date(g.game.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A',
-                  // BDL stamps postseason games week 999 — a sentinel, not a week.
-                  week: (Number(g.game?.week) >= 900) ? 'Postseason' : (g.game?.week || 'N/A'),
-                  // ncaaf/v1/player_stats embeds a game whose home_team and
-                  // visitor_team are NULL, so the opponent cannot be read here
-                  // — it needs a join to the schedule by game id. Null rather
-                  // than the undefined the old expression produced.
-                  opponent: null,
-                  result: g.game?.home_score !== undefined && g.game?.away_score !== undefined
-                    ? `${g.game.home_score}-${g.game.away_score}` : 'N/A',
-                  completions: g.passing_completions || 0,
-                  attempts: g.passing_attempts || 0,
-                  yards: g.passing_yards || 0,
-                  tds: g.passing_touchdowns || 0,
-                  ints: g.passing_interceptions || 0,
-                  rating: g.passing_rating || g.passing_qbr || 0
-                }));
-              console.log(`[Scout Report] ✓ Fetched ${gameLogs.length} game logs for ${qbName}`);
-            }
-          } catch (e) {
-            console.warn(`[Scout Report] Could not fetch game logs for ${qbName}:`, e.message);
-          }
-        }
-
-        // Calculate games played from game logs if BDL doesn't provide it
-        // BDL NCAAF player_season_stats doesn't include games_played field
-        // Use game logs count - we fetch game-by-game stats so this is accurate
-        let gamesPlayed = startingQB.games_played || 0;
-        if (!gamesPlayed && gameLogs && gameLogs.length > 0) {
-          gamesPlayed = gameLogs.length;
-          console.log(`[Scout Report] Games played from game logs: ${gamesPlayed} for ${qbName}`);
-        }
-
-        return {
-          name: qbName,
-          playerId: qbId,
-          passingYards: startingQB.passing_yards || 0,
-          passingTds: startingQB.passing_touchdowns || 0,
-          passingInts: startingQB.passing_interceptions || 0,
-          passingRating: startingQB.passing_rating || 0,
-          completionPct: startingQB.passing_attempts > 0
-            ? ((startingQB.passing_completions / startingQB.passing_attempts) * 100).toFixed(1)
-            : 0,
-          gamesPlayed: gamesPlayed,
-          gameLogs: gameLogs,
-          source: 'bdl_stats'
-        };
-      }
-    }
-
-    // BDL returned empty - no QB stats available
-    console.log(`[Scout Report] BDL empty for ${teamName} - no QB stats available from BDL`);
-    return null;
-
-  } catch (e) {
-    console.warn(`[Scout Report] NCAAF QB stats fallback failed for ${teamName}:`, e.message);
     return null;
   }
 }
@@ -1106,7 +975,7 @@ function formatStartingQBs(homeTeam, awayTeam, qbs) {
       lines.push(`   No NFL regular-season stat line on file.`);
     }
 
-    // Add game logs if available (NCAAF enhanced QB data)
+    // Add game logs if the QB carries them
     if (qb.gameLogs && qb.gameLogs.length > 0) {
       lines.push(`   RECENT GAMES (L${qb.gameLogs.length}):`);
       qb.gameLogs.forEach((g, i) => {
@@ -1462,7 +1331,7 @@ export async function buildNflScoutReport(game, options = {}) {
   // Step K: Assemble the report
   // ===================================================================
 
-  // Extract narrative context from Gemini Grounding
+  // Extract narrative context from the grounding pass
   let narrativeContext = injuries?.narrativeContext || null;
 
   const matchupLabel = game.isNeutralSite ? `${awayTeam} vs ${homeTeam}` : `${awayTeam} @ ${homeTeam}`;
@@ -1577,4 +1446,4 @@ ${formatOdds(game, sportKey)}
 }
 
 
-export { fetchStartingQBs, fetchQBStatsByName, fetchNCAAFStartingQBFromStats, formatStartingQBs };
+export { fetchStartingQBs, fetchQBStatsByName, formatStartingQBs };
