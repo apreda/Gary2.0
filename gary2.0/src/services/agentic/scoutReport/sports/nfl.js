@@ -371,7 +371,8 @@ async function fetchNCAAFStartingQBFromStats(teamId, teamName, season = football
                 .slice(0, 5)
                 .map(g => ({
                   date: g.game?.date ? new Date(g.game.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A',
-                  week: g.game?.week || 'N/A',
+                  // BDL stamps postseason games week 999 — a sentinel, not a week.
+                  week: (Number(g.game?.week) >= 900) ? 'Postseason' : (g.game?.week || 'N/A'),
                   // ncaaf/v1/player_stats embeds a game whose home_team and
                   // visitor_team are NULL, so the opponent cannot be read here
                   // — it needs a join to the schedule by game id. Null rather

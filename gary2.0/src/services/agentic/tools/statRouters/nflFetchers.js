@@ -1639,12 +1639,39 @@ Be factual with historical stats where available.`;
       ? await ballDontLieService.getNflPlayerGameLogsBatch(allIds, season, 5)
       : {};
 
-    const render = (leaders) => leaders.map((p) => ({
-      player: p.name,
-      role: p.role,
-      position: p.position,
-      last_5: logs?.[p.id] || 'No game logs returned'
-    }));
+    // Render each game as the line that role is actually judged on. Handing
+    // over the raw summary object printed every stat family for every player,
+    // so a running back's log carried "pass_yds: 0, pass_tds: 0" on all five
+    // rows — noise Gary has to read past to find the carries.
+    const statLine = (role, g) => {
+      const parts = [];
+      if (role === 'passer' || Number(g.pass_att)) {
+        parts.push(`${g.pass_comp ?? 0}/${g.pass_att ?? 0}, ${g.pass_yds ?? 0} pass yds, ${g.pass_tds ?? 0} TD, ${g.ints ?? 0} INT`);
+      }
+      if (role === 'rusher' || Number(g.rush_att)) {
+        parts.push(`${g.rush_att ?? 0} car, ${g.rush_yds ?? 0} rush yds, ${g.rush_tds ?? 0} TD`);
+      }
+      if (role === 'receiver' || Number(g.targets) || Number(g.receptions)) {
+        parts.push(`${g.receptions ?? 0}/${g.targets ?? 0} tgt, ${g.rec_yds ?? 0} rec yds, ${g.rec_tds ?? 0} TD`);
+      }
+      const where = g.isHome === undefined ? '' : (g.isHome ? 'vs ' : '@ ');
+      const opponent = g.opponent ? `${where}${g.opponent}` : 'opponent not carried';
+      return `${opponent}: ${parts.join('; ') || 'no offensive stats'}`;
+    };
+
+    const render = (leaders) => leaders.map((p) => {
+      const summary = logs?.[p.id];
+      if (!summary?.games?.length) {
+        return { player: p.name, role: p.role, position: p.position, last_5: 'No game logs returned' };
+      }
+      return {
+        player: p.name,
+        role: p.role,
+        position: p.position,
+        games_used: summary.gamesAnalyzed ?? summary.games.length,
+        last_5: summary.games.map((g) => statLine(p.role, g))
+      };
+    });
 
     return {
       category: 'Player Game Logs',

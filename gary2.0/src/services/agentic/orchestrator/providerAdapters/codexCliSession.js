@@ -23,9 +23,13 @@
  * never mean a dark slate.
  */
 import { spawn } from 'child_process';
+import { isCliTripped, recordCliTimeout, recordCliSuccess, trippedError } from './cliCircuitBreaker.js';
 
 const CODEX_BIN = process.env.CODEX_CLI_PATH || 'codex';
-const CALL_TIMEOUT_MS = 15 * 60 * 1000; // sol turns on a full desk can run minutes
+// Measured Aug 25 2026 over 2,596 logged CLI responses: median 2.3m, p90 5.8m,
+// p99 9.2m, max 14.6m. Ten minutes clears p99 while abandoning a hung bridge a
+// third sooner. The circuit breaker below is what bounds a bad night.
+const CALL_TIMEOUT_MS = Number(process.env.GARY_CLI_TIMEOUT_MS) || 10 * 60 * 1000;
 
 // Effort is PINNED per call, same lesson as the Claude bridge (Jul 29: headless
 // runs silently inherited the interactive default). Codex takes it as a config
@@ -41,19 +45,24 @@ export function isCodexCliModel(modelName) {
 const cliModelOf = (modelName) => String(modelName).replace(/^codex-/, '');
 
 function runCodex(args, stdinText, timeoutMs = CALL_TIMEOUT_MS) {
+  // A bridge that has already timed out repeatedly this run is not asked again.
+  if (isCliTripped('codex')) return Promise.reject(trippedError('codex'));
   return new Promise((resolve, reject) => {
     const proc = spawn(CODEX_BIN, args, { stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
     const timer = setTimeout(() => {
       proc.kill('SIGTERM');
+      recordCliTimeout('codex');
       reject(new Error(`codex CLI timed out after ${Math.round(timeoutMs / 60000)}m`));
     }, timeoutMs);
     proc.stdout.on('data', (d) => { stdout += d.toString(); });
     proc.stderr.on('data', (d) => { stderr += d.toString(); });
-    proc.on('error', (e) => { clearTimeout(timer); reject(e); });
+    proc.on('error', (e) => { clearTimeout(timer); recordCliSuccess('codex'); reject(e); });
     proc.on('close', (code) => {
       clearTimeout(timer);
+      // Any answer at all — even a non-zero exit — means the bridge is alive.
+      recordCliSuccess('codex');
       resolve({ code, stdout, stderr });
     });
     proc.stdin.write(stdinText);

@@ -4,7 +4,8 @@ import {
   formSummary,
   homeAwaySplit,
   marginProfile,
-  closeGameRecord
+  closeGameRecord,
+  footballWeekLabel
 } from '../../../src/services/agentic/tools/statRouters/footballTeamGames.js';
 
 // NFL spelling: home_team_score / visitor_team_score, status 'Final'.
@@ -124,5 +125,21 @@ describe('football game ledger — summaries', () => {
     expect(formSummary([], 5)).toBeNull();
     expect(marginProfile([])).toBeNull();
     expect(closeGameRecord([], 7)).toBeNull();
+  });
+});
+
+describe('week labels', () => {
+  it('renders a real week number', () => {
+    expect(footballWeekLabel(7)).toBe('Wk 7');
+  });
+
+  it('does not print BDL postseason sentinel 999 as a week', () => {
+    // Ohio State's 2025 season carries 28 rows stamped week 999 — a Jan 1 bowl.
+    expect(footballWeekLabel(999)).toBe('Postseason');
+  });
+
+  it('handles a missing week without inventing one', () => {
+    expect(footballWeekLabel(null)).toBe('Wk ?');
+    expect(footballWeekLabel(undefined)).toBe('Wk ?');
   });
 });

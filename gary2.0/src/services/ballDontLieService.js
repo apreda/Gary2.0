@@ -3079,7 +3079,11 @@ const ballDontLieService = {
       }
       const cacheKey = `ncaaf_player_season_stats_${(pidArr || []).join('-')}_${(tidArr || []).join('-')}_${season}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        const query = { season, per_page: 100 };
+        // `seasons[]`, not the scalar `season`: with team_ids[] alongside it,
+        // the scalar form returns ZERO rows and no error (verified live Aug 25
+        // 2026). fetchNCAAFStartingQBFromStats calls this with a teamId, so its
+        // NCAAF starting-QB fallback has been silently empty.
+        const query = { 'seasons[]': [season], per_page: 100 };
         if (Array.isArray(pidArr) && pidArr.length) {
           query['player_ids[]'] = pidArr.slice(0, 100);
         }
@@ -3117,18 +3121,36 @@ const ballDontLieService = {
       }
       const cacheKey = `ncaaf_player_game_stats_${(pidArr || []).join('-')}_${(tidArr || []).join('-')}_${season}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        // seasons[] is an ARRAY here (unlike player_season_stats' scalar
-        // `season`); passing the scalar returns an unfiltered page.
-        const query = { 'seasons[]': [season], per_page: 100 };
+        // `seasons[]` must be an ARRAY. The scalar `season` that
+        // getNcaafPlayerSeasonStats uses returns ZERO rows here the moment
+        // team_ids rides along — same silent-filter family as /team_stats
+        // needing seasons[] beside game_ids[].
+        const baseQuery = { 'seasons[]': [season], per_page: 100 };
         if (Array.isArray(pidArr) && pidArr.length) {
-          query['player_ids[]'] = pidArr.slice(0, 100);
+          baseQuery['player_ids[]'] = pidArr.slice(0, 100);
         }
         if (Array.isArray(tidArr) && tidArr.length) {
-          query['team_ids[]'] = tidArr.slice(0, 100);
+          baseQuery['team_ids[]'] = tidArr.slice(0, 100);
         }
-        const url = `${BALLDONTLIE_API_BASE_URL}/ncaaf/v1/player_stats${buildQuery(query)}`;
-        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
-        return response.data?.data || [];
+
+        // A whole team's season does NOT fit in one page: a single page of 100
+        // rows covered only weeks 1-4, 6-7 for one team, so leaders computed
+        // from it were drawn from a truncated season and the "last 5" was
+        // missing the most recent games entirely. Follow the cursor.
+        const rows = [];
+        let cursor = null;
+        const seen = new Set();
+        for (let page = 0; page < 8; page += 1) {
+          const query = cursor ? { ...baseQuery, cursor } : baseQuery;
+          const url = `${BALLDONTLIE_API_BASE_URL}/ncaaf/v1/player_stats${buildQuery(query)}`;
+          const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
+          rows.push(...(response.data?.data || []));
+          const next = response.data?.meta?.next_cursor || null;
+          if (!next || seen.has(String(next))) break;
+          seen.add(String(next));
+          cursor = next;
+        }
+        return rows;
       }, ttlMinutes);
     } catch (e) {
       console.error('[Ball Don\'t Lie] ncaaf getNcaafPlayerGameStats error:', e.message);

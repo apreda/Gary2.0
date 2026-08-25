@@ -11,6 +11,21 @@ import { isGameCompleted } from '../../sharedUtils.js';
  * spellings are normalized here, once, so no fetcher has to know.
  */
 
+/**
+ * BDL stamps postseason football games with week 999 — a sentinel, not a week.
+ * Ohio State's 2025 season carries 28 such rows (a Jan 1 bowl), and rendering
+ * it raw printed "Wk 999" into the desk as if it were a real week number.
+ * Verified Aug 25 2026 on both /player_stats and /games.
+ */
+const POSTSEASON_WEEK_FLOOR = 900;
+
+export function footballWeekLabel(week) {
+  if (week === null || week === undefined || week === '') return 'Wk ?';
+  const n = Number(week);
+  if (!Number.isFinite(n)) return 'Wk ?';
+  return n >= POSTSEASON_WEEK_FLOOR ? 'Postseason' : `Wk ${n}`;
+}
+
 /** Score for one side of a game row, across both leagues' key spellings. */
 function sideScore(game, side) {
   const value = side === 'home'

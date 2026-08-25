@@ -23,6 +23,7 @@ import { spawn } from 'child_process';
 import { mkdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { isCliTripped, recordCliTimeout, recordCliSuccess, trippedError } from './cliCircuitBreaker.js';
 
 // NEUTRAL GROUND (Aug 12 2026 — the Baz press-refusal autopsy): headless
 // `claude -p` auto-loads the project memory (CLAUDE.md, memory index) of its
@@ -42,7 +43,12 @@ function neutralCwd() {
 }
 
 const CLAUDE_BIN = process.env.CLAUDE_CLI_PATH || 'claude';
-const CALL_TIMEOUT_MS = 15 * 60 * 1000; // Fable turns on a full desk can run minutes
+// Measured Aug 25 2026 over 2,596 logged CLI responses: median 2.3m, p90 5.8m,
+// p99 9.2m, max 14.6m. Ten minutes sits just above p99, so real desk turns
+// still finish while a hung bridge is abandoned a third sooner. Cutting to the
+// p90 would strand roughly one call in ten. Override per-run if a lane needs
+// more; the circuit breaker below is what actually bounds a bad night.
+const CALL_TIMEOUT_MS = Number(process.env.GARY_CLI_TIMEOUT_MS) || 10 * 60 * 1000;
 const BRAIN_DISALLOWED_TOOLS = 'Task,Bash,Glob,Grep,Read,Edit,Write,MultiEdit,NotebookEdit,WebFetch,WebSearch,TodoWrite,WebSearchTool';
 
 // Effort is PINNED per call — headless `claude -p` otherwise inherits the
@@ -66,6 +72,8 @@ export function isClaudeCliModel(modelName) {
 }
 
 function runClaude(args, stdinText, timeoutMs = CALL_TIMEOUT_MS) {
+  // A bridge that has already timed out repeatedly this run is not asked again.
+  if (isCliTripped('claude')) return Promise.reject(trippedError('claude'));
   return new Promise((resolve, reject) => {
     // The claude CLI prefers ANTHROPIC_API_KEY over the founder's subscription
     // login when the env var is present. The key entered .env on Aug 18 for the
@@ -79,13 +87,16 @@ function runClaude(args, stdinText, timeoutMs = CALL_TIMEOUT_MS) {
     let stderr = '';
     const timer = setTimeout(() => {
       proc.kill('SIGTERM');
+      recordCliTimeout('claude');
       reject(new Error(`claude CLI timed out after ${Math.round(timeoutMs / 60000)}m`));
     }, timeoutMs);
     proc.stdout.on('data', (d) => { stdout += d.toString(); });
     proc.stderr.on('data', (d) => { stderr += d.toString(); });
-    proc.on('error', (e) => { clearTimeout(timer); reject(e); });
+    proc.on('error', (e) => { clearTimeout(timer); recordCliSuccess('claude'); reject(e); });
     proc.on('close', (code) => {
       clearTimeout(timer);
+      // Any answer at all — even a non-zero exit — means the bridge is alive.
+      recordCliSuccess('claude');
       resolve({ code, stdout, stderr });
     });
     proc.stdin.write(stdinText);

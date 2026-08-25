@@ -1,5 +1,5 @@
 import { ballDontLieService } from '../../../ballDontLieService.js';
-import { loadTeamResults, formSummary, homeAwaySplit, marginProfile, closeGameRecord } from './footballTeamGames.js';
+import { loadTeamResults, formSummary, homeAwaySplit, marginProfile, closeGameRecord, footballWeekLabel } from './footballTeamGames.js';
 
 const NCAAF_BDL_SPORT = 'americanfootball_ncaaf';
 
@@ -580,7 +580,7 @@ export const ncaafFetchers = {
               const against = opponent
                 ? `${venue}${opponent}`
                 : '(opponent not carried by BDL for this game)';
-              return `Wk ${g.game?.week ?? '?'} ${against}: ${line.join('; ') || 'no offensive stats'}`;
+              return `${footballWeekLabel(g.game?.week)} ${against}: ${line.join('; ') || 'no offensive stats'}`;
             })
         }));
       };
