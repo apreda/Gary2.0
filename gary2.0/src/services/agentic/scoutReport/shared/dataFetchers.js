@@ -638,18 +638,26 @@ export function formatRecentForm(teamName, recentGames, count = 5) {
       return null;
     }
 
+    // Venue was computed above and then discarded: every result printed "vs",
+    // so a road win read as a home win. Where a game was played is a real
+    // factor in every one of these sports — say which it was.
+    const venue = isHome ? 'vs' : '@';
+
     if (teamScore > oppScore) {
       wins++;
-      return `W vs ${oppName} (${teamScore}-${oppScore})`;
+      return `W ${venue} ${oppName} (${teamScore}-${oppScore})`;
     } else {
       losses++;
-      return `L vs ${oppName} (${teamScore}-${oppScore})`;
+      return `L ${venue} ${oppName} (${teamScore}-${oppScore})`;
     }
   }).filter(r => r !== null);
 
-  const shown = Math.min(completedGames.length, count);
-  return `• ${teamName}: ${wins}-${losses} last ${shown}
-  ${results.slice(0, count).join(' | ')}`;
+  // The record must count the same games the line lists. `shown` used to be
+  // min(completedGames.length, count), which ignored the games dropped by the
+  // filter above — printing e.g. "2-2 last 5" beside four listed games.
+  const listed = results.slice(0, count);
+  return `• ${teamName}: ${wins}-${losses} last ${listed.length}
+  ${listed.join(' | ')}`;
 }
 
 /**
