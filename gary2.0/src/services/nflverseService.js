@@ -82,12 +82,22 @@ export function parseCsv(text) {
     .map((r) => Object.fromEntries(header.map((h, i) => [h, r[i]])));
 }
 
+/**
+ * nflverse release TAGS do not always equal the file prefix. The roster files
+ * live under the tag "rosters" (plural) but are named roster_2025.csv
+ * (singular), so deriving the tag from the filename 404s — which loadRelease
+ * reports as "the season has not started", a wrong and very believable
+ * message. Anything that differs is declared here rather than assumed.
+ */
+const RELEASE_TAGS = { roster: 'rosters' };
+
 async function loadRelease(asset, season, { fetchImpl = globalThis.fetch } = {}) {
   const key = `${asset}_${season}`;
   const hit = cache.get(key);
   if (hit && hit.expires > Date.now()) return hit.value;
 
-  const url = `${RELEASE_BASE}/${asset}/${asset}_${season}.csv`;
+  const tag = RELEASE_TAGS[asset] || asset;
+  const url = `${RELEASE_BASE}/${tag}/${asset}_${season}.csv`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   let value;
@@ -188,6 +198,114 @@ export async function getSnapShare(teamName, season, { week = null, minPct = 0.2
     opponent: inWeek[0]?.opponent || null,
     offense: shape('offense'),
     defense: shape('defense')
+  };
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ROSTER TURNOVER — what the prior season's numbers no longer describe
+//
+// THE OPENING-WEEKEND PROBLEM, second half (Aug 25 2026). On Sep 9 there is
+// no 2026 play-by-play, so the season splits come from 2025 and are labelled
+// as 2025. That label is honest but incomplete: it says the roster MAY have
+// changed without saying what changed, which leaves the desk unable to judge
+// how much of last year's profile still applies.
+//
+// nflverse publishes a roster per season, so the answer is available: name
+// the players who produced last year's numbers and are no longer here.
+//
+// WEIGHTED BY WHO ACTUALLY PLAYED. A raw comparison is useless — Detroit's
+// 2025 and 2026 rosters differ by 55 players, almost all camp bodies. Snap
+// share is what separates a departed left tackle from a departed sixth
+// receiver, so departures are ranked by the share of snaps they took last
+// season and anyone below the floor is counted but not named.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Highest snap share a player reached in a season, offence or defence. */
+function peakSnapShare(snapRows, playerName) {
+  let best = 0;
+  for (const row of snapRows) {
+    if (row.player !== playerName) continue;
+    const off = Number(row.offense_pct);
+    const def = Number(row.defense_pct);
+    if (Number.isFinite(off) && off > best) best = off;
+    if (Number.isFinite(def) && def > best) best = def;
+  }
+  return best;
+}
+
+/**
+ * Who left and who arrived between two seasons.
+ *
+ * @param {string} teamName
+ * @param {number} priorSeason   the season the STATS come from
+ * @param {number} currentSeason the season being played
+ * @param {{snapFloor?:number}} opts  minimum prior snap share to name a departure
+ */
+export async function getRosterTurnover(teamName, priorSeason, currentSeason, { snapFloor = 0.3, ...opts } = {}) {
+  const code = nflverseCode(teamName);
+  if (!code) return { unavailable: true, reason: `No nflverse team code for "${teamName}".` };
+
+  const [prior, current] = await Promise.all([
+    loadRelease('roster', priorSeason, opts),
+    loadRelease('roster', currentSeason, opts)
+  ]);
+  if (prior.unavailable) return prior;
+  if (current.unavailable) return current;
+
+  // A player with no gsis_id cannot be matched across seasons, and guessing by
+  // name would silently merge two people. Unmatched rows are counted, never
+  // reported as departures.
+  const onTeam = (file) => file.rows.filter((r) => r.team === code);
+  const priorRows = onTeam(prior);
+  const currentRows = onTeam(current);
+  const currentIds = new Set(currentRows.map((r) => r.gsis_id).filter(Boolean));
+  const priorIds = new Set(priorRows.map((r) => r.gsis_id).filter(Boolean));
+
+  const unmatched = priorRows.filter((r) => !r.gsis_id).length;
+
+  // Snap share is optional context: a missing snap file must not turn a real
+  // departure list into an empty one.
+  const snaps = await loadRelease('snap_counts', priorSeason, opts);
+  const snapRows = snaps.unavailable ? [] : snaps.rows.filter((r) => r.team === code);
+
+  const departed = priorRows
+    .filter((r) => r.gsis_id && !currentIds.has(r.gsis_id))
+    .map((r) => ({
+      player: r.full_name,
+      position: r.depth_chart_position || r.position || null,
+      peak_snap_share: snapRows.length ? Number(peakSnapShare(snapRows, r.full_name).toFixed(3)) : null
+    }))
+    .sort((a, b) => (b.peak_snap_share || 0) - (a.peak_snap_share || 0));
+
+  const significant = snapRows.length
+    ? departed.filter((p) => (p.peak_snap_share || 0) >= snapFloor)
+    : departed.slice(0, 10);
+
+  const arrived = currentRows
+    .filter((r) => r.gsis_id && !priorIds.has(r.gsis_id))
+    .map((r) => ({
+      player: r.full_name,
+      position: r.depth_chart_position || r.position || null,
+      years_experience: Number(r.years_exp) || 0
+    }))
+    // Veterans first: a signed starter changes the profile, a rookie
+    // seventh-rounder mostly does not.
+    .sort((a, b) => b.years_experience - a.years_experience)
+    .slice(0, 10);
+
+  return {
+    team: teamName,
+    stats_season: priorSeason,
+    current_season: currentSeason,
+    departed_total: departed.length,
+    departed_significant: significant,
+    arrived_notable: arrived,
+    ...(snapRows.length ? {} : { snap_note: `No ${priorSeason} snap counts, so departures could not be weighted by playing time; the ten listed are unranked.` }),
+    ...(unmatched ? { unmatched_prior_rows: unmatched } : {}),
+    note: significant.length
+      ? `${significant.length} player${significant.length === 1 ? '' : 's'} who took at least ${Math.round(snapFloor * 100)}% of snaps in ${priorSeason} are no longer on the roster. Any ${priorSeason} team rate below describes a unit that included them.`
+      : `No player who took at least ${Math.round(snapFloor * 100)}% of ${priorSeason} snaps has left. The ${priorSeason} rates describe substantially the same personnel.`
   };
 }
 

@@ -1,5 +1,5 @@
 import { advancedPair, basisLine, continuityFor } from './footballAdvanced.js';
-import { getPassRushAndCoverage, getQbPressureProfile } from '../../../nflverseService.js';
+import { getPassRushAndCoverage, getQbPressureProfile, getRosterTurnover } from '../../../nflverseService.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { fmtNum, fmtPct } from './statRouterCommon.js';
 import { loadTeamResults } from './footballTeamGames.js';
@@ -568,13 +568,43 @@ export const footballAdvancedTokens = {
       return unavailable('Roster Continuity', home, away,
         pair?.note || 'The play ledger covers the NFL only.');
     }
+    // OPENING WEEKEND. When the splits come from last season, "the roster may
+    // have changed" is not good enough — it leaves the desk unable to judge
+    // how much of last year's profile still applies. Name who is gone.
+    let turnover = { home: null, away: null };
+    if (pair.basis === 'prior_season') {
+      const [h, a] = await Promise.all([
+        getRosterTurnover(named(home), pair.priorSeason, pair.season).catch(() => null),
+        getRosterTurnover(named(away), pair.priorSeason, pair.season).catch(() => null)
+      ]);
+      turnover = {
+        home: h && !h.unavailable ? h : null,
+        away: a && !a.unavailable ? a : null
+      };
+    }
+
+    const side = (team, which) => ({
+      team: named(team),
+      ...(continuityFor(pair, which) || { note: 'No starter timeline available.' }),
+      ...(turnover[which] ? {
+        roster_turnover: {
+          departed_total: turnover[which].departed_total,
+          departed_who_played: turnover[which].departed_significant.slice(0, 10),
+          arrived_veterans: turnover[which].arrived_notable.slice(0, 6),
+          note: turnover[which].note
+        }
+      } : {})
+    });
+
     return {
       category: 'Roster Continuity',
-      data_scope: 'Which quarterback started which game, from the play ledger',
+      data_scope: pair.basis === 'prior_season'
+        ? 'Which quarterback started which game last season, and who from that roster has since left'
+        : 'Which quarterback started which game, from the play ledger',
       basis: basisLine(pair),
-      home: { team: named(home), ...(continuityFor(pair, 'home') || { note: 'No starter timeline available.' }) },
-      away: { team: named(away), ...(continuityFor(pair, 'away') || { note: 'No starter timeline available.' }) },
-      reading_note: 'A season average built across a quarterback change describes a team that no longer exists. Where more than one starter appears, the season rate is a blend and should be read as one.'
+      home: side(home, 'home'),
+      away: side(away, 'away'),
+      reading_note: 'A season average built across a quarterback change describes a team that no longer exists. Where more than one starter appears, the season rate is a blend and should be read as one. Where players who took a large share of snaps have departed, the unit that produced those rates is not the unit that will play.'
     };
   },
 
