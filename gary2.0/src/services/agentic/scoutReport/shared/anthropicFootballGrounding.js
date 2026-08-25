@@ -107,6 +107,32 @@ export function scrubFootballGroundingText(text) {
  * guard and the validation floor all have to stay identical, and a duplicate
  * only ever gets fixed on one side.
  */
+
+/**
+ * Does this writing refer to that team?
+ *
+ * Requiring the literal full name is wrong and it silently threw away good
+ * coverage: press accounts say "the Lions", not "the Detroit Lions", so a
+ * 3,198-character head-to-head report on exactly the right game was discarded
+ * as off-topic. The validation exists to catch a lane that answered about
+ * something else, not to enforce a house style on beat writers.
+ *
+ * A team counts as named if the text carries its full name, its nickname, or
+ * its city/school. Short fragments are ignored so "New York" cannot be matched
+ * by "new" and a two-letter school cannot match at random.
+ */
+export function mentionsTeam(lowerText, teamName) {
+  const full = String(teamName || '').toLowerCase().trim();
+  if (!full) return true;
+  if (lowerText.includes(full)) return true;
+  const words = full.split(/\s+/);
+  if (words.length < 2) return false;
+  const nickname = words[words.length - 1];
+  const place = words.slice(0, -1).join(' ');
+  return (nickname.length >= 4 && lowerText.includes(nickname))
+    || (place.length >= 4 && lowerText.includes(place));
+}
+
 async function runFootballSearch({
   apiKey, fetchImpl, timeoutMs, label, prompt, maxUses = 6,
   mustMention = [], minChars = 200,
@@ -180,7 +206,7 @@ async function runFootballSearch({
 
       const cleaned = scrubFootballGroundingText(stripSearchNarration(textParts.join('\n\n')));
       const lower = cleaned.toLowerCase();
-      const missing = mustMention.filter((name) => !lower.includes(String(name || '').toLowerCase()));
+      const missing = mustMention.filter((name) => !mentionsTeam(lower, name));
       if (cleaned.length < minChars || missing.length > 0) {
         console.warn(`[${label}] narrative validation failed (chars=${cleaned.length}, missing=${missing.join('|') || 'none'})`);
         return null;
@@ -478,8 +504,11 @@ export async function fetchFootballDeepCoverage({
     const lane = selected[i];
     const outcome = settled[i];
     const value = outcome.status === 'fulfilled' ? outcome.value : null;
-    if (value && value.text) {
-      done.push({ key: lane.key, label: lane.label, text: value.text, searches: value.searches ?? null });
+    // runFootballSearch returns { data, provider, searchCount } — NOT
+    // { text, searches }. Reading the wrong keys made every successful lane
+    // look empty, which is the silent-blank class this whole audit is about.
+    if (value && value.data) {
+      done.push({ key: lane.key, label: lane.label, text: value.data, searches: value.searchCount ?? null });
     } else {
       // A lane that found nothing is REPORTED as having found nothing. A
       // silently missing section reads as "there was nothing to say".
