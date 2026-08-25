@@ -49,6 +49,9 @@ export function toTeamResults(games, teamId) {
       if (scored === null || allowed === null) return null;
 
       return {
+        // Kept so per-player game rows (whose embedded game object has null
+        // teams in NCAAF) can be joined back to a real opponent.
+        gameId: g.id ?? null,
         date: g.date || null,
         week: g.week ?? null,
         home: isHome,

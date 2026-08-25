@@ -36,6 +36,14 @@ describe('football game ledger — score key normalization', () => {
     expect(results[0]).toMatchObject({ scored: 24, allowed: 20, margin: 4, won: true, home: true });
   });
 
+  it('carries the game id so per-player rows can be joined to an opponent', () => {
+    // NCAAF player_stats rows embed a game whose home_team/visitor_team are
+    // NULL; without this key the log line rendered "@ Unknown" and invented a
+    // road venue for every game.
+    const results = toTeamResults([nflGame(4242, 10, 20, 24, 20, '2025-09-07')], 10);
+    expect(results[0].gameId).toBe(4242);
+  });
+
   it('reads NCAAF score keys', () => {
     const results = toTeamResults([ncaafGame(1, 10, 20, 17, 31, '2025-09-06')], 10);
     expect(results).toHaveLength(1);

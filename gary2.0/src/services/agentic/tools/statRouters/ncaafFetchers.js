@@ -506,13 +506,134 @@ export const ncaafFetchers = {
     away: { team: away.full_name || away.name }
   }),
 
-  NCAAF_PLAYER_GAME_LOGS: async (bdlSport, home, away) => ({
-    category: 'Player Game Logs',
-    source: 'NOT AVAILABLE',
-    reason: 'This token has never had a fetcher. Per-player game logs are not wired into the stat router for either football league.',
-    note: 'The scout report already carries the starting quarterbacks and the key-player stat lines for this game. Use those; do not recall or estimate a game log.',
-    home: { team: home.full_name || home.name },
-    away: { team: away.full_name || away.name }
-  })
+  /**
+   * Game-by-game lines for each side's leading passer, rusher and receiver,
+   * from ncaaf/v1/player_stats. Rows carry `game`, so each line arrives with
+   * its date, week and opponent rather than as a bare season total.
+   */
+  NCAAF_PLAYER_GAME_LOGS: async (bdlSport, home, away, season) => {
+    try {
+      const teamLogs = async (team) => {
+        // ncaaf/v1/player_stats embeds a `game` object whose home_team and
+        // visitor_team are NULL, so the opponent is not in this payload. Join
+        // it to the team's schedule by game id rather than printing a guess —
+        // an unjoined line previously rendered "@ Unknown" for every game,
+        // inventing a road venue as well as losing the opponent.
+        const [rows, schedule] = await Promise.all([
+          ballDontLieService.getNcaafPlayerGameStats({ teamId: team.id, season }),
+          loadTeamResults(NCAAF_BDL_SPORT, team.id, season)
+        ]);
+        if (!rows || rows.length === 0) return [];
+        const byGameId = new Map();
+        for (const g of (schedule || [])) {
+          if (g.gameId != null) byGameId.set(String(g.gameId), g);
+        }
+
+        // Sum each player's season from their game rows, then keep the leader
+        // in each role. Season totals and game rows come from one call.
+        const byPlayer = new Map();
+        for (const row of rows) {
+          const id = row?.player?.id;
+          if (!id) continue;
+          if (!byPlayer.has(id)) {
+            byPlayer.set(id, {
+              id,
+              name: `${row.player.first_name || ''} ${row.player.last_name || ''}`.trim(),
+              position: row.player.position_abbreviation || row.player.position || null,
+              passing: 0, rushing: 0, receiving: 0, games: []
+            });
+          }
+          const entry = byPlayer.get(id);
+          entry.passing += Number(row.passing_yards) || 0;
+          entry.rushing += Number(row.rushing_yards) || 0;
+          entry.receiving += Number(row.receiving_yards) || 0;
+          entry.games.push(row);
+        }
+
+        const players = [...byPlayer.values()];
+        const leader = (field) => players
+          .filter((p) => p[field] > 0)
+          .sort((a, b) => b[field] - a[field])[0] || null;
+
+        const picked = [['passer', leader('passing')], ['rusher', leader('rushing')], ['receiver', leader('receiving')]]
+          .filter(([, p]) => p)
+          // one player can lead two roles; show him once, under the first
+          .filter(([, p], i, arr) => arr.findIndex(([, q]) => q.id === p.id) === i);
+
+        return picked.map(([role, p]) => ({
+          player: p.name,
+          role,
+          position: p.position,
+          last_5: p.games
+            .sort((a, b) => new Date(b.game?.date || 0) - new Date(a.game?.date || 0))
+            .slice(0, 5)
+            .map((g) => {
+              const joined = byGameId.get(String(g.game?.id ?? ''));
+              const opponent = joined?.opponent || null;
+              const isHome = joined?.home ?? null;
+              const venue = isHome === null ? '' : (isHome ? 'vs ' : '@ ');
+              const line = [];
+              if (Number(g.passing_yards)) line.push(`${g.passing_completions || 0}/${g.passing_attempts || 0}, ${g.passing_yards} pass yds, ${g.passing_touchdowns || 0} TD, ${g.passing_interceptions || 0} INT`);
+              if (Number(g.rushing_yards)) line.push(`${g.rushing_attempts || 0} car, ${g.rushing_yards} rush yds, ${g.rushing_touchdowns || 0} TD`);
+              if (Number(g.receiving_yards)) line.push(`${g.receptions || 0} rec, ${g.receiving_yards} rec yds, ${g.receiving_touchdowns || 0} TD`);
+              // No opponent joined = say so; never render a venue we do not have.
+              const against = opponent
+                ? `${venue}${opponent}`
+                : '(opponent not carried by BDL for this game)';
+              return `Wk ${g.game?.week ?? '?'} ${against}: ${line.join('; ') || 'no offensive stats'}`;
+            })
+        }));
+      };
+
+      const [homePlayers, awayPlayers] = await Promise.all([teamLogs(home), teamLogs(away)]);
+      return {
+        category: 'Player Game Logs',
+        source: 'Ball Don\'t Lie',
+        data_scope: 'Last 5 games for each side\'s leading passer, rusher and receiver',
+        home: { team: home.full_name || home.name, players: homePlayers },
+        away: { team: away.full_name || away.name, players: awayPlayers }
+      };
+    } catch (error) {
+      console.warn('[Stat Router] NCAAF Player Game Logs fetch failed:', error.message);
+      return unavailableResult(error, home, away);
+    }
+  },
+
+  /**
+   * Poll position for both sides. In college the ranking IS the stakes —
+   * ranked-vs-ranked, an unranked team hosting a top-10, a team that just
+   * moved up or dropped out. BDL publishes rank, first-place votes, trend and
+   * record; MOTIVATION had no token at all before this.
+   */
+  NCAAF_RANKINGS_CONTEXT: async (bdlSport, home, away, season) => {
+    try {
+      const rankings = await ballDontLieService.getNcaafRankings(season) || [];
+      const findRank = (team) => {
+        const row = rankings.find((r) => Number(r?.team?.id) === Number(team.id));
+        if (!row) return { ranked: false, note: 'Not in the current poll' };
+        return {
+          ranked: true,
+          rank: row.rank,
+          record: row.record || null,
+          trend: row.trend || null,
+          first_place_votes: row.first_place_votes ?? null,
+          poll_week: row.week ?? null
+        };
+      };
+      const homeRank = findRank(home);
+      const awayRank = findRank(away);
+      return {
+        category: 'Poll Position',
+        source: 'Ball Don\'t Lie',
+        data_scope: 'Current AP-style poll: rank, record, movement. Poll standing only — no implication for this game.',
+        both_ranked: homeRank.ranked && awayRank.ranked,
+        home: { team: home.full_name || home.name, ...homeRank },
+        away: { team: away.full_name || away.name, ...awayRank }
+      };
+    } catch (error) {
+      console.warn('[Stat Router] NCAAF Rankings Context fetch failed:', error.message);
+      return unavailableResult(error, home, away);
+    }
+  }
 
 };

@@ -101,7 +101,10 @@ export const INVESTIGATION_FACTORS = {
     CLOSE_GAMES: ['CLOSE_GAME_RECORD'], // Clutch performance
     INJURIES: ['INJURIES'], // Critical for opt-outs — TOP_PLAYERS is in scout report
     HOME_FIELD: ['HOME_AWAY_SPLITS'],
-    MOTIVATION: [], // Bowl game, rivalry, playoff implications — use fetch_narrative_context
+    // Poll position is the one piece of college stakes we hold as structured
+    // data; bowl/rivalry/playoff framing still comes from fetch_narrative_context.
+    // Empty until Aug 25 2026, which left the factor with nothing to call.
+    MOTIVATION: ['NCAAF_RANKINGS_CONTEXT'],
     SCHEDULE_QUALITY: ['NCAAF_STRENGTH_OF_SCHEDULE', 'NCAAF_CONFERENCE_STRENGTH', 'NCAAF_VS_POWER_OPPONENTS']
   },
 

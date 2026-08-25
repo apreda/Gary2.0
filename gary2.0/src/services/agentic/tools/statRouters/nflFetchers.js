@@ -1606,13 +1606,53 @@ Be factual with historical stats where available.`;
     };
   },
 
-  NFL_PLAYER_GAME_LOGS: async (bdlSport, home, away) => ({
-    category: 'Player Game Logs',
-    source: 'NOT AVAILABLE',
-    reason: 'This token has never had a fetcher. Per-player game logs are not wired into the stat router for either football league.',
-    note: 'The scout report already carries the starting quarterbacks and the key-player stat lines for this game. Use those; do not recall or estimate a game log.',
-    home: { team: home.full_name || home.name },
-    away: { team: away.full_name || away.name }
-  })
+  /**
+   * Game-by-game lines for each side's leading passer, rusher and receiver.
+   * The checklist has asked for this since the NFL factor map was written and
+   * it never had a fetcher — the season totals it fell back on cannot show
+   * whether a number came from four steady weeks or one outlier.
+   */
+  NFL_PLAYER_GAME_LOGS: async (bdlSport, home, away, season) => {
+    const leadersFor = async (team) => {
+      const rows = await ballDontLieService.getNflSeasonStatsByTeam(team.id, season) || [];
+      const topBy = (field) => rows
+        .filter((r) => Number(r?.[field]) > 0)
+        .sort((a, b) => Number(b[field]) - Number(a[field]))[0] || null;
+      const picks = [
+        ['passer', topBy('passing_yards')],
+        ['rusher', topBy('rushing_yards')],
+        ['receiver', topBy('receiving_yards')]
+      ];
+      return picks
+        .filter(([, row]) => row?.player?.id)
+        .map(([role, row]) => ({
+          role,
+          id: row.player.id,
+          name: `${row.player.first_name || ''} ${row.player.last_name || ''}`.trim(),
+          position: row.player.position_abbreviation || row.player.position || null
+        }));
+    };
+
+    const [homeLeaders, awayLeaders] = await Promise.all([leadersFor(home), leadersFor(away)]);
+    const allIds = [...homeLeaders, ...awayLeaders].map((p) => p.id);
+    const logs = allIds.length
+      ? await ballDontLieService.getNflPlayerGameLogsBatch(allIds, season, 5)
+      : {};
+
+    const render = (leaders) => leaders.map((p) => ({
+      player: p.name,
+      role: p.role,
+      position: p.position,
+      last_5: logs?.[p.id] || 'No game logs returned'
+    }));
+
+    return {
+      category: 'Player Game Logs',
+      source: 'Ball Don\'t Lie',
+      data_scope: 'Last 5 games for each side\'s leading passer, rusher and receiver',
+      home: { team: home.full_name || home.name, players: render(homeLeaders) },
+      away: { team: away.full_name || away.name, players: render(awayLeaders) }
+    };
+  }
 
 };

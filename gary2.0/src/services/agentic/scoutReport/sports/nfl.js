@@ -372,7 +372,11 @@ async function fetchNCAAFStartingQBFromStats(teamId, teamName, season = football
                 .map(g => ({
                   date: g.game?.date ? new Date(g.game.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A',
                   week: g.game?.week || 'N/A',
-                  opponent: g.game?.home_team?.full_name === teamName ? (g.game?.visitor_team?.full_name || g.game?.away_team?.full_name) : g.game?.home_team?.full_name,
+                  // ncaaf/v1/player_stats embeds a game whose home_team and
+                  // visitor_team are NULL, so the opponent cannot be read here
+                  // — it needs a join to the schedule by game id. Null rather
+                  // than the undefined the old expression produced.
+                  opponent: null,
                   result: g.game?.home_score !== undefined && g.game?.away_score !== undefined
                     ? `${g.game.home_score}-${g.game.away_score}` : 'N/A',
                   completions: g.passing_completions || 0,

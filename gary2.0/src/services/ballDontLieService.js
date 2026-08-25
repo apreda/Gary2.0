@@ -3097,6 +3097,46 @@ const ballDontLieService = {
   },
 
   /**
+   * Per-GAME NCAAF player stat lines (endpoint: ncaaf/v1/player_stats).
+   *
+   * This method was called by the NCAAF starting-QB fallback in
+   * scoutReport/sports/nfl.js but had never been defined — the call sat inside
+   * a try/catch, so the TypeError was swallowed and every NCAAF quarterback
+   * silently got zero game logs. Added Aug 25 2026.
+   *
+   * Each row carries `game` (date, week, teams, scores) and `player`, so the
+   * caller can build a dated, opponent-attributed log.
+   */
+  async getNcaafPlayerGameStats({ playerIds, playerId, teamIds, teamId, season } = {}, ttlMinutes = 15) {
+    try {
+      if (!season) return [];
+      const pidArr = playerIds || (playerId ? [playerId] : undefined);
+      const tidArr = teamIds || (teamId ? [teamId] : undefined);
+      if ((!pidArr || pidArr.length === 0) && (!tidArr || tidArr.length === 0)) {
+        return [];
+      }
+      const cacheKey = `ncaaf_player_game_stats_${(pidArr || []).join('-')}_${(tidArr || []).join('-')}_${season}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        // seasons[] is an ARRAY here (unlike player_season_stats' scalar
+        // `season`); passing the scalar returns an unfiltered page.
+        const query = { 'seasons[]': [season], per_page: 100 };
+        if (Array.isArray(pidArr) && pidArr.length) {
+          query['player_ids[]'] = pidArr.slice(0, 100);
+        }
+        if (Array.isArray(tidArr) && tidArr.length) {
+          query['team_ids[]'] = tidArr.slice(0, 100);
+        }
+        const url = `${BALLDONTLIE_API_BASE_URL}/ncaaf/v1/player_stats${buildQuery(query)}`;
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
+        return response.data?.data || [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error('[Ball Don\'t Lie] ncaaf getNcaafPlayerGameStats error:', e.message);
+      return [];
+    }
+  },
+
+  /**
    * Generic helpers (multi-sport)
    */
   async getTeams(sportKey, params = {}) {

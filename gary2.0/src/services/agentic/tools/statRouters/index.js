@@ -94,6 +94,43 @@ for (const token of Object.keys(ALIASES)) {
 }
 
 /**
+ * Resolve a token the way dispatch does, and report whether this sport is
+ * allowed to run it — WITHOUT executing anything.
+ *
+ * Extracted Aug 25 2026. The cross-sport guard below has always been correct,
+ * but nothing checked the other direction: that every token a sport's factor
+ * checklist DECLARES is actually reachable for that sport. It was not — the
+ * NFL checklist asked for five NBA/NHL-owned tokens and NCAAF for four, so
+ * those factors returned "belongs to NBA" on every single run. Exposing the
+ * decision makes the invariant testable instead of merely intended.
+ *
+ * @returns {{resolvedKey: string|null, owner: string|null, allowed: boolean, reason: string}}
+ */
+export function resolveTokenForSport(sport, token) {
+  const bdlSport = sportToBdlKey(sport);
+  const normalizedSport = normalizeSportName(sport);
+  const sportSpecificToken = `${normalizedSport}_${token}`;
+
+  const resolvedKey = FETCHERS[sportSpecificToken] ? sportSpecificToken : token;
+  if (!FETCHERS[resolvedKey]) {
+    return { resolvedKey: null, owner: null, allowed: false, reason: 'no fetcher' };
+  }
+
+  const owner = TOKEN_OWNER[resolvedKey] || null;
+  const currentFamily = (bdlSport || '').split('_')[0];
+  if (SHARED_TOKENS.has(resolvedKey)) {
+    return { resolvedKey, owner, allowed: true, reason: 'shared' };
+  }
+  if (SPORT_POLYMORPHIC_TOKENS.get(resolvedKey)?.has(normalizedSport) === true) {
+    return { resolvedKey, owner, allowed: true, reason: 'polymorphic' };
+  }
+  if (owner && SPORT_FAMILY[owner] !== currentFamily) {
+    return { resolvedKey, owner, allowed: false, reason: `owned by ${owner}` };
+  }
+  return { resolvedKey, owner, allowed: true, reason: 'own family' };
+}
+
+/**
  * Fetch stats for a given sport, token, and teams
  */
 export async function fetchStats(sport, token, homeTeam, awayTeam, options = {}) {
