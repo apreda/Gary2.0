@@ -4,6 +4,7 @@ import { loadTeamResults, formSummary, homeAwaySplit, marginProfile } from './fo
 import { nflVenueFor, weatherApplies } from './footballVenues.js';
 import { loadLeagueContext, opponentQualityLine } from './footballLeagueContext.js';
 import { getFbsTeams, fbsVenueFor } from '../../../cfbdService.js';
+import { latestGameNarrative } from './footballGameStory.js';
 import { getKickoffWeather, windDescription } from '../../../weatherService.js';
 import { getPracticeReport, getSnapShare } from '../../../nflverseService.js';
 
@@ -62,6 +63,57 @@ export const nflFetchers = {
     // Calculate yards per play correctly using season totals
     const homeGamesPlayed = homeStats?.games_played || 1;
     const awayGamesPlayed = awayStats?.games_played || 1;
+
+    // ── THE QUALIFIERS ON POINTS PER GAME (founder, Aug 25) ──
+    // PPG is one of the most quoted and least trustworthy numbers on a desk.
+    // It is not the offence's alone (defensive and return touchdowns are in
+    // it), it is not per-opportunity (a fast team scores more by having more
+    // drives), and its mean hides the shape (one 55-point blowout drags a
+    // season). Each of those is answerable from data already fetched here.
+    const [homeLedger, awayLedger] = await Promise.all([
+      loadTeamResults(bdlSport, home.id, season).catch(() => []),
+      loadTeamResults(bdlSport, away.id, season).catch(() => [])
+    ]);
+    const median = (nums) => {
+      if (!nums.length) return null;
+      const s2 = [...nums].sort((x, y) => x - y);
+      const mid = Math.floor(s2.length / 2);
+      return s2.length % 2 ? s2[mid] : Number(((s2[mid - 1] + s2[mid]) / 2).toFixed(1));
+    };
+    const scoringProfile = (stats, ledger, gamesPlayed) => {
+      const pts = ledger.map((g) => g.scored);
+      // Non-offensive scores. BDL publishes RETURN touchdowns but has no
+      // defensive-touchdown field at all — verified against the captured
+      // payload, which is how the contract test caught an invented
+      // `defensive_touchdowns` here. Count what exists and say what does not,
+      // rather than under-reporting silently.
+      const kickTds = Number(stats?.returning_kick_return_touchdowns) || 0;
+      const puntTds = Number(stats?.returning_punt_return_touchdowns) || 0;
+      const nonOffensive = kickTds + puntTds;
+      const recent = ledger.slice(0, 4).map((g) => g.scored);
+      const earlier = ledger.slice(4).map((g) => g.scored);
+      const avg = (a) => (a.length ? Number((a.reduce((x, y) => x + y, 0) / a.length).toFixed(1)) : null);
+      return {
+        mean_points: avg(pts),
+        median_points: median(pts),
+        // A mean well above the median means one or two blowouts are carrying it.
+        skew_note: (pts.length >= 4 && avg(pts) != null && median(pts) != null)
+          ? (Math.abs(avg(pts) - median(pts)) >= 3
+            ? 'Mean and median differ by 3+ — the average is being pulled by outlier games, not describing a typical one'
+            : 'Mean and median agree — the average describes a typical game')
+          : null,
+        non_offensive_touchdowns: nonOffensive,
+        non_offensive_note: nonOffensive > 0
+          ? `${nonOffensive} touchdown${nonOffensive === 1 ? ' was' : 's were'} scored by the return game, not the offence. Defensive touchdowns are NOT published in this feed, so any pick-six or fumble return is still counted inside points per game with no way to separate it.`
+          : 'No return touchdowns. Defensive touchdowns are not published in this feed, so a pick-six would still be inside points per game unseparated.',
+        last_4_points_per_game: avg(recent),
+        earlier_points_per_game: avg(earlier),
+        recency_note: (avg(recent) != null && avg(earlier) != null && Math.abs(avg(recent) - avg(earlier)) >= 5)
+          ? 'Recent scoring differs from earlier in the season by 5+ per game — the season average describes neither stretch'
+          : null,
+        games_played: gamesPlayed
+      };
+    };
     const homeTotalYards = homeStats?.total_offensive_yards || (homeStats?.total_offensive_yards_per_game * homeGamesPlayed);
     const awayTotalYards = awayStats?.total_offensive_yards || (awayStats?.total_offensive_yards_per_game * awayGamesPlayed);
     const homeTotalPlays = (homeStats?.passing_attempts || 0) + (homeStats?.rushing_attempts || 0);
@@ -74,13 +126,15 @@ export const nflFetchers = {
         team: home.full_name || home.name,
         points_per_game: fmtNum(homeStats?.total_points_per_game),
         yards_per_game: fmtNum(homeStats?.total_offensive_yards_per_game),
-        yards_per_play: fmtNum(homeTotalPlays > 0 ? homeTotalYards / homeTotalPlays : 0, 1)
+        yards_per_play: fmtNum(homeTotalPlays > 0 ? homeTotalYards / homeTotalPlays : 0, 1),
+        scoring_context: scoringProfile(homeStats, homeLedger, homeGamesPlayed)
       },
       away: {
         team: away.full_name || away.name,
         points_per_game: fmtNum(awayStats?.total_points_per_game),
         yards_per_game: fmtNum(awayStats?.total_offensive_yards_per_game),
-        yards_per_play: fmtNum(awayTotalPlays > 0 ? awayTotalYards / awayTotalPlays : 0, 1)
+        yards_per_play: fmtNum(awayTotalPlays > 0 ? awayTotalYards / awayTotalPlays : 0, 1),
+        scoring_context: scoringProfile(awayStats, awayLedger, awayGamesPlayed)
       }
     };
   },
@@ -514,44 +568,20 @@ export const nflFetchers = {
 
   // ===== NFL EARLY/LATE DOWN & EXPLOSIVENESS STATS =====
 
-  EARLY_DOWN_SUCCESS: async (bdlSport, home, away, season) => {
-    // Early downs (1st & 2nd down) success rate - BDL doesn't have this directly
-    // Use Gemini Grounding to get actual early down success rate from PFR/FO
-    console.log(`[Stat Router] Fetching EARLY_DOWN_SUCCESS for ${away.name} @ ${home.name}`);
-    
-    if (bdlSport !== 'americanfootball_nfl') {
-      return { category: 'Early Down Success', note: 'Only available for NFL' };
-    }
-    
-    try {
-      const seasonStr = getCurrentSeasonString();
-      const query = `site:pro-football-reference.com OR site:footballoutsiders.com
-        ${seasonStr} NFL early down success rate first down second down efficiency ${home.name} ${away.name}.
-        For each team:
-        1. First down success rate (% of 1st downs gaining 4+ yards)
-        2. Second down success rate
-        3. Early down EPA (if available)
-        4. Yards per first down
-        5. Negative play rate on early downs`;
-      
-      const groundingResult = await groundedWebSearch(query, {
-        systemMessage: 'You are an NFL analyst. Use data from Pro Football Reference or Football Outsiders. Provide exact early down success metrics for both teams.'
-      });
-      
-      return {
-        category: 'Early Down Success Rate',
-        source: 'Pro-Football-Reference / Football Outsiders via Gemini',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name },
-        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
-        comparison: 'Early down success rates for both teams.',
-        note: 'Early down success rate data for both teams.'
-      };
-    } catch (error) {
-      console.error(`[Stat Router] Error fetching EARLY_DOWN_SUCCESS:`, error.message);
-      return { category: 'Early Down Success', error: 'Data unavailable' };
-    }
-  },
+  /**
+   * Retired from web search Aug 25 2026 (founder: cut the prose lanes).
+   * This was a grounded search asking a model to recall numbers it cannot
+   * verify, sitting beside counted data. An honest decline that names what
+   * would source it is worth more than unverifiable prose.
+   */
+  EARLY_DOWN_SUCCESS: async (bdlSport, home, away) => ({
+    category: 'Early Down Success',
+    source: 'NOT AVAILABLE',
+    reason: 'Per-play success rate by down needs play-by-play aggregated across the season. Buildable from the per-game play feed, not yet built. Third and fourth down conversion rates ARE available in SUCCESS_RATE_OFFENSE and LATE_DOWN_EFFICIENCY.',
+    note: 'Do not estimate, derive or recall this figure. Report it as unavailable.',
+    home: { team: home.full_name || home.name },
+    away: { team: away.full_name || away.name }
+  }),
 
   LATE_DOWN_EFFICIENCY: async (bdlSport, home, away, season) => {
     // Late downs (3rd & 4th) - BDL has this!
@@ -747,196 +777,81 @@ export const nflFetchers = {
   // ===== NFL MISSING STATS (Real Data via Gemini Grounding) =====
 
   // SOURCE: PFF (Pro Football Focus), Football Outsiders, ESPN
-  OL_RANKINGS: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching OL_RANKINGS for ${away.name} @ ${home.name}`);
-    
-    if (bdlSport !== 'americanfootball_nfl') {
-      return { category: 'Offensive Line Rankings', note: 'Only available for NFL' };
-    }
-    
-    try {
-      const seasonStr = getCurrentSeasonString();
-      const query = `site:nextgenstats.nfl.com OR site:pff.com OR site:footballoutsiders.com
-        ${seasonStr} NFL offensive line rankings pass block win rate run blocking grades ${home.name} ${away.name}.
-        For each team's offensive line:
-        1. Pass block win rate (Next Gen Stats)
-        2. Overall OL ranking/grade (PFF)
-        3. Run blocking grade/efficiency
-        4. Sacks allowed this season
-        5. Adjusted Line Yards (Football Outsiders)`;
-      
-      const groundingResult = await groundedWebSearch(query, {
-        systemMessage: 'You are an NFL analyst. Use data from NFL Next Gen Stats for pass block win rate, and PFF/Football Outsiders for grades. Provide exact offensive line rankings and grades for both teams.'
-      });
-      
-      return {
-        category: 'Offensive Line Rankings',
-        source: 'NFL Next Gen Stats / PFF / Football Outsiders via Gemini',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name },
-        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
-        comparison: 'Offensive line rankings and performance data for both teams.',
-        note: 'OL sack rate and pressure rate allowed data.'
-      };
-    } catch (error) {
-      console.error(`[Stat Router] Error fetching OL_RANKINGS:`, error.message);
-      return { category: 'OL Rankings', error: 'Data unavailable' };
-    }
-  },
+  /**
+   * Retired from web search Aug 25 2026 (founder: cut the prose lanes).
+   * This was a grounded search asking a model to recall numbers it cannot
+   * verify, sitting beside counted data. An honest decline that names what
+   * would source it is worth more than unverifiable prose.
+   */
+  OL_RANKINGS: async (bdlSport, home, away) => ({
+    category: 'Offensive Line',
+    source: 'NOT AVAILABLE',
+    reason: 'Pass-block win rate and line grades are charted products (Next Gen Stats, PFF). No feed we hold publishes them. Sacks allowed and sack yardage — which we DO have — are in PRESSURE_RATE.',
+    note: 'Do not estimate, derive or recall this figure. Report it as unavailable.',
+    home: { team: home.full_name || home.name },
+    away: { team: away.full_name || away.name }
+  }),
 
+  /**
+   * Retired from web search Aug 25 2026 (founder: cut the prose lanes).
+   * This was a grounded search asking a model to recall numbers it cannot
+   * verify, sitting beside counted data. An honest decline that names what
+   * would source it is worth more than unverifiable prose.
+   */
+  DL_RANKINGS: async (bdlSport, home, away) => ({
+    category: 'Defensive Line',
+    source: 'NOT AVAILABLE',
+    reason: 'Pass-rush win rate and pressure rate are charted products. No feed we hold publishes them. Sacks recorded and sack yardage forced are in PRESSURE_RATE.',
+    note: 'Do not estimate, derive or recall this figure. Report it as unavailable.',
+    home: { team: home.full_name || home.name },
+    away: { team: away.full_name || away.name }
+  }),
 
-  // SOURCE: PFF, Football Outsiders, Pro Football Reference
-  DL_RANKINGS: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching DL_RANKINGS for ${away.name} @ ${home.name}`);
-    
-    if (bdlSport !== 'americanfootball_nfl') {
-      return { category: 'Defensive Line Rankings', note: 'Only available for NFL' };
-    }
-    
-    try {
-      const seasonStr = getCurrentSeasonString();
-      const query = `site:nextgenstats.nfl.com OR site:pff.com OR site:footballoutsiders.com
-        ${seasonStr} NFL defensive line pass rush win rate pressure rate ${home.name} ${away.name}.
-        For each team's defensive line:
-        1. Pass rush win rate (Next Gen Stats)
-        2. Overall DL ranking/grade (PFF)
-        3. Pressure rate and sacks
-        4. Run defense grade/Adjusted Line Yards allowed
-        5. Key pass rushers and their individual win rates`;
-      
-      const groundingResult = await groundedWebSearch(query, {
-        systemMessage: 'You are an NFL analyst. Use data from NFL Next Gen Stats for pass rush win rate, and PFF/Football Outsiders for grades. Provide exact defensive line rankings and pass rush data for both teams.'
-      });
-      
-      return {
-        category: 'Defensive Line Rankings',
-        source: 'NFL Next Gen Stats / PFF / Football Outsiders via Gemini',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name },
-        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
-        comparison: 'Defensive line pressure rates and sack data for both teams.',
-        note: 'DL pressure rate and sack rate data.'
-      };
-    } catch (error) {
-      console.error(`[Stat Router] Error fetching DL_RANKINGS:`, error.message);
-      return { category: 'DL Rankings', error: 'Data unavailable' };
-    }
-  },
+  /**
+   * Retired from web search Aug 25 2026 (founder: cut the prose lanes).
+   * This was a grounded search asking a model to recall numbers it cannot
+   * verify, sitting beside counted data. An honest decline that names what
+   * would source it is worth more than unverifiable prose.
+   */
+  TIME_TO_THROW: async (bdlSport, home, away) => ({
+    category: 'Time to Throw',
+    source: 'NOT AVAILABLE',
+    reason: 'Average release time is an NFL Next Gen Stats tracking metric. No feed we hold publishes it.',
+    note: 'Do not estimate, derive or recall this figure. Report it as unavailable.',
+    home: { team: home.full_name || home.name },
+    away: { team: away.full_name || away.name }
+  }),
 
+  /**
+   * Retired from web search Aug 25 2026 (founder: cut the prose lanes).
+   * This was a grounded search asking a model to recall numbers it cannot
+   * verify, sitting beside counted data. An honest decline that names what
+   * would source it is worth more than unverifiable prose.
+   */
+  GOAL_LINE: async (bdlSport, home, away) => ({
+    category: 'Goal Line',
+    source: 'NOT AVAILABLE',
+    reason: 'Short-yardage and goal-line splits need play-by-play aggregated across the season. BDL publishes play-by-play per GAME, so this is buildable but not yet built; the season-level split is not a published field.',
+    note: 'Do not estimate, derive or recall this figure. Report it as unavailable.',
+    home: { team: home.full_name || home.name },
+    away: { team: away.full_name || away.name }
+  }),
 
-  // SOURCE: Next Gen Stats (NFL.com), PFF, Pro Football Reference
-  TIME_TO_THROW: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching TIME_TO_THROW for ${away.name} @ ${home.name}`);
-    
-    if (bdlSport !== 'americanfootball_nfl') {
-      return { category: 'Time to Throw', note: 'Only available for NFL' };
-    }
-    
-    try {
-      const seasonStr = getCurrentSeasonString();
-      const query = `site:nfl.com/stats OR site:nextgenstats.nfl.com OR site:pro-football-reference.com
-        ${seasonStr} NFL time to throw average QB release time ${home.name} ${away.name}.
-        What is each QB's average time to throw?
-        Include: average release time, % of quick throws (<2.5s), % of deep drops (>3s).
-        Next Gen Stats data preferred.`;
-      
-      const groundingResult = await groundedWebSearch(query, {
-        systemMessage: 'You are an NFL analyst. Use data from NFL Next Gen Stats or Pro Football Reference. Provide exact time to throw data for both teams QBs.'
-      });
-      
-      return {
-        category: 'Time to Throw',
-        source: 'NFL Next Gen Stats / Pro-Football-Reference via Gemini',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name },
-        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
-        comparison: 'QB release time and pressure rate data for both teams.',
-        note: 'QB time to throw and pressure data for both teams.'
-      };
-    } catch (error) {
-      console.error(`[Stat Router] Error fetching TIME_TO_THROW:`, error.message);
-      return { category: 'Time to Throw', error: 'Data unavailable' };
-    }
-  },
+  /**
+   * Retired from web search Aug 25 2026 (founder: cut the prose lanes).
+   * This was a grounded search asking a model to recall numbers it cannot
+   * verify, sitting beside counted data. An honest decline that names what
+   * would source it is worth more than unverifiable prose.
+   */
+  TWO_MINUTE_DRILL: async (bdlSport, home, away) => ({
+    category: 'Two-Minute Drill',
+    source: 'NOT AVAILABLE',
+    reason: 'End-of-half efficiency needs play-by-play aggregated across the season. Buildable from the per-game play feed, not yet built; not a published field.',
+    note: 'Do not estimate, derive or recall this figure. Report it as unavailable.',
+    home: { team: home.full_name || home.name },
+    away: { team: away.full_name || away.name }
+  }),
 
-
-  // SOURCE: Pro Football Reference, Football Outsiders
-  GOAL_LINE: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching GOAL_LINE for ${away.name} @ ${home.name}`);
-    
-    if (bdlSport !== 'americanfootball_nfl') {
-      return { category: 'Goal Line', note: 'Only available for NFL' };
-    }
-    
-    try {
-      const seasonStr = getCurrentSeasonString();
-      const query = `site:pro-football-reference.com OR site:footballoutsiders.com
-        ${seasonStr} NFL red zone efficiency goal to go inside 5 yard line ${home.name} ${away.name}.
-        For each team:
-        1. Goal line TD conversion rate (inside 5/10)
-        2. Red zone TD % (offense and defense)
-        3. Short yardage conversion rate (3rd/4th and 1-2)
-        4. Stuffed rate on goal line`;
-      
-      const groundingResult = await groundedWebSearch(query, {
-        systemMessage: 'You are an NFL analyst. Use data from Pro Football Reference or Football Outsiders. Provide exact goal line and short yardage efficiency for both teams.'
-      });
-      
-      return {
-        category: 'Goal Line Efficiency',
-        source: 'Pro-Football-Reference / Football Outsiders via Gemini',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name },
-        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
-        comparison: 'Goal line and red zone conversion data for both teams.',
-        note: 'Goal line conversion data provided for comparison.'
-      };
-    } catch (error) {
-      console.error(`[Stat Router] Error fetching GOAL_LINE:`, error.message);
-      return { category: 'Goal Line', error: 'Data unavailable' };
-    }
-  },
-
-
-  // SOURCE: Pro Football Reference, ESPN
-  TWO_MINUTE_DRILL: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching TWO_MINUTE_DRILL for ${away.name} @ ${home.name}`);
-    
-    if (bdlSport !== 'americanfootball_nfl') {
-      return { category: 'Two Minute Drill', note: 'Only available for NFL' };
-    }
-    
-    try {
-      const seasonStr = getCurrentSeasonString();
-      const query = `site:pro-football-reference.com OR site:espn.com
-        ${seasonStr} NFL two minute drill efficiency end of half scoring ${home.name} ${away.name}.
-        For each team:
-        1. Points scored in final 2 minutes of halves
-        2. Two minute drill scoring rate
-        3. QB performance in hurry-up/no-huddle
-        4. Game-winning drives this season`;
-      
-      const groundingResult = await groundedWebSearch(query, {
-        systemMessage: 'You are an NFL analyst. Use data from Pro Football Reference or ESPN. Provide exact two minute drill efficiency for both teams.'
-      });
-      
-      return {
-        category: 'Two Minute Drill',
-        source: 'Pro-Football-Reference / ESPN via Gemini',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name },
-        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
-        comparison: 'End-of-half scoring data for both teams.',
-        note: 'End-of-half scoring data for both teams.'
-      };
-    } catch (error) {
-      console.error(`[Stat Router] Error fetching TWO_MINUTE_DRILL:`, error.message);
-      return { category: 'Two Minute Drill', error: 'Data unavailable' };
-    }
-  },
-
-
-  // SOURCE: Pro Football Reference, ESPN
   KICKING: async (bdlSport, home, away, season) => {
     // BDL carries field goals by distance bucket and the full punting line for
     // both teams, plus the opponent mirror. This used to buy web-search prose
@@ -992,83 +907,63 @@ export const nflFetchers = {
     };
   },
 
+  /**
+   * Primetime record, counted from actual kickoff times rather than recalled
+   * by a web search. A kickoff at or after 8pm ET is a night game.
+   */
   PRIMETIME_RECORD: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching PRIMETIME_RECORD for ${away.name} @ ${home.name}`);
-    
-    if (bdlSport !== 'americanfootball_nfl') {
-      return { category: 'Primetime Record', note: 'Only available for NFL' };
-    }
-    
-    try {
-      const seasonStr = getCurrentSeasonString();
-      const query = `site:pro-football-reference.com OR site:espn.com
-        ${seasonStr} NFL primetime record Sunday Night Monday Night Thursday Night ${home.name} ${away.name}.
-        For each team:
-        1. Record in primetime games this season and last 3 years
-        2. QB primetime record and stats
-        3. Points per game in primetime vs regular games
-        4. Any notable primetime wins/losses`;
-      
-      const groundingResult = await groundedWebSearch(query, {
-        systemMessage: 'You are an NFL analyst. Use data from Pro Football Reference or ESPN. Provide exact primetime game performance for both teams.'
-      });
-      
+    const [homeResults, awayResults] = await Promise.all([
+      loadTeamResults(bdlSport, home.id, season),
+      loadTeamResults(bdlSport, away.id, season)
+    ]);
+    const isNight = (iso) => {
+      if (!iso) return false;
+      const hour = Number(new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York', hour: 'numeric', hour12: false
+      }).format(new Date(iso)));
+      return Number.isFinite(hour) && hour >= 20;
+    };
+    const line = (results) => {
+      const night = results.filter((r) => isNight(r.date));
+      if (night.length === 0) return { note: 'No night games on the schedule yet this season.' };
+      const wins = night.filter((r) => r.won).length;
       return {
-        category: 'Primetime Performance',
-        source: 'Pro-Football-Reference / ESPN via Gemini',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name },
-        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
-        comparison: 'Primetime records and performance splits for both teams.',
-        note: 'Primetime record and performance data for both teams.'
+        night_game_record: `${wins}-${night.length - wins}`,
+        games: night.map((r) => `${r.won ? 'W' : 'L'} ${r.scored}-${r.allowed} ${r.home ? 'vs' : '@'} ${r.opponent}`)
       };
-    } catch (error) {
-      console.error(`[Stat Router] Error fetching PRIMETIME_RECORD:`, error.message);
-      return { category: 'Primetime Record', error: 'Data unavailable' };
-    }
+    };
+    return {
+      category: 'Primetime Record',
+      source: 'Ball Don\'t Lie schedule',
+      data_scope: 'Games kicking off at or after 8pm ET. A small sample by definition — the games are listed so the record is never read as more than it is.',
+      home: { team: home.full_name || home.name, ...line(homeResults) },
+      away: { team: away.full_name || away.name, ...line(awayResults) }
+    };
   },
 
-
-  // SOURCE: Pro Football Reference, ESPN - 4th Down Decision Analytics
   FOURTH_DOWN_TENDENCY: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching FOURTH_DOWN_TENDENCY for ${away.name} @ ${home.name}`);
-    
-    if (bdlSport !== 'americanfootball_nfl') {
-      return { category: 'Fourth Down Tendency', note: 'Only available for NFL' };
-    }
-    
-    try {
-      const seasonStr = getCurrentSeasonString();
-      const query = `site:nextgenstats.nfl.com OR site:pro-football-reference.com OR site:nfl.com/stats
-        ${seasonStr} NFL fourth down decisions go-for-it rate conversion percentage ${home.name} ${away.name}.
-        For each team's coach/offense:
-        1. 4th down GO rate (how often they go for it vs punt/FG)
-        2. 4th down conversion percentage when they go
-        3. 4th down attempts inside opponent territory
-        4. Aggressiveness rank
-        5. 4th down behavior when trailing vs leading`;
-      
-      const groundingResult = await groundedWebSearch(query, {
-        systemMessage: 'You are an NFL analyst. Use data from NFL Next Gen Stats, Pro Football Reference, or NFL.com. Provide exact 4th down decision rates and conversion percentages for both teams.'
-      });
-      
+    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
+    const line = (stats) => {
+      const att = Number(stats?.misc_fourth_down_attempts);
+      const gp = Number(stats?.games_played);
       return {
-        category: 'Fourth Down Tendency',
-        source: 'NFL Next Gen Stats / Pro-Football-Reference via Gemini',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name },
-        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
-        comparison: '4th down conversion and attempt data for both teams.',
-        note: '4th down attempt and conversion data for both teams.'
+        attempts: fmtNum(att, 0),
+        conversions: fmtNum(stats?.misc_fourth_down_convs, 0),
+        conversion_pct: fmtPct(stats?.misc_fourth_down_conv_pct / 100),
+        attempts_per_game: (Number.isFinite(att) && gp) ? Number((att / gp).toFixed(2)) : 'N/A',
+        opp_attempts: fmtNum(stats?.opp_misc_fourth_down_attempts, 0),
+        opp_conversion_pct: fmtPct(stats?.opp_misc_fourth_down_conv_pct / 100)
       };
-    } catch (error) {
-      console.error(`[Stat Router] Error fetching FOURTH_DOWN_TENDENCY:`, error.message);
-      return { category: 'Fourth Down Tendency', error: 'Data unavailable' };
-    }
+    };
+    return {
+      category: 'Fourth Down Tendency',
+      source: 'Ball Don\'t Lie',
+      data_scope: 'Attempts, conversions and rate. Attempts per game is the aggressiveness read; the conversion rate is how it has gone. Situation (score, field position, time) behind each attempt is not in this feed.',
+      home: { team: home.full_name || home.name, ...line(homeStats) },
+      away: { team: away.full_name || away.name, ...line(awayStats) }
+    };
   },
 
-
-  // SOURCE: BDL NFL schedule — no grounding needed for schedule data
   SCHEDULE_CONTEXT: async (bdlSport, home, away, season) => {
     console.log(`[Stat Router] Fetching SCHEDULE_CONTEXT for ${away.name} @ ${home.name}`);
 
@@ -1445,6 +1340,43 @@ Be factual with historical stats where available.`;
     }
   },
 
+
+  /**
+   * What actually happened in the most recent game.
+   *
+   * MLB hands Gary real journalism — a headline and ~4,500 characters of
+   * written recap. Football has no free equivalent, so this reconstructs the
+   * account from play-by-play: the scoring, the plays that actually moved the
+   * result, and whether the game was ever decided before the whistle.
+   *
+   * Deliberately NOT the transcript. A game is ~170 plays and handing all of
+   * them over buries the story in noise — the beats are the story.
+   */
+  NFL_GAME_STORY: async (bdlSport, home, away, season) => {
+    const [h, a] = await Promise.all([
+      latestGameNarrative(bdlSport, home.id, season).catch(() => null),
+      latestGameNarrative(bdlSport, away.id, season).catch(() => null)
+    ]);
+    const shape = (n, team) => {
+      if (!n) return { team, note: 'No completed game or play-by-play on file.' };
+      return {
+        team,
+        as_written: n.headline || 'No written headline on file for this game.',
+        scoring: n.scoring,
+        turning_points: n.turning_points,
+        stopped_being_a_contest: n.stopped_being_a_contest,
+        yards_per_play_by_team: n.yards_per_play_by_team
+      };
+    };
+    return {
+      category: 'Last Game — What Happened',
+      source: 'Ball Don\'t Lie play-by-play',
+      data_scope: 'The most recent completed game told as an account rather than a box score: the scoring, the plays that swung win probability most, and whether the result was ever settled early. Yards per play is split competitive-vs-after-decided so garbage-time production cannot pass for form.',
+      home: shape(h, home.full_name || home.name),
+      away: shape(a, away.full_name || away.name)
+    };
+  },
+
   // ═══════════════════════════════════════════════════════════════════════
   // SPORT-SPECIFIC OVERRIDES (Aug 24 2026 audit)
   //
@@ -1721,7 +1653,7 @@ const SEASON_SAMPLE_TOKENS = [
   'PRESSURE_RATE', 'RED_ZONE_DEFENSE', 'WR_TE_STATS', 'DEFENSIVE_PLAYMAKERS',
   'TURNOVER_LUCK', 'LATE_DOWN_EFFICIENCY', 'EXPLOSIVE_ALLOWED', 'FUMBLE_LUCK',
   'PASSING_EPA', 'RUSHING_EPA', 'KICKING', 'FIELD_POSITION', 'PASSING_TDS',
-  'INTERCEPTIONS', 'RUSHING_TDS', 'TOTAL_TDS', 'PASSING_YPG'
+  'INTERCEPTIONS', 'RUSHING_TDS', 'TOTAL_TDS', 'PASSING_YPG', 'FOURTH_DOWN_TENDENCY'
 ];
 
 export function seasonSampleTokens() {

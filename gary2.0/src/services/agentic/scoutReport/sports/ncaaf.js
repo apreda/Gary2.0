@@ -15,6 +15,7 @@ import { generateGameSignificance } from '../gameSignificanceGenerator.js';
 import { formatTokenMenu } from '../../tools/toolDefinitions.js';
 import { sportToBdlKey, findTeam, escapeRegex, formatGameTime } from '../shared/utilities.js';
 import { groundedWebSearch, fetchStandingsSnapshot } from '../shared/grounding.js';
+import { fetchFootballRecentGameCoverage } from '../shared/anthropicFootballGrounding.js';
 import {
   fetchTeamProfile,
   fetchInjuries,
@@ -1174,6 +1175,17 @@ ${line(homeTeam)}
   // NO TRUNCATION — Gary needs the full narrative for both teams + matchup context
   let narrativeContext = injuries?.narrativeContext || null;
 
+  // Press accounts of the last games — the detail no feed encodes. Same
+  // rationale as the NFL builder; fail-soft so a missing narrative never
+  // costs the report.
+  let recentCoverage = null;
+  try {
+    const coverage = await fetchFootballRecentGameCoverage({ homeTeam, awayTeam, sport: 'NCAAF' });
+    recentCoverage = coverage?.data || null;
+  } catch (e) {
+    console.warn(`[Scout Report] Recent-game coverage unavailable: ${e.message}`);
+  }
+
   // Build the scout report
   const matchupLabel = game.isNeutralSite ? `${awayTeam} vs ${homeTeam}` : `${awayTeam} @ ${homeTeam}`;
   const venueLabel = game.venue || (game.isNeutralSite ? 'Neutral Site' : `${homeTeam} Home`);
@@ -1228,7 +1240,15 @@ INJURY REPORT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${injuryReportText}
 ${formatStartingLineups(homeTeam, awayTeam, injuries.lineups)}
-${narrativeContext ? `
+${recentCoverage ? `
+HOW THE LAST GAMES ACTUALLY WENT — AS WRITTEN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Press accounts of each team's recent games. A final score can misrepresent a
+game; these are the details a box score cannot carry.
+
+${recentCoverage}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+` : ''}${narrativeContext ? `
 CURRENT STATE & CONTEXT
 ━━━━━━━━━━━━━━━━━━━━━━━
 Recent news, storylines, and context for both teams.

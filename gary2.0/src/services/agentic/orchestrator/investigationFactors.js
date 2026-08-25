@@ -19,7 +19,9 @@ export const INVESTIGATION_FACTORS = {
     RED_ZONE: ['RED_ZONE_OFFENSE', 'RED_ZONE_DEFENSE', 'GOAL_LINE'],
     EXPLOSIVE_PLAYS: ['EXPLOSIVE_PLAYS', 'EXPLOSIVE_ALLOWED'],
     SPECIAL_TEAMS: ['SPECIAL_TEAMS', 'KICKING', 'FIELD_POSITION'],
-    RECENT_FORM: ['RECENT_FORM', 'EPA_LAST_5'],
+    // GAME_STORY is the account of the last game, not another rate. Stats
+    // about stats are not context; what happened is (founder, Aug 25).
+    RECENT_FORM: ['RECENT_FORM', 'EPA_LAST_5', 'GAME_STORY'],
     // SNAP_SHARE is usage, not availability — who actually plays, and how
     // much. A depth chart cannot carry it. Added Aug 25 2026 with nflverse.
     INJURIES: ['INJURIES', 'SNAP_SHARE'], // From scout report + player logs

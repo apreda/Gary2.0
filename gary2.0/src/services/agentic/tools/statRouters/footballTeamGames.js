@@ -101,6 +101,11 @@ export function toTeamResults(games, teamId) {
         home: isHome,
         opponent: teamNameOf(g, opponentSide),
         opponentId: teamIdOf(g, opponentSide),
+        // BDL writes a real one-line account for ~94% of finals and it was
+        // being discarded on every read. "Lions beat playoff-bound Bears 19-16
+        // on Bates' 42-yard field goal as time expires" is context a score
+        // line cannot carry, and it costs nothing — the field is already here.
+        summary: g.summary || null,
         scored,
         allowed,
         margin: scored - allowed,
@@ -187,7 +192,9 @@ export function gameStoryLine(result, { opponentContext = null } = {}) {
   }
 
   if (opponentContext) parts.push(opponentContext);
-  return parts.join(' — ');
+  const line = parts.join(' — ');
+  // The written headline goes last so the structured facts read first.
+  return result.summary ? `${line}\n      "${result.summary}"` : line;
 }
 
 export function homeAwaySplit(results) {

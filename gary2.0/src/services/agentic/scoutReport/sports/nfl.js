@@ -14,6 +14,7 @@ import {
   getInjuryStatusFromMap
 } from '../shared/utilities.js';
 import { fetchStandingsSnapshot } from '../shared/grounding.js';
+import { fetchFootballRecentGameCoverage } from '../shared/anthropicFootballGrounding.js';
 import {
   fetchTeamProfile,
   fetchInjuries,
@@ -1334,6 +1335,20 @@ export async function buildNflScoutReport(game, options = {}) {
   // Extract narrative context from the grounding pass
   let narrativeContext = injuries?.narrativeContext || null;
 
+  // WHAT THE PRESS WROTE ABOUT THE LAST GAMES (founder, Aug 25).
+  // Play-by-play gives the scoring and the swings; only someone who watched
+  // writes down that a 50-yard catch was nearly picked and fell in the
+  // receiver's lap, or that a line was beaten all afternoon. MLB gets this
+  // free from statsapi's editorial recap; football has to search for it.
+  // Fail-soft: a missing narrative never costs the report.
+  let recentCoverage = null;
+  try {
+    const coverage = await fetchFootballRecentGameCoverage({ homeTeam, awayTeam, sport: sportKey });
+    recentCoverage = coverage?.data || null;
+  } catch (e) {
+    console.warn(`[Scout Report] Recent-game coverage unavailable: ${e.message}`);
+  }
+
   const matchupLabel = game.isNeutralSite ? `${awayTeam} vs ${homeTeam}` : `${awayTeam} @ ${homeTeam}`;
   const venueLabel = game.venue || (game.isNeutralSite ? 'Neutral Site' : `${homeTeam} Home`);
   const tournamentLabel = game.tournamentContext ? `[${game.tournamentContext}]` : '';
@@ -1391,7 +1406,15 @@ INJURY REPORT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${injuryReportText}
 ${formatStartingLineups(homeTeam, awayTeam, injuries.lineups)}
-${returningPlayersSection}${narrativeContext ? `
+${recentCoverage ? `
+HOW THE LAST GAMES ACTUALLY WENT — AS WRITTEN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Press accounts of each team's recent games. A final score can misrepresent a
+game; these are the details a box score cannot carry.
+
+${recentCoverage}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+` : ''}${returningPlayersSection}${narrativeContext ? `
 CURRENT STATE & CONTEXT
 ━━━━━━━━━━━━━━━━━━━━━━━
 Recent news, storylines, and context for both teams.
