@@ -1,4 +1,5 @@
 import { ballDontLieService } from '../../../ballDontLieService.js';
+import { getSpPlus, getFpi, getReturningProduction, rowFor } from '../../../cfbdService.js';
 import { loadTeamResults, formSummary, homeAwaySplit, marginProfile, closeGameRecord, footballWeekLabel } from './footballTeamGames.js';
 
 const NCAAF_BDL_SPORT = 'americanfootball_ncaaf';
@@ -478,23 +479,7 @@ export const ncaafFetchers = {
   // and names what would source it, so the absence stays visible and greppable.
   // ═══════════════════════════════════════════════════════════════════════
 
-  NCAAF_SP_PLUS_RATINGS: async (bdlSport, home, away) => ({
-    category: 'Sp Plus Ratings',
-    source: 'NOT AVAILABLE',
-    reason: 'SP+ is a Football Outsiders/Bill Connelly rating; BDL does not publish it.',
-    note: 'Do not estimate, derive or recall this figure. Report it as unavailable. A CollegeFootballData.com feed would source it.',
-    home: { team: home.full_name || home.name },
-    away: { team: away.full_name || away.name }
-  }),
 
-  NCAAF_FPI_RATINGS: async (bdlSport, home, away) => ({
-    category: 'Fpi Ratings',
-    source: 'NOT AVAILABLE',
-    reason: 'FPI is an ESPN rating; BDL does not publish it.',
-    note: 'Do not estimate, derive or recall this figure. Report it as unavailable. A CollegeFootballData.com feed would source it.',
-    home: { team: home.full_name || home.name },
-    away: { team: away.full_name || away.name }
-  }),
 
   NCAAF_EPA: async (bdlSport, home, away) => ({
     category: 'Epa',
@@ -533,32 +518,8 @@ export const ncaafFetchers = {
     away: { team: away.full_name || away.name }
   }),
 
-  NCAAF_STRENGTH_OF_SCHEDULE: async (bdlSport, home, away) => ({
-    category: 'Strength Of Schedule',
-    source: 'NOT AVAILABLE',
-    reason: 'No opponent-adjusted rating is published in the BDL NCAAF feed.',
-    note: 'Do not estimate, derive or recall this figure. Report it as unavailable. A CollegeFootballData.com feed would source it.',
-    home: { team: home.full_name || home.name },
-    away: { team: away.full_name || away.name }
-  }),
 
-  NCAAF_CONFERENCE_STRENGTH: async (bdlSport, home, away) => ({
-    category: 'Conference Strength',
-    source: 'NOT AVAILABLE',
-    reason: 'No conference rating is published in the BDL NCAAF feed.',
-    note: 'Do not estimate, derive or recall this figure. Report it as unavailable. A CollegeFootballData.com feed would source it.',
-    home: { team: home.full_name || home.name },
-    away: { team: away.full_name || away.name }
-  }),
 
-  NCAAF_VS_POWER_OPPONENTS: async (bdlSport, home, away) => ({
-    category: 'Vs Power Opponents',
-    source: 'NOT AVAILABLE',
-    reason: 'Requires an opponent-quality classification BDL does not provide.',
-    note: 'Do not estimate, derive or recall this figure. Report it as unavailable. A CollegeFootballData.com feed would source it.',
-    home: { team: home.full_name || home.name },
-    away: { team: away.full_name || away.name }
-  }),
 
   /**
    * Game-by-game lines for each side's leading passer, rusher and receiver,
@@ -754,6 +715,177 @@ export const ncaafFetchers = {
       console.warn('[Stat Router] NCAAF Pressure Rate fetch failed:', error.message);
       return unavailableResult(error, home, away);
     }
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // COLLEGE RATINGS — CollegeFootballData (Aug 25 2026)
+  //
+  // These five factors answered "not available" because BDL's NCAAF season
+  // row has thirteen fields and no ratings. CFBD returns the WHOLE LEAGUE per
+  // request (SP+ 137 teams in one call), and the free tier is 1,000 requests
+  // per calendar month — so everything here is bulk-fetched and cached, and
+  // nothing is ever called per game.
+  // ═══════════════════════════════════════════════════════════════════════
+
+  NCAAF_SP_PLUS_RATINGS: async (bdlSport, home, away, season) => {
+    const sp = await getSpPlus(season);
+    if (sp.unavailable) {
+      return { category: 'SP+', source: 'NOT AVAILABLE', reason: sp.reason,
+        home: { team: home.full_name || home.name }, away: { team: away.full_name || away.name } };
+    }
+    const line = (team) => {
+      const r = rowFor(sp, team.full_name || team.name);
+      if (!r) return { team: team.full_name || team.name, note: 'No SP+ row matched this school.' };
+      return {
+        team: team.full_name || team.name,
+        sp_rating: r.rating, sp_rank: r.ranking,
+        offense_rank: r.offense?.ranking ?? null, offense_rating: r.offense?.rating ?? null,
+        defense_rank: r.defense?.ranking ?? null, defense_rating: r.defense?.rating ?? null,
+        special_teams_rating: r.specialTeams?.rating ?? null,
+        conference: r.conference || null
+      };
+    };
+    return {
+      category: 'SP+ Ratings',
+      source: 'CollegeFootballData',
+      data_scope: `Opponent-adjusted SP+ for the ${season} season, ranked against all ${sp.rows.length} rated teams. This is the opponent adjustment BDL's raw yardage cannot provide.`,
+      home: line(home), away: line(away)
+    };
+  },
+
+  NCAAF_FPI_RATINGS: async (bdlSport, home, away, season) => {
+    const fpi = await getFpi(season);
+    if (fpi.unavailable) {
+      return { category: 'FPI', source: 'NOT AVAILABLE', reason: fpi.reason,
+        home: { team: home.full_name || home.name }, away: { team: away.full_name || away.name } };
+    }
+    const line = (team) => {
+      const r = rowFor(fpi, team.full_name || team.name);
+      if (!r) return { team: team.full_name || team.name, note: 'No FPI row matched this school.' };
+      return {
+        team: team.full_name || team.name,
+        fpi: r.fpi, fpi_rank: r.resumeRanks?.fpi ?? null,
+        efficiency_overall: r.efficiencies?.overall ?? null,
+        efficiency_offense: r.efficiencies?.offense ?? null,
+        efficiency_defense: r.efficiencies?.defense ?? null,
+        efficiency_special_teams: r.efficiencies?.specialTeams ?? null
+      };
+    };
+    return {
+      category: 'FPI Ratings',
+      source: 'CollegeFootballData',
+      data_scope: `ESPN FPI and efficiency splits for ${season}, across ${fpi.rows.length} rated teams.`,
+      home: line(home), away: line(away)
+    };
+  },
+
+  NCAAF_STRENGTH_OF_SCHEDULE: async (bdlSport, home, away, season) => {
+    const fpi = await getFpi(season);
+    if (fpi.unavailable) {
+      return { category: 'Strength of Schedule', source: 'NOT AVAILABLE', reason: fpi.reason,
+        home: { team: home.full_name || home.name }, away: { team: away.full_name || away.name } };
+    }
+    const line = (team) => {
+      const r = rowFor(fpi, team.full_name || team.name);
+      if (!r) return { team: team.full_name || team.name, note: 'No FPI row matched this school.' };
+      return {
+        team: team.full_name || team.name,
+        strength_of_schedule_rank: r.resumeRanks?.strengthOfSchedule ?? null,
+        strength_of_record_rank: r.resumeRanks?.strengthOfRecord ?? null,
+        game_control_rank: r.resumeRanks?.gameControl ?? null,
+        average_win_probability_rank: r.resumeRanks?.averageWinProbability ?? null
+      };
+    };
+    return {
+      category: 'Strength of Schedule',
+      source: 'CollegeFootballData',
+      data_scope: 'FPI resume ranks. Strength of schedule says how hard the season has been; strength of RECORD says how impressive the record is given that schedule — a 10-2 against the 5th-hardest slate and a 10-2 against the 110th are not the same record.',
+      home: line(home), away: line(away)
+    };
+  },
+
+  NCAAF_CONFERENCE_STRENGTH: async (bdlSport, home, away, season) => {
+    const sp = await getSpPlus(season);
+    if (sp.unavailable) {
+      return { category: 'Conference Strength', source: 'NOT AVAILABLE', reason: sp.reason,
+        home: { team: home.full_name || home.name }, away: { team: away.full_name || away.name } };
+    }
+    // Aggregate the bulk SP+ we already hold — no extra request.
+    const byConf = new Map();
+    for (const r of sp.rows) {
+      if (!r.conference || !Number.isFinite(r.rating)) continue;
+      if (!byConf.has(r.conference)) byConf.set(r.conference, []);
+      byConf.get(r.conference).push(r.rating);
+    }
+    const table = [...byConf.entries()]
+      .map(([conference, ratings]) => ({
+        conference,
+        teams: ratings.length,
+        avg_sp_rating: Number((ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(2))
+      }))
+      .sort((a, b) => b.avg_sp_rating - a.avg_sp_rating);
+    table.forEach((c, i) => { c.rank = i + 1; });
+
+    const line = (team) => {
+      const r = rowFor(sp, team.full_name || team.name);
+      const conf = r?.conference || null;
+      const entry = conf ? table.find((c) => c.conference === conf) : null;
+      return {
+        team: team.full_name || team.name,
+        conference: conf,
+        conference_rank: entry?.rank ?? null,
+        conference_avg_sp: entry?.avg_sp_rating ?? null,
+        conferences_ranked: table.length
+      };
+    };
+    return {
+      category: 'Conference Strength',
+      source: 'CollegeFootballData',
+      data_scope: 'Average SP+ per conference, computed from the same bulk ratings pull. Context for whether a record was built inside a strong league or a weak one.',
+      conference_table: table.slice(0, 12),
+      home: line(home), away: line(away)
+    };
+  },
+
+  NCAAF_VS_POWER_OPPONENTS: async (bdlSport, home, away, season) => {
+    const [sp, homeResults, awayResults] = await Promise.all([
+      getSpPlus(season),
+      loadTeamResults(NCAAF_BDL_SPORT, home.id, season),
+      loadTeamResults(NCAAF_BDL_SPORT, away.id, season)
+    ]);
+    if (sp.unavailable) {
+      return { category: 'Vs Ranked Opposition', source: 'NOT AVAILABLE', reason: sp.reason,
+        home: { team: home.full_name || home.name }, away: { team: away.full_name || away.name } };
+    }
+    // Join each completed game to the opponent's SP+ rank. This is the answer
+    // to "how good was that team" for every result on the schedule.
+    const rankOf = (opponentName) => rowFor(sp, opponentName)?.ranking ?? null;
+    const line = (team, results) => {
+      const rated = results
+        .map((r) => ({ ...r, oppRank: rankOf(r.opponent) }))
+        .filter((r) => r.oppRank != null);
+      const vsTop = (limit) => {
+        const subset = rated.filter((r) => r.oppRank <= limit);
+        if (subset.length === 0) return null;
+        const wins = subset.filter((r) => r.won).length;
+        return {
+          record: `${wins}-${subset.length - wins}`,
+          games: subset.map((r) => `${r.won ? 'W' : 'L'} ${r.scored}-${r.allowed} ${r.home ? 'vs' : '@'} ${r.opponent} (SP+ #${r.oppRank})`)
+        };
+      };
+      return {
+        team: team.full_name || team.name,
+        games_with_a_rated_opponent: rated.length,
+        vs_sp_top_25: vsTop(25) || { note: 'No games against SP+ top-25 opposition.' },
+        vs_sp_top_50: vsTop(50) || { note: 'No games against SP+ top-50 opposition.' }
+      };
+    };
+    return {
+      category: 'Vs Ranked Opposition',
+      source: 'CollegeFootballData SP+ joined to the BDL schedule',
+      data_scope: 'Every completed game joined to the opponent\'s SP+ rank. A 5-0 start against SP+ 90th-and-worse is a different 5-0 from one with a top-25 win in it.',
+      home: line(home, homeResults), away: line(away, awayResults)
+    };
   }
 
 };

@@ -1608,7 +1608,18 @@ Be factual with historical stats where available.`;
         }));
     };
 
-    const [homeLeaders, awayLeaders] = await Promise.all([leadersFor(home), leadersFor(away)]);
+    // The game ledger and league ranks turn a stat line into an account of
+    // the game it came from: what the score was, whether he was chasing it,
+    // and how good the defense he did it against actually was.
+    const [homeLeaders, awayLeaders, homeGames, awayGames, league] = await Promise.all([
+      leadersFor(home), leadersFor(away),
+      loadTeamResults(bdlSport, home.id, season).catch(() => []),
+      loadTeamResults(bdlSport, away.id, season).catch(() => []),
+      loadLeagueContext(bdlSport, season).catch(() => null)
+    ]);
+    const ledgerFor = (results) => new Map((results || []).map((r) => [String(r.gameId), r]));
+    const homeLedger = ledgerFor(homeGames);
+    const awayLedger = ledgerFor(awayGames);
     const allIds = [...homeLeaders, ...awayLeaders].map((p) => p.id);
     const logs = allIds.length
       ? await ballDontLieService.getNflPlayerGameLogsBatch(allIds, season, 5)
@@ -1618,7 +1629,7 @@ Be factual with historical stats where available.`;
     // over the raw summary object printed every stat family for every player,
     // so a running back's log carried "pass_yds: 0, pass_tds: 0" on all five
     // rows — noise Gary has to read past to find the carries.
-    const statLine = (role, g) => {
+    const statLine = (role, g, ledger) => {
       const parts = [];
       if (role === 'passer' || Number(g.pass_att)) {
         parts.push(`${g.pass_comp ?? 0}/${g.pass_att ?? 0}, ${g.pass_yds ?? 0} pass yds, ${g.pass_tds ?? 0} TD, ${g.ints ?? 0} INT`);
@@ -1631,10 +1642,28 @@ Be factual with historical stats where available.`;
       }
       const where = g.isHome === undefined ? '' : (g.isHome ? 'vs ' : '@ ');
       const opponent = g.opponent ? `${where}${g.opponent}` : 'opponent not carried';
-      return `${opponent}: ${parts.join('; ') || 'no offensive stats'}`;
+
+      // What the game actually was. A 331-yard game in a blowout loss where he
+      // was throwing from two scores down is not the same evidence as 331 in a
+      // game he controlled, and the raw line cannot tell them apart.
+      const tail = [];
+      const led = ledger.get(String(g.gameId));
+      if (led) {
+        tail.push(`team ${led.won ? 'won' : 'lost'} ${led.scored}-${led.allowed}`);
+        if (led.shapeKnown) {
+          const ht = led.halftimeFor === led.halftimeAgainst
+            ? `tied ${led.halftimeFor}-${led.halftimeAgainst} at half`
+            : `${led.halftimeFor > led.halftimeAgainst ? 'led' : 'trailed'} ${led.halftimeFor}-${led.halftimeAgainst} at half`;
+          tail.push(ht);
+        }
+        const oppLine = league ? opponentQualityLine(league, led.opponentId) : null;
+        if (oppLine) tail.push(oppLine);
+      }
+      const context = tail.length ? ` — ${tail.join(', ')}` : '';
+      return `${opponent}: ${parts.join('; ') || 'no offensive stats'}${context}`;
     };
 
-    const render = (leaders) => leaders.map((p) => {
+    const render = (leaders, ledger) => leaders.map((p) => {
       const summary = logs?.[p.id];
       if (!summary?.games?.length) {
         return { player: p.name, role: p.role, position: p.position, last_5: 'No game logs returned' };
@@ -1644,16 +1673,16 @@ Be factual with historical stats where available.`;
         role: p.role,
         position: p.position,
         games_used: summary.gamesAnalyzed ?? summary.games.length,
-        last_5: summary.games.map((g) => statLine(p.role, g))
+        last_5: summary.games.map((g) => statLine(p.role, g, ledger))
       };
     });
 
     return {
       category: 'Player Game Logs',
       source: 'Ball Don\'t Lie',
-      data_scope: 'Last 5 games for each side\'s leading passer, rusher and receiver',
-      home: { team: home.full_name || home.name, players: render(homeLeaders) },
-      away: { team: away.full_name || away.name, players: render(awayLeaders) }
+      data_scope: 'Last 5 games for each side\'s leading passer, rusher and receiver, each line carrying the game it came from — the result, whether the team led or trailed at half, and how good that opponent was',
+      home: { team: home.full_name || home.name, players: render(homeLeaders, homeLedger) },
+      away: { team: away.full_name || away.name, players: render(awayLeaders, awayLedger) }
     };
   }
 
