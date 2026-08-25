@@ -105,10 +105,13 @@ function retryLeadTimesFor(sportKey) {
 
 const SPORTS = [
   { key: 'americanfootball_nfl', flag: '--nfl', label: 'NFL', propsScript: 'run-agentic-nfl-props.js' },
-  // Live college props come from The Odds API and are BDL roster/stat
-  // validated. A missing/deactivated server key fails this lane loudly; it
-  // never manufactures a market from stats.
-  { key: 'americanfootball_ncaaf', flag: '--ncaaf', label: 'NCAAF', propsScript: 'run-agentic-ncaaf-props.js' },
+  // NCAAF PROPS = THE PIGGYBACK (founder, Aug 25 2026): college props ride the
+  // game-pick lane — run-agentic-picks asks Gary for at most two menu props
+  // right after each NCAAF game pick and stores them on the production prop
+  // rails. The standalone desk lane (run-agentic-ncaaf-props.js) is PARKED, so
+  // this entry deliberately carries no propsScript; the scheduler's props slot
+  // skips sports without one. NFL keeps its full desk below.
+  { key: 'americanfootball_ncaaf', flag: '--ncaaf', label: 'NCAAF' },
   { key: 'basketball_nba', flag: '--nba', label: 'NBA', propsScript: 'run-agentic-nba-props.js' },
   // NHL PARKED (Jul 13 2026): the BDL NHL tier lapsed, so every fetch 401s. That
   // permanent failure set fetchFailed=true on every daily build, which on the

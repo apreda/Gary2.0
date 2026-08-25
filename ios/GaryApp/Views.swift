@@ -21880,6 +21880,13 @@ struct PicksCarouselView: View {
     /// True while `sport` was set by the auto-snap rather than a user tap —
     /// the only state the snap is allowed to correct once real data lands.
     @State private var sportAutoSelected = false
+    /// NCAAF CONFERENCE NAVIGATION (founder, Aug 25 2026): the college strip
+    /// defaults to ranked matchups — backfilled with the biggest remaining
+    /// games when the poll is thin — and filters by conference on demand. A
+    /// cross-conference game belongs to BOTH conferences' filters; a game
+    /// with two ranked teams shows under RANKED and both conferences.
+    static let ncaafRankedFilter = "RANKED"
+    @State private var ncaafConference: String = PicksCarouselView.ncaafRankedFilter
     @State private var page = 0
     @State private var selectedProp: PropPick?
     /// PERF#1(b/c): memoized UNSORTED game set + precomputed per-game edge index.
@@ -22132,6 +22139,13 @@ struct PicksCarouselView: View {
                 )
             }
         }
+        // NCAAF CONFERENCE NAVIGATION (founder, Aug 25 2026): scope the
+        // college strip to the active view — RANKED (with big-game backfill)
+        // or one conference. Today only; Yesterday keeps the full recap.
+        if sport == "NCAAF", pickDay == .today {
+            out = filterNcaafGames(out)
+        }
+
         // Flag doubleheader siblings — pages use this to DEMAND game-scoped
         // data (an unstamped arm/pick/edge stays off rather than guessed).
         var perMatchup: [String: Int] = [:]
@@ -22144,6 +22158,153 @@ struct PicksCarouselView: View {
 
     private var games: [(matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])] {
         gamesMemo
+    }
+
+    // MARK: — NCAAF conference navigation (founder, Aug 25 2026)
+
+    private struct NcaafGameMeta {
+        var homeConference: String?
+        var awayConference: String?
+        var homeRanking: Int?
+        var awayRanking: Int?
+        var conferences: Set<String> { Set([homeConference, awayConference].compactMap { $0 }) }
+        var isRanked: Bool { homeRanking != nil || awayRanking != nil }
+    }
+
+    /// The Power-4 set — RANKED's backfill prefers these matchups when the AP
+    /// poll alone can't fill the strip (Week 0 had exactly one ranked game).
+    private static let ncaafPowerConferences: Set<String> = ["SEC", "Big Ten", "Big 12", "ACC"]
+    /// RANKED shows at least this many games when the day has them.
+    private static let ncaafRankedFloor = 6
+    /// Menu order for the day's conferences (only ones with games show).
+    private static let ncaafConferenceOrder = [
+        "SEC", "Big Ten", "Big 12", "ACC", "Pac-12", "American",
+        "Mountain West", "Sun Belt", "MAC", "CUSA", "Independents",
+    ]
+
+    /// Conference/rank identity for the day's NCAAF games, keyed by provider
+    /// game id with a matchup-key fallback. Sources: stored picks (post-pick)
+    /// and the daily slate (pre-pick) — the first stamp for a key wins. An
+    /// empty index means the stamps never arrived; filtering then stands down
+    /// entirely rather than hiding games behind unknowable membership.
+    private func ncaafMetaIndex() -> [String: NcaafGameMeta] {
+        var index: [String: NcaafGameMeta] = [:]
+        func put(_ key: String?, _ meta: NcaafGameMeta) {
+            guard let key, !key.isEmpty, index[key] == nil,
+                  !meta.conferences.isEmpty || meta.isRanked else { return }
+            index[key] = meta
+        }
+        for p in store.gamePicks where (p.league ?? "").uppercased() == "NCAAF" {
+            let meta = NcaafGameMeta(homeConference: p.homeConference, awayConference: p.awayConference,
+                                     homeRanking: p.homeRanking, awayRanking: p.awayRanking)
+            put(p.game_id.map { "id\($0)" }, meta)
+            let a = (p.awayTeam ?? ""), h = (p.homeTeam ?? "")
+            if !a.isEmpty, !h.isEmpty { put("mu" + Self.matchupKey("\(a) @ \(h)"), meta) }
+        }
+        for s in store.slate where (s.league ?? "").uppercased() == "NCAAF" {
+            let meta = NcaafGameMeta(homeConference: s.home_conference, awayConference: s.away_conference,
+                                     homeRanking: s.home_ranking, awayRanking: s.away_ranking)
+            put(s.bdl_game_id.map { "id\($0)" }, meta)
+            if let a = s.away_team, let h = s.home_team, !a.isEmpty, !h.isEmpty {
+                put("mu" + Self.matchupKey("\(a) @ \(h)"), meta)
+            }
+        }
+        return index
+    }
+
+    private func ncaafMeta(
+        for game: (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick]),
+        index: [String: NcaafGameMeta]
+    ) -> NcaafGameMeta? {
+        let ids = Set(game.props.compactMap(\.game_id))
+        if ids.count == 1, let id = ids.first, let meta = index["id\(id)"] { return meta }
+        return index["mu" + Self.matchupKey(game.matchup)]
+    }
+
+    /// The day's conferences that actually have games — the menu never offers
+    /// a filter that would render empty.
+    private func ncaafConferenceOptions() -> [String] {
+        let present = Set(ncaafMetaIndex().values.flatMap { $0.conferences })
+        return Self.ncaafConferenceOrder.filter { present.contains($0) }
+    }
+
+    private func filterNcaafGames(
+        _ games: [(matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])]
+    ) -> [(matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])] {
+        let index = ncaafMetaIndex()
+        guard !index.isEmpty else { return games }
+
+        if ncaafConference != Self.ncaafRankedFilter {
+            let filtered = games.filter {
+                ncaafMeta(for: $0, index: index)?.conferences.contains(ncaafConference) == true
+            }
+            if filtered.isEmpty {
+                // The selected conference left the day's slate (refresh,
+                // rollover) — snap home to RANKED, never an empty strip.
+                ncaafConference = Self.ncaafRankedFilter
+            } else {
+                return filtered
+            }
+        }
+
+        // RANKED: every matchup with an AP side leads; when the poll can't
+        // fill the strip, backfill with the biggest remaining games — Power-4
+        // matchups first, then the rest, each ordered by kickoff.
+        var ranked: [(matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])] = []
+        var power: [(matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])] = []
+        var rest: [(matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])] = []
+        for g in games {
+            let meta = ncaafMeta(for: g, index: index)
+            if meta?.isRanked == true { ranked.append(g) }
+            else if meta?.conferences.contains(where: Self.ncaafPowerConferences.contains) == true { power.append(g) }
+            else { rest.append(g) }
+        }
+        let byKickoff: ((matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick]),
+                        (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])) -> Bool = {
+            ($0.commence ?? .distantFuture) < ($1.commence ?? .distantFuture)
+        }
+        let backfillNeed = max(0, Self.ncaafRankedFloor - ranked.count)
+        let backfill = Array((power.sorted(by: byKickoff) + rest.sorted(by: byKickoff)).prefix(backfillNeed))
+        let visible = ranked.sorted(by: byKickoff) + backfill
+        return visible.isEmpty ? games : visible
+    }
+
+    private func selectNcaafConference(_ value: String) {
+        guard ncaafConference != value else { return }
+        withAnimation(.easeInOut(duration: 0.25)) {
+            ncaafConference = value
+            page = 0
+        }
+        gamesMemo = []
+        rebuildMemo()
+    }
+
+    /// The strip's conference selector — the day block's exact grammar
+    /// (selection over kicker, gold chevron), NCAAF Today only.
+    private var conferenceBlock: some View {
+        Menu {
+            Button("Ranked") { selectNcaafConference(Self.ncaafRankedFilter) }
+            ForEach(ncaafConferenceOptions(), id: \.self) { conf in
+                Button(conf) { selectNcaafConference(conf) }
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 4) {
+                    Text(ncaafConference == Self.ncaafRankedFilter ? "RANKED" : ncaafConference.uppercased())
+                        .font(HubFont.data(11.5, .semibold))
+                        .foregroundStyle(.white.opacity(0.95))
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(GaryColors.gold)
+                }
+                Text("CONFERENCE")
+                    .font(HubFont.data(9.5, .medium))
+                    .foregroundStyle(.white.opacity(0.55))
+            }
+            .padding(.horizontal, 13)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
     }
 
     /// Recompute the memoized game set + edge index. Called on first load and
@@ -22516,6 +22677,8 @@ struct PicksCarouselView: View {
         }
         .onChange(of: sport) { _ in
             page = 0
+            // A fresh league entry always starts college at RANKED.
+            ncaafConference = Self.ncaafRankedFilter
             gamesMemo = []
             rebuildMemo()
             lockShowcaseIfNeeded()
@@ -22829,6 +22992,12 @@ struct PicksCarouselView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 0) {
                     dayBlock
+                    // NCAAF only: the conference selector rides the strip in
+                    // the day block's grammar (founder, Aug 25 2026).
+                    if sport == "NCAAF", pickDay == .today, !ncaafConferenceOptions().isEmpty {
+                        Rectangle().fill(Color.white.opacity(0.1)).frame(width: 1, height: 26)
+                        conferenceBlock
+                    }
                     ForEach(Array(games.enumerated()), id: \.offset) { idx, g in
                         Rectangle().fill(Color.white.opacity(0.1)).frame(width: 1, height: 26)
                         stripBlock(idx + 1, g)

@@ -1188,7 +1188,20 @@ async function main() {
           }
         }
         console.log(`[${config.name}] Conference data attached to ${games.length} games (all conferences accepted)`);
-        
+
+      }
+
+      // NCAAF: stamp conference names + AP Top 25 ranks (founder, Aug 25 2026).
+      // The app's college navigation defaults to ranked matchups and filters
+      // the rest by conference — both reads come from these per-side fields.
+      // Fail-soft by contract: navigation chrome never delays a pick.
+      if (config.key === 'americanfootball_ncaaf' && games.length > 0) {
+        try {
+          const { attachNcaafGameMetadata } = await import('../src/services/ncaafGameMetadata.js');
+          await attachNcaafGameMetadata(games);
+        } catch (metaErr) {
+          console.warn(`[${config.name}] Conference/rank stamping skipped: ${metaErr.message}`);
+        }
       }
 
       // Apply --game-id filter (exact, used by scheduler — no ambiguity)
@@ -2112,12 +2125,13 @@ async function main() {
             cfpRound: result.cfpRound || null,
             homeSeed: result.homeSeed || null,
             awaySeed: result.awaySeed || null,
-            // NCAAB AP Top 25 rankings
-            homeRanking: result.homeRanking || null,
-            awayRanking: result.awayRanking || null,
-            // NCAAB conference data for app filtering
-            homeConference: result.homeConference || null,
-            awayConference: result.awayConference || null,
+            // AP Top 25 rankings (NCAAB: from the scout; NCAAF: stamped on the
+            // game object by attachNcaafGameMetadata — Aug 25 2026)
+            homeRanking: result.homeRanking ?? game.homeRanking ?? null,
+            awayRanking: result.awayRanking ?? game.awayRanking ?? null,
+            // Conference data for app filtering (same two sources)
+            homeConference: result.homeConference ?? game.homeConference ?? null,
+            awayConference: result.awayConference ?? game.awayConference ?? null,
             // Single conference field for app filtering (based on which team is in the pick).
             // Longest whole-word match wins (shared-mascot class, Aug 19 sweep): a bare
             // last-word join reads "Michigan State" and "Ohio State" as the same school.
@@ -2137,10 +2151,12 @@ async function main() {
               };
               const h = matchLen(result.homeTeam);
               const a = matchLen(result.awayTeam);
-              if (h > a) return result.homeConference || null;
-              if (a > h) return result.awayConference || null;
+              const homeConf = result.homeConference ?? game.homeConference ?? null;
+              const awayConf = result.awayConference ?? game.awayConference ?? null;
+              if (h > a) return homeConf;
+              if (a > h) return awayConf;
               // Tie or no match: use home conference if available
-              return result.homeConference || result.awayConference || null;
+              return homeConf || awayConf;
             })(),
             statsUsed: statsUsed, // Token names for backwards compatibility
             statsData: statsData, // Full stat data with values for Tale of the Tape
@@ -2207,6 +2223,33 @@ async function main() {
               }
             } catch (storeErr) {
               console.log(`⚠️  [${config.name}] Immediate store failed (will retry at end): ${storeErr.message}`);
+            }
+          }
+
+          // THE NCAAF PIGGYBACK (founder GO, Aug 25 2026): college props ride
+          // the game pick — right after Gary's pick for an FBS game, he takes
+          // at most two props from that game's live menu (popular books,
+          // piggyback price band), and they publish on the production NCAAF
+          // prop rails (prop_picks → grading, records, the game's card).
+          // Fail-soft by contract: a props failure never touches the stored
+          // game pick. NFL keeps its full props desk — this lane is college's.
+          if (config.key === 'americanfootball_ncaaf' && shouldStore
+              && cleanPick.type !== 'pass' && cleanPick.pick !== 'PASS') {
+            try {
+              const { runNcaafPiggyback } = await import('../src/services/pickdesk/ncaafPiggybackProps.js');
+              const piggyback = await runNcaafPiggyback({
+                game,
+                pickText: cleanPick.pick,
+                rationale: cleanPick.rationale,
+              });
+              if (!piggyback.picks.length) {
+                console.log(`   [NCAAF Piggyback] no props stored (${piggyback.reason || 'Gary passed the menu'}; menu size ${piggyback.menuSize})`);
+              } else {
+                await storeNcaafPiggybackProps(piggyback.picks, { useTestTable });
+                console.log(`   [NCAAF Piggyback] stored ${piggyback.picks.length} prop(s): ${piggyback.picks.map((p) => `${p.player} ${p.bet.toUpperCase()} ${p.prop} ${p.line} @ ${p.odds}`).join(' | ')}`);
+              }
+            } catch (piggybackErr) {
+              console.warn(`   ⚠️ [NCAAF Piggyback] skipped (${piggybackErr.message}) — game pick unaffected`);
             }
           }
         } else if (result.error) {
@@ -2421,6 +2464,53 @@ async function checkExistingPick(league, homeTeam, awayTeam, gameDate = null, ga
     // Function may not exist, continue
   }
   return null;
+}
+
+/**
+ * Store NCAAF piggyback props on the production prop rails. Production takes
+ * the same atomic Postgres date lock as every props writer (no read/merge
+ * fallback); --test mirrors the props CLI's isolated test_prop_picks merge.
+ * Dates follow the GAME's NCAAF slate date, never the run's wall clock.
+ */
+async function storeNcaafPiggybackProps(rows, { useTestTable: toTestTable = false } = {}) {
+  if (!rows.length) return;
+  const { storePropPicksAtomic, stampFootballTdCategory } = await import('./lib/propPicksStorage.js');
+
+  const byDate = new Map();
+  for (const row of rows) {
+    const date = ncaafSlateDateForInstant(row.commence_time);
+    if (!byDate.has(date)) byDate.set(date, []);
+    byDate.get(date).push(row);
+  }
+
+  if (toTestTable) {
+    for (const [date, datePicks] of byDate) {
+      const stamped = datePicks.map((p) => stampFootballTdCategory(p, 'NCAAF'));
+      const { data: existing, error: readErr } = await supabase
+        .from('test_prop_picks').select('picks').eq('date', date).maybeSingle();
+      if (readErr) throw new Error(`test_prop_picks read failed for ${date}: ${readErr.message}`);
+      const kept = (existing?.picks || []).filter((p) =>
+        !stamped.some((n) => String(p.game_id) === String(n.game_id)
+          && (p.player || '').toLowerCase() === (n.player || '').toLowerCase()
+          && (p.prop || '') === (n.prop || '')));
+      const { error: upsertErr } = await supabase.from('test_prop_picks')
+        .upsert({ date, picks: [...kept, ...stamped], created_at: new Date().toISOString() });
+      if (upsertErr) throw new Error(`test_prop_picks upsert failed for ${date}: ${upsertErr.message}`);
+      console.log(`🧪 [NCAAF Piggyback] TEST: ${stamped.length} prop(s) → test_prop_picks (${date})`);
+    }
+    return;
+  }
+
+  for (const [date, datePicks] of byDate) {
+    const result = await storePropPicksAtomic({
+      client: supabase,
+      date,
+      leagueLabel: 'NCAAF',
+      picks: datePicks,
+      forceRun: false,
+    });
+    console.log(`✅ [NCAAF Piggyback] atomic prop storage (${date}): ${result.added} added, ${result.skipped} already present`);
+  }
 }
 
 async function storePicks(picks) {

@@ -813,7 +813,7 @@ enum SupabaseAPI {
 
     static func fetchDailySlateWithStatus(date: String, forceRefresh: Bool = false) async -> DailySlateFetch {
         let url = buildURL(table: "daily_slate", query: [
-            URLQueryItem(name: "select", value: "league,away_team,home_team,commence_time,scheduled_date,kickoff_status,game_status,status_detail,bdl_game_id,venue,spread,ml_home,ml_away,total"),
+            URLQueryItem(name: "select", value: "league,away_team,home_team,commence_time,scheduled_date,kickoff_status,game_status,status_detail,bdl_game_id,venue,spread,ml_home,ml_away,total,home_conference,away_conference,home_ranking,away_ranking"),
             URLQueryItem(name: "date", value: "eq.\(date)"),
             URLQueryItem(name: "order", value: "commence_time.asc")
         ])

@@ -564,6 +564,14 @@ struct DailySlateRow: Codable {
     let ml_home: Double?
     let ml_away: Double?
     let total: Double?
+    /// NCAAF navigation chrome (Aug 25 2026): conference names + AP Top 25
+    /// ranks per side, stamped by the slate writer for college rows only —
+    /// the Picks page's ranked default and conference filter read these.
+    /// Optional keeps every other league's rows and cached slates decodable.
+    var home_conference: String? = nil
+    var away_conference: String? = nil
+    var home_ranking: Int? = nil
+    var away_ranking: Int? = nil
 
     var isInterrupted: Bool {
         switch game_status?.lowercased() {

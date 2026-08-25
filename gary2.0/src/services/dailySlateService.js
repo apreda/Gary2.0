@@ -273,6 +273,16 @@ export async function buildLeagueRows(sport, etDateStr) {
         `NCAAF source returned ${missingGameIdentity.length} game(s) without a provider game id`,
       );
     }
+
+    // Conference names + AP ranks for the app's college navigation (founder,
+    // Aug 25 2026) — the slate carries them so the Picks page can filter
+    // before any pick posts. Fail-soft: chrome never blocks the slate write.
+    try {
+      const { attachNcaafGameMetadata } = await import('./ncaafGameMetadata.js');
+      await attachNcaafGameMetadata(ncaafGames);
+    } catch (metaErr) {
+      console.warn(`[Daily Slate] NCAAF conference/rank stamping skipped: ${metaErr.message}`);
+    }
   }
 
   const rows = [];
@@ -331,6 +341,14 @@ export async function buildLeagueRows(sport, etDateStr) {
       // The game's own identity — lets every reader (iOS pages, insight
       // attachment) tell doubleheader games apart without string games.
       bdl_game_id: gameId,
+      // College navigation chrome (NCAAF only, nullable columns): the Picks
+      // page's ranked default + conference filter read these per-side fields.
+      ...(isNcaaf ? {
+        home_conference: g.homeConference ?? null,
+        away_conference: g.awayConference ?? null,
+        home_ranking: g.homeRanking ?? null,
+        away_ranking: g.awayRanking ?? null,
+      } : {}),
       venue: null, // BDL games+odds shape carries no venue
       line_vendor: g.line_vendor ?? null,
       ...sanitizeLines(sport.league, {

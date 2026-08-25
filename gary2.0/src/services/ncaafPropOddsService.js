@@ -177,13 +177,20 @@ function bestPrice(current, candidate) {
  * Every output row represents one player + canonical type + exact line; each
  * side independently keeps the best American price across returned books.
  */
-export function transformNcaafEventOdds(payload, { bdlGameId = null } = {}) {
+export function transformNcaafEventOdds(payload, { bdlGameId = null, allowedBookmakers = null } = {}) {
   if (!payload || payload.sport_key !== SPORT_KEY) {
     throw new NcaafPropMarketError('EVENT_ODDS_MISMATCH', 'The Odds API returned a non-NCAAF event payload');
   }
 
+  // Optional book whitelist (founder, Aug 25 2026: "stick to the most popular
+  // ones with the standard odds and lines"). Null = every book, unchanged.
+  const allowedBooks = Array.isArray(allowedBookmakers) && allowedBookmakers.length
+    ? new Set(allowedBookmakers.map((b) => String(b).toLowerCase().trim()))
+    : null;
+
   const rows = new Map();
   for (const book of Array.isArray(payload.bookmakers) ? payload.bookmakers : []) {
+    if (allowedBooks && !allowedBooks.has(String(book?.key || '').toLowerCase().trim())) continue;
     for (const market of Array.isArray(book?.markets) ? book.markets : []) {
       const propType = MARKET_TYPE_MAP[market?.key];
       if (!propType) continue;
@@ -238,7 +245,10 @@ export function transformNcaafEventOdds(payload, { bdlGameId = null } = {}) {
 function windowAround(iso, hours) {
   const epoch = new Date(iso).getTime();
   if (!Number.isFinite(epoch)) return null;
-  return new Date(epoch + hours * 60 * 60 * 1000).toISOString();
+  // The Odds API rejects fractional seconds in commenceTimeFrom/To (422:
+  // "format must be YYYY-MM-DDTHH:MM:SSZ") — caught live Aug 25 2026, the
+  // first real run this lane ever got. Strip the milliseconds.
+  return new Date(epoch + hours * 60 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
 export const ncaafPropOddsService = {
@@ -251,6 +261,7 @@ export const ncaafPropOddsService = {
     env = process.env,
     fetchImpl = globalThis.fetch,
     timeoutMs = 15_000,
+    allowedBookmakers = null,
   } = {}) {
     if (typeof fetchImpl !== 'function') {
       throw new NcaafPropMarketError('FETCH_UNAVAILABLE', 'No fetch implementation is available for NCAAF props');
@@ -289,7 +300,7 @@ export const ncaafPropOddsService = {
       throw new NcaafPropMarketError('EVENT_ODDS_MISMATCH', 'The Odds API event-odds payload did not match the selected NCAAF game');
     }
 
-    const markets = transformNcaafEventOdds(eventOdds, { bdlGameId });
+    const markets = transformNcaafEventOdds(eventOdds, { bdlGameId, allowedBookmakers });
     if (markets.length === 0) {
       throw new NcaafPropMarketError(
         'NO_LIVE_PROP_MARKETS',
