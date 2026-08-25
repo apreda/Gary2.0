@@ -2,6 +2,7 @@ import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fm
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { loadTeamResults, formSummary, homeAwaySplit, marginProfile } from './footballTeamGames.js';
 import { nflVenueFor, weatherApplies } from './footballVenues.js';
+import { loadLeagueContext, opponentQualityLine } from './footballLeagueContext.js';
 import { getKickoffWeather, windDescription } from '../../../weatherService.js';
 import { getPracticeReport, getSnapShare } from '../../../nflverseService.js';
 
@@ -1451,15 +1452,17 @@ Be factual with historical stats where available.`;
   },
 
   NFL_RECENT_FORM: async (bdlSport, home, away, season) => {
-    const [homeResults, awayResults] = await Promise.all([
+    const [homeResults, awayResults, league] = await Promise.all([
       loadTeamResults(bdlSport, home.id, season),
-      loadTeamResults(bdlSport, away.id, season)
+      loadTeamResults(bdlSport, away.id, season),
+      loadLeagueContext(bdlSport, season)
     ]);
+    const opts = { leagueContext: league, opponentQuality: opponentQualityLine };
     return {
       category: 'Recent Form (Last 5)',
-      data_scope: 'Completed games this season, newest first, each with its opponent and score',
-      home: { team: home.full_name || home.name, ...(formSummary(homeResults, 5) || { note: 'No completed games found' }) },
-      away: { team: away.full_name || away.name, ...(formSummary(awayResults, 5) || { note: 'No completed games found' }) }
+      data_scope: 'Completed games newest first. Each line carries who it was against, where it was played, how the game actually went half by half, and how good that opponent was on the season — a score alone cannot say whether a win was comfortable, salvaged, or nearly thrown away.',
+      home: { team: home.full_name || home.name, ...(formSummary(homeResults, 5, opts) || { note: 'No completed games found' }) },
+      away: { team: away.full_name || away.name, ...(formSummary(awayResults, 5, opts) || { note: 'No completed games found' }) }
     };
   },
 

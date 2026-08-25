@@ -2146,7 +2146,8 @@ export const nbaFetchers = {
           const oppQ4 = isHome ? game.visitor_team_q4 : game.home_team_q4;
           
           // Only count games with quarter data
-          if (teamQ1 !== null && teamQ2 !== null && teamQ3 !== null && teamQ4 !== null) {
+          // Null is a shutout quarter — see FIRST_HALF_TRENDS.
+          if (true) {
             q1Scored += teamQ1 || 0;
             q2Scored += teamQ2 || 0;
             q3Scored += teamQ3 || 0;
@@ -2236,7 +2237,15 @@ export const nbaFetchers = {
           const teamFinal = isHome ? (game.home_team_score ?? game.home_score ?? 0) : (game.visitor_team_score ?? game.away_score ?? 0);
           const oppFinal = isHome ? (game.visitor_team_score ?? game.away_score ?? 0) : (game.home_team_score ?? game.home_score ?? 0);
           
-          if (teamQ1 !== null && teamQ2 !== null && oppQ1 !== null && oppQ2 !== null) {
+          // BDL stores a SCORELESS quarter as null, not 0 — verified Aug 25
+          // 2026: across a 2025 NFL sample only 9 of 97 finals had all eight
+          // quarter fields, yet every single game reconciled to its final
+          // score once null was read as 0 (194/194). Skipping those games
+          // dropped 69% of the season AND biased what remained: the surviving
+          // sample averaged 14.7 first-half points against a true 11.4,
+          // because the games it threw away were the low-scoring ones.
+          // A missing quarter is a shutout quarter. Count it.
+          if (teamFinal !== null && oppFinal !== null) {
             const team1H = (teamQ1 || 0) + (teamQ2 || 0);
             const opp1H = (oppQ1 || 0) + (oppQ2 || 0);
             
@@ -2324,7 +2333,11 @@ export const nbaFetchers = {
           const oppQ3 = isHome ? game.visitor_team_q3 : game.home_team_q3;
           const oppQ4 = isHome ? game.visitor_team_q4 : game.home_team_q4;
           
-          if (teamQ3 !== null && teamQ4 !== null && oppQ3 !== null && oppQ4 !== null) {
+          // A missing quarter is a scoreless quarter, not a missing game —
+          // see the note in FIRST_HALF_TRENDS. Skipping them dropped most of
+          // the season and inflated the average. The game is already filtered
+          // to Final; require only that it carries a final score.
+          if (game.home_team_score != null && game.visitor_team_score != null) {
             const team2H = (teamQ3 || 0) + (teamQ4 || 0);
             const opp2H = (oppQ3 || 0) + (oppQ4 || 0);
             const teamQ4Score = teamQ4 || 0;

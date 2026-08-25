@@ -5,7 +5,8 @@ import {
   homeAwaySplit,
   marginProfile,
   closeGameRecord,
-  footballWeekLabel
+  footballWeekLabel,
+  gameStoryLine
 } from '../../../src/services/agentic/tools/statRouters/footballTeamGames.js';
 
 // NFL spelling: home_team_score / visitor_team_score, status 'Final'.
@@ -90,12 +91,55 @@ describe('football game ledger — summaries', () => {
     nflGame(4, 50, 10, 35, 7, '2025-09-28')    // L by 28, away
   ], 10);
 
-  it('carries the opponent and the score into the form line', () => {
+  it('carries the opponent, venue and score into the form line', () => {
     const form = formSummary(results, 5);
     expect(form.record).toBe('2-2');
     expect(form.games_used).toBe(4);
-    expect(form.results).toContain('W 27-10 @ Team 40');
-    expect(form.results).toContain('L 14-17 vs Team 30');
+    // The line now leads with the result and venue, then tells the story.
+    expect(form.results.some((l) => l.startsWith('W 27-10 @ Team 40'))).toBe(true);
+    expect(form.results.some((l) => l.startsWith('L 14-17 vs Team 30'))).toBe(true);
+  });
+
+  it('tells what actually happened, not just the final score', () => {
+    // The founder's standard: "were they ahead in the first half and then blew
+    // it, or vice versa? What is the story of the game?"
+    const blownLead = toTeamResults([{
+      id: 9, date: '2025-10-05', status: 'Final',
+      home_team: { id: 10, full_name: 'Team 10' },
+      visitor_team: { id: 20, full_name: 'Team 20' },
+      home_team_score: 24, visitor_team_score: 31,
+      home_team_q1: 10, home_team_q2: 14, home_team_q3: null, home_team_q4: null,
+      visitor_team_q1: 7, visitor_team_q2: 3, visitor_team_q3: 14, visitor_team_q4: 7
+    }], 10);
+    const line = gameStoryLine(blownLead[0]);
+    expect(line).toContain('led 24-10 at half');
+    expect(line).toContain('outscored 0-21 after');
+    expect(line).toContain('lost a halftime lead');
+  });
+
+  it('reads a scoreless quarter as zero, not as missing data', () => {
+    // BDL stores a shutout quarter as null. Only 9 of 97 sampled 2025 finals
+    // carried all eight fields, yet all 194 sides reconciled once null read as
+    // 0 — so treating null as "missing" discarded 69% of the season.
+    const shutoutHalf = toTeamResults([{
+      id: 11, date: '2025-10-12', status: 'Final',
+      home_team: { id: 10, full_name: 'Team 10' },
+      visitor_team: { id: 20, full_name: 'Team 20' },
+      home_team_score: 14, visitor_team_score: 0,
+      home_team_q1: null, home_team_q2: 7, home_team_q3: null, home_team_q4: 7,
+      visitor_team_q1: null, visitor_team_q2: null, visitor_team_q3: null, visitor_team_q4: null
+    }], 10);
+    expect(shutoutHalf[0].shapeKnown).toBe(true);
+    expect(shutoutHalf[0].halftimeFor).toBe(7);
+    expect(shutoutHalf[0].halftimeAgainst).toBe(0);
+    expect(gameStoryLine(shutoutHalf[0])).toContain('led 7-0 at half');
+  });
+
+  it('attaches how good the opponent was, when league context is supplied', () => {
+    const leagueContext = { byTeamId: new Map([[30, {}]]) };
+    const opponentQuality = (ctx, id) => (id === 30 ? 'opponent allowed 30.1 ppg (32nd of 32)' : null);
+    const form = formSummary(results, 5, { leagueContext, opponentQuality });
+    expect(form.results.some((l) => l.includes('opponent allowed 30.1 ppg (32nd of 32)'))).toBe(true);
   });
 
   it('splits home from away', () => {

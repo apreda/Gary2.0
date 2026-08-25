@@ -34,6 +34,25 @@ function sideScore(game, side) {
   return Number.isFinite(Number(value)) ? Number(value) : null;
 }
 
+/**
+ * Quarter points for one side.
+ *
+ * BDL stores a SCORELESS quarter as null, not 0 — verified Aug 25 2026: only
+ * 9 of 97 sampled 2025 finals carried all eight quarter fields, yet every one
+ * reconciled to its final score once null was read as 0 (194/194). Treating
+ * null as "missing" and skipping the game threw away 69% of the season and
+ * biased what was left toward high-scoring halves.
+ */
+function quarters(game, side) {
+  const pre = side === 'home' ? 'home_team' : 'visitor_team';
+  const alt = side === 'home' ? 'home' : 'away';
+  const q = (n) => {
+    const v = game?.[`${pre}_q${n}`] ?? game?.[`${alt}_score_q${n}`];
+    return Number.isFinite(Number(v)) ? Number(v) : 0;
+  };
+  return { q1: q(1), q2: q(2), q3: q(3), q4: q(4) };
+}
+
 function teamIdOf(game, side) {
   const team = side === 'home' ? game?.home_team : (game?.visitor_team || game?.away_team);
   return team?.id ?? null;
@@ -63,6 +82,16 @@ export function toTeamResults(games, teamId) {
       const allowed = sideScore(g, opponentSide);
       if (scored === null || allowed === null) return null;
 
+      // The half-by-half shape is what turns a score into a story: a 27-10
+      // win that was 24-0 at half is a different game from one that was 3-10
+      // at half, and the final score alone cannot tell them apart.
+      const own = quarters(g, side);
+      const opp = quarters(g, opponentSide);
+      const halftimeFor = own.q1 + own.q2;
+      const halftimeAgainst = opp.q1 + opp.q2;
+      const secondHalfFor = own.q3 + own.q4;
+      const secondHalfAgainst = opp.q3 + opp.q4;
+
       return {
         // Kept so per-player game rows (whose embedded game object has null
         // teams in NCAAF) can be joined back to a real opponent.
@@ -71,10 +100,18 @@ export function toTeamResults(games, teamId) {
         week: g.week ?? null,
         home: isHome,
         opponent: teamNameOf(g, opponentSide),
+        opponentId: teamIdOf(g, opponentSide),
         scored,
         allowed,
         margin: scored - allowed,
-        won: scored > allowed
+        won: scored > allowed,
+        halftimeFor,
+        halftimeAgainst,
+        secondHalfFor,
+        secondHalfAgainst,
+        // Quarter data is only usable when the sides reconcile to the finals.
+        shapeKnown: (halftimeFor + secondHalfFor === scored)
+          && (halftimeAgainst + secondHalfAgainst === allowed)
       };
     })
     .filter(Boolean)
@@ -90,8 +127,11 @@ export async function loadTeamResults(bdlSport, teamId, season) {
   return toTeamResults(games, teamId);
 }
 
-/** W-L plus the games themselves, so a rate always arrives with its schedule. */
-export function formSummary(results, count = 5) {
+/**
+ * W-L plus the games themselves, so a rate always arrives with its schedule —
+ * and, when league context is supplied, with how good each opponent was.
+ */
+export function formSummary(results, count = 5, { leagueContext = null, opponentQuality = null } = {}) {
   const window = results.slice(0, count);
   if (window.length === 0) return null;
   const wins = window.filter((r) => r.won).length;
@@ -100,10 +140,54 @@ export function formSummary(results, count = 5) {
     games_used: window.length,
     points_per_game: round(avg(window.map((r) => r.scored)), 1),
     points_allowed_per_game: round(avg(window.map((r) => r.allowed)), 1),
-    results: window.map((r) => (
-      `${r.won ? 'W' : 'L'} ${r.scored}-${r.allowed} ${r.home ? 'vs' : '@'} ${r.opponent || 'Unknown'}`
-    ))
+    // Each game carries its own story, not just its score.
+    results: window.map((r) => gameStoryLine(r, {
+      opponentContext: (leagueContext && opponentQuality)
+        ? opponentQuality(leagueContext, r.opponentId)
+        : null
+    }))
   };
+}
+
+/**
+ * One game, told the way a bettor would ask about it.
+ *
+ * The founder's standard: a stat is not usable until you know where it came
+ * from. "W 27-10" answers almost nothing — who was it against, was it home,
+ * and above all WHAT HAPPENED. A 27-10 win that was 24-0 at half is a
+ * different game from one that was 3-10 at half, and the final score cannot
+ * tell them apart.
+ *
+ * Facts only, no verdict. It reports that a team led at half and was
+ * outscored after; it never says whether that means anything. Gary decides.
+ */
+export function gameStoryLine(result, { opponentContext = null } = {}) {
+  if (!result) return null;
+  const head = `${result.won ? 'W' : 'L'} ${result.scored}-${result.allowed} `
+    + `${result.home ? 'vs' : '@'} ${result.opponent || 'Unknown'}`;
+
+  const parts = [head];
+
+  if (result.shapeKnown) {
+    const htFor = result.halftimeFor;
+    const htAgainst = result.halftimeAgainst;
+    const ht = htFor === htAgainst
+      ? `tied ${htFor}-${htAgainst} at half`
+      : `${htFor > htAgainst ? 'led' : 'trailed'} ${htFor}-${htAgainst} at half`;
+    const after = `outscored ${result.secondHalfFor}-${result.secondHalfAgainst} after`;
+    parts.push(`${ht}, ${after}`);
+
+    // Name the swing only when the second half actually reversed the game —
+    // stated as what happened, never as a judgement about the team.
+    const ledAtHalf = htFor > htAgainst;
+    if (ledAtHalf && !result.won) parts.push('lost a halftime lead');
+    else if (!ledAtHalf && htFor !== htAgainst && result.won) parts.push('won after trailing at half');
+  } else {
+    parts.push('quarter detail not available for this game');
+  }
+
+  if (opponentContext) parts.push(opponentContext);
+  return parts.join(' — ');
 }
 
 export function homeAwaySplit(results) {
