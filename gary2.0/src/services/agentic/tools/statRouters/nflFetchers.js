@@ -1,6 +1,8 @@
 import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, groundedWebSearch, getGroundedWeather, isGameCompleted } from './statRouterCommon.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { loadTeamResults, formSummary, homeAwaySplit, marginProfile } from './footballTeamGames.js';
+import { nflVenueFor, weatherApplies } from './footballVenues.js';
+import { getKickoffWeather, windDescription } from '../../../weatherService.js';
 
 /**
  * Both teams' season rows in one call, unwrapped.
@@ -1238,86 +1240,105 @@ export const nflFetchers = {
 
 
   // ===== WEATHER (NFL/NCAAF) - Returns weather data for Gary to evaluate =====
+  /**
+   * Kickoff weather from the stadium's own coordinates.
+   *
+   * Was a grounded web search asking a model what the weather was — pinned to
+   * "today" rather than kickoff, unverifiable, and slow. Open-Meteo is keyless
+   * and returns the actual forecast hour. Roof state comes from the venue
+   * table, so a dome says dome instead of reporting a wind that never reaches
+   * the field.
+   */
   WEATHER: async (bdlSport, home, away, season, options = {}) => {
     const homeName = home.full_name || home.name;
     const awayName = away.full_name || away.name;
-    
-    // Only applicable for football
+
     if (bdlSport !== 'americanfootball_nfl' && bdlSport !== 'americanfootball_ncaaf') {
       return {
         category: 'Weather',
-        note: 'Weather data is primarily relevant for outdoor football games.',
+        note: 'Weather is a football lane.',
         home: { team: homeName },
         away: { team: awayName }
       };
     }
 
-    const sport = bdlSport === 'americanfootball_ncaaf' ? 'NCAAF' : 'NFL';
-    console.log(`[Stat Router] WEATHER check for ${awayName} @ ${homeName} (${sport})`);
-
-    try {
-      const dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-      const weather = await getGroundedWeather(homeName, awayName, dateStr);
-
-      if (!weather) {
-        console.log(`[Stat Router] WEATHER: No data available`);
-        return {
-          category: 'Weather',
-          note: 'Weather data unavailable for this game.',
-          home: { team: homeName },
-          away: { team: awayName }
-        };
-      }
-
-      // Dome games
-      if (weather.is_dome) {
-        return {
-          category: 'Weather',
-          conditions: 'Indoor/Dome Stadium',
-          note: 'Indoor stadium - controlled environment.',
-          home: { team: homeName },
-          away: { team: awayName }
-        };
-      }
-
-      const temp = weather.temperature;
-      const wind = weather.wind_speed;
-      const conditions = (weather.conditions || 'Clear').toLowerCase();
-
-      // Flag notably cold or windy conditions for context
-      const notableConditions = [];
-      if (temp && temp < 25) notableConditions.push(`Cold: ${temp}°F`);
-      if (wind && wind >= 15) notableConditions.push(`Wind: ${wind} mph`);
-      if (conditions.includes('snow') || conditions.includes('rain') || conditions.includes('storm')) {
-        notableConditions.push(`Precipitation: ${weather.conditions}`);
-      }
-
-      console.log(`[Stat Router] WEATHER: ${temp}°F, ${wind || 'light'} mph wind, ${conditions}`);
-
-      // Return weather data for Gary to evaluate
+    // College venues are not in the table (130+ FBS stadiums); CollegeFootballData
+    // publishes them with elevation and would close this. Say so rather than
+    // guessing a coordinate.
+    const venue = bdlSport === 'americanfootball_nfl' ? nflVenueFor(homeName) : null;
+    if (!venue) {
       return {
         category: 'Weather',
-        temperature: temp ? `${temp}°F` : 'N/A',
-        wind_speed: wind ? `${wind} mph` : 'Light',
-        conditions: weather.conditions || 'Clear',
-        notable_conditions: notableConditions.length > 0 ? notableConditions : null,
-        note: 'Current weather forecast for game time.',
+        source: 'NOT AVAILABLE',
+        reason: bdlSport === 'americanfootball_ncaaf'
+          ? 'No venue coordinates for NCAAF stadiums. A CollegeFootballData venues feed would provide them (with elevation).'
+          : `No venue entry for ${homeName}.`,
+        note: 'Do not estimate conditions. Report weather as unavailable for this game.',
         home: { team: homeName },
         away: { team: awayName }
       };
-    } catch (error) {
-      console.error(`[Stat Router] Error fetching weather:`, error.message);
+    }
+
+    const base = {
+      category: 'Weather & Environment',
+      source: 'Open-Meteo + venue table',
+      venue: venue.venue,
+      roof: venue.roof,
+      surface: venue.surface,
+      home: { team: homeName },
+      away: { team: awayName }
+    };
+
+    if (venue.roof === 'dome') {
+      return { ...base, conditions: 'Indoor — fixed roof. Weather does not reach the field.' };
+    }
+
+    const kickoff = options?.game?.commence_time || options?.gameTime || null;
+    if (!kickoff) {
       return {
-        category: 'Weather',
-        note: 'Weather data unavailable.',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name }
+        ...base,
+        conditions: 'Kickoff time not supplied to this lane, so no hour-specific forecast was fetched.',
+        note: venue.roof === 'retractable'
+          ? 'Retractable roof — whether it is open is a game-day decision not known here.'
+          : undefined
       };
     }
+
+    const weather = await getKickoffWeather(venue, kickoff);
+    if (!weather) {
+      return { ...base, conditions: 'Forecast lookup failed for the kickoff hour.' };
+    }
+    if (weather.unavailable) {
+      // Not a fault — the game is simply too far out to forecast.
+      return {
+        ...base,
+        conditions: 'No forecast yet for this kickoff.',
+        reason: weather.reason,
+        note: 'Weather is genuinely unknown at this range. Do not estimate it; a later run closer to kickoff will carry it.'
+      };
+    }
+
+    return {
+      ...base,
+      // A retractable roof may be shut: report the outdoor forecast AND the
+      // fact that it might not apply, rather than picking one and being wrong.
+      roof_note: venue.roof === 'retractable'
+        ? 'Retractable roof — the open/closed decision is made on game day and is not known here, so treat the outdoor forecast as conditional.'
+        : undefined,
+      temperature_f: weather.temperature_f,
+      feels_like_f: weather.feels_like_f,
+      wind: windDescription(weather),
+      wind_mph: weather.wind_mph,
+      wind_gust_mph: weather.wind_gust_mph,
+      wind_direction: weather.wind_direction,
+      precip_chance_pct: weather.precip_chance_pct,
+      conditions: weather.conditions,
+      humidity_pct: weather.humidity_pct,
+      elevation_ft: Number.isFinite(weather.elevation_m) ? Math.round(weather.elevation_m * 3.28084) : null,
+      forecast_provenance: weather.provenance
+    };
   },
 
-
-  // ===== QB WEATHER HISTORY (NFL only - uses Gemini Grounding) =====
   QB_WEATHER_HISTORY: async (bdlSport, home, away, season, options = {}) => {
     // Only applicable for NFL
     if (bdlSport !== 'americanfootball_nfl') {
