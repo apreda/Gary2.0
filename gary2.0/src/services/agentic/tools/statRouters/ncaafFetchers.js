@@ -886,6 +886,117 @@ export const ncaafFetchers = {
       data_scope: 'Every completed game joined to the opponent\'s SP+ rank. A 5-0 start against SP+ 90th-and-worse is a different 5-0 from one with a top-25 win in it.',
       home: line(home, homeResults), away: line(away, awayResults)
     };
+  },
+
+  /**
+   * College QB line, aggregated from per-player game rows.
+   *
+   * The bare QB_STATS token resolves to the NFL fetcher across the shared
+   * football family, and NFL season fields do not exist in BDL's 13-field
+   * NCAAF row — completion percentage and yards per attempt came back N/A on
+   * every college game. The per-player GAME endpoint carries completions and
+   * attempts, so both are countable.
+   */
+  NCAAF_QB_STATS: async (bdlSport, home, away, season) => {
+    try {
+      const forTeam = async (team) => {
+        const rows = await ballDontLieService.getNcaafPlayerGameStats({ teamId: team.id, season });
+        if (!rows || rows.length === 0) return { note: 'No player game rows returned.' };
+        const byPlayer = new Map();
+        for (const r of rows) {
+          const id = r?.player?.id;
+          if (!id || !(Number(r.passing_attempts) > 0)) continue;
+          const e = byPlayer.get(id) || {
+            name: `${r.player.first_name || ''} ${r.player.last_name || ''}`.trim(),
+            att: 0, comp: 0, yds: 0, td: 0, int: 0, games: 0
+          };
+          e.att += Number(r.passing_attempts) || 0;
+          e.comp += Number(r.passing_completions) || 0;
+          e.yds += Number(r.passing_yards) || 0;
+          e.td += Number(r.passing_touchdowns) || 0;
+          e.int += Number(r.passing_interceptions) || 0;
+          e.games += 1;
+          byPlayer.set(id, e);
+        }
+        const lead = [...byPlayer.values()].sort((a, b) => b.yds - a.yds)[0];
+        if (!lead) return { note: 'No passer with attempts on file.' };
+        return {
+          quarterback: lead.name,
+          games: lead.games,
+          completions: lead.comp,
+          attempts: lead.att,
+          completion_pct: lead.att ? `${((lead.comp / lead.att) * 100).toFixed(1)}%` : 'N/A',
+          passing_yards: lead.yds,
+          yards_per_attempt: lead.att ? Number((lead.yds / lead.att).toFixed(2)) : 'N/A',
+          touchdowns: lead.td,
+          interceptions: lead.int
+        };
+      };
+      const [h, a] = await Promise.all([forTeam(home), forTeam(away)]);
+      return {
+        category: 'Quarterback',
+        source: 'Ball Don\'t Lie',
+        data_scope: 'Season totals for the leading passer, summed from his per-game rows — the number of games behind the line is stated so a two-start sample cannot read like a full season.',
+        home: { team: home.full_name || home.name, ...h },
+        away: { team: away.full_name || away.name, ...a }
+      };
+    } catch (error) {
+      console.warn('[Stat Router] NCAAF QB Stats fetch failed:', error.message);
+      return unavailableResult(error, home, away);
+    }
+  },
+
+  /**
+   * College turnovers, both directions, from the per-game team boxes.
+   *
+   * The bare TURNOVER_LUCK token resolves to the NFL fetcher, whose season
+   * fields do not exist for NCAAF — it returned 10 of 14 values as N/A. The
+   * per-game box carries `turnovers` and a game_ids query returns BOTH teams,
+   * so committed and forced are each countable.
+   */
+  NCAAF_TURNOVER_LUCK: async (bdlSport, home, away, season) => {
+    try {
+      const forTeam = async (team) => {
+        const results = await loadTeamResults(NCAAF_BDL_SPORT, team.id, season);
+        const gameIds = results.map((r) => r.gameId).filter((id) => id != null).slice(0, 20);
+        if (gameIds.length === 0) return { note: 'No completed games found.' };
+        // game_ids is IGNORED unless seasons[] rides along — a documented BDL
+        // trap that returns an unfiltered page instead of an error.
+        const boxes = await ballDontLieService.getNcaafTeamStatsByGameIds(gameIds, season);
+        if (!boxes || boxes.length === 0) return { note: 'No per-game team boxes returned.' };
+        let committed = 0; let forced = 0; let games = 0;
+        for (const gid of gameIds) {
+          const rows = boxes.filter((b) => Number(b?.game?.id) === Number(gid));
+          if (rows.length !== 2) continue;
+          const own = rows.find((r) => Number(r?.team?.id) === Number(team.id));
+          const opp = rows.find((r) => Number(r?.team?.id) !== Number(team.id));
+          if (!own || !opp) continue;
+          committed += Number(own.turnovers) || 0;
+          forced += Number(opp.turnovers) || 0;
+          games += 1;
+        }
+        if (games === 0) return { note: 'No game had boxes for both teams.' };
+        return {
+          games_used: games,
+          turnovers_committed: committed,
+          turnovers_forced: forced,
+          turnover_margin: forced - committed,
+          committed_per_game: Number((committed / games).toFixed(2)),
+          forced_per_game: Number((forced / games).toFixed(2))
+        };
+      };
+      const [h, a] = await Promise.all([forTeam(home), forTeam(away)]);
+      return {
+        category: 'Turnovers',
+        source: 'Ball Don\'t Lie',
+        data_scope: 'Turnovers committed and forced, counted from per-game team boxes (a game_ids query returns both teams). Fumble-vs-interception split is not published for NCAAF.',
+        home: { team: home.full_name || home.name, ...h },
+        away: { team: away.full_name || away.name, ...a }
+      };
+    } catch (error) {
+      console.warn('[Stat Router] NCAAF Turnover Luck fetch failed:', error.message);
+      return unavailableResult(error, home, away);
+    }
   }
 
 };

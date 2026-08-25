@@ -812,39 +812,62 @@ export const nbaFetchers = {
 
     const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season });
 
+    // BDL publishes conference_record and division_record but NOT
+    // conference_rank or division_rank — those fields simply do not exist in
+    // the payload, so reading them yielded 'N/A' on every football game.
+    // The rank is derivable from the same 32 rows: sort within the group by
+    // wins, then point differential as the tiebreak. Computed, and labelled
+    // as computed rather than presented as a fetched standing.
+    const winPct = (row) => {
+      const w = Number(row?.wins) || 0;
+      const l = Number(row?.losses) || 0;
+      const t = Number(row?.ties) || 0;
+      const games = w + l + t;
+      return games > 0 ? (w + t / 2) / games : 0;
+    };
+    const rankWithin = (row, keyFn) => {
+      if (!row || !Array.isArray(standings)) return null;
+      const key = keyFn(row);
+      if (!key) return null;
+      const group = standings.filter((s) => keyFn(s) === key);
+      if (group.length < 2) return null;
+      group.sort((a, b) => (winPct(b) - winPct(a))
+        || ((Number(b.point_differential) || 0) - (Number(a.point_differential) || 0)));
+      const index = group.findIndex((s) => s.team?.id === row.team?.id);
+      return index === -1 ? null : { rank: index + 1, of: group.length };
+    };
+    const confKey = (s) => s?.team?.conference || null;
+    const divKey = (s) => (s?.team?.conference && s?.team?.division)
+      ? `${s.team.conference} ${s.team.division}` : null;
+
     const homeSt = standings?.find(s => s.team?.id === home.id);
     const awaySt = standings?.find(s => s.team?.id === away.id);
-    
+    const fmt = (r) => (r ? `${r.rank} of ${r.of}` : 'not derivable');
+
+    const side = (team, st) => ({
+      team: team.full_name || team.name,
+      wins: st?.wins ?? 'N/A',
+      losses: st?.losses ?? 'N/A',
+      overall_record: st?.overall_record || `${st?.wins ?? 0}-${st?.losses ?? 0}`,
+      home_record: st?.home_record || 'N/A',
+      away_record: st?.road_record || 'N/A',
+      conference_record: st?.conference_record || 'N/A',
+      conference_rank: fmt(rankWithin(st, confKey)),
+      division_record: st?.division_record || 'N/A',
+      division_rank: fmt(rankWithin(st, divKey)),
+      playoff_seed: st?.playoff_seed ?? 'N/A',
+      point_differential: st?.point_differential ?? 'N/A'
+    });
+
     return {
       category: 'Full Standings & Records',
       source: 'Ball Don\'t Lie API',
-      home: {
-        team: home.full_name || home.name,
-        wins: homeSt?.wins || 'N/A',
-        losses: homeSt?.losses || 'N/A',
-        overall_record: `${homeSt?.wins || 0}-${homeSt?.losses || 0}`,
-        home_record: homeSt?.home_record || 'N/A',
-        away_record: homeSt?.road_record || 'N/A',
-        conference_record: homeSt?.conference_record || 'N/A',
-        conference_rank: homeSt?.conference_rank || 'N/A',
-        division_record: homeSt?.division_record || 'N/A',
-        division_rank: homeSt?.division_rank || 'N/A'
-      },
-      away: {
-        team: away.full_name || away.name,
-        wins: awaySt?.wins || 'N/A',
-        losses: awaySt?.losses || 'N/A',
-        overall_record: `${awaySt?.wins || 0}-${awaySt?.losses || 0}`,
-        home_record: awaySt?.home_record || 'N/A',
-        away_record: awaySt?.road_record || 'N/A',
-        conference_record: awaySt?.conference_record || 'N/A',
-        conference_rank: awaySt?.conference_rank || 'N/A',
-        division_record: awaySt?.division_record || 'N/A',
-        division_rank: awaySt?.division_rank || 'N/A'
-      },
-      context: homeSt && awaySt ? 
-        `${home.name} (${homeSt.wins}-${homeSt.losses}, #${homeSt.conference_rank} in conf) vs ${away.name} (${awaySt.wins}-${awaySt.losses}, #${awaySt.conference_rank} in conf)` :
-        'Standings comparison unavailable'
+      data_scope: 'Records are as published. Conference and division RANK are computed here by win percentage then point differential — BDL does not publish either as a field.',
+      home: side(home, homeSt),
+      away: side(away, awaySt),
+      context: homeSt && awaySt
+        ? `${home.name} (${homeSt.wins}-${homeSt.losses}, seed ${homeSt.playoff_seed ?? '—'}) vs ${away.name} (${awaySt.wins}-${awaySt.losses}, seed ${awaySt.playoff_seed ?? '—'})`
+        : 'Standings comparison unavailable'
     };
   },
 

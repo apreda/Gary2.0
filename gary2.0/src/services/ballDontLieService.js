@@ -3111,6 +3111,36 @@ const ballDontLieService = {
    * Each row carries `game` (date, week, teams, scores) and `player`, so the
    * caller can build a dated, opponent-attributed log.
    */
+  /**
+   * Per-game NCAAF team boxes for a set of games.
+   *
+   * A game_ids query returns BOTH teams' rows for each game, which is how the
+   * turnover lane gets "forced" as well as "committed" without a second call.
+   * seasons[] rides along deliberately: the documented BDL trap is that
+   * game_ids[] can be IGNORED without it, returning an unfiltered page rather
+   * than an error (see memory bdl-football-team-stats-filters). Verified
+   * Aug 25 2026 that the NFL endpoint currently filters correctly either way;
+   * sending it costs nothing and removes the dependency on that staying true.
+   */
+  async getNcaafTeamStatsByGameIds(gameIds, season, ttlMinutes = 30) {
+    try {
+      if (!Array.isArray(gameIds) || gameIds.length === 0 || !season) return [];
+      const cacheKey = `ncaaf_team_stats_games_${season}_${[...gameIds].sort().join(',')}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const params = new URLSearchParams();
+        params.append('seasons[]', String(season));
+        for (const id of gameIds) params.append('game_ids[]', String(id));
+        params.append('per_page', '100');
+        const url = `${BALLDONTLIE_API_BASE_URL}/ncaaf/v1/team_stats?${params.toString()}`;
+        const resp = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
+        return resp.data?.data || [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error('[Ball Don\'t Lie] ncaaf getNcaafTeamStatsByGameIds error:', e.message);
+      return [];
+    }
+  },
+
   async getNcaafPlayerGameStats({ playerIds, playerId, teamIds, teamId, season } = {}, ttlMinutes = 15) {
     try {
       if (!season) return [];
