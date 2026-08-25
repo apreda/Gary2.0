@@ -1,5 +1,6 @@
 import { ballDontLieService } from '../../../ballDontLieService.js';
-import { getSpPlus, getFpi, getReturningProduction, rowFor } from '../../../cfbdService.js';
+import { getSpPlus, getFpi, getReturningProduction, rowFor,
+         getAdvancedSeasonStats, rankBy, rankedFor } from '../../../cfbdService.js';
 import { loadTeamResults, formSummary, homeAwaySplit, marginProfile, closeGameRecord, footballWeekLabel } from './footballTeamGames.js';
 
 const NCAAF_BDL_SPORT = 'americanfootball_ncaaf';
@@ -148,6 +149,36 @@ async function ncaafDisruption(team, season) {
     interceptions: ints,
     passes_defended: pbu,
     top_disruptors: leaders
+  };
+}
+
+/** A ranked percentage, stated with the field it beat. */
+function pctRank(entry) {
+  if (!entry) return 'N/A';
+  return `${(entry.value * 100).toFixed(1)}% (${ordinalOf(entry.rank)} of ${entry.of})`;
+}
+
+/** A ranked raw number, stated with the field it beat. */
+function numRank(entry) {
+  if (!entry) return 'N/A';
+  return `${entry.value.toFixed(3)} (${ordinalOf(entry.rank)} of ${entry.of})`;
+}
+
+function ordinalOf(n) {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+/** One shape for "CFBD could not answer", so the reason always travels. */
+function advUnavailable(category, result, home, away) {
+  return {
+    category,
+    source: 'NOT AVAILABLE',
+    reason: result.reason,
+    note: 'Do not estimate or recall this figure. Report it as unavailable.',
+    home: { team: home.full_name || home.name },
+    away: { team: away.full_name || away.name }
   };
 }
 
@@ -481,42 +512,10 @@ export const ncaafFetchers = {
 
 
 
-  NCAAF_EPA: async (bdlSport, home, away) => ({
-    category: 'Epa',
-    source: 'NOT AVAILABLE',
-    reason: 'Per-play EPA needs play-by-play; BDL NCAAF provides season and game totals only.',
-    note: 'Do not estimate, derive or recall this figure. Report it as unavailable. A CollegeFootballData.com feed would source it.',
-    home: { team: home.full_name || home.name },
-    away: { team: away.full_name || away.name }
-  }),
-
-  NCAAF_SUCCESS_RATE: async (bdlSport, home, away) => ({
-    category: 'Success Rate',
-    source: 'NOT AVAILABLE',
-    reason: 'Per-play success rate needs play-by-play; BDL NCAAF provides season and game totals only.',
-    note: 'Do not estimate, derive or recall this figure. Report it as unavailable. A CollegeFootballData.com feed would source it.',
-    home: { team: home.full_name || home.name },
-    away: { team: away.full_name || away.name }
-  }),
 
 
-  NCAAF_EXPLOSIVE_PLAYS: async (bdlSport, home, away) => ({
-    category: 'Explosive Plays',
-    source: 'NOT AVAILABLE',
-    reason: 'Explosive-play counts need play-level yardage or long-play fields; BDL NCAAF carries neither.',
-    note: 'Do not estimate, derive or recall this figure. Report it as unavailable. A CollegeFootballData.com feed would source it.',
-    home: { team: home.full_name || home.name },
-    away: { team: away.full_name || away.name }
-  }),
 
-  NCAAF_REDZONE: async (bdlSport, home, away) => ({
-    category: 'Redzone',
-    source: 'NOT AVAILABLE',
-    reason: 'BDL NCAAF box scores carry no red-zone attempts or scores (the NFL boxes do).',
-    note: 'Do not estimate, derive or recall this figure. Report it as unavailable. A CollegeFootballData.com feed would source it.',
-    home: { team: home.full_name || home.name },
-    away: { team: away.full_name || away.name }
-  }),
+
 
 
 
@@ -997,6 +996,105 @@ export const ncaafFetchers = {
       console.warn('[Stat Router] NCAAF Turnover Luck fetch failed:', error.message);
       return unavailableResult(error, home, away);
     }
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // ADVANCED SEASON STATS — one CFBD request, 136 teams (Aug 25 2026)
+  //
+  // These four factors were declining because BDL's NCAAF row cannot support
+  // them. CFBD's /stats/season/advanced carries all of it, and every rate here
+  // arrives with its league rank — a 0.53 success rate means nothing until you
+  // know it is 8th of 136.
+  // ═══════════════════════════════════════════════════════════════════════
+
+  NCAAF_SUCCESS_RATE: async (bdlSport, home, away, season) => {
+    const adv = await getAdvancedSeasonStats(season);
+    if (adv.unavailable) return advUnavailable('Success Rate', adv, home, away);
+    const offRank = rankBy(adv, 'offense.successRate');
+    const defRank = rankBy(adv, 'defense.successRate', { lowerIsBetter: true });
+    const stdRank = rankBy(adv, 'offense.standardDowns.successRate');
+    const passRank = rankBy(adv, 'offense.passingDowns.successRate');
+    const side = (team) => {
+      const name = team.full_name || team.name;
+      return {
+        team: name,
+        offense_success_rate: pctRank(rankedFor(offRank, name)),
+        defense_success_rate_allowed: pctRank(rankedFor(defRank, name)),
+        standard_downs: pctRank(rankedFor(stdRank, name)),
+        passing_downs: pctRank(rankedFor(passRank, name))
+      };
+    };
+    return {
+      category: 'Success Rate',
+      source: 'CollegeFootballData',
+      data_scope: `Per-play success rate for ${season}, ranked across ${adv.rows.length} FBS teams. Standard downs and passing downs are split out because a team that stays on schedule and one that lives in third-and-long can share an overall rate.`,
+      home: side(home), away: side(away)
+    };
+  },
+
+  NCAAF_EXPLOSIVE_PLAYS: async (bdlSport, home, away, season) => {
+    const adv = await getAdvancedSeasonStats(season);
+    if (adv.unavailable) return advUnavailable('Explosiveness', adv, home, away);
+    const offRank = rankBy(adv, 'offense.explosiveness');
+    const defRank = rankBy(adv, 'defense.explosiveness', { lowerIsBetter: true });
+    const side = (team) => {
+      const name = team.full_name || team.name;
+      return {
+        team: name,
+        offense_explosiveness: numRank(rankedFor(offRank, name)),
+        defense_explosiveness_allowed: numRank(rankedFor(defRank, name))
+      };
+    };
+    return {
+      category: 'Explosiveness',
+      source: 'CollegeFootballData',
+      data_scope: 'Explosiveness is the average value of a team\'s SUCCESSFUL plays — how much damage it does when it does move the ball, which is a different question from how often it moves it.',
+      home: side(home), away: side(away)
+    };
+  },
+
+  NCAAF_EPA: async (bdlSport, home, away, season) => {
+    const adv = await getAdvancedSeasonStats(season);
+    if (adv.unavailable) return advUnavailable('PPA', adv, home, away);
+    const offRank = rankBy(adv, 'offense.ppa');
+    const defRank = rankBy(adv, 'defense.ppa', { lowerIsBetter: true });
+    const side = (team) => {
+      const name = team.full_name || team.name;
+      return {
+        team: name,
+        offense_ppa_per_play: numRank(rankedFor(offRank, name)),
+        defense_ppa_allowed_per_play: numRank(rankedFor(defRank, name))
+      };
+    };
+    return {
+      category: 'Predicted Points Added',
+      source: 'CollegeFootballData',
+      data_scope: 'PPA is CFBD\'s expected-points model, per play. This is genuine per-play value, not the yards-and-points proxy the NFL lanes use under an EPA label.',
+      home: side(home), away: side(away)
+    };
+  },
+
+  NCAAF_REDZONE: async (bdlSport, home, away, season) => {
+    const adv = await getAdvancedSeasonStats(season);
+    if (adv.unavailable) return advUnavailable('Scoring Opportunities', adv, home, away);
+    const offRank = rankBy(adv, 'offense.pointsPerOpportunity');
+    const defRank = rankBy(adv, 'defense.pointsPerOpportunity', { lowerIsBetter: true });
+    const side = (team) => {
+      const name = team.full_name || team.name;
+      const row = rowFor(adv, name);
+      return {
+        team: name,
+        points_per_scoring_opportunity: numRank(rankedFor(offRank, name)),
+        points_allowed_per_opportunity: numRank(rankedFor(defRank, name)),
+        total_opportunities: row?.offense?.totalOpportunies ?? null
+      };
+    };
+    return {
+      category: 'Scoring Opportunities',
+      source: 'CollegeFootballData',
+      data_scope: 'Points per scoring opportunity (a drive reaching the opponent 40). BDL publishes no red-zone data for NCAAF at all; this is the finishing measure that replaces it — and it captures drives that stall at the 25 as well as those that reach the 20.',
+      home: side(home), away: side(away)
+    };
   }
 
 };

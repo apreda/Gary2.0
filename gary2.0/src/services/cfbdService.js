@@ -177,6 +177,46 @@ export function fbsVenueFor(teamsResult, teamName) {
   };
 }
 
+/**
+ * Advanced season stats — success rate, explosiveness, PPA, havoc, line yards,
+ * points per scoring opportunity — for all 136 FBS teams in ONE request.
+ *
+ * This single endpoint closes every NCAAF factor that was still declining:
+ * NCAAF_SUCCESS_RATE, NCAAF_EXPLOSIVE_PLAYS, NCAAF_EPA and NCAAF_REDZONE. It
+ * also upgrades havoc from the counts BDL allows to a genuine RATE (havoc has
+ * a play-count denominator here), and gives college trench play real numbers
+ * where the lane had been buying unstructured web prose.
+ */
+export async function getAdvancedSeasonStats(season, opts = {}) {
+  return bulkGet(`/stats/season/advanced?year=${season}`, `advanced_${season}`, opts);
+}
+
+/**
+ * Rank every team on one nested metric, so a rate arrives with the field it
+ * beat. `path` is dot-notation into the row, e.g. "offense.successRate".
+ */
+export function rankBy(result, path, { lowerIsBetter = false } = {}) {
+  if (!result || result.unavailable || !Array.isArray(result.rows)) return null;
+  const read = (row) => path.split('.').reduce((o, k) => (o == null ? o : o[k]), row);
+  const scored = result.rows
+    .map((r) => ({ team: r.team, value: Number(read(r)) }))
+    .filter((r) => r.team && Number.isFinite(r.value));
+  if (scored.length < 8) return null;
+  scored.sort((a, b) => (lowerIsBetter ? a.value - b.value : b.value - a.value));
+  const byTeam = new Map();
+  scored.forEach((r, i) => byTeam.set(r.team, { rank: i + 1, value: r.value, of: scored.length }));
+  return byTeam;
+}
+
+/** Look up a ranked metric for one team name (BDL-style full name tolerated). */
+export function rankedFor(rankMap, teamName) {
+  if (!rankMap) return null;
+  for (const [school, entry] of rankMap) {
+    if (cfbdTeamMatches(school, teamName)) return entry;
+  }
+  return null;
+}
+
 /** Find one team's row in a bulk result. */
 export function rowFor(result, teamName) {
   if (!result || result.unavailable || !Array.isArray(result.rows)) return null;
