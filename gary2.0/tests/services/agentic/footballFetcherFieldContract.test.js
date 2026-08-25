@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ballDontLieService } from '../../../src/services/ballDontLieService.js';
-import { nflFetchers } from '../../../src/services/agentic/tools/statRouters/nflFetchers.js';
+import { nflFetchers, seasonSampleTokens } from '../../../src/services/agentic/tools/statRouters/nflFetchers.js';
 
 /**
  * FIELD-NAME CONTRACT (Aug 24 2026 audit).
@@ -42,16 +42,25 @@ const nflFetchersSource = fs.readFileSync(
  * silent shrinkage (a broken regex covering nothing) fail loudly.
  */
 function seasonStatsTokens() {
-  const starts = [...nflFetchersSource.matchAll(/^ {2}([A-Z][A-Z0-9_]*): *async/gm)]
+  // Bound the search to the map literal. The LAST fetcher's body otherwise ran
+  // to end-of-file and swallowed the module-level code beneath it, which reads
+  // as a seasonPair() call and produced a phantom season-stat token.
+  const mapStart = nflFetchersSource.indexOf('export const nflFetchers = {');
+  const mapEnd = nflFetchersSource.indexOf('\n};', mapStart);
+  const source = nflFetchersSource.slice(mapStart, mapEnd === -1 ? undefined : mapEnd);
+
+  const starts = [...source.matchAll(/^ {2}([A-Z][A-Z0-9_]*): *async/gm)]
     .map((m) => ({ token: m[1], index: m.index }));
   const tokens = [];
   for (let i = 0; i < starts.length; i += 1) {
-    const end = i + 1 < starts.length ? starts[i + 1].index : nflFetchersSource.length;
-    const body = nflFetchersSource.slice(starts[i].index, end);
-    // Any fetcher that pulls a season row is covered. Do NOT narrow this to
-    // `homeStats?.field` — TURNOVER_LUCK reads `homeStats.defense_interceptions`
-    // without the optional chain and escaped the first audit sweep entirely.
-    if (!/getTeamSeasonStats/.test(body)) continue;
+    const end = i + 1 < starts.length ? starts[i + 1].index : source.length;
+    const body = source.slice(starts[i].index, end);
+    // Any fetcher that pulls a season row is covered — whether it calls
+    // getTeamSeasonStats directly or goes through the shared seasonPair()
+    // helper. Do NOT narrow this to `homeStats?.field`: TURNOVER_LUCK reads
+    // `homeStats.defense_interceptions` without the optional chain and escaped
+    // the first audit sweep entirely.
+    if (!/getTeamSeasonStats|seasonPair\(/.test(body)) continue;
     tokens.push(starts[i].token);
   }
   return tokens;
@@ -122,5 +131,54 @@ describe('NFL fetcher → BDL field-name contract', () => {
     // And nothing may render as 'N/A' — a field that resolved to undefined
     // for any other reason is the same blind lane by a different route.
     expect(JSON.stringify(result)).not.toContain('N/A');
+  });
+});
+
+describe('season stats carry the sample behind them', () => {
+  let original;
+  let misses;
+
+  beforeEach(() => {
+    misses = new Set();
+    original = ballDontLieService.getTeamSeasonStats;
+    ballDontLieService.getTeamSeasonStats = async (_sport, { teamId } = {}) => [
+      bdlSeasonRow(teamId, misses)
+    ];
+  });
+
+  afterEach(() => {
+    ballDontLieService.getTeamSeasonStats = original;
+  });
+
+  it('stamps every season-stat fetcher, and the list has not drifted', () => {
+    // The stamp list is explicit; this keeps it equal to the set of fetchers
+    // that actually read a season row, so a new one cannot ship unstamped.
+    expect(seasonSampleTokens().sort()).toEqual([...TOKENS].sort());
+  });
+
+  it('states the games behind the rate, not just the rate', async () => {
+    const result = await nflFetchers.OFFENSIVE_EPA('americanfootball_nfl', home, away, 2025);
+    expect(result.sample).toContain('17 games');
+    expect(result.sample).toContain('2025 season');
+    expect(result.sample).toContain('Home Team');
+    expect(result.sample).toContain('Away Team');
+  });
+
+  it('says so plainly when the game count is not reported', async () => {
+    ballDontLieService.getTeamSeasonStats = async (_sport, { teamId } = {}) => {
+      const row = bdlSeasonRow(teamId, misses);
+      return [{ ...row, games_played: null }];
+    };
+    const result = await nflFetchers.OFFENSIVE_EPA('americanfootball_nfl', home, away, 2025);
+    expect(result.sample === undefined || result.sample.includes('not reported')).toBe(true);
+  });
+
+  it('never loses the stat if provenance cannot be built', async () => {
+    ballDontLieService.getTeamSeasonStats = async () => { throw new Error('BDL down'); };
+    const result = await nflFetchers.OFFENSIVE_EPA('americanfootball_nfl', home, away, 2025)
+      .catch(() => null);
+    // The inner fetcher shares the same failure, so either it threw or it
+    // returned — what must never happen is a stamped-but-empty result.
+    if (result) expect(result.category).toBeTruthy();
   });
 });

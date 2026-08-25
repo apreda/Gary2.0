@@ -2,15 +2,29 @@ import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fm
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { loadTeamResults, formSummary, homeAwaySplit, marginProfile } from './footballTeamGames.js';
 
+/**
+ * Both teams' season rows in one call, unwrapped.
+ *
+ * This exact six-line fetch-and-unwrap appeared ~20 times across this file.
+ * BDL returns an array for some sports and a bare object for others, so every
+ * copy had to repeat the Array.isArray dance — and a copy that forgot it would
+ * read fields off an array and silently get undefined for all of them.
+ * getTeamSeasonStats is cached (30 min), so callers share one round trip.
+ */
+async function seasonPair(bdlSport, home, away, season) {
+  const [homeArr, awayArr] = await Promise.all([
+    ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+    ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+  ]);
+  return {
+    homeStats: Array.isArray(homeArr) ? homeArr[0] : homeArr,
+    awayStats: Array.isArray(awayArr) ? awayArr[0] : awayArr
+  };
+}
+
 export const nflFetchers = {
   OFFENSIVE_EPA: async (bdlSport, home, away, season) => {
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    // Extract first element from array response
-    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
     
     // NCAAF uses different field names than NFL
     if (bdlSport === 'americanfootball_ncaaf') {
@@ -67,12 +81,7 @@ export const nflFetchers = {
   },
 
   DEFENSIVE_EPA: async (bdlSport, home, away, season) => {
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
     
     // NCAAF uses different field names
     if (bdlSport === 'americanfootball_ncaaf') {
@@ -186,12 +195,7 @@ export const nflFetchers = {
   },
 
   QB_STATS: async (bdlSport, home, away, season) => {
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
     
     return {
       category: 'Quarterback/Passing Stats',
@@ -215,12 +219,7 @@ export const nflFetchers = {
   },
 
   RB_STATS: async (bdlSport, home, away, season) => {
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
     
     return {
       category: 'Rushing Stats',
@@ -243,12 +242,7 @@ export const nflFetchers = {
   // ===== NFL-SPECIFIC STATS (unique data for each token) =====
   
   SUCCESS_RATE_OFFENSE: async (bdlSport, home, away, season) => {
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
     
     return {
       category: 'Offensive Success Rate (3rd/4th Down)',
@@ -271,12 +265,7 @@ export const nflFetchers = {
   },
 
   SUCCESS_RATE_DEFENSE: async (bdlSport, home, away, season) => {
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
     
     return {
       category: 'Defensive Success Rate (Opp 3rd/4th Down)',
@@ -299,12 +288,7 @@ export const nflFetchers = {
   },
 
   EXPLOSIVE_PLAYS: async (bdlSport, home, away, season) => {
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
     
     // BDL doesn't have actual explosive play data (plays > 20 yards)
     // Use longest plays and yards per attempt as proxies for explosiveness
@@ -328,12 +312,7 @@ export const nflFetchers = {
   },
 
   PRESSURE_RATE: async (bdlSport, home, away, season) => {
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
     
     // BDL keeps the pass rush on the OPPONENT mirror: opp_passing_sacks is the
     // sacks this defense recorded, passing_sacks is what its own line allowed.
@@ -422,12 +401,7 @@ export const nflFetchers = {
     // For now, use defensive efficiency metrics. Do not download team-game rows:
     // they were never read by this calculation and added two BDL requests.
     
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
     
     return {
       category: 'Defensive Efficiency Summary',
@@ -450,12 +424,7 @@ export const nflFetchers = {
   },
 
   WR_TE_STATS: async (bdlSport, home, away, season) => {
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
     
     return {
       category: 'Receiving/Passing Attack',
@@ -477,12 +446,7 @@ export const nflFetchers = {
   },
 
   DEFENSIVE_PLAYMAKERS: async (bdlSport, home, away, season) => {
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
     
     return {
       category: 'Defensive Playmaking',
@@ -505,12 +469,7 @@ export const nflFetchers = {
 
   TURNOVER_LUCK: async (bdlSport, home, away, season) => {
     try {
-      const [homeStatsArr, awayStatsArr] = await Promise.all([
-        ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-        ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-      ]);
-      const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-      const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+      const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
 
       if (!homeStats || !awayStats) {
         return { category: 'Turnover Analysis', error: 'Data unavailable — BDL returned no stats for one or both teams' };
@@ -591,12 +550,7 @@ export const nflFetchers = {
 
   LATE_DOWN_EFFICIENCY: async (bdlSport, home, away, season) => {
     // Late downs (3rd & 4th) - BDL has this!
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
     
     return {
       category: 'Late Down Efficiency (3rd & 4th Down)',
@@ -625,12 +579,7 @@ export const nflFetchers = {
 
   EXPLOSIVE_ALLOWED: async (bdlSport, home, away, season) => {
     // Defensive version - how many explosive plays does each team ALLOW?
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
     
     return {
       category: 'Explosive Plays Allowed (Defense)',
@@ -655,12 +604,7 @@ export const nflFetchers = {
 
   FUMBLE_LUCK: async (bdlSport, home, away, season) => {
     // Fumble luck - fumbles forced vs fumbles lost (regression indicator)
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
     
     // BDL splits a team's own fumbles by where they happened; the sum is the
     // offense's total, and fumbles_lost is how many it did not get back.
@@ -712,12 +656,7 @@ export const nflFetchers = {
 
   PASSING_EPA: async (bdlSport, home, away, season) => {
     // Passing efficiency metrics from BDL
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
     
     // Calculate passer rating components
     const homeYPA = homeStats?.net_yards_per_pass_attempt || 0;
@@ -764,12 +703,7 @@ export const nflFetchers = {
 
   RUSHING_EPA: async (bdlSport, home, away, season) => {
     // Rushing efficiency metrics from BDL
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
 
     // BDL publishes rushing yards per game but not carries per game; the
     // carries and the games are both counted fields, so this is a stated
@@ -1002,12 +936,7 @@ export const nflFetchers = {
     // BDL carries field goals by distance bucket and the full punting line for
     // both teams, plus the opponent mirror. This used to buy web-search prose
     // for numbers already sitting in the season row.
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
 
     const kickingLine = (stats) => ({
       fg_pct: fmtPct(stats?.kicking_field_goal_pct / 100),
@@ -1035,12 +964,7 @@ export const nflFetchers = {
     // Average starting field position needs drive data BDL does not publish
     // per team-season. What it does publish is the return and punt-coverage
     // game that drives it — real numbers, and the opponent mirror with them.
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
 
     const returnLine = (stats) => ({
       yards_per_punt_return: fmtNum(stats?.returning_yards_per_punt_return, 1),
@@ -1230,12 +1154,7 @@ export const nflFetchers = {
   
   // ===== DERIVED STATS (single-value for clean display) =====
   PASSING_TDS: async (bdlSport, home, away, season) => {
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
     
     return {
       category: 'Passing Touchdowns',
@@ -1251,12 +1170,7 @@ export const nflFetchers = {
   },
 
   INTERCEPTIONS: async (bdlSport, home, away, season) => {
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
     
     return {
       category: 'Interceptions Thrown',
@@ -1272,12 +1186,7 @@ export const nflFetchers = {
   },
 
   RUSHING_TDS: async (bdlSport, home, away, season) => {
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
     
     return {
       category: 'Rushing Touchdowns',
@@ -1293,12 +1202,7 @@ export const nflFetchers = {
   },
 
   TOTAL_TDS: async (bdlSport, home, away, season) => {
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
     
     const homeTotalTds = (homeStats?.passing_touchdowns || 0) + (homeStats?.rushing_touchdowns || 0);
     const awayTotalTds = (awayStats?.passing_touchdowns || 0) + (awayStats?.rushing_touchdowns || 0);
@@ -1317,12 +1221,7 @@ export const nflFetchers = {
   },
 
   PASSING_YPG: async (bdlSport, home, away, season) => {
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
     
     return {
       category: 'Passing Yards Per Game',
@@ -1683,3 +1582,58 @@ Be factual with historical stats where available.`;
   }
 
 };
+
+
+/**
+ * SAMPLE PROVENANCE (founder standard, Aug 25 2026).
+ *
+ * "If we are going to show X data point then nobody should be able to poke
+ * holes in it — someone shouldn't be able to say but when was that game, or
+ * who played in that game, or any context relevant beyond what the data point
+ * is saying."
+ *
+ * A season rate like "5.4 yards per play" says nothing about how much football
+ * it rests on. Week 2 and Week 17 print identically. Every season-stat lane
+ * now carries the games behind it and the season it belongs to, so a thin
+ * sample announces itself instead of arriving with the authority of a full
+ * year. Stamped in one place rather than in twenty-four return statements.
+ *
+ * getTeamSeasonStats is cached, so this costs no extra round trip.
+ */
+const SEASON_SAMPLE_TOKENS = [
+  'OFFENSIVE_EPA', 'DEFENSIVE_EPA', 'QB_STATS', 'RB_STATS',
+  'SUCCESS_RATE_OFFENSE', 'SUCCESS_RATE_DEFENSE', 'EXPLOSIVE_PLAYS',
+  'PRESSURE_RATE', 'RED_ZONE_DEFENSE', 'WR_TE_STATS', 'DEFENSIVE_PLAYMAKERS',
+  'TURNOVER_LUCK', 'LATE_DOWN_EFFICIENCY', 'EXPLOSIVE_ALLOWED', 'FUMBLE_LUCK',
+  'PASSING_EPA', 'RUSHING_EPA', 'KICKING', 'FIELD_POSITION', 'PASSING_TDS',
+  'INTERCEPTIONS', 'RUSHING_TDS', 'TOTAL_TDS', 'PASSING_YPG'
+];
+
+export function seasonSampleTokens() {
+  return [...SEASON_SAMPLE_TOKENS];
+}
+
+for (const token of SEASON_SAMPLE_TOKENS) {
+  const inner = nflFetchers[token];
+  if (typeof inner !== 'function') continue;
+  nflFetchers[token] = async (bdlSport, home, away, season, options) => {
+    const result = await inner(bdlSport, home, away, season, options);
+    if (!result || typeof result !== 'object' || result.error) return result;
+    try {
+      const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
+      const gp = (stats) => {
+        const n = Number(stats?.games_played);
+        return Number.isFinite(n) && n > 0 ? n : null;
+      };
+      const homeGp = gp(homeStats);
+      const awayGp = gp(awayStats);
+      if (homeGp === null && awayGp === null) return result;
+      const label = (name, n) => `${name}: ${n === null ? 'games played not reported' : `${n} game${n === 1 ? '' : 's'}`}`;
+      result.sample = `Season totals — ${label(home.full_name || home.name, homeGp)}, `
+        + `${label(away.full_name || away.name, awayGp)}${season ? ` (${season} season)` : ''}`;
+    } catch {
+      // Provenance is context, never a reason to lose the stat itself.
+    }
+    return result;
+  };
+}
