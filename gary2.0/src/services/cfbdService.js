@@ -126,6 +126,57 @@ export async function getVenues(opts = {}) {
   return bulkGet('/venues', 'venues', opts);
 }
 
+/**
+ * Every FBS team WITH its home venue — name, coordinates, elevation, timezone,
+ * grass and dome — in a single request for all 136.
+ *
+ * This is what makes NCAAF weather possible. The lane had to decline for
+ * college because 130+ FBS stadiums were not in the NFL venue table and
+ * guessing a coordinate was not acceptable.
+ */
+export async function getFbsTeams(season, opts = {}) {
+  return bulkGet(`/teams/fbs?year=${season}`, `fbsteams_${season}`, opts);
+}
+
+/**
+ * Resolve a BDL-style team name to its CFBD home venue.
+ *
+ * BDL says "Ohio State Buckeyes"; CFBD splits that into school "Ohio State"
+ * and mascot "Buckeyes", so the joined form matches exactly. Falls back to a
+ * whole-word school prefix, and REFUSES anything ambiguous rather than
+ * returning a stadium in the wrong state.
+ */
+export function fbsVenueFor(teamsResult, teamName) {
+  if (!teamsResult || teamsResult.unavailable || !Array.isArray(teamsResult.rows) || !teamName) return null;
+  const wanted = String(teamName).toLowerCase().trim();
+
+  const joined = teamsResult.rows.filter((t) => (
+    `${t.school || ''} ${t.mascot || ''}`.toLowerCase().trim() === wanted
+  ));
+  const pick = joined.length === 1 ? joined[0] : null;
+
+  const chosen = pick || (() => {
+    const prefix = teamsResult.rows.filter((t) => cfbdTeamMatches(t.school, teamName));
+    return prefix.length === 1 ? prefix[0] : null;
+  })();
+
+  const loc = chosen?.location;
+  if (!loc || !Number.isFinite(Number(loc.latitude)) || !Number.isFinite(Number(loc.longitude))) return null;
+  return {
+    team: chosen.school,
+    venue: loc.name || null,
+    lat: Number(loc.latitude),
+    lon: Number(loc.longitude),
+    elevation_m: Number(loc.elevation) || null,
+    tz: loc.timezone || null,
+    // CFBD exposes a boolean dome and a boolean grass; it has no retractable
+    // flag, so a retractable stadium reports dome=false. Treat non-dome as
+    // open and say the roof is unconfirmed rather than asserting it.
+    roof: loc.dome === true ? 'dome' : 'open_or_unconfirmed',
+    surface: loc.grass === true ? 'grass' : (loc.grass === false ? 'turf' : null)
+  };
+}
+
 /** Find one team's row in a bulk result. */
 export function rowFor(result, teamName) {
   if (!result || result.unavailable || !Array.isArray(result.rows)) return null;

@@ -3,6 +3,7 @@ import { ballDontLieService } from '../../../ballDontLieService.js';
 import { loadTeamResults, formSummary, homeAwaySplit, marginProfile } from './footballTeamGames.js';
 import { nflVenueFor, weatherApplies } from './footballVenues.js';
 import { loadLeagueContext, opponentQualityLine } from './footballLeagueContext.js';
+import { getFbsTeams, fbsVenueFor } from '../../../cfbdService.js';
 import { getKickoffWeather, windDescription } from '../../../weatherService.js';
 import { getPracticeReport, getSnapShare } from '../../../nflverseService.js';
 
@@ -1267,13 +1268,20 @@ export const nflFetchers = {
     // College venues are not in the table (130+ FBS stadiums); CollegeFootballData
     // publishes them with elevation and would close this. Say so rather than
     // guessing a coordinate.
-    const venue = bdlSport === 'americanfootball_nfl' ? nflVenueFor(homeName) : null;
+    // NFL comes from the local table; NCAAF venues come from CFBD, which
+    // publishes coordinates, elevation and dome for all 136 FBS teams in one
+    // cached request. Before that, college weather had to decline outright.
+    let venue = bdlSport === 'americanfootball_nfl' ? nflVenueFor(homeName) : null;
+    if (!venue && bdlSport === 'americanfootball_ncaaf') {
+      const teams = await getFbsTeams(season).catch(() => null);
+      venue = teams ? fbsVenueFor(teams, homeName) : null;
+    }
     if (!venue) {
       return {
         category: 'Weather',
         source: 'NOT AVAILABLE',
         reason: bdlSport === 'americanfootball_ncaaf'
-          ? 'No venue coordinates for NCAAF stadiums. A CollegeFootballData venues feed would provide them (with elevation).'
+          ? `No CFBD venue matched "${homeName}" (it may be an FCS school, which the FBS teams feed does not cover). Coordinates are never guessed.`
           : `No venue entry for ${homeName}.`,
         note: 'Do not estimate conditions. Report weather as unavailable for this game.',
         home: { team: homeName },
@@ -1326,7 +1334,9 @@ export const nflFetchers = {
       // fact that it might not apply, rather than picking one and being wrong.
       roof_note: venue.roof === 'retractable'
         ? 'Retractable roof — the open/closed decision is made on game day and is not known here, so treat the outdoor forecast as conditional.'
-        : undefined,
+        : (venue.roof === 'open_or_unconfirmed'
+          ? 'CFBD reports no dome for this venue. It publishes no retractable flag, so a retractable roof would look the same as an open one here.'
+          : undefined),
       temperature_f: weather.temperature_f,
       feels_like_f: weather.feels_like_f,
       wind: windDescription(weather),
