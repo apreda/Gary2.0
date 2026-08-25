@@ -3,6 +3,7 @@ import { ballDontLieService } from '../../../ballDontLieService.js';
 import { loadTeamResults, formSummary, homeAwaySplit, marginProfile } from './footballTeamGames.js';
 import { nflVenueFor, weatherApplies } from './footballVenues.js';
 import { getKickoffWeather, windDescription } from '../../../weatherService.js';
+import { getPracticeReport, getSnapShare } from '../../../nflverseService.js';
 
 /**
  * Both teams' season rows in one call, unwrapped.
@@ -1490,7 +1491,7 @@ Be factual with historical stats where available.`;
     };
   },
 
-  NFL_INJURIES: async (bdlSport, home, away) => {
+  NFL_INJURIES: async (bdlSport, home, away, season) => {
     const injuries = await ballDontLieService.getNflPlayerInjuries([home.id, away.id]);
     const forTeam = (teamId) => {
       const rows = (injuries || []).filter((i) => Number(i?.player?.team?.id) === Number(teamId));
@@ -1505,11 +1506,62 @@ Be factual with historical stats where available.`;
         questionable: byStatus('QUESTIONABLE')
       };
     };
+    // The practice report is what makes a status readable. "Questionable" on
+    // its own is close to noise — in 2025, 321 Questionable players had
+    // practiced fully and only 171 had not practiced at all. BDL cannot tell
+    // those apart; nflverse can.
+    const [homePractice, awayPractice] = await Promise.all([
+      getPracticeReport(home.full_name || home.name, season).catch(() => null),
+      getPracticeReport(away.full_name || away.name, season).catch(() => null)
+    ]);
+    const practiceBlock = (p) => {
+      if (!p) return { note: 'Practice report lookup failed.' };
+      if (p.unavailable) return { note: p.reason };
+      return {
+        week: p.week,
+        report: p.players.map((x) => (
+          `${x.name}${x.position ? ` (${x.position})` : ''} — ${x.game_status || 'no game status'}, practiced ${x.practice || 'unknown'}${x.injury ? ` [${x.injury}]` : ''}`
+        ))
+      };
+    };
+
     return {
       category: 'Injury Report',
-      data_scope: 'BDL official injury feed: status and comment only. Practice participation (DNP/Limited/Full) and the inactives list are NOT available.',
-      home: { team: home.full_name || home.name, ...forTeam(home.id) },
-      away: { team: away.full_name || away.name, ...forTeam(away.id) }
+      data_scope: 'BDL official injury feed (status + comment) PLUS the nflverse practice report (DNP / Limited / Full). The inactives list at 90 minutes before kickoff is still the only certainty about who dresses, and is not available here.',
+      home: {
+        team: home.full_name || home.name,
+        ...forTeam(home.id),
+        practice_report: practiceBlock(homePractice)
+      },
+      away: {
+        team: away.full_name || away.name,
+        ...forTeam(away.id),
+        practice_report: practiceBlock(awayPractice)
+      }
+    };
+  },
+
+  /**
+   * Who is ACTUALLY on the field. A depth chart says who is listed; snap share
+   * says who plays, and by how much. A "starter" at 38% and a backup at 62% is
+   * a fact no roster ordering carries.
+   */
+  NFL_SNAP_SHARE: async (bdlSport, home, away, season) => {
+    const [h, a] = await Promise.all([
+      getSnapShare(home.full_name || home.name, season).catch(() => null),
+      getSnapShare(away.full_name || away.name, season).catch(() => null)
+    ]);
+    const block = (s, team) => {
+      if (!s) return { team, note: 'Snap-count lookup failed.' };
+      if (s.unavailable) return { team, note: s.reason };
+      return { team, week: s.week, opponent: s.opponent, offense: s.offense, defense: s.defense };
+    };
+    return {
+      category: 'Snap Share',
+      source: 'nflverse',
+      data_scope: 'Snap percentages from the most recent completed game — usage, not depth-chart position.',
+      home: block(h, home.full_name || home.name),
+      away: block(a, away.full_name || away.name)
     };
   },
 

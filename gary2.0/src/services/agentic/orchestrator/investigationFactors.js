@@ -20,7 +20,9 @@ export const INVESTIGATION_FACTORS = {
     EXPLOSIVE_PLAYS: ['EXPLOSIVE_PLAYS', 'EXPLOSIVE_ALLOWED'],
     SPECIAL_TEAMS: ['SPECIAL_TEAMS', 'KICKING', 'FIELD_POSITION'],
     RECENT_FORM: ['RECENT_FORM', 'EPA_LAST_5'],
-    INJURIES: ['INJURIES'], // From scout report + player logs
+    // SNAP_SHARE is usage, not availability — who actually plays, and how
+    // much. A depth chart cannot carry it. Added Aug 25 2026 with nflverse.
+    INJURIES: ['INJURIES', 'SNAP_SHARE'], // From scout report + player logs
     SCHEDULE: ['REST_SITUATION', 'HOME_AWAY_SPLITS', 'SCHEDULE_CONTEXT'],
     STANDINGS_CONTEXT: ['STANDINGS', 'DIVISION_RECORD'], // Playoff picture, standings
     H2H_DIVISION: ['H2H_HISTORY'],
