@@ -88,6 +88,68 @@ function unavailableResult(error, home, away) {
   };
 }
 
+/**
+ * Team defensive disruption, aggregated from per-player game rows.
+ *
+ * BDL's NCAAF SEASON row carries 13 fields and none of them are defensive
+ * beyond opponent yards — which is why HAVOC and PRESSURE_RATE were answering
+ * "not available" and why the NFL PRESSURE_RATE fetcher, borrowed across the
+ * family, came back 8/10 N/A. But the per-player GAME endpoint does carry
+ * sacks, tackles_for_loss, interceptions and passes_defended, so the team
+ * totals are countable — they were simply never counted.
+ *
+ * Per-PLAY havoc rate still is not available: that needs a defensive snap or
+ * play count BDL does not publish. The counts and per-game figures are real;
+ * the rate is not, and the lane says so rather than inventing a denominator.
+ */
+async function ncaafDisruption(team, season) {
+  const rows = await ballDontLieService.getNcaafPlayerGameStats({ teamId: team.id, season });
+  if (!rows || rows.length === 0) return null;
+
+  const gameIds = new Set(rows.map((r) => r.game?.id).filter((id) => id != null));
+  const games = gameIds.size || null;
+  const total = (field) => rows.reduce((sum, r) => sum + (Number(r[field]) || 0), 0);
+  const perGame = (n) => (games ? Number((n / games).toFixed(2)) : null);
+
+  const sacks = total('sacks');
+  const tfl = total('tackles_for_loss');
+  const ints = total('interceptions');
+  const pbu = total('passes_defended');
+
+  // Who is generating it — a number with no name behind it invites the
+  // question the founder's standard forbids leaving open.
+  const byPlayer = new Map();
+  for (const r of rows) {
+    const id = r?.player?.id;
+    if (!id) continue;
+    const disruption = (Number(r.sacks) || 0) + (Number(r.tackles_for_loss) || 0);
+    if (disruption <= 0) continue;
+    const entry = byPlayer.get(id) || {
+      name: `${r.player.first_name || ''} ${r.player.last_name || ''}`.trim(),
+      sacks: 0, tfl: 0
+    };
+    entry.sacks += Number(r.sacks) || 0;
+    entry.tfl += Number(r.tackles_for_loss) || 0;
+    byPlayer.set(id, entry);
+  }
+  const leaders = [...byPlayer.values()]
+    .sort((a, b) => (b.sacks * 2 + b.tfl) - (a.sacks * 2 + a.tfl))
+    .slice(0, 3)
+    .map((p) => `${p.name} (${p.sacks} sacks, ${p.tfl} TFL)`);
+
+  const dates = rows.map((r) => String(r.game?.date || '').slice(0, 10)).filter(Boolean).sort();
+
+  return {
+    games_used: games,
+    span: dates.length ? `${dates[0]} → ${dates[dates.length - 1]}` : null,
+    sacks, sacks_per_game: perGame(sacks),
+    tackles_for_loss: tfl, tfl_per_game: perGame(tfl),
+    interceptions: ints,
+    passes_defended: pbu,
+    top_disruptors: leaders
+  };
+}
+
 export const ncaafFetchers = {
 
   // ===== NCAAF BDL-BASED STATS (THESE WORK - use team_season_stats) =====
@@ -452,14 +514,6 @@ export const ncaafFetchers = {
     away: { team: away.full_name || away.name }
   }),
 
-  NCAAF_HAVOC: async (bdlSport, home, away) => ({
-    category: 'Havoc',
-    source: 'NOT AVAILABLE',
-    reason: 'Havoc rate needs TFLs, forced fumbles and pass breakups; BDL NCAAF carries none of them.',
-    note: 'Do not estimate, derive or recall this figure. Report it as unavailable. A CollegeFootballData.com feed would source it.',
-    home: { team: home.full_name || home.name },
-    away: { team: away.full_name || away.name }
-  }),
 
   NCAAF_EXPLOSIVE_PLAYS: async (bdlSport, home, away) => ({
     category: 'Explosive Plays',
@@ -632,6 +686,72 @@ export const ncaafFetchers = {
       };
     } catch (error) {
       console.warn('[Stat Router] NCAAF Rankings Context fetch failed:', error.message);
+      return unavailableResult(error, home, away);
+    }
+  },
+
+  /**
+   * Real defensive disruption for college — replaces the previous
+   * "not available" declaration now that the per-player game endpoint is
+   * being counted. Per-play havoc RATE remains unavailable (no snap count).
+   */
+  NCAAF_HAVOC: async (bdlSport, home, away, season) => {
+    try {
+      const [homeD, awayD] = await Promise.all([
+        ncaafDisruption(home, season),
+        ncaafDisruption(away, season)
+      ]);
+      if (!homeD && !awayD) {
+        return {
+          category: 'Havoc',
+          source: 'NOT AVAILABLE',
+          reason: 'BDL returned no NCAAF player game rows for either team this season.',
+          home: { team: home.full_name || home.name },
+          away: { team: away.full_name || away.name }
+        };
+      }
+      return {
+        category: 'Defensive Disruption (Havoc components)',
+        source: 'Ball Don\'t Lie',
+        data_scope: 'Sacks, tackles for loss, interceptions and passes defended, counted from per-player game rows. Per-PLAY havoc rate is NOT available — BDL publishes no defensive snap or play count for NCAAF.',
+        home: { team: home.full_name || home.name, ...(homeD || { note: 'No player game rows returned' }) },
+        away: { team: away.full_name || away.name, ...(awayD || { note: 'No player game rows returned' }) }
+      };
+    } catch (error) {
+      console.warn('[Stat Router] NCAAF Havoc fetch failed:', error.message);
+      return unavailableResult(error, home, away);
+    }
+  },
+
+  /**
+   * College pass rush. The bare PRESSURE_RATE token resolves to the NFL
+   * fetcher across the shared football family, which reads NFL-only season
+   * fields and came back 8/10 N/A for college. This is the sport's own.
+   */
+  NCAAF_PRESSURE_RATE: async (bdlSport, home, away, season) => {
+    try {
+      const [homeD, awayD] = await Promise.all([
+        ncaafDisruption(home, season),
+        ncaafDisruption(away, season)
+      ]);
+      const line = (d) => (d ? {
+        games_used: d.games_used,
+        span: d.span,
+        sacks: d.sacks,
+        sacks_per_game: d.sacks_per_game,
+        tackles_for_loss: d.tackles_for_loss,
+        tfl_per_game: d.tfl_per_game,
+        top_disruptors: d.top_disruptors
+      } : { note: 'No player game rows returned' });
+      return {
+        category: 'Pass Rush',
+        source: 'Ball Don\'t Lie',
+        data_scope: 'Sacks and tackles for loss counted from per-player game rows. True pressure rate and QB hits are not published for NCAAF.',
+        home: { team: home.full_name || home.name, ...line(homeD) },
+        away: { team: away.full_name || away.name, ...line(awayD) }
+      };
+    } catch (error) {
+      console.warn('[Stat Router] NCAAF Pressure Rate fetch failed:', error.message);
       return unavailableResult(error, home, away);
     }
   }

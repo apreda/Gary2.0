@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { resolveTokenForSport } from '../../../src/services/agentic/tools/statRouters/index.js';
 import { INVESTIGATION_FACTORS } from '../../../src/services/agentic/orchestrator/investigationFactors.js';
+import { DEPRECATED_TOKENS } from '../../../src/services/agentic/tools/statRouters/statRouterCommon.js';
 
 /**
  * SPORT ISOLATION, ENFORCED (Aug 25 2026).
@@ -126,5 +128,30 @@ describe('the guard still refuses genuine cross-sport requests', () => {
   it('still allows the deliberately shared and polymorphic tokens', () => {
     expect(resolveTokenForSport('NFL', 'REST_SITUATION').allowed).toBe(true);
     expect(resolveTokenForSport('NFL', 'QUARTER_SCORING').allowed).toBe(true);
+  });
+});
+
+describe('a live checklist token is never on the deprecated list', () => {
+  /**
+   * The deprecation list short-circuits dispatch BEFORE a fetcher runs. Three
+   * live NCAAF tokens sat on it — NCAAF_STRENGTH_OF_SCHEDULE,
+   * NCAAF_CONFERENCE_STRENGTH, NCAAF_VS_POWER_OPPONENTS — so their own honest
+   * "not available, here is what would source it" answers were unreachable,
+   * and Gary got a pointer to Gemini instead: a vendor retired Aug 24 2026
+   * that exists in no lane. Found Aug 25 by driving every endpoint live.
+   */
+  it.each(SPORTS)('%s declares nothing that dispatch short-circuits', (sportKey) => {
+    const declared = declaredTokens(sportKey).map(({ token }) => token);
+    const shortCircuited = declared.filter((t) => DEPRECATED_TOKENS.includes(t));
+    expect(shortCircuited).toEqual([]);
+  });
+
+  it('the deprecation message names no retired vendor', () => {
+    const src = readFileSync(
+      new URL('../../../src/services/agentic/tools/statRouters/index.js', import.meta.url),
+      'utf8'
+    );
+    expect(src).not.toContain('use Gemini Grounding context');
+    expect(src).not.toContain('via Gemini Grounding in Scout Report');
   });
 });

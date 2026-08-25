@@ -350,12 +350,19 @@ const BDL_API_KEY = process.env.BALLDONTLIE_API_KEY;
  */
 // Tokens that should return N/A immediately (deprecated)
 // Gemini Grounding in Scout Report provides this context instead
+// Legacy NCAAF token names with no fetcher and no live checklist reference.
+// They short-circuit before dispatch so a stale name cannot reach the router.
+//
+// THREE NAMES WERE REMOVED Aug 25 2026 — NCAAF_STRENGTH_OF_SCHEDULE,
+// NCAAF_CONFERENCE_STRENGTH and NCAAF_VS_POWER_OPPONENTS are LIVE entries in
+// the NCAAF factor checklist. Being listed here intercepted them before their
+// own declarations could answer, and handed Gary a pointer to Gemini — retired
+// Aug 24, present in no lane. They now reach the honest NOT AVAILABLE that
+// names what would actually source them.
 const DEPRECATED_TOKENS = [
-  // NCAAF tokens - use Gemini Grounding instead
   'NCAAF_SP_PLUS', 'NCAAF_FPI', 'NCAAF_EPA_ADVANCED', 'NCAAF_HAVOC_RATE',
   'NCAAF_EXPLOSIVENESS', 'NCAAF_RUSHING_EFFICIENCY', 'NCAAF_PASSING_EFFICIENCY',
-  'NCAAF_RED_ZONE', 'NCAAF_STRENGTH_OF_SCHEDULE', 'NCAAF_CONFERENCE_STRENGTH',
-  'NCAAF_VS_POWER_OPPONENTS', 'NCAAF_TRAVEL_FATIGUE', 'NCAAF_OPPONENT_ADJUSTED'
+  'NCAAF_RED_ZONE', 'NCAAF_TRAVEL_FATIGUE', 'NCAAF_OPPONENT_ADJUSTED'
 ];
 
 

@@ -48,7 +48,7 @@ export const nhlFetchers = {
 
       return {
         category: 'Special Teams (Football)',
-        data_scope: 'BDL does not expose kicking/punting/return stats for NFL/NCAAF — use Gemini Grounding for special teams data',
+        data_scope: 'NHL special teams. Football does not route here — NFL has NFL_SPECIAL_TEAMS/KICKING/FIELD_POSITION off real BDL fields, and BDL publishes no NCAAF special-teams data at all.',
         source: 'Ball Don\'t Lie API',
         home: {
           team: home.full_name || home.name,

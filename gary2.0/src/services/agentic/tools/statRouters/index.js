@@ -161,12 +161,13 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
   // Check for deprecated tokens
   const sportSpecificToken = `${normalizedSport}_${token}`;
   if (DEPRECATED_TOKENS.includes(token) || DEPRECATED_TOKENS.includes(sportSpecificToken)) {
-    console.log(`[Stat Router] Skipping ${token} - deprecated token, using Gemini Grounding context instead`);
+    console.log(`[Stat Router] Skipping ${token} — retired token name with no fetcher`);
     return {
       token, sport,
-      homeValue: 'N/A (use Gemini Grounding context)',
-      awayValue: 'N/A (use Gemini Grounding context)',
-      note: 'Advanced analytics provided via Gemini Grounding in Scout Report'
+      source: 'NOT AVAILABLE',
+      homeValue: 'N/A',
+      awayValue: 'N/A',
+      note: 'This is a retired token name with no data source. Report it as unavailable; do not estimate, derive or recall a value for it.'
     };
   }
 
