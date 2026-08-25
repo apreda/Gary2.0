@@ -195,3 +195,184 @@ export async function getSnapShare(teamName, season, { week = null, minPct = 0.2
 export function _clearNflverseCache() {
   cache.clear();
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PRO FOOTBALL REFERENCE ADVANCED STATS — pressure and coverage (Aug 25 2026)
+//
+// THE GAP THIS CLOSES. PRESSURE_RATE could only report sacks, and said so
+// honestly: "QB hits and true pressure rate are charted products. No feed we
+// hold publishes them." That was wrong about where to look. nflverse mirrors
+// PFR's charting as a free CSV, and it carries pressures, hurries, QB
+// knockdowns, blitz counts, pocket time, and — the part with no substitute —
+// per-defender COVERAGE: targets, completion rate allowed, yards per target,
+// touchdowns and interceptions, and passer rating allowed.
+//
+// Why pressure matters more than sacks: Zach Allen finished 2025 with 32 QB
+// hits and 7 sacks. A desk reading sacks alone calls Denver's rush ordinary.
+// It was not ordinary; the finish simply did not land. And Brian Burns was
+// blitzed 39 times to Myles Garrett's 1 for comparable production — the same
+// number means different things about the scheme behind it.
+//
+// Why coverage matters: it is the only per-player defensive weakness in any
+// feed we hold. Brandon Stephens allowed 10 touchdowns and a 134.3 passer
+// rating on 85 targets in 2025. That is a targetable matchup, and until now
+// it was invisible to the desk.
+//
+// A TRAP WORTH NAMING. These two files spell the team column DIFFERENTLY —
+// the defensive file uses `tm`, the passing file uses `team`. Cross-reading
+// them returns undefined, not an error, which is precisely the silent-blank
+// failure this audit keeps finding. The column is therefore declared per
+// file below rather than assumed, and a test asserts both resolve.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Per-file column spellings. Never assume these agree. */
+const PFR_FILES = {
+  def: { asset: 'advstats_season_def', teamColumn: 'tm' },
+  pass: { asset: 'advstats_season_pass', teamColumn: 'team' }
+};
+
+/**
+ * PFR advanced stats are published as ONE file covering every season, not one
+ * file per season, so loadRelease's `${asset}_${season}.csv` shape does not
+ * apply here.
+ */
+async function loadPfr(kind, { fetchImpl = globalThis.fetch } = {}) {
+  const spec = PFR_FILES[kind];
+  if (!spec) return { unavailable: true, reason: `Unknown PFR file "${kind}".` };
+  const key = `pfr_${kind}`;
+  const hit = cache.get(key);
+  if (hit && hit.expires > Date.now()) return hit.value;
+
+  const url = `${RELEASE_BASE}/pfr_advstats/${spec.asset}.csv`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let value;
+  try {
+    const response = await fetchImpl(url, { signal: controller.signal });
+    if (!response.ok) {
+      value = { unavailable: true, reason: `nflverse returned HTTP ${response.status} for ${spec.asset}.csv.` };
+    } else {
+      const rows = parseCsv(await response.text());
+      if (rows.length && !(spec.teamColumn in rows[0])) {
+        // The column spelling changed upstream. Say so rather than returning
+        // rows whose team can never be matched.
+        value = { unavailable: true, reason: `${spec.asset}.csv no longer has a "${spec.teamColumn}" column; PFR advanced stats need remapping.` };
+      } else {
+        value = { rows, teamColumn: spec.teamColumn };
+      }
+    }
+  } catch (error) {
+    return { unavailable: true, reason: `Could not reach nflverse for ${spec.asset}.csv: ${error.message}` };
+  } finally {
+    clearTimeout(timer);
+  }
+  cache.set(key, { value, expires: Date.now() + CACHE_TTL_MS });
+  return value;
+}
+
+const pfrNum = (v) => {
+  if (v === '' || v == null || v === 'NA') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+/**
+ * A team's pass rush and coverage for one season.
+ *
+ * @returns {Promise<{unavailable?:true, reason?:string, pass_rush?:Array, coverage?:Array}>}
+ */
+export async function getPassRushAndCoverage(teamName, season, opts = {}) {
+  const code = nflverseCode(teamName);
+  if (!code) return { unavailable: true, reason: `No nflverse team code for "${teamName}".` };
+
+  const file = await loadPfr('def', opts);
+  if (file.unavailable) return file;
+
+  const rows = file.rows.filter((r) => String(r.season) === String(season) && r[file.teamColumn] === code);
+  if (rows.length === 0) {
+    return { unavailable: true, reason: `PFR has no ${season} defensive charting rows for ${teamName} yet.` };
+  }
+
+  const pass_rush = rows
+    .map((r) => ({
+      player: r.player,
+      position: r.pos || null,
+      games: pfrNum(r.g),
+      pressures: pfrNum(r.prss),
+      hurries: pfrNum(r.hrry),
+      qb_hits: pfrNum(r.qbkd),
+      sacks: pfrNum(r.sk),
+      blitzes: pfrNum(r.bltz),
+      missed_tackle_pct: pfrNum(r.m_tkl_percent)
+    }))
+    .filter((p) => (p.pressures || 0) > 0 || (p.sacks || 0) > 0)
+    .sort((a, b) => (b.pressures || 0) - (a.pressures || 0))
+    .slice(0, 8);
+
+  const coverage = rows
+    .map((r) => ({
+      player: r.player,
+      position: r.pos || null,
+      targets: pfrNum(r.tgt),
+      completions_allowed: pfrNum(r.cmp),
+      completion_pct_allowed: pfrNum(r.cmp_percent),
+      yards_allowed: pfrNum(r.yds),
+      yards_per_target: pfrNum(r.yds_tgt),
+      touchdowns_allowed: pfrNum(r.td),
+      interceptions: pfrNum(r.int),
+      passer_rating_allowed: pfrNum(r.rat),
+      average_depth_of_target: pfrNum(r.dadot),
+      missed_tackle_pct: pfrNum(r.m_tkl_percent)
+    }))
+    // A rating allowed over four targets says nothing. Twenty is the floor at
+    // which a defender's coverage line starts describing him.
+    .filter((c) => (c.targets || 0) >= 20)
+    .sort((a, b) => (b.targets || 0) - (a.targets || 0))
+    .slice(0, 8);
+
+  return {
+    season,
+    team: teamName,
+    pass_rush,
+    coverage,
+    source: 'Pro Football Reference charting via nflverse'
+  };
+}
+
+/**
+ * How much pressure a team's quarterbacks actually face, and how they throw
+ * under it. This is the offensive-line read that PASS_BLOCK_WIN_RATE had to
+ * decline.
+ */
+export async function getQbPressureProfile(teamName, season, opts = {}) {
+  const code = nflverseCode(teamName);
+  if (!code) return { unavailable: true, reason: `No nflverse team code for "${teamName}".` };
+
+  const file = await loadPfr('pass', opts);
+  if (file.unavailable) return file;
+
+  const rows = file.rows
+    .filter((r) => String(r.season) === String(season) && r[file.teamColumn] === code)
+    .map((r) => ({
+      player: r.player,
+      pass_attempts: pfrNum(r.pass_attempts),
+      pressure_pct: pfrNum(r.pressure_pct),
+      times_pressured: pfrNum(r.times_pressured),
+      times_hit: pfrNum(r.times_hit),
+      times_hurried: pfrNum(r.times_hurried),
+      times_blitzed: pfrNum(r.times_blitzed),
+      pocket_time_seconds: pfrNum(r.pocket_time),
+      bad_throw_pct: pfrNum(r.bad_throw_pct),
+      on_target_pct: pfrNum(r.on_tgt_pct),
+      drop_pct: pfrNum(r.drop_pct),
+      play_action_attempts: pfrNum(r.pa_pass_att),
+      intended_air_yards_per_attempt: pfrNum(r.intended_air_yards_per_pass_attempt)
+    }))
+    .filter((r) => (r.pass_attempts || 0) > 0)
+    .sort((a, b) => (b.pass_attempts || 0) - (a.pass_attempts || 0));
+
+  if (rows.length === 0) {
+    return { unavailable: true, reason: `PFR has no ${season} passing charting rows for ${teamName} yet.` };
+  }
+  return { season, team: teamName, quarterbacks: rows, source: 'Pro Football Reference charting via nflverse' };
+}

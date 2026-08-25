@@ -13,7 +13,10 @@ export const INVESTIGATION_FACTORS = {
     EFFICIENCY: ['OFFENSIVE_EPA', 'DEFENSIVE_EPA', 'PASSING_EPA', 'RUSHING_EPA', 'SUCCESS_RATE_OFFENSE', 'SUCCESS_RATE_DEFENSE'],
     DOWN_EFFICIENCY: ['EARLY_DOWN_SUCCESS', 'LATE_DOWN_EFFICIENCY'], // Critical for drives
     TRENCHES: ['OL_RANKINGS', 'DL_RANKINGS', 'PRESSURE_RATE', 'TIME_TO_THROW'],
-    QB_SITUATION: ['QB_STATS', 'PLAYER_GAME_LOGS'], // QB performance and game logs
+    // ROSTER_CONTINUITY says WHICH quarterback the season numbers describe.
+    // Cleveland's 2025 averages blend three starters; a season rate built
+    // across a change describes no team that will take the field.
+    QB_SITUATION: ['QB_STATS', 'PLAYER_GAME_LOGS', 'ROSTER_CONTINUITY'],
     SKILL_PLAYERS: ['RB_STATS', 'WR_TE_STATS', 'DEFENSIVE_PLAYMAKERS'], // Key playmakers
     TURNOVERS: ['TURNOVER_MARGIN', 'TURNOVER_LUCK', 'FUMBLE_LUCK'],
     RED_ZONE: ['RED_ZONE_OFFENSE', 'RED_ZONE_DEFENSE', 'GOAL_LINE'],
@@ -21,7 +24,11 @@ export const INVESTIGATION_FACTORS = {
     SPECIAL_TEAMS: ['SPECIAL_TEAMS', 'KICKING', 'FIELD_POSITION'],
     // GAME_STORY is the account of the last game, not another rate. Stats
     // about stats are not context; what happened is (founder, Aug 25).
-    RECENT_FORM: ['RECENT_FORM', 'EPA_LAST_5', 'GAME_STORY'],
+    // GAME_LEDGER is the canonical list of what happened this season, with a
+    // reference tag per game. Records elsewhere CITE those tags instead of
+    // reprinting the season five times (founder, Aug 25: a record is a tally,
+    // not a measure — it must never arrive without the games behind it).
+    RECENT_FORM: ['RECENT_FORM', 'EPA_LAST_5', 'GAME_STORY', 'GAME_LEDGER'],
     // SNAP_SHARE is usage, not availability — who actually plays, and how
     // much. A depth chart cannot carry it. Added Aug 25 2026 with nflverse.
     INJURIES: ['INJURIES', 'SNAP_SHARE'], // From scout report + player logs

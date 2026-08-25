@@ -31,23 +31,35 @@ const fixture = JSON.parse(
 );
 const NFL_SEASON_FIELDS = fixture.nfl_team_season_stats;
 
-const nflFetchersSource = fs.readFileSync(
-  path.join(here, '../../../src/services/agentic/tools/statRouters/nflFetchers.js'),
-  'utf8'
-);
+/**
+ * BOTH modules are scanned (Aug 25 2026).
+ *
+ * Fifteen season-stat fetchers moved to footballAdvancedTokens.js when the
+ * play ledger landed. Scanning only nflFetchers.js would have quietly dropped
+ * them from this contract — the guard would still pass, covering four fewer
+ * tokens than before, which is exactly the silent-shrinkage failure the count
+ * assertion below exists to catch. It caught it.
+ */
+const SOURCES = [
+  '../../../src/services/agentic/tools/statRouters/nflFetchers.js',
+  '../../../src/services/agentic/tools/statRouters/footballAdvancedTokens.js'
+].map((rel) => fs.readFileSync(path.join(here, rel), 'utf8'));
+
+const nflFetchersSource = SOURCES[0];
 
 /**
  * Tokens are discovered from source rather than hardcoded so a fetcher added
  * later cannot quietly escape the contract. The count assertion below makes
  * silent shrinkage (a broken regex covering nothing) fail loudly.
  */
-function seasonStatsTokens() {
+function tokensIn(fullSource, openingLiteral) {
   // Bound the search to the map literal. The LAST fetcher's body otherwise ran
   // to end-of-file and swallowed the module-level code beneath it, which reads
   // as a seasonPair() call and produced a phantom season-stat token.
-  const mapStart = nflFetchersSource.indexOf('export const nflFetchers = {');
-  const mapEnd = nflFetchersSource.indexOf('\n};', mapStart);
-  const source = nflFetchersSource.slice(mapStart, mapEnd === -1 ? undefined : mapEnd);
+  const mapStart = fullSource.indexOf(openingLiteral);
+  if (mapStart === -1) return [];
+  const mapEnd = fullSource.indexOf('\n};', mapStart);
+  const source = fullSource.slice(mapStart, mapEnd === -1 ? undefined : mapEnd);
 
   const starts = [...source.matchAll(/^ {2}([A-Z][A-Z0-9_]*): *async/gm)]
     .map((m) => ({ token: m[1], index: m.index }));
@@ -60,13 +72,17 @@ function seasonStatsTokens() {
     // helper. Do NOT narrow this to `homeStats?.field`: TURNOVER_LUCK reads
     // `homeStats.defense_interceptions` without the optional chain and escaped
     // the first audit sweep entirely.
-    if (!/getTeamSeasonStats|seasonPair\(/.test(body)) continue;
+    // bdlPair() is footballAdvancedTokens.js's equivalent of seasonPair().
+    if (!/getTeamSeasonStats|seasonPair\(|bdlPair\(/.test(body)) continue;
     tokens.push(starts[i].token);
   }
   return tokens;
 }
 
-const TOKENS = seasonStatsTokens();
+const TOKENS = [...new Set([
+  ...tokensIn(SOURCES[0], 'export const nflFetchers = {'),
+  ...tokensIn(SOURCES[1], 'export const footballAdvancedTokens = {')
+])];
 
 /**
  * A BDL row carrying every real key and nothing else, wrapped so that reading

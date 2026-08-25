@@ -299,3 +299,205 @@ export async function fetchFootballRecentGameCoverage({
     minChars: 400,
   });
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE DEEP READ — one combined search becomes six focused ones (Aug 25 2026)
+//
+// The founder's ask: "having Gary read through a ton of articles to fully
+// understand what happened last game, or last 3 games, or last time these
+// teams played, or for a QB or WR or defensive context."
+//
+// One prompt covering all of that returns a paragraph per team and loses the
+// specifics — a single search budget spread across six subjects finds the
+// shallowest version of each. Six lanes, each with its own budget, come back
+// with what a beat writer actually wrote about that one subject.
+//
+// KNOWN-OLD CONTEXT. Every lane is handed the facts we already hold — the
+// scores, the accounts, the play-by-play story — and told to add what those
+// do NOT say. Without that, a search lane re-reports the box score as though
+// it were discovering it, which is the recurring failure of search lanes in
+// this pipeline (see run-wire-items.js for the same pattern in the wire).
+//
+// COST IS REAL AND IS NOT HIDDEN. Six lanes at up to six searches each is
+// roughly 30-36 searches per game against the metered Anthropic API, where
+// the previous single pass ran seven. That is a deliberate trade the founder
+// made explicitly ("i dont care about costs really"), and the lane count is a
+// parameter so it can be cut back without a code change.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const DEEP_RULES = `
+RULES (identical for every lane):
+- Attribute each account to its outlet.
+- Reported fact and observation only. No predictions, no betting angles, no odds, no picks, no ATS or cover talk.
+- Do NOT report injuries or injury status — a separate official feed owns those. A player leaving a game may be mentioned only as part of what happened in it.
+- Do not use internal memory to fill gaps. Only what this request's searches support.
+- If the coverage cannot be found, say so plainly rather than inferring what probably happened.
+- Do not compare the two teams and do not favour either.`;
+
+/**
+ * The lanes. Each is a separate search with its own budget.
+ *
+ * `known` is the structured account we already hold, passed in so the lane
+ * spends its searches on what we do not have.
+ */
+export const DEEP_COVERAGE_LANES = [
+  {
+    key: 'last_game',
+    label: 'THE LAST GAME, AS WRITTEN',
+    maxUses: 6,
+    build: ({ homeTeam, awayTeam, league, known }) => `Use live web search to find what was WRITTEN about the single most recent completed game for each of ${homeTeam} and ${awayTeam} in ${league}. Search each team separately.
+${known}
+For each of those two games, report what the coverage said happened that the box score cannot carry:
+- how the game was actually won or lost in the writer's account;
+- the plays that decided it, and whether each was earned or fortunate — a tipped ball, a dropped interception, a ball that nearly got picked and fell into the receiver's lap, a spot or a review that went one way;
+- what the final score misrepresents, if anything: a team outplayed that still won, a scoreline flattered by late points, a comeback that stalled short;
+- what coaches or players said afterwards, attributed.
+${DEEP_RULES}
+Write one clearly labelled section per team.`
+  },
+  {
+    key: 'recent_run',
+    label: 'THE RUN BEFORE IT',
+    maxUses: 6,
+    build: ({ homeTeam, awayTeam, league, known }) => `Use live web search to find what was written about the SECOND and THIRD most recent completed games for each of ${homeTeam} and ${awayTeam} in ${league} — the games BEFORE their latest one. Search each team separately.
+${known}
+For each game, report how it went in the writer's account, and then say what the three games together showed: whether the team has been playing the same way each week or differently, and what changed between them if anything did.
+${DEEP_RULES}
+Write one clearly labelled section per team.`
+  },
+  {
+    key: 'head_to_head',
+    label: 'THE LAST TIME THEY PLAYED',
+    maxUses: 5,
+    build: ({ homeTeam, awayTeam, league }) => `Use live web search to find coverage of the most recent games played BETWEEN ${homeTeam} and ${awayTeam} in ${league} — their head-to-head history, most recent first, going back no further than three meetings.
+
+For each meeting, report the date, the result, and what the coverage said about how it was decided. Then say plainly which parts of those meetings still apply and which do not — different coach, different quarterback, different roster, a different season.
+${DEEP_RULES}
+If these two teams have not played each other recently, say so rather than substituting a different matchup.`
+  },
+  {
+    key: 'quarterback',
+    label: 'THE QUARTERBACKS',
+    maxUses: 6,
+    build: ({ homeTeam, awayTeam, league, known }) => `Use live web search to find what has been written about how the starting quarterbacks for ${homeTeam} and ${awayTeam} have been PLAYING over their last few games in ${league}. Search each separately.
+${known}
+Report, per quarterback:
+- how his recent games were described — decisive, erratic, protected by the scheme, carrying the offence;
+- how he has handled pressure and what coverage says teams are doing to him;
+- any change in his role, the play-calling around him, or who is starting;
+- attributed comment from coaches or the quarterback.
+${DEEP_RULES}
+Write one clearly labelled section per quarterback, and name the quarterback in the heading.`
+  },
+  {
+    key: 'skill_players',
+    label: 'THE SKILL PLAYERS',
+    maxUses: 5,
+    build: ({ homeTeam, awayTeam, league }) => `Use live web search to find what has been written about the receivers, tight ends and running backs for ${homeTeam} and ${awayTeam} in ${league} over their last few games.
+
+Report who is actually being used and how — who the offence is going to in the situations that matter, whose role has grown or shrunk, who has been dropping the ball or breaking tackles, and any change in the backfield split. Say who the coverage treats as the team's primary threat.
+${DEEP_RULES}
+Write one clearly labelled section per team.`
+  },
+  {
+    key: 'defense',
+    label: 'THE DEFENCES',
+    maxUses: 6,
+    build: ({ homeTeam, awayTeam, league, known }) => `Use live web search to find what has been written about how the DEFENCES of ${homeTeam} and ${awayTeam} have been playing over their last few games in ${league}. Search each separately.
+${known}
+Report, per defence:
+- what opponents have been doing to it successfully, in the writer's account — where it is being attacked and by what kind of play;
+- which individual defenders are being targeted, and which are winning;
+- how the pass rush has actually looked, beyond the sack count;
+- any scheme or personnel change described by the coverage — a coordinator adjustment, a corner moving inside, a rookie taking snaps.
+${DEEP_RULES}
+Write one clearly labelled section per team.`
+  }
+];
+
+/** Render what we already hold, so a lane does not spend searches rediscovering it. */
+function knownBlock(knownAccounts) {
+  if (!knownAccounts || !String(knownAccounts).trim()) return '';
+  return `
+<already_known>
+These facts are ALREADY on file and do not need to be found again. Treat them as known and spend your searches on what they do NOT say:
+${String(knownAccounts).trim()}
+</already_known>
+`;
+}
+
+/**
+ * Run the deep read.
+ *
+ * @param {object}   opts
+ * @param {string[]} opts.lanes          lane keys to run (default: all)
+ * @param {string}   opts.knownAccounts  facts already held, passed to each lane
+ * @returns {Promise<{text:string, lanes:object[], searches:number}|null>}
+ */
+export async function fetchFootballDeepCoverage({
+  homeTeam,
+  awayTeam,
+  sport,
+  now = new Date(),
+  fetchImpl = globalThis.fetch,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  lanes = null,
+  knownAccounts = null
+} = {}) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey || typeof fetchImpl !== 'function') {
+    console.warn('[Football Deep Read] Anthropic web search unavailable (missing API key or fetch)');
+    return null;
+  }
+
+  const isNcaaf = sport === 'NCAAF' || sport === 'americanfootball_ncaaf';
+  const league = isNcaaf ? 'college football' : 'NFL';
+  const today = etDate(now, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const known = knownBlock(knownAccounts);
+  const selected = lanes
+    ? DEEP_COVERAGE_LANES.filter((l) => lanes.includes(l.key))
+    : DEEP_COVERAGE_LANES;
+
+  // Lanes are independent, so they run together. One lane failing must never
+  // take the others with it — narrative is context, never a reason to lose a
+  // pick.
+  const settled = await Promise.allSettled(selected.map((lane) => runFootballSearch({
+    apiKey,
+    fetchImpl,
+    timeoutMs,
+    label: `Deep Read ${lane.key}`,
+    prompt: `<date_anchor>Current ET date: ${today}.</date_anchor>\n\n`
+      + lane.build({ homeTeam, awayTeam, league, known }),
+    maxUses: lane.maxUses,
+    mustMention: [homeTeam, awayTeam],
+    minChars: 300
+  })));
+
+  const done = [];
+  for (let i = 0; i < selected.length; i += 1) {
+    const lane = selected[i];
+    const outcome = settled[i];
+    const value = outcome.status === 'fulfilled' ? outcome.value : null;
+    if (value && value.text) {
+      done.push({ key: lane.key, label: lane.label, text: value.text, searches: value.searches ?? null });
+    } else {
+      // A lane that found nothing is REPORTED as having found nothing. A
+      // silently missing section reads as "there was nothing to say".
+      done.push({ key: lane.key, label: lane.label, text: null, searches: 0,
+        note: outcome.status === 'rejected' ? `This lane failed: ${outcome.reason?.message || 'unknown error'}` : 'No coverage found for this lane.' });
+    }
+  }
+
+  const withText = done.filter((l) => l.text);
+  if (withText.length === 0) return null;
+
+  const text = done.map((lane) => (
+    lane.text
+      ? `${lane.label}\n${lane.text}`
+      : `${lane.label}\n(${lane.note})`
+  )).join('\n\n');
+
+  const searches = done.reduce((sum, l) => sum + (Number(l.searches) || 0), 0);
+  console.log(`[Football Deep Read] ${withText.length}/${selected.length} lanes returned, ${searches} searches, ${text.length} chars`);
+  return { text, lanes: done, searches };
+}

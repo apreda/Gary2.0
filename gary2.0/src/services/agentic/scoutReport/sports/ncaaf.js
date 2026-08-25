@@ -15,7 +15,8 @@ import { generateGameSignificance } from '../gameSignificanceGenerator.js';
 import { formatTokenMenu } from '../../tools/toolDefinitions.js';
 import { sportToBdlKey, findTeam, escapeRegex, formatGameTime } from '../shared/utilities.js';
 import { groundedWebSearch, fetchStandingsSnapshot } from '../shared/grounding.js';
-import { fetchFootballRecentGameCoverage } from '../shared/anthropicFootballGrounding.js';
+import { fetchFootballDeepCoverage } from '../shared/anthropicFootballGrounding.js';
+import { loadTeamResults, gameStoryLine } from '../../tools/statRouters/footballTeamGames.js';
 import {
   fetchTeamProfile,
   fetchInjuries,
@@ -1180,8 +1181,28 @@ ${line(homeTeam)}
   // costs the report.
   let recentCoverage = null;
   try {
-    const coverage = await fetchFootballRecentGameCoverage({ homeTeam, awayTeam, sport: 'NCAAF' });
-    recentCoverage = coverage?.data || null;
+    // Hand the search lanes what we already hold, so they spend their budget
+    // on what a box score cannot say rather than rediscovering the scores.
+    let knownAccounts = null;
+    try {
+      const bdlKey = 'americanfootball_ncaaf';
+      const rosterTeams = await ballDontLieService.getTeams(bdlKey);
+      const ids = [[homeTeam, findTeam(rosterTeams, homeTeam)?.id], [awayTeam, findTeam(rosterTeams, awayTeam)?.id]]
+        .filter(([, id]) => id != null);
+      if (ids.length) {
+        const blocks = await Promise.all(ids.map(async ([name, id]) => {
+          const results = (await loadTeamResults(bdlKey, id, ncaafSeasonYear)).slice(0, 3);
+          if (!results.length) return null;
+          return `${name}:\n` + results.map((r) => `  - ${gameStoryLine(r)}`).join('\n');
+        }));
+        const kept = blocks.filter(Boolean);
+        if (kept.length) knownAccounts = kept.join('\n');
+      }
+    } catch (e) {
+      console.warn(`[Scout Report] Known-accounts context unavailable: ${e.message}`);
+    }
+    const coverage = await fetchFootballDeepCoverage({ homeTeam, awayTeam, sport: 'NCAAF', knownAccounts });
+    recentCoverage = coverage?.text || null;
   } catch (e) {
     console.warn(`[Scout Report] Recent-game coverage unavailable: ${e.message}`);
   }

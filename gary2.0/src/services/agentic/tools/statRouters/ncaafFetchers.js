@@ -5,6 +5,13 @@ import { loadTeamResults, formSummary, homeAwaySplit, marginProfile, closeGameRe
 
 const NCAAF_BDL_SPORT = 'americanfootball_ncaaf';
 
+/** CFBD rates arrive as long floats; round without inventing precision. */
+function cfbdNum(v) {
+  return Number.isFinite(Number(v)) ? Number(Number(v).toFixed(4)) : null;
+}
+
+
+
 function normalizeId(value) {
   if (value === null || value === undefined || value === '') return null;
   return String(value);
@@ -183,6 +190,96 @@ function advUnavailable(category, result, home, away) {
 }
 
 export const ncaafFetchers = {
+
+  /**
+   * LEAGUE ISOLATION (founder, Aug 25 2026).
+   *
+   * These two lanes were the ONLY place a college game could execute an
+   * NFL-owned fetcher. NCAAF's checklist declares OL_RANKINGS and
+   * DL_RANKINGS, no NCAAF_ variant existed, and the ownership guard permits
+   * it because both leagues share the "americanfootball" family — so the
+   * dispatcher handed college matchups to the NFL implementation.
+   *
+   * The founder's ruling is that the NFL and college football are to be as
+   * separate as the NFL and baseball: same sport, different league, different
+   * players, nothing shared. A branch inside a shared function is not
+   * separation — it is one blast radius wearing two labels. Declaring the
+   * NCAAF_ variants here makes resolveTokenForSport pick these, so no NFL
+   * code path executes for a college game at all.
+   *
+   * The data is CollegeFootballData throughout. Nothing here can reach
+   * nflverse, PFR charting, or the NFL play ledger, and nothing there can
+   * reach this.
+   */
+  NCAAF_OL_RANKINGS: async (bdlSport, home, away, season) => {
+    const advanced = await getAdvancedSeasonStats(season);
+    if (advanced.unavailable) {
+      return {
+        category: 'Offensive Line',
+        source: 'NOT AVAILABLE',
+        reason: advanced.reason,
+        note: 'Do not estimate, derive or recall this figure. Report it as unavailable.',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name }
+      };
+    }
+    const side = (team) => {
+      const row = rowFor(advanced, team.full_name || team.name);
+      if (!row) return { team: team.full_name || team.name, note: 'No CFBD advanced row for this team (FBS only).' };
+      return {
+        team: team.full_name || team.name,
+        line_yards: cfbdNum(row.offense?.lineYards),
+        stuff_rate: cfbdNum(row.offense?.stuffRate),
+        power_success: cfbdNum(row.offense?.powerSuccess),
+        second_level_yards: cfbdNum(row.offense?.secondLevelYards),
+        open_field_yards: cfbdNum(row.offense?.openFieldYards)
+      };
+    };
+    return {
+      category: 'Offensive Line',
+      source: 'CollegeFootballData',
+      data_scope: 'Advanced season stats — line yards, stuff rate and power success for all FBS teams',
+      home: side(home),
+      away: side(away),
+      reading_note: 'Line yards credit the blocking rather than the back. Stuff rate is the share of carries stopped at or behind the line. Power success is short-yardage and goal-line conversion.'
+    };
+  },
+
+  NCAAF_DL_RANKINGS: async (bdlSport, home, away, season) => {
+    const advanced = await getAdvancedSeasonStats(season);
+    if (advanced.unavailable) {
+      return {
+        category: 'Defensive Line',
+        source: 'NOT AVAILABLE',
+        reason: advanced.reason,
+        note: 'Do not estimate, derive or recall this figure. Report it as unavailable.',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name }
+      };
+    }
+    const side = (team) => {
+      const row = rowFor(advanced, team.full_name || team.name);
+      if (!row) return { team: team.full_name || team.name, note: 'No CFBD advanced row for this team (FBS only).' };
+      return {
+        team: team.full_name || team.name,
+        line_yards_allowed: cfbdNum(row.defense?.lineYards),
+        stuff_rate: cfbdNum(row.defense?.stuffRate),
+        power_success_allowed: cfbdNum(row.defense?.powerSuccess),
+        havoc_total: cfbdNum(row.defense?.havoc?.total),
+        havoc_front_seven: cfbdNum(row.defense?.havoc?.frontSeven),
+        havoc_secondary: cfbdNum(row.defense?.havoc?.db)
+      };
+    };
+    return {
+      category: 'Defensive Line',
+      source: 'CollegeFootballData',
+      data_scope: 'Advanced season stats — line yards allowed, stuff rate and havoc for all FBS teams',
+      home: side(home),
+      away: side(away),
+      reading_note: 'Havoc split into front seven and secondary says WHERE disruption comes from. It is the closest college equivalent to a pass-rush win rate; it is not the same measurement and must not be called one.'
+    };
+  },
+
 
   // ===== NCAAF BDL-BASED STATS (THESE WORK - use team_season_stats) =====
   

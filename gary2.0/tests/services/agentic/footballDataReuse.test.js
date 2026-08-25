@@ -750,8 +750,11 @@ describe('football BDL request reuse', () => {
     const result = await nflFetchers.RED_ZONE_DEFENSE('americanfootball_nfl', home, away, 2026);
 
     expect(teamStats).not.toHaveBeenCalled();
-    expect(result.home.opp_ppg).toBe('18.0');
-    expect(result.away.opp_ppg).toBe('24.0');
+    // Renamed Aug 25 2026 when RED_ZONE_DEFENSE stopped being a duplicate of
+    // DEFENSIVE_EPA under a red-zone heading. `opp_ppg` was never opponent
+    // red-zone anything; it is points allowed per game, and now says so.
+    expect(result.home.points_allowed_per_game).toBe('18.0');
+    expect(result.away.points_allowed_per_game).toBe('24.0');
   });
 
   it('uses the scout-report schedule query shape for NFL L5 and schedule tokens', async () => {

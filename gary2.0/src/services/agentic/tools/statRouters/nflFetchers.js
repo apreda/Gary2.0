@@ -7,6 +7,7 @@ import { getFbsTeams, fbsVenueFor } from '../../../cfbdService.js';
 import { latestGameNarrative } from './footballGameStory.js';
 import { getKickoffWeather, windDescription } from '../../../weatherService.js';
 import { getPracticeReport, getSnapShare } from '../../../nflverseService.js';
+import { footballAdvancedTokens } from './footballAdvancedTokens.js';
 
 /**
  * Both teams' season rows in one call, unwrapped.
@@ -29,158 +30,6 @@ async function seasonPair(bdlSport, home, away, season) {
 }
 
 export const nflFetchers = {
-  OFFENSIVE_EPA: async (bdlSport, home, away, season) => {
-    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
-    
-    // NCAAF uses different field names than NFL
-    if (bdlSport === 'americanfootball_ncaaf') {
-      const homeTotalYpg = (homeStats?.passing_yards_per_game || 0) + (homeStats?.rushing_yards_per_game || 0);
-      const awayTotalYpg = (awayStats?.passing_yards_per_game || 0) + (awayStats?.rushing_yards_per_game || 0);
-      const homeTotalTds = (homeStats?.passing_touchdowns || 0) + (homeStats?.rushing_touchdowns || 0);
-      const awayTotalTds = (awayStats?.passing_touchdowns || 0) + (awayStats?.rushing_touchdowns || 0);
-      
-      return {
-        category: 'Offensive Production',
-        data_scope: 'Season yards and touchdowns (not EPA)',
-        home: {
-          team: home.full_name || home.name,
-          total_yards_per_game: fmtNum(homeTotalYpg),
-          passing_ypg: fmtNum(homeStats?.passing_yards_per_game),
-          rushing_ypg: fmtNum(homeStats?.rushing_yards_per_game),
-          total_tds: homeTotalTds.toString()
-        },
-        away: {
-          team: away.full_name || away.name,
-          total_yards_per_game: fmtNum(awayTotalYpg),
-          passing_ypg: fmtNum(awayStats?.passing_yards_per_game),
-          rushing_ypg: fmtNum(awayStats?.rushing_yards_per_game),
-          total_tds: awayTotalTds.toString()
-        }
-      };
-    }
-    
-    // NFL and other sports
-    // Calculate yards per play correctly using season totals
-    const homeGamesPlayed = homeStats?.games_played || 1;
-    const awayGamesPlayed = awayStats?.games_played || 1;
-
-    // ── THE QUALIFIERS ON POINTS PER GAME (founder, Aug 25) ──
-    // PPG is one of the most quoted and least trustworthy numbers on a desk.
-    // It is not the offence's alone (defensive and return touchdowns are in
-    // it), it is not per-opportunity (a fast team scores more by having more
-    // drives), and its mean hides the shape (one 55-point blowout drags a
-    // season). Each of those is answerable from data already fetched here.
-    const [homeLedger, awayLedger] = await Promise.all([
-      loadTeamResults(bdlSport, home.id, season).catch(() => []),
-      loadTeamResults(bdlSport, away.id, season).catch(() => [])
-    ]);
-    const median = (nums) => {
-      if (!nums.length) return null;
-      const s2 = [...nums].sort((x, y) => x - y);
-      const mid = Math.floor(s2.length / 2);
-      return s2.length % 2 ? s2[mid] : Number(((s2[mid - 1] + s2[mid]) / 2).toFixed(1));
-    };
-    const scoringProfile = (stats, ledger, gamesPlayed) => {
-      const pts = ledger.map((g) => g.scored);
-      // Non-offensive scores. BDL publishes RETURN touchdowns but has no
-      // defensive-touchdown field at all — verified against the captured
-      // payload, which is how the contract test caught an invented
-      // `defensive_touchdowns` here. Count what exists and say what does not,
-      // rather than under-reporting silently.
-      const kickTds = Number(stats?.returning_kick_return_touchdowns) || 0;
-      const puntTds = Number(stats?.returning_punt_return_touchdowns) || 0;
-      const nonOffensive = kickTds + puntTds;
-      const recent = ledger.slice(0, 4).map((g) => g.scored);
-      const earlier = ledger.slice(4).map((g) => g.scored);
-      const avg = (a) => (a.length ? Number((a.reduce((x, y) => x + y, 0) / a.length).toFixed(1)) : null);
-      return {
-        mean_points: avg(pts),
-        median_points: median(pts),
-        // A mean well above the median means one or two blowouts are carrying it.
-        skew_note: (pts.length >= 4 && avg(pts) != null && median(pts) != null)
-          ? (Math.abs(avg(pts) - median(pts)) >= 3
-            ? 'Mean and median differ by 3+ — the average is being pulled by outlier games, not describing a typical one'
-            : 'Mean and median agree — the average describes a typical game')
-          : null,
-        non_offensive_touchdowns: nonOffensive,
-        non_offensive_note: nonOffensive > 0
-          ? `${nonOffensive} touchdown${nonOffensive === 1 ? ' was' : 's were'} scored by the return game, not the offence. Defensive touchdowns are NOT published in this feed, so any pick-six or fumble return is still counted inside points per game with no way to separate it.`
-          : 'No return touchdowns. Defensive touchdowns are not published in this feed, so a pick-six would still be inside points per game unseparated.',
-        last_4_points_per_game: avg(recent),
-        earlier_points_per_game: avg(earlier),
-        recency_note: (avg(recent) != null && avg(earlier) != null && Math.abs(avg(recent) - avg(earlier)) >= 5)
-          ? 'Recent scoring differs from earlier in the season by 5+ per game — the season average describes neither stretch'
-          : null,
-        games_played: gamesPlayed
-      };
-    };
-    const homeTotalYards = homeStats?.total_offensive_yards || (homeStats?.total_offensive_yards_per_game * homeGamesPlayed);
-    const awayTotalYards = awayStats?.total_offensive_yards || (awayStats?.total_offensive_yards_per_game * awayGamesPlayed);
-    const homeTotalPlays = (homeStats?.passing_attempts || 0) + (homeStats?.rushing_attempts || 0);
-    const awayTotalPlays = (awayStats?.passing_attempts || 0) + (awayStats?.rushing_attempts || 0);
-    
-    return {
-      category: 'Offensive Efficiency',
-      data_scope: 'Season yards and points (not EPA)',
-      home: {
-        team: home.full_name || home.name,
-        points_per_game: fmtNum(homeStats?.total_points_per_game),
-        yards_per_game: fmtNum(homeStats?.total_offensive_yards_per_game),
-        yards_per_play: fmtNum(homeTotalPlays > 0 ? homeTotalYards / homeTotalPlays : 0, 1),
-        scoring_context: scoringProfile(homeStats, homeLedger, homeGamesPlayed)
-      },
-      away: {
-        team: away.full_name || away.name,
-        points_per_game: fmtNum(awayStats?.total_points_per_game),
-        yards_per_game: fmtNum(awayStats?.total_offensive_yards_per_game),
-        yards_per_play: fmtNum(awayTotalPlays > 0 ? awayTotalYards / awayTotalPlays : 0, 1),
-        scoring_context: scoringProfile(awayStats, awayLedger, awayGamesPlayed)
-      }
-    };
-  },
-
-  DEFENSIVE_EPA: async (bdlSport, home, away, season) => {
-    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
-    
-    // NCAAF uses different field names
-    if (bdlSport === 'americanfootball_ncaaf') {
-      const homeOppYards = (homeStats?.opp_passing_yards || 0) + (homeStats?.opp_rushing_yards || 0);
-      const awayOppYards = (awayStats?.opp_passing_yards || 0) + (awayStats?.opp_rushing_yards || 0);
-      
-      return {
-        category: 'Defensive Production',
-        data_scope: 'Season yards allowed (not EPA)',
-        home: {
-          team: home.full_name || home.name,
-          opp_total_yards: fmtNum(homeOppYards),
-          opp_passing_yards: fmtNum(homeStats?.opp_passing_yards),
-          opp_rushing_yards: fmtNum(homeStats?.opp_rushing_yards)
-        },
-        away: {
-          team: away.full_name || away.name,
-          opp_total_yards: fmtNum(awayOppYards),
-          opp_passing_yards: fmtNum(awayStats?.opp_passing_yards),
-          opp_rushing_yards: fmtNum(awayStats?.opp_rushing_yards)
-        }
-      };
-    }
-    
-    // NFL and other sports
-    return {
-      category: 'Defensive Efficiency',
-      data_scope: 'Season yards and points allowed (not EPA)',
-      home: {
-        team: home.full_name || home.name,
-        opp_points_per_game: fmtNum(homeStats?.opp_total_points_per_game),
-        opp_yards_per_game: fmtNum(homeStats?.opp_total_offensive_yards_per_game)
-      },
-      away: {
-        team: away.full_name || away.name,
-        opp_points_per_game: fmtNum(awayStats?.opp_total_points_per_game),
-        opp_yards_per_game: fmtNum(awayStats?.opp_total_offensive_yards_per_game)
-      }
-    };
-  },
 
   RED_ZONE_OFFENSE: async (bdlSport, home, away, season) => {
     const homeName = home.full_name || home.name;
@@ -297,105 +146,6 @@ export const nflFetchers = {
     };
   },
 
-
-  // ===== NFL-SPECIFIC STATS (unique data for each token) =====
-  
-  SUCCESS_RATE_OFFENSE: async (bdlSport, home, away, season) => {
-    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
-    
-    return {
-      category: 'Offensive Success Rate (3rd/4th Down)',
-      data_scope: 'Third and fourth down conversion rates (not per-play success rate)',
-      home: {
-        team: home.full_name || home.name,
-        third_down_pct: fmtPct(homeStats?.misc_third_down_conv_pct / 100),
-        fourth_down_pct: fmtPct(homeStats?.misc_fourth_down_conv_pct / 100),
-        third_down_att: fmtNum(homeStats?.misc_third_down_attempts, 0),
-        third_down_made: fmtNum(homeStats?.misc_third_down_convs, 0)
-      },
-      away: {
-        team: away.full_name || away.name,
-        third_down_pct: fmtPct(awayStats?.misc_third_down_conv_pct / 100),
-        fourth_down_pct: fmtPct(awayStats?.misc_fourth_down_conv_pct / 100),
-        third_down_att: fmtNum(awayStats?.misc_third_down_attempts, 0),
-        third_down_made: fmtNum(awayStats?.misc_third_down_convs, 0)
-      }
-    };
-  },
-
-  SUCCESS_RATE_DEFENSE: async (bdlSport, home, away, season) => {
-    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
-    
-    return {
-      category: 'Defensive Success Rate (Opp 3rd/4th Down)',
-      data_scope: 'Third and fourth down conversion rates (not per-play success rate)',
-      home: {
-        team: home.full_name || home.name,
-        opp_third_down_pct: fmtPct(homeStats?.opp_misc_third_down_conv_pct / 100),
-        opp_fourth_down_pct: fmtPct(homeStats?.opp_misc_fourth_down_conv_pct / 100),
-        opp_third_down_att: fmtNum(homeStats?.opp_misc_third_down_attempts, 0),
-        opp_third_down_made: fmtNum(homeStats?.opp_misc_third_down_convs, 0)
-      },
-      away: {
-        team: away.full_name || away.name,
-        opp_third_down_pct: fmtPct(awayStats?.opp_misc_third_down_conv_pct / 100),
-        opp_fourth_down_pct: fmtPct(awayStats?.opp_misc_fourth_down_conv_pct / 100),
-        opp_third_down_att: fmtNum(awayStats?.opp_misc_third_down_attempts, 0),
-        opp_third_down_made: fmtNum(awayStats?.opp_misc_third_down_convs, 0)
-      }
-    };
-  },
-
-  EXPLOSIVE_PLAYS: async (bdlSport, home, away, season) => {
-    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
-    
-    // BDL doesn't have actual explosive play data (plays > 20 yards)
-    // Use longest plays and yards per attempt as proxies for explosiveness
-    return {
-      category: 'Explosive Play Potential',
-      home: {
-        team: home.full_name || home.name,
-        longest_pass: fmtNum(homeStats?.passing_long, 0),
-        longest_rush: fmtNum(homeStats?.rushing_long, 0),
-        yards_per_catch: fmtNum(homeStats?.receiving_yards_per_reception, 1),
-        yards_per_carry: fmtNum(homeStats?.rushing_yards_per_rush_attempt, 1)
-      },
-      away: {
-        team: away.full_name || away.name,
-        longest_pass: fmtNum(awayStats?.passing_long, 0),
-        longest_rush: fmtNum(awayStats?.rushing_long, 0),
-        yards_per_catch: fmtNum(awayStats?.receiving_yards_per_reception, 1),
-        yards_per_carry: fmtNum(awayStats?.rushing_yards_per_rush_attempt, 1)
-      }
-    };
-  },
-
-  PRESSURE_RATE: async (bdlSport, home, away, season) => {
-    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
-    
-    // BDL keeps the pass rush on the OPPONENT mirror: opp_passing_sacks is the
-    // sacks this defense recorded, passing_sacks is what its own line allowed.
-    // QB hits and true pressure rate are not in BDL for either league.
-    return {
-      category: 'Pressure/Sack Stats',
-      data_scope: 'Season sacks and sack yardage (QB hits and pressure rate are not available)',
-      home: {
-        team: home.full_name || home.name,
-        sacks_made: fmtNum(homeStats?.opp_passing_sacks, 0),
-        sacks_allowed: fmtNum(homeStats?.passing_sacks, 0),
-        sack_yards_forced: fmtNum(homeStats?.opp_passing_sack_yards_lost, 0),
-        sack_yards_allowed: fmtNum(homeStats?.passing_sack_yards_lost, 0)
-      },
-      away: {
-        team: away.full_name || away.name,
-        sacks_made: fmtNum(awayStats?.opp_passing_sacks, 0),
-        sacks_allowed: fmtNum(awayStats?.passing_sacks, 0),
-        sack_yards_forced: fmtNum(awayStats?.opp_passing_sack_yards_lost, 0),
-        sack_yards_allowed: fmtNum(awayStats?.passing_sack_yards_lost, 0)
-      }
-    };
-  },
-
   EPA_LAST_5: async (bdlSport, home, away, season) => {
     // Match the full-season request made by the scout report so this token can
     // reuse that cached schedule. An NFL season is well below 100 games and we
@@ -454,34 +204,6 @@ export const nflFetchers = {
     };
   },
 
-  RED_ZONE_DEFENSE: async (bdlSport, home, away, season) => {
-    // For defense, we need opponent's red zone stats when playing against this team
-    // This requires getting opponent stats from games, which is complex
-    // For now, use defensive efficiency metrics. Do not download team-game rows:
-    // they were never read by this calculation and added two BDL requests.
-    
-    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
-    
-    return {
-      category: 'Defensive Efficiency Summary',
-      data_scope: 'General defensive stats (red zone specific data unavailable from BDL)',
-      home: {
-        team: home.full_name || home.name,
-        opp_ppg: fmtNum(homeStats?.opp_total_points_per_game),
-        opp_yards_per_game: fmtNum(homeStats?.opp_total_offensive_yards_per_game),
-        takeaways: fmtNum((homeStats?.defensive_interceptions || 0) + (homeStats?.fumbles_recovered || 0), 0),
-        sacks: fmtNum(homeStats?.opp_passing_sacks, 0)
-      },
-      away: {
-        team: away.full_name || away.name,
-        opp_ppg: fmtNum(awayStats?.opp_total_points_per_game),
-        opp_yards_per_game: fmtNum(awayStats?.opp_total_offensive_yards_per_game),
-        takeaways: fmtNum((awayStats?.defensive_interceptions || 0) + (awayStats?.fumbles_recovered || 0), 0),
-        sacks: fmtNum(awayStats?.opp_passing_sacks, 0)
-      }
-    };
-  },
-
   WR_TE_STATS: async (bdlSport, home, away, season) => {
     const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
     
@@ -500,28 +222,6 @@ export const nflFetchers = {
         receiving_tds: fmtNum(awayStats?.passing_touchdowns, 0),
         yards_per_catch: fmtNum(awayStats?.passing_yards / (awayStats?.passing_completions || 1)),
         completion_pct: fmtPct(awayStats?.passing_completion_pct / 100)
-      }
-    };
-  },
-
-  DEFENSIVE_PLAYMAKERS: async (bdlSport, home, away, season) => {
-    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
-    
-    return {
-      category: 'Defensive Playmaking',
-      home: {
-        team: home.full_name || home.name,
-        interceptions: fmtNum(homeStats?.defensive_interceptions, 0),
-        fumble_recoveries: fmtNum(homeStats?.fumbles_recovered, 0),
-        sacks: fmtNum(homeStats?.opp_passing_sacks, 0),
-        total_takeaways: fmtNum((homeStats?.defensive_interceptions || 0) + (homeStats?.fumbles_recovered || 0), 0)
-      },
-      away: {
-        team: away.full_name || away.name,
-        interceptions: fmtNum(awayStats?.defensive_interceptions, 0),
-        fumble_recoveries: fmtNum(awayStats?.fumbles_recovered, 0),
-        sacks: fmtNum(awayStats?.opp_passing_sacks, 0),
-        total_takeaways: fmtNum((awayStats?.defensive_interceptions || 0) + (awayStats?.fumbles_recovered || 0), 0)
       }
     };
   },
@@ -565,24 +265,6 @@ export const nflFetchers = {
     }
   },
 
-
-  // ===== NFL EARLY/LATE DOWN & EXPLOSIVENESS STATS =====
-
-  /**
-   * Retired from web search Aug 25 2026 (founder: cut the prose lanes).
-   * This was a grounded search asking a model to recall numbers it cannot
-   * verify, sitting beside counted data. An honest decline that names what
-   * would source it is worth more than unverifiable prose.
-   */
-  EARLY_DOWN_SUCCESS: async (bdlSport, home, away) => ({
-    category: 'Early Down Success',
-    source: 'NOT AVAILABLE',
-    reason: 'Per-play success rate by down needs play-by-play aggregated across the season. Buildable from the per-game play feed, not yet built. Third and fourth down conversion rates ARE available in SUCCESS_RATE_OFFENSE and LATE_DOWN_EFFICIENCY.',
-    note: 'Do not estimate, derive or recall this figure. Report it as unavailable.',
-    home: { team: home.full_name || home.name },
-    away: { team: away.full_name || away.name }
-  }),
-
   LATE_DOWN_EFFICIENCY: async (bdlSport, home, away, season) => {
     // Late downs (3rd & 4th) - BDL has this!
     const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
@@ -609,31 +291,6 @@ export const nflFetchers = {
       },
       comparison: '3rd down conversion rates for both teams.',
       note: '3rd down conversion data for both teams.'
-    };
-  },
-
-  EXPLOSIVE_ALLOWED: async (bdlSport, home, away, season) => {
-    // Defensive version - how many explosive plays does each team ALLOW?
-    const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
-    
-    return {
-      category: 'Explosive Plays Allowed (Defense)',
-      home: {
-        team: home.full_name || home.name,
-        opp_longest_pass: fmtNum(homeStats?.opp_passing_long, 0),
-        opp_longest_rush: fmtNum(homeStats?.opp_rushing_long, 0),
-        opp_yards_per_catch: fmtNum(homeStats?.opp_receiving_yards_per_reception, 1),
-        opp_yards_per_carry: fmtNum(homeStats?.opp_rushing_yards_per_rush_attempt, 1)
-      },
-      away: {
-        team: away.full_name || away.name,
-        opp_longest_pass: fmtNum(awayStats?.opp_passing_long, 0),
-        opp_longest_rush: fmtNum(awayStats?.opp_rushing_long, 0),
-        opp_yards_per_catch: fmtNum(awayStats?.opp_receiving_yards_per_reception, 1),
-        opp_yards_per_carry: fmtNum(awayStats?.opp_rushing_yards_per_rush_attempt, 1)
-      },
-      comparison: 'Explosive plays allowed by each defense.',
-      note: 'Explosive plays allowed by each defense.'
     };
   },
 
@@ -773,85 +430,6 @@ export const nflFetchers = {
     };
   },
 
-
-  // ===== NFL MISSING STATS (Real Data via Gemini Grounding) =====
-
-  // SOURCE: PFF (Pro Football Focus), Football Outsiders, ESPN
-  /**
-   * Retired from web search Aug 25 2026 (founder: cut the prose lanes).
-   * This was a grounded search asking a model to recall numbers it cannot
-   * verify, sitting beside counted data. An honest decline that names what
-   * would source it is worth more than unverifiable prose.
-   */
-  OL_RANKINGS: async (bdlSport, home, away) => ({
-    category: 'Offensive Line',
-    source: 'NOT AVAILABLE',
-    reason: 'Pass-block win rate and line grades are charted products (Next Gen Stats, PFF). No feed we hold publishes them. Sacks allowed and sack yardage — which we DO have — are in PRESSURE_RATE.',
-    note: 'Do not estimate, derive or recall this figure. Report it as unavailable.',
-    home: { team: home.full_name || home.name },
-    away: { team: away.full_name || away.name }
-  }),
-
-  /**
-   * Retired from web search Aug 25 2026 (founder: cut the prose lanes).
-   * This was a grounded search asking a model to recall numbers it cannot
-   * verify, sitting beside counted data. An honest decline that names what
-   * would source it is worth more than unverifiable prose.
-   */
-  DL_RANKINGS: async (bdlSport, home, away) => ({
-    category: 'Defensive Line',
-    source: 'NOT AVAILABLE',
-    reason: 'Pass-rush win rate and pressure rate are charted products. No feed we hold publishes them. Sacks recorded and sack yardage forced are in PRESSURE_RATE.',
-    note: 'Do not estimate, derive or recall this figure. Report it as unavailable.',
-    home: { team: home.full_name || home.name },
-    away: { team: away.full_name || away.name }
-  }),
-
-  /**
-   * Retired from web search Aug 25 2026 (founder: cut the prose lanes).
-   * This was a grounded search asking a model to recall numbers it cannot
-   * verify, sitting beside counted data. An honest decline that names what
-   * would source it is worth more than unverifiable prose.
-   */
-  TIME_TO_THROW: async (bdlSport, home, away) => ({
-    category: 'Time to Throw',
-    source: 'NOT AVAILABLE',
-    reason: 'Average release time is an NFL Next Gen Stats tracking metric. No feed we hold publishes it.',
-    note: 'Do not estimate, derive or recall this figure. Report it as unavailable.',
-    home: { team: home.full_name || home.name },
-    away: { team: away.full_name || away.name }
-  }),
-
-  /**
-   * Retired from web search Aug 25 2026 (founder: cut the prose lanes).
-   * This was a grounded search asking a model to recall numbers it cannot
-   * verify, sitting beside counted data. An honest decline that names what
-   * would source it is worth more than unverifiable prose.
-   */
-  GOAL_LINE: async (bdlSport, home, away) => ({
-    category: 'Goal Line',
-    source: 'NOT AVAILABLE',
-    reason: 'Short-yardage and goal-line splits need play-by-play aggregated across the season. BDL publishes play-by-play per GAME, so this is buildable but not yet built; the season-level split is not a published field.',
-    note: 'Do not estimate, derive or recall this figure. Report it as unavailable.',
-    home: { team: home.full_name || home.name },
-    away: { team: away.full_name || away.name }
-  }),
-
-  /**
-   * Retired from web search Aug 25 2026 (founder: cut the prose lanes).
-   * This was a grounded search asking a model to recall numbers it cannot
-   * verify, sitting beside counted data. An honest decline that names what
-   * would source it is worth more than unverifiable prose.
-   */
-  TWO_MINUTE_DRILL: async (bdlSport, home, away) => ({
-    category: 'Two-Minute Drill',
-    source: 'NOT AVAILABLE',
-    reason: 'End-of-half efficiency needs play-by-play aggregated across the season. Buildable from the per-game play feed, not yet built; not a published field.',
-    note: 'Do not estimate, derive or recall this figure. Report it as unavailable.',
-    home: { team: home.full_name || home.name },
-    away: { team: away.full_name || away.name }
-  }),
-
   KICKING: async (bdlSport, home, away, season) => {
     // BDL carries field goals by distance bucket and the full punting line for
     // both teams, plus the opponent mirror. This used to buy web-search prose
@@ -904,40 +482,6 @@ export const nflFetchers = {
       data_scope: 'Return and punt-coverage game (average starting field position itself is not available)',
       home: { team: home.full_name || home.name, ...returnLine(homeStats) },
       away: { team: away.full_name || away.name, ...returnLine(awayStats) }
-    };
-  },
-
-  /**
-   * Primetime record, counted from actual kickoff times rather than recalled
-   * by a web search. A kickoff at or after 8pm ET is a night game.
-   */
-  PRIMETIME_RECORD: async (bdlSport, home, away, season) => {
-    const [homeResults, awayResults] = await Promise.all([
-      loadTeamResults(bdlSport, home.id, season),
-      loadTeamResults(bdlSport, away.id, season)
-    ]);
-    const isNight = (iso) => {
-      if (!iso) return false;
-      const hour = Number(new Intl.DateTimeFormat('en-US', {
-        timeZone: 'America/New_York', hour: 'numeric', hour12: false
-      }).format(new Date(iso)));
-      return Number.isFinite(hour) && hour >= 20;
-    };
-    const line = (results) => {
-      const night = results.filter((r) => isNight(r.date));
-      if (night.length === 0) return { note: 'No night games on the schedule yet this season.' };
-      const wins = night.filter((r) => r.won).length;
-      return {
-        night_game_record: `${wins}-${night.length - wins}`,
-        games: night.map((r) => `${r.won ? 'W' : 'L'} ${r.scored}-${r.allowed} ${r.home ? 'vs' : '@'} ${r.opponent}`)
-      };
-    };
-    return {
-      category: 'Primetime Record',
-      source: 'Ball Don\'t Lie schedule',
-      data_scope: 'Games kicking off at or after 8pm ET. A small sample by definition — the games are listed so the record is never read as more than it is.',
-      home: { team: home.full_name || home.name, ...line(homeResults) },
-      away: { team: away.full_name || away.name, ...line(awayResults) }
     };
   },
 
@@ -1393,21 +937,6 @@ Be factual with historical stats where available.`;
     return nflFetchers.TURNOVER_LUCK(bdlSport, home, away, season);
   },
 
-  NFL_RECENT_FORM: async (bdlSport, home, away, season) => {
-    const [homeResults, awayResults, league] = await Promise.all([
-      loadTeamResults(bdlSport, home.id, season),
-      loadTeamResults(bdlSport, away.id, season),
-      loadLeagueContext(bdlSport, season)
-    ]);
-    const opts = { leagueContext: league, opponentQuality: opponentQualityLine };
-    return {
-      category: 'Recent Form (Last 5)',
-      data_scope: 'Completed games newest first. Each line carries who it was against, where it was played, how the game actually went half by half, and how good that opponent was on the season — a score alone cannot say whether a win was comfortable, salvaged, or nearly thrown away.',
-      home: { team: home.full_name || home.name, ...(formSummary(homeResults, 5, opts) || { note: 'No completed games found' }) },
-      away: { team: away.full_name || away.name, ...(formSummary(awayResults, 5, opts) || { note: 'No completed games found' }) }
-    };
-  },
-
   NFL_HOME_AWAY_SPLITS: async (bdlSport, home, away, season) => {
     const [homeResults, awayResults] = await Promise.all([
       loadTeamResults(bdlSport, home.id, season),
@@ -1629,6 +1158,22 @@ Be factual with historical stats where available.`;
   }
 
 };
+
+/**
+ * THE LEDGER-BACKED TOKENS (Aug 25 2026).
+ *
+ * Fifteen tokens moved out of this file and into footballAdvancedTokens.js
+ * when the season play ledger landed. Six of them used to decline outright,
+ * four were named after a metric they did not compute, and one was a
+ * red-zone lane containing no red-zone data.
+ *
+ * They are merged rather than defined inline so this file stays about BDL's
+ * season row and that file stays about the play ledger. The merge happens
+ * BEFORE the season-sample wrapper below, so the ledger tokens are wrapped
+ * too and carry the same provenance stamp as everything else.
+ */
+Object.assign(nflFetchers, footballAdvancedTokens);
+
 
 
 /**

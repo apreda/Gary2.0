@@ -22,6 +22,35 @@ const SPORT_SOURCES = {
   mlb: mlbFetchers,
 };
 const SPORT_FAMILY = { nba: 'basketball', ncaab: 'basketball', nfl: 'americanfootball', ncaaf: 'americanfootball', nhl: 'icehockey', mlb: 'baseball' };
+
+/**
+ * LEAGUE ISOLATION — stricter than family (founder ruling, Aug 25 2026).
+ *
+ * The family guard stops baseball from executing a basketball fetcher. It does
+ * NOT stop the NFL and college football from executing each other's, because
+ * both are "americanfootball" — and for a while they did: NCAAF's checklist
+ * declared OL_RANKINGS and DL_RANKINGS, no NCAAF_ variant existed, and the
+ * dispatcher handed college matchups to the NFL implementation.
+ *
+ * The founder's ruling is that these two are as separate as the NFL and
+ * baseball: same sport, different league, different players, nothing shared.
+ * A shared fetcher with an `if (ncaaf)` branch inside it is not separation —
+ * it is one blast radius wearing two labels.
+ *
+ * So the pairs named here may never cross even though they share a family.
+ * Basketball has the identical NBA/NCAAB shape and is NOT listed yet: that is
+ * a checklist change needing the founder's sign-off on the exact list, and
+ * both leagues are out of season. It is debt, and it is named debt.
+ */
+const LEAGUE_ISOLATED = new Map([
+  ['nfl', new Set(['ncaaf'])],
+  ['ncaaf', new Set(['nfl'])]
+]);
+
+function crossesLeagueLine(currentSport, owner) {
+  const from = String(currentSport || '').toLowerCase();
+  return Boolean(owner && LEAGUE_ISOLATED.get(from)?.has(owner));
+}
 // Tokens that take bdlSport and route internally — genuinely sport-agnostic,
 // reachable from any sport (NHL reaches STANDINGS/REST_SITUATION via aliases).
 const SHARED_TOKENS = new Set(['DEFAULT', 'REST_SITUATION', 'STANDINGS', 'H2H_HISTORY']);
@@ -124,6 +153,9 @@ export function resolveTokenForSport(sport, token) {
   if (SPORT_POLYMORPHIC_TOKENS.get(resolvedKey)?.has(normalizedSport) === true) {
     return { resolvedKey, owner, allowed: true, reason: 'polymorphic' };
   }
+  if (crossesLeagueLine(normalizedSport, owner)) {
+    return { resolvedKey, owner, allowed: false, reason: `owned by ${owner} — the NFL and college football are isolated leagues` };
+  }
   if (owner && SPORT_FAMILY[owner] !== currentFamily) {
     return { resolvedKey, owner, allowed: false, reason: `owned by ${owner}` };
   }
@@ -198,7 +230,8 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
     const tokenOwner = TOKEN_OWNER[resolvedKey];
     const currentFamily = (bdlSport || '').split('_')[0];
     const permitsCurrentSport = SPORT_POLYMORPHIC_TOKENS.get(resolvedKey)?.has(normalizedSport) === true;
-    if (tokenOwner && !SHARED_TOKENS.has(resolvedKey) && !permitsCurrentSport && SPORT_FAMILY[tokenOwner] !== currentFamily) {
+    if (tokenOwner && !SHARED_TOKENS.has(resolvedKey) && !permitsCurrentSport
+      && (crossesLeagueLine(normalizedSport, tokenOwner) || SPORT_FAMILY[tokenOwner] !== currentFamily)) {
       console.warn(`[Stat Router] 🛑 Cross-sport block: ${resolvedKey} belongs to ${tokenOwner.toUpperCase()}, requested during a ${sport} run`);
       return { error: `Stat token ${token} belongs to ${tokenOwner.toUpperCase()} — not available for ${sport}. Use this sport's own tokens.`, token };
     }
