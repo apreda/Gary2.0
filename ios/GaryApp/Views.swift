@@ -10875,7 +10875,6 @@ struct GaryPicksView: View {
         var resultsMap: [String: String] = [:]
         var hasYesterday = false
         var yesterdayFailed = false
-        var yesterdayTransientFailure = false
         do {
             let yesterday = SupabaseAPI.yesterdayEST()
             let fetched = try await yesterdayFetch
@@ -10898,15 +10897,16 @@ struct GaryPicksView: View {
             }
         } catch {
             yesterdayFailed = true
-            yesterdayTransientFailure = SupabaseAPI.isTransientExternalFailure(error)
         }
 
         await MainActor.run {
-            if !didFail || !transientFailure {
+            // Any failure keeps last-good on screen; fetchFailed carries the
+            // retry state (Aug 26 — a failed refresh must never blank a board).
+            if !didFail {
                 allPicks = picks
                 sportsWithFreshPicks = freshSports
             }
-            if !yesterdayFailed || !yesterdayTransientFailure {
+            if !yesterdayFailed {
                 yesterdayPicks = yPicks
                 showingYesterdayResults = hasYesterday
                 yesterdayResultsMap = resultsMap
@@ -12098,7 +12098,6 @@ struct GaryPropsView: View {
         var yMap: [String: String] = [:]
         var hasYesterday = false
         var yesterdayFailed = false
-        var yesterdayTransientFailure = false
         do {
             let yesterday = SupabaseAPI.yesterdayEST()
             let fetched = try await withTimeout(seconds: 20) {
@@ -12124,7 +12123,6 @@ struct GaryPropsView: View {
             }
         } catch {
             yesterdayFailed = true
-            yesterdayTransientFailure = SupabaseAPI.isTransientExternalFailure(error)
         }
 
         await MainActor.run {
@@ -12135,7 +12133,8 @@ struct GaryPropsView: View {
                 sportsWithFreshProps = freshSports
             }
             propResultsMap = todayMap
-            if !yesterdayFailed || !yesterdayTransientFailure {
+            // Any failure keeps last-good (Aug 26 — same wipe class as above).
+            if !yesterdayFailed {
                 yesterdayProps = yProps.filter { !$0.isHRLane }
                 yesterdayResultsMap = yMap
                 showingYesterdayResults = hasYesterday
@@ -18969,55 +18968,55 @@ private struct GaryTakeCardBack<Tail: View>: View {
                         .accessibilityLabel(shareAccessibilityLabel)
                     }
 
-                    if caseExpanded {
-                        Text(take)
-                            .font(GaryFonts.text(14.5))
-                            .foregroundStyle(.white.opacity(0.88))
-                            .lineSpacing(3.5)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        ZStack(alignment: .bottom) {
-                            Text(take)
-                                .font(GaryFonts.text(14.5))
-                                .foregroundStyle(.white.opacity(0.88))
-                                .lineSpacing(3.5)
-                                // fixedSize = the text renders at FULL height
-                                // and the window clips it mid-line under the
-                                // fade. Without it, SwiftUI ellipsized the
-                                // last visible line ("…") inside the fixed
-                                // frame — the hard no-ellipsis law (Aug 19).
-                                .fixedSize(horizontal: false, vertical: true)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .frame(height: 108, alignment: .top)
-                                .clipped()
-                            backFade
-                        }
-                    }
-
+                    // The take IS the button (founder, Aug 26: no FULL TAKE
+                    // label row, no flip hint — the chevron riding the right
+                    // edge of the words is the whole affordance, and the two
+                    // freed rows go to MORE visible take: the hook a reader
+                    // gets before deciding to open the rest). The window
+                    // height grew 108 → 158 with the reclaimed space.
                     Button {
                         withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { caseExpanded.toggle() }
                     } label: {
-                        HStack(spacing: 5) {
-                            Text(caseExpanded ? "THE SHORT OF IT" : "THE FULL TAKE")
-                                .font(GaryFonts.mono(9, bold: true)).tracking(1.8)
-                            Image(systemName: caseExpanded ? "chevron.up" : "chevron.down")
-                                .font(.system(size: 8, weight: .bold))
+                        Group {
+                            if caseExpanded {
+                                Text(take)
+                                    .font(GaryFonts.text(14.5))
+                                    .foregroundStyle(.white.opacity(0.88))
+                                    .lineSpacing(3.5)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            } else {
+                                ZStack(alignment: .bottom) {
+                                    Text(take)
+                                        .font(GaryFonts.text(14.5))
+                                        .foregroundStyle(.white.opacity(0.88))
+                                        .lineSpacing(3.5)
+                                        // fixedSize = the text renders at FULL height
+                                        // and the window clips it mid-line under the
+                                        // fade. Without it, SwiftUI ellipsized the
+                                        // last visible line ("…") inside the fixed
+                                        // frame — the hard no-ellipsis law (Aug 19).
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .frame(height: 158, alignment: .top)
+                                        .clipped()
+                                    backFade
+                                }
+                            }
                         }
-                        .foregroundStyle(GaryColors.gold.opacity(0.85))
+                        .overlay(alignment: .bottomTrailing) {
+                            Image(systemName: caseExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(GaryColors.gold.opacity(0.85))
+                                .padding(.trailing, 2)
+                        }
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(caseExpanded ? "Collapse Gary's take" : "Read Gary's full take")
                 }
             }
 
             tail
-
-            HStack {
-                Spacer()
-                Text("flip ↺")
-                    .font(GaryFonts.mono(9, bold: false))
-                    .foregroundStyle(.white.opacity(0.5))
-            }
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -20544,6 +20543,7 @@ final class PropsSlateStore: ObservableObject {
     /// Failed pick sources from the latest attempt. Daily and NFL are separate
     /// so an NFL table problem can never blank or relabel the working MLB board.
     @Published var gamePickSourceFailures: Set<String> = []
+    @Published var slateSourceFailed = false
 
     /// The EST slate day the TODAY-state (allProps/gamePicks/slate) was loaded for.
     /// If the app sits open past the 6am ET rollover, keep-last-good would otherwise
@@ -20572,7 +20572,7 @@ final class PropsSlateStore: ObservableObject {
         await MainActor.run {
             if !loadedDate.isEmpty {
                 allProps = []; gamePicks = []; slate = []; slateUnavailable = false
-                propPickSourceFailed = false; gamePickSourceFailures = []
+                propPickSourceFailed = false; gamePickSourceFailures = []; slateSourceFailed = false
                 todayGameResults = [:]; todayPropResults = [:]
                 // Also drop the yesterday-fallback so a PRIOR day's fallback can't
                 // survive the roll before the fresh fetch resolves.
@@ -20651,7 +20651,6 @@ final class PropsSlateStore: ObservableObject {
         var yMap: [String: String] = [:]
         var hasYesterday = false
         var yFetchOK = false   // true = yesterday fetch SUCCEEDED (even if empty); false = threw
-        var yTransientFailure = false
         do {
             let yesterday = SupabaseAPI.yesterdayEST()
             let fetched = try await withTimeout(seconds: 20) {
@@ -20677,9 +20676,7 @@ final class PropsSlateStore: ObservableObject {
                     yMap[key] = outcome.lowercased()
                 }
             }
-        } catch {
-            yTransientFailure = SupabaseAPI.isTransientExternalFailure(error)
-        }
+        } catch { }
 
         // TODAY's graded props — same keying as resultForProp, so the Today board
         // stamps finished props live. Require only a result (actual_value is just
@@ -20694,24 +20691,26 @@ final class PropsSlateStore: ObservableObject {
             tPropMap[makeResultKey(player: playerName, propType: normalizePropType(propType), line: line, matchup: matchup)] = outcome.lowercased()
         }
 
-        // A successful empty is authoritative and clears the board. Only a
-        // whitelisted external transient may retain same-date last-good; schema,
-        // auth and configuration failures fail closed and expose the retry state.
-        if !didFail || !transientFailure {
+        // A successful empty is authoritative and clears the board. ANY
+        // failure keeps the same-date last-good copy on screen — the source
+        // banner (propPickSourceFailed) is what exposes the retry state.
+        // (Aug 26, founder screenshots: a pull-to-refresh that hit a failed
+        // fetch blanked a healthy MLB board and the sports list with it,
+        // snapping the page to an empty NFL desk. A failed fetch is not an
+        // empty result.)
+        if !didFail {
             allProps = props
             sportsWithFreshProps = freshSports
         }
         // Reset the fallback whenever the yesterday fetch SUCCEEDED (yFetchOK) — even
         // when it now returns nothing needed (today covers every sport). Guarding on
         // !yProps.isEmpty alone latched showingYesterdayResults ON, so settled yesterday
-        // props lingered on the Today board after today filled in. Only a typed
-        // transient external failure keeps last-good.
-        if yFetchOK || !yTransientFailure {
+        // props lingered on the Today board after today filled in. Any failure
+        // keeps last-good (Aug 26 — same wipe class as the today board above).
+        if yFetchOK {
             yesterdayProps = yProps
             yesterdayResultsMap = yMap
             showingYesterdayResults = hasYesterday
-        }
-        if yFetchOK || !yTransientFailure {
             yesterdayPropsAll = yPropsAll
         }
         if !tPropMap.isEmpty || todayPropResults.isEmpty { todayPropResults = tPropMap }
@@ -20758,11 +20757,12 @@ final class PropsSlateStore: ObservableObject {
             // current in-memory same-date slate is already the last-good copy.
             if !freshSlate.isEmpty { slate = freshSlate }
         } else {
-            // Internal auth/config/schema failures are not emergencies and must
-            // not be disguised by an old board. The explicit unavailable state
-            // makes the broken primary visible and retryable.
-            slate = []
+            // Internal auth/config/schema failures stay VISIBLE via
+            // slateSourceFailed (the board banner) — but the same-date board
+            // the user is reading stays rendered. Blanking a live board on a
+            // failed refresh stranded the page on an empty desk (Aug 26).
         }
+        slateSourceFailed = !slateResult.succeeded
         slateUnavailable = !slateResult.succeeded && slate.isEmpty
         let freshSports = Set(mergedToday.compactMap { ($0.league ?? "").uppercased() }.filter { !$0.isEmpty })
 
@@ -22006,6 +22006,12 @@ struct PicksCarouselView: View {
     private func snapSportIfAllHidden() {
         guard !AppFlags.picksAllTab,
               let first = sports.first(where: { $0 != "ALL" }) else { return }
+        // A refresh that FAILED is not evidence a league left the board —
+        // while any source is failing (or still loading), the chip list is
+        // not authoritative and the user's page does not move (Aug 26: a
+        // failed pull-to-refresh wiped the list and snapped MLB → NFL).
+        guard store.gamePickSourceFailures.isEmpty, !store.propPickSourceFailed,
+              !store.slateSourceFailed, !store.loading else { return }
         if sport == "ALL" || !sports.contains(sport) {
             sport = first
             sportAutoSelected = true
@@ -22859,7 +22865,7 @@ struct PicksCarouselView: View {
     }
 
     private var scopedBoardSourceFailed: Bool {
-        if store.propPickSourceFailed { return true }
+        if store.propPickSourceFailed || store.slateSourceFailed { return true }
         switch sport {
         case "NFL": return store.gamePickSourceFailures.contains("NFL")
         case "NCAAB":
