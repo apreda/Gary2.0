@@ -69,15 +69,18 @@ export function fallbackVerbatimPair(rationale, budget) {
 
 const STAKE = /\$\s?\d/;
 const ODDS = /[-+]\d{3,4}\b/;
-const WAGER_FIRST_PERSON = /\b(i(?:'|\u2019)?ll|i(?:'|\u2019)?m|i am)\b/i;
+// Price vocabulary beyond a bare odds token ("at plus money", "even money").
+const PRICE_TALK = /\b(?:plus|even)[- ]money\b/i;
 
 /** A sentence that carries analysis rather than restating the wager.
- *  Price-critique sentences ("-153 is too much for...") stay — a wrong
- *  price IS a reason; a first-person wager declaration at a price is not. */
+ *  NO PRICE TALK (founder, Aug 26 2026 — supersedes the price-critique
+ *  carve-out): a sentence carrying ANY odds token or price vocabulary never
+ *  reaches the feed. The verbatim law forbids editing Gary's sentences, so
+ *  priced sentences are EXCLUDED whole, never scrubbed. */
 export function isReasonSentence(sentence) {
   const t = String(sentence ?? '');
   if (STAKE.test(t)) return false;
-  if (ODDS.test(t) && WAGER_FIRST_PERSON.test(t)) return false;
+  if (ODDS.test(t) || PRICE_TALK.test(t)) return false;
   // HEADINGS ARE NOT SENTENCES (Aug 24 2026): stored rationales carry section
   // labels ("Gary's Take") as bare unpunctuated lines, and splitSentences
   // keeps paragraph tails whole. During the Aug 21+ Gemini outage the

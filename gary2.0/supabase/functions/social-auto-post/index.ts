@@ -12,7 +12,7 @@
 // CONVERSION-FIRST REDESIGN (v11, Jun 16 2026) — see Desktop/Gary2.0/X_CONVERSION_STRATEGY.md:
 //   - North Star is APP DOWNLOADS + retained users, NOT impressions/followers.
 //   - ZERO emojis anywhere (removed the sport-emoji map and the TOP PICK badge).
-//   - "Give the pick, hold the depth" withhold policy: the pick hook shows the pick + odds + ONE strongest falsifiable
+//   - "Give the pick, hold the depth" withhold policy: the pick hook shows the BARE pick (no odds — founder, Aug 26) + ONE strongest falsifiable
 //     factor; the full breakdown and the rest of the day's slate stay in the app (that is the reason to download).
 //   - No hashtags. No "Full breakdown" promise. No in-thread App Store link (the buried link converted ~0; the bio +
 //     pinned post carry the install path, and the profile out-converts an in-thread link). Pick thread = hook, plus a
@@ -26,6 +26,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { matchVerdicts, plainVerdict, buildVerdictPrompt, trimTweet } from "./verdicts.ts";
 import { fallbackReasonPair, isVerbatimSnippet, reasonCandidates, splitSentences } from "../_shared/verbatimSnippets.js";
+import { barePick } from "./barepick.ts";
 import { computeStanding } from "./pl.ts";
 import { selectPicks, type Slot } from "./window.ts";
 import { marqueeScore } from "./marquee.ts";
@@ -329,20 +330,13 @@ const PROP_LABELS: Record<string, string> = {
   pitcher_hits_allowed: "hits allowed",
 };
 
-function fmtSignedOdds(o: unknown): string {
-  const n = parseInt(String(o ?? ""), 10);
-  if (!Number.isFinite(n)) return "";
-  return n > 0 ? `+${n}` : String(n);
-}
-
 function propLine(p: any): string {
   const type = String(p?.prop ?? "").split(" ")[0];
-  const odds = fmtSignedOdds(p?.odds);
-  const oddsStr = odds ? ` (${odds})` : "";
-  if (type === "home_runs") return `- ${p.player} ${PROP_LABELS.home_runs}${oddsStr}`;
+  // NO PRICE TALK (founder, Aug 26): prop lines carry the bet, never the price.
+  if (type === "home_runs") return `- ${p.player} ${PROP_LABELS.home_runs}`;
   const label = PROP_LABELS[type] ?? type.replace(/_/g, " ");
   const bet = String(p?.bet ?? "").toUpperCase();
-  return `- ${p.player} ${bet} ${p.line} ${label}${oddsStr}`;
+  return `- ${p.player} ${bet} ${p.line} ${label}`;
 }
 
 // This game's props: CORE lanes first, HR threats after, deduped by player+prop.
@@ -471,9 +465,10 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
     const conf = parseFloat(chosen.confidence ?? 0);
     const isTopPick = conf >= 0.8 && conf === maxConf;
     const league = (chosen.league ?? "MLB").toUpperCase();
-    // De-dupe odds: many pick strings already embed the odds (e.g. "Dodgers ML -174"). Only append (odds) when not present.
-    const oddsStr = (chosen.odds && !String(chosen.pick).includes(String(chosen.odds))) ? ` (${chosen.odds})` : "";
-    const pickLine = `${chosen.pick}${oddsStr}`; // clean machine-readable shorthand, no emoji
+    // NO PRICE TALK (founder, Aug 26): the injected line is the BARE pick —
+    // the same founder-ruled shape replies use ("Yankees ML" — the spread or
+    // total is part of the bet; the price is just today's number at one book).
+    const pickLine = barePick(String(chosen.pick)); // clean machine-readable shorthand, no odds, no emoji
 
     // WITHHOLD POLICY, VERBATIM EDITION (founder, Aug 17 2026): the hook is
     // two of Gary's OWN rationale sentences around the injected pick line —

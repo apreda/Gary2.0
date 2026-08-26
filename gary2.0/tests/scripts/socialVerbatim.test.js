@@ -87,9 +87,13 @@ describe('reasonCandidates', () => {
     expect(kept.some((s) => s.includes('put the'))).toBe(false);
   });
 
-  it('keeps price-critique sentences — a wrong price IS a reason', () => {
+  it('drops EVERY priced sentence whole — no price talk reaches the feed (founder, Aug 26)', () => {
+    // Supersedes the old price-critique carve-out. The verbatim law forbids
+    // editing Gary's sentences, so a priced sentence is excluded, never scrubbed.
     const kept = reasonCandidates(R);
-    expect(kept.some((s) => s.startsWith('The -153 is too much'))).toBe(true);
+    expect(kept.some((s) => /[-+]\d{3,4}\b/.test(s))).toBe(false);
+    expect(reasonCandidates('He cashes at plus money more often than not. The lineup is the reason tonight.'))
+      .toEqual(['The lineup is the reason tonight.']);
   });
 
   it('fallbackReasonPair prefers stat-bearing reasons over the scene-setting opener', () => {
