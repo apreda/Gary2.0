@@ -2,9 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
   bullpenLedgerDate,
-  relieverBoxEntries,  outsToIp,
-  penLeverageArms,
-  penWindowComposition,
+  relieverBoxEntries,
+  outsToIp,
 } from '../../src/services/agentic/tools/statRouters/bullpenLedger.js';
 
 const fetchersSrc = readFileSync(
@@ -84,42 +83,12 @@ describe('MLB_BULLPEN_WORKLOAD wiring', () => {
   });
 });
 
-describe('pen-window composition (the Aug 26 six-eight autopsy fills)', () => {
-  const arms = [
-    { pid: 1, name: 'Miller', outs: 13, er: 1, pitches: 55, dates: ['2026-08-22', '2026-08-24'],
-      marginOuts: [{ margin: 1, outs: 3 }, { margin: 0, outs: 4 }, { margin: 5, outs: 6 }] },
-    { pid: 2, name: 'Suarez', outs: 11, er: 0, pitches: 48, dates: ['2026-08-23'],
-      marginOuts: [{ margin: 2, outs: 5 }, { margin: null, outs: 6 }] },
-    { pid: 3, name: 'Mopup', outs: 9, er: 6, pitches: 40, dates: ['2026-08-21'],
-      marginOuts: [{ margin: 7, outs: 9 }] },
-  ];
-
+// (The Aug-26 composition/leverage prose devices were retired the same day —
+// founder duplication audit. outsToIp remains the ledger's arithmetic.)
+describe('outsToIp', () => {
   it('formats outs as MLB innings', () => {
     expect(outsToIp(13)).toBe('4.1');
     expect(outsToIp(9)).toBe('3.0');
     expect(outsToIp(0)).toBe('0.0');
-  });
-
-  it('states the arms, the blowout share, and the unknown share', () => {
-    const line = penWindowComposition(arms);
-    expect(line).toContain('Miller 4.1IP');
-    expect(line).toContain('Suarez 3.2IP');
-    expect(line).toContain('Mopup 3.0IP');
-    // Blowout outs: Miller margin-5 (6) + Mopup margin-7 (9) = 15 → 5.0 IP of 11.0
-    expect(line).toContain('5.0 of 11.0 IP entered with a margin of 4+');
-    // Suarez's unknown-entry 6 outs are named, not silently bucketed
-    expect(line).toContain('entry context unknown for 2.0 IP');
-  });
-
-  it('ranks leverage arms by close-entry work and leaves mop-up men out', () => {
-    const ranked = penLeverageArms(arms);
-    expect(ranked.map((a) => a.name)).toEqual(['Miller', 'Suarez']);
-    expect(ranked[0].closeApps).toBe(2); // margins 1 and 0
-    expect(ranked[1].closeApps).toBe(1); // margin 2; the null entry counts nowhere
-  });
-
-  it('returns nothing rather than an empty claim when no arms pitched', () => {
-    expect(penWindowComposition([])).toBe(null);
-    expect(penLeverageArms([])).toEqual([]);
   });
 });

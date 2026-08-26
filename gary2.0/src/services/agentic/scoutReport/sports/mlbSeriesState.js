@@ -300,56 +300,9 @@ export function computeMlbSituationalRecords(seasonIndex, teamBdlId, teamName) {
   return { line: lines.join('\n'), records: { afterLoss, afterBlowoutLoss, afterWin, afterOffDay, seriesFinales } };
 }
 
-/**
- * RECENT FORM, SERIES-SHAPED (founder, Aug 10 2026): "last 7 would likely be
- * 1 game against 1 team, 3 against another and another 3 — Gary has to
- * understand that context too." A club's recent games grouped into series
- * runs (opponent+venue change = new series), each tallied with the opponent
- * named. The newest run is tagged (ongoing) only when it is tonight's
- * matchup — a finished set never wears the tag. Null-safe: no games, null.
- */
-export function computeMlbRecentSeriesForm(games, teamNick, maxSeries = 4, ongoingOppNick = null) {
-  const series = groupGamesIntoSeries(games, teamNick);
-  if (!series.length) return null;
-  const sideOf = (g) => (clubMatches(g.teams.home.team.name, teamNick) ? 'home' : 'away');
-  const recent = series.slice(-maxSeries);
-  return recent.map((s, i) => {
-    let w = 0, l = 0;
-    for (const g of s.games) {
-      const side = sideOf(g);
-      const us = g.teams[side]?.score;
-      const them = g.teams[side === 'home' ? 'away' : 'home']?.score;
-      if (us == null || them == null) continue;
-      if (us > them) w += 1; else if (them > us) l += 1;
-    }
-    const ongoing = i === recent.length - 1 && !!ongoingOppNick && clubMatches(s.opp, ongoingOppNick);
-    // Nickname = last word, except the league's two-word nicknames.
-    const nick = /\b(Blue Jays|Red Sox|White Sox)$/.test(s.opp)
-      ? s.opp.match(/\b(Blue Jays|Red Sox|White Sox)$/)[1]
-      : s.opp.split(' ').pop();
-    return `${s.home ? 'vs' : '@'} ${nick} ${w}-${l}${ongoing ? ' (ongoing)' : ''}`;
-  }).join(' · ');
-}
-
-/** Shared series grouping: a club's games split into series runs (opponent
- *  or venue change = new run). Used by the form line and the situational
- *  layer so "a series" means the same thing everywhere. */
-export function groupGamesIntoSeries(games, teamNick) {
-  const rows = (Array.isArray(games) ? games : [])
-    .filter(g => g?.teams?.home?.team?.name && g?.teams?.away?.team?.name);
-  if (!rows.length || !teamNick) return [];
-  const sideOf = (g) => (clubMatches(g.teams.home.team.name, teamNick) ? 'home' : 'away');
-  const series = [];
-  for (const g of rows) {
-    const side = sideOf(g);
-    const opp = side === 'home' ? g.teams.away.team.name : g.teams.home.team.name;
-    const home = side === 'home';
-    const last = series[series.length - 1];
-    if (last && last.opp === opp && last.home === home) last.games.push(g);
-    else series.push({ opp, home, games: [g] });
-  }
-  return series;
-}
+// (computeMlbRecentSeriesForm, groupGamesIntoSeries, and the situational
+// series line were retired Aug 26 — founder duplication audit: the series
+// stories and RECENT FORM entries carry what they compressed.)
 
 const shortMonthDay = (iso) => {
   const d = new Date(`${String(iso).slice(0, 10)}T12:00:00Z`);
@@ -357,12 +310,6 @@ const shortMonthDay = (iso) => {
     : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 };
 
-/**
- * SEASON SERIES, GROUPED (founder, Aug 10: "Phillies won the series back in
- * June" instead of nine raw dated lines — familiarity, not a mandate). The
- * same meetings the season-series tally uses, grouped into series (venue
- * flip or a >3-day gap = a new set), each tallied with its dates.
- */
 export function computeMlbSeasonSeriesGroups(seasonIndex, homeBdlId, awayBdlId, homeTeam, awayTeam) {
   if (!seasonIndex || typeof seasonIndex.entries !== 'function' || !homeBdlId || !awayBdlId) return null;
   const meetings = [];
@@ -402,22 +349,3 @@ export function computeMlbSeasonSeriesGroups(seasonIndex, homeBdlId, awayBdlId, 
   });
 }
 
-/**
- * SITUATIONALLY, GAME BY GAME (founder GO, Aug 10): per-game RISP, LOB,
- * one-run flag, and pen events with the arm NAMED — "if the same guy
- * fucked them 3 games out of 7," the name is on every line. Rows arrive
- * from the official boxscore; a row with nothing to say prints nothing.
- */
-export function situationalSeriesLine(label, rows) {
-  const parts = (rows || []).filter(Boolean).map(r => {
-    const bits = [];
-    if (r.risp) bits.push(`RISP ${r.risp}`);
-    if (r.lob != null) bits.push(`${r.lob} LOB`);
-    if (r.oneRun) bits.push('one-run game');
-    const pens = (r.penEvents || [])
-      .map(p => `${p.name}${p.note ? ` ${p.note}` : ''}${p.er ? ` ${p.er} ER` : ''}`);
-    if (pens.length) bits.push(`pen: ${pens.join(', ')}`);
-    return bits.length ? `${r.date}: ${bits.join(', ')}` : null;
-  }).filter(Boolean);
-  return parts.length ? `${label}: ${parts.join(' · ')}` : null;
-}

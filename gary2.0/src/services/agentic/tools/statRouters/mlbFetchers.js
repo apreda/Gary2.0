@@ -19,7 +19,6 @@ import {
   getGameBoxScore,
   getPitcherPlatoonSplits,
   getPitcherEntryContext,
-  getPitcherSeasonPitching,
   getMlbPeopleHands,
   getPitcherGameLogRaw,
 } from '../../../mlbStatsApiService.js';
@@ -27,7 +26,7 @@ import { computeRelieverUsagePattern } from '../../scoutReport/sports/mlbSeasonC
 import { getPitcherArsenal, getPitcherStatcastProfile } from '../../../baseballSavantService.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { formatSampleSuffix } from './statRouterCommon.js';
-import { bullpenLedgerDate, outsToIp, penLeverageArms, penWindowComposition, relieverBoxEntries } from './bullpenLedger.js';
+import { bullpenLedgerDate, outsToIp, relieverBoxEntries } from './bullpenLedger.js';
 // Bridge-aware search seam (Jul 30): ALL grounding in this file routes like
 // the WORLD lane — Claude sub first when GARY_GROUNDING_VIA_CLAUDE=1 ($0),
 // then the API chain — never a hardwired paid Gemini call.
@@ -1998,29 +1997,11 @@ export const mlbFetchers = {
             const penEra14 = ((pen14.er * 27) / pen14.outs).toFixed(2);
             lines.push(`Pen last ${pen14.games} games: ${outsToIp(pen14.outs)} IP, ${pen14.er} ER (${penEra14} ERA)`);
           }
-          // WHAT THE 7-GAME NUMBER IS MADE OF (founder GO, Aug 26 — the 6-8
-          // autopsy: the pen ERA decided eight picks while hiding who threw
-          // it and in what spots). Facts only; the read is the brain's.
-          const composition = penWindowComposition([...armWindow.values()]);
-          if (composition) lines.push(`Last-7 composition — ${composition}`);
-          const levArms = penLeverageArms([...armWindow.values()]);
-          if (levArms.length) {
-            const levLines = [];
-            for (const a of levArms) {
-              let seasonBit = '';
-              try {
-                const sp = await getPitcherSeasonPitching(a.pid, season);
-                if (sp?.era != null) seasonBit = `season ${sp.era} ERA${sp.saves != null ? `, ${sp.saves} SV` : ''}${sp.holds != null ? `, ${sp.holds} HLD` : ''}; `;
-              } catch { /* season line is additive */ }
-              const lastWorked = a.dates.length ? a.dates[a.dates.length - 1] : null;
-              levLines.push(
-                `${a.name} — ${seasonBit}window ${outsToIp(a.outs)} IP, ${a.er} ER, ` +
-                `${a.closeApps} close-entry appearance${a.closeApps === 1 ? '' : 's'}, ${a.pitches} pitches` +
-                (lastWorked ? `, last worked ${lastWorked}` : '')
-              );
-            }
-            lines.push(`Most-used in close spots (last 7 games): ${levLines.join(' | ')}`);
-          }
+          // (The Aug-26 composition and close-spot prose lines were retired
+          // the same day — founder duplication audit: they restated the
+          // per-date ledger above as stats-in-story-form, and the game
+          // stories now carry the pen's narrative. The ledger stays the
+          // availability record: who threw, when, entering what, pitches.)
         }
       } catch (e) {
         console.warn(`[MLB Fetchers] ⚠️ Bullpen workload API failed for ${teamName}: ${e.message}`);

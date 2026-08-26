@@ -57,68 +57,13 @@ export function relieverBoxEntries(side) {
   return entries;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Pen-window composition + leverage arms (Aug 26 2026, founder GO — the 6-8
-// autopsy: the 7-game pen ERA decided eight picks and predicted nothing,
-// because the number hid WHO threw those innings, how many came in blowout
-// spots, and whether tonight's decisive arm is even in the sample).
-// ─────────────────────────────────────────────────────────────────────────────
+// (The Aug-26 pen-window composition and leverage-arms devices were retired
+// the same day they shipped — founder duplication audit: composed prose
+// restated the appearance ledger, and the game stories carry the pen's
+// narrative. outsToIp stays: the ledger's own arithmetic.)
 
 /** Outs → MLB "X.Y" innings string (Y = leftover outs). */
 export function outsToIp(outs) {
   const o = Math.max(0, Math.trunc(Number(outs) || 0));
   return `${Math.floor(o / 3)}.${o % 3}`;
-}
-
-/**
- * One line stating what the window's ERA is actually made of: the arms by
- * innings, and how much of the work came in low-leverage (blowout-entry)
- * spots. Facts only — what that means for tonight is the brain's call.
- * @param {Array<{name: string, outs: number, margins?: Array<number|null>, marginOuts?: Array<{margin: number|null, outs: number}>}>} arms
- * @param {{ blowoutMargin?: number, topArms?: number }} [opts]
- */
-export function penWindowComposition(arms, { blowoutMargin = 4, topArms = 5 } = {}) {
-  const list = (arms || []).filter((a) => a && Number(a.outs) > 0);
-  if (!list.length) return null;
-  const totalOuts = list.reduce((s, a) => s + Number(a.outs), 0);
-  const byIp = [...list].sort((a, b) => Number(b.outs) - Number(a.outs));
-  const named = byIp.slice(0, topArms).map((a) => `${a.name} ${outsToIp(a.outs)}IP`);
-  const rest = byIp.length - named.length;
-
-  let blowoutOuts = 0;
-  let unknownOuts = 0;
-  for (const a of list) {
-    for (const seg of a.marginOuts || []) {
-      const o = Number(seg.outs) || 0;
-      if (seg.margin == null) unknownOuts += o;
-      else if (Math.abs(seg.margin) >= blowoutMargin) blowoutOuts += o;
-    }
-  }
-
-  const parts = [
-    `arms: ${named.join(', ')}${rest > 0 ? `, +${rest} more` : ''}`,
-    `${outsToIp(blowoutOuts)} of ${outsToIp(totalOuts)} IP entered with a margin of ${blowoutMargin}+ (blowout innings count the same in the ERA above)`,
-  ];
-  if (unknownOuts > 0) parts.push(`entry context unknown for ${outsToIp(unknownOuts)} IP`);
-  return parts.join('; ');
-}
-
-/**
- * The arms most used in close spots across the window — the likely late-game
- * arms tonight, ranked by close-entry appearances (margin ≤ closeMargin),
- * then total pitches. Returns the raw records; the caller formats and may
- * attach season stats. Never invents an arm: only what the window recorded.
- * @param {Array<{pid?: number, name: string, outs: number, er?: number, pitches?: number, dates?: string[], marginOuts?: Array<{margin: number|null, outs: number}>}>} arms
- * @param {{ closeMargin?: number, top?: number }} [opts]
- */
-export function penLeverageArms(arms, { closeMargin = 2, top = 3 } = {}) {
-  const scored = (arms || [])
-    .filter((a) => a && Number(a.outs) > 0)
-    .map((a) => ({
-      ...a,
-      closeApps: (a.marginOuts || []).filter((s) => s.margin != null && Math.abs(s.margin) <= closeMargin).length,
-    }))
-    .filter((a) => a.closeApps > 0);
-  scored.sort((a, b) => (b.closeApps - a.closeApps) || ((b.pitches || 0) - (a.pitches || 0)));
-  return scored.slice(0, top);
 }

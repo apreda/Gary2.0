@@ -22,7 +22,6 @@ import {
   getMlbUpcomingGames,
   getProbablePitchers,
   getMlbGameLineups,
-  getGameBoxScore,
   getPitcherPlatoonSplits,
   getMlbTransactions,
   getPitcherLastStarts,
@@ -44,9 +43,8 @@ import { recentWindowLine, monthArcLine, longLayoffFlag, earlyCareerFlag, midSea
 import { milbLineFromStatsReply } from '../../../starterDebut.js';
 import { foldName } from '../../../../utils/nameUtils.js';
 import { findStandingsRow } from '../../../teamIdentity.js';
-import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbSeasonSeriesGroups, computeMlbScheduleShape, computeMlbRecentSeriesForm, groupGamesIntoSeries, situationalSeriesLine, toEtDate, clubMatches } from './mlbSeriesState.js';
-import { aggregateRecentWindow, oppStarterLineFromBox } from './mlbRecentWindow.js';
-import { fetchMlbDeepCoverage } from '../shared/anthropicMlbGrounding.js';
+import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbSeasonSeriesGroups, computeMlbScheduleShape, toEtDate, clubMatches } from './mlbSeriesState.js';
+import { aggregateRecentWindow } from './mlbRecentWindow.js';
 import { computeHitterContact, hitterContactLine, computePitcherWhiffByStart } from './mlbContactQuality.js';
 import {
   completedMlbTeamGames,
@@ -384,14 +382,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     list.push(s);
     recentBoxStatsById.set(s.game_id, list);
   }
-  // Also fetch last game via MLB Stats API for the detailed box score (SP line, bullpen detail)
-  const lastHomeGamePk = homeRecentGames?.[homeRecentGames.length - 1]?.gamePk;
-  const lastAwayGamePk = awayRecentGames?.[awayRecentGames.length - 1]?.gamePk;
-  const [lastHomeBoxScore, lastAwayBoxScore] = await Promise.all([
-    lastHomeGamePk ? getGameBoxScore(lastHomeGamePk).catch(() => null) : null,
-    lastAwayGamePk ? getGameBoxScore(lastAwayGamePk).catch(() => null) : null,
-  ]);
-  console.log(`[Scout Report] Box stats: ${recentBoxStats.length} player records for ${allBoxGameIds.length} games. MLB API box: ${homeTeam}=${lastHomeBoxScore ? 'Y' : 'N'}, ${awayTeam}=${lastAwayBoxScore ? 'Y' : 'N'}`);
+  console.log(`[Scout Report] Box stats: ${recentBoxStats.length} player records for ${allBoxGameIds.length} games.`);
 
   // BULLPEN USAGE, LAST 3 GAMES (Jul 7 — founder: "not sure Gary is fully aware
   // of bullpen usage"). The 3-day picture lived only behind a fetch token the
@@ -420,14 +411,19 @@ export async function buildMlbScoutReport(game, options = {}) {
 
   const fetchGameStory = async (gamePk) => {
     if (!gamePk) return null;
-    return await getCachedOrFetch(`mlb_game_story_${gamePk}`, async () => {
+    // UNTRIMMED (founder ruling, Aug 26 — "why are we trimming?"): 9 of 15
+    // recaps on a measured slate ran past the old 4,000-char cap, and the cut
+    // landed on the END of the article — where writers put the quotes and the
+    // what-it-means. Stories now arrive whole. Cache key bumped (v2) so
+    // week-old truncated bodies cannot outlive the ruling.
+    return await getCachedOrFetch(`mlb_game_story_v2_${gamePk}`, async () => {
       const resp = await fetch(`https://statsapi.mlb.com/api/v1/game/${gamePk}/content`);
       if (!resp.ok) return null;
       const j = await resp.json();
       const rec = j?.editorial?.recap?.mlb || j?.editorial?.wrap?.mlb || null;
       if (!rec?.body) return null;
       const clean = String(rec.body).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-      return { headline: rec.headline || '', body: clean.slice(0, 4000) };
+      return { headline: rec.headline || '', body: clean };
     }, 7 * 24 * 60).catch(() => null);
   };
 
@@ -448,6 +444,9 @@ export async function buildMlbScoutReport(game, options = {}) {
   let probablePitchersSection = 'Probable pitchers not yet announced.';
   const pitcherStats = {};
   const pitcherArcData = {}; // per-side career/season provenance for the SAMPLE CONTEXT flags
+  // gamePk -> "Pitcher Name (Team)" for every start story printed in the
+  // probables block — the team lanes point at these instead of reprinting.
+  const pitcherStoryPks = new Map();
 
   if (probablePitchersData) {
     const parts = [];
@@ -701,47 +700,26 @@ export async function buildMlbScoutReport(game, options = {}) {
           if (lastStarts.length >= 2) {
             parts.push(`  IP by start (oldest→newest): ${lastStarts.map(g => g.ip ?? '?').join(', ')}`);
           }
-          // HIS LAST START, AS WRITTEN (founder GO, Aug 10): the official
-          // game story rides the ledger's newest row — the distortion flag's
-          // device, now on every starter, because "5.2IP 1ER" can't say how
-          // the outing actually went.
-          // HIS LAST FIVE STARTS, AS WRITTEN (founder GO, Aug 12 — Plan A1:
-          // "6.0IP 3ER" can't say pulled-early, wore-down, or bailed-out-by-
-          // the-defense). STARTER-ANCHORED (same day, his catch: Wheeler's
-          // slot carried a story whose visible text was entirely about the
-          // OTHER team's pitcher — gamers open on the game's hero, not our
-          // man): each story starts at its first sentence naming the starter;
-          // the lede is only the fallback when the story never names him.
-          // Finals are immutable — the story cache makes repeat desks ~$0.
-          const starterFocus = (body, lastName, cap) => {
-            const flatBody = String(body).replace(/\s*\n+\s*/g, ' ');
-            if (!lastName) return sentenceTrim(flatBody, cap);
-            const sentences = flatBody.split(/(?<=\.)\s+/);
-            const idx = sentences.findIndex((s) => s.includes(lastName));
-            if (idx < 0) return sentenceTrim(flatBody, cap);
-            let out = '';
-            for (let i = idx; i < sentences.length; i++) {
-              if (out.length + sentences[i].length + 1 > cap) break;
-              out += (out ? ' ' : '') + sentences[i];
-            }
-            return out || sentenceTrim(flatBody, cap);
-          };
-          const starterLast = String(pitcher.fullName || '').trim().split(' ').pop();
-          const storyStarts = lastStarts.slice(-5).filter((g) => g?.gamePk);
+          // HIS STARTS, AS WRITTEN (founder GO Aug 10/12; rebuilt as FULL
+          // ARTICLES on his Aug-26 ruling: "literally pull an article and
+          // have Gary read the entire thing"). The last THREE starts each
+          // carry their complete official game story — no starter-anchored
+          // slicing, no cap: the old excerpt device amputated the article,
+          // and the trimmed tail was where the quotes and the what-it-means
+          // lived. Newest start first. A story printed here is remembered in
+          // pitcherStoryPks so the team lanes below point at it instead of
+          // reprinting it. Finals are immutable — the story cache makes
+          // repeat desks ~$0.
+          const storyStarts = lastStarts.slice(-3).filter((g) => g?.gamePk);
           const stories = await Promise.all(storyStarts.map(async (g) => ({
             g,
             st: await fetchGameStory(g.gamePk).catch(() => null),
           })));
           const withBody = stories.filter((s) => s.st?.body);
-          // Uncapped by founder ruling (Aug 12: "I don't want to limit what
-          // Gary gets") — the 4000 bound is the story bodies' own runaway
-          // guard, not an editorial trim.
-          if (withBody.length) {
-            const newest = withBody[withBody.length - 1];
-            parts.push(`  His last start, as written: ${starterFocus(newest.st.body, starterLast, 4000)}`);
-            for (const { g, st } of withBody.slice(0, -1).reverse()) {
-              parts.push(`  ${g.date} ${g.isHome ? 'vs' : '@'} ${g.opponent}, as written: ${starterFocus(st.body, starterLast, 4000)}`);
-            }
+          for (const { g, st } of withBody.slice().reverse()) {
+            pitcherStoryPks.set(g.gamePk, `${pitcher.fullName || 'the starter'} (${label})`);
+            const flatBody = String(st.body).replace(/\s*\n+\s*/g, ' ');
+            parts.push(`  His start ${g.date} ${g.isHome ? 'vs' : '@'} ${g.opponent}, as written${st.headline ? ` — ${st.headline}` : ''}: ${flatBody}`);
           }
         }
         // The week's press on him (fired pre-loop; see pressBySide above).
@@ -1146,18 +1124,23 @@ export async function buildMlbScoutReport(game, options = {}) {
     const homeLast = homeWireGames[homeWireGames.length - 1] || null;
     const awayLast = awayWireGames[awayWireGames.length - 1] || null;
     const entries = [];
+    // Untrimmed (founder ruling, Aug 26). A story already printed whole in
+    // the probables block prints here as a pointer, never twice.
+    const bodyOrPointer = (pk, story) => (pitcherStoryPks.has(pk)
+      ? `(full story printed above, under ${pitcherStoryPks.get(pk)}'s starts as written)`
+      : String(story.body).replace(/\s*\n+\s*/g, ' '));
     if (homeLast && awayLast && homeLast.gamePk === awayLast.gamePk) {
       const story = wireStoryByPk.get(homeLast.gamePk);
       if (story) {
         lastNightPks.add(homeLast.gamePk);
-        entries.push(`These two, ${String(homeLast.officialDate || homeLast.gameDate || '').slice(0, 10)} — ${story.headline}\n${sentenceTrim(story.body, 4000)}`);
+        entries.push(`These two, ${String(homeLast.officialDate || homeLast.gameDate || '').slice(0, 10)} — ${story.headline}\n${bodyOrPointer(homeLast.gamePk, story)}`);
       }
     } else {
       for (const [g, nick] of [[awayLast, awayTeam], [homeLast, homeTeam]]) {
         const story = g && wireStoryByPk.get(g.gamePk);
         if (story) {
           lastNightPks.add(g.gamePk);
-          entries.push(`${wireLabel(g, nick)} — ${story.headline}\n${sentenceTrim(story.body, 4000)}`);
+          entries.push(`${wireLabel(g, nick)} — ${story.headline}\n${bodyOrPointer(g.gamePk, story)}`);
         }
       }
     }
@@ -1175,144 +1158,21 @@ export async function buildMlbScoutReport(game, options = {}) {
     for (const g of games) {
       const story = wireStoryByPk.get(g.gamePk);
       if (!story?.body) continue;
-      entries.push(`These two, ${String(g.officialDate || g.gameDate || '').slice(0, 10)} — ${story.headline}\n${sentenceTrim(String(story.body).replace(/\s*\n+\s*/g, ' '), 4000)}`);
+      // Untrimmed (founder ruling, Aug 26); pointer when the probables block
+      // already carries this game's story whole.
+      const body = pitcherStoryPks.has(g.gamePk)
+        ? `(full story printed above, under ${pitcherStoryPks.get(g.gamePk)}'s starts as written)`
+        : String(story.body).replace(/\s*\n+\s*/g, ' ');
+      entries.push(`These two, ${String(g.officialDate || g.gameDate || '').slice(0, 10)} — ${story.headline}\n${body}`);
     }
     return entries.join('\n\n');
   })();
 
-  // SITUATIONAL BOXSCORE (founder GO, Aug 10 — "what actually happens in
-  // the games"): per-game team RISP, LOB, and the pen arms with decision
-  // notes, from the official boxscore. Finals are immutable → 7d cache.
-  const fetchGameSituational = async (gamePk) => {
-    if (!gamePk) return null;
-    return await getCachedOrFetch(`mlb_game_situ_${gamePk}`, async () => {
-      const resp = await fetch(`https://statsapi.mlb.com/api/v1/game/${gamePk}/boxscore`);
-      if (!resp.ok) return null;
-      const j = await resp.json();
-      const side = (s) => {
-        const t = j?.teams?.[s];
-        if (!t) return null;
-        let risp = null;
-        for (const blk of t.info || []) {
-          for (const f of blk.fieldList || []) {
-            if (f.label === 'Team RISP') risp = String(f.value || '').replace(/\.$/, '');
-          }
-        }
-        // pitchers[] is appearance order — everyone after the first arm is
-        // the pen (an opener's bulk guy lands here too; the note says what
-        // each appearance actually was).
-        const pen = (t.pitchers || []).slice(1).map((pid) => {
-          const p = t.players?.[`ID${pid}`];
-          const st = p?.stats?.pitching || {};
-          return {
-            name: String(p?.person?.fullName || '?').split(' ').pop(),
-            note: st.note || null,
-            er: st.earnedRuns ?? null,
-          };
-        });
-        return { name: t.team?.name || '', lob: t.teamStats?.batting?.leftOnBase ?? null, risp, pen };
-      };
-      return { away: side('away'), home: side('home') };
-    }, 7 * 24 * 60).catch(() => null);
-  };
-
-  // THIS SERIES + LAST SERIES, SITUATIONALLY (founder GO, Aug 10): the
-  // series grain baseball is played in, game by game, arms named. A game
-  // with no boxscore, or a club with no rows, simply prints nothing.
-  const situationalBlock = await (async () => {
-    try {
-      const fmtD = (iso) => {
-        const d = new Date(`${String(iso).slice(0, 10)}T12:00:00Z`);
-        return Number.isNaN(d.getTime()) ? String(iso).slice(0, 10)
-          : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-      };
-      const rowsFor = async (games, nick) => {
-        const out = [];
-        for (const g of (games || []).slice(-3)) {
-          if (!g?.gamePk) continue;
-          const box = await fetchGameSituational(g.gamePk);
-          if (!box) continue;
-          const us = clubMatches(box.home?.name, nick) ? box.home : box.away;
-          if (!us) continue;
-          const mySide = clubMatches(g.teams?.home?.team?.name, nick) ? 'home' : 'away';
-          const myRuns = g.teams?.[mySide]?.score;
-          const theirRuns = g.teams?.[mySide === 'home' ? 'away' : 'home']?.score;
-          const oneRun = myRuns != null && theirRuns != null && Math.abs(myRuns - theirRuns) === 1;
-          const penEvents = (us.pen || []).filter(p => p.note || (Number(p.er) || 0) > 0);
-          out.push({ date: fmtD(g.officialDate || g.gameDate), risp: us.risp, lob: us.lob, oneRun, penEvents });
-        }
-        return out;
-      };
-      const nickOf = (name) => String(name || '').split(' ').pop();
-      const lines = [];
-      for (const [games, nick, oppNick] of [[homeRecentGames, homeTeam, awayTeam], [awayRecentGames, awayTeam, homeTeam]]) {
-        const groups = groupGamesIntoSeries(games, nick);
-        const cur = groups[groups.length - 1] || null;
-        const prev = groups[groups.length - 2] || null;
-        const curIsTonight = cur && clubMatches(cur.opp, oppNick);
-        if (curIsTonight) {
-          const l1 = situationalSeriesLine(`${nick}, this series`, await rowsFor(cur.games, nick));
-          if (l1) lines.push(l1);
-          if (prev) {
-            const l2 = situationalSeriesLine(`${nick}, last series (${prev.home ? 'vs' : '@'} ${nickOf(prev.opp)})`, await rowsFor(prev.games, nick));
-            if (l2) lines.push(l2);
-          }
-        } else if (cur) {
-          const l = situationalSeriesLine(`${nick}, last series (${cur.home ? 'vs' : '@'} ${nickOf(cur.opp)})`, await rowsFor(cur.games, nick));
-          if (l) lines.push(l);
-        }
-      }
-      return lines.join('\n');
-    } catch { return ''; }
-  })();
-
-  // RECENT FORM, SERIES-SHAPED (founder, Aug 10; widened Aug 12 — Plan A4):
-  // windows cut at series boundaries with the opponent named — a flat
-  // "last 7" silently spans three different clubs. The ledger now covers a
-  // MONTH of baseball (~10 series) from its own 30-game fetch, so the arc
-  // arrives in the sport's native unit. The 10-game lists above keep feeding
-  // the devices sized for them.
-  const [homeArcGames, awayArcGames] = await Promise.all([
-    homeTeamId ? getMlbRecentGames(homeTeamId, 30).catch(() => homeRecentGames) : Promise.resolve(homeRecentGames),
-    awayTeamId ? getMlbRecentGames(awayTeamId, 30).catch(() => awayRecentGames) : Promise.resolve(awayRecentGames),
-  ]);
-  const recentSeriesBlock = [
-    [homeArcGames, homeTeam], [awayArcGames, awayTeam],
-  ].map(([games, nick]) => {
-    const line = computeMlbRecentSeriesForm(games, nick, 10, nick === homeTeam ? awayTeam : homeTeam);
-    return line ? `${nick}: ${line}` : null;
-  }).filter(Boolean).join('\n');
-
-  // FORM ARC (founder GO, Aug 12 — Plan A4, his design correction: form
-  // lives in GAMES PLAYED and events, never calendar days): one mid-window
-  // between L10 and the season — the last 20 games with run shape — plus the
-  // one computable event anchor every August roster has, the trade deadline.
-  const formArcBlock = (() => {
-    const TRADE_DEADLINE_ET = '2026-07-31';
-    const arcLine = (games, nick) => {
-      const finals = (games || []).filter((g) => g?.teams?.home?.score != null && g?.teams?.away?.score != null);
-      if (finals.length < 5) return null;
-      const isUs = (side) => clubMatches(side?.team?.name, nick);
-      const rows = finals.map((g) => {
-        const us = isUs(g.teams.home) ? g.teams.home : g.teams.away;
-        const them = isUs(g.teams.home) ? g.teams.away : g.teams.home;
-        return { won: us.score > them.score, rs: us.score, ra: them.score, date: String(g.officialDate || g.gameDate || '').slice(0, 10) };
-      });
-      const window = rows.slice(-20);
-      const w = window.filter((r) => r.won).length;
-      const rs = (window.reduce((a, r) => a + r.rs, 0) / window.length).toFixed(1);
-      const ra = (window.reduce((a, r) => a + r.ra, 0) / window.length).toFixed(1);
-      const bits = [`L${window.length}: ${w}-${window.length - w}, ${rs} scored / ${ra} allowed per game`];
-      const post = rows.filter((r) => r.date > TRADE_DEADLINE_ET);
-      if (post.length >= 3) {
-        const pw = post.filter((r) => r.won).length;
-        bits.push(`since the deadline (Jul 31): ${pw}-${post.length - pw}`);
-      }
-      return `${nick}: ${bits.join(' · ')}`;
-    };
-    const lines = [arcLine(homeArcGames, homeTeam), arcLine(awayArcGames, awayTeam)].filter(Boolean);
-    return lines.length ? lines.join('\n') : '';
-  })();
+  // (SITUATIONAL BOXSCORE, RECENT-SERIES-FORM, and FORM-ARC blocks retired
+  // Aug 26 — founder duplication audit: RISP/LOB/pen-event compressions and
+  // W-L restatements narrated games whose full official stories now print
+  // beside them. The stories carry the how; the L5/L10 line and standings
+  // carry the record book.)
 
   // THE TAPE prefetch: scoring flows for the recent games shown below —
   // one cached single-game fetch each (curated scoring_summary field).
@@ -1335,36 +1195,15 @@ export async function buildMlbScoutReport(game, options = {}) {
     }));
   }
 
-  // OPPOSING STARTER PER RECENT GAME (founder GO, Aug 26 2026: "very
-  // important that gary understands the full context of what happened in
-  // those games they struggled to score"). Each recent game is stamped with
-  // the arm the offense actually faced — a 2.6 R/G window against Gausman
-  // and Bradish is a different fact than 2.6 against nobodies. Boxscores are
-  // in-process cached, so these walks reuse the pen/defense fetches.
-  const oppStarterMapFor = async (games, teamId) => {
-    const map = new Map();
-    if (!teamId) return map;
-    await Promise.all((games || []).slice(-10).map(async (g) => {
-      if (g?.gamePk == null) return;
-      try {
-        const box = await getGameBoxScore(g.gamePk);
-        const line = oppStarterLineFromBox(box, teamId);
-        if (line) map.set(g.gamePk, line);
-      } catch { /* additive context — never sink the section */ }
-    }));
-    return map;
-  };
-  const [homeOppStarters, awayOppStarters] = await Promise.all([
-    oppStarterMapFor(homeRecentGames, homeTeamId),
-    oppStarterMapFor(awayRecentGames, awayTeamId),
-  ]);
-
+  // (OPPOSING-STARTER stat stamps retired Aug 26, hours after shipping —
+  // founder duplication audit: each game's full official story now prints in
+  // these entries and names the arm the offense faced, with the how.)
   let recentPerformanceSection = '';
   {
     const lastWord = (name) => name.toLowerCase().split(' ').pop();
 
     // Build per-game recap from BDL box stats + game result
-    const formatGameRecap = (game, teamName, bdlCandidates, oppStarters) => {
+    const formatGameRecap = (game, teamName, bdlCandidates) => {
       if (!game) return null;
       const isHome = clubMatches(game.teams?.home?.team?.name, teamName);
       const teamScore = isHome ? (game.teams?.home?.score ?? 0) : (game.teams?.away?.score ?? 0);
@@ -1413,10 +1252,6 @@ export async function buildMlbScoutReport(game, options = {}) {
 
       let recap = `  ${date}: ${wl} ${teamScore}-${oppScore} ${loc} ${oppName}`;
       if (spLine) recap += `\n    ${spLine}`;
-      // The arm this offense faced — the other half of "why the runs did or
-      // didn't come" that the own-side box can never show.
-      const oppSp = game.gamePk != null && oppStarters ? oppStarters.get(game.gamePk) : null;
-      if (oppSp) recap += `\n    Opp SP: ${oppSp}`;
       if (bullpenLines.length) recap += `\n    Bullpen: ${bullpenLines.join(' | ')}`;
       if (keyHitters.length) recap += `\n    Batting: ${keyHitters.join(' | ')}`;
       // THE TAPE (Jul 26; pitcher-attributed Aug 12): how the runs actually
@@ -1430,74 +1265,48 @@ export async function buildMlbScoutReport(game, options = {}) {
       // TONIGHT, head-to-head games live in SERIES STATE.
       if (game.gamePk != null && !lastNightPks.has(game.gamePk) && !headToHeadPks.has(game.gamePk) && wireStoryByPk.has(game.gamePk)) {
         const st = wireStoryByPk.get(game.gamePk);
-        if (st?.body) recap += `\n    As written: ${sentenceTrim(String(st.body).replace(/\s*\n+\s*/g, ' '), 4000)}`;
+        // Untrimmed (founder ruling, Aug 26); pointer when the probables
+        // block already carries this game's story whole.
+        if (st?.body) {
+          recap += pitcherStoryPks.has(game.gamePk)
+            ? `\n    As written: (full story printed above, under ${pitcherStoryPks.get(game.gamePk)}'s starts as written)`
+            : `\n    As written: ${String(st.body).replace(/\s*\n+\s*/g, ' ')}`;
+        }
       }
       return recap;
     };
 
 
-    const formatTeamRecent = (teamName, games, bdlCandidates, oppStarters) => {
+    const formatTeamRecent = (teamName, games, bdlCandidates) => {
       if (!games || games.length === 0) return `${teamName}: No recent games`;
       const lines = [`${teamName}:`];
       // L1-L4: individual game recaps (most recent first)
       const last4 = games.slice(-4).reverse();
       for (let i = 0; i < last4.length; i++) {
-        const recap = formatGameRecap(last4[i], teamName, bdlCandidates, oppStarters);
+        const recap = formatGameRecap(last4[i], teamName, bdlCandidates);
         if (recap) lines.push(`  [L${i + 1}]${recap.trim().startsWith(' ') ? recap : ' ' + recap.trim()}`);
       }
       // L5/L10: aggregates. The bracket names the window ASKED for; the line
       // itself states how many games were actually available, so the two can
       // never quietly disagree. When the club has played 5 or fewer, the L10
       // window is the same games — print it once instead of twice.
-      const l5 = aggregateRecentWindow(games, teamName, 5, oppStarters);
+      const l5 = aggregateRecentWindow(games, teamName, 5);
       if (l5) lines.push(`  [Last 5] ${l5}`);
       if (games.length > 5) {
-        const l10 = aggregateRecentWindow(games, teamName, 10, oppStarters);
+        const l10 = aggregateRecentWindow(games, teamName, 10);
         if (l10) lines.push(`  [Last 10] ${l10}`);
       }
       return lines.join('\n');
     };
 
-    recentPerformanceSection = [formatTeamRecent(homeTeam, homeRecentGames, homeBdlGames, homeOppStarters), formatTeamRecent(awayTeam, awayRecentGames, awayBdlGames, awayOppStarters)].join('\n\n');
+    recentPerformanceSection = [formatTeamRecent(homeTeam, homeRecentGames, homeBdlGames), formatTeamRecent(awayTeam, awayRecentGames, awayBdlGames)].join('\n\n');
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  // THE MLB DEEP READ (founder GO, Aug 26: "do this for MLB please") —
-  // the football Aug-25 press build: four metered search lanes (each team's
-  // last games as written, each probable's recent starts as covered, this
-  // series as written), each handed the results we already hold (KNOWN-OLD)
-  // so the searches buy what a box score cannot say. Fail-open: narrative is
-  // context, never a reason to lose a pick — but a technical all-miss is
-  // REPORTED in-section, never disguised as a quiet news week.
-  // ═══════════════════════════════════════════════════════════════════
-  let mlbDeepReadSection = '';
-  try {
-    const resultLine = (g, teamName) => {
-      const isHome = clubMatches(g?.teams?.home?.team?.name, teamName);
-      const us = isHome ? g?.teams?.home?.score : g?.teams?.away?.score;
-      const them = isHome ? g?.teams?.away?.score : g?.teams?.home?.score;
-      const opp = isHome ? g?.teams?.away?.team?.name : g?.teams?.home?.team?.name;
-      const day = String(g?.officialDate || g?.gameDate || '').slice(5, 10);
-      if (us == null || them == null || !opp) return null;
-      return `${day} ${us > them ? 'W' : 'L'} ${us}-${them} ${isHome ? 'vs' : '@'} ${opp}`;
-    };
-    const knownAccounts = [
-      `${awayTeam} last games: ${(awayRecentGames || []).slice(-2).map((g) => resultLine(g, awayTeam)).filter(Boolean).join(' | ') || 'unknown'}`,
-      `${homeTeam} last games: ${(homeRecentGames || []).slice(-2).map((g) => resultLine(g, homeTeam)).filter(Boolean).join(' | ') || 'unknown'}`,
-      probablePitchersData?.away?.fullName ? `${awayTeam} probable: ${probablePitchersData.away.fullName}` : null,
-      probablePitchersData?.home?.fullName ? `${homeTeam} probable: ${probablePitchersData.home.fullName}` : null,
-    ].filter(Boolean).join('\n');
-    const deep = await fetchMlbDeepCoverage({
-      homeTeam,
-      awayTeam,
-      homeProbable: probablePitchersData?.home?.fullName ?? null,
-      awayProbable: probablePitchersData?.away?.fullName ?? null,
-      knownAccounts,
-    });
-    if (deep?.text) mlbDeepReadSection = deep.text;
-  } catch (e) {
-    console.warn(`[Scout Report] MLB deep read unavailable: ${e.message}`);
-  }
+  // (THE MLB DEEP READ retired Aug 26, same day it shipped — founder's
+  // articles-over-digests ruling: the statsapi recaps now arrive whole for
+  // the team lanes AND each probable's last three starts, which is the
+  // material those search lanes were summarizing. The per-starter press
+  // search in the probables block remains the one search lane.)
 
   // ═══════════════════════════════════════════════════════════════════
   // THIS SERIES — WHO'S DOING WHAT (Jul 26 2026): per-player aggregates over
@@ -1696,148 +1505,9 @@ export async function buildMlbScoutReport(game, options = {}) {
   // (HP umpire line built then REMOVED same hour — founder, Aug 12: "the
   // umpire is not going to be a factor to drive a bet on. That's insanity.")
 
-  // ═══════════════════════════════════════════════════════════════════
-  // LAST GAME (DETAILED — full box score from most recent completed game)
-  // ═══════════════════════════════════════════════════════════════════
-  let lastGameSection = '';
-  {
-    /**
-     * Format a detailed box score for a team's last game.
-     * Uses MLB Stats API boxscore data (teams.home/away.players with stats.pitching / stats.batting).
-     */
-    const formatDetailedLastGame = (teamName, recentGames, boxScoreData) => {
-      if (!recentGames || recentGames.length === 0) {
-        return `${teamName}: No recent game data`;
-      }
-      const lastGame = recentGames[recentGames.length - 1];
-      const homeT = lastGame?.teams?.home;
-      const awayT = lastGame?.teams?.away;
-      if (!homeT || !awayT) return `${teamName}: Last game data incomplete`;
-
-      const homeScore = homeT.score ?? '?';
-      const awayScore = awayT.score ?? '?';
-      const homeName = homeT.team?.name || 'Home';
-      const awayName = awayT.team?.name || 'Away';
-      const date = lastGame.officialDate || lastGame.gameDate?.split('T')[0] || '';
-      const dateFormatted = date ? new Date(date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
-
-      // Determine if this team was home or away, and W/L
-      const wasHome = clubMatches(homeName, teamName);
-      const teamScore = wasHome ? homeScore : awayScore;
-      const oppScore = wasHome ? awayScore : homeScore;
-      const oppName = wasHome ? awayName : homeName;
-      const result = teamScore > oppScore ? 'W' : teamScore < oppScore ? 'L' : 'T';
-      const prefix = wasHome ? 'vs' : '@';
-
-      // Header line
-      const headerLine = `${teamName}: ${result} ${teamScore}-${oppScore} ${prefix} ${oppName} (${dateFormatted})`;
-
-      // If no box score data, fall back to basic line
-      if (!boxScoreData) {
-        return headerLine;
-      }
-
-      // Extract this team's side from the box score
-      const teamSide = wasHome ? 'home' : 'away';
-      const teamBoxData = boxScoreData.teams?.[teamSide];
-      if (!teamBoxData) return headerLine;
-
-      const players = teamBoxData.players || {};
-      const pitcherIds = teamBoxData.pitchers || [];
-      const batterIds = teamBoxData.batters || [];
-
-      // ── Starting Pitcher (first pitcher listed) ──
-      let spLine = '';
-      const relievers = [];
-      for (let i = 0; i < pitcherIds.length; i++) {
-        const p = players[`ID${pitcherIds[i]}`];
-        if (!p) continue;
-        const pStats = p.stats?.pitching;
-        if (!pStats || (pStats.inningsPitched === '0.0' && !pStats.outs)) continue;
-        const name = p.person?.fullName?.split(' ').pop() || p.person?.fullName || 'Unknown';
-        const ip = pStats.inningsPitched || '0.0';
-        const h = pStats.hits ?? 0;
-        const r = pStats.runs ?? 0;
-        const er = pStats.earnedRuns ?? 0;
-        const bb = pStats.baseOnBalls ?? 0;
-        const k = pStats.strikeOuts ?? 0;
-
-        if (i === 0) {
-          // Starting pitcher — full line
-          spLine = `  SP: ${name} ${ip} IP, ${h}H, ${er}ER, ${bb}BB, ${k}K`;
-        } else {
-          // Reliever — compact line
-          const sv = pStats.saves > 0 ? ' (SV)' : '';
-          const hld = pStats.holds > 0 ? ' (HLD)' : '';
-          const bs = pStats.blownSaves > 0 ? ' (BS)' : '';
-          const tag = sv || hld || bs;
-          relievers.push(`${name} ${ip} IP, ${er}ER${tag}`);
-        }
-      }
-
-      // ── Bullpen line ──
-      let bullpenLine = '';
-      if (relievers.length > 0) {
-        bullpenLine = `  Bullpen: ${relievers.join(' | ')}`;
-      }
-
-      // ── Key Hitters (anyone with 1+ hits) ──
-      const hitters = [];
-      for (const batterId of batterIds) {
-        const p = players[`ID${batterId}`];
-        if (!p) continue;
-        const bStats = p.stats?.batting;
-        if (!bStats) continue;
-        const hits = parseInt(bStats.hits) || 0;
-        const ab = parseInt(bStats.atBats) || 0;
-        if (hits === 0 || ab === 0) continue;
-        const name = p.person?.fullName?.split(' ').pop() || p.person?.fullName || 'Unknown';
-        const hr = parseInt(bStats.homeRuns) || 0;
-        const rbi = parseInt(bStats.rbi) || 0;
-        const bb = parseInt(bStats.baseOnBalls) || 0;
-        const doubles = parseInt(bStats.doubles) || 0;
-        const triples = parseInt(bStats.triples) || 0;
-        const sb = parseInt(bStats.stolenBases) || 0;
-
-        let extras = '';
-        if (hr > 0) extras += ` ${hr}HR`;
-        if (rbi > 0) extras += ` ${rbi}RBI`;
-        if (doubles > 0) extras += ` ${doubles}2B`;
-        if (triples > 0) extras += ` ${triples}3B`;
-        if (bb > 0) extras += ` ${bb}BB`;
-        if (sb > 0) extras += ` ${sb}SB`;
-
-        hitters.push({ name, hits, ab, extras: extras.trim(), totalBases: hits + doubles + triples * 2 + hr * 3 });
-      }
-      // Sort by total bases descending (most impactful hitters first)
-      hitters.sort((a, b) => b.totalBases - a.totalBases);
-      const keyHittersLine = hitters.length > 0
-        ? `  Key Hitters: ${hitters.slice(0, 6).map(h => `${h.name} ${h.hits}-${h.ab}${h.extras ? ' ' + h.extras : ''}`).join(' | ')}`
-        : '  Key Hitters: None (0 hits)';
-
-      // ── Team Totals (from linescore if available) ──
-      const linescore = lastGame.linescore?.teams?.[teamSide];
-      let totalsLine = '';
-      if (linescore) {
-        const runs = linescore.runs ?? teamScore;
-        const totalHits = linescore.hits ?? '?';
-        const errors = linescore.errors ?? '?';
-        totalsLine = `  Team: ${runs}R, ${totalHits}H, ${errors}E`;
-      }
-
-      // Assemble
-      const lines = [headerLine];
-      if (spLine) lines.push(spLine);
-      if (bullpenLine) lines.push(bullpenLine);
-      lines.push(keyHittersLine);
-      if (totalsLine) lines.push(totalsLine);
-      return lines.join('\n');
-    };
-
-    const homeLast = formatDetailedLastGame(homeTeam, homeRecentGames, lastHomeBoxScore);
-    const awayLast = formatDetailedLastGame(awayTeam, awayRecentGames, lastAwayBoxScore);
-    lastGameSection = `${homeLast}\n\n${awayLast}`;
-  }
+  // (LAST GAME inning-detail block retired Aug 26 — founder duplication
+  // audit: it restated the [L1] recent-form entry beside the same game's
+  // full official story.)
 
   // ═══════════════════════════════════════════════════════════════════
   // WEATHER / VENUE CONTEXT
@@ -2746,14 +2416,11 @@ Rolling splits (L1/L3/L5/L10):
 ${recentPerformanceSection || 'No recent performance data.'}
 
 
-${mlbDeepReadSection ? `═══ THE PRESS BOX — THE DEEP READ (as written) ═══\n${mlbDeepReadSection}\n\n` : ''}═══ SERIES STATE ═══
-${computeMlbSeriesState(homeTeam, awayTeam, homeRecentGames, homeUpcomingGames).line}${seasonSeriesBlock}${thisSeriesHotSection ? `\n\nThis series, who's doing what:\n${thisSeriesHotSection}` : ''}${situationalBlock ? `\n\nSituationally, game by game (team RISP, runners left on, pen events):\n${situationalBlock}` : ''}${seriesStoriesBlock ? `\n\nThis series, as written:\n${seriesStoriesBlock}` : ''}
+═══ SERIES STATE ═══
+${computeMlbSeriesState(homeTeam, awayTeam, homeRecentGames, homeUpcomingGames).line}${seasonSeriesBlock}${thisSeriesHotSection ? `\n\nThis series, who's doing what:\n${thisSeriesHotSection}` : ''}${seriesStoriesBlock ? `\n\nThis series, as written:\n${seriesStoriesBlock}` : ''}
 
-${formArcBlock ? `Form arc (games played, not calendar):\n${formArcBlock}\n\n` : ''}${recentSeriesBlock ? `Recent series:\n${recentSeriesBlock}\n\n` : ''}Recent results:
+Recent results:
 ${recentResults}
-
-Last game (inning detail):
-${lastGameSection}
 
 ${situationFlagsSection ? `═══ SITUATION FLAGS ═══\n${situationFlagsSection}\n\n` : ''}${lastNightSection ? `═══ LAST NIGHT, AS WRITTEN ═══\n${lastNightSection}\n\n` : ''}═══ ROSTER MOVES — LAST 14 DAYS ═══
 ${rosterMovesSection}

@@ -202,11 +202,6 @@ export function mentionsTeam(lowerText, teamName) {
     || (place.length >= 4 && lowerText.includes(place));
 }
 
-// Exported for the MLB deep read (Aug 26): the runner is pure search
-// mechanics — pause_turn contract, retry ladder, mention/min-chars gates —
-// with nothing football about it. Sport meaning stays in each caller's lanes.
-export { runFootballSearch as runGroundedCoverageSearch, DEEP_RULES as GROUNDED_COVERAGE_RULES, knownBlock as groundedKnownBlock, etDate as groundedEtDate };
-
 async function runFootballSearch({
   apiKey, fetchImpl, timeoutMs, label, prompt, maxUses = 6,
   mustMention = [], minChars = 200, failures = null,

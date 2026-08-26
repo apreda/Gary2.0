@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aggregateRecentWindow, oppStarterLineFromBox } from '../../../src/services/agentic/scoutReport/sports/mlbRecentWindow.js';
+import { aggregateRecentWindow } from '../../../src/services/agentic/scoutReport/sports/mlbRecentWindow.js';
 
 /**
  * LABEL-VS-MATH CONTRACT (founder audit, Aug 25 2026).
@@ -100,62 +100,6 @@ describe('MLB recent window — never implies more games than it has', () => {
   });
 });
 
-describe('opposing-starter context (Aug 26 — "2.6 against Gausman is not 2.6 against nobodies")', () => {
-  const game = (pk, day, oppName, us, them, home) => ({
-    gamePk: pk,
-    officialDate: `2026-08-${day}`,
-    teams: home
-      ? { home: { team: { name: 'Tampa Bay Rays' }, score: us }, away: { team: { name: oppName }, score: them } }
-      : { home: { team: { name: oppName }, score: them }, away: { team: { name: 'Tampa Bay Rays' }, score: us } },
-  });
-
-  it('replaces the collapsed opponents with per-game results and opposing starters', () => {
-    const games = [
-      game(1, '22', 'Baltimore Orioles', 2, 3, false),
-      game(2, '23', 'Baltimore Orioles', 3, 1, false),
-      game(3, '24', 'Detroit Tigers', 4, 1, false),
-    ];
-    const starters = new Map([[1, 'Bradish 7.0IP 2ER 8K'], [3, 'Olson 5.0IP 4ER']]);
-    const line = aggregateRecentWindow(games, 'Tampa Bay Rays', 5, starters);
-    expect(line).toContain('| games: 08-22 L 2-3 @ Baltimore Orioles (opp SP Bradish 7.0IP 2ER 8K)');
-    expect(line).toContain('08-23 W 3-1 @ Baltimore Orioles');
-    expect(line).toContain('08-24 W 4-1 @ Detroit Tigers (opp SP Olson 5.0IP 4ER)');
-    expect(line).not.toContain('| opponents:');
-    // The arithmetic contract survives annotation
-    expect(line).toContain('2-1 over 3 games');
-    expect(line).toContain('3.0 R/G');
-  });
-
-  it('keeps the collapsed-opponents form exactly when no starter map is given', () => {
-    const games = [
-      game(1, '22', 'Baltimore Orioles', 2, 3, false),
-      game(2, '23', 'Baltimore Orioles', 3, 1, false),
-    ];
-    const line = aggregateRecentWindow(games, 'Tampa Bay Rays', 5);
-    expect(line).toContain('| opponents: @ Baltimore Orioles x2');
-    expect(line).not.toContain('| games:');
-  });
-
-  it('extracts the OPPOSING starter line from a boxscore, never the own side', () => {
-    const box = {
-      teams: {
-        home: {
-          team: { id: 116 },
-          pitchers: [601, 602],
-          players: { ID601: { person: { fullName: 'Jackson Jobe' }, stats: { pitching: { inningsPitched: '5.1', earnedRuns: 1, strikeOuts: 6 } } } },
-        },
-        away: {
-          team: { id: 139 },
-          pitchers: [701],
-          players: { ID701: { person: { fullName: 'Ian Seymour' }, stats: { pitching: { inningsPitched: '5.2', earnedRuns: 4 } } } },
-        },
-      },
-    };
-    // From the Rays' (139) point of view the opposing starter is Jobe
-    expect(oppStarterLineFromBox(box, 139)).toBe('Jobe 5.1IP 1ER 6K');
-    // From the Tigers' (116) point of view it's Seymour
-    expect(oppStarterLineFromBox(box, 116)).toBe('Seymour 5.2IP 4ER');
-    // A team not in this box gets nothing, never a guess
-    expect(oppStarterLineFromBox(box, 999)).toBe(null);
-  });
-});
+// (The Aug-26 opposing-starter stamps were retired the same day — founder
+// duplication audit: the full game stories in RECENT FORM carry the arm the
+// offense faced. The window stays the record book tested above.)
