@@ -596,14 +596,18 @@ export async function runIndependentDecisionLanes(lanes = []) {
 }
 
 /**
- * Size the NCAAF worker pool for a clustered Saturday slate. Three workers are
- * enough for a small window, but a fixed pool leaves dozens of independent
- * model runs queued behind one another when many games share a kickoff. The
- * BDL transport remains independently serialized by bdlRequestGate; this only
- * permits bounded overlap of model/context work.
+ * Size a worker pool for a clustered start window — pure math, sport-agnostic
+ * (each lane passes its own min/max/target; the sport meaning stays at the
+ * call site). A fixed serial lane leaves independent model runs queued behind
+ * one another when many games share a start time: the Aug 25 2026 West-Coast
+ * cluster carried six MLB picks at 11-22 min each into a 95-minute T-90
+ * runway, so the sixth game (Reds @ Giants) could not be reached in ANY order
+ * and the coverage law broke. The BDL transport remains independently
+ * serialized by bdlRequestGate; this only permits bounded overlap of
+ * model/context work.
  */
-export function ncaafClusterConcurrency(gameCount, {
-  minWorkers = 3,
+export function clusterConcurrency(gameCount, {
+  minWorkers = 1,
   maxWorkers = 12,
   targetGamesPerWorker = 4,
 } = {}) {

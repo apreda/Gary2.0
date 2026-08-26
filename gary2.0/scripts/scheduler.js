@@ -31,7 +31,7 @@ import {
   isScheduleEntryRetired,
   isSportFetchRetryEntry,
   makeSportFetchRetryEntry,
-  ncaafClusterConcurrency,
+  clusterConcurrency,
   nextTriggerBatch,
   laneOwnsMlbDriftGuard,
   newScheduleEntries,
@@ -151,8 +151,17 @@ const NFL_GAME_DECISION_CONCURRENCY = 3;
 // cluster. Scale the bounded model/context pool with the cluster rather than
 // leaving every large slate behind three workers. The cross-process BDL gate
 // remains authoritative and serializes provider transports independently.
+const NCAAF_CLUSTER_MIN_CONCURRENCY = 3;
 const NCAAF_CLUSTER_MAX_CONCURRENCY = 12;
 const NCAAF_TARGET_GAMES_PER_WORKER = 4;
+// Shared MLB/NBA daily lane: serial on a normal night (≤4 games in a window),
+// TWO bounded workers on a fat start cluster. Aug 25 2026: six West-Coast MLB
+// picks at 11-22 min each vs a 95-min T-90 runway — serial missed Reds @
+// Giants in a way NO ordering could fix (98 min of work, 95 of runway). The
+// daily ledger's atomic date-lock path already absorbs concurrent writers
+// (NCAAF runs up to 12 through it); two keeps CLI-quota pressure modest.
+const SHARED_LANE_MAX_CONCURRENCY = 2;
+const SHARED_LANE_TARGET_GAMES_PER_WORKER = 4;
 
 // A child may research for a long time, but it may not own the scheduler past
 // the next queued trigger or its own kickoff/first pitch. Two minutes lets the
@@ -1315,14 +1324,26 @@ async function executeDecisionLaneSchedule(schedule, {
 
     const ncaafGames = bySport.get('americanfootball_ncaaf') || [];
 
-    const runSharedDailyGameLane = async () => {
+    // Shared MLB/NBA lane: the same per-game pipeline the football lanes use —
+    // each worker finishes one game's pick, then that same game's props, so a
+    // fat cluster's props stop expiring behind the full pick sweep. Batches
+    // arrive trigger-sorted from nextTriggerBatch (≈ deadline order within a
+    // tier), and clusterConcurrency stays at ONE worker on a normal night.
+    const runSharedDailyDecisionLane = async () => {
       for (const [sportKey, games] of orderedSports) {
         if (sportKey === 'americanfootball_nfl' || sportKey === 'americanfootball_ncaaf') continue;
         const sport = games[0].sport;
-        log(`\n── ${sport.label}: ${games.length} game decision(s), sequential daily-ledger lane ──`);
-        for (const entry of games) {
-          await runGameDecision(entry);
-        }
+        const workers = clusterConcurrency(games.length, {
+          maxWorkers: SHARED_LANE_MAX_CONCURRENCY,
+          targetGamesPerWorker: SHARED_LANE_TARGET_GAMES_PER_WORKER,
+        });
+        log(`\n── ${sport.label}: ${games.length} per-game decision pipeline(s), ${workers} bounded worker(s), atomic daily-ledger writes ──`);
+        await runPerGameDecisionPipeline({
+          entries: games,
+          concurrency: workers,
+          runGame: runGameDecision,
+          runProps: runPropDecision,
+        });
       }
     };
 
@@ -1386,7 +1407,8 @@ async function executeDecisionLaneSchedule(schedule, {
 
     const runNCAAFDecisionLane = async () => {
       if (ncaafGames.length === 0) return;
-      const workers = ncaafClusterConcurrency(ncaafGames.length, {
+      const workers = clusterConcurrency(ncaafGames.length, {
+        minWorkers: NCAAF_CLUSTER_MIN_CONCURRENCY,
         maxWorkers: NCAAF_CLUSTER_MAX_CONCURRENCY,
         targetGamesPerWorker: NCAAF_TARGET_GAMES_PER_WORKER,
       });
@@ -1397,16 +1419,6 @@ async function executeDecisionLaneSchedule(schedule, {
         runGame: runGameDecision,
         runProps: runPropDecision,
       });
-    };
-
-    const runSharedPropLane = async () => {
-      for (const [sportKey, games] of orderedSports) {
-        if (sportKey === 'americanfootball_nfl' || sportKey === 'americanfootball_ncaaf') continue;
-        const sport = games[0].sport;
-        if (!sport.propsScript) continue;
-        log(`\n── ${sport.label}: ${games.length} prop decision(s), sequential lane ──`);
-        for (const entry of games) await runPropDecision(entry);
-      }
     };
 
     const trackedLane = (laneKey, lane) => ({
@@ -1443,8 +1455,10 @@ async function executeDecisionLaneSchedule(schedule, {
         runProps: async () => {},
       }),
       trackedLane('shared', {
-        runGames: runSharedDailyGameLane,
-        runProps: runSharedPropLane,
+        // Per-game pipeline: each bounded worker runs the exact game's pick,
+        // then that game's props, before taking the next game.
+        runGames: runSharedDailyDecisionLane,
+        runProps: async () => {},
       }),
     ]);
 

@@ -11,7 +11,7 @@ import {
   isScheduleEntryRetired,
   isSportFetchRetryEntry,
   makeSportFetchRetryEntry,
-  ncaafClusterConcurrency,
+  clusterConcurrency,
   nextTriggerBatch,
   laneOwnsMlbDriftGuard,
   newScheduleEntries,
@@ -676,12 +676,28 @@ describe('scheduler reliability policy', () => {
   });
 
   it('expands NCAAF cluster workers dynamically but remains bounded', () => {
-    expect(ncaafClusterConcurrency(0)).toBe(0);
-    expect(ncaafClusterConcurrency(2)).toBe(2);
-    expect(ncaafClusterConcurrency(12)).toBe(3);
-    expect(ncaafClusterConcurrency(20)).toBe(5);
-    expect(ncaafClusterConcurrency(60)).toBe(12);
-    expect(ncaafClusterConcurrency(120)).toBe(12);
+    const ncaaf = { minWorkers: 3, maxWorkers: 12, targetGamesPerWorker: 4 };
+    expect(clusterConcurrency(0, ncaaf)).toBe(0);
+    expect(clusterConcurrency(2, ncaaf)).toBe(2);
+    expect(clusterConcurrency(12, ncaaf)).toBe(3);
+    expect(clusterConcurrency(20, ncaaf)).toBe(5);
+    expect(clusterConcurrency(60, ncaaf)).toBe(12);
+    expect(clusterConcurrency(120, ncaaf)).toBe(12);
+  });
+
+  it('keeps the shared MLB/NBA lane serial on a normal night and opens a second worker on a fat cluster', () => {
+    const shared = { maxWorkers: 2, targetGamesPerWorker: 4 };
+    // A typical evening window: one to four games — exactly the old serial lane.
+    for (const count of [1, 2, 3, 4]) {
+      expect(clusterConcurrency(count, shared)).toBe(1);
+    }
+    // The Aug 25 2026 West-Coast cluster: six picks at 11-22 min each vs a
+    // 95-minute T-90 runway. Serial was 98 minutes of work — Reds @ Giants was
+    // unreachable in ANY order. Two workers cover it with the props windows
+    // still open.
+    expect(clusterConcurrency(6, shared)).toBe(2);
+    // The bound holds even on a full 15-game slate landing in one window.
+    expect(clusterConcurrency(15, shared)).toBe(2);
   });
 
   it('runs each football game decision before its own props without a full-slate barrier', async () => {
