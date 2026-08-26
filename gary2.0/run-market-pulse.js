@@ -3,8 +3,8 @@
  * Market Pulse — League-Wide Market Results (TODAY-rolling)
  *
  * Summarizes how the betting market behaved across a full league slate for a
- * given day: the overs/unders record (total points vs the closing total),
- * the favorites moneyline record (more-negative ML = favorite), and the
+ * given day: the overs/unders record (final runs vs the PREGAME total), the
+ * favorites moneyline record (more-negative pregame ML = favorite), and the
  * underdogs' flat-stake net units. One `market_pulse` row per (date, league),
  * upserted via the supabase client (onConflict date,league) so re-runs refresh
  * rather than duplicate. iOS reads via the anon SELECT policy.
@@ -22,10 +22,15 @@
  * yesterday counts. Pass --yesterday (or --date) to (re)build a settled day.
  *
  * Data sources:
- *   MLB — bdl.getMlbGamesForDate(date) for finals + bdl.getMlbGameOdds({ dates })
- *         for closing total / moneylines, joined per game id.
+ *   MLB — bdl.getMlbGamesForETDate(date) for finals; EVERY market number
+ *         (total, run line, both MLs) joins from the daily_slate PREGAME
+ *         snapshot. The live odds endpoint is banned from tallies: post-game
+ *         it holds the SETTLED lines (see scripts/lib/marketPulseTallies.js).
  *   NBA — ballDontLieOddsService.getGamesWithOddsForSport('basketball_nba', date)
- *         for totals + h2h, joined to bdl.getNbaGamesForDate(date) for finals.
+ *         for totals, joined to bdl.getNbaGamesForDate(date) for finals.
+ *         ⚑ NBA totals still read the live-odds snapshot (the same settled-line
+ *         trap); no pregame slate join is wired, so NBA carries no favs/dogs
+ *         counts. Fix rides the NBA-readiness pass before the season (~Oct 1).
  *
  * Usage:
  *   node run-market-pulse.js                       # TODAY (EST), rolling — MLB + NBA
@@ -38,7 +43,9 @@
 // MUST load env vars FIRST before any other imports
 import './src/loadEnv.js';
 
-import { getESTDate } from './src/utils/dateUtils.js';
+import { getESTDate, getESTHour } from './src/utils/dateUtils.js';
+import { computePulsePasses } from './scripts/lib/marketPulseRunMode.js';
+import { accumulate, freshAcc } from './scripts/lib/marketPulseTallies.js';
 
 // Import after env is loaded (services read env at module init time).
 // market_pulse is RLS'd anon-read-only — writes need the service-role key,
@@ -75,29 +82,29 @@ function getArgValue(flag) {
   return next;
 }
 
-/** Yesterday in EST (YYYY-MM-DD) — Market Pulse grades the day that just finished. */
-function yesterdayEST() {
-  const today = getESTDate();
-  const d = new Date(`${today}T12:00:00Z`); // noon avoids TZ rollover
-  d.setUTCDate(d.getUTCDate() - 1);
-  return d.toISOString().slice(0, 10);
-}
-
 const dryRun = args.includes('--dry-run');
 const yesterdayFlag = args.includes('--yesterday');
 const dateArg = getArgValue('--date');
 const leagueArg = getArgValue('--league');
 
-// Date precedence: --date (explicit) > --yesterday (settled prior day) > TODAY (EST).
-// TODAY is the default so the strip is today-anchored and rolls as games grade.
-const targetDate = dateArg || (yesterdayFlag ? yesterdayEST() : getESTDate());
-// A row built for TODAY is written even with 0 graded games (the 0-state reset),
-// as long as today actually has a slate; a settled past day keeps the old
-// "skip empty" behavior (no row when nothing was gradeable).
-const isToday = !dateArg && !yesterdayFlag;
-if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
-  console.error(`❌ Invalid --date "${targetDate}". Expected YYYY-MM-DD.`);
-  process.exit(1);
+// Date precedence: --date (explicit) > --yesterday (settled prior day) > hour-keyed
+// default (see scripts/lib/marketPulseRunMode.js): flagless pre-6AM-ET runs SETTLE
+// yesterday (the 2 AM slot is the only one that sees a full West-Coast night),
+// 6-10 AM runs re-settle yesterday then write today's 0-state, later runs are the
+// today-anchored strip as before. A row built for TODAY is written even with 0
+// graded games (the 0-state reset), as long as today actually has a slate; a
+// settled past day keeps the old "skip empty" behavior.
+const passes = computePulsePasses({
+  dateArg,
+  yesterdayFlag,
+  etHour: getESTHour(),
+  today: getESTDate(),
+});
+for (const pass of passes) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(pass.date)) {
+    console.error(`❌ Invalid --date "${pass.date}". Expected YYYY-MM-DD.`);
+    process.exit(1);
+  }
 }
 
 // Leagues: --league (comma-separated, case-insensitive) filtered to ACTIVE_LEAGUES,
@@ -140,7 +147,8 @@ const teamName = (t) => {
 };
 
 // ── daily_slate join helpers (mirror src/services/streaksService.js) ──────────
-// Per-game PREGAME moneyline is read from the `daily_slate` morning snapshot,
+// Per-game PREGAME lines (both MLs, total, run line) are read from the
+// `daily_slate` morning snapshot,
 // NEVER re-derived from the live BDL odds endpoint for a past date — that feed
 // only keeps the latest snapshot, which post-game is the SETTLED in-game line
 // (the winner reads ~-10000, circular). daily_slate freezes the real two-sided
@@ -171,12 +179,13 @@ function isoToETDate(iso) {
 }
 
 /**
- * Map<bdlGameId, { ml_home, ml_away }> of GENUINE pregame moneylines for the
- * given MLB finals, sourced from daily_slate (keyed by ET date + mascot names).
- * A final with no stored slate row (e.g. before daily_slate existed) is simply
- * absent → it's treated as having no pregame ML and skipped for dogs/favs.
+ * Map<bdlGameId, { ml_home, ml_away, total, spread_home }> of GENUINE pregame
+ * lines for the given MLB finals, sourced from daily_slate (keyed by ET date +
+ * mascot names). A final with no stored slate row (e.g. before daily_slate
+ * existed) is simply absent → no pregame market, so accumulate() counts the
+ * game but skips every tally it can't ground.
  */
-async function fetchMlbPregameMl(finals) {
+async function fetchMlbPregameLines(finals) {
   const byGame = new Map();
   if (!finals.length) return byGame;
   const etDates = [...new Set(finals.map((g) => isoToETDate(g.date)))];
@@ -184,13 +193,13 @@ async function fetchMlbPregameMl(finals) {
   try {
     const { data, error } = await supabase
       .from('daily_slate')
-      .select('date, away_team, home_team, ml_home, ml_away')
+      .select('date, away_team, home_team, ml_home, ml_away, total, spread')
       .eq('league', 'MLB')
       .in('date', etDates);
     if (error) throw new Error(error.message);
     slate = data || [];
   } catch (err) {
-    console.warn(`   ⚠️  daily_slate read failed (pregame ML unavailable): ${err.message}`);
+    console.warn(`   ⚠️  daily_slate read failed (pregame lines unavailable): ${err.message}`);
     return byGame;
   }
   const byKey = new Map();
@@ -200,7 +209,7 @@ async function fetchMlbPregameMl(finals) {
   }
   for (const g of finals) {
     const r = byKey.get(slateKey(isoToETDate(g.date), g.away_team?.name, g.home_team?.name));
-    if (r) byGame.set(g.id, { ml_home: num(r.ml_home), ml_away: num(r.ml_away) });
+    if (r) byGame.set(g.id, { ml_home: num(r.ml_home), ml_away: num(r.ml_away), total: num(r.total), spread_home: num(r.spread) });
   }
   return byGame;
 }
@@ -213,144 +222,32 @@ function median(values) {
   return arr.length % 2 ? arr[mid] : (arr[mid - 1] + arr[mid]) / 2;
 }
 
-/**
- * Accumulate one finished game into the running tallies.
- *  - overs: combined total points vs closing total (push when equal)
- *  - favorites ML: favorite = more-negative ML, decided by final score
- *  - dogs flat-stake: +american/100 when the dog wins, −1 when it loses
- * Mutates `acc`. Returns the per-game meta record (or null if not gradeable).
- */
-function accumulate(acc, { matchup, awayTeam, homeTeam, homeScore, awayScore, total, spreadHome, mlHome, mlAway }) {
-  const hs = num(homeScore);
-  const as = num(awayScore);
-  if (hs === null || as === null) return null; // no final score → skip
-
-  const t = num(total);
-  const sh = num(spreadHome);
-
-  // A game counts toward the slate only when it has BOTH a final score and a
-  // usable market number (a total or a run/point spread).
-  const hasOdds = t !== null || sh !== null;
-  if (!hasOdds) return null;
-
-  acc.games_counted += 1;
-
-  const combined = hs + as;
-  let ouResult = null;
-  if (t !== null) {
-    if (combined > t) {
-      acc.overs_wins += 1;
-      ouResult = 'over';
-    } else if (combined < t) {
-      acc.overs_losses += 1;
-      ouResult = 'under';
-    } else {
-      acc.overs_pushes += 1;
-      ouResult = 'push';
-    }
-  }
-
-  const winner = hs > as ? 'home' : as > hs ? 'away' : 'push';
-
-  // Favorite = the side laying the runs/points: a NEGATIVE home spread means the
-  // home team is favored. We read the SPREAD SIGN, not the moneyline — the BDL
-  // odds feed only keeps the latest snapshot, which post-game is the settled line,
-  // so its moneyline is circular (the winner reads -50000). The run-line sign
-  // still reflects who was favored. (A blowout upset can flip a live spread; rare.)
-  let favorite = null;
-  if (sh !== null && sh !== 0) favorite = sh < 0 ? 'home' : 'away';
-  if (favorite && winner !== 'push') {
-    if (favorite === winner) { acc.fav_wins += 1; acc.dog_losses += 1; }
-    else { acc.fav_losses += 1; acc.dog_wins += 1; }
-  }
-
-  // Winning DOGS / FAVS view — sourced from the GENUINE pregame moneyline frozen
-  // in daily_slate (NOT the settled BDL line). The winner's own pregame ML sign
-  // buckets them: positive ML = a winning dog, negative ML = a winning fav.
-  // `winner_is_dog` is null when there's no pregame ML for the winning side
-  // (no slate snapshot, or a missing/pick-'em side) — the consumer skips those.
-  const mh = num(mlHome);
-  const ma = num(mlAway);
-  const winnerMl = winner === 'home' ? mh : winner === 'away' ? ma : null;
-  let winnerIsDog = null;
-  if (winner !== 'push' && winnerMl !== null && winnerMl !== 0) {
-    winnerIsDog = winnerMl > 0;
-  }
-
-  return {
-    matchup,
-    away_team: awayTeam,
-    home_team: homeTeam,
-    away_score: as,
-    home_score: hs,
-    total: t,
-    combined,
-    ouResult,
-    favorite,
-    winner,                         // 'home' | 'away' | 'push'
-    winner_team: winner === 'home' ? homeTeam : winner === 'away' ? awayTeam : null,
-    spreadHome: sh,
-    ml_home: mh,                    // genuine PREGAME moneyline (daily_slate)
-    ml_away: ma,                    // genuine PREGAME moneyline (daily_slate)
-    winner_ml: winnerMl,            // the winning side's pregame ML (sign = dog/fav)
-    winner_is_dog: winnerIsDog,     // true=winning dog (+ML), false=winning fav (−ML), null=n/a
-  };
-}
-
-function freshAcc() {
-  return {
-    overs_wins: 0,
-    overs_losses: 0,
-    overs_pushes: 0,
-    fav_wins: 0,
-    fav_losses: 0,
-    dog_wins: 0,
-    dog_losses: 0,
-    dog_net_units: 0,
-    games_counted: 0,
-  };
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Per-league builders → { row, meta }
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * MLB: getMlbGamesForDate(date) for finals + getMlbGameOdds({ dates:[date] })
- * joined by game id. Score fields are home_team_data.runs / away_team_data.runs;
- * odds fields are total_value, moneyline_home_odds, moneyline_away_odds
- * (confirmed in ballDontLieOddsService.js / poll-live-scores.js).
+ * MLB: finals from BDL (score fields home_team_data.runs / away_team_data.runs),
+ * every market number from the daily_slate pregame snapshot via
+ * fetchMlbPregameLines. No live-odds fetch — see the settled-line ban in
+ * scripts/lib/marketPulseTallies.js.
  */
 async function buildMlb(date) {
-  // BDL files late-ET (West-Coast) games under tomorrow's UTC date — fetch games via
-  // the ET-date helper, and odds for BOTH UTC days so those late games still carry
-  // totals/ML (oddsByGame is keyed by game_id, so extra rows are harmless).
-  const nextUtc = (() => { const d = new Date(`${date}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); })();
-  const [games, oddsA, oddsB] = await Promise.all([
-    bdl.getMlbGamesForETDate(date),
-    bdl.getMlbGameOdds({ dates: [date] }),
-    bdl.getMlbGameOdds({ dates: [nextUtc] }),
-  ]);
-  const oddsRows = [...(oddsA || []), ...(oddsB || [])];
+  // Finals via the ET-date helper (BDL files late West-Coast games under
+  // tomorrow's UTC date). EVERY market number — total, run line, both MLs —
+  // comes from the daily_slate PREGAME snapshot: the live odds endpoint only
+  // keeps the latest vendor rows, which post-game are the SETTLED in-game
+  // lines (a 13-1 blowout stored spread_home 11.5; a 1-0 final stored total
+  // 1.5) and flipped Aug 24-25's true fav 4-11 into a reported 12-3.
+  const games = await bdl.getMlbGamesForETDate(date);
 
-  // Multiple vendor rows per game → take the median closing number per field.
-  const oddsByGame = new Map();
-  for (const r of oddsRows || []) {
-    const gid = r.game_id;
-    if (gid == null) continue;
-    if (!oddsByGame.has(gid)) oddsByGame.set(gid, []);
-    oddsByGame.get(gid).push(r);
-  }
-
-  // Pregame moneylines for every final, from the daily_slate snapshot (the only
-  // grounded source — the live odds feed's post-game ML is settled/circular).
   const finals = (games || []).filter((g) => {
     const status = String(g.status || '').toUpperCase();
     return status.includes('FINAL')
       && num(g.home_team_data?.runs) !== null
       && num(g.away_team_data?.runs) !== null;
   });
-  const pregameMlByGame = await fetchMlbPregameMl(finals);
+  const pregameByGame = await fetchMlbPregameLines(finals);
 
   const acc = freshAcc();
   const meta = [];
@@ -359,16 +256,12 @@ async function buildMlb(date) {
     const homeScore = num(g.home_team_data?.runs);
     const awayScore = num(g.away_team_data?.runs);
 
-    const rows = oddsByGame.get(g.id) || [];
-    const total = median(rows.map((r) => num(r.total_value)));
-    const spreadHome = median(rows.map((r) => num(r.spread_home_value)));
-
     const awayTeam = teamName(g.away_team);
     const homeTeam = teamName(g.home_team);
     const matchup = `${awayTeam} @ ${homeTeam}`;
-    const { ml_home = null, ml_away = null } = pregameMlByGame.get(g.id) || {};
+    const { ml_home = null, ml_away = null, total = null, spread_home = null } = pregameByGame.get(g.id) || {};
     const rec = accumulate(acc, {
-      matchup, awayTeam, homeTeam, homeScore, awayScore, total, spreadHome,
+      matchup, awayTeam, homeTeam, homeScore, awayScore, total, spreadHome: spread_home,
       mlHome: ml_home, mlAway: ml_away,
     });
     if (rec) meta.push(rec);
@@ -449,9 +342,10 @@ async function buildNba(date) {
 // Main
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function run() {
+/** One full pulse pass for a single date. Returns the pass's failure count. */
+async function run(targetDate, isToday) {
   console.log(
-    `\n📊 Market Pulse — date=${targetDate} leagues=${leagues.join(', ')}` +
+    `\n📊 Market Pulse — date=${targetDate}${isToday ? '' : ' (settling)'} leagues=${leagues.join(', ')}` +
       (dryRun ? ' (DRY RUN)' : '')
   );
 
@@ -496,7 +390,7 @@ async function run() {
 
       console.log(
         `   ${league}: ${acc.games_counted} games | O/U ${acc.overs_wins}-${acc.overs_losses}-${acc.overs_pushes} | ` +
-          `Fav (spread) ${acc.fav_wins}-${acc.fav_losses}`
+          `Fav (pregame ML) ${acc.fav_wins}-${acc.fav_losses}`
       );
     } catch (err) {
       failures += 1;
@@ -518,7 +412,7 @@ async function run() {
     const { error } = await supabase.from(TABLE).upsert(rows, { onConflict: 'date,league' });
     if (error) {
       console.error(`   ❌ Upsert failed: ${error.message}${error.code ? ' [code=' + error.code + ']' : ''}`);
-      process.exit(1);
+      return failures + 1;
     }
 
     console.log(`\n✅ Done — upserted ${rows.length} market_pulse row(s) for ${targetDate}.`);
@@ -529,12 +423,19 @@ async function run() {
   // authoritative leagues use the normal no-row path and do not increment this.
   if (failures > 0) {
     console.error(`\n❌ Market Pulse completed with ${failures} failed league(s); successful league updates were preserved.`);
-    process.exit(1);
   }
+  return failures;
 }
 
-run()
-  .then(() => process.exit(0))
+(async () => {
+  // A failed pass never blocks the next one (a broken settle still lets today's
+  // 0-state land, and vice versa); any failure anywhere exits nonzero at the end.
+  let totalFailures = 0;
+  for (const pass of passes) {
+    totalFailures += await run(pass.date, pass.isToday);
+  }
+  process.exit(totalFailures > 0 ? 1 : 0);
+})()
   .catch((error) => {
     console.error('Market Pulse runner crashed:', error);
     process.exit(1);
