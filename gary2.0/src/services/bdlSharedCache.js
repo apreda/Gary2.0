@@ -1,18 +1,28 @@
 /**
- * Small cross-process cache for football BDL reads.
+ * Small cross-process cache for selected BDL reads.
  *
- * NFL Sundays launch one child per game, so the ordinary in-memory cache and
- * single-flight map cannot stop separate Node processes from downloading the
- * same teams, standings, schedule, roster and prior-season baseline rows.
- * This cache is deliberately football-only; MLB and every other established
- * lane retain their existing cache behavior.
+ * Gary's scheduler and batch jobs launch fresh Node children all day, so the
+ * ordinary in-memory cache and single-flight map cannot stop separate
+ * processes from downloading the same rows again and again. This file-backed
+ * cache is shared by every local PID.
+ *
+ * Eligibility is an explicit allowlist, never blanket:
+ *  - FOOTBALL keys (the original scope): NFL Sundays launch one child per
+ *    game, all needing the same teams/standings/schedule/roster rows.
+ *  - MLB PLAYER SPLITS + PLAYER-VS-PLAYER (added Aug 26 2026): season-level
+ *    aggregates that barely change intraday, yet the insights lanes walked
+ *    hundreds of players per run from a cold in-memory cache — the documented
+ *    429 storms (2,758 "Too many requests" during the Aug 24 marathon) were
+ *    mostly this repeat traffic. Long TTLs + this shared layer mean the first
+ *    run of the day pays for everyone.
+ * Every other established lane retains its existing cache behavior.
  */
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const DEFAULT_ROOT = join(tmpdir(), 'gary-bdl-football-cache-v1');
+const DEFAULT_ROOT = join(tmpdir(), 'gary-bdl-shared-cache-v1');
 
 function disabled() {
   if (process.env.GARY_BDL_SHARED_CACHE_DISABLED === '1') return true;
@@ -30,6 +40,16 @@ export function isFootballBdlCacheKey(key) {
   return /(^|_)(?:americanfootball_)?(?:nfl|ncaaf)(?:_|$)/i.test(String(key || ''));
 }
 
+/** The two MLB per-player key families behind the 429 storms — nothing wider. */
+export function isMlbSharedBdlCacheKey(key) {
+  return /^mlb_(?:player_splits|pvp)_/i.test(String(key || ''));
+}
+
+/** A key eligible for the cross-process shared cache. */
+export function isSharedBdlCacheKey(key) {
+  return isFootballBdlCacheKey(key) || isMlbSharedBdlCacheKey(key);
+}
+
 export function isSubstantiveSharedCacheValue(data) {
   if (Array.isArray(data)) return data.length > 0;
   if (data && typeof data === 'object') return Object.keys(data).length > 0;
@@ -41,8 +61,8 @@ function cachePath(key) {
   return join(rootDir(), `${digest}.json`);
 }
 
-export async function readSharedFootballCache(key, now = Date.now()) {
-  if (disabled() || !isFootballBdlCacheKey(key)) return { hit: false };
+export async function readSharedBdlCache(key, now = Date.now()) {
+  if (disabled() || !isSharedBdlCacheKey(key)) return { hit: false };
   try {
     const record = JSON.parse(await readFile(cachePath(key), 'utf8'));
     if (record?.key !== key || !Number.isFinite(record?.expiry) || record.expiry <= now) {
@@ -55,8 +75,8 @@ export async function readSharedFootballCache(key, now = Date.now()) {
   }
 }
 
-export async function writeSharedFootballCache(key, data, ttlMinutes, now = Date.now()) {
-  if (disabled() || !isFootballBdlCacheKey(key) || !isSubstantiveSharedCacheValue(data)) return false;
+export async function writeSharedBdlCache(key, data, ttlMinutes, now = Date.now()) {
+  if (disabled() || !isSharedBdlCacheKey(key) || !isSubstantiveSharedCacheValue(data)) return false;
   const ttlMs = Number(ttlMinutes) * 60_000;
   if (!Number.isFinite(ttlMs) || ttlMs <= 0) return false;
   try {
@@ -76,6 +96,8 @@ export async function writeSharedFootballCache(key, data, ttlMinutes, now = Date
 
 export default {
   isFootballBdlCacheKey,
-  readSharedFootballCache,
-  writeSharedFootballCache,
+  isMlbSharedBdlCacheKey,
+  isSharedBdlCacheKey,
+  readSharedBdlCache,
+  writeSharedBdlCache,
 };

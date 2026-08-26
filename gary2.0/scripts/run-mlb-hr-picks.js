@@ -33,7 +33,12 @@ runAgenticPropsCli({
     // untouched; the afternoon passes still land the picks. Every other error
     // stays a loud exit 1.
     const chain = [error?.message, error?.cause?.message].filter(Boolean).join(' | ');
-    if (/HARD FAIL[^|]*requires lineups/i.test(chain)) {
+    // Two spellings of the same pregame state: the scout report's lineup
+    // hard-gate, and — when a desk builds anyway via a fallback brain — the
+    // board finding zero lineup-confirmed players (Aug 26 2026: this second
+    // shape was still exiting 1 every morning and burying real failures).
+    if (/HARD FAIL[^|]*requires lineups/i.test(chain)
+      || /no lineup-confirmed player/i.test(chain)) {
       console.log(`⏳ MLB HR lane: lineups not posted yet — expected before ~T-120; a later pass picks this up. (${chain.slice(0, 160)})`);
       process.exit(0);
     }

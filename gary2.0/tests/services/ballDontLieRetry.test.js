@@ -94,11 +94,13 @@ describe('getCachedOrFetch network retry', () => {
     expect(fetchFn).toHaveBeenCalledTimes(1);
   });
 
-  it('still retries 429 once (existing behavior preserved)', async () => {
+  it('retries 429s on the growing ladder and recovers mid-burst', async () => {
+    // Aug 26 2026: one 1.2s retry landed inside the same throttle window and
+    // just doubled the storm — the ladder's later sleeps land after it clears.
     let calls = 0;
     const fetchFn = vi.fn(async () => {
       calls += 1;
-      if (calls === 1) {
+      if (calls <= 2) {
         const e = new Error('Too Many Requests');
         e.status = 429;
         throw e;
@@ -107,8 +109,20 @@ describe('getCachedOrFetch network retry', () => {
     });
     const data = await getCachedOrFetch(`test_retry_${Date.now()}_d`, fetchFn, 1);
     expect(data).toEqual({ ok: 429 });
-    expect(fetchFn).toHaveBeenCalledTimes(2);
-  }, 10000);
+    expect(fetchFn).toHaveBeenCalledTimes(3);
+  }, 15000);
+
+  it('gives up after the 429 ladder is exhausted', async () => {
+    const fetchFn = vi.fn(async () => {
+      const e = new Error('Too Many Requests');
+      e.status = 429;
+      throw e;
+    });
+    await expect(
+      getCachedOrFetch(`test_retry_${Date.now()}_d2`, fetchFn, 1)
+    ).rejects.toThrow('Too Many Requests');
+    expect(fetchFn).toHaveBeenCalledTimes(4); // initial + 3 ladder retries
+  }, 30000);
 
   it('does not cache failures — a later call with the same key retries fresh', async () => {
     const key = `test_retry_${Date.now()}_e`;

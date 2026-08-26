@@ -527,9 +527,9 @@ function buildPrompt({ date, league, todayFinals, ydayFinals, allowNames, recent
  * the strict-JSON contract, and every downstream validation gate are
  * identical either way; only the transport changes.
  */
-async function callWireModel(prompt) {
+async function callWireModel(prompt, { bridgeTimeoutMs = 5 * 60 * 1000 } = {}) {
   const { claudeCliWebSearch } = await import('./src/services/agentic/orchestrator/providerAdapters/claudeCliSession.js');
-  const viaBridge = await claudeCliWebSearch(prompt, { timeoutMs: 5 * 60 * 1000 });
+  const viaBridge = await claudeCliWebSearch(prompt, { timeoutMs: bridgeTimeoutMs });
   if (viaBridge.success && viaBridge.data) return viaBridge.data;
   console.warn(`   ⚠️ [Wire] claude bridge failed — trying Anthropic server web search: ${String(viaBridge.error || 'empty output').slice(0, 200)}`);
   const { anthropicWebSearchRaw } = await import('./src/services/agentic/scoutReport/shared/anthropicWebSearch.js');
@@ -537,6 +537,21 @@ async function callWireModel(prompt) {
   if (viaApi.success && viaApi.data) return viaApi.data;
   throw new Error(viaApi.error || 'both grounded transports failed');
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Run-level time budget — the whole run must FIT its launchd stage cap.
+// ─────────────────────────────────────────────────────────────────────────────
+// The insights plist hard-caps this stage (GARY_CAP_WIRE, 180s) so a hung run
+// can never hold the next run's launchd slot — but four leagues at a 5-minute
+// bridge timeout each could legitimately need 20 minutes, so slow-bridge days
+// were GUARANTEED rc=142 kills mid-run. The run now spends against one clock:
+// each league's bridge timeout shrinks to what's left, and when the floor is
+// gone the remaining leagues are SKIPPED LOUDLY instead of killed silently.
+// The Wire runs several times a day, so a deferred league self-heals on the
+// next pass; a skip is a deferral, never a failure.
+const WIRE_TIME_BUDGET_MS = Math.max(60_000, Number(process.env.GARY_WIRE_TIME_BUDGET_MS) || 150_000);
+const WIRE_LEAGUE_FLOOR_MS = 25_000;   // below this, a league can't finish honestly
+const WIRE_BRIDGE_MAX_MS = 90_000;     // per-league ceiling even with budget to spare
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Robust JSON extraction (clone of the insights/props "search all blocks" pattern)
@@ -705,9 +720,18 @@ async function run() {
 
   let totalRows = 0;
   let failures = 0;
+  const runStart = Date.now();
 
   for (const league of leagues) {
     console.log(`\n── ${league} ──`);
+    const remainingMs = WIRE_TIME_BUDGET_MS - (Date.now() - runStart);
+    if (remainingMs < WIRE_LEAGUE_FLOOR_MS) {
+      console.log(
+        `   ⏭️  Deferring ${league}: ${Math.round(remainingMs / 1000)}s left of the ` +
+          `${Math.round(WIRE_TIME_BUDGET_MS / 1000)}s run budget — the next scheduled Wire pass covers it.`
+      );
+      continue;
+    }
     try {
       // Today's finals are the lead material (the grader writes each game
       // minutes after its final); yesterday's ride along for morning runs.
@@ -734,7 +758,11 @@ async function run() {
 
       const recentInjuries = await fetchRecentInjuryHeadlines(targetDate, league);
       const prompt = buildPrompt({ date: targetDate, league, todayFinals, ydayFinals, allowNames: allow.names, recentInjuries });
-      const text = await callWireModel(prompt);
+      const bridgeTimeoutMs = Math.min(
+        WIRE_BRIDGE_MAX_MS,
+        Math.max(WIRE_LEAGUE_FLOOR_MS, WIRE_TIME_BUDGET_MS - (Date.now() - runStart) - 10_000)
+      );
+      const text = await callWireModel(prompt, { bridgeTimeoutMs });
       const parsed = parseWireItems(text);
 
       const allRows = parsed

@@ -4,9 +4,10 @@ import { nhlSeason } from '../utils/dateUtils.js';
 import { waitForBdlRequestSlot } from './bdlRequestGate.js';
 import {
   isFootballBdlCacheKey,
-  readSharedFootballCache,
-  writeSharedFootballCache,
-} from './bdlSharedFootballCache.js';
+  isSharedBdlCacheKey,
+  readSharedBdlCache,
+  writeSharedBdlCache,
+} from './bdlSharedCache.js';
 import { decodeBdlRows, decodeBdlSdkItem, decodeBdlSdkRows } from './bdlResponse.js';
 
 // Set cache TTL (5 minutes for playoff data)
@@ -300,11 +301,12 @@ export async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES) {
     }
   }
 
-  // Football desks run in separate child processes. Reuse substantive JSON
-  // fetched by a neighboring game before booking another account-wide BDL
-  // request. Other sports never enter this path.
-  if (isFootballBdlCacheKey(key)) {
-    const shared = await readSharedFootballCache(key, now);
+  // Desks and insight lanes run in separate child processes. Reuse
+  // substantive JSON fetched by a neighboring process before booking another
+  // account-wide BDL request. Eligibility is the shared-cache allowlist:
+  // football keys, plus MLB player splits/PvP (the Aug-24 429-storm families).
+  if (isSharedBdlCacheKey(key)) {
+    const shared = await readSharedBdlCache(key, now);
     if (shared.hit) {
       cacheMap.set(key, { data: shared.data, expiry: shared.expiry });
       return shared.data;
@@ -320,20 +322,29 @@ export async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES) {
   console.log(`[Ball Don't Lie] Fetching fresh data for ${key}`);
 
   const fetchWithRetry = async () => {
-    // 429: one retry (unchanged behavior). Transient network errors: up to
+    // 429: three retries on a growing ladder — under a burst the first 1.2s
+    // retry lands inside the same throttle window and just doubles traffic
+    // (the Aug-24 storm logged 5,035 429s doing exactly that); the later
+    // sleeps land after the window clears. Transient network errors: up to
     // 3 retries with short backoff — a DNS blip usually clears in seconds.
     // Status surfaces a few ways depending on whether the call went through
     // axios, fetch, or the BDL SDK.
     const NETWORK_BACKOFF_MS = [800, 2000, 4500];
-    let rateLimitRetried = false;
+    const RATE_LIMIT_BACKOFF_MS = [1200, 4000, 10000];
+    let rateLimitAttempt = 0;
     let netAttempt = 0;
     for (;;) {
       try {
         if (isFootballBdlCacheKey(key)) {
+          // Football only: the 3/min pacing gate predates the paid tier and
+          // MLB volume would starve behind it. MLB shared keys skip the gate
+          // but still re-check the shared cache after any retry sleep below.
           await waitForBdlRequestSlot(key);
-          // A sibling may have filled the shared cache while this process waited
-          // for the global slot. Re-check immediately before the real transport.
-          const shared = await readSharedFootballCache(key);
+        }
+        if (isSharedBdlCacheKey(key)) {
+          // A sibling may have filled the shared cache while this process
+          // waited or slept. Re-check immediately before the real transport.
+          const shared = await readSharedBdlCache(key);
           if (shared.hit) return shared.data;
         }
         return await fetchFn();
@@ -341,10 +352,11 @@ export async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES) {
         const status = err?.response?.status ?? err?.status;
         const msg = (err?.message || err?.response?.data?.error || '').toString();
         const isRateLimit = status === 429 || /too many requests/i.test(msg);
-        if (isRateLimit && !rateLimitRetried) {
-          rateLimitRetried = true;
-          console.warn(`[Ball Don't Lie] 429 on ${key} — retrying in 1.2s`);
-          await new Promise(r => setTimeout(r, 1200));
+        if (isRateLimit && rateLimitAttempt < RATE_LIMIT_BACKOFF_MS.length) {
+          const delay = RATE_LIMIT_BACKOFF_MS[rateLimitAttempt];
+          rateLimitAttempt += 1;
+          console.warn(`[Ball Don't Lie] 429 on ${key} — retry ${rateLimitAttempt}/${RATE_LIMIT_BACKOFF_MS.length} in ${delay}ms`);
+          await new Promise(r => setTimeout(r, delay));
           continue;
         }
         if (!isRateLimit && isTransientNetworkError(err) && netAttempt < NETWORK_BACKOFF_MS.length) {
@@ -363,7 +375,7 @@ export async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES) {
     .then(async data => {
       const expiry = Date.now() + (ttlMinutes * 60 * 1000);
       cacheMap.set(key, { data, expiry });
-      await writeSharedFootballCache(key, data, ttlMinutes);
+      await writeSharedBdlCache(key, data, ttlMinutes);
       return data;
     })
     .finally(() => {
@@ -5670,7 +5682,7 @@ const ballDontLieService = {
    * Returns splits by: arena, batting order, breakdown (L/R, home/away, day/night),
    *                     count, opponent, position, situation, day/month
    */
-  async getMlbPlayerSplits({ playerId, season } = {}, ttlMinutes = 60) {
+  async getMlbPlayerSplits({ playerId, season } = {}, ttlMinutes = 720) {
     try {
       if (!playerId || !season) return null;
       const cacheKey = `mlb_player_splits_${playerId}_${season}`;
@@ -5692,7 +5704,7 @@ const ballDontLieService = {
    * Get MLB player vs player matchups (GOAT tier)
    * Batter vs all pitchers on an opponent team (or pitcher vs all batters)
    */
-  async getMlbPlayerVsPlayer({ playerId, opponentTeamId } = {}, ttlMinutes = 120) {
+  async getMlbPlayerVsPlayer({ playerId, opponentTeamId } = {}, ttlMinutes = 720) {
     try {
       if (!playerId || !opponentTeamId) return [];
       const cacheKey = `mlb_pvp_${playerId}_vs_${opponentTeamId}`;
