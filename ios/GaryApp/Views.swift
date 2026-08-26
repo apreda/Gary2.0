@@ -2062,18 +2062,30 @@ private func fetchIsolatedGamePickSources(
     var future: [GaryPick] = []
     var failures: Set<GamePickSource> = []
     var transientExternalFailures: Set<GamePickSource> = []
+    // A cancelled request (our own torn-down refresh task) retains last-good
+    // WITHOUT reporting a source failure — no banner for a pull we cancelled
+    // ourselves (Aug 26 sim repro).
     do { daily = try await dailyTask } catch {
-        failures.insert(.daily)
-        if SupabaseAPI.isTransientExternalFailure(error) { transientExternalFailures.insert(.daily) }
+        if SupabaseAPI.isCancellation(error) { transientExternalFailures.insert(.daily) }
+        else {
+            failures.insert(.daily)
+            if SupabaseAPI.isTransientExternalFailure(error) { transientExternalFailures.insert(.daily) }
+        }
     }
     do { nfl = try await nflTask } catch {
-        failures.insert(.nfl)
-        if SupabaseAPI.isTransientExternalFailure(error) { transientExternalFailures.insert(.nfl) }
+        if SupabaseAPI.isCancellation(error) { transientExternalFailures.insert(.nfl) }
+        else {
+            failures.insert(.nfl)
+            if SupabaseAPI.isTransientExternalFailure(error) { transientExternalFailures.insert(.nfl) }
+        }
     }
     if includeUpcomingNcaab {
         do { future = try await futureTask } catch {
-            failures.insert(.ncaabFuture)
-            if SupabaseAPI.isTransientExternalFailure(error) { transientExternalFailures.insert(.ncaabFuture) }
+            if SupabaseAPI.isCancellation(error) { transientExternalFailures.insert(.ncaabFuture) }
+            else {
+                failures.insert(.ncaabFuture)
+                if SupabaseAPI.isTransientExternalFailure(error) { transientExternalFailures.insert(.ncaabFuture) }
+            }
         }
     }
 
@@ -12061,14 +12073,21 @@ struct GaryPropsView: View {
         // Use a timeout to prevent infinite loading
         var props: [PropPick] = []
         var didFail = false
+        var wasCancelled = false
         var transientFailure = false
         do {
             props = try await withTimeout(seconds: 30) {
                 try await SupabaseAPI.fetchPropPicks(date: date, forceRefresh: forceRefresh)
             }
         } catch {
-            didFail = true
-            transientFailure = SupabaseAPI.isTransientExternalFailure(error)
+            if SupabaseAPI.isCancellation(error) {
+                // Our own torn-down refresh task — state stands, no banner.
+                wasCancelled = true
+                transientFailure = true
+            } else {
+                didFail = true
+                transientFailure = SupabaseAPI.isTransientExternalFailure(error)
+            }
         }
 
         // Fetch today's prop results to stamp W/L on completed props
@@ -20611,14 +20630,21 @@ final class PropsSlateStore: ObservableObject {
 
         var props: [PropPick] = []
         var didFail = false
+        var wasCancelled = false
         var transientFailure = false
         do {
             props = try await withTimeout(seconds: 30) {
                 try await SupabaseAPI.fetchPropPicks(date: date, forceRefresh: forceRefresh)
             }
         } catch {
-            didFail = true
-            transientFailure = SupabaseAPI.isTransientExternalFailure(error)
+            if SupabaseAPI.isCancellation(error) {
+                // Our own torn-down refresh task — state stands, no banner.
+                wasCancelled = true
+                transientFailure = true
+            } else {
+                didFail = true
+                transientFailure = SupabaseAPI.isTransientExternalFailure(error)
+            }
         }
 
         // Keep only FRESH props (game today or upcoming). A game that already
@@ -20698,7 +20724,7 @@ final class PropsSlateStore: ObservableObject {
         // fetch blanked a healthy MLB board and the sports list with it,
         // snapping the page to an empty NFL desk. A failed fetch is not an
         // empty result.)
-        if !didFail {
+        if !didFail && !wasCancelled {
             allProps = props
             sportsWithFreshProps = freshSports
         }
@@ -20762,7 +20788,7 @@ final class PropsSlateStore: ObservableObject {
             // the user is reading stays rendered. Blanking a live board on a
             // failed refresh stranded the page on an empty desk (Aug 26).
         }
-        slateSourceFailed = !slateResult.succeeded
+        slateSourceFailed = !slateResult.succeeded && !slateResult.cancelled
         slateUnavailable = !slateResult.succeeded && slate.isEmpty
         let freshSports = Set(mergedToday.compactMap { ($0.league ?? "").uppercased() }.filter { !$0.isEmpty })
 
@@ -22763,8 +22789,17 @@ struct PicksCarouselView: View {
         guard !rollingPicksRefreshInFlight, !store.loading else { return }
         rollingPicksRefreshInFlight = true
         defer { rollingPicksRefreshInFlight = false }
-        await store.refresh()
-        await loadConnections()
+        // The pull gesture's task is SwiftUI's to cancel — a mid-pull
+        // re-render tears it down and every in-flight request died
+        // "cancelled" (Aug 26 sim repro: the fresh Dbacks pick never landed
+        // and the banner blamed the source). The actual work runs in an
+        // UNSTRUCTURED task the gesture cannot kill; awaiting its value
+        // keeps the spinner honest for the full duration.
+        let work = Task {
+            await store.refresh()
+            await loadConnections()
+        }
+        await work.value
         rebuildMemo()
     }
 

@@ -777,6 +777,20 @@ enum SupabaseAPI {
         /// Only transport/rate-limit/provider-server failures may retain a
         /// same-date last-good slate. Auth/config/schema failures must surface.
         let transientExternalFailure: Bool
+        /// The request died because OUR OWN task was cancelled (SwiftUI tears
+        /// down a .refreshable task on mid-pull re-render). Neither a success
+        /// nor a failure: last-good stands, no banner (Aug 26 sim repro —
+        /// "cancelled" was being branded a source failure on every pull).
+        var cancelled: Bool = false
+    }
+
+    /// A thrown error that means WE cancelled the work, not that the source
+    /// failed. Never a banner, never a wipe — the state simply stands.
+    static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let urlError = error as? URLError, urlError.code == .cancelled { return true }
+        let ns = error as NSError
+        return ns.domain == NSURLErrorDomain && ns.code == NSURLErrorCancelled
     }
 
     private static let dailySlateCacheKey = "gary.dailySlate.lastGood"
@@ -854,6 +868,14 @@ enum SupabaseAPI {
             return DailySlateFetch(rows: visible, succeeded: true, transientExternalFailure: false)
         } catch {
             print("[fetchDailySlate] error \(date): \(error.localizedDescription)")
+            if isCancellation(error) {
+                return DailySlateFetch(
+                    rows: cachedDailySlate(date: date),
+                    succeeded: false,
+                    transientExternalFailure: true,
+                    cancelled: true
+                )
+            }
             let isTransient = isTransientExternalFailure(error)
             return DailySlateFetch(
                 rows: isTransient ? cachedDailySlate(date: date) : [],
