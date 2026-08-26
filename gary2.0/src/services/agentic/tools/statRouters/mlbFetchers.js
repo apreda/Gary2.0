@@ -1704,9 +1704,16 @@ export const mlbFetchers = {
         parkData.type === 'hitter' ? 'Hitter-Friendly' :
         parkData.type === 'variable' ? 'Variable (Wind-Dependent)' : 'Neutral';
       return {
-        homeValue: `${parkData.park} — ${typeLabel} (Factor: ${parkData.factor})\n${parkData.notes}`,
-        awayValue: 'N/A (park factor applies to home venue)',
-        comparison: `Park factor and venue profile for ${homeTeam} home stadium`,
+        // NO NUMERIC PARK FACTORS ON GARY'S DESK (founder, Aug 26: "we never
+        // math out park factor, ever... I'm talking about what the average
+        // everyday fan would know about a certain park" — the Padres rationale
+        // cited "a 0.92 factor" the same day). The park reaches Gary as fan
+        // knowledge in words: the character of the yard, which both lineups
+        // share tonight. The numeric factor stays OUT of every Gary surface;
+        // the user-facing board's +N% row (his Aug 14 pick) is untouched.
+        homeValue: `${parkData.park} — ${typeLabel}. ${parkData.notes}`,
+        awayValue: 'Shared venue — both lineups hit in the same park tonight.',
+        comparison: `Venue profile for ${homeTeam} home stadium`,
         source: 'Static MLB Park Data (2024-2026)',
       };
     }
@@ -1714,8 +1721,8 @@ export const mlbFetchers = {
     // No match found — return generic message
     return {
       homeValue: `${homeTeam}: Park data not found for venue "${venueName || 'unknown'}". Check venue name mapping.`,
-      awayValue: 'N/A (park factor applies to home venue)',
-      comparison: `Park factor and venue profile for ${homeTeam} home stadium`,
+      awayValue: 'Shared venue — both lineups hit in the same park tonight.',
+      comparison: `Venue profile for ${homeTeam} home stadium`,
       source: 'Static MLB Park Data (venue not matched)',
     };
   },
