@@ -3412,11 +3412,20 @@ struct HomeView: View {
     private enum HomeBoardLeague: String, CaseIterable, Hashable {
         case mlb = "MLB"
         case nfl = "NFL"
+        /// College football is a first-class board tab (founder, Aug 26:
+        /// "we need an NCAAF tab") — same board, same empty-state honesty.
+        case ncaaf = "NCAAF"
         /// The user's own slate (founder, Aug 20: "a You tab next to NFL") —
         /// same board, same rows, THEIR side's standing in the verdict slot.
         case you = "YOU"
 
-        var sport: Sport { self == .mlb ? .mlb : .nfl }
+        var sport: Sport {
+            switch self {
+            case .mlb: return .mlb
+            case .ncaaf: return .ncaaf
+            default: return .nfl
+            }
+        }
     }
 
     /// Freshest live/final row for a slate game (the cache once it has polled,
@@ -4194,7 +4203,7 @@ struct HomeView: View {
         // view"): every game holds its slate slot all day; the row itself
         // rolls scheduled time → live verdict → the stamp in place.
         let rows = sheetRows
-            .filter { $0.league == HomeBoardLeague.mlb.rawValue || $0.league == HomeBoardLeague.nfl.rawValue }
+            .filter { HomeBoardLeague(rawValue: $0.league) != nil && $0.league != HomeBoardLeague.you.rawValue }
             .sorted { $0.commence < $1.commence }
         let youRows = youSheetRows
         let available: Set<HomeBoardLeague> = {
@@ -4259,14 +4268,52 @@ struct HomeView: View {
                 }
             }
             // A selected league with no slate says so in place — the tab
-            // switch always lands ON the board, never anywhere else.
+            // switch always lands ON the board, never anywhere else. When the
+            // fetched look-ahead board carries this league's games TOMORROW,
+            // they show right here (founder, Aug 26: "show me the games that
+            // are upcoming even if that isn't today") — real rows only, never
+            // an invented schedule for days the board hasn't reached.
             if rows.isEmpty {
-                Text("NO \(selected.rawValue) GAMES TODAY")
-                    .font(.system(size: 12.5, weight: .semibold).monospacedDigit())
-                    .tracking(1.4)
-                    .foregroundStyle(Color.white.opacity(0.45))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 22)
+                let upcoming = selected == .you ? [] : (tomorrowBoard?.board ?? [])
+                    .filter { ($0.league ?? "").uppercased() == selected.rawValue }
+                if upcoming.isEmpty {
+                    Text("NO \(selected.rawValue) GAMES TODAY")
+                        .font(.system(size: 12.5, weight: .semibold).monospacedDigit())
+                        .tracking(1.4)
+                        .foregroundStyle(Color.white.opacity(0.45))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 22)
+                } else {
+                    Text("NEXT \(selected.rawValue) GAMES — TOMORROW")
+                        .font(.system(size: 12.5, weight: .semibold).monospacedDigit())
+                        .tracking(1.4)
+                        .foregroundStyle(Color.white.opacity(0.45))
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 16)
+                        .padding(.bottom, 6)
+                    ForEach(Array(upcoming.enumerated()), id: \.offset) { i, r in
+                        HStack(spacing: 8) {
+                            Text("\(r.away_abbr ?? r.away_team ?? "") @ \(r.home_abbr ?? r.home_team ?? "")")
+                                .font(.system(size: 13.5, weight: .bold).monospacedDigit())
+                                .foregroundStyle(Color.white.opacity(0.85))
+                            Spacer(minLength: 8)
+                            if let ml = r.ml_away ?? r.ml_home {
+                                Text(ml > 0 ? "+\(Int(ml))" : "\(Int(ml))")
+                                    .font(.system(size: 12.5, weight: .semibold).monospacedDigit())
+                                    .foregroundStyle(Color.white.opacity(0.55))
+                            }
+                            Text(r.commence_time.map { TomorrowView.etTime($0, withZone: false, meridiem: true).uppercased() } ?? "TIME TBD")
+                                .font(.system(size: 12.5, weight: .semibold).monospacedDigit())
+                                .foregroundStyle(Color.white.opacity(0.55))
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        if i < upcoming.count - 1 {
+                            Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1).padding(.leading, 14)
+                        }
+                    }
+                    Color.clear.frame(height: 10)
+                }
             }
             ForEach(Array(rows.enumerated()), id: \.element.id) { i, r in
                 Button {
