@@ -138,14 +138,22 @@ struct HomeYourNight: View {
 
 // ── FANTASY CORNER TEASER ───────────────────────────────────────────────────
 // ── THE WIRE MINI ───────────────────────────────────────────────────────────
-// Three wire headlines (already written 3x daily) — the betting-news pulse
-// on the front page, routing into the Hub.
+// The fun-stuff doors + three wire headlines in ONE container (founder,
+// Aug 26: "combine these to one container") — the doors row sits inside the
+// card the Wire already wears, split by hairlines instead of three separate
+// chips. The doors render on every day-state; the wire rows join beneath a
+// divider whenever the day's items exist.
 struct HomeWireMini: View {
+    struct Door {
+        let title: String
+        let sub: String
+        let act: () -> Void
+    }
+    let doors: [Door]
     let items: [SupabaseAPI.WireItem]
     var onOpen: () -> Void
 
     var body: some View {
-        if !items.isEmpty {
             // Dashboard container (Aug 3): the Wire wears the board's chrome
             // and the shared act-head grammar — no more naked list.
             VStack(alignment: .leading, spacing: 10) {
@@ -153,6 +161,37 @@ struct HomeWireMini: View {
                 // chips already say what this is.
                 HomeSectionRule()
                 VStack(spacing: 0) {
+                    HStack(spacing: 0) {
+                        ForEach(Array(doors.enumerated()), id: \.offset) { i, door in
+                            Button {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { door.act() }
+                            } label: {
+                                VStack(spacing: 3) {
+                                    Text(door.title.uppercased())
+                                        .font(.system(size: 12, weight: .semibold).monospacedDigit()).tracking(1.2)
+                                        .foregroundStyle(GaryColors.gold)
+                                    HStack(spacing: 3) {
+                                        Text(door.sub)
+                                            .font(.system(size: 13, weight: .bold).monospacedDigit())
+                                            .foregroundStyle(.white.opacity(0.85))
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 7, weight: .bold))
+                                            .foregroundStyle(.white.opacity(0.62))
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 11)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            if i < doors.count - 1 {
+                                Rectangle().fill(Color.white.opacity(0.07)).frame(width: 1, height: 30)
+                            }
+                        }
+                    }
+                    if !items.isEmpty {
+                        Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+                    }
                     ForEach(Array(items.prefix(3).enumerated()), id: \.offset) { i, item in
                         Button(action: onOpen) {
                             HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -188,6 +227,5 @@ struct HomeWireMini: View {
                 .garyPanel(radius: 12)
                 .pageGutter()
             }
-        }
     }
 }

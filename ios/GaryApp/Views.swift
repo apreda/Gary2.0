@@ -3320,22 +3320,24 @@ struct HomeView: View {
         // (The second headlines instance that used to sit here came out Aug 5 —
         // the rail lives at the top of the page now, in every day-state.)
 
-        // ── THE FUN STUFF — funnels only, never advice (founder, Aug 3:
-        // "Cut Shane Bieber" doesn't belong on a clean front page; the doors
-        // to the fun rooms do).
-        HStack(spacing: 10) {
-            homeDoor("Free Pick", "TODAY") { selectedTab = 3 }
-            homeDoor("HR Threats", "THE HUB") {
-                UserDefaults.standard.set("hub", forKey: "hubScope")
-                selectedTab = 2
-            }
-            homeDoor("Fantasy", "WAIVERS") {
-                UserDefaults.standard.set("fantasy", forKey: "hubScope")
-                selectedTab = 2
-            }
-        }
-        .pageGutter()
-        HomeWireMini(items: wireItems) {
+        // ── THE FUN STUFF + THE WIRE — one container (founder, Aug 26:
+        // "combine these to one container"): the fun-room doors ride the top
+        // of the Wire's card, hairline-split, moments beneath. Funnels only,
+        // never advice (founder, Aug 3).
+        HomeWireMini(
+            doors: [
+                .init(title: "Free Pick", sub: "TODAY") { selectedTab = 3 },
+                .init(title: "HR Threats", sub: "THE HUB") {
+                    UserDefaults.standard.set("hub", forKey: "hubScope")
+                    selectedTab = 2
+                },
+                .init(title: "Fantasy", sub: "WAIVERS") {
+                    UserDefaults.standard.set("fantasy", forKey: "hubScope")
+                    selectedTab = 2
+                },
+            ],
+            items: wireItems
+        ) {
             UserDefaults.standard.set("hub", forKey: "hubScope")
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
         }
@@ -3357,29 +3359,6 @@ struct HomeView: View {
         // (Parked, unrendered: worldCupModule, the Wire, prop box, Hits &
         // Heartbreakers, The Receipts — receiptLanes/cashRows still computed
         // for other surfaces.)
-    }
-
-    private func homeDoor(_ title: String, _ sub: String, _ act: @escaping () -> Void) -> some View {
-        Button { withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { act() } } label: {
-            VStack(spacing: 3) {
-                Text(title.uppercased())
-                    .font(.system(size: 12, weight: .semibold).monospacedDigit()).tracking(1.2)
-                    .foregroundStyle(GaryColors.gold)
-                HStack(spacing: 3) {
-                    Text(sub)
-                        .font(.system(size: 13, weight: .bold).monospacedDigit())
-                        .foregroundStyle(.white.opacity(0.85))
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 7, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.62))
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 11)
-            .garyPanel(radius: 12)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - THE SHEET (today's slate × Gary's calls × live state)
