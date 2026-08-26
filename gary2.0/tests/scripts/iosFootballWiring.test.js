@@ -428,8 +428,10 @@ describe('Home MLB/NFL board parity', () => {
     expect(consumeFocus).toContain('store.gamePicks.first');
     expect(consumeFocus).toContain('$0.game_id == gameID');
     expect(consumeFocus).toContain('games.firstIndex { bdlGameId(for: $0) == gameID }');
-    expect(views).toMatch(/\.onChange\(of: sport\)[\s\S]{0,220}?consumeFocus\(\)/);
-    expect(views).toMatch(/\.onChange\(of: dataSignature\)[\s\S]{0,220}?consumeFocus\(\)/);
+    // 350-char window: consumeFocus() must live INSIDE each onChange block (the
+    // Aug 25 conference-nav edit legitimately grew the sport block past 220).
+    expect(views).toMatch(/\.onChange\(of: sport\)[\s\S]{0,350}?consumeFocus\(\)/);
+    expect(views).toMatch(/\.onChange\(of: dataSignature\)[\s\S]{0,350}?consumeFocus\(\)/);
   });
 
   it('exposes the Picks league masthead and exactly one dock tab as accessible controls', () => {
