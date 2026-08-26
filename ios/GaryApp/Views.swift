@@ -19005,7 +19005,12 @@ private struct GaryTakeCardBack<Tail: View>: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             } else {
                                 ZStack(alignment: .bottom) {
-                                    Text(take)
+                                    // Paragraph breaks flatten to one space in the
+                                    // PREVIEW only (founder, Aug 26: the window
+                                    // shows words, not gaps) — expanded keeps
+                                    // Gary's paragraphs exactly as written.
+                                    Text(take.replacingOccurrences(of: "\n\n", with: " ")
+                                        .replacingOccurrences(of: "\n", with: " "))
                                         .font(GaryFonts.text(14.5))
                                         .foregroundStyle(.white.opacity(0.88))
                                         .lineSpacing(3.5)

@@ -493,6 +493,7 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
     const user = `Choose the two sentences for a single bet's post. Return ONLY JSON: {"opening": "...", "closing": "..."}.
 Both values MUST be sentences copied character-for-character from the numbered list below — different sentences, and their combined length must be at most ${budget} characters.
 Both must be REASONS for the pick — Gary's argument and analysis. NEVER the scene-setting opener (weather, park, time of day, atmosphere) and NEVER a sentence that merely restates the bet or its odds.
+Each chosen sentence must STAND ALONE for a reader who has seen nothing else: every person it mentions is named IN the sentence, and it never opens mid-argument ("But…", "Those advantages…", "He…").
 opening: the sentence that carries Gary's ARGUMENT — his read of the game, WHY the bet exists (often first-person: "I'm backing… because", "My read is…"); never a bare stat fragment. closing: the single strongest supporting reason — concrete numbers belong here, under the argument, not in place of it.
 ${isTopPick ? "This is Gary's highest-conviction play on the whole board today — prefer the sentences that carry that certainty.\n" : ""}PICK: ${chosen.pick} | ${chosen.awayTeam} @ ${chosen.homeTeam} | league ${league}
 

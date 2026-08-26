@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import {
   fallbackReasonPair,
   fallbackVerbatimPair,
+  isStandaloneSentence,
   isVerbatimSnippet,
   reasonCandidates,
   splitSentences,
@@ -148,5 +149,28 @@ describe('composer wiring', () => {
     expect(composerSrc).toContain('fallbackReasonPair(');
     expect(composerSrc).not.toContain('PICK_HOOK_SCHEMA');
     expect(composerSrc).not.toContain('Write the hook for a single bet');
+  });
+});
+
+describe('standalone-sentence gate (founder, Aug 26 — the Pirates tweet)', () => {
+  it('drops the exact torn-context opener that reached the feed', () => {
+    expect(isStandaloneSentence('But the price compensates for those advantages, while the starting-pitcher platoon matchup points toward Pittsburgh.')).toBe(false);
+  });
+
+  it('drops unresolved third-person sentences and keeps named ones', () => {
+    expect(isStandaloneSentence('He has completed six innings once since returning.')).toBe(false);
+    expect(isStandaloneSentence('Their bullpen coughed it up late again.')).toBe(false);
+    expect(isStandaloneSentence('Chandler has allowed a 5.6% barrel rate and 38.3% hard-hit rate; Vásquez sits at 10.3% and 43.9%.')).toBe(true);
+    expect(isStandaloneSentence('Holmes has been effective overall, but he has made only three starts since returning from an 85-day absence.')).toBe(true);
+  });
+
+  it('keeps Gary first-person stance sentences — I and my are never unresolved', () => {
+    expect(isStandaloneSentence("I'm backing Arizona straight up.")).toBe(true);
+    expect(isStandaloneSentence('My read is that Baltimore keeps this close through Bassitt.')).toBe(true);
+  });
+
+  it('price prose is price talk — the read reaches the feed, never the number', () => {
+    const kept = reasonCandidates('The price compensates for those edges tonight. Milwaukee is 26-12 against left-handed starters.');
+    expect(kept).toEqual(['Milwaukee is 26-12 against left-handed starters.']);
   });
 });

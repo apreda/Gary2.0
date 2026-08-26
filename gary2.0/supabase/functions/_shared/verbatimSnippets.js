@@ -69,8 +69,41 @@ export function fallbackVerbatimPair(rationale, budget) {
 
 const STAKE = /\$\s?\d/;
 const ODDS = /[-+]\d{3,4}\b/;
-// Price vocabulary beyond a bare odds token ("at plus money", "even money").
-const PRICE_TALK = /\b(?:plus|even)[- ]money\b/i;
+// Price vocabulary beyond a bare odds token: "plus money", "the price
+// compensates", "at that price", "the juice" — priced ARGUMENT is still
+// price talk (founder, Aug 26: the feed carries the read, never the number).
+const PRICE_TALK = /\b(?:plus|even)[- ]money\b|\bpric(?:e|es|ed|ing)\b|\bjuice\b/i;
+
+// A sentence the FEED can carry must stand alone (founder, Aug 26: "he will
+// say he or refer to someone and nobody knows who he is talking about").
+// Two torn-context shapes, both excluded whole:
+//  - a connective/anaphora OPENER ("But…", "Those advantages…", "He…") —
+//    the sentence continues an argument the reader never saw;
+//  - an unresolved pronoun: he/his/they/their with NO name in the sentence
+//    itself (a capitalized word beyond position 0 counts as the name).
+// First-person stays — "I'm", "my" is Gary himself, never unresolved.
+const TORN_OPENER = /^(?:but|and|so|yet|still|also|plus|though|however|meanwhile|that|those|these|this|he|his|him|she|her|they|their|them|it['\u2019]?s why)\b/i;
+const THIRD_PERSON = /\b(?:he|his|him|she|her|they|their|them)\b/i;
+// Sentence-initial capitalization is ambiguous, so word[0] only counts as a
+// name when it is not an ordinary sentence-starter ("Holmes has..." resolves
+// a later "he"; "Their bullpen..." never does — TORN_OPENER catches those).
+const STARTER_STOPWORDS = new Set([
+  'the', 'a', 'an', 'in', 'on', 'at', 'over', 'with', 'without', 'if', 'when',
+  'while', 'after', 'before', 'neither', 'both', 'nothing', 'there', 'what',
+  'even', 'only', 'now', 'one', 'two', 'no', 'not', 'my', 'i',
+]);
+function hasResolvingProperNoun(t) {
+  const words = String(t).split(/\s+/).map((w) => w.replace(/^["'\u201C\u2018(]+/, ''));
+  if (words.slice(1).some((w) => /^[A-Z][a-zA-Z'\u2019.-]+/.test(w))) return true;
+  const first = words[0] || '';
+  return /^[A-Z][a-zA-Z'\u2019.-]+/.test(first) && !STARTER_STOPWORDS.has(first.toLowerCase());
+}
+export function isStandaloneSentence(sentence) {
+  const t = String(sentence ?? '').trim();
+  if (TORN_OPENER.test(t)) return false;
+  if (THIRD_PERSON.test(t) && !hasResolvingProperNoun(t)) return false;
+  return true;
+}
 
 /** A sentence that carries analysis rather than restating the wager.
  *  NO PRICE TALK (founder, Aug 26 2026 — supersedes the price-critique
@@ -81,6 +114,7 @@ export function isReasonSentence(sentence) {
   const t = String(sentence ?? '');
   if (STAKE.test(t)) return false;
   if (ODDS.test(t) || PRICE_TALK.test(t)) return false;
+  if (!isStandaloneSentence(t)) return false;
   // HEADINGS ARE NOT SENTENCES (Aug 24 2026): stored rationales carry section
   // labels ("Gary's Take") as bare unpunctuated lines, and splitSentences
   // keeps paragraph tails whole. During the Aug 21+ Gemini outage the
