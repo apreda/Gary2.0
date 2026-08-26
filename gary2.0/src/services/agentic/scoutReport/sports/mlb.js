@@ -45,7 +45,7 @@ import { milbLineFromStatsReply } from '../../../starterDebut.js';
 import { foldName } from '../../../../utils/nameUtils.js';
 import { findStandingsRow } from '../../../teamIdentity.js';
 import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbSeasonSeriesGroups, computeMlbScheduleShape, computeMlbRecentSeriesForm, groupGamesIntoSeries, situationalSeriesLine, toEtDate, clubMatches } from './mlbSeriesState.js';
-import { aggregateRecentWindow } from './mlbRecentWindow.js';
+import { aggregateRecentWindow, oppStarterLineFromBox } from './mlbRecentWindow.js';
 import { computeHitterContact, hitterContactLine, computePitcherWhiffByStart } from './mlbContactQuality.js';
 import {
   completedMlbTeamGames,
@@ -1329,12 +1329,36 @@ export async function buildMlbScoutReport(game, options = {}) {
     }));
   }
 
+  // OPPOSING STARTER PER RECENT GAME (founder GO, Aug 26 2026: "very
+  // important that gary understands the full context of what happened in
+  // those games they struggled to score"). Each recent game is stamped with
+  // the arm the offense actually faced — a 2.6 R/G window against Gausman
+  // and Bradish is a different fact than 2.6 against nobodies. Boxscores are
+  // in-process cached, so these walks reuse the pen/defense fetches.
+  const oppStarterMapFor = async (games, teamId) => {
+    const map = new Map();
+    if (!teamId) return map;
+    await Promise.all((games || []).slice(-10).map(async (g) => {
+      if (g?.gamePk == null) return;
+      try {
+        const box = await getGameBoxScore(g.gamePk);
+        const line = oppStarterLineFromBox(box, teamId);
+        if (line) map.set(g.gamePk, line);
+      } catch { /* additive context — never sink the section */ }
+    }));
+    return map;
+  };
+  const [homeOppStarters, awayOppStarters] = await Promise.all([
+    oppStarterMapFor(homeRecentGames, homeTeamId),
+    oppStarterMapFor(awayRecentGames, awayTeamId),
+  ]);
+
   let recentPerformanceSection = '';
   {
     const lastWord = (name) => name.toLowerCase().split(' ').pop();
 
     // Build per-game recap from BDL box stats + game result
-    const formatGameRecap = (game, teamName, bdlCandidates) => {
+    const formatGameRecap = (game, teamName, bdlCandidates, oppStarters) => {
       if (!game) return null;
       const isHome = clubMatches(game.teams?.home?.team?.name, teamName);
       const teamScore = isHome ? (game.teams?.home?.score ?? 0) : (game.teams?.away?.score ?? 0);
@@ -1383,6 +1407,10 @@ export async function buildMlbScoutReport(game, options = {}) {
 
       let recap = `  ${date}: ${wl} ${teamScore}-${oppScore} ${loc} ${oppName}`;
       if (spLine) recap += `\n    ${spLine}`;
+      // The arm this offense faced — the other half of "why the runs did or
+      // didn't come" that the own-side box can never show.
+      const oppSp = game.gamePk != null && oppStarters ? oppStarters.get(game.gamePk) : null;
+      if (oppSp) recap += `\n    Opp SP: ${oppSp}`;
       if (bullpenLines.length) recap += `\n    Bullpen: ${bullpenLines.join(' | ')}`;
       if (keyHitters.length) recap += `\n    Batting: ${keyHitters.join(' | ')}`;
       // THE TAPE (Jul 26; pitcher-attributed Aug 12): how the runs actually
@@ -1402,29 +1430,29 @@ export async function buildMlbScoutReport(game, options = {}) {
     };
 
 
-    const formatTeamRecent = (teamName, games, bdlCandidates) => {
+    const formatTeamRecent = (teamName, games, bdlCandidates, oppStarters) => {
       if (!games || games.length === 0) return `${teamName}: No recent games`;
       const lines = [`${teamName}:`];
       // L1-L4: individual game recaps (most recent first)
       const last4 = games.slice(-4).reverse();
       for (let i = 0; i < last4.length; i++) {
-        const recap = formatGameRecap(last4[i], teamName, bdlCandidates);
+        const recap = formatGameRecap(last4[i], teamName, bdlCandidates, oppStarters);
         if (recap) lines.push(`  [L${i + 1}]${recap.trim().startsWith(' ') ? recap : ' ' + recap.trim()}`);
       }
       // L5/L10: aggregates. The bracket names the window ASKED for; the line
       // itself states how many games were actually available, so the two can
       // never quietly disagree. When the club has played 5 or fewer, the L10
       // window is the same games — print it once instead of twice.
-      const l5 = aggregateRecentWindow(games, teamName, 5);
+      const l5 = aggregateRecentWindow(games, teamName, 5, oppStarters);
       if (l5) lines.push(`  [Last 5] ${l5}`);
       if (games.length > 5) {
-        const l10 = aggregateRecentWindow(games, teamName, 10);
+        const l10 = aggregateRecentWindow(games, teamName, 10, oppStarters);
         if (l10) lines.push(`  [Last 10] ${l10}`);
       }
       return lines.join('\n');
     };
 
-    recentPerformanceSection = [formatTeamRecent(homeTeam, homeRecentGames, homeBdlGames), formatTeamRecent(awayTeam, awayRecentGames, awayBdlGames)].join('\n\n');
+    recentPerformanceSection = [formatTeamRecent(homeTeam, homeRecentGames, homeBdlGames, homeOppStarters), formatTeamRecent(awayTeam, awayRecentGames, awayBdlGames, awayOppStarters)].join('\n\n');
   }
 
   // ═══════════════════════════════════════════════════════════════════

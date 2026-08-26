@@ -19,6 +19,7 @@ import {
   getGameBoxScore,
   getPitcherPlatoonSplits,
   getPitcherEntryContext,
+  getPitcherSeasonPitching,
   getMlbPeopleHands,
   getPitcherGameLogRaw,
 } from '../../../mlbStatsApiService.js';
@@ -26,7 +27,7 @@ import { computeRelieverUsagePattern } from '../../scoutReport/sports/mlbSeasonC
 import { getPitcherArsenal, getPitcherStatcastProfile } from '../../../baseballSavantService.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { formatSampleSuffix } from './statRouterCommon.js';
-import { bullpenLedgerDate, relieverBoxEntries } from './bullpenLedger.js';
+import { bullpenLedgerDate, outsToIp, penLeverageArms, penWindowComposition, relieverBoxEntries } from './bullpenLedger.js';
 // Bridge-aware search seam (Jul 30): ALL grounding in this file routes like
 // the WORLD lane — Claude sub first when GARY_GROUNDING_VIA_CLAUDE=1 ($0),
 // then the API chain — never a hardwired paid Gemini call.
@@ -1799,17 +1800,19 @@ export const mlbFetchers = {
       }
 
       try {
-        // PEN FORM WINDOW (founder GO, Aug 5 eve — closing the hunt's last
-        // gap): fetch the last SEVEN games. The per-appearance ledger below
-        // still prints only the last three (workload recency); the extra
-        // four exist for one number — the pen's rolling ERA, the "how has
-        // the bullpen actually been throwing" fact a bettor holds.
-        const allRecentGames = await getMlbRecentGames(mlbTeam.id, 7);
+        // PEN FORM WINDOW (founder GO, Aug 5 eve; widened Aug 26 after the
+        // 6-8 autopsy): fetch the last FOURTEEN games. The per-appearance
+        // ledger below still prints only the last three (workload recency);
+        // the rest exist for the rolling pen numbers — 7-game AND 14-game,
+        // side by side, so a hot week reads against a steadier baseline —
+        // plus the window's per-arm composition and leverage-arm facts.
+        const allRecentGames = await getMlbRecentGames(mlbTeam.id, 14);
         if (!allRecentGames || allRecentGames.length === 0) {
           lines.push(`${teamName}: No recent games found`);
           continue;
         }
         const recentGames = allRecentGames.slice(-3);
+        const last7Pks = new Set(allRecentGames.slice(-7).map((g) => g?.gamePk).filter((pk) => pk != null));
         // TEAM-LABELED (Aug 12): home + away values concatenate in the desk,
         // so unheadered date lines read as one anonymous ledger — same bug
         // class as the pen-stats section.
@@ -1823,23 +1826,52 @@ export const mlbFetchers = {
         // /game/{gamePk}/boxscore endpoint instead — same namespace,
         // and the boxscore already includes per-pitcher inningsPitched.
         usedApi = true;
-        // Pen form across the full window — same boxscore walk, totals only.
-        const penForm = { outs: 0, er: 0, games: 0 };
+        // Pen form across both windows — same boxscore walk. pen7 covers the
+        // last seven games, pen14 all fourteen; armWindow carries the last
+        // seven's per-arm composition (who threw it, in what spots).
+        const pen7 = { outs: 0, er: 0, games: 0 };
+        const pen14 = { outs: 0, er: 0, games: 0 };
+        const armWindow = new Map(); // pid -> { pid, name, outs, er, pitches, dates[], marginOuts[] }
+        const armWindowAdd = (pid, name, outs, er, pitches, date, margin) => {
+          const a = armWindow.get(pid) || { pid, name, outs: 0, er: 0, pitches: 0, dates: [], marginOuts: [] };
+          a.outs += outs; a.er += er; a.pitches += pitches;
+          if (date) a.dates.push(date);
+          a.marginOuts.push({ margin, outs });
+          armWindow.set(pid, a);
+        };
         for (const g of allRecentGames.slice(0, -3)) {
           const b = await getGameBoxScore(g.gamePk).catch(() => null);
           if (!b?.teams) continue;
+          const inLast7 = last7Pks.has(g.gamePk);
+          // Entry context only where the composition needs it (the last-7
+          // games); the older seven contribute totals alone.
+          const ctx = inLast7 ? await getPitcherEntryContext(g.gamePk).catch(() => new Map()) : new Map();
           const sk = b.teams.home?.team?.id === mlbTeam.id ? 'home' : 'away';
           const sd = b.teams[sk];
           let counted = false;
-          for (const { player } of relieverBoxEntries(sd)) {
+          for (const { pid, player } of relieverBoxEntries(sd)) {
             const st = player?.stats?.pitching;
             const ipn = parseFloat(st?.inningsPitched);
             if (!Number.isFinite(ipn)) continue;
-            penForm.outs += Math.floor(ipn) * 3 + Math.round((ipn % 1) * 10);
-            penForm.er += Number(st?.earnedRuns) || 0;
+            const outs = Math.floor(ipn) * 3 + Math.round((ipn % 1) * 10);
+            const er = Number(st?.earnedRuns) || 0;
+            pen14.outs += outs;
+            pen14.er += er;
+            if (inLast7) {
+              pen7.outs += outs;
+              pen7.er += er;
+              const ec = ctx.get(pid);
+              const margin = ec?.awayScore != null && ec?.homeScore != null
+                ? Math.abs(Number(ec.awayScore) - Number(ec.homeScore)) : null;
+              armWindowAdd(pid, player?.person?.fullName || 'Unknown', outs, er,
+                Number(st?.numberOfPitches) || 0, bullpenLedgerDate(g), margin);
+            }
             counted = true;
           }
-          if (counted) penForm.games += 1;
+          if (counted) {
+            pen14.games += 1;
+            if (inLast7) pen7.games += 1;
+          }
         }
         const armTotals = new Map(); // name -> { outs, pitches, er, dates[] }
         const gameDates = [];        // chronological (recentGames is oldest -> newest)
@@ -1910,6 +1942,11 @@ export const mlbFetchers = {
             t.er += Number(er) || 0;
             t.dates.push(date);
             armTotals.set(name, t);
+            // The ledger's three games are the tail of the 7-game window —
+            // mirror them into the per-arm composition with the entry margin.
+            const ecMargin = ec?.awayScore != null && ec?.homeScore != null
+              ? Math.abs(Number(ec.awayScore) - Number(ec.homeScore)) : null;
+            armWindowAdd(pid, name, outs, Number(er) || 0, Number(pitches) || 0, date, ecMargin);
           }
 
           if (relievers.length > 0) {
@@ -1937,17 +1974,45 @@ export const mlbFetchers = {
             .map(([n, a]) => `${n} ${a.pitches} pitches/${a.dates.length} G`)
             .join(', ');
           const totalEr = [...armTotals.values()].reduce((acc, a) => acc + (a.er || 0), 0);
-          penForm.outs += totalOuts;
-          penForm.er += totalEr;
-          penForm.games += gameDates.length;
+          pen7.outs += totalOuts; pen7.er += totalEr; pen7.games += gameDates.length;
+          pen14.outs += totalOuts; pen14.er += totalEr; pen14.games += gameDates.length;
           lines.push(
             `Last ${gameDates.length} games total: ${Math.floor(totalOuts / 3)}.${totalOuts % 3} relief IP, ${totalEr} ER ` +
             `across ${armTotals.size} arms; heaviest: ${heaviest}; ` +
             `worked both of the last two game days: ${b2b.length ? b2b.join(', ') : 'none'}.`,
           );
-          if (penForm.games >= 4 && penForm.outs > 0) {
-            const penEra = ((penForm.er * 27) / penForm.outs).toFixed(2);
-            lines.push(`Pen last ${penForm.games} games: ${Math.floor(penForm.outs / 3)}.${penForm.outs % 3} IP, ${penForm.er} ER (${penEra} ERA)`);
+          if (pen7.games >= 4 && pen7.outs > 0) {
+            const penEra7 = ((pen7.er * 27) / pen7.outs).toFixed(2);
+            lines.push(`Pen last ${pen7.games} games: ${outsToIp(pen7.outs)} IP, ${pen7.er} ER (${penEra7} ERA)`);
+          }
+          // The steadier companion window (Aug 26): the same walk, doubled —
+          // a hot or cold week reads against its own longer baseline.
+          if (pen14.games >= 8 && pen14.outs > 0 && pen14.games > pen7.games) {
+            const penEra14 = ((pen14.er * 27) / pen14.outs).toFixed(2);
+            lines.push(`Pen last ${pen14.games} games: ${outsToIp(pen14.outs)} IP, ${pen14.er} ER (${penEra14} ERA)`);
+          }
+          // WHAT THE 7-GAME NUMBER IS MADE OF (founder GO, Aug 26 — the 6-8
+          // autopsy: the pen ERA decided eight picks while hiding who threw
+          // it and in what spots). Facts only; the read is the brain's.
+          const composition = penWindowComposition([...armWindow.values()]);
+          if (composition) lines.push(`Last-7 composition — ${composition}`);
+          const levArms = penLeverageArms([...armWindow.values()]);
+          if (levArms.length) {
+            const levLines = [];
+            for (const a of levArms) {
+              let seasonBit = '';
+              try {
+                const sp = await getPitcherSeasonPitching(a.pid, season);
+                if (sp?.era != null) seasonBit = `season ${sp.era} ERA${sp.saves != null ? `, ${sp.saves} SV` : ''}${sp.holds != null ? `, ${sp.holds} HLD` : ''}; `;
+              } catch { /* season line is additive */ }
+              const lastWorked = a.dates.length ? a.dates[a.dates.length - 1] : null;
+              levLines.push(
+                `${a.name} — ${seasonBit}window ${outsToIp(a.outs)} IP, ${a.er} ER, ` +
+                `${a.closeApps} close-entry appearance${a.closeApps === 1 ? '' : 's'}, ${a.pitches} pitches` +
+                (lastWorked ? `, last worked ${lastWorked}` : '')
+              );
+            }
+            lines.push(`Most-used in close spots (last 7 games): ${levLines.join(' | ')}`);
           }
         }
       } catch (e) {

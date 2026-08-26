@@ -360,6 +360,21 @@ export async function getGameBoxScore(gamePk) {
   return data;
 }
 
+/**
+ * A pitcher's season pitching line (era, ip, saves, holds...) — used to put a
+ * season number beside a leverage arm's window facts (Aug 26 2026). Cached;
+ * null on any miss, never a guess.
+ */
+export async function getPitcherSeasonPitching(personId, season) {
+  const key = `pitcher_season_pitching_${personId}_${season}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+  const data = await apiFetch(`/people/${personId}/stats?stats=season&group=pitching&season=${season}`);
+  const stat = data?.stats?.[0]?.splits?.[0]?.stat || null;
+  setCache(key, stat);
+  return stat;
+}
+
 export async function getGameLineScore(gamePk) {
   const data = await apiFetch(`/game/${gamePk}/linescore`);
   return data;
