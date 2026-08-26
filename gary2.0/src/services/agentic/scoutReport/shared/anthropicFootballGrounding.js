@@ -108,6 +108,75 @@ export function scrubFootballGroundingText(text) {
  * only ever gets fixed on one side.
  */
 
+
+/**
+ * A GLOBAL CEILING ON IN-FLIGHT SEARCHES (Aug 26 2026).
+ *
+ * The deep read fans one game out into six lanes, and the NCAAF scheduler
+ * runs up to twelve games concurrently — so a Saturday could put SEVENTY-TWO
+ * web searches in flight at once against an endpoint with no limiter on this
+ * path at all. The BDL 429 work does not cover it; that is a different client.
+ *
+ * Worse than the storm is how it would have read. A 429 returned null, and a
+ * null lane rendered as "No coverage found for this lane" — rate-limited
+ * presented as nothing-was-written, across a whole slate, with every log line
+ * green. That is the exact silent-blank failure this audit exists to remove,
+ * introduced by the fan-out itself.
+ *
+ * The gate is global rather than per-game because the pressure is global.
+ *
+ * THE MEASURED ARITHMETIC, so the trade-off is visible rather than implied.
+ * A lane is ONE gated API call that internally spends up to six searches, and
+ * a lane takes ~20s. The biggest 2025 college Saturday carried 114 games:
+ *
+ *     114 games x 6 lanes = 684 gated calls
+ *     684 / 6 concurrent x 20s  =  ~38 minutes for the whole slate
+ *
+ * That is the deep read's total contribution to an NCAAF Saturday, spread
+ * across the twelve game workers rather than added to each. Raising the gate
+ * shortens it linearly and raises 429 exposure linearly; FOOTBALL_SEARCH_
+ * CONCURRENCY exists so that is a config change, not a code change. NFL runs
+ * at most three games at once, so it never approaches the ceiling.
+ */
+const MAX_CONCURRENT_SEARCHES = Number(process.env.FOOTBALL_SEARCH_CONCURRENCY) || 6;
+const RATE_LIMIT_RETRIES = 3;
+
+let activeSearches = 0;
+const searchQueue = [];
+
+function acquireSearchSlot() {
+  if (activeSearches < MAX_CONCURRENT_SEARCHES) {
+    activeSearches += 1;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => searchQueue.push(resolve));
+}
+
+function releaseSearchSlot() {
+  const next = searchQueue.shift();
+  if (next) next();
+  else activeSearches = Math.max(0, activeSearches - 1);
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Honour Retry-After when the server sends it; back off exponentially if not. */
+function retryDelayMs(response, attempt) {
+  const header = Number(response?.headers?.get?.('retry-after'));
+  // RFC 7231 allows a retry-after of 0, meaning retry now — a `> 0` guard
+  // silently ignored the server's own instruction and backed off anyway.
+  // A small floor keeps that from becoming a hot loop.
+  if (Number.isFinite(header) && header >= 0) {
+    return Math.min(Math.max(header * 1000, 250), 30_000);
+  }
+  return Math.min(1000 * (2 ** attempt), 30_000);
+}
+
+/** Test seam: current gate state. */
+export function _searchGateState() {
+  return { active: activeSearches, queued: searchQueue.length, max: MAX_CONCURRENT_SEARCHES };
+}
+
 /**
  * Does this writing refer to that team?
  *
@@ -135,8 +204,10 @@ export function mentionsTeam(lowerText, teamName) {
 
 async function runFootballSearch({
   apiKey, fetchImpl, timeoutMs, label, prompt, maxUses = 6,
-  mustMention = [], minChars = 200,
+  mustMention = [], minChars = 200, failures = null,
 }) {
+  // Existing callers pass no sink and keep the old null-on-failure contract.
+  const fail = (reason) => { if (failures) failures.push(reason); return null; };
   const startedAt = Date.now();
   const tool = {
     type: 'web_search_20250305',
@@ -151,27 +222,39 @@ async function runFootballSearch({
   let successfulSearches = 0;
   const searchErrors = [];
 
+  await acquireSearchSlot();
   try {
     for (let continuation = 0; continuation <= MAX_PAUSE_CONTINUATIONS; continuation += 1) {
-      const response = await fetchImpl(ANTHROPIC_MESSAGES_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': ANTHROPIC_VERSION,
-        },
-        body: JSON.stringify({
-          model: apiModelId(process.env.ANTHROPIC_GROUNDING_MODEL),
-          max_tokens: 6000,
-          messages,
-          tools: [tool],
-        }),
-        signal: controller.signal,
-      });
+      let response = null;
+      for (let attempt = 0; attempt <= RATE_LIMIT_RETRIES; attempt += 1) {
+        response = await fetchImpl(ANTHROPIC_MESSAGES_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': ANTHROPIC_VERSION,
+          },
+          body: JSON.stringify({
+            model: apiModelId(process.env.ANTHROPIC_GROUNDING_MODEL),
+            max_tokens: 6000,
+            messages,
+            tools: [tool],
+          }),
+          signal: controller.signal,
+        });
+        // 429 and 5xx are "ask again", not "there is nothing to find".
+        if (response.status !== 429 && response.status < 500) break;
+        if (attempt === RATE_LIMIT_RETRIES) break;
+        const wait = retryDelayMs(response, attempt);
+        console.warn(`[${label}] Anthropic HTTP ${response.status} — retrying in ${wait}ms (attempt ${attempt + 1}/${RATE_LIMIT_RETRIES})`);
+        await sleep(wait);
+      }
 
       if (!response.ok) {
         console.warn(`[${label}] Anthropic HTTP ${response.status}`);
-        return null;
+        return fail(response.status === 429
+          ? `rate limited by the search API (HTTP 429) after ${RATE_LIMIT_RETRIES} retries — this is NOT a finding that no coverage exists`
+          : `search API returned HTTP ${response.status}`);
       }
 
       const data = await response.json();
@@ -186,7 +269,7 @@ async function runFootballSearch({
       if (data.stop_reason === 'pause_turn') {
         if (continuation === MAX_PAUSE_CONTINUATIONS) {
           console.warn(`[${label}] Anthropic pause_turn continuation cap exceeded`);
-          return null;
+          return fail('the search ran past its continuation cap before finishing');
         }
         // Server search results contain encrypted fields. Preserve the entire
         // assistant turn and resend it unchanged, per Anthropic's contract.
@@ -196,7 +279,7 @@ async function runFootballSearch({
 
       if (data.stop_reason !== 'end_turn') {
         console.warn(`[${label}] Anthropic incomplete stop reason: ${data.stop_reason || 'missing'}`);
-        return null;
+        return fail(`the search ended incompletely (${data.stop_reason || 'no stop reason'})`);
       }
 
       if (successfulSearches < 1) {
@@ -209,7 +292,9 @@ async function runFootballSearch({
       const missing = mustMention.filter((name) => !mentionsTeam(lower, name));
       if (cleaned.length < minChars || missing.length > 0) {
         console.warn(`[${label}] narrative validation failed (chars=${cleaned.length}, missing=${missing.join('|') || 'none'})`);
-        return null;
+        return fail(missing.length
+          ? `the search returned text that did not mention ${missing.join(' or ')}`
+          : `the search returned only ${cleaned.length} characters`);
       }
 
       console.log(`[${label}] Anthropic web search OK (${successfulSearches} search block(s), ${cleaned.length} chars, ${Date.now() - startedAt}ms)`);
@@ -218,8 +303,9 @@ async function runFootballSearch({
   } catch (error) {
     const reason = error?.name === 'AbortError' ? 'timeout' : (error?.message || 'request failed');
     console.warn(`[${label}] Anthropic request failed: ${reason}`);
-    return null;
+    return fail(`the search request failed (${reason})`);
   } finally {
+    releaseSearchSlot();
     clearTimeout(timer);
   }
   return null;
@@ -487,7 +573,9 @@ export async function fetchFootballDeepCoverage({
   // Lanes are independent, so they run together. One lane failing must never
   // take the others with it — narrative is context, never a reason to lose a
   // pick.
-  const settled = await Promise.allSettled(selected.map((lane) => runFootballSearch({
+  // One failure sink per lane, so a lane that came back empty can say WHY.
+  const sinks = selected.map(() => []);
+  const settled = await Promise.allSettled(selected.map((lane, i) => runFootballSearch({
     apiKey,
     fetchImpl,
     timeoutMs,
@@ -496,7 +584,8 @@ export async function fetchFootballDeepCoverage({
       + lane.build({ homeTeam, awayTeam, league, known }),
     maxUses: lane.maxUses,
     mustMention: [homeTeam, awayTeam],
-    minChars: 300
+    minChars: 300,
+    failures: sinks[i]
   })));
 
   const done = [];
@@ -510,23 +599,45 @@ export async function fetchFootballDeepCoverage({
     if (value && value.data) {
       done.push({ key: lane.key, label: lane.label, text: value.data, searches: value.searchCount ?? null });
     } else {
-      // A lane that found nothing is REPORTED as having found nothing. A
-      // silently missing section reads as "there was nothing to say".
-      done.push({ key: lane.key, label: lane.label, text: null, searches: 0,
-        note: outcome.status === 'rejected' ? `This lane failed: ${outcome.reason?.message || 'unknown error'}` : 'No coverage found for this lane.' });
+      // A lane that found nothing is REPORTED as having found nothing — and
+      // WHY. "No coverage found" and "we were rate limited" are completely
+      // different statements, and collapsing them is how a throttled slate
+      // reads as a quiet news week.
+      const why = outcome.status === 'rejected'
+        ? `This lane failed: ${outcome.reason?.message || 'unknown error'}`
+        : (sinks[i][0] ? `This lane returned nothing because ${sinks[i][0]}.` : 'No coverage was found for this lane.');
+      done.push({ key: lane.key, label: lane.label, text: null, searches: 0, note: why });
     }
   }
 
   const withText = done.filter((l) => l.text);
-  if (withText.length === 0) return null;
+  const searches = done.reduce((sum, l) => sum + (Number(l.searches) || 0), 0);
 
-  const text = done.map((lane) => (
+  const body = done.map((lane) => (
     lane.text
       ? `${lane.label}\n${lane.text}`
       : `${lane.label}\n(${lane.note})`
   )).join('\n\n');
 
-  const searches = done.reduce((sum, l) => sum + (Number(l.searches) || 0), 0);
+  if (withText.length === 0) {
+    // EVERY lane empty is itself a finding, and returning null buried it: the
+    // section vanished from the report and the desk could not tell a quiet
+    // news week from a throttled one. If any lane failed for a technical
+    // reason, say so; if they genuinely found nothing, that is also worth
+    // stating rather than silently omitting.
+    const technical = done.some((l) => /rate limited|HTTP|request failed|incompletely|continuation cap/i.test(l.note || ''));
+    if (!technical) return null;
+    console.warn(`[Football Deep Read] all ${selected.length} lanes empty — reporting the reason rather than omitting the section`);
+    return {
+      text: `No press coverage could be retrieved for this game. This is a retrieval failure, NOT a finding that the games were unremarkable — do not treat the absence as information.\n\n${body}`,
+      lanes: done,
+      searches,
+      allFailed: true
+    };
+  }
+
+  const text = body;
+
   console.log(`[Football Deep Read] ${withText.length}/${selected.length} lanes returned, ${searches} searches, ${text.length} chars`);
   return { text, lanes: done, searches };
 }

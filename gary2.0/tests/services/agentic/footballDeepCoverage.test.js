@@ -120,3 +120,69 @@ describe('the contract between the search and the fan-out', () => {
     expect(source).toMatch(/searches: value\.searchCount/);
   });
 });
+
+describe('the search gate and how a throttled slate reports itself', () => {
+  /**
+   * The fan-out multiplied peak in-flight searches by SIX. NCAAF runs up to
+   * twelve games at once, so a Saturday could have put seventy-two requests in
+   * flight against a path with no limiter — the BDL 429 work is a different
+   * client and does not cover it.
+   *
+   * The storm mattered less than how it read: a 429 returned null, and a null
+   * lane rendered as "No coverage found for this lane". Throttling would have
+   * been presented to the desk as a quiet news week, across a whole slate,
+   * with every log line green.
+   */
+  it('declares a bounded ceiling on concurrent searches', async () => {
+    const { _searchGateState } = await import(
+      '../../../src/services/agentic/scoutReport/shared/anthropicFootballGrounding.js'
+    );
+    const gate = _searchGateState();
+    expect(gate.max).toBeGreaterThan(0);
+    // Six lanes x twelve NCAAF workers is 72. The ceiling must be well under.
+    expect(gate.max).toBeLessThan(72);
+  });
+
+  it('retries a 429 instead of reporting it as an absence of coverage', async () => {
+    const { fetchFootballDeepCoverage } = await import(
+      '../../../src/services/agentic/scoutReport/shared/anthropicFootballGrounding.js'
+    );
+    process.env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || 'test-key';
+    let calls = 0;
+    const throttled = async () => {
+      calls += 1;
+      // A retry-after of 0 keeps the test fast while exercising the header path.
+      return { ok: false, status: 429, headers: { get: () => '0' } };
+    };
+    const result = await fetchFootballDeepCoverage({
+      homeTeam: 'Detroit Lions', awayTeam: 'Chicago Bears', sport: 'NFL',
+      lanes: ['defense'], fetchImpl: throttled
+    });
+
+    expect(calls).toBeGreaterThan(1);            // it retried
+    expect(result).not.toBeNull();               // it did not vanish
+    expect(result.allFailed).toBe(true);
+    // The two statements that must never be collapsed.
+    expect(result.text).toMatch(/retrieval failure/i);
+    expect(result.text).toMatch(/NOT a finding that the games were unremarkable/i);
+    expect(result.text).toMatch(/rate limited/i);
+  });
+
+  it('a genuine no-coverage result still returns null rather than an empty section', async () => {
+    const { fetchFootballDeepCoverage } = await import(
+      '../../../src/services/agentic/scoutReport/shared/anthropicFootballGrounding.js'
+    );
+    process.env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || 'test-key';
+    // A clean 200 whose text simply does not mention the teams: nothing was
+    // found, and that is not a technical failure worth a section of its own.
+    const empty = async () => ({
+      ok: true, status: 200, headers: { get: () => null },
+      json: async () => ({ content: [{ type: 'text', text: 'unrelated content about something else entirely' }], stop_reason: 'end_turn' })
+    });
+    const result = await fetchFootballDeepCoverage({
+      homeTeam: 'Detroit Lions', awayTeam: 'Chicago Bears', sport: 'NFL',
+      lanes: ['defense'], fetchImpl: empty
+    });
+    expect(result).toBeNull();
+  });
+});
