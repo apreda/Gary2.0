@@ -18987,56 +18987,56 @@ private struct GaryTakeCardBack<Tail: View>: View {
                         .accessibilityLabel(shareAccessibilityLabel)
                     }
 
-                    // The take IS the button (founder, Aug 26: no FULL TAKE
-                    // label row, no flip hint — the chevron riding the right
-                    // edge of the words is the whole affordance, and the two
-                    // freed rows go to MORE visible take: the hook a reader
-                    // gets before deciding to open the rest). The window
-                    // height grew 108 → 158 with the reclaimed space.
-                    Button {
-                        withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { caseExpanded.toggle() }
-                    } label: {
-                        Group {
-                            if caseExpanded {
-                                Text(take)
+                    // ONLY THE ARROW expands (founder, Aug 26: "expand if a
+                    // user clicks the arrow, but if they just click the card's
+                    // body it should flip back"). The take text is plain — a
+                    // body tap falls through to the container's flip gesture;
+                    // the chevron is the one expand control, wearing a real
+                    // 44pt-class tap target so it wins the race cleanly.
+                    Group {
+                        if caseExpanded {
+                            Text(take)
+                                .font(GaryFonts.text(14.5))
+                                .foregroundStyle(.white.opacity(0.88))
+                                .lineSpacing(3.5)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        } else {
+                            ZStack(alignment: .bottom) {
+                                // Paragraph breaks flatten to one space in the
+                                // PREVIEW only (founder, Aug 26: the window
+                                // shows words, not gaps) — expanded keeps
+                                // Gary's paragraphs exactly as written.
+                                Text(take.replacingOccurrences(of: "\n\n", with: " ")
+                                    .replacingOccurrences(of: "\n", with: " "))
                                     .font(GaryFonts.text(14.5))
                                     .foregroundStyle(.white.opacity(0.88))
                                     .lineSpacing(3.5)
+                                    // fixedSize = the text renders at FULL height
+                                    // and the window clips it mid-line under the
+                                    // fade. Without it, SwiftUI ellipsized the
+                                    // last visible line ("…") inside the fixed
+                                    // frame — the hard no-ellipsis law (Aug 19).
+                                    .fixedSize(horizontal: false, vertical: true)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                            } else {
-                                ZStack(alignment: .bottom) {
-                                    // Paragraph breaks flatten to one space in the
-                                    // PREVIEW only (founder, Aug 26: the window
-                                    // shows words, not gaps) — expanded keeps
-                                    // Gary's paragraphs exactly as written.
-                                    Text(take.replacingOccurrences(of: "\n\n", with: " ")
-                                        .replacingOccurrences(of: "\n", with: " "))
-                                        .font(GaryFonts.text(14.5))
-                                        .foregroundStyle(.white.opacity(0.88))
-                                        .lineSpacing(3.5)
-                                        // fixedSize = the text renders at FULL height
-                                        // and the window clips it mid-line under the
-                                        // fade. Without it, SwiftUI ellipsized the
-                                        // last visible line ("…") inside the fixed
-                                        // frame — the hard no-ellipsis law (Aug 19).
-                                        .fixedSize(horizontal: false, vertical: true)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .frame(height: 158, alignment: .top)
-                                        .clipped()
-                                    backFade
-                                }
+                                    .frame(height: 158, alignment: .top)
+                                    .clipped()
+                                backFade
                             }
                         }
-                        .overlay(alignment: .bottomTrailing) {
+                    }
+                    .overlay(alignment: .bottomTrailing) {
+                        Button {
+                            withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { caseExpanded.toggle() }
+                        } label: {
                             Image(systemName: caseExpanded ? "chevron.up" : "chevron.down")
                                 .font(.system(size: 11, weight: .bold))
                                 .foregroundStyle(GaryColors.gold.opacity(0.85))
-                                .padding(.trailing, 2)
+                                .frame(width: 40, height: 34, alignment: .bottomTrailing)
+                                .contentShape(Rectangle())
                         }
-                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(caseExpanded ? "Collapse Gary's take" : "Read Gary's full take")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(caseExpanded ? "Collapse Gary's take" : "Read Gary's full take")
                 }
             }
 
