@@ -46,6 +46,9 @@ describe('openaiWebSearch (de-Gemini step one, Jul 26 2026)', () => {
     delete process.env.OPENAI_API_KEY;
     const r = await openaiWebSearch('anything');
     expect(r.success).toBe(false);
-    expect(r.error).toContain('OPENAI_API_KEY');
+    // Aug 26: a missing OpenAI key now falls through to the funded Anthropic
+    // rung (every failure mode reaches it) — with both keys absent in the
+    // test env, the contained failure names the LAST rung tried.
+    expect(r.error).toContain('ANTHROPIC_API_KEY');
   });
 });

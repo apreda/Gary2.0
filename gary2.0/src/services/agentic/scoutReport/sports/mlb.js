@@ -46,6 +46,7 @@ import { foldName } from '../../../../utils/nameUtils.js';
 import { findStandingsRow } from '../../../teamIdentity.js';
 import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbSeasonSeriesGroups, computeMlbScheduleShape, computeMlbRecentSeriesForm, groupGamesIntoSeries, situationalSeriesLine, toEtDate, clubMatches } from './mlbSeriesState.js';
 import { aggregateRecentWindow, oppStarterLineFromBox } from './mlbRecentWindow.js';
+import { fetchMlbDeepCoverage } from '../shared/anthropicMlbGrounding.js';
 import { computeHitterContact, hitterContactLine, computePitcherWhiffByStart } from './mlbContactQuality.js';
 import {
   completedMlbTeamGames,
@@ -779,6 +780,11 @@ export async function buildMlbScoutReport(game, options = {}) {
         const press = pressRaw ? sentenceSnap(sentenceTrim(pressRaw.replace(/\s*\n+\s*/g, ' '), 4000)) : '';
         if (press && press.length > 60 && !/^(no|none|unverified)\b/i.test(press)) {
           parts.push(`  His recent work, as written: ${press}`);
+        } else if (pressBySide[side]) {
+          // A press lane that came back empty SAYS SO (Aug 26 — for weeks
+          // this line silently vanished on search failures and the desk read
+          // as stats-only): absence of coverage is not absence of news.
+          parts.push('  His recent work, as written: (press retrieval returned nothing this run — treat as missing coverage, not as a quiet story)');
         }
         // TONIGHT'S-VENUE split (Jul 31 — the Lowder autopsy: the Hub
         // headlined his 3.09-at-home while the desk priced the 5.61 season
@@ -1453,6 +1459,44 @@ export async function buildMlbScoutReport(game, options = {}) {
     };
 
     recentPerformanceSection = [formatTeamRecent(homeTeam, homeRecentGames, homeBdlGames, homeOppStarters), formatTeamRecent(awayTeam, awayRecentGames, awayBdlGames, awayOppStarters)].join('\n\n');
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // THE MLB DEEP READ (founder GO, Aug 26: "do this for MLB please") —
+  // the football Aug-25 press build: four metered search lanes (each team's
+  // last games as written, each probable's recent starts as covered, this
+  // series as written), each handed the results we already hold (KNOWN-OLD)
+  // so the searches buy what a box score cannot say. Fail-open: narrative is
+  // context, never a reason to lose a pick — but a technical all-miss is
+  // REPORTED in-section, never disguised as a quiet news week.
+  // ═══════════════════════════════════════════════════════════════════
+  let mlbDeepReadSection = '';
+  try {
+    const resultLine = (g, teamName) => {
+      const isHome = clubMatches(g?.teams?.home?.team?.name, teamName);
+      const us = isHome ? g?.teams?.home?.score : g?.teams?.away?.score;
+      const them = isHome ? g?.teams?.away?.score : g?.teams?.home?.score;
+      const opp = isHome ? g?.teams?.away?.team?.name : g?.teams?.home?.team?.name;
+      const day = String(g?.officialDate || g?.gameDate || '').slice(5, 10);
+      if (us == null || them == null || !opp) return null;
+      return `${day} ${us > them ? 'W' : 'L'} ${us}-${them} ${isHome ? 'vs' : '@'} ${opp}`;
+    };
+    const knownAccounts = [
+      `${awayTeam} last games: ${(awayRecentGames || []).slice(-2).map((g) => resultLine(g, awayTeam)).filter(Boolean).join(' | ') || 'unknown'}`,
+      `${homeTeam} last games: ${(homeRecentGames || []).slice(-2).map((g) => resultLine(g, homeTeam)).filter(Boolean).join(' | ') || 'unknown'}`,
+      probablePitchersData?.away?.fullName ? `${awayTeam} probable: ${probablePitchersData.away.fullName}` : null,
+      probablePitchersData?.home?.fullName ? `${homeTeam} probable: ${probablePitchersData.home.fullName}` : null,
+    ].filter(Boolean).join('\n');
+    const deep = await fetchMlbDeepCoverage({
+      homeTeam,
+      awayTeam,
+      homeProbable: probablePitchersData?.home?.fullName ?? null,
+      awayProbable: probablePitchersData?.away?.fullName ?? null,
+      knownAccounts,
+    });
+    if (deep?.text) mlbDeepReadSection = deep.text;
+  } catch (e) {
+    console.warn(`[Scout Report] MLB deep read unavailable: ${e.message}`);
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -2702,7 +2746,7 @@ Rolling splits (L1/L3/L5/L10):
 ${recentPerformanceSection || 'No recent performance data.'}
 
 
-═══ SERIES STATE ═══
+${mlbDeepReadSection ? `═══ THE PRESS BOX — THE DEEP READ (as written) ═══\n${mlbDeepReadSection}\n\n` : ''}═══ SERIES STATE ═══
 ${computeMlbSeriesState(homeTeam, awayTeam, homeRecentGames, homeUpcomingGames).line}${seasonSeriesBlock}${thisSeriesHotSection ? `\n\nThis series, who's doing what:\n${thisSeriesHotSection}` : ''}${situationalBlock ? `\n\nSituationally, game by game (team RISP, runners left on, pen events):\n${situationalBlock}` : ''}${seriesStoriesBlock ? `\n\nThis series, as written:\n${seriesStoriesBlock}` : ''}
 
 ${formArcBlock ? `Form arc (games played, not calendar):\n${formArcBlock}\n\n` : ''}${recentSeriesBlock ? `Recent series:\n${recentSeriesBlock}\n\n` : ''}Recent results:

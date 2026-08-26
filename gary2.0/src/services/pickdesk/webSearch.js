@@ -93,6 +93,26 @@ CRITICAL REMINDER: Today is ${todayStr}. Use ONLY fresh search results. Your tra
  * Run one grounded web search. Returns { success, data, raw } — data is the
  * text (empty string on any failure).
  */
+/**
+ * The funded last rung (Aug 26): Anthropic server web search catches EVERY
+ * OpenAI failure mode — quota, timeout, abort, missing key — not just 429s.
+ * The observed failure was "This operation was aborted" returning EMPTY with
+ * no third rung, which made the pitcher-press lane silently absent for weeks.
+ */
+async function anthropicSearchFallback(query, options, reason) {
+  console.warn(`[Web Search] falling back to Anthropic server web search (${reason})`);
+  try {
+    const { anthropicWebSearchRaw } = await import('../agentic/scoutReport/shared/anthropicWebSearch.js');
+    const viaApi = await anthropicWebSearchRaw(freshnessPrompt(query, options.freshnessHours), { maxTokens: options.maxTokens || 2000 });
+    return viaApi.success
+      ? { success: true, data: viaApi.data, raw: null }
+      : { success: false, data: '', raw: null, error: viaApi.error || reason };
+  } catch (g) {
+    console.warn(`[Web Search] Anthropic fallback also failed: ${g.message}`);
+    return { success: false, data: '', raw: null, error: g.message };
+  }
+}
+
 export async function openaiWebSearch(query, options = {}) {
   const cacheKey = createHash('sha256')
     .update(`${query}|${options.freshnessHours || 48}`)
@@ -115,7 +135,7 @@ export async function openaiWebSearch(query, options = {}) {
   }
 
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return { success: false, data: '', raw: null, error: 'OPENAI_API_KEY missing' };
+  if (!apiKey) return cachePut(await anthropicSearchFallback(query, options, 'OPENAI_API_KEY missing'));
 
   const body = {
     model: options.model || WEB_SEARCH_MODEL,
@@ -165,23 +185,14 @@ export async function openaiWebSearch(query, options = {}) {
       if (cut > text.length * 0.5) text = text.slice(0, cut + 1);
     }
     console.log(`[Web Search] ${WEB_SEARCH_MODEL} returned ${text.length} chars`);
-    return cachePut({ success: text.length > 0, data: text, raw: data });
+    if (text.length > 0) return cachePut({ success: true, data: text, raw: data });
+    return cachePut(await anthropicSearchFallback(query, options, 'OpenAI returned empty output'));
   } catch (e) {
     const msg = String(e.message || '');
-    if (msg.includes('429') || msg.toLowerCase().includes('quota')) {
-      // Aug 24 2026: the old third rung here was Gemini grounding — retired
-      // with the vendor. Anthropic server web search is the last resort now.
-      console.warn(`[Web Search] OpenAI quota/429 — falling back to Anthropic server web search`);
-      try {
-        const { anthropicWebSearchRaw } = await import('../agentic/scoutReport/shared/anthropicWebSearch.js');
-        const viaApi = await anthropicWebSearchRaw(freshnessPrompt(query, options.freshnessHours), { maxTokens: options.maxTokens || 2000 });
-        return viaApi.success ? cachePut({ success: true, data: viaApi.data, raw: null }) : { success: false, data: '', raw: null, error: viaApi.error };
-      } catch (g) {
-        console.warn(`[Web Search] Anthropic fallback also failed: ${g.message}`);
-        return { success: false, data: '', raw: null, error: g.message };
-      }
-    }
-    console.warn(`[Web Search] failed: ${msg}`);
-    return { success: false, data: '', raw: null, error: msg };
+    // Aug 24 2026: the old third rung here was Gemini grounding — retired with
+    // the vendor. Aug 26: the Anthropic rung now catches EVERY failure mode,
+    // not just quota — an aborted/timed-out OpenAI call used to return empty
+    // with no third rung, and the press lane silently vanished.
+    return cachePut(await anthropicSearchFallback(query, options, msg || 'OpenAI request failed'));
   }
 }
