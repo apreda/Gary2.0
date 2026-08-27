@@ -261,8 +261,6 @@ export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spo
     
     ? `**BET TYPE:** Two options — MONEYLINE or RUN LINE (-1.5/+1.5).
 
-Check each offered line in both directions — does your read beat the price on either side of the moneyline, and on either side of the run line? A line can be wrong toward the favorite or toward the dog; the ticket is wherever your read and the number disagree — and if they nowhere disagree, your strongest conviction is still a real bet.
-
 **HOUSE LIMIT:** no moneyline heavier than ${GAME_ML_CAP}. If the side you like is priced past that, its moneyline is off the menu — on a game priced like that, the bet is not who wins, it is the run line: that side -1.5 at its price, or the other side +1.5 at its price (the underdog's moneyline also stays legal). Which side of the 1.5 does your read take?`
     : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.
 

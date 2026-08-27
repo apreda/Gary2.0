@@ -121,7 +121,7 @@ function renderFindingsSoFar(accumulated) {
     const context = String(f.context || f.sample_context || '').slice(0, 220);
     return `**${name}**\nKey finding: ${finding}\nNumbers: ${numbers}\nContext: ${context}`;
   });
-  return '## FINDINGS SO FAR (prior factor conclusions — build on these; do NOT re-investigate unless needed)\n\n' + blocks.join('\n\n');
+  return '## FINDINGS SO FAR (prior factor findings — build on these; do NOT re-investigate unless needed)\n\n' + blocks.join('\n\n');
 }
 
 
@@ -276,7 +276,7 @@ ${mlbAwarenessBlock}
 ${researchProvenanceBlock}
 CRITICAL RULES:
 - Report specific numbers with context: "Team went 2-4 with -8.3 net rating during games 60-65 when Player X was out — but 3 of those were against top-10 defenses"
-- Report each factor's findings, and weight them honestly: for each, note whether it meaningfully moves THIS game or is minor context. Most individual factors move a single game far less than they look like they do — say so when that's the case. Gary makes the final call and connects the dots, but your job is to tell him what carries real weight and what is small, not to present every factor as equally important
+- Report each factor's findings: verified numbers, and — where the press supplies it — the narrative as reported, attributed to its source. Do not add your own characterizations, psychological reads, or conclusions about what a finding means for the game; Gary weighs and connects. You report
 - If you reference opponent quality or recency distortion, include concrete evidence (named opponents and/or score/result context), not generic claims like "weaker opposition"
 - When citing any trend (L5/L10 or recent stretch), include concrete sample context: opponent names/results and who was active/inactive in that window
 - For search/grounding results, use factual events only. Ignore picks, predictions, and opinion content
