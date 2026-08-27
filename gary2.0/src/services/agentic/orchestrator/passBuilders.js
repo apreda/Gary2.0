@@ -332,7 +332,7 @@ ${finalDecisionInstruction}
 
 [Your card rationale — plain text prose]
 
-This draft is the rationale that appears on the pick card: your pick, and the real reasons you landed on it, in your own words and your own shape. No mandated structure, no required opening move — write it the way this game deserves. The card prints your pick and its price directly above this text, so the reader has already seen the ticket before your first word.
+This draft is the rationale that appears on the pick card: your pick, and the real reasons you landed on it, in your own words and your own shape. Open with a line or two setting the stage like a broadcast — the scene, not the case. Past the open, no mandated structure — write it the way this game deserves. The card prints your pick and its price directly above this text, so the reader has already seen the ticket before your first word.
 
 **ESTABLISHED INJURY RULE:**
 If a player has been out for multiple games, that absence is not new information — the line was SET with that absence already factored in. The team's recent stats, form, and record already reflect life without that player. Citing a non-fresh injury as a reason for your pick is the same as citing something the line already knows. The only injuries that can inform your pick are FRESH ones (0-2 games missed) where the market may not have fully adjusted yet. If you name a player listed under ESTABLISHED ABSENCES in your rationale, you are using old news that is already in the price.
