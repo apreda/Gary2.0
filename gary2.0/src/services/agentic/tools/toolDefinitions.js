@@ -98,35 +98,6 @@ const NFL_TOKENS = [
   'VARIANCE_CONSISTENCY'  // Point differential variance, QB consistency, upset potential
 ];
 
-// NCAAB Stat Tokens — advanced stats are investigation tokens, not pre-loaded in scout report
-// Scout report provides context (injuries, roster, standings, rankings, recent form, H2H, venue)
-// Gary calls these tokens during Pass 1 to investigate the statistical baseline
-const NCAAB_TOKENS = [
-  // BDL Core Stats (team-level, from /team_season_stats)
-  'SCORING', 'FG_PCT', 'THREE_PT_SHOOTING',
-  'TURNOVER_RATE', 'OREB_RATE', 'FT_RATE',
-  'REBOUNDS', 'ASSISTS', 'STEALS', 'BLOCKS',
-  // Context + roster tokens used by NCAAB factor checklist
-  'TOP_PLAYERS', 'INJURIES',
-  // NCAAB-Specific Calculated Stats (from BDL raw box score data)
-  'NCAAB_EFG_PCT',           // (FGM + 0.5*FG3M) / FGA
-  'NCAAB_TS_PCT',            // PTS / (2*(FGA+0.44*FTA))
-  'NCAAB_TEMPO',             // (FGA+0.44*FTA-OREB+TOV) / GP
-  'NCAAB_OFFENSIVE_RATING',  // (PTS/Poss)*100
-  'NCAAB_DEFENSIVE_RATING',  // (OppPTS/Poss)*100 — uses games endpoint for opp points
-  'NET_RATING',              // Combined ORtg - DRtg (uses NCAAB calculated ratings)
-  'NCAAB_BARTTORVIK',        // Barttorvik T-Rank / AdjEM / tempo-free profile
-  // Bundled investigation tokens
-  'NCAAB_FOUR_FACTORS',      // All 4 Dean Oliver factors in one call (eFG%, TOV%, FTA Rate, ORB%)
-  'NCAAB_L1_STATS',          // Last game full team stats (shooting, pace, four factors, opponent stats)
-  'NCAAB_L3_STATS',          // Last 3 games full team stats
-  'NCAAB_L5_EFFICIENCY',     // L5 full team stats (shooting, pace, four factors, opponent stats)
-  // Context stats (have dedicated NCAAB fetchers in statRouter)
-  'NCAAB_VENUE',             // Arena/venue name from Highlightly API (only NCAAB venue source)
-  'RECENT_FORM',             // Enhanced recent form with opponent quality
-  'H2H_HISTORY'              // Head-to-head history (BDL games)
-];
-
 // NCAAF Stat Tokens - BDL-based tokens that work
 // BDL NCAAF has: team_season_stats with passing/rushing yards, TDs, opponent yards
 const NCAAF_TOKENS = [
@@ -155,50 +126,6 @@ const NCAAF_TOKENS = [
   // sourced, current figure found during organic research, but the tool router
   // must not promise SP+/FPI/EPA/havoc fields that have no deterministic data
   // adapter and then quietly return a generic unavailable result.
-];
-
-// NHL Stat Tokens (uses BDL + Gemini Grounding for advanced stats)
-const NHL_TOKENS = [
-  // Standings & Records (from BDL standings endpoint)
-  'STANDINGS', 'TEAM_RECORD', 'CONFERENCE_STANDING', 'DIVISION_STANDING',
-  'POINTS_PCT',           // Points percentage from BDL standings
-  'STREAK',               // Current win/loss streak from BDL standings
-  'PLAYOFF_POSITION',     // Playoff race context from standings
-  // Special Teams (critical in hockey)
-  'POWER_PLAY_PCT', 'PENALTY_KILL_PCT', 'SPECIAL_TEAMS',
-  // Scoring
-  'GOALS_FOR', 'GOALS_AGAINST', 'GOAL_DIFFERENTIAL',
-  // Shot Metrics
-  'SHOTS_FOR', 'SHOTS_AGAINST', 'SHOT_DIFFERENTIAL',
-  // Advanced Analytics (via Gemini Grounding)
-  'CORSI_FOR_PCT',        // Real possession metric (CF%)
-  'EXPECTED_GOALS',       // Real xG data
-  'PDO',                  // Real luck indicator (Sh% + Sv%)
-  'HIGH_DANGER_CHANCES',  // Real scoring chance quality
-  // Goaltending
-  'GOALIE_STATS', 'SAVE_PCT', 'GOALS_AGAINST_AVG', 'GOALIE_MATCHUP',
-  'NHL_GSAX',                 // GSAx via Gemini Grounding (MoneyPuck/NST)
-  'NHL_GOALIE_RECENT_FORM',   // Goalie L5/L10 computed from BDL box scores
-  'NHL_HIGH_DANGER_SV_PCT',   // HDSV% via Gemini Grounding (Natural Stat Trick)
-  // Situational
-  'REST_SITUATION', 'BACK_TO_BACK',
-  // Faceoffs & Possession
-  'FACEOFF_PCT', 'POSSESSION_METRICS',
-  // Players & Lineups (from BDL box_scores and player_season_stats)
-  'TOP_SCORERS', 'TOP_PLAYERS', 'INJURIES',
-  'LINE_COMBINATIONS',    // Forward lines and D pairings
-  'HOT_PLAYERS',          // Players on hot streaks
-  // Historical
-  'H2H_HISTORY', 'RECENT_FORM', 'HOME_AWAY_SPLITS',
-  // Luck/Regression (from BDL + computed)
-  'LUCK_INDICATORS',      // Real luck analysis (PDO, xG diff)
-  'SHOOTING_REGRESSION',  // Player shooting % regression indicators
-  'CLOSE_GAME_RECORD',    // One-goal game record
-  'ONE_GOAL_GAMES',       // 1-goal game win/loss record (from BDL games)
-  'OVERTIME_RECORD',      // Real OT/SO record calculated
-  // Variance/Consistency (from BDL standings + games)
-  'REGULATION_WIN_PCT',   // Regulation wins vs total wins
-  'MARGIN_VARIANCE'       // Goal differential variance
 ];
 
 // MLB Stat Tokens — BDL GOAT tier + MLB Stats API + Gemini Grounding
@@ -256,9 +183,7 @@ const MLB_TOKENS = [
 const ALL_TOKENS_BY_SPORT = {
   NBA: NBA_TOKENS,
   NFL: NFL_TOKENS,
-  NCAAB: NCAAB_TOKENS,
   NCAAF: NCAAF_TOKENS,
-  NHL: NHL_TOKENS,
   MLB: MLB_TOKENS,
 };
 
@@ -266,9 +191,7 @@ const ALL_TOKENS_BY_SPORT = {
 const ALL_TOKENS = [...new Set([
   ...NBA_TOKENS,
   ...NFL_TOKENS,
-  ...NCAAB_TOKENS,
   ...NCAAF_TOKENS,
-  ...NHL_TOKENS,
   ...MLB_TOKENS,
 ])];
 
@@ -428,43 +351,6 @@ Only use for NFL games when you need specific player matchup analysis.`,
           team: {
             type: "string",
             description: "Team name to filter results (returns top players for that team)"
-          },
-          player_name: {
-            type: "string",
-            description: "Optional: specific player name to search for"
-          }
-        },
-        required: ["stat_type", "team"]
-      }
-    }
-  },
-  {
-    type: "function",
-    function: {
-      name: "fetch_nhl_player_stats",
-      description: `Fetches NHL player statistics for deeper analysis.
-Use this when you need detailed player-level metrics beyond what's in the scout report.
-Available stat types:
-- SKATERS: Goals, assists, points, plus/minus, shooting %, time on ice
-- GOALIES: Save %, GAA, wins, losses, shutouts
-- LEADERS: League leaders by stat category (points, goals, saves, etc.)
-Only use for NHL games when you need specific player analysis.`,
-      parameters: {
-        type: "object",
-        properties: {
-          stat_type: {
-            type: "string",
-            enum: ["SKATERS", "GOALIES", "LEADERS"],
-            description: "The type of stats to fetch"
-          },
-          team: {
-            type: "string",
-            description: "Team name to filter results (returns players for that team)"
-          },
-          leader_type: {
-            type: "string",
-            enum: ["points", "goals", "assists", "save_pct", "wins", "shutouts", "plus_minus"],
-            description: "For LEADERS type: which stat to get league leaders for"
           },
           player_name: {
             type: "string",

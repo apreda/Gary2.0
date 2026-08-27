@@ -70,10 +70,10 @@ describe('#3 briefing contract: no ordered re-investigation, no leash (Jul 22 ev
   });
 });
 
-describe('#4 grounding budget: NHL 10 / stat-rich sports 4', () => {
-  it('researchBriefing carries the tiered cap', () => {
+describe('#4 grounding budget: flat cap of 4', () => {
+  it('researchBriefing carries the flat cap (the NHL 10-tier died with the NHL lane, Aug 27)', () => {
     const flash = src('orchestrator/researchBriefing.js');
-    expect(flash).toContain('isNHLSport ? 10 : 4');
-    expect(flash).not.toContain('isNHLSport ? 10 : 8');
+    expect(flash).toContain('const MAX_GROUNDING_CALLS = 4');
+    expect(flash).not.toContain('isNHLSport');
   });
 });

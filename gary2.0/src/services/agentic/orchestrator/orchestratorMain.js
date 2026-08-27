@@ -4,7 +4,6 @@ import { getConstitution } from '../constitution/index.js';
 import { getFlashInvestigationPrompt } from '../flashInvestigationPrompts.js';
 import { buildScoutReport } from '../scoutReport/scoutReportBuilder.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
-import { nbaSeason, nhlSeason, nflSeason, ncaabSeason } from '../../../utils/dateUtils.js';
 import { CONFIG } from './orchestratorConfig.js';
 import { createModelSession, sendToSession } from './sessionManager.js';
 import { shouldReuseScoutReport } from '../statsSubstance.js';

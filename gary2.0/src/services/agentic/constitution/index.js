@@ -8,7 +8,6 @@ import { NCAAF_CONSTITUTION } from './ncaafConstitution.js';
 import { MLB_CONSTITUTION } from './mlbConstitution.js'; // restored Aug 18 2026 — June engine returns for MLB games
 import { NFL_PROPS_CONSTITUTION } from './nflPropsConstitution.js';
 import { NBA_PROPS_CONSTITUTION } from './nbaPropsConstitution.js';
-import { NHL_PROPS_CONSTITUTION } from './nhlPropsConstitution.js';
 // (mlbPropsConstitution deleted Jul 26 2026 — MLB props run the desk lane, constitution-less.)
 /**
  * BASE RULES - Applied to ALL sports
@@ -100,11 +99,9 @@ const GAME_CONSTITUTIONS = {
 const PROPS_CONSTITUTIONS = {
   NFL_PROPS: NFL_PROPS_CONSTITUTION,
   NBA_PROPS: NBA_PROPS_CONSTITUTION,
-  NHL_PROPS: NHL_PROPS_CONSTITUTION,
   MLB_PROPS: '',  // desk lane — MLB props carry no constitution (Jul 26 2026)
   basketball_nba_props: NBA_PROPS_CONSTITUTION,
   americanfootball_nfl_props: NFL_PROPS_CONSTITUTION,
-  icehockey_nhl_props: NHL_PROPS_CONSTITUTION,
   baseball_mlb_props: '',
 };
 

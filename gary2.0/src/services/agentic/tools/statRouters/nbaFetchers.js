@@ -1,6 +1,5 @@
 import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, fetchNBATeamScoringStats, fetchNBATeamAdvancedStats, fetchNBALeaders, fetchNBATeamBaseStats, fetchNBATeamOpponentStats, fetchNBATeamDefenseStats, fetchTopPlayersForTeam, formatRecentGames, buildPaceAnalysis, BDL_API_KEY, _nbaBaseStatsCache, _nbaAdvancedStatsCache, _nbaOpponentStatsCache, _nbaDefenseStatsCache, _nbaTeamScoringStatsCache, groundedWebSearch, isGameCompleted, getBarttovikRatings, isPostseasonOptions } from './statRouterCommon.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
-import { ncaabFetchers } from './ncaabFetchers.js';
 
 export const nbaFetchers = {
   // ===== PACE & TEMPO =====
@@ -882,10 +881,6 @@ export const nbaFetchers = {
   },
 
   HOME_AWAY_SPLITS: async (bdlSport, home, away, season, options) => {
-    // NCAAB: BDL standings require conference_id — delegate to Gemini Grounding fetcher
-    if (bdlSport === 'basketball_ncaab') {
-      return ncaabFetchers.NCAAB_HOME_AWAY_SPLITS(bdlSport, home, away, season);
-    }
     // NCAAF: BDL standings require conference_id — no grounding fetcher available
     if (bdlSport === 'americanfootball_ncaaf') {
       return {

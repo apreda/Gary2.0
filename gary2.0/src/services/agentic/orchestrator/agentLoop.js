@@ -10,7 +10,7 @@ import { isInvestigationSufficient, summarizeStatForContext, formatNum, formatPc
 import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js';
 import { getConstitution } from '../constitution/index.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
-import { nbaSeason, nhlSeason, nflSeason, ncaafSeason } from '../../../utils/dateUtils.js';
+import { nbaSeason, nflSeason, ncaafSeason } from '../../../utils/dateUtils.js';
 import { getTokensForSport, toolDefinitions } from '../tools/toolDefinitions.js';
 
 function hasInvestigationCompleteMarker(text = '') {
@@ -169,9 +169,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   const provider = 'session';
   const isNFLSport = sport === 'americanfootball_nfl' || sport === 'NFL';
   const isNCAAFSport = sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
-  const isNCAABSport = sport === 'basketball_ncaab' || sport === 'NCAAB';
   const isNBASport = sport === 'basketball_nba' || sport === 'NBA';
-  const isNHLSport = sport === 'icehockey_nhl' || sport === 'NHL';
   const isMLBSport = sport === 'baseball_mlb' || sport === 'MLB';
 
   // Pass sport through options so downstream builders (Pass 3) can use it
@@ -232,8 +230,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // Build tools list — add finalize_props when in props mode
   // Remove fetch_narrative_context (grounding) when it adds no value:
   // - Props mode: all data is in the pre-built scout report + player stats. No grounding needed.
-  // - NCAAB game picks: narrative data is already in scout report.
-  const needsGrounding = isGamePicksMode && !isNCAABSport;
+  const needsGrounding = isGamePicksMode;
   const baseTools = needsGrounding
     ? toolDefinitions
     : toolDefinitions.filter(t => t.function?.name !== 'fetch_narrative_context');
@@ -393,12 +390,9 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       const hasSpread = Number.isFinite(spread);
       const homeSpread = hasSpread ? `${spread >= 0 ? '+' : ''}${spread.toFixed(1)}` : '';
       const awaySpread = hasSpread ? `${-spread >= 0 ? '+' : ''}${(-spread).toFixed(1)}` : '';
-      const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
       const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
 
-      const spreadLine = isNHL
-        ? `The line is ${homeTeam} (home) vs ${awayTeam} (away) — puck line / moneyline.`
-        : isMLB
+      const spreadLine = isMLB
         ? `The line is ${homeTeam} (home) vs ${awayTeam} (away) — run line / moneyline.`
         : `The spread is ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}.`;
 
@@ -868,21 +862,7 @@ INVESTIGATION COMPLETE`;
             continue;
           }
 
-          // NCAAB: Block ALL narrative context — Current State + Tier 1 metrics (Barttorvik/NET/SOS)
-          // are already in the scout report. Narrative context calls return garbage (146 chars of generic text)
-          // and waste iterations. Gary should use fetch_stats for BDL data instead.
-          if (sport === 'basketball_ncaab') {
-            console.log(`  → [NARRATIVE_CONTEXT] BLOCKED (NCAAB — data already in scout report): "${args.query}"`);
-            messages.push({
-              role: 'tool',
-              tool_call_id: toolCall.id,
-              name: functionName,
-              content: JSON.stringify({ error: 'NCAAB narrative context is already in your scout report (Current State section + Tier 1 Advanced Metrics). Use fetch_stats for additional BDL data. Do NOT call fetch_narrative_context for NCAAB.' })
-            });
-            continue;
-          }
-
-          // Non-NCAAB: Qualify queries to prevent contamination
+          // Qualify queries to prevent contamination
           let groundingQuery = args.query;
 
           console.log(`  → [NARRATIVE_CONTEXT] for query: "${groundingQuery}"`);
@@ -1324,146 +1304,6 @@ INVESTIGATION COMPLETE`;
             messages.push({ tool_call_id: toolCall.id, role: 'tool', name: functionName, content: JSON.stringify({ error: error.message }) });
           }
           continue;
-        }
-
-        // Handle fetch_nhl_player_stats tool
-        if (functionName === 'fetch_nhl_player_stats') {
-          console.log(`  → [NHL_PLAYER_STATS:${args.stat_type}] for ${args.team}${args.player_name ? ` (${args.player_name})` : ''}`);
-
-          try {
-            const { ballDontLieService } = await import('../../ballDontLieService.js');
-
-            let statResult = { stat_type: args.stat_type, team: args.team, data: [] };
-            // NHL season: Use starting year of season (e.g., 2025 for 2025-26 season)
-            const season = nhlSeason();
-
-            // Get team ID first
-            const teams = await ballDontLieService.getTeams('icehockey_nhl');
-            const team = teams.find(t =>
-              t.full_name?.toLowerCase().includes(args.team.toLowerCase()) ||
-              t.tricode?.toLowerCase() === args.team.toLowerCase()
-            );
-
-            if (!team && args.stat_type !== 'LEADERS') {
-              statResult.error = `Team "${args.team}" not found`;
-            } else if (args.stat_type === 'LEADERS') {
-              // Get league leaders for a specific stat
-              const leaderType = args.leader_type || 'points';
-              const leaders = await ballDontLieService.getNhlPlayerStatsLeadersByType(season, leaderType);
-              statResult.data = (leaders || []).slice(0, 10).map(l => ({
-                player: l.player?.full_name,
-                team: l.player?.teams?.[0]?.full_name || 'Unknown',
-                position: l.player?.position_code,
-                stat: l.name,
-                value: l.value
-              }));
-            } else {
-              // Get players for the team
-              const players = await ballDontLieService.getNhlTeamPlayers(team.id, season);
-
-              if (args.stat_type === 'SKATERS') {
-                // Filter to skaters (non-goalies)
-                const skaters = players.filter(p => p.position_code !== 'G');
-
-                // Get stats for each skater (limit to 10)
-                const skatersToFetch = args.player_name
-                  ? skaters.filter(p => p.full_name?.toLowerCase().includes(args.player_name.toLowerCase()))
-                  : skaters.slice(0, 10);
-
-                const statsPromises = skatersToFetch.map(async (player) => {
-                  try {
-                    const stats = await ballDontLieService.getNhlPlayerSeasonStats(player.id, season);
-                    const statsObj = {};
-                    (stats || []).forEach(s => { statsObj[s.name] = s.value; });
-                    return {
-                      player: player.full_name,
-                      position: player.position_code,
-                      gamesPlayed: statsObj.games_played || 0,
-                      goals: statsObj.goals || 0,
-                      assists: statsObj.assists || 0,
-                      points: statsObj.points || 0,
-                      plusMinus: statsObj.plus_minus || 0,
-                      shootingPct: statsObj.shooting_pct ? (statsObj.shooting_pct * 100).toFixed(1) : null,
-                      timeOnIcePerGame: statsObj.time_on_ice_per_game || null,
-                      powerPlayGoals: statsObj.power_play_goals || 0,
-                      powerPlayPoints: statsObj.power_play_points || 0
-                    };
-                  } catch (e) {
-                    return null;
-                  }
-                });
-
-                const results = await Promise.all(statsPromises);
-                statResult.data = results.filter(r => r !== null).sort((a, b) => b.points - a.points);
-
-              } else if (args.stat_type === 'GOALIES') {
-                // Filter to goalies
-                const goalies = players.filter(p => p.position_code === 'G');
-
-                const goaliesToFetch = args.player_name
-                  ? goalies.filter(p => p.full_name?.toLowerCase().includes(args.player_name.toLowerCase()))
-                  : goalies.slice(0, 3);
-
-                const statsPromises = goaliesToFetch.map(async (player) => {
-                  try {
-                    const stats = await ballDontLieService.getNhlPlayerSeasonStats(player.id, season);
-                    const statsObj = {};
-                    (stats || []).forEach(s => { statsObj[s.name] = s.value; });
-                    return {
-                      player: player.full_name,
-                      gamesPlayed: statsObj.games_played || 0,
-                      gamesStarted: statsObj.games_started || 0,
-                      wins: statsObj.wins || 0,
-                      losses: statsObj.losses || 0,
-                      otLosses: statsObj.ot_losses || 0,
-                      savePct: statsObj.save_pct ? (statsObj.save_pct * 100).toFixed(1) : null,
-                      goalsAgainstAvg: statsObj.goals_against_average?.toFixed(2) || null,
-                      shutouts: statsObj.shutouts || 0,
-                      saves: statsObj.saves || 0,
-                      goalsAgainst: statsObj.goals_against || 0
-                    };
-                  } catch (e) {
-                    return null;
-                  }
-                });
-
-                const results = await Promise.all(statsPromises);
-                statResult.data = results.filter(r => r !== null).sort((a, b) => b.gamesPlayed - a.gamesPlayed);
-              }
-
-              if (statResult.data.length === 0) {
-                statResult.message = `No ${args.stat_type.toLowerCase()} stats found for ${team?.full_name || args.team}`;
-              }
-            }
-
-            // Store in history
-            toolCallHistory.push({
-              token: `NHL_PLAYER_STATS:${args.stat_type}`,
-              timestamp: Date.now(),
-              homeValue: statResult.data?.length || 0,
-              awayValue: 'players',
-              rawResult: statResult
-            });
-
-            // Summarize player stats for context efficiency
-            const playerSummary = summarizePlayerStats(statResult, args.stat_type, args.team || homeTeam);
-            messages.push({
-              tool_call_id: toolCall.id,
-              role: 'tool',
-              name: functionName,
-              content: playerSummary
-            });
-          } catch (error) {
-            console.error('[Orchestrator] Error fetching NHL player stats:', error.message);
-            messages.push({
-              tool_call_id: toolCall.id,
-              role: 'tool',
-              name: functionName,
-              content: `NHL PLAYER STATS (${args.stat_type}): Error - ${error.message}`
-            });
-          }
-
-          continue; // Skip the regular fetch_stats handling
         }
 
         // Handle fetch_ncaaf_player_stats tool

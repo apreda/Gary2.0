@@ -2,7 +2,7 @@
  * Tale of the Tape — Verified Stats Comparison
  *
  * Builds a verified comparison table for both teams using BDL data.
- * Sport-specific stat rows: NBA/NCAAB (efficiency), NHL (goals/PP/PK), NFL (yards/points), NCAAF (yards).
+ * Sport-specific stat rows: NBA (efficiency), NFL (yards/points), NCAAF (yards).
  */
 
 /**
@@ -143,126 +143,6 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
       { label: 'TOV/Gm', ...tovGm },
       { label: 'OREB/Gm', ...orebGm },
       { label: 'DREB/Gm', ...drebGm },
-      { label: 'Key Injuries', home: homeInjuries, away: awayInjuries, arrow: '' }
-    ];
-
-  } else if (sport === 'NCAAB' || sport === 'basketball_ncaab') {
-    // NCAAB: 12 rows using Barttorvik advanced metrics + BDL records
-    const record = formatStat(homeProfile?.record, awayProfile?.record, true);
-    const confRecord = formatStat(homeProfile?.conferenceRecord, awayProfile?.conferenceRecord, true);
-    const l5Form = formatStat(homeL5, awayL5, true);
-    const l10Form = formatStat(homeL10, awayL10, true);
-
-    // Barttorvik data (passed via seasonStats.barttorvik)
-    const homeBart = homeStats.barttorvik || {};
-    const awayBart = awayStats.barttorvik || {};
-    const adjOE = formatStat(fmtNum(homeBart.adjOE), fmtNum(awayBart.adjOE));
-    const adjDE = formatStat(fmtNum(homeBart.adjDE), fmtNum(awayBart.adjDE));
-    const homeEM = homeBart.adjEM != null ? (homeBart.adjEM > 0 ? '+' : '') + parseFloat(homeBart.adjEM).toFixed(1) : 'N/A';
-    const awayEM = awayBart.adjEM != null ? (awayBart.adjEM > 0 ? '+' : '') + parseFloat(awayBart.adjEM).toFixed(1) : 'N/A';
-    const adjEM = formatStat(homeEM, awayEM);
-    const tempo = formatStat(fmtNum(homeBart.tempo), fmtNum(awayBart.tempo));
-    const barthag = formatStat(fmtNum(homeBart.barthag, 4), fmtNum(awayBart.barthag, 4));
-    const homeWab = homeBart.wab != null ? (homeBart.wab > 0 ? '+' : '') + parseFloat(homeBart.wab).toFixed(1) : 'N/A';
-    const awayWab = awayBart.wab != null ? (awayBart.wab > 0 ? '+' : '') + parseFloat(awayBart.wab).toFixed(1) : 'N/A';
-    const wab = formatStat(homeWab, awayWab);
-
-    // Barttorvik rankings
-    const tRank = formatStat(
-      homeBart.rank != null ? '#' + homeBart.rank : 'N/A',
-      awayBart.rank != null ? '#' + awayBart.rank : 'N/A'
-    );
-    const adjoeRank = formatStat(
-      homeBart.adjOE_rank != null ? '#' + homeBart.adjOE_rank : 'N/A',
-      awayBart.adjOE_rank != null ? '#' + awayBart.adjOE_rank : 'N/A'
-    );
-    const adjdeRank = formatStat(
-      homeBart.adjDE_rank != null ? '#' + homeBart.adjDE_rank : 'N/A',
-      awayBart.adjDE_rank != null ? '#' + awayBart.adjDE_rank : 'N/A'
-    );
-    const projRecord = formatStat(
-      homeBart.projW != null && homeBart.projL != null ? `${Math.round(homeBart.projW)}-${Math.round(homeBart.projL)}` : 'N/A',
-      awayBart.projW != null && awayBart.projL != null ? `${Math.round(awayBart.projW)}-${Math.round(awayBart.projL)}` : 'N/A'
-    );
-
-    rows = [
-      { label: 'Record', ...record },
-      { label: 'Conf Record', ...confRecord },
-      { label: 'L5 Form', ...l5Form },
-      { label: 'L10 Form', ...l10Form },
-      { label: 'T-Rank', ...tRank },
-      { label: 'AdjOE', ...adjOE },
-      { label: 'AdjOE Rank', ...adjoeRank },
-      { label: 'AdjDE', ...adjDE },
-      { label: 'AdjDE Rank', ...adjdeRank },
-      { label: 'AdjEM', ...adjEM },
-      { label: 'Tempo', ...tempo },
-      { label: 'Barthag', ...barthag },
-      { label: 'WAB', ...wab },
-      { label: 'Proj Record', ...projRecord },
-      { label: 'Key Injuries', home: homeInjuries, away: awayInjuries, arrow: '' }
-    ];
-
-  } else if (sport === 'NHL' || sport === 'icehockey_nhl') {
-    // NHL: 15 rows from BDL + MoneyPuck + NHL API
-    const record = formatStat(homeProfile?.record, awayProfile?.record, true);
-    const l5Form = formatStat(homeL5, awayL5, true);
-    const l10Form = formatStat(homeL10, awayL10, true);
-
-    // Format goals per game
-    const formatGoals = (val) => {
-      if (val === undefined || val === null) return 'N/A';
-      const num = typeof val === 'number' ? val : parseFloat(val);
-      return !isNaN(num) ? num.toFixed(2) : 'N/A';
-    };
-
-    const goalsFor = formatStat(formatGoals(homeStats.goals_for_per_game), formatGoals(awayStats.goals_for_per_game));
-    const goalsAgainst = formatStat(formatGoals(homeStats.goals_against_per_game), formatGoals(awayStats.goals_against_per_game));
-
-    // Format PP/PK percentages - handle decimal format (0.17619) vs percentage format
-    const formatPctNhl = (val) => {
-      if (val === undefined || val === null) return 'N/A';
-      const num = typeof val === 'number' ? val : parseFloat(val);
-      if (isNaN(num)) return 'N/A';
-      return num < 1 ? (num * 100).toFixed(1) + '%' : num.toFixed(1) + '%';
-    };
-
-    const ppPct = formatStat(formatPctNhl(homeStats.power_play_percentage), formatPctNhl(awayStats.power_play_percentage));
-    const pkPct = formatStat(formatPctNhl(homeStats.penalty_kill_percentage), formatPctNhl(awayStats.penalty_kill_percentage));
-    const shotsFor = formatStat(fmtNum(homeStats.shots_for_per_game), fmtNum(awayStats.shots_for_per_game));
-    const faceoffPct = formatStat(
-      homeStats.faceoff_win_percentage ? (parseFloat(homeStats.faceoff_win_percentage) * 100).toFixed(1) + '%' : 'N/A',
-      awayStats.faceoff_win_percentage ? (parseFloat(awayStats.faceoff_win_percentage) * 100).toFixed(1) + '%' : 'N/A'
-    );
-
-    // MoneyPuck advanced stats (passed via seasonStats.moneyPuck)
-    const homeMP = homeStats.moneyPuck || {};
-    const awayMP = awayStats.moneyPuck || {};
-    const corsiPct = formatStat(fmtPct(homeMP.corsi_pct), fmtPct(awayMP.corsi_pct));
-    const xgPct = formatStat(fmtPct(homeMP.xg_pct), fmtPct(awayMP.xg_pct));
-
-    // NHL API advanced stats (passed via seasonStats.nhlApi)
-    const homeNHL = homeStats.nhlApi || {};
-    const awayNHL = awayStats.nhlApi || {};
-    const pdo = formatStat(fmtNum(homeNHL.pdo, 3), fmtNum(awayNHL.pdo, 3));
-    const shPct5v5 = formatStat(fmtPct(homeNHL.shooting_pct_5v5), fmtPct(awayNHL.shooting_pct_5v5));
-    const svPct5v5 = formatStat(fmtPct(homeNHL.save_pct_5v5), fmtPct(awayNHL.save_pct_5v5));
-
-    rows = [
-      { label: 'L5 Form', ...l5Form },
-      { label: 'L10 Form', ...l10Form },
-      { label: 'Record', ...record },
-      { label: 'Goals For/Gm', ...goalsFor },
-      { label: 'Goals Agst/Gm', ...goalsAgainst },
-      { label: 'Shots For/Gm', ...shotsFor },
-      { label: 'PP Pct', ...ppPct },
-      { label: 'PK Pct', ...pkPct },
-      { label: 'FO Pct', ...faceoffPct },
-      { label: 'Corsi Pct', ...corsiPct },
-      { label: 'xG Pct', ...xgPct },
-      { label: 'PDO', ...pdo },
-      { label: 'SH Pct 5v5', ...shPct5v5 },
-      { label: 'SV Pct 5v5', ...svPct5v5 },
       { label: 'Key Injuries', home: homeInjuries, away: awayInjuries, arrow: '' }
     ];
 

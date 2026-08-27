@@ -1,10 +1,8 @@
 import { isGeminiToken, getAuthoritativeSource, clearStatRouterCache, DEPRECATED_TOKENS, sportToBdlKey, normalizeSportName, findTeam } from './statRouterCommon.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
-import { nbaSeason, nhlSeason, nflSeason, ncaabSeason, ncaafSeason, mlbSeason } from '../../../../utils/dateUtils.js';
+import { nbaSeason, nflSeason, ncaafSeason, mlbSeason } from '../../../../utils/dateUtils.js';
 import { nbaFetchers } from './nbaFetchers.js';
-import { nhlFetchers } from './nhlFetchers.js';
 import { nflFetchers } from './nflFetchers.js';
-import { ncaabFetchers } from './ncaabFetchers.js';
 import { ncaafFetchers } from './ncaafFetchers.js';
 import { mlbFetchers } from './mlbFetchers.js';
 
@@ -15,13 +13,11 @@ import { mlbFetchers } from './mlbFetchers.js';
 // sport families (see SHARED_TOKENS for the deliberate exceptions).
 const SPORT_SOURCES = {
   nba: nbaFetchers,
-  ncaab: ncaabFetchers,
   ncaaf: ncaafFetchers,
   nfl: nflFetchers,
-  nhl: nhlFetchers,
   mlb: mlbFetchers,
 };
-const SPORT_FAMILY = { nba: 'basketball', ncaab: 'basketball', nfl: 'americanfootball', ncaaf: 'americanfootball', nhl: 'icehockey', mlb: 'baseball' };
+const SPORT_FAMILY = { nba: 'basketball', nfl: 'americanfootball', ncaaf: 'americanfootball', mlb: 'baseball' };
 
 /**
  * LEAGUE ISOLATION — stricter than family (founder ruling, Aug 25 2026).
@@ -38,9 +34,8 @@ const SPORT_FAMILY = { nba: 'basketball', ncaab: 'basketball', nfl: 'americanfoo
  * it is one blast radius wearing two labels.
  *
  * So the pairs named here may never cross even though they share a family.
- * Basketball has the identical NBA/NCAAB shape and is NOT listed yet: that is
- * a checklist change needing the founder's sign-off on the exact list, and
- * both leagues are out of season. It is debt, and it is named debt.
+ * (The NCAAB half of the old basketball-pair debt died with the NCAAB lane,
+ * founder deletion order Aug 27.)
  */
 const LEAGUE_ISOLATED = new Map([
   ['nfl', new Set(['ncaaf'])],
@@ -51,8 +46,7 @@ function crossesLeagueLine(currentSport, owner) {
   const from = String(currentSport || '').toLowerCase();
   return Boolean(owner && LEAGUE_ISOLATED.get(from)?.has(owner));
 }
-// Tokens that take bdlSport and route internally — genuinely sport-agnostic,
-// reachable from any sport (NHL reaches STANDINGS/REST_SITUATION via aliases).
+// Tokens that take bdlSport and route internally — genuinely sport-agnostic.
 const SHARED_TOKENS = new Set(['DEFAULT', 'REST_SITUATION', 'STANDINGS', 'H2H_HISTORY']);
 // These scoring-split handlers are deliberately polymorphic, but only for the
 // two leagues whose BDL game rows expose Q1-Q4 fields. They live in the NBA
@@ -89,10 +83,6 @@ FETCHERS.DEFAULT = async (bdlSport, _home, _away) => ({
 // Aliases — maps alternate token names to real fetcher names.
 // Only kept where investigation prompts or investigation factors reference the alias name.
 const ALIASES = {
-  // NHL: goalie aliases (SAVE_PCT, GOALS_AGAINST_AVG, GOALIE_MATCHUP are in investigation factors)
-  SAVE_PCT: 'GOALIE_STATS',
-  GOALS_AGAINST_AVG: 'GOALIE_STATS',
-  GOALIE_MATCHUP: 'GOALIE_STATS',
   BACK_TO_BACK: 'REST_SITUATION',
   DIVISION_STANDING: 'STANDINGS',
   // NBA/shared
@@ -171,10 +161,6 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
   let defaultSeason;
   if (normalizedSportForSeason.includes('nba')) {
     defaultSeason = nbaSeason();
-  } else if (normalizedSportForSeason.includes('ncaab')) {
-    defaultSeason = ncaabSeason();
-  } else if (normalizedSportForSeason.includes('nhl')) {
-    defaultSeason = nhlSeason();
   } else if (normalizedSportForSeason.includes('ncaaf')) {
     defaultSeason = ncaafSeason();
   } else if (normalizedSportForSeason.includes('nfl')) {

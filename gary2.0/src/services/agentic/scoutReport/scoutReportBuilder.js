@@ -8,9 +8,7 @@
  */
 
 import { buildNbaScoutReport } from './sports/nba.js';
-import { buildNhlScoutReport } from './sports/nhl.js';
 import { buildNflScoutReport } from './sports/nfl.js';
-import { buildNcaabScoutReport } from './sports/ncaab.js';
 import { buildNcaafScoutReport } from './sports/ncaaf.js';
 import { buildMlbScoutReport } from './sports/mlb.js';
 
@@ -26,9 +24,7 @@ import { assembleFlashReport } from './shared/flashReportAssembler.js';
 
 const SPORT_BUILDERS = {
   'NBA': buildNbaScoutReport,
-  'NHL': buildNhlScoutReport,
   'NFL': buildNflScoutReport,
-  'NCAAB': buildNcaabScoutReport,
   'NCAAF': buildNcaafScoutReport,
   'MLB': buildMlbScoutReport,
 };

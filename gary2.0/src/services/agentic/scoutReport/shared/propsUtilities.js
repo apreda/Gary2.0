@@ -142,105 +142,6 @@ CRITICAL RULES:
 7. NO BETTING ADVICE - Gary will make his own decision - you just provide CONTEXT
 8. ADVANCED STATS: Prioritize tracking data from nba.com/stats for predictive metrics`;
     }
-    else if (sport === 'NHL' || sport === 'icehockey_nhl') {
-      prompt = `For the NHL game ${awayTeam} @ ${homeTeam} on ${today}, provide COMPREHENSIVE narrative context for player prop analysis:
-
-== SECTION 1: BREAKING NEWS & SITUATIONAL ==
-- LAST-MINUTE SCRATCHES: Any players ruled OUT after morning skate?
-- TRADE RUMORS: Any active trade talks? (especially before trade deadline)
-- COACHING CHANGES: Any recent firings or interim coaches?
-- ROSTER MOVES: Any recent call-ups from AHL or waivers?
-
-== SECTION 2: MOTIVATION FACTORS ==
-- REVENGE GAMES: Is any player facing their FORMER TEAM?
-- MILESTONE CHASING: Any player close to career milestone? (e.g., 500 goals)
-- CONTRACT YEAR: Which players have expiring contracts?
-- RETURN FROM INJURY: Any star returning from LTIR?
-- PLAYOFF IMPLICATIONS: Playoff race standings for both teams?
-
-== SECTION 3: GOALIE SITUATION (CRITICAL FOR PROPS) ==
-- WHO IS STARTING for ${homeTeam}? (confirmed or expected)
-- WHO IS STARTING for ${awayTeam}? (confirmed or expected)
-- Is either goalie on a B2B (likely to rest)?
-- Any goalie controversies or platoon situations?
-
-== SECTION 4: SCHEDULE & TRAVEL CONTEXT ==
-- BACK-TO-BACK: Is either team on 2nd night of B2B?
-- ROAD TRIP LENGTH: Is either team on an extended road trip?
-- REST ADVANTAGE: Days rest for each team?
-- TRAVEL FATIGUE: Cross-country travel?
-
-== SECTION 5: PLAYER-SPECIFIC CONTEXT ==
-For top scorers/players:
-- LOAD MANAGEMENT: Any stars likely to rest?
-- LINE CHANGES: Any recent line combination changes?
-- RECENT PRODUCTION: Points, assists, shots on goal over last 5 games for top players?
-- RECENT QUOTES: Coach comments about specific players?
-
-== SECTION 6: TEAM TRENDS ==
-- WIN/LOSE STREAKS: Current streak and context
-- DIVISION RIVALRY: Are these division rivals?
-- RECENT H2H: Did these teams play recently?
-
-== SECTION 7: GAME ENVIRONMENT ==
-- GAME TOTAL (O/U): What is the over/under?
-- SPREAD: What is the spread?
-- VARIANCE DATA: Which players have high game-to-game variance vs consistent outputs?
-
-== SECTION 8: NHL ADVANCED STATS (PREDICTIVE METRICS) ==
-Search moneypuck.com, naturalstattrick.com, and nhl.com/stats for tracking data that PREDICTS future performance:
-
-**For Skaters on ${homeTeam} and ${awayTeam}:**
-- INDIVIDUAL EXPECTED GOALS (ixG): Expected goals based on shot location and quality
-- GOALS ABOVE EXPECTED (GAE): Positive = finishing above expected, Negative = finishing below expected.
-- HIGH DANGER CHANCES (HDC): Scoring chances from slot/crease area.
-- SHOOTING %: Current shooting percentage vs career average
-- INDIVIDUAL CORSI FOR (iCF): Total shot attempts per game
-
-**For Goal Scorers:**
-- ixG vs ACTUAL GOALS: What is the gap between expected and actual goals?
-- HDC/60: High danger chances per 60 minutes
-- SHOOTING % TREND: Current season shooting % vs career average
-
-**For Assist/Points Props:**
-- PRIMARY ASSISTS: Primary assist count vs secondary assist count
-- 5v5 vs PP PRODUCTION: What % of production comes from power play? Which PP unit?
-- ON-ICE xGF: When this player is on ice, how much xG does the team generate?
-- LINEMATE QUALITY: Who are they playing with? List linemates and their production
-
-**For SOG (Shots on Goal) Props:**
-- iCF (Individual Corsi For): Total shot attempts (includes blocked and missed)
-- SHOTS THROUGH %: What % of shot attempts reach the net?
-- SHOT RATE/60: Shots per 60 minutes of ice time
-- O-ZONE STARTS %: Percentage of shifts starting in offensive zone
-
-**Team-Level Predictive Metrics:**
-- ${homeTeam} xGF/60 (expected goals for per 60): Offensive generation quality
-- ${awayTeam} xGF/60: Offensive generation quality
-- ${homeTeam} xGA/60 (expected goals against per 60): Defensive quality
-- ${awayTeam} xGA/60: Defensive quality
-- PDO: Team shooting % + save % (100 is baseline)
-
-**MATCHUP-SPECIFIC (Critical for Props):**
-- ${homeTeam} goalie xSV% (expected save %) vs actual SV%
-- ${awayTeam} goalie xSV% vs actual SV%
-- Any player with a significant gap between GOALS and ixG (in either direction)?
-- What is the size of that gap?
-
-== SECTION 9: BETTING MARKET SIGNALS ==
-SUPPLEMENTARY DATA ONLY - not decisive:
-- LINE MOVEMENT: Significant spread/total movement?
-- PUBLIC %: Lopsided public betting?
-
-FORMAT with clear section headers. Be FACTUAL - say "No data found" if unsure.
-
-CRITICAL RULES:
-1. FACTS ONLY - Do NOT include any betting predictions, picks, or analysis from articles
-2. NO OPINIONS - Do NOT copy predictions from any source
-3. YOUR OWN WORDS - Synthesize facts, do NOT plagiarize
-4. NO BETTING ADVICE - Gary will make his own decision - you just provide CONTEXT
-5. ADVANCED STATS: Prioritize xG data from moneypuck.com or naturalstattrick.com`;
-    }
     else if (sport === 'NFL' || sport === 'americanfootball_nfl') {
       prompt = `For the NFL game ${awayTeam} @ ${homeTeam} on ${today}, provide COMPREHENSIVE narrative context for player prop analysis:
 
@@ -507,7 +408,7 @@ export function parseNarrativeSections(text) {
  * Fetch prop line movement data via Gemini Grounding
  * Queries ScoresAndOdds and BettingPros for opening vs. current lines
  *
- * @param {string} sport - 'NBA' | 'NFL' | 'NHL'
+ * @param {string} sport - 'NBA' | 'NFL'
  * @param {string} gameDate - Game date (YYYY-MM-DD or human readable)
  * @param {string} homeTeam - Home team name
  * @param {string} awayTeam - Away team name
@@ -525,8 +426,6 @@ export async function fetchPropLineMovement(sport, gameDate, homeTeam, awayTeam,
       propTypes = 'points, rebounds, assists, threes made';
     } else if (sport === 'NFL' || sport === 'americanfootball_nfl') {
       propTypes = 'passing yards, rushing yards, receiving yards, receptions';
-    } else if (sport === 'NHL' || sport === 'icehockey_nhl') {
-      propTypes = 'shots on goal, points, goals, assists';
     }
 
     // Query with a more natural prompt that's easier for Gemini to respond to

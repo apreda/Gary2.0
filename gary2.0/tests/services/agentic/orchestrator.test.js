@@ -33,12 +33,12 @@ describe('normalizeSportToLeague', () => {
 
 // ─── INVESTIGATION_FACTORS structure ──────────────────────────────────
 describe('INVESTIGATION_FACTORS', () => {
-  it('has entries for all 5 sports', () => {
+  it('has entries for the live sports — and none for the deleted NHL/NCAAB lanes (founder, Aug 27)', () => {
     expect(INVESTIGATION_FACTORS).toHaveProperty('basketball_nba');
     expect(INVESTIGATION_FACTORS).toHaveProperty('americanfootball_nfl');
-    expect(INVESTIGATION_FACTORS).toHaveProperty('icehockey_nhl');
-    expect(INVESTIGATION_FACTORS).toHaveProperty('basketball_ncaab');
     expect(INVESTIGATION_FACTORS).toHaveProperty('americanfootball_ncaaf');
+    expect(INVESTIGATION_FACTORS).not.toHaveProperty('icehockey_nhl');
+    expect(INVESTIGATION_FACTORS).not.toHaveProperty('basketball_ncaab');
   });
 
   it('each sport has factor categories with token arrays', () => {

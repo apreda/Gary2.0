@@ -29,27 +29,15 @@ const SPORTS = Object.keys(INVESTIGATION_FACTORS);
 const ENFORCED = ['americanfootball_nfl', 'americanfootball_ncaaf', 'baseball_mlb'];
 
 /**
- * The dormant sports carry the same disease and are NOT yet fixed — those are
- * checklist edits, which need the founder's sign-off on the exact list. Until
- * then their debt is pinned here exactly: it may not grow, and every entry
- * removed must be removed from this list too. NBA readiness is due ~Oct 1.
+ * NBA is the one dormant sport still carrying pinned debt (readiness due
+ * ~Oct 1). The NHL and NCAAB entries died with those lanes (founder
+ * deletion order, Aug 27).
  */
 const KNOWN_UNREACHABLE = {
   basketball_nba: ['PLAYER_PERFORMANCE.PLAYER_GAME_LOGS (no fetcher)'],
-  icehockey_nhl: [
-    'INJURIES.INJURIES (owned by nba)',
-    'SCHEDULE.BACK_TO_BACK (owned by nba)',
-    'H2H_DIVISION.DIVISION_STANDING (owned by nba)'
-  ],
-  basketball_ncaab: [
-    'RECENT_FORM.PLAYER_GAME_LOGS (no fetcher)',
-    'PLAYER_PERFORMANCE.PLAYER_GAME_LOGS (no fetcher)'
-  ]
 };
 
-const KNOWN_EMPTY_FACTORS = {
-  basketball_ncaab: ['SCHEDULE', 'STANDINGS_CONTEXT', 'RANKINGS']
-};
+const KNOWN_EMPTY_FACTORS = {};
 
 function declaredTokens(sportKey) {
   const factors = INVESTIGATION_FACTORS[sportKey] || {};

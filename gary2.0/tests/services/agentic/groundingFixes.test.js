@@ -68,13 +68,6 @@ describe('(b) stat-router fetchers unwrap the {success, data, raw} shape', () =>
     expect(f).not.toContain("groundingResult?.content || 'Data unavailable'");
   });
 
-  it('NCAAB NET extractor reads .data (was .content + a dead OpenAI shape)', () => {
-    const f = src('services/agentic/tools/statRouters/ncaabFetchers.js');
-    expect(f).not.toContain('response?.choices?.[0]?.message?.content');
-  });
-});
-
-describe('(c) MLB_GAME_PREVIEW asks for fan context, never picks', () => {
   it('query solicits storylines/team news/media narratives and forbids picks', () => {
     const f = src('services/agentic/tools/statRouters/mlbFetchers.js');
     expect(f).not.toContain('betting projections, expert picks');

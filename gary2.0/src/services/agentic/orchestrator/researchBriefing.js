@@ -249,9 +249,7 @@ Current preseason personnel, announced starter rest, rotations, injuries and coa
     // All sports get fetch_narrative_context (grounding) — Flash handles narrative investigation
     const researchTools = isNflAugustPreseasonScoutPlan ? [] : toolDefinitions;
 
-    const isNCAABSport = sport === 'basketball_ncaab' || sport === 'NCAAB';
     const isMLBSport = sport === 'baseball_mlb' || sport === 'MLB';
-    const isNHLSport = sport === 'icehockey_nhl' || sport === 'NHL';
     // (Restored Aug 18 2026 — the June engine returns for MLB games.)
     const mlbAwarenessBlock = isMLBSport ? `\n\n${getMlbSeasonAwareness()}\n` : '';
 
@@ -310,7 +308,7 @@ ${scoutReportContent}`,
 ${hasSpread ? `**Spread:** ${options.spread}` : ''}
 ${options.researchSeasonLabel ? `**Performance data window:** ${options.researchSeasonLabel}` : ''}
 
-The full scout report for this game is in your system context — it is your baseline for every factor. I will now ask you to investigate factors one at a time.${isNCAABSport ? ' (NCAAB: narrative context is already in the scout report — prefer fetch_stats for BDL data)' : ''}${isMLBSport ? `
+The full scout report for this game is in your system context — it is your baseline for every factor. I will now ask you to investigate factors one at a time.${isMLBSport ? `
 
 (MLB: The scout report in your system context ALREADY contains the following — DO NOT re-fetch these tokens:
 - DIVISION STANDINGS → covers MLB_STANDINGS, MLB_STANDINGS_STRUCTURED, MLB_TEAM_RECORD
@@ -333,7 +331,7 @@ Investigate using fetch_stats for tokens that ADD information beyond the scout r
 - MLB_STATCAST — last-3-games contact quality (exit velo, launch angle, xwOBA, bat speed, whiff/chase)
 - MLB_PARK_FACTORS, MLB_WEATHER — venue and conditions
 
-Use fetch_narrative_context ONLY for breaking news or game-thread context that no token covers.)` : ''}${isNHLSport ? ' (NHL: The scout report already includes confirmed starting goalies, lineups, power play units, and injuries from RotoWire. Do NOT use fetch_narrative_context to re-search for goalies, lineups, injuries, or PP/PK stats — all of this is in the scout report. Use grounding ONLY for context not in the scout report like recent player performance narrative or trade news.)' : ''}`;
+Use fetch_narrative_context ONLY for breaking news or game-thread context that no token covers.)` : ''}`;
 
     console.log(`[Research Briefing] Sending scout report to Gemini Flash (factor-by-factor investigation)`);
 
@@ -452,10 +450,9 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
               }
             } else if (functionName === 'fetch_narrative_context') {
               // Grounding budget per game (Jul 8 2026 cost audit):
-              //   NHL 10 — RotoWire-era cap; revisit when the season starts in October.
               //   MLB + others 4 — structured tokens cover stats/lineups/injuries;
               //           grounding is for breaking news no token can answer.
-              const MAX_GROUNDING_CALLS = isNHLSport ? 10 : 4;
+              const MAX_GROUNDING_CALLS = 4;
               if (groundingCalls >= MAX_GROUNDING_CALLS) {
                 console.log(`  → [Research Grounding] SKIPPED (cap reached: ${groundingCalls}/${MAX_GROUNDING_CALLS}): "${(args.query || '').slice(0, 80)}"`);
                 functionResponses.push({ name: functionName, content: `Grounding call limit reached (${MAX_GROUNDING_CALLS}). Use available stat tokens and scout report data instead.` });
@@ -487,8 +484,6 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                 const sportKeyMap = {
                   'NBA': 'basketball_nba',
                   'NFL': 'americanfootball_nfl',
-                  'NHL': 'icehockey_nhl',
-                  'NCAAB': 'basketball_ncaab',
                   'NCAAF': 'americanfootball_ncaaf',
                   'MLB': 'baseball_mlb',
                 };
@@ -513,12 +508,6 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                   if (args.sport === 'NBA') {
                     logs = await ballDontLieService.getNbaPlayerGameLogs(player.id, numGames);
                     logContent = JSON.stringify({ player: args.player_name, sport: 'NBA', logs: logs || [] });
-                  } else if (args.sport === 'NCAAB') {
-                    logs = await ballDontLieService.getNcaabPlayerGameLogs(player.id, numGames);
-                    logContent = JSON.stringify({ player: args.player_name, sport: 'NCAAB', logs: logs || [] });
-                  } else if (args.sport === 'NHL') {
-                    logs = await ballDontLieService.getNhlPlayerGameLogs(player.id, numGames);
-                    logContent = JSON.stringify({ player: args.player_name, sport: 'NHL', logs: logs || [] });
                   } else if (args.sport === 'MLB') {
                     // MLB per-game stats use BDL's /mlb/v1/stats — flat shape
                     // (pitcher: ip/er/p_k/p_bb; batter: at_bats/hits/hr/rbi).
@@ -544,7 +533,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                   } else {
                     // Unknown sport — return an explicit error instead of
                     // silently hitting NFL endpoints (the prior bug).
-                    functionResponses.push({ name: functionName, content: JSON.stringify({ error: `Unknown sport "${args.sport}" — pass one of NBA, NHL, MLB, NFL, NCAAB, NCAAF.` }) });
+                    functionResponses.push({ name: functionName, content: JSON.stringify({ error: `Unknown sport "${args.sport}" — pass one of NBA, MLB, NFL, NCAAF.` }) });
                     continue;
                   }
                   functionResponses.push({ name: functionName, content: logContent });
@@ -732,7 +721,6 @@ const FOLLOW_UP_SPORT_LABELS = {
   americanfootball_nfl: 'NFL', NFL: 'NFL',
   americanfootball_ncaaf: 'NCAAF', NCAAF: 'NCAAF',
   basketball_nba: 'NBA', NBA: 'NBA',
-  icehockey_nhl: 'NHL', NHL: 'NHL',
   basketball_ncaab: 'NCAAB', NCAAB: 'NCAAB',
 };
 

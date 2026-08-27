@@ -219,17 +219,10 @@ export async function fetchTeamProfile(teamName, sport) {
       console.log(`[Scout Report] NCAAF ${teamName} performance baseline: ${seasonStatsSeason} (${seasonStatsScope})`);
     }
     
-    // Fetch standings - NCAAB and NCAAF require conference_id from the team data
+    // Fetch standings - NCAAF requires conference_id from the team data
     let standings = [];
     let teamStanding = null;
-    if (bdlSport === 'basketball_ncaab') {
-      // NCAAB: Use dedicated getNcaabStandings method which handles the API correctly
-      if (team.conference_id) {
-        console.log(`[Scout Report] Fetching NCAAB standings for ${teamName} (conference_id: ${team.conference_id})`);
-        standings = await ballDontLieService.getNcaabStandings(team.conference_id, currentSeason);
-        teamStanding = standings?.find(s => s.team?.id === team.id || s.team?.name === teamName);
-      }
-    } else if (bdlSport === 'americanfootball_ncaaf') {
+    if (bdlSport === 'americanfootball_ncaaf') {
       // NCAAF: Requires conference_id - get from team.conference field
       const conferenceId = team.conference;
       if (conferenceId) {
@@ -252,7 +245,7 @@ export async function fetchTeamProfile(teamName, sport) {
         }
       }
     } else {
-      // NBA, NHL, NFL - no conference_id needed
+      // NBA, NFL - no conference_id needed
       standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season: currentSeason });
       teamStanding = standings?.find(s => s.team?.id === team.id || s.team?.name === teamName);
     }

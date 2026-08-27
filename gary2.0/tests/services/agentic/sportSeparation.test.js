@@ -11,17 +11,15 @@ import { describe, it, expect } from 'vitest';
 process.env.BALLDONTLIE_API_KEY ||= 'test-key';
 
 const { nbaFetchers } = await import('../../../src/services/agentic/tools/statRouters/nbaFetchers.js');
-const { ncaabFetchers } = await import('../../../src/services/agentic/tools/statRouters/ncaabFetchers.js');
 const { ncaafFetchers } = await import('../../../src/services/agentic/tools/statRouters/ncaafFetchers.js');
 const { nflFetchers } = await import('../../../src/services/agentic/tools/statRouters/nflFetchers.js');
-const { nhlFetchers } = await import('../../../src/services/agentic/tools/statRouters/nhlFetchers.js');
 const { mlbFetchers } = await import('../../../src/services/agentic/tools/statRouters/mlbFetchers.js');
 const { fetchStats } = await import('../../../src/services/agentic/tools/statRouters/index.js');
 const { ballDontLieService } = await import('../../../src/services/ballDontLieService.js');
 
 describe('stat token namespace is collision-free across sports', () => {
   it('no token name is defined by two sports (incl. DEFAULT — neutral DEFAULT lives in the router)', () => {
-    const sources = { nba: nbaFetchers, ncaab: ncaabFetchers, ncaaf: ncaafFetchers, nfl: nflFetchers, nhl: nhlFetchers, mlb: mlbFetchers };
+    const sources = { nba: nbaFetchers, ncaaf: ncaafFetchers, nfl: nflFetchers, mlb: mlbFetchers };
     const owner = {};
     const collisions = [];
     for (const [sport, map] of Object.entries(sources)) {
@@ -35,9 +33,9 @@ describe('stat token namespace is collision-free across sports', () => {
 });
 
 describe('fetchStats never crosses sport families', () => {
-  it('an MLB run cannot execute an NHL fetcher', async () => {
+  it('an MLB run cannot execute a goalie token (the NHL lane is deleted — the token no longer exists at all)', async () => {
     const res = await fetchStats('baseball_mlb', 'GOALIE_STATS', 'Astros', 'Rays', {});
-    expect(res.error).toMatch(/belongs to NHL|not available/i);
+    expect(String(res.comparison || res.error)).toMatch(/not implemented|Unknown stat token|belongs to NHL|not available/i);
   });
 
   it('an unknown sport hard-fails instead of borrowing the NBA season', async () => {

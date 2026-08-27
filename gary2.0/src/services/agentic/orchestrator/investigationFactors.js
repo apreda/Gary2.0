@@ -56,46 +56,6 @@ export const INVESTIGATION_FACTORS = {
     ROSTER_CONTEXT: ['BENCH_DEPTH', 'CLUTCH_STATS', 'LUCK_ADJUSTED']
   },
 
-  // NHL: 12 factor categories
-  // BDL has: injuries, game history (H2H), standings, team stats, goalie stats, special teams
-  // Grounding: possession (Corsi/xG), line combos, PDO, high-danger
-  // NOT available: per-player game logs (BDL NHL box scores are empty)
-  icehockey_nhl: {
-    POSSESSION: ['CORSI_FOR_PCT', 'EXPECTED_GOALS', 'SHOT_DIFFERENTIAL', 'HIGH_DANGER_CHANCES'],
-    SPECIAL_TEAMS: ['POWER_PLAY_PCT', 'PENALTY_KILL_PCT', 'SPECIAL_TEAMS'],
-    GOALTENDING: ['GOALIE_STATS', 'SAVE_PCT', 'GOALS_AGAINST_AVG', 'GOALIE_MATCHUP'],
-    SCORING: ['GOALS_FOR', 'GOALS_AGAINST', 'GOAL_DIFFERENTIAL'],
-    LUCK_REGRESSION: ['PDO', 'SHOOTING_REGRESSION'],
-    RECENT_FORM: ['RECENT_FORM', 'NHL_RECENT_FORM'],  // Team recent form — no per-player logs (BDL NHL box scores empty)
-    PLAYER_PERFORMANCE: ['LINE_COMBINATIONS', 'NHL_HOT_PLAYERS'],  // Scout report covers top scorers
-    INJURIES: ['INJURIES'],  // BDL has structured NHL injuries
-    SCHEDULE: ['REST_SITUATION', 'BACK_TO_BACK'],
-    HOME_AWAY: ['NHL_HOME_AWAY_SPLITS'],  // Use NHL-prefixed token (fetcher exists)
-    H2H_DIVISION: ['DIVISION_STANDING'],  // H2H computed from BDL game history in scout report
-    STANDINGS_CONTEXT: ['STANDINGS', 'PLAYOFF_POSITION'],
-  },
-
-  // NCAAB: 15 factor categories
-  // Scout report provides CONTEXT: injuries, roster depth, standings, rankings, recent form, H2H, venue
-  // Advanced stats (Barttorvik, Four Factors, Splits, L5 Efficiency) are investigation tokens
-  basketball_ncaab: {
-    BARTTORVIK_EFFICIENCY: ['NCAAB_BARTTORVIK', 'NCAAB_OFFENSIVE_RATING', 'NCAAB_DEFENSIVE_RATING', 'NET_RATING'],
-    FOUR_FACTORS: ['NCAAB_FOUR_FACTORS', 'NCAAB_EFG_PCT', 'NCAAB_TS_PCT', 'TURNOVER_RATE', 'OREB_RATE', 'FT_RATE'],
-    SCORING_SHOOTING: ['SCORING', 'FG_PCT', 'THREE_PT_SHOOTING'],
-    DEFENSIVE_STATS: ['STEALS', 'BLOCKS'],
-    TEMPO: ['NCAAB_TEMPO'],
-    L5_EFFICIENCY: ['NCAAB_L5_EFFICIENCY'],
-    RECENT_FORM: ['PLAYER_GAME_LOGS'],  // RECENT_FORM token duplicates scout report — only game logs need fetching
-    PLAYER_PERFORMANCE: ['PLAYER_GAME_LOGS'],  // TOP_PLAYERS is in scout report
-    INJURIES: ['INJURIES'],     // Baseline in scout report; token for deeper investigation
-    SCHEDULE: [],  // Tournament schedule is equal for all teams — no tokens needed
-    HOME_AWAY: ['HOME_AWAY_SPLITS'],
-    H2H: ['H2H_HISTORY'],          // H2H in scout report; token for additional matchup data
-    ASSISTS_PLAYMAKING: ['ASSISTS'],
-    STANDINGS_CONTEXT: [],  // Conference standings in scout report — preloaded
-    RANKINGS: []  // AP/Coaches rankings in scout report — preloaded
-  },
-
   // NCAAF: 16 factor categories
   // NOTE: BDL has limited NCAAF data - advanced stats (SP+, FPI, EPA) come from Gemini grounding
   americanfootball_ncaaf: {

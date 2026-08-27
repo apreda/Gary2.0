@@ -89,7 +89,6 @@ export function summarizeStatForContext(statResult, statToken, homeTeam, awayTea
           const aStr = typeof a === 'string' ? a : 'N/A';
           return `${statToken}: ${hStr} | ${aStr}`;
         }
-        // NHL returns l5/l10 objects; other sports return summary/last_5 strings
         const awayForm = a.summary || a.last_5 || (a.l5?.record ? `${a.l5.record} (L5)` : 'N/A');
         const homeForm = h.summary || h.last_5 || (h.l5?.record ? `${h.l5.record} (L5)` : 'N/A');
         return orderTeams('RECENT FORM (Last 5)', homeForm, awayForm);
@@ -135,129 +134,6 @@ export function summarizeStatForContext(statResult, statToken, homeTeam, awayTea
         return orderTeams('PAINT DEFENSE',
           `${formatNum(h.opp_pts_paint || h.paint_ppg || h.value)} opp PPG in paint`,
           `${formatNum(a.opp_pts_paint || a.paint_ppg || a.value)} opp PPG in paint`);
-
-      // ===== NCAAB TOKENS =====
-
-      case 'NCAAB_FOUR_FACTORS':
-        return orderTeams('FOUR FACTORS',
-          `eFG ${formatPct(h.efg_pct)} | TOV ${formatPct(h.tov_rate)} | ORB ${formatPct(h.oreb_pct)} | FT Rate ${formatNum(h.fta_rate)}`,
-          `eFG ${formatPct(a.efg_pct)} | TOV ${formatPct(a.tov_rate)} | ORB ${formatPct(a.oreb_pct)} | FT Rate ${formatNum(a.fta_rate)}`);
-
-      case 'NCAAB_EFG_PCT':
-        return orderTeams('EFFECTIVE FG% (NCAAB)',
-          formatPct(h.efg_pct),
-          formatPct(a.efg_pct));
-
-      case 'NCAAB_BARTTORVIK':
-        return orderTeams('BARTTORVIK T-RANK',
-          `#${formatNum(h.t_rank)} | AdjOE ${formatNum(h.adj_oe)} | AdjDE ${formatNum(h.adj_de)} | AdjEM ${formatNum(h.adj_em)} | Tempo ${formatNum(h.tempo)}`,
-          `#${formatNum(a.t_rank)} | AdjOE ${formatNum(a.adj_oe)} | AdjDE ${formatNum(a.adj_de)} | AdjEM ${formatNum(a.adj_em)} | Tempo ${formatNum(a.tempo)}`);
-
-      case 'NCAAB_OFFENSIVE_RATING':
-        return orderTeams('ADJ OFFENSIVE EFFICIENCY (NCAAB)',
-          `${formatNum(h.offensive_rating)} (Rank ${formatNum(h.adjOE_rank)})`,
-          `${formatNum(a.offensive_rating)} (Rank ${formatNum(a.adjOE_rank)})`);
-
-      case 'NCAAB_DEFENSIVE_RATING':
-        return orderTeams('ADJ DEFENSIVE EFFICIENCY (NCAAB)',
-          `${formatNum(h.defensive_rating)} (Rank ${formatNum(h.adjDE_rank)})`,
-          `${formatNum(a.defensive_rating)} (Rank ${formatNum(a.adjDE_rank)})`);
-
-      case 'NCAAB_TEMPO':
-        return orderTeams('TEMPO (NCAAB)',
-          `${formatNum(h.tempo)} poss/game`,
-          `${formatNum(a.tempo)} poss/game`);
-
-      case 'NCAAB_L5_EFFICIENCY':
-        return orderTeams('L5 EFFICIENCY (NCAAB)',
-          `eFG ${formatPct(h.efg_pct)} | TS ${formatPct(h.ts_pct)} | ORtg ${formatNum(h.approx_ortg)} | DRtg ${formatNum(h.approx_drtg)} | Net ${formatNum(h.approx_net_rtg)}`,
-          `eFG ${formatPct(a.efg_pct)} | TS ${formatPct(a.ts_pct)} | ORtg ${formatNum(a.approx_ortg)} | DRtg ${formatNum(a.approx_drtg)} | Net ${formatNum(a.approx_net_rtg)}`);
-
-      case 'SCORING':
-        return orderTeams('SCORING',
-          `${formatNum(h.points_per_game || h.pts)} PPG (FG ${formatPct(h.fg_pct)})`,
-          `${formatNum(a.points_per_game || a.pts)} PPG (FG ${formatPct(a.fg_pct)})`);
-
-      case 'REBOUNDS':
-        return orderTeams('REBOUNDING',
-          `${formatNum(h.rebounds_per_game || h.reb)} RPG (OREB ${formatNum(h.oreb_per_game || h.oreb)} | DREB ${formatNum(h.dreb_per_game || h.dreb)})`,
-          `${formatNum(a.rebounds_per_game || a.reb)} RPG (OREB ${formatNum(a.oreb_per_game || a.oreb)} | DREB ${formatNum(a.dreb_per_game || a.dreb)})`);
-
-      case 'ASSISTS':
-        return orderTeams('ASSISTS',
-          `${formatNum(h.assists_per_game || h.ast)} APG`,
-          `${formatNum(a.assists_per_game || a.ast)} APG`);
-
-      case 'STEALS':
-        return orderTeams('STEALS',
-          `${formatNum(h.steals_per_game || h.stl)} SPG`,
-          `${formatNum(a.steals_per_game || a.stl)} SPG`);
-
-      case 'BLOCKS':
-        return orderTeams('BLOCKS',
-          `${formatNum(h.blocks_per_game || h.blk)} BPG`,
-          `${formatNum(a.blocks_per_game || a.blk)} BPG`);
-
-      case 'FT_RATE':
-        return orderTeams('FREE THROW RATE',
-          `${formatNum(h.ft_rate)} FT Rate | ${formatPct(h.ft_pct)} FT% | ${formatNum(h.fta_per_game)} FTA/g`,
-          `${formatNum(a.ft_rate)} FT Rate | ${formatPct(a.ft_pct)} FT% | ${formatNum(a.fta_per_game)} FTA/g`);
-
-      case 'NCAAB_VENUE': {
-        // NCAAB_VENUE returns { venue, home_team, away_team } at top level (no home/away objects)
-        const venueName = statResult.venue || 'N/A';
-        return `VENUE: ${venueName} (${statResult.home_team || homeTeam} home)`;
-      }
-
-      case 'H2H_HISTORY':
-        // Preserve FULL context: dates, scores, margins, revenge status, sweep context, PERSONNEL
-        const h2hGames = statResult.meetings_this_season || statResult.games || statResult.h2h || [];
-        if (h2hGames.length === 0) {
-          return `H2H HISTORY: No matchups this season. ${statResult.IMPORTANT || 'Check Scout Report for prior season data.'}`;
-        }
-        // Include personnel notes (DNPs, top scorers) so Gary sees WHO PLAYED in each H2H game
-        const h2hDetails = h2hGames.slice(0, 5).map(g => {
-          const date = g.date || 'N/A';
-          const result = g.result || g.score || 'N/A';
-          const personnel = g.personnel_note && g.personnel_note !== '(Box score unavailable)' 
-            ? ` [${g.personnel_note}]` 
-            : '';
-          return `${date}: ${result}${personnel}`;
-        }).join(' | ');
-        const seriesRecord = statResult.this_season_record || '';
-        const revengeNote = statResult.revenge_note || '';
-        
-        // Include sweep context if detected (NBA-specific trap detection)
-        const sweepContext = statResult.sweep_context;
-        let sweepContextStr = '';
-        if (sweepContext?.triggered) {
-          const marginInfo = sweepContext.margin_context ? ` ${sweepContext.margin_context}` : '';
-          sweepContextStr = ` | ${sweepContext.sweep_note}${marginInfo}`;
-        }
-        
-        // Add CONDITIONS CHANGED context if detected
-        const conditionsChanged = statResult.conditions_changed_context;
-        let conditionsChangedStr = '';
-        if (conditionsChanged?.triggered) {
-          conditionsChangedStr = ` | ${conditionsChanged.note}`;
-        }
-        
-        return `H2H HISTORY (${h2hGames.length} games this season): ${seriesRecord}. Meetings: ${h2hDetails}${revengeNote ? ` [REVENGE: ${revengeNote}]` : ''}${sweepContextStr}${conditionsChangedStr}`;
-      
-      case 'CLUTCH_STATS':
-        return orderTeams('CLUTCH PERFORMANCE',
-          `${h.clutch_record || 'N/A'} (Net ${h.clutch_net_rating || 'N/A'}, Rank ${h.clutch_net_rank || 'N/A'}, eFG ${h.clutch_efg_pct || 'N/A'})`,
-          `${a.clutch_record || 'N/A'} (Net ${a.clutch_net_rating || 'N/A'}, Rank ${a.clutch_net_rank || 'N/A'}, eFG ${a.clutch_efg_pct || 'N/A'})`);
-
-      case 'BENCH_DEPTH':
-        return orderTeams('BENCH DEPTH',
-          `bench ${formatNum(h.bench_ppg || h.value)} PPG (${h.bench_pct || ''} of scoring, ${h.rotation_size || '?'}-man rotation${h.top_bench ? ', top bench: ' + h.top_bench : ''})`,
-          `bench ${formatNum(a.bench_ppg || a.value)} PPG (${a.bench_pct || ''} of scoring, ${a.rotation_size || '?'}-man rotation${a.top_bench ? ', top bench: ' + a.top_bench : ''})`);
-
-      case 'REST_SITUATION':
-        return orderTeams('REST',
-          `${h.days_rest ?? 'N/A'} days rest${h.is_b2b ? ' (B2B)' : ''}`,
-          `${a.days_rest ?? 'N/A'} days rest${a.is_b2b ? ' (B2B)' : ''}`);
 
       // ===== NBA / GENERAL TOKENS =====
 
