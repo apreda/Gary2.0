@@ -719,6 +719,8 @@ function buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread) {
   const mlbAwareness = getMlbSeasonAwareness();
 
   return `
+You're deciding what to bet on tonight's game below. The betting options and their prices come at the end, after you've been through everything.
+
 <scout_report>
 ## MATCHUP BRIEFING (TODAY: ${today})
 
@@ -745,23 +747,15 @@ ${factors}
 </reading_the_game>
 
 <instructions>
-## YOUR TASK: PASS 1 - INVESTIGATE THE GAME
+## YOUR TASK
 
-Your job in this pass is the READ: investigate this game and build your honest read of how it actually goes. The betting options come after your read is formed; do not shop prices now.
-
-Use the scout report + research briefing as your starting point, then investigate with fetch_stats where you need deeper evidence.
-
-Before completing Pass 1, end your synthesis with BOTH sections, using these EXACT headings on their own lines (the system stores each case under its heading):
+Before completing this pass, end with BOTH sections, using these EXACT headings on their own lines (the system stores each case under its heading):
 
 CASE FOR BACKING ${homeTeam.toUpperCase()} TONIGHT:
-(2-3 paragraphs making the argument for that side as tonight's bet — how they win this game and what carries it.)
 
 CASE FOR BACKING ${awayTeam.toUpperCase()} TONIGHT:
-(2-3 paragraphs, same shape.)
 
-Use whatever reasoning you find most compelling — stats, matchup data, momentum, series context, pitcher feel, team energy, or any combination. There is no required formula. Some nights one factor dominates; other nights it's the full picture.
-
-Do NOT declare a side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
+Do NOT declare a side or a pick yet — the bet question comes at the end. When your investigation is complete, output this exact line on its own line:
 INVESTIGATION COMPLETE
 </instructions>`.trim();
 }
