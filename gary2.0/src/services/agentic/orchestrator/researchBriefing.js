@@ -95,9 +95,13 @@ function parseStructuredBriefingPayload(rawText = '') {
 function renderStructuredBriefing(payload) {
   const blocks = [];
   for (const factor of payload.factors) {
+    // The keyFinding synthesis layer is DEAD (founder, Aug 27: "we dont
+    // need to spoon feed him... let him figure that out" — and the layer
+    // was provably garbling: "0-2 at home in this series after opening the
+    // homestand with a 13-3 win"). The briefing is numbers + context, both
+    // facts; Gary does the finding.
     const lines = [
       `**${factor.factorName}**`,
-      `Key finding: ${factor.keyFinding}`,
       `Numbers: ${factor.numbers}`,
       `Context: ${factor.context}`
     ];
@@ -116,10 +120,9 @@ function renderFindingsSoFar(accumulated) {
   if (!accumulated || accumulated.length === 0) return '';
   const blocks = accumulated.map(f => {
     const name = f.factor || f.name || f.title || 'Unknown';
-    const finding = String(f.keyFinding || f.key_finding || f.finding || '').slice(0, 260);
-    const numbers = String(f.numbers || f.stats || '').slice(0, 260);
-    const context = String(f.context || f.sample_context || '').slice(0, 220);
-    return `**${name}**\nKey finding: ${finding}\nNumbers: ${numbers}\nContext: ${context}`;
+    const numbers = String(f.numbers || f.stats || '').slice(0, 300);
+    const context = String(f.context || f.sample_context || '').slice(0, 260);
+    return `**${name}**\nNumbers: ${numbers}\nContext: ${context}`;
   });
   return '## FINDINGS SO FAR (prior factor findings — build on these; do NOT re-investigate unless needed)\n\n' + blocks.join('\n\n');
 }
@@ -285,7 +288,7 @@ CRITICAL RULES:
 - Every figure you cite must exist verbatim in the scout report or a tool return. A metric neither provides (wRC+, xERA, FIP, SIERA, BABIP, DRS, pop time, and the like) is NOT AVAILABLE — say so instead of recalling or deriving a value. Never present arithmetic you performed (a computed differential, an inferred rate) as a fetched stat; if you must derive, label it as your own calculation from named inputs
 
 OUTPUT FORMAT — for each factor you investigate, write your findings as a JSON object:
-{"factor": "Factor name", "keyFinding": "1-2 sentence finding", "numbers": "Concrete stats for BOTH teams — repeat the exact figures in THIS field; never leave it empty", "context": "Opponent quality / who played / sample window context — never leave it empty"}
+{"factor": "Factor name", "numbers": "Concrete stats for BOTH teams — exact figures, labeled, one item per line (\\n between items; never a wall of pipes); never leave it empty", "context": "Sample windows, opponent quality, who played, and what the press reports — as reported and attributed; facts only, never leave it empty"}
 
 Do NOT make a pick or recommendation.
 
@@ -628,7 +631,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
             // Flash wrote prose instead of JSON — wrap it
             const proseFactor = {
               factor: factorName,
-              keyFinding: content.slice(0, 200),
+              context: content.slice(0, 300),
               numbers: '',
               context: content
             };
@@ -657,7 +660,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
     console.log(`[Research Briefing] ✅ ${_accumulatedFactors.length}/${allFactorNames.length} factors completed in ${elapsed}s (${totalToolCalls} stat + ${groundingCalls} grounding calls)`);
 
     // Data quality check — warn about factors with empty findings
-    const emptyFactors = _accumulatedFactors.filter(f => !f.keyFinding && !f.numbers);
+    const emptyFactors = _accumulatedFactors.filter(f => !f.numbers && !f.context);
     if (emptyFactors.length > 0) {
       console.warn(`[Research Briefing] ⚠️ ${emptyFactors.length} factors have empty findings: ${emptyFactors.map(f => f.factor).join(', ')}`);
     }
@@ -675,10 +678,9 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
       // Fallback: render directly from accumulated factors without normalization
       const directBriefing = _accumulatedFactors.map(f => {
         const name = f.factor || f.name || f.title || 'Unknown';
-        const finding = f.keyFinding || f.key_finding || f.finding || '';
         const numbers = f.numbers || f.stats || '';
         const context = f.context || f.sample_context || '';
-        return `**${name}**\nKey finding: ${finding}\nNumbers: ${numbers}\nContext: ${context}`;
+        return `**${name}**\nNumbers: ${numbers}\nContext: ${context}`;
       }).join('\n\n');
       return { briefing: directBriefing, calledTokens };
     }
