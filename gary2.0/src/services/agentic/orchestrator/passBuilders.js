@@ -422,15 +422,14 @@ Check each offered line in both directions — does your read beat the price on 
 
 Your JSON must include all three fields: "final_pick", "rationale", AND "confidence_score". Missing confidence_score will cause a system error.`;
 
-  // Side-neutral synthesis for EVERY sport (founder, Aug 27 — closing the
-  // MLB gap the Aug-24 football fix left open): the old shared wording
-  // enumerated when-the-favorite / when-the-underdog cases, and its vivid
-  // dog example ("price pays far more than your read of a close game
-  // requires") came back near-verbatim in the Aug-26 dog cards ("closer to
-  // a coin flip than the price suggests"). Neither side gets a template.
-  const synthesis = isFootball
-    ? `You've done your investigation and formed your read of this game. Your research assistant investigated independently and surfaced their findings. Now make the betting decision from the two posted sides. The sign of the spread is not evidence and neither side starts with a lower burden of proof. Hold each team's verified four-quarter cover path against this exact number, decide where your read differs from the market, and take the ticket you would put your own money on. Commit now and draft the exact rationale that should appear on the pick card.`
-    : `You've done your investigation and formed your read of this game. Your research assistant investigated independently and surfaced their findings. Now the actual job: the betting options in front of you are what you are picking from — you are not being asked who is better or who wins on paper; the prices already say what the world thinks. You are picking the BEST BET on this board: neither side starts with a lower burden of proof, and the direction of a price is not evidence. Hold your read of tonight against each posted option, decide where your read and the market disagree, and take the ticket you would put your own money on. Commit now and draft the exact rationale that should appear on the pick card.`;
+  // THE BARE ASK (founder GO, Aug 27, superseding the same-morning neutral
+  // rewrite): the decision turn asks what a person would ask — nothing else.
+  // Every synthesis speech this turn ever carried (side cases, "the board",
+  // burden-of-proof framing, commit/process narration) is gone for every
+  // sport; "no different than I was talking to a human." The instructions
+  // block below is untouched — it is the output contract (format, rails),
+  // not betting talk.
+  const synthesis = `What's your bet, and what are the reasons why?`;
 
   return `
 <decision_checkpoint>

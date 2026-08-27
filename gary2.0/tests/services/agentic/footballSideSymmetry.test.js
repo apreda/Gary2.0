@@ -122,10 +122,16 @@ describe('football side-symmetry contract', () => {
       expect(prompt).not.toContain('For spread picks: use "spreadOdds" value');
     }
     expect(nfl).toContain('separate verified starter-phase evidence from verified reserve-phase evidence');
-    // Aug 27 (founder): the shared synthesis is side-neutral for EVERY sport
-    // now — the vivid dog example is gone from the non-football branch too.
+    // Aug 27 (founder, second GO of the day): the synthesis is the bare ask —
+    // one human question, identical for every sport. No side cases, no
+    // burden-of-proof framing, no board talk, no process narration.
     expect(nba).not.toContain('the underdog, because the price pays far more');
-    expect(nba).toContain('neither side starts with a lower burden of proof');
+    for (const prompt of [nfl, ncaaf, nba]) {
+      expect(prompt).toContain("What's your bet, and what are the reasons why?");
+      expect(prompt).not.toContain('burden of proof');
+      expect(prompt).not.toContain('Commit now');
+      expect(prompt).not.toContain('BEST BET on this board');
+    }
   });
 
   it('removes the one-sided favorite vignette from football system prompts', () => {

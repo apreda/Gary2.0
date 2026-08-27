@@ -73,7 +73,7 @@ describe('analyzeGameDesk — the blind report → priced decision (Aug 12 contr
     expect(calls[0]).not.toContain('THE LINES');
     expect(calls[1]).not.toContain('sealed');
     expect(calls[1]).toContain('Reds ML -112');
-    expect(calls[1]).toContain('Which bet is it?');
+    expect(calls[1]).toContain("What's your bet, and what are the reasons why?");
     expect(calls[1]).not.toMatch(/one unit|\$100/i); // stake never declared — it invites a payout comparison
     expect(calls[1]).toContain('Then, under the JSON, write "Gary\'s Take"');
     expect(calls[1]).not.toMatch(/better bet|already paid for|losing season/);
@@ -197,7 +197,7 @@ describe('the ask texts — the whole contract, nothing else', () => {
   it('buildTicketAsk is the board plus the bare decision — no value vocabulary, no stake', () => {
     const ask = buildTicketAsk('BOARD');
     expect(ask.startsWith('BOARD')).toBe(true);
-    expect(ask).toContain('Which bet is it?');
+    expect(ask).toContain("What's your bet, and what are the reasons why?");
     expect(ask).not.toMatch(/one unit|\$100/i);
     expect(ask).not.toMatch(/better bet|already paid for|market's read/i);
     expect(ask).not.toContain('sealed');
@@ -209,7 +209,7 @@ describe('the ask texts — the whole contract, nothing else', () => {
   it('buildRunLineTicketAsk is the same bare decision with the moneyline off the board — ±1.5 only, no mechanics lecture', () => {
     const ask = buildRunLineTicketAsk('RL BOARD');
     expect(ask.startsWith('RL BOARD')).toBe(true);
-    expect(ask).toContain('Which bet is it?');
+    expect(ask).toContain("What's your bet, and what are the reasons why?");
     expect(ask).not.toMatch(/one unit|\$100/i);
     expect(ask).not.toMatch(/better bet/i);
     expect(ask).toContain('[+1.5 or -1.5]');
