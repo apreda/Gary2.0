@@ -3416,7 +3416,12 @@ const ballDontLieService = {
         // and can exceed BDL's 100-row page before the FBS policy is applied.
         // Follow every NCAAF cursor first; callers then classify the complete
         // provider result instead of silently publishing only page one.
-        const paginate = sportKey === 'americanfootball_ncaaf';
+        // paginateAll (Aug 27, the H2H blindness fix): any caller may opt in
+        // — a 100-row page of a ~160-game MLB season made every post-June
+        // meeting invisible to MLB_H2H while the same desk narrated the
+        // series. The flag never reaches the querystring.
+        const paginate = sportKey === 'americanfootball_ncaaf' || requestParams?.paginateAll === true;
+        if (requestParams?.paginateAll != null) delete requestParams.paginateAll;
         const allGames = [];
         const seenCursors = new Set();
         let cursor = requestParams?.cursor ?? null;

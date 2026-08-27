@@ -411,6 +411,60 @@ export async function getScoringFlowAttributed(gamePk) {
 }
 
 /**
+ * BATTER TRIPS (founder GO, Aug 27 — the full player block): every plate
+ * appearance in a final game, per batter, with the pitcher, inning, traffic,
+ * and score where it matters — plus his steals. From the official
+ * play-by-play; finals are immutable so the derived map caches hard.
+ * Returns { [batterMlbamId]: ["HR off Perales (7th, two on, made it 8-1)", ...] }
+ */
+export async function getBatterGameTrips(gamePk) {
+  const key = `batter_trips_${gamePk}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+  const data = await apiFetch(`/game/${gamePk}/playByPlay`);
+  const all = data?.allPlays || [];
+  const ord = (n) => (n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`);
+  const EV = {
+    'Single': '1B', 'Double': '2B', 'Triple': '3B', 'Home Run': 'HR',
+    'Walk': 'BB', 'Intent Walk': 'IBB', 'Strikeout': 'K', 'Strikeout Double Play': 'K (DP)',
+    'Hit By Pitch': 'HBP', 'Sac Fly': 'sac fly', 'Sac Bunt': 'sac bunt',
+    'Grounded Into DP': 'GIDP', 'Field Error': 'reached on error',
+    'Fielders Choice': 'FC', 'Fielders Choice Out': 'FC', 'Forceout': 'forceout',
+    'Flyout': 'flyout', 'Lineout': 'lineout', 'Groundout': 'groundout', 'Pop Out': 'popout',
+    'Double Play': 'DP', 'Triple Play': 'TP',
+  };
+  const trips = {};
+  for (const p of all) {
+    const bid = p?.matchup?.batter?.id;
+    const ev = p?.result?.event;
+    const inning = p?.about?.inning;
+    // The batter's own steals ride his trail even when someone else is up.
+    for (const r of p?.runners || []) {
+      const rid = r?.details?.runner?.id;
+      if (rid != null && /^stolen_base/.test(String(r?.details?.eventType || ''))) {
+        (trips[rid] ||= []).push(`SB (${ord(inning)})`);
+      }
+    }
+    if (bid == null || !ev) continue;
+    const abbrev = EV[ev] || String(ev).toLowerCase();
+    const isHit = ['1B', '2B', '3B', 'HR'].includes(abbrev);
+    const reached = isHit || ['BB', 'IBB', 'HBP', 'reached on error'].includes(abbrev);
+    const pitcher = String(p.matchup?.pitcher?.fullName || '').split(' ').pop();
+    const joiner = reached ? 'off' : 'vs';
+    const aboard = new Set((p.runners || [])
+      .filter((r) => (r?.movement?.start ?? r?.movement?.originBase) && r?.details?.runner?.id !== bid)
+      .map((r) => r?.details?.runner?.id)).size;
+    const aboardBit = isHit && aboard >= 3 ? ', bases loaded' : isHit && aboard === 2 ? ', two on' : '';
+    const rbi = Number(p?.result?.rbi) || 0;
+    const scoreBit = abbrev === 'HR' ? `, made it ${p.result.awayScore}-${p.result.homeScore}` : '';
+    const rbiBit = abbrev !== 'HR' && rbi > 0 ? `, ${rbi} RBI` : '';
+    (trips[bid] ||= []).push(`${abbrev}${pitcher ? ` ${joiner} ${pitcher}` : ''} (${ord(inning)}${aboardBit}${scoreBit}${rbiBit})`);
+  }
+  setCache(key, trips);
+  return trips;
+}
+
+/**
  * PEN ENTRY CONTEXT (founder GO, Aug 12 — the bullpen's missing story):
  * for each pitcher in a final game, the situation he ENTERED into — inning,
  * half, and the score before his first pitch. Keyed by MLBAM pitcher id.
@@ -688,7 +742,8 @@ export async function getPitcherLastStarts(personId, season, limit = 3) {
 }
 
 /** Raw season pitching game log for one person — shares the cache key with
- *  getPitcherLastStarts, so starter devices and the pen usage patterns never
+ *  getPitcherLastStarts,
+  getBatterGameTrips, so starter devices and the pen usage patterns never
  *  double-fetch the same log. Returns the statsapi splits verbatim. */
 export async function getPitcherGameLogRaw(personId, season) {
   const key = `mlb_sp_log_${personId}_${season}`;

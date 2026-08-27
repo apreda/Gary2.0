@@ -1022,7 +1022,10 @@ export const mlbFetchers = {
       const homeId = home.id || home.teamId;
       const awayId = away.id || away.teamId;
       if (homeId && awayId) {
-        const games = await ballDontLieService.getGames('baseball_mlb', { team_ids: [homeId], seasons: [season || new Date().getFullYear()], per_page: 100 });
+        // paginateAll (Aug 27): one 100-row page of a full MLB season ended
+        // in mid-June — H2H said "may not have played yet" about clubs that
+        // met LAST NIGHT. Every page now, spring filtered below.
+        const games = await ballDontLieService.getGames('baseball_mlb', { team_ids: [homeId], seasons: [season || new Date().getFullYear()], per_page: 100, paginateAll: true });
         const h2h = (games || []).filter(g => {
           const hId = g.home_team?.id || g.home_team_data?.id;
           const aId = g.visitor_team?.id || g.away_team?.id;
@@ -1075,13 +1078,22 @@ export const mlbFetchers = {
         }
       }
     } catch (e) {
+      // A FAILED lookup is not an empty result (funnel law): say it failed,
+      // never "they may not have played" — that read as series blindness on
+      // a desk whose pen section narrated the same series (Aug 27 catch).
       console.warn(`[MLB Fetchers] BDL H2H failed: ${e.message}`);
+      return {
+        homeValue: 'H2H lookup FAILED this run — treat season-series data as unavailable, NOT as "no meetings". Do not cite season-series records or run totals.',
+        awayValue: '',
+        comparison: `MLB H2H: ${awayTeam} vs ${homeTeam}`,
+        source: 'BDL API (lookup failed)',
+      };
     }
     return {
-      homeValue: 'No H2H data available (teams may not have played yet this season). Season-series run totals: NOT AVAILABLE — do not cite per-game series scoring averages.',
+      homeValue: 'No regular-season meetings between these clubs this season (full season paginated). Season-series run totals: NOT AVAILABLE — do not cite per-game series scoring averages.',
       awayValue: '',
       comparison: `MLB H2H: ${awayTeam} vs ${homeTeam}`,
-      source: 'BDL API (no data)',
+      source: 'BDL API (no meetings)',
     };
   },
 

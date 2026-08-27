@@ -332,13 +332,13 @@ describe('homeRoadLine', () => {
     ];
     // home: 18 IP, 4 ER = 2.00; road: 12.1 IP, 13 ER = 9.49
     expect(homeRoadLine(starts)).toBe(
-      'Home/Road: 3 home starts — 2.00 ERA, team 2-1 · 3 road starts — 9.49 ERA, team 1-2'
+      'Home/Road: 3 home starts, 18.0 IP — 2.00 ERA, team 2-1 · 3 road starts, 12.1 IP — 9.49 ERA, team 1-2'
     );
   });
 
   it('omits a side with zero starts instead of inventing it', () => {
     const starts = [S(true, '6.0', 2, true), S(true, '5.0', 1, null)];
-    expect(homeRoadLine(starts)).toBe('Home/Road: 2 home starts — 2.45 ERA, team 1-0');
+    expect(homeRoadLine(starts)).toBe('Home/Road: 2 home starts, 11.0 IP — 2.45 ERA, team 1-0');
   });
 
   it('null under 2 starts and on malformed innings', () => {
@@ -359,8 +359,8 @@ describe('homeRoadLine', () => {
     ];
     // road season: 25 IP 13 ER = 4.68; road last 3: 18 IP 4 ER = 2.00
     expect(homeRoadLine(starts)).toBe(
-      'Home/Road: 1 home start — 2.57 ERA, team 1-0 (most recent 2026-07-04 vs Royals) · '
-      + '5 road starts — 4.68 ERA, team 2-3, last 3 road: 2.00 (most recent 2026-06-28 @ Tigers)'
+      'Home/Road: 1 home start, 7.0 IP — 2.57 ERA, team 1-0 (most recent 2026-07-04 vs Royals) · '
+      + '5 road starts, 25.0 IP — 4.68 ERA, team 2-3, last 3 road: 2.00 (most recent 2026-06-28 @ Tigers)'
     );
   });
 });

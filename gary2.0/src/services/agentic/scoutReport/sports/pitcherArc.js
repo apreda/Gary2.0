@@ -82,6 +82,11 @@ export function homeRoadLine(starts) {
     const era = eraOf(rows);
     if (era == null) return MALFORMED; // one bad row poisons the WHOLE line —
     // printing only the clean side would read as "all his starts are there"
+    // The half's innings ride the count (founder, Aug 27: the aggregate
+    // arrives WITH its sample — never a naked venue rate).
+    let halfOuts = 0;
+    for (const g of rows) halfOuts += outsFromIp(g.ip) ?? 0;
+    const ipStr = `${Math.floor(halfOuts / 3)}.${halfOuts % 3}`;
     const decided = rows.filter((g) => g.win != null);
     const w = decided.filter((g) => g.win).length;
     const rec = decided.length ? `, team ${w}-${decided.length - w}` : '';
@@ -97,7 +102,7 @@ export function homeRoadLine(starts) {
     if (latest?.date && latest?.opponent) {
       recent += ` (most recent ${latest.date} ${label === 'home' ? 'vs' : '@'} ${latest.opponent})`;
     }
-    return `${rows.length} ${label} start${rows.length === 1 ? '' : 's'} — ${era} ERA${rec}${recent}`;
+    return `${rows.length} ${label} start${rows.length === 1 ? '' : 's'}, ${ipStr} IP — ${era} ERA${rec}${recent}`;
   };
   const halves = [
     half(starts.filter((g) => g.isHome === true), 'home'),

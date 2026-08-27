@@ -22,6 +22,8 @@ import {
   getMlbUpcomingGames,
   getProbablePitchers,
   getMlbGameLineups,
+  getGameBoxScore,
+  getBatterGameTrips,
   getPitcherPlatoonSplits,
   getMlbTransactions,
   getPitcherLastStarts,
@@ -1234,26 +1236,14 @@ export async function buildMlbScoutReport(game, options = {}) {
         for (const rp of pitchers.slice(1)) {
           bullpenLines.push(`${rp.player?.last_name || '?'} ${rp.ip}IP ${rp.er || 0}ER ${rp.p_k || 0}K`);
         }
-        // Full batting lineup — every hitter who had an at-bat, in batting order
-        const hitters = gameStats.filter(s => s.at_bats != null && s.at_bats > 0)
-          .sort((a, b) => (b.total_bases || 0) - (a.total_bases || 0));
-        for (const h of hitters) {
-          let extras = [];
-          if (h.hr > 0) extras.push(`${h.hr}HR`);
-          if (h.doubles > 0) extras.push(`${h.doubles}2B`);
-          if (h.rbi > 0) extras.push(`${h.rbi}RBI`);
-          if (h.runs > 0) extras.push(`${h.runs}R`);
-          if (h.bb > 0) extras.push(`${h.bb}BB`);
-          if (h.k > 0) extras.push(`${h.k}K`);
-          if (h.stolen_bases > 0) extras.push(`${h.stolen_bases}SB`);
-          keyHitters.push(`${h.player?.last_name || '?'} ${h.hits}-${h.at_bats}${extras.length ? ' ' + extras.join(' ') : ''}`);
-        }
+        // (Per-game Batting: lines moved into the player blocks Aug 27 —
+        // player-major replaces game-major; the game keeps its score, flow,
+        // and story.)
       }
 
       let recap = `  ${date}: ${wl} ${teamScore}-${oppScore} ${loc} ${oppName}`;
       if (spLine) recap += `\n    ${spLine}`;
       if (bullpenLines.length) recap += `\n    Bullpen: ${bullpenLines.join(' | ')}`;
-      if (keyHitters.length) recap += `\n    Batting: ${keyHitters.join(' | ')}`;
       // THE TAPE (Jul 26; pitcher-attributed Aug 12): how the runs actually
       // arrived — the official scoring plays, inning by inning, the pitcher
       // named on every one. Facts verbatim from the feed.
@@ -1533,12 +1523,13 @@ export async function buildMlbScoutReport(game, options = {}) {
   // HARD FAIL only when BOTH sources come up short — Gary cannot pick
   // without confirmed lineups + starting pitchers.
   // ═══════════════════════════════════════════════════════════════════
-  const formatLineup = (teamData, teamName, cardExtras = new Map()) => {
+  const formatLineup = (teamData, teamName, blocks = new Map()) => {
     if (!teamData || teamData.batters.length === 0) return `${teamName}: Not yet posted`;
     let out = `${teamName}:\n`;
-    out += teamData.batters.map(b => {
-      const extra = cardExtras.get(b);
-      return `  ${b.battingOrder}. ${b.name} (${b.position}) [Bats: ${b.batsThrows?.split('/')[0] || '?'}]${extra ? ` — ${extra}` : ''}`;
+    out += teamData.batters.map((b) => {
+      const head = `  ${b.battingOrder}. ${b.name} (${b.position}) [Bats: ${b.batsThrows?.split('/')[0] || '?'}]`;
+      const lines = blocks.get(b);
+      return lines?.length ? `${head}\n${lines.map((l) => `     ${l}`).join('\n')}` : head;
     }).join('\n');
     if (teamData.pitcher) out += `\n  SP: ${teamData.pitcher.name} (Throws: ${teamData.pitcher.batsThrows?.split('/')[1] || '?'})`;
     return out;
@@ -1651,27 +1642,83 @@ export async function buildMlbScoutReport(game, options = {}) {
       return `  Handedness: ${counts.L} LHB, ${counts.R} RHB${counts.S ? `, ${counts.S} switch` : ''}`;
     };
     const withHands = (formatted, line) => (line ? `${formatted}\n${line}` : formatted);
-    // THE CARD (founder GO, Aug 27 — "so Gary can see all the players info
-    // at once"): each lineup line carries the three facts a fan holds about
-    // a name tonight — his season, his series, and his history with
-    // tonight's arm. Career BvP prints for EVERY batter ("we have to show
-    // each player vs that pitcher" — never cherry-picked): a real line, an
-    // honest "no career ABs", or "unavailable this run" on a failed lookup.
-    // (This is the one founder-ruled carve-out to the Aug-10 no-prior-season
-    // law.) The per-batter stat walls this card replaces died today.
-    const seasonBitOf = (batter, pool) => {
+    // THE FULL PLAYER BLOCK (founder GO, Aug 27 PM — "if the lineup says Sal
+    // Steward then along with that should be all the info we have on him"):
+    // everything player-shaped prints under his name — the stats a sharp
+    // looks up (season full line, MLB.com-standard 7/15-day rolls, platoon,
+    // month arc) AND what a fan just knows (his series, his history with
+    // tonight's arm, every trip to the plate with the pitcher and the spot,
+    // and the writers' own words on him from the last game's story). Games
+    // and full stories stay game-shaped in their own sections. Career BvP is
+    // the founder-ruled carve-out to the Aug-10 no-prior-season law. One
+    // batter's bad vendor row loses only his lines, never the card.
+    const three = (v) => { const n = Number(v); return Number.isFinite(n) ? n.toFixed(3).replace(/^0\./, '.') : null; };
+    const poolRowOf = (batter, pool) => {
       const target = foldName(batter?.name);
-      const s = (pool || []).find((r) => foldName(r.player?.full_name || `${r.player?.first_name || ''} ${r.player?.last_name || ''}`) === target);
-      if (!s || !(s.batting_ab > 0)) return null;
-      const three = (v) => { const n = Number(v); return Number.isFinite(n) ? n.toFixed(3).replace(/^0\./, '.') : '—'; };
-      return `${three(s.batting_avg)}/${three(s.batting_ops)}, ${s.batting_hr ?? 0} HR`;
+      return (pool || []).find((r) => foldName(r.player?.full_name || `${r.player?.first_name || ''} ${r.player?.last_name || ''}`) === target) || null;
     };
-    const seriesBitOf = (batter, teamName) => {
-      if (!pairSeriesGameCount) return null;
-      const key = [...seriesBattersByTeam.keys()].find((k) => clubMatches(k, teamName));
-      const smap = key ? seriesBattersByTeam.get(key) : null;
-      const a = smap?.get(String(batter?.name || '').trim().split(/\s+/).pop());
-      return a ? `this series: ${a.h}-${a.ab}${a.hr ? `, ${a.hr} HR` : ''}` : 'this series: no ABs';
+    const seasonLineOf = (row) => {
+      if (!row || !(row.batting_ab > 0)) return null;
+      const rate = [
+        three(row.batting_avg) ? `${three(row.batting_avg)} AVG` : null,
+        three(row.batting_obp) ? `${three(row.batting_obp)} OBP` : null,
+        three(row.batting_slg) ? `${three(row.batting_slg)} SLG` : null,
+      ].filter(Boolean).join(' / ') + (three(row.batting_ops) ? ` (${three(row.batting_ops)} OPS)` : '');
+      const counts = [
+        `${row.batting_ab} AB`,
+        row.batting_r != null ? `${row.batting_r} R` : null,
+        `${row.batting_hr ?? 0} HR`,
+        row.batting_rbi != null ? `${row.batting_rbi} RBI` : null,
+        row.batting_2b != null ? `${row.batting_2b} 2B` : null,
+        row.batting_bb != null ? `${row.batting_bb} BB` : null,
+        row.batting_so != null ? `${row.batting_so} K` : null,
+        row.batting_sb != null ? `${row.batting_sb} SB` : null,
+      ].filter(Boolean).join(', ');
+      return `Season: ${rate} — ${counts}`;
+    };
+    const HITTER_MONTHS = { March: 3, April: 4, May: 5, June: 6, July: 7, August: 8, September: 9, October: 10 };
+    const splitsLinesOf = async (batter) => {
+      if (batter?.playerId == null) return [];
+      const splits = await ballDontLieService.getMlbPlayerSplits({ playerId: batter.playerId, season }).catch(() => null);
+      if (!splits) return [];
+      const out = [];
+      const dayRows = splits.byDayMonth || [];
+      const roll = (nm) => dayRows.find((r) => r.category === 'batting' && r.split_name === nm && r.at_bats > 0);
+      const fmtRoll = (label, r) => (r ? `${label} ${r.hits}-${r.at_bats}, ${r.home_runs || 0} HR (${three(r.avg) ?? '—'}/${three(r.ops) ?? '—'})` : null);
+      const rollBits = [fmtRoll('last 7 days', roll('Last 7 Days')), fmtRoll('last 15 days', roll('Last 15 Days'))].filter(Boolean);
+      if (rollBits.length) out.push(`Rolling (AVG/OPS): ${rollBits.join(' | ')}`);
+      const bd = splits.byBreakdown || [];
+      const hand = (nm) => bd.find((r) => r.category === 'batting' && r.split_name === nm && r.at_bats > 0);
+      const fmtHand = (r) => `${three(r.avg) ?? '—'}/${three(r.ops) ?? '—'}${r.home_runs ? `, ${r.home_runs} HR` : ''} (${r.at_bats} AB)`;
+      const vl = hand('vs. Left');
+      const vr = hand('vs. Right');
+      if (vl || vr) out.push(`Platoon (AVG/OPS): vs LHP ${vl ? fmtHand(vl) : 'no ABs'} | vs RHP ${vr ? fmtHand(vr) : 'no ABs'}`);
+      const months = dayRows
+        .filter((r) => r.category === 'batting' && HITTER_MONTHS[r.split_name] && r.at_bats > 0)
+        .sort((a, b) => HITTER_MONTHS[a.split_name] - HITTER_MONTHS[b.split_name])
+        .map((r) => `${r.split_name.slice(0, 3)} ${three(r.avg) ?? '—'}/${three(r.ops) ?? '—'} (${r.at_bats} AB${r.home_runs ? `, ${r.home_runs} HR` : ''})`);
+      if (months.length >= 2) out.push(`By month (AVG/OPS): ${months.join(' · ')}`);
+      return out;
+    };
+    // "This series" derives from the same official play-by-play as the trip
+    // lines (Aug 27 live catch: the BDL box join missed a whole series and
+    // printed 'no ABs' under three-hit nights — one source, one truth).
+    const seriesLineFromTrips = (bId, trailData, oppTeamName) => {
+      const seriesGames = (trailData || []).filter((g) => clubMatches(g.opp, oppTeamName));
+      if (!seriesGames.length) return null;
+      let ab = 0; let h = 0; let hr = 0; let seen = false;
+      for (const g of seriesGames) {
+        for (const t of g.trips?.[bId] || []) {
+          seen = true;
+          const lead = String(t).split(' ')[0];
+          if (['BB', 'IBB', 'HBP', 'SB', 'caught'].includes(lead) || /^sac/.test(lead)) continue;
+          ab += 1;
+          if (['1B', '2B', '3B', 'HR'].includes(lead)) h += 1;
+          if (lead === 'HR') hr += 1;
+        }
+      }
+      if (!seen) return 'This series: no ABs';
+      return `This series: ${h}-${ab}${hr ? `, ${hr} HR` : ''}`;
     };
     const rosterIdByName = (roster, name) => {
       const target = foldName(name);
@@ -1682,7 +1729,7 @@ export async function buildMlbScoutReport(game, options = {}) {
       const spLast = String(oppProbable?.fullName || '').trim().split(/\s+/).pop();
       if (!spId || !spLast) return null; // no announced arm — nothing to compare
       const batterId = batter?.personId ?? rosterIdByName(roster, batter?.name);
-      if (!batterId) return `career vs ${spLast}: unavailable this run`;
+      if (!batterId) return `Career vs ${spLast}: unavailable this run`;
       try {
         const r = await getCachedOrFetch(`mlb_bvp_career_${batterId}_${spId}`, async () => {
           const resp = await fetch(`https://statsapi.mlb.com/api/v1/people/${batterId}/stats?stats=vsPlayerTotal&opposingPlayerId=${spId}&group=hitting`);
@@ -1691,32 +1738,119 @@ export async function buildMlbScoutReport(game, options = {}) {
           const st = j?.stats?.[0]?.splits?.[0]?.stat || null;
           return { ab: st?.atBats ?? 0, h: st?.hits ?? 0, hr: st?.homeRuns ?? 0 };
         }, 24 * 60);
-        if (!r || !(r.ab > 0)) return `no career ABs vs ${spLast}`;
-        return `career vs ${spLast}: ${r.h}-${r.ab}${r.hr ? `, ${r.hr} HR` : ''}`;
-      } catch { return `career vs ${spLast}: unavailable this run`; }
+        if (!r || !(r.ab > 0)) return `No career ABs vs ${spLast}`;
+        return `Career vs ${spLast}: ${r.h}-${r.ab}${r.hr ? `, ${r.hr} HR` : ''}`;
+      } catch { return `Career vs ${spLast}: unavailable this run`; }
     };
-    const buildCardExtras = async (sideData, pool, teamName, roster, oppProbable) => {
-      const extras = new Map();
+    // Trail window: the whole current series and never fewer than the last
+    // three games — the founder's recency floor, same grain as the pen's.
+    const trailGamesFor = (recentGames, teamName) => {
+      const finals = (recentGames || []).filter((g) => g?.gamePk);
+      if (!finals.length) return [];
+      const oppOfG = (g) => (clubMatches(g?.teams?.home?.team?.name, teamName) ? g?.teams?.away?.team?.name : g?.teams?.home?.team?.name);
+      const lastOpp = oppOfG(finals[finals.length - 1]);
+      const picked = new Map();
+      for (let i = finals.length - 1; i >= 0; i -= 1) {
+        if (oppOfG(finals[i]) === lastOpp) picked.set(finals[i].gamePk, finals[i]);
+        else break;
+      }
+      for (const g of finals.slice(-3)) picked.set(g.gamePk, g);
+      return [...picked.values()]
+        .sort((a, b) => String(a.officialDate || a.gameDate || '').localeCompare(String(b.officialDate || b.gameDate || '')))
+        .slice(-6);
+    };
+    const trailDataFor = async (recentGames, teamName) => {
+      const games = trailGamesFor(recentGames, teamName);
+      return await Promise.all(games.map(async (g) => {
+        const isHome = clubMatches(g?.teams?.home?.team?.name, teamName);
+        const opp = String(isHome ? g?.teams?.away?.team?.name : g?.teams?.home?.team?.name || '?');
+        const day = String(g.officialDate || g.gameDate || '').slice(5, 10).replace('-', '/');
+        const [trips, box] = await Promise.all([
+          getBatterGameTrips(g.gamePk).catch(() => ({})),
+          getGameBoxScore(g.gamePk).catch(() => null),
+        ]);
+        const oppSide = box?.teams
+          ? (box.teams.home?.team && clubMatches(box.teams.home.team.name, teamName) ? box.teams.away : box.teams.home)
+          : null;
+        const starterId = Array.isArray(oppSide?.pitchers) ? oppSide.pitchers[0] : null;
+        const starter = starterId != null
+          ? String(oppSide?.players?.[`ID${starterId}`]?.person?.fullName || '').split(' ').pop() || null
+          : null;
+        return { pk: g.gamePk, day, opp, vsAt: isHome ? 'vs' : '@', starter, trips };
+      }));
+    };
+    const nickOfClub = (name) => (String(name).match(/\b(Blue Jays|Red Sox|White Sox)$/) || [])[1] || String(name || '?').split(' ').pop();
+    const tripsLinesOf = (batter, roster, trailData) => {
+      const bId = batter?.personId ?? rosterIdByName(roster, batter?.name);
+      if (!bId || !trailData?.length) return [];
+      const lines = trailData.slice().reverse().map((g) => {
+        const t = g.trips?.[bId];
+        const head = `${g.day} ${g.vsAt} ${nickOfClub(g.opp)}${g.starter ? ` (started ${g.starter})` : ''}`;
+        return `  ${head}: ${t && t.length ? t.join(' · ') : 'did not play'}`;
+      });
+      return ['Every trip to the plate — this series, and always at least his last 3 games:', ...lines];
+    };
+    const pressLinesOf = (batter, lastPk) => {
+      const story = lastPk != null ? wireStoryByPk.get(lastPk) : null;
+      if (!story?.body) return [];
+      const last = String(batter?.name || '').trim().split(/\s+/).pop();
+      if (!last) return [];
+      const sentences = String(story.body).replace(/\s*\n+\s*/g, ' ').split(/(?<=[.!?"”])\s+(?=[A-Z"“])/);
+      const first = String(batter?.name || '').trim().split(/\s+/)[0];
+      // Surname guard (Aug 27 live catch: Jordan Walker's block quoted a
+      // sentence about reliever Josh Walker): a bare surname only counts
+      // when the sentence doesn't attach it to a different first name.
+      const namesHim = (s) => {
+        if (first && s.includes(`${first} ${last}`)) return true;
+        if (!s.includes(last)) return false;
+        const owners = [...s.matchAll(new RegExp(`([A-Z][\\w'’.-]+)\\s+${last}\\b`, 'g'))].map((m) => m[1]);
+        return owners.length === 0 || owners.some((o) => o === first);
+      };
+      const picked = [];
+      for (let i = 0; i < sentences.length; i += 1) {
+        if (namesHim(sentences[i])) {
+          picked.push(sentences[i]);
+          const nxt = sentences[i + 1];
+          if (nxt && /^["“]/.test(nxt)) { picked.push(nxt); i += 1; }
+        }
+      }
+      if (!picked.length) return ['The press on him, last game: (not named in the game story)'];
+      return [
+        'The press on him, last game (from the official game story — the full article prints whole in the games section):',
+        `  "${picked.join(' ')}"`,
+      ];
+    };
+    const buildPlayerBlocks = async (sideData, pool, teamName, roster, oppProbable, recentGames, oppTeamName) => {
+      const blocks = new Map();
+      const trailData = await trailDataFor(recentGames, teamName).catch(() => []);
+      const lastPk = trailData.length ? trailData[trailData.length - 1].pk : null;
       await Promise.all((sideData?.batters || []).map(async (b) => {
-        // One batter's bad row loses only his extras — never the card.
+        // One batter's bad row loses only his lines — never the card.
         try {
+          const lines = [];
+          const s = seasonLineOf(poolRowOf(b, pool));
+          if (s) lines.push(s);
+          lines.push(...await splitsLinesOf(b));
+          const bId = b?.personId ?? rosterIdByName(roster, b?.name);
           const bits = [
-            seasonBitOf(b, pool),
-            seriesBitOf(b, teamName),
+            bId != null ? seriesLineFromTrips(bId, trailData, oppTeamName) : null,
             await careerBvpBitOf(b, roster, oppProbable),
           ].filter(Boolean);
-          if (bits.length) extras.set(b, bits.join(' · '));
-        } catch { /* card line prints bare */ }
+          if (bits.length) lines.push(bits.join(' · '));
+          lines.push(...tripsLinesOf(b, roster, trailData));
+          lines.push(...pressLinesOf(b, lastPk));
+          if (lines.length) blocks.set(b, lines);
+        } catch { /* block prints bare */ }
       }));
-      return extras;
+      return blocks;
     };
-    const [homeCardExtras, awayCardExtras] = await Promise.all([
-      buildCardExtras(homeData, homePlayerSeasonStats, homeTeam, homeRoster, probablePitchersData?.away),
-      buildCardExtras(awayData, awayPlayerSeasonStats, awayTeam, awayRoster, probablePitchersData?.home),
+    const [homePlayerBlocks, awayPlayerBlocks] = await Promise.all([
+      buildPlayerBlocks(homeData, homePlayerSeasonStats, homeTeam, homeRoster, probablePitchersData?.away, homeRecentGames, awayTeam),
+      buildPlayerBlocks(awayData, awayPlayerSeasonStats, awayTeam, awayRoster, probablePitchersData?.home, awayRecentGames, homeTeam),
     ]);
     confirmedLineupsSection = [
-      withSat(withHands(formatLineup(homeData, homeTeam, homeCardExtras), handsLine(homeData)), satToday(homeTeam, homeData)),
-      withSat(withHands(formatLineup(awayData, awayTeam, awayCardExtras), handsLine(awayData)), satToday(awayTeam, awayData)),
+      withSat(withHands(formatLineup(homeData, homeTeam, homePlayerBlocks), handsLine(homeData)), satToday(homeTeam, homeData)),
+      withSat(withHands(formatLineup(awayData, awayTeam, awayPlayerBlocks), handsLine(awayData)), satToday(awayTeam, awayData)),
     ].join('\n\n');
   }
 
