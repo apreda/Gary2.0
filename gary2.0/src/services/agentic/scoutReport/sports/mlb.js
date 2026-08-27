@@ -37,7 +37,7 @@ import {
   getPitcherMilbSeasonRaw,
   getPitcherGameLogRaw,
 } from '../../../mlbStatsApiService.js';
-import { computeSpVsHandByStart, computeSeasonBvpForLineup, computePitchTypeTrendByStart } from './mlbPlatoonRecency.js';
+import { computeSpVsHandByStart, computePitchTypeTrendByStart } from './mlbPlatoonRecency.js';
 import { computeTeamMonthArc, computeBounceBackLine, computeRecordSince, computeCurrentStreak, computeRecentQuality, computeVenueTransition } from './mlbSeasonContext.js';
 import { recentWindowLine, monthArcLine, longLayoffFlag, earlyCareerFlag, midSeasonGapFlag, singleStartDistortion, teamChangeFlags, seasonLineQualifier, matchupRecencyLine, homeRoadLine, whoHeIsLine } from './pitcherArc.js';
 import { milbLineFromStatsReply } from '../../../starterDebut.js';
@@ -45,7 +45,7 @@ import { foldName } from '../../../../utils/nameUtils.js';
 import { findStandingsRow } from '../../../teamIdentity.js';
 import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbSeasonSeriesGroups, computeMlbScheduleShape, toEtDate, clubMatches } from './mlbSeriesState.js';
 import { aggregateRecentWindow } from './mlbRecentWindow.js';
-import { computeHitterContact, hitterContactLine, computePitcherWhiffByStart } from './mlbContactQuality.js';
+import { computePitcherWhiffByStart } from './mlbContactQuality.js';
 import {
   completedMlbTeamGames,
   resolveMlbGamesMissed,
@@ -1315,8 +1315,12 @@ export async function buildMlbScoutReport(game, options = {}) {
   // Series batters per team, hoisted for the SAT TODAY diff in the lineups
   // section below (founder GO, Aug 12 — the Cowser miss: the desk shows who
   // IS in tonight; who ISN'T is invisible unless someone diffs the series).
-  const seriesBattersByTeam = new Map(); // team last-word -> Map(lastName -> {ab,h,hr,rbi})
-  let thisSeriesHotSection = '';
+  // Per-batter series aggregates: feeds the lineup card's "this series" line
+  // and the SAT TODAY diff. (The printed who's-doing-what tallies died
+  // Aug 27 — founder: the facts ride the lineup card, the stories carry
+  // the narrative.)
+  const seriesBattersByTeam = new Map(); // folded full team name -> Map(lastName -> {ab,h,hr,rbi})
+  let pairSeriesGameCount = 0;
   try {
     const pairGame = (g) => {
       const an = g?.teams?.away?.team?.name;
@@ -1351,29 +1355,14 @@ export async function buildMlbScoutReport(game, options = {}) {
           a.ip += parseFloat(r.ip || 0) || 0; a.er += r.er || 0; a.k += r.p_k || 0;
         }
       }
-      const teamLine = (nick) => {
-        const key = [...perTeam.keys()].find((k) => clubMatches(k, nick));
-        const players = key ? perTeam.get(key) : null;
-        if (!players) return null;
-        const bats = [...players.entries()].filter(([, a]) => a.ab > 0)
-          .sort((x, y) => (y[1].h + y[1].hr * 2) - (x[1].h + x[1].hr * 2)).slice(0, 5)
-          .map(([nm, a]) => `${nm} ${a.h}-${a.ab}${a.hr ? ` ${a.hr}HR` : ''}${a.rbi ? ` ${a.rbi}RBI` : ''}`);
-        const arms = [...players.entries()].filter(([, a]) => a.ip > 0)
-          .sort((x, y) => y[1].ip - x[1].ip).slice(0, 3)
-          .map(([nm, a]) => `${nm} ${a.ip.toFixed(1)}IP ${a.er}ER ${a.k}K`);
-        const bits = [];
-        if (bats.length) bits.push(`Bats: ${bats.join(' | ')}`);
-        if (arms.length) bits.push(`Arms: ${arms.join(' | ')}`);
-        return bits.length ? `${nick} this series — ${bits.join('  ·  ')}` : null;
-      };
-      thisSeriesHotSection = [teamLine(homeTeam), teamLine(awayTeam)].filter(Boolean).join('\n');
+      pairSeriesGameCount = seriesGames.length;
       for (const [tKey, players] of perTeam.entries()) {
         const bats = new Map();
         for (const [nm, a] of players.entries()) if (a.ab > 0) bats.set(nm, a);
         if (bats.size) seriesBattersByTeam.set(tKey, bats);
       }
     }
-  } catch (e) { console.warn(`[Scout Report] series-hot failed: ${e.message}`); thisSeriesHotSection = ''; }
+  } catch (e) { console.warn(`[Scout Report] series-batters failed: ${e.message}`); }
 
   // ═══════════════════════════════════════════════════════════════════
   // (SITUATIONAL RECORDS section REMOVED — founder, Aug 5 PM: "record tells
@@ -1544,10 +1533,13 @@ export async function buildMlbScoutReport(game, options = {}) {
   // HARD FAIL only when BOTH sources come up short — Gary cannot pick
   // without confirmed lineups + starting pitchers.
   // ═══════════════════════════════════════════════════════════════════
-  const formatLineup = (teamData, teamName) => {
+  const formatLineup = (teamData, teamName, cardExtras = new Map()) => {
     if (!teamData || teamData.batters.length === 0) return `${teamName}: Not yet posted`;
     let out = `${teamName}:\n`;
-    out += teamData.batters.map(b => `  ${b.battingOrder}. ${b.name} (${b.position}) [Bats: ${b.batsThrows?.split('/')[0] || '?'}]`).join('\n');
+    out += teamData.batters.map(b => {
+      const extra = cardExtras.get(b);
+      return `  ${b.battingOrder}. ${b.name} (${b.position}) [Bats: ${b.batsThrows?.split('/')[0] || '?'}]${extra ? ` — ${extra}` : ''}`;
+    }).join('\n');
     if (teamData.pitcher) out += `\n  SP: ${teamData.pitcher.name} (Throws: ${teamData.pitcher.batsThrows?.split('/')[1] || '?'})`;
     return out;
   };
@@ -1585,11 +1577,10 @@ export async function buildMlbScoutReport(game, options = {}) {
 
   // LINEUP NORMALIZATION (bug fix, Aug 19 eve — the [Bats: ?] render): a
   // statsapi-fallback lineup carries no handedness (needs person hydration)
-  // and no BDL player ids — which silently blanked the handedness chain AND
-  // the entire per-hitter enrichment (rolls, season anchor, platoon, month
-  // arc, vs-opponent) on fallback nights. Hydrate hands from the people
-  // batch; join BDL ids by folded name against the season stats already in
-  // memory. BDL-sourced lineups pass through untouched.
+  // and no BDL player ids. Hydrate hands from the people batch; join BDL
+  // ids by folded name against the season stats already in memory (the id
+  // bridge stays for the card's possible platoon/month additions, pending
+  // the founder's post-review ruling). BDL-sourced lineups pass untouched.
   try {
     const needHands = [];
     for (const sideData of [homeData, awayData]) {
@@ -1660,9 +1651,72 @@ export async function buildMlbScoutReport(game, options = {}) {
       return `  Handedness: ${counts.L} LHB, ${counts.R} RHB${counts.S ? `, ${counts.S} switch` : ''}`;
     };
     const withHands = (formatted, line) => (line ? `${formatted}\n${line}` : formatted);
+    // THE CARD (founder GO, Aug 27 — "so Gary can see all the players info
+    // at once"): each lineup line carries the three facts a fan holds about
+    // a name tonight — his season, his series, and his history with
+    // tonight's arm. Career BvP prints for EVERY batter ("we have to show
+    // each player vs that pitcher" — never cherry-picked): a real line, an
+    // honest "no career ABs", or "unavailable this run" on a failed lookup.
+    // (This is the one founder-ruled carve-out to the Aug-10 no-prior-season
+    // law.) The per-batter stat walls this card replaces died today.
+    const seasonBitOf = (batter, pool) => {
+      const target = foldName(batter?.name);
+      const s = (pool || []).find((r) => foldName(r.player?.full_name || `${r.player?.first_name || ''} ${r.player?.last_name || ''}`) === target);
+      if (!s || !(s.batting_ab > 0)) return null;
+      const three = (v) => { const n = Number(v); return Number.isFinite(n) ? n.toFixed(3).replace(/^0\./, '.') : '—'; };
+      return `${three(s.batting_avg)}/${three(s.batting_ops)}, ${s.batting_hr ?? 0} HR`;
+    };
+    const seriesBitOf = (batter, teamName) => {
+      if (!pairSeriesGameCount) return null;
+      const key = [...seriesBattersByTeam.keys()].find((k) => clubMatches(k, teamName));
+      const smap = key ? seriesBattersByTeam.get(key) : null;
+      const a = smap?.get(String(batter?.name || '').trim().split(/\s+/).pop());
+      return a ? `this series: ${a.h}-${a.ab}${a.hr ? `, ${a.hr} HR` : ''}` : 'this series: no ABs';
+    };
+    const rosterIdByName = (roster, name) => {
+      const target = foldName(name);
+      return (roster || []).find((p) => foldName(p.name) === target)?.id ?? null;
+    };
+    const careerBvpBitOf = async (batter, roster, oppProbable) => {
+      const spId = oppProbable?.id ?? null;
+      const spLast = String(oppProbable?.fullName || '').trim().split(/\s+/).pop();
+      if (!spId || !spLast) return null; // no announced arm — nothing to compare
+      const batterId = batter?.personId ?? rosterIdByName(roster, batter?.name);
+      if (!batterId) return `career vs ${spLast}: unavailable this run`;
+      try {
+        const r = await getCachedOrFetch(`mlb_bvp_career_${batterId}_${spId}`, async () => {
+          const resp = await fetch(`https://statsapi.mlb.com/api/v1/people/${batterId}/stats?stats=vsPlayerTotal&opposingPlayerId=${spId}&group=hitting`);
+          if (!resp.ok) throw new Error(`vsPlayerTotal HTTP ${resp.status}`);
+          const j = await resp.json();
+          const st = j?.stats?.[0]?.splits?.[0]?.stat || null;
+          return { ab: st?.atBats ?? 0, h: st?.hits ?? 0, hr: st?.homeRuns ?? 0 };
+        }, 24 * 60);
+        if (!r || !(r.ab > 0)) return `no career ABs vs ${spLast}`;
+        return `career vs ${spLast}: ${r.h}-${r.ab}${r.hr ? `, ${r.hr} HR` : ''}`;
+      } catch { return `career vs ${spLast}: unavailable this run`; }
+    };
+    const buildCardExtras = async (sideData, pool, teamName, roster, oppProbable) => {
+      const extras = new Map();
+      await Promise.all((sideData?.batters || []).map(async (b) => {
+        // One batter's bad row loses only his extras — never the card.
+        try {
+          const bits = [
+            seasonBitOf(b, pool),
+            seriesBitOf(b, teamName),
+            await careerBvpBitOf(b, roster, oppProbable),
+          ].filter(Boolean);
+          if (bits.length) extras.set(b, bits.join(' · '));
+        } catch { /* card line prints bare */ }
+      }));
+      return extras;
+    };
+    const [homeCardExtras, awayCardExtras] = await Promise.all([
+      buildCardExtras(homeData, homePlayerSeasonStats, homeTeam, homeRoster, probablePitchersData?.away),
+      buildCardExtras(awayData, awayPlayerSeasonStats, awayTeam, awayRoster, probablePitchersData?.home),
+    ]);
     confirmedLineupsSection = [
-      withSat(withHands(formatLineup(homeData, homeTeam), handsLine(homeData)), satToday(homeTeam, homeData)),
-      withSat(withHands(formatLineup(awayData, awayTeam), handsLine(awayData)), satToday(awayTeam, awayData)),
+      withSat(withHands(formatLineup(homeData, homeTeam, homeCardExtras), handsLine(homeData)), satToday(homeTeam, homeData)),
+      withSat(withHands(formatLineup(awayData, awayTeam, awayCardExtras), handsLine(awayData)), satToday(awayTeam, awayData)),
     ].join('\n\n');
   }
 
@@ -1871,162 +1925,13 @@ export async function buildMlbScoutReport(game, options = {}) {
     injuriesSection = 'No current structured injuries reported.';
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  // LINEUP RECENT BATTING — last 7 / 15 day rolls for tonight's starters
-  // (Jul 22 2026, founder-approved: a fan always knows who is 12-for-28
-  // this week; the desk served only season-long lines + raw box lines. BDL
-  // splits byDayMonth, one cached call per starter. Facts only — no
-  // hot/cold labels; the reasoning model decides what a roll means.)
-  // ═══════════════════════════════════════════════════════════════════
-  const isDayGame = startTime
-    ? parseInt(new Date(startTime).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }), 10) < 17
-    : false;
+  // (LINEUP RECENT BATTING wall retired Aug 27 — founder: the fan facts
+  // now ride the lineup card, one line per name; per-game batting lines
+  // and the stories carry recency. Platoon and month arcs await his
+  // ruling after he reviews the new card.)
 
-  // CONTACT QUALITY, LAST ~7 (Jul 27): per-hitter Statcast aggregates over
-  // both teams' recent finals — loud-contact-unlucky vs genuinely-lost is
-  // visible instead of inferred. One cached fetch per game, shared by every
-  // hitter in it; failures just omit the clause.
-  let contactByPid = new Map();
-  try {
-    const recentGameIds = [
-      ...homeBdlGames.slice(-7).map(g => g.id),
-      ...awayBdlGames.slice(-7).map(g => g.id),
-    ];
-    const lineupHitterIds = [...(homeData?.batters || []), ...(awayData?.batters || [])]
-      .map(b => b?.playerId).filter(id => id != null);
-    if (recentGameIds.length && lineupHitterIds.length) {
-      contactByPid = await computeHitterContact({ gameIds: recentGameIds, hitterIds: lineupHitterIds });
-    }
-  } catch { /* contact layer optional */ }
-
-  const HITTER_MONTH_ORDER = { March: 3, April: 4, May: 5, June: 6, July: 7, August: 8, September: 9, October: 10 };
-  const battingRollFor = async (batter, seasonPool, oppFullName) => {
-    if (batter?.playerId == null) return null;
-    try {
-      const splits = await ballDontLieService.getMlbPlayerSplits({ playerId: batter.playerId, season });
-      const rows = splits?.byDayMonth || [];
-      const roll = (name) => rows.find(r => r.category === 'batting' && r.split_name === name);
-      const fmt = (r) => r && r.at_bats > 0
-        ? `${r.hits}-${r.at_bats}, ${r.home_runs || 0} HR, ${r.rbis ?? r.rbi ?? 0} RBI, ${r.avg ?? '?'} AVG/${r.ops ?? '?'} OPS`
-        : null;
-      const l7 = fmt(roll('Last 7 Days'));
-      const l15 = fmt(roll('Last 15 Days'));
-      // Day games only: the batter's day-game season line rides along (same
-      // splits response, byBreakdown) — a fan checks it for a 1 PM start.
-      let dayBit = '';
-      if (isDayGame) {
-        const day = (splits?.byBreakdown || []).find(r => r.category === 'batting' && r.split_name === 'Day');
-        if (day && day.at_bats > 0) dayBit = ` | Day games: ${day.hits}-${day.at_bats}, ${day.avg ?? '?'} AVG/${day.ops ?? '?'} OPS`;
-      }
-      const contact = hitterContactLine(contactByPid.get(String(batter.playerId)));
-      const contactBit = contact ? `\n     Contact (recent): ${contact}` : '';
-      // SEASON ANCHOR (founder GO, Aug 18 — the audit's top fill): a roll
-      // means nothing without the baseline. Already-fetched season stats,
-      // finally printed beside the L7/L15 they qualify.
-      let seasonBit = '';
-      {
-        const target = foldName(batter.name);
-        const sRow = (seasonPool || []).find((s) => foldName(s.player?.full_name || `${s.player?.first_name || ''} ${s.player?.last_name || ''}`) === target);
-        if (sRow && (sRow.batting_ab || 0) > 0) {
-          const avg = sRow.batting_avg != null ? sRow.batting_avg.toFixed(3) : '—';
-          const ops = sRow.batting_ops != null ? sRow.batting_ops.toFixed(3) : '—';
-          seasonBit = `\n     Season: ${avg} AVG/${ops} OPS, ${sRow.batting_hr ?? 0} HR, ${sRow.batting_rbi ?? 0} RBI (${sRow.batting_ab} AB)`;
-        }
-      }
-      // PLATOON, HITTER GRAIN (founder GO, Aug 18 — high-level, bettor
-      // grade): both hands, samples visible. A sheltered platoon bat shows
-      // itself in the AB imbalance; what that means tonight is Gary's read.
-      let platoonBit = '';
-      {
-        const bd = splits?.byBreakdown || [];
-        const handRow = (nm) => bd.find((r) => r.category === 'batting' && r.split_name === nm && r.at_bats > 0);
-        const vl = handRow('vs. Left');
-        const vr = handRow('vs. Right');
-        const fmtHand = (r) => `${r.avg ?? '?'} AVG/${r.ops ?? '?'} OPS${r.home_runs ? `, ${r.home_runs} HR` : ''} (${r.at_bats} AB)`;
-        if (vl || vr) platoonBit = `\n     Platoon: vs LHP ${vl ? fmtHand(vl) : 'no ABs'} | vs RHP ${vr ? fmtHand(vr) : 'no ABs'}`;
-      }
-      // MONTH ARC (founder GO, Aug 18): "has he slumped like this before?"
-      // — the season's own months, from the same cached splits call.
-      let monthsBit = '';
-      {
-        const monthRows = rows
-          .filter((r) => r.category === 'batting' && HITTER_MONTH_ORDER[r.split_name] && r.at_bats > 0)
-          .sort((a, b) => HITTER_MONTH_ORDER[a.split_name] - HITTER_MONTH_ORDER[b.split_name]);
-        if (monthRows.length >= 2) {
-          monthsBit = `\n     By month: ${monthRows.map((r) => `${r.split_name.slice(0, 3)} ${r.avg ?? '?'}/${r.ops ?? '?'} (${r.at_bats} AB)`).join(' · ')}`;
-        }
-      }
-      // VS TONIGHT'S OPPONENT, THIS SEASON (same splits payload). Nickname
-      // resolves only when it names one club in his byOpponent rows — and
-      // BDL's legacy club names (e.g. Indians) simply skip the line.
-      let oppBit = '';
-      {
-        const cands = (splits?.byOpponent || []).filter((r) =>
-          r.category === 'batting' && r.at_bats > 0 && clubMatches(r.split_name, oppFullName));
-        if (cands.length === 1) {
-          const r = cands[0];
-          oppBit = `\n     Vs ${String(oppFullName).split(' ').pop()} this season: ${r.hits}-${r.at_bats}${r.home_runs ? `, ${r.home_runs} HR` : ''} (${r.avg ?? '?'} AVG)`;
-        }
-      }
-      if (!l7 && !l15 && !dayBit && !contactBit && !seasonBit && !platoonBit) return null;
-      return `  ${batter.battingOrder}. ${batter.name}: ${l7 ? `L7 ${l7}` : ''}${l7 && l15 ? ' | ' : ''}${l15 ? `L15 ${l15}` : ''}${dayBit}${seasonBit}${platoonBit}${monthsBit}${oppBit}${contactBit}`;
-    } catch { return null; }
-  };
-  const battingRollsFor = async (data, teamName, seasonPool, oppFullName) => {
-    const lines = (await Promise.all((data?.batters || []).map((b) => battingRollFor(b, seasonPool, oppFullName)))).filter(Boolean);
-    return lines.length ? `${teamName}:\n${lines.join('\n')}` : null;
-  };
-  const [homeBattingRolls, awayBattingRolls] = await Promise.all([
-    battingRollsFor(homeData, homeTeam, homePlayerSeasonStats, awayTeam),
-    battingRollsFor(awayData, awayTeam, awayPlayerSeasonStats, homeTeam),
-  ]);
-  const lineupRecentBattingSection = [homeBattingRolls, awayBattingRolls].filter(Boolean).join('\n\n')
-    || 'Recent batting rolls unavailable for tonight\'s starters.';
-
-  // ═══════════════════════════════════════════════════════════════════
-  // TONIGHT'S BATS VS TONIGHT'S ARMS — this season only (founder GO,
-  // Aug 18): the desk-legal batter-vs-pitcher, built from the PAs of the
-  // starter's own meetings with this club (Aug 10 no-prior-season ruling
-  // intact). One cached PA payload per meeting.
-  // ═══════════════════════════════════════════════════════════════════
-  let seasonBvpSection = '';
-  try {
-    const bvpFor = async (spSide, lineupData, lineupTeamName) => {
-      const sp = pitcherStats[spSide];
-      const bdlPid = sp?.player?.id;
-      const spName = sp?.name || probablePitchersData?.[spSide]?.fullName;
-      if (bdlPid == null || !spName || !(lineupData?.batters?.length >= 9)) return null;
-      const meetings = (pitcherArcData[spSide]?.starts || [])
-        .filter((g) => clubMatches(g.opponent, lineupTeamName));
-      if (!meetings.length) return null;
-      const vsDates = new Set(meetings.map((g) => String(g.date || '').slice(0, 10)));
-      const chrono = await ballDontLieService.getMlbPlayerGameRowsChrono(bdlPid, season).catch(() => []);
-      const gameIds = (chrono || [])
-        .filter((r) => r?.ip != null && parseFloat(r.ip) > 0)
-        .filter((r) => vsDates.has(toEtDate(r._game?.date || r.game?.date || r.date || '')))
-        .map((r) => r.game_id);
-      if (!gameIds.length) return null;
-      const spLast = String(spName).split(' ').pop();
-      const bvp = await computeSeasonBvpForLineup({
-        pitcherBdlId: bdlPid,
-        pitcherLastName: spLast,
-        gameIds,
-        lineupBatters: lineupData.batters,
-      });
-      if (!bvp) return null;
-      // The meetings themselves anchor the sample (founder, Aug 19: when
-      // were those games, what happened — never a floating anecdote).
-      const meetingBits = meetings.map((g) =>
-        `${g.date} ${g.isHome ? 'vs' : '@'} (${g.ip} IP, ${g.er} ER${g.win == null ? '' : g.win ? ', team W' : ', team L'})`);
-      const header = `${spLast} has faced the ${lineupTeamName} ${meetings.length === 1 ? 'once' : `${meetings.length} times`} this season: ${meetingBits.join(' · ')}`;
-      return [header, bvp.teamLine, bvp.hittersLine].filter(Boolean).join('\n');
-    };
-    const [homeBvp, awayBvp] = await Promise.all([
-      bvpFor('away', homeData, homeTeam),
-      bvpFor('home', awayData, awayTeam),
-    ]);
-    seasonBvpSection = [homeBvp, awayBvp].filter(Boolean).join('\n\n');
-  } catch { seasonBvpSection = ''; }
+  // (Season BvP grid retired Aug 27 — founder: every batter's CAREER line
+  // vs tonight's arm now prints on the lineup card itself.)
 
   // ═══════════════════════════════════════════════════════════════════
   // BENCH TONIGHT (founder GO, Aug 18): who is actually available to hit
@@ -2394,10 +2299,7 @@ ${smallSampleFlagsSection}
 ═══ CONFIRMED LINEUPS ═══
 ${confirmedLineupsSection}
 
-═══ LINEUP RECENT BATTING (last 7 / last 15 days) ═══
-${lineupRecentBattingSection}
-
-${seasonBvpSection ? `═══ TONIGHT'S BATS VS TONIGHT'S ARMS — THIS SEASON ═══\n${seasonBvpSection}\n\n` : ''}${benchSection ? `═══ THE BENCH TONIGHT ═══\n${benchSection}\n\n` : ''}${matchupShelfSection ? matchupShelfSection + '\n\n' : ''}═══ BETTING CONTEXT ═══
+${benchSection ? `═══ THE BENCH TONIGHT ═══\n${benchSection}\n\n` : ''}${matchupShelfSection ? matchupShelfSection + '\n\n' : ''}═══ BETTING CONTEXT ═══
 ${oddsSection}
 
 
@@ -2413,7 +2315,7 @@ ${recentPerformanceSection || 'No recent performance data.'}
 
 
 ═══ SERIES STATE ═══
-${computeMlbSeriesState(homeTeam, awayTeam, homeRecentGames, homeUpcomingGames).line}${seasonSeriesBlock}${thisSeriesHotSection ? `\n\nThis series, who's doing what:\n${thisSeriesHotSection}` : ''}${seriesStoriesBlock ? `\n\nThis series, as written:\n${seriesStoriesBlock}` : ''}
+${computeMlbSeriesState(homeTeam, awayTeam, homeRecentGames, homeUpcomingGames).line}${seasonSeriesBlock}${seriesStoriesBlock ? `\n\nThis series, as written:\n${seriesStoriesBlock}` : ''}
 
 Recent results:
 ${recentResults}
