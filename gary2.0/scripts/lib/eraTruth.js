@@ -47,11 +47,13 @@ export function gitStamp() {
  * Import side effects print banners, so only the last stdout line is parsed.
  */
 export function diskEras() {
+  // Game era = the June engine's surface hash (the pickdesk game brain and
+  // its PROMPT_SHA are retired — founder, Aug 27: one pick system).
   const code = `
     process.env.BALLDONTLIE_API_KEY ||= 'x';
-    const g = await import('${PROJECT_DIR}/src/services/pickdesk/garyBrain.js');
+    const g = await import('${PROJECT_DIR}/src/services/agentic/orchestrator/junePromptSha.js');
     const p = await import('${PROJECT_DIR}/src/services/pickdesk/propsBrain.js');
-    console.log(JSON.stringify({ game: g.PROMPT_SHA, props: p.PROPS_PROMPT_SHA }));
+    console.log(JSON.stringify({ game: g.junePromptSha(), props: p.PROPS_PROMPT_SHA }));
   `;
   const out = execSync('node --input-type=module', {
     cwd: PROJECT_DIR,

@@ -1,10 +1,8 @@
 // Prompt-surface pins that survive the Jul 26 2026 MLB rebuild.
 //
-// The MLB pass-lane pins (best-bet grammar placement, F-10/F-11 de-scaffold,
-// run-line mechanics placement) died with the pass machinery — their intent
-// is pinned for the new lane in tests/services/pickdesk/garyBrain.test.js.
 // What remains here guards the SHARED system prompt (all sports) and the
-// founder-kept MLB awareness bullets in their new home.
+// founder-kept MLB scaffolding. (The pickdesk game-lane pins died with the
+// pickdesk game brain — deleted Aug 27, one pick system.)
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -12,7 +10,6 @@ import { dirname, join } from 'path';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const src = (rel) => readFileSync(join(here, '../../../src/services/agentic', rel), 'utf8');
-const pickdesk = (rel) => readFileSync(join(here, '../../../src/services/pickdesk', rel), 'utf8');
 
 describe('J-series: judgment is licensed, numbers stay policed', () => {
   it('J-1: facts stay policed; the judgment essay is gone (founder, Aug 27 second ruling)', () => {
@@ -53,11 +50,8 @@ describe('J-series: judgment is licensed, numbers stay policed', () => {
     expect(main).not.toContain('redsInGame');
   });
 
-  it('the pickdesk surface is zero-based — no inherited doctrine text', () => {
-    const brain = pickdesk('garyBrain.js');
-    expect(brain).not.toContain('Streaks are real currency');
-    expect(brain).not.toContain('THINK LIKE A SHARP');
-  });
+  // (pickdesk-surface test retired Aug 27 — the pickdesk game brain is
+  // deleted; one pick system.)
 });
 
 describe('MLB game lane runs the restored June engine (Aug 18 restoration)', () => {

@@ -8,7 +8,6 @@ import {
 
 const mlbDeskSrc = readFileSync(new URL('../../src/services/pickdesk/mlbDesk.js', import.meta.url), 'utf8');
 const scoutMlbSrc = readFileSync(new URL('../../src/services/agentic/scoutReport/sports/mlb.js', import.meta.url), 'utf8');
-const garyBrainSrc = readFileSync(new URL('../../src/services/pickdesk/garyBrain.js', import.meta.url), 'utf8');
 const gameRecapSrc = readFileSync(new URL('../../src/services/gameRecap.js', import.meta.url), 'utf8');
 
 // Leakage-audit findings 1-4 (founder GO, Aug 17): every team match below used
@@ -96,10 +95,8 @@ describe('call-site wiring', () => {
     expect(scoutMlbSrc).not.toContain(".toLowerCase().includes(lw)");
   });
 
-  it('routes pick-side detection through pickSideByName (finding 3)', () => {
-    expect(garyBrainSrc).toContain('pickSideByName(');
-    expect(garyBrainSrc).not.toContain("split(' ').pop()");
-  });
+  // (finding-3 pin retired Aug 27 with the pickdesk game brain itself —
+  // the June lane's side detection is detectPickedTeam, pinned elsewhere.)
 
   it('routes the recap prop-row filter through matchupIncludesBothTeams (finding 4)', () => {
     expect(gameRecapSrc).toContain('matchupIncludesBothTeams(');

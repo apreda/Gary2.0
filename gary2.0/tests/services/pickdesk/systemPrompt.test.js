@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { buildSystemPrompt } from '../../../src/services/agentic/orchestrator/orchestratorMain.js';
 
-// pickdesk brain runs the founder-curated survivors WITHOUT a constitution
-// block (spec 2026-07-26). Props/other sports still pass constitutions.
+// MLB passes an empty constitution block (spec 2026-07-26 survivors live in
+// pass context, not here). Props/other sports still pass constitutions.
 describe('buildSystemPrompt without a constitution', () => {
   it('omits the constitution block entirely when passed an empty string', () => {
     const p = buildSystemPrompt('', 'MLB');

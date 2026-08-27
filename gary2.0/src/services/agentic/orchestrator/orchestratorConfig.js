@@ -32,9 +32,9 @@ export const GAME_PICK_MODEL = process.env.GARY_MODEL_OVERRIDE || 'gpt-5.6-sol';
 //   pattern). Full-June paid upgrade whenever he wants it:
 //   GARY_MLB_BRAIN_MODEL=gpt-5.6-sol → API Sol WITH self-verification tools
 //   (~$10-20/night more).
-// Both env-overridable; the lane arms via GARY_MLB_JUNE_ENGINE=1 in
-// scripts/run-agentic-picks.js (key requirement follows the research model's
-// provider).
+// Both env-overridable; the June engine is MLB's ONLY game lane (founder,
+// Aug 27 — the arming flag and pickdesk default are retired; key
+// requirement follows the research model's provider).
 // Aug 18 PM (founder: "why keep Gemini for football — one system"): the
 // researcher is Haiku for EVERY game sport, not just MLB. Same checklist
 // walk, same tools, per-sport factor lists.

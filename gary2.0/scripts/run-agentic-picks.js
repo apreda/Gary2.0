@@ -34,24 +34,19 @@ const { oddsService } = await import('../src/services/oddsService.js');
 const { picksService } = await import('../src/services/picksService.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
 const { findStaleInjuryMentions } = await import('../src/services/agentic/orchestrator/statAudit.js');
-const { GAME_PICK_MODEL, MLB_JUNE_BRAIN_MODEL } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
-const { analyzeGameDesk, PROMPT_SHA } = await import('../src/services/pickdesk/garyBrain.js');
+const { GAME_PICK_MODEL, MLB_JUNE_BRAIN_MODEL, DESK_FALLBACK_MODELS } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
 
 // ERA LIVE — this is a fresh process, so its module cache IS disk truth. One
 // line + a ledger append make every pick run auditable by folder/commit/era,
 // and the grading-side drift check (checkEraDrift) verifies that every era
 // stamped in the database came from a run recorded here. Fail-open.
+// (The pickdesk game era is gone with the pickdesk game lane — founder,
+// Aug 27: one pick system. The June era is THE game era.)
 try {
   const { recordEraRun, gitStamp, PROJECT_DIR } = await import('./lib/eraTruth.js');
-  const etToday = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-  console.log(`🧬 ERA LIVE: game ${PROMPT_SHA} · commit ${gitStamp()} @ ${PROJECT_DIR}`);
-  recordEraRun('game', etToday, PROMPT_SHA);
-  // The June engine stamps ITS OWN era on stored MLB picks (junePromptSha, not
-  // the pickdesk PROMPT_SHA above). Record both, or the drift guard cries
-  // "another writer made production picks" every single graded day — which it
-  // did from the Aug 18 restoration until Aug 24, training everyone to ignore
-  // the one alarm built to catch a real foreign writer.
   const { junePromptSha: juneEra } = await import('../src/services/agentic/orchestrator/junePromptSha.js');
+  const etToday = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  console.log(`🧬 ERA LIVE: game ${juneEra()} · commit ${gitStamp()} @ ${PROJECT_DIR}`);
   recordEraRun('game', etToday, juneEra());
 } catch (e) { console.log(`🧬 ERA LIVE: (unavailable — ${e.message})`); }
 
@@ -61,24 +56,23 @@ try {
 // the Jul 22-26 pickdesk cutover). MLB game picks return to the orchestrator:
 // scout report → Haiku research briefing (checklist, hard-fail) → Sol brain
 // WITH tools → bilateral cases → Pass 2.5 decision (ML or RL, Gary's choice)
-// → Pass 3 + statAudit. Arms via GARY_MLB_JUNE_ENGINE=1 and requires
-// ANTHROPIC_API_KEY (the researcher's isolated pool). Unarmed or key-less,
-// MLB stays on pickdesk — the coverage policy (Gary picks EVERY game) is
-// never sacrificed to a missing credential.
+// → Pass 3 + statAudit. THE lane, unconditionally (founder, Aug 27) —
+// requires ANTHROPIC_API_KEY (researcher) + OPENAI_API_KEY (brain); a
+// missing key fails loudly instead of rerouting to a second system.
 // ═══════════════════════════════════════════════════════════════════════════
 const { MLB_RESEARCH_MODEL } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
-const JUNE_ENGINE_ARMED = process.env.GARY_MLB_JUNE_ENGINE === '1';
-// The researcher's key requirement follows its provider: anthropic-* models
-// need ANTHROPIC_API_KEY; gpt-* models (Terra default) ride OPENAI_API_KEY,
-// which the brain needs anyway.
+// ONE LANE (founder, Aug 27): MLB runs the June engine unconditionally —
+// the GARY_MLB_JUNE_ENGINE arming flag and the pickdesk default it guarded
+// are retired. A missing key no longer reroutes to a second system; it
+// fails each game loudly (a missing LLM secret warns — it never silently
+// changes what system makes production picks).
 const _researchKeyOk = MLB_RESEARCH_MODEL.startsWith('anthropic-')
   ? !!process.env.ANTHROPIC_API_KEY
   : !!process.env.OPENAI_API_KEY;
-const JUNE_ENGINE_READY = JUNE_ENGINE_ARMED && _researchKeyOk && !!process.env.OPENAI_API_KEY;
-if (JUNE_ENGINE_ARMED && !JUNE_ENGINE_READY) {
-  console.warn(`[JuneEngine] GARY_MLB_JUNE_ENGINE=1 but the required API key is missing (researcher ${MLB_RESEARCH_MODEL}) — MLB stays on pickdesk until it lands in .env.`);
-} else if (JUNE_ENGINE_READY) {
-  console.log(`[JuneEngine] ⚾ ARMED — MLB games run the restored June engine (brain: ${MLB_JUNE_BRAIN_MODEL}, researcher: ${MLB_RESEARCH_MODEL}).`);
+if (!_researchKeyOk || !process.env.OPENAI_API_KEY) {
+  console.error(`[JuneEngine] 🚨 REQUIRED API KEY MISSING (researcher ${MLB_RESEARCH_MODEL}) — MLB picks WILL FAIL loudly until it lands in .env. There is no fallback system.`);
+} else {
+  console.log(`[JuneEngine] ⚾ MLB games run the June engine (brain: ${MLB_JUNE_BRAIN_MODEL}, researcher: ${MLB_RESEARCH_MODEL}, model cascade: ${DESK_FALLBACK_MODELS.join(' → ')}).`);
 }
 
 // Era stamp for the restored lane: one hash over the engine's full surface —
@@ -156,26 +150,35 @@ function extractJuneBilateralPaths(rawAnalysis, homeTeam, awayTeam) {
 }
 
 async function runMlbJuneEngine(game, runnerOptions) {
-  const engineOptions = { ...runnerOptions, modelOverride: MLB_JUNE_BRAIN_MODEL };
-  let result = await analyzeGame(game, 'baseball_mlb', engineOptions);
+  // ONE PICK SYSTEM (founder, Aug 27: "no need for a full fallback other
+  // pick system... fallback to another one like opus is fine"): a failure
+  // re-runs the SAME engine — same desk, same prompts — on the next model
+  // in the cascade. The separate pickdesk brain is retired.
+  let result = await analyzeGame(game, 'baseball_mlb', { ...runnerOptions, modelOverride: MLB_JUNE_BRAIN_MODEL });
   if (result?.error || !result?.pick) {
-    console.warn(`[JuneEngine] first attempt failed (${result?.error || 'no pick'}) — one retry`);
-    result = await analyzeGame(game, 'baseball_mlb', engineOptions);
+    console.warn(`[JuneEngine] first attempt failed (${result?.error || 'no pick'}) — one retry on ${MLB_JUNE_BRAIN_MODEL}`);
+    result = await analyzeGame(game, 'baseball_mlb', { ...runnerOptions, modelOverride: MLB_JUNE_BRAIN_MODEL });
+  }
+  let modelUsed = MLB_JUNE_BRAIN_MODEL;
+  for (const fallbackModel of DESK_FALLBACK_MODELS) {
+    if (result?.pick && !result?.error) break;
+    console.warn(`[JuneEngine] ⚠️ ${modelUsed} failed (${result?.error || 'no pick'}) — same engine on ${fallbackModel}`);
+    result = await analyzeGame(game, 'baseball_mlb', { ...runnerOptions, modelOverride: fallbackModel });
+    modelUsed = fallbackModel;
   }
   if (result?.error || !result?.pick) {
-    console.warn(`[JuneEngine] ⚠️ engine failed twice (${result?.error || 'no pick'}) — pickdesk fallback for this game (coverage policy holds; era stamp will show pickdesk honestly).`);
-    return analyzeGameDesk(game, runnerOptions);
+    console.error(`[JuneEngine] 🚫 every model in the cascade failed for ${game.away_team} @ ${game.home_team} (${result?.error || 'no pick'}) — no pick for this game. There is no second system.`);
+    return result?.error ? result : { error: 'june engine exhausted: no model produced a pick' };
   }
-  // Storage-contract parity with the pickdesk lane (paths, model, era stamp).
-  // Bilateral cases live in the PASS 1 message — rawAnalysis holds only the
-  // LAST assistant message (Pass 2.5), so extract from the full narrative
-  // (Aug 18 now-test finding).
+  // Storage-contract fields (paths, model, era stamp). Bilateral cases live
+  // in the PASS 1 message — rawAnalysis holds only the LAST assistant
+  // message (Pass 2.5), so extract from the full narrative (Aug 18 finding).
   const raw = result._fullAssistantNarrative || result._context?.fullAssistantNarrative
     || result.rawAnalysis || result._context?.rawAnalysis || '';
   const paths = extractJuneBilateralPaths(raw, game.home_team, game.away_team);
   result.path_home = result.path_home ?? paths.path_home;
   result.path_away = result.path_away ?? paths.path_away;
-  result._modelUsed = result._modelUsed ?? MLB_JUNE_BRAIN_MODEL;
+  result._modelUsed = result._modelUsed ?? modelUsed;
   result._promptSha = result._promptSha ?? await junePromptSha();
   return result;
 }
@@ -1357,13 +1360,12 @@ async function main() {
         };
         let result;
         try {
-          // MLB game picks: the restored JUNE ENGINE when armed (Aug 18 2026,
-          // GARY_MLB_JUNE_ENGINE=1 + ANTHROPIC_API_KEY); pickdesk otherwise.
-          // Other sports route through analyzeGame as before.
+          // MLB game picks: THE June engine, unconditionally (founder,
+          // Aug 27 — the separate pickdesk system is retired; model
+          // failures cascade inside runMlbJuneEngine). Other sports route
+          // through analyzeGame as before.
           if (config.key === 'baseball_mlb') {
-            result = JUNE_ENGINE_READY
-              ? await runMlbJuneEngine(game, runnerOptions)
-              : await analyzeGameDesk(game, runnerOptions);
+            result = await runMlbJuneEngine(game, runnerOptions);
           } else {
             result = await analyzeGame(game, config.key, runnerOptions);
           }
