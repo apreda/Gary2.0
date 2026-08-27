@@ -162,7 +162,11 @@ describe('Football Fantasy density', () => {
     // Aug 20: the guard grew from fantasy-only to EVERY football row —
     // quarterback/availability rows carry player_id and fell through to the
     // MLB-only PlayerInsightSheet (a permanent "building" screen for NFL ids).
-    expect(hubView).toMatch(/if sel == \.nfl \|\| sel == \.ncaaf \{\s*\n\s*selectedSignal = s\s*\n\s*\}\s*\n\s*else if s\.playerId != nil \{ breakdownSignal = s \}/);
+    // Aug 27: the pipeline builds football packs, so the guard gates on
+    // verified pack existence — the pack sheet opens only when today's
+    // intelCards hold the tapped id, the edge overlay stays the fallback.
+    // The invariant is unchanged: no football tap can land on a placeholder.
+    expect(hubView).toMatch(/if sel == \.nfl \|\| sel == \.ncaaf \{\s*\n\s*if let pid = s\.playerId, intelCards\.contains\(where: \{ \$0\.player_id == pid \}\) \{\s*\n\s*breakdownSignal = s\s*\n\s*\} else \{\s*\n\s*selectedSignal = s\s*\n\s*\}\s*\n\s*\}\s*\n\s*else if s\.playerId != nil \{ breakdownSignal = s \}/);
     expect(hubView).not.toContain('(sel == .nfl || sel == .ncaaf), Self.fantasyKinds.contains(s.kind)');
   });
 });
