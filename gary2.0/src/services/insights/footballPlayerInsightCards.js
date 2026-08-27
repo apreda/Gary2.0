@@ -35,16 +35,6 @@ function isPreseasonDate(date) {
   return Number(String(date || '').slice(5, 7)) === 8;
 }
 
-function etKickLabel(game) {
-  const raw = game?.date ?? game?.datetime ?? game?.commence_time ?? game?.start_time_utc;
-  if (!raw || /^\d{4}-\d{2}-\d{2}$/.test(String(raw))) return null;
-  const instant = new Date(raw);
-  if (Number.isNaN(instant.getTime())) return null;
-  return instant.toLocaleTimeString('en-US', {
-    timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit',
-  }) + ' ET';
-}
-
 function sideName(team) {
   return team?.abbreviation || team?.college || team?.name || team?.full_name || null;
 }
@@ -249,8 +239,9 @@ async function buildNflPacks({ date, bdl, games }) {
       () => bdl.getNflPlayerGameLogsBatch(allIds, logSeason, 5, 15, { seasonType: 2 }), {},
     );
     const propRows = await safeCall(() => bdl.getNflPlayerProps(game.id), []);
-    const kick = etKickLabel(game);
-    const gameLabelText = `${sideName(awayTeam)} @ ${sideName(homeTeam)}${kick ? ` · ${kick}` : ''}`;
+    // Bare "AWY @ HOM" — the same join key MLB packs use (iOS matches every
+    // token against team keywords, so a kick-time suffix would break the join).
+    const gameLabelText = `${sideName(awayTeam)} @ ${sideName(homeTeam)}`;
 
     for (const side of sides) {
       for (const p of side.players) {
@@ -325,8 +316,7 @@ async function buildNcaafPacks({ date, bdl, games }) {
     const awayTeam = game.away_team ?? game.visitor_team;
     const homeTeam = game.home_team;
     if (!awayTeam?.id || !homeTeam?.id || game?.id == null) continue;
-    const kick = etKickLabel(game);
-    const gameLabelText = `${sideName(awayTeam)} @ ${sideName(homeTeam)}${kick ? ` · ${kick}` : ''}`;
+    const gameLabelText = `${sideName(awayTeam)} @ ${sideName(homeTeam)}`;
 
     for (const [team, opponent] of [[awayTeam, homeTeam], [homeTeam, awayTeam]]) {
       const rows = await safeCall(
