@@ -3305,15 +3305,9 @@ struct HomeView: View {
         // yesterday until first pitch and going live after, the strip said
         // the same numbers twice on one page. THE RECORD is the one home.)
 
-        // ── YOUR NIGHT (Jul 26) — the user's own open action with live
-        // state; self-hides without data. (The receipts line above it was
-        // REMOVED Aug 4 on the founder's call — struct deleted with it.)
-        HomeYourNight {
-            UserDefaults.standard.set("you", forKey: "billfoldScope")
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
-        }
-        .opacity(animateIn ? 1 : 0)
-        .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
+        // (YOUR NIGHT strip removed Aug 27 — the board's YOU lane below is
+        // where the user's open action lives on Home; the strip said it
+        // twice. The receipts line above it went the same way Aug 4.)
 
         // ── THE BOARD — every game, one list, all day.
         homeSheet
@@ -3782,9 +3776,10 @@ struct HomeView: View {
         guard AppFlags.userBookEnabled, !myTodayBets.isEmpty else { return [] }
         var out: [HomeSheetRow] = []
         for (i, bet) in myTodayBets.enumerated() {
-            let kindWord = bet.kind == "fade" ? "FADING" : bet.kind == "tail" ? "RIDING" : "YOURS"
-            var call = "\(kindWord) · \(Self.homePickLabel(bet.pick_text))"
-            if bet.streak_pick == true { call += " · STREAK" }
+            // Board parity (founder, Aug 27: "literally the same view except
+            // its the picks the person made") — no kind word, no extras; the
+            // verdict slot already answers for THEIR side of the bet.
+            let call = Self.homePickLabel(bet.pick_text)
 
             // Game tails/fades join the slate for the live score + verdict.
             let pick = bet.pick_type == "game"
@@ -3823,14 +3818,12 @@ struct HomeView: View {
                 if let score = ls?.scoreLine { title = score.uppercased() }
                 statusText = AppFlags.storeSafe ? "✓ WON" : "✓ CASHED"
                 statusColor = GaryColors.win
-                call += " · \(BookMoney.net(bet.units_net ?? 0))"
             } else if bet.status == "lost" {
                 zone = .settled
                 clockText = "FINAL"
                 if let score = ls?.scoreLine { title = score.uppercased() }
                 statusText = "✗ LOST"
                 statusColor = GaryColors.loss
-                call += " · \(BookMoney.net(bet.units_net ?? 0))"
             } else if bet.status == "push" || bet.status == "void" {
                 zone = .settled
                 clockText = "FINAL"
@@ -4324,13 +4317,14 @@ struct HomeView: View {
             // THE RECORD rides INSIDE the board card (founder, Aug 19: "put
             // the stuff above it inside of the board at the end, so it's all
             // wrapped up") — the board's own bottom line, behind one divider.
-            // On the YOU tab the bottom line is THEIR day, not Gary's.
+            // On the YOU tab the bottom line is THEIR day, not Gary's —
+            // wearing the SAME scorecard as the league lanes, fixed shape
+            // from 0–0 (founder, Aug 27: "we need the record and 0 like
+            // MLB NFL NCAAF have"; the "YOUR DAY n OPEN" line is gone).
             if selected == .you {
-                if let line = youDayLine {
-                    Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
-                    line
-                        .padding(.horizontal, 14).padding(.vertical, 12)
-                }
+                Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+                youScorecard
+                    .padding(.horizontal, 14).padding(.vertical, 12)
             } else if gamesNightRecord.w + gamesNightRecord.l + gamesNightRecord.p > 0
                 || recapLabel == "LIVE" || recapLabel == "TODAY" {
                 Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
@@ -4364,33 +4358,47 @@ struct HomeView: View {
         .pageGutter()
     }
 
-    /// The YOU tab's bottom line: their settled day in money, open count beside.
-    private var youDayLine: AnyView? {
-        let settled = myTodayBets.filter { ["won", "lost", "push"].contains($0.status) }
-        let open = myTodayBets.filter { $0.isPending }.count
-        guard !settled.isEmpty || open > 0 else { return nil }
-        let w = settled.filter { $0.status == "won" }.count
-        let l = settled.filter { $0.status == "lost" }.count
-        let net = settled.reduce(0.0) { $0 + ($1.units_net ?? 0) }
-        return AnyView(HStack(spacing: 8) {
-            Text("YOUR DAY")
-                .font(.system(size: 11, weight: .bold).monospacedDigit()).tracking(1.2)
-                .foregroundStyle(GaryColors.gold)
-            if w + l > 0 {
-                Text("\(w)\u{2013}\(l)")
-                    .font(.system(size: 13, weight: .bold).monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.9))
-                Text(BookMoney.netTotal(net))
-                    .font(.system(size: 13, weight: .bold).monospacedDigit())
-                    .foregroundStyle(net >= 0 ? GaryColors.win : GaryColors.loss)
+    /// The YOU tab's bottom line — the SAME scorecard the league lanes wear,
+    /// answered with the user's own day. Fixed shape from 0–0, the numbers
+    /// fill in as their bets grade; tapping opens the Billfold on YOU.
+    private var youScorecard: some View {
+        Button {
+            UserDefaults.standard.set("you", forKey: "billfoldScope")
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
+        } label: {
+            let settled = myTodayBets.filter { ["won", "lost", "push"].contains($0.status) }
+            let w = settled.filter { $0.status == "won" }.count
+            let l = settled.filter { $0.status == "lost" }.count
+            let p = settled.filter { $0.status == "push" }.count
+            HStack(spacing: 0) {
+                scoreCell(Self.recordLine(w, l, p), recapLabel, .white.opacity(0.92))
+                Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 34)
+                if AppFlags.storeSafe {
+                    scoreCell(w + l > 0 ? "\(Int((Double(w) / Double(w + l) * 100).rounded()))%" : "—",
+                              "WIN RATE", .white.opacity(0.92))
+                } else {
+                    // Their book's own unit size drives the dollars — the cell
+                    // grammar stays the board's, the stake basis stays true.
+                    let netUnits = settled.reduce(0.0) { $0 + ($1.units_net ?? 0) }
+                    let net = netUnits * BookMoney.unitDollars
+                    scoreCell(Formatters.flatStakeDollars(net),
+                              "NET · $\(Int(BookMoney.unitDollars))/PICK",
+                              settled.isEmpty ? .white.opacity(0.92)
+                                              : (net >= 0 ? GaryColors.win : GaryColors.loss))
+                    Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 34)
+                    let best = settled.compactMap { $0.units_net }.filter { $0 > 0 }.max()
+                        .map { $0 * BookMoney.unitDollars }
+                    if let best, best > 0 {
+                        scoreCell("+\(Int(best))", "BEST CASH", GaryColors.gold)
+                    } else {
+                        scoreCell("—", "BEST CASH", .white.opacity(0.35))
+                    }
+                }
             }
-            if open > 0 {
-                Text("\(open) OPEN")
-                    .font(.system(size: 11, weight: .semibold).monospacedDigit()).tracking(0.8)
-                    .foregroundStyle(.white.opacity(0.55))
-            }
-            Spacer()
-        })
+            .pageGutter()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: Tonight extras — the bettor's read on the DAY
