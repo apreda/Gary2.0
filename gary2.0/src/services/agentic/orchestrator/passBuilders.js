@@ -379,7 +379,7 @@ export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spo
 
 **HOUSE LIMIT:** no moneyline heavier than ${GAME_ML_CAP} — a favorite priced past that is a puck-line ticket, not a moneyline ticket.`
     : isMLB
-    ? `**BET TYPE:** Two options — MONEYLINE (team wins outright) or RUN LINE (standard -1.5/+1.5). The mechanics: -1.5 pays only on a win by 2+ runs — a one-run win pays the moneyline and LOSES -1.5; +1.5 cashes on a win or a one-run loss. They are different bets on different outcomes, not two prices for the same opinion — take the bet that pays if your read is right, not the one that makes a price you dislike look better.
+    ? `**BET TYPE:** Two options — MONEYLINE or RUN LINE (-1.5/+1.5).
 
 Check each offered line in both directions — does your read beat the price on either side of the moneyline, and on either side of the run line? A line can be wrong toward the favorite or toward the dog; the ticket is wherever your read and the number disagree — and if they nowhere disagree, your strongest conviction is still a real bet.
 
@@ -418,7 +418,7 @@ Check each offered line in both directions — does your read beat the price on 
 }
 \`\`\`
 
-**confidence_score (0.50-1.00):** How confident are you in this pick? Set it organically based on the strength of the evidence — do NOT default. Confidence measures your read against the price — not the shortness of the price.
+**confidence_score (0.50-1.00):** How confident are you in this pick?
 
 Your JSON must include all three fields: "final_pick", "rationale", AND "confidence_score". Missing confidence_score will cause a system error.`;
 

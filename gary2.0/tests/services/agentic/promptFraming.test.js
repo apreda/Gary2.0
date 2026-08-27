@@ -15,19 +15,28 @@ const src = (rel) => readFileSync(join(here, '../../../src/services/agentic', re
 const pickdesk = (rel) => readFileSync(join(here, '../../../src/services/pickdesk', rel), 'utf8');
 
 describe('J-series: judgment is licensed, numbers stay policed', () => {
-  it('J-1: the shared system prompt draws the fact/opinion line', () => {
+  it('J-1: facts stay policed; the judgment essay is gone (founder, Aug 27 second ruling)', () => {
     const main = src('orchestrator/orchestratorMain.js');
-    expect(main).toContain('JUDGMENT vs FABRICATION');
     expect(main).toContain('FACT-CHECKING PROTOCOL (ZERO TOLERANCE)');
+    // The whole JUDGMENT vs FABRICATION section died with its steering
+    // clauses; the fact-vs-judgment rail lives on inside rule 2.
+    expect(main).not.toContain('JUDGMENT vs FABRICATION');
+    expect(main).not.toContain('the ones the books love');
+    expect(main).not.toContain('YOU decide which to trust tonight');
+    expect(main).toContain('voiced as judgment, never dressed up as a statistic');
   });
 
-  it('identity: era-B four-sentence core + storyteller; contrarian block gone (founder, Aug 27)', () => {
+  it('identity: the 30-years line stands alone; storyteller + contrarian block gone (founder, Aug 27)', () => {
     const main = src('orchestrator/orchestratorMain.js');
     expect(main).not.toContain('value bettor, not a market trader');
     expect(main).not.toContain('all of it is CLUES');
     expect(main).not.toContain('mirror, not a source');
     expect(main).not.toContain('quality of the decision, not the bounce of the ball');
-    expect(main).toContain('paint the picture of how tonight');
+    // The storyteller paragraph ("paint the picture... not here to say who is
+    // better on paper") is gone — the 30-years sentence is the identity.
+    expect(main).not.toContain('paint the picture of how tonight');
+    expect(main).not.toContain('who is better on paper');
+    expect(main).toContain('a sports bettor with over 30 years of experience');
     // THINK LIKE A SHARP removed Aug 27 (founder): "obvious narratives are
     // priced in / question your first instinct" is contrarian steering that
     // rode along unreviewed since the original Dec 2025 commit.
