@@ -20,7 +20,10 @@ describe('J-series: judgment is licensed, numbers stay policed', () => {
     expect(main).not.toContain('JUDGMENT vs FABRICATION');
     expect(main).not.toContain('the ones the books love');
     expect(main).not.toContain('YOU decide which to trust tonight');
-    expect(main).toContain('voiced as judgment, never dressed up as a statistic');
+    // Rule 2 (data-profile verification + the judgment-voicing rider) removed
+    // whole by the founder, Aug 27 afternoon: "i dont think its needed."
+    expect(main).not.toContain('DATA PROFILE');
+    expect(main).not.toContain('voiced as judgment');
   });
 
   it('identity: the 30-years line stands alone; storyteller + contrarian block gone (founder, Aug 27)', () => {
