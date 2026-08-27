@@ -2,7 +2,7 @@
 // (founder GO after the ledger post-mortem: June +26u on this engine, every
 // week negative since the Jul 22-26 cutover). Pieces grafted verbatim from
 // the pre-deletion state (53962904^).
-import { getNbaSpreadFactors, getNcaabSpreadFactors, getNhlSpreadFactors, getNflSpreadFactors, getNcaafSpreadFactors, getMlbSpreadFactors, getMlbSeasonAwareness, getFootballSeasonAwareness } from './spreadEvaluationFactors.js';
+import { getNbaSpreadFactors, getNflSpreadFactors, getNcaafSpreadFactors, getMlbSpreadFactors, getMlbSeasonAwareness, getFootballSeasonAwareness } from './spreadEvaluationFactors.js';
 import { GAME_ML_CAP } from './orchestratorConfig.js';
 
 /**
@@ -14,21 +14,11 @@ import { GAME_ML_CAP } from './orchestratorConfig.js';
  */
 export function buildPass1Message(scoutReport, homeTeam, awayTeam, today, sport = '', spread = null) {
   const isNBA = sport === 'basketball_nba' || sport === 'NBA';
-  const isNCAAB = sport === 'basketball_ncaab' || sport === 'NCAAB';
   const isNFL = sport === 'americanfootball_nfl' || sport === 'NFL';
   const isNCAAF = sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
 
   if (isNBA) {
     return buildNbaPass1(scoutReport, today, homeTeam, awayTeam, spread);
-  }
-
-  if (isNCAAB) {
-    return buildNcaabPass1(scoutReport, today, homeTeam, awayTeam, spread);
-  }
-
-  const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
-  if (isNHL) {
-    return buildNhlPass1(scoutReport, today, homeTeam, awayTeam, spread);
   }
 
   if (isNFL) {
@@ -99,111 +89,6 @@ Do NOT declare a final side, make a pick, or write your final analysis yet. When
 INVESTIGATION COMPLETE
 </instructions>
 `.trim();
-}
-
-/**
- * NCAAB-specific Pass 1 — concise spread evaluation factors
- * 7 named factors tuned to college basketball market dynamics.
- */
-function buildNcaabPass1(scoutReport, today, homeTeam, awayTeam, spread) {
-  const factors = getNcaabSpreadFactors();
-  const absSpread = Math.abs(spread || 0);
-  const favoriteLabel = spread < 0 ? homeTeam : awayTeam;
-  const underdogLabel = spread < 0 ? awayTeam : homeTeam;
-
-  return `
-<scout_report>
-## MATCHUP BRIEFING (TODAY: ${today})
-
-${scoutReport}
-</scout_report>
-
-<investigation_rules>
-## INVESTIGATION RULES
-
-**THE SYMMETRY RULE:**
-- If you call a stat for Team A, you MUST call the equivalent for Team B
-- Cherry-picking stats for one side = incomplete picture = bad bet
-
-**INJURY TIMING:**
-- Use the injury duration tags from the scout report exactly as shown.
-- **FRESH:** Market may not have fully adjusted.
-- **SHORT-TERM / LONG-TERM / SEASON-LONG:** The team's current stats already reflect this absence.
-
-</investigation_rules>
-
-<instructions>
-## YOUR TASK: PASS 1 - INVESTIGATE THE GAME
-
-Tonight's spread: ${favoriteLabel} -${absSpread} / ${underdogLabel} +${absSpread}
-
-${factors}
-
-The spread number was set AFTER seedings, injuries, rest, and all publicly known information were available. The question is not whether these factors exist — everyone can see them — but whether the spread has accounted for them correctly for THIS game. Records and rankings describe what has happened — they are not reasons for or against a spread.
-
-You are picking which side of this spread to take. Investigate the game — the teams, the players, the stats, the recent context — and build your understanding of this specific game at this specific number.
-
-Use the scout report + research briefing as your starting point, then investigate with fetch_stats where you need deeper evidence.
-
-Before completing Pass 1, include BOTH sections:
-Case for ${homeTeam}
-Case for ${awayTeam}
-
-Each case should be 2-3 paragraphs explaining why that side covers. Use whatever reasoning you find most compelling — stats, matchup data, momentum, tournament context, coaching, or any combination. There is no required formula.
-
-Do NOT declare a final side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
-INVESTIGATION COMPLETE
-</instructions>
-`.trim();
-}
-
-/**
- * NHL-specific Pass 1 — moneyline + puck line evaluation factors
- * 7 named factors tuned to hockey market dynamics.
- */
-function buildNhlPass1(scoutReport, today, homeTeam, awayTeam, spread) {
-  // NHL Pass 1 — clean, minimal, matches NBA philosophy. No bet type forcing.
-
-  return `
-<scout_report>
-## MATCHUP BRIEFING (TODAY: ${today})
-
-${scoutReport}
-</scout_report>
-
-<investigation_rules>
-## INVESTIGATION RULES
-
-**THE SYMMETRY RULE:**
-- If you call a stat for Team A, you MUST call the equivalent for Team B
-- Cherry-picking stats for one side = incomplete picture = bad bet
-
-**INJURY TIMING:**
-- Use the injury duration tags from the scout report exactly as shown.
-- **FRESH:** Recent stat windows may still include games with this player.
-- **SHORT-TERM / LONG-TERM / SEASON-LONG:** Current team baselines already reflect these absences.
-
-</investigation_rules>
-
-<moneyline_pricing>
-The prices you see were set AFTER the goalie situations, schedule, and injuries were known. The question is not whether these factors exist — everyone can see them — but whether the price has accounted for them correctly for THIS game. Records and streaks describe what has happened — they are not reasons for or against a price.
-</moneyline_pricing>
-
-<instructions>
-## YOUR TASK: PASS 1 - INVESTIGATE THE GAME
-
-Your job is to find the best bet on this game tonight — the side, and the price, that you would put your own money on. Sometimes that bet is the favorite, sometimes the underdog; the price is part of the bet, not just the question of who is the better team. Investigate the full matchup — goaltending, 5-on-5 play, special teams, roster depth, injuries — and build your understanding of which team has the edge, and whether the price reflects it.
-
-Use the scout report + research briefing as your starting point, then investigate with fetch_stats where you need deeper evidence.
-
-Before completing Pass 1, include BOTH sections:
-Case for backing ${homeTeam} tonight
-Case for backing ${awayTeam} tonight
-(Each case should be 2-3 paragraphs making the argument for that side as tonight's bet — why it wins and why its price is one you'd take.)
-
-Do NOT declare a side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
-INVESTIGATION COMPLETE
-</instructions>`.trim();
 }
 
 /**
@@ -363,7 +248,6 @@ export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spo
   const descriptorExamples = _fb
     ? 'do not call a line "elite in pass protection," describe a "rising pressure rate," characterize a usage split, or call a rotation "settled"/"in flux" unless the underlying metric or report was provided.'
     : 'do not call a pitcher a "ground-ball specialist," describe "declining velocity," characterize a platoon split, or call a reliever\'s workload "heavy"/"fresh" unless the underlying metric was provided.';
-  const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
   const isFootball = sport === 'americanfootball_nfl' || sport === 'NFL' ||
     sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
@@ -371,14 +255,10 @@ export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spo
   // MLB") — spread or moneyline, Gary's choice. The generic bet-type note
   // below always offered both; the old 'spread' label here contradicted it
   // and forced 16/16 preseason spreads.
-  const lineLabel = (isNHL) ? 'moneyline or puck line'
-    : (isMLB ? 'moneyline or run line'
-    : (isFootball ? 'spread or moneyline' : 'spread'));
-  const betTypeNote = isNHL
-    ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). Choose the bet type that matches your read on the game.
-
-**HOUSE LIMIT:** no moneyline heavier than ${GAME_ML_CAP} — a favorite priced past that is a puck-line ticket, not a moneyline ticket.`
-    : isMLB
+  const lineLabel = isMLB ? 'moneyline or run line'
+    : (isFootball ? 'spread or moneyline' : 'spread');
+  const betTypeNote = isMLB
+    
     ? `**BET TYPE:** Two options — MONEYLINE or RUN LINE (-1.5/+1.5).
 
 Check each offered line in both directions — does your read beat the price on either side of the moneyline, and on either side of the run line? A line can be wrong toward the favorite or toward the dog; the ticket is wherever your read and the number disagree — and if they nowhere disagree, your strongest conviction is still a real bet.
@@ -390,9 +270,7 @@ Check each offered line in both directions — does your read beat the price on 
   const homeSpread = spread >= 0 ? `+${spread.toFixed(1)}` : spread.toFixed(1);
   const awaySpread = (-spread) >= 0 ? `+${(-spread).toFixed(1)}` : (-spread).toFixed(1);
   let lineContext;
-  if (isNHL) {
-    lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away). Choose ML or Puck Line based on your investigation.`;
-  } else if (isMLB) {
+  if (isMLB) {
     lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away). Choose ML or Run Line — whichever ticket your read actually calls.`;
   } else if (isFootball) {
     lineContext = `Line context: ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}. Both moneylines are posted in your market data — choose Spread or ML, whichever ticket your read actually calls.`;
@@ -400,11 +278,9 @@ Check each offered line in both directions — does your read beat the price on 
     lineContext = `Line context: ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}.`;
   }
 
-  const isNCAAB = sport === 'basketball_ncaab' || sport === 'NCAAB';
-  const useOpenDecision = isNCAAB;
 
   const finalDecisionInstruction = `Final Decision: [your side at this ${lineLabel}]`;
-  const spreadOddsRule = (isNHL || isMLB)
+  const spreadOddsRule = isMLB
     ? '3. For spread picks: use "spreadOdds" value (e.g., -105, -115)'
     : '3. For spread picks: copy the selected team\'s exact pair. A home pick uses "spreadHome" + "spreadHomeOdds"; an away pick uses "spreadAway" + "spreadAwayOdds". Never borrow the opponent\'s price or invent a missing price.';
 
@@ -444,11 +320,7 @@ Do NOT restart analysis. Do NOT run a full re-investigation. Only call more tool
 <synthesis>
 ${synthesis}
 </synthesis>
-${useOpenDecision ? `
-<decision_freedom>
-Use whatever reasoning you find most compelling to make your pick — stats, matchup data, momentum, series context, pitcher feel, team energy, logic, superstition, or any combination. There is no required formula. You keep what the ticket pays, and sometimes earning it takes finding an edge in the data, sometimes it takes reading the situation, sometimes it takes following the clues, sometimes it takes gut instinct, sometimes it takes riding a streak, sometimes it takes betting logic, sometimes it takes sports logic. The decision is yours. It is okay to take risks and chances that are not the most probable outcome — upsets happen, and sometimes the signs point that way even if the numbers don't.
-</decision_freedom>
-` : ''}
+
 ${decisionGuards ? `<sport_decision_guards>\n${decisionGuards}\n</sport_decision_guards>\n` : ''}
 
 <instructions>
@@ -827,13 +699,10 @@ Do NOT default to the over — an over pick must beat the under on evidence, not
  * read stands; the instrument must be payout-legal.
  */
 export function buildMlCapRetryMessage(sport, cap = GAME_ML_CAP) {
-  const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
   const market = isMLB
     ? 'the run line — the side you like at -1.5, or the other side at +1.5 (the underdog\'s moneyline also stays legal)'
-    : isNHL
-      ? 'the puck line (±1.5) — or the underdog\'s moneyline'
-      : 'the spread — or the underdog\'s moneyline';
+    : 'the spread — or the underdog\'s moneyline';
   return `HOUSE LIMIT: no moneyline heavier than ${cap}. That moneyline is off the menu — on a game priced like this, the bet is not who wins, it is ${market}. Which side does your read take? Return your final JSON with the exact odds for that ticket.`;
 }
 

@@ -5,38 +5,11 @@
  * spread evaluation. 2-3 sentences per factor — no investigation steps,
  * no stat names, no methodology. Gary's HIGH thinking mode handles reasoning.
  *
- * Sport-keyed: getNbaSpreadFactors(), getNcaabSpreadFactors(), etc.
+ * Sport-keyed: getNbaSpreadFactors(), getNflSpreadFactors(), etc.
  */
 
 export function getNbaSpreadFactors() {
   return `Narrative factors — back-to-backs, streaks, rest, travel, revenge spots, hot/cold stretches — are context for the game. They are not edges and they are not reasons by themselves to pick a side. Every bettor in the world can see these factors. Sometimes the favorite is the right side. Sometimes the underdog is. It depends entirely on THIS game, these players, and this matchup.`;
-}
-
-export function getNcaabSpreadFactors() {
-  return `This is a neutral-court tournament game. Home/away records are irrelevant. Both teams in this round are on the same rest schedule. The spread was set AFTER seedings, injuries, and all publicly known information were available — everyone can see the seed gap and the efficiency ratings. Sometimes the favorite is the right side. Sometimes the underdog is. It depends entirely on THIS matchup between THESE teams.`;
-}
-
-export function getNhlSpreadFactors() {
-  return `### 1. POSSESSION & TERRITORIAL CONTROL
-5-on-5 possession metrics (Corsi, Fenwick, expected goals) reveal how teams control play at even strength. A team can win games while losing the possession battle — but the process tells a different story than the results.
-
-### 2. SPECIAL TEAMS MATCHUP
-Power play and penalty kill operate independently of 5-on-5 dynamics. A team's special teams profile can shift game outcomes on its own — investigate PP% and PK% for both sides and how they interact.
-
-### 3. GOALTENDING & STARTER CONFIRMATION
-The confirmed starting goalie and their current form are significant line-movers. A backup surprise start, a hot streak, or a cold stretch all shift the price. Recent form can diverge from the season baseline.
-
-### 4. STREAKS & FORM
-Hockey streaks can be driven by goaltending, special teams, shooting variance, or genuine process improvement. The market reacts to the streak — investigate what's underneath it.
-
-### 5. REST & SCHEDULE
-Back-to-backs, travel, and compressed schedules affect NHL pricing. The line adjusts for these — investigate whether the adjustment matches the actual impact on each team's roster and goaltending deployment.
-
-### 6. INJURY IMPACT ON PRICE
-Established absences are already in the team's stats and the line. FRESH/SHORT-TERM absences may not be fully reflected in the price yet.
-
-### 7. VARIANCE & CLOSE-GAME RECORDS
-Hockey runs on heavy single-game variance. Teams can sustain shooting percentages, save percentages, and close-game records that the underlying process doesn't support. PDO (shooting% + save%) shows where results and process diverge.`;
 }
 
 export function getNflSpreadFactors() {

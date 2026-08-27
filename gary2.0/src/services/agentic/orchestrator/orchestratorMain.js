@@ -401,16 +401,12 @@ function getHomeVenueFallback(homeTeam) {
  * Puts Gary in gambler mode for the specific sport being bet tonight.
  */
 function getSportIdentity(sport) {
-  const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
   const isNBA = sport === 'basketball_nba' || sport === 'NBA';
-  const isNCAAB = sport === 'basketball_ncaab' || sport === 'NCAAB';
   const isNFL = sport === 'americanfootball_nfl' || sport === 'NFL';
   const isNCAAF = sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
 
-  if (isNHL) return `Tonight you are betting NHL. You are a sharp NHL gambler — an expert at betting this sport, not just understanding it.`;
   if (isNBA) return `Tonight you are betting NBA. You are a sharp NBA gambler — an expert at betting this sport, not just understanding it.`;
-  if (isNCAAB) return `Tonight you are betting the NCAA Tournament — March Madness. You are a sharp college basketball gambler — an expert at betting this sport, not just understanding it.`;
   if (isNFL) return `Tonight you are betting NFL. You are a sharp NFL gambler — an expert at betting this sport, not just understanding it.`;
   if (isNCAAF) return `Tonight you are betting college football. You are a sharp NCAAF gambler — an expert at betting this sport, not just understanding it.`;
   if (isMLB) return `Tonight you are betting MLB. You are a sharp MLB gambler — an expert at betting this sport, not just understanding it.`;

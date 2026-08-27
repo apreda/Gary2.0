@@ -4,9 +4,7 @@
 
 import { NBA_CONSTITUTION } from './nbaConstitution.js';
 import { NFL_CONSTITUTION } from './nflConstitution.js';
-import { NCAAB_CONSTITUTION } from './ncaabConstitution.js';
 import { NCAAF_CONSTITUTION } from './ncaafConstitution.js';
-import { NHL_CONSTITUTION } from './nhlConstitution.js';
 import { MLB_CONSTITUTION } from './mlbConstitution.js'; // restored Aug 18 2026 — June engine returns for MLB games
 import { NFL_PROPS_CONSTITUTION } from './nflPropsConstitution.js';
 import { NBA_PROPS_CONSTITUTION } from './nbaPropsConstitution.js';
@@ -86,16 +84,12 @@ Your training data pre-dates the current season. It is NOW 2026.
 const GAME_CONSTITUTIONS = {
   NBA: NBA_CONSTITUTION,
   NFL: NFL_CONSTITUTION,
-  NCAAB: NCAAB_CONSTITUTION,
   NCAAF: NCAAF_CONSTITUTION,
-  NHL: NHL_CONSTITUTION,
   MLB: MLB_CONSTITUTION, // restored Aug 18 2026 — June engine
   // Aliases
   basketball_nba: NBA_CONSTITUTION,
   americanfootball_nfl: NFL_CONSTITUTION,
-  basketball_ncaab: NCAAB_CONSTITUTION,
   americanfootball_ncaaf: NCAAF_CONSTITUTION,
-  icehockey_nhl: NHL_CONSTITUTION,
   baseball_mlb: MLB_CONSTITUTION, // restored Aug 18 2026 — June engine
 };
 
