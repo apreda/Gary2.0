@@ -9,7 +9,10 @@ describe('buildSystemPrompt without a constitution', () => {
     expect(p).not.toContain('<constitution>');
     expect(p).toContain('FACT-CHECKING PROTOCOL');
     expect(p).toContain('JUDGMENT vs FABRICATION');
-    expect(p).toContain('THINK LIKE A SHARP');
+    // THINK LIKE A SHARP removed (founder, Aug 27): contrarian steering —
+    // "obvious narratives are priced in, question your first instinct" —
+    // that survived from the original Dec 2025 commit without review.
+    expect(p).not.toContain('THINK LIKE A SHARP');
   });
 
   it('still renders the constitution block when one is provided', () => {

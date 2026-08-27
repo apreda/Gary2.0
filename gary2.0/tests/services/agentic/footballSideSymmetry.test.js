@@ -122,7 +122,10 @@ describe('football side-symmetry contract', () => {
       expect(prompt).not.toContain('For spread picks: use "spreadOdds" value');
     }
     expect(nfl).toContain('separate verified starter-phase evidence from verified reserve-phase evidence');
-    expect(nba).toContain('the underdog, because the price pays far more');
+    // Aug 27 (founder): the shared synthesis is side-neutral for EVERY sport
+    // now — the vivid dog example is gone from the non-football branch too.
+    expect(nba).not.toContain('the underdog, because the price pays far more');
+    expect(nba).toContain('neither side starts with a lower burden of proof');
   });
 
   it('removes the one-sided favorite vignette from football system prompts', () => {
@@ -131,7 +134,8 @@ describe('football side-symmetry contract', () => {
 
     expect(nfl).not.toContain('a favorite that looks ripe to be caught sleeping');
     expect(nfl).not.toMatch(/take the points|lay the points|pick the favorite|pick the underdog/i);
-    expect(nba).toContain('a favorite that looks ripe to be caught sleeping');
+    // Aug 27 (founder): the dog-flavored example is gone for every sport.
+    expect(nba).not.toContain('a favorite that looks ripe to be caught sleeping');
   });
 
   it('assigns stable, league-specific prompt-era fingerprints', () => {

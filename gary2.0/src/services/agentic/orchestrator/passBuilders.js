@@ -422,13 +422,15 @@ Check each offered line in both directions — does your read beat the price on 
 
 Your JSON must include all three fields: "final_pick", "rationale", AND "confidence_score". Missing confidence_score will cause a system error.`;
 
-  // Football receives a side-neutral synthesis. The shared wording's vivid
-  // underdog example ("price pays far more...") was harmless in two-option
-  // moneyline lanes but became an anchor in low-information preseason spread
-  // decisions. Keep every other sport byte-for-byte on its existing surface.
+  // Side-neutral synthesis for EVERY sport (founder, Aug 27 — closing the
+  // MLB gap the Aug-24 football fix left open): the old shared wording
+  // enumerated when-the-favorite / when-the-underdog cases, and its vivid
+  // dog example ("price pays far more than your read of a close game
+  // requires") came back near-verbatim in the Aug-26 dog cards ("closer to
+  // a coin flip than the price suggests"). Neither side gets a template.
   const synthesis = isFootball
     ? `You've done your investigation and formed your read of this game. Your research assistant investigated independently and surfaced their findings. Now make the betting decision from the two posted sides. The sign of the spread is not evidence and neither side starts with a lower burden of proof. Hold each team's verified four-quarter cover path against this exact number, decide where your read differs from the market, and take the ticket you would put your own money on. Commit now and draft the exact rationale that should appear on the pick card.`
-    : `You've done your investigation and formed your read of this game. Your research assistant investigated independently and surfaced their findings. Now the actual job: the betting options in front of you are what you are picking from — you are not being asked who is better or who wins on paper; the prices already say what the world thinks. You are picking the BEST BET on this board: hold your read of tonight against the options and take the ticket you would put your own money on. Sometimes that is the favorite at a fair price. Sometimes it is the underdog, because the price pays far more than your read of a close game requires. And sometimes your read simply says a side gets it done regardless of the numbers — that conviction, owned plainly, is a real sports betting decision. Commit now and draft the exact rationale that should appear on the pick card.`;
+    : `You've done your investigation and formed your read of this game. Your research assistant investigated independently and surfaced their findings. Now the actual job: the betting options in front of you are what you are picking from — you are not being asked who is better or who wins on paper; the prices already say what the world thinks. You are picking the BEST BET on this board: neither side starts with a lower burden of proof, and the direction of a price is not evidence. Hold your read of tonight against each posted option, decide where your read and the market disagree, and take the ticket you would put your own money on. Commit now and draft the exact rationale that should appear on the pick card.`;
 
   return `
 <decision_checkpoint>

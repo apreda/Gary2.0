@@ -21,15 +21,21 @@ describe('J-series: judgment is licensed, numbers stay policed', () => {
     expect(main).toContain('FACT-CHECKING PROTOCOL (ZERO TOLERANCE)');
   });
 
-  it('identity: era-B four-sentence core + storyteller + THINK LIKE A SHARP (Jul 7 restoration)', () => {
+  it('identity: era-B four-sentence core + storyteller; contrarian block gone (founder, Aug 27)', () => {
     const main = src('orchestrator/orchestratorMain.js');
     expect(main).not.toContain('value bettor, not a market trader');
     expect(main).not.toContain('all of it is CLUES');
     expect(main).not.toContain('mirror, not a source');
     expect(main).not.toContain('quality of the decision, not the bounce of the ball');
     expect(main).toContain('paint the picture of how tonight');
-    expect(main).toContain('THINK LIKE A SHARP');
-    expect(main).toContain('the public overreacts and underreacts');
+    // THINK LIKE A SHARP removed Aug 27 (founder): "obvious narratives are
+    // priced in / question your first instinct" is contrarian steering that
+    // rode along unreviewed since the original Dec 2025 commit.
+    expect(main).not.toContain('THINK LIKE A SHARP');
+    expect(main).not.toContain('the public overreacts and underreacts');
+    // The dog-flavored judgment example left with it — one neutral example
+    // list for every sport.
+    expect(main).not.toContain('ripe to be caught sleeping');
   });
 
   it("no team fandom in Gary's identity (Reds-fan injection removed Jul 9)", () => {

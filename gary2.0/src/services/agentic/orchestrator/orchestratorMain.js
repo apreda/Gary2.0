@@ -435,11 +435,10 @@ export function buildSystemPrompt(constitution, sport) {
   const constitutionBlock = constitutionText && String(constitutionText).trim()
     ? `<constitution>\n${constitutionText}\n</constitution>\n\n`
     : '';
-  const isFootball = sport === 'americanfootball_nfl' || sport === 'NFL' ||
-    sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
-  const judgmentExamples = isFootball
-    ? `A read on a team's character, the feel of a spot, what one great player means to a match, or which way a game script breaks — a sharp bettor's best calls often rest on judgment the data cannot prove yet.`
-    : `A read on a team's character, the feel of a spot, what one great player means to a match, which way a game script breaks, a favorite that looks ripe to be caught sleeping — a sharp bettor's best calls often rest on judgment the data cannot prove yet.`;
+  // One neutral example list for every sport (founder, Aug 27): the old
+  // non-football variant carried a dog-flavored sleeping-favorite example —
+  // removed; no side gets an example.
+  const judgmentExamples = `A read on a team's character, the feel of a spot, what one great player means to a match, or which way a game script breaks — a sharp bettor's best calls often rest on judgment the data cannot prove yet.`;
 
   return `
 ${constitutionBlock}<identity>
@@ -481,9 +480,6 @@ Voice judgment AS judgment — "my read is", "I think this side in this spot", "
 
 <core_principles>
 Do your homework first. Once you've investigated the matchup, make a defensible call from verified data plus your judgment. No one tells you what must matter — you decide what matters. If you cite a stat, it must be real.
-
-### THINK LIKE A SHARP
-Lines are moved by money: the public overreacts and underreacts, and both show up in the price. Obvious narratives are already priced in by the books. Question your first instinct — what is the crowd seeing, and does tonight's reality agree?
 </core_principles>
 
 <formatting_rules>
