@@ -68,6 +68,8 @@ import { computeFootballQbWatch } from './computers/footballQbWatch.js';
 import { computeFootballSituational } from './computers/footballSituational.js';
 import { computeFootballMismatch } from './computers/footballMismatch.js';
 import { computeFootballDefensiveEdges } from './computers/footballDefensiveEdges.js';
+import { computeFootballHeadToHead } from './computers/footballHeadToHead.js';
+import { computeFootballRestSpacing } from './computers/footballRestSpacing.js';
 import { computeFootballStandings } from './computers/footballStandings.js';
 import { computeNflFantasyEdges } from './computers/nflFantasyEdges.js';
 import { computeNcaafFantasyEdges } from './computers/ncaafFantasyEdges.js';
@@ -128,6 +130,11 @@ const FOOTBALL_COMPUTERS = [
   // third downs allowed, takeaways, pressure. Reads the OPPONENT's row from
   // every game each side has played, so nothing here is a rating or estimate.
   computeFootballDefensiveEdges,
+  // MLB-counterpart lanes (Aug 27 2026 parity build): the real prior meetings
+  // between the slate pair, and the calendar's rest story (short week / bye /
+  // spacing gap). Both read the provider game index only; rest skips August.
+  computeFootballHeadToHead,
+  computeFootballRestSpacing,
 ];
 
 const NFL_COMPUTERS = [

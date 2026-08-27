@@ -31,6 +31,9 @@ const { generateInsightConnections } = await import('./src/services/insights/gen
 const { buildPlayerInsightCards } = await import('./src/services/insights/playerInsightCards.js');
 const { ballDontLieService } = await import('./src/services/ballDontLieService.js');
 const { buildLeaguePulse } = await import('./src/services/insights/leaguePulse.js');
+const { buildFootballLeaguePulse } = await import('./src/services/insights/footballLeaguePulse.js');
+const { buildFootballPlayerInsightCards } = await import('./src/services/insights/footballPlayerInsightCards.js');
+const { loadFootballSlate } = await import('./src/services/insights/footballData.js');
 const {
   footballHubRunIsEmptyFailure,
   shouldRepairFootballMarketVendor,
@@ -87,12 +90,13 @@ const VOLATILE_CATEGORIES = new Set([
 ]);
 
 // Per-player breakdown packs (the iOS Hub "full breakdown" view). Built for MLB
-// (hitter/pitcher) after the day's insight_connections insert succeeds; failures
-// here are NON-FATAL to the connections run.
+// (hitter/pitcher) and, since Aug 27 2026, NFL/NCAAF (football payloads on the
+// same PlayerInsightPack contract) after the day's insight_connections insert
+// succeeds; failures here are NON-FATAL to the connections run.
 const CARDS_TABLE = 'player_insight_cards';
 const CARDS_REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/${CARDS_TABLE}` : null;
 
-// League Pulse: league-wide daily leaderboard tables (MLB). Unlike the
+// League Pulse: league-wide daily leaderboard tables (MLB + NFL/NCAAF). Unlike the
 // additive-freeze connections write, pulse is a LIVE SNAPSHOT — full-row UPSERT
 // on (date, league, tab) each run via Prefer: resolution=merge-duplicates. A
 // dropped/ungroundable tab simply never gets a row (iOS hides any tab with no row).
@@ -477,12 +481,51 @@ async function insertCards(rows) {
 }
 
 /**
- * Build the day's per-player breakdown packs (MLB) and write them with the
+ * Build the day's per-player breakdown packs (MLB + NFL/NCAAF) and write them with the
  * same DELETE-then-INSERT idempotency. NON-FATAL: any failure here is caught and
  * warned so it never sinks the connections run. Respects --dry-run (prints the
  * pack count + one sample payload instead of writing).
  */
 async function buildAndStoreCards({ date, league, connections }) {
+  // Football packs (Aug 27 2026 parity build): the same table, the same
+  // DELETE-then-INSERT idempotency, a football payload on the shared
+  // PlayerInsightPack contract. Leagues without a pack builder still no-op.
+  if (league === 'NFL' || league === 'NCAAF') {
+    try {
+      const games = await loadFootballSlate({
+        bdl: ballDontLieService, league: league.toLowerCase(), date,
+      });
+      const packs = await buildFootballPlayerInsightCards({
+        date, league, games, bdl: ballDontLieService,
+      });
+      if (!Array.isArray(packs) || packs.length === 0) {
+        console.log(`   ℹ️  No player insight cards built for ${league} (${date}).`);
+        return;
+      }
+      const rows = packs.map((p) => ({
+        date: p.date,
+        league: p.league,
+        player_id: String(p.player_id),
+        player_name: p.player_name ?? null,
+        team_abbr: p.team_abbr ?? null,
+        game_id: p.game_id != null ? String(p.game_id) : null,
+        payload: p.payload,
+        generated_by: 'insights-cli',
+      }));
+      if (dryRun) {
+        console.log(`   🧪 Would write ${rows.length} ${league} player insight card(s). Sample payload:`);
+        console.log(JSON.stringify(rows[0]?.payload, null, 2));
+        return;
+      }
+      await deleteDayCards(date, league);
+      await insertCards(rows);
+      console.log(`   ✅ Stored ${rows.length} player insight card(s) for ${league} (${date}).`);
+    } catch (err) {
+      const detail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
+      console.warn(`   ⚠️  [${league}] player insight cards skipped: ${detail}`);
+    }
+    return;
+  }
   if (league !== 'MLB') return;
   try {
     // generateInsightConnections returns the count but not the slate itself;
@@ -547,16 +590,21 @@ async function buildAndStoreCards({ date, league, connections }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Build the day's League Pulse tab packs (MLB) and UPSERT them on
+ * Build the day's League Pulse tab packs (MLB + NFL/NCAAF) and UPSERT them on
  * (date, league, tab) — a full-row replace each run via merge-duplicates, so the
  * board is always the current snapshot (the live-data behavior the spec wants, the
  * opposite of the connections additive-freeze). NON-FATAL: any failure here is
  * caught + warned so it never sinks the connections run. Respects --dry-run.
  */
 async function buildAndStorePulse({ date, league }) {
-  if (league !== 'MLB') return;
+  // MLB rides its original builder; NFL/NCAAF ride the football builder
+  // (Aug 27 2026 parity build) onto the SAME generic-table write below.
+  const isFootballPulse = league === 'NFL' || league === 'NCAAF';
+  if (league !== 'MLB' && !isFootballPulse) return;
   try {
-    const packs = await buildLeaguePulse({ date, league });
+    const packs = isFootballPulse
+      ? await buildFootballLeaguePulse({ date, league, bdl: ballDontLieService })
+      : await buildLeaguePulse({ date, league });
     if (!Array.isArray(packs) || packs.length === 0) {
       console.log(`   ℹ️  No league pulse tabs built for ${league} (${date}).`);
       return;
@@ -736,10 +784,10 @@ async function run() {
     if (dryRun) {
       console.log(`   Would write ${rows.length} row(s):`);
       console.log(JSON.stringify(rows, null, 2));
-      // Player insight cards build on the SAME connections (MLB only); in dry-run
+      // Player insight cards (MLB rides connections; football rides the slate); in dry-run
       // this prints the pack count + one sample payload instead of writing.
       await buildAndStoreCards({ date: targetDate, league, connections });
-      // League Pulse (MLB) builds its own league-wide tables from the slate.
+      // League Pulse builds its own league-wide tables from the slate.
       await buildAndStorePulse({ date: targetDate, league });
       continue;
     }
@@ -880,9 +928,9 @@ async function run() {
 
       console.log(`   ✅ ${fresh.length} new / ${rows.length} computed for ${league} (${targetDate}); ${Math.max(0, rows.length - fresh.length - upgraded - volatileKeys.size)} already posted (frozen); ${volatileKeys.size} volatile row(s) refreshed; ${upgraded} confirmedXI situational row(s) upgraded-in-place; ${patched} content-patched (voice/ids/fantasy evidence).`);
       // After the connections insert succeeds, build + store this league's
-      // per-player breakdown packs (MLB only). NON-FATAL — guarded internally.
+      // per-player breakdown packs (MLB + NFL/NCAAF). NON-FATAL — guarded internally.
       await buildAndStoreCards({ date: targetDate, league, connections });
-      // League Pulse (MLB) — league-wide leaderboard tables, full-row UPSERT
+      // League Pulse — league-wide leaderboard tables, full-row UPSERT
       // each run (live snapshot). NON-FATAL — guarded internally.
       await buildAndStorePulse({ date: targetDate, league });
     } catch (err) {
