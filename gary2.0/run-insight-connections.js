@@ -424,6 +424,30 @@ async function existingKeys(date, league) {
   return set;
 }
 
+/**
+ * Seed state for the per-lane CHECKPOINT writer (football): the stored row keys
+ * (same identity as the additive-freeze) plus the set of categories that already
+ * have rows today — volatile categories checkpoint only into an EMPTY category,
+ * because a non-empty one belongs to replaceVolatileRows' snapshot semantics.
+ */
+async function existingState(date, league) {
+  const { data } = await axios.get(REST_URL, {
+    headers: restHeaders,
+    params: {
+      date: `eq.${date}`,
+      league: `eq.${league}`,
+      select: 'category,headline,game,player_id,team_id,game_id',
+    },
+  });
+  const keys = new Set();
+  const categories = new Set();
+  for (const r of data || []) {
+    keys.add(rowKey(r));
+    categories.add(r.category);
+  }
+  return { keys, categories };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Player Insight Cards write path (same idempotency as the connections write)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -590,10 +614,64 @@ async function run() {
 
   for (const league of leagues) {
     console.log(`\n── ${league} ──`);
+
+    // PER-LANE CHECKPOINT (Aug 27 2026). The insights plist hard-caps this
+    // stage (GARY_CAP_FOOTBALL) and the alarm kills the whole process when the
+    // subscription-bridge lane reads run long — on Aug 27 every pass computed
+    // its lanes and died before the single end-of-run write, shipping ZERO NFL
+    // rows on a 4-game day. Store each football lane AS IT COMPLETES instead:
+    //   • additive lanes ride the SAME first-write-wins freeze as the final
+    //     write (seeded keys + rowKey), so nothing already posted is touched;
+    //   • volatile lanes (injury/quarterback/pace_script/…) checkpoint only
+    //     into an EMPTY category — once a category has rows, its refresh
+    //     belongs to replaceVolatileRows' insert-then-delete snapshot;
+    //   • confirmedXI situational rows stay the final write's alone (their
+    //     upgrade-in-place needs the run's full set).
+    // The final write below is unchanged and idempotent over checkpoint rows
+    // (its own existingKeys fetch sees them and freezes them). Football-only:
+    // MLB rows are not final at lane time (voice pass + id resolver run
+    // between generate and store). Manual --reset skips checkpoints — its
+    // delete-then-rebuild expects the day to be rebuilt in one write.
+    const isFootballLeague = league === 'NFL' || league === 'NCAAF';
+    let onLaneRows;
+    if (!dryRun && !resetDay && isFootballLeague) {
+      try {
+        const state = await existingState(targetDate, league);
+        onLaneRows = async ({ computer, rows: laneConnections }) => {
+          const fresh = [];
+          for (const r of laneConnections.map((c) => toRow(c, league, targetDate))) {
+            if (r.category === 'situational' && r.meta?.kind === 'confirmedXI') continue;
+            if (VOLATILE_CATEGORIES.has(r.category)) {
+              if (state.categories.has(r.category)) continue;
+            } else if (state.keys.has(rowKey(r))) {
+              continue;
+            }
+            fresh.push(r);
+          }
+          if (!fresh.length) return;
+          await insertRows(fresh);
+          for (const r of fresh) {
+            state.keys.add(rowKey(r));
+            state.categories.add(r.category);
+          }
+          console.log(`   💾 checkpoint: ${fresh.length} row(s) stored from ${computer} (${league})`);
+        };
+      } catch (err) {
+        // Seeding failed (transient REST error) — run exactly as before, one
+        // write at the end. The checkpoint is a safety net, never a gate.
+        console.warn(`   ⚠️  [${league}] checkpoint seed failed — falling back to end-of-run write only: ${err.message}`);
+        onLaneRows = undefined;
+      }
+    }
+
     let connections;
     let generatedGameCount = 0;
     try {
-      const generated = await generateInsightConnections({ date: targetDate, league });
+      const generated = await generateInsightConnections({
+        date: targetDate,
+        league,
+        options: onLaneRows ? { onLaneRows } : {},
+      });
       generatedGameCount = Number(generated?.gameCount) || 0;
       if (Array.isArray(generated?.failures) && generated.failures.length > 0) {
         hadError = true;

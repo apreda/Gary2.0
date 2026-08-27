@@ -162,6 +162,15 @@ const COMPUTERS_BY_LEAGUE = {
  * @param {number} [args.options.minRelevance]    drop rows below this (default 35)
  * @param {number} [args.options.maxPerCategory]  cap rows per category so one hot
  *                                                lane can't flood the hub (default 8)
+ * @param {function} [args.options.onLaneRows]    async ({ computer, rows }) called as
+ *                                                EACH computer settles, with that lane's
+ *                                                post-processed rows — lets the caller
+ *                                                checkpoint completed lanes so an external
+ *                                                kill (the plist stage hard-cap) cannot
+ *                                                discard every finished lane with the
+ *                                                process. Hook errors are non-fatal to
+ *                                                the lane; the aggregate return is
+ *                                                unchanged either way.
  * @returns {Promise<object>} { date, league, season, gameCount, connections: row[] }
  */
 export async function generateInsightConnections({ date, league = 'mlb', options = {} } = {}) {
@@ -287,7 +296,22 @@ export async function generateInsightConnections({ date, league = 'mlb', options
       // Per-lane diagnostics: a 0-row lane should be visible in the log, not
       // silently absorbed into the aggregate.
       console.log(`[insights]   ${name}: ${Array.isArray(rows) ? rows.length : 0} row(s)`);
-      return Array.isArray(rows) ? rows : [];
+      const list = Array.isArray(rows) ? rows : [];
+      // Lane checkpoint: hand this lane's rows to the caller NOW, post-processed
+      // through the same contract as the aggregate (slate membership, relevance
+      // floor, in-lane dedupe/caps). The football stage runs under a plist
+      // hard-cap that kills the process outright when the subscription-bridge
+      // lane reads run long — without this, four finished lanes died with the
+      // process and the board shipped zero rows (Aug 27 2026).
+      if (typeof options.onLaneRows === 'function' && list.length) {
+        try {
+          const laneRows = postProcess(list, { slateGameIds, minRelevance, maxRows, maxPerCategory });
+          if (laneRows.length) await options.onLaneRows({ computer: name, rows: laneRows });
+        } catch (err) {
+          console.warn(`[insights]   checkpoint for "${name}" failed (non-fatal): ${err?.message || err}`);
+        }
+      }
+      return list;
     }),
   );
 
