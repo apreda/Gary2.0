@@ -68,15 +68,14 @@ describe('MLB game lane runs the restored June engine (Aug 18 restoration)', () 
     expect(pb).toContain('CASE FOR BACKING ${homeTeam.toUpperCase()} TONIGHT:');
   });
 
-  it('the ask-the-researcher protocol is wired (founder GO, Aug 18)', () => {
+  it('the researcher is dead for every sport (founder kill, Aug 27) — no briefing, no ask channel', () => {
     const loop = src('orchestrator/agentLoop.js');
-    expect(loop).toContain('extractResearcherQuestions(message.content');
-    expect(loop).toContain('RESEARCHER_QUESTION_BUDGET');
-    expect(loop).toContain('ASK RESEARCHER:');
-    const advisor = src('orchestrator/researchBriefing.js');
-    expect(advisor).toContain('export function extractResearcherQuestions');
-    expect(advisor).toContain('export async function askResearcher');
-    expect(advisor).toContain('Do NOT pick a side');
+    expect(loop).not.toContain('buildResearchBriefing(');
+    expect(loop).not.toContain('RESEARCHER_QUESTION_BUDGET');
+    expect(loop).not.toContain('ASK RESEARCHER:');
+    expect(loop).toContain('THE RESEARCHER IS DEAD — ALL SPORTS');
+    const sha = src('orchestrator/junePromptSha.js');
+    expect(sha).toContain('RESEARCHER=OFF, ALL SPORTS');
   });
 
   it('the house limit caps every game moneyline (founder, Aug 18)', () => {

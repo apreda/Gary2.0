@@ -60,13 +60,12 @@ describe('#2 MLB research walk runs 8 factor chats with the full token union', (
   });
 });
 
-describe('#3 briefing contract: no ordered re-investigation, no leash (Jul 22 eve — Sol investigates freely)', () => {
-  it('neither orders redundant investigation nor forbids the brain from investigating', () => {
+describe('#3 the briefing is gone (researcher killed for all sports, Aug 27)', () => {
+  it('the agent loop neither builds nor injects a research briefing', () => {
     const loop = src('orchestrator/agentLoop.js');
-    expect(loop).not.toContain('You MUST still investigate');
-    expect(loop).not.toContain('IS your investigation');
-    expect(loop).not.toContain('go straight to your Pass 1 synthesis');
-    expect(loop).toContain('Investigate further with your own fetch_stats calls wherever your read wants more evidence');
+    expect(loop).not.toContain('RESEARCH BRIEFING (from your research assistant');
+    expect(loop).not.toContain('Investigate further with your own fetch_stats calls');
+    expect(loop).toContain('const _researchBriefing = null;');
   });
 });
 

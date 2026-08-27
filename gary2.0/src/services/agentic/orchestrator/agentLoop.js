@@ -1,7 +1,7 @@
-import { CONFIG, LEGACY_BRAIN_MODEL, LEGACY_BRAIN_FALLBACK, LEGACY_RESEARCH_MODEL, PROPS_DESK_MODEL, GAME_PICK_MODEL, GAME_ML_CAP, DESK_FALLBACK_MODELS, validateSessionModel, RESEARCH_BRIEFING_TIMEOUT_MS } from './orchestratorConfig.js';
+import { CONFIG, LEGACY_BRAIN_MODEL, LEGACY_BRAIN_FALLBACK, LEGACY_RESEARCH_MODEL, PROPS_DESK_MODEL, GAME_PICK_MODEL, GAME_ML_CAP, DESK_FALLBACK_MODELS, validateSessionModel } from './orchestratorConfig.js';
 import { isExplicitPropsPass } from '../propsSharedUtils.js';
 import { createModelSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
-import { extractTextualSummaryForModelSwitch, buildResearchBriefing, extractResearcherQuestions, createResearcherFollowUpSession, askResearcher } from './researchBriefing.js';
+import { extractTextualSummaryForModelSwitch } from './researchBriefing.js';
 import { createCostTracker } from './costTracker.js';
 import { buildPass1Message, buildPass25Message, buildPass25PropsMessage, buildPass3Unified, buildPass3Props, FINALIZE_PROPS_TOOL, getFinalizePropsToolForSport, PROPS_PICK_SCHEMA, buildMlCapRetryMessage } from './passBuilders.js';
 import { parseGaryResponse, parsePropsResponse, normalizePickFormat, determineCurrentPass } from './responseParser.js';
@@ -331,13 +331,9 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
 
   // Flash Research Briefing state — comprehensive pre-game briefing (factual findings only)
   // Flash completes BEFORE Gary starts. Findings injected before Pass 1.
-  let _researchBriefing = null;          // Briefing text from Flash (factual findings)
   // ASK-THE-RESEARCHER (founder GO, Aug 18 2026): Gary can hand questions to
   // the researcher during Pass 1; the harness answers them via a dedicated
   // follow-up session. Budgeted so a curious brain can't loop forever.
-  let _researcherFollowUpSession = null;
-  let _researcherQuestionsUsed = 0;
-  const RESEARCHER_QUESTION_BUDGET = 6;
   // Tokens Flash already investigated. Seeded into Gary's dedup set so Gary
   // doesn't pay for round-trips that just return data already in the briefing.
   // The briefing IS Gary's data for these tokens.
@@ -351,90 +347,16 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // Flash reads the scout report, identifies gaps, and uses fetch_stats
   // to investigate deeper. Gary waits for Flash to finish so he has the
   // full per-factor findings from the very first iteration.
-  // THE RESEARCHER IS DEAD FOR MLB (founder, Aug 27: "kill the research
-  // assistant" — after three caught defects in one document: a garbled
-  // series record, psychological reads, and fabricated market prices).
-  // The desk is Gary's entire evidence; on the CLI bridge he has no tools,
-  // and that is the design — everything he needs is ON the desk, and the
-  // manifest guards that it all rendered. Football keeps its researcher
-  // pending its own parity review.
-  const skipResearcher = sport === 'baseball_mlb' || sport === 'MLB';
-  if (options.scoutReport && !isPropsMode && !skipResearcher) {
-    console.log(`[Research Briefing] 🔬 Running the research briefing (Haiku with tools) — Gary waits for completion`);
-    try {
-      const briefingResult = await Promise.race([
-        buildResearchBriefing(options.scoutReport, sport, homeTeam, awayTeam, { ...options, _costTracker: costTracker }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error(`Flash research timed out after ${RESEARCH_BRIEFING_TIMEOUT_MS / 1000}s`)), RESEARCH_BRIEFING_TIMEOUT_MS))
-      ]);
-      if (briefingResult && typeof briefingResult === 'object') {
-        _researchBriefing = briefingResult.briefing;
-        if (briefingResult.calledTokens?.length > 0) {
-          // Seed Gary's dedup set with everything Flash already covered. Each
-          // entry is added in both forms — full token ("PLAYER_GAME_LOGS:Buxton")
-          // and base token ("PLAYER_GAME_LOGS") — to match the existing
-          // alreadyFetchedStats key shape (built per-iteration around line ~546).
-          for (const { token } of briefingResult.calledTokens) {
-            if (!token) continue;
-            _flashCalledTokens.add(token);
-            const base = token.split(':')[0];
-            if (base && base !== token) _flashCalledTokens.add(base);
-          }
-          console.log(`[Research Briefing] Seeded ${_flashCalledTokens.size} Flash-covered tokens into Gary's dedup set`);
-        }
-        console.log(`[Research Briefing] ✅ Briefing ready (${briefingResult.briefing?.length || 0} chars)`);
-      } else if (briefingResult && typeof briefingResult === 'string') {
-        _researchBriefing = briefingResult;
-        console.log(`[Research Briefing] ✅ Briefing ready (${briefingResult.length} chars)`);
-      } else {
-        throw new Error(`[HARD FAIL] Flash Research Assistant returned empty briefing for ${homeTeam} @ ${awayTeam} (${sport}). The research assistant must complete successfully — no fallback to unresearched picks.`);
-      }
-    } catch (err) {
-      throw new Error(`[HARD FAIL] Flash Research Assistant failed for ${homeTeam} @ ${awayTeam} (${sport}). Error: ${err.message}. The research assistant must complete successfully — no fallback to unresearched picks.`);
-    }
+  // THE RESEARCHER IS DEAD — ALL SPORTS (founder, Aug 27: "make sure then
+  // this is the process for ALL sports"). His rationale, recorded: the
+  // briefing was a second author we could not control — it decided which
+  // findings surfaced, Gary clung to whatever it surfaced, and the desk
+  // could not be standardized while it wrote. Everything Gary sees is now
+  // the desk, section by section, the same shape every game, so how he
+  // USES the same information becomes observable. No briefing, no
+  // ask-the-researcher, no injected block. The desk is the evidence.
+  const _researchBriefing = null;
 
-    // Inject Flash's per-factor findings BEFORE Pass 1 + reframe Gary's task as spread investigation
-    if (_researchBriefing) {
-      const spread = options.spread ?? null;
-      const hasSpread = Number.isFinite(spread);
-      const homeSpread = hasSpread ? `${spread >= 0 ? '+' : ''}${spread.toFixed(1)}` : '';
-      const awaySpread = hasSpread ? `${-spread >= 0 ? '+' : ''}${(-spread).toFixed(1)}` : '';
-      const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
-
-      const spreadLine = isMLB
-        ? `The line is ${homeTeam} (home) vs ${awayTeam} (away) — run line / moneyline.`
-        : `The spread is ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}.`;
-
-      // Jul 8 2026 cost audit: this contract used to ORDER Gary to keep
-      // investigating on his own even though every Flash-covered token is
-      // already seeded into the dedup set — those re-requests return nothing
-      // new, so the order guaranteed wasted big-brain round-trips every game.
-      // The briefing IS the investigation (the December design); Gary fetches
-      // only what is genuinely missing.
-      // A brain on a CLI sub bridge (claude-cli / codex-cli) cannot call tools
-      // — never invite it to fetch (Aug 18 2026, June-engine cost config: the
-      // researcher carries all tool work; Gary reads). API brains keep the
-      // investigate-further invitation.
-      const brainHasTools = !['claude-cli', 'codex-cli'].includes(currentSession?.provider);
-      const investigateAsk = brainHasTools
-        ? `Investigate further with your own fetch_stats calls wherever your read wants more evidence — duplicates of already-fetched stats return nothing new, so only novel requests cost anything. You can also hand a question to your research assistant: write a line starting with ASK RESEARCHER: followed by the question (one per line, up to 6 per game) and the answer comes back with verified figures.`
-        : `Your research assistant stays on call. To dig deeper into anything — a split the briefing summarized, a number you want verified, a factor it did not cover — write a line starting with ASK RESEARCHER: followed by the question (one per line, up to 6 per game). The answers come back with verified figures before you continue. Weigh the briefing's findings honestly rather than repeating them.`;
-      const briefingBlock = `\n\n## RESEARCH BRIEFING (from your research assistant)\n\nYour research assistant investigated every factor with full tool access. These are structured, verified findings. Everything it covers is already fetched.\n\n${_researchBriefing}\n\n---\n\n${spreadLine}\n\n${investigateAsk}`;
-      // Append to the user message Gary receives
-      userMessage = userMessage + briefingBlock;
-      nextMessageToSend = userMessage;
-      // Update messages array to include briefing
-      messages[1] = { role: 'user', content: userMessage };
-      console.log(`[Orchestrator] 📋 Flash research briefing included before Pass 1 (${_researchBriefing.length} chars) — Gary tasked with spread investigation`);
-      // Dump full Flash briefing to file when VERBOSE_GARY is set
-      if (process.env.VERBOSE_GARY) {
-        const fs = await import('fs');
-        const dumpPath = `/tmp/flash_briefing_${homeTeam.replace(/\s/g,'_')}_${Date.now()}.txt`;
-        const fullDump = `=== FLASH RESEARCH BRIEFING (${_researchBriefing.length} chars) ===\n\n${_researchBriefing}`;
-        fs.writeFileSync(dumpPath, fullDump);
-        console.log(`[VERBOSE] Flash briefing dumped to: ${dumpPath}`);
-      }
-    }
-  }
 
   while (iteration < effectiveMaxIterations) {
     iteration++;
@@ -1690,43 +1612,7 @@ INVESTIGATION COMPLETE`;
       const { categoryCount: gateCategories, totalCalls: gateCalls } = isInvestigationSufficient(toolCallHistory, iteration);
       const markedComplete = hasInvestigationCompleteMarker(message.content || '');
 
-      // ASK-THE-RESEARCHER (founder GO, Aug 18 2026): questions outrank a
-      // completion marker in the same message — the answers block tells Gary
-      // to re-emit INVESTIGATION COMPLETE when he is actually done.
-      if (isGamePicksMode && _researchBriefing) {
-        const remaining = skipResearcher ? 0 : RESEARCHER_QUESTION_BUDGET - _researcherQuestionsUsed;
-        const questions = remaining > 0 ? extractResearcherQuestions(message.content || '', remaining) : [];
-        if (questions.length > 0) {
-          messages.push({ role: 'assistant', content: message.content });
-          _researcherQuestionsUsed += questions.length;
-          console.log(`[Orchestrator] 🙋 ${questions.length} researcher question(s) from Gary (${_researcherQuestionsUsed}/${RESEARCHER_QUESTION_BUDGET} used): ${questions.map(q => q.slice(0, 80)).join(' | ')}`);
-          let answersText;
-          try {
-            if (!_researcherFollowUpSession) {
-              _researcherFollowUpSession = await createResearcherFollowUpSession({
-                scoutReportContent: options.scoutReport || '',
-                briefing: _researchBriefing,
-                sport, homeTeam, awayTeam,
-                _costTracker: costTracker,
-              });
-            }
-            answersText = await askResearcher(_researcherFollowUpSession, questions, { sport, homeTeam, awayTeam, options });
-          } catch (err) {
-            console.warn(`[Orchestrator] ⚠️ researcher follow-up failed: ${err.message}`);
-            answersText = `The researcher could not be reached (${err.message}). Work from the scout report and briefing.`;
-          }
-          const budgetLine = _researcherQuestionsUsed >= RESEARCHER_QUESTION_BUDGET
-            ? '\n\nYour question budget is exhausted — synthesize from what you have.'
-            : `\n\nYou may ask ${RESEARCHER_QUESTION_BUDGET - _researcherQuestionsUsed} more question(s) the same way.`;
-          const answersMsg = {
-            role: 'user',
-            content: `## RESEARCHER ANSWERS\n\n${answersText}${budgetLine}\n\nContinue Pass 1. When your synthesis is complete (including both cases), output exactly:\nINVESTIGATION COMPLETE`
-          };
-          messages.push(answersMsg);
-          nextMessageToSend = answersMsg;
-          continue;
-        }
-      }
+      // (ask-the-researcher protocol removed with the researcher — Aug 27.)
 
       if (markedComplete) {
         if (isGamePicksMode && !isNFLSport && !isNCAAFSport) {

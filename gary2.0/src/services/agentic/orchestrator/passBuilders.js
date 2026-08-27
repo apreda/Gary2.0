@@ -75,9 +75,7 @@ Tonight's spread: ${favoriteLabel} -${absSpread} / ${underdogLabel} +${absSpread
 
 The spread number you see tonight was set AFTER the schedule, injuries, and rest situation were known. The question is not whether these factors exist — everyone can see them — but whether the spread has accounted for them correctly for THIS game. Records and rankings describe what has happened — they are not reasons for or against a spread.
 
-You are picking which side of this spread to take. Investigate the game — the teams, the players taking the floor tonight, the stats, the injuries, the schedule, the recent context — and build your understanding of this specific matchup at this specific number.
-
-Use the scout report + research briefing as your starting point, then investigate with fetch_stats where you need deeper evidence.
+You are picking which side of this spread to take. The full desk above is your evidence.
 
 Before completing Pass 1, include BOTH sections:
 Case for ${homeTeam}
@@ -141,9 +139,7 @@ ${factors}
 
 Posted spread: ${homeTeam} ${formatSpread(homeSpread)} / ${awayTeam} ${formatSpread(awaySpread)}
 
-Your end goal in this game is to choose the best side of this spread. In this pass, stay neutral: verify/disconfirm key claims and build decision-ready evidence through the factors above.
-
-Use the scout report + research briefing as your starting point, then investigate with fetch_stats where you need additional evidence to verify, disconfirm, or clarify critical gaps before synthesis.
+Your end goal in this game is to choose the best side of this spread. In this pass, stay neutral: build decision-ready evidence through the factors above. The full desk above is your evidence.
 
 TREND AWARENESS (L5/L10): Treat recent trend data as a clue, not a conclusion. Synthesize whether it could continue, regress, or be overvalued/undervalued at this spread number. Use sample context (opponents faced, who played, game-window conditions) to ground that assessment.
 
@@ -209,9 +205,7 @@ ${factors}
 
 Posted spread: ${homeTeam} ${formatSpread(homeSpread)} / ${awayTeam} ${formatSpread(awaySpread)}
 
-Your end goal in this game is to choose the best side of this spread. In this pass, stay neutral: verify/disconfirm key claims and build decision-ready evidence through the factors above.
-
-Use the scout report + research briefing as your starting point, then investigate with fetch_stats where you need additional evidence to verify, disconfirm, or clarify critical gaps before synthesis.
+Your end goal in this game is to choose the best side of this spread. In this pass, stay neutral: build decision-ready evidence through the factors above. The full desk above is your evidence.
 
 TREND AWARENESS (L5/L10): Treat recent trend data as a clue, not a conclusion. Synthesize whether it could continue, regress, or be overvalued/undervalued at this spread number. Use sample context (opponents faced, who played, game-window conditions) to ground that assessment.
 
