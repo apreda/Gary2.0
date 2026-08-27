@@ -185,6 +185,6 @@ export function buildPenPressQuery(teamName) {
     `(who has been entrusted with late innings, who worked multiple days, who was unavailable and why), ` +
     `any meltdowns or escapes as described in game coverage, the closer situation and any role changes as reported, ` +
     `fresh reliever injuries, activations, call-ups or option moves, and manager comments about bullpen decisions or availability. ` +
-    `Attribute claims to the outlet. Report only what has been published — no predictions, no betting advice, no opinions of your own.`
+    `Attribute claims to the outlet. Report only what has been published — no predictions, no betting advice, no opinions of your own. Write the report directly: do not narrate your search process, do not describe what you are about to look for, and do not mention searching at all.`
   );
 }

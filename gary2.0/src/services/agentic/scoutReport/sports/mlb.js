@@ -48,6 +48,7 @@ import { findStandingsRow } from '../../../teamIdentity.js';
 import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbSeasonSeriesGroups, computeMlbScheduleShape, toEtDate, clubMatches } from './mlbSeriesState.js';
 import { aggregateRecentWindow } from './mlbRecentWindow.js';
 import { computePitcherWhiffByStart } from './mlbContactQuality.js';
+import { renderBoxScore, buildPenPressQuery } from './mlbGamesAsWritten.js';
 import {
   completedMlbTeamGames,
   resolveMlbGamesMissed,
@@ -218,6 +219,8 @@ export async function buildMlbScoutReport(game, options = {}) {
     confirmedLineups,
     homeUpcomingGames,
     storylinesGrounding,
+    homePenPress,
+    awayPenPress,
   ] = await Promise.all([
     homeTeamId ? getTeamRoster(homeTeamId).catch(e => { console.warn(`[Scout Report] Home roster error: ${e.message}`); return []; }) : Promise.resolve([]),
     awayTeamId ? getTeamRoster(awayTeamId).catch(e => { console.warn(`[Scout Report] Away roster error: ${e.message}`); return []; }) : Promise.resolve([]),
@@ -272,6 +275,14 @@ export async function buildMlbScoutReport(game, options = {}) {
       `Attribute reported narratives to their source. Do NOT include picks, predictions, or betting advice.`,
       { maxTokens: 2200 }
     ).then(r => r?.data || '').catch(() => ''),
+    // THE PEN, AS REPORTED (founder GO, Aug 27 — the pen press beat): what
+    // the beat is writing about each bullpen, attributed. Failure ≠ empty
+    // (funnel law): a thrown search is marked failed and prints an
+    // honest-absence line; a clean empty result omits the section.
+    openaiWebSearch(buildPenPressQuery(homeTeam), { maxTokens: 1200, freshnessHours: 72 })
+      .then(r => ({ text: r?.data || '' })).catch(() => ({ failed: true })),
+    openaiWebSearch(buildPenPressQuery(awayTeam), { maxTokens: 1200, freshnessHours: 72 })
+      .then(r => ({ text: r?.data || '' })).catch(() => ({ failed: true })),
     // (OUR-OWN-RECAPS fetch DELETED Aug 12 2026: it existed only as the
     // WIRE section's fallback, and the WIRE dissolved into colocated
     // official stories the same day. Every story on the desk is now MLB's
@@ -1168,6 +1179,46 @@ export async function buildMlbScoutReport(game, options = {}) {
       entries.push(`These two, ${String(g.officialDate || g.gameDate || '').slice(0, 10)} — ${story.headline}\n${body}`);
     }
     return entries.join('\n\n');
+  })();
+
+  // THE BOX SCORES (founder, Aug 27: "i want the full box scores AND the
+  // context that stats dont show which comes from the stories"): the
+  // complete official box for last night's game(s) and every current-series
+  // game, printed beside the stories those same games carry. Failure ≠
+  // empty: a fetch that throws prints an honest-absence line.
+  const boxScoresSection = await (async () => {
+    const rows = [];
+    const seen = new Set();
+    for (const g of [...homeWireGames, ...awayWireGames]
+      .filter((g) => lastNightPks.has(g.gamePk) || headToHeadPks.has(g.gamePk))
+      .sort((a, b) => new Date(a.gameDate || a.officialDate || 0) - new Date(b.gameDate || b.officialDate || 0))) {
+      if (seen.has(g.gamePk)) continue;
+      seen.add(g.gamePk);
+      rows.push(g);
+    }
+    const parts = [];
+    for (const g of rows) {
+      const date = String(g.officialDate || g.gameDate || '').slice(0, 10);
+      const head = `${date} ${g.teams?.away?.team?.name ?? 'Away'} ${g.teams?.away?.score ?? ''} @ ${g.teams?.home?.team?.name ?? 'Home'} ${g.teams?.home?.score ?? ''}`.replace(/\s+/g, ' ').trim();
+      try {
+        const box = await getGameBoxScore(g.gamePk);
+        const rendered = renderBoxScore(head, box);
+        if (rendered) parts.push(rendered);
+      } catch {
+        parts.push(`BOX SCORE — ${head}: box score retrieval failed this run — treat as missing data, not an empty game.`);
+      }
+    }
+    return parts.join('\n\n');
+  })();
+
+  // THE PEN, AS REPORTED — see the fetch above for the failure contract.
+  const penPressSection = (() => {
+    const rows = [];
+    for (const [teamName, res] of [[awayTeam, awayPenPress], [homeTeam, homePenPress]]) {
+      if (res?.failed) rows.push(`${teamName}: press retrieval returned nothing this run — treat as missing coverage, not a quiet story.`);
+      else if (res?.text && res.text.trim()) rows.push(`${teamName}:\n${res.text.trim()}`);
+    }
+    return rows.join('\n\n');
   })();
 
   // (SITUATIONAL BOXSCORE, RECENT-SERIES-FORM, and FORM-ARC blocks retired
@@ -2454,7 +2505,7 @@ ${computeMlbSeriesState(homeTeam, awayTeam, homeRecentGames, homeUpcomingGames).
 Recent results:
 ${recentResults}
 
-${situationFlagsSection ? `═══ SITUATION FLAGS ═══\n${situationFlagsSection}\n\n` : ''}${lastNightSection ? `═══ LAST NIGHT, AS WRITTEN ═══\n${lastNightSection}\n\n` : ''}═══ ROSTER MOVES — LAST 14 DAYS ═══
+${situationFlagsSection ? `═══ SITUATION FLAGS ═══\n${situationFlagsSection}\n\n` : ''}${lastNightSection ? `═══ LAST NIGHT, AS WRITTEN ═══\n${lastNightSection}\n\n` : ''}${boxScoresSection ? `═══ THE BOX SCORES ═══\n${boxScoresSection}\n\n` : ''}${penPressSection ? `═══ THE PEN, AS REPORTED ═══\n${penPressSection}\n\n` : ''}═══ ROSTER MOVES — LAST 14 DAYS ═══
 ${rosterMovesSection}
 
 ═══ SCHEDULE SHAPE ═══

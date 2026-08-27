@@ -24,6 +24,7 @@ const DOSSIER_SURFACE_FILES = [
   '../scoutReport/sports/mlbPlatoonRecency.js',
   '../scoutReport/sports/mlbSeasonContext.js',
   '../scoutReport/sports/mlbSeriesState.js',
+  '../scoutReport/sports/mlbGamesAsWritten.js',
   '../scoutReport/sports/mlbContactQuality.js',
   '../scoutReport/sports/mlbInjuryContext.js',
   '../scoutReport/sports/pitcherArc.js',
