@@ -49,6 +49,7 @@ import { computeMlbSeriesState, computeMlbSeasonSeries, computeMlbSeasonSeriesGr
 import { aggregateRecentWindow } from './mlbRecentWindow.js';
 import { computePitcherWhiffByStart } from './mlbContactQuality.js';
 import { renderBoxScore, buildPenPressQuery } from './mlbGamesAsWritten.js';
+import { auditDeskManifest, recordDeskManifest } from './mlbDeskManifest.js';
 import {
   completedMlbTeamGames,
   resolveMlbGamesMissed,
@@ -249,7 +250,7 @@ export async function buildMlbScoutReport(game, options = {}) {
       // Hard news is a 24-hour window (founder, Aug 10) — storylines and
       // press keep the wider one.
       { maxTokens: groundingOpts.maxTokens, freshnessHours: 24 }
-    ).then(r => r?.data || '').catch(() => ''),
+    ).then(r => (r?.success === false ? 'News retrieval failed this run — treat as missing coverage, not a quiet day.' : (r?.data || ''))).catch(() => 'News retrieval failed this run — treat as missing coverage, not a quiet day.'),
     // Lineups: BDL API first (pre-game, includes handedness + probable pitchers);
     // the MLB Stats API boxscore fills any side BDL leaves short, downstream.
     (async () => {
@@ -274,15 +275,15 @@ export async function buildMlbScoutReport(game, options = {}) {
       `Do not re-list a player's static, ongoing injured-list absence as a current storyline. Include injury context here only when there is a new status change, scratch, activation/return, rehab-role development, or other concrete new development today; the structured injury section owns absence freshness. ` +
       `Attribute reported narratives to their source. Do NOT include picks, predictions, or betting advice.`,
       { maxTokens: 2200 }
-    ).then(r => r?.data || '').catch(() => ''),
+    ).then(r => (r?.success === false ? 'Storylines retrieval failed this run — treat as missing coverage, not a quiet week.' : (r?.data || ''))).catch(() => 'Storylines retrieval failed this run — treat as missing coverage, not a quiet week.'),
     // THE PEN, AS REPORTED (founder GO, Aug 27 — the pen press beat): what
     // the beat is writing about each bullpen, attributed. Failure ≠ empty
     // (funnel law): a thrown search is marked failed and prints an
     // honest-absence line; a clean empty result omits the section.
     openaiWebSearch(buildPenPressQuery(homeTeam), { maxTokens: 1200, freshnessHours: 72 })
-      .then(r => ({ text: r?.data || '' })).catch(() => ({ failed: true })),
+      .then(r => (r?.success === false ? { failed: true } : { text: r?.data || '' })).catch(() => ({ failed: true })),
     openaiWebSearch(buildPenPressQuery(awayTeam), { maxTokens: 1200, freshnessHours: 72 })
-      .then(r => ({ text: r?.data || '' })).catch(() => ({ failed: true })),
+      .then(r => (r?.success === false ? { failed: true } : { text: r?.data || '' })).catch(() => ({ failed: true })),
     // (OUR-OWN-RECAPS fetch DELETED Aug 12 2026: it existed only as the
     // WIRE section's fallback, and the WIRE dissolved into colocated
     // official stories the same day. Every story on the desk is now MLB's
@@ -2317,7 +2318,10 @@ export async function buildMlbScoutReport(game, options = {}) {
       }
       const vt = computeVenueTransition(seasonIndex, bdlId, isHome);
       if (vt) lines.push(`Tonight: ${vt}.`);
-      const bounce = computeBounceBackLine(seasonIndex, bdlId, teamName);
+      const bounce = computeBounceBackLine(seasonIndex, bdlId, teamName, (id) => {
+        const opp = nickOfId(id);
+        return opp ? `${opp.split(' ').pop()}${standingsRecordOf(opp)}` : null;
+      });
       if (bounce) {
         let bLine = bounce;
         const lastWon = / won their last game /.test(bounce);
@@ -2703,6 +2707,10 @@ ${storylinesGrounding ? `\n— THE STORYLINES —\n${storylinesGrounding}` : ''}
     homeScores: runsFor(homeRecentGames, homeTeam),
     awayScores: runsFor(awayRecentGames, awayTeam),
   };
+
+  // THE DESK MANIFEST (founder, Aug 27): nothing leaves this builder
+  // silently short — grade every section, scream on missing, ledger it.
+  try { recordDeskManifest(`${awayTeam} @ ${homeTeam}`, auditDeskManifest(text)); } catch { /* fail-open */ }
 
   return {
     text,

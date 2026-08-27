@@ -48,7 +48,7 @@ export function computeTeamMonthArc(seasonIndex, teamBdlId) {
  * The loss itself is documented by the desk's ledgers and stories, which is
  * the context the founder requires a record to carry. Null without data.
  */
-export function computeBounceBackLine(seasonIndex, teamBdlId, teamName) {
+export function computeBounceBackLine(seasonIndex, teamBdlId, teamName, oppLabelOf = null) {
   const finals = teamFinalsChrono(seasonIndex, teamBdlId);
   if (finals.length < 10) return null;
   let afterLossW = 0, afterLossL = 0, afterWinW = 0, afterWinL = 0;
@@ -57,10 +57,16 @@ export function computeBounceBackLine(seasonIndex, teamBdlId, teamName) {
     else finals[i].won ? afterLossW++ : afterLossL++;
   }
   const last = finals[finals.length - 1];
+  // The opponent is named IN the line (founder, Aug 27: "it doesnt even say
+  // who they lost to?") and the old "detailed in the ledgers above" pointer
+  // is gone — this section prints FIRST, so "above" was a lie about the
+  // desk's own structure. The game's story and box print below.
+  const opp = typeof oppLabelOf === 'function' ? oppLabelOf(last.oppId) : null;
+  const oppBit = opp ? ` ${last.home ? 'vs' : '@'} ${opp}` : '';
   if (last.won) {
-    return `${teamName} won their last game (${last.date}, ${last.rf}-${last.ra} — detailed in the ledgers above); after a win this season: ${afterWinW}-${afterWinL}.`;
+    return `${teamName} won their last game ${last.rf}-${last.ra}${oppBit} (${last.date}); after a win this season: ${afterWinW}-${afterWinL}.`;
   }
-  return `${teamName} lost their last game (${last.date}, ${last.rf}-${last.ra} — detailed in the ledgers above); after a loss this season: ${afterLossW}-${afterLossL}.`;
+  return `${teamName} lost their last game ${last.rf}-${last.ra}${oppBit} (${last.date}); after a loss this season: ${afterLossW}-${afterLossL}.`;
 }
 
 /** Rich chronological finals (date, result, score, venue, opponent id) —
