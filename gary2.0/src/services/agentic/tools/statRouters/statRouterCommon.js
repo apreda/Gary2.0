@@ -161,7 +161,6 @@ import { ballDontLieService } from '../../../ballDontLieService.js';
 import { groundedWebSearch, getGroundedWeather } from '../../scoutReport/scoutReportBuilder.js';
 import { isGameCompleted, formatStatValue, safeStatValue } from '../../sharedUtils.js';
 // Highlightly API — venue, H2H, last-five-games
-import { getNcaabVenue, getH2H, getLastFiveGames } from '../../../ncaabVenueService.js';
 import { nbaSeason, nhlSeason, nflSeason, ncaabSeason } from '../../../../utils/dateUtils.js';
 import { getTeamRatings as getBarttovikRatings } from '../../../ncaabMetricsService.js';
 
@@ -373,9 +372,7 @@ function sportToBdlKey(sport) {
   const mapping = {
     'NBA': 'basketball_nba',
     'NFL': 'americanfootball_nfl',
-    'NCAAB': 'basketball_ncaab',
     'NCAAF': 'americanfootball_ncaaf',
-    'NHL': 'icehockey_nhl',
     'MLB': 'baseball_mlb'
   };
   return mapping[sport] || sport;
@@ -388,9 +385,7 @@ function normalizeSportName(sport) {
   const mapping = {
     'basketball_nba': 'NBA',
     'americanfootball_nfl': 'NFL',
-    'basketball_ncaab': 'NCAAB',
     'americanfootball_ncaaf': 'NCAAF',
-    'icehockey_nhl': 'NHL',
     'baseball_mlb': 'MLB',
     'NBA': 'NBA',
     'NFL': 'NFL',
@@ -989,131 +984,7 @@ async function fetchTopPlayersForTeam(bdlSport, team, season) {
     throw new Error(`[HARD FAIL] fetchTopPlayersForTeam called with undefined/invalid team (bdlSport=${bdlSport}, season=${season}). This indicates a team resolution bug upstream — the team name could not be mapped to a BDL team ID.`);
   }
   try {
-    // For NCAAB, use the player_season_stats endpoint which gives season averages directly
-    // This is more reliable than aggregating per-game stats
-    if (bdlSport === 'basketball_ncaab') {
-      const seasonStats = await ballDontLieService.getNcaabPlayerSeasonStats({
-        teamIds: [team.id],
-        season
-      });
-      
-      if (!seasonStats || seasonStats.length === 0) {
-        // Fallback to per-game stats if season stats unavailable
-        const gameStats = await ballDontLieService.getPlayerStats(bdlSport, {
-          seasons: [season],
-          team_ids: [team.id],
-          per_page: 10
-        });
-        
-        if (!gameStats || gameStats.length === 0) {
-          return [{ note: 'No player stats available' }];
-        }
-        
-        // Aggregate per-game stats
-        const playerMap = new Map();
-        gameStats.forEach(g => {
-          const playerId = g.player?.id;
-          if (!playerId) return;
-          if (!playerMap.has(playerId)) {
-            playerMap.set(playerId, {
-              player: g.player,
-              games: 0,
-              pts: 0, reb: 0, ast: 0, stl: 0, blk: 0,
-              fgm: 0, fga: 0, fg3m: 0, fg3a: 0, ftm: 0, fta: 0
-            });
-          }
-          const p = playerMap.get(playerId);
-          p.games++;
-          p.pts += g.pts || 0;
-          p.reb += g.reb || 0;
-          p.ast += g.ast || 0;
-          p.stl += g.stl || 0;
-          p.blk += g.blk || 0;
-          p.fgm += g.fgm || 0;
-          p.fga += g.fga || 0;
-          p.fg3m += g.fg3m || 0;
-          p.fg3a += g.fg3a || 0;
-          p.ftm += g.ftm || 0;
-          p.fta += g.fta || 0;
-        });
-        
-        const sorted = Array.from(playerMap.values())
-          .filter(p => p.games >= 3)
-          .sort((a, b) => (b.pts / b.games) - (a.pts / a.games))
-          .slice(0, 5);
-        
-        return sorted.map(p => ({
-          name: `${p.player?.first_name || ''} ${p.player?.last_name || ''}`.trim(),
-          position: p.player?.position || 'N/A',
-          games: p.games,
-          ppg: fmtNum(p.pts / p.games),
-          rpg: fmtNum(p.reb / p.games),
-          apg: fmtNum(p.ast / p.games),
-          fg_pct: p.fga > 0 ? fmtNum((p.fgm / p.fga) * 100) + '%' : 'N/A',
-          fg3_pct: p.fg3a > 0 ? fmtNum((p.fg3m / p.fg3a) * 100) + '%' : 'N/A'
-        }));
-      }
-      
-      // Use season stats directly - this is the preferred path
-      const sorted = seasonStats
-        .filter(p => p.games_played >= 3)
-        .sort((a, b) => (b.pts || 0) - (a.pts || 0)) // pts is total points, higher = more production
-        .slice(0, 5);
-      
-      return sorted.map(p => {
-        const games = p.games_played || 1;
-        return {
-          name: `${p.player?.first_name || ''} ${p.player?.last_name || ''}`.trim(),
-          position: p.player?.position || 'N/A',
-          games: games,
-          // Season stats gives totals, calculate per-game
-          ppg: fmtNum((p.pts || 0) / games),
-          rpg: fmtNum((p.reb || 0) / games),
-          apg: fmtNum((p.ast || 0) / games),
-          spg: fmtNum((p.stl || 0) / games),
-          bpg: fmtNum((p.blk || 0) / games),
-          fg_pct: p.fg_pct ? fmtNum(p.fg_pct) + '%' : 'N/A',
-          fg3_pct: p.fg3_pct ? fmtNum(p.fg3_pct) + '%' : 'N/A',
-          ft_pct: p.ft_pct ? fmtNum(p.ft_pct) + '%' : 'N/A',
-          min_pg: fmtNum(p.min || 0)
-        };
-      });
-    }
-    
-    // NHL: Use team roster + individual season stats (BDL NHL doesn't support generic getPlayerStats)
-    if (bdlSport === 'icehockey_nhl') {
-      const roster = await ballDontLieService.getNhlTeamPlayers(team.id, season);
-      if (!roster || roster.length === 0) {
-        return [{ note: 'No NHL player stats available' }];
-      }
-      // Fetch season stats for all skaters (exclude goalies for scoring stats)
-      const skaters = roster.filter(p => (p.position || '').toUpperCase() !== 'G').slice(0, 22);
-      const statsPromises = skaters.map(p => ballDontLieService.getNhlPlayerSeasonStats(p.id, season).catch(() => null));
-      const allStats = await Promise.all(statsPromises);
-      const playerStats = skaters.map((p, i) => {
-        const stats = allStats[i];
-        if (!stats) return { player: p, goals: 0, assists: 0, points: 0, games: 0 };
-        // getNhlPlayerSeasonStats returns an object with properties directly (goals, assists, etc.)
-        return {
-          player: p,
-          goals: Number(stats.goals || 0),
-          assists: Number(stats.assists || 0),
-          points: Number(stats.goals || 0) + Number(stats.assists || 0),
-          games: Number(stats.games_played || 0)
-        };
-      }).filter(p => p.games > 0);
-      const sorted = playerStats.sort((a, b) => b.points - a.points).slice(0, 12);
-      return sorted.map(p => ({
-        name: `${p.player?.first_name || ''} ${p.player?.last_name || ''}`.trim(),
-        position: p.player?.position || 'N/A',
-        games: p.games,
-        points: p.points,
-        goals: p.goals,
-        assists: p.assists,
-        ppg: fmtNum(p.points / p.games),
-        gpg: fmtNum(p.goals / p.games)
-      }));
-    }
+
 
     // Default path for other sports (NBA, NFL)
     const seasonStats = await ballDontLieService.getPlayerStats(bdlSport, {
@@ -1334,5 +1205,4 @@ export { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fm
 // Re-export imported dependencies for fetcher sub-modules
 export { groundedWebSearch, getGroundedWeather } from '../../scoutReport/scoutReportBuilder.js';
 export { isGameCompleted } from '../../sharedUtils.js';
-export { getNcaabVenue } from '../../../ncaabVenueService.js';
 export { getTeamRatings as getBarttovikRatings } from '../../../ncaabMetricsService.js';

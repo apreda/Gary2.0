@@ -3266,15 +3266,12 @@ export const nbaFetchers = {
     
     // Works for NBA, NHL, and college sports
     const isNba = bdlSport === 'basketball_nba';
-    const isNhl = bdlSport === 'icehockey_nhl';
     
     try {
       // Get standings to know each team's record
       let standings = [];
       if (isNba) {
         standings = await ballDontLieService.getNbaStandings(season);
-      } else if (isNhl) {
-        standings = await ballDontLieService.getNhlStandings(season);
       } else {
         // For college, use generic standings router (sport-aware)
         standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season });
@@ -3389,65 +3386,11 @@ export const nbaFetchers = {
 
   // ===== BENCH DEPTH (NBA) =====
   BENCH_DEPTH: async (bdlSport, home, away, season, options) => {
-    // NCAAB: Use player season stats to compute depth (starters vs bench contribution)
-    if (bdlSport === 'basketball_ncaab') {
-      console.log(`[Stat Router] Fetching NCAAB BENCH_DEPTH for ${away.name} @ ${home.name}`);
-      try {
-        const [homeStats, awayStats] = await Promise.all([
-          ballDontLieService.getNcaabPlayerSeasonStats({ teamId: home.id, season }),
-          ballDontLieService.getNcaabPlayerSeasonStats({ teamId: away.id, season })
-        ]);
 
-        const calcNcaabDepth = (playerStats, teamName) => {
-          if (!playerStats || playerStats.length === 0) return { error: 'No player stats' };
-          // Calculate per-game averages, sort by PPG
-          const players = playerStats
-            .filter(s => (s.games_played || 0) > 0)
-            .map(s => {
-              const gp = s.games_played || 1;
-              return {
-                name: `${s.player?.first_name || ''} ${s.player?.last_name || ''}`.trim(),
-                ppg: (s.pts || 0) / gp,
-                rpg: (s.reb || 0) / gp,
-                apg: (s.ast || 0) / gp,
-                gp
-              };
-            })
-            .sort((a, b) => b.ppg - a.ppg);
 
-          const starters = players.slice(0, 5);
-          const bench = players.slice(5);
-          const starterPPG = starters.reduce((sum, p) => sum + p.ppg, 0);
-          const benchPPG = bench.reduce((sum, p) => sum + p.ppg, 0);
-          const benchContributors = bench.filter(p => p.ppg >= 3).length;
-
-          return {
-            starter_ppg: starterPPG.toFixed(1),
-            bench_ppg: benchPPG.toFixed(1),
-            bench_pct: starterPPG > 0 ? `${((benchPPG / (starterPPG + benchPPG)) * 100).toFixed(0)}%` : 'N/A',
-            rotation_size: players.filter(p => p.ppg >= 3).length,
-            bench_contributors: benchContributors,
-            top_bench: bench.slice(0, 6).map(p => `${p.name} ${p.ppg.toFixed(1)}ppg`).join(', ') || 'None'
-          };
-        };
-
-        const homeDepth = calcNcaabDepth(homeStats, home.name);
-        const awayDepth = calcNcaabDepth(awayStats, away.name);
-        return {
-          category: 'NCAAB Bench Depth (Season Stats)',
-          home: { team: home.full_name || home.name, ...homeDepth },
-          away: { team: away.full_name || away.name, ...awayDepth },
-          note: 'Bench scoring data for both teams.'
-        };
-      } catch (error) {
-        console.warn('[Stat Router] NCAAB BENCH_DEPTH error:', error.message);
-        return { category: 'Bench Depth', error: 'Data unavailable for NCAAB' };
-      }
-    }
-
-    // Non-NBA/NCAAB: not supported
+    // NBA only
     if (bdlSport !== 'basketball_nba') {
-      return { category: 'Bench Depth', note: 'Only available for NBA/NCAAB', error: 'Sport not supported' };
+      return { category: 'Bench Depth', note: 'Only available for NBA', error: 'Sport not supported' };
     }
 
     console.log(`[Stat Router] Fetching BENCH_DEPTH for ${away.name} @ ${home.name}`);

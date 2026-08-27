@@ -1114,10 +1114,6 @@ INVESTIGATION COMPLETE`;
             let logs;
             if (args.sport === 'NBA') {
               logs = await ballDontLieService.getNbaPlayerGameLogs(player.id, numGames);
-            } else if (args.sport === 'NCAAB') {
-              logs = await ballDontLieService.getNcaabPlayerGameLogs(player.id, numGames);
-            } else if (args.sport === 'NHL') {
-              logs = await ballDontLieService.getNhlPlayerGameLogs(player.id, numGames);
             } else if (args.sport === 'MLB') {
               // BDL exposes per-game stats via /mlb/v1/stats — flat shape
               // (ip, er, p_k, p_bb, ... for pitchers; at_bats, hits, hr, rbi, ... for batters).
