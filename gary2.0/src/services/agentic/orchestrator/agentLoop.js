@@ -1,7 +1,6 @@
-import { CONFIG, LEGACY_BRAIN_MODEL, LEGACY_BRAIN_FALLBACK, LEGACY_RESEARCH_MODEL, PROPS_DESK_MODEL, GAME_PICK_MODEL, GAME_ML_CAP, DESK_FALLBACK_MODELS, validateSessionModel } from './orchestratorConfig.js';
+import { CONFIG, LEGACY_BRAIN_MODEL, LEGACY_RESEARCH_MODEL, PROPS_DESK_MODEL, GAME_PICK_MODEL, GAME_ML_CAP, validateSessionModel } from './orchestratorConfig.js';
 import { isExplicitPropsPass } from '../propsSharedUtils.js';
 import { createModelSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
-import { extractTextualSummaryForModelSwitch } from './researchBriefing.js';
 import { createCostTracker } from './costTracker.js';
 import { buildPass1Message, buildPass25Message, buildPass25PropsMessage, buildPass3Unified, buildPass3Props, FINALIZE_PROPS_TOOL, getFinalizePropsToolForSport, PROPS_PICK_SCHEMA, buildMlCapRetryMessage } from './passBuilders.js';
 import { parseGaryResponse, parsePropsResponse, normalizePickFormat, determineCurrentPass } from './responseParser.js';
@@ -262,7 +261,6 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   const toolCallHistory = [];
   // Models already exhausted by the provider-agnostic quota cascade below —
   // an exhausted brain must never be retried under another cascade slot.
-  const triedQuotaModels = new Set();
 
   // ═══════════════════════════════════════════════════════════════════════════
   // PERSISTENT SESSION STATE TRACKING
@@ -446,54 +444,15 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
 
       } catch (error) {
         if (error.isQuotaError) {
-          // ═══════════════════════════════════════════════════════════════════
-          // PROVIDER-AGNOSTIC QUOTA CASCADE (founder GO, Aug 20 2026): a 429
-          // or credits-empty on ANY brain walks the shared desk fallback
-          // chain, transplanting the textual context. Bridge models are
-          // tool-less by construction; the pass structure already tolerates a
-          // text-only brain (the football lane runs on the codex bridge in
-          // production). The two Gemini-era branches that used to sit above
-          // this — Flash/Pro tier names, primary→backup key rotation — were
-          // excised with the vendor (founder, Aug 24 2026); this cascade is
-          // now the ONLY quota handler.
-          // ═══════════════════════════════════════════════════════════════════
-          triedQuotaModels.add(currentModelName);
-          const textualContext = extractTextualSummaryForModelSwitch(messages, toolCallHistory);
-          if (textualContext.length < 2000) {
-            console.warn(`[Orchestrator] LOW CONTEXT WARNING: Only ${textualContext.length} chars for model switch`);
-          }
-          const remaining = [...new Set([...DESK_FALLBACK_MODELS, LEGACY_BRAIN_FALLBACK])]
-            .filter((m) => !triedQuotaModels.has(m));
-          let rescued = false;
-          for (const nextModel of remaining) {
-            try {
-              console.log(`[Orchestrator] ⚠️ ${currentModelName} quota/credits exhausted — cascading to ${nextModel}`);
-              currentSession = await createModelSession({ _costTracker: costTracker,
-                modelName: nextModel,
-                systemPrompt: systemPrompt + '\n\n' + textualContext,
-                tools: currentPass === 'evaluation' ? [] : activeTools,
-                thinkingLevel: 'medium'
-              });
-              currentModelName = nextModel;
-              const retryResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
-              message = { role: 'assistant', content: retryResponse.content, tool_calls: retryResponse.toolCalls };
-              finishReason = retryResponse.finishReason;
-              if (message.content || message.tool_calls) { messages.push(message); }
-              rescued = true;
-              break;
-            } catch (cascadeError) {
-              if (cascadeError.isQuotaError || cascadeError.status === 429) {
-                triedQuotaModels.add(nextModel);
-                continue; // next model in the chain
-              }
-              throw cascadeError;
-            }
-          }
-          if (!rescued) {
-            console.error(`[Orchestrator] 🚫 Quota cascade exhausted (${[...triedQuotaModels].join(', ')}) — HARD FAIL`);
-            throw new Error(`[Orchestrator] All brains in the quota cascade are exhausted (${[...triedQuotaModels].join(', ')}). Cannot produce pick.`);
-          }
-        } else if (error.message?.includes('MALFORMED_FUNCTION_CALL')) {
+          // ONE BRAIN PER PICK (founder, Aug 27: "i want the same core brain
+          // to be actually making and writing the rationale so we know its
+          // truly organic"). The mid-conversation model switch — a new brain
+          // continuing THIS game on a summary transplant of the context —
+          // is dead. A quota error now throws to the runner, which re-runs
+          // the ENTIRE game from the top on the next brain in the cascade:
+          // whoever writes the rationale also did the investigation.
+          throw error;
+                } else if (error.message?.includes('MALFORMED_FUNCTION_CALL')) {
           // MALFORMED_FUNCTION_CALL after retries — tell Gary the tool call failed and continue
           // Do NOT create a new session or force-skip phases. The existing session has full context.
           console.log(`[Orchestrator] ⚠️ MALFORMED_FUNCTION_CALL after retries — telling Gary to continue`);

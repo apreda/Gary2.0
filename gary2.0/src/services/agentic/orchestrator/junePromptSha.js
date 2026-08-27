@@ -49,6 +49,7 @@ export function junePromptSha() {
     // Engine-shape markers: not prompt text, but changes to what Gary
     // receives that live outside the hashed files. Each is a new era.
     'RESEARCHER=OFF, ALL SPORTS (founder kill, Aug 27 2026 — the desk is the evidence, standardized; a second author is banned)',
+    'ONE BRAIN PER PICK (founder, Aug 27 2026 — no mid-conversation model switch; a failed brain means the whole game re-runs on the next one)',
     MLB_CONSTITUTION.pass1Context,
     MLB_CONSTITUTION.bilateralCasePrompt('HOME', 'AWAY'),
     getMlbSpreadFactors(),

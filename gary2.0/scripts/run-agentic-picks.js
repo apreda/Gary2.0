@@ -1362,7 +1362,18 @@ async function main() {
           if (config.key === 'baseball_mlb') {
             result = await runMlbJuneEngine(game, runnerOptions);
           } else {
-            result = await analyzeGame(game, config.key, runnerOptions);
+            // ONE BRAIN PER PICK, every sport (founder, Aug 27): a failed or
+            // quota-dead brain never hands THIS game's context to another
+            // model mid-stream — the next brain re-runs the whole game.
+            result = await analyzeGame(game, config.key, { ...runnerOptions, modelOverride: GAME_PICK_MODEL });
+            let cascadeModel = GAME_PICK_MODEL;
+            for (const fallbackModel of DESK_FALLBACK_MODELS) {
+              if (result?.pick && !result?.error) break;
+              console.warn(`[Runner] ⚠️ ${cascadeModel} failed (${result?.error || 'no pick'}) — same game, whole re-run on ${fallbackModel}`);
+              result = await analyzeGame(game, config.key, { ...runnerOptions, modelOverride: fallbackModel });
+              cascadeModel = fallbackModel;
+            }
+            if (result && !result.error && result.pick) result._modelUsed = result._modelUsed ?? cascadeModel;
           }
         } catch (err) {
           if (err.message?.includes('USER_ABORTED') || err.message?.includes('aborted')) {
