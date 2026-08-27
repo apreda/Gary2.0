@@ -46,6 +46,9 @@ export function junePromptSha() {
     catch { return `missing:${rel}`; }
   }).join('\n⸻\n');
   const staticSurface = [
+    // Engine-shape markers: not prompt text, but changes to what Gary
+    // receives that live outside the hashed files. Each is a new era.
+    'MLB_RESEARCHER=OFF (founder kill, Aug 27 2026 — the desk is the evidence)',
     MLB_CONSTITUTION.pass1Context,
     MLB_CONSTITUTION.bilateralCasePrompt('HOME', 'AWAY'),
     getMlbSpreadFactors(),

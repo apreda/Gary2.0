@@ -351,7 +351,15 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // Flash reads the scout report, identifies gaps, and uses fetch_stats
   // to investigate deeper. Gary waits for Flash to finish so he has the
   // full per-factor findings from the very first iteration.
-  if (options.scoutReport && !isPropsMode) {
+  // THE RESEARCHER IS DEAD FOR MLB (founder, Aug 27: "kill the research
+  // assistant" — after three caught defects in one document: a garbled
+  // series record, psychological reads, and fabricated market prices).
+  // The desk is Gary's entire evidence; on the CLI bridge he has no tools,
+  // and that is the design — everything he needs is ON the desk, and the
+  // manifest guards that it all rendered. Football keeps its researcher
+  // pending its own parity review.
+  const skipResearcher = sport === 'baseball_mlb' || sport === 'MLB';
+  if (options.scoutReport && !isPropsMode && !skipResearcher) {
     console.log(`[Research Briefing] 🔬 Running the research briefing (Haiku with tools) — Gary waits for completion`);
     try {
       const briefingResult = await Promise.race([
@@ -1686,7 +1694,7 @@ INVESTIGATION COMPLETE`;
       // completion marker in the same message — the answers block tells Gary
       // to re-emit INVESTIGATION COMPLETE when he is actually done.
       if (isGamePicksMode && _researchBriefing) {
-        const remaining = RESEARCHER_QUESTION_BUDGET - _researcherQuestionsUsed;
+        const remaining = skipResearcher ? 0 : RESEARCHER_QUESTION_BUDGET - _researcherQuestionsUsed;
         const questions = remaining > 0 ? extractResearcherQuestions(message.content || '', remaining) : [];
         if (questions.length > 0) {
           messages.push({ role: 'assistant', content: message.content });

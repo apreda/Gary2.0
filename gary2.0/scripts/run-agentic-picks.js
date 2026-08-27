@@ -60,19 +60,14 @@ try {
 // requires ANTHROPIC_API_KEY (researcher) + OPENAI_API_KEY (brain); a
 // missing key fails loudly instead of rerouting to a second system.
 // ═══════════════════════════════════════════════════════════════════════════
-const { MLB_RESEARCH_MODEL } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
 // ONE LANE (founder, Aug 27): MLB runs the June engine unconditionally —
-// the GARY_MLB_JUNE_ENGINE arming flag and the pickdesk default it guarded
-// are retired. A missing key no longer reroutes to a second system; it
-// fails each game loudly (a missing LLM secret warns — it never silently
-// changes what system makes production picks).
-const _researchKeyOk = MLB_RESEARCH_MODEL.startsWith('anthropic-')
-  ? !!process.env.ANTHROPIC_API_KEY
-  : !!process.env.OPENAI_API_KEY;
-if (!_researchKeyOk || !process.env.OPENAI_API_KEY) {
-  console.error(`[JuneEngine] 🚨 REQUIRED API KEY MISSING (researcher ${MLB_RESEARCH_MODEL}) — MLB picks WILL FAIL loudly until it lands in .env. There is no fallback system.`);
+// no pickdesk fallback, and as of the afternoon kill, NO RESEARCHER: the
+// desk is Gary's entire evidence. Keys still power the desk's press lanes
+// and the brains; a missing key fails loudly, never silently.
+if (!process.env.OPENAI_API_KEY) {
+  console.error(`[JuneEngine] 🚨 OPENAI_API_KEY MISSING — the brain bridge and desk press lanes WILL FAIL loudly until it lands in .env. There is no fallback system.`);
 } else {
-  console.log(`[JuneEngine] ⚾ MLB games run the June engine (brain: ${MLB_JUNE_BRAIN_MODEL}, researcher: ${MLB_RESEARCH_MODEL}, model cascade: ${DESK_FALLBACK_MODELS.join(' → ')}).`);
+  console.log(`[JuneEngine] ⚾ MLB games run the June engine, desk-only (brain: ${MLB_JUNE_BRAIN_MODEL}, model cascade: ${DESK_FALLBACK_MODELS.join(' → ')}; researcher: OFF — founder kill, Aug 27).`);
 }
 
 // Era stamp for the restored lane: one hash over the engine's full surface —
