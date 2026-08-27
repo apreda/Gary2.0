@@ -1643,10 +1643,10 @@ export async function buildMlbScoutReport(game, options = {}) {
       } catch { return null; }
     };
     const withSat = (formatted, satLine) => (satLine ? `${formatted}\n${satLine}` : formatted);
-    // HANDEDNESS COUNT (founder GO, Aug 18): the nine's composition against
-    // tonight's opposing starter, as arithmetic — not left for the brain to
-    // tally letter by letter.
-    const handsLine = (sideData, oppPitcher) => {
+    // HANDEDNESS COUNT (founder GO, Aug 18; vs-starter tag removed Aug 27 —
+    // founder: the lineup is a fact and the starter's split is a fact, but
+    // pointing the count at tonight's arm was our multiplication, not data).
+    const handsLine = (sideData) => {
       const counts = { L: 0, R: 0, S: 0 };
       for (const b of sideData?.batters || []) {
         // BDL says S for switch, statsapi says B — one bucket (Aug 19 fix:
@@ -1657,16 +1657,12 @@ export async function buildMlbScoutReport(game, options = {}) {
       }
       const total = counts.L + counts.R + counts.S;
       if (total < 9) return null;
-      const hand = oppPitcher?.pitchHand?.code || null;
-      const vs = oppPitcher?.fullName
-        ? ` vs ${hand ? `${hand}HP ` : ''}${String(oppPitcher.fullName).split(' ').pop()}`
-        : '';
-      return `  Handedness${vs}: ${counts.L} LHB, ${counts.R} RHB${counts.S ? `, ${counts.S} switch` : ''}`;
+      return `  Handedness: ${counts.L} LHB, ${counts.R} RHB${counts.S ? `, ${counts.S} switch` : ''}`;
     };
     const withHands = (formatted, line) => (line ? `${formatted}\n${line}` : formatted);
     confirmedLineupsSection = [
-      withSat(withHands(formatLineup(homeData, homeTeam), handsLine(homeData, probablePitchersData?.away)), satToday(homeTeam, homeData)),
-      withSat(withHands(formatLineup(awayData, awayTeam), handsLine(awayData, probablePitchersData?.home)), satToday(awayTeam, awayData)),
+      withSat(withHands(formatLineup(homeData, homeTeam), handsLine(homeData)), satToday(homeTeam, homeData)),
+      withSat(withHands(formatLineup(awayData, awayTeam), handsLine(awayData)), satToday(awayTeam, awayData)),
     ].join('\n\n');
   }
 

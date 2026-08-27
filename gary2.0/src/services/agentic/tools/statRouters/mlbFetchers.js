@@ -368,7 +368,7 @@ export const mlbFetchers = {
         // namespaces, so it always returned 0 records. Removed rather than
         // duplicated; the workload token is wired into the same factor.
         if (relievers.length > 0) {
-          lines.push(`  Recent per-game workload: see MLB_BULLPEN_WORKLOAD (IP + pitch counts, last 3 games)`);
+          lines.push(`  Recent per-game workload: see MLB_BULLPEN_WORKLOAD (appearance detail + day/series rollups)`);
         }
 
         if (usedApi) continue;
@@ -1806,126 +1806,105 @@ export const mlbFetchers = {
       }
 
       try {
-        // PEN FORM WINDOW (founder GO, Aug 5 eve; widened Aug 26 after the
-        // 6-8 autopsy): fetch the last FOURTEEN games. The per-appearance
-        // ledger below still prints only the last three (workload recency);
-        // the rest exist for the rolling pen numbers — 7-game AND 14-game,
-        // side by side, so a hot week reads against a steadier baseline —
-        // plus the window's per-arm composition and leverage-arm facts.
+        // PEN RECENCY, THE FOUNDER'S SPEC (Aug 27, replacing the Aug-26
+        // 7/14-GAME windows he never asked for — his words: last game, who
+        // pitched in it, who's pitched this series, and the pen over the
+        // last 5/7/10 DAYS and 3 series). The most recent series prints
+        // appearance by appearance (the last game is its newest row), then
+        // the day-window and series rollups. Facts only; the read is the
+        // brain's. (The Aug-26 composition/close-spot prose died the same
+        // day — duplication audit; the game stories carry the narrative.)
         const allRecentGames = await getMlbRecentGames(mlbTeam.id, 14);
         if (!allRecentGames || allRecentGames.length === 0) {
           lines.push(`${teamName}: No recent games found`);
           continue;
         }
-        const recentGames = allRecentGames.slice(-3);
-        const last7Pks = new Set(allRecentGames.slice(-7).map((g) => g?.gamePk).filter((pk) => pk != null));
-        // TEAM-LABELED (Aug 12): home + away values concatenate in the desk,
-        // so unheadered date lines read as one anonymous ledger — same bug
-        // class as the pen-stats section.
-        lines.push(`${teamName} pen, recent appearances:`);
-
-        // recentGames comes from MLB Stats API (each item has a `gamePk`).
-        // The prior implementation passed those gamePks to BDL's
-        // getMlbGameStats expecting them to be BDL game IDs — different
-        // namespaces, so BDL returned 0 records and every team got
-        // "No box score data available". Use the MLB Stats API's own
-        // /game/{gamePk}/boxscore endpoint instead — same namespace,
-        // and the boxscore already includes per-pitcher inningsPitched.
-        usedApi = true;
-        // Pen form across both windows — same boxscore walk. pen7 covers the
-        // last seven games, pen14 all fourteen; armWindow carries the last
-        // seven's per-arm composition (who threw it, in what spots).
-        const pen7 = { outs: 0, er: 0, games: 0 };
-        const pen14 = { outs: 0, er: 0, games: 0 };
-        const armWindow = new Map(); // pid -> { pid, name, outs, er, pitches, dates[], marginOuts[] }
-        const armWindowAdd = (pid, name, outs, er, pitches, date, margin) => {
-          const a = armWindow.get(pid) || { pid, name, outs: 0, er: 0, pitches: 0, dates: [], marginOuts: [] };
-          a.outs += outs; a.er += er; a.pitches += pitches;
-          if (date) a.dates.push(date);
-          a.marginOuts.push({ margin, outs });
-          armWindow.set(pid, a);
+        // Series runs, oldest → newest: consecutive games vs the same club.
+        const oppOf = (g) => (g?.teams?.home?.team?.id === mlbTeam.id
+          ? (g?.teams?.away?.team?.name || '?')
+          : (g?.teams?.home?.team?.name || '?'));
+        const nickOf = (name) => {
+          const two = String(name || '').match(/\b(Blue Jays|Red Sox|White Sox)$/);
+          return two ? two[1] : String(name || '?').split(' ').pop();
         };
-        for (const g of allRecentGames.slice(0, -3)) {
-          const b = await getGameBoxScore(g.gamePk).catch(() => null);
-          if (!b?.teams) continue;
-          const inLast7 = last7Pks.has(g.gamePk);
-          // Entry context only where the composition needs it (the last-7
-          // games); the older seven contribute totals alone.
-          const ctx = inLast7 ? await getPitcherEntryContext(g.gamePk).catch(() => new Map()) : new Map();
-          const sk = b.teams.home?.team?.id === mlbTeam.id ? 'home' : 'away';
-          const sd = b.teams[sk];
-          let counted = false;
-          for (const { pid, player } of relieverBoxEntries(sd)) {
-            const st = player?.stats?.pitching;
-            const ipn = parseFloat(st?.inningsPitched);
-            if (!Number.isFinite(ipn)) continue;
-            const outs = Math.floor(ipn) * 3 + Math.round((ipn % 1) * 10);
-            const er = Number(st?.earnedRuns) || 0;
-            pen14.outs += outs;
-            pen14.er += er;
-            if (inLast7) {
-              pen7.outs += outs;
-              pen7.er += er;
-              const ec = ctx.get(pid);
-              const margin = ec?.awayScore != null && ec?.homeScore != null
-                ? Math.abs(Number(ec.awayScore) - Number(ec.homeScore)) : null;
-              armWindowAdd(pid, player?.person?.fullName || 'Unknown', outs, er,
-                Number(st?.numberOfPitches) || 0, bullpenLedgerDate(g), margin);
-            }
-            counted = true;
-          }
-          if (counted) {
-            pen14.games += 1;
-            if (inLast7) pen7.games += 1;
-          }
+        const seriesRuns = [];
+        for (const g of allRecentGames) {
+          const opp = oppOf(g);
+          const tail = seriesRuns[seriesRuns.length - 1];
+          if (tail && tail.opp === opp) tail.games.push(g);
+          else seriesRuns.push({ opp, games: [g] });
         }
-        const armTotals = new Map(); // name -> { outs, pitches, er, dates[] }
-        const gameDates = [];        // chronological (recentGames is oldest -> newest)
-        for (const game of recentGames) {
+        const trailing = seriesRuns[seriesRuns.length - 1];
+        // DETAIL FLOOR (founder, Aug 27: "for the last game, the last two
+        // games, Gary needs to know every single thing"): the full trailing
+        // series AND never fewer than the last three games, even when a new
+        // series just started — capped at six appearances-detail games.
+        const detailSet = new Map();
+        for (const g of [...(trailing?.games || []), ...allRecentGames.slice(-3)]) {
+          if (g?.gamePk != null) detailSet.set(g.gamePk, g);
+        }
+        const detailGames = [...detailSet.values()]
+          .sort((x, y) => String(bullpenLedgerDate(x)).localeCompare(String(bullpenLedgerDate(y))))
+          .slice(-6);
+        const detailPks = new Set(detailGames.map((g) => g.gamePk));
+        // "This series" vs "last series": is the trailing run tonight's opponent?
+        const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z]/g, '');
+        const tonightOpp = norm(teamName) === norm(homeTeam) ? awayTeam : homeTeam;
+        const trailingIsTonight = trailing && (norm(trailing.opp) === norm(tonightOpp)
+          || norm(trailing.opp).includes(norm(nickOf(tonightOpp)))
+          || norm(tonightOpp).includes(norm(nickOf(trailing.opp))));
+        lines.push(`${teamName} pen, ${trailingIsTonight ? `this series vs ${nickOf(trailing.opp)}` : `last series (vs ${nickOf(trailing?.opp)})`}, appearance by appearance:`);
+
+        usedApi = true;
+        // ONE boxscore walk over the whole fetch: full appearance lines for
+        // the detail window, bare per-game pen totals for the rollups.
+        // (recentGames come from MLB Stats API — gamePk namespace; BDL game
+        // ids are a different namespace and return nothing here.)
+        const perGamePen = []; // { pk, date, outs, er }
+        const armTotals = new Map(); // detail window: name -> { outs, pitches, er, dates[] }
+        const gameDates = [];        // detail window, chronological
+        for (const game of allRecentGames) {
           const date = bullpenLedgerDate(game);
+          const inDetail = detailPks.has(game.gamePk);
           const box = await getGameBoxScore(game.gamePk).catch(() => null);
           if (!box?.teams) {
-            lines.push(`${date}: Box score unavailable`);
+            if (inDetail) lines.push(`${date}: Box score unavailable`);
             continue;
           }
           // ENTRY CONTEXT (founder GO, Aug 12 — the pen's missing story):
           // the situation each arm walked into — inning and score before his
-          // first pitch — from the official play-by-play. Fail-open.
-          const entryCtx = await getPitcherEntryContext(game.gamePk).catch(() => new Map());
-
-          // Identify which side of the box belongs to this team.
-          const homeId = box.teams.home?.team?.id;
-          const sideKey = homeId === mlbTeam.id ? 'home' : 'away';
+          // first pitch — from the official play-by-play. Detail window only.
+          const entryCtx = inDetail ? await getPitcherEntryContext(game.gamePk).catch(() => new Map()) : new Map();
+          const sideKey = box.teams.home?.team?.id === mlbTeam.id ? 'home' : 'away';
           const side = box.teams[sideKey];
-          gameDates.push(date);
-
+          let gOuts = 0;
+          let gEr = 0;
           const relievers = [];
           // pitchers[] is appearance order: [0] is the STARTER, everyone after
-          // is relief. (The old `ip < 5` heuristic misfiled a shelled starter
-          // as a relief arm and dropped a 5-inning bulk reliever entirely.)
-          // relieverBoxEntries also drops position players mopping up a
-          // blowout — they are not pen arms (Aug 15 KC fix).
+          // is relief. relieverBoxEntries also drops position players mopping
+          // up a blowout — they are not pen arms (Aug 15 KC fix).
           for (const { pid, player: p } of relieverBoxEntries(side)) {
             const ipStr = p?.stats?.pitching?.inningsPitched;
             if (ipStr == null) continue;
             // MLB IP is in "outs decimal" form (e.g. "1.2" = 1 inning + 2 outs).
             const ip = parseFloat(ipStr);
             if (!Number.isFinite(ip) || ip < 0) continue;
+            const outs = Math.floor(ip) * 3 + Math.round((ip % 1) * 10);
+            const er = p?.stats?.pitching?.earnedRuns;
+            gOuts += outs;
+            gEr += Number(er) || 0;
+            if (!inDetail) continue;
             const name = p?.person?.fullName || 'Unknown';
             // Pitch count is the real workload signal — IP alone overstates a
             // 15-pitch four-out save and understates a 30-pitch single inning.
             const pitches = p?.stats?.pitching?.numberOfPitches;
             const pitchStr = pitches != null ? `, ${pitches} pitches` : '';
-            // PEN CONTEXT (founder GO, Aug 5 PM: "we cannot build an AI system
-            // that makes accurate picks without knowing the closer blew two
-            // saves back-to-back"). ER = the appearance's result; the official
-            // decision note carries it by name — (BS, 4), (SV, 20), (H, 12) —
-            // so a blown save is a printed fact, not a hoped-for search hit.
-            const er = p?.stats?.pitching?.earnedRuns;
+            // PEN CONTEXT (founder GO, Aug 5 PM): the official decision note
+            // carries the appearance's result by name — (BS, 4), (SV, 20),
+            // (H, 12) — so a blown save is a printed fact.
             const note = p?.stats?.pitching?.note;
-            // THE OUTING'S SHAPE (founder GO, Aug 12 — Plan A2: "did they get
-            // out of a jam? did they walk a couple guys?"): K/BB and inherited
-            // runners make the appearance a story, not a bare IP figure.
+            // THE OUTING'S SHAPE (founder GO, Aug 12 — Plan A2): K/BB and
+            // inherited runners make the appearance a story, not a bare IP.
             const k = p?.stats?.pitching?.strikeOuts;
             const bb = p?.stats?.pitching?.baseOnBalls;
             const ir = p?.stats?.pitching?.inheritedRunners;
@@ -1936,73 +1915,68 @@ export const mlbFetchers = {
             // first pitch, from the play-by-play entry context above.
             const ec = entryCtx.get(pid);
             const entered = ec?.inning != null ? ` (in ${ec.half}${ec.inning} ${ec.awayScore}-${ec.homeScore})` : '';
-            // The jam he actually pitched with — only when it was real
-            // traffic (2+ on). One runner is a Tuesday; the bases loaded is
-            // the outing. Escaped-or-not is Gary's read off the ER beside it.
+            // Real traffic only (2+ on) — one runner is a Tuesday.
             const jam = ec?.maxOn >= 3 ? ', bases loaded' : ec?.maxOn === 2 ? ', 2 on' : '';
             relievers.push(`${name} ${ip.toFixed(1)} IP${entered}${er != null ? `, ${er} ER` : ''}${kbb ? `, ${kbb}` : ''}${inherited}${jam}${pitchStr}${note ? ` ${note}` : ''}`);
-            const outs = Math.floor(ip) * 3 + Math.round((ip % 1) * 10);
             const t = armTotals.get(name) || { outs: 0, pitches: 0, er: 0, dates: [] };
             t.outs += outs;
             t.pitches += Number(pitches) || 0;
             t.er += Number(er) || 0;
             t.dates.push(date);
             armTotals.set(name, t);
-            // The ledger's three games are the tail of the 7-game window —
-            // mirror them into the per-arm composition with the entry margin.
-            const ecMargin = ec?.awayScore != null && ec?.homeScore != null
-              ? Math.abs(Number(ec.awayScore) - Number(ec.homeScore)) : null;
-            armWindowAdd(pid, name, outs, Number(er) || 0, Number(pitches) || 0, date, ecMargin);
           }
-
-          if (relievers.length > 0) {
-            lines.push(`${date}: ${relievers.join(', ')}`);
-          } else {
-            lines.push(`${date}: No reliever appearances`);
+          perGamePen.push({ pk: game.gamePk, date, outs: gOuts, er: gEr });
+          if (inDetail) {
+            gameDates.push(date);
+            lines.push(relievers.length ? `${date}: ${relievers.join(', ')}` : `${date}: No reliever appearances`);
           }
         }
         // Roll-up (founder, Jul 30): the aggregate facts beside the ledger —
-        // total relief IP, arms used, and who worked both of the last two game
-        // days. Facts only; what that means for tonight is the brain's call.
+        // total relief IP, arms used, and who worked both of the last two
+        // game days. Facts only.
         if (armTotals.size) {
           const totalOuts = [...armTotals.values()].reduce((s, a) => s + a.outs, 0);
+          const totalEr = [...armTotals.values()].reduce((acc, a) => acc + (a.er || 0), 0);
           // Distinct dates — a doubleheader made everyone 'worked both of
           // the last two game days' (live catch, Rockies Aug 5 DH).
           const lastTwo = [...new Set(gameDates)].slice(-2);
           const b2b = [...armTotals.entries()]
             .filter(([, a]) => lastTwo.length === 2 && lastTwo.every((d) => a.dates.includes(d)))
             .map(([n]) => n);
-          // Per-arm totals for the heaviest arms — so "who carried it" is a
-          // printed fact, not an exercise in summing the date lines above.
           const heaviest = [...armTotals.entries()]
             .sort((a, b) => b[1].pitches - a[1].pitches)
             .slice(0, 3)
             .map(([n, a]) => `${n} ${a.pitches} pitches/${a.dates.length} G`)
             .join(', ');
-          const totalEr = [...armTotals.values()].reduce((acc, a) => acc + (a.er || 0), 0);
-          pen7.outs += totalOuts; pen7.er += totalEr; pen7.games += gameDates.length;
-          pen14.outs += totalOuts; pen14.er += totalEr; pen14.games += gameDates.length;
           lines.push(
-            `Last ${gameDates.length} games total: ${Math.floor(totalOuts / 3)}.${totalOuts % 3} relief IP, ${totalEr} ER ` +
+            `These ${gameDates.length} game${gameDates.length === 1 ? '' : 's'} total: ${outsToIp(totalOuts)} relief IP, ${totalEr} ER ` +
             `across ${armTotals.size} arms; heaviest: ${heaviest}; ` +
             `worked both of the last two game days: ${b2b.length ? b2b.join(', ') : 'none'}.`,
           );
-          if (pen7.games >= 4 && pen7.outs > 0) {
-            const penEra7 = ((pen7.er * 27) / pen7.outs).toFixed(2);
-            lines.push(`Pen last ${pen7.games} games: ${outsToIp(pen7.outs)} IP, ${pen7.er} ER (${penEra7} ERA)`);
-          }
-          // The steadier companion window (Aug 26): the same walk, doubled —
-          // a hot or cold week reads against its own longer baseline.
-          if (pen14.games >= 8 && pen14.outs > 0 && pen14.games > pen7.games) {
-            const penEra14 = ((pen14.er * 27) / pen14.outs).toFixed(2);
-            lines.push(`Pen last ${pen14.games} games: ${outsToIp(pen14.outs)} IP, ${pen14.er} ER (${penEra14} ERA)`);
-          }
-          // (The Aug-26 composition and close-spot prose lines were retired
-          // the same day — founder duplication audit: they restated the
-          // per-date ledger above as stats-in-story-form, and the game
-          // stories now carry the pen's narrative. The ledger stays the
-          // availability record: who threw, when, entering what, pitches.)
         }
+        // The pen by DAYS — the founder's recency grain (5/7/10 calendar days
+        // back from today ET, so off days and doubleheaders count as
+        // themselves instead of stretching a game-count window).
+        const todayEtPen = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+        const daysAgoPen = (d) => Math.round((new Date(`${todayEtPen}T12:00:00`) - new Date(`${d}T12:00:00`)) / 86400000);
+        for (const win of [5, 7, 10]) {
+          const rows = perGamePen.filter((r) => r.date && daysAgoPen(r.date) >= 0 && daysAgoPen(r.date) <= win);
+          const outs = rows.reduce((s, r) => s + r.outs, 0);
+          const er = rows.reduce((s, r) => s + r.er, 0);
+          if (rows.length && outs > 0) {
+            lines.push(`Pen last ${win} days: ${outsToIp(outs)} IP, ${er} ER (${((er * 27) / outs).toFixed(2)} ERA) over ${rows.length} game${rows.length === 1 ? '' : 's'}`);
+          }
+        }
+        // The pen by SERIES — the sport's native unit, last three, newest first.
+        const seriesBits = seriesRuns.slice(-3).reverse().map((s) => {
+          const pks = new Set(s.games.map((g) => g.gamePk));
+          const rows = perGamePen.filter((r) => pks.has(r.pk));
+          if (!rows.length) return null;
+          const outs = rows.reduce((sum, r) => sum + r.outs, 0);
+          const er = rows.reduce((sum, r) => sum + r.er, 0);
+          return `vs ${nickOf(s.opp)} (${rows.length}g): ${outsToIp(outs)} IP, ${er} ER`;
+        }).filter(Boolean);
+        if (seriesBits.length) lines.push(`Pen by series, newest first: ${seriesBits.join(' · ')}`);
       } catch (e) {
         console.warn(`[MLB Fetchers] ⚠️ Bullpen workload API failed for ${teamName}: ${e.message}`);
         lines.push(`${teamName}: Bullpen workload data unavailable — check MLB Stats API boxscore`);
@@ -2012,7 +1986,7 @@ export const mlbFetchers = {
     return {
       homeValue: homeLines.join('\n'),
       awayValue: awayLines.join('\n'),
-      comparison: `Bullpen workload (last 3 games) for ${awayTeam} @ ${homeTeam}`,
+      comparison: `Bullpen recency (series detail + 5/7/10-day and 3-series rollups) for ${awayTeam} @ ${homeTeam}`,
       source: usedApi ? 'BDL API + MLB Stats API' : 'Gemini Grounding (fallback)',
     };
   },

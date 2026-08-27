@@ -77,9 +77,12 @@ describe('MLB_BULLPEN_WORKLOAD wiring', () => {
     expect(fetchersSrc).not.toContain("(game.gameDate || '').split('T')[0]");
   });
 
-  it('walks relievers through relieverBoxEntries in both the ledger and pen-form passes', () => {
+  it('walks relievers through relieverBoxEntries in the single pen walk (Aug 27 rework)', () => {
+    // The Aug-27 founder-spec rebuild collapsed the two walks (ledger +
+    // pen-form window) into ONE boxscore walk — position-player filtering
+    // still applies to every appearance through relieverBoxEntries.
     const uses = fetchersSrc.match(/relieverBoxEntries\(/g) || [];
-    expect(uses.length).toBeGreaterThanOrEqual(2);
+    expect(uses.length).toBeGreaterThanOrEqual(1);
   });
 });
 
