@@ -25173,9 +25173,15 @@ struct PicksGamePage: View {
 /// starters lead, then hitters); tapping a row opens the same full breakdown
 /// sheet the Hub uses. Rows ride player_insight_cards (computed daily by the
 /// insights pipeline) and the section hides itself entirely on days or games
-/// without packs — non-MLB pages render nothing extra.
+/// without packs. Football pages mount it too (Aug 27 2026 — football packs
+/// build now), scoped by exact game id.
 struct PlayerIntelSection: View {
     let matchup: String
+    /// Exact-id scope (football pages, Aug 27 2026): football packs carry the
+    /// BDL game id, and college abbreviations have no keyword table for the
+    /// matchup-string join — when the caller knows the game id, packs attach
+    /// by identity instead. MLB keeps the matchup join unchanged (nil here).
+    var gameId: String? = nil
     @State private var rows: [PlayerInsightCardRow] = []
     @State private var selected: PlayerInsightCardRow? = nil
 
@@ -25204,15 +25210,18 @@ struct PlayerIntelSection: View {
                 }
             }
         }
-        .task(id: matchup) {
+        .task(id: matchup + (gameId ?? "")) {
             let all = await SupabaseAPI.fetchPlayerIntelRows(date: SupabaseAPI.todayEST())
             let mine = all.filter { r in
+                if let gameId { return r.game_id == gameId }
                 guard let g = r.payload?.game, !g.isEmpty else { return false }
                 return abbrGameMatches(g, matchup: matchup)
             }
-            // Pitchers lead (they drive the matchup), then hitters by name.
+            // Pitchers lead (they drive the matchup) — quarterbacks are the
+            // football counterpart — then everyone else by name.
             rows = Array(mine.sorted { a, b in
-                let ap = a.payload?.type == "pitcher", bp = b.payload?.type == "pitcher"
+                let leads: Set<String> = ["pitcher", "quarterback"]
+                let ap = leads.contains(a.payload?.type ?? ""), bp = leads.contains(b.payload?.type ?? "")
                 if ap != bp { return ap }
                 return (a.player_name ?? "") < (b.player_name ?? "")
             }.prefix(Self.maxRows))
@@ -25223,7 +25232,9 @@ struct PlayerIntelSection: View {
     private func intelRow(_ row: PlayerInsightCardRow) -> some View {
         let p = row.payload
         let meta = [p?.team?.uppercased(), p?.position].compactMap { $0 }.joined(separator: " · ")
-        let signalLine = p?.strengths?.first ?? p?.weaknesses?.first
+        // Football packs carry no strengths/weaknesses — their season line is
+        // the row's one-glance signal instead.
+        let signalLine = p?.strengths?.first ?? p?.weaknesses?.first ?? p?.season?.line1
         return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 8) {

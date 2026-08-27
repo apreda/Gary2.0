@@ -395,18 +395,21 @@ struct HubView: View {
     @State private var breakdownSignal: Signal? = nil
     @State private var teamCardSignal: Signal? = nil
 
-    /// Player-backed MLB signals open their populated player card; football
-    /// fantasy signals open their own grounded evidence. Team-backed rows use
+    /// Player-backed signals open their populated player card — MLB always,
+    /// football when today's pack exists for the id. Team-backed rows use
     /// the team card, with the compact signal overlay as the safe fallback.
     private func openSignal(_ s: Signal) {
-        // EVERY football row opens the edge overlay: the player-card and
-        // team-card pipelines are MLB intel surfaces (player_insight_cards +
-        // the team seed) and can never fill for NFL/NCAAF ids — routing a
-        // football row there parks the user on a permanent "building" screen.
-        // (This used to guard only the fantasy lanes; quarterback/availability
-        // rows carry player_id and fell through the same hole.)
+        // Football rows open the player pack sheet ONLY when today's football
+        // pack verifiably exists for that player id (the pipeline builds
+        // NFL/NCAAF packs since Aug 27 2026); otherwise the edge overlay stays
+        // the fallback, so a football tap can never land on a permanent
+        // "building" screen. The MLB team-card pipeline remains MLB-only.
         if sel == .nfl || sel == .ncaaf {
-            selectedSignal = s
+            if let pid = s.playerId, intelCards.contains(where: { $0.player_id == pid }) {
+                breakdownSignal = s
+            } else {
+                selectedSignal = s
+            }
         }
         else if s.playerId != nil { breakdownSignal = s }
         else if s.teamId != nil || s.h2h != nil { teamCardSignal = s }
@@ -500,9 +503,12 @@ struct HubView: View {
     @State private var todayBoard: TomorrowBoard? = nil
     /// LEAGUE PULSE (moved from the Picks page — founder, Jul 30): league-wide
     /// daily tables, fetched with the page load so pull-to-refresh and the
-    /// staleness refetch cover it like everything else on the page.
-    @State private var pulseRows: [LeaguePulseRow] = []
+    /// staleness refetch cover it like everything else on the page. Since
+    /// Aug 27 2026 the pipeline writes NFL/NCAAF tabs too — one dict keyed by
+    /// league label, the same generic table renderer for every desk.
+    @State private var pulseByLeague: [String: [LeaguePulseRow]] = [:]
     @State private var pulseTab: String? = nil
+    private var pulseRows: [LeaguePulseRow] { pulseByLeague[sel.label] ?? [] }
     @State private var pendingScrollAnchor: String? = nil
     /// Beats currently expanded past their top rows ("See all n").
     @State private var openBeats: Set<String> = []
@@ -617,7 +623,9 @@ struct HubView: View {
         async let tbF = SupabaseAPI.fetchTodayBoard(date: date)
         async let intelF = SupabaseAPI.fetchPlayerIntelRows(date: date)
         // Force past the 30-min pulse cache on refresh/rollover, not first paint.
-        async let pulseF = SupabaseAPI.fetchLeaguePulse(date: date, league: "MLB", forceRefresh: didLoad)
+        async let pulseMlbF = SupabaseAPI.fetchLeaguePulse(date: date, league: "MLB", forceRefresh: didLoad)
+        async let pulseNflF = SupabaseAPI.fetchLeaguePulse(date: date, league: "NFL", forceRefresh: didLoad)
+        async let pulseNcaafF = SupabaseAPI.fetchLeaguePulse(date: date, league: "NCAAF", forceRefresh: didLoad)
 
         var successful: [HubLeagueSel: [Signal]] = [:]
         var failedLeagues: Set<HubLeagueSel> = []
@@ -665,7 +673,11 @@ struct HubView: View {
         }
         let liveStreaks = await streaksF
         let tb = await tbF
-        let pulse = await pulseF
+        let pulse: [String: [LeaguePulseRow]] = [
+            "MLB": await pulseMlbF,
+            "NFL": await pulseNflF,
+            "NCAAF": await pulseNcaafF,
+        ]
         // Graded rows still load — not for a page section (The Receipts came
         // off Aug 6), but search surfaces them and the tally maths read them.
         let receiptsDate = gradedDate
@@ -703,7 +715,7 @@ struct HubView: View {
             nightRows = night
             ydaySignals = yday
             todayBoard = tb
-            pulseRows = pulse
+            pulseByLeague = pulse
             fetched = resolved
             itemsIndex = Self.buildItemsIndex(resolved)
             // Land on the highest-priority league with edges tonight, without
@@ -748,7 +760,8 @@ struct HubView: View {
         case .teamRecord:                            anchor = isFootball ? "form" : (sel == .wc ? "matchups" : "arms")
         case .situational:                           anchor = isFootball ? "form" : (sel == .wc ? "matchups" : "arms")
         case .injury:                                anchor = isFootball ? "field" : "matchups"
-        case .h2h, .firstInning,
+        case .h2h:                                   anchor = isFootball ? "form" : "matchups"
+        case .firstInning,
              .runningGame, .parkWeather:             anchor = "matchups"
         case .tournament, .advancement:              anchor = "cup"
         case .xgRegression, .xgRecap:                anchor = "numbers"
@@ -955,7 +968,7 @@ struct HubView: View {
                 Beat(anchor: "trenches", title: "The Trenches", kinds: [.trenches, .passRush]),
                 Beat(anchor: "field", title: "The Field", kinds: [.quarterback, .injury]),
                 Beat(anchor: "edges", title: "The Edges", kinds: [.coverage, .paceScript, .redZone, .turnoverEdge, .explosivePlay, .coaching]),
-                Beat(anchor: "form", title: "The Form", kinds: [.situational, .streak, .teamRecord]),
+                Beat(anchor: "form", title: "The Form", kinds: [.situational, .streak, .teamRecord, .h2h]),
                 Beat(anchor: "afterGary", title: "After Gary", kinds: [.afterGary]),
             ]
         }
@@ -965,7 +978,7 @@ struct HubView: View {
                 Beat(anchor: "trenches", title: "The Trenches", kinds: [.trenches, .passRush]),
                 Beat(anchor: "field", title: "The Field", kinds: [.quarterback, .injury]),
                 Beat(anchor: "edges", title: "The Edges", kinds: [.coverage, .paceScript, .specialTeams, .redZone, .turnoverEdge, .explosivePlay, .coaching, .marketRange]),
-                Beat(anchor: "form", title: "The Form", kinds: [.situational, .streak, .teamRecord]),
+                Beat(anchor: "form", title: "The Form", kinds: [.situational, .streak, .teamRecord, .h2h]),
                 Beat(anchor: "afterGary", title: "After Gary", kinds: [.afterGary]),
             ]
         }
@@ -1209,7 +1222,9 @@ struct HubView: View {
     // opens each. Every name in them routes by the law (Aug 4): player names
     // → player card when the day has one, team names → the team card.
     @ViewBuilder private var referenceShelf: some View {
-        if sel == .mlb, !pulseRows.isEmpty {
+        // MLB, NFL, and NCAAF all carry pulse tabs now (Aug 27 2026); the dict
+        // read keeps a league with no stored tabs collapsed to nothing.
+        if [.mlb, .nfl, .ncaaf].contains(sel), !pulseRows.isEmpty {
             HubCollapsible(anchor: "pulse", open: $openBeats,
                            title: "League Pulse", sub: "league-wide tables") {
                 HubLeaguePulse(rows: pulseRows, selectedTab: $pulseTab,
@@ -2285,8 +2300,12 @@ fileprivate struct HubLeaguePulse: View {
     var onPlayer: (PlayerInsightCardRow) -> Void = { _ in }
     var onTeam: ((String) -> Void)? = nil
 
-    /// Fixed display order; any tab without a row drops out.
-    private static let tabOrder = ["starting_pitchers", "hot_cold_bats", "bullpen", "injuries"]
+    /// Fixed display order; any tab without a row drops out. MLB tabs first
+    /// as before; football tabs (Aug 27 2026) lead with the market board.
+    private static let tabOrder = [
+        "starting_pitchers", "hot_cold_bats", "bullpen", "injuries",
+        "the_board", "form", "injury_sheet", "rankings",
+    ]
 
     private var ordered: [LeaguePulseRow] {
         rows.sorted { a, b in

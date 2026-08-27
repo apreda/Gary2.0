@@ -130,6 +130,9 @@ struct FootballGameIntelView: View {
     }
     private var standingsRows: [Signal] { morningRows([.situational], cap: 2) }
     private var mismatchRow: Signal? { morningRows([.mismatch], cap: 1).first }
+    /// THE SERIES (Aug 27 2026): the real prior meetings between the two
+    /// franchises, from the head-to-head lane. One row per game by contract.
+    private var seriesRow: Signal? { morningRows([.h2h], cap: 1).first }
 
     // THE TRACK RECORD: Gary's graded record on each franchise's games,
     // the run he's on with them, and his last call — from game_results,
@@ -237,6 +240,9 @@ struct FootballGameIntelView: View {
                 if !standingsRows.isEmpty {
                     FootballStandingsSection(rows: standingsRows, accent: accent, title: "The Rankings")
                 }
+                if let seriesRow {
+                    FootballStandingsSection(rows: [seriesRow], accent: accent, title: "The Series")
+                }
 
                 if !shapeRows.isEmpty {
                     FootballGameShapeSection(rows: shapeRows, accent: accent)
@@ -286,6 +292,9 @@ struct FootballGameIntelView: View {
                 if !standingsRows.isEmpty {
                     FootballStandingsSection(rows: standingsRows, accent: accent)
                 }
+                if let seriesRow {
+                    FootballStandingsSection(rows: [seriesRow], accent: accent, title: "The Series")
+                }
 
                 if let numberSignal {
                     FootballMarketSection(title: "Gary's Number", signal: numberSignal, accent: accent)
@@ -299,6 +308,12 @@ struct FootballGameIntelView: View {
                     FootballAvailabilitySection(rows: availability, accent: accent)
                 }
             }
+
+            // PLAYER INTEL (Aug 27 2026): the football packs now build, and the
+            // section is the SAME one MLB pages mount — scoped by exact game id
+            // (college abbreviations have no matchup-keyword join). It hides
+            // itself entirely on a day or game without packs.
+            PlayerIntelSection(matchup: matchup, gameId: exactGameID)
 
             if !sweatSignals.isEmpty {
                 FootballSweatSection(signals: sweatSignals, accent: accent)
