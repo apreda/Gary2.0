@@ -96,19 +96,28 @@ export function selectStoryGames({ teamName, opponentName, recentGames, printedP
 
 /**
  * Render the section. `entries` = selectStoryGames rows joined with their
- * fetched stories: { gamePk, date, label, final, story: { headline, body } }.
- * Entries with no story body are dropped (no recap published — say nothing,
- * never reconstruct). Bodies print WHOLE.
+ * fetched stories: { gamePk, date, label, final, story: { headline, body },
+ * storyError? }.
+ *
+ * A FAILED FETCH IS NOT AN EMPTY RESULT (funnel law; the Aug-26 pressBySide
+ * lesson): a game whose retrieval FAILED prints an honest-absence line so a
+ * throttled run never reads as a quiet night. Only verified-empty — the call
+ * succeeded and no recap is published — is omitted silently. Bodies print
+ * WHOLE.
  */
 export function renderGamesAsWritten(teamName, entries) {
-  const withBody = (entries || []).filter((e) => e?.story?.body);
-  if (withBody.length === 0) return '';
+  const rows = (entries || []).filter((e) => e?.story?.body || e?.storyError);
+  if (rows.length === 0) return '';
   const lines = [`═══ ${teamName.toUpperCase()} — THE LAST GAMES, AS WRITTEN ═══`];
-  for (const e of withBody) {
+  for (const e of rows) {
     const head = [e.date, e.label, e.final].filter(Boolean).join(' ');
-    const title = e.story.headline ? ` — ${e.story.headline}` : '';
-    const body = String(e.story.body).replace(/\s*\n+\s*/g, ' ').trim();
-    lines.push(`${head}${title}: ${body}`);
+    if (e?.story?.body) {
+      const title = e.story.headline ? ` — ${e.story.headline}` : '';
+      const body = String(e.story.body).replace(/\s*\n+\s*/g, ' ').trim();
+      lines.push(`${head}${title}: ${body}`);
+    } else {
+      lines.push(`${head}: recap retrieval failed this run — treat as missing coverage, not a quiet game.`);
+    }
   }
   return lines.join('\n\n');
 }

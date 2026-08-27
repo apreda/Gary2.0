@@ -67,8 +67,8 @@ describe('selectStoryGames — last game + the current series, deduped', () => {
   });
 });
 
-describe('renderGamesAsWritten — whole articles, silence over reconstruction', () => {
-  it('prints the full body untrimmed and drops story-less games silently', () => {
+describe('renderGamesAsWritten — whole articles, silence only for verified-empty', () => {
+  it('prints the full body untrimmed and omits verified-empty games silently', () => {
     const body = 'The starter left in the sixth with two on. '.repeat(60).trim();
     const out = renderGamesAsWritten('Seattle Mariners', [
       { gamePk: 104, date: '2026-08-26', label: 'vs Philadelphia Phillies', final: 'W 4-1', story: { headline: 'Mariners hold on', body } },
@@ -80,6 +80,14 @@ describe('renderGamesAsWritten — whole articles, silence over reconstruction',
     expect(out).not.toContain('2026-08-25');
     expect(out).not.toContain('…');
     expect(out).not.toContain('...');
+  });
+
+  it('a FAILED retrieval prints an honest-absence line — never a quiet omission', () => {
+    const out = renderGamesAsWritten('Seattle Mariners', [
+      { gamePk: 104, date: '2026-08-26', label: 'vs Philadelphia Phillies', final: 'W 4-1', story: null, storyError: true },
+    ]);
+    expect(out).toContain('2026-08-26 vs Philadelphia Phillies W 4-1: recap retrieval failed this run');
+    expect(out).toContain('treat as missing coverage, not a quiet game');
   });
 });
 
