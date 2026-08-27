@@ -8,7 +8,6 @@ describe('buildSystemPrompt without a constitution', () => {
     const p = buildSystemPrompt('', 'MLB');
     expect(p).not.toContain('<constitution>');
     expect(p).toContain('FACT-CHECKING PROTOCOL');
-    expect(p).toContain('FACT-CHECKING PROTOCOL');
     expect(p).not.toContain('JUDGMENT vs FABRICATION');
     // THINK LIKE A SHARP removed (founder, Aug 27): contrarian steering —
     // "obvious narratives are priced in, question your first instinct" —
