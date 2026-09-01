@@ -11,15 +11,16 @@ import { fetchTodayGamePicks, fetchTodayPropPicks, selectTopPick, selectTopProps
 import { fetchDailySlate } from '@/lib/gary/board';
 import { fetchAllGameResults, computeRecord, currentStreak, sinceDate, effectiveOdds } from '@/lib/gary/results';
 import { todayEST, daysAgoEST } from '@/lib/gary/dates';
+import { pageMetadata } from '@/lib/seo/metadata';
 
 export const revalidate = 600;
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  canonical: '/',
   title: 'Gary AI — Free Sports Picks for Every Game, Every Day',
   description:
     'Free daily picks with written reasoning across MLB, NBA, NFL, NHL, NCAAB, and NCAAF. Public track record. Free on iOS.',
-  alternates: { canonical: '/' },
-};
+});
 
 export default async function Home() {
   const [gamePicks, propPicks, slate, results] = await Promise.all([
@@ -110,7 +111,6 @@ export default async function Home() {
                 alt="Gary the bear — gold coin mark"
                 width={400}
                 height={400}
-                preload
               />
               <Image
                 src="/coin2.png"

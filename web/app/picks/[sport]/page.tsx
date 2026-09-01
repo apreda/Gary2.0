@@ -15,6 +15,7 @@ import { buildBoard, fetchDailySlate } from '@/lib/gary/board';
 import { fetchAllGameResults, computeRecord, sinceDate } from '@/lib/gary/results';
 import { normalizeLeague, SPORTS, sportBySlug } from '@/lib/gary/leagues';
 import { todayEST, daysAgoEST, nowMs } from '@/lib/gary/dates';
+import { pageMetadata } from '@/lib/seo/metadata';
 
 export const revalidate = 600;
 // Unknown slugs 404 at the router — no SSR pass or data fetch for garbage paths.
@@ -31,18 +32,18 @@ export async function generateMetadata({ params }: { params: Promise<{ sport: st
   // Tournament over (Jul 19 2026): the page keeps its search equity but sells
   // the complete graded record, not a daily slate that no longer exists.
   if (cfg.code === 'WC') {
-    return {
+    return pageMetadata({
+      canonical: '/picks/world-cup',
       title: 'World Cup 2026 Picks — The Complete Graded Record | Gary AI',
       description:
         'Gary picked every match of the 2026 FIFA World Cup with written reasoning, and every result is graded on the public record — through the final.',
-      alternates: { canonical: '/picks/world-cup' },
-    };
+    });
   }
-  return {
+  return pageMetadata({
+    canonical: `/picks/${cfg.slug}`,
     title: `Free ${cfg.longName} Picks Today — With Reasoning | Gary AI`,
     description: `Gary's free ${cfg.longName} picks for today with written rationale, confidence ratings, and a public graded track record. Updated daily.`,
-    alternates: { canonical: `/picks/${cfg.slug}` },
-  };
+  });
 }
 
 export default async function SportPicksPage({ params }: { params: Promise<{ sport: string }> }) {
@@ -149,6 +150,7 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
             <BoardGrid
               items={board.map(g => ({
                 key: g.key,
+                label: `${g.away} at ${g.home}`,
                 tile: <GameTile game={g} now={now} />,
                 panel: <GameRow game={g} now={now} />,
               }))}

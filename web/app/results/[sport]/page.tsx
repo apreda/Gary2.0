@@ -8,6 +8,7 @@ import {
 import { daysAgoEST } from '@/lib/gary/dates';
 import { SPORTS, sportBySlug } from '@/lib/gary/leagues';
 import { JsonLd } from '@/components/JsonLd';
+import { pageMetadata } from '@/lib/seo/metadata';
 
 export const revalidate = 3600;
 // Unknown slugs 404 at the router — no SSR pass or data fetch for garbage paths.
@@ -22,18 +23,18 @@ export async function generateMetadata({ params }: { params: Promise<{ sport: st
   const cfg = sportBySlug(sport);
   if (!cfg) return {};
   if (cfg.code === 'WC') {
-    return {
+    return pageMetadata({
+      canonical: '/results/world-cup',
       title: 'World Cup 2026 Predictions Record — Every Pick Graded | Gary AI',
       description:
         "Gary AI's graded 2026 World Cup predictions record — every match pick scored against the final result, win-loss, and net units. Public through the final.",
-      alternates: { canonical: '/results/world-cup' },
-    };
+    });
   }
-  return {
+  return pageMetadata({
+    canonical: `/results/${cfg.slug}`,
     title: `${cfg.longName} Picks Track Record | Gary AI`,
     description: `Gary AI's complete graded ${cfg.longName} picks record — win-loss, net units at flat stakes, current streak, and every graded result. Public and updated daily.`,
-    alternates: { canonical: `/results/${cfg.slug}` },
-  };
+  });
 }
 
 const fmtUnits = (u: number) => `${u >= 0 ? '+' : '-'}${Math.abs(u).toFixed(1)}u`;

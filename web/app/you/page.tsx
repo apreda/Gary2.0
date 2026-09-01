@@ -5,14 +5,15 @@ import { BookClient } from '@/components/book/BookClient';
 import { Leaderboard } from '@/components/book/Leaderboard';
 import { garyBoardRows } from '@/lib/book/gary';
 import { currentUser } from '@/lib/auth/server';
+import { pageMetadata } from '@/lib/seo/metadata';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  canonical: '/you',
   title: 'Your Book | Gary AI',
   description:
     'Ride or fade Gary’s picks and keep an unfakeable record — plus your own logged bets, graded your way, on the web and in the app.',
-  alternates: { canonical: '/you' },
   robots: { index: false },
-};
+});
 
 // Session-dependent by nature — never prerender one user's book for another.
 export const dynamic = 'force-dynamic';

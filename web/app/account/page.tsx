@@ -3,14 +3,15 @@ import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { PageMasthead } from '@/components/Terminal';
 import { supabaseServer, currentUser } from '@/lib/auth/server';
+import { pageMetadata } from '@/lib/seo/metadata';
 import { SignInForm } from './SignInForm';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  canonical: '/account',
   title: 'Account | Gary AI',
   description: 'Sign in to Gary AI — ride or fade picks and keep your book on the web.',
-  alternates: { canonical: '/account' },
   robots: { index: false },
-};
+});
 
 // Session-dependent by nature — never prerender a signed-out shell for a
 // signed-in user.

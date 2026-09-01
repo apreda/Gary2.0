@@ -8,15 +8,16 @@ import {
 import { rest } from '@/lib/gary/supabase';
 import { daysAgoEST } from '@/lib/gary/dates';
 import { SPORTS, LEAGUE_DISPLAY, sportByCode } from '@/lib/gary/leagues';
+import { pageMetadata } from '@/lib/seo/metadata';
 
 export const revalidate = 3600;
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  canonical: '/results',
   title: 'Track Record — Every Pick Graded, Public | Gary AI',
   description:
     'The complete public record of Gary AI sports picks: win-loss by sport, net units at flat stakes, streaks, and every graded result. No cherry-picking.',
-  alternates: { canonical: '/results' },
-};
+});
 
 const fmtUnits = (u: number) => `${u >= 0 ? '+' : '-'}${Math.abs(u).toFixed(1)}u`;
 
@@ -117,7 +118,7 @@ export default async function ResultsPage() {
         <div>
           <p className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-gold">Nothing deleted</p>
           <p className="mt-1.5 text-[14px] leading-relaxed text-mid">
-            Wins, losses, and pushes all stay on the record. The archive below is the complete history.
+            Wins, losses, and pushes all stay in the record totals. The recent tape below shows the latest 25 graded picks.
           </p>
         </div>
         <div>

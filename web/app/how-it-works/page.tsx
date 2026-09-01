@@ -4,13 +4,14 @@ import { Eyebrow } from '@/components/Eyebrow';
 import { JsonLd } from '@/components/JsonLd';
 import { AppStoreButton } from '@/components/AppStoreButton';
 import { PageMasthead, StitchRule, GhostLink } from '@/components/Terminal';
+import { pageMetadata } from '@/lib/seo/metadata';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  canonical: '/how-it-works',
   title: 'How Gary Works — Methodology | Gary AI',
   description:
     'How Gary AI makes free daily sports picks: live-data research, written reasoning for every call, audited stats, and every pick graded the next morning.',
-  alternates: { canonical: '/how-it-works' },
-};
+});
 
 const faqItems = [
   {

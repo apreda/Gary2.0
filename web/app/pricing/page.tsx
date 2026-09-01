@@ -8,15 +8,16 @@ import { PricingPlans } from '@/components/PricingPlans';
 import { GATING, PRICING } from '@/lib/gary/pricing';
 import { fetchAllGameResults, computeRecord, recordByLeague, sinceDate } from '@/lib/gary/results';
 import { daysAgoEST } from '@/lib/gary/dates';
+import { pageMetadata } from '@/lib/seo/metadata';
 
 export const revalidate = 600;
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  canonical: '/pricing',
   title: 'Gary AI Pricing — Unlock Winners, the Picks Gary Would Bet',
   description:
     'The full slate is free. Winners — the picks Gary would actually bet, each board with its public record — is $9.99/mo per sport or All-Access. Cancel anytime.',
-  alternates: { canonical: '/pricing' },
-};
+});
 
 const faqItems = [
   {

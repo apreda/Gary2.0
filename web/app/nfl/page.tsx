@@ -5,14 +5,15 @@ import { AppStoreButton } from '@/components/AppStoreButton';
 import { StitchRule, StatTile, GhostLink } from '@/components/Terminal';
 import { fetchAllGameResults, computeRecord, sinceDate } from '@/lib/gary/results';
 import { estDateStr, daysAgoEST } from '@/lib/gary/dates';
+import { pageMetadata } from '@/lib/seo/metadata';
 import { joinWaitlist } from './actions';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  canonical: '/nfl',
   title: 'NFL Picks for Every Game — Kickoff Sep 9 | Gary AI',
   description:
     'Gary picks every NFL game this season — free in the app, with the reasoning behind each pick, and every result on his public record. First card drops for Kickoff: Patriots at Seahawks, September 9.',
-  alternates: { canonical: '/nfl' },
-};
+});
 
 const KICKOFF_ISO = '2026-09-09';
 

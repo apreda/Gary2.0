@@ -18,15 +18,16 @@ import { etDateLabel, etTime, oddsText } from '@/lib/gary/format';
 import { hubGradedDateEST, nowMs, todayEST } from '@/lib/gary/dates';
 import { SPORTS, sportByCode } from '@/lib/gary/leagues';
 import type { GaryPick } from '@/lib/gary/types';
+import { pageMetadata } from '@/lib/seo/metadata';
 
 export const revalidate = 600;
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  canonical: '/picks',
   title: "Today's Free Sports Picks — Full Slate | Gary AI",
   description:
     "The whole board, game by game: opening lines, first pitch, and Gary's pick with the reasoning behind it the moment it posts. Always free.",
-  alternates: { canonical: '/picks' },
-};
+});
 
 /**
  * The headline call as a band, not a second copy of the card — the game's own
@@ -157,6 +158,7 @@ export default async function PicksPage() {
                         .filter(g => g.league === code)
                         .map(g => ({
                           key: g.key,
+                          label: `${g.away} at ${g.home}`,
                           tile: <GameTile game={g} now={now} />,
                           panel: <GameRow game={g} now={now} />,
                         }))}
@@ -169,6 +171,7 @@ export default async function PicksPage() {
                 <BoardGrid
                   items={board.map(g => ({
                     key: g.key,
+                    label: `${g.away} at ${g.home}`,
                     tile: <GameTile game={g} now={now} />,
                     panel: <GameRow game={g} now={now} />,
                   }))}
