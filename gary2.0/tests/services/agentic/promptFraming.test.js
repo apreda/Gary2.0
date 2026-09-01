@@ -67,7 +67,12 @@ describe('MLB game lane runs the restored June engine (Aug 18 restoration)', () 
     expect(pb).not.toContain('this lane is deleted');
     // The bilateral ask and the symmetry rule ride Pass 1
     expect(pb).toContain('THE SYMMETRY RULE');
-    expect(pb).toContain('CASE FOR BACKING ${homeTeam.toUpperCase()} TONIGHT:');
+    // The case headings come from THE CASE MENU (Sep 1 2026): who-wins on a
+    // legal board, the actual tickets on a capped one.
+    expect(pb).toContain('${headings.home}');
+    const menu = src('orchestrator/mlbCaseMenu.js');
+    expect(menu).toContain('CASE FOR BACKING ${H(homeTeam)} TONIGHT:');
+    expect(menu).toContain('OR THE ${H(menu.dog)} OUTRIGHT AT ${menu.dogMl}, TONIGHT:');
   });
 
   it('the researcher is dead for every sport (founder kill, Aug 27) — no briefing, no ask channel', () => {
