@@ -1446,7 +1446,7 @@ async function main() {
           // injuries never carry a pick's case). Log-only, never blocks.
           try {
             const staleInj = findStaleInjuryMentions(result.rationale, typeof result.injuries === 'string' ? result.injuries : '');
-            if (staleInj.length) console.warn(`   [InjuryWatch] card cites injuries older than 7d: ${staleInj.join(', ')} — review whether they carry the case.`);
+            if (staleInj.length) console.warn(`   [InjuryWatch] card cites ESTABLISHED absences: ${staleInj.join(', ')} — review whether they carry the case.`);
           } catch { /* telemetry must never break the run */ }
           if (result.toolCallHistory) {
             // Show UNIQUE stats only (not duplicates)

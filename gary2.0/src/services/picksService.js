@@ -267,15 +267,9 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null, options = {
 
   console.log(`Storing picks for date: ${currentDateString}`);
 
-  // Helper to parse confidence safely
-  const parseConfidenceValue = (value) => {
-    if (typeof value === 'number') return value;
-    if (typeof value === 'string') {
-      const parsed = parseFloat(value);
-      return Number.isFinite(parsed) ? parsed : 0;
-    }
-    return 0;
-  };
+  // (parseConfidenceValue deleted Sep 1 2026 — an uncalled helper whose
+  // null→0 coercion was the exact fabricated-conviction class the Jul 30
+  // ruling banned.)
 
   // ONE mapper (Aug 24 2026): the old `rawGeminiOutput` extraction branch
   // that sat here was a reader for a shape NOTHING has produced since the
@@ -311,7 +305,10 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null, options = {
       momentum: 0,
       rationale: pick.rationale,
       trapAlert: false,
-      confidence: pick.confidence || 0,
+      // NEVER coerce a missing conviction to a number (founder, Jul 30): the
+      // old `|| 0` here silently defeated the runner's honest null — a stored
+      // 0 reads as a STATED zero conviction. Null stays null.
+      confidence: pick.confidence ?? null,
       superstition: false,
       sport: pick.sport,
       // Include agentic system fields

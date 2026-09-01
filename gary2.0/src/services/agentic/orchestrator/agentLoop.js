@@ -395,7 +395,9 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           // Send text message (user message or pass transition)
           if (!nextMessageToSend) {
             console.log(`[Orchestrator] ⚠️ No message to send - using fallback prompt`);
-            nextMessageToSend = `Continue your investigation. Use fetch_stats to gather more data on this matchup.`;
+            nextMessageToSend = isPropsMode
+              ? `Continue your investigation. Use fetch_stats to gather more data on this matchup.`
+              : `Continue: synthesize from the desk — it is your complete evidence — and finish the current pass.`;
           }
           sessionResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
         }
@@ -465,7 +467,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
 
     } else if (provider === 'session') {
       // No session available — this should never happen in normal operation
-      throw new Error('No active Gemini session available');
+      throw new Error('No active model session available');
     }
 
     // Handle empty response from Gemini (common when model is confused)
@@ -493,8 +495,14 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           console.log(`[Orchestrator] Gary has ${totalCalls} stats across ${categoryCount} categories — pushing to proceed`);
           nudgeContent = `You have ${totalCalls} stats gathered across ${categoryCount} categories. If there are remaining critical factual gaps, request only those stats. Otherwise, finish Pass 1 synthesis and output exactly:\nINVESTIGATION COMPLETE`;
         } else {
-          console.log(`[Orchestrator] ⚠️ Gemini returned empty response (${totalCalls} stats, ${categoryCount} categories) — prompting for more stats`);
-          nudgeContent = `You didn't respond. Use the fetch_stats tool to request stats for this matchup. You've gathered ${totalCalls} stats across ${categoryCount} categories so far. Continue investigating to build a complete picture of this matchup.`;
+          console.log(`[Orchestrator] ⚠️ Empty response (${totalCalls} stats, ${categoryCount} categories) — nudging Pass 1 forward`);
+          // Desk-only game brains have NO tools — a fetch_stats instruction
+          // here (the pre-Sep-1 wording) told Gary to call a tool that does
+          // not exist, and an empty-response streak would loop on it to the
+          // iteration cap. Props mode keeps its tool language.
+          nudgeContent = isPropsMode
+            ? `You didn't respond. Use the fetch_stats tool to request stats for this matchup. You've gathered ${totalCalls} stats across ${categoryCount} categories so far. Continue investigating to build a complete picture of this matchup.`
+            : `You didn't respond. Continue reading the desk — it is your complete evidence. Finish your Pass 1 synthesis with both cases and then output exactly:\nINVESTIGATION COMPLETE`;
         }
       }
       

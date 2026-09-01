@@ -305,20 +305,25 @@ export function auditCountClaims(rationale, { homeTeam, awayTeam, homeScores, aw
  * pick; mentioning a KNOWN absence as context is legitimate, so this counts
  * the rate for review rather than judging intent.
  */
-export function findStaleInjuryMentions(rationale, injuriesText, staleDays = 7) {
+export function findStaleInjuryMentions(rationale, injuriesText, staleGames = 2) {
   if (typeof rationale !== 'string' || typeof injuriesText !== 'string' || !rationale || !injuriesText) return [];
   const out = [];
   const seen = new Set();
-  const re = /\[(?:NEW|KNOWN)\]\s+([A-Z][\w.'-]+(?:\s+[A-Z][\w.'-]+)+)\s*\(.*?(\d+)d ago\)/g;
+  // Matches the CURRENT desk line shape (tags renamed from [NEW]/[KNOWN] to
+  // the games-based clock — the old regex silently matched nothing, found in
+  // the Sep 1 audit): "[ESTABLISHED — 8 team games missed] Willy Adames (SS)".
+  // The clock is games missed since last appearance (founder law), so the
+  // threshold is games, not days; FRESH and SP SCRATCH rows never count.
+  const re = /\[ESTABLISHED — (\d+)\+? team games? missed\]\s+([A-Z][\w.'-]+(?:\s+[A-Z][\w.'-]+)+)\s*\(/g;
   for (const m of injuriesText.matchAll(re)) {
-    const name = m[1].trim();
-    const age = parseInt(m[2], 10);
-    if (!Number.isFinite(age) || age <= staleDays) continue;
+    const gamesMissed = parseInt(m[1], 10);
+    const name = m[2].trim();
+    if (!Number.isFinite(gamesMissed) || gamesMissed <= staleGames) continue;
     const lastName = name.split(/\s+/).pop();
     if (seen.has(lastName)) continue;
     if (new RegExp(`(^|[^A-Za-z])${lastName}([^A-Za-z]|$)`).test(rationale)) {
       seen.add(lastName);
-      out.push(`${name} (${age}d old)`);
+      out.push(`${name} (${gamesMissed} team games missed)`);
     }
   }
   return out;
