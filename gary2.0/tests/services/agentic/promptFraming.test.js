@@ -63,7 +63,7 @@ describe('MLB game lane runs the restored June engine (Aug 18 restoration)', () 
   it('the pass builders route MLB games again', () => {
     const pb = src('orchestrator/passBuilders.js');
     expect(pb).toContain('MLB GAME LANE RESTORED');
-    expect(pb).toContain('return buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread)');
+    expect(pb).toContain('return buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread, extras.game || null)');
     expect(pb).not.toContain('this lane is deleted');
     // The bilateral ask and the symmetry rule ride Pass 1
     expect(pb).toContain('THE SYMMETRY RULE');
