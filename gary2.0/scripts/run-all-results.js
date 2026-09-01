@@ -586,7 +586,8 @@ function getStatValue(sport, data, name, type, playerId = null, meta = {}) {
     if (p) {
       // BDL MLB stats fields: at_bats, runs, hits, rbi, hr, bb, k, avg, obp, slg,
       // ip, p_hits, p_runs, er, p_bb, p_k, p_hr, pitch_count, strikes, era
-      // NOTE: total_bases and stolen_bases are NOT in BDL — compute or skip
+      // The box also carries doubles, triples, total_bases and stolen_bases
+      // (verified against live rows Sep 1 2026) — the old "NOT in BDL" note was stale.
 
       // Batter props
       // Combo prop FIRST — "hits_runs_rbis" contains "rbi" as a substring, so it must be
@@ -616,7 +617,16 @@ function getStatValue(sport, data, name, type, playerId = null, meta = {}) {
         if (p.sb != null) return p.sb;
         return null; // BDL may not have SB — let grounding try
       }
-      if (t.includes('single')) return null; // Need doubles/triples which BDL may not have
+      // SINGLES (Sep 1 2026): hits − doubles − triples − HR, the same derivation
+      // the cloud grader uses. Any missing component stays null so the prop
+      // waits rather than settling on a fabricated zero — and a singles prop
+      // no longer spends a web search every re-grade pass.
+      if (t.includes('single')) {
+        const hr = p.hr ?? p.home_runs;
+        return (p.hits != null && p.doubles != null && p.triples != null && hr != null)
+          ? Number(p.hits) - Number(p.doubles) - Number(p.triples) - Number(hr)
+          : null;
+      }
       if (t.includes('double') && !t.includes('play')) return p.doubles ?? null;
       // Strikeouts — keyed by the BOARD's own semantics (Jul 30, the Jun 4
       // "attribution-swap" class): 'pitcher_strikeouts' = p_k, bare
