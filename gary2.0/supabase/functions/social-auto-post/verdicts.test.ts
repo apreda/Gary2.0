@@ -105,3 +105,33 @@ test("caps candidates per run", () => {
   assert.equal(matchVerdicts(rows, results).length, 4);
   assert.equal(matchVerdicts(rows, results, { cap: 2 }).length, 2);
 });
+
+// ── isValidVerdict (Sep 1 2026): the Aug 16 tweet that posted the model's scratch work ──
+import { isValidVerdict } from "./verdicts.ts";
+
+const SCRATCH = `1+9+1+4+1+5 = 75 characters.
+ 75 is well under 100 characters.
+
+ Let's check all constraints:
+ - Starts with "Miss."? Yes.
+ - Based ONLY on provided facts? Yes (Score 3-2, Allen HR 1 RBI, Pena HR 1 RBI,`;
+
+test("isValidVerdict: the real Aug 16 scratch-work output is rejected", () => {
+  assert.equal(isValidVerdict(SCRATCH, "lost"), false);
+});
+
+test("isValidVerdict: accepts the shipped good verdicts", () => {
+  assert.equal(isValidVerdict("Hit. Cardinals beat Reds 2-1. Alec Burleson drove in both St. Louis runs.", "won"), true);
+  assert.equal(isValidVerdict("Miss. Royals managed just 2 hits in a 1-0 loss. Reid Detmers struck out 11.", "lost"), true);
+  assert.equal(isValidVerdict("Push. Final 7-7.", "push"), true);
+  assert.equal(isValidVerdict(plainVerdict("won", "4-2"), "won"), true);
+});
+
+test("isValidVerdict: wrong opener, empty body, line breaks, meta talk, or over-length all fail", () => {
+  assert.equal(isValidVerdict("Hit. Cardinals beat Reds 2-1.", "lost"), false);          // opener must match result
+  assert.equal(isValidVerdict("Miss.", "lost"), false);                                    // nothing after the opener
+  assert.equal(isValidVerdict("Miss. Royals lost.\nDetmers struck out 11.", "lost"), false); // multi-line
+  assert.equal(isValidVerdict("Miss. That is 62 characters, under the limit.", "lost"), false); // meta vocabulary
+  assert.equal(isValidVerdict("Miss. Starts with \"Miss.\" as required.", "lost"), false);  // quoting the opener
+  assert.equal(isValidVerdict("Hit. " + "Rays win. ".repeat(20), "won"), false);           // far too long
+});

@@ -128,3 +128,26 @@ export function matchVerdicts(
   }
   return out;
 }
+
+// ── Output-shape gate (Sep 1 2026) ─────────────────────────────────────────────────────────────
+// On Aug 16 2026 the verdict lane quote-tweeted the model's SCRATCH WORK instead of the verdict
+// ("1+9+1+4+1+5 = 75 characters. 75 is well under 100 characters. Let's check all constraints: …",
+// 2,882 impressions) — a fourth-wall break published by our own machine. clean()+trimTweet only
+// sanitized characters; nothing checked that the text was a verdict at all. This is that check. A
+// reply that fails it never posts: the caller falls back to plainVerdict, which cannot be wrong.
+const VERDICT_MAX_CHARS = 140;
+const VERDICT_META = /\b(characters?|constraints?|prompt|tweet|requirements?|word count|let'?s check|under \d+)\b/i;
+
+export function isValidVerdict(text: string, result: string): boolean {
+  const t = String(text ?? "").trim();
+  const opener = verdictOpener(result);
+  if (!t.startsWith(opener)) return false;
+  const body = t.slice(opener.length).trim();
+  if (!body || !/[A-Za-z]/.test(body)) return false;
+  if (/[\r\n]/.test(t)) return false;
+  if (t.length > VERDICT_MAX_CHARS) return false;
+  if (VERDICT_META.test(t)) return false;
+  if (/["“”]/.test(t) && /\b(Hit|Miss|Push)\.?["“”]/.test(t)) return false; // quoting the opener = talking about the format
+  if (/=/.test(t)) return false;
+  return true;
+}

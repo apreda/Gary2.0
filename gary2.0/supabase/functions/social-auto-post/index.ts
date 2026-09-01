@@ -20,11 +20,12 @@
 //   - Recap (10am) = ONE Gary-voiced morning-tape post: record in prose + one real result detail, mood-ladder register
 //     (absorbed the retired personality post, Jul 5). Falls back to plain per-sport lines if the LLM fails.
 //
-// Query params: ?dry_run=1 (compose, don't post/log), ?force_mode=pick|recap|personality|verdict|arc, ?preview=1 (dry-run: compose top pick ignoring timing), ?metrics_only=1
+// Query params: ?dry_run=1 (compose, don't post/log), ?force_mode=pick|recap|personality|verdict|arc|week_tape, ?preview=1 (dry-run: compose top pick ignoring timing), ?metrics_only=1
 // LLM: Anthropic ONLY (ANTHROPIC_API_KEY secret; SOCIAL_ANTHROPIC_MODEL, default claude-sonnet-5).
 //      Gemini is fully retired (founder, Aug 24 2026: "no more gemini for anything").
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { matchVerdicts, plainVerdict, buildVerdictPrompt, trimTweet } from "./verdicts.ts";
+import { matchVerdicts, plainVerdict, buildVerdictPrompt, trimTweet, isValidVerdict } from "./verdicts.ts";
+import { composeWeekTape } from "./weektape.ts";
 import { fallbackReasonPair, isVerbatimSnippet, reasonCandidates, splitSentences } from "../_shared/verbatimSnippets.js";
 import { barePick } from "./barepick.ts";
 import { computeStanding } from "./pl.ts";
@@ -97,7 +98,11 @@ function etParts(d = new Date()) {
   const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
   const p: Record<string, string> = {};
   for (const x of fmt.formatToParts(d)) p[x.type] = x.value;
-  return { date: `${p.year}-${p.month}-${p.day}`, hour: parseInt(p.hour === "24" ? "0" : p.hour), minute: parseInt(p.minute) };
+  // 0 = Sunday … 6 = Saturday, in ET — the week tape fires on Mondays.
+  const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(
+    new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", weekday: "short" }).format(d),
+  );
+  return { date: `${p.year}-${p.month}-${p.day}`, hour: parseInt(p.hour === "24" ? "0" : p.hour), minute: parseInt(p.minute), weekday };
 }
 
 function yesterdayOf(today: string): string {
@@ -626,7 +631,15 @@ async function groundedVerdict(
   const evidence = await fetchGameEvidence(c);
   if (!evidence) return null;
   try {
-    return trimTweet(clean(await nakedLLM(buildVerdictPrompt(c, evidence))));
+    const text = trimTweet(clean(await nakedLLM(buildVerdictPrompt(c, evidence))));
+    // SHAPE GATE (Sep 1 2026): on Aug 16 this lane quote-tweeted the model's scratch work
+    // ("1+9+1+4+1+5 = 75 characters… Let's check all constraints"). Anything that is not a
+    // verdict falls back to the template, which cannot be wrong.
+    if (!isValidVerdict(text, c.result)) {
+      console.error(`VERDICT_SHAPE_REJECTED for ${c.pickText}: ${JSON.stringify(text.slice(0, 160))}`);
+      return plainVerdict(c.result, c.finalScore);
+    }
+    return text;
   } catch (e) {
     console.error("grounded verdict LLM failed, using plain fallback: " + String(e));
     return plainVerdict(c.result, c.finalScore);
@@ -786,6 +799,38 @@ async function runRecapMode(today: string, dryRun: boolean) {
   return { posted: true, text, thread_url: `https://x.com/BetwithGary/status/${tweetId}` };
 }
 
+// WEEK TAPE (Sep 1 2026, co-founder ruling after the marketing review): ONE post a week, Monday late
+// morning ET — the completed Mon-Sun record across every league, plus the trailing 30 days. It is
+// deterministic (weektape.ts): no model, no prose beyond the fixed lines. It exists because the record
+// is the brand and, with the daily recap retired (Aug 21), nothing on the timeline ever stated the
+// aggregate: verdicts are per-game receipts, and the pin promised a Monday standing that stopped Jul 7.
+// Idempotent on its own log row (thread_format 'week_tape') inside the last six days, so a failed 11am
+// run is retried by the next runs through mid-afternoon and never posts twice.
+const WEEK_TAPE_HOUR = 11;
+
+async function runWeekTapeMode(today: string, dryRun: boolean) {
+  const weekAgo = new Date(new Date(today + "T12:00:00Z").getTime() - 6 * 86400_000).toISOString().slice(0, 10);
+  const { data: recent } = await sb.from("social_post_log")
+    .select("id").eq("thread_format", "week_tape").gte("post_date", weekAgo).limit(1);
+  if (recent?.length && !dryRun) return { posted: false, reason: "week tape already posted this week" };
+
+  const since = new Date(new Date(today + "T12:00:00Z").getTime() - 31 * 86400_000).toISOString().slice(0, 10);
+  const { data: rows, error } = await sb.from("game_results")
+    .select("game_date, league, result").gte("game_date", since).lt("game_date", today);
+  if (error) throw error;
+  const tape = composeWeekTape((rows ?? []).map((r: any) => ({ ...r, game_date: String(r.game_date) })), today);
+  if (!tape) return { posted: false, reason: "no graded games in the completed week" };
+  if (dryRun) return { posted: false, dry_run: true, week: tape.week, record: tape.record, text: tape.text };
+
+  const tweetId = await postTweet(tape.text);
+  const { error: insErr } = await sb.from("social_post_log").insert({
+    post_date: today, slot: "week_tape", league: "TAPE", pick_text: `WEEK TAPE ${today}`, thread_format: "week_tape",
+    hook_tweet_id: tweetId, thread_url: `https://x.com/BetwithGary/status/${tweetId}`, post_text: tape.text,
+  });
+  if (insErr) throw new Error(`posted ${tweetId} but log insert FAILED (dedup at risk): ${insErr.message}`);
+  return { posted: true, week: tape.week, record: tape.record, text: tape.text, thread_url: `https://x.com/BetwithGary/status/${tweetId}` };
+}
+
 // Daily standalone CHARACTER post (Option A). Grounded in yesterday's mood + today's slate so it's earned, not random. No link, no hashtag.
 async function runPersonalityMode(today: string, dryRun: boolean) {
   // RETIRED Jun 29 2026: the noon "words" character post (the "Ground out a 10 and 7 record... staring at
@@ -828,7 +873,7 @@ Deno.serve(async (req) => {
     const force = url.searchParams.get("force_mode") ?? (preview ? "pick" : null);
     const metricsOnly = url.searchParams.get("metrics_only") === "1";
 
-    const { date: today, hour } = etParts();
+    const { date: today, hour, weekday } = etParts();
     const nowMs = Date.now();
 
     // Refresh KPI metrics (keeps impressions/likes live 24/7). Never let it block posting.
@@ -875,6 +920,12 @@ Deno.serve(async (req) => {
       return Response.json({ mode: "arc", metrics, arc });
     }
 
+    if (force === "week_tape") {
+      const weekTape = await runWeekTapeMode(today, dryRun);
+      console.log(JSON.stringify({ mode: "week_tape", weekTape }).slice(0, 500));
+      return Response.json({ mode: "week_tape", metrics, weekTape });
+    }
+
     if (force === "recap") {
       const recap = await runRecapMode(today, dryRun);
       console.log(JSON.stringify({ mode: "recap", recap }).slice(0, 500));
@@ -899,12 +950,19 @@ Deno.serve(async (req) => {
       catch (e) { console.error("recap mode failed: " + String(e)); recap = { error: String(e) }; }
     }
 
+    // Monday week tape: same self-healing window shape as the recap (tries 11am-3pm ET, posts once).
+    let weekTape: any = undefined;
+    if (!force && weekday === 1 && hour >= WEEK_TAPE_HOUR && hour <= WEEK_TAPE_HOUR + 4) {
+      try { weekTape = await runWeekTapeMode(today, dryRun); }
+      catch (e) { console.error("week tape failed: " + String(e)); weekTape = { error: String(e) }; }
+    }
+
     if (hour < POST_HOURS_START || hour > POST_HOURS_END) {
-      return Response.json({ posted: false, reason: `ET hour ${hour} is outside the posting window`, metrics, verdict, recap, arc });
+      return Response.json({ posted: false, reason: `ET hour ${hour} is outside the posting window`, metrics, verdict, recap, weekTape, arc });
     }
     const result = await runPickMode(today, nowMs, dryRun, preview);
-    console.log(JSON.stringify({ mode: "pick", verdict, recap, arc, ...result }).slice(0, 500));
-    return Response.json({ mode: "pick", metrics, verdict, recap, arc, ...result });
+    console.log(JSON.stringify({ mode: "pick", verdict, recap, weekTape, arc, ...result }).slice(0, 500));
+    return Response.json({ mode: "pick", metrics, verdict, recap, weekTape, arc, ...result });
   } catch (e) {
     console.error(String(e));
     return Response.json({ error: String(e) }, { status: 500 });
