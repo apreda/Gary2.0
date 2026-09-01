@@ -9,7 +9,9 @@ import {
   normalizePickText,
   pageSummary,
   parseGameSlug,
+  publishedGamePathSet,
   propsForGame,
+  resultGamePath,
   teamSlug,
 } from '@/lib/gary/gamepage';
 import type { GameResultRow, GaryPick, PropPick, PropResultRow } from '@/lib/gary/types';
@@ -34,6 +36,37 @@ describe('slugs', () => {
     expect(parseGameSlug('-at-reds')).toBeNull();
     expect(parseGameSlug('cubs-at-')).toBeNull();
     expect(parseGameSlug('Cubs-at-Reds')).toBeNull();
+  });
+});
+
+describe('result links', () => {
+  it('builds a permanent analysis path from a routable graded result', () => {
+    expect(resultGamePath({
+      game_date: '2026-08-30',
+      league: 'MLB',
+      matchup: 'Red Sox @ Yankees',
+      pick_text: 'Red Sox ML -142',
+      result: 'lost',
+      final_score: '1-16',
+      confidence: 0.6,
+    })).toBe('/picks/mlb/2026-08-30/red-sox-at-yankees');
+  });
+
+  it('does not invent a page for incomplete or unroutable rows', () => {
+    const base = {
+      game_date: '2026-08-30', pick_text: 'A ML', result: 'won',
+      final_score: '3-1', confidence: 0.6,
+    };
+    expect(resultGamePath({ ...base, league: 'EPL', matchup: 'A @ B' })).toBeNull();
+    expect(resultGamePath({ ...base, league: 'MLB', matchup: 'Unknown' })).toBeNull();
+  });
+
+  it('deduplicates the page index into exact public paths', () => {
+    const paths = publishedGamePathSet([
+      { date: '2026-08-30', league: 'MLB', sport: null, away_team: 'Cubs', home_team: 'Reds' },
+      { date: '2026-08-30', league: 'MLB', sport: null, away_team: 'Cubs', home_team: 'Reds' },
+    ]);
+    expect([...paths]).toEqual(['/picks/mlb/2026-08-30/cubs-at-reds']);
   });
 });
 
@@ -121,6 +154,7 @@ describe('page helpers', () => {
       { date: '2026-08-30', league: 'baseball_mlb', sport: null, away_team: 'Rays', home_team: 'Padres' },
       { date: '2026-06-20', league: 'EPL', sport: null, away_team: 'Arsenal', home_team: 'Spurs' },   // no routable sport
       { date: '2026-08-30', league: 'MLB', sport: null, away_team: null, home_team: 'Reds' },
+      { date: '2099-08-30', league: 'MLB', sport: null, away_team: 'Future', home_team: 'Game' },
     ]);
     expect(paths).toEqual([
       { sport: 'mlb', date: '2026-08-30', slug: 'cubs-at-reds' },

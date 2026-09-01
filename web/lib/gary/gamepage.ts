@@ -156,15 +156,26 @@ export interface GameDay {
   picks: GaryPick[];
   results: GameResultRow[];
   slate: SlateRow[];
+  publishedAt: string | null;
+}
+
+async function fetchBoardPublishedAt(date: string, revalidate = 3600): Promise<string | null> {
+  const rows = await rest<Array<{ created_at: string | null }>>(
+    `daily_picks?select=created_at&date=eq.${date}&order=created_at.asc&limit=1`,
+    { revalidate },
+  ).catch(() => []);
+  const value = rows[0]?.created_at ?? null;
+  return value && Number.isFinite(new Date(value).getTime()) ? value : null;
 }
 
 export async function fetchGameDay(sportSlug: string, date: string): Promise<GameDay | null> {
   const cfg = sportBySlug(sportSlug);
   if (!cfg || !isArchiveDate(date)) return null;
-  const [allPicks, results, slate] = await Promise.all([
+  const [allPicks, results, slate, publishedAt] = await Promise.all([
     fetchArchiveGamePicks(date),
     fetchArchiveGameResults(date).catch(() => [] as GameResultRow[]),
     fetchDailySlate(date, 3600).catch(() => [] as SlateRow[]),
+    fetchBoardPublishedAt(date),
   ]);
   const picks = allPicks.filter(p => isGamePick(p) && normalizeLeague(p.league, p.sport) === cfg.code);
   if (picks.length === 0) return null;
@@ -174,6 +185,7 @@ export async function fetchGameDay(sportSlug: string, date: string): Promise<Gam
     picks: [...picks].sort((a, b) => (a.commence_time ?? '').localeCompare(b.commence_time ?? '')),
     results: results.filter(r => normalizeLeague(r.league) === cfg.code),
     slate: slate.filter(r => normalizeLeague(r.league) === cfg.code),
+    publishedAt,
   };
 }
 
@@ -203,6 +215,18 @@ export interface GamePagePath {
   slug: string;
 }
 
+/** A graded result's permanent analysis URL, when its row identifies both teams. */
+export function resultGamePath(row: GameResultRow): string | null {
+  const code = normalizeLeague(row.league);
+  const cfg = code ? sportByCode(code) : undefined;
+  if (!cfg || !row.game_date || !isArchiveDate(row.game_date)) return null;
+
+  const parts = (row.matchup ?? '').trim().split(/\s+(?:@|at|vs\.?|versus)\s+/i);
+  if (parts.length !== 2 || !parts[0]?.trim() || !parts[1]?.trim()) return null;
+
+  return `/picks/${cfg.slug}/${row.game_date}/${gameSlug(parts[0], parts[1])}`;
+}
+
 /** Every game page URL the site can render, from the light `pick_page_index` view. */
 export function gamePagePaths(rows: PickIndexRow[]): GamePagePath[] {
   const seen = new Set<string>();
@@ -210,7 +234,7 @@ export function gamePagePaths(rows: PickIndexRow[]): GamePagePath[] {
   for (const r of rows) {
     const code = normalizeLeague(r.league, r.sport);
     const cfg = code ? sportByCode(code) : undefined;
-    if (!cfg || !r.date || !r.away_team || !r.home_team) continue;
+    if (!cfg || !isArchiveDate(r.date) || !r.away_team || !r.home_team) continue;
     const slug = gameSlug(r.away_team, r.home_team);
     const key = `${cfg.slug}|${r.date}|${slug}`;
     if (seen.has(key)) continue;
@@ -220,10 +244,28 @@ export function gamePagePaths(rows: PickIndexRow[]): GamePagePath[] {
   return out;
 }
 
+/** Membership set used to avoid linking old result rows to pages that were never published. */
+export function publishedGamePathSet(rows: PickIndexRow[]): Set<string> {
+  return new Set(gamePagePaths(rows).map(p => `/picks/${p.sport}/${p.date}/${p.slug}`));
+}
+
 export async function fetchPickIndex(revalidate = 3600): Promise<PickIndexRow[]> {
   return restAll<PickIndexRow>('pick_page_index?select=date,league,sport,away_team,home_team&order=date.desc', {
     revalidate,
   });
+}
+
+/** Narrow index slice for validating result links without scanning all history. */
+export async function fetchPickIndexForDates(
+  dates: Array<string | null>,
+  revalidate = 3600,
+): Promise<PickIndexRow[]> {
+  const valid = [...new Set(dates.filter((date): date is string => !!date && isArchiveDate(date)))];
+  if (valid.length === 0) return [];
+  return restAll<PickIndexRow>(
+    `pick_page_index?select=date,league,sport,away_team,home_team&date=in.(${valid.join(',')})&order=date.desc,away_team.asc,home_team.asc`,
+    { revalidate },
+  );
 }
 
 /** Dates on which this league had at least one game pick, newest first. */

@@ -11,7 +11,7 @@ export const metadata: Metadata = pageMetadata({
 export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-3xl px-5 py-12">
-      <PageMasthead title="Privacy policy" meta="Last updated: June 4, 2026">
+      <PageMasthead title="Privacy policy" meta="Last updated: September 1, 2026">
         <p className="mt-2 font-mono text-[11px] text-low">Operated by Gary A.I. LLC</p>
       </PageMasthead>
 
@@ -23,13 +23,36 @@ export default function PrivacyPage() {
           <p className="mb-3 font-semibold text-hi">Website (betwithgary.ai)</p>
           <ul className="mb-4 list-disc space-y-2 pl-5">
             <li>
-              No account or registration is required. We do not collect your name, email address,
-              or any other personally identifiable information through the Website.
+              No account is required to browse the public Website. If you create or use an
+              optional account, Supabase Auth processes your email address, sign-in credentials,
+              and authentication-provider profile data needed to operate that account.
+            </li>
+            <li>
+              If you use Your Book, we store the picks you ride or fade, bets you log, stakes,
+              grading information, and an optional public handle. If you claim a handle and have
+              enough settled rides or fades to rank, that handle and your aggregate verified
+              win-loss-push and unit record may appear on the public leaderboard. Manually logged
+              plays, dollar stake values, and your email address are not shown there. A preferred
+              dollar value for one unit is stored locally in your browser rather than in your account.
+            </li>
+            <li>
+              If you join a launch notification list, we collect the email address you submit,
+              a short source label, and limited request information such as the browser user
+              agent so we can operate and protect that signup.
             </li>
             <li>
               We use <strong className="text-hi">Vercel Analytics</strong> to collect
               anonymous usage statistics (pages visited, referrer, country, device type). This
               data is aggregated and not linked to any individual.
+            </li>
+            <li>
+              Gary also uses first-party product and attribution analytics. The Website creates
+              a random <code className="font-mono text-hi">gary_web_id</code> in local browser
+              storage and sends that identifier, an event name, the web platform label, and
+              limited page or call-to-action properties to Supabase. Tracked App Store redirects
+              also store the campaign token, referring page, and browser user-agent string. We
+              use this information to measure product usage, campaign performance, and abuse;
+              it is not used for cross-site advertising.
             </li>
           </ul>
 
@@ -57,7 +80,9 @@ export default function PrivacyPage() {
           <h2 className="mb-3 font-display text-xl text-hi">2. How We Use Information</h2>
           <ul className="list-disc space-y-2 pl-5">
             <li>Provide, maintain, and improve the Service.</li>
-            <li>Send push notifications you have opted into.</li>
+            <li>Manage optional accounts and keep account-linked features available across web and iOS.</li>
+            <li>Store, display, and grade Your Book activity that you choose to create.</li>
+            <li>Send push notifications or one-time launch notifications you have opted into.</li>
             <li>
               Analyze aggregate, anonymous usage patterns to improve performance and content
               (Website analytics only).
@@ -69,10 +94,11 @@ export default function PrivacyPage() {
         <section>
           <h2 className="mb-3 font-display text-xl text-hi">3. Cookies &amp; Analytics</h2>
           <p>
-            The Website uses Vercel Analytics, which collects anonymous page-view data without
-            setting persistent tracking cookies. No cross-site advertising cookies are placed.
-            If you wish to limit analytics collection, you may use a browser extension that
-            blocks analytics scripts.
+            The Website uses essential cookies for optional account sessions. It also uses local
+            browser storage for preferences such as the display value of one betting unit.
+            Vercel Analytics collects anonymous page-view data without cross-site advertising
+            cookies. We do not place cross-site advertising cookies. You can browse the public
+            content without signing in.
           </p>
         </section>
 
@@ -84,8 +110,8 @@ export default function PrivacyPage() {
           <ul className="list-disc space-y-2 pl-5">
             <li>
               <strong className="text-hi">Service providers</strong> (e.g., Supabase for
-              database hosting, Vercel for infrastructure) who process data on our behalf under
-              appropriate data-processing agreements.
+              authentication and database hosting, and Vercel for infrastructure and analytics)
+              who process data on our behalf.
             </li>
             <li>
               <strong className="text-hi">Authentication providers</strong> (Apple, Google)
@@ -103,8 +129,12 @@ export default function PrivacyPage() {
         <section>
           <h2 className="mb-3 font-display text-xl text-hi">5. Data Retention</h2>
           <p>
-            Account data is retained for as long as your account remains active. You may request
-            deletion of your account and associated personal data at any time by emailing{' '}
+            Account and Your Book data are retained while your account remains active or as
+            needed to provide the features you requested. Launch-notification data is retained
+            for the stated notification and related operational needs. First-party event and link
+            attribution records are retained for operational analytics and campaign measurement
+            until they are no longer reasonably needed for those purposes. You may request deletion
+            of your account and associated personal data at any time by emailing{' '}
             <a
               href="mailto:privacy@betwithgary.ai"
               className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold"

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
+import { permanentRedirect } from 'next/navigation';
 import { Eyebrow } from '@/components/Eyebrow';
 import { AppStoreButton } from '@/components/AppStoreButton';
 import { StitchRule, StatTile, GhostLink } from '@/components/Terminal';
@@ -14,6 +15,10 @@ export const metadata: Metadata = pageMetadata({
   description:
     'Gary picks every NFL game this season — free in the app, with the reasoning behind each pick, and every result on his public record. First card drops for Kickoff: Patriots at Seahawks, September 9.',
 });
+
+// Keep the kickoff campaign fresh until launch, then consolidate its authority
+// into the evergreen NFL picks page without requiring a deployment that day.
+export const revalidate = 3600;
 
 const KICKOFF_ISO = '2026-09-09';
 
@@ -54,6 +59,7 @@ export default async function NflPage({
 
   const days = daysToKickoff();
   const preseason = days > 0;
+  if (!preseason) permanentRedirect('/picks/nfl');
 
   const all = await fetchAllGameResults();
   const allTime = computeRecord(all);

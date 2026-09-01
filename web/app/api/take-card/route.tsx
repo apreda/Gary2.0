@@ -8,7 +8,7 @@ export const runtime = 'nodejs';
 // matchup, the pick(s) in gold, then Gary's written read as the body. Posts as the WORDLESS reply under the pick card,
 // so a WC thread is all branded cards, no plain-text paragraphs. Same brand tokens as pick-card-app, gold border.
 // GET /api/take-card?matchup=Austria @ Argentina&picks=AUSTRIA +1.5 · UNDER 2.5&take=...the read...
-const GOLD = '#C9A227', CARD = '#1C1A1A', WHITE = '#FFFFFF';
+const GOLD = '#C9A227', CARD = '#1C1A1A';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -35,11 +35,13 @@ export async function GET(req: Request) {
           {/* header: GARY'S TAKE + matchup + bear */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center' }}>
-              <div style={{ fontFamily: 'JBMono', fontSize: 28, color: GOLD, letterSpacing: 4 }}>GARY'S TAKE</div>
+              <div style={{ fontFamily: 'JBMono', fontSize: 28, color: GOLD, letterSpacing: 4 }}>{"GARY'S TAKE"}</div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <div style={{ fontFamily: 'JBMono', fontSize: 20, color: 'rgba(255,255,255,0.42)', letterSpacing: 1, marginRight: 20 }}>{matchup}</div>
-              <img src={bearSrc} width={64} height={64} style={{ borderRadius: 14 }} />
+              {/* ImageResponse renders server-side and requires a native image node. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={bearSrc} alt="" width={64} height={64} style={{ borderRadius: 14 }} />
             </div>
           </div>
 

@@ -14,6 +14,7 @@ const COLUMNS: { heading: string; links: { href: string; label: string; external
       { href: '/props', label: 'Player Props' },
       { href: '/hub', label: 'The Hub' },
       { href: '/results', label: 'Track Record' },
+      { href: '/results/audit', label: 'Model Audit' },
     ],
   },
   {
@@ -27,6 +28,10 @@ const COLUMNS: { heading: string; links: { href: string; label: string; external
   {
     heading: 'Company',
     links: [
+      { href: '/about', label: 'About Gary AI' },
+      { href: '/editorial-standards', label: 'Editorial Standards' },
+      { href: '/data-sources', label: 'Data Sources' },
+      { href: '/corrections', label: 'Corrections' },
       { href: '/press', label: 'Press & Brand' },
       { href: '/contact', label: 'Contact' },
       { href: '/terms', label: 'Terms' },
@@ -65,7 +70,7 @@ export function Footer() {
                     {l.external ? (
                       <a href={l.href} className={linkClass}>{l.label}</a>
                     ) : (
-                      <Link href={l.href} className={linkClass}>{l.label}</Link>
+                      <Link href={l.href} prefetch={false} className={linkClass}>{l.label}</Link>
                     )}
                   </li>
                 ))}

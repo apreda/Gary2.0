@@ -14,7 +14,7 @@ export const BRAND = {
   supportEmail: 'support@betwithgary.ai',
   sports: ['NBA', 'NFL', 'NHL', 'MLB', 'NCAAB', 'NCAAF', '2026 FIFA World Cup archive'],
   character:
-    'Gary is a bear — a 30-year-veteran bettor who owns his losses. Always use the real character assets; never generate a bear, and never a lion.',
+    'Gary is the bear persona for the Gary AI sports-analysis product, not a real human handicapper. Always use the real character assets; never generate a bear, and never a lion.',
   boilerplateShort:
     'Gary AI delivers free daily sports picks for every game on the board, with written reasoning, a morning research desk, and a public graded track record at betwithgary.ai.',
   boilerplateMedium:

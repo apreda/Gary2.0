@@ -1,22 +1,41 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { JsonLd } from '@/components/JsonLd';
 import { PickCard } from '@/components/PickCard';
 import { PropCard } from '@/components/PropCard';
 import { PageMasthead, ResultLetter, StitchRule } from '@/components/Terminal';
 import {
-  fetchArchiveGamePicks,
-  fetchArchiveGameResults,
-  fetchArchiveInsights,
-  fetchArchivePropPicks,
-  fetchArchivePropResults,
+  adjacentArchiveDates,
+  archiveDateLabel,
+  archiveDayStats,
+  archiveMonthLabel,
+  fetchArchiveDateSummaries,
+  fetchArchiveDay,
   isArchiveDate,
 } from '@/lib/gary/archive';
-import { etDateLabel } from '@/lib/gary/format';
 import type { GameResultRow, InsightRow, PropResultRow } from '@/lib/gary/types';
-import { pageMetadata } from '@/lib/seo/metadata';
+import { SITE_URL, pageMetadata } from '@/lib/seo/metadata';
 
 export const revalidate = 3600;
+
+// Empty means every valid date is generated on demand and then kept in ISR.
+export function generateStaticParams() {
+  return [];
+}
+
+function archiveDescription(
+  label: string,
+  counts: { gamePicks: number; propPicks: number; insights: number; gradedResults: number },
+): string {
+  const contents = [
+    counts.gamePicks > 0 ? `${counts.gamePicks} game pick${counts.gamePicks === 1 ? '' : 's'}` : null,
+    counts.propPicks > 0 ? `${counts.propPicks} player prop${counts.propPicks === 1 ? '' : 's'}` : null,
+    counts.insights > 0 ? `${counts.insights} research note${counts.insights === 1 ? '' : 's'}` : null,
+    counts.gradedResults > 0 ? `${counts.gradedResults} graded result${counts.gradedResults === 1 ? '' : 's'}` : null,
+  ].filter(Boolean).join(', ');
+  return `Review Gary AI's stored sports-pick board for ${label}${contents ? `: ${contents}` : ''}. Original analysis and graded results stay separate.`;
+}
 
 export async function generateMetadata({
   params,
@@ -32,10 +51,15 @@ export async function generateMetadata({
       robots: { index: false },
     });
   }
+
+  const day = await fetchArchiveDay(date);
+  const counts = archiveDayStats(day);
+  const label = archiveDateLabel(date);
   return pageMetadata({
     canonical: `/archive/${date}`,
-    title: `Gary AI Picks Archive — ${date}`,
-    description: `Gary AI’s stored game picks, player props, Hub research, and graded results for ${date}.`,
+    title: `Sports Picks Archive — ${label} | Gary AI`,
+    description: archiveDescription(label, counts),
+    robots: counts.substantive ? undefined : { index: false, follow: true },
   });
 }
 
@@ -47,31 +71,75 @@ export default async function ArchiveDatePage({
   const { date } = await params;
   if (!isArchiveDate(date)) notFound();
 
-  const [picks, props, insights, gameResults, propResults] = await Promise.all([
-    fetchArchiveGamePicks(date),
-    fetchArchivePropPicks(date),
-    fetchArchiveInsights(date),
-    fetchArchiveGameResults(date),
-    fetchArchivePropResults(date),
+  const [day, summaries] = await Promise.all([
+    fetchArchiveDay(date),
+    fetchArchiveDateSummaries(),
   ]);
+  const { picks, props, insights, gameResults, propResults } = day;
 
   if (picks.length + props.length + insights.length + gameResults.length + propResults.length === 0) {
     notFound();
   }
 
+  const counts = archiveDayStats(day);
+  const label = archiveDateLabel(date);
+  const month = date.slice(0, 7);
+  const monthExists = summaries.some(summary => summary.date.startsWith(`${month}-`));
+  const { previous, next } = adjacentArchiveDates(summaries.map(summary => summary.date), date);
+  const canonical = `${SITE_URL}/archive/${date}`;
+  const description = archiveDescription(label, counts);
+
   return (
     <main className="mx-auto max-w-6xl px-5 pb-20 pt-12">
-      <Link
-        href="/archive"
-        className="font-mono text-[11px] uppercase tracking-[0.05em] text-gold underline decoration-gold/40 underline-offset-4"
-      >
-        ← All archive dates
-      </Link>
+      <JsonLd data={{
+        '@context': 'https://schema.org',
+        '@graph': [
+          {
+            '@type': 'BreadcrumbList',
+            itemListElement: [
+              { '@type': 'ListItem', position: 1, name: 'Gary AI', item: `${SITE_URL}/` },
+              { '@type': 'ListItem', position: 2, name: 'Pick archive', item: `${SITE_URL}/archive` },
+              ...(monthExists ? [{
+                '@type': 'ListItem',
+                position: 3,
+                name: archiveMonthLabel(month),
+                item: `${SITE_URL}/archive/month/${month}`,
+              }] : []),
+              { '@type': 'ListItem', position: monthExists ? 4 : 3, name: label, item: canonical },
+            ],
+          },
+          {
+            '@type': 'CollectionPage',
+            '@id': `${canonical}#page`,
+            url: canonical,
+            name: `Gary AI sports picks for ${label}`,
+            description,
+            mainEntity: {
+              '@type': 'ItemList',
+              numberOfItems: counts.totalItems,
+            },
+          },
+        ],
+      }} />
+
+      <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] uppercase tracking-[0.05em] text-low">
+        <Link href="/archive" className="text-gold underline decoration-gold/40 underline-offset-4">Pick archive</Link>
+        {monthExists && (
+          <>
+            <span aria-hidden>/</span>
+            <Link href={`/archive/month/${month}`} className="text-gold underline decoration-gold/40 underline-offset-4">
+              {archiveMonthLabel(month)}
+            </Link>
+          </>
+        )}
+        <span aria-hidden>/</span>
+        <span>{label}</span>
+      </nav>
       <div className="mt-5">
         <PageMasthead
-          title="Daily archive"
-          meta={date}
-          sub={`The stored Gary board for ${etDateLabel(date)}. Results are presented separately because older records do not all carry a durable source-pick ID.`}
+          title={`Sports picks for ${label}`}
+          meta={`${counts.totalItems} stored item${counts.totalItems === 1 ? '' : 's'}`}
+          sub="The stored Gary board for this day. Results are presented separately because older records do not all carry a durable source-pick ID."
         />
       </div>
 
@@ -119,6 +187,29 @@ export default async function ArchiveDatePage({
           </div>
         </ArchiveSection>
       )}
+
+      <nav aria-label="Archive date navigation" className="mt-12 grid grid-cols-3 items-center gap-3 font-mono text-[11px] uppercase tracking-[0.05em]">
+        <div>
+          {previous && (
+            <Link href={`/archive/${previous}`} className="text-gold underline decoration-gold/40 underline-offset-4">
+              ← {archiveDateLabel(previous)}
+            </Link>
+          )}
+        </div>
+        <Link
+          href={monthExists ? `/archive/month/${month}` : '/archive'}
+          className="text-center text-low underline decoration-white/20 underline-offset-4 hover:text-gold"
+        >
+          {monthExists ? archiveMonthLabel(month) : 'All dates'}
+        </Link>
+        <div className="text-right">
+          {next && (
+            <Link href={`/archive/${next}`} className="text-gold underline decoration-gold/40 underline-offset-4">
+              {archiveDateLabel(next)} →
+            </Link>
+          )}
+        </div>
+      </nav>
     </main>
   );
 }

@@ -60,6 +60,7 @@ function chipTabs<K extends string>(
           key={item.key}
           type="button"
           onClick={() => onPick(item.key)}
+          aria-pressed={active === item.key}
           className={`flex flex-col items-center gap-[3px] font-mono text-[10.5px] font-bold tracking-[0.08em] transition-colors ${
             active === item.key ? 'text-gold' : 'text-low hover:text-mid'
           }`}
@@ -198,10 +199,21 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
   }, []);
 
   useEffect(() => {
-    reload();
-    fetchMyStreak().then(setStreak);
-    fetchMyHandle().then(setHandle);
-  }, [reload]);
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void Promise.all([fetchMyBets(), fetchMyStreak(), fetchMyHandle()]).then(([rows, nextStreak, nextHandle]) => {
+        if (cancelled) return;
+        setBets(rows);
+        setStreak(nextStreak);
+        setHandle(nextHandle);
+        setLoading(false);
+      });
+    }, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, []);
 
   const claim = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -269,6 +281,13 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
           + Log a bet
         </button>
       </div>
+
+      {!handle && (
+        <p className="max-w-2xl font-mono text-[10.5px] leading-relaxed text-low">
+          A claimed handle and your aggregate verified With Gary record can appear on the public
+          leaderboard once you qualify. Manually logged plays, dollar stakes, and your email stay private.
+        </p>
+      )}
 
       {showLog && (
         <LogBet

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Eyebrow } from '@/components/Eyebrow';
 import { JsonLd } from '@/components/JsonLd';
 import { AppStoreButton } from '@/components/AppStoreButton';
+import { AnalysisDisclosure } from '@/components/AnalysisDisclosure';
 import { PageMasthead, StitchRule, GhostLink } from '@/components/Terminal';
 import { pageMetadata } from '@/lib/seo/metadata';
 
@@ -63,7 +64,7 @@ const steps = [
   {
     num: '03',
     title: 'Fact-check',
-    body: `Before a pick is published, a second pass audits the numeric claims in the writeup against the underlying data that was actually fetched. If a rationale cites a player's recent average or a team's record in a specific situation, those numbers are verified. Picks that fail the audit are corrected or retried — they don't go out as written. This was added after a review of loss cases that traced back to stale or fabricated statistics.`,
+    body: `Before a pick is published, a second pass audits the numeric claims in the writeup against the underlying data that was actually fetched. If a rationale cites a player's recent average or a team's record in a specific situation, those numbers are verified. Picks that fail the audit are corrected or retried — they don't go out as written. This check was added after a review of losing picks found stale inputs and numeric claims that the fetched data did not support in some writeups.`,
   },
   {
     num: '04',
@@ -78,10 +79,12 @@ export default function HowItWorksPage() {
       <JsonLd data={faqJsonLd} />
 
       <PageMasthead
-        title="How Gary works"
+        title="How Gary AI makes sports picks"
         meta="METHODOLOGY"
         sub="Gary covers MLB, NBA, NFL, NHL, NCAAB, and NCAAF. Every pick follows the same four-step process, from research to graded result."
       />
+
+      <AnalysisDisclosure className="mt-7" />
 
       {/* Four-step methodology — numbered rail, not gray boxes */}
       <div className="mt-12">
@@ -93,6 +96,16 @@ export default function HowItWorksPage() {
               <div>
                 <h2 className="font-display text-3xl uppercase leading-none text-hi">{step.title}</h2>
                 <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-mid">{step.body}</p>
+                {step.num === '03' && (
+                  <p className="mt-3 text-[13px] text-low">
+                    <Link
+                      href="/corrections"
+                      className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold"
+                    >
+                      How correction reports are handled →
+                    </Link>
+                  </p>
+                )}
               </div>
             </div>
           </div>

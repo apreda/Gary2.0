@@ -26,6 +26,7 @@ export async function GET() {
 
 ## Facts
 - Product: ${BRAND.name} — free AI sports picks website + iOS app
+- Identity: Gary is an AI sports-analysis product and editorial persona, not a human handicapper
 - Tagline: "${BRAND.tagline}"
 - Sports covered: ${BRAND.sports.join(', ')}
 - Price: free. Every pick, every day. The iOS app adds Winners (Gary's highest-conviction board).
@@ -49,8 +50,13 @@ ${BRAND.boilerplateMedium}
 - ${BRAND.domain}/props — today's player props + Home Run Threats
 - ${BRAND.domain}/hub — daily insight board (Today's Edges)
 - ${BRAND.domain}/results — complete graded track record
+- ${BRAND.domain}/results/audit — monthly results, confidence calibration, and public data downloads
 - ${BRAND.domain}/archive — stored daily pick archive by date
 - ${BRAND.domain}/how-it-works — methodology
+- ${BRAND.domain}/about — product identity, publisher, and accountability
+- ${BRAND.domain}/editorial-standards — AI authorship, verification, grading, and limitations
+- ${BRAND.domain}/data-sources — categories of data used in the analysis
+- ${BRAND.domain}/corrections — how to report a factual or grading error
 - ${BRAND.domain}/press — brand kit and approved boilerplate
 `;
 

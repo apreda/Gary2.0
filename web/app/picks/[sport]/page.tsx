@@ -7,7 +7,7 @@ import { GameTile } from '@/components/board/GameTile';
 import { BoardGrid } from '@/components/board/BoardGrid';
 import { BookDayProvider } from '@/components/book/BookDay';
 import { UnderlineTabs } from '@/components/UnderlineTabs';
-import { PageMasthead } from '@/components/Terminal';
+import { PageMasthead, StitchRule } from '@/components/Terminal';
 import { LiveScoreStrip } from '@/components/LiveChip';
 import { JsonLd } from '@/components/JsonLd';
 import { fetchTodayGamePicks } from '@/lib/gary/picks';
@@ -24,6 +24,53 @@ export const dynamicParams = false;
 
 export function generateStaticParams() {
   return SPORTS.map(s => ({ sport: s.slug }));
+}
+
+const researchLens: Record<string, string> = {
+  MLB: 'starting pitching, bullpen availability, lineup and platoon context, venue conditions, and the market price',
+  NBA: 'player availability, rest and travel, recent team data, matchup context, and the market price',
+  NHL: 'goaltending and player availability, schedule context, recent team data, venue, and the market price',
+  NFL: 'player availability, rest, matchup and venue conditions, weather where relevant, and the market price',
+  NCAAB: 'guard-play and availability, rest, recent team data, home-court context, and the market price',
+  NCAAF: 'player availability, rest, matchup and venue conditions, weather where relevant, and the market price',
+  WC: 'team availability, recent match data, tournament context, venue conditions, and the market price',
+};
+
+function SportGuide({ cfg, lastBoard }: { cfg: NonNullable<ReturnType<typeof sportBySlug>>; lastBoard: string | null }) {
+  return (
+    <section className="mt-16" aria-labelledby="sport-guide-heading">
+      <h2 id="sport-guide-heading" className="font-display text-2xl uppercase text-hi">
+        How Gary covers {cfg.name}
+      </h2>
+      <StitchRule tone="faint" className="mt-4" />
+      <div className="mt-6 grid gap-4 md:grid-cols-3">
+        <div className="rounded-card border border-line bg-card p-5">
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-gold">The research</p>
+          <p className="mt-2 text-[14px] leading-relaxed text-mid">
+            Each {cfg.name} board is built from {researchLens[cfg.code] ?? 'current matchup data, availability, venue context, and the market price'}. Missing inputs are treated as gaps, not filled with guesses.
+          </p>
+        </div>
+        <div className="rounded-card border border-line bg-card p-5">
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-gold">The call</p>
+          <p className="mt-2 text-[14px] leading-relaxed text-mid">
+            Moneyline, spread, and total markets appear when they are part of the stored board. Every posted call carries Gary&apos;s written reasoning and displayed confidence; no pick is added merely to fill a page.
+          </p>
+        </div>
+        <div className="rounded-card border border-line bg-card p-5">
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-gold">The receipt</p>
+          <p className="mt-2 text-[14px] leading-relaxed text-mid">
+            The result is graded after the final and stays in the public ledger, including losses and pushes. Historical boards link to permanent matchup pages whenever the original analysis is available.
+          </p>
+        </div>
+      </div>
+      <p className="mt-5 text-[13.5px] leading-relaxed text-low">
+        Read the <Link href="/how-it-works" className="text-gold underline decoration-gold/40 underline-offset-4">full methodology</Link>,{' '}
+        <Link href="/data-sources" className="text-gold underline decoration-gold/40 underline-offset-4">data-source policy</Link>, and{' '}
+        <Link href={`/results/${cfg.slug}`} className="text-gold underline decoration-gold/40 underline-offset-4">complete {cfg.name} record</Link>
+        {lastBoard ? <>, or revisit the <Link href={`/picks/${cfg.slug}/${lastBoard}`} className="text-gold underline decoration-gold/40 underline-offset-4">latest completed board</Link></> : null}.
+      </p>
+    </section>
+  );
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ sport: string }> }): Promise<Metadata> {
@@ -107,7 +154,7 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
         ],
       }} />
       <PageMasthead
-        title={cfg.code === 'WC' ? 'World Cup 2026 — the graded record' : `Free ${cfg.longName} picks`}
+        title={cfg.code === 'WC' ? 'World Cup 2026 — the graded record' : `Today's free ${cfg.name} picks`}
         meta={cfg.retired ? cfg.code : `${cfg.code} · ${todayEST()}`}
       >
         {allTime && l30 && (
@@ -175,6 +222,8 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
           </div>
         </BookDayProvider>
       )}
+
+      <SportGuide cfg={cfg} lastBoard={lastBoard} />
     </main>
   );
 }

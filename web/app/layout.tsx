@@ -8,7 +8,9 @@ import './globals.css';
 
 const barlow = Barlow_Condensed({ weight: ['600', '700'], subsets: ['latin'], variable: '--font-barlow' });
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
-const jbmono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-jbmono' });
+// Display and body copy are the LCP-critical faces. Mono remains self-hosted
+// and loads on demand without competing for an additional preload slot.
+const jbmono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-jbmono', preload: false });
 
 export const viewport: Viewport = {
   themeColor: '#0A0908',

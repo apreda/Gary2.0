@@ -48,8 +48,10 @@ export async function GET(req: Request) {
       <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', background: CARD, padding: 80 }}>
         {/* GARY'S PICK + bear */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div style={{ fontFamily: 'JBMono', fontSize: 30, color: GOLD, letterSpacing: 6, paddingTop: 16 }}>GARY'S PICK</div>
-          <img src={bearSrc} width={116} height={116} style={{ borderRadius: 22 }} />
+          <div style={{ fontFamily: 'JBMono', fontSize: 30, color: GOLD, letterSpacing: 6, paddingTop: 16 }}>{"GARY'S PICK"}</div>
+          {/* ImageResponse renders server-side and requires a native image node. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={bearSrc} alt="" width={116} height={116} style={{ borderRadius: 22 }} />
         </div>
 
         {/* stacked hero, one line per word, BarlowCondensed — vertically centered in the free space */}

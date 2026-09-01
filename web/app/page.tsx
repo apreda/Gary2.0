@@ -81,7 +81,10 @@ export default async function Home() {
                 <>The free sports desk</>
               )}
             </p>
-            <h1 className="rise rise-2 mt-5 font-display text-[clamp(3.4rem,9.5vw,7.5rem)] uppercase leading-[0.9] text-hi">
+            {/* Keep the LCP heading paintable immediately. Supporting hero
+                details retain the page's restrained entrance motion. */}
+            <h1 className="mt-5 font-display text-[clamp(3.4rem,9.5vw,7.5rem)] uppercase leading-[0.9] text-hi">
+              <span className="mb-3 block text-[0.42em] tracking-[0.025em] text-gold">Free sports picks.</span>
               Every game.
               <br />
               Every day.

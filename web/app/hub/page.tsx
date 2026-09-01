@@ -153,7 +153,7 @@ export default async function HubPage() {
   return (
     <main className="mx-auto max-w-6xl px-5 pb-16 pt-12">
       <PageMasthead
-        title="The hub"
+        title="Today's sports research and trends"
         meta={todayEST()}
         sub="The angles Gary's research surfaced today — every board is graded against actual results the next morning."
       >

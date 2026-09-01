@@ -107,7 +107,7 @@ export default async function PicksPage() {
     <main className="mx-auto max-w-6xl px-5 pb-20 pt-12">
       {picks.length > 0 && <JsonLd data={itemList} />}
       <PageMasthead
-        title="Today's picks"
+        title="Today's free sports picks"
         meta={etDateLabel(date)}
         sub="The whole board, game by game. Gary posts each call about 90 minutes before first pitch — every game on this page tells you where its call stands."
       />

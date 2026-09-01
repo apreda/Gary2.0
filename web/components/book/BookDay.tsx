@@ -1,8 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { supabaseBrowser } from '@/lib/auth/client';
-import { fetchMyBets, fetchTailCounts } from '@/lib/book/api';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { UserBet } from '@/lib/book/model';
 
 /**
@@ -32,9 +30,12 @@ export function useBookDay(): BookDayState | null {
 export function useUnitDollars(): [number, (v: number) => void] {
   const [value, setValue] = useState(0);
   useEffect(() => {
-    const raw = window.localStorage.getItem('userUnitDollars');
-    const v = raw ? parseFloat(raw) : 0;
-    if (Number.isFinite(v) && v > 0) setValue(v);
+    const timer = window.setTimeout(() => {
+      const raw = window.localStorage.getItem('userUnitDollars');
+      const v = raw ? parseFloat(raw) : 0;
+      if (Number.isFinite(v) && v > 0) setValue(v);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
   const set = useCallback((v: number) => {
     setValue(v);
@@ -44,33 +45,74 @@ export function useUnitDollars(): [number, (v: number) => void] {
 }
 
 export function BookDayProvider({ date, children }: { date: string; children: React.ReactNode }) {
+  const activationRef = useRef<HTMLDivElement>(null);
+  const [active, setActive] = useState(false);
   const [ready, setReady] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
   const [counts, setCounts] = useState<Record<string, { tails: number; fades: number }>>({});
   const [mine, setMine] = useState<UserBet[]>([]);
 
   useEffect(() => {
+    if (active) return;
+    const node = activationRef.current;
+    if (!node || typeof IntersectionObserver === 'undefined') {
+      setActive(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries.some(entry => entry.isIntersecting)) {
+          setActive(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '320px 0px' },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [active]);
+
+  useEffect(() => {
+    if (!active) return;
+
     let cancelled = false;
     (async () => {
-      const [{ data: session }, dayCounts] = await Promise.all([
-        supabaseBrowser().auth.getSession(),
-        fetchTailCounts(date),
-      ]);
-      if (cancelled) return;
-      setCounts(dayCounts);
-      const authed = session.session != null;
-      setSignedIn(authed);
-      if (authed) {
-        const bets = await fetchMyBets();
-        // Cancellation guard: never latch an empty result over a live row.
-        if (!cancelled && bets.length > 0) setMine(bets);
+      try {
+        // Keep the sizeable Supabase browser SDK out of an ordinary board
+        // visit. Load it only after the visitor shows intent to open or use
+        // the interactive Book controls.
+        const [{ supabaseBrowser }, { fetchMyBets, fetchTailCounts }] = await Promise.all([
+          import('@/lib/auth/client'),
+          import('@/lib/book/api'),
+        ]);
+        const [{ data: session }, dayCounts] = await Promise.all([
+          supabaseBrowser().auth.getSession(),
+          fetchTailCounts(date),
+        ]);
+        if (cancelled) return;
+        setCounts(dayCounts);
+        const authed = session.session != null;
+        setSignedIn(authed);
+        if (authed) {
+          const bets = await fetchMyBets();
+          // Cancellation guard: never latch an empty result over a live row.
+          if (!cancelled && bets.length > 0) setMine(bets);
+        }
+      } catch {
+        if (!cancelled) {
+          setCounts({});
+          setSignedIn(false);
+        }
+      } finally {
+        // A feed failure must not leave the controls in a permanent loading
+        // state; route-level authorization still protects every mutation.
+        if (!cancelled) setReady(true);
       }
-      if (!cancelled) setReady(true);
     })();
     return () => {
       cancelled = true;
     };
-  }, [date]);
+  }, [active, date]);
 
   const addBet = useCallback((bet: UserBet) => {
     setMine(prev => [bet, ...prev.filter(b => b.id !== bet.id)]);
@@ -82,7 +124,14 @@ export function BookDayProvider({ date, children }: { date: string; children: Re
 
   return (
     <BookDayContext.Provider value={{ ready, signedIn, counts, mine, addBet, removeBet }}>
-      {children}
+      <div
+        ref={activationRef}
+        onMouseEnter={() => setActive(true)}
+        onFocusCapture={() => setActive(true)}
+        onPointerDownCapture={() => setActive(true)}
+      >
+        {children}
+      </div>
     </BookDayContext.Provider>
   );
 }

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { pageMetadata, RSS_FEED_PATH } from '@/lib/seo/metadata';
+import {
+  OPEN_GRAPH_IMAGE_PATH,
+  pageMetadata,
+  RSS_FEED_PATH,
+  TWITTER_IMAGE_PATH,
+} from '@/lib/seo/metadata';
 import { softwareApplicationJsonLd } from '@/lib/seo/software-application';
 
 describe('pageMetadata', () => {
@@ -20,6 +25,21 @@ describe('pageMetadata', () => {
       siteName: 'Gary AI',
       type: 'website',
       url: '/picks/mlb',
+      images: [{
+        url: OPEN_GRAPH_IMAGE_PATH,
+        width: 1200,
+        height: 630,
+      }],
+    });
+    expect(metadata.twitter).toMatchObject({
+      card: 'summary_large_image',
+      title: 'MLB Picks | Gary AI',
+      description: 'Daily MLB picks.',
+      images: [{
+        url: TWITTER_IMAGE_PATH,
+        width: 1200,
+        height: 630,
+      }],
     });
   });
 
@@ -35,6 +55,10 @@ describe('pageMetadata', () => {
         images: ['/example.png'],
         locale: 'en_US',
       },
+      twitter: {
+        card: 'summary',
+        images: ['/example-twitter.png'],
+      },
     });
 
     expect(metadata.alternates?.languages).toEqual({ 'en-US': '/example' });
@@ -47,6 +71,22 @@ describe('pageMetadata', () => {
       locale: 'en_US',
       url: '/example',
     });
+    expect(metadata.twitter).toMatchObject({
+      card: 'summary',
+      images: ['/example-twitter.png'],
+    });
+  });
+
+  it('reuses a custom Open Graph card for Twitter when no separate Twitter image is supplied', () => {
+    const metadata = pageMetadata({
+      canonical: '/picks/mlb/example',
+      title: 'A at B Pick',
+      openGraph: { images: ['/api/share-card?pick=a'] },
+      twitter: { card: 'summary_large_image' },
+    });
+
+    expect(metadata.openGraph).toMatchObject({ images: ['/api/share-card?pick=a'] });
+    expect(metadata.twitter).toMatchObject({ images: ['/api/share-card?pick=a'] });
   });
 });
 

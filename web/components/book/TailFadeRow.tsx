@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useBookDay, useUnitDollars } from './BookDay';
-import { deleteBet, placeBet, placePropBet } from '@/lib/book/api';
 import { fmtNet, fmtStake, type UserBet } from '@/lib/book/model';
 import { parseGameTime } from '@/lib/gary/format';
 import { estDateStr, todayEST } from '@/lib/gary/dates';
@@ -28,8 +27,11 @@ function pickDateEST(commence?: string | null): string {
 function useLocked(commence?: string | null): boolean {
   const [locked, setLocked] = useState(false);
   useEffect(() => {
-    const d = parseGameTime(commence);
-    if (d) setLocked(Date.now() >= d.getTime());
+    const timer = window.setTimeout(() => {
+      const d = parseGameTime(commence);
+      if (d) setLocked(Date.now() >= d.getTime());
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [commence]);
   return locked;
 }
@@ -227,6 +229,7 @@ export function TailFadeRow({
   const place = async (stake: number, streak: boolean) => {
     setBusy(true);
     try {
+      const { placeBet } = await import('@/lib/book/api');
       const bet = await placeBet({
         gameDate: pickDateEST(commence),
         pickId,
@@ -247,8 +250,15 @@ export function TailFadeRow({
   const undo = async () => {
     if (!mine) return;
     setBusy(true);
-    if (await deleteBet(mine.id)) ctx.removeBet(mine.id);
-    setBusy(false);
+    setErrorText(null);
+    try {
+      const { deleteBet } = await import('@/lib/book/api');
+      if (await deleteBet(mine.id)) ctx.removeBet(mine.id);
+    } catch (e) {
+      setErrorText(e instanceof Error ? e.message : 'We could not undo that right now.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -276,10 +286,10 @@ export function TailFadeRow({
         />
       ) : (
         <div className="flex gap-2">
-          <button type="button" onClick={() => arm('tail')} disabled={busy} className={twinBtn}>
+          <button type="button" onClick={() => arm('tail')} disabled={busy || !ctx.ready} className={twinBtn}>
             BET WITH GARY
           </button>
-          <button type="button" onClick={() => arm('fade')} disabled={busy} className={twinBtn}>
+          <button type="button" onClick={() => arm('fade')} disabled={busy || !ctx.ready} className={twinBtn}>
             FADE THE BEAR
           </button>
         </div>
@@ -333,6 +343,7 @@ export function PropTailFadeRow({
   const place = async (stake: number) => {
     setBusy(true);
     try {
+      const { placePropBet } = await import('@/lib/book/api');
       const bet = await placePropBet({
         gameDate: pickDateEST(commence),
         player,
@@ -352,8 +363,15 @@ export function PropTailFadeRow({
   const undo = async () => {
     if (!mine) return;
     setBusy(true);
-    if (await deleteBet(mine.id)) ctx.removeBet(mine.id);
-    setBusy(false);
+    setErrorText(null);
+    try {
+      const { deleteBet } = await import('@/lib/book/api');
+      if (await deleteBet(mine.id)) ctx.removeBet(mine.id);
+    } catch (e) {
+      setErrorText(e instanceof Error ? e.message : 'We could not undo that right now.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -378,10 +396,10 @@ export function PropTailFadeRow({
         />
       ) : (
         <div className="flex gap-2">
-          <button type="button" onClick={() => arm('tail')} disabled={busy} className={twinBtn}>
+          <button type="button" onClick={() => arm('tail')} disabled={busy || !ctx.ready} className={twinBtn}>
             BET WITH GARY
           </button>
-          <button type="button" onClick={() => arm('fade')} disabled={busy} className={twinBtn}>
+          <button type="button" onClick={() => arm('fade')} disabled={busy || !ctx.ready} className={twinBtn}>
             FADE THE BEAR
           </button>
         </div>

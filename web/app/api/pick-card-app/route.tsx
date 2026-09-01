@@ -41,7 +41,9 @@ export async function GET(req: Request) {
           {/* eyebrow + bear */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div style={{ fontFamily: 'JBMono', fontSize: 30, color: GOLD, letterSpacing: 6 }}>{eyebrow}</div>
-            <img src={bearSrc} width={92} height={92} style={{ borderRadius: 18 }} />
+            {/* ImageResponse renders server-side and requires a native image node. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={bearSrc} alt="" width={92} height={92} style={{ borderRadius: 18 }} />
           </div>
 
           {/* stacked hero: picked team over the bet */}
@@ -66,7 +68,7 @@ export async function GET(req: Request) {
           {/* footer: gold start time + Gary's Take affordance */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ fontFamily: 'JBMono', fontSize: 24, color: GOLD, letterSpacing: 1 }}>{time}</div>
-            <div style={{ fontFamily: 'JBMono', fontSize: 24, color: 'rgba(201,162,39,0.75)', letterSpacing: 2 }}>GARY'S TAKE  ›</div>
+            <div style={{ fontFamily: 'JBMono', fontSize: 24, color: 'rgba(201,162,39,0.75)', letterSpacing: 2 }}>{"GARY'S TAKE  ›"}</div>
           </div>
         </div>
       </div>

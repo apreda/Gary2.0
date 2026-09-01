@@ -7,6 +7,7 @@ import {
 } from '@/lib/gary/results';
 import { rest } from '@/lib/gary/supabase';
 import { daysAgoEST } from '@/lib/gary/dates';
+import { fetchPickIndexForDates, publishedGamePathSet, resultGamePath } from '@/lib/gary/gamepage';
 import { SPORTS, LEAGUE_DISPLAY, sportByCode } from '@/lib/gary/leagues';
 import { pageMetadata } from '@/lib/seo/metadata';
 
@@ -93,11 +94,13 @@ export default async function ResultsPage() {
       return nr === 'won' || nr === 'lost' || nr === 'push';
     })
     .slice(0, 25);
+  const pickIndex = await fetchPickIndexForDates(recent.map(row => row.game_date)).catch(() => []);
+  const publishedPaths = publishedGamePathSet(pickIndex);
 
   return (
     <main className="mx-auto max-w-6xl px-5 pb-16 pt-12">
       <PageMasthead
-        title="Track record"
+        title="Sports picks results and track record"
         meta="EVERY PICK GRADED"
         sub="Every pick is stored before lock, graded after the final, and stays on the record — wins, losses, and pushes. Units assume flat 1-unit stakes at the listed odds."
       />
@@ -233,19 +236,29 @@ export default async function ResultsPage() {
         <h2 className="font-display text-2xl uppercase text-hi">Recent Results</h2>
         <StitchRule tone="faint" className="mt-3" />
         <ul className="mt-1">
-          {recent.map((r, i) => (
-            <li key={i} className="flex items-center justify-between gap-3 border-b border-line py-3 last:border-0">
-              <div className="flex min-w-0 items-baseline gap-3">
-                <ResultLetter result={r.result ?? ''} />
-                <span className="min-w-0 break-words font-mono text-[13px] text-mid">{r.pick_text}</span>
-              </div>
-              <div className="tnum ml-3 flex shrink-0 items-center gap-3 font-mono text-[12px] text-low">
-                <span>{(r.league ?? '').toUpperCase()}</span>
-                <span>{r.final_score}</span>
-                <span>{r.game_date}</span>
-              </div>
-            </li>
-          ))}
+          {recent.map((r, i) => {
+            const candidate = resultGamePath(r);
+            const href = candidate && publishedPaths.has(candidate) ? candidate : null;
+            return (
+              <li key={i} className="flex items-center justify-between gap-3 border-b border-line py-3 last:border-0">
+                <div className="flex min-w-0 items-baseline gap-3">
+                  <ResultLetter result={r.result ?? ''} />
+                  {href ? (
+                    <Link href={href} className="min-w-0 break-words font-mono text-[13px] text-mid underline decoration-white/20 underline-offset-4 transition-colors hover:text-gold hover:decoration-gold/40">
+                      {r.pick_text}
+                    </Link>
+                  ) : (
+                    <span className="min-w-0 break-words font-mono text-[13px] text-mid">{r.pick_text}</span>
+                  )}
+                </div>
+                <div className="tnum ml-3 flex shrink-0 items-center gap-3 font-mono text-[12px] text-low">
+                  <span>{(r.league ?? '').toUpperCase()}</span>
+                  <span>{r.final_score}</span>
+                  <span>{r.game_date}</span>
+                </div>
+              </li>
+            );
+          })}
         </ul>
         <p className="mt-6 text-sm text-mid">
           Full history by sport:{' '}
@@ -258,6 +271,11 @@ export default async function ResultsPage() {
             </span>
           ))}
         </p>
+        <div className="mt-6 flex flex-wrap gap-4 font-mono text-[11px] uppercase tracking-[0.05em]">
+          <Link href="/results/audit" className="text-gold underline decoration-gold/40 underline-offset-4">Model audit and monthly tape</Link>
+          <a href="/results.csv" className="text-gold underline decoration-gold/40 underline-offset-4">Download CSV</a>
+          <a href="/results.json" className="text-gold underline decoration-gold/40 underline-offset-4">Download JSON</a>
+        </div>
       </section>
     </main>
   );

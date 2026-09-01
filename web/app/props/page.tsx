@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import Link from 'next/link';
 import type { Metadata } from 'next';
 import { Eyebrow } from '@/components/Eyebrow';
 import { ScoutRead } from '@/components/ScoutRead';
@@ -136,7 +137,7 @@ export default async function PropsPage() {
   return (
     <main className="mx-auto max-w-5xl px-5 pb-20 pt-12">
       <PageMasthead
-        title="Props board"
+        title="Today's free player prop picks"
         meta={etDateLabel(date)}
         sub="Every player prop Gary posted today — the matchup, the numbers he leaned on, and the way it loses."
       />
@@ -204,6 +205,37 @@ export default async function PropsPage() {
           </p>
         </div>
       )}
+
+      <section className="mt-16" aria-labelledby="props-guide-heading">
+        <h2 id="props-guide-heading" className="font-display text-2xl uppercase text-hi">How to read Gary&apos;s props board</h2>
+        <StitchRule tone="faint" className="mt-4" />
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          <div className="rounded-card border border-line bg-card p-5">
+            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-gold">The line</p>
+            <p className="mt-2 text-[14px] leading-relaxed text-mid">
+              Each posted prop keeps the player, market, threshold, side, and listed odds that were stored with the call. Missing historical fields stay missing rather than being reconstructed later.
+            </p>
+          </div>
+          <div className="rounded-card border border-line bg-card p-5">
+            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-gold">The reasoning</p>
+            <p className="mt-2 text-[14px] leading-relaxed text-mid">
+              The written read explains the matchup and statistics Gary used and includes the way the play can fail. Prop markets vary by sport and by the data available on that day.
+            </p>
+          </div>
+          <div className="rounded-card border border-line bg-card p-5">
+            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-gold">The result</p>
+            <p className="mt-2 text-[14px] leading-relaxed text-mid">
+              Props are graded after the underlying event is final. Wins, losses, pushes, and missing historical odds remain visible in the public record and downloadable ledger.
+            </p>
+          </div>
+        </div>
+        <p className="mt-5 text-[13.5px] leading-relaxed text-low">
+          Player props are higher variance than game lines. Review the{' '}
+          <Link href="/results/audit" className="text-gold underline decoration-gold/40 underline-offset-4">model audit</Link>,{' '}
+          <Link href="/data-sources" className="text-gold underline decoration-gold/40 underline-offset-4">data-source policy</Link>, and{' '}
+          <Link href="/results" className="text-gold underline decoration-gold/40 underline-offset-4">complete graded record</Link> before drawing conclusions from a short run.
+        </p>
+      </section>
     </main>
   );
 }

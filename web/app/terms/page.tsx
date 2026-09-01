@@ -11,7 +11,7 @@ export const metadata: Metadata = pageMetadata({
 export default function TermsPage() {
   return (
     <main className="mx-auto max-w-3xl px-5 py-12">
-      <PageMasthead title="Terms of service" meta="Last updated: June 4, 2026">
+      <PageMasthead title="Terms of service" meta="Last updated: September 1, 2026">
         <p className="mt-2 font-mono text-[11px] text-low">Operated by Gary A.I. LLC</p>
       </PageMasthead>
 
@@ -43,9 +43,12 @@ export default function TermsPage() {
           </p>
           <ul className="list-disc space-y-2 pl-5">
             <li>
-              <strong className="text-hi">Website (betwithgary.ai):</strong> A read-only
-              site displaying Gary&rsquo;s picks, props, insight Hub, and historical track record.
-              No account registration is required to browse the Website.
+              <strong className="text-hi">Website (betwithgary.ai):</strong> A site displaying
+              Gary&rsquo;s picks, props, insight Hub, permanent analysis pages, and historical
+              track record. No account is required to browse public content. Optional accounts
+              let users ride or fade Gary&rsquo;s calls, maintain a personal record in Your Book,
+              log their own plays, and choose a public handle. These tracking tools record a
+              user&rsquo;s selections; they do not transmit or place wagers.
             </li>
             <li>
               <strong className="text-hi">iOS App:</strong> A free-to-download companion app

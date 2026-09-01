@@ -12,6 +12,12 @@ import { SITE_URL, pageMetadata } from '@/lib/seo/metadata';
 
 export const revalidate = 3600;
 
+// Generate published days on first request, then keep them in ISR. Returning
+// an array is required for runtime revalidation of a dynamic path in Next 16.
+export function generateStaticParams() {
+  return [];
+}
+
 type Params = Promise<{ sport: string; date: string }>;
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {

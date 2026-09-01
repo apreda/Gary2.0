@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
+import Link from 'next/link';
 import { Eyebrow } from '@/components/Eyebrow';
 import { PageMasthead, StatTile } from '@/components/Terminal';
 import { BRAND, liveStats } from '@/lib/gary/press';
@@ -170,6 +171,19 @@ export default async function PressPage() {
           </p>
         </section>
       )}
+
+      <section className="mt-10 rounded-panel border border-gold/30 bg-card p-6">
+        <Eyebrow>PUBLIC DATA ROOM</Eyebrow>
+        <h2 className="mt-2 font-display text-2xl uppercase text-hi">Audit the record directly</h2>
+        <p className="mt-3 text-[14px] leading-relaxed text-mid">
+          The model audit recomputes monthly results and confidence-band outcomes from the same public ledger. Reporters and researchers can download the underlying game and prop rows without requesting a private spreadsheet.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 font-mono text-[11px] uppercase tracking-[0.05em]">
+          <Link href="/results/audit" className="text-gold underline decoration-gold/40 underline-offset-4">Open model audit</Link>
+          <a href="/results.csv" className="text-gold underline decoration-gold/40 underline-offset-4">Download CSV</a>
+          <a href="/results.json" className="text-gold underline decoration-gold/40 underline-offset-4">Download JSON</a>
+        </div>
+      </section>
 
       {/* Assets */}
       <section className="mt-10">

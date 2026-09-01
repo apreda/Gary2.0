@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
 
 const LINKS = [
   { href: '/today', label: 'Today' },
@@ -21,26 +20,7 @@ const focusRing =
 
 export function Nav() {
   const pathname = usePathname();
-  const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void fetch('/api/session', { cache: 'no-store', signal: controller.signal })
-      .then(response => response.ok ? response.json() as Promise<{ signedIn: boolean }> : null)
-      .then(result => {
-        if (result) setSignedIn(result.signedIn);
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setSignedIn(false);
-      });
-    return () => {
-      controller.abort();
-    };
-  }, [pathname]);
-
-  const accountHref = signedIn === false ? '/account?next=%2Ftoday' : '/account';
-  const accountLabel = signedIn === false ? 'Sign in' : 'Account';
 
   return (
     <header className="sticky top-0 z-40 bg-ink/85 backdrop-blur">
@@ -48,7 +28,7 @@ export function Nav() {
           app's header does. The scrim only reads when scrolled over content. */}
       <div aria-hidden className="pointer-events-none absolute inset-x-0 top-full h-4 bg-gradient-to-b from-ink/80 to-transparent" />
       <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
-        <Link href="/" className={`flex items-center gap-2.5 ${focusRing}`}>
+        <Link href="/" prefetch={false} className={`flex items-center gap-2.5 ${focusRing}`}>
           <Image src="/brand/gary-icon.png" alt="" aria-hidden width={30} height={30} />
           {/* The app's wordmark rule: mono, regular weight, gold, all caps —
               quiet weight + signature color beats bold + white. */}
@@ -63,6 +43,7 @@ export function Nav() {
               <Link
                 key={l.href}
                 href={l.href}
+                prefetch={false}
                 aria-current={active ? 'page' : undefined}
                 className={`relative py-1 text-[13.5px] transition-colors ${focusRing} ${
                   active ? 'text-hi' : 'text-mid hover:text-gold-light'
@@ -77,10 +58,11 @@ export function Nav() {
 
         <div className="flex items-center gap-3">
           <Link
-            href={accountHref}
+            href="/account"
+            prefetch={false}
             className={`hidden rounded-card border border-gold/40 px-4 py-2 text-[13px] text-gold transition-colors hover:border-gold/70 hover:text-gold-light sm:inline-flex ${focusRing}`}
           >
-            {accountLabel}
+            Account
           </Link>
 
           {/* Mobile disclosure menu — no JS, real icon */}
@@ -99,6 +81,7 @@ export function Nav() {
                 <Link
                   key={l.href}
                   href={l.href}
+                  prefetch={false}
                   onClick={e => e.currentTarget.closest('details')?.removeAttribute('open')}
                   aria-current={isActive(l.href) ? 'page' : undefined}
                   className={`block border-b border-line px-5 py-3.5 text-sm last:border-b-0 ${focusRing} ${
@@ -111,12 +94,13 @@ export function Nav() {
                 </Link>
               ))}
               <Link
-                href={accountHref}
+                href="/account"
+                prefetch={false}
                 onClick={e => e.currentTarget.closest('details')?.removeAttribute('open')}
                 aria-current={pathname === '/account' ? 'page' : undefined}
                 className={`block px-5 py-3.5 text-sm text-gold sm:hidden ${focusRing}`}
               >
-                {accountLabel}
+                Account
               </Link>
             </div>
           </details>

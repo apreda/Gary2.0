@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { AppStoreButton } from '@/components/AppStoreButton';
 import { Eyebrow } from '@/components/Eyebrow';
 import { JsonLd } from '@/components/JsonLd';
@@ -26,6 +26,11 @@ import { SITE_URL, pageMetadata } from '@/lib/seo/metadata';
 
 export const revalidate = 3600;
 
+// Generate permanent matchup pages on first request, then retain them in ISR.
+export function generateStaticParams() {
+  return [];
+}
+
 type Params = Promise<{ sport: string; date: string; game: string }>;
 
 function headline(pick: GaryPick): string {
@@ -38,6 +43,13 @@ function oddsOf(pick: GaryPick): string | null {
   return oddsText(pick.odds ?? (pick.pick ?? '').match(/[+-]\d{3,}\s*$/)?.[0]);
 }
 
+function publishedLabel(value: string): string {
+  return new Date(value).toLocaleString('en-US', {
+    timeZone: 'America/New_York',
+    month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
+  }) + ' ET';
+}
+
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { sport, date, game } = await params;
   const cfg = sportBySlug(sport);
@@ -46,6 +58,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   const picks = day ? findGamePicks(day.picks, cfg.code, game) : [];
   if (!day || picks.length === 0) return { robots: { index: false } };
   const pick = picks[0];
+  const canonicalSlug = gameSlug(pick.awayTeam, pick.homeTeam);
   const result = matchPickResult(pick, day.results);
   const res = (result?.result ?? '').trim().toLowerCase();
   const label = etDateLabel(date);
@@ -56,7 +69,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
     `&meta=${encodeURIComponent(`${headline(pick)} · ${label}`.toUpperCase())}` +
     (res === 'won' || res === 'lost' ? `&result=${res}` : '');
   return pageMetadata({
-    canonical: `/picks/${cfg.slug}/${date}/${game}`,
+    canonical: `/picks/${cfg.slug}/${date}/${canonicalSlug}`,
     title: `${headline(pick)} Prediction and Pick, ${label} | Gary AI`,
     description: summary
       ? `Gary's pick: ${callOf(pick)}. ${summary}`
@@ -85,6 +98,7 @@ export default async function GamePage({ params }: { params: Params }) {
   // Canonical slug for this matchup — a containment match on a nickname URL
   // still lands here, but the address bar should carry the real one.
   const canonicalSlug = gameSlug(picks[0].awayTeam, picks[0].homeTeam);
+  if (game !== canonicalSlug) permanentRedirect(`/picks/${cfg.slug}/${date}/${canonicalSlug}`);
 
   const { props: dayProps, results: propResults } = await fetchGameProps(date);
   const lead = [...picks].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0];
@@ -106,6 +120,9 @@ export default async function GamePage({ params }: { params: Params }) {
 
   const pageUrl = `${SITE_URL}/picks/${cfg.slug}/${date}/${canonicalSlug}`;
   const body = picks.map(p => (p.rationale ?? p.rationale_plain ?? '')).filter(Boolean).join('\n\n');
+  const sourceBooks = [...new Set(
+    picks.flatMap(pick => pick.sportsbook_odds ?? []).map(line => line.book?.trim()).filter((book): book is string => !!book),
+  )];
 
   return (
     <main className="mx-auto max-w-3xl px-5 pb-20 pt-12">
@@ -122,10 +139,11 @@ export default async function GamePage({ params }: { params: Params }) {
         '@context': 'https://schema.org', '@type': 'Article',
         headline: `${headline(lead)}: ${callOf(lead)}`,
         description: pageSummary(lead),
-        datePublished: lead.commence_time ?? `${date}T12:00:00-04:00`,
+        ...(day.publishedAt ? { datePublished: day.publishedAt } : {}),
         author: { '@type': 'Organization', name: 'Gary AI', url: SITE_URL },
         publisher: { '@type': 'Organization', name: 'Gary A.I. LLC', url: SITE_URL },
         mainEntityOfPage: pageUrl,
+        isAccessibleForFree: true,
         articleBody: body,
         about: {
           '@type': 'SportsEvent',
@@ -227,6 +245,37 @@ export default async function GamePage({ params }: { params: Params }) {
           </section>
         );
       })}
+
+      <section className="mt-12 rounded-panel border border-line bg-card p-6" aria-labelledby="analysis-disclosure-heading">
+        <h2 id="analysis-disclosure-heading" className="font-display text-[1.5rem] uppercase leading-none text-hi">About this analysis</h2>
+        <dl className="mt-5 grid gap-5 text-[13.5px] leading-relaxed sm:grid-cols-2">
+          <div>
+            <dt className="font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-gold">Who made it</dt>
+            <dd className="mt-1.5 text-mid">Gary AI, an AI sports-analysis product operated by Gary A.I. LLC. No human reviewer is claimed unless one is explicitly named.</dd>
+          </div>
+          <div>
+            <dt className="font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-gold">Published data</dt>
+            <dd className="mt-1.5 text-mid">
+              {day.publishedAt ? `Board stored ${publishedLabel(day.publishedAt)}.` : `Stored board date: ${label}; an exact publication timestamp is not available in this historical row.`}
+            </dd>
+          </div>
+          <div>
+            <dt className="font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-gold">Odds record</dt>
+            <dd className="mt-1.5 text-mid">
+              The displayed line is the value retained with the call.
+              {sourceBooks.length > 0 ? ` Stored sportsbook sources: ${sourceBooks.join(', ')}.` : ' Source names were not retained with this call.'}
+            </dd>
+          </div>
+          <div>
+            <dt className="font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-gold">Accountability</dt>
+            <dd className="mt-1.5 text-mid">
+              Read the <Link href="/editorial-standards" className="text-gold underline decoration-gold/40 underline-offset-4">editorial standards</Link>,{' '}
+              <Link href="/data-sources" className="text-gold underline decoration-gold/40 underline-offset-4">source policy</Link>, and{' '}
+              <Link href="/corrections" className="text-gold underline decoration-gold/40 underline-offset-4">corrections process</Link>.
+            </dd>
+          </div>
+        </dl>
+      </section>
 
       {/* Props written for this game */}
       {props.length > 0 && (

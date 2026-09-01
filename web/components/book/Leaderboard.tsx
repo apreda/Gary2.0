@@ -24,7 +24,6 @@ export function Leaderboard({ garyRows, myHandle }: { garyRows: GaryRows; myHand
 
   useEffect(() => {
     let cancelled = false;
-    setRows(null);
     fetchLeaderboard(window_).then(users => {
       if (cancelled) return;
       const gary = garyRows[window_];
@@ -50,7 +49,12 @@ export function Leaderboard({ garyRows, myHandle }: { garyRows: GaryRows; myHand
             <button
               key={w.key}
               type="button"
-              onClick={() => setWindow(w.key)}
+              aria-pressed={window_ === w.key}
+              onClick={() => {
+                if (window_ === w.key) return;
+                setRows(null);
+                setWindow(w.key);
+              }}
               className={`flex flex-col items-center gap-[3px] font-mono text-[10.5px] font-bold tracking-[0.08em] transition-colors ${
                 window_ === w.key ? 'text-gold' : 'text-low hover:text-mid'
               }`}
