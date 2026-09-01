@@ -67,7 +67,7 @@ Some nights one thing decides it; some nights it's the whole picture. Lead with 
 }
 
 /**
- * MLB Awareness — injected at Pass 1 and in Flash research briefing.
+ * MLB Awareness — injected at Pass 1.
  * Jul 22 (founder, knowing item-by-item choice after reading the full prompt
  * surface): ONLY the variance bullet and the momentum/streaks bullet survive —
  * everything explaining how baseball works to the model was removed ("why do

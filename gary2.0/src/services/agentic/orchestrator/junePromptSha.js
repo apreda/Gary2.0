@@ -15,6 +15,8 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import { MLB_CONSTITUTION } from '../constitution/mlbConstitution.js';
+import { getConstitution } from '../constitution/index.js';
+import { buildSystemPrompt } from './garySystemPrompt.js';
 import { getMlbSpreadFactors, getMlbSeasonAwareness } from './spreadEvaluationFactors.js';
 import { buildPass1Message, buildPass25Message, buildPass3Unified } from './passBuilders.js';
 
@@ -50,6 +52,12 @@ export function junePromptSha() {
     // receives that live outside the hashed files. Each is a new era.
     'RESEARCHER=OFF, ALL SPORTS (founder kill, Aug 27 2026 — the desk is the evidence, standardized; a second author is banned)',
     'ONE BRAIN PER PICK (founder, Aug 27 2026 — no mid-conversation model switch; a failed brain means the whole game re-runs on the next one)',
+    'PASS1 NUDGES=DESK-ONLY (Sep 1 2026 — the game-lane stall/reminder messages in agentLoop.js no longer cite the dead research briefing or a fetch_stats tool; agentLoop is outside this hash, so wording changes there must bump this marker)',
+    // The RENDERED system prompt (identity + FACT-CHECKING + BASE_RULES).
+    // Until Sep 1 2026 this surface sat outside the hash — a system-prompt
+    // edit did not move the era ledger (Aug 19 law violation, found in the
+    // Sep 1 process audit).
+    buildSystemPrompt(getConstitution('baseball_mlb'), 'baseball_mlb'),
     MLB_CONSTITUTION.pass1Context,
     MLB_CONSTITUTION.bilateralCasePrompt('HOME', 'AWAY'),
     getMlbSpreadFactors(),

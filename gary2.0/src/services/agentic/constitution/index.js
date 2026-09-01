@@ -13,21 +13,23 @@ import { NBA_PROPS_CONSTITUTION } from './nbaPropsConstitution.js';
  * BASE RULES - Applied to ALL sports
  * These rules govern data sources and external influence
  */
+// DESK-ONLY (Aug 27 2026 consolidation, text corrected Sep 1): every
+// production brain runs on a CLI bridge with zero tools — the desk in the
+// conversation is the entire evidence. The old text ordered Gary to call
+// fetch_stats() and live search, tools no session carries anymore. If a
+// tool-capable API brain (gpt-/anthropic- prefix) is ever revived as a
+// pick lane, this block must be revisited alongside it.
 const BASE_RULES = `
 ═══════════════════════════════════════════════════════════════════════════════
 [DATA] DATA SOURCE RULES (CRITICAL)
 ═══════════════════════════════════════════════════════════════════════════════
 
-1. STATISTICS - Use fetch_stats() tool ONLY (BDL API)
-   - ALL hard stats (scoring, efficiency, rates, ratings, splits) must come from fetch_stats()
-   - Do NOT search for stats - they are available via the tool
-   - BDL data is structured, reliable, and cost-effective
+1. THE DESK IS THE EVIDENCE - This conversation carries no live tools
+   - Every stat, name, and number you use comes from the scout report and the materials provided in this conversation
+   - There is no stat-fetch tool and no live search here - never reference calling one, and never wait for more data to arrive
 
-2. LIVE CONTEXT - Use search for real-time info ONLY
-   - Injuries: "Is [player] playing today?"
-   - Weather: "Current conditions at [stadium]"
-   - Roster verification: "Is [player] on [team] roster?"
-   - Breaking news: "Any [team] news today?"
+2. LIVE CONTEXT - Search results the desk carries (breaking news, storylines, weather) were retrieved for you before this conversation started
+   - Treat them as provided data, same as any desk section
 
 ═══════════════════════════════════════════════════════════════════════════════
 [PROHIBITED] EXTERNAL INFLUENCE PROHIBITION (MANDATORY)

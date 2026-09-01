@@ -155,7 +155,12 @@ async function runMlbJuneEngine(game, runnerOptions) {
     result = await analyzeGame(game, 'baseball_mlb', { ...runnerOptions, modelOverride: MLB_JUNE_BRAIN_MODEL });
   }
   let modelUsed = MLB_JUNE_BRAIN_MODEL;
-  for (const fallbackModel of DESK_FALLBACK_MODELS) {
+  // DESK_FALLBACK_MODELS is filtered against GAME_PICK_MODEL at config time,
+  // but THIS lane's primary is MLB_JUNE_BRAIN_MODEL — when the two constants
+  // differ (any run without GARY_MODEL_OVERRIDE in env), the config filter
+  // leaves the primary in the list and a failed brain would get a third run
+  // before the first real fallback. Filter against the lane's own primary.
+  for (const fallbackModel of DESK_FALLBACK_MODELS.filter((m) => m !== MLB_JUNE_BRAIN_MODEL)) {
     if (result?.pick && !result?.error) break;
     console.warn(`[JuneEngine] ⚠️ ${modelUsed} failed (${result?.error || 'no pick'}) — same engine on ${fallbackModel}`);
     result = await analyzeGame(game, 'baseball_mlb', { ...runnerOptions, modelOverride: fallbackModel });

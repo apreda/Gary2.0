@@ -252,7 +252,6 @@ export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spo
   const lineLabel = isMLB ? 'moneyline or run line'
     : (isFootball ? 'spread or moneyline' : 'spread');
   const betTypeNote = isMLB
-    
     ? `**BET TYPE:** Two options — MONEYLINE or RUN LINE (-1.5/+1.5).
 
 **HOUSE LIMIT:** no moneyline heavier than ${GAME_ML_CAP}. If the side you like is priced past that, its moneyline is off the menu — on a game priced like that, the bet is not who wins, it is the run line: that side -1.5 at its price, or the other side +1.5 at its price (the underdog's moneyline also stays legal). Which side of the 1.5 does your read take?`
@@ -306,7 +305,7 @@ Your JSON must include all three fields: "final_pick", "rationale", AND "confide
 You have completed investigation and synthesis in Pass 1. This is the final decision checkpoint.
 ${lineContext}
 
-Do NOT restart analysis. Do NOT run a full re-investigation. Only call more tools if a critical factual gap blocks your decision.
+Do NOT restart analysis. Do NOT run a full re-investigation. The desk you have already read is your complete evidence.
 </decision_checkpoint>
 
 <synthesis>
@@ -338,10 +337,10 @@ Judgment calls informed by data are valid.
 <negative_constraints>
 CRITICAL CONSTRAINTS (all system prompt rules apply — these are reminders of the most violated ones):
 
-1. PLAYER NAMES: Only from roster section. Your training data pre-dates tonight — every number from scout report, tools, or grounding.
+1. PLAYER NAMES: Only from roster section. Your training data pre-dates tonight — every number from the scout report or other provided data.
 2. RECORDS: Records describe what happened, not what will happen.
 3. Do NOT predict your own margin or final score.
-4. NO FABRICATION — STAT PROVENANCE (HARD RULE): Every specific number you write (${statExamples}) must appear VERBATIM in this conversation's scout report, tool responses, or grounding results. Your training-data numbers pre-date this season and citing one is a fabrication even if it sounds plausible. This also covers QUANTITATIVE DESCRIPTORS: ${descriptorExamples} If a stat you want is not in your data, OMIT THE CLAIM and write around it — a rationale with fewer numbers is fine; a rationale with an invented number is not.
+4. NO FABRICATION — STAT PROVENANCE (HARD RULE): Every specific number you write (${statExamples}) must appear VERBATIM in this conversation's scout report or other provided data. Your training-data numbers pre-date this season and citing one is a fabrication even if it sounds plausible. This also covers QUANTITATIVE DESCRIPTORS: ${descriptorExamples} If a stat you want is not in your data, OMIT THE CLAIM and write around it — a rationale with fewer numbers is fine; a rationale with an invented number is not.
 5. NO EMOJIS. No tactical/scheme/film claims the provided data can't support.
 </negative_constraints>
 
@@ -451,9 +450,8 @@ export function buildPass3Unified(homeTeam = '[HOME]', awayTeam = '[AWAY]', opti
   // DO NOT pre-fill confidence — Gary must set his own organic confidence score
 
   const sport = options.sport || '';
-  const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
-  const spreadOddsRule = (isNHL || isMLB)
+  const spreadOddsRule = isMLB
     ? '3. For spread picks: use "spreadOdds" value (e.g., -105, -115)'
     : '3. For spread picks: copy the selected team\'s exact pair. A home pick uses "spreadHome" + "spreadHomeOdds"; an away pick uses "spreadAway" + "spreadAwayOdds". Never borrow the opponent\'s price or invent a missing price.';
 
@@ -465,9 +463,6 @@ export function buildPass3Unified(homeTeam = '[HOME]', awayTeam = '[AWAY]', opti
   - ${homeTeam}: ${homeRecord || 'N/A'}
   - ${awayTeam}: ${awayRecord || 'N/A'}` : '';
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // GEMINI 3 OPTIMIZED: XML-tagged structure with END-OF-PROMPT instruction
-  // ═══════════════════════════════════════════════════════════════════════════
   return `
 <pass_context>
 ## PASS 3 - FORMAT ONLY
@@ -485,7 +480,7 @@ ${recordsReminder}
 <output_requirements>
 ## OUTPUT REQUIREMENTS
 
-${isNHL ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). Choose the bet type that matches your read on the game.` : isMLB ? `**BET TYPE:** You have two options — MONEYLINE (team wins outright) or RUN LINE (standard -1.5/+1.5). Choose the bet type that matches your read on the game.` : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`}
+**BET TYPE:** Your ticket was already chosen in Pass 2.5 — carry it forward exactly (${isMLB ? 'moneyline or run line' : 'spread or moneyline'}, whichever you picked). Do NOT switch instruments in this pass.
 
 **CRITICAL ODDS RULES:**
 1. Use the EXACT odds shown in the scout report's betting lines — never default to -110. The pick field must carry them: "[Team] ML -192" NOT "[Team] ML -110"

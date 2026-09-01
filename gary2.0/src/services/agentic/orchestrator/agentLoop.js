@@ -212,10 +212,8 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   };
   const modelLabel = modelOverride
     ? `OVERRIDE: ${modelOverride}`
-    : isPropsMode
-      ? 'Flash 3 (props — Tier 2)'
-      : 'Flash 3.5 (main)';
-  console.log(`[Orchestrator] Starting ${sport} — ${modelLabel} + Flash 3 (research)`);
+    : primaryModel;
+  console.log(`[Orchestrator] Starting ${sport} — brain: ${modelLabel} (desk-only, researcher OFF)`);
 
   const propContext = options.propContext || null;
   let propsRetryCount = 0; // Track finalize_props retry attempts
@@ -248,7 +246,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     enableCache: true  // Cache system prompt + tools (~10K stable tokens, 90% off on reuse)
   });
   let currentModelName = currentSession.modelName;
-  console.log(`[Orchestrator] ${modelLabel} session created (${currentModelName}, ${sport}, thinking: high)`);
+  console.log(`[Orchestrator] ${modelLabel} session created (${currentModelName}, ${sport}, thinking: ${isPropsMode ? 'high' : 'xhigh'})`);
 
   // Messages array for state tracking (pass detection) — API calls go
   // through the persistent session
@@ -327,24 +325,10 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   let _statAuditRetried = false; // One corrective retry when the rationale cites numbers absent from provided data
   let _mlCapRetried = false; // One corrective re-ask when a moneyline breaks the house limit (payout law)
 
-  // Flash Research Briefing state — comprehensive pre-game briefing (factual findings only)
-  // Flash completes BEFORE Gary starts. Findings injected before Pass 1.
-  // ASK-THE-RESEARCHER (founder GO, Aug 18 2026): Gary can hand questions to
-  // the researcher during Pass 1; the harness answers them via a dedicated
-  // follow-up session. Budgeted so a curious brain can't loop forever.
-  // Tokens Flash already investigated. Seeded into Gary's dedup set so Gary
-  // doesn't pay for round-trips that just return data already in the briefing.
-  // The briefing IS Gary's data for these tokens.
-  const _flashCalledTokens = new Set();
+  const _flashCalledTokens = new Set(); // retained: dedup set consumers below survive the researcher kill
 
   const effectiveMaxIterations = CONFIG.maxIterations;
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // AWAIT FLASH RESEARCH BRIEFING — completes BEFORE Gary starts
-  // ═══════════════════════════════════════════════════════════════════════
-  // Flash reads the scout report, identifies gaps, and uses fetch_stats
-  // to investigate deeper. Gary waits for Flash to finish so he has the
-  // full per-factor findings from the very first iteration.
   // THE RESEARCHER IS DEAD — ALL SPORTS (founder, Aug 27: "make sure then
   // this is the process for ALL sports"). His rationale, recorded: the
   // briefing was a second author we could not control — it decided which
@@ -1501,7 +1485,7 @@ INVESTIGATION COMPLETE`;
             : '';
           const synthesizeFrom = isPropsMode
             ? 'Synthesize what you already have from the scout report. If you still need more data, call fetch_stats.'
-            : 'Synthesize what you already have from the scout report + research briefing. If you still need more data, call fetch_stats.';
+            : 'Synthesize what you already have from the desk — it is your complete evidence.';
           const completionNudge = `You are still in Pass 1. Do not make your pick yet.
 
 ${synthesizeFrom}
@@ -1615,7 +1599,7 @@ INVESTIGATION COMPLETE`;
         : '';
       const synthesizeMsg = isPropsMode
         ? 'Synthesize from scout report. If you need more data, call fetch_stats.'
-        : 'Synthesize from scout report + research briefing. If you need more data, call fetch_stats.';
+        : 'Synthesize from the desk — it is your complete evidence.';
       const pass1Reminder = {
         role: 'user',
         content: `You are still in Pass 1. Do not make your pick yet.

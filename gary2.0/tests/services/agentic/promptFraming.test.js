@@ -13,7 +13,9 @@ const src = (rel) => readFileSync(join(here, '../../../src/services/agentic', re
 
 describe('J-series: judgment is licensed, numbers stay policed', () => {
   it('J-1: facts stay policed; the judgment essay is gone (founder, Aug 27 second ruling)', () => {
-    const main = src('orchestrator/orchestratorMain.js');
+    // The system prompt moved to garySystemPrompt.js (Sep 1 2026 extraction
+    // so junePromptSha can hash the rendered prompt) — the pins follow it.
+    const main = src('orchestrator/garySystemPrompt.js');
     expect(main).toContain('FACT-CHECKING PROTOCOL (ZERO TOLERANCE)');
     // The whole JUDGMENT vs FABRICATION section died with its steering
     // clauses; the fact-vs-judgment rail lives on inside rule 2.
@@ -27,7 +29,7 @@ describe('J-series: judgment is licensed, numbers stay policed', () => {
   });
 
   it('identity: the 30-years line stands alone; storyteller + contrarian block gone (founder, Aug 27)', () => {
-    const main = src('orchestrator/orchestratorMain.js');
+    const main = src('orchestrator/garySystemPrompt.js');
     expect(main).not.toContain('value bettor, not a market trader');
     expect(main).not.toContain('all of it is CLUES');
     expect(main).not.toContain('mirror, not a source');
@@ -48,7 +50,7 @@ describe('J-series: judgment is licensed, numbers stay policed', () => {
   });
 
   it("no team fandom in Gary's identity (Reds-fan injection removed Jul 9)", () => {
-    const main = src('orchestrator/orchestratorMain.js');
+    const main = src('orchestrator/garySystemPrompt.js') + src('orchestrator/orchestratorMain.js');
     expect(main).not.toContain('lifelong Cincinnati Reds fan');
     expect(main).not.toContain('redsInGame');
   });

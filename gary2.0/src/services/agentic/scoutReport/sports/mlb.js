@@ -2488,11 +2488,7 @@ ${smallSampleFlagsSection}
 ═══ CONFIRMED LINEUPS ═══
 ${confirmedLineupsSection}
 
-${benchSection ? `═══ THE BENCH TONIGHT ═══\n${benchSection}\n\n` : ''}${matchupShelfSection ? matchupShelfSection + '\n\n' : ''}═══ BETTING CONTEXT ═══
-${oddsSection}
-
-
-═══ TEAM SEASON STATS ═══
+${benchSection ? `═══ THE BENCH TONIGHT ═══\n${benchSection}\n\n` : ''}${matchupShelfSection ? matchupShelfSection + '\n\n' : ''}═══ TEAM SEASON STATS ═══
 ${teamSeasonStatsSection || 'No team season stats available.'}
 
 ${standingsSection ? `═══ STANDINGS & SEASON SHAPE ═══\n${standingsSection}\n\n` : ''}═══ INJURIES (BDL Structured) ═══
@@ -2562,6 +2558,9 @@ ${restScheduleSection}
 ═══ TODAY'S BREAKING NEWS ═══
 ${gameContextGrounding || 'No same-day breaking news.'}
 ${storylinesGrounding ? `\n— THE STORYLINES —\n${storylinesGrounding}` : ''}
+
+═══ BETTING CONTEXT ═══
+${oddsSection}
 `.trim();
 
   // Token menu for Flash
