@@ -29,14 +29,15 @@ export function resolveDeskLayout(options = {}) {
 
 // Team-block subsections in reading order. The manifest expects each once
 // per club; the test suite pins the order.
+// (Founder, Sep 1: no separate Catcher or Defense subsections — the
+// starting catcher's running-game line rides his lineup row, and the
+// fielding numbers ride Season stats.)
 export const TEAM_SUBSECTIONS = [
   'Where they stand',
   'Season stats',
   "Tonight's lineup",
   "Tonight's starter",
   'The pen',
-  'Catcher and the running game',
-  'Defense',
   'Injuries',
   'Recent form',
   'Roster moves',
@@ -63,7 +64,10 @@ function renderTeam(t) {
 
   blocks.push(sub('Where they stand', has(t.stand) ? t.stand : `${name}: ${absent('standings context')}`));
 
-  blocks.push(sub('Season stats', has(t.seasonStats) ? t.seasonStats : `${name}: ${absent('team season stats')}`));
+  blocks.push(sub('Season stats', joinBlocks([
+    has(t.seasonStats) ? t.seasonStats : `${name}: ${absent('team season stats')}`,
+    has(t.defense) ? `Defense:\n${t.defense}` : null,
+  ])));
 
   blocks.push(sub("Tonight's lineup", joinBlocks([
     has(t.lineup) ? t.lineup : `${name}: lineup not yet posted — treat as missing data, not as a quiet lane.`,
@@ -81,10 +85,6 @@ function renderTeam(t) {
     has(t.penWorkload) ? `Workload (recent appearances):\n${t.penWorkload}` : `${name}: ${absent('bullpen workload')}`,
     has(t.penPress) ? `As reported:\n${t.penPress}` : null,
   ])));
-
-  blocks.push(sub('Catcher and the running game', has(t.catcher) ? t.catcher : `${name}: ${absent('catcher data')}`));
-
-  blocks.push(sub('Defense', has(t.defense) ? t.defense : `${name}: ${absent('team defense')}`));
 
   blocks.push(sub('Injuries', joinBlocks([
     has(t.injuries) ? t.injuries : `${name}: ${absent('structured injury data')}`,

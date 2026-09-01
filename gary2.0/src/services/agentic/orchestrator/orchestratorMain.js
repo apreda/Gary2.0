@@ -199,7 +199,7 @@ export async function analyzeGame(game, sport, options = {}) {
     if (isPropsMode) {
       userMessage = buildPass1PropsMessage(garyText, homeTeam, awayTeam, today, sport);
     } else {
-      userMessage = buildPass1Message(garyText, homeTeam, awayTeam, today, sport, canonicalHomeSpread, { homeSeed: game.homeSeed, awaySeed: game.awaySeed });
+      userMessage = buildPass1Message(garyText, homeTeam, awayTeam, today, sport, canonicalHomeSpread, { homeSeed: game.homeSeed, awaySeed: game.awaySeed, game });
     }
     // Optional sport-specific Pass 1 context (phase-aligned, not always-on)
     if (typeof constitution === 'object' && constitution.pass1Context && !isPropsMode) {
@@ -257,7 +257,11 @@ context for player-level evaluation. Investigate the game thoroughly first.
       scoutReport: flashText,
       // Optional sport-specific Pass 2.5 decision guards (phase-aligned)
       pass25DecisionGuards: (typeof constitution === 'object' ? constitution.pass25DecisionGuards || '' : ''),
-      bilateralCasePrompt: (typeof constitution === 'object' ? constitution.bilateralCasePrompt || null : null),
+      // The game rides along so a capped MLB game's case headings name the
+      // actual tickets on every re-injection (mlbCaseMenu.js, Sep 1 2026).
+      bilateralCasePrompt: (typeof constitution === 'object' && constitution.bilateralCasePrompt)
+        ? (h, a) => constitution.bilateralCasePrompt(h, a, game)
+        : null,
       // Structured runs-scored history — feeds the count-claim verifier
       // (a false "N of last M games" tally is fabrication; Jul 22 2026).
       recentScores: (typeof scoutReportData === 'object' && scoutReportData?.recentScores) || null

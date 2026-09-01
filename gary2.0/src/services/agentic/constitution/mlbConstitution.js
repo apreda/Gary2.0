@@ -15,6 +15,8 @@
  * - Situational awareness (series state, schedule, streaks) → the desk
  */
 
+import { mlbCaseHeadings } from '../orchestrator/mlbCaseMenu.js';
+
 export const MLB_CONSTITUTION = {
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -71,11 +73,15 @@ Use the exact tag shown in the scout report for this game.
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION E: BILATERAL CASE PROMPT — injected at end of Pass 1
   // ═══════════════════════════════════════════════════════════════════════════
-  bilateralCasePrompt: (homeTeam, awayTeam) =>
-    `Before outputting INVESTIGATION COMPLETE, end your Pass 1 synthesis with both sections, using these EXACT headings on their own lines (the system stores each case under its heading):
-CASE FOR BACKING ${homeTeam.toUpperCase()} TONIGHT:
-CASE FOR BACKING ${awayTeam.toUpperCase()} TONIGHT:
-(Each case: 2-3 paragraphs making the argument for that side as tonight's bet — how it wins this game and what carries it — based on the matchup evidence you investigated.)`
+  // Headings come from mlbCaseMenu.js (Sep 1 2026) so a capped game's
+  // tickets read the same here as in Pass 1's own ask.
+  bilateralCasePrompt: (homeTeam, awayTeam, game = null) => {
+    const h = mlbCaseHeadings(homeTeam, awayTeam, game);
+    return `Before outputting INVESTIGATION COMPLETE, end your Pass 1 synthesis with both sections, using these EXACT headings on their own lines (the system stores each case under its heading):
+${h.home}
+${h.away}
+(Each case: 2-3 paragraphs making the argument for that side as tonight's bet — how it wins this game and what carries it — based on the matchup evidence you investigated.)`;
+  }
 };
 
 export default MLB_CONSTITUTION;

@@ -4,6 +4,7 @@
 // the pre-deletion state (53962904^).
 import { getNbaSpreadFactors, getNflSpreadFactors, getNcaafSpreadFactors, getMlbSpreadFactors, getMlbSeasonAwareness, getFootballSeasonAwareness } from './spreadEvaluationFactors.js';
 import { GAME_ML_CAP } from './orchestratorConfig.js';
+import { mlbCaseHeadings, mlbPass1Opening } from './mlbCaseMenu.js';
 
 /**
  * Build the PASS 1 user message - Identify battlegrounds, DO NOT pick a side yet
@@ -12,7 +13,7 @@ import { GAME_ML_CAP } from './orchestratorConfig.js';
  * Every supported sport has a dedicated builder with sport-specific evaluation factors.
  * Unsupported sports throw an error — add a builder before enabling a new sport.
  */
-export function buildPass1Message(scoutReport, homeTeam, awayTeam, today, sport = '', spread = null) {
+export function buildPass1Message(scoutReport, homeTeam, awayTeam, today, sport = '', spread = null, extras = {}) {
   const isNBA = sport === 'basketball_nba' || sport === 'NBA';
   const isNFL = sport === 'americanfootball_nfl' || sport === 'NFL';
   const isNCAAF = sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
@@ -31,7 +32,7 @@ export function buildPass1Message(scoutReport, homeTeam, awayTeam, today, sport 
 
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
   if (isMLB) {
-    return buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread);
+    return buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread, extras.game || null);
   }
 
   throw new Error(`[Pass 1] No sport-specific builder for "${sport}" — add one to passBuilders.js`);
@@ -712,12 +713,16 @@ export function buildMlCapRetryMessage(sport, cap = GAME_ML_CAP) {
 // MLB PASS 1
 // ═══════════════════════════════════════════════════════════════════════════
 
-function buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread) {
+function buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread, game = null) {
   const factors = getMlbSpreadFactors();
   const mlbAwareness = getMlbSeasonAwareness();
+  // THE CASE MENU (founder GO, Sep 1 2026): on a capped game the two cases
+  // are the actual tickets, and the opening line says what kind of bet this
+  // is — see mlbCaseMenu.js. Uncapped games read exactly as before.
+  const headings = mlbCaseHeadings(homeTeam, awayTeam, game);
 
   return `
-You're deciding what to bet on tonight's game below. The betting options and their prices come at the end, after you've been through everything.
+${mlbPass1Opening(game, homeTeam, awayTeam)}
 
 <scout_report>
 ## MATCHUP BRIEFING (TODAY: ${today})
@@ -749,9 +754,9 @@ ${factors}
 
 Before completing this pass, end with BOTH sections, using these EXACT headings on their own lines (the system stores each case under its heading):
 
-CASE FOR BACKING ${homeTeam.toUpperCase()} TONIGHT:
+${headings.home}
 
-CASE FOR BACKING ${awayTeam.toUpperCase()} TONIGHT:
+${headings.away}
 
 Do NOT declare a side or a pick yet — the bet question comes at the end. When your investigation is complete, output this exact line on its own line:
 INVESTIGATION COMPLETE

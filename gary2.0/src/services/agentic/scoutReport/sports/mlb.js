@@ -1986,8 +1986,18 @@ export async function buildMlbScoutReport(game, options = {}) {
         // One batter's bad row loses only his lines — never the card.
         try {
           const lines = [];
-          const s = seasonLineOf(poolRowOf(b, pool));
+          const row = poolRowOf(b, pool);
+          const s = seasonLineOf(row);
           if (s) lines.push(s);
+          // THE RUNNING GAME, ON THE CATCHER'S OWN LINE (founder, Sep 1 2026:
+          // "we just need to know in the lineups part who the starting catcher
+          // is and then include the stats/data for that catcher"). His season
+          // caught-stealing line from his own BDL row — the fact a fan holds:
+          // can you run on this catcher.
+          if (String(b?.position || '').toUpperCase() === 'C' && row && row.fielding_sba != null) {
+            const pct = row.fielding_cs_percent != null ? ` (${Number(row.fielding_cs_percent).toFixed(0)}%)` : '';
+            lines.push(`Running game: ${row.fielding_cs ?? 0} caught of ${row.fielding_sba} steal attempts${pct}${row.fielding_pb != null ? `, ${row.fielding_pb} PB` : ''}`);
+          }
           lines.push(...await splitsLinesOf(b));
           const bId = b?.personId ?? rosterIdByName(roster, b?.name);
           const bits = [
@@ -2668,7 +2678,8 @@ export async function buildMlbScoutReport(game, options = {}) {
     pen: shelfHalf('MLB_CLOSER_RELIEVER_STATS', side),
     penWorkload: shelfHalf('MLB_BULLPEN_WORKLOAD', side),
     penPress: penPressBySide[side],
-    catcher: shelfHalf('MLB_CATCHER_DEFENSE', side),
+    // (Catcher: the starting catcher's running-game line rides his lineup
+    // row; the team-wide catcher list has no bucket home — founder, Sep 1.)
     defense: shelfHalf('MLB_TEAM_DEFENSE', side),
     injuries: injuriesBySide[side],
     flags: situationFlagsBySide[side],

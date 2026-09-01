@@ -47,6 +47,9 @@ const DOSSIER_SURFACE_FILES = [
   // deleted Sep 1 2026 — the researcher's corpse left the tree.)
 ];
 
+// A representative capped board for hashing the case-menu variants.
+const CAPPED_GAME = { moneyline_home: -230, moneyline_away: 210, spread_home: -1.5, spread_home_odds: -111, spread_away: 1.5, spread_away_odds: -109 };
+
 let _sha = null;
 
 /** 12-char sha of the full June-engine surface. Memoized per process. */
@@ -69,9 +72,13 @@ export function junePromptSha() {
     buildSystemPrompt(getConstitution('baseball_mlb'), 'baseball_mlb'),
     MLB_CONSTITUTION.pass1Context,
     MLB_CONSTITUTION.bilateralCasePrompt('HOME', 'AWAY'),
+    // THE CASE MENU (Sep 1 2026): the capped-game variant of the headings
+    // and Pass 1 opening — hash it too, or its wording could drift unseen.
+    MLB_CONSTITUTION.bilateralCasePrompt('HOME', 'AWAY', CAPPED_GAME),
     getMlbSpreadFactors(),
     getMlbSeasonAwareness(),
     buildPass1Message('SCOUT', 'HOME', 'AWAY', 'DATE', 'baseball_mlb', 0),
+    buildPass1Message('SCOUT', 'HOME', 'AWAY', 'DATE', 'baseball_mlb', 0, { game: CAPPED_GAME }),
     buildPass25Message('HOME', 'AWAY', 'MLB', 0, ''),
     // The unpriced-spread MENU TRUTH branch (Sep 1 2026) renders only when a
     // recovery board carries a spread with no price — hash that variant too,

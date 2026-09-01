@@ -14,8 +14,7 @@ const team = (name, over = {}) => ({
   pen: `${name}: Closer Man — 30 SV, 2.10 ERA`,
   penWorkload: `${name}: Closer Man pitched yesterday (18 pitches)`,
   penPress: `${name}:\nThe closer has been described as fresh.`,
-  catcher: `${name}: Backstop (C) — 30% CS (12-for-40), 4 PB; bats .240/.690 (300 AB)`,
-  defense: `${name}: .985 FP, 60 E, 110 DP turned; OF assists 22`,
+  defense: `${name} (138 GP):\n  Fielding: 60 E, 0.985 FPCT, 4700 TC, 110 DP\n  Team Pitching: 3.90 ERA, 1.22 WHIP`,
   injuries: `${name}:\n  [FRESH — 1 team game missed] Star Bat (LF) — Hamstring`,
   flags: `FRESH ABSENCE: Star Bat (${name}) — placed on the injured list 2026-08-31. First game(s) without him.`,
   spot: `${name}:\n  Won their last 2.\n  Last 7: 5-2`,
@@ -87,6 +86,18 @@ describe('renderBucketsDesk', () => {
     expect(awayBlock).toContain('San Francisco Giants: Closer Man');
   });
 
+  it('folds defense into Season stats and has no Catcher or Defense subsection', () => {
+    const text = renderBucketsDesk(pieces());
+    expect(text).not.toContain('── Defense ──');
+    expect(text).not.toContain('── Catcher');
+    const homeBlock = text.slice(text.indexOf('═══ ATLANTA BRAVES ═══'), text.indexOf('═══ SAN FRANCISCO GIANTS ═══'));
+    const ss = homeBlock.indexOf('── Season stats ──');
+    const lu = homeBlock.indexOf("── Tonight's lineup ──");
+    const def = homeBlock.indexOf('Defense:\nAtlanta Braves (138 GP):');
+    expect(def).toBeGreaterThan(ss);
+    expect(def).toBeLessThan(lu);
+  });
+
   it('puts the market last and the price nowhere else', () => {
     const text = renderBucketsDesk(pieces());
     const marketIdx = text.indexOf('THE MARKET');
@@ -133,8 +144,8 @@ describe('renderBucketsDesk', () => {
     const audit = auditDeskManifest(renderBucketsDesk(pieces()), 'buckets');
     expect(audit.missing).toEqual([]);
     expect(audit.empty).toEqual([]);
-    // 10 team subsections (graded once each, both clubs) + 4 matchup + 1 market.
-    expect(audit.present.length).toBe(15);
+    // 8 team subsections (graded once each, both clubs) + 4 matchup + 1 market.
+    expect(audit.present.length).toBe(13);
   });
 
   it('is flagged by the manifest when a per-team subsection appears for only one club', () => {
