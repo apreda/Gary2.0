@@ -1552,8 +1552,9 @@ export async function buildMlbScoutReport(game, options = {}) {
   // REST & SCHEDULE SITUATION
   // ═══════════════════════════════════════════════════════════════════
   let restScheduleSection = '';
+  let restNoSeriesSection = '';
   {
-    const formatRestSchedule = (teamName, recentGames, opponentName) => {
+    const formatRestSchedule = (teamName, recentGames, opponentName, withSeries = true) => {
       if (!recentGames || recentGames.length === 0) {
         return `${teamName}: Schedule data unavailable`;
       }
@@ -1592,17 +1593,21 @@ export async function buildMlbScoutReport(game, options = {}) {
         }
       }
 
-      if (seriesGames > 0) {
-        // They've already played seriesGames games vs this opponent recently, so today is game seriesGames+1
-        parts.push(`Game ${seriesGames + 1} of series vs ${opponentName}`);
-      } else {
-        parts.push(`Game 1 of series vs ${opponentName}`);
+      if (withSeries) {
+        if (seriesGames > 0) {
+          // They've already played seriesGames games vs this opponent recently, so today is game seriesGames+1
+          parts.push(`Game ${seriesGames + 1} of series vs ${opponentName}`);
+        } else {
+          parts.push(`Game 1 of series vs ${opponentName}`);
+        }
       }
 
       return `${teamName}: ${parts.join('. ')}.`;
     };
 
     restScheduleSection = `${formatRestSchedule(homeTeam, homeRecentGames, awayTeam)}\n${formatRestSchedule(awayTeam, awayRecentGames, homeTeam)}`;
+    // Bucket layout: the series clause is SERIES STATE's line, not rest's.
+    restNoSeriesSection = `${formatRestSchedule(homeTeam, homeRecentGames, awayTeam, false)}\n${formatRestSchedule(awayTeam, awayRecentGames, homeTeam, false)}`;
   }
 
   // (HP umpire line built then REMOVED same hour — founder, Aug 12: "the
@@ -2621,8 +2626,8 @@ export async function buildMlbScoutReport(game, options = {}) {
   const startLine = startTime ? `Start: ${new Date(startTime).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })} ET` : '';
   const dhLine = dhInfo ? `DOUBLEHEADER today${dhInfo.gameNumber ? ` — this is game ${dhInfo.gameNumber}` : ''}${dhInfo.split ? ' (split doubleheader)' : ''}.` : '';
 
-  // THE FOUR-BUCKET DESK (founder GO, Sep 1 2026): same pieces, grouped by
-  // club, then interaction, then surroundings, then price. Selected by
+  // THE THREE-BUCKET DESK (founder GO, Sep 1 2026): same pieces, grouped by
+  // club, then tonight's game, then price. Selected by
   // GARY_MLB_DESK_LAYOUT=buckets (or options.deskLayout); production stays
   // on the flat desk below until the founder flips it.
   const teamPieces = (side, name) => ({
@@ -2667,12 +2672,10 @@ export async function buildMlbScoutReport(game, options = {}) {
       sharedLastNight: lastNightShared,
       sharedBoxScores: boxScoresShared.length ? boxScoresShared.join('\n\n') : null,
       park: shelfHalf('MLB_PARK_FACTORS', 'home'),
-    },
-    situation: {
+      weather: weatherSection || null,
       scheduleShape: scheduleShapeBlock || null,
       lookahead: lookaheadBlock || null,
-      rest: restScheduleSection || null,
-      weather: weatherSection || null,
+      rest: restNoSeriesSection || null,
       news: gameContextGrounding || null,
       storylines: storylinesGrounding || null,
     },

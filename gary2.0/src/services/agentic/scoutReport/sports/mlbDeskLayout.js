@@ -1,11 +1,13 @@
 /**
- * THE FOUR-BUCKET DESK (founder GO, Sep 1 2026): the same facts the flat
+ * THE THREE-BUCKET DESK (founder GO, Sep 1 2026): the same facts the flat
  * desk carries, regrouped the way a bettor reads a game —
  *
  *   THE TEAMS      who they are: one whole dossier per club, home first
- *   THE MATCHUP    how they interact: series, season series, park — nothing
- *                  restated from the team blocks
- *   THE SITUATION  what surrounds tonight: schedule, rest, weather, news
+ *   THE MATCHUP    tonight's game: series, the park and its weather, schedule
+ *                  and rest, the day's news — nothing restated from the
+ *                  team blocks. (A separate SITUATION bucket lived for one
+ *                  build — founder, same day: the two were splitting one
+ *                  subject; rest said "game 1 of series" beside series state.)
  *   THE MARKET     the price — last, by the Sep 1 ruling (BETTING CONTEXT
  *                  rides the desk end so Gary reads the game before the odds)
  *
@@ -40,8 +42,7 @@ export const TEAM_SUBSECTIONS = [
   'Roster moves',
 ];
 
-export const MATCHUP_SUBSECTIONS = ['Series state', 'The park'];
-export const SITUATION_SUBSECTIONS = ['Schedule shape', 'Rest', 'Weather', "Today's breaking news"];
+export const MATCHUP_SUBSECTIONS = ['Series state', 'The park', 'Schedule and rest', "Today's news"];
 export const MARKET_SUBSECTIONS = ['Betting context'];
 
 const BAR = '━'.repeat(66);
@@ -114,24 +115,22 @@ function renderMatchup(m) {
     has(m.sharedBoxScores) ? m.sharedBoxScores : null,
   ]);
   return [
-    bucket('THE MATCHUP', 'how they interact'),
+    bucket('THE MATCHUP', "tonight's game"),
     sub('Series state', series),
-    sub('The park', has(m.park) ? m.park : absent('park profile')),
-  ].join('\n\n');
-}
-
-function renderSituation(s) {
-  return [
-    bucket('THE SITUATION', 'what surrounds tonight'),
-    sub('Schedule shape', joinBlocks([
-      has(s.scheduleShape) ? s.scheduleShape : absent('Schedule shape'),
-      has(s.lookahead) ? `Looking ahead:\n${s.lookahead}` : null,
+    // Weather rides the park — same physical place. It posts to the game
+    // feed only near first pitch, so a pending line is not a broken lane.
+    sub('The park', joinBlocks([
+      has(m.park) ? m.park : absent('park profile'),
+      has(m.weather) ? m.weather : 'Weather: not yet posted in the game feed for this build.',
     ])),
-    sub('Rest', has(s.rest) ? s.rest : absent('Rest data')),
-    sub('Weather', has(s.weather) ? s.weather : 'Weather: not yet posted in the game feed for this build.'),
-    sub("Today's breaking news", joinBlocks([
-      has(s.news) ? s.news : 'No same-day breaking news.',
-      has(s.storylines) ? `— THE STORYLINES —\n${s.storylines}` : null,
+    sub('Schedule and rest', joinBlocks([
+      has(m.scheduleShape) ? m.scheduleShape : absent('Schedule shape'),
+      has(m.lookahead) ? `Looking ahead:\n${m.lookahead}` : null,
+      has(m.rest) ? m.rest : absent('Rest data'),
+    ])),
+    sub("Today's news", joinBlocks([
+      has(m.news) ? m.news : 'No same-day breaking news.',
+      has(m.storylines) ? `— THE STORYLINES —\n${m.storylines}` : null,
     ])),
   ].join('\n\n');
 }
@@ -148,8 +147,8 @@ function renderMarket(mk) {
  * @param {string} p.header    the matchup/venue/start lines (no series, no weather — those have buckets)
  * @param {object} p.home      per-team pieces, see renderTeam
  * @param {object} p.away
- * @param {object} p.matchup   { seriesState, seasonSeries, divisionGame, seriesStories, sharedLastNight, sharedBoxScores, park }
- * @param {object} p.situation { scheduleShape, lookahead, rest, weather, news, storylines }
+ * @param {object} p.matchup   { seriesState, seasonSeries, divisionGame, seriesStories, sharedLastNight,
+ *                               sharedBoxScores, park, weather, scheduleShape, lookahead, rest, news, storylines }
  * @param {object} p.market    { odds }
  */
 export function renderBucketsDesk(p) {
@@ -160,7 +159,6 @@ export function renderBucketsDesk(p) {
     renderTeam(p.home),
     renderTeam(p.away),
     renderMatchup(p.matchup || {}),
-    renderSituation(p.situation || {}),
     renderMarket(p.market || {}),
   ].join('\n\n').trim();
 }

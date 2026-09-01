@@ -13,7 +13,7 @@
 import { existsSync, mkdirSync, appendFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { TEAM_SUBSECTIONS, MATCHUP_SUBSECTIONS, SITUATION_SUBSECTIONS, MARKET_SUBSECTIONS } from './mlbDeskLayout.js';
+import { TEAM_SUBSECTIONS, MATCHUP_SUBSECTIONS, MARKET_SUBSECTIONS } from './mlbDeskLayout.js';
 
 const REQUIRED = [
   ['THE SITUATION', '═══ THE SITUATION ═══'],
@@ -47,19 +47,17 @@ const OPTIONAL = [
   ['THE PEN, AS REPORTED', '═══ THE PEN, AS REPORTED ═══'],
 ];
 
-// THE FOUR-BUCKET DESK (Sep 1 2026) grades by subsection marker instead:
+// THE THREE-BUCKET DESK (Sep 1 2026) grades by subsection marker instead:
 // each team subsection must appear once per club, the rest once. Labels
 // are the layout module's own (mlbDeskLayout.js); `count` is how many
-// occurrences a complete desk carries.
+// occurrences a complete desk carries. (Weather rides The park and posts
+// only near first pitch; its pending line is not absence language.)
 const REQUIRED_BUCKETS = [
   ...TEAM_SUBSECTIONS.map((label) => [label, `── ${label} ──`, 2]),
   ...MATCHUP_SUBSECTIONS.map((label) => [label, `── ${label} ──`, 1]),
-  ...SITUATION_SUBSECTIONS.filter((l) => l !== 'Weather').map((label) => [label, `── ${label} ──`, 1]),
   ...MARKET_SUBSECTIONS.map((label) => [label, `── ${label} ──`, 1]),
 ];
-// Weather posts to the game feed only near first pitch — a pending line on
-// an early build is not a broken lane.
-const OPTIONAL_BUCKETS = [['Weather', '── Weather ──', 1]];
+const OPTIONAL_BUCKETS = [];
 
 const ABSENCE_RX = /failed this run|retrieval failed|treat as missing/i;
 

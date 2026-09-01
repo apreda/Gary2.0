@@ -40,12 +40,10 @@ const pieces = () => ({
     sharedLastNight: null,
     sharedBoxScores: null,
     park: 'Truist Park: open-air, 400 to center, plays close to neutral for runs and homers in the summer months.',
-  },
-  situation: {
+    weather: 'Weather: Clear, 84°F, Wind: 6 mph, Out To CF',
     scheduleShape: 'Atlanta Braves: Game 1 of a 6-game homestand.\nSan Francisco Giants: Game 2 of a 7-game road trip.',
     lookahead: 'Atlanta Braves: same series continues tomorrow.',
-    rest: 'Atlanta Braves: 0 days rest (played yesterday). Game 2 of series vs San Francisco Giants.',
-    weather: 'Weather: Clear, 84°F, Wind: 6 mph, Out To CF',
+    rest: 'Atlanta Braves: 0 days rest (played yesterday).\nSan Francisco Giants: 0 days rest (played yesterday).',
     news: 'No same-day breaking news.',
     storylines: 'The Giants arrive off a doubleheader split.',
   },
@@ -53,12 +51,18 @@ const pieces = () => ({
 });
 
 describe('renderBucketsDesk', () => {
-  it('orders the four buckets TEAMS → MATCHUP → SITUATION → MARKET, home team first', () => {
+  it('orders the three buckets TEAMS → MATCHUP → MARKET, home team first, no SITUATION bucket', () => {
     const text = renderBucketsDesk(pieces());
     const at = (s) => { const i = text.indexOf(s); expect(i, `missing "${s}"`).toBeGreaterThan(-1); return i; };
     expect(at('THE TEAMS')).toBeLessThan(at('THE MATCHUP'));
-    expect(at('THE MATCHUP')).toBeLessThan(at('THE SITUATION'));
-    expect(at('THE SITUATION')).toBeLessThan(at('THE MARKET'));
+    expect(at('THE MATCHUP')).toBeLessThan(at('THE MARKET'));
+    expect(text).not.toContain('THE SITUATION');
+    // Inside THE MATCHUP: series → park (with weather) → schedule and rest → news.
+    expect(at('── Series state ──')).toBeLessThan(at('── The park ──'));
+    expect(at('── The park ──')).toBeLessThan(at('Weather: Clear, 84°F'));
+    expect(at('Weather: Clear, 84°F')).toBeLessThan(at('── Schedule and rest ──'));
+    expect(at('── Schedule and rest ──')).toBeLessThan(at("── Today's news ──"));
+    expect(at("── Today's news ──")).toBeLessThan(at('THE MARKET'));
     expect(at('═══ ATLANTA BRAVES ═══')).toBeLessThan(at('═══ SAN FRANCISCO GIANTS ═══'));
     expect(at('═══ SAN FRANCISCO GIANTS ═══')).toBeLessThan(at('THE MATCHUP'));
   });
@@ -97,9 +101,11 @@ describe('renderBucketsDesk', () => {
     p.home.lastNight = null;
     p.home.boxScores = null;
     p.matchup.park = null;          // required → absence line
+    p.matchup.weather = null;       // pending, not absent — its own wording
     const text = renderBucketsDesk(p);
     expect(text).toContain('Atlanta Braves: team season stats unavailable this run');
     expect(text).toContain('park profile unavailable this run');
+    expect(text).toContain('Weather: not yet posted in the game feed for this build.');
     const homeBlock = text.slice(text.indexOf('═══ ATLANTA BRAVES ═══'), text.indexOf('═══ SAN FRANCISCO GIANTS ═══'));
     expect(homeBlock).not.toContain('As reported:');
     expect(homeBlock).not.toContain('As written:');
@@ -127,7 +133,8 @@ describe('renderBucketsDesk', () => {
     const audit = auditDeskManifest(renderBucketsDesk(pieces()), 'buckets');
     expect(audit.missing).toEqual([]);
     expect(audit.empty).toEqual([]);
-    expect(audit.present.length).toBeGreaterThan(15);
+    // 10 team subsections (graded once each, both clubs) + 4 matchup + 1 market.
+    expect(audit.present.length).toBe(15);
   });
 
   it('is flagged by the manifest when a per-team subsection appears for only one club', () => {
