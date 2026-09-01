@@ -487,7 +487,10 @@ private enum FootballEvidence {
         let first = value.components(separatedBy: CharacterSet(charactersIn: ".\n")).first?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? value
         guard !first.isEmpty else { return nil }
-        return first.count <= 96 ? first : String(first.prefix(93)) + "…"
+        // NO ELLIPSIS EVER (founder hard law): the first sentence prints whole.
+        // The old 96-char cap chopped it to 93 chars + "…" — truncation is
+        // never acceptable; the row wraps instead (found in the Sep 1 audit).
+        return first
     }
 
     static func availability(from pick: GaryPick?, awayLabel: String,
