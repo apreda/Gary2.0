@@ -2373,7 +2373,11 @@ export const mlbFetchers = {
           // TEAM-LABELED (Aug 12): the desk renders home + away values back
           // to back, so unheadered arm lines read as ONE anonymous list —
           // Gary couldn't tell whose pen was whose (the Orioles-Twins miss).
-          lines.push(`${teamName} pen${rosterFiltered ? ' (current roster)' : ''}:`);
+          // LABEL TRUTH (founder, Sep 1 2026): these are FULL-SEASON lines.
+          // "current" only says which arms are counted (tonight's roster);
+          // the old "(current roster)" / "(current arms, season)" labels were
+          // being quoted back as if they described what the pen is doing now.
+          lines.push(`${teamName} pen${rosterFiltered ? ' — arms on tonight\'s roster, full-season lines' : ' — full-season lines'}:`);
           // HANDEDNESS + SEASON USAGE PATTERN (founder GO, Aug 18): the arm's
           // throwing side and the manager's actual rules for him — how often
           // he works back-to-back days, his pitch loads, multi-inning use —
@@ -2426,7 +2430,7 @@ export const mlbFetchers = {
             uWhipOuts += a.whipOuts;
           }
           if (uOuts > 0) {
-            lines.push(`${teamName} pen as a unit (${rosterFiltered ? 'current arms, ' : ''}season): ${((uEr * 27) / uOuts).toFixed(2)} ERA, ${(uWhipOuts / uOuts).toFixed(2)} WHIP over ${Math.floor(uOuts / 3)}.${uOuts % 3} IP`);
+            lines.push(`${teamName} pen as a unit, full season${rosterFiltered ? ' (arms on tonight\'s roster only)' : ''}: ${((uEr * 27) / uOuts).toFixed(2)} ERA, ${(uWhipOuts / uOuts).toFixed(2)} WHIP over ${Math.floor(uOuts / 3)}.${uOuts % 3} IP — not a recent-form figure; recent work is under Workload`);
           }
           continue;
         }
