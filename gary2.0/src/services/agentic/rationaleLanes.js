@@ -35,6 +35,12 @@ export const LANES = [
   ['discounts_momentum', /not momentum|not the (handicap|bet|foundation)|set(ting)? the streaks aside|does not decide|do not determine|not predictive/i],
   ['schedule_rest', /day off|off day|rest|travel|doubleheader|getaway|road trip|homestand/i],
   ['line_history', /line (history|moved|movement)|opened at|first seen/i],
+  // Football lanes (Sep 1 2026) — the desk sections a football rationale cites.
+  ['fb_quarterback', /quarterback|\bQB\b|passer|under center/i],
+  ['fb_epa_success', /\bEPA\b|success rate|yards per play|explosive/i],
+  ['fb_pressure_trenches', /pressure rate|sack|pass protection|offensive line|defensive line|trench/i],
+  ['fb_injury_report', /questionable|doubtful|out for|inactive|injury report/i],
+  ['fb_spread_key_number', /key number|\bhook\b|cover(ed|ing)? the (spread|number)|by more than|within the number/i],
 ];
 
 /** Lane keys present in one rationale. */

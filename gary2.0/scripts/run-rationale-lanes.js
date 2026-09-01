@@ -43,6 +43,22 @@ export async function tagRationaleLanes(dates) {
       rows.push(laneRowFor(d.date, p, r));
     }
   }
+  // NFL lives in its own weekly table; its results carry the game date.
+  const { data: nflRes } = await db.from('nfl_results').select('game_id, game_date, result, pick_text').in('game_date', dates);
+  if (nflRes?.length) {
+    const wanted = new Set(nflRes.map((r) => String(r.game_id)));
+    const byNfl = new Map(nflRes.map((r) => [`${String(r.game_id)}|${r.pick_text}`, r]));
+    const { data: weeks } = await db.from('weekly_nfl_picks').select('picks').order('created_at', { ascending: false }).limit(6);
+    for (const w of weeks || []) {
+      for (const p of w.picks || []) {
+        const gid = String(p?.bdl_game_id ?? p?.game_id ?? '');
+        if (!p?.pick || !p?.rationale || !wanted.has(gid)) continue;
+        const r = byNfl.get(`${gid}|${p.pick}`) || null;
+        if (!r) continue;
+        rows.push(laneRowFor(r.game_date, { ...p, league: 'NFL', game_id: gid }, r));
+      }
+    }
+  }
   if (rows.length) {
     const { error: e3 } = await db.from('pick_rationale_lanes').upsert(rows, { onConflict: 'game_date,league,game_id,pick_text' });
     if (e3) throw e3;

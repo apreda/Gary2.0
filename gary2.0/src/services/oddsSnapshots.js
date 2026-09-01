@@ -1,6 +1,6 @@
 /**
  * ODDS SNAPSHOTS (founder GO, Sep 1 2026 — "make the price a real leg"):
- * every MLB board the odds service fetches is recorded once per change, so
+ * every MLB/NFL/NCAAF board the odds service fetches is recorded once per change, so
  * the desk can say where a line opened for the day and where it is now.
  * Our own T90/T60/T30/T15 fetches were the free source nobody kept.
  *
@@ -19,6 +19,8 @@ async function db() {
   }
   return _db;
 }
+// MLB and both football lanes keep price history (Sep 1 2026).
+const SNAPSHOT_SPORTS = new Set(['baseball_mlb', 'americanfootball_nfl', 'americanfootball_ncaaf']);
 const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
 const etDate = (iso) => (iso ? new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null);
 
@@ -38,7 +40,7 @@ const sameBoard = (a, b) => a && b && ['moneyline_home', 'moneyline_away', 'spre
 /** Record the boards of a fetched slate. Never throws. */
 export async function recordOddsSnapshots(sport, games) {
   try {
-    if (sport !== 'baseball_mlb' || !Array.isArray(games) || games.length === 0) return 0;
+    if (!SNAPSHOT_SPORTS.has(sport) || !Array.isArray(games) || games.length === 0) return 0;
     const rows = games
       .map((g) => {
         const gameId = String(g.bdl_game_id ?? g.id ?? '');

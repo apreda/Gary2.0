@@ -35,6 +35,7 @@ import {
 } from '../shared/dataFetchers.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
 import { footballSeasonForDate, footballSeasonLabel } from './footballSeason.js';
+import { getOddsHistory, formatLineHistory } from '../../../oddsSnapshots.js';
 import { ncaafTeamConferenceId } from '../../../ncaafGamePolicy.js';
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1249,6 +1250,17 @@ ${filteredPlayers.join(', ')}
 
   // Build verified Tale of Tape ONCE and reuse in report text + return object
   const verifiedTaleOfTape = buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayProfile, sportKey, injuries, recentHome, recentAway);
+
+  // LINE HISTORY (Sep 1 2026 — the price as a real leg): where this week's
+  // board was first seen and where it is now, from our own snapshots.
+  try {
+    const lhGameId = game.bdl_game_id ?? game.id;
+    const lhDay = game.commence_time ? new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null;
+    if (lhGameId != null && lhDay) {
+      const lhHist = await getOddsHistory('americanfootball_ncaaf', lhDay, lhGameId);
+      game._lineHistory = formatLineHistory(lhHist, game, game.home_team, game.away_team);
+    }
+  } catch { /* history is additive */ }
 
   const report = `
 ${seasonLongInjuriesSection}══════════════════════════════════════════════════════════════════════

@@ -3,6 +3,7 @@
  * Core data fetching functions used by ALL sports in scout report generation.
  */
 
+import { GAME_ML_CAP } from '../../orchestrator/orchestratorConfig.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { fetchNbaInjuriesForGame } from '../../../nbaInjuryReportService.js';
 import axios from 'axios';
@@ -3561,6 +3562,28 @@ export function formatOdds(game, sport = '') {
     lines.push(`Moneyline: ${game.h2h}`);
   } else {
     lines.push('Moneyline: Not available');
+  }
+
+  // MENU TRUTH for the house limit (founder GO, Sep 1 2026 — the MLB desk's
+  // rule, applied to football): a moneyline heavier than the cap is not a
+  // ticket and the desk says so before the read. The legal menu prints on
+  // every game. Payout law stated as data, no steering.
+  if (!isNHL) {
+    const capped = (v) => Number.isFinite(parseFloat(v)) && Number(v) < GAME_ML_CAP;
+    const tickets = [];
+    const dropped = [];
+    for (const [name, ml, sp, spOdds] of [
+      [game.away_team, mlAway, spreadAway, spreadAwayOdds],
+      [game.home_team, mlHome, spreadHome, spreadHomeOdds],
+    ]) {
+      if (ml !== null && Number.isFinite(parseFloat(ml))) (capped(ml) ? dropped : tickets).push(`${name} ${formatMoneyline(ml)}`);
+      if (sp !== null && spOdds !== null && spOdds !== undefined && spOdds !== '' && Number.isFinite(Number(spOdds))) {
+        tickets.push(`${name} ${formatSignedSpread(sp)} (${formatAmericanPrice(spOdds)})`);
+      }
+    }
+    if (dropped.length) lines.push(`House limit: no moneyline heavier than ${GAME_ML_CAP}. ${dropped.join(' and ')} is past it and is not a ticket this week.`);
+    if (tickets.length) lines.push(`Tickets on this game: ${tickets.join(' · ')}`);
+    if (game._lineHistory) lines.push(game._lineHistory);
   }
 
   // Total - parse for database storage but do NOT display to Gary
