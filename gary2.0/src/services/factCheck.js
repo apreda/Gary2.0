@@ -3,7 +3,7 @@
  * actually happened in the game.
  *
  * One cheap content call per graded game pick (no grounding, no tools —
- * generateSolText's cascade since Aug 24 2026, claude-sonnet-5 first): the
+ * generateSolText cascade — codex-first since Sep 1 2026): the
  * model gets the rationale, the pick + result, and an evidence pack (final score plus
  * whatever one cheap fetch provides — for MLB, the BDL per-game player stats we
  * already pull at grading time). It extracts the 3-6 most load-bearing

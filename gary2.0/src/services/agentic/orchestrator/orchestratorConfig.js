@@ -1,45 +1,28 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// MODEL POLICY (Aug 24 2026 — Gemini retired; founder: "no more gemini for
-// anything"). Two vendors: Anthropic (API for tool-calling research/legacy
-// lanes, CLI subscription bridge for content/brains at $0) and ChatGPT (the
-// codex bridge for the Sol brains, OpenAI API as a search rung). The session
-// seam (validateSessionModel below) refuses any gemini-* name at runtime.
+// MODEL POLICY (Sep 1 2026 — the founder's Claude weekly subscription carries
+// ZERO Gary traffic). Two vendors, three roles:
+//   · ChatGPT codex bridge ($0 on GPT Pro): every game/props BRAIN, every
+//     CONTENT pass, and the first grounded-SEARCH rung.
+//   · Metered APIs as rare fallbacks only: OpenAI Responses web_search, then
+//     Anthropic server search; the model cascade's anthropic- rungs.
+//   · The Claude CLI adapter still exists as plumbing but nothing in
+//     production names a claude-* model anymore.
+// Gemini stays eradicated (founder, Aug 24: "no more gemini for anything");
+// the session seam (validateSessionModel below) refuses any gemini-* name.
 // ═══════════════════════════════════════════════════════════════════════════
 
-// GAME PICKS run the FULL orchestrator prompt stack on GPT-5.6 Sol (founder,
-// Jul 22 2026 PM: "the only thing we should have changed is that we are using
-// Sol 5.6 now" — same pick process, new brain; routed via the OpenAI adapter
-// seam in sessionManager, same as the July 5.5 bake-off).
-//
-// SUBSCRIPTION BRIDGE (founder, Jul 29 2026): while API balances are paused,
-// GARY_MODEL_OVERRIDE=claude-fable-5 swaps the game brain onto the founder's
-// Claude subscription via the claudeCliSession adapter ($0 marginal). The
-// Gemini cascade stays behind it, firing only if the bridge brain itself
-// fails. Unset the env var and the system is exactly the Sol architecture —
-// the API stack returns with the next balance top-up, zero code changes.
+// Non-MLB game lanes' configured brain; production's scheduler plist sets
+// GARY_MODEL_OVERRIDE=codex-gpt-5.6-sol so every game brain rides the bridge.
 export const GAME_PICK_MODEL = process.env.GARY_MODEL_OVERRIDE || 'gpt-5.6-sol';
 
-// JUNE ENGINE RESTORATION (Aug 18 2026, founder GO after the ledger
-// post-mortem: June +26u/58% on this engine, negative every week since the
-// Jul 22-26 cutover): MLB games return to the agentic orchestrator.
-// - Research assistant: Anthropic API Haiku (founder's cost call, Aug 18:
-//   $1/$5 — the cheapest tools-capable tier anywhere; ~$3-6/night for the
-//   full slate). The CLI sub bridges are tool-less by construction and
-//   research needs 25+ fetch_stats calls per game, so the researcher is the
-//   ONE metered piece of the lane.
-// - Brain: Sol on the $0 codexCli bridge (founder's cost call, Aug 18) —
-//   tool-less, reads the researcher's briefing as its evidence (the football
-//   pattern). Full-June paid upgrade whenever he wants it:
-//   GARY_MLB_BRAIN_MODEL=gpt-5.6-sol → API Sol WITH self-verification tools
-//   (~$10-20/night more).
-// Both env-overridable; the June engine is MLB's ONLY game lane (founder,
-// Aug 27 — the arming flag and pickdesk default are retired; key
-// requirement follows the research model's provider).
-// Aug 18 PM (founder: "why keep Gemini for football — one system"): the
-// researcher is Haiku for EVERY game sport, not just MLB. Same checklist
-// walk, same tools, per-sport factor lists.
+// THE RESEARCHER IS DEAD (founder, Aug 27 2026 — all sports): the desk is the
+// entire evidence and the brains run tool-less. GAME_RESEARCH_MODEL survives
+// ONLY as validateSessionModel's reroute target for refused model names.
 export const GAME_RESEARCH_MODEL = process.env.GARY_RESEARCH_MODEL || 'anthropic-claude-haiku-4-5';
-export const MLB_RESEARCH_MODEL = process.env.GARY_MLB_RESEARCH_MODEL || GAME_RESEARCH_MODEL;
+// (MLB_RESEARCH_MODEL deleted Sep 1 2026 — zero consumers after the
+// researcher kill.)
+// The MLB June brain: Sol on the $0 codex bridge. GARY_MLB_BRAIN_MODEL is the
+// env seam for a paid API-Sol experiment run.
 export const MLB_JUNE_BRAIN_MODEL = process.env.GARY_MLB_BRAIN_MODEL || 'codex-gpt-5.6-sol';
 
 // HOUSE LIMIT (founder, Aug 18 — restored from the pickdesk-era -179 rule):
@@ -56,14 +39,11 @@ export const GAME_ML_CAP = Number(process.env.GARY_ML_CAP || -179);
 // primary, a fallback, or a default anywhere. The legacy constants below
 // now resolve to the brains we actually run so an env-less spawn can never
 // land on a dead vendor (same lesson as solText, Aug 21).
-// Legacy lanes do TOOL-CALLING, and the Claude CLI adapter is deliberately
-// tools-free (brain calls only) — so these route to the Anthropic API
-// adapter ('anthropic-' prefix), which carries tools. ⚑Verify the NBA/NHL/
-// NCAAB pick paths on these models before their seasons open (~Oct 1).
-export const LEGACY_BRAIN_MODEL = 'anthropic-claude-sonnet-5';
+// Props-cascade last resort (metered Anthropic API — carries tools if a lane
+// ever needs them). LEGACY_BRAIN_MODEL deleted Sep 1 2026, zero consumers;
+// ⚑verify the pinned NBA pick path before its season opens (~Oct 1).
 export const LEGACY_BRAIN_FALLBACK = 'anthropic-claude-haiku-4-5';
-// Research / tool-calling investigation for the legacy non-MLB lanes — the
-// same Haiku the June engine's researcher runs (Anthropic API pool).
+// validateSessionModel's reroute target for refused model names.
 export const LEGACY_RESEARCH_MODEL = 'anthropic-claude-haiku-4-5';
 // Props lane default = the brain the plists actually set (codex bridge).
 export const PROPS_DESK_MODEL = process.env.GARY_PROPS_MODEL_OVERRIDE || 'codex-gpt-5.6-sol';

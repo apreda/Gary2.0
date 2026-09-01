@@ -4,7 +4,7 @@
  * took, how the game swung, and the bet's fate.
  *
  * One cheap content call per graded game pick (no grounding, no tools —
- * generateSolText's cascade since Aug 24 2026, claude-sonnet-5 first): the
+ * generateSolText cascade — codex-first since Sep 1 2026): the
  * model gets the pick + odds + graded result and the same evidence pack the
  * fact checker grades against (final score plus, for MLB, the BDL per-game
  * player stats we already pull at grading time). Every fact in the recap must
