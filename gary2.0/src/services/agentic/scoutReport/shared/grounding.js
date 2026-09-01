@@ -321,7 +321,7 @@ ${snapshot.join('\n')}
  */
 async function groundedTransport(prompt, options = {}) {
   const viaBridge = await codexCliWebSearch(prompt, {
-    timeoutMs: options.timeoutMs ?? 5 * 60 * 1000,
+    timeoutMs: options.timeoutMs ?? 8 * 60 * 1000,
   });
   if (viaBridge.success && viaBridge.data) return viaBridge;
   console.warn('[Grounding Search] codex bridge empty/failed — trying Anthropic server web search');

@@ -14,7 +14,7 @@ import { anthropicWebSearchRaw } from './anthropicWebSearch.js';
 // second. Prompts here carry their own date anchors, so no extra wrapping.
 // Returns text or null.
 async function groundedPropsSearch(prompt, { maxTokens = 3000 } = {}) {
-  const viaBridge = await codexCliWebSearch(prompt, { timeoutMs: 5 * 60 * 1000 });
+  const viaBridge = await codexCliWebSearch(prompt, { timeoutMs: 8 * 60 * 1000 });
   if (viaBridge.success && viaBridge.data) return viaBridge.data;
   console.warn('[Props Search] codex bridge empty/failed — trying Anthropic server web search');
   const viaApi = await anthropicWebSearchRaw(prompt, { maxTokens });

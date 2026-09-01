@@ -198,7 +198,11 @@ export async function codexCliWebSearch(prompt, options = {}) {
       '-c', 'model_reasoning_effort="low"',
       '-',
     ];
-    const { code, stdout, stderr } = await runCodex(args, prompt, options.timeoutMs || 5 * 60 * 1000);
+    // 8 minutes: the Sep 1 NFL Week-1 smoke showed heavy multi-part football
+    // queries running past the old 5m cap (3 of 4 timed out) while completed
+    // ones landed 6-17K chars — and with the metered fallback rung subject to
+    // wallet balance, the $0 rung finishing is worth the extra headroom.
+    const { code, stdout, stderr } = await runCodex(args, prompt, options.timeoutMs || 8 * 60 * 1000);
     if (code !== 0) throw toError(stderr || stdout);
     const { text } = parseEvents(stdout);
     const clean = String(text || '').trim();
