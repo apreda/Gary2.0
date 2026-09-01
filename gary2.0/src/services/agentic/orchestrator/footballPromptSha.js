@@ -15,9 +15,9 @@ const SHARED_SURFACE = [
   './garySystemPrompt.js',
   '../constitution/index.js',
   './spreadEvaluationFactors.js',
-  './footballResearchPolicy.js',
-  // (researchBriefing.js, investigationFactors.js, flashInvestigationPrompts.js
-  // deleted Sep 1 2026 — the researcher's corpse left the tree.)
+  // (researchBriefing.js, investigationFactors.js, flashInvestigationPrompts.js,
+  // footballResearchPolicy.js deleted Sep 1 2026 — the researcher's corpse
+  // left the tree.)
   './responseParser.js',
   '../scoutReport/shared/dataFetchers.js',
   '../scoutReport/shared/anthropicFootballGrounding.js',

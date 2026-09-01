@@ -29,8 +29,7 @@ export const BALLDONTLIE_API_BASE_URL = 'https://api.balldontlie.io';
 // All BDL HTTP calls share a hard 12s deadline so a stalled connection
 // surfaces as a transient error (retried by getCachedOrFetch) instead of
 // hanging on the ~75-120s OS TCP timeout. Every other outbound service in
-// this repo (gemini, moneyPuck, nhlStatsApi, draftKings) already sets one;
-// BDL was the outlier (June 3 2026 hardening).
+// this repo already sets one; BDL was the outlier (June 3 2026 hardening).
 const BDL_TIMEOUT_MS = 12000;
 const bdlHttp = axios.create({ timeout: BDL_TIMEOUT_MS });
 
@@ -4114,7 +4113,8 @@ const ballDontLieService = {
         };
         const path = endpointMap[sportKey];
         if (!path) {
-          // NCAAF/NCAAB: Return empty silently - Gemini Grounding provides opt-out/injury context
+          // NCAAF: BDL has no college injuries endpoint — grounded search
+          // supplies opt-out/injury context on the desk instead.
           return [];
         }
         const qs = buildQuery(params);

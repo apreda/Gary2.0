@@ -10,7 +10,6 @@ import { shouldReuseScoutReport } from '../statsSubstance.js';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from 'fs';
 import { join } from 'path';
 import { createHash } from 'crypto';
-import { resolveNflResearchBaseline } from './footballResearchPolicy.js';
 import { homeSpreadReference } from '../../marketTruth.js';
 import { footballPromptSha } from './footballPromptSha.js';
 
@@ -130,7 +129,6 @@ export async function analyzeGame(game, sport, options = {}) {
     const injuries = typeof scoutReportData === 'object' ? scoutReportData.injuries : null;
     // Extract verified Tale of the Tape (pre-computed stats for pick card display)
     const verifiedTaleOfTape = typeof scoutReportData === 'object' ? scoutReportData.verifiedTaleOfTape : null;
-    const researchBaseline = resolveNflResearchBaseline(sport, verifiedTaleOfTape);
     // Extract venue context (for NBA Cup, neutral site games, CFP games, etc.)
     const venueContext = typeof scoutReportData === 'object' ? {
       venue: scoutReportData.venue,
@@ -257,14 +255,6 @@ context for player-level evaluation. Investigate the game thoroughly first.
       awayRecord,
       // Pass Flash's investigation-ready scout report (includes Tale of Tape + token menu)
       scoutReport: flashText,
-      // NFL preseason: use the same verified prior-season performance baseline
-      // already printed in the scout report. This avoids an empty current-year
-      // refetch while preserving explicit provenance in every research finding.
-      ...(researchBaseline ? {
-        researchSeason: researchBaseline.season,
-        researchSeasonScope: researchBaseline.scope,
-        researchSeasonLabel: researchBaseline.label
-      } : {}),
       // Optional sport-specific Pass 2.5 decision guards (phase-aligned)
       pass25DecisionGuards: (typeof constitution === 'object' ? constitution.pass25DecisionGuards || '' : ''),
       bilateralCasePrompt: (typeof constitution === 'object' ? constitution.bilateralCasePrompt || null : null),

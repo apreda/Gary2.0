@@ -1778,10 +1778,10 @@ Output JSON only:
 
 One entry per game listed above. Copy each GAME KEY exactly into game_key.`;
 
-    // Arms used to retry only PROPS_DESK_MODEL. When that points at the
-    // Claude subscription and its weekly tank is empty, every retry hits the
-    // same wall and the entire day stays blank. Use the same independent
-    // provider chain as Gary's desks: Claude -> Codex/GPT -> Gemini.
+    // Arms used to retry only PROPS_DESK_MODEL. When that points at one
+    // subscription and its tank is empty, every retry hits the same wall and
+    // the entire day stays blank. Use the same independent provider chain as
+    // Gary's desks: codex GPT Pro bridge -> metered Anthropic API rungs.
     const models = [...new Set([PROPS_DESK_MODEL, ...DESK_FALLBACK_MODELS])];
     const failures = [];
     for (const modelName of models) {
