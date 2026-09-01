@@ -1,7 +1,11 @@
 import type { MetadataRoute } from 'next';
 import { SPORTS } from '@/lib/gary/leagues';
+import { fetchPickIndex, gamePagePaths } from '@/lib/gary/gamepage';
+import { todayEST } from '@/lib/gary/dates';
 
 const BASE_URL = 'https://www.betwithgary.ai';
+
+export const revalidate = 3600;
 
 type ChangeFrequency = NonNullable<MetadataRoute.Sitemap[number]['changeFrequency']>;
 
@@ -19,8 +23,13 @@ const entry = (
   priority,
 });
 
-export default function sitemap(): MetadataRoute.Sitemap {
-  return [
+/**
+ * The static map plus every per-game page Gary has ever published (Sep 1 2026).
+ * A day still being graded changes daily; a settled day never changes again.
+ * The index view is light (keys only), so the whole season fits in one map.
+ */
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const fixed: MetadataRoute.Sitemap = [
     entry('/', 1, 'daily'),
     entry('/picks', 0.9, 'daily'),
     ...SPORTS.map(s => entry(`/picks/${s.slug}`, 0.9, s.retired ? 'yearly' : 'daily')),
@@ -38,4 +47,28 @@ export default function sitemap(): MetadataRoute.Sitemap {
     entry('/terms', 0.1, 'yearly'),
     entry('/privacy', 0.1, 'yearly'),
   ];
+
+  let games: MetadataRoute.Sitemap = [];
+  try {
+    const paths = gamePagePaths(await fetchPickIndex());
+    const today = todayEST();
+    const recent = (date: string) => date >= new Date(new Date(`${today}T12:00:00Z`).getTime() - 3 * 86400000).toISOString().slice(0, 10);
+    const days = new Set<string>();
+    const dayEntries: MetadataRoute.Sitemap = [];
+    for (const p of paths) {
+      const key = `${p.sport}|${p.date}`;
+      if (!days.has(key)) {
+        days.add(key);
+        dayEntries.push(entry(`/picks/${p.sport}/${p.date}`, 0.5, recent(p.date) ? 'daily' : 'yearly'));
+      }
+    }
+    games = [
+      ...dayEntries,
+      ...paths.map(p => entry(`/picks/${p.sport}/${p.date}/${p.slug}`, 0.6, recent(p.date) ? 'daily' : 'yearly')),
+    ];
+  } catch {
+    // The static map still ships; the game pages return on the next revalidation.
+  }
+
+  return [...fixed, ...games];
 }

@@ -9,7 +9,7 @@ import { logEvent } from '@/lib/gary/analytics';
 type Sel = { plan: 'all_access' | 'all_access_annual' | 'single'; sport?: string };
 
 export function PricingPlans() {
-  const [sel, setSel] = useState<Sel>({ plan: 'all_access' });
+  const [sel, setSel] = useState<Sel>({ plan: 'all_access_annual' });
 
   useEffect(() => {
     logEvent('paywall_viewed', { surface: 'web', trigger: 'pricing_page' });
@@ -33,52 +33,8 @@ export function PricingPlans() {
 
   return (
     <div>
-      {/* All-Access — the anchor */}
-      <button
-        onClick={() => pick({ plan: 'all_access' })}
-        className={`relative flex w-full items-center gap-4 rounded-panel border bg-card p-5 text-left transition-colors ${
-          isSel('all_access') ? 'border-gold/70 shadow-[0_0_0_1px_rgba(201,162,39,0.35)]' : 'border-line hover:border-white/25'
-        }`}
-      >
-        <span className="absolute -top-2.5 left-4 rounded-md bg-gold px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.04em] text-ink">
-          Best value · {PRICING.trialDays} days free
-        </span>
-        <Radio on={isSel('all_access')} />
-        <div className="min-w-0 flex-1">
-          <div className="font-mono text-sm font-bold tracking-[0.04em] text-hi">ALL-ACCESS</div>
-          <div className="mt-1 text-[13px] text-mid">Every sport&apos;s Winners board — the plays Gary backs</div>
-        </div>
-        <div className="text-right">
-          <div className="tnum font-mono text-lg font-bold text-gold">{PRICING.allAccessMonthly}</div>
-          <div className="font-mono text-[9px] uppercase tracking-[0.04em] text-low">per month</div>
-        </div>
-      </button>
-
-      {/* All-Access annual — the committed-bettor rate, half the monthly run-rate */}
-      <button
-        onClick={() => pick({ plan: 'all_access_annual' })}
-        className={`relative mt-4 flex w-full items-center gap-4 rounded-panel border bg-card p-5 text-left transition-colors ${
-          isSel('all_access_annual') ? 'border-gold/70 shadow-[0_0_0_1px_rgba(201,162,39,0.35)]' : 'border-line hover:border-white/25'
-        }`}
-      >
-        <span className="absolute -top-2.5 left-4 rounded-md bg-gold px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.04em] text-ink">
-          Save 50% vs monthly
-        </span>
-        <Radio on={isSel('all_access_annual')} />
-        <div className="min-w-0 flex-1">
-          <div className="font-mono text-sm font-bold tracking-[0.04em] text-hi">ALL-ACCESS — ANNUAL</div>
-          <div className="mt-1 text-[13px] text-mid">
-            Every board, all year · works out to {PRICING.allAccessAnnualMonthly}/mo
-          </div>
-        </div>
-        <div className="text-right">
-          <div className="tnum font-mono text-lg font-bold text-gold">{PRICING.allAccessAnnual}</div>
-          <div className="font-mono text-[9px] uppercase tracking-[0.04em] text-low">per year</div>
-        </div>
-      </button>
-
-      {/* Single sports — sold per board, the natural yes for a one-sport bettor */}
-      <div className="mt-7">
+      {/* Single sports lead (Sep 1 2026): the realistic first yes for a fan who knows one sport */}
+      <div>
         <div className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-low">
           Single sports — {PRICING.single}/mo each
         </div>
@@ -110,6 +66,50 @@ export function PricingPlans() {
           })}
         </div>
       </div>
+
+      {/* All-Access annual — the value rate, half the monthly run-rate */}
+      <button
+        onClick={() => pick({ plan: 'all_access_annual' })}
+        className={`relative mt-7 flex w-full items-center gap-4 rounded-panel border bg-card p-5 text-left transition-colors ${
+          isSel('all_access_annual') ? 'border-gold/70 shadow-[0_0_0_1px_rgba(201,162,39,0.35)]' : 'border-line hover:border-white/25'
+        }`}
+      >
+        <span className="absolute -top-2.5 left-4 rounded-md bg-gold px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.04em] text-ink">
+          Best value · {PRICING.trialDays} days free
+        </span>
+        <Radio on={isSel('all_access_annual')} />
+        <div className="min-w-0 flex-1">
+          <div className="font-mono text-sm font-bold tracking-[0.04em] text-hi">ALL-ACCESS — ANNUAL</div>
+          <div className="mt-1 text-[13px] text-mid">
+            Every board, all year · works out to {PRICING.allAccessAnnualMonthly}/mo
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="tnum font-mono text-lg font-bold text-gold">{PRICING.allAccessAnnual}</div>
+          <div className="font-mono text-[9px] uppercase tracking-[0.04em] text-low">per year</div>
+        </div>
+      </button>
+
+      {/* All-Access monthly — last on purpose: the $29.99 anchor is not the first number a new fan should meet */}
+      <button
+        onClick={() => pick({ plan: 'all_access' })}
+        className={`relative mt-4 flex w-full items-center gap-4 rounded-panel border bg-card p-5 text-left transition-colors ${
+          isSel('all_access') ? 'border-gold/70 shadow-[0_0_0_1px_rgba(201,162,39,0.35)]' : 'border-line hover:border-white/25'
+        }`}
+      >
+        <span className="absolute -top-2.5 left-4 rounded-md bg-gold px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.04em] text-ink">
+          {PRICING.trialDays} days free
+        </span>
+        <Radio on={isSel('all_access')} />
+        <div className="min-w-0 flex-1">
+          <div className="font-mono text-sm font-bold tracking-[0.04em] text-hi">ALL-ACCESS</div>
+          <div className="mt-1 text-[13px] text-mid">Every sport&apos;s Winners board — the plays Gary backs</div>
+        </div>
+        <div className="text-right">
+          <div className="tnum font-mono text-lg font-bold text-gold">{PRICING.allAccessMonthly}</div>
+          <div className="font-mono text-[9px] uppercase tracking-[0.04em] text-low">per month</div>
+        </div>
+      </button>
 
       {/* CTA */}
       <div className="mt-7 flex flex-col items-center gap-2">

@@ -15,6 +15,7 @@ import { buildBoard, fetchDailySlate } from '@/lib/gary/board';
 import { fetchAllGameResults, computeRecord, sinceDate } from '@/lib/gary/results';
 import { normalizeLeague, SPORTS, sportBySlug } from '@/lib/gary/leagues';
 import { todayEST, daysAgoEST, nowMs } from '@/lib/gary/dates';
+import { fetchLeagueDates } from '@/lib/gary/gamepage';
 import { pageMetadata } from '@/lib/seo/metadata';
 
 export const revalidate = 600;
@@ -53,11 +54,15 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
 
   const date = todayEST();
   const now = nowMs();
-  const [allPicks, slate, results] = await Promise.all([
+  const [allPicks, slate, results, leagueDates] = await Promise.all([
     fetchTodayGamePicks().catch(() => null),
     cfg.retired ? Promise.resolve([]) : fetchDailySlate(date).catch(() => []),
     fetchAllGameResults().catch(() => null),
+    fetchLeagueDates(cfg.code).catch(() => [] as string[]),
   ]);
+  // The most recent past day this league had a board — the door into the
+  // per-game pages (every pick ever published, graded, on its own URL).
+  const lastBoard = leagueDates.find(d => d < date) ?? null;
 
   const picks = allPicks
     ? allPicks.filter(p => normalizeLeague(p.league, p.sport) === cfg.code)
@@ -127,6 +132,18 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
       />
 
       {!cfg.retired && <div className="mt-5"><LiveScoreStrip date={date} leagues={[cfg.code]} /></div>}
+
+      {lastBoard && (
+        <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.05em] text-low">
+          <Link href={`/picks/${cfg.slug}/${lastBoard}`} className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light">
+            Last board, graded · {lastBoard}
+          </Link>
+          <span className="mx-2" aria-hidden>·</span>
+          <Link href="/archive" className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light">
+            Every day on the record
+          </Link>
+        </p>
+      )}
 
       {board.length === 0 ? (
         <div className="mt-10 flex flex-col items-center justify-center rounded-card border border-line bg-card p-10 text-center">
