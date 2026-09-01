@@ -4,7 +4,9 @@ import { readFileSync } from 'node:fs';
 
 const views = readIosViewsSource();
 const bigNumbers = views.slice(
-  views.indexOf('struct ScoutBigNumbersSection: View'),
+  // The rail renderer (ScoutBigNumbersRail) sits just above the section that
+  // builds MLB's rows; the slice covers both (Sep 1 2026 extraction).
+  views.indexOf('struct ScoutBigNumberRow: Identifiable'),
   views.indexOf('struct PicksGamePage: View'),
 );
 const trioData = views.slice(

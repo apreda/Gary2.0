@@ -255,6 +255,7 @@ final class SwapMeta: Decodable {
     // Fantasy Corner lane payloads (two_start / closer_watch / return_watch /
     // cut_list): the full Gary read + the numbers the card's stat strip shows.
     let read: String?              // full analyst read (verdict rides `verdict`)
+    let computed_detail: String?   // football lanes: the exact computed sentence behind the read
     let week: String?              // two-start: "Mon 7/27 - Sun 8/2"
     let starts: [FantasyStart]?    // two-start: the posted turns
     let committee: Bool?           // closer watch: shared ninth
@@ -373,6 +374,12 @@ struct TeamSheet: Decodable {
     let team: String?
     let formation: String?   // "4-2-3-1"
     let xi: [XIMan]?
+    // Football team-metric lanes (quarterback / pace / trenches …) write
+    // meta.away / meta.home as { value, games, abbreviation } — one side's
+    // number and its sample. Optional so every older row still decodes.
+    let value: Double?
+    let games: Int?
+    let abbreviation: String?
 }
 
 struct XIMan: Decodable {

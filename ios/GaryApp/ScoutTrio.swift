@@ -245,10 +245,66 @@ struct ScoutArmsSection: View {
         return s
     }
 
-    @ViewBuilder private func stack(_ label: String, _ value: String?) -> some View {
-        if let value {
+    private func plate(_ p: TomorrowPerson?) -> ScoutArmsPlate? {
+        guard let p else { return nil }
+        var stacks: [ScoutArmsStack] = [
+            ScoutArmsStack(label: "Season", value: seasonLine(p)),
+            ScoutArmsStack(label: "Last out", value: lastOutLine(p)),
+            ScoutArmsStack(label: "L3 · Rest", value: l3RestLine(p)),
+        ]
+        // Debut arm (founder GO, Aug 17): zero MLB data renders an honest
+        // state + his labeled AAA/AA line — never a blank plate, never a
+        // fabricated 0.00.
+        if p.no_mlb_starts == true {
+            stacks.append(ScoutArmsStack(label: "Season", value: "No MLB starts"))
+            stacks.append(ScoutArmsStack(label: p.milb?.level ?? "MiLB", value: milbLine(p)))
+        }
+        return ScoutArmsPlate(name: surname(p), stacks: stacks)
+    }
+
+    var body: some View {
+        // Missing generated copy is not permission to resurrect the old
+        // stats-only/quality-starts treatment. The server publishes MLB rows
+        // atomically once every eligible matchup has its Arms take; if an
+        // incomplete legacy snapshot slips through, omit this section until
+        // the short board-cache refresh picks up the repaired snapshot.
+        if let take = d.armsTake?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !take.isEmpty,
+           d.awayStarter != nil || d.homeStarter != nil {
+            ScoutArmsLayout(title: "THE ARMS", take: take, left: plate(d.awayStarter), right: plate(d.homeStarter))
+        }
+    }
+}
+
+/// One label/value pair on a plate ("SEASON" / "4.02 ERA"). A nil value
+/// prints nothing — the plate simply carries less.
+struct ScoutArmsStack: Identifiable {
+    let label: String
+    let value: String?
+    var id: String { label }
+}
+
+/// One side of THE ARMS pair: the surname plate and its stacks.
+struct ScoutArmsPlate {
+    let name: String
+    let stacks: [ScoutArmsStack]
+}
+
+/// THE ARMS as a reusable layout (Sep 1 2026 — the football page mounts
+/// this exact component for its passing games): the gold title, Gary's
+/// take on the same container the plates wear, then two soft side-by-side
+/// plates, the home side titled in gold. Pure layout — every sport supplies
+/// its own words and numbers.
+struct ScoutArmsLayout: View {
+    let title: String
+    let take: String
+    let left: ScoutArmsPlate?
+    let right: ScoutArmsPlate?
+
+    @ViewBuilder private func stack(_ st: ScoutArmsStack) -> some View {
+        if let value = st.value {
             VStack(alignment: .leading, spacing: 3) {
-                ScoutMock.kicker(label, size: 11.5)
+                ScoutMock.kicker(st.label, size: 11.5)
                 Text(value)
                     .font(.system(size: 18, weight: .semibold).monospacedDigit())
                     .foregroundStyle(ScoutMock.warm)
@@ -257,23 +313,14 @@ struct ScoutArmsSection: View {
         }
     }
 
-    @ViewBuilder private func plate(_ p: TomorrowPerson?, home: Bool) -> some View {
+    @ViewBuilder private func plate(_ p: ScoutArmsPlate?, home: Bool) -> some View {
         if let p {
             VStack(alignment: .leading, spacing: 10) {
-                Text(surname(p))
+                Text(p.name)
                     .font(GaryFonts.display(20)).tracking(0.5)
                     .foregroundStyle(home ? GaryColors.gold : ScoutMock.warm)
                     .lineLimit(1).minimumScaleFactor(0.6)
-                stack("Season", seasonLine(p))
-                stack("Last out", lastOutLine(p))
-                stack("L3 · Rest", l3RestLine(p))
-                // Debut arm (founder GO, Aug 17): zero MLB data renders an
-                // honest state + his labeled AAA/AA line — never a blank
-                // plate, never a fabricated 0.00.
-                if p.no_mlb_starts == true {
-                    stack("Season", "No MLB starts")
-                    stack(p.milb?.level ?? "MiLB", milbLine(p))
-                }
+                ForEach(p.stacks) { stack($0) }
             }
             .padding(12)
             // Both plates fill the pair's height (founder, Aug 6: "Perez's box
@@ -290,50 +337,42 @@ struct ScoutArmsSection: View {
     }
 
     var body: some View {
-        // Missing generated copy is not permission to resurrect the old
-        // stats-only/quality-starts treatment. The server publishes MLB rows
-        // atomically once every eligible matchup has its Arms take; if an
-        // incomplete legacy snapshot slips through, omit this section until
-        // the short board-cache refresh picks up the repaired snapshot.
-        if let take = d.armsTake?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !take.isEmpty,
-           d.awayStarter != nil || d.homeStarter != nil {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("THE ARMS")
-                    .font(GaryFonts.display(14)).tracking(0.8)
-                    .foregroundStyle(GaryColors.gold)
-                // Gary's two sentences on the two starters (founder, Aug 4 —
-                // "whatever two sentences Gary wants to say").
-                // The take stands on the same container the plates below it
-                // wear (founder, Aug 20: "the words feel like they are propped
-                // up, the same depth as the containers below it") — soft fill
-                // plus the gold hairline, never bare text on the page ground.
-                Text(take)
-                    .font(.system(size: 15))
-                    .foregroundStyle(ScoutMock.warm.opacity(0.92))
-                    .lineSpacing(4)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 13).padding(.vertical, 11)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(ScoutMock.warm.opacity(0.04)))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(GaryColors.gold.opacity(0.32), lineWidth: 0.6))
-                // No fixedSize here: an HStack already sizes to its tallest
-                // child, and THAT height is what the plates' maxHeight
-                // .infinity stretches into. Forcing ideal height (the Aug 6
-                // first attempt) removed the definite container height the
-                // stretch needs, so the short plate stayed a stub.
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(GaryFonts.display(14)).tracking(0.8)
+                .foregroundStyle(GaryColors.gold)
+            // Gary's two sentences (founder, Aug 4 — "whatever two sentences
+            // Gary wants to say"). The take stands on the same container the
+            // plates below it wear (founder, Aug 20: "the words feel like they
+            // are propped up, the same depth as the containers below it") —
+            // soft fill plus the gold hairline, never bare text on the page.
+            Text(take)
+                .font(.system(size: 15))
+                .foregroundStyle(ScoutMock.warm.opacity(0.92))
+                .lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 13).padding(.vertical, 11)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(ScoutMock.warm.opacity(0.04)))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(GaryColors.gold.opacity(0.32), lineWidth: 0.6))
+            // No fixedSize here: an HStack already sizes to its tallest
+            // child, and THAT height is what the plates' maxHeight
+            // .infinity stretches into. Forcing ideal height (the Aug 6
+            // first attempt) removed the definite container height the
+            // stretch needs, so the short plate stayed a stub.
+            if left != nil || right != nil {
                 HStack(alignment: .top, spacing: 8) {
-                    plate(d.awayStarter, home: false)
-                    plate(d.homeStarter, home: true)
+                    plate(left, home: false)
+                    plate(right, home: true)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
     }
 }
 
@@ -343,59 +382,44 @@ struct ScoutNotebookSection: View {
     let d: ScoutTrioData
 
     // (The Arms chapter moved OUT of the Notebook Jul 22 evening — the
-    // ScoutArmsSection above owns the pitchers now: prose + plates, Comp C.)
-    private var parkProse: Text? {
-        var parts: [Text] = []
-        if let t = d.tempF, let w = d.windMph {
-            var wind = Text("\(t)°").bold().foregroundColor(ScoutMock.warm)
-                + Text(" with the wind at ").foregroundColor(ScoutMock.warm.opacity(0.88))
-                + Text("\(w) mph").bold().foregroundColor(ScoutMock.warm)
-            if let note = d.weatherNote, !note.isEmpty {
-                wind = wind + Text(" — \(note)").foregroundColor(ScoutMock.warm.opacity(0.88))
-            }
-            parts.append(wind)
-        }
-        if let total = d.total {
-            let tShow = total == total.rounded() ? String(format: "%.0f", total) : String(format: "%.1f", total)
-            parts.append(Text("The total sits at ").foregroundColor(ScoutMock.warm.opacity(0.88))
-                + Text(tShow).bold().foregroundColor(ScoutMock.warm))
-        }
-        guard !parts.isEmpty else { return nil }
-        return parts.dropFirst().reduce(parts[0]) { $0 + Text(". ").foregroundColor(ScoutMock.warm.opacity(0.88)) + $1 }
-            + Text(".").foregroundColor(ScoutMock.warm.opacity(0.88))
-    }
-
-    @ViewBuilder private func chapter(_ title: String, prose: Text, data: String? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(title.uppercased())
-                .font(GaryFonts.display(13)).tracking(0.8)
-                .foregroundStyle(GaryColors.gold)
-            prose
-                .font(.system(size: 13.5).monospacedDigit())
-                .lineSpacing(4)
-                .fixedSize(horizontal: false, vertical: true)
-            if let data {
-                Text(data)
-                    .font(.system(size: 11.5, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(ScoutMock.warm.opacity(0.55))
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, 12)
-    }
+    // ScoutArmsSection above owns the pitchers now: prose + plates, Comp C.
+    // The park/series chapters and the chapter renderer left with the Sep 1
+    // extraction — ScoutNewsCard is the one chapter that survives.)
 
     var body: some View {
         // THE PARK and THE SERIES moved into the Big Numbers rail (founder,
         // Aug 6) — each fact lives once on the page. THE NEWS stays: the wire
         // is the one chapter nothing else on the page carries.
         if !d.wireLines.isEmpty, let wire = d.wireText {
-            VStack(alignment: .leading, spacing: 0) {
-                chapter("The News", prose: Text(wire).foregroundColor(ScoutMock.warm.opacity(0.88)))
-            }
-            .padding(.horizontal, 15).padding(.top, 2).padding(.bottom, 14)
-            .background(ScoutMock.cardShape)
-            .padding(.horizontal, 16)
+            ScoutNewsCard(text: wire)
         }
+    }
+}
+
+/// THE NEWS card — the Notebook's one surviving chapter as a reusable
+/// component (Sep 1 2026): the football page mounts the same card for its
+/// wire lines, so the news reads identically on every sport.
+struct ScoutNewsCard: View {
+    let text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("THE NEWS")
+                    .font(GaryFonts.display(13)).tracking(0.8)
+                    .foregroundStyle(GaryColors.gold)
+                Text(text)
+                    .foregroundColor(ScoutMock.warm.opacity(0.88))
+                    .font(.system(size: 13.5).monospacedDigit())
+                    .lineSpacing(4)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 12)
+        }
+        .padding(.horizontal, 15).padding(.top, 2).padding(.bottom, 14)
+        .background(ScoutMock.cardShape)
+        .padding(.horizontal, 16)
     }
 }
 
@@ -440,27 +464,114 @@ extension String {
 /// five games, bullpen ERA over 14 days, run differential over 10 games,
 /// weather and the current series. No ranked-insight roulette: every game uses
 /// the same grammar and every rolling window stops before the slate date.
+/// One row of THE BIG NUMBERS rail: the oversized numeral and its sentence
+/// (the bold lead, then the quieter rest). Public so every sport's page can
+/// build rows for the same rail.
+struct ScoutBigNumberRow: Identifiable {
+    let id: String
+    let numeral: String
+    let bold: String
+    let rest: String
+    let fractionNumerator: Int?
+    let fractionDenominator: Int?
+
+    init(id: String, numeral: String, bold: String, rest: String,
+         fractionNumerator: Int? = nil, fractionDenominator: Int? = nil) {
+        self.id = id
+        self.numeral = numeral
+        self.bold = bold
+        self.rest = rest
+        self.fractionNumerator = fractionNumerator
+        self.fractionDenominator = fractionDenominator
+    }
+
+    static func american(_ v: Double) -> String {
+        let n = Int(v.rounded())
+        return n > 0 ? "+\(n)" : "\(n)"
+    }
+
+    /// THE LINE — the current price leads, one book, display only (never on
+    /// Gary's desk). The sentence carries open → now so the movement remains
+    /// explicit without repeating the full ladder in the oversized numeral.
+    /// Shared by every sport's rail (Sep 1 2026).
+    static func lineMove(awayName: String, homeName: String,
+                         openAway: Double?, curAway: Double?, openHome: Double?, curHome: Double?) -> ScoutBigNumberRow? {
+        var best: (name: String, open: Double, cur: Double, delta: Double)? = nil
+        for (open, cur, name) in [(openAway, curAway, awayName), (openHome, curHome, homeName)] {
+            guard let open, let cur else { continue }
+            let delta = open - cur          // positive = price shortened = money came in
+            if delta >= 1, delta > (best?.delta ?? 0) { best = (name, open, cur, delta) }
+        }
+        if let b = best {
+            return ScoutBigNumberRow(id: "line-move",
+                                     numeral: american(b.cur),
+                                     bold: "\(b.name) opened \(american(b.open)) and are now \(american(b.cur))", rest: "")
+        }
+        // No move — show the favorite holding its number.
+        guard let ha = curAway, let hh = curHome else { return nil }
+        let homeFav = hh <= ha
+        let name = homeFav ? homeName : awayName
+        let price = homeFav ? hh : ha
+        return ScoutBigNumberRow(id: "line-move", numeral: american(price),
+                                 bold: "The line hasn't moved — \(name) opened here and hold", rest: "")
+    }
+}
+
+/// THE BIG NUMBERS rail as a reusable layout (Sep 1 2026): the first two
+/// numerals in gold, the rest in warm, hairlines between rows, the whole
+/// stack on the page card. Pure layout — the sport supplies the rows.
+struct ScoutBigNumbersRail: View {
+    let rows: [ScoutBigNumberRow]
+
+    var body: some View {
+        if !rows.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { i, r in
+                    // CENTER, not baseline (founder, Aug 6: "the words next to
+                    // it should be in the middle not like at the bottom") — a
+                    // 40pt numeral against a two-line sentence sat the words on
+                    // the numeral's baseline, i.e. at its foot.
+                    HStack(alignment: .center, spacing: 14) {
+                        Group {
+                            if let numerator = r.fractionNumerator,
+                               let denominator = r.fractionDenominator {
+                                HStack(alignment: .top, spacing: 0) {
+                                    Text("\(numerator)/")
+                                        .font(GaryFonts.display(40))
+                                    Text("\(denominator)")
+                                        .font(GaryFonts.display(20))
+                                        .padding(.top, 2)
+                                }
+                            } else {
+                                Text(r.numeral)
+                                    .font(GaryFonts.display(40))
+                                    .lineLimit(1).minimumScaleFactor(0.5)
+                            }
+                        }
+                        .foregroundStyle(i < 2 ? GaryColors.gold : ScoutMock.warm)
+                        .frame(minWidth: 64, alignment: .leading)
+                        (Text(r.bold).bold().foregroundColor(ScoutMock.warm)
+                            + Text(r.rest).foregroundColor(ScoutMock.warm.opacity(0.85)))
+                            .font(.system(size: 12.5).monospacedDigit())
+                            .lineSpacing(2.5)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 12)
+                    if i < rows.count - 1 {
+                        Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+                    }
+                }
+            }
+            .background(ScoutMock.cardShape)
+            .padding(.horizontal, 16)
+        }
+    }
+}
+
 struct ScoutBigNumbersSection: View {
     let d: ScoutTrioData
 
-    private struct Row: Identifiable {
-        let id: String
-        let numeral: String
-        let bold: String
-        let rest: String
-        let fractionNumerator: Int?
-        let fractionDenominator: Int?
-
-        init(id: String, numeral: String, bold: String, rest: String,
-             fractionNumerator: Int? = nil, fractionDenominator: Int? = nil) {
-            self.id = id
-            self.numeral = numeral
-            self.bold = bold
-            self.rest = rest
-            self.fractionNumerator = fractionNumerator
-            self.fractionDenominator = fractionDenominator
-        }
-    }
+    private typealias Row = ScoutBigNumberRow
     // THE LADDER (founder GO, Aug 14 2026). Rows 1-2 are fixed (HR L5, pen ERA
     // L14). Rows 3-5 fill from a ranked list of conditional reads — line move,
     // significant streak, live vs-hand split — with two always-available floor
@@ -479,34 +590,12 @@ struct ScoutBigNumbersSection: View {
         return out
     }
 
-    private static func american(_ v: Double) -> String {
-        let n = Int(v.rounded())
-        return n > 0 ? "+\(n)" : "\(n)"
-    }
+    private static func american(_ v: Double) -> String { ScoutBigNumberRow.american(v) }
 
-    /// THE LINE — the current price leads, one book, display only (never on
-    /// Gary's desk). The sentence carries open → now so the movement remains
-    /// explicit without repeating the full ladder in the oversized numeral.
+    /// THE LINE — shared with every sport's rail (ScoutBigNumberRow.lineMove).
     private var lineMoveRow: Row? {
-        var best: (name: String, open: Double, cur: Double, delta: Double)? = nil
-        for (open, cur, name) in [(d.mlOpenAway, d.mlAway, d.awayName),
-                                  (d.mlOpenHome, d.mlHome, d.homeName)] {
-            guard let open, let cur else { continue }
-            let delta = open - cur          // positive = price shortened = money came in
-            if delta >= 1, delta > (best?.delta ?? 0) { best = (name, open, cur, delta) }
-        }
-        if let b = best {
-            return Row(id: "line-move",
-                       numeral: Self.american(b.cur),
-                       bold: "\(b.name) opened \(Self.american(b.open)) and are now \(Self.american(b.cur))", rest: "")
-        }
-        // No move — show the favorite holding its number.
-        guard let ha = d.mlAway, let hh = d.mlHome else { return nil }
-        let homeFav = hh <= ha
-        let name = homeFav ? d.homeName : d.awayName
-        let price = homeFav ? hh : ha
-        return Row(id: "line-move", numeral: Self.american(price),
-                   bold: "The line hasn't moved — \(name) opened here and hold", rest: "")
+        ScoutBigNumberRow.lineMove(awayName: d.awayName, homeName: d.homeName,
+                                   openAway: d.mlOpenAway, curAway: d.mlAway, openHome: d.mlOpenHome, curHome: d.mlHome)
     }
 
     /// W5/L5 or longer, either club; the league-longest tag rides when true.
@@ -623,48 +712,7 @@ struct ScoutBigNumbersSection: View {
     /// belongs to the head-to-head ledger, not here.
 
     var body: some View {
-        let built = rows
-        if !built.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(built.enumerated()), id: \.element.id) { i, r in
-                    // CENTER, not baseline (founder, Aug 6: "the words next to
-                    // it should be in the middle not like at the bottom") — a
-                    // 40pt numeral against a two-line sentence sat the words on
-                    // the numeral's baseline, i.e. at its foot.
-                    HStack(alignment: .center, spacing: 14) {
-                        Group {
-                            if let numerator = r.fractionNumerator,
-                               let denominator = r.fractionDenominator {
-                                HStack(alignment: .top, spacing: 0) {
-                                    Text("\(numerator)/")
-                                        .font(GaryFonts.display(40))
-                                    Text("\(denominator)")
-                                        .font(GaryFonts.display(20))
-                                        .padding(.top, 2)
-                                }
-                            } else {
-                                Text(r.numeral)
-                                    .font(GaryFonts.display(40))
-                                    .lineLimit(1).minimumScaleFactor(0.5)
-                            }
-                        }
-                        .foregroundStyle(i < 2 ? GaryColors.gold : ScoutMock.warm)
-                        .frame(minWidth: 64, alignment: .leading)
-                        (Text(r.bold).bold().foregroundColor(ScoutMock.warm)
-                            + Text(r.rest).foregroundColor(ScoutMock.warm.opacity(0.85)))
-                            .font(.system(size: 12.5).monospacedDigit())
-                            .lineSpacing(2.5)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(.horizontal, 14).padding(.vertical, 12)
-                    if i < built.count - 1 {
-                        Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
-                    }
-                }
-            }
-            .background(ScoutMock.cardShape)
-            .padding(.horizontal, 16)
-        }
+        ScoutBigNumbersRail(rows: rows)
     }
 }
 

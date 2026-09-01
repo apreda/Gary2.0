@@ -130,10 +130,10 @@ describe('THE SWEAT terminal states', () => {
 
 describe('Football Field density', () => {
   it('balances the two teams and caps the visible personnel board', () => {
-    expect(footballIntel).toContain('while output.count < 4');
+    expect(footballIntel).toContain('while output.count < cap');
     expect(footballIntel).toContain('index < away.count ? away[index] : nil');
     expect(footballIntel).toContain('index < home.count ? home[index] : nil');
-    expect(footballIntel).toContain('if output.count == 4 { break }');
+    expect(footballIntel).toContain('if output.count == cap { break }');
     expect(footballIntel).not.toContain('SKILL PERSONNEL');
   });
 });

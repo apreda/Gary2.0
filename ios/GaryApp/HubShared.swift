@@ -267,6 +267,9 @@ struct Signal: Identifiable {
     var reg: SwapMeta? = nil
     /// Head-to-head payload (head_to_head lane) — season series dominance + last meeting.
     var h2h: SwapMeta? = nil
+    /// The row's raw lane payload, whatever its kind — the football page reads
+    /// per-side values (meta.away / meta.home) off it (Sep 1 2026).
+    var lane: SwapMeta? = nil
     /// NRFI/YRFI payload — each side's recent first-inning sequence for the dots.
     var nrfi: SwapMeta? = nil
     /// The row's own EST slate day (insight_connections.date). Lets surfaces

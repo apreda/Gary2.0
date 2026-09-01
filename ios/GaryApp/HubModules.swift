@@ -477,6 +477,7 @@ extension Connection {
             confirmedXI: (meta?.kind == "confirmedXI") ? meta : nil,
             reg: (meta?.kind == "regression_pitcher") ? meta : nil,
             h2h: (meta?.kind == "h2h") ? meta : nil,
+            lane: meta,
             nrfi: (meta?.kind == "nrfi") ? meta : nil,
             slateDate: date,
             weather: (meta?.kind == "park_weather") ? meta : nil,
