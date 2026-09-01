@@ -1,26 +1,14 @@
 import Foundation
 
-/// World Cup feature flag + its data-layer helpers.
-///
-/// `AppFlags` is declared in ContentView.swift (alongside the other ship-level
-/// switches); this extension adds the single switch that gates EVERY World Cup
-/// surface in the iOS build. The 2026 tournament ended Jul 19 — permanently OFF
-/// (founder, Jul 21: the backend pipeline was fully deleted, next Cup is 2030).
-/// The entire WC system — picks, Hub lanes, the paywall pass, the game-intel
-/// dashboard — lives behind this flag; the rendering code stays in place
-/// (unreachable while this is false) rather than tearing out ~17 call sites
-/// blind with no build available to verify the result compiles.
+/// World Cup data-layer guard. The 2026 tournament ended Jul 19 and the
+/// backend pipeline was deleted Jul 21 (founder; next Cup is 2030). The WC
+/// render code left the app Sep 1 2026; what remains is the row drop below,
+/// because June-July WC rows still exist in the database and must never leak
+/// into any list (founder: the app renders ZERO World Cup anything).
 extension AppFlags {
-    /// Master World Cup switch. OFF = the app renders ZERO World Cup anything:
-    /// no WC picks, no WC shelf, no WC Hub lanes, no WC paywall pass, no WC
-    /// front-page module, and no WC rows leak through the data layer.
-    static let worldCupEnabled = false
-
     /// Canonical World Cup league test, mirroring the normalization in
     /// `Models.swift` (`effectiveLeague`): world_cup / worldcup / wc /
-    /// soccer_world_cup all map to the WC league. Used at the data layer to drop
-    /// WC-tagged rows when `worldCupEnabled` is off, so nothing WC can leak into
-    /// any list even if a render path was missed (defense in depth).
+    /// soccer_world_cup all map to the WC league.
     static func isWorldCupLeague(_ raw: String?) -> Bool {
         guard let raw, !raw.isEmpty else { return false }
         let n = raw.lowercased()
@@ -30,16 +18,12 @@ extension AppFlags {
     /// True when a row carrying league string `raw` should be HIDDEN from the UI.
     /// Convenience for `.filter { !AppFlags.hidesWorldCupRow($0.league) }`.
     static func hidesWorldCupRow(_ raw: String?) -> Bool {
-        !worldCupEnabled && isWorldCupLeague(raw)
+        isWorldCupLeague(raw)
     }
 
     /// The leagues the Home/Hub "edges" loops iterate when fetching insight
-    /// connections. WC drops out entirely when the feature is off, so those loops
-    /// never even request the World Cup lane.
-    static var insightLeagues: [String] {
-        worldCupEnabled ? ["MLB", "NFL", "NCAAF", "NBA", "WC"]
-                        : ["MLB", "NFL", "NCAAF", "NBA"]
-    }
+    /// connections.
+    static let insightLeagues: [String] = ["MLB", "NFL", "NCAAF", "NBA"]
 
     /// Picks-page ALL tab (founder, Jul 13 2026: "we don't need an ALL tab at
     /// all, just the sport leagues — but don't delete it, hide it"). OFF = the
@@ -57,7 +41,7 @@ extension AppFlags {
 // Aug 11 — the pair is unsatisfiable from a personal account). Until the LLC →
 // org enrollment → app transfer completes, the iOS DISPLAY LAYER carries no
 // betting language: no odds or prices, no market notation (ML/±1.5/over-under),
-// no units or dollars, no wager tracking. Same pattern as `worldCupEnabled`:
+// no units or dollars, no wager tracking. One master switch:
 // render code stays in place, one master switch, data layer untouched.
 //
 // THE PICK ENGINE IS NOT TOUCHED. Picks are still made against real prices and

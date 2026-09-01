@@ -2114,10 +2114,6 @@ struct TomorrowBoard: Decodable {
     // older rows without these still decode.
     let league_avg_era: Double?
     let league_avg_xera: Double?
-    // World Cup look-ahead — one entry per tomorrow WC match (its own lane, no
-    // longer mixed into the MLB-only `starters`). Optional; nil/[] on non-WC
-    // days or older rows.
-    let wc_lookahead: [TomorrowWcMatch]?
 }
 
 struct TomorrowBoardRow: Decodable {   // mirrors DailySlateRow + presentation extras
@@ -2366,93 +2362,3 @@ struct TomorrowWeather: Decodable {
     let commence_time: String?
 }
 
-// MARK: - Tomorrow WC Look-ahead (wc_lookahead — one entry per tomorrow match)
-//
-// The World Cup branch of "The Day Ahead". Server (buildWcLookahead in
-// tomorrowService.js) joins the WC fixture feed to the same slate rows the
-// board renders (for the posted lines), then layers the grounded day-before
-// reads per side: projected XI + formation, L5 form, key scorers. GROUNDED —
-// any field with no usable source is null/[]; lines are nil when unposted.
-struct TomorrowWcMatch: Decodable {
-    let league: String?             // "WC"
-    let match: String?              // "Away @ Home"
-    let away_team: String?
-    let home_team: String?
-    let commence_time: String?      // ISO8601 kickoff
-    let kickoff: String?            // short ET clock, e.g. "3:00"
-    let stage: String?              // plain-text stage/round | nil
-    let group: String?              // "Group A" | nil
-    let venue: String?              // stadium name | nil
-    let lines: TomorrowWcLines?
-    let home: TomorrowWcSide?
-    let away: TomorrowWcSide?
-}
-
-// LINES — headline numbers off the board's slate row; draw + TO-ADVANCE
-// (qualify) prices from the raw vendor rows (Jul 10 backend). All nil when
-// unposted; advance_* nil outside knockout matches (group stage, the final).
-struct TomorrowWcLines: Decodable {
-    let spread: Double?
-    let total: Double?
-    let ml_home: Double?
-    let ml_away: Double?
-    var ml_draw: Double? = nil
-    var advance_home: Double? = nil
-    var advance_away: Double? = nil
-}
-
-// One side of a WC look-ahead match: projected XI + formation, L5 form,
-// key players. Each field is null when its grounded source is unavailable.
-struct TomorrowWcSide: Decodable {
-    let team: String?
-    let xi: TomorrowWcXI?
-    let form: TomorrowWcForm?
-    let key_players: [TomorrowWcKeyPlayer]?
-}
-
-// Projected XI + formation (recent regulars, OUT/suspended dropped server-side).
-struct TomorrowWcXI: Decodable {
-    let formation: String?          // "4-2-3-1" | nil
-    let keeper: String?
-    let xi: [TomorrowWcStarter]?    // projected XI (keeper may also lead this list)
-}
-
-struct TomorrowWcStarter: Decodable {
-    let n: String?                  // player name
-    let p: String?                  // position | nil
-    let num: Int?                   // shirt number | nil
-}
-
-// Recent form (L5) — W-D-L record + goals for/against per game.
-struct TomorrowWcForm: Decodable {
-    let record: String?             // "W-D-L", e.g. "3-1-1"
-    let w: Int?
-    let d: Int?
-    let l: Int?
-    let gf_per_game: Double?
-    let ga_per_game: Double?
-    let form: String?               // "WWDLW" most-recent-first | nil
-    let matches: Int?
-    // THIS tournament's record only (excludes friendlies + qualifiers) — used by
-    // the Big Games preview. nil until a team has played a WC game.
-    let wc: TomorrowWcRecord?
-}
-
-// A team's World-Cup-tournament-only record (the "WC so far" stat).
-struct TomorrowWcRecord: Decodable {
-    let record: String?             // "W-D-L"
-    let w: Int?
-    let d: Int?
-    let l: Int?
-    let gf_per_game: Double?
-    let ga_per_game: Double?
-    let matches: Int?
-}
-
-// A key player to watch — a leading cycle scorer for the side.
-struct TomorrowWcKeyPlayer: Decodable {
-    let name: String?
-    let goals: Int?
-    let assists: Int?
-    let position: String?
-}

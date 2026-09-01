@@ -2023,17 +2023,16 @@ struct DailyRecapOverlay: View {
     }
 }
 
-/// A complete, per-source game-pick read. `daily_picks`, `weekly_nfl_picks`,
-/// and the future NCAAB lane fail independently; callers merge only the failed
-/// source's last-good rows, so one desk can never erase another sport.
+/// A complete, per-source game-pick read. `daily_picks` and `weekly_nfl_picks`
+/// fail independently; callers merge only the failed source's last-good rows,
+/// so one desk can never erase another sport.
 private enum GamePickSource: Hashable {
-    case daily, nfl, ncaabFuture
+    case daily, nfl
 
     var failureKey: String {
         switch self {
         case .daily: return "DAILY"
         case .nfl: return "NFL"
-        case .ncaabFuture: return "NCAAB_FUTURE"
         }
     }
 }
@@ -2048,18 +2047,13 @@ private struct GamePickSourceSnapshot {
 }
 
 private func fetchIsolatedGamePickSources(
-    date: String,
-    includeUpcomingNcaab: Bool
+    date: String
 ) async -> GamePickSourceSnapshot {
     async let dailyTask = SupabaseAPI.fetchDailyPicks(date: date)
     async let nflTask = SupabaseAPI.fetchWeeklyNFLPicks(for: date)
-    async let futureTask: [GaryPick] = includeUpcomingNcaab
-        ? SupabaseAPI.fetchUpcomingNCAABPicks(afterDate: date)
-        : []
 
     var daily: [GaryPick] = []
     var nfl: [GaryPick] = []
-    var future: [GaryPick] = []
     var failures: Set<GamePickSource> = []
     var transientExternalFailures: Set<GamePickSource> = []
     // A cancelled request (our own torn-down refresh task) retains last-good
@@ -2079,19 +2073,9 @@ private func fetchIsolatedGamePickSources(
             if SupabaseAPI.isTransientExternalFailure(error) { transientExternalFailures.insert(.nfl) }
         }
     }
-    if includeUpcomingNcaab {
-        do { future = try await futureTask } catch {
-            if SupabaseAPI.isCancellation(error) { transientExternalFailures.insert(.ncaabFuture) }
-            else {
-                failures.insert(.ncaabFuture)
-                if SupabaseAPI.isTransientExternalFailure(error) { transientExternalFailures.insert(.ncaabFuture) }
-            }
-        }
-    }
-
-    // weekly_nfl_picks is canonical for NFL. The future NCAAB response may
-    // overlap today's daily row, so de-duplicate the complete healthy sources.
-    let combined = daily.filter { ($0.league ?? "").uppercased() != "NFL" } + nfl + future
+    // weekly_nfl_picks is canonical for NFL. De-duplicate the complete healthy
+    // sources.
+    let combined = daily.filter { ($0.league ?? "").uppercased() != "NFL" } + nfl
     var seen: Set<String> = []
     let unique = combined.filter { seen.insert($0.id).inserted }
     return GamePickSourceSnapshot(
@@ -2109,7 +2093,6 @@ private func mergeGamePickSnapshot(
         let league = (pick.league ?? "OTHER").uppercased()
         return (snapshot.transientExternalFailures.contains(.daily) && league != "NFL")
             || (snapshot.transientExternalFailures.contains(.nfl) && league == "NFL")
-            || (snapshot.transientExternalFailures.contains(.ncaabFuture) && league == "NCAAB")
     }
     var seen: Set<String> = []
     return (snapshot.picks + retained).filter { seen.insert($0.id).inserted }
@@ -2463,8 +2446,7 @@ struct HomeView: View {
                     async let breakdownFetch = SupabaseAPI.fetchYesterdayBySport()
                     async let formFetch = SupabaseAPI.fetchSevenDayFormBySport()
                     async let picksFetch = fetchIsolatedGamePickSources(
-                        date: date,
-                        includeUpcomingNcaab: true
+                        date: date
                     )
                     async let propPicksFetch = SupabaseAPI.fetchPropPicks(date: date, forceRefresh: forceFresh)
                     // Pull the full recent window (not just 30) so the morning recap's
@@ -2479,8 +2461,7 @@ struct HomeView: View {
                     // Yesterday's top pick/prop ride the SAME parallel wave —
                     // they were serial awaits on the critical path (perf, Jul 13).
                     async let yPicksFetch = fetchIsolatedGamePickSources(
-                        date: SupabaseAPI.yesterdayEST(),
-                        includeUpcomingNcaab: false
+                        date: SupabaseAPI.yesterdayEST()
                     )
                     async let yPropsFetch = SupabaseAPI.fetchPropPicks(date: SupabaseAPI.yesterdayEST())
                     // Market pulse anchors to TODAY's rolling row — the builder now
@@ -3007,8 +2988,7 @@ struct HomeView: View {
         let date = SupabaseAPI.todayEST()
         let previousPicks = todayPicks
         async let picksFetch = fetchIsolatedGamePickSources(
-            date: date,
-            includeUpcomingNcaab: true
+            date: date
         )
         async let propsFetch = SupabaseAPI.fetchPropPicks(date: date, forceRefresh: true)
         async let gameResultsFetch = SupabaseAPI.fetchRecentGameResults(limit: 200)
@@ -7706,47 +7686,6 @@ enum Sport: String, CaseIterable {
     }
 }
 
-// MARK: - Conference Filter Bar (NCAAB)
-
-struct ConferenceFilterBar: View {
-    @Binding var selected: String
-    let conferences: [String]
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                conferenceTab("All", isSelected: selected == "All")
-
-                ForEach(conferences, id: \.self) { conf in
-                    conferenceTab(conf, isSelected: selected == conf)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 2)
-        }
-        .frame(height: 30)
-    }
-
-    private func conferenceTab(_ label: String, isSelected: Bool) -> some View {
-        Button {
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                selected = label
-            }
-        } label: {
-            VStack(spacing: 4) {
-                Text(label)
-                    .font(.system(size: 11, weight: isSelected ? .bold : .medium))
-                    .foregroundStyle(isSelected ? .white : .white.opacity(0.4))
-                    .padding(.horizontal, 6)
-
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(isSelected ? GaryColors.gold : .clear)
-                    .frame(height: 1.75)
-            }
-        }
-    }
-}
-
 // MARK: - Sport Filter Bar
 
 struct SportFilterBar: View {
@@ -8012,10 +7951,8 @@ struct PremiumPicksView: View {
     fileprivate static let checkoutLinks: [String: String] = [
         "MLB":   "https://buy.stripe.com/test_9B600kcnqgWRa9c3xWaIM08",
         "NBA":   "https://buy.stripe.com/test_6oUdRa87a0XT6X05G4aIM09",
-        "NHL":   "https://buy.stripe.com/test_8x24gA87a8qldlo9WkaIM0a",
         "NFL":   "https://buy.stripe.com/test_bJe5kEevyeOJ1CG1pOaIM0b",
         "NCAAF": "https://buy.stripe.com/test_5kQbJ25Z2gWR6X05G4aIM0c",
-        "NCAAB": "https://buy.stripe.com/test_5kQ3cw1IM7mheps0lKaIM0d",
         // June 9 flip: $29.99/mo + $179/yr, both 7-day card-required trials.
         "ALL":        "https://buy.stripe.com/test_00w9AU2MQ8ql5SW0lKaIM0h",
         "ALL_ANNUAL": "https://buy.stripe.com/test_fZu14o0EI9up3KOgkIaIM0i",
@@ -8024,10 +7961,8 @@ struct PremiumPicksView: View {
     fileprivate static let checkoutLinks: [String: String] = [
         "MLB":   "https://buy.stripe.com/4gM4gA3N69u1anqaObao800",
         "NBA":   "https://buy.stripe.com/8x2aEYcjCfSpdzC3lJao801",
-        "NHL":   "https://buy.stripe.com/dRmcN697qfSp9jmf4rao802",
         "NFL":   "https://buy.stripe.com/8x25kEgzS6hPgLO1dBao803",
         "NCAAF": "https://buy.stripe.com/bJe7sM97qeOleDG9K7ao804",
-        "NCAAB": "https://buy.stripe.com/dRmeVebfy6hPfHK7BZao805",
         // June 9 flip, LIVE: $29.99/mo + $179/yr, 7-day card-required trials
         // (webhook v10 maps both). The retired $34.99/3-day link
         // (buy.stripe.com/aFabJ21EY21z...) stays ACTIVE in Stripe until the
@@ -8057,17 +7992,13 @@ struct PremiumPicksView: View {
     // In-season / imminent sports shown as rows (placeholders when a sport has no pick yet).
     // Any extra league present in the data is appended automatically.
     // Every sport Gary actually covers — lanes hold placeholders off-slate.
-    // WC is dropped from the canonical list when the World Cup feature is off, so
-    // no WC shelf/placeholder lane is ever ordered into the board.
-    private var canonicalSports: [String] {
-        AppFlags.worldCupEnabled
-            ? ["MLB", "NBA", "NHL", "WC", "NFL", "NCAAF", "NCAAB"]
-            : ["MLB", "NBA", "NHL", "NFL", "NCAAF", "NCAAB"]
-    }
+    // (NHL, NCAAB and the World Cup left the pick engine Aug 27 / Jul 21 2026;
+    // their rows stay readable in history but no shelf is ordered for them.)
+    private let canonicalSports = ["MLB", "NBA", "NFL", "NCAAF"]
     // Sports with a props product. NCAAF is fail-closed upstream until its
     // verified market provider has a live key, but once lines are present its
     // cards belong on the same Winners prop shelf as every other sport.
-    private let propSports = ["MLB", "NBA", "NHL", "NFL", "NCAAF"]
+    private let propSports = ["MLB", "NBA", "NFL", "NCAAF"]
 
     // MARK: - Terminal status / tab counts (all derived from loaded view state)
 
@@ -9132,9 +9063,6 @@ struct PremiumPicksView: View {
     }
 
     private func storefrontRow(_ b: (league: String, count: Int, unit: String, live: Bool)) -> some View {
-                    // "Pre-order · kicks off June 11" only while that's still true —
-                    // mid-tournament an empty WC night is just a night off.
-                    let preorder = b.league == "WC" && b.count == 0 && worldCupPhase() == .preTournament
                     return HStack(spacing: 12) {
                         Image(systemName: Sport.from(league: b.league).icon)
                             .font(.system(size: 13, weight: .semibold))
@@ -9144,8 +9072,7 @@ struct PremiumPicksView: View {
                             Text("\(b.league) BOARD")
                                 .font(GaryFonts.mono(12, bold: true)).tracking(0.8)
                                 .foregroundStyle(.white.opacity(0.9))
-                            Text(preorder ? "All 104 matches · kicks off June 11"
-                                 : b.count == 0 ? "No \(b.unit) tonight yet"
+                            Text(b.count == 0 ? "No \(b.unit) tonight yet"
                                  : b.live ? "\(b.count) \(b.unit)\(b.count == 1 ? "" : "s") tonight"
                                  : "Last result posted")
                                 .font(.system(size: 11))
@@ -9162,7 +9089,7 @@ struct PremiumPicksView: View {
                                     .foregroundStyle(.white.opacity(0.6))
                             }
                         }
-                        Text(preorder ? "Pre-order ›" : "Unlock ›")
+                        Text("Unlock ›")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(GaryColors.gold)
                     }
@@ -9206,9 +9133,7 @@ struct PremiumPicksView: View {
     }
 
     private func placeholderRow(for league: String) -> some View {
-        let msg: String = (league == "WC" && worldCupPhase() == .preTournament)
-            ? "World Cup kicks off June 11 — picks drop with the slate."
-            : "No \(league) pick yet — next slate posts ~90 min before \(shelfStartNoun(for: league))."
+        let msg = "No \(league) pick yet — next slate posts ~90 min before \(shelfStartNoun(for: league))."
         return Text(msg)
             .font(GaryFonts.text(13))
             .foregroundStyle(.white.opacity(0.62))
@@ -9423,7 +9348,7 @@ struct PremiumPicksView: View {
     /// (flip-backs + CASHED/LOST stamps), ordered by sport. No live/slate logic.
     private func loadHistorical(_ date: String) async {
         await MainActor.run { loading = true }
-        async let gamesF = fetchIsolatedGamePickSources(date: date, includeUpcomingNcaab: false)
+        async let gamesF = fetchIsolatedGamePickSources(date: date)
         async let propsF = SupabaseAPI.fetchPropPicks(date: date)
         async let resultsF = SupabaseAPI.fetchAllGameResults(since: date)
         async let propResF = SupabaseAPI.fetchRecentPropResults(limit: 200)
@@ -9539,8 +9464,8 @@ struct PremiumPicksView: View {
         let previousMatchupScores = matchupScoresMap
         let previousPropResults = propResultsMap
 
-        async let todayGameF = fetchIsolatedGamePickSources(date: today, includeUpcomingNcaab: true)
-        async let yGameF = fetchIsolatedGamePickSources(date: yesterday, includeUpcomingNcaab: false)
+        async let todayGameF = fetchIsolatedGamePickSources(date: today)
+        async let yGameF = fetchIsolatedGamePickSources(date: yesterday)
         async let resultsF = SupabaseAPI.fetchAllGameResults(since: yesterday)
         async let todayPropsF = SupabaseAPI.fetchPropPicks(date: today)
         async let slateF = SupabaseAPI.fetchDailySlate(date: today)
@@ -9839,7 +9764,7 @@ struct PlansSheetView: View {
     /// game_results source as the Results tab; the strip hides entirely if the
     /// fetch fails or comes back empty rather than showing a made-up number.
 
-    private static let sports = ["MLB", "NBA", "NHL", "NFL", "NCAAF", "NCAAB"]
+    private static let sports = ["MLB", "NBA", "NFL", "NCAAF"]
     private static let winColor = GaryColors.win
     private static let lossColor = GaryColors.loss
     private static let ink = Color(hex: "#0C0B0B")   // text on the gold CTA / chips
@@ -10479,7 +10404,6 @@ struct GaryPicksView: View {
     @State private var loading = true
     @State private var fetchFailed = false
     @State private var selectedSport: Sport = .all
-    @State private var selectedConference: String = "All"
     @State private var lastUpdated: Date?
 
     // Yesterday's results fallback (per-sport: sports with no fresh picks today show yesterday's stamped cards)
@@ -10548,12 +10472,7 @@ struct GaryPicksView: View {
                 let isBeforeCutoff = now < cutoffTime
                 let wasGameYesterday = estCalendar.isDate(gameDayEST, inSameDayAs: estCalendar.date(byAdding: .day, value: -1, to: todayEST) ?? todayEST)
 
-                if league == "NCAAB" {
-                    // NCAAB tournament picks are intentionally stored ahead of tip and should remain visible.
-                    return gameDayEST >= todayEST || (isBeforeCutoff && wasGameYesterday)
-                }
-
-                // Other sports stay on the normal today-only window, with the late-night cutoff.
+                // Every sport stays on the normal today-only window, with the late-night cutoff.
                 return isGameToday || (isBeforeCutoff && wasGameYesterday)
             }
         }
@@ -10575,16 +10494,7 @@ struct GaryPicksView: View {
             mergedPicks.append(contentsOf: yesterdayForSport)
         }
 
-        var sportFiltered = sortByTime(mergedPicks.filter { ($0.league ?? "").uppercased() == selectedSport.rawValue })
-
-        // Apply conference filter for NCAAB
-        if selectedSport == .ncaab && selectedConference != "All" {
-            sportFiltered = sportFiltered.filter { pick in
-                let homeConf = pick.homeConference ?? ""
-                let awayConf = pick.awayConference ?? ""
-                return homeConf == selectedConference || awayConf == selectedConference
-            }
-        }
+        let sportFiltered = sortByTime(mergedPicks.filter { ($0.league ?? "").uppercased() == selectedSport.rawValue })
 
         return sportFiltered
     }
@@ -10646,17 +10556,6 @@ struct GaryPicksView: View {
         return sports
     }
 
-    /// Available conferences from today's NCAAB picks
-    private var availableConferences: [String] {
-        let ncaabPicks = allPicks.filter { ($0.league ?? "").uppercased() == "NCAAB" }
-        var confSet = Set<String>()
-        for pick in ncaabPicks {
-            if let hc = pick.homeConference, !hc.isEmpty { confSet.insert(hc) }
-            if let ac = pick.awayConference, !ac.isEmpty { confSet.insert(ac) }
-        }
-        return confSet.sorted()
-    }
-
     /// Get time slot string for NFL picks (e.g., "Sunday 1:00 PM ET")
     private func getTimeSlot(for pick: GaryPick) -> String? {
         guard let isoTime = pick.commence_time, !isoTime.isEmpty else { return nil }
@@ -10697,24 +10596,11 @@ struct GaryPicksView: View {
                         .offset(y: -10)
 
                     SportFilterBar(selected: $selectedSport, availableSports: availableSports, todaySports: sportsWithFreshPicks, showAll: true)
-                        .onChange(of: selectedSport) { _ in
-                            selectedConference = "All"
-                        }
                         .offset(x: -4, y: 10)
                 }
                 .padding(.leading, 10)
                 .padding(.top, -14)
                 .padding(.bottom, -18)
-
-                // Conference Filter (NCAAB only)
-                if selectedSport == .ncaab {
-                    ConferenceFilterBar(
-                        selected: $selectedConference,
-                        conferences: availableConferences
-                    )
-                    .padding(.bottom, 0)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                }
 
                 Spacer().frame(height: 6)
 
@@ -12399,14 +12285,6 @@ struct TomorrowView {
         /// Profile · Weather). The giant inline list overflowed the screen — this
         /// is now a contained tabbed table that scrolls internally.
         @State private var lookAheadTab = 0
-        /// The active WC look-ahead lane (Form · Key Scorers · Lineups) — the WC
-        /// twin of lookAheadTab.
-        @State private var wcLookAheadTab = 0
-        /// MLB / WC top-level switch for "The Day Ahead". MLB = the existing
-        /// tabbed table; WC = the per-match World Cup look-ahead cards.
-        @State private var lookAheadSport: LookAheadSport = .mlb
-        /// Teal WC accent, matching the board's sport-dot legend.
-        private let wcAccent = Color(hex: "#3FB6A8")
 
         var body: some View {
             VStack(alignment: .leading, spacing: 22) {
@@ -12562,15 +12440,6 @@ struct TomorrowView {
                                         stat: starterStat(lastName: h, abbr: bRow?.home_abbr))
                         }
                         .padding(.top, 3)
-                    } else if let wc = wcMatch(g) {
-                        // WC parity — same LOOK as the pitcher rows, WC-appropriate
-                        // stats: each nation on its own row (abbr · name · L5 record,
-                        // form-coloured · goals/game), grounded from wc_lookahead.
-                        VStack(alignment: .leading, spacing: 5) {
-                            wcTeamLine(team: wc.away_team, form: wc.away?.form, league: g.league)
-                            wcTeamLine(team: wc.home_team, form: wc.home?.form, league: g.league)
-                        }
-                        .padding(.top, 3)
                     }
                     // Market line — the favourite + total (MLB ML/total · WC ML/goals).
                     if let mkt = bigGameMarket(g) {
@@ -12620,60 +12489,6 @@ struct TomorrowView {
             }
         }
 
-        /// The wc_lookahead entry for a WC big game, matched by matchup string.
-        private func wcMatch(_ g: TomorrowBigGame) -> TomorrowWcMatch? {
-            guard (g.league ?? "").uppercased() == "WC",
-                  let mu = g.matchup?.lowercased() else { return nil }
-            return board?.wc_lookahead?.first {
-                ($0.match ?? "").lowercased() == mu
-            }
-        }
-
-        /// One WC nation — abbr · name · L5 record (form-coloured) · goals/game. The
-        /// WC twin of pitcherLine: same shape, soccer stats (not ERA).
-        private func wcTeamLine(team: String?, form: TomorrowWcForm?, league: String?) -> some View {
-            let ab = teamAbbrevFromName(team ?? "", league: league)
-            // THIS World Cup's record only (founder: "only the WC games"), falling
-            // back to the L5 form when a team hasn't played a tournament game yet.
-            let rec = form?.wc?.record ?? form?.record
-            let w = form?.wc?.w ?? form?.w
-            let l = form?.wc?.l ?? form?.l
-            let gf = form?.wc?.gf_per_game ?? form?.gf_per_game
-            let recColor: Color = {
-                guard let w = w, let l = l else { return .white.opacity(0.9) }
-                if w > l { return GaryColors.win }
-                if l > w { return GaryColors.loss }
-                return Color(hex: "#E8B339")   // even — amber
-            }()
-            return HStack(spacing: 8) {
-                Text(ab.uppercased())
-                    .font(GaryFonts.mono(10.5, bold: true))
-                    .foregroundStyle(GaryColors.gold.opacity(0.85))
-                    .frame(width: 34, alignment: .leading)
-                Text(team ?? "")
-                    .font(GaryFonts.text(13))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .lineLimit(1).minimumScaleFactor(0.85)
-                Spacer(minLength: 8)
-                if let rec = rec {
-                    Text(rec)
-                        .font(GaryFonts.mono(13, bold: true))
-                        .foregroundStyle(recColor)
-                    if let gf = gf {
-                        // Spelled out for US fans — not the cryptic "GF".
-                        Text("\(Self.trimNum(gf)) Goals/Gm")
-                            .font(GaryFonts.mono(10))
-                            .foregroundStyle(.white.opacity(0.62))
-                    }
-                } else {
-                    Text("—")
-                        .font(GaryFonts.mono(11))
-                        .foregroundStyle(.white.opacity(0.62))
-                }
-            }
-        }
-
-        /// The board row for a big game, matched by team last-words ("Reds @ Brewers").
         private func bigGameBoardRow(_ g: TomorrowBigGame) -> TomorrowBoardRow? {
             guard let mu = g.matchup?.lowercased(), let rows = board?.board else { return nil }
             let sides = mu.components(separatedBy: " @ ")
@@ -12888,46 +12703,6 @@ struct TomorrowView {
             return String(team.prefix(3)).uppercased()
         }
 
-        /// Proper FIFA 3-letter code for a WC nation. A naive first-3-letters slice
-        /// is both WRONG (Netherlands→NED not NET, Spain→ESP, Morocco→MAR) and, for
-        /// Japan, OFFENSIVE ("JAP") — so map the field explicitly. Unlisted → first 3.
-        private func wcCode(_ name: String?) -> String {
-            guard let name, !name.isEmpty else { return "—" }
-            let t = name.lowercased()
-            let map: [(String, String)] = [
-                ("japan","JPN"),("brazil","BRA"),("germany","GER"),("paraguay","PAR"),
-                ("argentina","ARG"),("france","FRA"),("spain","ESP"),("england","ENG"),
-                ("portugal","POR"),("netherlands","NED"),("belgium","BEL"),("croatia","CRO"),
-                ("italy","ITA"),("morocco","MAR"),("senegal","SEN"),("united states","USA"),
-                ("usa","USA"),("mexico","MEX"),("canada","CAN"),("uruguay","URU"),
-                ("colombia","COL"),("ecuador","ECU"),("south korea","KOR"),("korea republic","KOR"),
-                ("korea","KOR"),("australia","AUS"),("switzerland","SUI"),("denmark","DEN"),
-                ("poland","POL"),("serbia","SRB"),("ghana","GHA"),("nigeria","NGA"),
-                ("cameroon","CMR"),("ivory coast","CIV"),("côte","CIV"),("tunisia","TUN"),
-                ("algeria","ALG"),("egypt","EGY"),("saudi arabia","KSA"),("saudi","KSA"),
-                ("iran","IRN"),("qatar","QAT"),("austria","AUT"),("norway","NOR"),
-                ("sweden","SWE"),("scotland","SCO"),("wales","WAL"),("ukraine","UKR"),
-                ("peru","PER"),("chile","CHI"),("costa rica","CRC"),("panama","PAN"),
-                ("jamaica","JAM"),("uzbekistan","UZB"),("jordan","JOR"),("new zealand","NZL"),
-                ("türkiye","TUR"),("turkiye","TUR"),("turkey","TUR"),("south africa","RSA"),
-                ("cape verde","CPV"),("mali","MLI"),("dr congo","COD"),("venezuela","VEN"),
-                ("bolivia","BOL"),
-            ]
-            if let code = map.first(where: { t.contains($0.0) })?.1 { return code }
-            return String(name.uppercased().filter { $0.isLetter }.prefix(3))
-        }
-
-        // ── ④ Look-ahead tabs (Starters · Key Returns · Form · Run Profile ·
-        // Weather) ─────────────────────────────────────────────────────────────
-        //
-        // The old version stacked the entire by-sport starters + returns lists
-        // inline, which overflowed the screen on a full slate. This is now a
-        // tabbed table (mono tab strip idiom):
-        // with the active tab in gold, over a FIXED-HEIGHT container that scrolls
-        // internally to reach every row — grouped by sport where relevant. Tabs
-        // with no data are hidden; the whole section hides if nothing has data.
-
-        /// Which look-ahead lanes actually have data, in display order.
         private var lookAheadAvailable: [LookAheadLane] {
             LookAheadLane.allCases.filter { hasData($0) }
         }
@@ -12940,55 +12715,15 @@ struct TomorrowView {
             case .weather:  return !(board?.weather ?? []).isEmpty
             }
         }
-        /// Tomorrow's WC matches, earliest kickoff first. Empty on non-WC days.
-        private var wcMatches: [TomorrowWcMatch] {
-            (board?.wc_lookahead ?? []).sorted {
-                ($0.commence_time ?? "") < ($1.commence_time ?? "")
-            }
-        }
         private var hasMlbLookahead: Bool { !lookAheadAvailable.isEmpty }
-        private var hasWcLookahead: Bool { !wcMatches.isEmpty }
 
-        /// "The Day Ahead" — an MLB / WC sport switch over the per-sport look-ahead.
-        /// MLB = the tabbed table (Starters · Form · Run Profile · Weather); WC =
-        /// the soccer-tailored tabbed table (Form · Key Scorers · Lineups), same
-        /// style. The switch only appears when BOTH sports have look-ahead data —
-        /// otherwise the single available sport renders alone (no orphan toggle).
+        /// "The Day Ahead" — the MLB look-ahead (Starters · Form · Run Profile ·
+        /// Weather). (The World Cup twin was deleted Sep 1 2026 with the WC lane.)
         @ViewBuilder private var lookAheadTabs: some View {
-            if hasMlbLookahead || hasWcLookahead {
-                let sport: LookAheadSport = {
-                    if lookAheadSport == .wc, hasWcLookahead { return .wc }
-                    if lookAheadSport == .mlb, hasMlbLookahead { return .mlb }
-                    return hasMlbLookahead ? .mlb : .wc
-                }()
+            if hasMlbLookahead {
                 VStack(alignment: .leading, spacing: 6) {
                     HubSectionHeader(eyebrow: "The Day Ahead", sub: "")
-                    // MLB / WC switch — only when both have data.
-                    if hasMlbLookahead && hasWcLookahead {
-                        HStack(spacing: 18) {
-                            ForEach([LookAheadSport.mlb, .wc], id: \.self) { s in
-                                Button {
-                                    withAnimation(.easeInOut(duration: 0.15)) { lookAheadSport = s }
-                                } label: {
-                                    Text(s.label)
-                                        .font(GaryFonts.mono(11, bold: true)).tracking(1)
-                                        .foregroundStyle(s == sport
-                                            ? (s == .wc ? wcAccent : GaryColors.gold)
-                                            : .white.opacity(0.4))
-                                        .frame(minHeight: 30)
-                                        .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-                            }
-                            Spacer()
-                        }
-                        .pageGutter()
-                    }
-                    if sport == .wc {
-                        wcLookAheadBody
-                    } else {
-                        mlbLookAheadTable
-                    }
+                    mlbLookAheadTable
                 }
             }
         }
@@ -13038,293 +12773,6 @@ struct TomorrowView {
                     .pageGutter()
                 }
             }
-        }
-
-        // ── WC look-ahead — the SAME tabbed-table style as MLB (founder call),
-        // tailored to soccer: Form · Key Scorers · Lineups. Fixed-height,
-        // internally scrolling, grouped by match. (Replaced the per-match cards.)
-        @ViewBuilder private var wcLookAheadBody: some View {
-            let lanes = wcLanesAvailable
-            if !lanes.isEmpty {
-                let active = lanes[min(wcLookAheadTab, lanes.count - 1)]
-                VStack(alignment: .leading, spacing: 6) {
-                    if lanes.count > 1 {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 18) {
-                                ForEach(Array(lanes.enumerated()), id: \.element) { i, lane in
-                                    Button {
-                                        withAnimation(.easeInOut(duration: 0.15)) { wcLookAheadTab = i }
-                                    } label: {
-                                        Text(lane.label)
-                                            .font(GaryFonts.mono(10.5, bold: true)).tracking(0.8)
-                                            .foregroundStyle(i == min(wcLookAheadTab, lanes.count - 1) ? GaryColors.gold : .white.opacity(0.4))
-                                            .frame(minHeight: 30)
-                                            .contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                            .padding(.horizontal, 2)
-                        }
-                        .pageGutter()
-                    }
-                    VStack(spacing: 0) {
-                        wcLaneHeader(active)
-                        Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
-                        ScrollView(.vertical, showsIndicators: true) {
-                            wcLaneBody(active).frame(maxWidth: .infinity)
-                        }
-                        .frame(height: 300)
-                        .scrollIndicators(.visible)
-                    }
-                    .background(Color(hex: "#181616"))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.07), lineWidth: 1))
-                    .pageGutter()
-                }
-            }
-        }
-
-        /// Which WC lanes have data, in display order.
-        private var wcLanesAvailable: [WcLane] {
-            WcLane.allCases.filter { lane in
-                switch lane {
-                case .matchup:
-                    return wcMatches.contains { $0.lines != nil || $0.away?.form != nil || $0.home?.form != nil }
-                case .form:
-                    return wcMatches.contains { $0.away?.form != nil || $0.home?.form != nil }
-                case .scorers:
-                    return wcMatches.contains { !($0.away?.key_players ?? []).isEmpty || !($0.home?.key_players ?? []).isEmpty }
-                }
-            }
-        }
-
-        /// Column headers per WC lane — gold, mirroring the MLB table.
-        @ViewBuilder private func wcLaneHeader(_ lane: WcLane) -> some View {
-            HStack(spacing: 8) {
-                switch lane {
-                case .matchup:
-                    Text("PROJECTION · WIN PROBABILITY").frame(maxWidth: .infinity, alignment: .leading)
-                case .form:
-                    Text("TEAM").frame(maxWidth: .infinity, alignment: .leading)
-                    Text("IN WC").frame(width: 58, alignment: .trailing)
-                    Text("GOALS/GM").frame(width: 72, alignment: .trailing)
-                    Text("OPP/GM").frame(width: 58, alignment: .trailing)
-                case .scorers:
-                    Text("PLAYER / TEAM").frame(maxWidth: .infinity, alignment: .leading)
-                    Text("GOALS").frame(width: 52, alignment: .trailing)
-                    Text("ASSTS").frame(width: 52, alignment: .trailing)
-                }
-            }
-            .font(GaryFonts.mono(10.5)).tracking(1.2)
-            .foregroundStyle(GaryColors.gold)
-            .padding(.vertical, 8).padding(.horizontal, 14)
-        }
-
-        /// The scrolling rows for the active WC lane, grouped by match.
-        @ViewBuilder private func wcLaneBody(_ lane: WcLane) -> some View {
-            VStack(spacing: 0) {
-                ForEach(Array(wcMatches.enumerated()), id: \.offset) { _, m in
-                    if lane == .matchup {
-                        wcMatchupCard(m)
-                    } else {
-                        wcMatchSubHeader(m)
-                        switch lane {
-                        case .form:
-                            wcFormRow(team: m.away_team, side: m.away)
-                            wcFormRow(team: m.home_team, side: m.home)
-                        case .scorers:
-                            wcScorerRows(team: m.away_team, side: m.away)
-                            wcScorerRows(team: m.home_team, side: m.home)
-                        case .matchup:
-                            EmptyView()
-                        }
-                    }
-                }
-            }
-        }
-
-        /// Match grouping header inside the WC table (teal matchup + kickoff).
-        private func wcMatchSubHeader(_ m: TomorrowWcMatch) -> some View {
-            HStack(spacing: 6) {
-                Text((m.match ?? "\(m.away_team ?? "") @ \(m.home_team ?? "")").uppercased())
-                    .font(GaryFonts.mono(10, bold: true)).tracking(0.8)
-                    .foregroundStyle(wcAccent.opacity(0.9))
-                    .lineLimit(1).minimumScaleFactor(0.8)
-                Spacer(minLength: 6)
-                if let k = m.kickoff, !k.isEmpty {
-                    Text(k.uppercased())
-                        .font(GaryFonts.mono(9, bold: true))
-                        .foregroundStyle(.white.opacity(0.62))
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, 9).padding(.bottom, 4).padding(.horizontal, 14)
-        }
-
-        /// FORM lane row — team · WC-only record (form-coloured) · goals/gm · opp goals/gm.
-        @ViewBuilder private func wcFormRow(team: String?, side: TomorrowWcSide?) -> some View {
-            // WC-ONLY record — this tournament's games, not last-5 overall (founder).
-            // Falls back to "—" until a side has played a World Cup match.
-            let f = side?.form?.wc
-            let recColor: Color = {
-                guard let w = f?.w, let l = f?.l else { return .white.opacity(0.85) }
-                if w > l { return GaryColors.win }
-                if l > w { return GaryColors.loss }
-                return .white.opacity(0.85)
-            }()
-            VStack(spacing: 0) {
-                HStack(spacing: 8) {
-                    Text(side?.team ?? team ?? "—")
-                        .font(GaryFonts.text(14, .semibold)).foregroundStyle(.white.opacity(0.92))
-                        .lineLimit(1).minimumScaleFactor(0.85)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Text(f?.record ?? "—")
-                        .font(GaryFonts.mono(13, bold: true)).foregroundStyle(recColor)
-                        .frame(width: 58, alignment: .trailing)
-                    Text(f?.gf_per_game.map { Self.trimNum($0) } ?? "—")
-                        .font(GaryFonts.mono(13)).foregroundStyle(.white.opacity(0.85))
-                        .frame(width: 72, alignment: .trailing)
-                    Text(f?.ga_per_game.map { Self.trimNum($0) } ?? "—")
-                        .font(GaryFonts.mono(13)).foregroundStyle(.white.opacity(0.7))
-                        .frame(width: 58, alignment: .trailing)
-                }
-                .padding(.vertical, 9).padding(.horizontal, 14)
-                hairline
-            }
-        }
-
-        /// KEY SCORERS lane — a side's top scorers: name + team · goals · assists.
-        @ViewBuilder private func wcScorerRows(team: String?, side: TomorrowWcSide?) -> some View {
-            let teamName = side?.team ?? team ?? ""
-            let players = Array((side?.key_players ?? []).prefix(3))
-            ForEach(Array(players.enumerated()), id: \.offset) { _, p in
-                VStack(spacing: 0) {
-                    HStack(spacing: 8) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(p.name ?? "—")
-                                .font(GaryFonts.text(14, .semibold)).foregroundStyle(.white.opacity(0.92)).lineLimit(1)
-                            Text(teamName)
-                                .font(GaryFonts.mono(10.5)).tracking(0.5).foregroundStyle(GaryColors.gold)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        Text("\(p.goals ?? 0)")
-                            .font(GaryFonts.mono(13, bold: true)).foregroundStyle(GaryColors.gold)
-                            .frame(width: 52, alignment: .trailing)
-                        Text("\(p.assists ?? 0)")
-                            .font(GaryFonts.mono(13)).foregroundStyle(.white.opacity(0.7))
-                            .frame(width: 52, alignment: .trailing)
-                    }
-                    .padding(.vertical, 9).padding(.horizontal, 14)
-                    hairline
-                }
-            }
-        }
-
-        /// MATCHUP card — the predictive hero. Projected scoreline from each side's
-        /// attack rate (goals/gm) vs the opponent's defense rate (opp goals/gm), the
-        /// derived lean, and the market spread/total as context. WC-only rates when a
-        /// side has WC games, else its overall form. All grounded in board data.
-        @ViewBuilder private func wcMatchupCard(_ m: TomorrowWcMatch) -> some View {
-            let awayName = m.away?.team ?? m.away_team ?? "Away"
-            let homeName = m.home?.team ?? m.home_team ?? "Home"
-            let homeGf = m.home?.form?.wc?.gf_per_game ?? m.home?.form?.gf_per_game
-            let homeGa = m.home?.form?.wc?.ga_per_game ?? m.home?.form?.ga_per_game
-            let awayGf = m.away?.form?.wc?.gf_per_game ?? m.away?.form?.gf_per_game
-            let awayGa = m.away?.form?.wc?.ga_per_game ?? m.away?.form?.ga_per_game
-            // Projected goals = (own attack + opponent's concession) / 2.
-            let homeProj: Double? = (homeGf != nil && awayGa != nil) ? (homeGf! + awayGa!) / 2 : nil
-            let awayProj: Double? = (awayGf != nil && homeGa != nil) ? (awayGf! + homeGa!) / 2 : nil
-            VStack(alignment: .leading, spacing: 9) {
-                HStack(spacing: 6) {
-                    Text((m.match ?? "\(awayName) @ \(homeName)").uppercased())
-                        .font(GaryFonts.mono(10, bold: true)).tracking(0.8)
-                        .foregroundStyle(wcAccent.opacity(0.9)).lineLimit(1).minimumScaleFactor(0.8)
-                    Spacer(minLength: 6)
-                    if let k = m.kickoff, !k.isEmpty {
-                        Text(k.uppercased()).font(GaryFonts.mono(9, bold: true)).foregroundStyle(.white.opacity(0.62))
-                    }
-                }
-                if let hp = homeProj, let ap = awayProj {
-                    // Projected scoreline — the higher number wears gold.
-                    HStack(spacing: 8) {
-                        Text("PROJECTED").font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(.white.opacity(0.62))
-                        Spacer(minLength: 4)
-                        Text(wcCode(awayName)).font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.7))
-                        Text(String(format: "%.1f", ap)).font(GaryFonts.mono(16, bold: true)).foregroundStyle(ap >= hp ? GaryColors.gold : .white.opacity(0.88))
-                        Text("–").font(GaryFonts.mono(13)).foregroundStyle(.white.opacity(0.62))
-                        Text(String(format: "%.1f", hp)).font(GaryFonts.mono(16, bold: true)).foregroundStyle(hp >= ap ? GaryColors.gold : .white.opacity(0.88))
-                        Text(wcCode(homeName)).font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.7))
-                    }
-                    // WIN% — true W/D/L from the Poisson scoreline grid (the favorite golds).
-                    let odds = Self.matchOdds(lambdaHome: hp, lambdaAway: ap, totalLine: m.lines?.total)
-                    let topP = max(odds.pHome, odds.pDraw, odds.pAway)
-                    HStack(spacing: 6) {
-                        Text("WIN%").font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(.white.opacity(0.62))
-                        Spacer(minLength: 4)
-                        Text("\(wcCode(awayName)) \(Self.pct(odds.pAway))")
-                            .font(GaryFonts.mono(11, bold: true)).foregroundStyle(odds.pAway >= topP ? GaryColors.gold : .white.opacity(0.7))
-                        Text("Draw \(Self.pct(odds.pDraw))")
-                            .font(GaryFonts.mono(10, bold: true)).foregroundStyle(odds.pDraw >= topP ? GaryColors.gold : .white.opacity(0.5))
-                        Text("\(wcCode(homeName)) \(Self.pct(odds.pHome))")
-                            .font(GaryFonts.mono(11, bold: true)).foregroundStyle(odds.pHome >= topP ? GaryColors.gold : .white.opacity(0.7))
-                    }
-                    // Proportional 3-segment bar: away (teal) · draw (grey) · home (gold).
-                    GeometryReader { g in
-                        HStack(spacing: 1.5) {
-                            Capsule().fill(wcAccent).frame(width: max(2, g.size.width * odds.pAway))
-                            Capsule().fill(Color.white.opacity(0.22)).frame(width: max(2, g.size.width * odds.pDraw))
-                            Capsule().fill(GaryColors.gold).frame(width: max(2, g.size.width * odds.pHome))
-                        }
-                    }
-                    .frame(height: 5)
-                    // Modal scoreline (away–home, matching PROJECTED) + P(over the line).
-                    HStack(spacing: 6) {
-                        Text("LIKELY SCORE").font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(.white.opacity(0.62))
-                        Text("\(odds.likelyAway)–\(odds.likelyHome)").font(GaryFonts.mono(13, bold: true)).foregroundStyle(.white.opacity(0.92))
-                        Text("\(wcCode(awayName))–\(wcCode(homeName))").font(GaryFonts.mono(8.5)).foregroundStyle(.white.opacity(0.62))
-                        if let po = odds.pOver, let t = m.lines?.total {
-                            Text("·").foregroundStyle(.white.opacity(0.62)).font(GaryFonts.mono(11))
-                            Text("Over \(Self.trimNum(t)) \(Self.pct(po))").font(GaryFonts.mono(10, bold: true)).foregroundStyle(.white.opacity(0.72))
-                        }
-                        Spacer(minLength: 0)
-                    }
-                } else {
-                    Text("Projection posts as both sides log World Cup games.")
-                        .font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.62))
-                }
-                // Market context — the board's spread + total.
-                if m.lines?.spread != nil || m.lines?.total != nil {
-                    HStack(spacing: 10) {
-                        Text("MARKET").font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(.white.opacity(0.62))
-                        if let sp = m.lines?.spread { Text("spread \(Self.trimNum(abs(sp)))").font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.6)) }
-                        if let t = m.lines?.total { Text("total \(Self.trimNum(t))").font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.6)) }
-                        Spacer(minLength: 0)
-                    }
-                }
-            }
-            .padding(.vertical, 11).padding(.horizontal, 14)
-            .overlay(hairline, alignment: .bottom)
-        }
-
-        /// Recent-form colour vs W/L: green winning, neutral even, red losing.
-        private func wcFormColor(_ f: TomorrowWcForm?) -> Color {
-            guard let f = f, let w = f.w, let l = f.l else { return .white.opacity(0.85) }
-            if w > l { return GaryColors.win }
-            if l > w { return GaryColors.loss }
-            // Even record (W == L): neutral white, NOT gold — gold is the brand accent,
-            // and reading an even record as highlighted was confusing (Paraguay 2-1-2).
-            return .white.opacity(0.85)
-        }
-
-        /// The projected XI names (keeper first), grounded — empty when no XI.
-        private func wcXiNames(_ xi: TomorrowWcXI?) -> [String] {
-            guard let xi else { return [] }
-            var names = (xi.xi ?? []).compactMap { $0.n }.filter { !$0.isEmpty }
-            if let gk = xi.keeper, !gk.isEmpty, !names.contains(gk) {
-                names.insert(gk, at: 0)
-            }
-            return names
         }
 
         /// The fixed column-header row for the active lane.
@@ -13662,36 +13110,6 @@ enum LookAheadLane: CaseIterable, Hashable {
         case .form:       return "FORM"
         case .runProfile: return "RUN PROFILE"
         case .weather:    return "WEATHER"
-        }
-    }
-}
-
-/// WC "Day Ahead" lanes — the soccer-tailored twin of LookAheadLane (no pitcher
-/// concepts): recent form, top scorers, projected lineups.
-enum WcLane: CaseIterable, Hashable {
-    // Matchup leads (strength + projected shape — the predictive hero). Lineups
-    // dropped (founder) — they live on each game's own pick page. The analytical
-    // lanes (Streaks / xG Regression / Advancement / Rest) that briefly folded in
-    // here were fed only by the old Hub — the redesigned Hub (HubView.swift)
-    // surfaces them itself, so the Day Ahead is back to per-match tables only.
-    case matchup, form, scorers
-    var label: String {
-        switch self {
-        case .matchup: return "MATCHUP"
-        case .form:    return "FORM"
-        case .scorers: return "KEY SCORERS"
-        }
-    }
-}
-
-/// The top-level MLB / WC switch for "The Day Ahead" — MLB routes to the tabbed
-/// table, WC to its own tabbed table (Form · Key Scorers · Lineups).
-enum LookAheadSport: Hashable {
-    case mlb, wc
-    var label: String {
-        switch self {
-        case .mlb: return "MLB"
-        case .wc:  return "WORLD CUP"
         }
     }
 }
@@ -19451,192 +18869,6 @@ struct SocialButton: View {
     }
 }
 
-// MARK: - NCAAB March Madness Marquee Border
-
-struct MarqueeLightsModifier: ViewModifier {
-    @State private var phase: CGFloat = 0
-    @State private var spotlightAngle: Double = 0
-
-    func body(content: Content) -> some View {
-        content
-            // Bulb border drawn inset so nothing clips
-            .overlay(
-                MarqueeBulbBorder(cornerRadius: 20, phase: phase, inset: 6)
-                    .allowsHitTesting(false)
-            )
-            // Sweeping spotlight cones
-            .overlay(
-                SpotlightSweep(angle: spotlightAngle)
-                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .allowsHitTesting(false)
-            )
-            .onAppear {
-                withAnimation(.linear(duration: 2.0).repeatForever(autoreverses: false)) {
-                    phase = 1.0
-                }
-                withAnimation(.linear(duration: 4.0).repeatForever(autoreverses: false)) {
-                    spotlightAngle = 360
-                }
-            }
-    }
-}
-
-// MARK: - Spotlight Sweep Animation
-struct SpotlightSweep: View {
-    let angle: Double
-
-    var body: some View {
-        Canvas { context, size in
-            let w = size.width
-            let h = size.height
-
-            // Two spotlights on opposite sides
-            let spots: [(Double, UnitPoint)] = [
-                (angle, .top),
-                (angle + 180, .bottom)
-            ]
-
-            for (deg, _) in spots {
-                let rad = deg * .pi / 180
-                // Spotlight origin orbits the card perimeter
-                let cx = w / 2 + cos(rad) * w * 0.45
-                let cy = h / 2 + sin(rad) * h * 0.45
-
-                let coneRadius: CGFloat = max(w, h) * 0.5
-                let center = CGPoint(x: cx, y: cy)
-
-                context.fill(
-                    Circle().path(in: CGRect(
-                        x: center.x - coneRadius,
-                        y: center.y - coneRadius,
-                        width: coneRadius * 2,
-                        height: coneRadius * 2
-                    )),
-                    with: .radialGradient(
-                        Gradient(colors: [
-                            Color(hex: "#C9A227").opacity(0.10),
-                            Color(hex: "#C9A227").opacity(0.04),
-                            Color.clear
-                        ]),
-                        center: center,
-                        startRadius: 0,
-                        endRadius: coneRadius
-                    )
-                )
-            }
-        }
-    }
-}
-
-struct MarqueeBulbBorder: View {
-    let cornerRadius: CGFloat
-    let phase: CGFloat
-    var inset: CGFloat = 0
-    // Bulb diameter — touching side by side
-    private let bulbSize: CGFloat = 8.5
-
-    var body: some View {
-        Canvas { context, size in
-            let w = size.width
-            let h = size.height
-            // Inset the path so bulbs draw fully inside the view bounds
-            let iw = w - inset * 2
-            let ih = h - inset * 2
-            let r = min(cornerRadius, min(iw, ih) / 2)
-            let perimeter = MarqueeBulbBorder.perimeterLength(w: iw, h: ih, r: r)
-            let count = Int(perimeter / bulbSize)
-            let litOffset = Int(phase * CGFloat(count))
-
-            for i in 0..<count {
-                let t = CGFloat(i) / CGFloat(count)
-                var pos = MarqueeBulbBorder.pointOnRect(t: t, w: iw, h: ih, r: r)
-                // Offset from inset space back to full coordinate space
-                pos.x += inset
-                pos.y += inset
-
-                // Chase pattern: every 3rd bulb is fully lit, others are dim
-                let patternIndex = (i + litOffset) % 4
-                let isLit = patternIndex == 0 || patternIndex == 1
-
-                // Bulb body (dark gold socket)
-                let socketRect = CGRect(x: pos.x - bulbSize / 2, y: pos.y - bulbSize / 2, width: bulbSize, height: bulbSize)
-                context.fill(Circle().path(in: socketRect), with: .color(Color(hex: "#8B6914").opacity(0.9)))
-
-                // Inner glass
-                let glassSize: CGFloat = bulbSize - 2.5
-                let glassRect = CGRect(x: pos.x - glassSize / 2, y: pos.y - glassSize / 2, width: glassSize, height: glassSize)
-
-                if isLit {
-                    // Lit bulb: bright warm white-gold center
-                    context.fill(Circle().path(in: glassRect), with: .color(Color(hex: "#FFEEBB").opacity(0.95)))
-                    // Hot center
-                    let hotSize: CGFloat = glassSize * 0.5
-                    let hotRect = CGRect(x: pos.x - hotSize / 2, y: pos.y - hotSize / 2, width: hotSize, height: hotSize)
-                    context.fill(Circle().path(in: hotRect), with: .color(Color.white.opacity(0.9)))
-                    // Glow halo
-                    let glowSize: CGFloat = bulbSize * 2.2
-                    let glowRect = CGRect(x: pos.x - glowSize / 2, y: pos.y - glowSize / 2, width: glowSize, height: glowSize)
-                    context.fill(Circle().path(in: glowRect), with: .color(Color(hex: "#C9A227").opacity(0.2)))
-                } else {
-                    // Dim bulb: dark amber, glass visible but unlit
-                    context.fill(Circle().path(in: glassRect), with: .color(Color(hex: "#6B4A0A").opacity(0.6)))
-                    // Faint filament
-                    let dotSize: CGFloat = glassSize * 0.3
-                    let dotRect = CGRect(x: pos.x - dotSize / 2, y: pos.y - dotSize / 2, width: dotSize, height: dotSize)
-                    context.fill(Circle().path(in: dotRect), with: .color(Color(hex: "#C9A227").opacity(0.25)))
-                }
-            }
-        }
-        .allowsHitTesting(false)
-    }
-
-    static func perimeterLength(w: CGFloat, h: CGFloat, r: CGFloat) -> CGFloat {
-        let straightW = w - 2 * r
-        let straightH = h - 2 * r
-        let cornerArc: CGFloat = .pi / 2 * r
-        return 2 * straightW + 2 * straightH + 4 * cornerArc
-    }
-
-    static func pointOnRect(t: CGFloat, w: CGFloat, h: CGFloat, r: CGFloat) -> CGPoint {
-        let straightW = w - 2 * r
-        let straightH = h - 2 * r
-        let cornerArc: CGFloat = .pi / 2 * r
-        let perimeter = 2 * straightW + 2 * straightH + 4 * cornerArc
-        var d = t * perimeter
-
-        if d < straightW { return CGPoint(x: r + d, y: 0) }
-        d -= straightW
-        if d < cornerArc {
-            let a = -CGFloat.pi / 2 + (d / r)
-            return CGPoint(x: w - r + r * cos(a), y: r + r * sin(a))
-        }
-        d -= cornerArc
-        if d < straightH { return CGPoint(x: w, y: r + d) }
-        d -= straightH
-        if d < cornerArc {
-            let a = d / r
-            return CGPoint(x: w - r + r * cos(a), y: h - r + r * sin(a))
-        }
-        d -= cornerArc
-        if d < straightW { return CGPoint(x: w - r - d, y: h) }
-        d -= straightW
-        if d < cornerArc {
-            let a = CGFloat.pi / 2 + (d / r)
-            return CGPoint(x: r + r * cos(a), y: h - r + r * sin(a))
-        }
-        d -= cornerArc
-        if d < straightH { return CGPoint(x: 0, y: h - r - d) }
-        d -= straightH
-        let a = CGFloat.pi + (d / r)
-        return CGPoint(x: r + r * cos(a), y: r + r * sin(a))
-    }
-}
-
-extension View {
-    func marqueeLights() -> some View {
-        modifier(MarqueeLightsModifier())
-    }
-}
 
 
 
@@ -20786,12 +20018,10 @@ final class PropsSlateStore: ObservableObject {
         // today's picks so an empty/slow picks table cannot postpone the 15 game
         // placeholders users should see all morning.
         async let todayFetch = fetchIsolatedGamePickSources(
-            date: date,
-            includeUpcomingNcaab: true
+            date: date
         )
         async let yesterdayFetch = fetchIsolatedGamePickSources(
-            date: yesterday,
-            includeUpcomingNcaab: false
+            date: yesterday
         )
         async let slateFetch = SupabaseAPI.fetchDailySlateWithStatus(date: date, forceRefresh: forceRefresh)
         let todaySnapshot = await todayFetch
@@ -21746,18 +20976,6 @@ func teamAbbrevFromName(_ name: String, league: String? = nil) -> String {
 
 /// A settled score WITH team labels ("CHC 10 · NYM 3") from a matchup + a raw "10-3".
 /// Falls back to the raw score if it can't parse. Global — shared by every card footer.
-/// 2026 World Cup phase (ET calendar) — keeps storefront copy honest as the
-/// tournament moves: "kicks off June 11" is a lie by June 12.
-enum WCPhase { case preTournament, live, done }
-func worldCupPhase(now: Date = Date()) -> WCPhase {
-    var cal = Calendar(identifier: .gregorian)
-    if let tz = TimeZone(identifier: "America/New_York") { cal.timeZone = tz }
-    let kickoff = DateComponents(calendar: cal, year: 2026, month: 6, day: 11).date ?? .distantFuture
-    let dayAfterFinal = DateComponents(calendar: cal, year: 2026, month: 7, day: 20).date ?? .distantFuture
-    if now < kickoff { return .preTournament }
-    if now < dayAfterFinal { return .live }
-    return .done
-}
 
 func finalScoreLine(matchup: String, raw: String, league: String? = nil) -> String {
     let parts = raw.components(separatedBy: CharacterSet(charactersIn: "-\u{2013}")).map { $0.trimmingCharacters(in: .whitespaces) }
@@ -22936,9 +22154,6 @@ struct PicksCarouselView: View {
         if store.propPickSourceFailed || store.slateSourceFailed { return true }
         switch sport {
         case "NFL": return store.gamePickSourceFailures.contains("NFL")
-        case "NCAAB":
-            return store.gamePickSourceFailures.contains("DAILY")
-                || store.gamePickSourceFailures.contains("NCAAB_FUTURE")
         case "ALL": return !store.gamePickSourceFailures.isEmpty
         default: return store.gamePickSourceFailures.contains("DAILY")
         }
@@ -23849,14 +23064,12 @@ enum ScoutWireCache {
 /// price heads · S3 series tug + venue split + S9 last-three meetings · THE
 /// ARMS as P34/P23 blocks (side-tinted Bebas plate + quality-start tag +
 /// statement ladder: label zone | rule | values) · LAST 10 as an F1 kicker
-/// row · hanging-indent WIRE · conditions footer. WC speaks the same kicker-
-/// row grammar (form / goal diff / shape / danger men). Flat on the page;
+/// row · hanging-indent WIRE · conditions footer. Flat on the page;
 /// every fact server-grounded; every row omits itself when data is short.
 struct GameScoutSection: View {
     let matchup: String
     var row: TomorrowBoardRow? = nil
     var board: TomorrowBoard? = nil
-    var wc: TomorrowWcMatch? = nil
     var wire: [SupabaseAPI.WireItem] = []
     /// Odds captured at pick time (GaryPick.moneylineAway/Home). When present
     /// the header wears Gary's exact numbers — never a drifted board snapshot
@@ -23887,32 +23100,19 @@ struct GameScoutSection: View {
         return v == v.rounded() ? String(format: "%.0f", v) : String(format: "%.1f", v)
     }
 
-    private var league: String { wc != nil ? "WC" : (row?.league ?? "").uppercased() }
+    private var league: String { (row?.league ?? "").uppercased() }
     private var headerNames: (away: String, home: String) {
         (Formatters.shortTeamName(sides.away, league: league),
          Formatters.shortTeamName(sides.home, league: league))
     }
-    /// Header prices. WC: TO-ADVANCE odds when the knockout market exists —
-    /// a price that never needs to match Gary's 90-minute pick (founder,
-    /// Jul 10) — else the 3-way ML (draw rendered separately below). MLB and
-    /// the rest: the odds CAPTURED AT PICK TIME when a pick exists, so the
+    /// Header prices: the odds CAPTURED AT PICK TIME when a pick exists, so the
     /// scout header always matches Gary's number; the day board only fills
     /// the pre-pick morning.
     private var headOdds: (a: String?, h: String?) {
-        if let wc {
-            if wc.lines?.advance_home != nil || wc.lines?.advance_away != nil {
-                return (Self.odds(wc.lines?.advance_away), Self.odds(wc.lines?.advance_home))
-            }
-            return (Self.odds(wc.lines?.ml_away), Self.odds(wc.lines?.ml_home))
-        }
         if let pickMl, pickMl.away != nil || pickMl.home != nil {
             return (Self.odds(pickMl.away), Self.odds(pickMl.home))
         }
         return (Self.odds(row?.ml_away), Self.odds(row?.ml_home))
-    }
-    /// True when the header is wearing the knockout TO-ADVANCE prices.
-    private var headIsAdvance: Bool {
-        wc != nil && (wc?.lines?.advance_home != nil || wc?.lines?.advance_away != nil)
     }
     private var teamAbbrs: (a: String, h: String) {
         (abbr(sides.away, fallback: row?.away_abbr), abbr(sides.home, fallback: row?.home_abbr))
@@ -24019,11 +23219,7 @@ struct GameScoutSection: View {
 
     private var footer: String? {
         var bits: [String] = []
-        if let wc {
-            if let ou = Self.num(wc.lines?.total) { bits.append("O/U \(ou)") }
-            if let st = wc.stage { bits.append(st) }
-            if let v = wc.venue { bits.append(v) }
-        } else if let row {
+        if let row {
             if let ou = Self.num(row.total) { bits.append("O/U \(ou)") }
             let ab = teamAbbrs
             if let w = board?.weather?.first(where: {
@@ -24044,13 +23240,12 @@ struct GameScoutSection: View {
     private var awayStarter: TomorrowPerson? { board?.starters.first { $0.abbr == teamAbbrs.a } }
     private var homeStarter: TomorrowPerson? { board?.starters.first { $0.abbr == teamAbbrs.h } }
     private var hasContent: Bool {
-        if wc != nil { return true }
         return row?.series != nil || awayStarter != nil || homeStarter != nil
             || board?.form?.isEmpty == false
     }
 
     var body: some View {
-        if row != nil || wc != nil, hasContent {
+        if row != nil, hasContent {
             VStack(alignment: .leading, spacing: 0) {
                 // "SCOUTING REPORT" label removed (founder, Aug 4) — the card
                 // opens straight with the matchup, then the arms.
@@ -24065,24 +23260,11 @@ struct GameScoutSection: View {
                         .foregroundStyle(GaryColors.gold)
                         .lineLimit(1).minimumScaleFactor(0.6)
                 }
-                .padding(.bottom, headIsAdvance || (wc?.lines?.ml_draw) != nil ? 4 : 10)
-                // The market caption: names the knockout TO-ADVANCE market, or
-                // carries the draw the 2-way header can't show.
-                if headIsAdvance {
-                    Text("TO ADVANCE")
-                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1.6)
-                        .foregroundStyle(GaryColors.gold.opacity(0.7))
-                        .padding(.bottom, 10)
-                } else if let draw = wc?.lines?.ml_draw {
-                    Text("DRAW \(Self.odds(draw) ?? "—")")
-                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1.6)
-                        .foregroundStyle(.white.opacity(0.62))
-                        .padding(.bottom, 10)
-                }
-                if let series = wc == nil ? row?.series : nil { seriesBlock(series) }
+                .padding(.bottom, 10)
+                if let series = row?.series { seriesBlock(series) }
                 // Gary's two sentences on the game's two starters (founder,
                 // Aug 4) — the take leads, the stat plates follow as data.
-                if wc == nil, let take = row?.arms_take {
+                if let take = row?.arms_take {
                     Text(take)
                         .font(GaryFonts.text(14, .medium))
                         .foregroundStyle(.white.opacity(0.88))
@@ -24090,7 +23272,7 @@ struct GameScoutSection: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.bottom, 10)
                 }
-                if wc == nil { mlbArms } else { wcRows }
+                mlbArms
                 wireLines
                 if let footer {
                     Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
@@ -24200,90 +23382,6 @@ struct GameScoutSection: View {
         }
     }
 
-    // ── WC — the same kicker-row grammar ──
-
-    private struct WcRow: Identifiable {
-        let id: Int
-        let label: String
-        let away: Text
-        let home: Text
-        var awaySub: Text? = nil
-        var homeSub: Text? = nil
-    }
-    private var wcRowList: [WcRow] {
-        guard let wc else { return [] }
-        var out: [WcRow] = []
-        func add(_ label: String, _ a: Text?, _ h: Text?, _ aSub: Text? = nil, _ hSub: Text? = nil) {
-            guard a != nil || h != nil else { return }
-            let dash = Self.stat("—", .white.opacity(0.45))
-            out.append(WcRow(id: out.count, label: label, away: a ?? dash, home: h ?? dash, awaySub: aSub, homeSub: hSub))
-        }
-        add("FORM · L5", (wc.away?.form?.form).map(Self.formRun), (wc.home?.form?.form).map(Self.formRun))
-        // GOALS/GM — scored and allowed per match, net tinted at the end
-        // (totals bettors want both halves, not just the diff).
-        func goals(_ s: TomorrowWcSide?) -> Text? {
-            guard let f = s?.form, let gf = f.gf_per_game, let ga = f.ga_per_game else { return nil }
-            let d = gf - ga
-            let dim: (String) -> Text = { Text($0).font(GaryFonts.mono(12)).foregroundColor(.white.opacity(0.62)) }
-            var t = Self.stat(Self.num(gf) ?? "—") + dim(" for · ")
-                + Self.stat(Self.num(ga) ?? "—") + dim(" vs")
-            if let dTxt = Self.diffText(d) { t = t + dim("  ") + dTxt }
-            return t
-        }
-        add("GOALS / GM", goals(wc.away), goals(wc.home))
-        // AT THIS CUP — tournament-only record (excludes friendlies/qualifiers).
-        func cup(_ s: TomorrowWcSide?) -> Text? {
-            guard let c = s?.form?.wc, let rec = c.record else { return nil }
-            let w = c.w ?? 0
-            let l = c.l ?? 0
-            let tint: Color = w > l ? GaryColors.win : l > w ? GaryColors.loss : .white.opacity(0.9)
-            return Self.stat(rec, tint)
-                + Text(" W-D-L").font(GaryFonts.mono(11)).foregroundColor(.white.opacity(0.62))
-        }
-        add("AT THIS CUP", cup(wc.away), cup(wc.home))
-        func manLine(_ p: TomorrowWcKeyPlayer) -> String? {
-            guard let n = p.name else { return nil }
-            var stat: [String] = []
-            if let g = p.goals, g > 0 { stat.append("\(g)G") }
-            if let a = p.assists, a > 0 { stat.append("\(a)A") }
-            return stat.isEmpty ? n : "\(n) \(stat.joined(separator: " "))"
-        }
-        func men(_ s: TomorrowWcSide?) -> (Text, Text?)? {
-            let lines = (s?.key_players ?? []).compactMap(manLine)
-            guard let first = lines.first else { return nil }
-            let mk: (String) -> Text = { Text($0).font(GaryFonts.text(13.5, .semibold)).foregroundColor(.white.opacity(0.92)) }
-            let sub = lines.count > 1
-                ? Text(lines[1]).font(GaryFonts.text(12, .medium)).foregroundColor(.white.opacity(0.62))
-                : nil
-            return (mk(first), sub)
-        }
-        let ma = men(wc.away), mh = men(wc.home)
-        add("DANGER MEN", ma?.0, mh?.0, ma?.1, mh?.1)
-        return out
-    }
-
-    @ViewBuilder private var wcRows: some View {
-        ForEach(wcRowList) { r in
-            Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
-            VStack(alignment: .leading, spacing: 5) {
-                Self.kicker(r.label)
-                HStack(alignment: .top, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        r.away.lineLimit(1).minimumScaleFactor(0.7)
-                        if let sub = r.awaySub { sub.lineLimit(1).minimumScaleFactor(0.7) }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    VStack(alignment: .trailing, spacing: 2) {
-                        r.home.lineLimit(1).minimumScaleFactor(0.7)
-                        if let sub = r.homeSub { sub.lineLimit(1).minimumScaleFactor(0.7) }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                }
-            }
-            .padding(.vertical, 10)
-        }
-    }
-
     /// S3's tug + venue split + S9's meetings.
     @ViewBuilder private func seriesBlock(_ s: TomorrowSeries) -> some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -24318,8 +23416,8 @@ struct GameScoutSection: View {
 
     /// Hanging-indent wire notes (injury first), de-duped across the sides.
     @ViewBuilder private var wireLines: some View {
-        let aKey = wc != nil ? sides.away : Formatters.shortTeamName(sides.away, league: "MLB")
-        let hKey = wc != nil ? sides.home : Formatters.shortTeamName(sides.home, league: "MLB")
+        let aKey = Formatters.shortTeamName(sides.away, league: "MLB")
+        let hKey = Formatters.shortTeamName(sides.home, league: "MLB")
         let items = [news(aKey), news(hKey)].compactMap { $0 }
         let uniq = items.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
         if !uniq.isEmpty {

@@ -891,7 +891,7 @@ enum SupabaseAPI {
     /// no slate-min math; everything is display-formatted server-side.
     static func fetchTomorrowBoard(date: String) async -> TomorrowBoard? {
         let url = buildURL(table: "tomorrow_board", query: [
-            URLQueryItem(name: "select", value: "date,countdown_iso,countdown_sport,countdown_matchup,game_count,any_lines,board,big_games,starters,returns,form,run_profile,weather,league_avg_era,league_avg_xera,wc_lookahead"),
+            URLQueryItem(name: "select", value: "date,countdown_iso,countdown_sport,countdown_matchup,game_count,any_lines,board,big_games,starters,returns,form,run_profile,weather,league_avg_era,league_avg_xera"),
             URLQueryItem(name: "date", value: "eq.\(date)"),
             URLQueryItem(name: "limit", value: "1")
         ])
@@ -1323,43 +1323,11 @@ enum SupabaseAPI {
         }
     }
     
-    // MARK: - Upcoming NCAAB Tournament Picks
-
-    /// Fetch NCAAB picks for today and future dates (tournament games stored in advance)
-    /// Returns only NCAAB picks with date >= today so all active tournament picks show
-    static func fetchUpcomingNCAABPicks(afterDate: String) async throws -> [GaryPick] {
-        // Fetch daily_picks rows with date > today (today is already fetched by fetchDailyPicks)
-        let url = buildURL(table: "daily_picks", query: [
-            URLQueryItem(name: "select", value: "picks::text,date"),
-            URLQueryItem(name: "date", value: "gt.\(afterDate)"),
-            URLQueryItem(name: "order", value: "date.asc")
-        ])
-
-        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-            throw NSError(domain: "SupabaseAPI.fetchUpcomingNCAABPicks", code: status,
-                          userInfo: [NSLocalizedDescriptionKey: "Upcoming NCAAB picks returned HTTP \(status)"])
-        }
-
-        let rows = try JSONDecoder().decode([DailyPicksRow].self, from: data)
-        var allPicks: [GaryPick] = []
-        for row in rows {
-            let picks = try parsePicksRow(row.picks)
-            try validateStoredGamePicks(picks, source: "daily_picks future NCAAB")
-            // Only include NCAAB picks from future dates
-            let ncaabPicks = picks.filter { ($0.league ?? "").uppercased() == "NCAAB" }
-            allPicks.append(contentsOf: ncaabPicks)
-        }
-        return allPicks
-    }
-
     // MARK: - Combined Picks
 
     /// Fetch the picks stored for exactly one slate date, including NFL picks
-    /// from the weekly table. Unlike `fetchAllPicks`, this deliberately does not
-    /// append future NCAAB tournament rows, which keeps Yesterday and historical
-    /// boards pinned to the date the user selected.
+    /// from the weekly table. Yesterday and historical boards stay pinned to
+    /// the date the user selected.
     /// - Parameter forceRefresh: Set to true for pull-to-refresh to bypass cache
     static func fetchExactDatePicks(date: String, forceRefresh: Bool = false) async throws -> [GaryPick] {
         let cacheKey = "exactDatePicks_\(date)"
@@ -1396,7 +1364,7 @@ enum SupabaseAPI {
         return result
     }
 
-    /// Fetch all picks: non-NFL from daily_picks + NFL from weekly_nfl_picks + upcoming NCAAB tournament picks
+    /// Fetch all picks: non-NFL from daily_picks + NFL from weekly_nfl_picks
     /// - Parameter forceRefresh: Set to true for pull-to-refresh to bypass cache
     static func fetchAllPicks(date: String, forceRefresh: Bool = false) async throws -> [GaryPick] {
         let cacheKey = "allPicks_\(date)"
@@ -1409,15 +1377,12 @@ enum SupabaseAPI {
         // Fetch fresh data
         async let dailyTask = fetchDailyPicks(date: date)
         async let nflTask = fetchWeeklyNFLPicks(for: date)
-        async let ncaabUpcomingTask = fetchUpcomingNCAABPicks(afterDate: date)
 
         var dailyPicks: [GaryPick] = []
         var nflPicks: [GaryPick] = []
-        var ncaabUpcoming: [GaryPick] = []
         var sourceErrors: [Error] = []
         do { dailyPicks = try await dailyTask } catch { sourceErrors.append(error) }
         do { nflPicks = try await nflTask } catch { sourceErrors.append(error) }
-        do { ncaabUpcoming = try await ncaabUpcomingTask } catch { sourceErrors.append(error) }
 
         // A SwiftUI preload can be cancelled while the user changes tabs. Do
         // not turn that cancellation into a successful empty response and
@@ -1427,7 +1392,7 @@ enum SupabaseAPI {
         // Filter out NFL from daily picks (they come from weekly_nfl_picks)
         let nonNFLPicks = dailyPicks.filter { ($0.league ?? "").uppercased() != "NFL" }
 
-        let result = nonNFLPicks + nflPicks + ncaabUpcoming
+        let result = nonNFLPicks + nflPicks
 
         guard sourceErrors.isEmpty else {
             throw SourceReadFailure(
