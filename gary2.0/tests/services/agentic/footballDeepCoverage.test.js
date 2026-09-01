@@ -1,4 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// CODEX FIRST (Sep 1 2026): the football search transport tries the $0 codex
+// bridge before Anthropic. Mocked to a miss here so these gate/throttle pins
+// keep exercising the Anthropic path they were written for, offline.
+vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js', () => ({
+  codexCliWebSearch: vi.fn(async () => ({ success: false, data: '', raw: null, error: 'mocked miss' })),
+  isCodexCliModel: (m) => typeof m === 'string' && m.startsWith('codex-'),
+}));
 import {
   mentionsTeam, DEEP_COVERAGE_LANES
 } from '../../../src/services/agentic/scoutReport/shared/anthropicFootballGrounding.js';

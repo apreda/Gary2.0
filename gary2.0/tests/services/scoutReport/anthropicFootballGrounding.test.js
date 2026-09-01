@@ -1,4 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// CODEX FIRST (Sep 1 2026): every football search lane tries the $0 codex
+// bridge before the Anthropic server search. Mocked here so a unit test never
+// spawns the real CLI; the default miss exercises the Anthropic path these
+// pins were written for, and one pin below covers the codex hit.
+vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js', () => ({
+  codexCliWebSearch: vi.fn(async () => ({ success: false, data: '', raw: null, error: 'mocked miss' })),
+  isCodexCliModel: (m) => typeof m === 'string' && m.startsWith('codex-'),
+}));
+import { codexCliWebSearch } from '../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js';
 import {
   fetchAnthropicFootballCurrentState,
   scrubFootballGroundingText,
@@ -148,5 +158,37 @@ describe('Anthropic football current-state fallback', () => {
     expect(cleaned).toContain('Buffalo Bills facts.');
     expect(cleaned).toContain('Carolina Panthers facts.');
     expect(cleaned).not.toMatch(/pick|\+3\.5|ATS/i);
+  });
+});
+
+describe('codex-first football search (Sep 1 2026)', () => {
+  it('a valid codex draft is returned under the same validation floor without touching Anthropic', async () => {
+    const draft = [
+      '## Buffalo Bills',
+      'The Buffalo Bills verified their starter and reserve playing-time plans in a current coach briefing. '.repeat(3),
+      '## Carolina Panthers',
+      'The Carolina Panthers separately verified their starter and reserve playing-time plans in a current coach briefing. '.repeat(3),
+    ].join('\n');
+    codexCliWebSearch.mockResolvedValueOnce({ success: true, data: draft, raw: null });
+    const fetchImpl = vi.fn();
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+    const result = await fetchAnthropicFootballCurrentState({
+      homeTeam: 'Buffalo Bills', awayTeam: 'Carolina Panthers', sport: 'NFL', fetchImpl,
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(result?.provider).toBe('codex-web-search');
+    expect(result?.data).toContain('Buffalo Bills');
+    expect(result?.data).toContain('Carolina Panthers');
+  });
+
+  it('a codex draft that names only one team falls through to Anthropic', async () => {
+    codexCliWebSearch.mockResolvedValueOnce({ success: true, data: '## Buffalo Bills\n' + 'Only the Bills are discussed here at length. '.repeat(12), raw: null });
+    const fetchImpl = vi.fn(async () => ({ ok: false, status: 503, headers: { get: () => null }, json: async () => ({}) }));
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+    const result = await fetchAnthropicFootballCurrentState({
+      homeTeam: 'Buffalo Bills', awayTeam: 'Carolina Panthers', sport: 'NFL', fetchImpl,
+    });
+    expect(fetchImpl).toHaveBeenCalled();
+    expect(result).toBeNull();
   });
 });

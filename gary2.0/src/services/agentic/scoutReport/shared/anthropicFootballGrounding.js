@@ -1,3 +1,15 @@
+import { codexCliWebSearch } from '../../orchestrator/providerAdapters/codexCliSession.js';
+
+// CODEX FIRST (founder GO, Sep 1 2026): every football search lane — current
+// state, recent coverage, and all six deep-read lanes — tries the $0 GPT Pro
+// codex bridge first, under the SAME prompt and the SAME validation floor,
+// and falls through to the metered Anthropic server search only on a miss.
+// Measured live before wiring: one deep-read lane on codex = 83s / 6,025
+// chars / both teams named (vs ~20s on Anthropic) — slower, free, and the
+// desk builds are tier-staggered, so the gate below carries the load.
+const CODEX_FIRST = process.env.GARY_FOOTBALL_SEARCH_CODEX_FIRST !== '0';
+const CODEX_TIMEOUT_MS = Number(process.env.FOOTBALL_CODEX_SEARCH_TIMEOUT_MS) || 150_000;
+
 const ANTHROPIC_MESSAGES_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
 const DEFAULT_MODEL = 'claude-haiku-4-5';
@@ -138,7 +150,10 @@ export function scrubFootballGroundingText(text) {
  * CONCURRENCY exists so that is a config change, not a code change. NFL runs
  * at most three games at once, so it never approaches the ceiling.
  */
-const MAX_CONCURRENT_SEARCHES = Number(process.env.FOOTBALL_SEARCH_CONCURRENCY) || 6;
+// Default raised 6 → 10 on Sep 1 2026: the gate now mostly meters codex lanes
+// (~83s each) rather than ~20s Anthropic calls, and Anthropic — the 429 the
+// ceiling protected against — is the rare fallback rung.
+const MAX_CONCURRENT_SEARCHES = Number(process.env.FOOTBALL_SEARCH_CONCURRENCY) || 10;
 const RATE_LIMIT_RETRIES = 3;
 
 let activeSearches = 0;
@@ -202,6 +217,17 @@ export function mentionsTeam(lowerText, teamName) {
     || (place.length >= 4 && lowerText.includes(place));
 }
 
+/** The one validation floor every provider's draft must clear. */
+function validateNarrative(rawText, { mustMention, minChars }) {
+  const cleaned = scrubFootballGroundingText(stripSearchNarration(rawText));
+  const lower = cleaned.toLowerCase();
+  const missing = mustMention.filter((name) => !mentionsTeam(lower, name));
+  if (cleaned.length < minChars || missing.length > 0) {
+    return { ok: false, cleaned, missing };
+  }
+  return { ok: true, cleaned, missing: [] };
+}
+
 async function runFootballSearch({
   apiKey, fetchImpl, timeoutMs, label, prompt, maxUses = 6,
   mustMention = [], minChars = 200, failures = null,
@@ -209,6 +235,31 @@ async function runFootballSearch({
   // Existing callers pass no sink and keep the old null-on-failure contract.
   const fail = (reason) => { if (failures) failures.push(reason); return null; };
   const startedAt = Date.now();
+
+  // ── Rung 1: the $0 codex bridge, same prompt, same validation floor ──
+  if (CODEX_FIRST) {
+    await acquireSearchSlot();
+    try {
+      const viaCodex = await codexCliWebSearch(prompt, { timeoutMs: CODEX_TIMEOUT_MS });
+      if (viaCodex.success) {
+        const v = validateNarrative(viaCodex.data, { mustMention, minChars });
+        if (v.ok) {
+          console.log(`[${label}] codex web search OK (${v.cleaned.length} chars, ${Date.now() - startedAt}ms, $0)`);
+          return { data: v.cleaned, provider: 'codex-web-search', searchCount: null };
+        }
+        console.warn(`[${label}] codex draft failed validation (chars=${v.cleaned.length}, missing=${v.missing.join('|') || 'none'}) — falling back to Anthropic`);
+      } else {
+        console.warn(`[${label}] codex search failed (${viaCodex.error || 'empty'}) — falling back to Anthropic`);
+      }
+    } finally {
+      releaseSearchSlot();
+    }
+  }
+
+  // ── Rung 2: Anthropic server web search (metered; unchanged below) ──
+  if (!apiKey || typeof fetchImpl !== 'function') {
+    return fail('the codex search missed and the Anthropic fallback is unavailable (missing API key)');
+  }
   const tool = {
     type: 'web_search_20250305',
     name: 'web_search',
@@ -287,10 +338,10 @@ async function runFootballSearch({
         return null;
       }
 
-      const cleaned = scrubFootballGroundingText(stripSearchNarration(textParts.join('\n\n')));
-      const lower = cleaned.toLowerCase();
-      const missing = mustMention.filter((name) => !mentionsTeam(lower, name));
-      if (cleaned.length < minChars || missing.length > 0) {
+      const v = validateNarrative(textParts.join('\n\n'), { mustMention, minChars });
+      const cleaned = v.cleaned;
+      const missing = v.missing;
+      if (!v.ok) {
         console.warn(`[${label}] narrative validation failed (chars=${cleaned.length}, missing=${missing.join('|') || 'none'})`);
         return fail(missing.length
           ? `the search returned text that did not mention ${missing.join(' or ')}`
@@ -321,7 +372,7 @@ export async function fetchAnthropicFootballCurrentState({
   timeoutMs = DEFAULT_TIMEOUT_MS,
 } = {}) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey || typeof fetchImpl !== 'function') {
+  if (!CODEX_FIRST && (!apiKey || typeof fetchImpl !== 'function')) {
     console.warn('[Football Grounding] Anthropic web search unavailable (missing API key or fetch)');
     return null;
   }
@@ -396,7 +447,7 @@ export async function fetchFootballRecentGameCoverage({
   timeoutMs = DEFAULT_TIMEOUT_MS,
 } = {}) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey || typeof fetchImpl !== 'function') {
+  if (!CODEX_FIRST && (!apiKey || typeof fetchImpl !== 'function')) {
     console.warn('[Football Coverage] Anthropic web search unavailable (missing API key or fetch)');
     return null;
   }
@@ -557,7 +608,7 @@ export async function fetchFootballDeepCoverage({
   knownAccounts = null
 } = {}) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey || typeof fetchImpl !== 'function') {
+  if (!CODEX_FIRST && (!apiKey || typeof fetchImpl !== 'function')) {
     console.warn('[Football Deep Read] Anthropic web search unavailable (missing API key or fetch)');
     return null;
   }
@@ -638,6 +689,7 @@ export async function fetchFootballDeepCoverage({
 
   const text = body;
 
-  console.log(`[Football Deep Read] ${withText.length}/${selected.length} lanes returned, ${searches} searches, ${text.length} chars`);
+  const codexLanes = settled.filter((o) => o.status === 'fulfilled' && o.value?.provider === 'codex-web-search').length;
+  console.log(`[Football Deep Read] ${withText.length}/${selected.length} lanes returned (${codexLanes} via codex at $0, ${withText.length - codexLanes} via Anthropic; ${searches} metered searches), ${text.length} chars`);
   return { text, lanes: done, searches };
 }
