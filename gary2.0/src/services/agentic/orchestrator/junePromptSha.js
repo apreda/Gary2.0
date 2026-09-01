@@ -70,6 +70,10 @@ export function junePromptSha() {
     getMlbSeasonAwareness(),
     buildPass1Message('SCOUT', 'HOME', 'AWAY', 'DATE', 'baseball_mlb', 0),
     buildPass25Message('HOME', 'AWAY', 'MLB', 0, ''),
+    // The unpriced-spread MENU TRUTH branch (Sep 1 2026) renders only when a
+    // recovery board carries a spread with no price — hash that variant too,
+    // or edits to its wording would never move the era.
+    buildPass25Message('HOME', 'AWAY', 'MLB', -1.5, '', { moneyline_home: -100, spread_home: -1.5 }),
     buildPass3Unified('HOME', 'AWAY', { sport: 'MLB' }),
     dossierSurface,
   ].join('\n⸻\n');

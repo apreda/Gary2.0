@@ -232,7 +232,7 @@ INVESTIGATION COMPLETE
  * @param {number} spread - The spread value (e.g., -13.5)
  * @param {string} decisionGuards - Optional sport-specific Pass 2.5 guard text
  */
-export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '', spread = 0, decisionGuards = '') {
+export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '', spread = 0, decisionGuards = '', market = {}) {
   // Sport-flavored provenance examples (founder GO, Aug 24): the hard rule
   // is identical for every sport; only the named examples follow the sport.
   const _fb = sport === 'americanfootball_nfl' || sport === 'NFL' || sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
@@ -260,11 +260,24 @@ export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spo
 **HOUSE LIMIT:** no moneyline heavier than ${GAME_ML_CAP} — a favorite priced past that is a spread ticket, not a moneyline ticket.`;
   const homeSpread = spread >= 0 ? `+${spread.toFixed(1)}` : spread.toFixed(1);
   const awaySpread = (-spread) >= 0 ? `+${(-spread).toFixed(1)}` : (-spread).toFixed(1);
+  // MENU TRUTH (founder GO, Sep 1 2026): a slate-recovery board can carry a
+  // spread NUMBER with no spread PRICE — an unpriced line cannot be a ticket
+  // (the odds gate rightly rejects it), so the menu must say so instead of
+  // letting Gary pick the unpriceable side and burning the cascade.
+  const finiteOdds = (v) => { const n = Number(v); return Number.isFinite(n) && n !== 0; };
+  const spreadPriced = [market?.spread_home_odds, market?.spread_away_odds, market?.spreadOdds, market?.spread_odds]
+    .some(finiteOdds);
+  const spreadPosted = Number.isFinite(Number(spread)) && Number(spread) !== 0;
+  const spreadOffBoard = spreadPosted && market && Object.keys(market).length > 0 && !spreadPriced;
   let lineContext;
   if (isMLB) {
-    lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away). Choose ML or Run Line — whichever ticket your read actually calls.`;
+    lineContext = spreadOffBoard
+      ? `Line context: ${homeTeam} (home) vs ${awayTeam} (away). The run line is posted WITHOUT a price tonight — an unpriced line cannot be a ticket, so the board is MONEYLINE only.`
+      : `Line context: ${homeTeam} (home) vs ${awayTeam} (away). Choose ML or Run Line — whichever ticket your read actually calls.`;
   } else if (isFootball) {
-    lineContext = `Line context: ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}. Both moneylines are posted in your market data — choose Spread or ML, whichever ticket your read actually calls.`;
+    lineContext = spreadOffBoard
+      ? `Line context: ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}. The spread is posted WITHOUT a price tonight — an unpriced line cannot be a ticket, so the board is MONEYLINE only.`
+      : `Line context: ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}. Both moneylines are posted in your market data — choose Spread or ML, whichever ticket your read actually calls.`;
   } else {
     lineContext = `Line context: ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}.`;
   }

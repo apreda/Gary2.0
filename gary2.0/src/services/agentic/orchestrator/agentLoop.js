@@ -309,7 +309,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       ? propContext.propsConstitution.pass25 || '' : '';
     const pass25Content = isPropsMode
       ? buildPass25PropsMessage(homeTeam, awayTeam, sport, propsPass25Constitution)
-      : buildPass25Message(homeTeam, awayTeam, sport, options.spread ?? null, options.pass25DecisionGuards || '');
+      : buildPass25Message(homeTeam, awayTeam, sport, options.spread ?? null, options.pass25DecisionGuards || '', options.game || {});
     messages.push({ role: 'user', content: pass25Content });
     nextMessageToSend = pass25Content;
     _pass25Injected = true;

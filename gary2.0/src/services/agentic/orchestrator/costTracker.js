@@ -22,6 +22,14 @@ const MODEL_RATES = {
   'anthropic-claude-haiku-4-5': { input: 1.00, output: 5.00 },
   'gpt-5.6-terra':            { input: 2.50, output: 15.00 },
   'gpt-5.6-luna':             { input: 1.00, output: 6.00 },
+  // Subscription bridges: $0 marginal (Sep 1 2026 — unknown names used to
+  // fall back to Haiku rates, so codex logged phantom dollars).
+  'codex-gpt-5.6-sol':        { input: 0, output: 0 },
+  'claude-opus-5':            { input: 0, output: 0 },
+  'claude-fable-5':           { input: 0, output: 0 },
+  // Metered Anthropic API cascade rungs (Sep 1 2026 cutover), list price.
+  'anthropic-claude-opus-5':  { input: 15.00, output: 75.00 },
+  'anthropic-claude-sonnet-5': { input: 3.00, output: 15.00 },
 };
 
 export function createCostTracker(pipelineLabel) {
