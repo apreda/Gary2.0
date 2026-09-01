@@ -159,8 +159,8 @@ export function getConstitution(sport) {
       pass1Context,
       pass25DecisionGuards,
       bilateralCasePrompt,
-      // Full combined string: guardrails + domain knowledge ONLY
-      // Gary is the decision maker. Flash handles investigation via flashInvestigationPrompts.js.
+      // Full combined string: guardrails + domain knowledge ONLY —
+      // Gary is the decision maker and the desk is his whole evidence.
       full: BASE_RULES + guardrails + (domainKnowledge ? '\n\n' + domainKnowledge : ''),
     };
   }

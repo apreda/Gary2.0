@@ -906,43 +906,7 @@ export function normalizeSportToLeague(sport) {
   return mapping[sport] || sport;
 }
 
-// Canonical research briefing categories used by tests and planning prompts.
-export const RESEARCH_BRIEFING_FACTORS = Object.freeze({
-  basketball_nba: Object.freeze([
-    'pace_and_efficiency',
-    'shooting_profile',
-    'rebounding_and_turnovers',
-    'injuries_and_rotations',
-    'schedule_and_rest'
-  ]),
-  americanfootball_nfl: Object.freeze([
-    'epa_and_success_rate',
-    'explosiveness_and_red_zone',
-    'trenches_and_pressure',
-    'injuries_and_usage',
-    'weather_and_game_script'
-  ]),
-  icehockey_nhl: Object.freeze([
-    'expected_goals_and_shot_quality',
-    'special_teams',
-    'goalie_form',
-    'line_matchups',
-    'travel_and_rest'
-  ]),
-  basketball_ncaab: Object.freeze([
-    'tempo_and_efficiency',
-    'shot_selection',
-    'rebounding_and_turnovers',
-    'foul_and_free_throw_profile',
-    'injuries_and_depth'
-  ]),
-  americanfootball_ncaaf: Object.freeze([
-    'sp_plus_and_efficiency',
-    'explosiveness_and_havoc',
-    'line_play_and_pressure',
-    'injuries_and_depth_chart',
-    'situational_and_travel'
-  ])
-});
+// (RESEARCH_BRIEFING_FACTORS deleted Sep 1 2026 with the rest of the
+// researcher's corpse — nothing consumed it after the Aug 27 kill.)
 
 

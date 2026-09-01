@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  normalizeSportToLeague,
-  getInvestigatedFactors,
-  INVESTIGATION_FACTORS
-} from '../../../src/services/agentic/orchestrator/index.js';
+import { normalizeSportToLeague } from '../../../src/services/agentic/orchestrator/index.js';
 
 // ─── normalizeSportToLeague ───────────────────────────────────────────
 describe('normalizeSportToLeague', () => {
@@ -31,62 +27,5 @@ describe('normalizeSportToLeague', () => {
   });
 });
 
-// ─── INVESTIGATION_FACTORS structure ──────────────────────────────────
-describe('INVESTIGATION_FACTORS', () => {
-  it('has entries for the live sports — and none for the deleted NHL/NCAAB lanes (founder, Aug 27)', () => {
-    expect(INVESTIGATION_FACTORS).toHaveProperty('basketball_nba');
-    expect(INVESTIGATION_FACTORS).toHaveProperty('americanfootball_nfl');
-    expect(INVESTIGATION_FACTORS).toHaveProperty('americanfootball_ncaaf');
-    expect(INVESTIGATION_FACTORS).not.toHaveProperty('icehockey_nhl');
-    expect(INVESTIGATION_FACTORS).not.toHaveProperty('basketball_ncaab');
-  });
-
-  it('each sport has factor categories with token arrays', () => {
-    for (const [sport, factors] of Object.entries(INVESTIGATION_FACTORS)) {
-      expect(Object.keys(factors).length).toBeGreaterThan(0);
-      for (const [factor, tokens] of Object.entries(factors)) {
-        expect(Array.isArray(tokens), `${sport}.${factor} should be an array`).toBe(true);
-        // Some factors are preloaded from scout report — empty arrays are intentional
-      }
-    }
-  });
-});
-
-// ─── getInvestigatedFactors ───────────────────────────────────────────
-describe('getInvestigatedFactors', () => {
-  it('hard-fails on an unknown sport (no silent fallback)', () => {
-    expect(() => getInvestigatedFactors([], 'cricket_t20')).toThrow(/HARD FAIL/);
-  });
-
-  it('returns 0% coverage with empty history', () => {
-    const result = getInvestigatedFactors([], 'basketball_nba');
-    expect(result.coverage).toBe(0);
-    expect(result.missing.length).toBeGreaterThan(0);
-    expect(result.covered.length).toBe(0);
-  });
-
-  it('recognizes covered factors from toolCallHistory tokens', () => {
-    const history = [
-      { token: 'NET_RATING', timestamp: Date.now() },
-      { token: 'OFFENSIVE_RATING', timestamp: Date.now() },
-      { token: 'PACE', timestamp: Date.now() },
-    ];
-    const result = getInvestigatedFactors(history, 'basketball_nba');
-    expect(result.covered).toContain('EFFICIENCY');
-    expect(result.covered).toContain('PACE_TEMPO');
-    expect(result.coverage).toBeGreaterThan(0);
-  });
-
-  it('handles preloaded factors', () => {
-    const result = getInvestigatedFactors([], 'basketball_nba', ['INJURIES']);
-    expect(result.covered).toContain('INJURIES');
-  });
-
-  it('uses prefix matching for player-specific tokens', () => {
-    const history = [
-      { token: 'PLAYER_GAME_LOGS:LeBron James', timestamp: Date.now() },
-    ];
-    const result = getInvestigatedFactors(history, 'basketball_nba');
-    expect(result.covered).toContain('PLAYER_PERFORMANCE');
-  });
-});
+// (INVESTIGATION_FACTORS + getInvestigatedFactors structure tests died with
+// the researcher's factor checklist, deleted Sep 1 2026.)

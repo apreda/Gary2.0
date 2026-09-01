@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { resolveTokenForSport } from '../../../src/services/agentic/tools/statRouters/index.js';
-import { INVESTIGATION_FACTORS } from '../../../src/services/agentic/orchestrator/investigationFactors.js';
 import { nflFetchers } from '../../../src/services/agentic/tools/statRouters/nflFetchers.js';
 import { ncaafFetchers } from '../../../src/services/agentic/tools/statRouters/ncaafFetchers.js';
 
@@ -30,23 +29,11 @@ import { ncaafFetchers } from '../../../src/services/agentic/tools/statRouters/n
 const NFL = 'americanfootball_nfl';
 const NCAAF = 'americanfootball_ncaaf';
 
-describe('no declared token crosses the league line', () => {
-  it.each([
-    [NCAAF, 'ncaaf', 'nfl'],
-    [NFL, 'nfl', 'ncaaf']
-  ])('%s declares nothing owned by the other league', (sportKey, mine, other) => {
-    const crossings = [];
-    for (const [factor, tokens] of Object.entries(INVESTIGATION_FACTORS[sportKey])) {
-      for (const token of tokens) {
-        const resolved = resolveTokenForSport(sportKey, token);
-        if (resolved.owner === other) crossings.push(`${factor}.${token} -> ${resolved.resolvedKey}`);
-      }
-    }
-    expect(crossings).toEqual([]);
-  });
-});
+// (The "declared checklist" half of this guard died with the researcher's
+// factor checklist, deleted Sep 1 2026 — ownership at the dispatcher is now
+// the only doorway, and the guards below cover every token name.)
 
-describe('no UNDECLARED token can cross it either', () => {
+describe('no token can cross the league line', () => {
   /**
    * The checklist is not the only way a token name reaches the dispatcher —
    * a research pass can ask for one by name. Ownership, not the checklist,

@@ -6,8 +6,8 @@
  * consumes the normalized {content, toolCalls, finishReason, usage} response
  * that sessionManager produces. This adapter implements that exact contract
  * over the RESPONSES API (/v1/responses) so GARY_MODEL_OVERRIDE=gpt-5.5 swaps
- * the decision brain per run with zero agentLoop changes. Research
- * (researchBriefing) stays on Gemini for every brain — only the Gary session moves.
+ * the decision brain per run with zero agentLoop changes. (The researcher is
+ * dead — Aug 27 2026 — so the brain session is the only session there is.)
  *
  * Why /v1/responses: gpt-5.5 rejects function tools + reasoning_effort on
  * /v1/chat/completions ("Please use /v1/responses instead" — verified live

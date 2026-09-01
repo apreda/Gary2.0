@@ -1,8 +1,8 @@
 /**
  * The June engine's era stamp — one hash over everything that shapes what
- * Gary reads: the static prompt surface (constitution, factor lenses, pass
- * builders) AND the dossier-surface files themselves (scout builder family,
- * shelf renderers, researcher checklist + factor plan, advisor prompt).
+ * Gary reads: the static prompt surface (rendered system prompt, constitution,
+ * factor lenses, pass builders) AND the dossier-surface files themselves
+ * (scout builder family, shelf renderers).
  *
  * Extended Aug 19 2026 (founder's ledger law): twice in 24 hours a dossier
  * generation changed with no era change and the ledger couldn't see it. Any
@@ -31,11 +31,8 @@ const DOSSIER_SURFACE_FILES = [
   '../scoutReport/sports/mlbInjuryContext.js',
   '../scoutReport/sports/pitcherArc.js',
   '../tools/statRouters/mlbFetchers.js',
-  '../flashInvestigationPrompts.js',
-  './researchBriefing.js',
-  // The factor PLAN is dossier surface too — its order is the briefing's
-  // order (added Aug 19 with the situation-first walk).
-  './investigationFactors.js',
+  // (flashInvestigationPrompts.js, researchBriefing.js, investigationFactors.js
+  // deleted Sep 1 2026 — the researcher's corpse left the tree.)
 ];
 
 let _sha = null;

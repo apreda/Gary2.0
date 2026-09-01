@@ -28,16 +28,8 @@ describe('model tiering: props on their own desk tier (game brain = Sol through 
     expect(configSrc).not.toMatch(/'gemini-[^']*'/);
   });
 
-  it('the research briefing runs the Haiku tier for every game sport', () => {
-    const flashSrc = readFileSync(path.join(__dirname, '../../../src/services/agentic/orchestrator/researchBriefing.js'), 'utf8');
-    // One system (founder, Aug 18): the researcher is Haiku for ALL game
-    // sports — no Gemini in any pick lane (it survives only as the OpenAI
-    // search layer's internal quota fallback).
-    expect(flashSrc).toContain('modelName: GAME_RESEARCH_MODEL');
-    expect(flashSrc).not.toContain("modelName: 'gemini-3-flash-preview'");
-    const configSrc = readFileSync(path.join(__dirname, '../../../src/services/agentic/orchestrator/orchestratorConfig.js'), 'utf8');
-    expect(configSrc).toMatch(/GAME_RESEARCH_MODEL = process\.env\.GARY_RESEARCH_MODEL \|\| 'anthropic-claude-haiku-4-5'/);
-    // The scout report rides the cached prefix, not the per-factor seeds.
-    expect(flashSrc).toContain('## SCOUT REPORT (this game');
-  });
+  // (The Haiku-researcher tier test died with researchBriefing.js — the
+  // researcher was killed Aug 27 2026 and its files were deleted Sep 1.
+  // GAME_RESEARCH_MODEL survives in config only as validateSessionModel's
+  // reroute target for refused model names.)
 });

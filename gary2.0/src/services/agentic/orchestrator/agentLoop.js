@@ -1,4 +1,4 @@
-import { CONFIG, LEGACY_BRAIN_MODEL, LEGACY_RESEARCH_MODEL, PROPS_DESK_MODEL, GAME_PICK_MODEL, GAME_ML_CAP, validateSessionModel } from './orchestratorConfig.js';
+import { CONFIG, PROPS_DESK_MODEL, GAME_PICK_MODEL, GAME_ML_CAP, validateSessionModel } from './orchestratorConfig.js';
 import { isExplicitPropsPass } from '../propsSharedUtils.js';
 import { createModelSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
 import { createCostTracker } from './costTracker.js';
@@ -1484,7 +1484,7 @@ INVESTIGATION COMPLETE`;
             ? `\n\n${bilateralFn(homeTeam, awayTeam)}`
             : '';
           const synthesizeFrom = isPropsMode
-            ? 'Synthesize what you already have from the scout report. If you still need more data, call fetch_stats.'
+            ? 'Synthesize what you already have from the scout report and player context — they are your evidence.'
             : 'Synthesize what you already have from the desk — it is your complete evidence.';
           const completionNudge = `You are still in Pass 1. Do not make your pick yet.
 
@@ -1598,7 +1598,7 @@ INVESTIGATION COMPLETE`;
         ? `\n\n${bilateralFn(homeTeam, awayTeam)}`
         : '';
       const synthesizeMsg = isPropsMode
-        ? 'Synthesize from scout report. If you need more data, call fetch_stats.'
+        ? 'Synthesize from the scout report and player context — they are your evidence.'
         : 'Synthesize from the desk — it is your complete evidence.';
       const pass1Reminder = {
         role: 'user',
@@ -1739,8 +1739,8 @@ INVESTIGATION COMPLETE`
         console.log(`[Orchestrator] ⚠️ Props response didn't parse (attempt ${propsRetryCount}/2) - requesting finalize_props tool call...`);
         messages.push({ role: 'assistant', content: message.content });
         const nudge = propsRetryCount === 1
-          ? 'You MUST call the finalize_props tool to submit your picks. Do NOT write JSON in text — use the finalize_props function call with your 2 best picks.'
-          : 'CRITICAL: Call the finalize_props function NOW. Your analysis is complete. Submit your 2 picks by calling finalize_props({ picks: [{ player, team, prop, line, bet, odds, confidence, rationale, key_stats }] }). This is a TOOL CALL, not text output.';
+          ? 'Submit your picks NOW. If your session has the finalize_props tool, call it; otherwise output a ```json code block: { "picks": [{ player, team, prop, line, bet, odds, confidence, rationale, key_stats }] } with your 2 best picks.'
+          : 'CRITICAL: Your analysis is complete — submit your 2 picks NOW as a ```json code block: { "picks": [{ player, team, prop, line, bet, odds, confidence, rationale, key_stats }] }. Nothing else in the response.';
         messages.push({ role: 'user', content: nudge });
         nextMessageToSend = nudge;
         continue;

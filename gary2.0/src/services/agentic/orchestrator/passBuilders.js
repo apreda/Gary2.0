@@ -384,11 +384,9 @@ ${scoutReport}
 <instructions>
 ## YOUR TASK: PASS 1 - INVESTIGATE THE GAME FOR PROPS
 
-Read the scout report. Investigate this game using your tools. Build a complete picture of both teams — their players, stats, injuries, and recent form.
+Read the scout report closely. Build a complete picture of both teams — their players, stats, injuries, and recent form.
 
-Your end goal is to evaluate PLAYER PROPS for this game. In this pass, gather the game-level context that informs individual player production: injuries, role changes, pace, and game context.
-
-Use the scout report as your starting point, then investigate with fetch_stats where you need additional evidence.
+Your end goal is to evaluate PLAYER PROPS for this game. In this pass, gather the game-level context that informs individual player production: injuries, role changes, pace, and game context. The scout report and the player context provided in this conversation are your evidence.
 
 Do NOT select props or make picks yet. When your investigation is complete, output this exact line on its own line:
 INVESTIGATION COMPLETE
@@ -416,7 +414,7 @@ export function buildPass25PropsMessage(homeTeam = '[HOME]', awayTeam = '[AWAY]'
     : 'do not call a pitcher a "ground-ball specialist," describe "declining velocity," characterize a platoon split, or call a reliever\'s workload "heavy"/"fresh" unless the underlying metric was provided.';
   return `
 ${pass25Constitution ? `<props_evaluation_framework>\n${pass25Constitution}\n</props_evaluation_framework>\n\n` : ''}<synthesis>
-You've completed your game investigation. You have the full picture — pace, matchups, injuries, role changes, game script expectations. If you need more data, you can still call tools. Take a moment to sit with everything before you make your picks.
+You've completed your game investigation. You have the full picture — pace, matchups, injuries, role changes, game script expectations. Take a moment to sit with everything before you make your picks.
 </synthesis>
 
 <instructions>
@@ -668,8 +666,6 @@ Connect your game analysis to individual player production. The line reflects es
 **DIVERSITY CHECK:** If all picks are the same direction or on the most obvious players, re-examine independently.
 
 Select 2 props from DIFFERENT players — the two strongest cases on this board, each on the side your evidence actually supports at its price (state the side's break-even % in key_stats). Two per game is the standard, and with both sides of every line genuinely evaluated it should rarely be hard to find two you can defend — take them with conviction. Reserve no_play (empty picks array, no_play: true, one-line pass_reason) for a board that gives you nothing to work with: missing lines, missing stats, a slate wipeout — a structural fallback, not a nightly option. Rationale should read like a game pick rationale — specific stats and matchup reasoning.
-
-If you need specific player stats before finalizing, you can still call fetch_stats tools.
 
 <negative_constraints>
 Do NOT select two props from the same player.

@@ -9,12 +9,16 @@ const SHARED_SURFACE = [
   './passBuilders.js',
   './agentLoop.js',
   './orchestratorMain.js',
+  // The system prompt file (extracted from orchestratorMain Sep 1 2026 —
+  // without this line the extraction would have dropped the identity +
+  // FACT-CHECKING + BASE_RULES surface out of the football era).
+  './garySystemPrompt.js',
+  '../constitution/index.js',
   './spreadEvaluationFactors.js',
   './footballResearchPolicy.js',
-  './researchBriefing.js',
-  './investigationFactors.js',
+  // (researchBriefing.js, investigationFactors.js, flashInvestigationPrompts.js
+  // deleted Sep 1 2026 — the researcher's corpse left the tree.)
   './responseParser.js',
-  '../flashInvestigationPrompts.js',
   '../scoutReport/shared/dataFetchers.js',
   '../scoutReport/shared/anthropicFootballGrounding.js',
   // The stat routers ARE the evidence surface: what a factor returns decides
