@@ -306,32 +306,9 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     return null; // Triggers retry
   }
   
-  // NHL: Detect ML vs Puck Line from Gary's pick text
-  const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
-  if (isNHL && parsed.pick) {
-    const pickLowerNHL = parsed.pick.toLowerCase();
-    if (pickLowerNHL.includes('puck line') || pickLowerNHL.includes('pl ') || pickLowerNHL.includes(' pl') ||
-        pickLowerNHL.includes('-1.5') || pickLowerNHL.includes('+1.5')) {
-      parsed.type = 'spread'; // Puck line is a spread
-      // Clean up pick text: remove "PL" / "puck line" — just show "Team -1.5" or "Team +1.5"
-      parsed.pick = parsed.pick
-        .replace(/\s*puck\s*line\s*/gi, ' ')
-        .replace(/\s+PL\s+/g, ' ')
-        .replace(/\s+PL$/g, '')
-        .replace(/^PL\s+/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-      console.log(`[Orchestrator] 🏒 NHL: Detected puck line pick → cleaned to "${parsed.pick}"`);
-    } else {
-      parsed.type = 'moneyline';
-      console.log(`[Orchestrator] 🏒 NHL: Detected moneyline pick`);
-    }
-  } else if (isNHL) {
-    parsed.type = 'moneyline';
-    console.log(`[Orchestrator] 🏒 NHL: Defaulting to moneyline`);
-  }
-  // DETECT TYPE FROM PICK TEXT if not explicitly provided (non-NHL)
-  else if (!parsed.type && parsed.pick) {
+  // (NHL puck-line branch deleted Sep 1 2026 — the NHL lane died Aug 27.)
+  // DETECT TYPE FROM PICK TEXT if not explicitly provided
+  if (!parsed.type && parsed.pick) {
     const pickLower = parsed.pick.toLowerCase();
     if (pickLower.includes(' ml ') || pickLower.includes(' moneyline') || pickLower.endsWith(' ml')) {
       parsed.type = 'moneyline';
@@ -347,32 +324,12 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     }
   }
   
-  // ML ODDS CEILING: favorite ML worse than -200 → force to spread (safety net)
-  if (parsed.type === 'moneyline' && gameOdds) {
-    const mlCeiling = -200;
-    const sideML = detectPickedTeam(parsed.pick, homeTeam, awayTeam);
-    const pickedHomeML = sideML === 'home';
-    const pickedAwayML = sideML === 'away';
-
-    const pickedTeamMlOdds = pickedHomeML ? (gameOdds.moneyline_home ?? gameOdds.ml_home)
-      : pickedAwayML ? (gameOdds.moneyline_away ?? gameOdds.ml_away)
-      : null;
-
-    if (pickedTeamMlOdds != null && pickedTeamMlOdds <= mlCeiling) {
-      const teamName = pickedHomeML ? homeTeam : awayTeam;
-      const spreadVal = pickedHomeML ? gameOdds.spread_home : gameOdds.spread_away;
-      if (spreadVal != null) {
-        const spreadStr = parseFloat(spreadVal) >= 0 ? `+${spreadVal}` : `${spreadVal}`;
-        console.log(`[Orchestrator] 🚫 ML ODDS CEILING: ${teamName} ML odds (${pickedTeamMlOdds}) exceed ${mlCeiling} limit — forcing to spread ${spreadStr}`);
-        parsed.type = 'spread';
-        parsed.pick = `${teamName} ${spreadStr}`;
-        parsed.spread = spreadVal;
-      } else {
-        console.error(`[Orchestrator] 🚫 ML ODDS CEILING: ${teamName} ML odds (${pickedTeamMlOdds}) exceed ${mlCeiling} limit but no spread available — REJECTING pick`);
-        return null;
-      }
-    }
-  }
+  // (The legacy hardcoded -200 "ML ODDS CEILING" force-to-spread died Sep 1
+  // 2026: it silently rewrote a heavy-favorite ML into the picked side's
+  // spread/run line BEFORE the ruled HOUSE LIMIT gate could run — bypassing
+  // the founder's Aug-18 mechanism, where the cap fires a corrective RE-ASK
+  // and GARY chooses which side of the 1.5 his read takes. agentLoop's
+  // moneylinePastCap gate on GAME_ML_CAP is the one instrument law.)
   // EXTRACT ODDS FROM PICK TEXT if not explicitly provided
   // E.g., "Detroit Red Wings ML -185" → odds = -185
   if (!parsed.odds && parsed.pick) {

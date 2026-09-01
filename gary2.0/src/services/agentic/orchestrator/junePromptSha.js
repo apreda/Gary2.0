@@ -36,6 +36,10 @@ const DOSSIER_SURFACE_FILES = [
   // codex-first grounding cutover).
   '../scoutReport/shared/grounding.js',
   '../../pickdesk/webSearch.js',
+  // The parser/normalizer decides how a pick's ticket is read and repriced —
+  // mechanics changes there are era changes (added Sep 1 2026 when the
+  // legacy -200 ML force was removed).
+  './responseParser.js',
   // (flashInvestigationPrompts.js, researchBriefing.js, investigationFactors.js
   // deleted Sep 1 2026 — the researcher's corpse left the tree.)
 ];
