@@ -38,7 +38,27 @@
 		A9719630F2ABAA18AF50CEDE /* BarlowCondensed-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3315353E71FE134F08CE96E9 /* BarlowCondensed-Bold.ttf */; };
 		AD40BD1C591C0853AB20200A /* GaryTour.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AF21EE7054E8EF36A963E61 /* GaryTour.swift */; };
 		B1A0DC14B221DFD88D97D546 /* AppStoreMetadata.md in Resources */ = {isa = PBXBuildFile; fileRef = 4D7626B616BEDAF94E8687F9 /* AppStoreMetadata.md */; };
-		B313EC36BDDDB18E9F687643 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44D1E52AFB4EED7E97F55C36 /* Views.swift */; };
+		4EC2B7A1B9697343A9C0E6F9 /* ViewsShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 073A6BFCDD5D5E5DE86DC846 /* ViewsShared.swift */; };
+		93B93DF3AECBE25E4485E1AD /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2CCDF3FCD06FA671EB3F94 /* HomeView.swift */; };
+		FC9486BE5CE032E2F48C6573 /* HomeFrontPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6F1F7A9FD73F0CFCBF2F57F /* HomeFrontPage.swift */; };
+		9AE4C5FF19009E1A595FF793 /* SportFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C877C0088B05783C3E5D0D20 /* SportFilter.swift */; };
+		690D7FABCEF7F2133CE6AA32 /* WinnersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 309CD84469DCD6976985812A /* WinnersView.swift */; };
+		FC4BF97C88D05F7762BD3A2B /* PlansSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 596A4D3ABF79860451D29012 /* PlansSheet.swift */; };
+		43AC6FE821546427FDA63CDD /* PicksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD5AAB1EB62695B93194F5B2 /* PicksView.swift */; };
+		6E1D1729B4D9774C8DCB3BEB /* PropsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46F3945FD757BEA0801F5940 /* PropsView.swift */; };
+		F262E797523A4E41516409FE /* TomorrowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48730787AAD32770E1BFBD2D /* TomorrowView.swift */; };
+		31176625FFFEF83CB4C21A37 /* BillfoldView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9E5AC1DDECFFC6E0517F539 /* BillfoldView.swift */; };
+		A8836BCCB1D98B98336331B9 /* PickCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4235AFE487EC6FDD3786A37F /* PickCards.swift */; };
+		EB13A217678E36FEE1BEB7A0 /* PickCardFronts.swift in Sources */ = {isa = PBXBuildFile; fileRef = D63A3595D0521A07C98FD1E0 /* PickCardFronts.swift */; };
+		029C28461035D24BBBC856A6 /* ShareCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6297FDDD350F3E743B7986A /* ShareCards.swift */; };
+		D29439D4868FDD8595FC79CA /* PropCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDA64C8CABA2300F66040E65 /* PropCards.swift */; };
+		FB5A5789D05A27AE2DBED24E /* SharedStores.swift in Sources */ = {isa = PBXBuildFile; fileRef = 939F64B54ADF6FC670847562 /* SharedStores.swift */; };
+		E4BA161E4E0E3865A8E196D6 /* HubShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 818B49C8F2475C7BFEA4DE65 /* HubShared.swift */; };
+		34AD75E5D08279F9BA53E6C6 /* PicksTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1877B9F6E2270387A38F2A3 /* PicksTab.swift */; };
+		1B66A55D81A91957AA0225A3 /* ScoutTrio.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DC620D138E63D186BF1A77F /* ScoutTrio.swift */; };
+		0AACA8B25D171F15CED203C3 /* HubModules.swift in Sources */ = {isa = PBXBuildFile; fileRef = E84BBAE66FBBA8CF37A69BD7 /* HubModules.swift */; };
+		B3B18DEEB5F2CF12BA01D6EB /* PropRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A25DAFD0BBD166CA2357ECF /* PropRows.swift */; };
+		B264B7D6B45EC36A06226615 /* PickDetailSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91B8451C528D6C7840761553 /* PickDetailSections.swift */; };
 		C436839CACCB30E27770C425 /* MLBBallparks.swift in Sources */ = {isa = PBXBuildFile; fileRef = A42B2DF8115CF072B0BA9C0E /* MLBBallparks.swift */; };
 		CA682CB250F6A7F4462A70B2 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C76D962853397848F9631A85 /* ContentView.swift */; };
 		CAF9190DE725143E36BFCD16 /* ci_post_clone.sh in Resources */ = {isa = PBXBuildFile; fileRef = 32B85EDA7E4476C638F6B871 /* ci_post_clone.sh */; };
@@ -72,7 +92,27 @@
 		3B00BB7C471BD1CE60801A0F /* Rajdhani-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Rajdhani-Bold.ttf"; sourceTree = "<group>"; };
 		423887686C6839DEC44C0DEA /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		430996827B4DF85995FED6C0 /* SecretsLocal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecretsLocal.swift; sourceTree = "<group>"; };
-		44D1E52AFB4EED7E97F55C36 /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
+		073A6BFCDD5D5E5DE86DC846 /* ViewsShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewsShared.swift; sourceTree = "<group>"; };
+		2F2CCDF3FCD06FA671EB3F94 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		D6F1F7A9FD73F0CFCBF2F57F /* HomeFrontPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeFrontPage.swift; sourceTree = "<group>"; };
+		C877C0088B05783C3E5D0D20 /* SportFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SportFilter.swift; sourceTree = "<group>"; };
+		309CD84469DCD6976985812A /* WinnersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinnersView.swift; sourceTree = "<group>"; };
+		596A4D3ABF79860451D29012 /* PlansSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlansSheet.swift; sourceTree = "<group>"; };
+		CD5AAB1EB62695B93194F5B2 /* PicksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PicksView.swift; sourceTree = "<group>"; };
+		46F3945FD757BEA0801F5940 /* PropsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PropsView.swift; sourceTree = "<group>"; };
+		48730787AAD32770E1BFBD2D /* TomorrowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TomorrowView.swift; sourceTree = "<group>"; };
+		B9E5AC1DDECFFC6E0517F539 /* BillfoldView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BillfoldView.swift; sourceTree = "<group>"; };
+		4235AFE487EC6FDD3786A37F /* PickCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickCards.swift; sourceTree = "<group>"; };
+		D63A3595D0521A07C98FD1E0 /* PickCardFronts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickCardFronts.swift; sourceTree = "<group>"; };
+		F6297FDDD350F3E743B7986A /* ShareCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareCards.swift; sourceTree = "<group>"; };
+		CDA64C8CABA2300F66040E65 /* PropCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PropCards.swift; sourceTree = "<group>"; };
+		939F64B54ADF6FC670847562 /* SharedStores.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedStores.swift; sourceTree = "<group>"; };
+		818B49C8F2475C7BFEA4DE65 /* HubShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubShared.swift; sourceTree = "<group>"; };
+		F1877B9F6E2270387A38F2A3 /* PicksTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PicksTab.swift; sourceTree = "<group>"; };
+		1DC620D138E63D186BF1A77F /* ScoutTrio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoutTrio.swift; sourceTree = "<group>"; };
+		E84BBAE66FBBA8CF37A69BD7 /* HubModules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubModules.swift; sourceTree = "<group>"; };
+		0A25DAFD0BBD166CA2357ECF /* PropRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PropRows.swift; sourceTree = "<group>"; };
+		91B8451C528D6C7840761553 /* PickDetailSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickDetailSections.swift; sourceTree = "<group>"; };
 		49489C7FC0ABE55881B19E13 /* GaryApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaryApp.swift; sourceTree = "<group>"; };
 		4D7626B616BEDAF94E8687F9 /* AppStoreMetadata.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = AppStoreMetadata.md; sourceTree = "<group>"; };
 		4DB2A6343A5BCF41DD4C3664 /* ChakraPetch-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "ChakraPetch-Bold.ttf"; sourceTree = "<group>"; };
@@ -167,7 +207,27 @@
 				26AE11992E449EB95857D6E3 /* SettingsView.swift */,
 				58C162EF98D65308171329E2 /* SupabaseAPI.swift */,
 				0110A48840365DDC8DBFCABF /* UserBookView.swift */,
-				44D1E52AFB4EED7E97F55C36 /* Views.swift */,
+				073A6BFCDD5D5E5DE86DC846 /* ViewsShared.swift */,
+				2F2CCDF3FCD06FA671EB3F94 /* HomeView.swift */,
+				D6F1F7A9FD73F0CFCBF2F57F /* HomeFrontPage.swift */,
+				C877C0088B05783C3E5D0D20 /* SportFilter.swift */,
+				309CD84469DCD6976985812A /* WinnersView.swift */,
+				596A4D3ABF79860451D29012 /* PlansSheet.swift */,
+				CD5AAB1EB62695B93194F5B2 /* PicksView.swift */,
+				46F3945FD757BEA0801F5940 /* PropsView.swift */,
+				48730787AAD32770E1BFBD2D /* TomorrowView.swift */,
+				B9E5AC1DDECFFC6E0517F539 /* BillfoldView.swift */,
+				4235AFE487EC6FDD3786A37F /* PickCards.swift */,
+				D63A3595D0521A07C98FD1E0 /* PickCardFronts.swift */,
+				F6297FDDD350F3E743B7986A /* ShareCards.swift */,
+				CDA64C8CABA2300F66040E65 /* PropCards.swift */,
+				939F64B54ADF6FC670847562 /* SharedStores.swift */,
+				818B49C8F2475C7BFEA4DE65 /* HubShared.swift */,
+				F1877B9F6E2270387A38F2A3 /* PicksTab.swift */,
+				1DC620D138E63D186BF1A77F /* ScoutTrio.swift */,
+				E84BBAE66FBBA8CF37A69BD7 /* HubModules.swift */,
+				0A25DAFD0BBD166CA2357ECF /* PropRows.swift */,
+				91B8451C528D6C7840761553 /* PickDetailSections.swift */,
 			);
 			name = GaryApp;
 			path = .;
@@ -343,7 +403,27 @@
 				F2A5809FF32535CE29C4E79A /* SettingsView.swift in Sources */,
 				D810CCA6C81972A7A21BD77F /* SupabaseAPI.swift in Sources */,
 				0E2DFD72AAC6F9DA0E624548 /* UserBookView.swift in Sources */,
-				B313EC36BDDDB18E9F687643 /* Views.swift in Sources */,
+				4EC2B7A1B9697343A9C0E6F9 /* ViewsShared.swift in Sources */,
+				93B93DF3AECBE25E4485E1AD /* HomeView.swift in Sources */,
+				FC9486BE5CE032E2F48C6573 /* HomeFrontPage.swift in Sources */,
+				9AE4C5FF19009E1A595FF793 /* SportFilter.swift in Sources */,
+				690D7FABCEF7F2133CE6AA32 /* WinnersView.swift in Sources */,
+				FC4BF97C88D05F7762BD3A2B /* PlansSheet.swift in Sources */,
+				43AC6FE821546427FDA63CDD /* PicksView.swift in Sources */,
+				6E1D1729B4D9774C8DCB3BEB /* PropsView.swift in Sources */,
+				F262E797523A4E41516409FE /* TomorrowView.swift in Sources */,
+				31176625FFFEF83CB4C21A37 /* BillfoldView.swift in Sources */,
+				A8836BCCB1D98B98336331B9 /* PickCards.swift in Sources */,
+				EB13A217678E36FEE1BEB7A0 /* PickCardFronts.swift in Sources */,
+				029C28461035D24BBBC856A6 /* ShareCards.swift in Sources */,
+				D29439D4868FDD8595FC79CA /* PropCards.swift in Sources */,
+				FB5A5789D05A27AE2DBED24E /* SharedStores.swift in Sources */,
+				E4BA161E4E0E3865A8E196D6 /* HubShared.swift in Sources */,
+				34AD75E5D08279F9BA53E6C6 /* PicksTab.swift in Sources */,
+				1B66A55D81A91957AA0225A3 /* ScoutTrio.swift in Sources */,
+				0AACA8B25D171F15CED203C3 /* HubModules.swift in Sources */,
+				B3B18DEEB5F2CF12BA01D6EB /* PropRows.swift in Sources */,
+				B264B7D6B45EC36A06226615 /* PickDetailSections.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
