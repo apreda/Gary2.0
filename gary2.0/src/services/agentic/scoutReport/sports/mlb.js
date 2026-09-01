@@ -104,8 +104,16 @@ export async function buildMlbScoutReport(game, options = {}) {
   // 2026: every MLBAM-keyed section — recent games, rosters, rest, series
   // state — silently emptied), so the schedule match below is the primary
   // source; any ids already on the game object are the fallback.
-  let homeTeamId = game.home_team_data?.id || game.home_team?.id;
-  let awayTeamId = game.away_team_data?.id || game.away_team?.id;
+  // MLBAM team ids ONLY (Sep 1 2026, provider-id conflation class): these
+  // feed MLB Stats API consumers (rosters, recent games, transactions,
+  // situational hitting). home_team_data.id IS MLBAM (formatMlbGameForPipeline);
+  // the old `|| game.home_team?.id` fallback grabbed a BDL id off BDL-shaped
+  // game objects — a different provider's numbering — and quietly broke every
+  // MLBAM lane for such callers. Production's odds-shaped games carry a string
+  // there, so the fallback never helped anyone; the schedule lookup below is
+  // the real resolver.
+  let homeTeamId = game.home_team_data?.id || null;
+  let awayTeamId = game.away_team_data?.id || null;
   let gamePk = game.gamePk || null;
   const venue = game.venue || game._raw?.venue?.name || 'Unknown Venue';
   const gameDesc = game.description || '';
@@ -2243,15 +2251,21 @@ export async function buildMlbScoutReport(game, options = {}) {
   const todayEtStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   const weekAgoStr = new Date(Date.now() - 14 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   const txFor = async (mlbamTeamId, teamName) => {
-    if (!mlbamTeamId) return null;
+    // A FAILED FETCH IS NOT AN EMPTY REPORT (Sep 1 2026 audit): the old
+    // catch returned null, so one team's transactions failing VANISHED that
+    // team from the section with no marker, and a both-sides failure printed
+    // "Transaction data unavailable." — a dialect the manifest does not read
+    // as honest absence, so it alarmed as a missing lane (seen live on the
+    // Sep 1 midday build). Failures now speak the manifest's language.
+    if (!mlbamTeamId) return `${teamName}: transaction retrieval failed this run (no team id) — treat as missing, not as no moves.`;
     try {
       const rows = await getMlbTransactions(mlbamTeamId, weekAgoStr, todayEtStr);
       if (!rows.length) return `${teamName}: no moves in the last 14 days.`;
       return `${teamName}:\n${rows.slice(-10).map(r => `  ${r.date}: ${r.description}`).join('\n')}`;
-    } catch { return null; }
+    } catch { return `${teamName}: transaction retrieval failed this run — treat as missing, not as no moves.`; }
   };
   const [homeTx, awayTx] = await Promise.all([txFor(homeTeamId, homeTeam), txFor(awayTeamId, awayTeam)]);
-  const rosterMovesSection = [homeTx, awayTx].filter(Boolean).join('\n\n') || 'Transaction data unavailable.';
+  const rosterMovesSection = [homeTx, awayTx].filter(Boolean).join('\n\n');
 
   // Schedule shape from the season index (homestand/trip position, 7-day load,
   // night-then-day turnaround).
