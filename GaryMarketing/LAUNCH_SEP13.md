@@ -7,28 +7,25 @@
 
 ---
 
-## 0. Blocking today — founder, ~5 minutes
+## 0. Outage — RESOLVED Sep 1 ~4:30 PM ET
 
-**The account has been silent since Sat Aug 30, 6 PM ET.** Every pick on Aug 31 failed to post with
-`402 credits depleted` from the X API (function logs, confirmed). Reads AND writes are pay-per-use on the
-2026 X developer plan; the balance hit zero.
+The account was silent from Sat Aug 30, 6 PM ET: every Aug 31 pick failed to post with `402 credits depleted`
+from the X API (pay-per-use balance hit zero). Founder topped up. **Lesson:** console.x.com creates a separate
+developer account per X login — the first $25 went to the account under his personal login (zero API usage,
+the tell), and the poster's app lives on the account tied to the @BetwithGary login. Fund THAT one (sign in as
+@BetwithGary in a private window → console.x.com → Billing → Credits). Still to confirm there: Auto Recharge
+ON and a monthly spend cap.
 
-1. Top up credits in the X Developer Console (developer.x.com → the Gary project → billing). While there,
-   set the monthly spend cap the July notes asked for. Until this is done: no picks post, no deletes work,
-   no metrics refresh.
-2. After the top-up, tell me — I re-run the delete of the Aug 16 scratch-work tweet
-   (`x.com/BetwithGary/status/2089177964537635183`) and confirm the next slate posts.
-
-**Also today:** today's `daily_picks` row (Sep 1) did not exist at 3:40 PM ET. That is the pick lane, not
-the poster — flagging, not touching.
-
----
+Done once credits returned: scratch-work tweet `2089177964537635183` deleted; new launch pin posted
+(`x.com/BetwithGary/status/2094884302810910895`) with the install-link reply; log anchor `launch_pin`.
+**Founder: pin that tweet in the X app (replacing the Jul 5 arc pin) and paste the bio in §2.**
+Aug 31's twelve picks were never tweeted; today's slate resumes on the normal game-paced windows.
 
 ## 1. The rulings (Sep 1)
 
 | Decision | Ruling | Status |
 |---|---|---|
-| Delete the Aug 16 scratch-work verdict tweet | Yes | Blocked on X credits (402). Retry after top-up. |
+| Delete the Aug 16 scratch-work verdict tweet | Yes | **Done** Sep 1 4:30 PM ET. |
 | Verdict shape gate so scratch work can never post | Yes | **Shipped** — `isValidVerdict` in verdicts.ts, 16/16 tests, deployed. |
 | Winners free through September; founding cohort keeps it free for the season; paywall for new installs Oct 1 | Yes | **iOS written** (`FoundingCohort`, WinnersView.swift) — ships in the next build. Checkout path (3.1.1 / external link) still needs the product call before Oct 1. |
 | One weekly Monday record post | Yes | **Shipped** — `week_tape` mode, Mondays 11 AM–3 PM ET, deterministic, deployed. First fire Mon Sep 7. |
@@ -48,14 +45,14 @@ the poster — flagging, not touching.
 
     AI that picks every game. MLB now, NFL from Kickoff, NBA in October. My plays post before they start and every result stays up, win or loss. Free in the app below.
 
-**New pin (replaces the Jul 5 arc pin, whose Monday standing stopped Jul 7).** I post it via
-post-single-tweet once credits are back; founder pins it in the X app. Text:
+**New pin (replaces the Jul 5 arc pin, whose Monday standing stopped Jul 7).** POSTED Sep 1 as tweet
+`2094884302810910895` (reply `2094884401628778549` carries the link). Founder pins it in the X app. Text as posted:
 
     A pick on every game, posted before it starts, with the reasoning. Every result stays up, win or loss.
 
     Baseball every day. NFL starts at Kickoff, September 9.
 
-    Free in the app. In before October 1, and every board stays free for the rest of the season.
+    Free in the app. Get in before October 1 and every board stays free for the rest of the season.
 
 **Reply under the pin (carries the install link, ct=x_pinned):**
 
@@ -140,7 +137,7 @@ Pull the live numbers the morning of (results page, all-time and since Opening D
 
 ## 7. Still founder-only (ranked by leverage per minute)
 
-1. X API credits (blocking everything on the account).
+1. Pin tweet 2094884302810910895 + paste the bio (X app, 2 min). Confirm Auto Recharge + spend cap on the Gary dev account.
 2. Apple Search Ads account + billing (30 min). Apple's policy puts "statistical analysis for gambling" in
    Search Results only, adults only, possible review. Only creating the account answers it.
 3. Approve one queued reply (reply-engine) to learn whether Gary can answer people.
