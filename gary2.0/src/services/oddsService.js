@@ -6,6 +6,7 @@ import { ballDontLieService } from './ballDontLieService.js';
 import { ballDontLieOddsService } from './ballDontLieOddsService.js';
 import { ncaafSlateDateForInstant } from './ncaafGamePolicy.js';
 import { americanImpliedProbability, finiteMarketNumber } from './marketTruth.js';
+import { recordOddsSnapshots } from './oddsSnapshots.js';
 
 // Track in-flight requests to prevent duplicates
 const inFlightRequests = new Map();
@@ -460,6 +461,10 @@ export const oddsService = {
       }
 
       console.log(`[Odds Service] ${sport}: Final result - ${processedGames.length} games ready for analysis`);
+      // ODDS SNAPSHOTS (Sep 1 2026): keep the board we just saw, once per
+      // change, so the desk can print the day's open beside the current
+      // price. Fire-and-forget; a ledger failure never touches the slate.
+      recordOddsSnapshots(sport, processedGames).then((n) => { if (n) console.log(`[Odds Snapshots] ${sport}: ${n} board change(s) recorded`); }).catch(() => {});
       return processedGames;
     });
   },

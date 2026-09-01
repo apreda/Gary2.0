@@ -1751,6 +1751,17 @@ async function main(targetDate = getTargetDate()) {
     console.warn(`  ⚠️ Era-drift check failed (non-fatal): ${e.message}`);
   }
 
+  // RATIONALE LANES (Sep 1 2026): read each graded rationale for the desk
+  // lanes it leaned on and ledger it — the measurement behind every desk
+  // decision. Never reaches Gary. Non-fatal.
+  try {
+    const { tagRationaleLanes, printLaneTable } = await import('./run-rationale-lanes.js');
+    const laneRows = await tagRationaleLanes([targetDate]);
+    printLaneTable(laneRows, targetDate);
+  } catch (e) {
+    console.warn(`  ⚠️ Rationale lanes failed (non-fatal): ${e.message}`);
+  }
+
   console.log(`\n════════════════════════════════════════`);
   console.log(`SUMMARY FOR ${targetDate}`);
   console.log(`Daily:  ${daily.w}W - ${daily.l}L`);

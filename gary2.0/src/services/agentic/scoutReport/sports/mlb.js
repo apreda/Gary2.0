@@ -52,6 +52,7 @@ import { renderBoxScore, buildPenPressQuery } from './mlbGamesAsWritten.js';
 import { auditDeskManifest, recordDeskManifest } from './mlbDeskManifest.js';
 import { resolveDeskLayout, renderBucketsDesk } from './mlbDeskLayout.js';
 import { GAME_ML_CAP } from '../../orchestrator/orchestratorConfig.js';
+import { getOddsHistory, formatLineHistory } from '../../../oddsSnapshots.js';
 import {
   completedMlbTeamGames,
   resolveMlbGamesMissed,
@@ -1667,6 +1668,17 @@ export async function buildMlbScoutReport(game, options = {}) {
       }
       if (tickets.length) lines.push(`Tickets on this game: ${tickets.join(' · ')}`);
     }
+    // LINE HISTORY (founder GO, Sep 1 2026 — the price as a real leg): where
+    // today's board opened and where it is now, from our own snapshots.
+    try {
+      const gameId = game.bdl_game_id ?? game.id;
+      const gameDay = startTime ? new Date(startTime).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null;
+      if (gameId != null && gameDay) {
+        const hist = await getOddsHistory('baseball_mlb', gameDay, gameId);
+        const line = formatLineHistory(hist, game, homeTeam, awayTeam);
+        if (line) lines.push(line);
+      }
+    } catch { /* history is additive */ }
     oddsSection = lines.join('\n');
     console.log(`[Scout Report] MLB: Using structured BDL odds`);
   } else {
