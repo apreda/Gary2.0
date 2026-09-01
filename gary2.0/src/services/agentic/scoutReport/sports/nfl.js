@@ -22,7 +22,6 @@ import {
   fetchRecentGames,
   etGameDateLong,
   fetchH2HData,
-  scrubNarrative,
   formatInjuryReport,
   formatStartingLineups,
   formatOdds,
@@ -126,7 +125,26 @@ async function fetchQBStatsByName(qbName, teamName, season = footballSeasonForDa
     // and the experience notes below called him a debutant. Fall to the PRIOR
     // season, LABELED, whenever the current season has no played games.
     if (!qbStats.length || !(Number(qbStats[0]?.games_played) > 0)) {
-      const prior = findQbRows(await ballDontLieService.getNflSeasonStatsByTeam(team.id, season - 1));
+      let prior = findQbRows(await ballDontLieService.getNflSeasonStatsByTeam(team.id, season - 1));
+      // A starter who changed clubs in the offseason has no line on this
+      // club's prior season (Sep 1 review: the fallback was team-scoped, so
+      // a 4,000-yard passer read "no NFL stat line on file"). Find HIM —
+      // the active-player search by name — and read his own prior season.
+      if (!prior.length || !(Number(prior[0]?.games_played) > 0)) {
+        try {
+          const found = await ballDontLieService.getPlayersActive('americanfootball_nfl', { search: searchParts[searchParts.length - 1], per_page: 25 }).catch(() => null);
+          const candidates = (found?.data || found || []).filter((pl) => {
+            const full = `${pl?.first_name || ''} ${pl?.last_name || ''}`.trim().toLowerCase();
+            const pos = String(pl?.position_abbreviation || pl?.position || '').toUpperCase();
+            return (full === searchName || full.includes(searchName) || searchName.includes(full)) && (pos === 'QB' || pos === 'QUARTERBACK');
+          });
+          const him = candidates[0];
+          if (him?.id) {
+            const own = (await ballDontLieService.getNflPlayerSeasonStats({ playerId: him.id, season: season - 1 }).catch(() => [])) || [];
+            if (own.length && Number(own[0]?.games_played) > 0) prior = own;
+          }
+        } catch { /* the by-player lookup is additive */ }
+      }
       if (prior.length && Number(prior[0]?.games_played) > 0) {
         qbStats = prior;
         statsSeason = season - 1;
@@ -1245,92 +1263,9 @@ export async function buildNflScoutReport(game, options = {}) {
   const injuriesForStorage = formatInjuriesForStorage(injuries);
 
   // ===================================================================
-  // Step J: Narrative scrubbing — remove "ghost" players
-  // ===================================================================
-  if (injuries?.narrativeContext) {
-    const allowedNames = new Set();
+  // Step J: (Ghost-player narrative scrub retired — its name sets had no
+  // consumer since the Flash scrub was removed; block deleted Sep 1 2026.)
 
-    // 1. Add names from NFL roster depth (primary source of truth for active players)
-    const roster = nflRosterDepth;
-
-    const addNamesFromSource = (teamData) => {
-      if (!teamData) return;
-      if (Array.isArray(teamData)) {
-        teamData.forEach(p => { if (p.name) allowedNames.add(p.name.trim()); });
-      } else {
-        const collectionKeys = [
-          'skaters', 'goalies', 'forwards', 'defensemen',
-          'players', 'roster', 'active_players', 'depth_chart',
-          'skater_stats', 'goalie_stats'
-        ];
-
-        collectionKeys.forEach(key => {
-          const coll = teamData[key];
-          if (Array.isArray(coll)) {
-            coll.forEach(p => {
-              if (p.name) allowedNames.add(p.name.trim());
-              else if (p.player?.first_name) {
-                const name = `${p.player.first_name} ${p.player.last_name || ''}`.trim();
-                allowedNames.add(name);
-              }
-            });
-          }
-        });
-
-        if (teamData.name) allowedNames.add(teamData.name.trim());
-        else if (teamData.player?.first_name) {
-          const name = `${teamData.player.first_name} ${teamData.player.last_name || ''}`.trim();
-          allowedNames.add(name);
-        }
-      }
-    };
-
-    if (roster) {
-      addNamesFromSource(roster.home);
-      addNamesFromSource(roster.away);
-    }
-
-    // 2. Add names from key players if available
-    if (keyPlayers) {
-      addNamesFromSource(keyPlayers.home);
-      addNamesFromSource(keyPlayers.away);
-    }
-
-    // 3. Add names from structured injury list (which already has hard filters applied)
-    [...(injuries.home || []), ...(injuries.away || [])].forEach(i => {
-      const name = i.name || `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim();
-      if (name && name.length > 3) allowedNames.add(name);
-    });
-
-    // 4. Add names from starting lineups
-    if (injuries.lineups) {
-      if (injuries.lineups.home) injuries.lineups.home.forEach(p => { if (p.name) allowedNames.add(p.name.trim()); });
-      if (injuries.lineups.away) injuries.lineups.away.forEach(p => { if (p.name) allowedNames.add(p.name.trim()); });
-    }
-
-    // Collect long-term injured players to EXCLUDE from narrative
-    const excludedLongTerm = new Set(injuries.filteredLongTerm || []);
-
-    // Check roster GP map for players who never played this season
-    if (nflRosterDepth?.gpMap) {
-      const gpMap = nflRosterDepth.gpMap;
-      [...(injuries.home || []), ...(injuries.away || [])].forEach(i => {
-        const name = i.name || `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim();
-        if (!name || name.length < 4) return;
-        if (gpMap[name] === 0) {
-          excludedLongTerm.add(name);
-        }
-      });
-    }
-
-    if (excludedLongTerm.size > 0) {
-      console.log(`[Scout Report] Excluding ${excludedLongTerm.size} long-term injured players from narrative (gp=0): ${Array.from(excludedLongTerm).join(', ')}`);
-    }
-
-    // Narrative scrub removed — was calling Flash per game, flagged non-names as unknown players
-  }
-
-  // ===================================================================
   // Step K: Assemble the report
   // ===================================================================
 

@@ -23,9 +23,12 @@ describe('football season identity', () => {
   });
 
   it('uses Eastern calendar boundaries', () => {
-    // Midnight UTC is still July 31 in New York.
-    expect(footballSeasonForDate('NFL', '2026-08-01T00:30:00Z')).toBe(2025);
-    expect(footballSeasonForDate('NFL', '2026-08-01T16:00:00Z')).toBe(2026);
+    // The football year opens with July's first exhibition (the Hall of
+    // Fame game, Sep 1 2026 fix) — midnight UTC is still June 30 in New York.
+    expect(footballSeasonForDate('NFL', '2026-07-01T00:30:00Z')).toBe(2025);
+    expect(footballSeasonForDate('NFL', '2026-07-01T16:00:00Z')).toBe(2026);
+    // A late-July kickoff belongs to the season it opens, as preseason.
+    expect(footballSeasonForDate('NFL', '2026-07-31T00:00:00Z')).toBe(2026);
   });
 
   it('formats a stable cross-year label', () => {

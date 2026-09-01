@@ -532,13 +532,19 @@ export const nflFetchers = {
       // ET, never UTC (Aug 19 sweep — the recurring class): toISOString
       // rolls past midnight at 8 PM ET, misfiling tonight's game.
       const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-      const formatSchedule = (games, teamName) => {
+      // The opponent is whichever side is NOT the team this line is for
+      // (Sep 1 review: the old `home.id || away.id` test compared every
+      // game to the HOME club, so the away club's own home games named the
+      // away club as its opponent).
+      const formatSchedule = (games, teamName, teamId) => {
         const sorted = [...(games || [])].sort((a, b) => new Date(a.date || a.datetime) - new Date(b.date || b.datetime));
         const past = sorted.filter(g => g.status === 'Final').slice(-2);
         const future = sorted.filter(g => g.status !== 'Final' && (g.date || g.datetime) > today).slice(0, 2);
+        const oppOf = (g) => (g.home_team?.id === teamId ? (g.visitor_team?.name || g.away_team?.name) : g.home_team?.name);
+        const venueOf = (g) => (g.home_team?.id === teamId ? 'vs' : '@');
         const lines = [`${teamName}:`];
-        if (past.length) lines.push(`  Recent: ${past.map(g => { const opp = g.home_team?.id === (home.id || away.id) ? g.visitor_team?.name || g.away_team?.name : g.home_team?.name; return `vs ${opp} (${g.home_team_score ?? '?'}-${g.visitor_team_score ?? g.away_score ?? '?'})`; }).join(', ')}`);
-        if (future.length) lines.push(`  Upcoming: ${future.map(g => { const opp = g.home_team?.id === (home.id || away.id) ? g.visitor_team?.name || g.away_team?.name : g.home_team?.name; return `vs ${opp} (${(g.date || g.datetime || '').split('T')[0]})`; }).join(', ')}`);
+        if (past.length) lines.push(`  Recent: ${past.map(g => `${venueOf(g)} ${oppOf(g)} (${g.home_team_score ?? '?'}-${g.visitor_team_score ?? g.away_score ?? '?'}, home-away)`).join(', ')}`);
+        if (future.length) lines.push(`  Upcoming: ${future.map(g => `${venueOf(g)} ${oppOf(g)} (${(g.date || g.datetime || '').split('T')[0]})`).join(', ')}`);
         return lines.join('\n');
       };
 
@@ -547,8 +553,8 @@ export const nflFetchers = {
         source: 'BDL API (NFL schedule)',
         home: { team: home.full_name || home.name },
         away: { team: away.full_name || away.name },
-        homeValue: formatSchedule(homeGames, home.full_name || home.name),
-        awayValue: formatSchedule(awayGames, away.full_name || away.name),
+        homeValue: formatSchedule(homeGames, home.full_name || home.name, homeId),
+        awayValue: formatSchedule(awayGames, away.full_name || away.name, awayId),
         note: 'Recent and upcoming opponents from BDL schedule.'
       };
     } catch (error) {
@@ -805,7 +811,10 @@ export const nflFetchers = {
 
     try {
       // First, get weather for the game via grounded search
-      const dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+      // The KICKOFF's date, never today's (Sep 1 review): a Tuesday run for
+      // a Sunday game was grading Sunday's conditions off Tuesday's forecast.
+      const kickoffIso = options?.game?.commence_time || options?.gameTime || null;
+      const dateStr = new Date(kickoffIso || Date.now()).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
       const weather = await getGroundedWeather(
         home.full_name || home.name,
         away.full_name || away.name,

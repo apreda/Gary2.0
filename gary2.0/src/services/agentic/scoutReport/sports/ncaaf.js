@@ -24,7 +24,6 @@ import {
   etGameDateLong,
   namesRefer,
   fetchH2HData,
-  scrubNarrative,
   formatInjuryReport,
   formatStartingLineups,
   formatOdds,
@@ -131,6 +130,15 @@ const NCAAF_CONFERENCE_NAMES = new Set(Object.values(NCAAF_CONFERENCE_NAMES_BY_I
 /**
  * Get CFP seeding from hardcoded bracket
  */
+/** Month (0-indexed) and day of a kickoff in Eastern time — game-day
+ * derivations are ET by code law; a 9 PM ET kickoff is not tomorrow. */
+function etMonthDay(instant) {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', month: 'numeric', day: 'numeric' })
+    .formatToParts(instant);
+  const get = (t) => Number(parts.find((x) => x.type === t)?.value);
+  return { month: get('month') - 1, day: get('day') };
+}
+
 function getCfpSeedingFromBracket(teamName, season = footballSeasonForDate('NCAAF')) {
   if (!teamName) return null;
   // This embedded bracket is historical. Never project its 2025 seeds onto a
@@ -285,8 +293,7 @@ function determineBowlTier(game, homeTeam, awayTeam) {
   const gameDate = new Date(game.commence_time || game.date);
   const season = footballSeasonForDate('NCAAF', gameDate);
   const isCfpMatchup = getCfpSeedingFromBracket(homeTeam, season) !== null && getCfpSeedingFromBracket(awayTeam, season) !== null;
-  const month = gameDate.getMonth();
-  const day = gameDate.getDate();
+  const { month, day } = etMonthDay(gameDate);
   const isBowlSeason = (month === 11 && day >= 14) || (month === 0 && day <= 15);
 
   let tier = 3; // Default to tier 3 (common bowl game)
@@ -364,8 +371,7 @@ async function fetchBowlGameContext(homeTeam, awayTeam, game, groundingText = nu
   try {
     // Check if this is likely a bowl/CFP game (December 14 - January 15)
     const gameDate = new Date(game.commence_time || game.date);
-    const month = gameDate.getMonth(); // 0-indexed
-    const day = gameDate.getDate();
+    const { month, day } = etMonthDay(gameDate);
 
     // Bowl/CFP season: Dec 14 - Jan 15 (month 11 = December, month 0 = January)
     const isBowlSeason = (month === 11 && day >= 14) || (month === 0 && day <= 15);
@@ -451,8 +457,7 @@ async function fetchCfpJourneyContext(homeTeam, awayTeam, game) {
     const gameDate = new Date(game.commence_time || game.date);
     const season = footballSeasonForDate('NCAAF', gameDate);
     const seasonLabel = footballSeasonLabel(season);
-    const month = gameDate.getMonth(); // 0-indexed
-    const day = gameDate.getDate();
+    const { month, day } = etMonthDay(gameDate);
 
     // CFP games are typically Jan 1 - Jan 20
     // Skip if not in CFP window
@@ -469,8 +474,12 @@ async function fetchCfpJourneyContext(homeTeam, awayTeam, game) {
                       gameName.includes('playoff') ||
                       gameName.includes('quarterfinal');
 
-    // Also check if teams are ranked (likely CFP teams)
-    // For now, fetch for any Jan game between ranked/notable teams
+    // Only a playoff game gets the playoff-journey searches (Sep 1 review:
+    // isCfpGame was computed and never read, so every bowl in the window
+    // paid two grounded searches for a "CFP journey" it did not have).
+    if (!isCfpGame) {
+      return '';
+    }
 
     console.log(`[Scout Report] Fetching CFP Road to Championship for ${awayTeam} vs ${homeTeam}`);
 
@@ -1107,71 +1116,9 @@ ${line(homeTeam)}
   // Format injuries for storage
   const injuriesForStorage = formatInjuriesForStorage(injuries);
 
-  // Narrative Scrubbing: Remove "ghost" players from the grounding narrative
-  // This ensures Gary never even sees names of players who are not in the active stats or filtered injuries.
-  if (injuries?.narrativeContext) {
-    const allowedNames = new Set();
-
-    // Helper to add names from different roster/keyPlayer formats
-    const addNamesFromSource = (teamData) => {
-      if (!teamData) return;
-      if (Array.isArray(teamData)) {
-        teamData.forEach(p => { if (p.name) allowedNames.add(p.name.trim()); });
-      } else {
-        const collectionKeys = [
-          'skaters', 'goalies', 'forwards', 'defensemen',
-          'players', 'roster', 'active_players', 'depth_chart',
-          'skater_stats', 'goalie_stats'
-        ];
-
-        collectionKeys.forEach(key => {
-          const coll = teamData[key];
-          if (Array.isArray(coll)) {
-            coll.forEach(p => {
-              if (p.name) allowedNames.add(p.name.trim());
-              else if (p.player?.first_name) {
-                const name = `${p.player.first_name} ${p.player.last_name || ''}`.trim();
-                allowedNames.add(name);
-              }
-            });
-          }
-        });
-
-        if (teamData.name) allowedNames.add(teamData.name.trim());
-        else if (teamData.player?.first_name) {
-          const name = `${teamData.player.first_name} ${teamData.player.last_name || ''}`.trim();
-          allowedNames.add(name);
-        }
-      }
-    };
-
-    // Add names from NCAAF key players
-    if (ncaafKeyPlayers) {
-      addNamesFromSource(ncaafKeyPlayers.home);
-      addNamesFromSource(ncaafKeyPlayers.away);
-    }
-
-    // Add names from structured injury list (which already has hard filters applied)
-    [...(injuries.home || []), ...(injuries.away || [])].forEach(i => {
-      const name = i.name || `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim();
-      if (name && name.length > 3) allowedNames.add(name);
-    });
-
-    // Add names from starting lineups
-    if (injuries.lineups) {
-      if (injuries.lineups.home) injuries.lineups.home.forEach(p => { if (p.name) allowedNames.add(p.name.trim()); });
-      if (injuries.lineups.away) injuries.lineups.away.forEach(p => { if (p.name) allowedNames.add(p.name.trim()); });
-    }
-
-    // Collect long-term injured players to EXCLUDE from narrative
-    const excludedLongTerm = new Set(injuries.filteredLongTerm || []);
-
-    if (excludedLongTerm.size > 0) {
-      console.log(`[Scout Report] Excluding ${excludedLongTerm.size} long-term injured players from narrative: ${Array.from(excludedLongTerm).join(', ')}`);
-    }
-
-    // Narrative scrub removed — was calling Flash per game, flagged non-names as unknown players
-  }
+  // (Ghost-player narrative scrub retired — the block that built its name
+  // sets without a consumer left Sep 1 2026; the grounded narrative prints
+  // as written.)
 
   // Extract narrative context from grounded search
   // NO TRUNCATION — Gary needs the full narrative for both teams + matchup context

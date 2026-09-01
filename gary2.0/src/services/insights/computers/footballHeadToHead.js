@@ -102,7 +102,10 @@ export async function computeFootballHeadToHead(ctx) {
     try {
       const rows = await bdl.getGames(
         sportKey,
-        { team_ids: teamIds, seasons: [Number(season), Number(season) - 1], per_page: 100 },
+        // paginateAll (Sep 1 review): four NFL clubs × two seasons pass 100
+        // rows by Week 1 — an un-paginated page silently drops the newest
+        // meetings (the Aug 27 MLB blindness, in football clothes).
+        { team_ids: teamIds, seasons: [Number(season), Number(season) - 1], per_page: 100, paginateAll: true },
         6,
       );
       if (Array.isArray(rows)) historyRows.push(...rows);
@@ -161,8 +164,12 @@ export async function computeFootballHeadToHead(ctx) {
 
     const awayName = sideName(awayTeam);
     const homeName = sideName(homeTeam);
+    // PRESEASON NEVER COUNTS (founder law, Aug 21 2026; Sep 1 review): the
+    // tally, the SERIES value, and the card's record read countable meetings
+    // only. Exhibition meetings still print in the detail, labeled — they
+    // are never dressed up as series history.
     const countable = meetings.filter((m) => m.season_type !== 1);
-    const tallyPool = countable.length ? countable : meetings;
+    const tallyPool = countable;
     const awayWins = tallyPool.filter((m) => String(m.winner_team_id) === String(awayTeam.id)).length;
     const homeWins = tallyPool.filter((m) => String(m.winner_team_id) === String(homeTeam.id)).length;
     const ties = tallyPool.length - awayWins - homeWins;
@@ -171,17 +178,18 @@ export async function computeFootballHeadToHead(ctx) {
     const meetingLines = meetings.slice(0, MAX_MEETINGS_SHOWN).map((m) =>
       `${meetingLabel(m.date)}: ${m.away} ${m.away_score} at ${m.home} ${m.home_score}${typeTag(m)}`);
 
-    const scope = countable.length ? '' : ' — every meeting in the window was preseason';
-    const tallyLead = awayWins === homeWins
-      ? `The series is ${awayWins}-${homeWins}${ties ? `-${ties}` : ''} across the last two seasons${scope}`
-      : `${awayWins > homeWins ? awayName : homeName} has taken ${Math.max(awayWins, homeWins)} of the last ${tallyPool.length}${ties ? ` (${ties} tie${ties === 1 ? '' : 's'})` : ''}${scope}`;
+    const tallyLead = !countable.length
+      ? 'Every meeting in the window was preseason — no series record to speak of'
+      : awayWins === homeWins
+        ? `The series is ${awayWins}-${homeWins}${ties ? `-${ties}` : ''} across the last two seasons`
+        : `${awayWins > homeWins ? awayName : homeName} has taken ${Math.max(awayWins, homeWins)} of the last ${tallyPool.length}${ties ? ` (${ties} tie${ties === 1 ? '' : 's'})` : ''}`;
 
     rows.push(makeRow({
       category: 'headToHead',
       headline: `${awayName} and ${homeName} have met ${meetings.length === 1 ? 'once' : `${meetings.length} times`} since ${Number(season) - 1}`,
       detail: `${tallyLead}. ${meetingLines.join('. ')}.`,
       game: helpers.gameLabel(game),
-      value: `${Math.max(awayWins, homeWins)}-${Math.min(awayWins, homeWins)}${ties ? `-${ties}` : ''} SERIES`,
+      value: countable.length ? `${Math.max(awayWins, homeWins)}-${Math.min(awayWins, homeWins)}${ties ? `-${ties}` : ''} SERIES` : 'PRESEASON ONLY',
       tone: TONES.NEUTRAL,
       relevance_score: Math.min(78, 40 + meetings.length * 6 + (countable.some((m) => m.season_type === 3) ? 10 : 0)),
       team_id: homeTeam.id,
@@ -193,13 +201,18 @@ export async function computeFootballHeadToHead(ctx) {
         // iOS head-to-head row reads the MLB writer's keys (dominant side,
         // wins/losses, meetings with away_runs/home_runs/dom_won, oldest →
         // newest). Both key sets ride the row so nothing downstream breaks.
-        ...cardContract({ meetings, awayTeam, homeTeam, awayWins, homeWins, ties }),
-        meetings: meetings.slice().reverse().map((m) => ({
+        // No countable meeting → no card contract (kind stays unset), so the
+        // app's head-to-head section stays dark instead of printing exhibitions.
+        ...(countable.length ? cardContract({ awayTeam, homeTeam, awayWins, homeWins, ties }) : {}),
+        // The card's ledger is countable meetings only, oldest → newest;
+        // every meeting (exhibitions labeled) stays under all_meetings.
+        meetings: countable.slice().reverse().map((m) => ({
           ...m,
           away_runs: m.away_score,
           home_runs: m.home_score,
           dom_won: m.winner_team_id != null && String(m.winner_team_id) === String(awayWins >= homeWins ? awayTeam.id : homeTeam.id),
         })),
+        all_meetings: meetings,
         tally: { away_wins: awayWins, home_wins: homeWins, ties, countable_only: countable.length > 0 },
       },
     }));

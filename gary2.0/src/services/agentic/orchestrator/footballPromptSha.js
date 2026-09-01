@@ -37,6 +37,12 @@ const SHARED_SURFACE = [
   '../tools/toolDefinitions.js',
   '../../marketTruth.js',
   '../../oddsService.js',
+  // The line-history sentence on every football desk (Sep 1 2026) — its
+  // wording is desk content.
+  '../../oddsSnapshots.js',
+  // The 15 ledger tokens are assigned into nflFetchers at load; the file
+  // that defines them shapes the desk as much as the fetcher file does.
+  '../tools/statRouters/footballAdvancedTokens.js',
 ];
 
 const SPORT_SURFACE = {
@@ -49,8 +55,9 @@ const SPORT_SURFACE = {
     '../constitution/ncaafConstitution.js',
     '../scoutReport/sports/ncaaf.js',
     '../tools/statRouters/ncaafFetchers.js',
-    // NCAAF's TRENCHES factor routes to the NFL fetchers for OL/DL/pressure.
-    '../tools/statRouters/nflFetchers.js',
+    // (nflFetchers.js left this list Sep 1 2026: LEAGUE_ISOLATED in the
+    // router blocks NCAAF from the NFL fetchers — the Aug 25 isolation law —
+    // so NFL-only edits no longer move the NCAAF era.)
   ],
 };
 

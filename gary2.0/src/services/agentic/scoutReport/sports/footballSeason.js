@@ -37,8 +37,12 @@ export function footballSeasonForDate(sport, value = new Date()) {
     throw new TypeError(`Unsupported football sport: ${sport}`);
   }
 
+  // The football year starts with the first exhibition — NFL's Hall of Fame
+  // game lands in late July (Sep 1 review: a Jul 31 kickoff keyed to the
+  // PRIOR season built the desk on last year's rosters and skipped the
+  // preseason stamp). July and August both open the new season.
   const { year, month } = easternDateParts(value);
-  return month >= 8 ? year : year - 1;
+  return month >= 7 ? year : year - 1;
 }
 
 export function footballSeasonLabel(season) {
@@ -58,7 +62,10 @@ export function nflSeasonTypeForGame(game = {}, value = null) {
   if (game?.postseason === true) return 3;
 
   const kickoff = value ?? game?.commence_time ?? game?.date ?? new Date();
-  return easternDateParts(kickoff).month === 8 ? 1 : 2;
+  // Same rule as insights/footballData.nflSeasonTypeForGame: July and
+  // August kickoffs without explicit metadata are preseason.
+  const month = easternDateParts(kickoff).month;
+  return month === 7 || month === 8 ? 1 : 2;
 }
 
 /**

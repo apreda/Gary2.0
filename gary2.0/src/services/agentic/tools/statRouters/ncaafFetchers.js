@@ -1,5 +1,5 @@
 import { ballDontLieService } from '../../../ballDontLieService.js';
-import { getSpPlus, getFpi, getReturningProduction, rowFor,
+import { getSpPlus, getFpi, rowFor,
          getAdvancedSeasonStats, rankBy, rankedFor } from '../../../cfbdService.js';
 import { loadTeamResults, formSummary, homeAwaySplit, marginProfile, closeGameRecord, footballWeekLabel } from './footballTeamGames.js';
 
@@ -595,27 +595,6 @@ export const ncaafFetchers = {
       return unavailableResult(error, home, away);
     }
   },
-
-  // ═══════════════════════════════════════════════════════════════════════
-  // CHECKLIST ASKS WITH NO SOURCE (Aug 24 2026 audit)
-  //
-  // BDL's NCAAF season row carries 13 fields and its game box 10 — no points,
-  // no sacks, no red zone, no explosive-play or havoc inputs, and no ratings.
-  // These tokens previously fell through to "Unknown stat token", which reads
-  // like a routing bug and invites the researcher to fill the hole itself.
-  // Declaring them says the true thing — the number does not exist for us —
-  // and names what would source it, so the absence stays visible and greppable.
-  // ═══════════════════════════════════════════════════════════════════════
-
-
-
-
-
-
-
-
-
-
 
   /**
    * Game-by-game lines for each side's leading passer, rusher and receiver,
