@@ -43,6 +43,9 @@ const DOSSIER_SURFACE_FILES = [
   // mechanics changes there are era changes (added Sep 1 2026 when the
   // legacy -200 ML force was removed).
   './responseParser.js',
+  // The ticket menu and the case headings (Sep 1 2026): the "House limit"
+  // and "Tickets on this game" sentences every desk prints live here.
+  './mlbCaseMenu.js',
   // (flashInvestigationPrompts.js, researchBriefing.js, investigationFactors.js
   // deleted Sep 1 2026 — the researcher's corpse left the tree.)
 ];

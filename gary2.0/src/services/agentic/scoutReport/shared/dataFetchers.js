@@ -3523,6 +3523,8 @@ export function formatStartingLineups(homeTeam, awayTeam, lineups) {
 
 // formatSituationalFactors removed — Layer 3 violation (told Gary what factors mean)
 
+const isFootballSport = (sport) => /football|nfl|ncaaf/i.test(String(sport || ''));
+
 export function formatOdds(game, sport = '') {
   const lines = [];
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
@@ -3571,7 +3573,7 @@ export function formatOdds(game, sport = '') {
   if (!isNHL) {
     lines.push(...menuTruthLines(
       { moneyline_home: mlHome, moneyline_away: mlAway, spread_home: spreadHome, spread_away: spreadAway, spread_home_odds: spreadHomeOdds, spread_away_odds: spreadAwayOdds },
-      game.home_team, game.away_team, { when: 'this week', order: 'away-first' }));
+      game.home_team, game.away_team, { when: isFootballSport(sport) ? 'this week' : 'tonight', order: 'away-first' }));
     if (game._lineHistory) lines.push(game._lineHistory);
   }
 

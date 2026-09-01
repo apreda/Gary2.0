@@ -110,7 +110,13 @@ struct FootballGameIntelView: View {
         Array(edges.filter { kinds.contains($0.kind) && matchesThisGame($0) }.prefix(cap))
     }
 
-    private var qbRows: [Signal] { morningRows([.quarterback], cap: 2) }
+    /// Every passing-lane row for this game (the per-QB watch rows AND the
+    /// team passing-metric rows). The take reads from any of them; the
+    /// plates read only the rows that carry per-side numbers (Sep 1 review:
+    /// a blind first-two cut usually picked the two per-QB rows, which have
+    /// no sides, and the section vanished).
+    private var qbRows: [Signal] { morningRows([.quarterback], cap: 8) }
+    private var qbMetricRows: [Signal] { qbRows.filter { $0.lane?.home?.value != nil || $0.lane?.away?.value != nil } }
     private var injuryWireRows: [Signal] { morningRows([.injury], cap: 24) }
     private var numberRailRows: [Signal] {
         morningRows([.paceScript, .turnoverEdge, .explosivePlay, .trenches], cap: 4)
@@ -185,13 +191,13 @@ struct FootballGameIntelView: View {
         return num
     }
     private func quarterbackPlate(home: Bool) -> ScoutArmsPlate? {
-        let stacks = qbRows.prefix(3).compactMap { s -> ScoutArmsStack? in
+        let stacks = qbMetricRows.prefix(3).compactMap { s -> ScoutArmsStack? in
             let side = home ? s.lane?.home : s.lane?.away
             guard let v = Self.sideValue(side) else { return nil }
             return ScoutArmsStack(label: metricLabel(s), value: v)
         }
         guard !stacks.isEmpty else { return nil }
-        let abbr = (home ? qbRows.first?.lane?.home?.abbreviation : qbRows.first?.lane?.away?.abbreviation)
+        let abbr = (home ? qbMetricRows.first?.lane?.home?.abbreviation : qbMetricRows.first?.lane?.away?.abbreviation)
             ?? (home ? sides.home : sides.away)
         return ScoutArmsPlate(name: abbr.uppercased(), stacks: Array(stacks))
     }
@@ -283,14 +289,21 @@ struct FootballGameIntelView: View {
         }
     }
 
-    /// Injury-wire rows attributed to a side by the lane's own suffix
-    /// ("… is out for DET"); unattributed rows show under both.
-    private func wireRows(for side: String) -> [Signal] {
-        injuryWireRows.filter { s in
+    /// Injury-wire rows attributed to a side by the lane's own suffix ("… is
+    /// out for DET" — the BDL abbreviation). Each side is known by its
+    /// abbreviation (the board row's, then the pick's) AND its mascot label,
+    /// so either spelling attributes; unattributed rows show under both.
+    private func sideKeys(home: Bool) -> [String] {
+        let abbr = home ? (row?.home_abbr ?? primaryPick?.homeTeamAbbreviation) : (row?.away_abbr ?? primaryPick?.awayTeamAbbreviation)
+        let label = home ? sides.home : sides.away
+        return [abbr, label].compactMap { $0?.trimmingCharacters(in: .whitespaces).lowercased() }.filter { !$0.isEmpty }
+    }
+    private func wireRows(home: Bool) -> [Signal] {
+        let keys = sideKeys(home: home)
+        return injuryWireRows.filter { s in
             guard let range = s.headline.range(of: #"\bfor ([A-Z][A-Za-z&' .-]{1,30})$"#, options: .regularExpression) else { return true }
-            let team = String(s.headline[range]).dropFirst(4).trimmingCharacters(in: .whitespaces)
-            return team.caseInsensitiveCompare(side) == .orderedSame
-                || side.lowercased().hasSuffix(team.lowercased()) || team.lowercased().hasSuffix(side.lowercased())
+            let team = String(s.headline[range]).dropFirst(4).trimmingCharacters(in: .whitespaces).lowercased()
+            return keys.contains { $0 == team || $0.hasSuffix(team) || team.hasSuffix($0) }
         }
     }
 
@@ -309,7 +322,7 @@ struct FootballGameIntelView: View {
             PlayerIntelSection(matchup: matchup, gameId: exactGameID)
             FootballAvailabilityCard(awayLabel: sides.away, homeLabel: sides.home,
                                      confirmed: FootballEvidence.availability(from: primaryPick, awayLabel: sides.away, homeLabel: sides.home, cap: 12),
-                                     wireAway: wireRows(for: sides.away), wireHome: wireRows(for: sides.home))
+                                     wireAway: wireRows(home: false), wireHome: wireRows(home: true))
             if !moreIntel.isEmpty {
                 EdgesSection(title: "MORE INTEL", edges: moreIntel).padding(.top, 8)
             }

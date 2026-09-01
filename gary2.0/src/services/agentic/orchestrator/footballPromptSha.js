@@ -40,6 +40,9 @@ const SHARED_SURFACE = [
   // The line-history sentence on every football desk (Sep 1 2026) — its
   // wording is desk content.
   '../../oddsSnapshots.js',
+  // The ticket menu the football desk prints (menuTruthLines) is defined
+  // here — desk content, so the football era moves with it.
+  './mlbCaseMenu.js',
   // The 15 ledger tokens are assigned into nflFetchers at load; the file
   // that defines them shapes the desk as much as the fetcher file does.
   '../tools/statRouters/footballAdvancedTokens.js',

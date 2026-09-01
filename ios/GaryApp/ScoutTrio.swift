@@ -278,10 +278,9 @@ struct ScoutArmsSection: View {
 
 /// One label/value pair on a plate ("SEASON" / "4.02 ERA"). A nil value
 /// prints nothing — the plate simply carries less.
-struct ScoutArmsStack: Identifiable {
+struct ScoutArmsStack {
     let label: String
     let value: String?
-    var id: String { label }
 }
 
 /// One side of THE ARMS pair: the surname plate and its stacks.
@@ -320,7 +319,9 @@ struct ScoutArmsLayout: View {
                     .font(GaryFonts.display(20)).tracking(0.5)
                     .foregroundStyle(home ? GaryColors.gold : ScoutMock.warm)
                     .lineLimit(1).minimumScaleFactor(0.6)
-                ForEach(p.stacks) { stack($0) }
+                // Identity by position — two stacks may share a label (a debut
+                // arm prints "Season" twice; two passing rows can share a unit).
+                ForEach(Array(p.stacks.enumerated()), id: \.offset) { _, st in stack(st) }
             }
             .padding(12)
             // Both plates fill the pair's height (founder, Aug 6: "Perez's box
@@ -507,7 +508,10 @@ struct ScoutBigNumberRow: Identifiable {
                                      numeral: american(b.cur),
                                      bold: "\(b.name) opened \(american(b.open)) and are now \(american(b.cur))", rest: "")
         }
-        // No move — show the favorite holding its number.
+        // No move — show the favorite holding its number. Only when an opening
+        // number exists: with no open on file there is nothing to have held,
+        // and "opened here and hold" would be a claim the row cannot back.
+        guard openAway != nil || openHome != nil else { return nil }
         guard let ha = curAway, let hh = curHome else { return nil }
         let homeFav = hh <= ha
         let name = homeFav ? homeName : awayName

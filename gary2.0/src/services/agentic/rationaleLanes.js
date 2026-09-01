@@ -43,10 +43,16 @@ export const LANES = [
   ['fb_spread_key_number', /key number|\bhook\b|cover(ed|ing)? the (spread|number)|by more than|within the number/i],
 ];
 
-/** Lane keys present in one rationale. */
-export function tagRationale(text) {
+const FOOTBALL_LEAGUES = new Set(['NFL', 'NCAAF']);
+
+/** Lane keys present in one rationale. Football lanes (fb_*) apply only to
+ * football rationales — "questionable" and "explosive" are baseball words too. */
+export function tagRationale(text, league = '') {
   const t = String(text || '');
-  return LANES.filter(([, rx]) => rx.test(t)).map(([key]) => key);
+  const football = FOOTBALL_LEAGUES.has(String(league || '').toUpperCase());
+  return LANES
+    .filter(([key, rx]) => (football || !key.startsWith('fb_')) && rx.test(t))
+    .map(([key]) => key);
 }
 
 /** fav | dog | pick-em | unknown — from the pick's own side price on the board. */
@@ -75,7 +81,7 @@ export function laneRowFor(gameDate, pick, result) {
     side: sideOfPick(pick),
     result: result?.result ?? null,
     prompt_sha: pick.prompt_sha || null,
-    lanes: tagRationale(pick.rationale),
+    lanes: tagRationale(pick.rationale, pick.league || pick.sport),
     rationale_chars: String(pick.rationale || '').length,
   };
 }

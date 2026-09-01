@@ -44,11 +44,13 @@ export async function tagRationaleLanes(dates) {
     }
   }
   // NFL lives in its own weekly table; its results carry the game date.
-  const { data: nflRes } = await db.from('nfl_results').select('game_id, game_date, result, pick_text').in('game_date', dates);
+  const { data: nflRes, error: e4 } = await db.from('nfl_results').select('game_id, game_date, result, pick_text').in('game_date', dates);
+  if (e4) throw e4;
   if (nflRes?.length) {
     const wanted = new Set(nflRes.map((r) => String(r.game_id)));
     const byNfl = new Map(nflRes.map((r) => [`${String(r.game_id)}|${r.pick_text}`, r]));
-    const { data: weeks } = await db.from('weekly_nfl_picks').select('picks').order('created_at', { ascending: false }).limit(6);
+    const { data: weeks, error: e5 } = await db.from('weekly_nfl_picks').select('picks').order('created_at', { ascending: false }).limit(6);
+    if (e5) throw e5;
     for (const w of weeks || []) {
       for (const p of w.picks || []) {
         const gid = String(p?.bdl_game_id ?? p?.game_id ?? '');

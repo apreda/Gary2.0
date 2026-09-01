@@ -37,12 +37,15 @@ export function footballSeasonForDate(sport, value = new Date()) {
     throw new TypeError(`Unsupported football sport: ${sport}`);
   }
 
-  // The football year starts with the first exhibition — NFL's Hall of Fame
-  // game lands in late July (Sep 1 review: a Jul 31 kickoff keyed to the
-  // PRIOR season built the desk on last year's rosters and skipped the
-  // preseason stamp). July and August both open the new season.
+  // August opens the football year here AND in the four sibling helpers
+  // (insights/footballData, utils/dateUtils nflSeason/ncaafSeason,
+  // picksService.getNFLSeason, pickdesk/footballPropsDesk). A late-July
+  // Hall of Fame kickoff keys to the prior year in all five — wrong, but
+  // consistently so; moving one helper alone (tried Sep 1 2026) filed the
+  // same game under two seasons. Fix all five together when that game is
+  // next on a slate.
   const { year, month } = easternDateParts(value);
-  return month >= 7 ? year : year - 1;
+  return month >= 8 ? year : year - 1;
 }
 
 export function footballSeasonLabel(season) {
