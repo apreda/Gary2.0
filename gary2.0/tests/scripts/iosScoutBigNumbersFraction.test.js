@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { readIosViewsSource } from '../helpers/iosViewsSource.js';
 import { readFileSync } from 'node:fs';
 
-const views = readFileSync(new URL('../../../ios/GaryApp/Views.swift', import.meta.url), 'utf8');
+const views = readIosViewsSource();
 const bigNumbers = views.slice(
-  views.indexOf('fileprivate struct ScoutBigNumbersSection: View'),
+  views.indexOf('struct ScoutBigNumbersSection: View'),
   views.indexOf('struct PicksGamePage: View'),
 );
 const trioData = views.slice(
-  views.indexOf('fileprivate struct ScoutTrioData'),
-  views.indexOf('fileprivate struct ScoutArmsSection'),
+  views.indexOf('struct ScoutTrioData'),
+  views.indexOf('struct ScoutArmsSection'),
 );
 
 describe('iOS Scout first-inning Big Number', () => {

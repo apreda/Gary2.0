@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { readIosViewsSource } from '../helpers/iosViewsSource.js';
 import { readFileSync } from 'node:fs';
 
-const views = readFileSync(new URL('../../../ios/GaryApp/Views.swift', import.meta.url), 'utf8');
+const views = readIosViewsSource();
 const homeView = views.slice(
   views.indexOf('struct HomeView: View'),
   views.indexOf('struct HomeContentPlaceholder: View'),

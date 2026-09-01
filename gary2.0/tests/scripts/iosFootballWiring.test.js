@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { readIosViewsSource } from '../helpers/iosViewsSource.js';
 import { readFileSync } from 'node:fs';
 
 const models = readFileSync(new URL('../../../ios/GaryApp/Models.swift', import.meta.url), 'utf8');
-const views = readFileSync(new URL('../../../ios/GaryApp/Views.swift', import.meta.url), 'utf8');
+const views = readIosViewsSource();
 const supabaseApi = readFileSync(new URL('../../../ios/GaryApp/SupabaseAPI.swift', import.meta.url), 'utf8');
 const footballIntel = readFileSync(new URL('../../../ios/GaryApp/FootballGameIntelView.swift', import.meta.url), 'utf8');
 const footballHub = readFileSync(new URL('../../../ios/GaryApp/FootballProofContract.swift', import.meta.url), 'utf8');
@@ -301,12 +302,12 @@ describe('Football Picks overview', () => {
   });
 
   it('keeps Winners shelves isolated when one sport source fails', () => {
-    expect(views).toContain('private func fetchIsolatedGamePickSources(');
+    expect(views).toContain('func fetchIsolatedGamePickSources(');
     expect(views).toContain('async let dailyTask = SupabaseAPI.fetchDailyPicks(date: date)');
     expect(views).toContain('async let nflTask = SupabaseAPI.fetchWeeklyNFLPicks(for: date)');
     expect(views).toContain('snapshot.transientExternalFailures.contains(.daily) && league != "NFL"');
     expect(views).toContain('snapshot.transientExternalFailures.contains(.nfl) && league == "NFL"');
-    expect(views).toContain('snapshot.transientExternalFailures.contains(.ncaabFuture) && league == "NCAAB"');
+    // (.ncaabFuture retention pin removed Sep 1 2026 — the NCAAB tournament lane left the app.)
     expect(views).toContain('retaining: previousGameShelves.filter { !$0.settled }.flatMap(\\.picks)');
     expect(views).toContain('retaining: previousGameShelves.filter(\\.settled).flatMap(\\.picks)');
     expect(views).toContain('? previousPropShelves.filter { !$0.settled }.flatMap(\\.props)');

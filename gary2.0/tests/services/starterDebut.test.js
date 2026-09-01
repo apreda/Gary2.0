@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { readIosViewsSource } from '../helpers/iosViewsSource.js';
 import { readFileSync } from 'node:fs';
 import {
   attachDebutContext,
@@ -8,7 +9,7 @@ import {
 
 const tomorrowSrc = readFileSync(new URL('../../src/services/tomorrowService.js', import.meta.url), 'utf8');
 const modelsSrc = readFileSync(new URL('../../../ios/GaryApp/Models.swift', import.meta.url), 'utf8');
-const viewsSrc = readFileSync(new URL('../../../ios/GaryApp/Views.swift', import.meta.url), 'utf8');
+const viewsSrc = readIosViewsSource();
 
 // Aug 17 2026 (founder GO): a starter with zero MLB data — Kent Emanuel's
 // blank plate — renders an honest empty state plus his labeled minor-league

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { readIosViewsSource } from '../helpers/iosViewsSource.js';
 import { readFileSync } from 'node:fs';
 
 const api = readFileSync(new URL('../../../ios/GaryApp/SupabaseAPI.swift', import.meta.url), 'utf8');
-const views = readFileSync(new URL('../../../ios/GaryApp/Views.swift', import.meta.url), 'utf8');
+const views = readIosViewsSource();
 
 const normalizer = api.slice(
   api.indexOf('private static func normalizeStoredGamePickPayload'),

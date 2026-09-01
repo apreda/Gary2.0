@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { readIosViewsSource } from '../helpers/iosViewsSource.js';
 import { readFileSync } from 'node:fs';
 
 const models = readFileSync(new URL('../../../ios/GaryApp/Models.swift', import.meta.url), 'utf8');
 const api = readFileSync(new URL('../../../ios/GaryApp/SupabaseAPI.swift', import.meta.url), 'utf8');
-const views = readFileSync(new URL('../../../ios/GaryApp/Views.swift', import.meta.url), 'utf8');
+const views = readIosViewsSource();
 
 const home = views.slice(views.indexOf('struct HomeView: View'), views.indexOf('struct HomeSheetRowView: View'));
 const cache = views.slice(views.indexOf('final class LiveScoreCache'), views.indexOf('// MARK: - Shared Props Slate Store'));
