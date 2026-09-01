@@ -179,4 +179,35 @@ export async function sendToCodexCliSession(session, message, _options = {}) {
   };
 }
 
-export default { isCodexCliModel, createCodexCliSession, sendToCodexCliSession, resetCodexCliSessionChat };
+/**
+ * One-shot grounded web search on the GPT Pro subscription (founder GO,
+ * Sep 1 2026: "not use Claude CLI at all... since codex is free too") —
+ * the $0 first rung for every pick-lane search. Same { success, data, raw }
+ * contract as the old claudeCliWebSearch rung. Mechanics verified live
+ * Sep 1: `exec -c tools.web_search=true` fires native Responses web_search
+ * events on the ChatGPT sub; search runs at LOW effort — retrieval quality
+ * is search-bound, and deep thinking on a news lookup just risks the timeout.
+ */
+export async function codexCliWebSearch(prompt, options = {}) {
+  const model = options.model || process.env.GARY_GROUNDING_CODEX_MODEL || 'gpt-5.6-sol';
+  try {
+    const args = [
+      'exec', '--skip-git-repo-check', '-s', 'read-only', '--json',
+      '-m', model,
+      '-c', 'tools.web_search=true',
+      '-c', 'model_reasoning_effort="low"',
+      '-',
+    ];
+    const { code, stdout, stderr } = await runCodex(args, prompt, options.timeoutMs || 5 * 60 * 1000);
+    if (code !== 0) throw toError(stderr || stdout);
+    const { text } = parseEvents(stdout);
+    const clean = String(text || '').trim();
+    console.log(`[Web Search] codex-cli (${model}) returned ${clean.length} chars (GPT Pro — $0 marginal)`);
+    return { success: clean.length > 0, data: clean, raw: stdout };
+  } catch (e) {
+    console.warn(`[Web Search] codex-cli search failed: ${e.message}`);
+    return { success: false, data: '', raw: null, error: e.message };
+  }
+}
+
+export default { isCodexCliModel, createCodexCliSession, sendToCodexCliSession, resetCodexCliSessionChat, codexCliWebSearch };

@@ -31,6 +31,11 @@ const DOSSIER_SURFACE_FILES = [
   '../scoutReport/sports/mlbInjuryContext.js',
   '../scoutReport/sports/pitcherArc.js',
   '../tools/statRouters/mlbFetchers.js',
+  // The grounded-search facades shape desk content (breaking news, press
+  // lanes) — retriever changes are era changes (added Sep 1 2026 with the
+  // codex-first grounding cutover).
+  '../scoutReport/shared/grounding.js',
+  '../../pickdesk/webSearch.js',
   // (flashInvestigationPrompts.js, researchBriefing.js, investigationFactors.js
   // deleted Sep 1 2026 — the researcher's corpse left the tree.)
 ];

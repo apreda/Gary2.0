@@ -27,9 +27,9 @@ import { getPitcherArsenal, getPitcherStatcastProfile } from '../../../baseballS
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { formatSampleSuffix } from './statRouterCommon.js';
 import { bullpenLedgerDate, outsToIp, relieverBoxEntries } from './bullpenLedger.js';
-// Bridge-aware search seam (Jul 30): ALL grounding in this file routes like
-// the WORLD lane — Claude sub first when GARY_GROUNDING_VIA_CLAUDE=1 ($0),
-// then the API chain — never a hardwired paid Gemini call.
+// Bridge-aware search seam (Sep 1 2026): ALL grounding in this file routes
+// like the WORLD lane — codex GPT Pro bridge first ($0), then the API chain.
+// Claude CLI is out of the pick lane (founder).
 import { openaiWebSearch } from '../../../pickdesk/webSearch.js';
 import { foldName } from '../../../../utils/nameUtils.js';
 

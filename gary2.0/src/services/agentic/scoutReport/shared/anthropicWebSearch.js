@@ -4,9 +4,9 @@
  * Extracted from anthropicFootballGrounding.js — the hardened transport core
  * (pause_turn continuation contract, search-result validation, timeout) with
  * the football-specific prompt/validation left behind in that module. This is
- * the METERED grounding rail of the post-Gemini world: the Claude
- * subscription bridge (claudeCliWebSearch, $0) goes first everywhere, and
- * this API-key rail catches what the bridge drops.
+ * the METERED grounding rail of the post-Gemini world: the codex GPT Pro
+ * bridge (codexCliWebSearch, $0) goes first everywhere — Claude CLI left the
+ * pick lane Sep 1 2026 — and this API-key rail catches what the bridge drops.
  *
  * Founder order, Aug 24: "no more gemini for anything — everything should be
  * Anthropic through the API or ChatGPT through the API."

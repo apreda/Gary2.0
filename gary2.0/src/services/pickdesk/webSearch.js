@@ -4,17 +4,18 @@
  * ({ success, data, raw }) is stable across every rung.
  *
  * The 2026 Freshness Protocol is ported from shared/grounding.js — the rules
- * are prompt text and provider-agnostic. Chain: Claude subscription bridge
- * (when GARY_GROUNDING_VIA_CLAUDE=1, $0) → OpenAI Responses web_search →
- * Anthropic server web search on quota failures. Failures degrade to empty
- * data (the desk renders "No same-day breaking news." — never blocks a pick).
+ * are prompt text and provider-agnostic. Chain (Sep 1 2026 — founder: Claude
+ * CLI OUT of the pick lane): codex GPT Pro bridge ($0) → OpenAI Responses
+ * web_search (API) → Anthropic server web search on any failure. Failures
+ * degrade to empty data (the desk renders "No same-day breaking news." —
+ * never blocks a pick).
  */
 import { createHash } from 'crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { describeSportsCalendar } from '../../utils/dateUtils.js';
-import { claudeCliWebSearch } from '../agentic/orchestrator/providerAdapters/claudeCliSession.js';
+import { codexCliWebSearch } from '../agentic/orchestrator/providerAdapters/codexCliSession.js';
 
 // SEARCH CACHE (founder GO, Aug 10): the props tiers re-build the desk per
 // window, so the same four questions about the same game were re-searched
@@ -124,15 +125,15 @@ export async function openaiWebSearch(query, options = {}) {
     if (result?.success && String(result?.data || '').trim()) searchCachePut(cacheKey, result);
     return result;
   };
-  // SUBSCRIPTION BRIDGE (founder, Jul 29): with GARY_GROUNDING_VIA_CLAUDE=1,
-  // grounding runs on the Claude subscription first (WebSearch tool only,
-  // Sonnet by default — its own weekly bucket), $0 marginal. The OpenAI →
-  // Gemini chain below stays as the fallback if the bridge search fails.
-  if (process.env.GARY_GROUNDING_VIA_CLAUDE === '1') {
-    const viaClaude = await claudeCliWebSearch(freshnessPrompt(query, options.freshnessHours), options);
-    if (viaClaude.success) return cachePut(viaClaude);
-    console.warn('[Web Search] claude-cli grounding empty/failed — trying API providers');
-  }
+  // SUBSCRIPTION BRIDGE (Sep 1 2026 — founder: Claude CLI OUT of the pick
+  // lane, "use codex since it's free too"): grounding runs on the GPT Pro
+  // codex bridge first, $0 marginal. The OpenAI API → Anthropic API chain
+  // below stays as the fallback if the bridge search fails. (The old
+  // GARY_GROUNDING_VIA_CLAUDE flag is retired — the scheduler plist still
+  // carries it harmlessly until its next planned edit.)
+  const viaCodex = await codexCliWebSearch(freshnessPrompt(query, options.freshnessHours), options);
+  if (viaCodex.success) return cachePut(viaCodex);
+  console.warn('[Web Search] codex-cli grounding empty/failed — trying API providers');
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return cachePut(await anthropicSearchFallback(query, options, 'OPENAI_API_KEY missing'));

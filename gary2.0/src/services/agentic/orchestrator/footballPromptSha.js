@@ -21,6 +21,10 @@ const SHARED_SURFACE = [
   './responseParser.js',
   '../scoutReport/shared/dataFetchers.js',
   '../scoutReport/shared/anthropicFootballGrounding.js',
+  // Grounded-search facades (Sep 1 2026 codex-first cutover) — the
+  // retriever shapes desk content, so it rides the era.
+  '../scoutReport/shared/grounding.js',
+  '../../pickdesk/webSearch.js',
   // The stat routers ARE the evidence surface: what a factor returns decides
   // what Gary reads. Before Aug 24 2026 they were unhashed, so ten fetchers
   // reading nonexistent BDL fields — and their repair — left the era stamp

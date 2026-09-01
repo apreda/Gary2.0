@@ -3,6 +3,14 @@
 process.env.GARY_SEARCH_CACHE_OFF = '1';
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+// The codex GPT Pro bridge is the unconditional first rung (Sep 1 2026 —
+// Claude CLI out of the pick lane). Mocked here so a unit test never spawns
+// the real CLI; each test sets its behavior.
+vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js', () => ({
+  codexCliWebSearch: vi.fn(),
+}));
+import { codexCliWebSearch } from '../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js';
 import { openaiWebSearch } from '../../../src/services/pickdesk/webSearch.js';
 
 const RESPONSES_OK = {
@@ -16,8 +24,21 @@ describe('openaiWebSearch (de-Gemini step one, Jul 26 2026)', () => {
   const realFetch = global.fetch;
   const realKey = process.env.OPENAI_API_KEY;
 
-  beforeEach(() => { process.env.OPENAI_API_KEY = 'test-key'; });
+  beforeEach(() => {
+    process.env.OPENAI_API_KEY = 'test-key';
+    // Default: the codex rung misses so each pin exercises the API chain.
+    codexCliWebSearch.mockReset().mockResolvedValue({ success: false, data: '', raw: null, error: 'mocked miss' });
+  });
   afterEach(() => { global.fetch = realFetch; process.env.OPENAI_API_KEY = realKey; });
+
+  it('the codex GPT Pro bridge is the first rung — a hit never touches the APIs', async () => {
+    codexCliWebSearch.mockResolvedValue({ success: true, data: 'Bridge news, dated today.', raw: null });
+    global.fetch = vi.fn();
+    const r = await openaiWebSearch('Cubs at Pirates TODAY breaking news');
+    expect(codexCliWebSearch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(r).toMatchObject({ success: true, data: 'Bridge news, dated today.' });
+  });
 
   it('sends the freshness protocol + query to the Responses API with the web_search tool', async () => {
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => RESPONSES_OK });

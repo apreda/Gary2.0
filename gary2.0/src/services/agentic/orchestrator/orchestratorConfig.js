@@ -72,18 +72,24 @@ export const PROPS_DESK_MODEL = process.env.GARY_PROPS_MODEL_OVERRIDE || 'codex-
 // OpenAI balance outage shipped 6 games with no pick): when a desk brain
 // throws — quota/429 first among the causes — the SAME desk re-runs on these
 // models in order at their top thinking level.
-// Two subscription tanks, then the third Anthropic tier (Aug 24: the two
-// metered Gemini last resorts are gone with the vendor).
+// Sep 1 2026 (founder: Claude CLI OUT of the pick lane — his weekly Claude
+// subscription usage never rides Gary's picks): the Anthropic rungs moved
+// from the CLI bridge to the metered API (anthropic- prefix). They fire only
+// when the codex bridge fails a whole game — a rare, cross-vendor last resort.
 // The chain filters out the primary so a quota error never retries itself.
-export const DESK_FALLBACK_MODELS = ['codex-gpt-5.6-sol', 'claude-opus-5', 'claude-sonnet-5'].filter((m) => m !== GAME_PICK_MODEL);
+export const DESK_FALLBACK_MODELS = ['codex-gpt-5.6-sol', 'anthropic-claude-opus-5', 'anthropic-claude-sonnet-5'].filter((m) => m !== GAME_PICK_MODEL);
 
 // $ per 1M tokens [input, output] — desk-lane cost logging only, not billing.
-// Claude entries are $0: the subscription bridge has no marginal token cost.
+// Bridge entries are $0 (no marginal token cost on a subscription); the
+// anthropic- API rungs are metered and logged at list price.
 export const DESK_COST_PER_M = {
   'gpt-5.6-sol': [5, 30],
+  'codex-gpt-5.6-sol': [0, 0],
   'claude-fable-5': [0, 0],
   'claude-opus-5': [0, 0],
   'claude-sonnet-5': [0, 0],
+  'anthropic-claude-opus-5': [15, 75],
+  'anthropic-claude-sonnet-5': [3, 15],
 };
 
 // Session-model gate — the founder's Aug 24 vendor ban enforced at the ONE

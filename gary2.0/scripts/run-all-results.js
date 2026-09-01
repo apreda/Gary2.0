@@ -112,14 +112,15 @@ function normalizeName(name) {
 }
 
 /**
- * Grounded web-search fallback (Aug 24 2026, Gemini retired): Claude
- * subscription bridge first ($0), Anthropic server web search second.
- * Same contract as the old Gemini helper — text or null, never throws.
+ * Grounded web-search fallback (Sep 1 2026 — founder: Claude CLI OUT of
+ * the pick lane): codex GPT Pro bridge first ($0), Anthropic server web
+ * search second. Same contract as the old Gemini helper — text or null,
+ * never throws.
  */
 async function geminiGrounding(query) {
   try {
-    const { claudeCliWebSearch } = await import('../src/services/agentic/orchestrator/providerAdapters/claudeCliSession.js');
-    const viaBridge = await claudeCliWebSearch(query, { timeoutMs: 3 * 60 * 1000 });
+    const { codexCliWebSearch } = await import('../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js');
+    const viaBridge = await codexCliWebSearch(query, { timeoutMs: 3 * 60 * 1000 });
     if (viaBridge.success && viaBridge.data) {
       console.log(`    [Grounding] Result: ${viaBridge.data.substring(0, 80)}...`);
       return viaBridge.data;

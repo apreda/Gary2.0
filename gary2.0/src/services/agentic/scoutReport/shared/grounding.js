@@ -11,7 +11,7 @@
 import { describeSportsCalendar } from '../../../../utils/dateUtils.js';
 import { seasonForSport, findTeamInStandings, sportToBdlKey } from './utilities.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
-import { claudeCliWebSearch } from '../../orchestrator/providerAdapters/claudeCliSession.js';
+import { codexCliWebSearch } from '../../orchestrator/providerAdapters/codexCliSession.js';
 import { anthropicWebSearchRaw } from './anthropicWebSearch.js';
 import { createHash } from 'crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync, statSync } from 'fs';
@@ -313,16 +313,18 @@ ${snapshot.join('\n')}
 }
 
 /**
- * Two-rail grounded transport (Aug 24 2026): the Claude subscription bridge
- * first ($0), the Anthropic server web-search API second. Both take a full
- * prompt and return { success, data }.
+ * Two-rail grounded transport (Sep 1 2026 — founder: Claude CLI OUT of the
+ * pick lane, "use codex since it's free too"): the GPT Pro codex bridge
+ * first ($0), the Anthropic server web-search API second (metered, rare —
+ * never the Claude subscription). Both take a full prompt and return
+ * { success, data }.
  */
 async function groundedTransport(prompt, options = {}) {
-  const viaBridge = await claudeCliWebSearch(prompt, {
+  const viaBridge = await codexCliWebSearch(prompt, {
     timeoutMs: options.timeoutMs ?? 5 * 60 * 1000,
   });
   if (viaBridge.success && viaBridge.data) return viaBridge;
-  console.warn('[Grounding Search] claude bridge empty/failed — trying Anthropic server web search');
+  console.warn('[Grounding Search] codex bridge empty/failed — trying Anthropic server web search');
   return anthropicWebSearchRaw(prompt, {
     maxTokens: Math.max(options.maxTokens ?? 2000, 2000),
     timeoutMs: options.timeoutMs ?? 90_000,
