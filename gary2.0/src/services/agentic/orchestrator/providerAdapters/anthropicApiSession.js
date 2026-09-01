@@ -150,9 +150,16 @@ export async function sendToAnthropicApiSession(session, message, options = {}) 
   const body = {
     model: session._apiModel,
     max_tokens: session.maxOutputTokens,
-    system: [{ type: 'text', text: session._systemPrompt, cache_control: { type: 'ephemeral' } }],
     messages: session._messages,
   };
+  // A session with no system prompt (content passes create these) must omit
+  // the field entirely: Anthropic 400s an EMPTY text block carrying
+  // cache_control ("cache_control cannot be set for empty text blocks").
+  // Surfaced Sep 1 2026 when the model cascade moved from the CLI bridge
+  // (which tolerated empty systems) to this API adapter.
+  if (String(session._systemPrompt || '').trim()) {
+    body.system = [{ type: 'text', text: session._systemPrompt, cache_control: { type: 'ephemeral' } }];
+  }
   if (session.tools?.length) {
     body.tools = session.tools;
     body.tool_choice = { type: 'auto' };

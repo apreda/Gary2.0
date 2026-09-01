@@ -1009,7 +1009,7 @@ ${h2hData.message}`;
  * SOURCE OF TRUTH varies by sport:
  * - NFL/NCAAF: BDL is PRIMARY (reliable weekly practice reports)
  * - NBA: RapidAPI is PRIMARY (structured injury status, no Grounding)
- * - NHL/NCAAB: Rotowire via Gemini Grounding is PRIMARY
+ * - NHL/NCAAB: Rotowire via grounded search is PRIMARY
  */
 export async function fetchInjuries(homeTeam, awayTeam, sport, gameDate = null) {
   try {
@@ -1042,7 +1042,29 @@ export async function fetchInjuries(homeTeam, awayTeam, sport, gameDate = null) 
         console.log(`[Scout Report] Failed to fetch ${sport} current state: ${e.message}`);
       }
 
-      // Fetch BDL injuries for both teams
+      // LEAGUE ISOLATION (founder law, Aug 25; leak found Sep 1 2026): BDL has
+      // NO college injuries endpoint, and this branch used to send NCAAF team
+      // ids into nfl/v1/player_injuries — where they COLLIDE with NFL team ids
+      // and file some NFL team's players under the college team (Chargers
+      // linemen printed on Wake Forest's desk, caught live). NCAAF never
+      // touches the NFL feed: its injury/opt-out context is the grounded
+      // narrative, and sourceOk reflects whether THAT source answered.
+      const isNcaafLane = sport === 'NCAAF' || bdlSport === 'americanfootball_ncaaf';
+      if (isNcaafLane) {
+        const narrativeAnswered = Boolean(narrativeContext && narrativeContext.length > 50);
+        if (!narrativeAnswered) {
+          console.warn(`[Scout Report] NCAAF injury context: grounded narrative did not answer — sourceOk=false (a failed fetch is not an empty report)`);
+        }
+        return {
+          home: [],
+          away: [],
+          lineups: { home: [], away: [] },
+          narrativeContext,
+          sourceOk: narrativeAnswered
+        };
+      }
+
+      // Fetch BDL injuries for both teams (NFL ONLY from here down)
       let homeInjuries = [];
       let awayInjuries = [];
 
@@ -1340,7 +1362,7 @@ export async function fetchInjuries(homeTeam, awayTeam, sport, gameDate = null) 
 
     // NO BDL FALLBACK FOR STATUS
     // BDL injury status data is often stale (e.g., player listed as "Questionable" when they've been playing for days)
-    // Rotowire (via Gemini Grounding) is the ONLY source of truth for:
+    // Rotowire (via grounded search) is the ONLY source of truth for:
     //   - Expected starting lineups
     //   - Current injury status (OUT, GTD, Questionable, Doubtful, Probable)
     // BDL is ONLY used for duration enrichment (how long a player has been out)
@@ -1884,12 +1906,12 @@ export async function fetchGroundingInjuries(homeTeam, awayTeam, sport) {
   try {
     const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
-    // Sport-specific queries for Gemini Grounding
+    // Sport-specific queries for grounded search
     let query;
     if (sport === 'NHL' || sport === 'icehockey_nhl') {
       // NHL-specific: Search rotowire.com/hockey/nhl-lineups.php directly
       // This page ALWAYS shows TODAY's lineups and injuries by default
-      console.log(`[Scout Report] Using Gemini Grounding for injury data: ${homeTeam} vs ${awayTeam}`);
+      console.log(`[Scout Report] Using grounded search for injury data: ${homeTeam} vs ${awayTeam}`);
 
       // DEDICATED INJURY-ONLY QUERY - This is critical!
       // The combined query often skips injuries. This query ONLY asks for injuries.
@@ -2201,7 +2223,7 @@ CRITICAL ANTI-OPINION RULES:
 }
 
 /**
- * Parse Gemini Grounding response to extract injury information
+ * Parse grounded search response to extract injury information
  * Returns: { home: [], away: [], filteredLongTerm: [] } - filteredLongTerm contains names of players
  * filtered out due to 14+ day absence (for narrative scrubbing)
  */

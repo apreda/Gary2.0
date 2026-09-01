@@ -1347,7 +1347,7 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
   // Process prop candidates first - limit to top 7 players per team
   const propCandidates = getTopPropCandidates(playerProps, 7);
   
-  // Parallel fetch: injuries, player IDs, narrative context, AND LINE MOVEMENT via Gemini Grounding
+  // Parallel fetch: injuries, player IDs, narrative context, AND LINE MOVEMENT via grounded search
   // IMPORTANT: All context is fetched UPFRONT so Gary knows all factors BEFORE iterations
   console.log('[NBA Props Context] Fetching injuries, player IDs, narrative context, and LINE MOVEMENT...');
   // RapidAPI for injury STATUS (same source as game picks)
@@ -1638,7 +1638,7 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
     dataGaps.push(`⚠️ LOW GAME LOGS COVERAGE: Only ${playersWithLogs}/${totalCandidates} players have recent game logs`);
   }
   if (!narrativeContext) {
-    dataGaps.push(`⚠️ NO NARRATIVE CONTEXT: Gemini Grounding failed - missing injury updates, news, trends`);
+    dataGaps.push(`⚠️ NO NARRATIVE CONTEXT: grounded search failed - missing injury updates, news, trends`);
   }
   if (allInjuries.length === 0 && teamIds.length > 0) {
     dataGaps.push(`⚠️ NO INJURIES RETURNED: Neither BDL nor game log detection found injuries`);

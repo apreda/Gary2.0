@@ -406,7 +406,7 @@ export function parseNarrativeSections(text) {
 // ─── fetchPropLineMovement ──────────────────────────────────────────────────
 
 /**
- * Fetch prop line movement data via Gemini Grounding
+ * Fetch prop line movement data via grounded search
  * Queries ScoresAndOdds and BettingPros for opening vs. current lines
  *
  * @param {string} sport - 'NBA' | 'NFL'

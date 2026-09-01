@@ -655,7 +655,7 @@ export async function buildNbaScoutReport(game, options = {}) {
   }
 
   // ===================================================================
-  // Step C: Fetch NBA game context via Gemini Grounding (venue, tournament, game significance)
+  // Step C: Fetch NBA game context via grounded search (venue, tournament, game significance)
   // This works dynamically for regular season, NBA Cup, playoffs, etc.
   // ===================================================================
   let gameContextData = null;
@@ -668,7 +668,7 @@ export async function buildNbaScoutReport(game, options = {}) {
     } else {
       dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
     }
-    console.log(`[Scout Report] Fetching NBA game context via Gemini Grounding for ${dateStr}...`);
+    console.log(`[Scout Report] Fetching NBA game context via grounded search for ${dateStr}...`);
 
     // Ask Gemini to determine game type with structured output at the end
     const contextQuery = `Given this NBA game: ${awayTeam} vs ${homeTeam} on ${dateStr}.
@@ -735,7 +735,7 @@ VENUE: [arena name, city]
         isNeutralSite: game.isNeutralSite || false
       };
 
-      console.log('[Scout Report] Game context retrieved via Gemini Grounding');
+      console.log('[Scout Report] Game context retrieved via grounded search');
     }
   } catch (e) {
     console.warn('[Scout Report] NBA game context fetch failed:', e.message);
@@ -1095,7 +1095,7 @@ VENUE: [arena name, city]
   // ===================================================================
   // Step J: Assemble the report text
   // ===================================================================
-  // Extract narrative context from Gemini Grounding (valuable even if injury parsing returned 0)
+  // Extract narrative context from grounded search (valuable even if injury parsing returned 0)
   // NO TRUNCATION — Gary needs the full narrative for both teams + matchup context
   let narrativeContext = injuries?.narrativeContext || null;
 
@@ -1197,7 +1197,7 @@ ${formatOdds(game, sportKey)}
     venue: game.venue || null,
     isNeutralSite: game.isNeutralSite || false,
     tournamentContext: game.tournamentContext || null,
-    // Game significance/context (from Gemini Grounding for NBA Cup, playoffs, etc.)
+    // Game significance/context (from grounded search for NBA Cup, playoffs, etc.)
     gameSignificance: game.gameSignificance || null,
     // CFP-specific fields (not applicable for NBA)
     cfpRound: null,

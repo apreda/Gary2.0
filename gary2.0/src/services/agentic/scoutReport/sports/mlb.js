@@ -7,7 +7,7 @@
  * Uses MLB Stats API (free, no key) for:
  * - Rosters, recent games, probable pitchers, player career stats
  * - Lineup fallback when BDL's lineup feed gaps a team (boxscore is authoritative)
- * Uses Gemini Grounding for:
+ * Uses grounded search for:
  * - Odds, live context, game preview, season storylines
  */
 
@@ -1550,7 +1550,7 @@ export async function buildMlbScoutReport(game, options = {}) {
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // ODDS (BDL structured odds preferred, Gemini Grounding fallback)
+  // ODDS (BDL structured odds preferred, grounded search fallback)
   // ═══════════════════════════════════════════════════════════════════
   let oddsSection = '';
   // Use structured BDL odds if available on the game object

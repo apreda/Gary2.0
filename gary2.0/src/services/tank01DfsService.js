@@ -19,7 +19,7 @@ import { normalizeTeamAbbreviation } from './agentic/agenticUtils.js';
  *   }
  * }
  * 
- * This replaces the unreliable Gemini Grounding approach for salary data.
+ * This replaces the unreliable grounded search approach for salary data.
  */
 
 const TANK01_BASE_URL = 'https://tank01-fantasy-stats.p.rapidapi.com';

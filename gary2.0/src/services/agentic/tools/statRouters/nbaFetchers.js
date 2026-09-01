@@ -1761,7 +1761,7 @@ export const nbaFetchers = {
       
       return {
         category: 'Lineup Net Ratings (First & Second Unit)',
-        source: 'Gemini Grounding (Live Search)',
+        source: 'grounded search (Live Search)',
         home: { team: home.full_name || home.name },
         away: { team: away.full_name || away.name },
         // Jul 8 2026 fix: groundedWebSearch returns {success, data, raw} —
@@ -2127,7 +2127,7 @@ export const nbaFetchers = {
       if (bdlSport === 'icehockey_nhl') {
         return {
           category: 'Period Scoring Trends',
-          data_scope: 'BDL NHL game data does not expose period-by-period scores (P1/P2/P3). Use Gemini Grounding for period scoring trends.',
+          data_scope: 'BDL NHL game data does not expose period-by-period scores (P1/P2/P3). Use grounded search for period scoring trends.',
           home: { team: homeName, note: 'Period scoring data unavailable from BDL' },
           away: { team: awayName, note: 'Period scoring data unavailable from BDL' }
         };

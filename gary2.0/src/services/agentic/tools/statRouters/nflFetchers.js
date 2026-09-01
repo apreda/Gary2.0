@@ -804,7 +804,7 @@ export const nflFetchers = {
     console.log(`[Stat Router] Fetching QB_WEATHER_HISTORY for ${away.name} @ ${home.name}`);
 
     try {
-      // First, get weather for the game via Gemini Grounding
+      // First, get weather for the game via grounded search
       const dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
       const weather = await getGroundedWeather(
         home.full_name || home.name,
@@ -843,7 +843,7 @@ export const nflFetchers = {
         };
       }
 
-      // Use Gemini Grounding for QB weather performance history
+      // Use grounded search for QB weather performance history
       const qbQuery = `NFL QB weather performance history for ${away.full_name || away.name} @ ${home.full_name || home.name}:
 
 Weather conditions: ${temp}°F, ${windStr}, ${conditions}
@@ -870,7 +870,7 @@ Be factual with historical stats where available.`;
           team: away.full_name || away.name,
           analysis: qbResult?.success ? qbResult.data : 'Weather analysis unavailable'
         },
-        note: 'Historical QB performance in similar weather conditions via Gemini Grounding'
+        note: 'Historical QB performance in similar weather conditions via grounded search'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching QB weather history:`, error.message);

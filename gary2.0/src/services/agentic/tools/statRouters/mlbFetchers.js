@@ -4,7 +4,7 @@
  * Primary: BDL GOAT-tier API for structured data (standings, player season stats, splits, BvP matchups, odds).
  * Secondary: MLB Stats API for roster/schedule/recent games/probable pitchers/weather/lineups.
  * Tertiary: Static park factor data (no API needed).
- * Fallback: Gemini Grounding ONLY for data with no API alternative (H2H, game preview, injuries, season form narrative).
+ * Fallback: grounded search ONLY for data with no API alternative (H2H, game preview, injuries, season form narrative).
  */
 
 import {
@@ -396,7 +396,7 @@ export const mlbFetchers = {
       homeValue: homeLines.join('\n') + (newsNote ? newsNote : ''),
       awayValue: awayLines.join('\n'),
       comparison: `Bullpen status for ${awayTeam} @ ${homeTeam}`,
-      source: usedApi ? 'BDL API + MLB Stats API' : 'Gemini Grounding (fallback)',
+      source: usedApi ? 'BDL API + MLB Stats API' : 'grounded search (fallback)',
     };
   },
 
@@ -465,7 +465,7 @@ export const mlbFetchers = {
 
   // ═══════════════════════════════════════════════════════════════════
   // PITCH-TYPE BREAKDOWNS (BDL GOAT) — per-pitch stats for SPs and hitters
-  // Replaces blind Gemini Grounding searches like "how does X hit sliders".
+  // Replaces blind grounded search searches like "how does X hit sliders".
   // These are deterministic, current-season Statcast aggregates from BDL.
   // ═══════════════════════════════════════════════════════════════════
 
@@ -1217,7 +1217,7 @@ export const mlbFetchers = {
       homeValue: result?.data || 'N/A',
       awayValue: result?.data || 'N/A',
       comparison: `Storylines and team news for ${awayTeam} @ ${homeTeam}`,
-      source: 'Gemini Grounding',
+      source: 'grounded search',
     };
   },
 
@@ -1999,7 +1999,7 @@ export const mlbFetchers = {
       homeValue: homeLines.join('\n'),
       awayValue: awayLines.join('\n'),
       comparison: `Bullpen recency (series detail + 5/7/10-day and 3-series rollups) for ${awayTeam} @ ${homeTeam}`,
-      source: usedApi ? 'BDL API + MLB Stats API' : 'Gemini Grounding (fallback)',
+      source: usedApi ? 'BDL API + MLB Stats API' : 'grounded search (fallback)',
     };
   },
 

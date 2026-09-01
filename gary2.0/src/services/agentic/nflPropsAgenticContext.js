@@ -7,7 +7,7 @@
  * - Recent game logs (L5) with trends, consistency, splits
  * - Advanced passing/rushing/receiving stats (BDL v2)
  * - Injuries (BDL practice reports)
- * - Comprehensive narrative context (Gemini Grounding)
+ * - Comprehensive narrative context (grounded search)
  * - Prop line movement (opening vs current)
  * - Game environment (implied team totals, spread, O/U)
  */

@@ -6,7 +6,7 @@
  * Fetches the full team ratings JSON once per session (365 teams),
  * caches for 6 hours, and serves individual team lookups from cache.
  *
- * Replaces Gemini Grounding calls for:
+ * Replaces grounded search calls for:
  *   - NCAAB_BARTTORVIK (T-Rank, AdjOE, AdjDE, Barthag, WAB)
  *   - NCAAB_BARTTORVIK_RATINGS (AdjO/AdjD/AdjEM via Barttorvik API)
  *   - NCAAB_OFFENSIVE_RATING / NCAAB_DEFENSIVE_RATING (broken BDL calc)

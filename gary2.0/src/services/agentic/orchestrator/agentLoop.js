@@ -758,7 +758,7 @@ INVESTIGATION COMPLETE`;
                 })
               };
               messages.push(toolResponse);
-              console.log(`    ✓ Found narrative context via Gemini Grounding (${searchResult.data.length} chars)`);
+              console.log(`    ✓ Found narrative context via grounded search (${searchResult.data.length} chars)`);
 
               // Track in toolCallHistory so investigation sufficiency counts grounding data
               const q = (args.query || '').toLowerCase();

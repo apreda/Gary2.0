@@ -128,7 +128,7 @@ const NCAAF_TOKENS = [
   // adapter and then quietly return a generic unavailable result.
 ];
 
-// MLB Stat Tokens — BDL GOAT tier + MLB Stats API + Gemini Grounding
+// MLB Stat Tokens — BDL GOAT tier + MLB Stats API + grounded search
 const MLB_TOKENS = [
   // Pitching
   'MLB_STARTING_PITCHERS',       // Probable starters (Grounding)

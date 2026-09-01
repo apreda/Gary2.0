@@ -408,10 +408,10 @@ async function fetchBowlGameContext(homeTeam, awayTeam, game, groundingText = nu
       }
     }
 
-    // Bowl context now provided by Gemini Grounding
-    // Bowl/CFP context is captured in the main Gemini Grounding search
+    // Bowl context now provided by grounded search
+    // Bowl/CFP context is captured in the main grounded search search
     // which provides coaching changes, opt-outs, injuries, venue info, etc.
-    console.log('[Scout Report] Using Gemini Grounding for bowl context');
+    console.log('[Scout Report] Using grounded search for bowl context');
 
     // Return bowl tier context section
     if (bowlTierInfo) {
@@ -436,7 +436,7 @@ ${bowlTierInfo.section}
 
 /**
  * Fetch CFP Road to Championship context for NCAAF playoff games
- * Uses Gemini Grounding to research each team's playoff journey
+ * Uses grounded search to research each team's playoff journey
  * CRITICAL: Only uses web search data (no training data) for current CFP info
  *
  * This provides Gary with full context of how each team reached the championship:
@@ -528,7 +528,7 @@ async function fetchCfpJourneyContext(homeTeam, awayTeam, game) {
 }
 
 /**
- * Fetch a single team's CFP playoff journey via Gemini Grounding
+ * Fetch a single team's CFP playoff journey via grounded search
  * Uses explicit date context to force web search instead of training data
  */
 async function fetchTeamCfpJourney(teamName, todayStr, season = footballSeasonForDate('NCAAF')) {
@@ -1172,7 +1172,7 @@ ${line(homeTeam)}
     // Narrative scrub removed — was calling Flash per game, flagged non-names as unknown players
   }
 
-  // Extract narrative context from Gemini Grounding
+  // Extract narrative context from grounded search
   // NO TRUNCATION — Gary needs the full narrative for both teams + matchup context
   let narrativeContext = injuries?.narrativeContext || null;
 

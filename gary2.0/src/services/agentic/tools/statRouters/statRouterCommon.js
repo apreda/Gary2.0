@@ -3,7 +3,7 @@
  * 
  * Maps stat tokens to actual Ball Don't Lie API calls.
  * Uses BDL Season Averages (Advanced) for NBA efficiency stats.
- * Uses Gemini Grounding for live context (QB weather history, etc.)
+ * Uses grounded search for live context (QB weather history, etc.)
  * 
  * ═══════════════════════════════════════════════════════════════════════════════
  * 🚨 CORE PRINCIPLES: DATA INTEGRITY & SOURCE HIERARCHY 🚨
@@ -45,7 +45,7 @@
  * │   - DREB_RATE (real DREB% from advanced + opponent OREB)                 │
  * │ BDL (Defense Stats - type=defense):                                       │
  * │   - PAINT_DEFENSE (opp_pts_paint, opp_pts_fb + DRtg + blocks)           │
- * │ Gemini Grounding (no BDL source):                                        │
+ * │ grounded search (no BDL source):                                        │
  * │   - LINEUP_NET_RATINGS (5-man lineup data)                               │
  * │ BDL (Player Season Averages):                                            │
  * │   - MINUTES_TREND (top 5 MPG per team from BDL season averages)         │
@@ -169,7 +169,7 @@ import { getTeamRatings as getBarttovikRatings } from '../../../ncaabMetricsServ
  * EXPLICIT DATA SOURCE MAPPING - What comes from where (ENGINEERED)
  * ═══════════════════════════════════════════════════════════════════════════════
  * 
- * These constants define EXACTLY which stats use Gemini Grounding.
+ * These constants define EXACTLY which stats use grounded search.
  * If a token is NOT in these lists, it uses BDL (our default/preferred source).
  */
 
@@ -267,7 +267,7 @@ const SPORT_SPECIFIC_ROUTING = {
 };
 
 /**
- * Check if a token requires Gemini Grounding (not in BDL)
+ * Check if a token requires grounded search (not in BDL)
  * @param {string} token - The stat token
  * @returns {boolean} - True if this token uses Gemini
  */
@@ -307,7 +307,7 @@ export function getAuthoritativeSource(token) {
     return 'site:footballoutsiders.com OR site:pro-football-reference.com';
   }
   
-  // NCAAB sources — tokens still using Gemini Grounding
+  // NCAAB sources — tokens still using grounded search
   // (NCAAB_BARTTORVIK_RATINGS, NCAAB_BARTTORVIK, NCAAB_STRENGTH_OF_SCHEDULE, NCAAB_OPPONENT_QUALITY
   //  now use Barttorvik API directly — no Grounding needed)
   if (['NCAAB_NET_RANKING', 'NCAAB_QUAD_RECORD'].includes(token)) {
@@ -328,7 +328,7 @@ export function getAuthoritativeSource(token) {
 }
 
 /**
- * Generate dynamic season string for Gemini Grounding queries
+ * Generate dynamic season string for grounded search queries
  * Returns format like "2025-26" for academic year sports (college, NBA, NHL)
  * @returns {string} - Season string like "2025-26"
  */
@@ -348,7 +348,7 @@ const BDL_API_KEY = process.env.BALLDONTLIE_API_KEY;
  * Main router function - fetches stats based on token
  */
 // Tokens that should return N/A immediately (deprecated)
-// Gemini Grounding in Scout Report provides this context instead
+// grounded search in Scout Report provides this context instead
 // Legacy NCAAF token names with no fetcher and no live checklist reference.
 // They short-circuit before dispatch so a stale name cannot reach the router.
 //

@@ -6,7 +6,7 @@
  * Returns all NBA injury reports for a given date as structured JSON.
  * Updated 3x daily (11AM, 3PM, 5PM ET) from official NBA injury reports.
  *
- * This replaces unreliable Gemini Grounding for NBA injury STATUS extraction.
+ * This replaces unreliable grounded search for NBA injury STATUS extraction.
  * Grounding is still used for lineups (starters).
  * BDL is still used for duration enrichment.
  */
