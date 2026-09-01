@@ -8347,6 +8347,14 @@ struct PremiumPicksView: View {
             // The record signs the page off (founder, Aug 6 night: off the
             // top — "below or just removed") — honesty stays, the board leads.
             winnersRecordBand
+            // THE LAUNCH closes the pre-drop page exactly as it closes a live
+            // board (founder, Sep 1). It was only reachable from the
+            // has-content branch, so the free-launch news — and the sign-in
+            // door inside it — disappeared every morning until the card
+            // posted. Same panel, same gate as the storefront slot.
+            if !devAllAccess && Self.freeLaunch {
+                freeLaunchFooter
+            }
         }
         .padding(.top, 14)
         .padding(.bottom, 120)
