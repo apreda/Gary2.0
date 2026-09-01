@@ -51,6 +51,7 @@ import { computePitcherWhiffByStart } from './mlbContactQuality.js';
 import { renderBoxScore, buildPenPressQuery } from './mlbGamesAsWritten.js';
 import { auditDeskManifest, recordDeskManifest } from './mlbDeskManifest.js';
 import { resolveDeskLayout, renderBucketsDesk } from './mlbDeskLayout.js';
+import { GAME_ML_CAP } from '../../orchestrator/orchestratorConfig.js';
 import {
   completedMlbTeamGames,
   resolveMlbGamesMissed,
@@ -1640,6 +1641,31 @@ export async function buildMlbScoutReport(game, options = {}) {
     }
     if (game.spread_home != null) {
       lines.push(`Run Line: ${homeTeam} ${game.spread_home > 0 ? '+' : ''}${game.spread_home} (${game.spread_home_odds || ''}) / ${awayTeam} ${game.spread_away > 0 ? '+' : ''}${game.spread_away} (${game.spread_away_odds || ''})`);
+    }
+    // MENU TRUTH for the house limit (founder GO, Sep 1 2026): a moneyline
+    // heavier than the cap is not a ticket, and the desk must say so BEFORE
+    // the read, not after it — the Aug 28-31 ledger showed every capped-
+    // favorite read finished as "who wins" and got relabeled onto the run
+    // line in Pass 2.5 (0 of 11 run-line rationales weighed the other side
+    // of the 1.5). The legal menu prints on every game; on a capped game
+    // the illegal price is named and dropped. Payout law, no steering.
+    {
+      const fmtMl = (v) => (v > 0 ? `+${v}` : `${v}`);
+      const fmtRl = (line, price) => `${line > 0 ? '+' : ''}${line}${price != null && price !== '' ? ` (${price > 0 ? '+' : ''}${price})` : ''}`;
+      const capped = (v) => v != null && Number(v) < GAME_ML_CAP;
+      const tickets = [];
+      const dropped = [];
+      for (const [name, ml, sp, spOdds] of [
+        [homeTeam, game.moneyline_home, game.spread_home, game.spread_home_odds],
+        [awayTeam, game.moneyline_away, game.spread_away, game.spread_away_odds],
+      ]) {
+        if (ml != null) (capped(ml) ? dropped : tickets).push(`${name} ${fmtMl(Number(ml))}`);
+        if (sp != null && spOdds != null && spOdds !== '') tickets.push(`${name} ${fmtRl(Number(sp), Number(spOdds))}`);
+      }
+      if (dropped.length) {
+        lines.push(`House limit: no moneyline heavier than ${GAME_ML_CAP}. ${dropped.join(' and ')} is past it and is not a ticket tonight.`);
+      }
+      if (tickets.length) lines.push(`Tickets on this game: ${tickets.join(' · ')}`);
     }
     oddsSection = lines.join('\n');
     console.log(`[Scout Report] MLB: Using structured BDL odds`);
