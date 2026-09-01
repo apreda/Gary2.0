@@ -3,9 +3,10 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { AppStoreButton } from './AppStoreButton';
+import { useEffect, useState } from 'react';
 
 const LINKS = [
+  { href: '/today', label: 'Today' },
   { href: '/picks', label: 'Picks' },
   { href: '/props', label: 'Props' },
   { href: '/results', label: 'Results' },
@@ -20,7 +21,26 @@ const focusRing =
 
 export function Nav() {
   const pathname = usePathname();
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch('/api/session', { cache: 'no-store', signal: controller.signal })
+      .then(response => response.ok ? response.json() as Promise<{ signedIn: boolean }> : null)
+      .then(result => {
+        if (result) setSignedIn(result.signedIn);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setSignedIn(false);
+      });
+    return () => {
+      controller.abort();
+    };
+  }, [pathname]);
+
+  const accountHref = signedIn === false ? '/account?next=%2Ftoday' : '/account';
+  const accountLabel = signedIn === false ? 'Sign in' : 'Account';
 
   return (
     <header className="sticky top-0 z-40 bg-ink/85 backdrop-blur">
@@ -36,7 +56,7 @@ export function Nav() {
         </Link>
 
         {/* Desktop links — active route wears the 2px gold underline (the app's tab rule) */}
-        <div className="hidden items-center gap-7 md:flex">
+        <div className="hidden items-center gap-7 lg:flex">
           {LINKS.map(l => {
             const active = isActive(l.href);
             return (
@@ -56,12 +76,15 @@ export function Nav() {
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="hidden sm:block">
-            <AppStoreButton label="Get the App" surface="nav" />
-          </div>
+          <Link
+            href={accountHref}
+            className={`hidden rounded-card border border-gold/40 px-4 py-2 text-[13px] text-gold transition-colors hover:border-gold/70 hover:text-gold-light sm:inline-flex ${focusRing}`}
+          >
+            {accountLabel}
+          </Link>
 
           {/* Mobile disclosure menu — no JS, real icon */}
-          <details className="group relative md:hidden">
+          <details className="group relative lg:hidden">
             <summary
               className={`flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-card border border-line-strong text-mid [&::-webkit-details-marker]:hidden ${focusRing}`}
               aria-label="Menu"
@@ -87,9 +110,14 @@ export function Nav() {
                   {l.label}
                 </Link>
               ))}
-              <div className="px-5 py-3.5 sm:hidden">
-                <AppStoreButton label="Get the App" surface="nav_mobile" />
-              </div>
+              <Link
+                href={accountHref}
+                onClick={e => e.currentTarget.closest('details')?.removeAttribute('open')}
+                aria-current={pathname === '/account' ? 'page' : undefined}
+                className={`block px-5 py-3.5 text-sm text-gold sm:hidden ${focusRing}`}
+              >
+                {accountLabel}
+              </Link>
             </div>
           </details>
         </div>

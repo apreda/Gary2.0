@@ -1,13 +1,14 @@
 import type { Metadata } from 'next';
 import { PageMasthead, StitchRule } from '@/components/Terminal';
 import { AppStoreButton } from '@/components/AppStoreButton';
+import { pageMetadata } from '@/lib/seo/metadata';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  canonical: '/contact',
   title: 'Contact | Gary AI',
   description:
     'Contact Gary AI: support email, X account, and App Store link.',
-  alternates: { canonical: '/contact' },
-};
+});
 
 export default function ContactPage() {
   return (

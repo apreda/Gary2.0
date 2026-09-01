@@ -6,13 +6,9 @@ import { PRICING } from '@/lib/gary/pricing';
 import { APP_STORE_URL } from '@/components/AppStoreButton';
 import { logEvent } from '@/lib/gary/analytics';
 
-type Sel = { plan: 'all_access' | 'all_access_annual' | 'single' | 'world_cup'; sport?: string };
+type Sel = { plan: 'all_access' | 'all_access_annual' | 'single'; sport?: string };
 
-export function PricingPlans({
-  recordsByLeague = {},
-}: {
-  recordsByLeague?: Record<string, { wins: number; losses: number }>;
-}) {
+export function PricingPlans() {
   const [sel, setSel] = useState<Sel>({ plan: 'all_access' });
 
   useEffect(() => {
@@ -21,8 +17,7 @@ export function PricingPlans({
 
   function pick(next: Sel) {
     setSel(next);
-    const billing =
-      next.plan === 'world_cup' ? 'one_time' : next.plan === 'all_access_annual' ? 'annual' : 'monthly';
+    const billing = next.plan === 'all_access_annual' ? 'annual' : 'monthly';
     logEvent('plan_selected', { ...next, surface: 'web', billing });
   }
 
@@ -34,7 +29,7 @@ export function PricingPlans({
   }
 
   const isSel = (plan: Sel['plan'], sport?: string) => sel.plan === plan && sel.sport === sport;
-  const singles = SPORTS.filter(s => s.code !== 'WC');
+  const singles = SPORTS.filter(s => !s.retired);
 
   return (
     <div>
@@ -89,7 +84,6 @@ export function PricingPlans({
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
           {singles.map(s => {
-            const rec = recordsByLeague[s.code];
             const on = isSel('single', s.code);
             return (
               <button
@@ -111,40 +105,11 @@ export function PricingPlans({
                   <span className="font-mono text-[13px] font-bold text-gold">{PRICING.single}</span>
                   <span className="font-mono text-[9px] text-white/35">/mo</span>
                 </span>
-                {rec && rec.wins + rec.losses > 0 && (
-                  <span className="tnum font-mono text-[10px] text-low">
-                    <span className={rec.wins >= rec.losses ? 'text-win' : 'text-loss'}>
-                      {rec.wins}–{rec.losses}
-                    </span>{' '}
-                    last 30
-                  </span>
-                )}
               </button>
             );
           })}
         </div>
       </div>
-
-      {/* World Cup — one-time on-ramp */}
-      <button
-        onClick={() => pick({ plan: 'world_cup' })}
-        className={`relative mt-6 flex w-full items-center gap-4 rounded-panel border bg-card p-5 text-left transition-colors ${
-          isSel('world_cup') ? 'border-wc shadow-[0_0_0_1px_rgba(20,184,166,0.4)]' : 'border-line hover:border-white/25'
-        }`}
-      >
-        <span className="absolute -top-2.5 left-4 rounded-md bg-wc px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.04em] text-ink">
-          Knockout rounds live
-        </span>
-        <Radio on={isSel('world_cup')} />
-        <div className="min-w-0 flex-1">
-          <div className="font-mono text-sm font-bold tracking-[0.04em] text-hi">WORLD CUP PASS</div>
-          <div className="mt-1 text-[13px] text-mid">All 104 matches · one-time, no renewal</div>
-        </div>
-        <div className="text-right">
-          <div className="tnum font-mono text-lg font-bold text-gold">{PRICING.worldCup}</div>
-          <div className="font-mono text-[9px] uppercase tracking-[0.04em] text-low">one-time</div>
-        </div>
-      </button>
 
       {/* CTA */}
       <div className="mt-7 flex flex-col items-center gap-2">
@@ -168,7 +133,6 @@ export function PricingPlans({
 function ctaLabel(sel: Sel): string {
   if (sel.plan === 'all_access') return `START ${PRICING.trialDays}-DAY FREE TRIAL IN THE APP`;
   if (sel.plan === 'all_access_annual') return `START FREE TRIAL — ${PRICING.allAccessAnnual}/YR IN THE APP`;
-  if (sel.plan === 'world_cup') return 'GET THE WORLD CUP PASS IN THE APP';
   return `UNLOCK ${sel.sport} WINNERS — ${PRICING.single}/MO`;
 }
 
@@ -176,7 +140,6 @@ function ctaCaption(sel: Sel): string {
   if (sel.plan === 'all_access') return `${PRICING.trialDays} days free, then ${PRICING.allAccessMonthly}/mo. Manage anytime in the app.`;
   if (sel.plan === 'all_access_annual')
     return `${PRICING.trialDays} days free, then ${PRICING.allAccessAnnual}/yr — ${PRICING.allAccessAnnualMonthly}/mo. Manage anytime in the app.`;
-  if (sel.plan === 'world_cup') return `${PRICING.worldCup} once. No renewal — yours for all 104 matches.`;
   return `Every ${sel.sport} play Gary backs — the Winners board. ${PRICING.single}/mo, cancel anytime.`;
 }
 

@@ -5,14 +5,15 @@ import { BookClient } from '@/components/book/BookClient';
 import { Leaderboard } from '@/components/book/Leaderboard';
 import { garyBoardRows } from '@/lib/book/gary';
 import { currentUser } from '@/lib/auth/server';
+import { pageMetadata } from '@/lib/seo/metadata';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  canonical: '/you',
   title: 'Your Book | Gary AI',
   description:
     'Ride or fade Gary’s picks and keep an unfakeable record — plus your own logged bets, graded your way, on the web and in the app.',
-  alternates: { canonical: '/you' },
   robots: { index: false },
-};
+});
 
 // Session-dependent by nature — never prerender one user's book for another.
 export const dynamic = 'force-dynamic';
@@ -41,7 +42,7 @@ export default async function YouPage() {
               you into the iOS app.
             </p>
             <Link
-              href="/account"
+              href="/account?next=%2Fyou"
               className="mt-5 inline-block rounded-chip bg-gold px-5 py-2.5 text-[14px] font-semibold text-ink transition-opacity hover:opacity-90"
             >
               Sign in to start your book

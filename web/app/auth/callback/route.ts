@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/auth/server';
+import { safeNextPath } from '@/lib/auth/redirect';
 
 /**
  * OAuth landing (Google now; Apple when its web service ID is configured).
@@ -10,7 +11,7 @@ import { supabaseServer } from '@/lib/auth/server';
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
-  const next = url.searchParams.get('next') ?? '/account';
+  const next = safeNextPath(url.searchParams.get('next'));
 
   if (code) {
     const supabase = await supabaseServer();
@@ -18,5 +19,8 @@ export async function GET(request: Request) {
     if (!error) return NextResponse.redirect(new URL(next, url.origin));
   }
 
-  return NextResponse.redirect(new URL('/account?error=signin', url.origin));
+  const retry = new URL('/account', url.origin);
+  retry.searchParams.set('error', 'signin');
+  retry.searchParams.set('next', next);
+  return NextResponse.redirect(retry);
 }

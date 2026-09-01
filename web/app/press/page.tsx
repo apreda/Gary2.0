@@ -3,15 +3,16 @@ import Image from 'next/image';
 import { Eyebrow } from '@/components/Eyebrow';
 import { PageMasthead, StatTile } from '@/components/Terminal';
 import { BRAND, liveStats } from '@/lib/gary/press';
+import { pageMetadata } from '@/lib/seo/metadata';
 
 export const revalidate = 3600;
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  canonical: '/press',
   title: 'Press & Brand Kit | Gary AI',
   description:
     'Brand facts, approved boilerplate, live track record stats, and downloadable assets for Gary AI — the free AI sports picks app.',
-  alternates: { canonical: '/press' },
-};
+});
 
 const BRAND_FACTS = [
   ['Product name', BRAND.name],

@@ -13,15 +13,16 @@ import { normalizeLeague } from '@/lib/gary/leagues';
 import { etDateLabel, etTime, parseGameTime } from '@/lib/gary/format';
 import { hubGradedDateEST, todayEST } from '@/lib/gary/dates';
 import type { PropPick } from '@/lib/gary/types';
+import { pageMetadata } from '@/lib/seo/metadata';
 
 export const revalidate = 600;
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  canonical: '/props',
   title: "Today's Free Player Prop Picks | Gary AI",
   description:
     "Every player prop Gary posted today, grouped by game, with the matchup, the numbers behind it, and the risk. Graded daily on the public record.",
-  alternates: { canonical: '/props' },
-};
+});
 
 /** The day's highest-confidence prop, read out in full. */
 function FeaturedProp({ prop }: { prop: PropPick }) {

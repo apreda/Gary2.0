@@ -1,11 +1,12 @@
 import type { Metadata } from 'next';
 import { PageMasthead } from '@/components/Terminal';
+import { pageMetadata } from '@/lib/seo/metadata';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  canonical: '/terms',
   title: 'Terms of Service | Gary AI',
   description: 'Terms of Service for betwithgary.ai and the Gary AI iOS app.',
-  alternates: { canonical: '/terms' },
-};
+});
 
 export default function TermsPage() {
   return (

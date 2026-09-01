@@ -25,7 +25,7 @@ export async function GET() {
 > ${BRAND.boilerplateShort}
 
 ## Facts
-- Product: ${BRAND.name} — free AI sports picks app (iOS) + website
+- Product: ${BRAND.name} — free AI sports picks website + iOS app
 - Tagline: "${BRAND.tagline}"
 - Sports covered: ${BRAND.sports.join(', ')}
 - Price: free. Every pick, every day. The iOS app adds Winners (Gary's highest-conviction board).
@@ -44,10 +44,12 @@ ${BRAND.boilerplateMedium}
 - Required disclaimer: ${BRAND.disclaimer}
 
 ## Key pages
+- ${BRAND.domain}/today — one-scroll morning sports desk
 - ${BRAND.domain}/picks — today's free picks (all sports)
 - ${BRAND.domain}/props — today's player props + Home Run Threats
 - ${BRAND.domain}/hub — daily insight board (Today's Edges)
 - ${BRAND.domain}/results — complete graded track record
+- ${BRAND.domain}/archive — stored daily pick archive by date
 - ${BRAND.domain}/how-it-works — methodology
 - ${BRAND.domain}/press — brand kit and approved boilerplate
 `;

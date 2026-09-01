@@ -3,14 +3,17 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Eyebrow } from '@/components/Eyebrow';
 import { AppStoreButton } from '@/components/AppStoreButton';
+import { JsonLd } from '@/components/JsonLd';
 import { StitchRule, GhostLink } from '@/components/Terminal';
+import { pageMetadata } from '@/lib/seo/metadata';
+import { softwareApplicationJsonLd } from '@/lib/seo/software-application';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  canonical: '/app',
   title: 'Gary AI for iOS — Daily Picks, Winners & the Billfold',
   description:
     "The Gary AI iOS app: daily picks with written reasoning, Winners — Gary's conviction board — the insight Hub, and the Billfold ledger. Free on the App Store.",
-  alternates: { canonical: '/app' },
-};
+});
 
 const features = [
   {
@@ -58,7 +61,7 @@ function WinnersBoardMock() {
       {[
         ['MLB', 'PHI ML', '-118', false],
         ['NBA', 'BOS -3.5', '-110', true],
-        ['WC', 'DRAW NO BET', '+140', true],
+        ['NHL', 'EDM ML', '+120', true],
       ].map(([lg, pick, odds, locked], i) => (
         <div key={i} className="mt-2.5 rounded-chip border border-line bg-card px-3 py-2.5">
           <div className="flex items-center justify-between">
@@ -90,6 +93,7 @@ function WinnersBoardMock() {
 export default function AppPage() {
   return (
     <main className="mx-auto max-w-6xl px-5 py-14">
+      <JsonLd data={softwareApplicationJsonLd} />
 
       {/* Hero */}
       <section className="grid items-center gap-10 lg:grid-cols-12">
@@ -111,7 +115,7 @@ export default function AppPage() {
           </div>
         </div>
         <div className="hidden justify-center lg:col-span-5 lg:flex">
-          <Image src="/brand/gary-icon.png" alt="Gary the bear" width={300} height={300} preload />
+          <Image src="/brand/gary-icon.png" alt="Gary the bear" width={300} height={300} />
         </div>
       </section>
 

@@ -7,15 +7,16 @@ import {
 } from '@/lib/gary/hub';
 import { todayEST } from '@/lib/gary/dates';
 import type { InsightRow } from '@/lib/gary/types';
+import { pageMetadata } from '@/lib/seo/metadata';
 
 export const revalidate = 600;
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  canonical: '/hub',
   title: "The Hub — Today's Edges & Insight Board | Gary AI",
   description:
     "Gary's daily insight board: heat checks, platoon edges, ballpark shifts, regression watches, and Home Run Threats — graded against results every morning.",
-  alternates: { canonical: '/hub' },
-};
+});
 
 type Tint = 'green' | 'red' | 'neutral';
 
