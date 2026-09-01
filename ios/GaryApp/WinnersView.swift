@@ -167,7 +167,12 @@ struct PremiumPicksView: View {
     // Jul 5 2026 (founder): shipping the update FREE — payments wait. Every
     // user gets the full members room (sealed cards, tap to reveal) "for a
     // good while." All checkout/entitlement logic stays intact behind this.
-    static let freeLaunch = true
+    /// Sep 1 2026 (co-founder ruling, marketing review): Winners stays free
+    /// for everyone through September, and any device that first opened Gary
+    /// before October 1 keeps it free for the rest of the season — the
+    /// founding cohort. Installs after that date meet the paywall. The stamp
+    /// and the date live in FoundingCohort (end of this file).
+    static var freeLaunch: Bool { FoundingCohort.winnersFree }
 
     /// Dev/QA all-access — honored in DEBUG builds ONLY. A Release binary
     /// ignores the flag entirely, so defaults tampering (jailbreak, backup
@@ -761,10 +766,14 @@ struct PremiumPicksView: View {
             HubSectionHeader(eyebrow: "The Launch", sub: "")
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Every board is free right now.")
+                    Text(FoundingCohort.beforePaywallStart
+                         ? "Every board is free right now."
+                         : "Winners is free for you all season.")
                         .font(GaryFonts.text(15, .semibold))
                         .foregroundStyle(.white.opacity(0.92))
-                    Text("Gary's full card — game picks and props — is open to everyone while we launch. Paid plans come later, and you'll see them here first.")
+                    Text(FoundingCohort.beforePaywallStart
+                         ? "Gary's full card — game picks and props — is open to everyone through September. Be in before October 1 and Winners stays free for the rest of the season."
+                         : "You were in before October 1, so every board stays open for the rest of the season.")
                         .font(.system(size: 12))
                         .foregroundStyle(.white.opacity(0.55))
                         .lineSpacing(2)
@@ -1955,3 +1964,50 @@ struct SafariView: UIViewControllerRepresentable {
 /// The pricing page — every plan in one place, in the terminal's own
 /// language. Opened from blurred board previews (focused on that sport)
 /// and from the All-Access section's "All plans" row.
+
+// MARK: - Founding cohort (Sep 1 2026)
+//
+// Winners stays free for everyone through September. A device that first
+// opened Gary before `paywallStart` keeps Winners free for the rest of the
+// season; an install after that date meets the paywall. The first-open stamp
+// lives in the Keychain (it survives a reinstall) and is written the first
+// time this build runs. A device that already carried Gary before this build
+// shipped has UserDefaults history — the intro flag, the session counter, a
+// signed-in id — and is stamped as founding too: nobody is demoted for
+// updating late.
+//
+// The promise is always keepable. If this build slips past October 1, every
+// device is stamped on its first run of the new build, which happens after the
+// date only for people who were ALREADY using Gary — and they carry history.
+enum FoundingCohort {
+    /// Midnight, October 1 2026, Eastern.
+    static let paywallStart: Date = {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
+        return cal.date(from: DateComponents(year: 2026, month: 10, day: 1)) ?? .distantFuture
+    }()
+    private static let key = "gary_first_open"
+
+    /// Write the first-open stamp once. Safe to call on every foreground.
+    static func stampIfNeeded() {
+        guard KeychainStore.get(key) == nil else { return }
+        let d = UserDefaults.standard
+        let carriedGaryBefore = d.bool(forKey: "hasSeenGaryIntro")
+            || d.integer(forKey: "reviewPromptSessionCount") > 0
+            || d.string(forKey: "gary_user_id") != nil
+        let stamp = carriedGaryBefore ? Date(timeIntervalSince1970: 0) : Date()
+        KeychainStore.set(key, String(stamp.timeIntervalSince1970))
+    }
+
+    static var firstOpen: Date {
+        stampIfNeeded()
+        if let s = KeychainStore.get(key), let t = TimeInterval(s) { return Date(timeIntervalSince1970: t) }
+        return Date()
+    }
+
+    /// The gate every Winners surface reads (via `PremiumPicksView.freeLaunch`).
+    static var winnersFree: Bool { firstOpen < paywallStart }
+
+    /// Copy switch: the free room reads one way before the date, another after.
+    static var beforePaywallStart: Bool { Date() < paywallStart }
+}

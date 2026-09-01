@@ -212,6 +212,10 @@ struct ContentView: View {
         .onChange(of: scenePhase) { newPhase in
             guard newPhase == .active else { return }
             ReviewPrompt.noteSession()
+            // Founding cohort (Sep 1 2026): stamp first-open on launch, not on
+            // the first Winners visit — a Sep 29 install that opens Winners
+            // on Oct 2 is still in before the date.
+            FoundingCohort.stampIfNeeded()
             // FORCE-REFRESH ON FOREGROUND: revive a dead poll loop and wake a
             // sleeping one so returning to the app shows current scores instantly
             // (the loop's adaptive sleep otherwise runs out before the next fetch).
