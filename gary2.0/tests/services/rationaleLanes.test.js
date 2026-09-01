@@ -38,15 +38,24 @@ describe('laneRowFor + summarizeLanes', () => {
 
 describe('formatLineHistory', () => {
   const first = { moneyline_home: -215, moneyline_away: 180, spread_home: -1.5, spread_home_odds: 100, spread_away: 1.5, spread_away_odds: -120, seen_at: '2026-09-01T09:00:00.000Z' };
-  it('says unchanged when the board has not moved', () => {
+  it('says unchanged when the board has not moved, with the day in the stamp', () => {
     const now = { moneyline_home: -215, moneyline_away: 180, spread_home: -1.5, spread_home_odds: 100, spread_away: 1.5, spread_away_odds: -120 };
-    expect(formatLineHistory({ first, latest: first, boards: 1 }, now, 'Rangers', 'Athletics')).toBe('Line history today: unchanged since first seen at 5:00 AM ET.');
+    expect(formatLineHistory({ first, latest: first, boards: 1 }, now, 'Rangers', 'Athletics')).toBe('Line history today: unchanged since first seen Tue 5:00 AM ET.');
   });
-  it('prints the open and the move when it has', () => {
+  it('prints the open and the move when it has, in the caller\'s window', () => {
     const now = { moneyline_home: -220, moneyline_away: 184, spread_home: -1.5, spread_home_odds: 104, spread_away: 1.5, spread_away_odds: -125 };
-    const line = formatLineHistory({ first, latest: now, boards: 2 }, now, 'Rangers', 'Athletics');
-    expect(line).toContain('first seen at 5:00 AM ET — moneyline Rangers -215 / Athletics +180; now Rangers -220 / Athletics +184');
-    expect(line).toContain('run line opened Rangers -1.5 (+100) / Athletics +1.5 (-120), now Rangers -1.5 (+104) / Athletics +1.5 (-125)');
+    const line = formatLineHistory({ first, latest: now, boards: 2 }, now, 'Rangers', 'Athletics', 'this week');
+    expect(line).toContain('Line history this week: first seen Tue 5:00 AM ET — moneyline Rangers -215 / Athletics +180; now Rangers -220 / Athletics +184');
+    expect(line).toContain('line opened Rangers -1.5 (+100) / Athletics +1.5 (-120), now Rangers -1.5 (+104) / Athletics +1.5 (-125)');
+  });
+  it('never calls two books\' prices a move', () => {
+    const fd = { ...first, line_vendor: 'fanduel' };
+    const now = { moneyline_home: -158, moneyline_away: 140, spread_home: -1.5, spread_home_odds: 100, spread_away: 1.5, spread_away_odds: -120, line_vendor: 'draftkings' };
+    const line = formatLineHistory({ first: fd, latest: now, boards: 2 }, now, 'Rangers', 'Athletics');
+    expect(line).toContain('at Fanduel');
+    expect(line).toContain('now shows Draftkings');
+    expect(line).toContain('Different books; not a like-for-like move');
+    expect(line).not.toContain('; now Rangers');
   });
   it('is null with no history', () => {
     expect(formatLineHistory(null, {}, 'A', 'B')).toBeNull();

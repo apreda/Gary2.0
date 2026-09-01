@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mlbCappedMenu, mlbCaseHeadings, mlbPass1Opening } from '../../src/services/agentic/orchestrator/mlbCaseMenu.js';
+import { mlbCappedMenu, mlbCaseHeadings, mlbPass1Opening, ticketMenu, menuTruthLines } from '../../src/services/agentic/orchestrator/mlbCaseMenu.js';
 import { buildPass1Message } from '../../src/services/agentic/orchestrator/passBuilders.js';
 import { MLB_CONSTITUTION } from '../../src/services/agentic/constitution/mlbConstitution.js';
 
@@ -68,7 +68,33 @@ describe('Pass 1 and the bilateral prompt agree', () => {
     expect(p).toContain('CASE FOR ROCKIES +1.5 (-109), OR THE ROCKIES OUTRIGHT AT +210, TONIGHT:');
     expect(MLB_CONSTITUTION.bilateralCasePrompt('Braves', 'Rockies')).toContain('CASE FOR BACKING BRAVES TONIGHT:');
   });
-  it('mlbPass1Opening is the default sentence with no board', () => {
-    expect(mlbPass1Opening(null, 'A', 'B')).toContain('The betting options and their prices come at the end');
+  it('mlbPass1Opening is the default sentence when not capped', () => {
+    expect(mlbPass1Opening(false)).toContain('The betting options and their prices come at the end');
+    expect(mlbPass1Opening(true)).toContain('is not a ticket');
+  });
+});
+
+describe('ticketMenu / menuTruthLines — one definition of a ticket', () => {
+  it('drops a capped moneyline and lists every priced ticket, home first by default', () => {
+    const m = ticketMenu(capped, 'Braves', 'Rockies');
+    expect(m.dropped).toEqual(['Braves -230']);
+    expect(m.tickets).toEqual(['Braves -1.5 (-111)', 'Rockies +210', 'Rockies +1.5 (-109)']);
+    const lines = menuTruthLines(capped, 'Braves', 'Rockies', { when: 'tonight' });
+    expect(lines[0]).toBe('House limit: no moneyline heavier than -179. Braves -230 is past it and is not a ticket tonight.');
+    expect(lines[1]).toBe('Tickets on this game: Braves -1.5 (-111) · Rockies +210 · Rockies +1.5 (-109)');
+  });
+  it('football order is away-first and the wording is the week', () => {
+    const lines = menuTruthLines(cappedAway, 'Rangers', 'Athletics', { when: 'this week', order: 'away-first' });
+    expect(lines[0]).toContain('is not a ticket this week');
+    expect(lines[1]).toBe('Tickets on this game: Athletics -1.5 (+104) · Rangers +184 · Rangers +1.5 (-125)');
+  });
+  it('a legal board lists both moneylines and both lines, nothing dropped', () => {
+    const m = ticketMenu(legal, 'A', 'B');
+    expect(m.dropped).toEqual([]);
+    expect(m.tickets.length).toBe(4);
+  });
+  it('an unpriced line is not a ticket', () => {
+    const m = ticketMenu({ ...legal, spread_home_odds: null, spread_away_odds: null }, 'A', 'B');
+    expect(m.tickets).toEqual(['A -150', 'B +130']);
   });
 });

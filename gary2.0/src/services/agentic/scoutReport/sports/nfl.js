@@ -1424,7 +1424,7 @@ ${filteredPlayers.join(', ')}
     const lhDay = game.commence_time ? new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null;
     if (lhGameId != null && lhDay) {
       const lhHist = await getOddsHistory('americanfootball_nfl', lhDay, lhGameId);
-      game._lineHistory = formatLineHistory(lhHist, game, game.home_team, game.away_team);
+      game._lineHistory = formatLineHistory(lhHist, game, game.home_team, game.away_team, 'this week');
     }
   } catch { /* history is additive */ }
 

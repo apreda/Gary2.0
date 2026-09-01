@@ -88,9 +88,11 @@ function auditBuckets(t) {
   const res = { missing: [], empty: [], honestAbsent: [], present: [], optionalAbsent: [] };
   const grade = (name, marker, count, required) => {
     const hits = everyIndex(t, marker);
+    // A subsection short of its expected count is MISSING and nothing else —
+    // the arrays partition the lanes (one verdict per name).
     if (hits.length < count) {
       (required ? res.missing : res.optionalAbsent).push(name);
-      if (hits.length === 0) return;
+      return;
     }
     const bodies = hits.map((i) => bucketBody(t, i));
     if (bodies.some((b) => ABSENCE_RX.test(b))) res.honestAbsent.push(name);

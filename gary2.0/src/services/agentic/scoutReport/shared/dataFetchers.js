@@ -3,7 +3,7 @@
  * Core data fetching functions used by ALL sports in scout report generation.
  */
 
-import { GAME_ML_CAP } from '../../orchestrator/orchestratorConfig.js';
+import { menuTruthLines } from '../../orchestrator/mlbCaseMenu.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { fetchNbaInjuriesForGame } from '../../../nbaInjuryReportService.js';
 import axios from 'axios';
@@ -3566,23 +3566,12 @@ export function formatOdds(game, sport = '') {
 
   // MENU TRUTH for the house limit (founder GO, Sep 1 2026 — the MLB desk's
   // rule, applied to football): a moneyline heavier than the cap is not a
-  // ticket and the desk says so before the read. The legal menu prints on
-  // every game. Payout law stated as data, no steering.
+  // ticket and the desk says so before the read. One definition of the menu
+  // (mlbCaseMenu.js) serves every desk. Away @ home order, like the lines above.
   if (!isNHL) {
-    const capped = (v) => Number.isFinite(parseFloat(v)) && Number(v) < GAME_ML_CAP;
-    const tickets = [];
-    const dropped = [];
-    for (const [name, ml, sp, spOdds] of [
-      [game.away_team, mlAway, spreadAway, spreadAwayOdds],
-      [game.home_team, mlHome, spreadHome, spreadHomeOdds],
-    ]) {
-      if (ml !== null && Number.isFinite(parseFloat(ml))) (capped(ml) ? dropped : tickets).push(`${name} ${formatMoneyline(ml)}`);
-      if (sp !== null && spOdds !== null && spOdds !== undefined && spOdds !== '' && Number.isFinite(Number(spOdds))) {
-        tickets.push(`${name} ${formatSignedSpread(sp)} (${formatAmericanPrice(spOdds)})`);
-      }
-    }
-    if (dropped.length) lines.push(`House limit: no moneyline heavier than ${GAME_ML_CAP}. ${dropped.join(' and ')} is past it and is not a ticket this week.`);
-    if (tickets.length) lines.push(`Tickets on this game: ${tickets.join(' · ')}`);
+    lines.push(...menuTruthLines(
+      { moneyline_home: mlHome, moneyline_away: mlAway, spread_home: spreadHome, spread_away: spreadAway, spread_home_odds: spreadHomeOdds, spread_away_odds: spreadAwayOdds },
+      game.home_team, game.away_team, { when: 'this week', order: 'away-first' }));
     if (game._lineHistory) lines.push(game._lineHistory);
   }
 

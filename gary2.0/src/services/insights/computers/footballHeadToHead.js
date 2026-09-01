@@ -47,6 +47,24 @@ function sideName(team) {
   return team?.abbreviation || team?.college || team?.name || team?.full_name || null;
 }
 
+/** The MLB card's keys for the series' dominant side (ties lean away). */
+function cardContract({ awayTeam, homeTeam, awayWins, homeWins, ties = 0 }) {
+  const awayDom = awayWins >= homeWins;
+  const dom = awayDom ? awayTeam : homeTeam;
+  const sub = awayDom ? homeTeam : awayTeam;
+  const longName = (t) => t?.full_name || t?.name || sideName(t) || 'Team';
+  return {
+    kind: 'h2h',
+    dominant: sideName(dom),
+    dominant_name: longName(dom),
+    opponent: sideName(sub),
+    opponent_name: longName(sub),
+    wins: awayDom ? awayWins : homeWins,
+    losses: awayDom ? homeWins : awayWins,
+    games: awayWins + homeWins + ties,
+  };
+}
+
 function scoreOf(game, which) {
   const raw = which === 'home'
     ? (game?.home_team_score ?? game?.home_score)
@@ -171,7 +189,17 @@ export async function computeFootballHeadToHead(ctx) {
       meta: {
         source: 'balldontlie_games',
         seasons: [Number(season) - 1, Number(season)],
-        meetings,
+        // THE CARD CONTRACT (founder, Sep 1 2026 — FOOTBALL = MLB SHAPE): the
+        // iOS head-to-head row reads the MLB writer's keys (dominant side,
+        // wins/losses, meetings with away_runs/home_runs/dom_won, oldest →
+        // newest). Both key sets ride the row so nothing downstream breaks.
+        ...cardContract({ meetings, awayTeam, homeTeam, awayWins, homeWins, ties }),
+        meetings: meetings.slice().reverse().map((m) => ({
+          ...m,
+          away_runs: m.away_score,
+          home_runs: m.home_score,
+          dom_won: m.winner_team_id != null && String(m.winner_team_id) === String(awayWins >= homeWins ? awayTeam.id : homeTeam.id),
+        })),
         tally: { away_wins: awayWins, home_wins: homeWins, ties, countable_only: countable.length > 0 },
       },
     }));

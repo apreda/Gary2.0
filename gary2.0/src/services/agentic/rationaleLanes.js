@@ -25,7 +25,7 @@ export const LANES = [
   ['contact_quality', /barrel|hard-hit|hard contact|whiff|xwOBA/i],
   ['player_rolling', /last (7|15|seven|fifteen) days|over the last (7|15)/i],
   ['injury_absence', /injur|absence|placed on|returning from|returns? (with|from)|scratch/i],
-  ['weather_park', /wind|°F|roof|degree|sunny|cloudy|clear|pitcher-friendly|hitter-friendly|dome/i],
+  ['weather_park', /\bwind\b|°F|\broof\b|degree|sunny|cloudy|\bclear\b|pitcher-friendly|hitter-friendly|\bdome\b/i],
   ['streak_series_scene', /straight|streak|swept|sweep|(won|lost|taken) (the )?first two|opener|finale|rubber match/i],
   ['season_series_h2h', /season series|season-series|this series/i],
   ['story_or_press', /as written|as reported|described|reports?\b|beat writer|quote|said\b/i],
@@ -33,7 +33,7 @@ export const LANES = [
   ['price_as_value', /(too expensive|worth|value|price (is|reflects)|plus money|at \+|inflated|the number)/i],
   ['ml_vs_rl_choice', /(away from|off|instead of|rather than|not) (laying|the run line|-1\.5|requiring)/i],
   ['discounts_momentum', /not momentum|not the (handicap|bet|foundation)|set(ting)? the streaks aside|does not decide|do not determine|not predictive/i],
-  ['schedule_rest', /day off|off day|rest|travel|doubleheader|getaway|road trip|homestand/i],
+  ['schedule_rest', /day off|off day|\brest\b|\brested\b|\btravel\b|doubleheader|getaway|road trip|homestand/i],
   ['line_history', /line (history|moved|movement)|opened at|first seen/i],
   // Football lanes (Sep 1 2026) — the desk sections a football rationale cites.
   ['fb_quarterback', /quarterback|\bQB\b|passer|under center/i],

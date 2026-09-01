@@ -51,7 +51,7 @@ import { computePitcherWhiffByStart } from './mlbContactQuality.js';
 import { renderBoxScore, buildPenPressQuery } from './mlbGamesAsWritten.js';
 import { auditDeskManifest, recordDeskManifest } from './mlbDeskManifest.js';
 import { resolveDeskLayout, renderBucketsDesk } from './mlbDeskLayout.js';
-import { GAME_ML_CAP } from '../../orchestrator/orchestratorConfig.js';
+import { menuTruthLines } from '../../orchestrator/mlbCaseMenu.js';
 import { getOddsHistory, formatLineHistory } from '../../../oddsSnapshots.js';
 import {
   completedMlbTeamGames,
@@ -1125,15 +1125,16 @@ export async function buildMlbScoutReport(game, options = {}) {
       const t = divTable(d);
       if (t) parts.push(t);
     }
+    const arcById = new Map([[homeTeamBdlId, computeTeamMonthArc(seasonIndex, homeTeamBdlId)], [awayTeamBdlId, computeTeamMonthArc(seasonIndex, awayTeamBdlId)]]);
     const monthArcs = [
       [homeTeamBdlId, homeTeam],
       [awayTeamBdlId, awayTeam],
-    ].map(([id, nm]) => { const a = computeTeamMonthArc(seasonIndex, id); return a ? `${nm} ${a}` : null; }).filter(Boolean);
+    ].map(([id, nm]) => { const a = arcById.get(id); return a ? `${nm} ${a}` : null; }).filter(Boolean);
     if (monthArcs.length) parts.push(`Season shape:\n${monthArcs.join('\n')}`);
     // (The tonight's-spot lines moved to THE SITUATION, Aug 19 — one home.)
     standingsSection = parts.join('\n\n');
     for (const [side, teamId, bdlId, nm] of [['home', homeTeamId, homeTeamBdlId, homeTeam], ['away', awayTeamId, awayTeamBdlId, awayTeam]]) {
-      const arc = computeTeamMonthArc(seasonIndex, bdlId);
+      const arc = arcById.get(bdlId);
       const bits = [
         ctxLine(teamId, nm),
         divTable(divisionOf(nm)),
@@ -1664,26 +1665,9 @@ export async function buildMlbScoutReport(game, options = {}) {
     // the read, not after it — the Aug 28-31 ledger showed every capped-
     // favorite read finished as "who wins" and got relabeled onto the run
     // line in Pass 2.5 (0 of 11 run-line rationales weighed the other side
-    // of the 1.5). The legal menu prints on every game; on a capped game
-    // the illegal price is named and dropped. Payout law, no steering.
-    {
-      const fmtMl = (v) => (v > 0 ? `+${v}` : `${v}`);
-      const fmtRl = (line, price) => `${line > 0 ? '+' : ''}${line}${price != null && price !== '' ? ` (${price > 0 ? '+' : ''}${price})` : ''}`;
-      const capped = (v) => v != null && Number(v) < GAME_ML_CAP;
-      const tickets = [];
-      const dropped = [];
-      for (const [name, ml, sp, spOdds] of [
-        [homeTeam, game.moneyline_home, game.spread_home, game.spread_home_odds],
-        [awayTeam, game.moneyline_away, game.spread_away, game.spread_away_odds],
-      ]) {
-        if (ml != null) (capped(ml) ? dropped : tickets).push(`${name} ${fmtMl(Number(ml))}`);
-        if (sp != null && spOdds != null && spOdds !== '') tickets.push(`${name} ${fmtRl(Number(sp), Number(spOdds))}`);
-      }
-      if (dropped.length) {
-        lines.push(`House limit: no moneyline heavier than ${GAME_ML_CAP}. ${dropped.join(' and ')} is past it and is not a ticket tonight.`);
-      }
-      if (tickets.length) lines.push(`Tickets on this game: ${tickets.join(' · ')}`);
-    }
+    // of the 1.5). One definition of the menu (mlbCaseMenu.js) serves the
+    // desk, the football desk, and the Pass 1 headings.
+    lines.push(...menuTruthLines(game, homeTeam, awayTeam, { when: 'tonight' }));
     // LINE HISTORY (founder GO, Sep 1 2026 — the price as a real leg): where
     // today's board opened and where it is now, from our own snapshots.
     try {
@@ -1890,9 +1874,11 @@ export async function buildMlbScoutReport(game, options = {}) {
     // "This series" derives from the same official play-by-play as the trip
     // lines (Aug 27 live catch: the BDL box join missed a whole series and
     // printed 'no ABs' under three-hit nights — one source, one truth).
-    const seriesLineFromTrips = (bId, trailData, oppTeamName) => {
+    // One trip vocabulary (Sep 1 review): the per-hitter series line and the
+    // nine-wide sum read the same totals, so they can never disagree.
+    const seriesTotalsFromTrips = (bId, trailData, oppTeamName) => {
       const seriesGames = (trailData || []).filter((g) => clubMatches(g.opp, oppTeamName));
-      if (!seriesGames.length) return null;
+      if (!seriesGames.length) return undefined; // no series games at all
       let ab = 0; let h = 0; let hr = 0; let seen = false;
       for (const g of seriesGames) {
         for (const t of g.trips?.[bId] || []) {
@@ -1904,8 +1890,13 @@ export async function buildMlbScoutReport(game, options = {}) {
           if (lead === 'HR') hr += 1;
         }
       }
-      if (!seen) return 'This series: no ABs';
-      return `This series: ${h}-${ab}${hr ? `, ${hr} HR` : ''}`;
+      return seen ? { ab, h, hr } : null; // null = games exist, no trips for him
+    };
+    const seriesLineFromTrips = (bId, trailData, oppTeamName) => {
+      const t = seriesTotalsFromTrips(bId, trailData, oppTeamName);
+      if (t === undefined) return null;
+      if (t === null) return 'This series: no ABs';
+      return `This series: ${t.h}-${t.ab}${t.hr ? `, ${t.hr} HR` : ''}`;
     };
     const rosterIdByName = (roster, name) => {
       const target = foldName(name);
@@ -2006,22 +1997,6 @@ export async function buildMlbScoutReport(game, options = {}) {
         'The press on him, last game (from the official game story — the full article prints whole in the games section):',
         `  "${picked.join(' ')}"`,
       ];
-    };
-    // Series line as numbers too, for the nine-wide sum below.
-    const seriesTotalsFromTrips = (bId, trailData, oppTeamName) => {
-      const seriesGames = (trailData || []).filter((g) => clubMatches(g.opp, oppTeamName));
-      let ab = 0; let h = 0; let hr = 0; let seen = false;
-      for (const g of seriesGames) {
-        for (const t of g.trips?.[bId] || []) {
-          seen = true;
-          const lead = String(t).split(' ')[0];
-          if (['BB', 'IBB', 'HBP', 'SB', 'caught'].includes(lead) || /^sac/.test(lead)) continue;
-          ab += 1;
-          if (['1B', '2B', '3B', 'HR'].includes(lead)) h += 1;
-          if (lead === 'HR') hr += 1;
-        }
-      }
-      return seen ? { ab, h, hr } : null;
     };
     // THE PLAYER BLOCK, TWO ORDERS (founder, Sep 1 2026 — recency first): the
     // same named parts assemble season-first for the flat desk (unchanged)

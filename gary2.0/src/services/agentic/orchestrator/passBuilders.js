@@ -722,7 +722,7 @@ function buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread, game = nu
   const headings = mlbCaseHeadings(homeTeam, awayTeam, game);
 
   return `
-${mlbPass1Opening(game, homeTeam, awayTeam)}
+${mlbPass1Opening(headings.capped)}
 
 <scout_report>
 ## MATCHUP BRIEFING (TODAY: ${today})

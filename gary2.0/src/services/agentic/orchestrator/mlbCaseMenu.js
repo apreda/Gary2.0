@@ -14,9 +14,42 @@
  */
 import { GAME_ML_CAP } from './orchestratorConfig.js';
 
-const fmtMl = (v) => (Number(v) > 0 ? `+${Number(v)}` : `${Number(v)}`);
 const fmtPrice = (v) => (Number(v) > 0 ? `+${Number(v)}` : `${Number(v)}`);
+const fmtMl = fmtPrice;
 const priced = (v) => v != null && v !== '' && Number.isFinite(Number(v));
+const fmtLine = (v) => `${Number(v) > 0 ? '+' : ''}${Number(v)}`;
+
+/**
+ * THE TICKET MENU — the one definition of what is a ticket on a board:
+ * every priced moneyline not heavier than the cap, every priced spread/run
+ * line. Used by the MLB desk, the football desk, and the Pass 1 headings.
+ * Returns display strings; `dropped` names the capped moneylines.
+ *
+ * @returns {{ tickets: string[], dropped: string[], cap: number }}
+ */
+export function ticketMenu(game, homeTeam, awayTeam, cap = GAME_ML_CAP, order = 'home-first') {
+  const sides = [
+    { name: homeTeam, ml: game?.moneyline_home, sp: game?.spread_home, spOdds: game?.spread_home_odds },
+    { name: awayTeam, ml: game?.moneyline_away, sp: game?.spread_away, spOdds: game?.spread_away_odds },
+  ];
+  if (order === 'away-first') sides.reverse();
+  const tickets = [];
+  const dropped = [];
+  for (const s of sides) {
+    if (priced(s.ml)) (Number(s.ml) < cap ? dropped : tickets).push(`${s.name} ${fmtMl(s.ml)}`);
+    if (priced(s.sp) && priced(s.spOdds)) tickets.push(`${s.name} ${fmtLine(s.sp)} (${fmtPrice(s.spOdds)})`);
+  }
+  return { tickets, dropped, cap };
+}
+
+/** The desk's MENU TRUTH lines for a board: the capped price named, then the menu. */
+export function menuTruthLines(game, homeTeam, awayTeam, { when = 'tonight', order = 'home-first' } = {}) {
+  const { tickets, dropped, cap } = ticketMenu(game, homeTeam, awayTeam, GAME_ML_CAP, order);
+  const lines = [];
+  if (dropped.length) lines.push(`House limit: no moneyline heavier than ${cap}. ${dropped.join(' and ')} is past it and is not a ticket ${when}.`);
+  if (tickets.length) lines.push(`Tickets on this game: ${tickets.join(' · ')}`);
+  return lines;
+}
 
 /**
  * The capped menu for a game, or null when no moneyline is past the cap
@@ -70,8 +103,8 @@ export function mlbCaseHeadings(homeTeam, awayTeam, game) {
 }
 
 /** Pass 1's opening sentence — the capped variant names the kind of bet, never the numbers. */
-export function mlbPass1Opening(game, homeTeam, awayTeam) {
-  return mlbCappedMenu(game, homeTeam, awayTeam)
+export function mlbPass1Opening(capped) {
+  return capped
     ? "You're deciding what to bet on tonight's game below. The favorite's moneyline is past the house limit and is not a ticket, so the bet on this game is the run line, or the underdog outright. The tickets and their prices come at the end, after you've been through everything."
     : "You're deciding what to bet on tonight's game below. The betting options and their prices come at the end, after you've been through everything.";
 }

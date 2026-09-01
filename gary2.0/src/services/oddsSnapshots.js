@@ -32,10 +32,14 @@ function boardOf(g) {
     spread_home_odds: num(g.spread_home_odds),
     spread_away: num(g.spread_away),
     spread_away_odds: num(g.spread_away_odds),
+    // The book the numbers came from: two books' prices are not a line
+    // move (the odds service can legitimately switch vendors between
+    // fetches), so history compares like with like.
+    line_vendor: g.line_vendor ? String(g.line_vendor).toLowerCase() : null,
   };
 }
-const sameBoard = (a, b) => a && b && ['moneyline_home', 'moneyline_away', 'spread_home', 'spread_home_odds', 'spread_away', 'spread_away_odds']
-  .every((k) => (a[k] ?? null) === (b[k] ?? null));
+const BOARD_KEYS = ['moneyline_home', 'moneyline_away', 'spread_home', 'spread_home_odds', 'spread_away', 'spread_away_odds', 'line_vendor'];
+const sameBoard = (a, b) => a && b && BOARD_KEYS.every((k) => (a[k] ?? null) === (b[k] ?? null));
 
 /** Record the boards of a fetched slate. Never throws. */
 export async function recordOddsSnapshots(sport, games) {
@@ -55,7 +59,7 @@ export async function recordOddsSnapshots(sport, games) {
     const dates = [...new Set(rows.map((r) => r.game_date))];
     const { data: latest } = await (await db())
       .from('odds_snapshots')
-      .select('game_id, game_date, moneyline_home, moneyline_away, spread_home, spread_home_odds, spread_away, spread_away_odds, seen_at')
+      .select('game_id, game_date, moneyline_home, moneyline_away, spread_home, spread_home_odds, spread_away, spread_away_odds, line_vendor, seen_at')
       .eq('sport', sport)
       .in('game_date', dates)
       .order('seen_at', { ascending: false });
@@ -83,7 +87,7 @@ export async function getOddsHistory(sport, gameDate, gameId) {
   try {
     const { data, error } = await (await db())
       .from('odds_snapshots')
-      .select('moneyline_home, moneyline_away, spread_home, spread_home_odds, spread_away, spread_away_odds, seen_at')
+      .select('moneyline_home, moneyline_away, spread_home, spread_home_odds, spread_away, spread_away_odds, line_vendor, seen_at')
       .eq('sport', sport)
       .eq('game_date', gameDate)
       .eq('game_id', String(gameId))
@@ -97,26 +101,36 @@ export async function getOddsHistory(sport, gameDate, gameId) {
 
 const fmtMl = (v) => (v == null ? '—' : v > 0 ? `+${v}` : `${v}`);
 const fmtRl = (line, price) => (line == null ? '—' : `${line > 0 ? '+' : ''}${line}${price != null ? ` (${price > 0 ? '+' : ''}${price})` : ''}`);
-const fmtEt = (iso) => new Date(iso).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' });
+const fmtEt = (iso) => new Date(iso).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', minute: '2-digit' });
+const vendorName = (v) => (v ? String(v).replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : null);
 
 /**
- * The desk's line-history lines for a game. `now` is the board on the game
- * row being built (the latest fetch); history supplies the day's first
- * sighting. Facts only — where it opened, where it is.
+ * The desk's line-history line for a game. `now` is the board on the game
+ * row being built (the latest fetch); history supplies the first sighting.
+ * `scope` is the caller's word for the window — "today" for a daily slate,
+ * "this week" for a football game whose board was first seen days out.
+ * Facts only — where it opened, where it is, and which book each is from
+ * when they differ, because two books' prices are not a move.
  */
-export function formatLineHistory(history, now, homeTeam, awayTeam) {
+export function formatLineHistory(history, now, homeTeam, awayTeam, scope = 'today') {
   if (!history?.first) return null;
   const f = history.first;
+  const nowBoard = boardOf(now || {});
   const openMl = `${homeTeam} ${fmtMl(f.moneyline_home)} / ${awayTeam} ${fmtMl(f.moneyline_away)}`;
-  const nowMl = `${homeTeam} ${fmtMl(num(now?.moneyline_home))} / ${awayTeam} ${fmtMl(num(now?.moneyline_away))}`;
+  const nowMl = `${homeTeam} ${fmtMl(nowBoard.moneyline_home)} / ${awayTeam} ${fmtMl(nowBoard.moneyline_away)}`;
   const openRl = `${homeTeam} ${fmtRl(f.spread_home, f.spread_home_odds)} / ${awayTeam} ${fmtRl(f.spread_away, f.spread_away_odds)}`;
-  const nowRl = `${homeTeam} ${fmtRl(num(now?.spread_home), num(now?.spread_home_odds))} / ${awayTeam} ${fmtRl(num(now?.spread_away), num(now?.spread_away_odds))}`;
+  const nowRl = `${homeTeam} ${fmtRl(nowBoard.spread_home, nowBoard.spread_home_odds)} / ${awayTeam} ${fmtRl(nowBoard.spread_away, nowBoard.spread_away_odds)}`;
   const when = fmtEt(f.seen_at);
+  const sameBook = (f.line_vendor ?? null) === (nowBoard.line_vendor ?? null) || !f.line_vendor || !nowBoard.line_vendor;
   if (openMl === nowMl && openRl === nowRl) {
-    return `Line history today: unchanged since first seen at ${when} ET.`;
+    return `Line history ${scope}: unchanged since first seen ${when} ET.`;
   }
-  const bits = [`Line history today: first seen at ${when} ET — moneyline ${openMl}`];
+  if (!sameBook) {
+    // Different books, different numbers — say so rather than call it a move.
+    return `Line history ${scope}: first seen ${when} ET at ${vendorName(f.line_vendor)} — moneyline ${openMl}, run/spread line ${openRl}; the board now shows ${vendorName(nowBoard.line_vendor)} — moneyline ${nowMl}, line ${nowRl}. Different books; not a like-for-like move.`;
+  }
+  const bits = [`Line history ${scope}: first seen ${when} ET — moneyline ${openMl}`];
   if (openMl !== nowMl) bits.push(`now ${nowMl}`);
-  if (openRl !== nowRl) bits.push(`run line opened ${openRl}, now ${nowRl}`);
+  if (openRl !== nowRl) bits.push(`line opened ${openRl}, now ${nowRl}`);
   return `${bits.join('; ')}.`;
 }
