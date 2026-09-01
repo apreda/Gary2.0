@@ -61,7 +61,7 @@ function WinnersBoardMock() {
       {[
         ['MLB', 'PHI ML', '-118', false],
         ['NBA', 'BOS -3.5', '-110', true],
-        ['WC', 'DRAW NO BET', '+140', true],
+        ['NHL', 'EDM ML', '+120', true],
       ].map(([lg, pick, odds, locked], i) => (
         <div key={i} className="mt-2.5 rounded-chip border border-line bg-card px-3 py-2.5">
           <div className="flex items-center justify-between">

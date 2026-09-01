@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/auth/client';
+import { safeNextPath } from '@/lib/auth/redirect';
 
 const focusRing =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink';
@@ -18,6 +19,7 @@ const field =
 export function SignInForm() {
   const router = useRouter();
   const params = useSearchParams();
+  const nextPath = safeNextPath(params.get('next'));
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -28,13 +30,19 @@ export function SignInForm() {
     params.get('error') === 'signin' ? 'Sign-in couldn’t finish. Please try again.' : null,
   );
 
+  function callbackUrl() {
+    const callback = new URL('/auth/callback', window.location.origin);
+    callback.searchParams.set('next', nextPath);
+    return callback.toString();
+  }
+
   async function google() {
     setBusy(true);
     setError(null);
     const { error } = await supabaseBrowser().auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: callbackUrl(),
         // Classic account chooser, not the passkey-first interstitial —
         // same call the app makes (founder, Aug 6).
         queryParams: { prompt: 'select_account' },
@@ -53,10 +61,15 @@ export function SignInForm() {
     setInfo(null);
     const supabase = supabaseBrowser();
     if (mode === 'signup') {
-      const { data, error } = await supabase.auth.signUp({ email, password });
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: callbackUrl() },
+      });
       if (error) {
         setError(error.message);
       } else if (data.session) {
+        router.replace(nextPath);
         router.refresh();
       } else {
         setInfo('Check your email to confirm your account, then sign in.');
@@ -70,6 +83,7 @@ export function SignInForm() {
             : 'Email or password is incorrect.',
         );
       } else {
+        router.replace(nextPath);
         router.refresh();
       }
     }
@@ -94,7 +108,10 @@ export function SignInForm() {
       </div>
 
       <form onSubmit={submit} className="space-y-3">
+        <label htmlFor="account-email" className="sr-only">Email address</label>
         <input
+          id="account-email"
+          name="email"
           type="email"
           required
           autoComplete="email"
@@ -103,7 +120,10 @@ export function SignInForm() {
           onChange={e => setEmail(e.target.value)}
           className={field}
         />
+        <label htmlFor="account-password" className="sr-only">Password</label>
         <input
+          id="account-password"
+          name="password"
           type="password"
           required
           autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
@@ -122,8 +142,8 @@ export function SignInForm() {
         </button>
       </form>
 
-      {error && <p className="mt-4 text-[13.5px] text-red-400">{error}</p>}
-      {info && <p className="mt-4 text-[13.5px] text-gold">{info}</p>}
+      {error && <p role="alert" className="mt-4 text-[13.5px] text-red-400">{error}</p>}
+      {info && <p role="status" className="mt-4 text-[13.5px] text-gold">{info}</p>}
 
       <button
         type="button"

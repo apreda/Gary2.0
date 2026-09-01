@@ -18,7 +18,6 @@ export const PRICING = {
   allAccessAnnual: '$179',
   allAccessAnnualMonthly: '$14.92',  // 179 / 12 — the annual card's effective rate
   single: '$9.99',
-  worldCup: '$14.99',
   twoSport: '$17.99',
   threeSport: '$24.99',
   trialDays: 7,

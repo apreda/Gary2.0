@@ -7,8 +7,10 @@ const COLUMNS: { heading: string; links: { href: string; label: string; external
     heading: 'The Desk',
     links: [
       { href: '/nfl', label: 'NFL Kickoff' },
+      { href: '/today', label: "Today's Desk" },
       { href: '/picks', label: "Today's Picks" },
-      { href: '/results/world-cup', label: 'World Cup 2026 Record' },
+      { href: '/archive', label: 'Pick Archive' },
+      { href: '/results/world-cup', label: 'World Cup 2026 Archive' },
       { href: '/props', label: 'Player Props' },
       { href: '/hub', label: 'The Hub' },
       { href: '/results', label: 'Track Record' },

@@ -19,7 +19,7 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: 'Gary',
     description:
       'A pick for every game, every day — with the full written reasoning and every result on the public record.',
-    start_url: '/',
+    start_url: '/today',
     scope: '/',
     display: 'standalone',
     orientation: 'portrait',

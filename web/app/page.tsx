@@ -19,7 +19,7 @@ export const metadata: Metadata = pageMetadata({
   canonical: '/',
   title: 'Gary AI — Free Sports Picks for Every Game, Every Day',
   description:
-    'Free daily picks with written reasoning across MLB, NBA, NFL, NHL, NCAAB, and NCAAF. Public track record. Free on iOS.',
+    'Free daily picks with written reasoning across MLB, NBA, NFL, NHL, NCAAB, and NCAAF, plus a daily research desk and public track record.',
 });
 
 export default async function Home() {
@@ -90,10 +90,15 @@ export default async function Home() {
             </h1>
             <p className="rise rise-3 mt-6 max-w-xl text-lg leading-relaxed text-mid">
               Gary covers the full slate free — every pick with the reasoning behind it,
-              every result graded in public. Winners, his conviction board, lives in the app.
+              every result graded in public, and a one-scroll Today desk for the whole morning briefing.
             </p>
             <div className="rise rise-4 mt-8 flex flex-wrap items-center gap-4">
-              <AppStoreButton surface="home_hero" />
+              <Link
+                href="/today"
+                className="inline-flex items-center rounded-card bg-gold px-5 py-3 text-sm font-semibold text-ink transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+              >
+                Open today&apos;s desk
+              </Link>
               <GhostLink href="/picks">See today&apos;s picks</GhostLink>
             </div>
             {l30 && allTime && (
@@ -358,10 +363,15 @@ export default async function Home() {
             The desk opens every morning.
           </h2>
           <p className="mx-auto mt-4 max-w-md text-[15px] leading-relaxed text-mid">
-            Download Gary and get the full slate — with the reasoning — the moment it drops.
+            Open the Today desk for the full slate, leading calls, Hub reads, live games, and your Book.
           </p>
           <div className="mt-7 flex flex-wrap items-center justify-center gap-4">
-            <AppStoreButton surface="home_footer_band" />
+            <Link
+              href="/today"
+              className="inline-flex items-center rounded-card bg-gold px-5 py-3 text-sm font-semibold text-ink transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+            >
+              Open Gary Today
+            </Link>
             <GhostLink href="/results">Check the record first</GhostLink>
           </div>
         </div>

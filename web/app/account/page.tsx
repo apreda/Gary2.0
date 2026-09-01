@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { PageMasthead } from '@/components/Terminal';
 import { supabaseServer, currentUser } from '@/lib/auth/server';
@@ -63,6 +64,21 @@ export default async function AccountPage() {
             Sign out
           </button>
         </form>
+
+        <div className="mt-5 flex flex-wrap gap-4 border-t border-line pt-5">
+          <Link
+            href="/today"
+            className="text-[13.5px] text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold"
+          >
+            Open today&apos;s desk →
+          </Link>
+          <Link
+            href="/you"
+            className="text-[13.5px] text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold"
+          >
+            Open your book →
+          </Link>
+        </div>
       </div>
     </main>
   );

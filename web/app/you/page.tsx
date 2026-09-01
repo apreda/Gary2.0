@@ -42,7 +42,7 @@ export default async function YouPage() {
               you into the iOS app.
             </p>
             <Link
-              href="/account"
+              href="/account?next=%2Fyou"
               className="mt-5 inline-block rounded-chip bg-gold px-5 py-2.5 text-[14px] font-semibold text-ink transition-opacity hover:opacity-90"
             >
               Sign in to start your book

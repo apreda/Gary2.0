@@ -6,7 +6,7 @@ import { AppStoreButton } from '@/components/AppStoreButton';
 import { GhostLink } from '@/components/Terminal';
 import { PricingPlans } from '@/components/PricingPlans';
 import { GATING, PRICING } from '@/lib/gary/pricing';
-import { fetchAllGameResults, computeRecord, recordByLeague, sinceDate } from '@/lib/gary/results';
+import { fetchAllGameResults, computeRecord, sinceDate } from '@/lib/gary/results';
 import { daysAgoEST } from '@/lib/gary/dates';
 import { pageMetadata } from '@/lib/seo/metadata';
 
@@ -28,7 +28,7 @@ const faqItems = [
   {
     question: 'How much is it?',
     answer:
-      `A single sport's Winners board is ${PRICING.single}/mo. All-Access — every board — is ${PRICING.allAccessMonthly}/mo with a ${PRICING.trialDays}-day free trial. The 2026 World Cup pass is a one-time ${PRICING.worldCup}. Everything bills through Stripe and cancels anytime.`,
+      `A single sport's Winners board is ${PRICING.single}/mo. All-Access — every active board — is ${PRICING.allAccessMonthly}/mo with a ${PRICING.trialDays}-day free trial. Everything bills through Stripe and cancels anytime.`,
   },
   {
     question: 'Where do I subscribe?',
@@ -58,11 +58,6 @@ export default async function PricingPage() {
   const l30 = results ? computeRecord(l30rows) : null;
   const allTime = results ? computeRecord(results) : null;
 
-  const recordsByLeague: Record<string, { wins: number; losses: number }> = {};
-  for (const [code, rec] of recordByLeague(l30rows)) {
-    recordsByLeague[code] = { wins: rec.wins, losses: rec.losses };
-  }
-
   return (
     <main className="mx-auto max-w-3xl px-4 py-12">
       <JsonLd data={faqJsonLd} />
@@ -81,7 +76,7 @@ export default async function PricingPage() {
         </p>
         {l30 && allTime && (l30.wins + l30.losses) > 0 && (
           <div className="mx-auto mt-6 inline-flex flex-wrap items-center justify-center gap-3 rounded-full border border-line bg-card px-5 py-2.5">
-            <span className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-faint">Last 30 days</span>
+            <span className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-faint">Full free-slate record · last 30 days</span>
             <span className="tnum font-mono text-sm font-bold">
               <span className="text-win">{l30.wins}</span>
               <span className="text-faint">–</span>
@@ -96,7 +91,7 @@ export default async function PricingPage() {
 
       {/* Plans */}
       <section className="mt-12">
-        <PricingPlans recordsByLeague={recordsByLeague} />
+        <PricingPlans />
       </section>
 
       {/* Gating table — what unlocking gets you */}

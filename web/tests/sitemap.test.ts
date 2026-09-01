@@ -16,6 +16,7 @@ describe('sitemap', () => {
       '/props',
       '/results',
       ...SPORTS.map(sport => `/results/${sport.slug}`),
+      '/archive',
       '/hub',
       '/nfl',
       '/pricing',
