@@ -50,6 +50,7 @@ import { aggregateRecentWindow } from './mlbRecentWindow.js';
 import { computePitcherWhiffByStart } from './mlbContactQuality.js';
 import { renderBoxScore, buildPenPressQuery } from './mlbGamesAsWritten.js';
 import { auditDeskManifest, recordDeskManifest } from './mlbDeskManifest.js';
+import { resolveDeskLayout, renderBucketsDesk } from './mlbDeskLayout.js';
 import {
   completedMlbTeamGames,
   resolveMlbGamesMissed,
@@ -84,16 +85,23 @@ async function buildScoutMatchupShelf(game, homeTeam, awayTeam, gamePk) {
   const { fetchStats } = await import('../../tools/statRouters/index.js');
   const { summarizeStatForContext } = await import('../../orchestrator/orchestratorHelpers.js');
   const opt = { game: { ...game, gamePk: gamePk ?? game.gamePk, id: game.id ?? game.bdl_game_id } };
+  // Per-token halves ride along for the four-bucket layout: every MLB
+  // fetcher here returns pre-formatted homeValue/awayValue strings, so the
+  // team blocks can carry each club's own pen, workload, catcher, defense
+  // and starter pitch types; the park (venue-only) goes to THE MATCHUP.
+  const byToken = {};
   const parts = await Promise.all(SCOUT_MATCHUP_SECTIONS.map(async ([token, header]) => {
     try {
       const r = await fetchStats('baseball_mlb', token, homeTeam, awayTeam, opt);
       if (!r || r.error) return null;
+      const str = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+      byToken[token] = { home: str(r.homeValue ?? r.home), away: str(r.awayValue ?? r.away) };
       const text = summarizeStatForContext(r, token, homeTeam, awayTeam);
       if (!text || text.trim().length < 20) return null;
       return `${header}\n${text.trim()}`;
     } catch { return null; }
   }));
-  return parts.filter(Boolean).join('\n\n');
+  return { text: parts.filter(Boolean).join('\n\n'), byToken };
 }
 
 export async function buildMlbScoutReport(game, options = {}) {
@@ -118,8 +126,13 @@ export async function buildMlbScoutReport(game, options = {}) {
   const venue = game.venue || game._raw?.venue?.name || 'Unknown Venue';
   const gameDesc = game.description || '';
   const startTime = game.start_time || game.commence_time || '';
+  // Desk layout (Sep 1 2026): 'legacy' flat sections, or 'buckets' — the
+  // four-bucket desk (mlbDeskLayout.js). Every builder below keeps its
+  // home/away halves so the bucket layout can group by club; the content
+  // of each half is byte-identical to the flat desk's.
+  const deskLayout = resolveDeskLayout(options);
 
-  console.log(`[Scout Report] Building MLB report: ${awayTeam} @ ${homeTeam}`);
+  console.log(`[Scout Report] Building MLB report: ${awayTeam} @ ${homeTeam} (layout: ${deskLayout})`);
 
   // Doubleheader awareness — filled by the schedule match below, or by the
   // fallback probe when the gamePk arrived pre-resolved.
@@ -464,6 +477,8 @@ export async function buildMlbScoutReport(game, options = {}) {
   };
 
   let probablePitchersSection = 'Probable pitchers not yet announced.';
+  // Each starter's own lines, for his team's block in the bucket layout.
+  const probablesBySide = { home: null, away: null };
   const pitcherStats = {};
   const pitcherArcData = {}; // per-side career/season provenance for the SAMPLE CONTEXT flags
   // gamePk -> "Pitcher Name (Team)" for every start story printed in the
@@ -494,7 +509,9 @@ export async function buildMlbScoutReport(game, options = {}) {
         { maxTokens: 900 }
       ).then(r => String(r?.data || '').trim()).catch(() => '');
     }
+    const sideStarts = [];
     for (const [side, label] of [['away', awayTeam], ['home', homeTeam]]) {
+      sideStarts.push([side, parts.length]);
       const pitcher = probablePitchersData[side];
       let seasonLineIdx = null;
       if (!pitcher?.fullName) {
@@ -926,6 +943,11 @@ export async function buildMlbScoutReport(game, options = {}) {
       }
     }
     probablePitchersSection = parts.join('\n');
+    sideStarts.forEach(([side, start], i) => {
+      const end = sideStarts[i + 1]?.[1] ?? parts.length;
+      const lines = parts.slice(start, end);
+      probablesBySide[side] = lines.length ? lines.join('\n') : null;
+    });
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -938,9 +960,11 @@ export async function buildMlbScoutReport(game, options = {}) {
   // them — he'll read the count and apply normal judgment.
   // ═══════════════════════════════════════════════════════════════════
   const smallSampleFlags = [];
+  const smallSampleFlagsBySide = { home: [], away: [] };
   await Promise.all([['home', homeTeam, homeTeamBdlId, homeBdlTeam], ['away', awayTeam, awayTeamBdlId, awayBdlTeam]].map(async ([side, label, currentTeamBdlId, bdlTeam]) => {
     const pitcher = probablePitchersData?.[side];
     const stats = pitcherStats?.[side];
+    const pushFlag = (...lines) => { smallSampleFlags.push(...lines); smallSampleFlagsBySide[side].push(...lines); };
     // ARC SAMPLE FLAGS (Aug 4 2026, the Bieber/Chandler autopsy): layoff
     // returns and first-real-season arms — the two cases where a season
     // aggregate quietly spans a different pitcher. Career profile comes from
@@ -955,17 +979,17 @@ export async function buildMlbScoutReport(game, options = {}) {
           name: pitcher.fullName, label,
           careerGs: arc.careerProfile.career?.gs, seasonGs: seasonRow?.gs,
         });
-        if (early) smallSampleFlags.push(early);
+        if (early) pushFlag(early);
         const layoff = longLayoffFlag({
           name: pitcher.fullName, label, seasons, season,
           firstStartDate: arc.firstStartDate,
         });
-        if (layoff) smallSampleFlags.push(layoff);
+        if (layoff) pushFlag(layoff);
         const gap = midSeasonGapFlag({
           name: pitcher.fullName, label, season,
           startDates: arc.startDates,
         });
-        if (gap) smallSampleFlags.push(gap);
+        if (gap) pushFlag(gap);
         // DISTORTION FLAG (founder GO, Aug 5 PM): one start moving the
         // starts-only ERA >= 0.75 prints both numbers, the game named, and
         // that game's official story — context, not another naked rate.
@@ -983,7 +1007,7 @@ export async function buildMlbScoutReport(game, options = {}) {
             const story = await fetchGameStory(g.gamePk).catch(() => null);
             if (story?.body) line += `\n  That game, as written: ${sentenceTrim(story.body, 450)}`;
           }
-          smallSampleFlags.push(line);
+          pushFlag(line);
         }
       }
     } catch { /* arc flags are additive — never sink the section */ }
@@ -1026,7 +1050,7 @@ export async function buildMlbScoutReport(game, options = {}) {
           if (mv) changeFlags[changeFlags.length - 1] += `\n  The move, as written: ${mv.date}: ${mv.description}`;
         }
       } catch { /* move line is additive */ }
-      smallSampleFlags.push(...changeFlags);
+      pushFlag(...changeFlags);
     }
   })).catch(() => {});
 
@@ -1045,6 +1069,10 @@ export async function buildMlbScoutReport(game, options = {}) {
   // compute from the cached season index.
   // ═══════════════════════════════════════════════════════════════════
   let standingsSection = '';
+  // Per-club "where they stand" for the bucket layout: context line, the
+  // club's division table, its month arc. Shared-division tables print in
+  // full for both clubs — a table is cheap; a pointer Gary has to chase is not.
+  const standingsBySide = { home: null, away: null };
   try {
     const ctx = await getMlbStandingsContext(season).catch(() => new Map());
     const ctxLine = (mlbamId, teamName) => {
@@ -1086,6 +1114,15 @@ export async function buildMlbScoutReport(game, options = {}) {
     if (monthArcs.length) parts.push(`Season shape:\n${monthArcs.join('\n')}`);
     // (The tonight's-spot lines moved to THE SITUATION, Aug 19 — one home.)
     standingsSection = parts.join('\n\n');
+    for (const [side, teamId, bdlId, nm] of [['home', homeTeamId, homeTeamBdlId, homeTeam], ['away', awayTeamId, awayTeamBdlId, awayTeam]]) {
+      const arc = computeTeamMonthArc(seasonIndex, bdlId);
+      const bits = [
+        ctxLine(teamId, nm),
+        divTable(divisionOf(nm)),
+        arc ? `Season shape: ${nm} ${arc}` : null,
+      ].filter(Boolean);
+      standingsBySide[side] = bits.length ? bits.join('\n\n') : null;
+    }
   } catch { standingsSection = ''; }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -1142,6 +1179,10 @@ export async function buildMlbScoutReport(game, options = {}) {
   // final's official story rides IN TONIGHT with the decision inputs. A
   // shared game ("These two") prints once. Fail-open: no story, no line.
   const lastNightPks = new Set();
+  // Bucket layout homes: a club's own last game rides its Recent form; a
+  // game the two shared ("These two") rides THE MATCHUP — one home per story.
+  const lastNightBySide = { home: null, away: null };
+  let lastNightShared = null;
   const lastNightSection = (() => {
     const homeLast = homeWireGames[homeWireGames.length - 1] || null;
     const awayLast = awayWireGames[awayWireGames.length - 1] || null;
@@ -1155,14 +1196,18 @@ export async function buildMlbScoutReport(game, options = {}) {
       const story = wireStoryByPk.get(homeLast.gamePk);
       if (story) {
         lastNightPks.add(homeLast.gamePk);
-        entries.push(`These two, ${String(homeLast.officialDate || homeLast.gameDate || '').slice(0, 10)} — ${story.headline}\n${bodyOrPointer(homeLast.gamePk, story)}`);
+        const entry = `These two, ${String(homeLast.officialDate || homeLast.gameDate || '').slice(0, 10)} — ${story.headline}\n${bodyOrPointer(homeLast.gamePk, story)}`;
+        entries.push(entry);
+        lastNightShared = entry;
       }
     } else {
-      for (const [g, nick] of [[awayLast, awayTeam], [homeLast, homeTeam]]) {
+      for (const [g, nick, side] of [[awayLast, awayTeam, 'away'], [homeLast, homeTeam, 'home']]) {
         const story = g && wireStoryByPk.get(g.gamePk);
         if (story) {
           lastNightPks.add(g.gamePk);
-          entries.push(`${wireLabel(g, nick)} — ${story.headline}\n${bodyOrPointer(g.gamePk, story)}`);
+          const entry = `${wireLabel(g, nick)} — ${story.headline}\n${bodyOrPointer(g.gamePk, story)}`;
+          entries.push(entry);
+          lastNightBySide[side] = entry;
         }
       }
     }
@@ -1195,6 +1240,10 @@ export async function buildMlbScoutReport(game, options = {}) {
   // complete official box for last night's game(s) and every current-series
   // game, printed beside the stories those same games carry. Failure ≠
   // empty: a fetch that throws prints an honest-absence line.
+  // Bucket layout homes mirror the stories': a head-to-head box rides THE
+  // MATCHUP, a club's own last-night box rides its Recent form.
+  const boxScoresBySide = { home: [], away: [] };
+  const boxScoresShared = [];
   const boxScoresSection = await (async () => {
     const rows = [];
     const seen = new Set();
@@ -1209,23 +1258,31 @@ export async function buildMlbScoutReport(game, options = {}) {
     for (const g of rows) {
       const date = String(g.officialDate || g.gameDate || '').slice(0, 10);
       const head = `${date} ${g.teams?.away?.team?.name ?? 'Away'} ${g.teams?.away?.score ?? ''} @ ${g.teams?.home?.team?.name ?? 'Home'} ${g.teams?.home?.score ?? ''}`.replace(/\s+/g, ' ').trim();
+      let rendered = null;
       try {
         const box = await getGameBoxScore(g.gamePk);
-        const rendered = renderBoxScore(head, box);
-        if (rendered) parts.push(rendered);
+        rendered = renderBoxScore(head, box) || null;
       } catch {
-        parts.push(`BOX SCORE — ${head}: box score retrieval failed this run — treat as missing data, not an empty game.`);
+        rendered = `BOX SCORE — ${head}: box score retrieval failed this run — treat as missing data, not an empty game.`;
       }
+      if (!rendered) continue;
+      parts.push(rendered);
+      if (headToHeadPks.has(g.gamePk)) boxScoresShared.push(rendered);
+      else if (homeWireGames.some((h) => h.gamePk === g.gamePk)) boxScoresBySide.home.push(rendered);
+      else boxScoresBySide.away.push(rendered);
     }
     return parts.join('\n\n');
   })();
 
   // THE PEN, AS REPORTED — see the fetch above for the failure contract.
+  const penPressBySide = { home: null, away: null };
   const penPressSection = (() => {
     const rows = [];
-    for (const [teamName, res] of [[awayTeam, awayPenPress], [homeTeam, homePenPress]]) {
-      if (res?.failed) rows.push(`${teamName}: press retrieval returned nothing this run — treat as missing coverage, not a quiet story.`);
-      else if (res?.text && res.text.trim()) rows.push(`${teamName}:\n${res.text.trim()}`);
+    for (const [teamName, res, side] of [[awayTeam, awayPenPress, 'away'], [homeTeam, homePenPress, 'home']]) {
+      let row = null;
+      if (res?.failed) row = `${teamName}: press retrieval returned nothing this run — treat as missing coverage, not a quiet story.`;
+      else if (res?.text && res.text.trim()) row = `${teamName}:\n${res.text.trim()}`;
+      if (row) { rows.push(row); penPressBySide[side] = row; }
     }
     return rows.join('\n\n');
   })();
@@ -1261,6 +1318,7 @@ export async function buildMlbScoutReport(game, options = {}) {
   // founder duplication audit: each game's full official story now prints in
   // these entries and names the arm the offense faced, with the how.)
   let recentPerformanceSection = '';
+  const recentFormBySide = { home: null, away: null };
   {
     const lastWord = (name) => name.toLowerCase().split(' ').pop();
 
@@ -1349,7 +1407,9 @@ export async function buildMlbScoutReport(game, options = {}) {
       return lines.join('\n');
     };
 
-    recentPerformanceSection = [formatTeamRecent(homeTeam, homeRecentGames, homeBdlGames), formatTeamRecent(awayTeam, awayRecentGames, awayBdlGames)].join('\n\n');
+    recentFormBySide.home = formatTeamRecent(homeTeam, homeRecentGames, homeBdlGames);
+    recentFormBySide.away = formatTeamRecent(awayTeam, awayRecentGames, awayBdlGames);
+    recentPerformanceSection = [recentFormBySide.home, recentFormBySide.away].join('\n\n');
   }
 
   // (THE MLB DEEP READ retired Aug 26, same day it shipped — founder's
@@ -1425,6 +1485,8 @@ export async function buildMlbScoutReport(game, options = {}) {
   // RECENT RESULTS (last 10 games for each team — individual game scores)
   // ═══════════════════════════════════════════════════════════════════
   let recentResults = 'No recent games available.';
+  const runShapeBySide = { home: null, away: null };
+  const recentResultsBySide = { home: null, away: null };
   {
     // Opponent records ride each row (founder, Aug 5 PM: "3-7 against WHOM —
     // you can tell a lot about the quality of a team even in the losses").
@@ -1475,10 +1537,14 @@ export async function buildMlbScoutReport(game, options = {}) {
       return bits.join(' ');
     };
     const parts = [];
-    const shapes = [runShape(homeRecentGames, homeTeam), runShape(awayRecentGames, awayTeam)].filter(Boolean);
+    runShapeBySide.home = runShape(homeRecentGames, homeTeam);
+    runShapeBySide.away = runShape(awayRecentGames, awayTeam);
+    const shapes = [runShapeBySide.home, runShapeBySide.away].filter(Boolean);
     if (shapes.length) parts.push(shapes.join('\n'));
-    parts.push(formatRecentGames(homeRecentGames, homeTeam));
-    parts.push(formatRecentGames(awayRecentGames, awayTeam));
+    recentResultsBySide.home = formatRecentGames(homeRecentGames, homeTeam);
+    recentResultsBySide.away = formatRecentGames(awayRecentGames, awayTeam);
+    parts.push(recentResultsBySide.home);
+    parts.push(recentResultsBySide.away);
     recentResults = parts.join('\n\n');
   }
 
@@ -1536,9 +1602,7 @@ export async function buildMlbScoutReport(game, options = {}) {
       return `${teamName}: ${parts.join('. ')}.`;
     };
 
-    const homeRest = formatRestSchedule(homeTeam, homeRecentGames, awayTeam);
-    const awayRest = formatRestSchedule(awayTeam, awayRecentGames, homeTeam);
-    restScheduleSection = `${homeRest}\n${awayRest}`;
+    restScheduleSection = `${formatRestSchedule(homeTeam, homeRecentGames, awayTeam)}\n${formatRestSchedule(awayTeam, awayRecentGames, homeTeam)}`;
   }
 
   // (HP umpire line built then REMOVED same hour — founder, Aug 12: "the
@@ -1552,7 +1616,9 @@ export async function buildMlbScoutReport(game, options = {}) {
   // WEATHER / VENUE CONTEXT
   // ═══════════════════════════════════════════════════════════════════
   let weatherSection = '';
-  if (probablePitchersData?.weather) {
+  // An empty weather object (the feed's pre-posting shape) is not weather —
+  // it printed "Unknown, —°F, Wind: Unknown" on early builds (seen Sep 1).
+  if (probablePitchersData?.weather && (probablePitchersData.weather.condition || probablePitchersData.weather.temp || probablePitchersData.weather.wind)) {
     const w = probablePitchersData.weather;
     weatherSection = `Weather: ${w.condition || 'Unknown'}, ${w.temp || '—'}°F, Wind: ${w.wind || 'Unknown'}`;
   }
@@ -1599,6 +1665,7 @@ export async function buildMlbScoutReport(game, options = {}) {
   const lineupShort = d => !(d?.batters?.length >= 9) || !d?.pitcher?.name;
 
   let confirmedLineupsSection = 'Lineups not yet posted — check closer to game time.';
+  const lineupBySide = { home: null, away: null };
   let homeData = null;
   let awayData = null;
   const homeLineupAbbr = game.home_team?.abbreviation || game.home_team_data?.abbreviation || '';
@@ -1908,10 +1975,9 @@ export async function buildMlbScoutReport(game, options = {}) {
       buildPlayerBlocks(homeData, homePlayerSeasonStats, homeTeam, homeRoster, probablePitchersData?.away, homeRecentGames, awayTeam),
       buildPlayerBlocks(awayData, awayPlayerSeasonStats, awayTeam, awayRoster, probablePitchersData?.home, awayRecentGames, homeTeam),
     ]);
-    confirmedLineupsSection = [
-      withSat(withHands(formatLineup(homeData, homeTeam, homePlayerBlocks), handsLine(homeData)), satToday(homeTeam, homeData)),
-      withSat(withHands(formatLineup(awayData, awayTeam, awayPlayerBlocks), handsLine(awayData)), satToday(awayTeam, awayData)),
-    ].join('\n\n');
+    lineupBySide.home = withSat(withHands(formatLineup(homeData, homeTeam, homePlayerBlocks), handsLine(homeData)), satToday(homeTeam, homeData));
+    lineupBySide.away = withSat(withHands(formatLineup(awayData, awayTeam, awayPlayerBlocks), handsLine(awayData)), satToday(awayTeam, awayData));
+    confirmedLineupsSection = [lineupBySide.home, lineupBySide.away].join('\n\n');
   }
 
   // HARD FAIL: Gary cannot pick MLB without confirmed lineups + starting pitchers
@@ -1946,6 +2012,9 @@ export async function buildMlbScoutReport(game, options = {}) {
   // This one shared path handles both teams and every injured player.
   // ═══════════════════════════════════════════════════════════════════
   let injuriesSection = '';
+  // Per-club halves for the bucket layout — the same routed lines, split.
+  // The LOCKED clock/label logic above and below is untouched.
+  const injuriesBySide = { home: null, away: null };
   if (Array.isArray(bdlInjuries) && bdlInjuries.length > 0) {
     const sameId = (a, b) => a != null && b != null && String(a) === String(b);
     const playerNameOf = (injury) => injury?.player?.full_name
@@ -2111,12 +2180,20 @@ export async function buildMlbScoutReport(game, options = {}) {
       .map((side) => `${side.teamName}:\n${side.lines.map((line) => `  ${line}`).join('\n')}`);
     injuriesSection = parts.join('\n\n')
       || 'No fresh or lineup-relevant absences. Long-term and depth IL entries are represented by tonight\'s confirmed lineups and current team baselines.';
+    for (const key of ['home', 'away']) {
+      const side = sides[key];
+      injuriesBySide[key] = side.lines.length > 0
+        ? `${side.teamName}:\n${side.lines.map((line) => `  ${line}`).join('\n')}`
+        : `${side.teamName}: no fresh or lineup-relevant absences. Long-term and depth IL entries are represented by tonight's confirmed lineup and current team baselines.`;
+    }
     console.log(
       `[Scout Report] MLB injury routing: fresh=${routedCounts.FRESH}, established=${routedCounts.ESTABLISHED}, `
       + `scratches=${routedCounts['SP SCRATCH']}, omitted=${routedCounts.omitted}, unresolved=${routedCounts.unresolved}`,
     );
   } else {
     injuriesSection = 'No current structured injuries reported.';
+    injuriesBySide.home = `${homeTeam}: no current structured injuries reported.`;
+    injuriesBySide.away = `${awayTeam}: no current structured injuries reported.`;
   }
 
   // (LINEUP RECENT BATTING wall retired Aug 27 — founder: the fan facts
@@ -2133,6 +2210,7 @@ export async function buildMlbScoutReport(game, options = {}) {
   // side and the season line. The platoon caddy question, answered.
   // ═══════════════════════════════════════════════════════════════════
   let benchSection = '';
+  const benchBySide = { home: null, away: null };
   try {
     const injuredFolds = new Set((bdlInjuries || [])
       .map((i) => foldName(i?.player?.full_name || [i?.player?.first_name, i?.player?.last_name].filter(Boolean).join(' ')))
@@ -2179,6 +2257,8 @@ export async function buildMlbScoutReport(game, options = {}) {
       benchFor(homeRoster, homeData, homePlayerSeasonStats, homeTeam),
       benchFor(awayRoster, awayData, awayPlayerSeasonStats, awayTeam),
     ]);
+    benchBySide.home = homeBench || null;
+    benchBySide.away = awayBench || null;
     benchSection = [homeBench, awayBench].filter(Boolean).join('\n');
   } catch { benchSection = ''; }
 
@@ -2201,6 +2281,7 @@ export async function buildMlbScoutReport(game, options = {}) {
   // is not touched. Same-day lineup scratches stay news-borne (no transaction
   // exists for a scratch).
   let situationFlagsSection = '';
+  const situationFlagsBySide = { home: null, away: null };
   try {
     const teamGamesOf = (teamName) => {
       // Exact whole-name lookup (leakage-audit finding 2, Aug 17): last-word
@@ -2217,13 +2298,14 @@ export async function buildMlbScoutReport(game, options = {}) {
     const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
     const todayEtFlag = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
     const flagLines = [];
-    for (const [teamName, teamId, seasonStats] of [
-      [homeTeam, homeTeamId, homePlayerSeasonStats],
-      [awayTeam, awayTeamId, awayPlayerSeasonStats],
+    for (const [teamName, teamId, seasonStats, side] of [
+      [homeTeam, homeTeamId, homePlayerSeasonStats, 'home'],
+      [awayTeam, awayTeamId, awayPlayerSeasonStats, 'away'],
     ]) {
       if (!teamId) continue;
       const rows = await getMlbTransactions(teamId, threeDaysAgo, todayEtFlag).catch(() => []);
       const seen = new Set();
+      const sideLines = [];
       for (const r of rows) {
         const d = String(r.description || '');
         const placed = d.match(/placed\s+(?:[A-Z0-9]{1,3}\s+)?(.+?)\s+on the .*injured list/i);
@@ -2236,11 +2318,13 @@ export async function buildMlbScoutReport(game, options = {}) {
           const gp = gpOf(seasonStats, playerName);
           const tg = teamGamesOf(teamName);
           const share = gp != null && tg ? ` — had played ${gp} of the team's ${tg} games` : '';
-          flagLines.push(`FRESH ABSENCE: ${playerName} (${teamName}) — placed on the injured list ${r.date}${share}. First game(s) without him.`);
+          sideLines.push(`FRESH ABSENCE: ${playerName} (${teamName}) — placed on the injured list ${r.date}${share}. First game(s) without him.`);
         } else {
-          flagLines.push(`JUST BACK: ${playerName} (${teamName}) — activated from the injured list ${r.date}.`);
+          sideLines.push(`JUST BACK: ${playerName} (${teamName}) — activated from the injured list ${r.date}.`);
         }
       }
+      flagLines.push(...sideLines);
+      situationFlagsBySide[side] = sideLines.length ? sideLines.join('\n') : null;
     }
     situationFlagsSection = flagLines.join('\n');
   } catch { situationFlagsSection = ''; }
@@ -2275,6 +2359,47 @@ export async function buildMlbScoutReport(game, options = {}) {
     homeShape ? `${homeTeam}: ${homeShape.line}` : null,
     awayShape ? `${awayTeam}: ${awayShape.line}` : null,
   ].filter(Boolean).join('\n');
+  // Lookahead / getaway / travel (Jul 26): facts for letdown-lookahead spots.
+  // Hoisted out of the flat template (Sep 1) so both layouts print it.
+  const lookaheadBlock = (() => {
+    const TZ = { rays: 'ET', guardians: 'ET', tigers: 'ET', yankees: 'ET', 'red sox': 'ET', 'blue jays': 'ET', orioles: 'ET', phillies: 'ET', mets: 'ET', braves: 'ET', marlins: 'ET', nationals: 'ET', pirates: 'ET', reds: 'ET', brewers: 'CT', cubs: 'CT', 'white sox': 'CT', cardinals: 'CT', royals: 'CT', twins: 'CT', astros: 'CT', rangers: 'CT', rockies: 'MT', diamondbacks: 'MT', dodgers: 'PT', angels: 'PT', padres: 'PT', giants: 'PT', athletics: 'PT', mariners: 'PT' };
+    const nameOf = (id) => {
+      const row = (bdlStandings || []).find(r => r.team?.id === id);
+      return row?.team?.display_name?.split(' ').pop() || null;
+    };
+    // TZ keys include the two-word Sox nicknames — match the FULL display name
+    // against each key (Aug 19 sweep: the one-word pop meant neither Sox club
+    // ever resolved a timezone and their travel lines silently dropped it).
+    const tzOf = (id) => {
+      const row = (bdlStandings || []).find(r => r.team?.id === id);
+      const full = (row?.team?.display_name || '').toLowerCase();
+      if (!full) return null;
+      const key = Object.keys(TZ).find((k) => full.endsWith(k));
+      return key ? TZ[key] : null;
+    };
+    const line = (teamId, teamName) => {
+      if (!teamId || !seasonIndex?.entries) return null;
+      let next = null;
+      for (const [, g] of seasonIndex.entries()) {
+        if (g.homeId !== teamId && g.awayId !== teamId) continue;
+        if (g.seasonType === 'spring_training') continue;
+        const et = toEtDate(g.date);
+        if (et <= todayEtStr) continue;
+        if (!next || et < next.et) next = { et, oppId: g.homeId === teamId ? g.awayId : g.homeId, hostId: g.homeId };
+      }
+      if (!next) return `${teamName}: no scheduled game found after today.`;
+      const tomorrow = new Date(new Date(todayEtStr + 'T12:00:00').getTime() + 86400000).toISOString().slice(0, 10);
+      const when = next.et === tomorrow ? 'tomorrow' : `next on ${next.et}`;
+      const opp = nameOf(next.oppId) || 'TBD';
+      const sameOppAsTonight = next.oppId === (teamId === homeTeamBdlId ? awayTeamBdlId : homeTeamBdlId);
+      const hereTz = tzOf(homeTeamBdlId);
+      const nextTz = tzOf(next.hostId);
+      const travel = hereTz && nextTz && hereTz !== nextTz ? ` (${hereTz}→${nextTz})` : '';
+      if (sameOppAsTonight) return `${teamName}: same series continues ${when}.`;
+      return `${teamName}: new series ${when} ${next.hostId === teamId ? 'vs' : '@'} ${opp}${travel} — tonight is the getaway game of this set.`;
+    };
+    return [line(homeTeamBdlId, homeTeam), line(awayTeamBdlId, awayTeam)].filter(Boolean).join('\n');
+  })();
   const seasonSeriesBlock = seasonSeries
     ? `\n${seasonSeries.line}\n${(seasonSeriesGroups || seasonSeries.results).map(r => `  ${r}`).join('\n')}`
     : '';
@@ -2291,6 +2416,10 @@ export async function buildMlbScoutReport(game, options = {}) {
   // own ledger.
   // ═══════════════════════════════════════════════════════════════════
   let situationSection = '';
+  // Bucket layout: each club's spot opens its own Recent form; the
+  // division-game line is an interaction and rides THE MATCHUP.
+  const spotBySide = { home: null, away: null };
+  let divisionGameLine = null;
   try {
     const teamNameOfBdlId = new Map((bdlStandings || []).filter((t) => t.team?.id != null)
       .map((t) => [String(t.team.id), t.team.display_name || t.team.full_name || '?']));
@@ -2348,10 +2477,9 @@ export async function buildMlbScoutReport(game, options = {}) {
       return lines.length ? `${teamName}:\n${lines.map((l) => `  ${l}`).join('\n')}` : null;
     };
 
-    const parts = [
-      spotFor(awayTeam, awayTeamBdlId, false, awaySituHit),
-      spotFor(homeTeam, homeTeamBdlId, true, homeSituHit),
-    ].filter(Boolean);
+    spotBySide.away = spotFor(awayTeam, awayTeamBdlId, false, awaySituHit);
+    spotBySide.home = spotFor(homeTeam, homeTeamBdlId, true, homeSituHit);
+    const parts = [spotBySide.away, spotBySide.home].filter(Boolean);
 
     if (homeDiv && awayDiv && homeDiv === awayDiv) {
       const divRec = (id) => situationCtx.get(id)?.divisionRecords?.[homeDiv] || null;
@@ -2361,7 +2489,8 @@ export async function buildMlbScoutReport(game, options = {}) {
       if (hd) bits.push(`${homeTeam} vs the division this season: ${hd}.`);
       if (ad) bits.push(`${awayTeam}: ${ad}.`);
       if (seasonSeries?.line) bits.push(seasonSeries.line);
-      parts.push(bits.join(' '));
+      divisionGameLine = bits.join(' ');
+      parts.push(divisionGameLine);
     }
 
     // Fresh roster changes ride the spot — names only, detail stays in
@@ -2380,6 +2509,7 @@ export async function buildMlbScoutReport(game, options = {}) {
   // TEAM SEASON STATS — FORMAT COMPARISON SECTION
   // ═══════════════════════════════════════════════════════════════════
   let teamSeasonStatsSection = '';
+  const seasonStatsBySide = { home: null, away: null };
   {
     const fmtBattingLine = (teamName, stats) => {
       if (!stats) return `${teamName}: Team season stats unavailable`;
@@ -2416,10 +2546,9 @@ export async function buildMlbScoutReport(game, options = {}) {
       return `${teamName}: ${avg} AVG / ${ops} OPS / ${rpg} R/G | Pitching: ${era} ERA / ${whip} WHIP / ${k9} K/9${fielding}${running}${shape}`;
     };
     if (homeTeamStats || awayTeamStats) {
-      teamSeasonStatsSection = [
-        fmtBattingLine(homeTeam, homeTeamStats),
-        fmtBattingLine(awayTeam, awayTeamStats),
-      ].join('\n');
+      seasonStatsBySide.home = fmtBattingLine(homeTeam, homeTeamStats);
+      seasonStatsBySide.away = fmtBattingLine(awayTeam, awayTeamStats);
+      teamSeasonStatsSection = [seasonStatsBySide.home, seasonStatsBySide.away].join('\n');
     }
     // TEAM VS-HAND (founder GO, Aug 12): how each lineup hits lefties and
     // righties, season-long — the platoon picture from the hitters' side.
@@ -2433,11 +2562,14 @@ export async function buildMlbScoutReport(game, options = {}) {
         const bits = [fmtHand('LHP', sp.vsLeft), fmtHand('RHP', sp.vsRight)].filter(Boolean);
         return bits.length ? `${teamName} ${bits.join(' | ')}` : null;
       };
-      const handLines = (await Promise.all([
+      const [homeHand, awayHand] = await Promise.all([
         handLine(homeTeam, homeTeamId),
         handLine(awayTeam, awayTeamId),
-      ])).filter(Boolean);
+      ]);
+      const handLines = [homeHand, awayHand].filter(Boolean);
       if (handLines.length) teamSeasonStatsSection += `\n${handLines.join('\n')}`;
+      if (homeHand) seasonStatsBySide.home = [seasonStatsBySide.home, homeHand].filter(Boolean).join('\n');
+      if (awayHand) seasonStatsBySide.away = [seasonStatsBySide.away, awayHand].filter(Boolean).join('\n');
     } catch { /* fail-open — the season lines above still print */ }
   }
 
@@ -2477,19 +2609,84 @@ export async function buildMlbScoutReport(game, options = {}) {
   // path is team-ID based). Every other join uses clubMatches (Aug 19).
   function lastWord(name) { return (name || '').toLowerCase().split(' ').pop(); }
 
-  const matchupShelfSection = await buildScoutMatchupShelf(game, homeTeam, awayTeam, gamePk).catch(() => '');
+  const matchupShelf = await buildScoutMatchupShelf(game, homeTeam, awayTeam, gamePk).catch(() => ({ text: '', byToken: {} }));
+  const matchupShelfSection = matchupShelf.text;
+  const shelfHalf = (token, side) => matchupShelf.byToken?.[token]?.[side] ?? null;
 
   // ═══════════════════════════════════════════════════════════════════
   // ASSEMBLE REPORT
   // ═══════════════════════════════════════════════════════════════════
-  const text = `
+  const seriesStateLine = computeMlbSeriesState(homeTeam, awayTeam, homeRecentGames, homeUpcomingGames).line;
+  const venueName = typeof venue === 'string' ? venue : venue?.name || 'Unknown';
+  const startLine = startTime ? `Start: ${new Date(startTime).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })} ET` : '';
+  const dhLine = dhInfo ? `DOUBLEHEADER today${dhInfo.gameNumber ? ` — this is game ${dhInfo.gameNumber}` : ''}${dhInfo.split ? ' (split doubleheader)' : ''}.` : '';
+
+  // THE FOUR-BUCKET DESK (founder GO, Sep 1 2026): same pieces, grouped by
+  // club, then interaction, then surroundings, then price. Selected by
+  // GARY_MLB_DESK_LAYOUT=buckets (or options.deskLayout); production stays
+  // on the flat desk below until the founder flips it.
+  const teamPieces = (side, name) => ({
+    name,
+    stand: standingsBySide[side],
+    seasonStats: seasonStatsBySide[side],
+    lineup: lineupBySide[side],
+    bench: benchBySide[side] ? benchBySide[side].replace(new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}: `), '') : null,
+    starter: probablesBySide[side],
+    starterFlags: smallSampleFlagsBySide[side].length ? smallSampleFlagsBySide[side].join('\n') : null,
+    pitchTypes: shelfHalf('MLB_PITCH_TYPES_SP', side),
+    pen: shelfHalf('MLB_CLOSER_RELIEVER_STATS', side),
+    penWorkload: shelfHalf('MLB_BULLPEN_WORKLOAD', side),
+    penPress: penPressBySide[side],
+    catcher: shelfHalf('MLB_CATCHER_DEFENSE', side),
+    defense: shelfHalf('MLB_TEAM_DEFENSE', side),
+    injuries: injuriesBySide[side],
+    flags: situationFlagsBySide[side],
+    spot: spotBySide[side],
+    recentForm: recentFormBySide[side],
+    runShape: runShapeBySide[side],
+    recentResults: recentResultsBySide[side],
+    lastNight: lastNightBySide[side],
+    boxScores: boxScoresBySide[side].length ? boxScoresBySide[side].join('\n\n') : null,
+    rosterMoves: side === 'home' ? homeTx : awayTx,
+  });
+  const bucketsText = deskLayout === 'buckets' ? renderBucketsDesk({
+    header: [
+      `MATCHUP: ${awayTeam} @ ${homeTeam}`,
+      gameDesc ? `Context: ${gameDesc}` : null,
+      `Venue: ${venueName}`,
+      startLine || null,
+      dhLine || null,
+    ].filter(Boolean).join('\n'),
+    home: teamPieces('home', homeTeam),
+    away: teamPieces('away', awayTeam),
+    matchup: {
+      seriesState: [seriesLine || null, seriesStateLine].filter(Boolean).join('\n'),
+      seasonSeries: seasonSeriesBlock ? seasonSeriesBlock.trim() : null,
+      divisionGame: divisionGameLine,
+      seriesStories: seriesStoriesBlock || null,
+      sharedLastNight: lastNightShared,
+      sharedBoxScores: boxScoresShared.length ? boxScoresShared.join('\n\n') : null,
+      park: shelfHalf('MLB_PARK_FACTORS', 'home'),
+    },
+    situation: {
+      scheduleShape: scheduleShapeBlock || null,
+      lookahead: lookaheadBlock || null,
+      rest: restScheduleSection || null,
+      weather: weatherSection || null,
+      news: gameContextGrounding || null,
+      storylines: storylinesGrounding || null,
+    },
+    market: { odds: oddsSection || null },
+  }) : null;
+
+  const legacyText = `
 ══════════════════════════════════════════════════════════════════
 MATCHUP: ${awayTeam} @ ${homeTeam}
 ${gameDesc ? `Context: ${gameDesc}` : ''}
-Venue: ${typeof venue === 'string' ? venue : venue?.name || 'Unknown'}
-${startTime ? `Start: ${new Date(startTime).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })} ET` : ''}
+Venue: ${venueName}
+${startLine}
 ${seriesLine ? seriesLine : ''}
-${dhInfo ? `DOUBLEHEADER today${dhInfo.gameNumber ? ` — this is game ${dhInfo.gameNumber}` : ''}${dhInfo.split ? ' (split doubleheader)' : ''}.` : ''}
+${dhLine}
 ${weatherSection}
 ══════════════════════════════════════════════════════════════════
 
@@ -2514,7 +2711,7 @@ ${recentPerformanceSection || 'No recent performance data.'}
 
 
 ═══ SERIES STATE ═══
-${computeMlbSeriesState(homeTeam, awayTeam, homeRecentGames, homeUpcomingGames).line}${seasonSeriesBlock}${seriesStoriesBlock ? `\n\nThis series, as written:\n${seriesStoriesBlock}` : ''}
+${seriesStateLine}${seasonSeriesBlock}${seriesStoriesBlock ? `\n\nThis series, as written:\n${seriesStoriesBlock}` : ''}
 
 Recent results:
 ${recentResults}
@@ -2524,47 +2721,7 @@ ${rosterMovesSection}
 
 ═══ SCHEDULE SHAPE ═══
 ${scheduleShapeBlock || 'Schedule shape unavailable.'}
-${(() => {
-  // Lookahead / getaway / travel (Jul 26): facts for letdown-lookahead spots.
-  const TZ = { rays: 'ET', guardians: 'ET', tigers: 'ET', yankees: 'ET', 'red sox': 'ET', 'blue jays': 'ET', orioles: 'ET', phillies: 'ET', mets: 'ET', braves: 'ET', marlins: 'ET', nationals: 'ET', pirates: 'ET', reds: 'ET', brewers: 'CT', cubs: 'CT', 'white sox': 'CT', cardinals: 'CT', royals: 'CT', twins: 'CT', astros: 'CT', rangers: 'CT', rockies: 'MT', diamondbacks: 'MT', dodgers: 'PT', angels: 'PT', padres: 'PT', giants: 'PT', athletics: 'PT', mariners: 'PT' };
-  const nameOf = (id) => {
-    const row = (bdlStandings || []).find(r => r.team?.id === id);
-    return row?.team?.display_name?.split(' ').pop() || null;
-  };
-  // TZ keys include the two-word Sox nicknames — match the FULL display name
-  // against each key (Aug 19 sweep: the one-word pop meant neither Sox club
-  // ever resolved a timezone and their travel lines silently dropped it).
-  const tzOf = (id) => {
-    const row = (bdlStandings || []).find(r => r.team?.id === id);
-    const full = (row?.team?.display_name || '').toLowerCase();
-    if (!full) return null;
-    const key = Object.keys(TZ).find((k) => full.endsWith(k));
-    return key ? TZ[key] : null;
-  };
-  const line = (teamId, teamName) => {
-    if (!teamId || !seasonIndex?.entries) return null;
-    let next = null;
-    for (const [, g] of seasonIndex.entries()) {
-      if (g.homeId !== teamId && g.awayId !== teamId) continue;
-      if (g.seasonType === 'spring_training') continue;
-      const et = toEtDate(g.date);
-      if (et <= todayEtStr) continue;
-      if (!next || et < next.et) next = { et, oppId: g.homeId === teamId ? g.awayId : g.homeId, hostId: g.homeId };
-    }
-    if (!next) return `${teamName}: no scheduled game found after today.`;
-    const tomorrow = new Date(new Date(todayEtStr + 'T12:00:00').getTime() + 86400000).toISOString().slice(0, 10);
-    const when = next.et === tomorrow ? 'tomorrow' : `next on ${next.et}`;
-    const opp = nameOf(next.oppId) || 'TBD';
-    const sameOppAsTonight = next.oppId === (teamId === homeTeamBdlId ? awayTeamBdlId : homeTeamBdlId);
-    const hereTz = tzOf(homeTeamBdlId);
-    const nextTz = tzOf(next.hostId);
-    const travel = hereTz && nextTz && hereTz !== nextTz ? ` (${hereTz}→${nextTz})` : '';
-    if (sameOppAsTonight) return `${teamName}: same series continues ${when}.`;
-    return `${teamName}: new series ${when} ${next.hostId === teamId ? 'vs' : '@'} ${opp}${travel} — tonight is the getaway game of this set.`;
-  };
-  const out = [line(homeTeamBdlId, homeTeam), line(awayTeamBdlId, awayTeam)].filter(Boolean).join('\n');
-  return out ? `\nLooking ahead:\n${out}` : '';
-})()}
+${lookaheadBlock ? `\nLooking ahead:\n${lookaheadBlock}` : ''}
 
 ═══ REST & SCHEDULE SITUATION ═══
 ${restScheduleSection}
@@ -2576,6 +2733,7 @@ ${storylinesGrounding ? `\n— THE STORYLINES —\n${storylinesGrounding}` : ''}
 ═══ BETTING CONTEXT ═══
 ${oddsSection}
 `.trim();
+  const text = bucketsText ?? legacyText;
 
   // Token menu for Flash
   const tokenMenu = formatTokenMenu('MLB');
@@ -2723,7 +2881,7 @@ ${oddsSection}
 
   // THE DESK MANIFEST (founder, Aug 27): nothing leaves this builder
   // silently short — grade every section, scream on missing, ledger it.
-  try { recordDeskManifest(`${awayTeam} @ ${homeTeam}`, auditDeskManifest(text)); } catch { /* fail-open */ }
+  try { recordDeskManifest(`${awayTeam} @ ${homeTeam}`, auditDeskManifest(text, deskLayout), deskLayout); } catch { /* fail-open */ }
 
   return {
     text,

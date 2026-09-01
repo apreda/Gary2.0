@@ -13,6 +13,7 @@
 import { existsSync, mkdirSync, appendFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { TEAM_SUBSECTIONS, MATCHUP_SUBSECTIONS, SITUATION_SUBSECTIONS, MARKET_SUBSECTIONS } from './mlbDeskLayout.js';
 
 const REQUIRED = [
   ['THE SITUATION', '═══ THE SITUATION ═══'],
@@ -46,6 +47,20 @@ const OPTIONAL = [
   ['THE PEN, AS REPORTED', '═══ THE PEN, AS REPORTED ═══'],
 ];
 
+// THE FOUR-BUCKET DESK (Sep 1 2026) grades by subsection marker instead:
+// each team subsection must appear once per club, the rest once. Labels
+// are the layout module's own (mlbDeskLayout.js); `count` is how many
+// occurrences a complete desk carries.
+const REQUIRED_BUCKETS = [
+  ...TEAM_SUBSECTIONS.map((label) => [label, `── ${label} ──`, 2]),
+  ...MATCHUP_SUBSECTIONS.map((label) => [label, `── ${label} ──`, 1]),
+  ...SITUATION_SUBSECTIONS.filter((l) => l !== 'Weather').map((label) => [label, `── ${label} ──`, 1]),
+  ...MARKET_SUBSECTIONS.map((label) => [label, `── ${label} ──`, 1]),
+];
+// Weather posts to the game feed only near first pitch — a pending line on
+// an early build is not a broken lane.
+const OPTIONAL_BUCKETS = [['Weather', '── Weather ──', 1]];
+
 const ABSENCE_RX = /failed this run|retrieval failed|treat as missing/i;
 
 /** Body of the section that starts at `idx`: text up to the next ═══ header. */
@@ -56,13 +71,48 @@ function sectionBody(text, idx) {
   return text.slice(start, next === -1 ? undefined : next);
 }
 
+/** Bucket-layout body: text up to the next subsection, team, or bucket header. */
+function bucketBody(text, idx) {
+  const start = text.indexOf('\n', idx);
+  if (start === -1) return '';
+  const m = /\n(── |═══ |━━━)/.exec(text.slice(start + 1));
+  return m ? text.slice(start, start + 1 + m.index) : text.slice(start);
+}
+
+function everyIndex(text, marker) {
+  const out = [];
+  let i = text.indexOf(marker);
+  while (i !== -1) { out.push(i); i = text.indexOf(marker, i + marker.length); }
+  return out;
+}
+
+function auditBuckets(t) {
+  const res = { missing: [], empty: [], honestAbsent: [], present: [], optionalAbsent: [] };
+  const grade = (name, marker, count, required) => {
+    const hits = everyIndex(t, marker);
+    if (hits.length < count) {
+      (required ? res.missing : res.optionalAbsent).push(name);
+      if (hits.length === 0) return;
+    }
+    const bodies = hits.map((i) => bucketBody(t, i));
+    if (bodies.some((b) => ABSENCE_RX.test(b))) res.honestAbsent.push(name);
+    else if (required && bodies.some((b) => b.trim().length < 40)) res.empty.push(name);
+    else res.present.push(name);
+  };
+  for (const [name, marker, count] of REQUIRED_BUCKETS) grade(name, marker, count, true);
+  for (const [name, marker, count] of OPTIONAL_BUCKETS) grade(name, marker, count, false);
+  return res;
+}
+
 /**
  * Grade a built desk. Returns { missing, empty, honestAbsent, present,
  * optionalAbsent } — arrays of section names. `missing` and `empty` are the
- * alarm states for required sections.
+ * alarm states for required sections. `layout` selects the header grammar
+ * ('legacy' flat ═══ sections, or 'buckets').
  */
-export function auditDeskManifest(text) {
+export function auditDeskManifest(text, layout = 'legacy') {
   const t = String(text || '');
+  if (layout === 'buckets') return auditBuckets(t);
   const res = { missing: [], empty: [], honestAbsent: [], present: [], optionalAbsent: [] };
   for (const [name, marker] of REQUIRED) {
     const i = t.indexOf(marker);
@@ -88,9 +138,10 @@ const LEDGER = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '
  * Log the audit — LOUD on any missing/empty required section — and append
  * the ledger line. Fail-open: the ledger must never sink a desk build.
  */
-export function recordDeskManifest(matchup, audit) {
+export function recordDeskManifest(matchup, audit, layout = 'legacy') {
   const bad = [...audit.missing, ...audit.empty];
-  const line = `${new Date().toISOString()} | ${matchup} | missing:[${audit.missing.join(',')}] empty:[${audit.empty.join(',')}] honest-absent:[${audit.honestAbsent.join(',')}] present:${audit.present.length}`;
+  const tag = layout === 'legacy' ? '' : ` [${layout}]`;
+  const line = `${new Date().toISOString()} | ${matchup}${tag} | missing:[${audit.missing.join(',')}] empty:[${audit.empty.join(',')}] honest-absent:[${audit.honestAbsent.join(',')}] present:${audit.present.length}`;
   if (bad.length > 0) {
     console.error(`[Desk Manifest] 🚨 REQUIRED SECTION(S) NOT ON THE DESK for ${matchup}: ${bad.join(', ')} — a missing lane is a broken lane, never a quiet one.`);
   } else if (audit.honestAbsent.length > 0) {

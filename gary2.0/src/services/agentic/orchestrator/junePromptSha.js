@@ -23,6 +23,9 @@ import { buildPass1Message, buildPass25Message, buildPass3Unified } from './pass
 const here = path.dirname(fileURLToPath(import.meta.url));
 const DOSSIER_SURFACE_FILES = [
   '../scoutReport/sports/mlb.js',
+  // The four-bucket desk layout (Sep 1 2026) arranges what Gary reads —
+  // its order and headers are desk content.
+  '../scoutReport/sports/mlbDeskLayout.js',
   '../scoutReport/sports/mlbPlatoonRecency.js',
   '../scoutReport/sports/mlbSeasonContext.js',
   '../scoutReport/sports/mlbSeriesState.js',
