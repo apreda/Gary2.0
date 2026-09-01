@@ -8293,18 +8293,30 @@ struct PremiumPicksView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: selectedDate == nil ? "lock.badge.clock" : "calendar.badge.exclamationmark")
-                .font(.system(size: 42)).foregroundStyle(.white.opacity(0.25))
-            Text(boardDataFailed ? "Board data unavailable. Pull to retry."
-                 : selectedDate != nil ? "No graded picks on this day."
-                 : todaySlateCounts.isEmpty
-                 ? "No games today. Yesterday's card is under the date above."
-                 : "Gary's best bets post a few hours before first pitch.")
-                .font(GaryFonts.text(14)).foregroundStyle(.white.opacity(0.62))
-                .multilineTextAlignment(.center)
+        VStack(spacing: 30) {
+            VStack(spacing: 12) {
+                Image(systemName: selectedDate == nil ? "lock.badge.clock" : "calendar.badge.exclamationmark")
+                    .font(.system(size: 42)).foregroundStyle(.white.opacity(0.25))
+                Text(boardDataFailed ? "Board data unavailable. Pull to retry."
+                     : selectedDate != nil ? "No graded picks on this day."
+                     : todaySlateCounts.isEmpty
+                     ? "No games today. Yesterday's card is under the date above."
+                     : "Gary's best bets post a few hours before first pitch.")
+                    .font(GaryFonts.text(14)).foregroundStyle(.white.opacity(0.62))
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity).padding(.horizontal, 30).padding(.top, 60)
+
+            // Every Winners state signs off with THE LAUNCH (founder, Sep 1).
+            // A browsed-to date with no card was the one page in the room that
+            // ended in nothing — one grey line and a screen of black. The panel
+            // sits directly under the message, the way it sits directly under
+            // the shelves on a live board; the leftover space stays below it.
+            if !devAllAccess && Self.freeLaunch {
+                freeLaunchFooter
+            }
         }
-        .frame(maxWidth: .infinity).padding(.horizontal, 30).padding(.top, 60)
+        .padding(.bottom, 120)
     }
 
     private var winnersSourceFailureBanner: some View {
