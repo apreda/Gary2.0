@@ -201,6 +201,16 @@ end $$;
 ---
 
 ## Changelog
+- **Sep 1 2026 — Full review + rulings (co-founder).** Review artifact: claude.ai/code/artifact/44ec1d0f-50be-4043-9244-c2ecfbf6b893.
+  Measured: volume x2, total impressions x4, per-post reach flat (~600), RT 0 -> 0.05/post, 125 followers, /get 23/mo, site
+  8-26 visitors/wk, waitlist table never existed, 1 paid sub ever, Winners free in the shipping build. The Aug 5 distribution
+  diagnosis stands; the plan is rewritten around what I can run alone (LAUNCH_SEP13.md). Rulings: founding cohort (free
+  through Sep, in before Oct 1 keeps Winners free for the season, paywall for new installs Oct 1); one Monday week tape
+  (shipped, deterministic); verdict shape gate (shipped); per-game pages on the site (built); Sep 13 = marketing launch;
+  founder thread on his own account (the one founder-voice exception); video off the plan unless he is on camera; affiliate
+  not now. **Founder overruled the volume cut: every MLB game keeps posting until NFL kicks off.** Targets restated in
+  LAUNCH_SEP13.md; the "median 2,000 impressions" target is dropped — per-post reach is a function of the network.
+  **Outage:** account silent since Aug 30 6 PM ET — X API 402 credits depleted; founder tops up.
 - **Aug 5 2026** — Posting engine rebuilt (commit `9930e4c`): hard first-pitch deadline, game-paced drip,
   day-part reservations, per-pick failure isolation, miss alerting, marquee tiebreak, recap voice restored,
   intent metrics persisted. Strategy established; targets set.

@@ -1,6 +1,11 @@
 # GARY — FALL LAUNCH GTM
 ## The true launch: NFL Kickoff, Wednesday September 9, 2026
 
+> **Sep 1 2026 update (supersedes the dates below where they differ):** the app RELEASES Sat Sep 5 (v2.24), NFL picks
+> begin at Kickoff Sep 9, and the MARKETING LAUNCH is Sunday Sep 13 (first NFL Sunday). Winners stays free through
+> September; anyone in before Oct 1 keeps it free for the season; new installs meet the paywall Oct 1. Working runbook,
+> copy, and the founder list: `LAUNCH_SEP13.md`. Video is off the September plan. X paid stays parked.
+
 > Written Jul 23 2026. Owner: Claude (marketing). Canonical copy of this plan also lives in Notion
 > (Marketing Command Center → Fall Launch). All dates ET. Companion docs: `POSITIONING.md` (copy
 > register, verbatim lines), `X_CONVERSION_STRATEGY.md` (X algo playbook), `LAUNCH_AD_TREATMENT.md`
