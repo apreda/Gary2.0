@@ -19,7 +19,7 @@ import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestra
 const JUDGE_MODEL =
   process.env.GARY_JUDGE_MODEL_OVERRIDE ||
   process.env.GARY_PROPS_MODEL_OVERRIDE ||
-  'claude-sonnet-5';
+  'codex-gpt-5.6-sol'; // GPT Pro bridge (Sep 1 2026 — Claude CLI out of the app; default = what production runs)
 
 export const JUDGE_SYSTEM = `You are the selection desk for a sports betting page. You do not make picks, change picks, or predict games. You read one sealed pick — its pre-lines read, its published card, and the desk of facts it was built from — and you score the CASE the way a sharp reader would:
 
