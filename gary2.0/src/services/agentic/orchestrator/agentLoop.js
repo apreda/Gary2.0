@@ -812,6 +812,19 @@ INVESTIGATION COMPLETE`;
         if (functionName === 'fetch_nfl_player_stats') {
           console.log(`  → [NFL_PLAYER_STATS:${args.stat_type}] for ${args.team}${args.player_name ? ` (${args.player_name})` : ''}`);
 
+          // LEAGUE ISOLATION (Sep 1 2026, the Chargers-on-Wake-Forest class):
+          // this handler resolves against NFL teams and NFL advanced stats
+          // unconditionally — refuse it outside NFL runs rather than hand a
+          // college game pro data. (Tool path is dormant on bridge brains;
+          // this is insurance for any future tool-capable lane.)
+          if (!isNFLSport) {
+            messages.push({
+              role: 'tool', tool_call_id: toolCall.id, name: functionName,
+              content: JSON.stringify({ error: 'fetch_nfl_player_stats is NFL-only — the leagues are isolated; use your desk data for this game.' })
+            });
+            continue;
+          }
+
           try {
             const { ballDontLieService } = await import('../../ballDontLieService.js');
 

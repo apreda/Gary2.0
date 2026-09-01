@@ -473,10 +473,16 @@ function gradeGame(pickText, homeTeam, awayTeam, hScore, vScore) {
   // misgrade a correct draw pick as a loss.
   if (/\b(draw|tie)\b/.test(pickLower)) return (hScore === vScore) ? 'won' : 'lost';
 
-  // 4. Moneyline / team-to-win. A team-to-win ML loses on a draw — (hScore > vScore)
-  // is false on a level result, so a tie correctly grades 'lost'.
-  if (side === 'home') return (hScore > vScore) ? 'won' : 'lost';
-  if (side === 'away') return (vScore > hScore) ? 'won' : 'lost';
+  // 4. Moneyline / team-to-win. A 2-way US-book moneyline PUSHES on a level
+  // final — the stake refunds, it does not lose (Sep 1 2026 audit; NFL ties
+  // are rare but real, MLB cannot end level, NCAAF overtime prevents it).
+  // The explicit draw-pick branch above was the dead soccer lane's 3-way
+  // contract, where a draw bet WINS on level — different market, unchanged.
+  if (side === 'home' || side === 'away') {
+    if (hScore === vScore) return 'push';
+    if (side === 'home') return (hScore > vScore) ? 'won' : 'lost';
+    return (vScore > hScore) ? 'won' : 'lost';
+  }
 
   // Not classifiable as ML/spread/total/draw AND no distinguishing team token —
   // this isn't a team-score bet at all (e.g. a player prop like "Freeman to win
