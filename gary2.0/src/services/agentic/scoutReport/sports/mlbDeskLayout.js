@@ -32,14 +32,20 @@ export function resolveDeskLayout(options = {}) {
 // (Founder, Sep 1: no separate Catcher or Defense subsections — the
 // starting catcher's running-game line rides his lineup row, and the
 // fielding numbers ride Season stats.)
+// RECENCY FIRST (founder, Sep 1 2026 — "a real human looking at a game
+// tonight is going to think more about what's been happening lately"):
+// each club opens with what is happening right now — the streak, the last
+// games as games, the last turn through the rotation — and the season
+// follows as the backdrop. Inside every subsection the same order holds:
+// the newest fact leads, the season line closes.
 export const TEAM_SUBSECTIONS = [
+  'Right now',
   'Where they stand',
   'Season stats',
   "Tonight's lineup",
   "Tonight's starter",
   'The pen',
   'Injuries',
-  'Recent form',
   'Roster moves',
 ];
 
@@ -62,6 +68,15 @@ function renderTeam(t) {
   const name = t.name;
   const blocks = [teamHead(name)];
 
+  blocks.push(sub('Right now', joinBlocks([
+    has(t.spot) ? t.spot : null,
+    has(t.recentForm) ? t.recentForm : `${name}: ${absent('recent games')}`,
+    has(t.runShape) ? t.runShape : null,
+    has(t.recentResults) ? t.recentResults : null,
+    has(t.lastNight) ? `As written:\n${t.lastNight}` : null,
+    has(t.boxScores) ? t.boxScores : null,
+  ])));
+
   blocks.push(sub('Where they stand', has(t.stand) ? t.stand : `${name}: ${absent('standings context')}`));
 
   blocks.push(sub('Season stats', joinBlocks([
@@ -81,23 +96,14 @@ function renderTeam(t) {
   ])));
 
   blocks.push(sub('The pen', joinBlocks([
-    has(t.pen) ? t.pen : `${name}: ${absent('high-leverage arms')}`,
-    has(t.penWorkload) ? `Workload (recent appearances):\n${t.penWorkload}` : `${name}: ${absent('bullpen workload')}`,
+    has(t.penWorkload) ? `Recent work, appearance by appearance:\n${t.penWorkload}` : `${name}: ${absent('bullpen workload')}`,
     has(t.penPress) ? `As reported:\n${t.penPress}` : null,
+    has(t.pen) ? `Season lines:\n${t.pen}` : `${name}: ${absent('high-leverage arms')}`,
   ])));
 
   blocks.push(sub('Injuries', joinBlocks([
     has(t.injuries) ? t.injuries : `${name}: ${absent('structured injury data')}`,
     has(t.flags) ? t.flags : null,
-  ])));
-
-  blocks.push(sub('Recent form', joinBlocks([
-    has(t.spot) ? t.spot : null,
-    has(t.recentForm) ? t.recentForm : `${name}: ${absent('recent games')}`,
-    has(t.runShape) ? t.runShape : null,
-    has(t.recentResults) ? t.recentResults : null,
-    has(t.lastNight) ? `As written:\n${t.lastNight}` : null,
-    has(t.boxScores) ? t.boxScores : null,
   ])));
 
   blocks.push(sub('Roster moves', has(t.rosterMoves) ? t.rosterMoves : `${name}: ${absent('transaction data')}`));

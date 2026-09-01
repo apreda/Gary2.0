@@ -512,6 +512,10 @@ export async function buildMlbScoutReport(game, options = {}) {
       ).then(r => String(r?.data || '').trim()).catch(() => '');
     }
     const sideStarts = [];
+    // Recency-first order for the bucket desk: the newest start and the
+    // last-three line lead, the season line follows, everything else keeps
+    // its order. Indices are absolute into `parts`.
+    const starterKeys = { home: {}, away: {} };
     for (const [side, label] of [['away', awayTeam], ['home', homeTeam]]) {
       sideStarts.push([side, parts.length]);
       const pitcher = probablePitchersData[side];
@@ -534,6 +538,7 @@ export async function buildMlbScoutReport(game, options = {}) {
         // naturally walk a lot of guys" — a team-grain fact, naked).
         const bbSeason = bdlRow.pitching_bb ?? null;
         seasonLineIdx = parts.length;
+        starterKeys[side].season = seasonLineIdx;
         parts.push(`${label}: ${pitcher.fullName} — ${w}-${l}, ${era} ERA, ${whip} WHIP, ${k} K${bbSeason != null ? `, ${bbSeason} BB` : ''}, ${ip} IP (${gs} ${season} starts)`);
         pitcherStats[side] = { name: pitcher.fullName, ...bdlRow };
       } else if (bdlRow) {
@@ -686,11 +691,12 @@ export async function buildMlbScoutReport(game, options = {}) {
           // Opponent record beside every start (founder GO, Aug 18): the
           // ledger's "against whom" now says how good the whom was.
           const fmtStart = (g) => `${g.date} ${g.isHome ? 'vs' : '@'} ${g.opponent}${standingsRecordOf(g.opponent)}: ${g.ip}IP ${g.h}H ${g.er}ER ${g.k}K${g.bb ? ` ${g.bb}BB` : ''}${g.hr ? ` ${g.hr}HR` : ''}${g.pitches ? ` ${g.pitches}p` : ''}${g.win == null ? '' : g.win ? ' (team W)' : ' (team L)'}`;
+          starterKeys[side].newest = `  Last start: ${fmtStart(lastStarts[lastStarts.length - 1])}`;
           parts.push(`  Last ${lastStarts.length} start${lastStarts.length === 1 ? '' : 's'}: ${lastStarts.slice().reverse().map(fmtStart).join(' | ')}`);
           // The ledger's own arithmetic (Aug 4) — the recent window as a
           // number, as citable as the season figure above it.
           const rw = recentWindowLine(lastStarts, 3);
-          if (rw) parts.push(`  ${rw}`);
+          if (rw) { starterKeys[side].last3 = parts.length; parts.push(`  ${rw}`); }
           // MATCHUP RECENCY (founder GO, Aug 10 night): his latest start
           // against TONIGHT'S opponent, un-buried — full-season ledger, not
           // just the visible six.
@@ -947,7 +953,17 @@ export async function buildMlbScoutReport(game, options = {}) {
     probablePitchersSection = parts.join('\n');
     sideStarts.forEach(([side, start], i) => {
       const end = sideStarts[i + 1]?.[1] ?? parts.length;
-      const lines = parts.slice(start, end);
+      const keys = starterKeys[side];
+      const lead = [];
+      const skip = new Set();
+      if (keys.newest) lead.push(keys.newest);
+      if (keys.last3 != null) { lead.push(parts[keys.last3]); skip.add(keys.last3); }
+      if (keys.season != null) { lead.push(parts[keys.season]); skip.add(keys.season); }
+      const rest = [];
+      for (let j = start; j < end; j += 1) if (!skip.has(j)) rest.push(parts[j]);
+      // The team label rides the season line; when it leads, the newest-start
+      // line needs the name in front of it.
+      const lines = lead.length ? [`${side === 'home' ? homeTeam : awayTeam} — ${probablePitchersData[side]?.fullName || 'starter'}, most recent first:`, ...lead, ...rest] : rest;
       probablesBySide[side] = lines.length ? lines.join('\n') : null;
     });
   }
@@ -1692,9 +1708,9 @@ export async function buildMlbScoutReport(game, options = {}) {
   // HARD FAIL only when BOTH sources come up short — Gary cannot pick
   // without confirmed lineups + starting pitchers.
   // ═══════════════════════════════════════════════════════════════════
-  const formatLineup = (teamData, teamName, blocks = new Map()) => {
+  const formatLineup = (teamData, teamName, blocks = new Map(), preface = null) => {
     if (!teamData || teamData.batters.length === 0) return `${teamName}: Not yet posted`;
-    let out = `${teamName}:\n`;
+    let out = `${teamName}:\n${preface ? `${preface}\n` : ''}`;
     out += teamData.batters.map((b) => {
       const head = `  ${b.battingOrder}. ${b.name} (${b.position}) [Bats: ${b.batsThrows?.split('/')[0] || '?'}]`;
       const lines = blocks.get(b);
@@ -1848,9 +1864,10 @@ export async function buildMlbScoutReport(game, options = {}) {
     };
     const HITTER_MONTHS = { March: 3, April: 4, May: 5, June: 6, July: 7, August: 8, September: 9, October: 10 };
     const splitsLinesOf = async (batter) => {
-      if (batter?.playerId == null) return [];
+      const empty = { lines: [], r7: null, r15: null };
+      if (batter?.playerId == null) return empty;
       const splits = await ballDontLieService.getMlbPlayerSplits({ playerId: batter.playerId, season }).catch(() => null);
-      if (!splits) return [];
+      if (!splits) return empty;
       const out = [];
       const dayRows = splits.byDayMonth || [];
       const roll = (nm) => dayRows.find((r) => r.category === 'batting' && r.split_name === nm && r.at_bats > 0);
@@ -1868,7 +1885,7 @@ export async function buildMlbScoutReport(game, options = {}) {
         .sort((a, b) => HITTER_MONTHS[a.split_name] - HITTER_MONTHS[b.split_name])
         .map((r) => `${r.split_name.slice(0, 3)} ${three(r.avg) ?? '—'}/${three(r.ops) ?? '—'} (${r.at_bats} AB${r.home_runs ? `, ${r.home_runs} HR` : ''})`);
       if (months.length >= 2) out.push(`By month (AVG/OPS): ${months.join(' · ')}`);
-      return out;
+      return { lines: out, r7: roll('Last 7 Days') || null, r15: roll('Last 15 Days') || null };
     };
     // "This series" derives from the same official play-by-play as the trip
     // lines (Aug 27 live catch: the BDL box join missed a whole series and
@@ -1990,47 +2007,93 @@ export async function buildMlbScoutReport(game, options = {}) {
         `  "${picked.join(' ')}"`,
       ];
     };
+    // Series line as numbers too, for the nine-wide sum below.
+    const seriesTotalsFromTrips = (bId, trailData, oppTeamName) => {
+      const seriesGames = (trailData || []).filter((g) => clubMatches(g.opp, oppTeamName));
+      let ab = 0; let h = 0; let hr = 0; let seen = false;
+      for (const g of seriesGames) {
+        for (const t of g.trips?.[bId] || []) {
+          seen = true;
+          const lead = String(t).split(' ')[0];
+          if (['BB', 'IBB', 'HBP', 'SB', 'caught'].includes(lead) || /^sac/.test(lead)) continue;
+          ab += 1;
+          if (['1B', '2B', '3B', 'HR'].includes(lead)) h += 1;
+          if (lead === 'HR') hr += 1;
+        }
+      }
+      return seen ? { ab, h, hr } : null;
+    };
+    // THE PLAYER BLOCK, TWO ORDERS (founder, Sep 1 2026 — recency first): the
+    // same named parts assemble season-first for the flat desk (unchanged)
+    // and recency-first for the bucket desk — his trips this series and his
+    // last three games, then this series and his history with tonight's
+    // arm, then the rolling week, then the press, then the season backdrop.
     const buildPlayerBlocks = async (sideData, pool, teamName, roster, oppProbable, recentGames, oppTeamName) => {
-      const blocks = new Map();
+      const legacy = new Map();
+      const recent = new Map();
       const trailData = await trailDataFor(recentGames, teamName).catch(() => []);
       const lastPk = trailData.length ? trailData[trailData.length - 1].pk : null;
+      const nine = { r7: { ab: 0, h: 0, hr: 0, n: 0 }, r15: { ab: 0, h: 0, hr: 0, n: 0 }, series: { ab: 0, h: 0, hr: 0, n: 0 } };
       await Promise.all((sideData?.batters || []).map(async (b) => {
         // One batter's bad row loses only his lines — never the card.
         try {
-          const lines = [];
           const row = poolRowOf(b, pool);
+          const part = { season: [], catcher: [], rolling: [], platoon: [], month: [], seriesBvp: [], trips: [], press: [] };
           const s = seasonLineOf(row);
-          if (s) lines.push(s);
+          if (s) part.season.push(s);
           // THE RUNNING GAME, ON THE CATCHER'S OWN LINE (founder, Sep 1 2026:
           // "we just need to know in the lineups part who the starting catcher
           // is and then include the stats/data for that catcher"). His season
           // caught-stealing line from his own BDL row — the fact a fan holds:
           // can you run on this catcher.
           if (String(b?.position || '').toUpperCase() === 'C' && row && row.fielding_sba != null) {
-            const pct = row.fielding_cs_percent != null ? ` (${Number(row.fielding_cs_percent).toFixed(0)}%)` : '';
-            lines.push(`Running game: ${row.fielding_cs ?? 0} caught of ${row.fielding_sba} steal attempts${pct}${row.fielding_pb != null ? `, ${row.fielding_pb} PB` : ''}`);
+            const pct = Number(row.fielding_sba) > 0 ? ` (${Math.round((Number(row.fielding_cs) || 0) / Number(row.fielding_sba) * 100)}%)` : '';
+            part.catcher.push(`Running game: ${row.fielding_cs ?? 0} caught of ${row.fielding_sba} steal attempts${pct}${row.fielding_pb != null ? `, ${row.fielding_pb} PB` : ''}`);
           }
-          lines.push(...await splitsLinesOf(b));
+          const sp = await splitsLinesOf(b);
+          for (const l of sp.lines) {
+            if (l.startsWith('Rolling')) part.rolling.push(l);
+            else if (l.startsWith('Platoon')) part.platoon.push(l);
+            else part.month.push(l);
+          }
+          for (const [k, r] of [['r7', sp.r7], ['r15', sp.r15]]) {
+            if (r) { nine[k].ab += r.at_bats || 0; nine[k].h += r.hits || 0; nine[k].hr += r.home_runs || 0; nine[k].n += 1; }
+          }
           const bId = b?.personId ?? rosterIdByName(roster, b?.name);
+          const st = bId != null ? seriesTotalsFromTrips(bId, trailData, oppTeamName) : null;
+          if (st) { nine.series.ab += st.ab; nine.series.h += st.h; nine.series.hr += st.hr; nine.series.n += 1; }
           const bits = [
             bId != null ? seriesLineFromTrips(bId, trailData, oppTeamName) : null,
             await careerBvpBitOf(b, roster, oppProbable),
           ].filter(Boolean);
-          if (bits.length) lines.push(bits.join(' · '));
-          lines.push(...tripsLinesOf(b, roster, trailData));
-          lines.push(...pressLinesOf(b, lastPk));
-          if (lines.length) blocks.set(b, lines);
+          if (bits.length) part.seriesBvp.push(bits.join(' · '));
+          part.trips.push(...tripsLinesOf(b, roster, trailData));
+          part.press.push(...pressLinesOf(b, lastPk));
+          const legacyLines = [...part.season, ...part.catcher, ...part.rolling, ...part.platoon, ...part.month, ...part.seriesBvp, ...part.trips, ...part.press];
+          const recentLines = [...part.trips, ...part.seriesBvp, ...part.rolling, ...part.press, ...part.season, ...part.catcher, ...part.platoon, ...part.month];
+          if (legacyLines.length) legacy.set(b, legacyLines);
+          if (recentLines.length) recent.set(b, recentLines);
         } catch { /* block prints bare */ }
       }));
-      return blocks;
+      // THE NINE, TOGETHER (founder, Sep 1 2026 — recency as a comparable):
+      // the confirmed lineup's combined line this series and over the last
+      // 7 and 15 days, in the same shape for both clubs. Hits and homers
+      // only — a summed OPS would be our arithmetic, not the vendor's.
+      const avg = (o) => (o.ab > 0 ? (o.h / o.ab).toFixed(3).replace(/^0\./, '.') : null);
+      const bit = (label, o) => (o.n > 0 && o.ab > 0 ? `${label} ${o.h}-for-${o.ab} (${avg(o)}), ${o.hr} HR` : null);
+      const nineBits = [bit('this series', nine.series), bit('last 7 days', nine.r7), bit('last 15 days', nine.r15)].filter(Boolean);
+      const nineLine = nineBits.length ? `  These nine, together — ${nineBits.join(' | ')}` : null;
+      return { legacy, recent, nineLine };
     };
-    const [homePlayerBlocks, awayPlayerBlocks] = await Promise.all([
+    const [homeBlocks, awayBlocks] = await Promise.all([
       buildPlayerBlocks(homeData, homePlayerSeasonStats, homeTeam, homeRoster, probablePitchersData?.away, homeRecentGames, awayTeam),
       buildPlayerBlocks(awayData, awayPlayerSeasonStats, awayTeam, awayRoster, probablePitchersData?.home, awayRecentGames, homeTeam),
     ]);
-    lineupBySide.home = withSat(withHands(formatLineup(homeData, homeTeam, homePlayerBlocks), handsLine(homeData)), satToday(homeTeam, homeData));
-    lineupBySide.away = withSat(withHands(formatLineup(awayData, awayTeam, awayPlayerBlocks), handsLine(awayData)), satToday(awayTeam, awayData));
-    confirmedLineupsSection = [lineupBySide.home, lineupBySide.away].join('\n\n');
+    const legacyHome = withSat(withHands(formatLineup(homeData, homeTeam, homeBlocks.legacy), handsLine(homeData)), satToday(homeTeam, homeData));
+    const legacyAway = withSat(withHands(formatLineup(awayData, awayTeam, awayBlocks.legacy), handsLine(awayData)), satToday(awayTeam, awayData));
+    confirmedLineupsSection = [legacyHome, legacyAway].join('\n\n');
+    lineupBySide.home = withSat(withHands(formatLineup(homeData, homeTeam, homeBlocks.recent, homeBlocks.nineLine), handsLine(homeData)), satToday(homeTeam, homeData));
+    lineupBySide.away = withSat(withHands(formatLineup(awayData, awayTeam, awayBlocks.recent, awayBlocks.nineLine), handsLine(awayData)), satToday(awayTeam, awayData));
   }
 
   // HARD FAIL: Gary cannot pick MLB without confirmed lineups + starting pitchers
@@ -2696,7 +2759,13 @@ export async function buildMlbScoutReport(game, options = {}) {
     injuries: injuriesBySide[side],
     flags: situationFlagsBySide[side],
     spot: spotBySide[side],
-    recentForm: recentFormBySide[side],
+    // Window labels with their reason (founder, Sep 1): five games is one
+    // turn through the rotation; the flat desk keeps its labels.
+    // The subsection sits under the club's own header, and the spot line
+    // above it already names the club — drop the games block's own name line.
+    recentForm: recentFormBySide[side]
+      ? recentFormBySide[side].replace(`${name}:\n`, '').replace('[Last 5]', '[Last 5 games — one turn through the rotation]').replace('[Last 10]', '[Last 10 games]')
+      : null,
     runShape: runShapeBySide[side],
     recentResults: recentResultsBySide[side],
     lastNight: lastNightBySide[side],
