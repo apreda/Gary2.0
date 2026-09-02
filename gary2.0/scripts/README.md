@@ -12,16 +12,12 @@ node scripts/run-agentic-picks.js --nfl --matchup "Patriots" --limit 1
 node scripts/run-agentic-picks.js --ncaaf --matchup "Alabama" --limit 1
 ```
 
-### `run-agentic-nba-props.js`
-Runs the 4-pass agentic pipeline for NBA player props.
+### Props runners (`run-agentic-mlb-props.js`, `run-agentic-nfl-props.js`)
+One props system: the props desk brain (`src/services/pickdesk/propsBrain.js`
+over the game desk + THE PROP BOARD + THE PROP SHEETS). The old multi-pass
+orchestrator props pipeline (NBA/NHL runners) was deleted Sep 2 2026.
 ```bash
-node scripts/run-agentic-nba-props.js --store=1
-```
-
-### `run-agentic-nhl-props.js`
-Runs the agentic pipeline for NHL player props.
-```bash
-node scripts/run-agentic-nhl-props.js --store=1
+node scripts/run-agentic-mlb-props.js --store=1
 ```
 
 ### `run-agentic-nfl-props.js`

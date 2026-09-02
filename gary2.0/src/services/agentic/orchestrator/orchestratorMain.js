@@ -63,7 +63,7 @@ function saveCachedScoutReport(homeTeam, awayTeam, sport, game, data) {
     console.warn(`[Orchestrator] Scout report cache write failed: ${e.message}`);
   }
 }
-import { buildPass1Message, buildPass1PropsMessage } from './passBuilders.js';
+import { buildPass1Message } from './passBuilders.js';
 import { runAgentLoop } from './agentLoop.js';
 import { normalizeSportToLeague } from './orchestratorHelpers.js';
 
@@ -157,11 +157,12 @@ export async function analyzeGame(game, sport, options = {}) {
       day: 'numeric' 
     });
 
-    // Props mode detection
-    const isPropsMode = options.mode === 'props';
-    const propContext = options.propContext || null;
-    if (isPropsMode) {
-      console.log(`[Orchestrator] 🎯 PROPS MODE: Analyzing props for ${awayTeam} @ ${homeTeam}`);
+    // GAME LANE ONLY. The orchestrator's multi-pass props mode — the brain
+    // behind the pre-Jul-27-2026 props ledger — was deleted Sep 2 2026
+    // (founder: "the old system is gone"); props run the desk brain
+    // (src/services/pickdesk/propsBrain.js). A caller asking for it fails loud.
+    if (options.mode === 'props' || options.propContext) {
+      throw new Error('The orchestrator props mode was retired Sep 2 2026 — props run the desk brain (pickdesk/propsBrain.js)');
     }
 
     // Step 2 & 3: Build system prompt
@@ -181,28 +182,10 @@ export async function analyzeGame(game, sport, options = {}) {
     // placeholders, so perform a final pass replacement here.
     systemPrompt = systemPrompt.replace(/{{CURRENT_DATE}}/g, today);
 
-    // In props mode, append props-specific constitution (pass1 + pass2 awareness sections)
-    if (isPropsMode && propContext?.propsConstitution) {
-      const propsConst = propContext.propsConstitution;
-      if (typeof propsConst === 'object') {
-        const propsText = [propsConst.pass1, propsConst.pass2].filter(Boolean).join('\n\n');
-        systemPrompt += '\n\n' + propsText;
-        console.log(`[Orchestrator] Appended props constitution pass1+pass2 (${propsText.length} chars)`);
-      } else {
-        systemPrompt += '\n\n' + propsConst;
-        console.log(`[Orchestrator] Appended props constitution (${propsConst.length} chars)`);
-      }
-    }
-
-    // Step 4: Build the user message — props mode gets props-specific Pass 1
-    let userMessage;
-    if (isPropsMode) {
-      userMessage = buildPass1PropsMessage(garyText, homeTeam, awayTeam, today, sport);
-    } else {
-      userMessage = buildPass1Message(garyText, homeTeam, awayTeam, today, sport, canonicalHomeSpread, { homeSeed: game.homeSeed, awaySeed: game.awaySeed, game });
-    }
+    // Step 4: Build the user message
+    let userMessage = buildPass1Message(garyText, homeTeam, awayTeam, today, sport, canonicalHomeSpread, { homeSeed: game.homeSeed, awaySeed: game.awaySeed, game });
     // Optional sport-specific Pass 1 context (phase-aligned, not always-on)
-    if (typeof constitution === 'object' && constitution.pass1Context && !isPropsMode) {
+    if (typeof constitution === 'object' && constitution.pass1Context) {
       userMessage += `\n\n<sport_pass1_context>\n${constitution.pass1Context}\n</sport_pass1_context>`;
     }
 
@@ -213,16 +196,6 @@ export async function analyzeGame(game, sport, options = {}) {
       console.log(`[Orchestrator] ═══ GARY SCOUT REPORT END ═══`);
     } else {
       console.log(`[Orchestrator] Desk ready (${garyText.length} chars)`);
-    }
-
-    // If in session mode, ALWAYS clear context between games to prevent token overflow
-    // In props mode, append a note to user message so Gary knows props evaluation comes after game analysis
-    if (isPropsMode) {
-      userMessage += `\n\n═══════════════════════════════════════════════════════════════════════════════
-PROPS MODE: After completing your game analysis (Investigation + Evaluation),
-you will be asked to evaluate player props for this matchup. Your game analysis provides
-context for player-level evaluation. Investigate the game thoroughly first.
-═══════════════════════════════════════════════════════════════════════════════`;
     }
 
     // Extract verified records for Pass 3 anti-hallucination
@@ -239,23 +212,21 @@ context for player-level evaluation. Investigate the game thoroughly first.
 
     // Step 5: Run the agent loop
     // Include game time for weather forecasting (only fetch weather within 36h of game time)
-    // Include spread for Pass 2.5 spread context injection
+    // Include spread for Pass 2 spread context injection
     const enrichedOptions = {
       ...options,
       gameTime: game.commence_time || null,
-      // Pass spread for Pass 2.5 context (use home spread as reference, typically negative for favorite)
+      // Pass spread for Pass 2 context (use home spread as reference, typically negative for favorite)
       spread: canonicalHomeSpread,
       // Pass game object for odds fallback in pick normalization
       game,
-      // Props mode context
-      mode: isPropsMode ? 'props' : 'game',
-      propContext: isPropsMode ? propContext : null,
+      mode: 'game',
       // Pass verified records for Pass 3 anti-hallucination
       homeRecord,
       awayRecord,
       // Pass Flash's investigation-ready scout report (includes Tale of Tape + token menu)
       scoutReport: flashText,
-      // Optional sport-specific Pass 2.5 decision guards (phase-aligned)
+      // Optional sport-specific Pass 2 decision guards (phase-aligned)
       pass25DecisionGuards: (typeof constitution === 'object' ? constitution.pass25DecisionGuards || '' : ''),
       // The game rides along so a capped MLB game's case headings name the
       // actual tickets on every re-injection (mlbCaseMenu.js, Sep 1 2026).
@@ -325,7 +296,7 @@ context for player-level evaluation. Investigate the game thoroughly first.
     //   - Gary's data scout report (what he saw)
     //   - Flash's investigation-ready scout report
     //   - Flash research briefing (the per-factor findings)
-    //   - Raw analysis (Pass 1 bilateral case + Pass 2.5 synthesis text)
+    //   - Raw analysis (Pass 1 bilateral case + Pass 2 synthesis text)
     //   - Tool call history
     if (!result.error) {
       result._context = {

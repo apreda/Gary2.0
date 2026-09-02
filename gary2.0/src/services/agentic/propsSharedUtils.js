@@ -1,67 +1,10 @@
 /**
  * Props Shared Utilities
  *
- * Used by run-agentic-props-cli.js (orchestrator path) for:
- * - getPropsConstitution(): fetches sectioned props constitution per sport
+ * Used by the props desk chassis (run-agentic-props-cli.js) for:
  * - applyPropsPerGameConstraint(): enforces 2-per-game cap + Gary Specials
+ * - isExplicitPropsPass / normalizePropBetDirection / stripInternalFields
  */
-import { getConstitution as getConstitutionFromIndex } from './constitution/index.js';
-
-// ── Sport label → constitution key mapping ──────────────────────────────────
-
-const SPORT_CONSTITUTION_KEYS = {
-  'NFL': 'NFL_PROPS',
-  'NBA': 'NBA_PROPS',
-  'NHL': 'NHL_PROPS',
-  'MLB': 'MLB_PROPS',
-  'MLB HR': 'MLB_PROPS',  // HR picks use same MLB props constitution
-  'NCAAB': 'NBA_PROPS',   // College basketball → closest analog is NBA props rules
-  'NCAAF': 'NFL_PROPS',   // College football → closest analog is NFL props rules
-};
-
-// ── getPropsConstitution ────────────────────────────────────────────────────
-
-/**
- * Get the props constitution for a given sport label.
- * Handles date template replacement in all sections.
- * @param {string} sportLabel - e.g. 'NFL', 'NBA', 'NHL'
- * @returns {Object|string} - Sectioned constitution object or string
- */
-export function getPropsConstitution(sportLabel) {
-  const constitutionKey = SPORT_CONSTITUTION_KEYS[sportLabel] || 'NFL_PROPS';
-  const constitution = getConstitutionFromIndex(constitutionKey);
-
-  // Replace date template if present
-  const today = new Date().toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-
-  if (typeof constitution === 'object' && constitution.pass1) {
-    // Sectioned props constitution — replace templates in all sections
-    for (const key of ['baseRules', 'pass1', 'pass2', 'pass25', 'pass3']) {
-      if (constitution[key]) {
-        constitution[key] = constitution[key].replace(/\{\{CURRENT_DATE\}\}/g, today);
-      }
-    }
-  } else if (typeof constitution === 'object' && constitution.full) {
-    // Game pick constitution (shouldn't be used here but handle gracefully)
-    for (const key of ['baseRules', 'domainKnowledge', 'guardrails', 'full']) {
-      if (constitution[key]) {
-        constitution[key] = constitution[key].replace(/\{\{CURRENT_DATE\}\}/g, today);
-      }
-    }
-  } else if (typeof constitution === 'string') {
-    return constitution.replace(/\{\{CURRENT_DATE\}\}/g, today);
-  }
-
-  return constitution;
-}
-
-// ── checkPropCorrelation ────────────────────────────────────────────────────
-
 /**
  * Check if two prop types are positively correlated
  * (both benefit from the same game script / player usage pattern)

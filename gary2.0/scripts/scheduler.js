@@ -112,7 +112,11 @@ const SPORTS = [
   // this entry deliberately carries no propsScript; the scheduler's props slot
   // skips sports without one. NFL keeps its full desk below.
   { key: 'americanfootball_ncaaf', flag: '--ncaaf', label: 'NCAAF' },
-  { key: 'basketball_nba', flag: '--nba', label: 'NBA', propsScript: 'run-agentic-nba-props.js' },
+  // NBA PROPS: no lane until the relaunch builds one on the props desk
+  // (Sep 2 2026 — the orchestrator props brain it used was deleted with the
+  // old props system; the scheduler's props slot skips sports without a
+  // propsScript). Game picks unchanged.
+  { key: 'basketball_nba', flag: '--nba', label: 'NBA' },
   // NHL PARKED (Jul 13 2026): the BDL NHL tier lapsed, so every fetch 401s. That
   // permanent failure set fetchFailed=true on every daily build, which on the
   // all-sports-dark All-Star break made buildPlanResilient treat a legitimate
@@ -120,7 +124,7 @@ const SPORTS = [
   // the (empty) daily slate or tomorrow board, so the app showed a blank void
   // instead of an honest dark day. No NHL games until October; restore this entry
   // with the BDL All-Access decision.
-  // { key: 'icehockey_nhl', flag: '--nhl', label: 'NHL', propsScript: 'run-agentic-nhl-props.js' },
+  // { key: 'icehockey_nhl', flag: '--nhl', label: 'NHL' },
   { key: 'baseball_mlb', flag: '--mlb', label: 'MLB', propsScript: 'run-agentic-mlb-props.js' },
 ];
 

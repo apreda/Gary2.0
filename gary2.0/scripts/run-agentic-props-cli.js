@@ -21,8 +21,7 @@ import { ncaafSlateDateForInstant } from '../src/services/ncaafGamePolicy.js';
 // Dynamic imports after env is loaded (services read env at import time)
 const { oddsService } = await import('../src/services/oddsService.js');
 const { propOddsService } = await import('../src/services/propOddsService.js');
-const { getPropsConstitution, applyPropsPerGameConstraint, isExplicitPropsPass, normalizePropBetDirection, stripInternalFields } = await import('../src/services/agentic/propsSharedUtils.js');
-const { analyzeGame } = await import('../src/services/agentic/orchestrator/index.js');
+const { applyPropsPerGameConstraint, isExplicitPropsPass, normalizePropBetDirection, stripInternalFields } = await import('../src/services/agentic/propsSharedUtils.js');
 const { analyzeMlbPropsDesk, PROPS_PROMPT_SHA } = await import('../src/services/pickdesk/propsBrain.js');
 const { analyzeFootballPropsDesk, FOOTBALL_PROPS_PROMPT_SHA } = await import('../src/services/pickdesk/footballPropsDesk.js');
 
@@ -89,18 +88,20 @@ function estDateFromISO(iso) {
 export async function runAgenticPropsCli({
   sportKey,
   leagueLabel,
-  buildContext,
   windowHours = 24 * 7,
   limitDefault = 5,
   useESTDayFiltering = false,  // If true, filter by EST day instead of rolling window
   regularOnly = false,  // If true for NFL, only generate yards/receptions props (no TDs - use when TDs already stored)
   hrOnly = false         // If true for MLB HR, only include home_runs props
 }) {
-  // Desk-lane sports (MLB, NFL, NCAAF) carry no context builder — the desk IS
-  // the context. NBA/NHL still require one for the orchestrator path.
+  // ONE props system: the desk lane (MLB Jul 26 2026, NFL + NCAAF Aug 20
+  // 2026). The orchestrator props path that carried NBA/NHL — the brain
+  // behind the pre-Jul-27 ledger — was deleted Sep 2 2026 (founder: "the old
+  // system is gone"); a sport without a desk lane has no props until it gets
+  // one, never a fallback to old parts.
   const DESK_LANE_SPORTS = new Set(['baseball_mlb', 'americanfootball_nfl', 'americanfootball_ncaaf']);
-  if (!sportKey || (!buildContext && !DESK_LANE_SPORTS.has(sportKey))) {
-    throw new Error('runAgenticPropsCli requires sportKey and buildContext');
+  if (!sportKey || !DESK_LANE_SPORTS.has(sportKey)) {
+    throw new Error(`runAgenticPropsCli: ${sportKey || 'no sport'} has no props desk lane (MLB, NFL, NCAAF only)`);
   }
 
   const args = parseArgs();
@@ -158,13 +159,12 @@ export async function runAgenticPropsCli({
     } catch (e) { console.log(`🧬 ERA LIVE (football props desk): unavailable — ${e.message}`); }
   }
 
-  const isDeskLane = DESK_LANE_SPORTS.has(sportKey);
   console.log(`\n🏈 Agentic ${leagueLabel} Props Runner Starting...`);
   console.log(`${'='.repeat(50)}`);
   console.log(`📅 Date: ${requestedSlateDate || getESTDate()}`);
   console.log(`🎯 Sport: ${leagueLabel}`);
   console.log(`📊 Games limit: ${limit}`);
-  console.log(`🔧 Pipeline: ${isDeskLane ? 'PROPS DESK (one call over the desk + board)' : 'ORCHESTRATOR (multi-pass)'}`);
+  console.log(`🔧 Pipeline: PROPS DESK (one call over the desk + board + sheets)`);
   console.log(`💾 Store: ${shouldStore ? 'Yes' : 'No (pass --store=1 to save)'}${useTestTable ? ' (TEST MODE → test_prop_picks)' : ''}`);
   if (cliRegularOnly && leagueLabel === 'NFL') console.log(`🏈 Mode: Regular props only (yards/receptions - TDs handled separately)`);
   if (matchupFilter) console.log(`🔍 Matchup filter: ${matchupFilter}`);
@@ -331,7 +331,7 @@ export async function runAgenticPropsCli({
       }
 
       // HR props now ride the SAME MLB run (user, Jun 18) — no separate paid HR
-      // pass. They're evaluated alongside the regular props in one orchestrator
+      // pass. They're evaluated alongside the regular props in one desk
       // call; the per-game cap (propsSharedUtils) keeps AT MOST ONE HR per game,
       // and the pick mapping below re-stamps HR picks as sport:"MLB HR" so they
       // route to the Home Run Threats lane. (run-mlb-hr-picks.js still works for
@@ -346,12 +346,11 @@ export async function runAgenticPropsCli({
       {
         // PROPS DESK LANE (MLB Jul 26 2026; NFL+NCAAF Aug 20 2026 — founder:
         // "the same system as MLB"): props read the SAME desk as game picks —
-        // one call over the sport's dossier + THE PROP BOARD (spec
-        // docs/superpowers/specs/2026-07-26-props-desk.md). The validated pool
-        // is the board's players (MLB: lineup-filtered; football: roster/stat
-        // validated). NBA/NHL keep the orchestrator path until their revival
-        // pass. Every gate below (no-stats, odds reconciliation + hard gate,
-        // caps, HR/TD routing) is shared chassis.
+        // one call over the sport's dossier + THE PROP BOARD + THE PROP SHEETS
+        // (spec docs/superpowers/specs/2026-07-26-props-desk.md). The validated
+        // pool is the board's players (MLB: lineup-filtered; football:
+        // roster/stat validated). Every gate below (no-stats, odds
+        // reconciliation + hard gate, caps, HR/TD routing) is shared chassis.
         let validatedPlayerNames;
         if (sportKey === 'baseball_mlb') {
           const deskRes = await analyzeMlbPropsDesk(game, playerProps, { nocache, hrOnly });
@@ -379,68 +378,14 @@ export async function runAgenticPropsCli({
           if (Array.isArray(deskRes.boardProps) && deskRes.boardProps.length) {
             playerProps = deskRes.boardProps;
           }
-        } else {
-          console.log(`[Orchestrator Props] Building context for ${matchup}...`);
-          const context = await buildContext(game, playerProps, { nocache, regularOnly: cliRegularOnly });
-
-          // A sport context may narrow the provider board after authoritative
-          // roster/stat validation. Adopt that exact board for BOTH the lines
-          // shown to Gary and the provider-price reconciliation below. NCAAF,
-          // for example, rejects any The Odds API player who is not on one of
-          // the two current BDL rosters or lacks the BDL field for that market.
-          if (Array.isArray(context.playerProps)) {
-            playerProps = context.playerProps;
-          }
-
-          // Prepare prop candidates and available lines for orchestrator
-          const propCandidates = (context.propCandidates || []).slice(0, 14).map(p => ({
-            player: p.player,
-            team: p.team,
-            props: p.props,
-            recentForm: p.recentForm ? {
-              targetTrend: p.recentForm.targetTrend,
-              usageTrend: p.recentForm.usageTrend,
-              formTrend: p.recentForm.formTrend
-            } : null
-          }));
-
-          // Filter available lines to only validated players
-          validatedPlayerNames = new Set(
-            (context.propCandidates || []).map(p => p.player.toLowerCase())
-          );
-          const availableLines = playerProps
-            .filter(p => validatedPlayerNames.has(p.player.toLowerCase()))
-            .slice(0, 80)
-            .map(p => ({
-              player: p.player,
-              prop_type: p.prop_type,
-              line: p.line,
-              over_odds: p.over_odds,
-              under_odds: p.under_odds
-            }));
-
-          const propsConstitution = getPropsConstitution(leagueLabel);
-
-          result = await analyzeGame(game, sportKey, {
-            mode: 'props',
-            propContext: {
-              propCandidates,
-              availableLines,
-              playerStats: context.playerStats || '',
-              gameSummary: context.gameSummary || {},
-              propsConstitution,
-              narrativeContext: context.narrativeContext || null
-            }
-          });
         }
 
         // Post-process picks (both lanes): normalize line + format prop for iOS display
         if (result.picks && result.picks.length > 0) {
-          // HR lane (hrOnly) must store ONLY home-run props. The candidate pool is
-          // already HR-filtered, but the orchestrator can still surface non-HR props
-          // (total_bases, strikeouts, ...) from its tools/context — and they'd get
-          // stamped sport:"MLB HR" below, polluting the Home Run Threats lane. Drop
-          // any non-HR pick here so the lane stays pure.
+          // HR lane (hrOnly) must store ONLY home-run props. The board is
+          // already HR-filtered, but a brain can still name a non-HR market —
+          // it would get stamped sport:"MLB HR" below and pollute the Home
+          // Run Threats lane. Drop any non-HR pick here so the lane stays pure.
           if (hrOnly) {
             const beforeHR = result.picks.length;
             result.picks = result.picks.filter(p =>
@@ -448,7 +393,7 @@ export async function runAgenticPropsCli({
               (p.prop_type || '').toLowerCase().includes('home_run')
             );
             if (result.picks.length !== beforeHR) {
-              console.log(`🏠 HR-only OUTPUT filter: dropped ${beforeHR - result.picks.length} non-HR pick(s) the orchestrator emitted`);
+              console.log(`🏠 HR-only OUTPUT filter: dropped ${beforeHR - result.picks.length} non-HR pick(s) the brain emitted`);
             }
           }
           // (A) NO-STATS GATE: drop any pick whose player is NOT a validated stat candidate
@@ -515,7 +460,7 @@ export async function runAgenticPropsCli({
               prop: displayProp,
               line: line != null ? String(line) : null,
               // HR picks route to the "MLB HR" lane even though they came from the
-              // regular MLB run (same orchestrator pass, no extra cost). Everything
+              // regular MLB run (same desk pass, no extra cost). Everything
               // else keeps the run's own label.
               sport: (sportKey === 'baseball_mlb' && displayProp.toLowerCase().includes('home_run')) ? 'MLB HR' : leagueLabel,
               matchup,
@@ -567,9 +512,7 @@ export async function runAgenticPropsCli({
           result.picks = result.picks.map((pick) => stampFootballTdCategory(pick, leagueLabel));
 
           // Apply 2-per-game cap + Gary Specials correlation for every sport.
-          // Previously this only ran for NBA/NHL — MLB and NFL bypassed the cap
-          // and never got correlation flags. There's no reason to skip it.
-          if (['NBA', 'NHL', 'MLB', 'NFL', 'NCAAF'].includes(leagueLabel)) {
+          {
             const { constrainedPicks } = applyPropsPerGameConstraint(result.picks, `${leagueLabel}-post`);
             result.picks = constrainedPicks;
           }

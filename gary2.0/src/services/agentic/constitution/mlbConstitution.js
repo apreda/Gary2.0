@@ -9,7 +9,7 @@
  * Everything else is covered elsewhere (do NOT duplicate here):
  * - Stat categories / pitcher analysis → the desk (scout report sections)
  * - Betting theory / market dynamics → model knowledge (Gary already knows MLB betting)
- * - Bet type (ML/RL) + house limit → Pass 2.5 betTypeNote (passBuilders.js)
+ * - Bet type (ML/RL) + house limit → Pass 2 betTypeNote (passBuilders.js)
  * - Transitive property → BASE_RULES
  * - Anti-hallucination / current season → BASE_RULES
  * - Situational awareness (series state, schedule, streaks) → the desk
@@ -61,7 +61,7 @@ Use the exact tag shown in the scout report for this game.
 `,
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // SECTION C: PASS 2.5 DECISION GUARDS — optional stage-specific reminders
+  // SECTION C: PASS 2 DECISION GUARDS — optional stage-specific reminders
   // ═══════════════════════════════════════════════════════════════════════════
   pass25DecisionGuards: ``,
 

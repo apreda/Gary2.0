@@ -1,6 +1,6 @@
 // F-3 / F-5 / F-8 / F-9 regression tests — July 5 2026 audit, structural batch.
 //
-//   F-3  props are no longer forced volume: Gary may pass (no_play) and picks are "up to 2"
+//   F-3  props are no longer forced volume: Gary may pass — the desk brain's empty list
 //   F-5  unverified odds are dropped, and internal _flags never reach the stored pick JSON
 //   F-8b fact-checks key results by pick_text+matchup and re-sync when a grade flips
 //   F-9  props run on the same brain as game picks (no cheap-model discount)
@@ -9,42 +9,39 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
-import { buildPass3Props, getFinalizePropsToolForSport } from '../../../src/services/agentic/orchestrator/passBuilders.js';
 import { isExplicitPropsPass, normalizePropBetDirection, stripInternalFields } from '../../../src/services/agentic/propsSharedUtils.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '../../..');
 const src = (rel) => readFileSync(path.join(root, rel), 'utf8');
 
-describe('F-3 (amended Jul 7): 2 props is the standard, no_play is structural-only', () => {
-  // Founder resolved the quota-vs-pass contradiction toward the requirement:
-  // "we still need 2 per game, that shouldn't be difficult." no_play survives
-  // as plumbing for empty boards (no lines / no stats), never as a nightly
-  // judgment escape hatch.
-  it('Pass 3 asks for 2 picks and keeps no_play as a structural fallback', () => {
-    const p = buildPass3Props('Braves', 'Mets', {});
-    expect(p).toContain('Select 2 props from DIFFERENT players');
-    expect(p).not.toContain('passing is the sharp play');
-    expect(p).toContain('no_play');
+describe('ONE props system (Sep 2 2026): the orchestrator props mode is gone', () => {
+  // The multi-pass orchestrator props brain — the system behind the
+  // pre-Jul-27-2026 props ledger — was deleted on the founder's "the old
+  // system is gone". Every props lane is the desk brain; the game lane
+  // refuses a props ask instead of quietly running old parts.
+  it('the orchestrator refuses props mode at its entry seam', () => {
+    const main = src('src/services/agentic/orchestrator/orchestratorMain.js');
+    expect(main).toContain("if (options.mode === 'props' || options.propContext) {");
+    expect(main).toContain('The orchestrator props mode was retired Sep 2 2026');
   });
-
-  it('finalize_props schema carries no_play + pass_reason', () => {
-    const tool = getFinalizePropsToolForSport('baseball_mlb');
-    const props = tool.function.parameters.properties;
-    expect(props.no_play).toBeDefined();
-    expect(props.pass_reason).toBeDefined();
+  it('agentLoop carries no props branches and passBuilders no props builders', () => {
+    const loop = src('src/services/agentic/orchestrator/agentLoop.js');
+    expect(loop).not.toMatch(/isPropsMode|finalize_props|buildPass3Props|propContext/);
+    const builders = src('src/services/agentic/orchestrator/passBuilders.js');
+    expect(builders).not.toMatch(/buildPass1PropsMessage|buildPass25PropsMessage|buildPass3Props|FINALIZE_PROPS_TOOL/);
   });
-
+  it('the props CLI runs desk lanes only — no context builder, no orchestrator fallback', () => {
+    const cli = src('scripts/run-agentic-props-cli.js');
+    expect(cli).not.toMatch(/buildContext|analyzeGame|getPropsConstitution/);
+    expect(cli).toContain("has no props desk lane (MLB, NFL, NCAAF only)");
+  });
   it('isExplicitPropsPass detects a real pass and nothing else', () => {
     expect(isExplicitPropsPass({ picks: [], no_play: true })).toBe(true);
     expect(isExplicitPropsPass({ no_play: true })).toBe(true);
     expect(isExplicitPropsPass({ picks: [] })).toBe(false);
     expect(isExplicitPropsPass({ picks: [{ player: 'X' }], no_play: true })).toBe(false);
     expect(isExplicitPropsPass(undefined)).toBe(false);
-  });
-
-  it('agentLoop accepts an explicit pass instead of error-retrying', () => {
-    expect(src('src/services/agentic/orchestrator/agentLoop.js')).toContain('isExplicitPropsPass');
   });
 });
 
@@ -120,8 +117,9 @@ describe('F-9 REVERSED (Jul 8 cost audit): props run on Tier 2', () => {
   // prompts). Founder reverted Jul 8; modelTiering.test.js carries the
   // canonical pin — this one just documents that props stay on their own
   // cheap tier (PROPS_DESK_MODEL since Jul 22 2026), never the big brain.
-  it('props mode selects the props-tier model, not the big brain', () => {
-    const loop = src('src/services/agentic/orchestrator/agentLoop.js');
-    expect(loop).toContain('isPropsMode ? PROPS_DESK_MODEL : GAME_PICK_MODEL');
+  it('props run the desk brain on PROPS_DESK_MODEL — the orchestrator never selects a props model', () => {
+    const brain = src('src/services/pickdesk/propsBrain.js');
+    expect(brain).toContain('const cascade = [...new Set([PROPS_DESK_MODEL, ...DESK_FALLBACK_MODELS, LEGACY_BRAIN_FALLBACK])];');
+    expect(src('src/services/agentic/orchestrator/agentLoop.js')).not.toContain('PROPS_DESK_MODEL');
   });
 });

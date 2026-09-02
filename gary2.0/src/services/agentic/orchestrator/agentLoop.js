@@ -1,10 +1,9 @@
-import { CONFIG, PROPS_DESK_MODEL, GAME_PICK_MODEL, GAME_ML_CAP, validateSessionModel } from './orchestratorConfig.js';
-import { isExplicitPropsPass } from '../propsSharedUtils.js';
+import { CONFIG, GAME_PICK_MODEL, GAME_ML_CAP, validateSessionModel } from './orchestratorConfig.js';
 import { createModelSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
 import { createCostTracker } from './costTracker.js';
-import { buildPass1Message, buildPass25Message, buildPass25PropsMessage, buildPass3Unified, buildPass3Props, FINALIZE_PROPS_TOOL, getFinalizePropsToolForSport, PROPS_PICK_SCHEMA, buildMlCapRetryMessage } from './passBuilders.js';
-import { parseGaryResponse, parsePropsResponse, normalizePickFormat, determineCurrentPass } from './responseParser.js';
-import { auditPickRationale, auditPropsPicks, auditCountClaims, buildStatAuditRetryMessage } from './statAudit.js';
+import { buildPass1Message, buildPass2Message, buildPass3Unified, buildMlCapRetryMessage } from './passBuilders.js';
+import { parseGaryResponse, normalizePickFormat, determineCurrentPass } from './responseParser.js';
+import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from './statAudit.js';
 import { isInvestigationSufficient, summarizeStatForContext, formatNum, formatPct, summarizePlayerGameLogs, summarizeMlbPlayerGameLogs, summarizePlayerStats, summarizeNbaPlayerAdvancedStats, pruneContextIfNeeded, normalizeSportToLeague, MAX_CONTEXT_MESSAGES, PRUNE_AFTER_ITERATION } from './orchestratorHelpers.js';
 import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js';
 import { getConstitution } from '../constitution/index.js';
@@ -174,10 +173,11 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // Pass sport through options so downstream builders (Pass 3) can use it
   options.sport = sport;
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Props mode setup (must be before session creation so activeTools is available)
-  const isPropsMode = options.mode === 'props';
-  const isGamePicksMode = !isPropsMode;
+  // The orchestrator is the GAME lane only. Props left it for the desk brain
+  // (MLB Jul 26 2026, football Aug 20 2026); the old multi-pass props mode —
+  // the system behind the pre-Jul-27 props ledger — was deleted Sep 2 2026
+  // (founder: "the old system is gone") and is refused at the entry seam
+  // (orchestratorMain.analyzeGame).
   const bilateralFn = options.bilateralCasePrompt || null;
   // Per-call override outranks the env override: the June-engine MLB lane must
   // pin a TOOLS-CAPABLE brain (API Sol) even while the scheduler plist's
@@ -196,12 +196,12 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // prompts, Jun 25-Jul 4). Founder reverted props to the documented Tier 2
   // on Jul 8; props win-rate stays on the nightly watch — one-line re-upgrade
   // if the lane sags.
-  const primaryModel = modelOverride ? modelOverride : (isPropsMode ? PROPS_DESK_MODEL : GAME_PICK_MODEL);
+  const primaryModel = modelOverride ? modelOverride : GAME_PICK_MODEL;
   // Game-pick audit = numeric-corpus trace + count-claim verification over the
   // structured recent scores (both feed the same corrective-retry rail).
   const auditGamePick = (p, messages) => {
     const a = auditPickRationale(p, messages);
-    if (!isPropsMode && options?.recentScores && p?.rationale) {
+    if (options?.recentScores && p?.rationale) {
       const counts = auditCountClaims(p.rationale, options.recentScores);
       if (counts.length) {
         a.retryable = [...a.retryable, ...counts];
@@ -215,25 +215,12 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     : primaryModel;
   console.log(`[Orchestrator] Starting ${sport} — brain: ${modelLabel} (desk-only, researcher OFF)`);
 
-  const propContext = options.propContext || null;
-  let propsRetryCount = 0; // Track finalize_props retry attempts
-
   // Cost tracking — accumulates tokens across all sessions (including 429 cascades)
-  const pipelineType = isPropsMode ? 'Props' : 'Game Picks';
-  const costTracker = createCostTracker(`${pipelineType}: ${awayTeam} @ ${homeTeam} (${sport})`);
+  const costTracker = createCostTracker(`Game Picks: ${awayTeam} @ ${homeTeam} (${sport})`);
 
   try { // try/finally ensures cost summary always logs on exit
 
-  // Build tools list — add finalize_props when in props mode
-  // Remove fetch_narrative_context (grounding) when it adds no value:
-  // - Props mode: all data is in the pre-built scout report + player stats. No grounding needed.
-  const needsGrounding = isGamePicksMode;
-  const baseTools = needsGrounding
-    ? toolDefinitions
-    : toolDefinitions.filter(t => t.function?.name !== 'fetch_narrative_context');
-  const activeTools = isPropsMode
-    ? [...baseTools, getFinalizePropsToolForSport(sport)]
-    : baseTools;
+  const activeTools = toolDefinitions;
 
   // PERSISTENT SESSION SETUP — one session per brain, adapter-routed.
   let currentSession = await createModelSession({ _costTracker: costTracker,
@@ -242,11 +229,11 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     tools: activeTools,
     // Game picks run Sol at its TOP reasoning tier (founder GO Jul 22 eve —
     // the WC specials precedent); props ride their own desk model.
-    thinkingLevel: isPropsMode ? 'high' : 'xhigh',
+    thinkingLevel: 'xhigh',
     enableCache: true  // Cache system prompt + tools (~10K stable tokens, 90% off on reuse)
   });
   let currentModelName = currentSession.modelName;
-  console.log(`[Orchestrator] ${modelLabel} session created (${currentModelName}, ${sport}, thinking: ${isPropsMode ? 'high' : 'xhigh'})`);
+  console.log(`[Orchestrator] ${modelLabel} session created (${currentModelName}, ${sport}, thinking: xhigh)`);
 
   // Messages array for state tracking (pass detection) — API calls go
   // through the persistent session
@@ -269,19 +256,19 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   let nextMessageToSend = userMessage;
   let pendingFunctionResponses = []; // Batched function responses to send
   // Persistent pass-injection flags (survive context pruning)
-  let _pass25Injected = false;
-  let _pass25JustInjected = false; // True for ONE iteration after Pass 2.5 is injected (for response logging)
+  let _pass2Injected = false;
+  let _pass2JustInjected = false; // True for ONE iteration after Pass 2 is injected (for response logging)
 
-  // Every route into Pass 2.5 goes through this one gate. Football cannot use
+  // Every route into Pass 2 goes through this one gate. Football cannot use
   // a timeout/stall shortcut to bypass the exact two-sided Pass 1 contract.
   // Other sports and props retain their existing progression behavior.
-  const injectPass25 = (currentAssistantText = '') => {
+  const injectPass2 = (currentAssistantText = '') => {
     const latestAssistant = [...messages].reverse().find(m => m.role === 'assistant');
     if (currentAssistantText && latestAssistant?.content !== currentAssistantText) {
       messages.push({ role: 'assistant', content: currentAssistantText });
     }
 
-    const strictFootballCases = isGamePicksMode && (isNFLSport || isNCAAFSport);
+    const strictFootballCases = isNFLSport || isNCAAFSport;
     if (strictFootballCases) {
       const allAssistantText = messages
         .filter(m => m.role === 'assistant')
@@ -305,15 +292,11 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       console.log(`[Orchestrator] Bilateral cases verified (homeLen=${caseCheck.homeLen}, awayLen=${caseCheck.awayLen})`);
     }
 
-    const propsPass25Constitution = (isPropsMode && typeof propContext?.propsConstitution === 'object')
-      ? propContext.propsConstitution.pass25 || '' : '';
-    const pass25Content = isPropsMode
-      ? buildPass25PropsMessage(homeTeam, awayTeam, sport, propsPass25Constitution)
-      : buildPass25Message(homeTeam, awayTeam, sport, options.spread ?? null, options.pass25DecisionGuards || '', options.game || {});
-    messages.push({ role: 'user', content: pass25Content });
-    nextMessageToSend = pass25Content;
-    _pass25Injected = true;
-    _pass25JustInjected = true;
+    const pass2Content = buildPass2Message(homeTeam, awayTeam, sport, options.spread ?? null, options.pass25DecisionGuards || '', options.game || {});
+    messages.push({ role: 'user', content: pass2Content });
+    nextMessageToSend = pass2Content;
+    _pass2Injected = true;
+    _pass2JustInjected = true;
     return true;
   };
 
@@ -344,7 +327,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     iteration++;
     console.log(`\n[Orchestrator] Iteration ${iteration}/${effectiveMaxIterations} (${provider}, ${currentModelName})`);
 
-    // Get the spread for Pass 2.5 context injection (available throughout loop)
+    // Get the spread for Pass 2 context injection (available throughout loop)
     const spread = options.spread ?? null;
 
     let response;
@@ -379,7 +362,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           // the existing stall-detection code can actually nudge Gary instead of
           // logging into the void.
           const hasQueuedPassMessage = nextMessageToSend && nextMessageToSend !== userMessage &&
-            (nextMessageToSend.includes('PASS 2.5') || nextMessageToSend.includes('CASE REVIEW') ||
+            (nextMessageToSend.includes('PASS 2') || nextMessageToSend.includes('CASE REVIEW') ||
              nextMessageToSend.includes('CASE EVALUATION') || nextMessageToSend.includes('investigation is complete') ||
              nextMessageToSend.includes('You are still in Pass 1'));
           
@@ -395,9 +378,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           // Send text message (user message or pass transition)
           if (!nextMessageToSend) {
             console.log(`[Orchestrator] ⚠️ No message to send - using fallback prompt`);
-            nextMessageToSend = isPropsMode
-              ? `Continue your investigation. Use fetch_stats to gather more data on this matchup.`
-              : `Continue: synthesize from the desk — it is your complete evidence — and finish the current pass.`;
+            nextMessageToSend = `Continue: synthesize from the desk — it is your complete evidence — and finish the current pass.`;
           }
           sessionResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
         }
@@ -420,12 +401,12 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           messages.push(message);
         }
 
-        // Log Pass 2.5 response content for debugging (FULL — no truncation)
-        if (_pass25JustInjected && message.content && !message.tool_calls?.length) {
-          console.log(`\n📋 GARY'S PASS 2.5 EVALUATION (${message.content.length} chars):\n${'─'.repeat(60)}`);
+        // Log Pass 2 response content for debugging (FULL — no truncation)
+        if (_pass2JustInjected && message.content && !message.tool_calls?.length) {
+          console.log(`\n📋 GARY'S PASS 2 EVALUATION (${message.content.length} chars):\n${'─'.repeat(60)}`);
           console.log(message.content);
           console.log(`${'─'.repeat(60)}\n`);
-          _pass25JustInjected = false;
+          _pass2JustInjected = false;
         }
 
       } catch (error) {
@@ -475,20 +456,20 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       // Check what pass we're in to provide appropriate nudge
       let nudgeContent;
 
-      if (_pass25Injected) {
-        // Pass 2.5 already sent - need decision, not stats
-        console.log(`[Orchestrator] ⚠️ Gemini returned empty response after Pass 2.5 - requesting decision output`);
+      if (_pass2Injected) {
+        // Pass 2 already sent - need decision, not stats
+        console.log(`[Orchestrator] ⚠️ Gemini returned empty response after Pass 2 - requesting decision output`);
         nudgeContent = `You didn't provide a response. Evaluate both sides and make your pick in natural language. Do NOT output JSON — the final formatted output comes in the next step.`;
       } else {
         // Still in investigation phase — check investigation breadth
         const { sufficient, categoryCount, totalCalls } = isInvestigationSufficient(toolCallHistory, iteration);
 
         if (sufficient) {
-          // FORCE-PROGRESSION on empty response: if iterations are running out, inject Pass 2.5 directly.
+          // FORCE-PROGRESSION on empty response: if iterations are running out, inject Pass 2 directly.
           // Empty completion + late iteration = Gary is stuck. Force him to commit instead of looping to MAX.
           if (iteration >= effectiveMaxIterations - 3) {
-            console.warn(`[Orchestrator] FORCE-PROGRESSION (empty response): iteration ${iteration}/${effectiveMaxIterations} with ${totalCalls} stats across ${categoryCount} categories — injecting Pass 2.5 to avoid pipeline timeout`);
-            injectPass25();
+            console.warn(`[Orchestrator] FORCE-PROGRESSION (empty response): iteration ${iteration}/${effectiveMaxIterations} with ${totalCalls} stats across ${categoryCount} categories — injecting Pass 2 to avoid pipeline timeout`);
+            injectPass2();
             continue;
           }
           // Enough investigation — tell Gary to wrap up investigation (NOT to decide)
@@ -499,10 +480,8 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           // Desk-only game brains have NO tools — a fetch_stats instruction
           // here (the pre-Sep-1 wording) told Gary to call a tool that does
           // not exist, and an empty-response streak would loop on it to the
-          // iteration cap. Props mode keeps its tool language.
-          nudgeContent = isPropsMode
-            ? `You didn't respond. Use the fetch_stats tool to request stats for this matchup. You've gathered ${totalCalls} stats across ${categoryCount} categories so far. Continue investigating to build a complete picture of this matchup.`
-            : `You didn't respond. Continue reading the desk — it is your complete evidence. Finish your Pass 1 synthesis with both cases and then output exactly:\nINVESTIGATION COMPLETE`;
+          // iteration cap.
+          nudgeContent = `You didn't respond. Continue reading the desk — it is your complete evidence. Finish your Pass 1 synthesis with both cases and then output exactly:\nINVESTIGATION COMPLETE`;
         }
       }
       
@@ -611,7 +590,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
 
         // Determine what phase we're in
         let nudgeMessage;
-        if (_pass25Injected) {
+        if (_pass2Injected) {
           nudgeMessage = `ALL ${message.tool_calls.length} stats you requested were already gathered. DO NOT request more stats.${dataRecap}
 
 Evaluate both sides and make your pick in natural language. Do NOT output JSON — the final formatted output comes in the next step.`;
@@ -659,81 +638,11 @@ INVESTIGATION COMPLETE`;
           continue;
         }
 
-        // Handle finalize_props tool call (props mode only)
-        if (functionName === 'finalize_props' && isPropsMode) {
-          // PIPELINE GATE: Block finalize_props until Pass 3 has been injected
-          // Props must go through full pipeline: Pass 1 → Pass 2.5 → Pass 3 → finalize
-          if (!_pass3Injected) {
-            const stage = !_pass25Injected ? 'evaluation (Pass 2.5)' : 'final props evaluation (Pass 3)';
-            console.log(`[Orchestrator] ⚠️ finalize_props BLOCKED — ${stage} not yet completed`);
-            pendingFunctionResponses.push({
-              name: functionName,
-              content: JSON.stringify({ error: `Cannot finalize props yet. You must complete ${stage} first. Continue your analysis and evaluation before selecting your final props.` })
-            });
-            continue;
-          }
-
-          const rawPicks = args.picks || [];
-          console.log(`[Orchestrator] 🎯 finalize_props called with ${rawPicks.length} picks`);
-
-          // F-3 (Jul 5 2026 audit): an explicit pass (no_play + empty picks) is a
-          // legitimate decision, not a malformed call — do NOT retry it into forced volume.
-          if (isExplicitPropsPass(args)) {
-            console.log(`[Orchestrator] 🚫 PROPS PASS — Gary passed on this board${args.pass_reason ? `: "${args.pass_reason}"` : ''}`);
-            return {
-              picks: [],
-              passed: true,
-              passReason: args.pass_reason || null,
-              toolCallHistory,
-              iterations: iteration,
-              homeTeam,
-              awayTeam,
-              sport,
-              rawAnalysis: message.content || '',
-              isProps: true
-            };
-          }
-
-          // Validate picks have required fields
-          const validPicks = rawPicks.filter(p => {
-            if (!p.player || !p.bet || !p.rationale) {
-              console.warn(`[Orchestrator] ⚠️ Dropping pick — missing required fields: player=${p.player}, bet=${p.bet}, rationale=${!!p.rationale}`);
-              return false;
-            }
-            return true;
-          });
-
-          if (validPicks.length === 0) {
-            console.warn(`[Orchestrator] ⚠️ finalize_props had 0 valid picks — requesting retry`);
-            pendingFunctionResponses.push({
-              name: functionName,
-              content: JSON.stringify({ error: 'Your picks are missing required fields (player, bet, rationale). Call finalize_props again — either with complete pick data, or with an empty picks array plus no_play: true and a pass_reason if you are passing on this board.' })
-            });
-            continue;
-          }
-
-          // Stat audit (warn-only): flag rationale numbers absent from the
-          // provided data. Props previously shipped completely unaudited.
-          auditPropsPicks(validPicks, messages);
-
-          // Return the props picks immediately
-          return {
-            picks: validPicks,
-            toolCallHistory,
-            iterations: iteration,
-            homeTeam,
-            awayTeam,
-            sport,
-            rawAnalysis: message.content || '',
-            isProps: true
-          };
-        }
-
         // Handle fetch_narrative_context tool (storylines, player news, context)
         if (functionName === 'fetch_narrative_context') {
-          // Block narrative context after Pass 2.5 — investigation is over, Gary should be evaluating
-          if (_pass25Injected) {
-            console.log(`  → [NARRATIVE_CONTEXT] BLOCKED (Pass 2.5 injected — investigation phase over): "${args.query}"`);
+          // Block narrative context after Pass 2 — investigation is over, Gary should be evaluating
+          if (_pass2Injected) {
+            console.log(`  → [NARRATIVE_CONTEXT] BLOCKED (Pass 2 injected — investigation phase over): "${args.query}"`);
             messages.push({
               role: 'tool',
               tool_call_id: toolCall.id,
@@ -1458,7 +1367,7 @@ INVESTIGATION COMPLETE`;
       const lastResponseWasTextOnly = message.content && (!message.tool_calls || message.tool_calls.length === 0);
 
       // Use persistent flags ONLY (survive context pruning, no false positives from Gemini echoing pass labels)
-      const pass25AlreadyInjected = _pass25Injected;
+      const pass2AlreadyInjected = _pass2Injected;
       const pass3AlreadyInjected = _pass3Injected;
 
       // Log investigation status
@@ -1474,14 +1383,14 @@ INVESTIGATION COMPLETE`;
 
       // ═══════════════════════════════════════════════════════════════════════
       // NOTE: Flash research briefing is now injected BEFORE Pass 1 (sequential, not parallel).
-      // Gary uses findings from Pass 1 context to inform his decision in Pass 2.5.
+      // Gary uses findings from Pass 1 context to inform his decision in Pass 2.
       // ═══════════════════════════════════════════════════════════════════════
       // PHASE GUIDANCE — marker-based transition; this section only nudges completion
       // ═══════════════════════════════════════════════════════════════════════
 
-      if (!pass25AlreadyInjected) {
+      if (!pass2AlreadyInjected) {
         // When Gary keeps making tool calls past the stall threshold AND he
-        // already has enough data, force progression to Pass 2.5 directly.
+        // already has enough data, force progression to Pass 2 directly.
         // Previously this path only sent a "synthesize and emit the marker"
         // reminder that Gary often ignored — see Phillies@Padres (5058601)
         // 2026-05-27, where 8 consecutive PLAYER_GAME_LOGS calls in a row
@@ -1497,16 +1406,14 @@ INVESTIGATION COMPLETE`;
           _investigationStallCount >= 3 && totalCalls >= 10;
 
         if (stalledWithEnoughData) {
-          console.warn(`[Orchestrator] FORCE-PROGRESSION (stall-based, tool-call path): ${_investigationStallCount} stalls, ${totalCalls} stats, ${categoryCount} categories at iter ${iteration}/${effectiveMaxIterations} — injecting Pass 2.5 directly to avoid MAX_ITERATIONS timeout`);
-          injectPass25(message.content);
+          console.warn(`[Orchestrator] FORCE-PROGRESSION (stall-based, tool-call path): ${_investigationStallCount} stalls, ${totalCalls} stats, ${categoryCount} categories at iter ${iteration}/${effectiveMaxIterations} — injecting Pass 2 directly to avoid MAX_ITERATIONS timeout`);
+          injectPass2(message.content);
         } else if (_investigationStallCount >= 3) {
           console.log(`[Orchestrator] Pass 1 stall detected at ${categoryCount} categories — nudging Gary to emit INVESTIGATION COMPLETE marker`);
-          const casePromptStall = (isGamePicksMode && bilateralFn)
+          const casePromptStall = bilateralFn
             ? `\n\n${bilateralFn(homeTeam, awayTeam)}`
             : '';
-          const synthesizeFrom = isPropsMode
-            ? 'Synthesize what you already have from the scout report and player context — they are your evidence.'
-            : 'Synthesize what you already have from the desk — it is your complete evidence.';
+          const synthesizeFrom = 'Synthesize what you already have from the desk — it is your complete evidence.';
           const completionNudge = `You are still in Pass 1. Do not make your pick yet.
 
 ${synthesizeFrom}
@@ -1517,14 +1424,12 @@ INVESTIGATION COMPLETE`;
           messages.push({ role: 'user', content: completionNudge });
           nextMessageToSend = completionNudge;
         }
-      } else if (pass25AlreadyInjected && !pass3AlreadyInjected) {
-        // Pass 2.5 evaluation done — inject Pass 3 for final output
-        const pass3Content = isPropsMode
-          ? buildPass3Props(homeTeam, awayTeam, propContext)
-          : buildPass3Unified(homeTeam, awayTeam, options);
+      } else if (pass2AlreadyInjected && !pass3AlreadyInjected) {
+        // Pass 2 evaluation done — inject Pass 3 for final output
+        const pass3Content = buildPass3Unified(homeTeam, awayTeam, options);
         messages.push({ role: 'user', content: pass3Content });
         _pass3Injected = true;
-        console.log(`[Orchestrator] Injected Pass 3 (${isPropsMode ? 'Props Evaluation' : 'Final Output'})`);
+        console.log(`[Orchestrator] Injected Pass 3 (Final Output)`);
       }
 
       // ═══════════════════════════════════════════════════════════════════════
@@ -1542,7 +1447,7 @@ INVESTIGATION COMPLETE`;
               name: tr.name || 'tool_response',
               content: tr.content
             }));
-            // Preserve any previously pushed responses (e.g., finalize_props block errors)
+            // Preserve any previously pushed responses (e.g., malformed-call errors)
             pendingFunctionResponses = [...pendingFunctionResponses, ...newResponses];
             console.log(`[Orchestrator] Prepared ${pendingFunctionResponses.length} function response(s) for session`);
           }
@@ -1568,18 +1473,18 @@ INVESTIGATION COMPLETE`;
 
     // ═══════════════════════════════════════════════════════════════════════
     // TEXT-ONLY RESPONSE HANDLING / PIPELINE ENFORCEMENT
-    // Pass 2.5 transition is marker-based only:
-    // - inject Pass 2.5 only when Gary outputs INVESTIGATION COMPLETE
+    // Pass 2 transition is marker-based only:
+    // - inject Pass 2 only when Gary outputs INVESTIGATION COMPLETE
     // - otherwise keep Pass 1 active with a completion reminder
     // ═══════════════════════════════════════════════════════════════════════
-    if (!_pass25Injected && iteration < effectiveMaxIterations) {
+    if (!_pass2Injected && iteration < effectiveMaxIterations) {
       const { categoryCount: gateCategories, totalCalls: gateCalls } = isInvestigationSufficient(toolCallHistory, iteration);
       const markedComplete = hasInvestigationCompleteMarker(message.content || '');
 
       // (ask-the-researcher protocol removed with the researcher — Aug 27.)
 
       if (markedComplete) {
-        if (isGamePicksMode && !isNFLSport && !isNCAAFSport) {
+        if (!isNFLSport && !isNCAAFSport) {
           // Football's first-turn prompt carries an exact two-sided section
           // contract. Do not let generic matchup prose masquerade as both
           // cases: that failure produced one-sided preseason decisions while
@@ -1594,33 +1499,31 @@ INVESTIGATION COMPLETE`;
           }
         }
 
-        // Explicit completion marker (text-only path) — inject Pass 2.5
-        const pass25Ready = injectPass25(message.content);
-        if (pass25Ready) {
-          console.log(`[Orchestrator] Pipeline gate: INVESTIGATION COMPLETE received — injecting Pass 2.5 (${gateCategories} categories, ${gateCalls} calls)`);
+        // Explicit completion marker (text-only path) — inject Pass 2
+        const pass2Ready = injectPass2(message.content);
+        if (pass2Ready) {
+          console.log(`[Orchestrator] Pipeline gate: INVESTIGATION COMPLETE received — injecting Pass 2 (${gateCategories} categories, ${gateCalls} calls)`);
         }
         continue;
       }
 
       // FORCE-PROGRESSION: Gary is running out of iterations but has plenty of data.
-      // Inject Pass 2.5 directly to prevent MAX_ITERATIONS pipeline failure.
+      // Inject Pass 2 directly to prevent MAX_ITERATIONS pipeline failure.
       // Threshold: within 3 of cap AND >=12 stats gathered.
       const forceProgress = (iteration >= effectiveMaxIterations - 3) && gateCalls >= 12;
       if (forceProgress) {
-        console.warn(`[Orchestrator] FORCE-PROGRESSION: iteration ${iteration}/${effectiveMaxIterations} with ${gateCalls} stats across ${gateCategories} categories — injecting Pass 2.5 without INVESTIGATION COMPLETE marker to avoid pipeline timeout`);
-        injectPass25(message.content);
+        console.warn(`[Orchestrator] FORCE-PROGRESSION: iteration ${iteration}/${effectiveMaxIterations} with ${gateCalls} stats across ${gateCategories} categories — injecting Pass 2 without INVESTIGATION COMPLETE marker to avoid pipeline timeout`);
+        injectPass2(message.content);
         continue;
       }
 
       // No completion marker yet — keep Pass 1 active
       console.log(`[Orchestrator] Pass 1 remains active — waiting for INVESTIGATION COMPLETE (${gateCategories} categories, ${gateCalls} calls)`);
       messages.push({ role: 'assistant', content: message.content });
-      const casePrompt = (isGamePicksMode && bilateralFn)
+      const casePrompt = bilateralFn
         ? `\n\n${bilateralFn(homeTeam, awayTeam)}`
         : '';
-      const synthesizeMsg = isPropsMode
-        ? 'Synthesize from the scout report and player context — they are your evidence.'
-        : 'Synthesize from the desk — it is your complete evidence.';
+      const synthesizeMsg = 'Synthesize from the desk — it is your complete evidence.';
       const pass1Reminder = {
         role: 'user',
         content: `You are still in Pass 1. Do not make your pick yet.
@@ -1638,30 +1541,27 @@ INVESTIGATION COMPLETE`
 
     // Use persistent flags (no false positives from message scanning)
 
-    // Pass 3 — inject after Pass 2.5 completes
-    if (_pass25Injected && !_pass3Injected && iteration < effectiveMaxIterations) {
-      // Pass 2.5 now produces BOTH the prose card rationale AND a structured
-      // JSON code block (see buildPass25Message in passBuilders.js). If the
+    // Pass 3 — inject after Pass 2 completes
+    if (_pass2Injected && !_pass3Injected && iteration < effectiveMaxIterations) {
+      // Pass 2 now produces BOTH the prose card rationale AND a structured
+      // JSON code block (see buildPass2Message in passBuilders.js). If the
       // JSON parses cleanly we have everything we need and Pass 3 — labeled
       // "FORMAT ONLY" in its own prompt — would just re-emit the same JSON.
       // Skip it. Saves one full round-trip (~25-28K input tokens) per game
       // without changing Gary's reasoning or the final pick content.
-      //
-      // Props mode keeps the existing Pass 3 path — props use the finalize_props
-      // tool which has its own dedicated gate; this short-circuit is game-pick only.
-      if (!isPropsMode) {
+      {
         let earlyPick = null;
         try {
           earlyPick = parseGaryResponse(message.content, homeTeam, awayTeam, sport, options.game || {});
         } catch (e) {
-          console.warn(`[Orchestrator] Pass 2.5 parse-first attempt threw: ${e.message} — falling through to Pass 3 injection`);
+          console.warn(`[Orchestrator] Pass 2 parse-first attempt threw: ${e.message} — falling through to Pass 3 injection`);
         }
         if (earlyPick) {
           // HOUSE LIMIT gate (before the stat audit — an illegal ticket gets
           // re-asked, not polished): one corrective re-ask, then hard-fail so
           // the lane's fallback rails take the game. A past-cap moneyline can
           // never ship.
-          if (isGamePicksMode && moneylinePastCap(earlyPick)) {
+          if (moneylinePastCap(earlyPick)) {
             if (!_mlCapRetried && iteration < effectiveMaxIterations) {
               _mlCapRetried = true;
               console.warn(`[Orchestrator] 🧱 HOUSE LIMIT: "${earlyPick.pick}" is heavier than ${GAME_ML_CAP} — corrective re-ask (the market is the runline/spread)`);
@@ -1700,7 +1600,7 @@ INVESTIGATION COMPLETE`
           // otherwise be the last assistant turn in `messages`).
           messages.push({ role: 'assistant', content: message.content });
 
-          console.log(`[Orchestrator] ✅ Pass 2.5 emitted valid JSON — skipping Pass 3 (saved 1 round-trip)`);
+          console.log(`[Orchestrator] ✅ Pass 2 emitted valid JSON — skipping Pass 3 (saved 1 round-trip)`);
           earlyPick.toolCallHistory = toolCallHistory;
           earlyPick.iterations = iteration;
           earlyPick.rawAnalysis = message.content;
@@ -1719,57 +1619,24 @@ INVESTIGATION COMPLETE`
           }
           return earlyPick;
         }
-        // No valid JSON in Pass 2.5 — fall through to Pass 3 injection as a
+        // No valid JSON in Pass 2 — fall through to Pass 3 injection as a
         // safety net. Gary still gets a chance to format properly.
-        console.log(`[Orchestrator] Pass 2.5 did not contain parseable JSON — falling through to Pass 3 injection (safety net)`);
+        console.log(`[Orchestrator] Pass 2 did not contain parseable JSON — falling through to Pass 3 injection (safety net)`);
       }
 
       messages.push({ role: 'assistant', content: message.content });
 
-      const pass3Content = isPropsMode
-        ? buildPass3Props(homeTeam, awayTeam, propContext)
-        : buildPass3Unified(homeTeam, awayTeam, options);
+      const pass3Content = buildPass3Unified(homeTeam, awayTeam, options);
       messages.push({ role: 'user', content: pass3Content });
       nextMessageToSend = pass3Content;
       _pass3Injected = true;
-      console.log(`[Orchestrator] Injected Pass 3 - ${isPropsMode ? 'Props Evaluation' : 'Final Output'}`);
+      console.log(`[Orchestrator] Injected Pass 3 - Final Output`);
 
       continue;
     }
 
     // Gary is done
     console.log(`[Orchestrator] Gary finished analysis (${finishReason})`);
-
-    // ─── Props mode: parse with parsePropsResponse ───────────────────────
-    if (isPropsMode) {
-      const propsParsed = parsePropsResponse(message.content, null);
-      if (propsParsed && propsParsed.length > 0) {
-        // Stat audit (warn-only) — same contract as the finalize_props path.
-        auditPropsPicks(propsParsed, messages);
-        return {
-          picks: propsParsed,
-          toolCallHistory, iterations: iteration,
-          homeTeam, awayTeam, sport,
-          rawAnalysis: message.content,
-          isProps: true
-        };
-      }
-      // Props response didn't parse — retry up to 2 times, then let max-iterations fallback handle it
-      propsRetryCount++;
-      if (propsRetryCount <= 2 && iteration < effectiveMaxIterations) {
-        console.log(`[Orchestrator] ⚠️ Props response didn't parse (attempt ${propsRetryCount}/2) - requesting finalize_props tool call...`);
-        messages.push({ role: 'assistant', content: message.content });
-        const nudge = propsRetryCount === 1
-          ? 'Submit your picks NOW. If your session has the finalize_props tool, call it; otherwise output a ```json code block: { "picks": [{ player, team, prop, line, bet, odds, confidence, rationale, key_stats }] } with your 2 best picks.'
-          : 'CRITICAL: Your analysis is complete — submit your 2 picks NOW as a ```json code block: { "picks": [{ player, team, prop, line, bet, odds, confidence, rationale, key_stats }] }. Nothing else in the response.';
-        messages.push({ role: 'user', content: nudge });
-        nextMessageToSend = nudge;
-        continue;
-      }
-      // After 2 nudges, skip straight to max-iterations fallback (don't waste iterations)
-      console.log(`[Orchestrator] ⚠️ Props finalize_props not called after ${propsRetryCount} retries — jumping to max-iterations fallback`);
-      break;
-    }
 
     // ─── Game mode: check for truncation, then parse ──────────────────────────
     // If response was truncated by MAX_TOKENS, retry immediately — don't parse broken JSON
@@ -1809,8 +1676,8 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
     }
 
     if (pick) {
-      // HOUSE LIMIT gate (same contract as the Pass 2.5 short-circuit exit).
-      if (isGamePicksMode && moneylinePastCap(pick)) {
+      // HOUSE LIMIT gate (same contract as the Pass 2 short-circuit exit).
+      if (moneylinePastCap(pick)) {
         if (!_mlCapRetried && iteration < effectiveMaxIterations) {
           _mlCapRetried = true;
           console.warn(`[Orchestrator] 🧱 HOUSE LIMIT: "${pick.pick}" is heavier than ${GAME_ML_CAP} — corrective re-ask (the market is the runline/spread)`);
@@ -1824,7 +1691,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
         return { error: `rails: moneyline past the ${GAME_ML_CAP} house limit` };
       }
 
-      // Stat audit (same contract as the Pass 2.5 short-circuit exit above):
+      // Stat audit (same contract as the Pass 2 short-circuit exit above):
       // retry only for retryable claims; windowed/derived claims warn-only.
       const audit = auditGamePick(pick, messages);
       if (audit.retryable.length > 0 && !_statAuditRetried && iteration < effectiveMaxIterations) {
@@ -1852,7 +1719,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
       pick.rawAnalysis = message.content;
 
       // Attach the full assistant-side narrative so the "Talk to Gary" feature
-      // can reference Gary's bilateral case + Pass 2.5 synthesis later. We join
+      // can reference Gary's bilateral case + Pass 2 synthesis later. We join
       // every assistant text turn — that captures the case for each side, the
       // synthesis, and the final analysis. Tool calls and system noise are skipped.
       try {
@@ -1881,94 +1748,11 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
   }
 
   // Max iterations reached
-  // For props mode: only attempt finalize if pipeline has completed through Pass 2.5
-  // If pipeline didn't reach Pass 2.5, the analysis is incomplete — fail honestly
-  if (isPropsMode) {
-    if (!_pass25Injected) {
-      console.error(`[Orchestrator] ❌ Max iterations reached but pipeline incomplete — Pass 2.5 (evaluation) never completed for ${awayTeam} @ ${homeTeam}`);
-      console.error(`[Orchestrator] Pipeline state: pass25=${_pass25Injected}, pass3=${_pass3Injected}`);
-      return {
-        error: `Props pipeline incomplete — Pass 2.5 (evaluation) never completed within max iterations`,
-        toolCallHistory, iterations: iteration,
-        homeTeam, awayTeam, sport, isProps: true,
-        _pipelineState: { pass25: _pass25Injected, pass3: _pass3Injected }
-      };
-    }
-    console.log(`[Orchestrator] ⚠️ Max iterations (${effectiveMaxIterations}) reached in props mode - injecting final props prompt...`);
-    const pass3PropsContent = buildPass3Props(homeTeam, awayTeam, propContext);
-    messages.push({ role: 'user', content: pass3PropsContent });
-    // Flip the pipeline flag so finalize_props is no longer blocked by the gate
-    // at line 688. Previously this fallback path forgot to set the flag and
-    // bypassed the gate by parsing tool_call args directly — two divergent
-    // paths to finalize. Keep the gate authoritative.
-    _pass3Injected = true;
-
-    if (!currentSession) {
-      throw new Error('No active Gemini session available for props finalization');
-    }
-
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        const sessionResponse = await sendToSessionWithRetry(
-          currentSession,
-          attempt === 1 ? pass3PropsContent : 'You have completed your analysis. Now call the finalize_props tool with your 2 best prop picks based on everything you investigated. Do not request more stats.'
-        );
-        const finalMessage = {
-          content: sessionResponse.content,
-          tool_calls: sessionResponse.toolCalls
-        };
-
-        // Check for finalize_props tool call
-        if (finalMessage?.tool_calls?.length) {
-          const propsCall = finalMessage.tool_calls.find(tc => tc.function?.name === 'finalize_props');
-          if (propsCall) {
-            const args = typeof propsCall.function.arguments === 'string'
-              ? JSON.parse(propsCall.function.arguments)
-              : propsCall.function.arguments;
-            return {
-              picks: args.picks || [],
-              toolCallHistory, iterations: iteration + attempt,
-              homeTeam, awayTeam, sport,
-              rawAnalysis: finalMessage.content || '',
-              isProps: true
-            };
-          }
-        }
-
-        // Try parsing text response
-        if (finalMessage?.content) {
-          const propsParsed = parsePropsResponse(finalMessage.content, null);
-          if (propsParsed && propsParsed.length > 0) {
-            return {
-              picks: propsParsed,
-              toolCallHistory, iterations: iteration + attempt,
-              homeTeam, awayTeam, sport,
-              rawAnalysis: finalMessage.content,
-              isProps: true
-            };
-          }
-          // Add response and retry with explicit instruction
-          messages.push({ role: 'assistant', content: finalMessage.content });
-          messages.push({ role: 'user', content: 'You have completed your analysis. Now call the finalize_props tool with your 2 best prop picks based on everything you investigated. Do not request more stats.' });
-          console.log(`[Orchestrator] Props synthesis attempt ${attempt} - no finalize_props call, retrying...`);
-        }
-      } catch (propsError) {
-        console.error(`[Orchestrator] Props synthesis attempt ${attempt} error:`, propsError.message);
-      }
-    }
-
-    return {
-      error: 'Could not extract props after max iterations',
-      toolCallHistory, iterations: iteration,
-      homeTeam, awayTeam, sport, isProps: true
-    };
-  }
-
   // Game mode: Pipeline did not complete within max iterations — NO synthesis fallback
   // Every pick must come from the real pipeline (Pass 1→2.5→3). If the pipeline
   // can't complete, this game is reported as a failure. No fake/synthesized picks.
   console.error(`[Orchestrator] MAX ITERATIONS (${effectiveMaxIterations}) reached without completing pipeline for ${awayTeam} @ ${homeTeam}`);
-  console.error(`[Orchestrator] Pipeline state: pass25=${_pass25Injected}, pass3=${_pass3Injected}`);
+  console.error(`[Orchestrator] Pipeline state: pass25=${_pass2Injected}, pass3=${_pass3Injected}`);
   console.error(`[Orchestrator] Stats gathered: ${toolCallHistory.length}, iterations: ${iteration}`);
   return {
     error: 'Pipeline did not complete within max iterations — no pick generated',
@@ -1977,7 +1761,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
     homeTeam,
     awayTeam,
     sport,
-    _pipelineState: { pass25: _pass25Injected, pass3: _pass3Injected },
+    _pipelineState: { pass25: _pass2Injected, pass3: _pass3Injected },
     _statsGathered: toolCallHistory.length
   };
 

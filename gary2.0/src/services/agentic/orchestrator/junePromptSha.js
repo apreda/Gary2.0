@@ -18,7 +18,7 @@ import { MLB_CONSTITUTION } from '../constitution/mlbConstitution.js';
 import { getConstitution } from '../constitution/index.js';
 import { buildSystemPrompt } from './garySystemPrompt.js';
 import { getMlbSpreadFactors, getMlbSeasonAwareness } from './spreadEvaluationFactors.js';
-import { buildPass1Message, buildPass25Message, buildPass3Unified } from './passBuilders.js';
+import { buildPass1Message, buildPass2Message, buildPass3Unified } from './passBuilders.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const DOSSIER_SURFACE_FILES = [
@@ -88,11 +88,11 @@ export function junePromptSha() {
     getMlbSeasonAwareness(),
     buildPass1Message('SCOUT', 'HOME', 'AWAY', 'DATE', 'baseball_mlb', 0),
     buildPass1Message('SCOUT', 'HOME', 'AWAY', 'DATE', 'baseball_mlb', 0, { game: CAPPED_GAME }),
-    buildPass25Message('HOME', 'AWAY', 'MLB', 0, ''),
+    buildPass2Message('HOME', 'AWAY', 'MLB', 0, ''),
     // The unpriced-spread MENU TRUTH branch (Sep 1 2026) renders only when a
     // recovery board carries a spread with no price — hash that variant too,
     // or edits to its wording would never move the era.
-    buildPass25Message('HOME', 'AWAY', 'MLB', -1.5, '', { moneyline_home: -100, spread_home: -1.5 }),
+    buildPass2Message('HOME', 'AWAY', 'MLB', -1.5, '', { moneyline_home: -100, spread_home: -1.5 }),
     buildPass3Unified('HOME', 'AWAY', { sport: 'MLB' }),
     dossierSurface,
   ].join('\n⸻\n');

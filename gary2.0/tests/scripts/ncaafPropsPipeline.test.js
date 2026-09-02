@@ -29,10 +29,10 @@ describe('NCAAF props runner wiring', () => {
 
   it('adopts the BDL-validated board and applies the shared per-game cap', () => {
     const cli = source('scripts/run-agentic-props-cli.js');
-    expect(cli).toContain('playerProps = context.playerProps');
+    expect(cli).toContain('playerProps = deskRes.boardProps;');
     expect(cli).toContain("leagueLabel === 'NCAAF' ? { player_id: _oddsRow?.player_id ?? null }");
     expect(cli).toContain("leagueLabel === 'NCAAF' && p.player_id == null");
-    expect(cli).toContain("['NBA', 'NHL', 'MLB', 'NFL', 'NCAAF'].includes(leagueLabel)");
+    expect(cli).toContain('applyPropsPerGameConstraint(result.picks, `${leagueLabel}-post`)');
     expect(cli).toContain('produced no valid picks and no explicit pass');
     expect(cli).toContain('throw new Error(`Props processing failed');
   });

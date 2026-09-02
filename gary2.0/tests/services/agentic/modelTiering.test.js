@@ -15,8 +15,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const agentLoopSrc = readFileSync(path.join(__dirname, '../../../src/services/agentic/orchestrator/agentLoop.js'), 'utf8');
 
 describe('model tiering: props on their own desk tier (game brain = Sol through the full orchestrator)', () => {
-  it('primaryModel branches on props mode', () => {
-    expect(agentLoopSrc).toContain('isPropsMode ? PROPS_DESK_MODEL : GAME_PICK_MODEL');
+  it('the orchestrator is the game lane only — primaryModel is the game brain (props mode deleted Sep 2 2026)', () => {
+    expect(agentLoopSrc).toContain('const primaryModel = modelOverride ? modelOverride : GAME_PICK_MODEL;');
+    expect(agentLoopSrc).not.toContain('PROPS_DESK_MODEL');
   });
 
   it('props default to the codex bridge — the brain the plists actually set — overridable only via the env seam (Gemini retired Aug 24 2026)', () => {

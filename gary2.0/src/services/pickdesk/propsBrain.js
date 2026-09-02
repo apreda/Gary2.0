@@ -16,7 +16,11 @@
  * dropped individually. Odds/no-stats/cap gates live in the CLI chassis.
  */
 import { createHash } from 'crypto';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import path from 'path';
 import { buildMlbDesk, fetchTonightsGameCall } from './mlbDesk.js';
+import { buildPropSheets } from './propSheets.js';
 import { PROPS_DESK_MODEL, LEGACY_BRAIN_FALLBACK, DESK_FALLBACK_MODELS, DESK_COST_PER_M } from '../agentic/orchestrator/orchestratorConfig.js';
 import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { normalizePropBetDirection } from '../agentic/propsSharedUtils.js';
@@ -54,9 +58,16 @@ const norm = (s) => String(s || '').toLowerCase().trim();
 const fmtOdds = (v) => (v == null ? null : (v > 0 ? `+${v}` : `${v}`));
 
 // Prompt-era fingerprint (Jul 29) — template hash, date placeholder; moves
-// only when the contract wording moves. Same scheme as garyBrain.PROMPT_SHA.
+// when the contract wording moves AND (Sep 2 2026, the Aug 19 ledger law)
+// when the desk surface the props brain reads moves: the board and the prop
+// sheets are what Gary prices from, so an edit there is a new era.
+const here = path.dirname(fileURLToPath(import.meta.url));
+const propsSurface = () => {
+  try { return readFileSync(path.join(here, 'propSheets.js'), 'utf8'); }
+  catch { return 'missing:propSheets.js'; }
+};
 export const PROPS_PROMPT_SHA = createHash('sha256')
-  .update(buildGaryPropsSystemPrompt('{date}') + THE_PROPS_ASK)
+  .update(buildGaryPropsSystemPrompt('{date}') + THE_PROPS_ASK + '\n⸻\n' + propsSurface())
   .digest('hex')
   .slice(0, 12);
 
@@ -558,6 +569,19 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
 
   const { homeTeam, awayTeam } = desk.meta;
 
+  // THE PROP SHEETS (Sep 2 2026): every board player's own numbers against
+  // his markets — the evidence a prop decision needs that the game desk
+  // never carried. Board version 3 = board + sheets, so the ledger can
+  // segment the era without a prompt change.
+  const sheets = buildPropSheets({
+    markets: board.markets,
+    chronoByPlayer,
+    lineups: desk.scout?.confirmedLineups || null,
+    homeTeam,
+    awayTeam,
+  });
+  if (sheets.players && board.stats) board.stats.board_version = 3;
+
   await snapshotPropMenu({
     markets: board.markets,
     matchup: `${awayTeam} @ ${homeTeam}`,
@@ -579,12 +603,13 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
     }
   } catch { /* the desk simply carries no call */ }
 
-  const userMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskText}${gameCall}\n\n${board.text}\n\n${THE_PROPS_ASK}`;
+  const sheetsBlock = sheets.text ? `\n\n${sheets.text}` : '';
+  const userMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskText}${gameCall}\n\n${board.text}${sheetsBlock}\n\n${THE_PROPS_ASK}`;
 
   const { parsed, audits, usage, explicitPass, respondingModel } = await runPropsDeskBrain({
     systemPrompt: buildGaryPropsSystemPrompt(todayLong()),
     userMessage,
-    corpus: [{ content: `${desk.deskText}${gameCall}\n${board.text}` }],
+    corpus: [{ content: `${desk.deskText}${gameCall}\n${board.text}${sheetsBlock}` }],
     recentScores: desk.recentScores || null,
   });
 

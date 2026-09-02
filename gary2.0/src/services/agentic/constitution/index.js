@@ -6,9 +6,9 @@ import { NBA_CONSTITUTION } from './nbaConstitution.js';
 import { NFL_CONSTITUTION } from './nflConstitution.js';
 import { NCAAF_CONSTITUTION } from './ncaafConstitution.js';
 import { MLB_CONSTITUTION } from './mlbConstitution.js'; // restored Aug 18 2026 — June engine returns for MLB games
-import { NFL_PROPS_CONSTITUTION } from './nflPropsConstitution.js';
-import { NBA_PROPS_CONSTITUTION } from './nbaPropsConstitution.js';
-// (mlbPropsConstitution deleted Jul 26 2026 — MLB props run the desk lane, constitution-less.)
+// (Props constitutions deleted: MLB Jul 26 2026, NBA/NFL Sep 2 2026 — every
+// props lane runs the desk brain, constitution-less; the orchestrator props
+// mode they fed is gone.)
 /**
  * BASE RULES - Applied to ALL sports
  * These rules govern data sources and external influence
@@ -80,51 +80,18 @@ const GAME_CONSTITUTIONS = {
 };
 
 /**
- * Props constitutions — sectioned objects { pass1, pass2, pass25, pass3 }
- * for phase-aligned delivery (context injected at each pass, not front-loaded).
- */
-const PROPS_CONSTITUTIONS = {
-  NFL_PROPS: NFL_PROPS_CONSTITUTION,
-  NBA_PROPS: NBA_PROPS_CONSTITUTION,
-  MLB_PROPS: '',  // desk lane — MLB props carry no constitution (Jul 26 2026)
-  basketball_nba_props: NBA_PROPS_CONSTITUTION,
-  americanfootball_nfl_props: NFL_PROPS_CONSTITUTION,
-  baseball_mlb_props: '',
-};
-
-/**
  * Get constitution for a sport.
  *
  * For game-pick sports with sectioned constitutions (objects):
  *   Returns { baseRules, domainKnowledge, guardrails, pass1Context, pass25DecisionGuards, full }
  *   - .full = all sections combined (for system prompt at session creation)
- *   - Individual sections allow phase-aligned delivery (Pass 1 / Pass 2.5 injection)
- *
- * For props sports (sectioned objects):
- *   Returns { baseRules, pass1, pass2, pass25, pass3 }
- *   - Each pass section is injected at the right moment during the 4-pass pipeline
+ *   - Individual sections allow phase-aligned delivery (Pass 1 / Pass 2 injection)
  *
  * For legacy flat-string constitutions:
  *   Returns a flat string (BASE_RULES + constitution)
  */
 export function getConstitution(sport) {
   const normalized = sport?.toUpperCase?.() || sport;
-
-  // Props — sectioned objects { pass1, pass2, pass25, pass3 }
-  const propsConst = PROPS_CONSTITUTIONS[normalized] || PROPS_CONSTITUTIONS[sport];
-  if (propsConst) {
-    if (typeof propsConst === 'object' && propsConst.pass1) {
-      return {
-        baseRules: BASE_RULES,
-        pass1: propsConst.pass1,
-        pass2: propsConst.pass2,
-        pass25: propsConst.pass25,
-        pass3: propsConst.pass3,
-      };
-    }
-    // Legacy flat string fallback
-    return BASE_RULES + propsConst;
-  }
 
   // Game picks — may be sectioned object or legacy flat string
   const sportConst = GAME_CONSTITUTIONS[normalized] || GAME_CONSTITUTIONS[sport];

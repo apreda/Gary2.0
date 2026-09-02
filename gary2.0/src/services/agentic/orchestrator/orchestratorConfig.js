@@ -29,7 +29,7 @@ export const MLB_JUNE_BRAIN_MODEL = process.env.GARY_MLB_BRAIN_MODEL || 'codex-g
 // no moneyline heavier than this ships to users. Payout law, not value
 // steering: on a game priced past the cap the market is the runline/spread,
 // not the winner. Enforced belt-and-suspenders in agentLoop with one
-// corrective re-ask; the menu clause lives in Pass 2.5.
+// corrective re-ask; the menu clause lives in Pass 2.
 export const GAME_ML_CAP = Number(process.env.GARY_ML_CAP || -179);
 // ═══ GEMINI ERADICATED (founder order, Aug 24 2026) ═══
 // "no more gemini for anything" — after the Google billing dunning

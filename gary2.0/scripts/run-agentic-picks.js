@@ -55,7 +55,7 @@ try {
 // post-mortem: June +26u/58% on the agentic engine, negative every week since
 // the Jul 22-26 pickdesk cutover). MLB game picks return to the orchestrator:
 // scout report → Haiku research briefing (checklist, hard-fail) → Sol brain
-// WITH tools → bilateral cases → Pass 2.5 decision (ML or RL, Gary's choice)
+// WITH tools → bilateral cases → Pass 2 decision (ML or RL, Gary's choice)
 // → Pass 3 + statAudit. THE lane, unconditionally (founder, Aug 27) —
 // requires ANTHROPIC_API_KEY (researcher) + OPENAI_API_KEY (brain); a
 // missing key fails loudly instead of rerouting to a second system.
@@ -172,7 +172,7 @@ async function runMlbJuneEngine(game, runnerOptions) {
   }
   // Storage-contract fields (paths, model, era stamp). Bilateral cases live
   // in the PASS 1 message — rawAnalysis holds only the LAST assistant
-  // message (Pass 2.5), so extract from the full narrative (Aug 18 finding).
+  // message (Pass 2), so extract from the full narrative (Aug 18 finding).
   const raw = result._fullAssistantNarrative || result._context?.fullAssistantNarrative
     || result.rawAnalysis || result._context?.rawAnalysis || '';
   const paths = extractJuneBilateralPaths(raw, game.home_team, game.away_team);

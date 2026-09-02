@@ -2,43 +2,6 @@ import { normalizeSportToLeague } from './orchestratorHelpers.js';
 import { spreadForSide } from '../../marketTruth.js';
 
 /**
- * Parse props response — extract finalize_props tool call or JSON from Gary's response
- */
-export function parsePropsResponse(content, toolCallArgs) {
-  // If we received direct tool call args (from finalize_props), use those
-  if (toolCallArgs && toolCallArgs.picks) {
-    return toolCallArgs.picks;
-  }
-
-  // Fallback: try to extract from text response
-  if (!content) return null;
-
-  // Try ALL JSON code blocks (not just the first) — Flash may output game-pick JSON before props JSON.
-  // Require BOTH player + bet on array items so a game-pick JSON that happens to include "player"
-  // (e.g. player-of-the-game rationale) cannot be misidentified as the props array.
-  const jsonBlocks = [...content.matchAll(/```json\s*([\s\S]*?)```/g)];
-  for (const match of jsonBlocks) {
-    try {
-      const parsed = JSON.parse(match[1]);
-      if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].player && parsed[0].bet) return parsed;
-      if (parsed.picks && Array.isArray(parsed.picks) && parsed.picks.length > 0) return parsed.picks;
-    } catch (e) { /* continue to next block */ }
-  }
-
-  // Try raw JSON object with picks — find the specific block containing "picks": [
-  const rawMatch = content.match(/\{[^{}]*"picks"\s*:\s*\[[\s\S]*?\]\s*\}/);
-  if (rawMatch) {
-    try {
-      const parsed = JSON.parse(rawMatch[0]);
-      if (parsed.picks && Array.isArray(parsed.picks)) return parsed.picks;
-    } catch (e) { /* continue */ }
-  }
-
-  return null;
-}
-
-
-/**
  * Determine the current pass based on message history
  * Returns: 'investigation', 'evaluation', 'final_decision', or 'default'
  */
@@ -49,7 +12,7 @@ export function determineCurrentPass(messages) {
   );
   if (hasPass3) return 'final_decision';
 
-  const hasPass25 = messages.some(m => m.content?.includes('PASS 2.5'));
+  const hasPass25 = messages.some(m => m.content?.includes('PASS 2'));
   if (hasPass25) return 'evaluation';
 
   // Default to investigation (Pass 1)
@@ -291,7 +254,7 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   const isFootball = sport === 'americanfootball_nfl' || sport === 'NFL' ||
     sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
   // CRITICAL: Support both legacy format (pick) and new format (final_pick)
-  // The new Pass 2.5 format uses "final_pick" instead of "pick"
+  // The new Pass 2 format uses "final_pick" instead of "pick"
   if (!parsed.pick && parsed.final_pick) {
     parsed.pick = parsed.final_pick;
     console.log(`[Orchestrator] 📋 Using final_pick as pick: "${parsed.pick}"`);

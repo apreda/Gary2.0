@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'fs';
 import {
   buildPass1Message,
-  buildPass25Message
+  buildPass2Message
 } from '../../../src/services/agentic/orchestrator/passBuilders.js';
 import { validateBilateralCases } from '../../../src/services/agentic/orchestrator/agentLoop.js';
 import { NFL_CONSTITUTION } from '../../../src/services/agentic/constitution/nflConstitution.js';
@@ -76,16 +76,16 @@ describe('football side-symmetry contract', () => {
     expect(result.awayLen).toBeLessThan(200);
   });
 
-  it('routes every normal and force-progression Pass 2.5 transition through the football case gate', () => {
+  it('routes every normal and force-progression Pass 2 transition through the football case gate', () => {
     const source = readFileSync(
       new URL('../../../src/services/agentic/orchestrator/agentLoop.js', import.meta.url),
       'utf8'
     );
-    const directBuilders = source.match(/\bbuildPass25Message\(/g) || [];
-    const gatedTransitions = source.match(/\binjectPass25\(/g) || [];
-    const gateStart = source.indexOf('const injectPass25 =');
+    const directBuilders = source.match(/\bbuildPass2Message\(/g) || [];
+    const gatedTransitions = source.match(/\binjectPass2\(/g) || [];
+    const gateStart = source.indexOf('const injectPass2 =');
     const strictValidation = source.indexOf('requireExplicitHeadings: true', gateStart);
-    const soleBuilder = source.indexOf('buildPass25Message(', gateStart);
+    const soleBuilder = source.indexOf('buildPass2Message(', gateStart);
 
     expect(directBuilders).toHaveLength(1);
     expect(gatedTransitions.length).toBeGreaterThanOrEqual(4);
@@ -95,21 +95,21 @@ describe('football side-symmetry contract', () => {
   });
 
   it('injects a neutral football-only final checkpoint without changing NBA wording', () => {
-    const nfl = buildPass25Message(
+    const nfl = buildPass2Message(
       'Cleveland Browns',
       'Buffalo Bills',
       'americanfootball_nfl',
       -2.5,
       NFL_CONSTITUTION.pass25DecisionGuards
     );
-    const ncaaf = buildPass25Message(
+    const ncaaf = buildPass2Message(
       'Home State',
       'Away State',
       'americanfootball_ncaaf',
       -7,
       NCAAF_CONSTITUTION.pass25DecisionGuards
     );
-    const nba = buildPass25Message('Home', 'Away', 'basketball_nba', -4, '');
+    const nba = buildPass2Message('Home', 'Away', 'basketball_nba', -4, '');
 
     for (const prompt of [nfl, ncaaf]) {
       expect(prompt).toContain('FOOTBALL SIDE-INDEPENDENCE CHECK');

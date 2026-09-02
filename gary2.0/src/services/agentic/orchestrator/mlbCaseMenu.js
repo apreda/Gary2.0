@@ -4,7 +4,7 @@
  * the underdog outright) — and Pass 1's opening line says so before the
  * read begins (Sep 2: the cases themselves argue who wins on every board). The Aug 28-31 ledger showed
  * every capped-favorite read finishing as "who wins" and being relabeled
- * onto -1.5 in Pass 2.5; 0 of 11 run-line rationales weighed the other
+ * onto -1.5 in Pass 2; 0 of 11 run-line rationales weighed the other
  * side of the 1.5. Menu language only — no factor, no direction.
  *
  * One source of truth for the headings: the Pass 1 builder and the
