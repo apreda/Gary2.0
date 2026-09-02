@@ -46,6 +46,8 @@ const DOSSIER_SURFACE_FILES = [
   // The ticket menu and the case headings (Sep 1 2026): the "House limit"
   // and "Tickets on this game" sentences every desk prints live here.
   './mlbCaseMenu.js',
+  // The line-history sentence in BETTING CONTEXT is worded here (Sep 1 2026).
+  '../../oddsSnapshots.js',
   // (flashInvestigationPrompts.js, researchBriefing.js, investigationFactors.js
   // deleted Sep 1 2026 — the researcher's corpse left the tree.)
 ];

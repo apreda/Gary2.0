@@ -129,12 +129,20 @@ describe('THE SWEAT terminal states', () => {
 });
 
 describe('Football Field density', () => {
-  it('balances the two teams and caps the visible personnel board', () => {
-    expect(footballIntel).toContain('while output.count < cap');
-    expect(footballIntel).toContain('index < away.count ? away[index] : nil');
-    expect(footballIntel).toContain('index < home.count ? home[index] : nil');
-    expect(footballIntel).toContain('if output.count == cap { break }');
+  it('shows the whole availability report — one side at a time, never capped (never-trim law)', () => {
+    expect(footballIntel).toContain('static func availability(from pick: GaryPick?, awayLabel: String,\n                             homeLabel: String) -> [Availability]');
+    expect(footballIntel).not.toContain('output.count < cap');
+    expect(footballIntel).toContain('confirmed: availability,');
     expect(footballIntel).not.toContain('SKILL PERSONNEL');
+  });
+  it('attributes injury-wire rows by the lanes\' own abbreviations and never hides an unrecognized row', () => {
+    expect(footballIntel).toContain('laneAbbreviation(home: home),');
+    expect(footballIntel).toContain('return names(mine, team) || !names(theirs, team)');
+  });
+  it('MORE INTEL excludes shown ROWS, not whole kinds, for the capped sections', () => {
+    expect(footballIntel).toContain('var shownIds = Set(railLaneRows.map(\\.id))');
+    expect(footballIntel).toContain('!shownIds.contains(s.id)');
+    expect(footballIntel).not.toContain('let said: Set<SignalKind> = [.quarterback, .paceScript');
   });
 });
 

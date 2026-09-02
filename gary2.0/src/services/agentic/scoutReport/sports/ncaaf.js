@@ -127,9 +127,6 @@ const NCAAF_CONFERENCE_NAMES = new Set(Object.values(NCAAF_CONFERENCE_NAMES_BY_I
 // CFP HELPER FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════
 
-/**
- * Get CFP seeding from hardcoded bracket
- */
 /** Month (0-indexed) and day of a kickoff in Eastern time — game-day
  * derivations are ET by code law; a 9 PM ET kickoff is not tomorrow. */
 function etMonthDay(instant) {
@@ -139,6 +136,9 @@ function etMonthDay(instant) {
   return { month: get('month') - 1, day: get('day') };
 }
 
+/**
+ * Get CFP seeding from hardcoded bracket
+ */
 function getCfpSeedingFromBracket(teamName, season = footballSeasonForDate('NCAAF')) {
   if (!teamName) return null;
   // This embedded bracket is historical. Never project its 2025 seeds onto a

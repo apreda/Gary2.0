@@ -13,7 +13,6 @@
 
 import { openaiWebSearch } from '../../../pickdesk/webSearch.js';
 import { formatTokenMenu } from '../../tools/toolDefinitions.js';
-import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
 import { ballDontLieService, getCachedOrFetch } from '../../../ballDontLieService.js';
 import { getPitcherArsenal, getPitcherStatcastProfile } from '../../../baseballSavantService.js';
 import {
@@ -80,24 +79,34 @@ const SCOUT_MATCHUP_SECTIONS = [
   ['MLB_PARK_FACTORS', '═══ THE PARK ═══'],
 ];
 
-async function buildScoutMatchupShelf(game, homeTeam, awayTeam, gamePk) {
+// The bucket desk reads the shelf by halves only (each club's own pen,
+// workload, defense and starter pitch types under THE TEAMS; the park under
+// THE MATCHUP) and never prints the joined shelf text; the catcher list was
+// dropped from it by founder call (Sep 1 2026 — the running game rides the
+// catcher's own lineup row), so that fetch is skipped outright.
+const BUCKETS_SKIPPED_SHELF_TOKENS = new Set(['MLB_CATCHER_DEFENSE']);
+
+async function buildScoutMatchupShelf(game, homeTeam, awayTeam, gamePk, deskLayout = 'buckets') {
   // Lazy imports — a top-level import of the stat router from inside the
   // scout family creates an init-order cycle (router → fetchers → scout);
   // at call time every module is initialized and the cycle is harmless.
   const { fetchStats } = await import('../../tools/statRouters/index.js');
   const { summarizeStatForContext } = await import('../../orchestrator/orchestratorHelpers.js');
   const opt = { game: { ...game, gamePk: gamePk ?? game.gamePk, id: game.id ?? game.bdl_game_id } };
+  const buckets = deskLayout === 'buckets';
+  const sections = buckets
+    ? SCOUT_MATCHUP_SECTIONS.filter(([token]) => !BUCKETS_SKIPPED_SHELF_TOKENS.has(token))
+    : SCOUT_MATCHUP_SECTIONS;
   // Per-token halves ride along for the four-bucket layout: every MLB
-  // fetcher here returns pre-formatted homeValue/awayValue strings, so the
-  // team blocks can carry each club's own pen, workload, catcher, defense
-  // and starter pitch types; the park (venue-only) goes to THE MATCHUP.
+  // fetcher here returns pre-formatted homeValue/awayValue strings.
   const byToken = {};
-  const parts = await Promise.all(SCOUT_MATCHUP_SECTIONS.map(async ([token, header]) => {
+  const parts = await Promise.all(sections.map(async ([token, header]) => {
     try {
       const r = await fetchStats('baseball_mlb', token, homeTeam, awayTeam, opt);
       if (!r || r.error) return null;
       const str = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
       byToken[token] = { home: str(r.homeValue ?? r.home), away: str(r.awayValue ?? r.away) };
+      if (buckets) return null;
       const text = summarizeStatForContext(r, token, homeTeam, awayTeam);
       if (!text || text.trim().length < 20) return null;
       return `${header}\n${text.trim()}`;
@@ -691,7 +700,8 @@ export async function buildMlbScoutReport(game, options = {}) {
           // Opponent record beside every start (founder GO, Aug 18): the
           // ledger's "against whom" now says how good the whom was.
           const fmtStart = (g) => `${g.date} ${g.isHome ? 'vs' : '@'} ${g.opponent}${standingsRecordOf(g.opponent)}: ${g.ip}IP ${g.h}H ${g.er}ER ${g.k}K${g.bb ? ` ${g.bb}BB` : ''}${g.hr ? ` ${g.hr}HR` : ''}${g.pitches ? ` ${g.pitches}p` : ''}${g.win == null ? '' : g.win ? ' (team W)' : ' (team L)'}`;
-          starterKeys[side].newest = `  Last start: ${fmtStart(lastStarts[lastStarts.length - 1])}`;
+          // Newest first: the ledger leads the starter block on the bucket desk.
+          starterKeys[side].ledger = parts.length;
           parts.push(`  Last ${lastStarts.length} start${lastStarts.length === 1 ? '' : 's'}: ${lastStarts.slice().reverse().map(fmtStart).join(' | ')}`);
           // The ledger's own arithmetic (Aug 4) — the recent window as a
           // number, as citable as the season figure above it.
@@ -956,13 +966,13 @@ export async function buildMlbScoutReport(game, options = {}) {
       const keys = starterKeys[side];
       const lead = [];
       const skip = new Set();
-      if (keys.newest) lead.push(keys.newest);
-      if (keys.last3 != null) { lead.push(parts[keys.last3]); skip.add(keys.last3); }
-      if (keys.season != null) { lead.push(parts[keys.season]); skip.add(keys.season); }
+      for (const idx of [keys.ledger, keys.last3, keys.season]) {
+        if (idx != null) { lead.push(parts[idx]); skip.add(idx); }
+      }
       const rest = [];
       for (let j = start; j < end; j += 1) if (!skip.has(j)) rest.push(parts[j]);
-      // The team label rides the season line; when it leads, the newest-start
-      // line needs the name in front of it.
+      // The team label rides the season line; when the ledger leads, the name
+      // goes in front of it.
       const lines = lead.length ? [`${side === 'home' ? homeTeam : awayTeam} — ${probablePitchersData[side]?.fullName || 'starter'}, most recent first:`, ...lead, ...rest] : rest;
       probablesBySide[side] = lines.length ? lines.join('\n') : null;
     });
@@ -1359,7 +1369,6 @@ export async function buildMlbScoutReport(game, options = {}) {
         .filter(s => clubMatches(s.team_name, teamName));
       let spLine = '';
       let bullpenLines = [];
-      let keyHitters = [];
 
       if (gameStats.length > 0) {
         // All pitchers sorted by IP (starter first, then bullpen in order of appearance)
@@ -1449,7 +1458,6 @@ export async function buildMlbScoutReport(game, options = {}) {
   // Aug 27 — founder: the facts ride the lineup card, the stories carry
   // the narrative.)
   const seriesBattersByTeam = new Map(); // folded full team name -> Map(lastName -> {ab,h,hr,rbi})
-  let pairSeriesGameCount = 0;
   try {
     const pairGame = (g) => {
       const an = g?.teams?.away?.team?.name;
@@ -1484,7 +1492,6 @@ export async function buildMlbScoutReport(game, options = {}) {
           a.ip += parseFloat(r.ip || 0) || 0; a.er += r.er || 0; a.k += r.p_k || 0;
         }
       }
-      pairSeriesGameCount = seriesGames.length;
       for (const [tKey, players] of perTeam.entries()) {
         const bats = new Map();
         for (const [nm, a] of players.entries()) if (a.ab > 0) bats.set(nm, a);
@@ -2700,7 +2707,7 @@ export async function buildMlbScoutReport(game, options = {}) {
   // path is team-ID based). Every other join uses clubMatches (Aug 19).
   function lastWord(name) { return (name || '').toLowerCase().split(' ').pop(); }
 
-  const matchupShelf = await buildScoutMatchupShelf(game, homeTeam, awayTeam, gamePk).catch(() => ({ text: '', byToken: {} }));
+  const matchupShelf = await buildScoutMatchupShelf(game, homeTeam, awayTeam, gamePk, deskLayout).catch(() => ({ text: '', byToken: {} }));
   const matchupShelfSection = matchupShelf.text;
   const shelfHalf = (token, side) => matchupShelf.byToken?.[token]?.[side] ?? null;
 

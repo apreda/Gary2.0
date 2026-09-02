@@ -1756,8 +1756,12 @@ async function main(targetDate = getTargetDate()) {
   // decision. Never reaches Gary. Non-fatal.
   try {
     const { tagRationaleLanes, printLaneTable } = await import('./run-rationale-lanes.js');
-    const laneRows = await tagRationaleLanes([targetDate]);
-    printLaneTable(laneRows, targetDate);
+    // The target date AND the day before: an afternoon pass runs before the
+    // night's picks exist, and the overnight passes may target today — either
+    // way last night's board gets tagged (upserts, so re-tagging is free).
+    const dayBefore = new Date(new Date(`${targetDate}T12:00:00Z`).getTime() - 86400000).toISOString().slice(0, 10);
+    const laneRows = await tagRationaleLanes([dayBefore, targetDate]);
+    printLaneTable(laneRows, `${dayBefore} → ${targetDate}`);
   } catch (e) {
     console.warn(`  ⚠️ Rationale lanes failed (non-fatal): ${e.message}`);
   }

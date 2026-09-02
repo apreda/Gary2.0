@@ -44,25 +44,30 @@ export function isCodexCliModel(modelName) {
 }
 const cliModelOf = (modelName) => String(modelName).replace(/^codex-/, '');
 
-function runCodex(args, stdinText, timeoutMs = CALL_TIMEOUT_MS) {
+// The breaker is keyed per LANE, not per binary: a web search lane running
+// under a deliberately short cap (football grounding: 150s across up to ten
+// concurrent lanes) must never count as evidence that the zero-tool pick
+// session is hanging. Two slow searches used to trip 'codex' for the whole
+// process and push every remaining pick onto the metered cascade.
+function runCodex(args, stdinText, timeoutMs = CALL_TIMEOUT_MS, breakerKey = 'codex') {
   // A bridge that has already timed out repeatedly this run is not asked again.
-  if (isCliTripped('codex')) return Promise.reject(trippedError('codex'));
+  if (isCliTripped(breakerKey)) return Promise.reject(trippedError(breakerKey));
   return new Promise((resolve, reject) => {
     const proc = spawn(CODEX_BIN, args, { stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
     const timer = setTimeout(() => {
       proc.kill('SIGTERM');
-      recordCliTimeout('codex');
+      recordCliTimeout(breakerKey);
       reject(new Error(`codex CLI timed out after ${Math.round(timeoutMs / 60000)}m`));
     }, timeoutMs);
     proc.stdout.on('data', (d) => { stdout += d.toString(); });
     proc.stderr.on('data', (d) => { stderr += d.toString(); });
-    proc.on('error', (e) => { clearTimeout(timer); recordCliSuccess('codex'); reject(e); });
+    proc.on('error', (e) => { clearTimeout(timer); recordCliSuccess(breakerKey); reject(e); });
     proc.on('close', (code) => {
       clearTimeout(timer);
       // Any answer at all — even a non-zero exit — means the bridge is alive.
-      recordCliSuccess('codex');
+      recordCliSuccess(breakerKey);
       resolve({ code, stdout, stderr });
     });
     proc.stdin.write(stdinText);
@@ -202,7 +207,7 @@ export async function codexCliWebSearch(prompt, options = {}) {
     // queries running past the old 5m cap (3 of 4 timed out) while completed
     // ones landed 6-17K chars — and with the metered fallback rung subject to
     // wallet balance, the $0 rung finishing is worth the extra headroom.
-    const { code, stdout, stderr } = await runCodex(args, prompt, options.timeoutMs || 8 * 60 * 1000);
+    const { code, stdout, stderr } = await runCodex(args, prompt, options.timeoutMs || 8 * 60 * 1000, 'codex-search');
     if (code !== 0) throw toError(stderr || stdout);
     const { text } = parseEvents(stdout);
     const clean = String(text || '').trim();

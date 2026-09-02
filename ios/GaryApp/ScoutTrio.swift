@@ -508,14 +508,18 @@ struct ScoutBigNumberRow: Identifiable {
                                      numeral: american(b.cur),
                                      bold: "\(b.name) opened \(american(b.open)) and are now \(american(b.cur))", rest: "")
         }
-        // No move — show the favorite holding its number. Only when an opening
-        // number exists: with no open on file there is nothing to have held,
-        // and "opened here and hold" would be a claim the row cannot back.
-        guard openAway != nil || openHome != nil else { return nil }
+        // No move — show the favorite holding its number. THE LINE closes the
+        // rail whenever prices are posted (founder, Aug 14: the market row is
+        // the fifth one); with no opening number on file there is nothing to
+        // have held, so the row says only what the board says now.
         guard let ha = curAway, let hh = curHome else { return nil }
         let homeFav = hh <= ha
         let name = homeFav ? homeName : awayName
         let price = homeFav ? hh : ha
+        guard openAway != nil || openHome != nil else {
+            return ScoutBigNumberRow(id: "line-move", numeral: american(price),
+                                     bold: "\(name) are \(american(price)) on the board", rest: "")
+        }
         return ScoutBigNumberRow(id: "line-move", numeral: american(price),
                                  bold: "The line hasn't moved — \(name) opened here and hold", rest: "")
     }

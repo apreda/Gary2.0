@@ -106,7 +106,7 @@ struct FootballGameIntelView: View {
         return g.contains(sides.away.lowercased()) || g.contains(sides.home.lowercased())
     }
 
-    private func morningRows(_ kinds: Set<SignalKind>, cap: Int) -> [Signal] {
+    private func morningRows(_ kinds: Set<SignalKind>, cap: Int = .max) -> [Signal] {
         Array(edges.filter { kinds.contains($0.kind) && matchesThisGame($0) }.prefix(cap))
     }
 
@@ -114,10 +114,12 @@ struct FootballGameIntelView: View {
     /// team passing-metric rows). The take reads from any of them; the
     /// plates read only the rows that carry per-side numbers (Sep 1 review:
     /// a blind first-two cut usually picked the two per-QB rows, which have
-    /// no sides, and the section vanished).
-    private var qbRows: [Signal] { morningRows([.quarterback], cap: 8) }
+    /// no sides, and the section vanished). Rows the plates do not show fall
+    /// through to MORE INTEL — nothing Gary read is invisible on the page.
+    private var qbRows: [Signal] { morningRows([.quarterback]) }
     private var qbMetricRows: [Signal] { qbRows.filter { $0.lane?.home?.value != nil || $0.lane?.away?.value != nil } }
-    private var injuryWireRows: [Signal] { morningRows([.injury], cap: 24) }
+    private var qbPlateRows: [Signal] { Array(qbMetricRows.prefix(3)) }
+    private var injuryWireRows: [Signal] { morningRows([.injury]) }
     private var numberRailRows: [Signal] {
         morningRows([.paceScript, .turnoverEdge, .explosivePlay, .trenches], cap: 4)
     }
@@ -161,14 +163,15 @@ struct FootballGameIntelView: View {
     /// as the take, then a plate per side with the lane's exact per-side
     /// numbers (yards per attempt, passing yards per game …). Built from the
     /// quarterback lane's meta.away / meta.home, so nothing is inferred.
-    private var quarterbackTake: String? {
+    private var quarterbackTakeRow: (row: Signal, take: String)? {
         for s in qbRows {
-            if let r = s.lane?.read?.trimmingCharacters(in: .whitespacesAndNewlines), !r.isEmpty { return r }
+            if let r = s.lane?.read?.trimmingCharacters(in: .whitespacesAndNewlines), !r.isEmpty { return (s, r) }
             let d = s.detail.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !d.isEmpty { return d }
+            if !d.isEmpty { return (s, d) }
         }
         return nil
     }
+    private var quarterbackTake: String? { quarterbackTakeRow?.take }
     private static let passingMetricLabels: [String: String] = [
         "yardsPerPass": "Yds / att",
         "passingYardsPerGame": "Pass yds / g",
@@ -191,14 +194,13 @@ struct FootballGameIntelView: View {
         return num
     }
     private func quarterbackPlate(home: Bool) -> ScoutArmsPlate? {
-        let stacks = qbMetricRows.prefix(3).compactMap { s -> ScoutArmsStack? in
+        let stacks = qbPlateRows.compactMap { s -> ScoutArmsStack? in
             let side = home ? s.lane?.home : s.lane?.away
             guard let v = Self.sideValue(side) else { return nil }
             return ScoutArmsStack(label: metricLabel(s), value: v)
         }
         guard !stacks.isEmpty else { return nil }
-        let abbr = (home ? qbMetricRows.first?.lane?.home?.abbreviation : qbMetricRows.first?.lane?.away?.abbreviation)
-            ?? (home ? sides.home : sides.away)
+        let abbr = laneAbbreviation(home: home) ?? (home ? sides.home : sides.away)
         return ScoutArmsPlate(name: abbr.uppercased(), stacks: Array(stacks))
     }
 
@@ -207,11 +209,15 @@ struct FootballGameIntelView: View {
     /// comparison), the game-shape pairs fill when the lanes are thin, and
     /// THE LINE closes the rail whenever prices are posted (founder, Aug 14:
     /// the market row is the fifth one).
+    /// The lane rows that actually make the rail: a row with no leading
+    /// numeral is skipped here and shows in MORE INTEL instead.
+    private var railLaneRows: [Signal] {
+        numberRailRows.filter { !($0.value.split(separator: " ").first.map(String.init) ?? $0.value).isEmpty }
+    }
     private var bigNumberRows: [ScoutBigNumberRow] {
         var out: [ScoutBigNumberRow] = []
-        for s in numberRailRows {
+        for s in railLaneRows {
             let numeral = s.value.split(separator: " ").first.map(String.init) ?? s.value
-            guard !numeral.isEmpty else { continue }
             out.append(ScoutBigNumberRow(id: "lane-\(s.id)", numeral: numeral, bold: s.headline, rest: ""))
         }
         for r in shapeRows where out.count < 4 {
@@ -275,13 +281,20 @@ struct FootballGameIntelView: View {
     }
 
     /// MORE INTEL — every remaining read for this game, in the MLB list.
-    /// Excluded: what a section above already says (the passing lanes, the
-    /// number rail, the series, injuries) and the live proof (its own card).
+    /// Excluded by ROW: what a section above actually shows (the take and the
+    /// plates, the rail rows). Excluded by KIND only where the section above
+    /// shows every row of that kind (the series, the injury wire) or the row
+    /// is its own card (the live proof, the receipt) or not this game's
+    /// (next slate). A capped section's overflow lands here, never nowhere.
     private var moreIntel: [Signal] {
-        let said: Set<SignalKind> = [.quarterback, .paceScript, .turnoverEdge, .explosivePlay, .trenches,
-                                     .h2h, .injury, .theSweat, .nextSlate, .afterGary]
+        let wholeKindShown: Set<SignalKind> = [.h2h, .injury, .theSweat, .nextSlate, .afterGary]
+        var shownIds = Set(railLaneRows.map(\.id))
+        if quarterbackPlate(home: false) != nil || quarterbackPlate(home: true) != nil {
+            shownIds.formUnion(qbPlateRows.map(\.id))
+            if let take = quarterbackTakeRow { shownIds.insert(take.row.id) }
+        }
         return edges.filter { s in
-            guard matchesThisGame(s), !said.contains(s.kind) else { return false }
+            guard matchesThisGame(s), !wholeKindShown.contains(s.kind), !shownIds.contains(s.id) else { return false }
             // The proof contract still gates the market range (exact game,
             // live board) — the list never shows a range the contract rejects.
             if s.kind == .marketRange { return FootballProofContract.isRenderableMarketRange(s, slateRow: row) }
@@ -289,21 +302,43 @@ struct FootballGameIntelView: View {
         }
     }
 
+    /// A side's BDL abbreviation from the lanes' own team sheets — present
+    /// from the first morning insights pass, long before the board row or
+    /// the pick carries one (football board rows never do).
+    private func laneAbbreviation(home: Bool) -> String? {
+        for s in edges where matchesThisGame(s) {
+            if let a = (home ? s.lane?.home : s.lane?.away)?.abbreviation?.trimmingCharacters(in: .whitespaces), !a.isEmpty { return a }
+        }
+        return nil
+    }
+
     /// Injury-wire rows attributed to a side by the lane's own suffix ("… is
-    /// out for DET" — the BDL abbreviation). Each side is known by its
-    /// abbreviation (the board row's, then the pick's) AND its mascot label,
-    /// so either spelling attributes; unattributed rows show under both.
+    /// out for DET" — the BDL abbreviation). Each side is known by every
+    /// abbreviation on file (the lanes', the board row's, the pick's) AND its
+    /// mascot label, so either spelling attributes. A row neither side
+    /// recognizes is never hidden: it shows under both.
     private func sideKeys(home: Bool) -> [String] {
-        let abbr = home ? (row?.home_abbr ?? primaryPick?.homeTeamAbbreviation) : (row?.away_abbr ?? primaryPick?.awayTeamAbbreviation)
-        let label = home ? sides.home : sides.away
-        return [abbr, label].compactMap { $0?.trimmingCharacters(in: .whitespaces).lowercased() }.filter { !$0.isEmpty }
+        let raw: [String?] = [
+            laneAbbreviation(home: home),
+            home ? row?.home_abbr : row?.away_abbr,
+            home ? primaryPick?.homeTeamAbbreviation : primaryPick?.awayTeamAbbreviation,
+            home ? sides.home : sides.away,
+        ]
+        return raw.compactMap { $0?.trimmingCharacters(in: .whitespaces).lowercased() }.filter { !$0.isEmpty }
+    }
+    private static func wireTeam(_ s: Signal) -> String? {
+        guard let range = s.headline.range(of: #"\bfor ([A-Z][A-Za-z&' .-]{1,30})$"#, options: .regularExpression) else { return nil }
+        return String(s.headline[range]).dropFirst(4).trimmingCharacters(in: .whitespaces).lowercased()
     }
     private func wireRows(home: Bool) -> [Signal] {
-        let keys = sideKeys(home: home)
+        let mine = sideKeys(home: home)
+        let theirs = sideKeys(home: !home)
+        func names(_ keys: [String], _ team: String) -> Bool {
+            keys.contains { $0 == team || $0.hasSuffix(team) || team.hasSuffix($0) }
+        }
         return injuryWireRows.filter { s in
-            guard let range = s.headline.range(of: #"\bfor ([A-Z][A-Za-z&' .-]{1,30})$"#, options: .regularExpression) else { return true }
-            let team = String(s.headline[range]).dropFirst(4).trimmingCharacters(in: .whitespaces).lowercased()
-            return keys.contains { $0 == team || $0.hasSuffix(team) || team.hasSuffix($0) }
+            guard let team = Self.wireTeam(s) else { return true }
+            return names(mine, team) || !names(theirs, team)
         }
     }
 
@@ -321,7 +356,7 @@ struct FootballGameIntelView: View {
             GameH2HSection(edges: edges.filter { matchesThisGame($0) })
             PlayerIntelSection(matchup: matchup, gameId: exactGameID)
             FootballAvailabilityCard(awayLabel: sides.away, homeLabel: sides.home,
-                                     confirmed: FootballEvidence.availability(from: primaryPick, awayLabel: sides.away, homeLabel: sides.home, cap: 12),
+                                     confirmed: availability,
                                      wireAway: wireRows(home: false), wireHome: wireRows(home: true))
             if !moreIntel.isEmpty {
                 EdgesSection(title: "MORE INTEL", edges: moreIntel).padding(.top, 8)
@@ -491,8 +526,11 @@ private enum FootballEvidence {
         return first
     }
 
+    /// The whole report, every listed player on both sides — the card shows
+    /// one side at a time and never trims (founder hard law: shown content
+    /// is complete). Ordered worst status first within each side.
     static func availability(from pick: GaryPick?, awayLabel: String,
-                             homeLabel: String, cap: Int = 4) -> [Availability] {
+                             homeLabel: String) -> [Availability] {
         guard let injuries = pick?.injuries else { return [] }
 
         func rows(_ source: [PlayerInjury], team: String) -> [Availability] {
@@ -509,22 +547,9 @@ private enum FootballEvidence {
                 }
         }
 
-        let away = rows(injuries.away ?? [], team: awayLabel)
-        let home = rows(injuries.home ?? [], team: homeLabel)
-        var output: [Availability] = []
         var seen = Set<String>()
-        var index = 0
-
-        while output.count < cap && (index < away.count || index < home.count) {
-            for item in [index < away.count ? away[index] : nil,
-                         index < home.count ? home[index] : nil].compactMap({ $0 }) {
-                let key = item.name.lowercased()
-                if seen.insert(key).inserted { output.append(item) }
-                if output.count == cap { break }
-            }
-            index += 1
-        }
-        return output
+        return (rows(injuries.away ?? [], team: awayLabel) + rows(injuries.home ?? [], team: homeLabel))
+            .filter { seen.insert($0.name.lowercased()).inserted }
     }
 }
 

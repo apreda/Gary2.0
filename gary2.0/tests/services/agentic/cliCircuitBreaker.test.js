@@ -47,6 +47,13 @@ describe('CLI circuit breaker', () => {
     expect(isCliTripped('codex')).toBe(false);
   });
 
+  it('isolates lanes on one binary — slow codex web searches never disable the codex pick session', () => {
+    recordCliTimeout('codex-search');
+    recordCliTimeout('codex-search');
+    expect(isCliTripped('codex-search')).toBe(true);
+    expect(isCliTripped('codex')).toBe(false);
+  });
+
   it('stays tripped once tripped, so the cascade stops paying', () => {
     recordCliTimeout('codex');
     recordCliTimeout('codex');
