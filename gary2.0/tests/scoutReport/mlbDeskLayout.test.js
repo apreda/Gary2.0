@@ -162,16 +162,16 @@ describe('renderBucketsDesk', () => {
 });
 
 describe('resolveDeskLayout', () => {
-  it('defaults to legacy, honors the option, then the env var', () => {
+  it('defaults to buckets (production since Sep 2), honors the option, then the env var', () => {
     const saved = process.env.GARY_MLB_DESK_LAYOUT;
     delete process.env.GARY_MLB_DESK_LAYOUT;
-    expect(resolveDeskLayout({})).toBe('legacy');
-    expect(resolveDeskLayout({ deskLayout: 'buckets' })).toBe('buckets');
-    process.env.GARY_MLB_DESK_LAYOUT = 'buckets';
     expect(resolveDeskLayout({})).toBe('buckets');
     expect(resolveDeskLayout({ deskLayout: 'legacy' })).toBe('legacy');
-    process.env.GARY_MLB_DESK_LAYOUT = 'nonsense';
+    process.env.GARY_MLB_DESK_LAYOUT = 'legacy';
     expect(resolveDeskLayout({})).toBe('legacy');
+    expect(resolveDeskLayout({ deskLayout: 'buckets' })).toBe('buckets');
+    process.env.GARY_MLB_DESK_LAYOUT = 'nonsense';
+    expect(resolveDeskLayout({})).toBe('buckets');
     if (saved === undefined) delete process.env.GARY_MLB_DESK_LAYOUT; else process.env.GARY_MLB_DESK_LAYOUT = saved;
   });
 });

@@ -128,10 +128,10 @@ export async function buildMlbScoutReport(game, options = {}) {
   const venue = game.venue || game._raw?.venue?.name || 'Unknown Venue';
   const gameDesc = game.description || '';
   const startTime = game.start_time || game.commence_time || '';
-  // Desk layout (Sep 1 2026): 'legacy' flat sections, or 'buckets' — the
-  // four-bucket desk (mlbDeskLayout.js). Every builder below keeps its
-  // home/away halves so the bucket layout can group by club; the content
-  // of each half is byte-identical to the flat desk's.
+  // Desk layout (Sep 1 2026): 'buckets' — the three-bucket, recency-first
+  // desk (mlbDeskLayout.js, production default) — or 'legacy', the flat
+  // sections. Every builder below keeps its home/away halves so the bucket
+  // layout can group by club.
   const deskLayout = resolveDeskLayout(options);
 
   console.log(`[Scout Report] Building MLB report: ${awayTeam} @ ${homeTeam} (layout: ${deskLayout})`);
@@ -2712,10 +2712,9 @@ export async function buildMlbScoutReport(game, options = {}) {
   const startLine = startTime ? `Start: ${new Date(startTime).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })} ET` : '';
   const dhLine = dhInfo ? `DOUBLEHEADER today${dhInfo.gameNumber ? ` — this is game ${dhInfo.gameNumber}` : ''}${dhInfo.split ? ' (split doubleheader)' : ''}.` : '';
 
-  // THE THREE-BUCKET DESK (founder GO, Sep 1 2026): same pieces, grouped by
-  // club, then tonight's game, then price. Selected by
-  // GARY_MLB_DESK_LAYOUT=buckets (or options.deskLayout); production stays
-  // on the flat desk below until the founder flips it.
+  // THE THREE-BUCKET DESK (founder GO, Sep 1 2026; production default Sep 2):
+  // same pieces, grouped by club, then tonight's game, then price. The flat
+  // desk below stays as the GARY_MLB_DESK_LAYOUT=legacy opt-out.
   const teamPieces = (side, name) => ({
     name,
     stand: standingsBySide[side],

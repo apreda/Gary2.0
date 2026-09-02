@@ -17,14 +17,16 @@
  * broken lane is loud, never a quiet gap. Optional pieces simply do not print.
  *
  * Layout selection: `options.deskLayout`, then GARY_MLB_DESK_LAYOUT, default
- * legacy — the flat desk stays production until the founder flips it.
+ * BUCKETS — production since Sep 2 2026 (founder: "make sure picks tonight
+ * will be the updated MLB system"). GARY_MLB_DESK_LAYOUT=legacy is the
+ * opt-out back to the flat desk.
  */
 
 export const DESK_LAYOUTS = ['legacy', 'buckets'];
 
 export function resolveDeskLayout(options = {}) {
   const pick = (v) => (DESK_LAYOUTS.includes(String(v || '').trim()) ? String(v).trim() : null);
-  return pick(options.deskLayout) || pick(process.env.GARY_MLB_DESK_LAYOUT) || 'legacy';
+  return pick(options.deskLayout) || pick(process.env.GARY_MLB_DESK_LAYOUT) || 'buckets';
 }
 
 // Team-block subsections in reading order. The manifest expects each once
