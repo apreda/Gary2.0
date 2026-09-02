@@ -2,14 +2,15 @@
  * THE THREE-BUCKET DESK (founder GO, Sep 1 2026): the same facts the flat
  * desk carries, regrouped the way a bettor reads a game —
  *
+ *   THE MARKET     the price — FIRST (founder GO, Sep 2 2026): the board
+ *                  leads the desk so the read argues with the number from
+ *                  the first line; prices-last read as "who is better"
  *   THE TEAMS      who they are: one whole dossier per club, home first
  *   THE MATCHUP    tonight's game: series, the park and its weather, schedule
  *                  and rest, the day's news — nothing restated from the
  *                  team blocks. (A separate SITUATION bucket lived for one
  *                  build — founder, same day: the two were splitting one
  *                  subject; rest said "game 1 of series" beside series state.)
- *   THE MARKET     the price — last, by the Sep 1 ruling (BETTING CONTEXT
- *                  rides the desk end so Gary reads the game before the odds)
  *
  * This module only ARRANGES pieces the builder in mlb.js already made; it
  * writes no facts of its own. Every required piece that arrives empty prints
@@ -160,12 +161,14 @@ function renderMarket(mk) {
  */
 export function renderBucketsDesk(p) {
   const top = `${'═'.repeat(66)}\n${String(p.header || '').trim()}\n${'═'.repeat(66)}`;
+  // THE BOARD COMES FIRST (founder GO, Sep 2 2026): the price leads the
+  // desk, so the read is an argument with the number from the first line.
   return [
     top,
+    renderMarket(p.market || {}),
     bucket('THE TEAMS', 'who they are'),
     renderTeam(p.home),
     renderTeam(p.away),
     renderMatchup(p.matchup || {}),
-    renderMarket(p.market || {}),
   ].join('\n\n').trim();
 }

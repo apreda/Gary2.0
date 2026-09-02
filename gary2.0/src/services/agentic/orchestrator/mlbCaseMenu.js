@@ -95,31 +95,33 @@ export function mlbGameKind(game, homeTeam, awayTeam) {
 }
 
 /**
- * The two Pass 1 case headings, home first. A moneyline game asks who wins;
- * a run-line game asks the run line — the favorite -1.5, the underdog +1.5.
+ * The two Pass 1 case headings, home first — the club's name on every board.
+ * (Founder, Sep 2 2026: a heading that says "-1.5" or "+1.5" sends the case
+ * hunting margin and one-run stats; the cases argue the game. On a run-line
+ * game the OPENER names the tickets, the headings do not.)
  */
 export function mlbCaseHeadings(homeTeam, awayTeam, game) {
   const H = (s) => String(s || '').toUpperCase();
   const g = mlbGameKind(game, homeTeam, awayTeam);
-  if (g.kind === 'moneyline') {
-    return { kind: 'moneyline', capped: false, home: `CASE FOR BACKING ${H(homeTeam)} TONIGHT:`, away: `CASE FOR BACKING ${H(awayTeam)} TONIGHT:` };
-  }
-  const favHeading = `CASE FOR ${H(g.fav)} -1.5 TONIGHT:`;
-  const dogHeading = `CASE FOR ${H(g.dog)} +1.5 TONIGHT:`;
   return {
-    kind: 'runline',
-    capped: true,
-    fav: g.fav,
-    dog: g.dog,
-    home: g.fav === homeTeam ? favHeading : dogHeading,
-    away: g.fav === awayTeam ? favHeading : dogHeading,
+    kind: g.kind,
+    capped: g.kind === 'runline',
+    fav: g.fav ?? null,
+    dog: g.dog ?? null,
+    home: `CASE FOR BACKING ${H(homeTeam)} TONIGHT:`,
+    away: `CASE FOR BACKING ${H(awayTeam)} TONIGHT:`,
   };
 }
 
-/** Pass 1's opening sentence: which game this is. Prices come at the end. */
+/**
+ * Pass 1's opening sentence: which game this is. THE BOARD COMES FIRST
+ * (founder GO, Sep 2 2026): the price is the first thing on the desk, so
+ * the read is an argument with the number from the first line — prices-last
+ * produced reads with no question to answer.
+ */
 export function mlbPass1Opening(headings) {
   if (headings && headings.kind === 'runline') {
-    return `You're deciding what to bet on tonight's game below. Tonight is a run-line game: ${headings.fav} -1.5 or ${headings.dog} +1.5. The prices come at the end, after you've been through everything.`;
+    return `You're deciding what to bet on tonight's game below. Tonight is a run-line game: ${headings.fav} -1.5 or ${headings.dog} +1.5. The board comes first; everything else follows.`;
   }
-  return "You're deciding what to bet on tonight's game below. The betting options and their prices come at the end, after you've been through everything.";
+  return "You're deciding what to bet on tonight's game below. The board comes first; everything else follows.";
 }

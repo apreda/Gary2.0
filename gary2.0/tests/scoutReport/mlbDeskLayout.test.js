@@ -48,18 +48,18 @@ const pieces = () => ({
 });
 
 describe('renderBucketsDesk', () => {
-  it('orders the three buckets TEAMS → MATCHUP → MARKET, home team first, no SITUATION bucket', () => {
+  it('orders the three buckets MARKET → TEAMS → MATCHUP, home team first, no SITUATION bucket', () => {
     const text = renderBucketsDesk(pieces());
     const at = (s) => { const i = text.indexOf(s); expect(i, `missing "${s}"`).toBeGreaterThan(-1); return i; };
+    // THE BOARD COMES FIRST (founder GO, Sep 2 2026).
+    expect(at('THE MARKET')).toBeLessThan(at('THE TEAMS'));
     expect(at('THE TEAMS')).toBeLessThan(at('THE MATCHUP'));
-    expect(at('THE MATCHUP')).toBeLessThan(at('THE MARKET'));
     expect(text).not.toContain('THE SITUATION');
     // Inside THE MATCHUP: series → park (with weather) → schedule and rest → news.
     expect(at('── Series state ──')).toBeLessThan(at('── The park ──'));
     expect(at('── The park ──')).toBeLessThan(at('Weather: Clear, 84°F'));
     expect(at('Weather: Clear, 84°F')).toBeLessThan(at('── Schedule and rest ──'));
     expect(at('── Schedule and rest ──')).toBeLessThan(at("── Today's news ──"));
-    expect(at("── Today's news ──")).toBeLessThan(at('THE MARKET'));
     expect(at('═══ ATLANTA BRAVES ═══')).toBeLessThan(at('═══ SAN FRANCISCO GIANTS ═══'));
     expect(at('═══ SAN FRANCISCO GIANTS ═══')).toBeLessThan(at('THE MATCHUP'));
   });
@@ -104,11 +104,14 @@ describe('renderBucketsDesk', () => {
   });
 
 
-  it('puts the market last and the price nowhere else', () => {
+  it('puts the market first and the price nowhere else', () => {
     const text = renderBucketsDesk(pieces());
     const marketIdx = text.indexOf('THE MARKET');
+    const teamsIdx = text.indexOf('THE TEAMS');
+    expect(marketIdx).toBeLessThan(teamsIdx);
     expect(text.indexOf('Moneyline:')).toBeGreaterThan(marketIdx);
-    expect(text.slice(0, marketIdx)).not.toContain('Moneyline:');
+    expect(text.indexOf('Moneyline:')).toBeLessThan(teamsIdx);
+    expect(text.slice(teamsIdx)).not.toContain('Moneyline:');
   });
 
   it('prints an honest absence line for required pieces and omits optional ones', () => {

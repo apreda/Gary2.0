@@ -2796,6 +2796,9 @@ ${dhLine}
 ${weatherSection}
 ══════════════════════════════════════════════════════════════════
 
+═══ BETTING CONTEXT ═══
+${oddsSection}
+
 ${situationSection ? `═══ THE SITUATION ═══\n${situationSection}\n\n` : ''}═══ PROBABLE PITCHERS ═══
 ${probablePitchersSection}
 
@@ -2832,9 +2835,6 @@ ${restScheduleSection}
 ═══ TODAY'S BREAKING NEWS ═══
 ${gameContextGrounding || 'No same-day breaking news.'}
 ${storylinesGrounding ? `\n— THE STORYLINES —\n${storylinesGrounding}` : ''}
-
-═══ BETTING CONTEXT ═══
-${oddsSection}
 `.trim();
   const text = bucketsText ?? legacyText;
 
