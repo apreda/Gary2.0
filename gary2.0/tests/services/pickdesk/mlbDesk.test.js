@@ -77,6 +77,11 @@ describe('buildMlbDesk — the three shelves, blind', () => {
     expect(meta.moneylineHome).toBe(-105);
   });
 
+  it('asks the scout for the LEGACY grammar its shelves are cut from (the game lane defaults to buckets since Sep 2)', async () => {
+    await buildMlbDesk(game);
+    expect(buildScoutReport).toHaveBeenCalledWith(game, 'baseball_mlb', expect.objectContaining({ deskLayout: 'legacy', keepSeasonBlocks: true }));
+  });
+
   it('shelf order (founder GO, Aug 13 — the anchoring lever): THE CLUBS → THE MATCHUP → THE PITCHING → THE WEEK; no arm appears before both clubs and the matchup are read', async () => {
     const { deskTextBlind } = await buildMlbDesk(game);
     const clubs = deskTextBlind.indexOf('THE CLUBS ━');

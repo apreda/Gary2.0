@@ -372,7 +372,12 @@ export async function buildMlbDesk(game, options = {}) {
   // The props desk keeps the team season blocks the game desk dropped
   // (founder, Sep 2 2026 — comparison bait for a side pick, still context
   // for a prop): keepSeasonBlocks is this product's own choice.
-  const scout = await buildScoutReport(game, 'baseball_mlb', { ...(options || {}), keepSeasonBlocks: true });
+  // It also reads the LEGACY desk grammar by name: the three shelves below
+  // (THE CLUBS / THE MATCHUP / THE PITCHING) and the blind split are cut
+  // from the flat ═══ headers, and the game lane's three-bucket default
+  // (Sep 2 2026) renders ── subsections those cuts cannot see — the whole
+  // desk fell open into the preamble with the prices still on it.
+  const scout = await buildScoutReport(game, 'baseball_mlb', { ...(options || {}), keepSeasonBlocks: true, deskLayout: 'legacy' });
   const scoutText = scout.garyText || scout.text || '';
 
   const season = new Date().getFullYear();
