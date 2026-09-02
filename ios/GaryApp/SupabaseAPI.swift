@@ -1609,6 +1609,11 @@ enum SupabaseAPI {
         return result
     }
 
+    /// THE PROPS BOOK starts here (Sep 2 2026, the props rebuild): the day the
+    /// old props brain was deleted. The Billfold's props ledger never reads
+    /// earlier rows; the archive keeps them.
+    static let propsBookSince = "2026-09-02"
+
     /// Fetch prop results with optional date filter
     /// - Parameter forceRefresh: Set to true for pull-to-refresh to bypass cache
     static func fetchPropResults(since dateFilter: String?, forceRefresh: Bool = false, billfold: Bool = false) async throws -> [PropResult] {

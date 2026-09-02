@@ -752,7 +752,7 @@ struct BillfoldView: View {
                         .font(.system(size: 12, weight: .medium, design: .default))
                         .foregroundStyle(brass)
                     Text("\u{00B7}").foregroundStyle(brass.opacity(0.5))
-                    Text(timeframeLabel)
+                    Text(selectedTab == 1 && (timeframe == "all" || timeframe == "ytd") ? "since Sep 2, 2026" : timeframeLabel)
                         .font(.system(size: 12, weight: .medium, design: .default))
                         .foregroundStyle(brass)
 
@@ -2074,7 +2074,11 @@ struct BillfoldView: View {
         }
 
         do {
-            let propSince: String? = wantsFull
+            // THE PROPS BOOK starts Sep 2, 2026 — the day the props system was
+            // rebuilt (the old props brain deleted; founder, Sep 2: nothing from
+            // it "can ever be used again"). Older graded props stay in the
+            // archive; the Billfold's props ledger is the system that is live.
+            let propWindowStart: String? = wantsFull
                 ? nil
                 : BillfoldCompute.dayFormatter.string(
                     from: Calendar.current.date(
@@ -2083,6 +2087,7 @@ struct BillfoldView: View {
                         to: Date()
                     ) ?? Date()
                 )
+            let propSince: String? = max(propWindowStart ?? SupabaseAPI.propsBookSince, SupabaseAPI.propsBookSince)
             let snapshot = try await BillfoldSnapshotStore.shared.load(forceRefresh: forceRefresh, fullHistory: wantsFull)
             await MainActor.run {
                 guard loadGeneration == billfoldLoadGeneration else { return }

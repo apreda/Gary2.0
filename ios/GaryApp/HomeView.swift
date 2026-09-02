@@ -615,7 +615,7 @@ struct HomeView: View {
                     // with "Gary picks every game" a single day's slate can exceed 30, and
                     // the old cap truncated it to the late spillover (the "always 1-0" bug).
                     async let gameResultsFetch = SupabaseAPI.fetchRecentGameResults(limit: 200)
-                    async let propResultsFetch = SupabaseAPI.fetchRecentPropResults(limit: 200)
+                    async let propResultsFetch = SupabaseAPI.fetchRecentPropResults(limit: 200, since: SupabaseAPI.propsBookSince)
                     async let liveFetch = SupabaseAPI.fetchLiveScores(date: date)
                     async let todayLedgerFetch = SupabaseAPI.fetchInsightLedger(date: date)
                     async let wireFetch = SupabaseAPI.fetchWireItems(date: date)
@@ -1153,7 +1153,7 @@ struct HomeView: View {
         )
         async let propsFetch = SupabaseAPI.fetchPropPicks(date: date, forceRefresh: true)
         async let gameResultsFetch = SupabaseAPI.fetchRecentGameResults(limit: 200)
-        async let propResultsFetch = SupabaseAPI.fetchRecentPropResults(limit: 200)
+        async let propResultsFetch = SupabaseAPI.fetchRecentPropResults(limit: 200, since: SupabaseAPI.propsBookSince)
         async let recapsTodayFetch = SupabaseAPI.fetchGameRecaps(date: date)
         async let recapsGradedFetch = SupabaseAPI.fetchGameRecaps(date: SupabaseAPI.hubGradedDateEST())
 
