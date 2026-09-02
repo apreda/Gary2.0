@@ -21,6 +21,7 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import { buildMlbDesk, fetchTonightsGameCall } from './mlbDesk.js';
 import { buildPropSheets } from './propSheets.js';
+import { screenBoard, lineupRates } from './propModel.js';
 import { PROPS_DESK_MODEL, LEGACY_BRAIN_FALLBACK, DESK_FALLBACK_MODELS, DESK_COST_PER_M } from '../agentic/orchestrator/orchestratorConfig.js';
 import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { normalizePropBetDirection } from '../agentic/propsSharedUtils.js';
@@ -62,10 +63,10 @@ const fmtOdds = (v) => (v == null ? null : (v > 0 ? `+${v}` : `${v}`));
 // when the desk surface the props brain reads moves: the board and the prop
 // sheets are what Gary prices from, so an edit there is a new era.
 const here = path.dirname(fileURLToPath(import.meta.url));
-const propsSurface = () => {
-  try { return readFileSync(path.join(here, 'propSheets.js'), 'utf8'); }
-  catch { return 'missing:propSheets.js'; }
-};
+const propsSurface = () => ['propSheets.js', 'propModel.js'].map((f) => {
+  try { return readFileSync(path.join(here, f), 'utf8'); }
+  catch { return `missing:${f}`; }
+}).join('\n⸻\n');
 export const PROPS_PROMPT_SHA = createHash('sha256')
   .update(buildGaryPropsSystemPrompt('{date}') + THE_PROPS_ASK + '\n⸻\n' + propsSurface())
   .digest('hex')
@@ -307,6 +308,58 @@ export function buildPropBoardV2(marketRows, {
   };
 }
 
+
+// ═══ THE SCREENED BOARD (Sep 2 2026) — the model's candidates as the menu ═══
+// Founder: "do this system then for props" and "two per game is what we
+// offer". THE PROP MODEL prices every primary market from the player's own
+// numbers; the board Gary reads is the handful the model disagrees with the
+// book on, each as ONE bet (the side the gap favors), in lineup order. Both
+// the model's number and the book's are stamped on the stored pick for the
+// ledger — neither ever reaches the prompt. Gary reads the desk and the
+// sheets, takes up to two, or passes.
+export const SCREEN_CANDIDATES = 8;
+export const SCREEN_MIN_GAP = 0.03;
+export const SCREEN_FLOOR = 4;
+
+export function selectCandidates(screened, { candidates = SCREEN_CANDIDATES, minGap = SCREEN_MIN_GAP, floor = SCREEN_FLOOR, perPlayer = 2 } = {}) {
+  const out = [];
+  const perPlayerCount = new Map();
+  for (const s of screened) {
+    if (out.length >= candidates) break;
+    if (isHrType(s.market.prop_type)) continue;                 // the fun lane has its own card
+    if (!propOddsService.isOddsTakeable(s.odds, s.market.prop_type)) continue;
+    const key = norm(s.market.player);
+    if ((perPlayerCount.get(key) || 0) >= perPlayer) continue;
+    if (s.edge < minGap && out.length >= floor) continue;      // the floor keeps two-per-game honest on a flat board
+    perPlayerCount.set(key, (perPlayerCount.get(key) || 0) + 1);
+    out.push(s);
+  }
+  return out;
+}
+
+/**
+ * The candidate board text: one bet per line, lineup order (away nine, away
+ * starter, home nine, home starter, then anyone the lineups did not place).
+ */
+export function buildScreenedBoard(candidates, { lineups, clearedClauseFor = null, headerLabel = `tonight's board` } = {}) {
+  if (!candidates.length) return { text: '', players: new Set() };
+  const order = [];
+  for (const side of [lineups?.away, lineups?.home]) {
+    for (const b of side?.batters || []) order.push(norm(b?.name));
+    if (side?.pitcher?.name) order.push(norm(side.pitcher.name));
+  }
+  const rank = (name) => { const i = order.indexOf(norm(name)); return i < 0 ? 999 : i; };
+  const sorted = candidates.slice().sort((a, b) => rank(a.market.player) - rank(b.market.player) || a.market.prop_type.localeCompare(b.market.prop_type));
+  const lines = sorted.map((s) => {
+    const m = s.market;
+    const cleared = clearedClauseFor ? clearedClauseFor(norm(m.player), m.prop_type, m.line) : null;
+    return `  ${m.player}${m.team ? ` (${m.team})` : ''}: ${s.side.toUpperCase()} ${m.prop_type} ${m.line} (${fmtOdds(s.odds)})${cleared ? ` — ${cleared}` : ''}`;
+  });
+  return {
+    text: `═══ THE PROP BOARD (${headerLabel}) ═══\n${lines.join('\n')}`,
+    players: new Set(sorted.map((s) => norm(s.market.player))),
+  };
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // THE MENU SNAPSHOT (founder, Aug 5 2026: "very few have odds"). The recap's
@@ -568,19 +621,52 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
   }
 
   const { homeTeam, awayTeam } = desk.meta;
+  const lineups = desk.scout?.confirmedLineups || null;
+
+  // THE PROP MODEL screen (Sep 2 2026): the candidates become the board Gary
+  // reads; the full board still feeds the menu snapshot. Off until the
+  // August replay (scripts/props-replay.js) clears it — GARY_PROPS_SCREEN=1
+  // in the scheduler plist turns it on; board_version 4 marks its picks.
+  const useScreen = !options.hrOnly && process.env.GARY_PROPS_SCREEN === '1';
+  let readBoard = board;
+  let candidates = [];
+  const screenByKey = new Map();
+  if (useScreen) {
+    const opposingRowsFor = (key) => {
+      const pitchOf = (side) => norm(side?.pitcher?.name);
+      const opp = pitchOf(lineups?.home) === key ? lineups?.away : pitchOf(lineups?.away) === key ? lineups?.home : null;
+      if (!opp) return null;
+      return lineupRates((opp.batters || []).map((b) => chronoByPlayer.get(norm(b?.name))).filter(Boolean));
+    };
+    const screened = screenBoard(board.markets, {
+      asOf: null,
+      rowsFor: (k) => chronoByPlayer.get(k),
+      lineupFor: opposingRowsFor,
+    });
+    candidates = selectCandidates(screened);
+    for (const s of candidates) screenByKey.set(`${norm(s.market.player)}|${norm(s.market.prop_type)}|${s.side}`, s);
+    const screenedBoard = buildScreenedBoard(candidates, {
+      lineups,
+      clearedClauseFor: (key, propType, line) => clearedClause(chronoByPlayer.get(key), propType, line),
+    });
+    if (screenedBoard.players.size) {
+      readBoard = { ...board, text: screenedBoard.text, players: screenedBoard.players };
+      console.log(`   [Props Brain] screen: ${candidates.length} candidates of ${screened.length} priced markets (gaps ${candidates.map((c) => (100 * c.edge).toFixed(0) + '%').join(' ')})`);
+    }
+  }
 
   // THE PROP SHEETS (Sep 2 2026): every board player's own numbers against
   // his markets — the evidence a prop decision needs that the game desk
-  // never carried. Board version 3 = board + sheets, so the ledger can
-  // segment the era without a prompt change.
+  // never carried. Board version 3 = board + sheets; 4 = the screened board.
+  const sheetPlayers = readBoard.players;
   const sheets = buildPropSheets({
-    markets: board.markets,
+    markets: board.markets.filter((m) => sheetPlayers.has(norm(m.player))),
     chronoByPlayer,
-    lineups: desk.scout?.confirmedLineups || null,
+    lineups,
     homeTeam,
     awayTeam,
   });
-  if (sheets.players && board.stats) board.stats.board_version = 3;
+  if (sheets.players && board.stats) board.stats.board_version = readBoard === board ? 3 : 4;
 
   await snapshotPropMenu({
     markets: board.markets,
@@ -604,12 +690,12 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
   } catch { /* the desk simply carries no call */ }
 
   const sheetsBlock = sheets.text ? `\n\n${sheets.text}` : '';
-  const userMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskText}${gameCall}\n\n${board.text}${sheetsBlock}\n\n${THE_PROPS_ASK}`;
+  const userMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskText}${gameCall}\n\n${readBoard.text}${sheetsBlock}\n\n${THE_PROPS_ASK}`;
 
   const { parsed, audits, usage, explicitPass, respondingModel } = await runPropsDeskBrain({
     systemPrompt: buildGaryPropsSystemPrompt(todayLong()),
     userMessage,
-    corpus: [{ content: `${desk.deskText}${gameCall}\n${board.text}${sheetsBlock}` }],
+    corpus: [{ content: `${desk.deskText}${gameCall}\n${readBoard.text}${sheetsBlock}` }],
     recentScores: desk.recentScores || null,
   });
 
@@ -635,6 +721,12 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
     // board eras without a prompt change. Public names: stripInternalFields
     // drops _-prefixed keys at the storage boundary.
     ...(board.stats ? { board_version: board.stats.board_version, board_two_sided_pct: board.stats.two_sided_pct } : {}),
+    // THE PROP MODEL's numbers for the ledger (never shown to Gary): the
+    // model's chance for the side taken, the vig-free price, and the gap.
+    ...(() => {
+      const s = screenByKey.get(`${norm(p.player)}|${norm(p.prop_type)}|${normalizePropBetDirection(p.bet)}`);
+      return s ? { screen_p: Number(s.pModel.toFixed(3)), price_p: Number(s.pMarket.toFixed(3)), screen_gap: Number(s.edge.toFixed(3)) } : {};
+    })(),
     _statAuditWarnings: audits[i]?.warnings ?? null,
   }));
 
