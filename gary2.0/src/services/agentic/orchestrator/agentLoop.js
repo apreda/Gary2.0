@@ -2,7 +2,7 @@ import { CONFIG, GAME_PICK_MODEL, GAME_ML_CAP, validateSessionModel } from './or
 import { createModelSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
 import { createCostTracker } from './costTracker.js';
 import { buildPass1Message, buildPass2Message, buildPass3Unified, buildMlCapRetryMessage } from './passBuilders.js';
-import { parseGaryResponse, normalizePickFormat, determineCurrentPass } from './responseParser.js';
+import { parseGaryResponse, normalizePickFormat } from './responseParser.js';
 import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from './statAudit.js';
 import { isInvestigationSufficient, summarizeStatForContext, formatNum, formatPct, summarizePlayerGameLogs, summarizeMlbPlayerGameLogs, summarizePlayerStats, summarizeNbaPlayerAdvancedStats, pruneContextIfNeeded, normalizeSportToLeague, MAX_CONTEXT_MESSAGES, PRUNE_AFTER_ITERATION } from './orchestratorHelpers.js';
 import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js';
@@ -338,8 +338,6 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       // ═══════════════════════════════════════════════════════════════════════
       // PERSISTENT SESSION API CALL
       // ═══════════════════════════════════════════════════════════════════════
-      const currentPass = determineCurrentPass(messages);
-      
       try {
         let sessionResponse;
         
@@ -1752,7 +1750,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
   // Every pick must come from the real pipeline (Pass 1→2.5→3). If the pipeline
   // can't complete, this game is reported as a failure. No fake/synthesized picks.
   console.error(`[Orchestrator] MAX ITERATIONS (${effectiveMaxIterations}) reached without completing pipeline for ${awayTeam} @ ${homeTeam}`);
-  console.error(`[Orchestrator] Pipeline state: pass25=${_pass2Injected}, pass3=${_pass3Injected}`);
+  console.error(`[Orchestrator] Pipeline state: pass2=${_pass2Injected}, pass3=${_pass3Injected}`);
   console.error(`[Orchestrator] Stats gathered: ${toolCallHistory.length}, iterations: ${iteration}`);
   return {
     error: 'Pipeline did not complete within max iterations — no pick generated',
@@ -1761,7 +1759,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
     homeTeam,
     awayTeam,
     sport,
-    _pipelineState: { pass25: _pass2Injected, pass3: _pass3Injected },
+    _pipelineState: { pass2: _pass2Injected, pass3: _pass3Injected },
     _statsGathered: toolCallHistory.length
   };
 

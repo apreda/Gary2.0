@@ -2,24 +2,6 @@ import { normalizeSportToLeague } from './orchestratorHelpers.js';
 import { spreadForSide } from '../../marketTruth.js';
 
 /**
- * Determine the current pass based on message history
- * Returns: 'investigation', 'evaluation', 'final_decision', or 'default'
- */
-export function determineCurrentPass(messages) {
-  // Check from most recent to oldest
-  const hasPass3 = messages.some(m =>
-    m.content?.includes('PASS 3 - FINAL OUTPUT') || m.content?.includes('PASS 3 - PROPS EVALUATION PHASE')
-  );
-  if (hasPass3) return 'final_decision';
-
-  const hasPass25 = messages.some(m => m.content?.includes('PASS 2'));
-  if (hasPass25) return 'evaluation';
-
-  // Default to investigation (Pass 1)
-  return 'investigation';
-}
-
-/**
  * Parse Gary's response to extract the pick JSON
  * 
  * IMPORTANT: We try to extract a valid pick from JSON FIRST.
