@@ -80,7 +80,7 @@ Use the exact tag shown in the scout report for this game.
     return `Before outputting INVESTIGATION COMPLETE, end your Pass 1 synthesis with both sections, using these EXACT headings on their own lines (the system stores each case under its heading):
 ${h.home}
 ${h.away}
-(Each case: 2-3 paragraphs making the argument for that side as tonight's bet — how it wins this game and what carries it — based on the matchup evidence you investigated.)`;
+(Each case: 2-3 paragraphs, the case for taking that side tonight.)`;
   }
 };
 

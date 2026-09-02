@@ -50,7 +50,7 @@ import { computePitcherWhiffByStart } from './mlbContactQuality.js';
 import { renderBoxScore, buildPenPressQuery } from './mlbGamesAsWritten.js';
 import { auditDeskManifest, recordDeskManifest } from './mlbDeskManifest.js';
 import { resolveDeskLayout, renderBucketsDesk } from './mlbDeskLayout.js';
-import { menuTruthLines } from '../../orchestrator/mlbCaseMenu.js';
+import { mlbGameKind } from '../../orchestrator/mlbCaseMenu.js';
 import { getOddsHistory, formatLineHistory } from '../../../oddsSnapshots.js';
 import {
   completedMlbTeamGames,
@@ -1670,20 +1670,16 @@ export async function buildMlbScoutReport(game, options = {}) {
   // Use structured BDL odds if available on the game object
   if (game.moneyline_home != null || game.moneyline_away != null) {
     const lines = [];
-    if (game.moneyline_home != null && game.moneyline_away != null) {
+    // THE GAME KIND (founder, Sep 2 2026): the board prints the tickets of
+    // the game this is — both moneylines on a moneyline game, the run line
+    // on a run-line game. The house limit and the menu are internal; Gary
+    // never reads them. (Sep 1's menu-truth lines retired here.)
+    const kind = mlbGameKind(game, homeTeam, awayTeam);
+    if (kind.kind === 'runline' && game.spread_home != null) {
+      lines.push(`Run Line: ${homeTeam} ${game.spread_home > 0 ? '+' : ''}${game.spread_home} (${game.spread_home_odds || ''}) / ${awayTeam} ${game.spread_away > 0 ? '+' : ''}${game.spread_away} (${game.spread_away_odds || ''})`);
+    } else if (game.moneyline_home != null && game.moneyline_away != null) {
       lines.push(`Moneyline: ${homeTeam} ${game.moneyline_home > 0 ? '+' : ''}${game.moneyline_home} / ${awayTeam} ${game.moneyline_away > 0 ? '+' : ''}${game.moneyline_away}`);
     }
-    if (game.spread_home != null) {
-      lines.push(`Run Line: ${homeTeam} ${game.spread_home > 0 ? '+' : ''}${game.spread_home} (${game.spread_home_odds || ''}) / ${awayTeam} ${game.spread_away > 0 ? '+' : ''}${game.spread_away} (${game.spread_away_odds || ''})`);
-    }
-    // MENU TRUTH for the house limit (founder GO, Sep 1 2026): a moneyline
-    // heavier than the cap is not a ticket, and the desk must say so BEFORE
-    // the read, not after it — the Aug 28-31 ledger showed every capped-
-    // favorite read finished as "who wins" and got relabeled onto the run
-    // line in Pass 2.5 (0 of 11 run-line rationales weighed the other side
-    // of the 1.5). One definition of the menu (mlbCaseMenu.js) serves the
-    // desk, the football desk, and the Pass 1 headings.
-    lines.push(...menuTruthLines(game, homeTeam, awayTeam, { when: 'tonight' }));
     // LINE HISTORY (founder GO, Sep 1 2026 — the price as a real leg): where
     // today's board opened and where it is now, from our own snapshots.
     try {

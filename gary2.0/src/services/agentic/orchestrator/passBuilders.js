@@ -252,10 +252,11 @@ export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spo
   // and forced 16/16 preseason spreads.
   const lineLabel = isMLB ? 'moneyline or run line'
     : (isFootball ? 'spread or moneyline' : 'spread');
+  // MLB (founder, Sep 2 2026): no bet-type note, no house-limit paragraph —
+  // the game kind was decided before the desk was read and the cases follow
+  // it; the decision turn is the bare ask and the output contract.
   const betTypeNote = isMLB
-    ? `**BET TYPE:** Two options — MONEYLINE or RUN LINE (-1.5/+1.5).
-
-**HOUSE LIMIT:** no moneyline heavier than ${GAME_ML_CAP}. If the side you like is priced past that, its moneyline is off the menu — on a game priced like that, the bet is not who wins, it is the run line: that side -1.5 at its price, or the other side +1.5 at its price (the underdog's moneyline also stays legal). Which side of the 1.5 does your read take?`
+    ? ''
     : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.
 
 **HOUSE LIMIT:** no moneyline heavier than ${GAME_ML_CAP} — a favorite priced past that is a spread ticket, not a moneyline ticket.`;
@@ -272,9 +273,9 @@ export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spo
   const spreadOffBoard = spreadPosted && market && Object.keys(market).length > 0 && !spreadPriced;
   let lineContext;
   if (isMLB) {
-    lineContext = spreadOffBoard
-      ? `Line context: ${homeTeam} (home) vs ${awayTeam} (away). The run line is posted WITHOUT a price tonight — an unpriced line cannot be a ticket, so the board is MONEYLINE only.`
-      : `Line context: ${homeTeam} (home) vs ${awayTeam} (away). Choose ML or Run Line — whichever ticket your read actually calls.`;
+    // No instruction here for MLB (founder, Sep 2 2026): the game kind and
+    // its tickets were named before the desk; nothing tells Gary an order.
+    lineContext = '';
   } else if (isFootball) {
     lineContext = spreadOffBoard
       ? `Line context: ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}. The spread is posted WITHOUT a price tonight — an unpriced line cannot be a ticket, so the board is MONEYLINE only.`
@@ -700,9 +701,9 @@ Do NOT default to the over — an over pick must beat the under on evidence, not
 export function buildMlCapRetryMessage(sport, cap = GAME_ML_CAP) {
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
   const market = isMLB
-    ? 'the run line — the side you like at -1.5, or the other side at +1.5 (the underdog\'s moneyline also stays legal)'
+    ? 'the run line, either side'
     : 'the spread — or the underdog\'s moneyline';
-  return `HOUSE LIMIT: no moneyline heavier than ${cap}. That moneyline is off the menu — on a game priced like this, the bet is not who wins, it is ${market}. Which side does your read take? Return your final JSON with the exact odds for that ticket.`;
+  return `HOUSE LIMIT: no moneyline heavier than ${cap}. That moneyline is not a ticket; on this game the tickets are ${market}. Return your final JSON with the exact odds for that ticket.`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -716,13 +717,13 @@ export function buildMlCapRetryMessage(sport, cap = GAME_ML_CAP) {
 function buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread, game = null) {
   const factors = getMlbSpreadFactors();
   const mlbAwareness = getMlbSeasonAwareness();
-  // THE CASE MENU (founder GO, Sep 1 2026): on a capped game the two cases
-  // are the actual tickets, and the opening line says what kind of bet this
-  // is — see mlbCaseMenu.js. Uncapped games read exactly as before.
+  // THE GAME KIND (founder, Sep 2 2026): decided before any data is read —
+  // a moneyline game asks who wins, a run-line game asks the run line. The
+  // opening line names which; the cases follow it (mlbCaseMenu.js).
   const headings = mlbCaseHeadings(homeTeam, awayTeam, game);
 
   return `
-${mlbPass1Opening(headings.capped)}
+${mlbPass1Opening(headings)}
 
 <scout_report>
 ## MATCHUP BRIEFING (TODAY: ${today})

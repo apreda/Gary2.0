@@ -32,27 +32,28 @@ describe('mlbCaseHeadings', () => {
     expect(h.home).toBe('CASE FOR BACKING BRAVES TONIGHT:');
     expect(h.away).toBe('CASE FOR BACKING ROCKIES TONIGHT:');
   });
-  it('keeps the who-wins headings on a capped board too, and flags the cap (founder, Sep 2)', () => {
+  it('a run-line game asks the run line: favorite -1.5, underdog +1.5, home heading first (founder, Sep 2)', () => {
     const h = mlbCaseHeadings('Braves', 'Rockies', capped);
-    expect(h.capped).toBe(true);
-    expect(h.home).toBe('CASE FOR BACKING BRAVES TONIGHT:');
-    expect(h.away).toBe('CASE FOR BACKING ROCKIES TONIGHT:');
+    expect(h.kind).toBe('runline');
+    expect(h.home).toBe('CASE FOR BRAVES -1.5 TONIGHT:');
+    expect(h.away).toBe('CASE FOR ROCKIES +1.5 TONIGHT:');
   });
-  it('never names a ticket in a heading, whichever side is capped', () => {
+  it('mirrors correctly when the away side is the run-line favorite', () => {
     const h = mlbCaseHeadings('Rangers', 'Athletics', cappedAway);
-    expect(h.capped).toBe(true);
-    expect(h.home).toBe('CASE FOR BACKING RANGERS TONIGHT:');
-    expect(h.away).toBe('CASE FOR BACKING ATHLETICS TONIGHT:');
+    expect(h.kind).toBe('runline');
+    expect(h.home).toBe('CASE FOR RANGERS +1.5 TONIGHT:');
+    expect(h.away).toBe('CASE FOR ATHLETICS -1.5 TONIGHT:');
   });
 });
 
 describe('Pass 1 and the bilateral prompt agree', () => {
-  it('opens with the capped sentence and keeps the who-wins headings on a capped game', () => {
+  it('names the game kind before the desk and asks the run line on a run-line game', () => {
     const msg = buildPass1Message('DESK', 'Braves', 'Rockies', '2026-09-01', 'baseball_mlb', -1.5, { game: capped });
-    expect(msg).toContain("The favorite's moneyline is past the house limit and is not a ticket, so the bet on this game is the run line, or the underdog outright.");
-    expect(msg).toContain('CASE FOR BACKING BRAVES TONIGHT:');
-    expect(msg).toContain('CASE FOR BACKING ROCKIES TONIGHT:');
-    expect(msg).not.toContain('-1.5 (');
+    expect(msg).toContain('Tonight is a run-line game: Braves -1.5 or Rockies +1.5.');
+    expect(msg).toContain('CASE FOR BRAVES -1.5 TONIGHT:');
+    expect(msg).toContain('CASE FOR ROCKIES +1.5 TONIGHT:');
+    expect(msg).not.toContain('CASE FOR BACKING');
+    expect(msg.toLowerCase()).not.toContain('house limit');
     expect(msg).not.toContain('OUTRIGHT AT');
     // Price-last ruling: the opening names the kind of bet, never the numbers.
     const opening = msg.split('\n').find((l) => l.startsWith("You're deciding"));
@@ -66,14 +67,16 @@ describe('Pass 1 and the bilateral prompt agree', () => {
   });
   it('the constitution bilateral prompt carries the same headings', () => {
     const p = MLB_CONSTITUTION.bilateralCasePrompt('Braves', 'Rockies', capped);
-    expect(p).toContain('CASE FOR BACKING BRAVES TONIGHT:');
-    expect(p).toContain('CASE FOR BACKING ROCKIES TONIGHT:');
-    expect(p).not.toContain('OUTRIGHT AT');
+    expect(p).toContain('CASE FOR BRAVES -1.5 TONIGHT:');
+    expect(p).toContain('CASE FOR ROCKIES +1.5 TONIGHT:');
+    expect(p).toContain('the case for taking that side tonight');
     expect(MLB_CONSTITUTION.bilateralCasePrompt('Braves', 'Rockies')).toContain('CASE FOR BACKING BRAVES TONIGHT:');
   });
-  it('mlbPass1Opening is the default sentence when not capped', () => {
-    expect(mlbPass1Opening(false)).toContain('The betting options and their prices come at the end');
-    expect(mlbPass1Opening(true)).toContain('is not a ticket');
+  it('mlbPass1Opening names the kind of game, prices at the end either way', () => {
+    expect(mlbPass1Opening({ kind: 'moneyline' })).toContain('The betting options and their prices come at the end');
+    const rl = mlbPass1Opening({ kind: 'runline', fav: 'Braves', dog: 'Rockies' });
+    expect(rl).toContain('Tonight is a run-line game: Braves -1.5 or Rockies +1.5.');
+    expect(rl.toLowerCase()).not.toContain('house limit');
   });
 });
 

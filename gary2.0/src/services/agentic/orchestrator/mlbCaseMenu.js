@@ -79,25 +79,47 @@ export function mlbCappedMenu(game, homeTeam, awayTeam, cap = GAME_ML_CAP) {
 }
 
 /**
- * The two Pass 1 case headings, home first — who wins, on every board.
- * Sep 1 named the tickets on a capped game; founder, Sep 2 2026: a case
- * headed "+1.5" argued "it stays close" instead of the game (the Blue Jays
- * card). The cases argue who wins; the capped opener still says the
- * favorite's moneyline is not a ticket, and the run line or the dog outright
- * is chosen in Pass 2.5 with the board. `capped` still selects the opener.
+ * THE GAME KIND (founder, Sep 2 2026): decided before any data is read.
+ * A game is a MONEYLINE game (the question is who wins) or a RUN-LINE game
+ * (the favorite's moneyline is past the house limit and the run line is
+ * priced both sides at 1.5 — the tickets are the favorite -1.5 or the
+ * underdog +1.5). Gary never sees the house limit or the menu mechanics;
+ * he sees which game it is, the cases follow it, and the bet question is
+ * the same in both: what's your bet, and what are the reasons why.
+ *
+ * @returns {{ kind: 'moneyline' } | { kind: 'runline', fav: string, dog: string }}
+ */
+export function mlbGameKind(game, homeTeam, awayTeam) {
+  const menu = mlbCappedMenu(game, homeTeam, awayTeam);
+  return menu ? { kind: 'runline', fav: menu.fav, dog: menu.dog } : { kind: 'moneyline' };
+}
+
+/**
+ * The two Pass 1 case headings, home first. A moneyline game asks who wins;
+ * a run-line game asks the run line — the favorite -1.5, the underdog +1.5.
  */
 export function mlbCaseHeadings(homeTeam, awayTeam, game) {
   const H = (s) => String(s || '').toUpperCase();
+  const g = mlbGameKind(game, homeTeam, awayTeam);
+  if (g.kind === 'moneyline') {
+    return { kind: 'moneyline', capped: false, home: `CASE FOR BACKING ${H(homeTeam)} TONIGHT:`, away: `CASE FOR BACKING ${H(awayTeam)} TONIGHT:` };
+  }
+  const favHeading = `CASE FOR ${H(g.fav)} -1.5 TONIGHT:`;
+  const dogHeading = `CASE FOR ${H(g.dog)} +1.5 TONIGHT:`;
   return {
-    capped: Boolean(mlbCappedMenu(game, homeTeam, awayTeam)),
-    home: `CASE FOR BACKING ${H(homeTeam)} TONIGHT:`,
-    away: `CASE FOR BACKING ${H(awayTeam)} TONIGHT:`,
+    kind: 'runline',
+    capped: true,
+    fav: g.fav,
+    dog: g.dog,
+    home: g.fav === homeTeam ? favHeading : dogHeading,
+    away: g.fav === awayTeam ? favHeading : dogHeading,
   };
 }
 
-/** Pass 1's opening sentence — the capped variant names the kind of bet, never the numbers. */
-export function mlbPass1Opening(capped) {
-  return capped
-    ? "You're deciding what to bet on tonight's game below. The favorite's moneyline is past the house limit and is not a ticket, so the bet on this game is the run line, or the underdog outright. The tickets and their prices come at the end, after you've been through everything."
-    : "You're deciding what to bet on tonight's game below. The betting options and their prices come at the end, after you've been through everything.";
+/** Pass 1's opening sentence: which game this is. Prices come at the end. */
+export function mlbPass1Opening(headings) {
+  if (headings && headings.kind === 'runline') {
+    return `You're deciding what to bet on tonight's game below. Tonight is a run-line game: ${headings.fav} -1.5 or ${headings.dog} +1.5. The prices come at the end, after you've been through everything.`;
+  }
+  return "You're deciding what to bet on tonight's game below. The betting options and their prices come at the end, after you've been through everything.";
 }
