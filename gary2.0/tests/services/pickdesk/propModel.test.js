@@ -124,26 +124,30 @@ describe('screenBoard', () => {
   });
 });
 
-describe('the screened board (propsBrain)', async () => {
+describe('the screened board (propsBrain) — the August replay policy', async () => {
   const { selectCandidates, buildScreenedBoard } = await import('../../../src/services/pickdesk/propsBrain.js');
   const mk = (player, prop_type, side, edge, odds, team = 'SEA') => ({ market: { player, team, prop_type, line: 0.5, over_odds: side === 'over' ? odds : -110, under_odds: side === 'under' ? odds : -110 }, side, edge, odds, pModel: 0.6, pMarket: 0.5 });
-  it('takes the top candidates by gap, at most two per player, never the HR lane or an off-window price, and floors the board', () => {
+  it('favorites -130..-200 at 4+ points lead, then -129..+150 at 6+, never +151 or a blocked market-side, two per player, three deep', () => {
     const screened = [
-      mk('A', 'hits', 'over', 0.20, -110), mk('A', 'total_bases', 'over', 0.18, 105), mk('A', 'rbis', 'over', 0.17, 150),
-      mk('B', 'home_runs', 'over', 0.16, 400), mk('C', 'walks', 'under', 0.15, -260), mk('D', 'pitcher_outs', 'under', 0.09, -120),
-      mk('E', 'hits', 'under', 0.01, 110), mk('F', 'singles', 'over', 0.005, -105), mk('G', 'doubles', 'over', 0.004, 300),
+      mk('Long', 'hits', 'over', 0.30, 220),                    // +151 and longer: never
+      mk('Blocked', 'total_bases', 'under', 0.25, -150),        // lost in both halves: off the menu
+      mk('A', 'walks', 'under', 0.09, -160), mk('A', 'rbis', 'under', 0.08, -170), mk('A', 'runs_scored', 'under', 0.07, -140),
+      mk('B', 'hits_runs_rbis', 'over', 0.05, -135),
+      mk('C', 'total_bases', 'over', 0.12, 115),                // fill band, 6+
+      mk('D', 'pitcher_walks', 'over', 0.03, -180),             // favorite band but under 4 points
+      mk('E', 'hits', 'over', 0.02, -105),
     ];
-    const picked = selectCandidates(screened);
-    const names = picked.map((s) => `${s.market.player} ${s.market.prop_type}`);
-    expect(names).toEqual(['A hits', 'A total_bases', 'D pitcher_outs', 'E hits']);   // A capped at 2, B is HR, C is -260, floor of 4 admits E
-    expect(selectCandidates(screened, { floor: 0 }).map((s) => s.market.player)).toEqual(['A', 'A', 'D']);
+    const picked = selectCandidates(screened).map((s) => `${s.market.player} ${s.market.prop_type} ${s.side}`);
+    expect(picked).toEqual(['A walks under', 'A rbis under', 'B hits_runs_rbis over']);   // A capped at 2; C waits behind the favorites
+    const thin = selectCandidates([mk('E', 'hits', 'over', 0.02, -105), mk('F', 'walks', 'under', 0.01, -120), mk('Long', 'hits', 'over', 0.30, 220)]);
+    expect(thin.map((s) => s.market.player)).toEqual(['E', 'F']);                         // the floor completes the pair inside the window
+    expect(selectCandidates([mk('Long', 'hits', 'over', 0.30, 220)])).toEqual([]);
   });
-  it('prints one bet per line in lineup order with the cleared clause', () => {
-    const cands = [mk('Julio Rodriguez', 'total_bases', 'over', 0.1, 127), mk('Randy Arozarena', 'walks', 'under', 0.08, -148), mk('Bryce Miller', 'pitcher_strikeouts', 'over', 0.07, -115)];
-    const lineups = { away: { batters: [{ name: 'Randy Arozarena' }, { name: 'Julio Rodriguez' }], pitcher: { name: 'Bryce Miller' } }, home: { batters: [], pitcher: null } };
-    const b = buildScreenedBoard(cands, { lineups, clearedClauseFor: (k) => (k === 'julio rodriguez' ? 'over in 6 of his last 15' : null) });
-    expect(b.text).toBe("═══ THE PROP BOARD (tonight's board) ═══\n  Randy Arozarena (SEA): UNDER walks 0.5 (-148)\n  Julio Rodriguez (SEA): OVER total_bases 0.5 (+127) — over in 6 of his last 15\n  Bryce Miller (SEA): OVER pitcher_strikeouts 0.5 (-115)");
-    expect([...b.players]).toEqual(['randy arozarena', 'julio rodriguez', 'bryce miller']);
-    expect(buildScreenedBoard([], { lineups })).toEqual({ text: '', players: new Set() });
+  it('prints one bet per line in policy order with the cleared clause', () => {
+    const cands = [mk('Randy Arozarena', 'walks', 'under', 0.08, -148), mk('Julio Rodriguez', 'total_bases', 'over', 0.1, 127)];
+    const b = buildScreenedBoard(cands, { clearedClauseFor: (k) => (k === 'julio rodriguez' ? 'over in 6 of his last 15' : null) });
+    expect(b.text).toBe("═══ THE PROP BOARD (tonight's board) ═══\n  Randy Arozarena (SEA): UNDER walks 0.5 (-148)\n  Julio Rodriguez (SEA): OVER total_bases 0.5 (+127) — over in 6 of his last 15");
+    expect([...b.players]).toEqual(['randy arozarena', 'julio rodriguez']);
+    expect(buildScreenedBoard([], {})).toEqual({ text: '', players: new Set() });
   });
 });

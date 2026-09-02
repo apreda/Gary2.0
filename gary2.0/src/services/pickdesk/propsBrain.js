@@ -312,25 +312,42 @@ export function buildPropBoardV2(marketRows, {
 // ═══ THE SCREENED BOARD (Sep 2 2026) — the model's candidates as the menu ═══
 // Founder: "do this system then for props" and "two per game is what we
 // offer". THE PROP MODEL prices every primary market from the player's own
-// numbers; the board Gary reads is the handful the model disagrees with the
-// book on, each as ONE bet (the side the gap favors), in lineup order. Both
-// the model's number and the book's are stamped on the stored pick for the
+// numbers; the board Gary reads is the three the August replay's policy
+// picks, each as ONE bet (the side the gap favors), best first. Both the
+// model's number and the book's are stamped on the stored pick for the
 // ledger — neither ever reaches the prompt. Gary reads the desk and the
 // sheets, takes up to two, or passes.
-export const SCREEN_CANDIDATES = 8;
-export const SCREEN_MIN_GAP = 0.03;
-export const SCREEN_FLOOR = 4;
+//
+// THE POLICY (validated on Aug 6 → Sep 1, positive in both halves and both
+// model variants — see propModel.js): the favorite side priced -130..-200
+// where the model sits 4+ points above the price, ranked by the gap; when
+// that is thin, -129..+150 at 6+ points; never +151 or longer (the book's
+// fattest edge, 7-11% lost in every slice); four market-sides that lost in
+// both halves are off the menu; at most two markets per player.
+export const SCREEN_CANDIDATES = 3;
+export const SCREEN_FLOOR = 2;
+const FAVORITE_BAND = { lo: -200, hi: -130, minGap: 0.04 };
+const FILL_BAND = { lo: -129, hi: 150, minGap: 0.06 };
+const MENU_BLOCKLIST = new Set(['singles under', 'total_bases under', 'pitcher_hits_allowed under', 'runs_scored under']);
 
-export function selectCandidates(screened, { candidates = SCREEN_CANDIDATES, minGap = SCREEN_MIN_GAP, floor = SCREEN_FLOOR, perPlayer = 2 } = {}) {
+export function selectCandidates(screened, { candidates = SCREEN_CANDIDATES, floor = SCREEN_FLOOR, perPlayer = 2 } = {}) {
+  const inBand = (s, b) => Number(s.odds) >= b.lo && Number(s.odds) <= b.hi && s.edge >= b.minGap;
+  const eligible = (screened || []).filter((s) => !isHrType(s.market.prop_type)
+    && !MENU_BLOCKLIST.has(`${norm(s.market.prop_type)} ${s.side}`)
+    && propOddsService.isOddsTakeable(s.odds, s.market.prop_type)
+    && Number(s.odds) <= FILL_BAND.hi);
+  const primary = eligible.filter((s) => inBand(s, FAVORITE_BAND));
+  const fill = eligible.filter((s) => inBand(s, FILL_BAND));
+  // The floor: two per game is the product, so on a flat board the next-best
+  // takeable markets inside the window complete the pair.
+  const rest = eligible.filter((s) => !primary.includes(s) && !fill.includes(s) && s.edge > 0);
   const out = [];
   const perPlayerCount = new Map();
-  for (const s of screened) {
+  for (const s of [...primary, ...fill, ...rest]) {
     if (out.length >= candidates) break;
-    if (isHrType(s.market.prop_type)) continue;                 // the fun lane has its own card
-    if (!propOddsService.isOddsTakeable(s.odds, s.market.prop_type)) continue;
+    if (rest.includes(s) && out.length >= floor) continue;
     const key = norm(s.market.player);
     if ((perPlayerCount.get(key) || 0) >= perPlayer) continue;
-    if (s.edge < minGap && out.length >= floor) continue;      // the floor keeps two-per-game honest on a flat board
     perPlayerCount.set(key, (perPlayerCount.get(key) || 0) + 1);
     out.push(s);
   }
@@ -338,18 +355,12 @@ export function selectCandidates(screened, { candidates = SCREEN_CANDIDATES, min
 }
 
 /**
- * The candidate board text: one bet per line, lineup order (away nine, away
- * starter, home nine, home starter, then anyone the lineups did not place).
+ * The candidate board text: one bet per line, in the policy's order (the
+ * replay's edge sat mostly in the first line — the order is the product).
  */
-export function buildScreenedBoard(candidates, { lineups, clearedClauseFor = null, headerLabel = `tonight's board` } = {}) {
+export function buildScreenedBoard(candidates, { clearedClauseFor = null, headerLabel = `tonight's board` } = {}) {
   if (!candidates.length) return { text: '', players: new Set() };
-  const order = [];
-  for (const side of [lineups?.away, lineups?.home]) {
-    for (const b of side?.batters || []) order.push(norm(b?.name));
-    if (side?.pitcher?.name) order.push(norm(side.pitcher.name));
-  }
-  const rank = (name) => { const i = order.indexOf(norm(name)); return i < 0 ? 999 : i; };
-  const sorted = candidates.slice().sort((a, b) => rank(a.market.player) - rank(b.market.player) || a.market.prop_type.localeCompare(b.market.prop_type));
+  const sorted = candidates;
   const lines = sorted.map((s) => {
     const m = s.market;
     const cleared = clearedClauseFor ? clearedClauseFor(norm(m.player), m.prop_type, m.line) : null;
@@ -624,10 +635,10 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
   const lineups = desk.scout?.confirmedLineups || null;
 
   // THE PROP MODEL screen (Sep 2 2026): the candidates become the board Gary
-  // reads; the full board still feeds the menu snapshot. Off until the
-  // August replay (scripts/props-replay.js) clears it — GARY_PROPS_SCREEN=1
-  // in the scheduler plist turns it on; board_version 4 marks its picks.
-  const useScreen = !options.hrOnly && process.env.GARY_PROPS_SCREEN === '1';
+  // reads; the full board still feeds the menu snapshot. ON since the August
+  // replay cleared the policy (Sep 2 evening); GARY_PROPS_SCREEN=0 restores
+  // the full sheets board for a controlled read. board_version 4 = screened.
+  const useScreen = !options.hrOnly && process.env.GARY_PROPS_SCREEN !== '0';
   let readBoard = board;
   let candidates = [];
   const screenByKey = new Map();
@@ -638,15 +649,17 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
       if (!opp) return null;
       return lineupRates((opp.batters || []).map((b) => chronoByPlayer.get(norm(b?.name))).filter(Boolean));
     };
+    const slotByName = new Map();
+    for (const side of [lineups?.home, lineups?.away]) for (const b of side?.batters || []) if (b?.name && b?.battingOrder != null) slotByName.set(norm(b.name), Number(b.battingOrder));
     const screened = screenBoard(board.markets, {
       asOf: null,
       rowsFor: (k) => chronoByPlayer.get(k),
       lineupFor: opposingRowsFor,
+      slotFor: (k) => slotByName.get(k) ?? null,
     });
     candidates = selectCandidates(screened);
-    for (const s of candidates) screenByKey.set(`${norm(s.market.player)}|${norm(s.market.prop_type)}|${s.side}`, s);
+    candidates.forEach((s, i) => screenByKey.set(`${norm(s.market.player)}|${norm(s.market.prop_type)}|${s.side}`, { ...s, rank: i + 1 }));
     const screenedBoard = buildScreenedBoard(candidates, {
-      lineups,
       clearedClauseFor: (key, propType, line) => clearedClause(chronoByPlayer.get(key), propType, line),
     });
     if (screenedBoard.players.size) {
@@ -725,7 +738,7 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
     // model's chance for the side taken, the vig-free price, and the gap.
     ...(() => {
       const s = screenByKey.get(`${norm(p.player)}|${norm(p.prop_type)}|${normalizePropBetDirection(p.bet)}`);
-      return s ? { screen_p: Number(s.pModel.toFixed(3)), price_p: Number(s.pMarket.toFixed(3)), screen_gap: Number(s.edge.toFixed(3)) } : {};
+      return s ? { screen_p: Number(s.pModel.toFixed(3)), price_p: Number(s.pMarket.toFixed(3)), screen_gap: Number(s.edge.toFixed(3)), screen_rank: s.rank } : {};
     })(),
     _statAuditWarnings: audits[i]?.warnings ?? null,
   }));

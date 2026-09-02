@@ -14,6 +14,16 @@
  * Pure arithmetic over BDL game rows (oldest → newest), no I/O, so the same
  * code runs the August replay (scripts/props-replay.js) and the live board.
  *
+ * WHAT THE AUGUST REPLAY FOUND (Sep 2 2026; 329 boards, 33,563 two-sided
+ * markets, rows dated before each game): the model alone does not beat the
+ * book — betting its side at any gap returns the vig (-3 to -5% ROI), and
+ * plus-money longshots (+161 and longer) lose 7-11% in every slice. What
+ * held in BOTH halves of the month and both model variants: the favorite
+ * side priced -130 to -200 where the model's number sits 4+ points above
+ * the price — 64% winners, +5 to +7% ROI at two per game. That is the menu
+ * policy in propsBrain.selectCandidates; the model's job is that pocket.
+ * Rank one carried most of it (68%, +12%), so the board is three deep.
+ *
  * Distributions:
  *   per-PA outcomes (hit, single, double, triple, HR, walk, strikeout, steal)
  *     → Binomial over a plate-appearance count drawn from the player's own
@@ -85,8 +95,25 @@ export function paDistribution(rows) {
   return new Map([...counts.entries()].map(([pa, c]) => [pa, c / n]));
 }
 
-/** A hitter's per-PA rates as of a date. */
-export function hitterProfile(rows, { asOf = null } = {}) {
+// Plate appearances by lineup slot (league, 2026): the leadoff man bats
+// ~4.6 times, the nine-hole ~3.8. Tonight's slot is known from the posted
+// lineup, so it outranks the player's own PA history (a call-up batting 2nd
+// tonight is not the bench bat his last 60 games say he was).
+const SLOT_PA = { 1: 4.65, 2: 4.55, 3: 4.45, 4: 4.35, 5: 4.25, 6: 4.12, 7: 4.02, 8: 3.92, 9: 3.82 };
+export function slotPaDistribution(slot) {
+  const mean = SLOT_PA[Number(slot)];
+  if (!mean) return null;
+  const lo = Math.floor(mean), frac = mean - lo;
+  // Mass on floor/ceil for the mean, a little on either side for extra innings and blowouts.
+  const d = new Map();
+  const add = (pa, w) => d.set(pa, (d.get(pa) || 0) + w);
+  add(lo, 0.8 * (1 - frac)); add(lo + 1, 0.8 * frac);
+  add(lo - 1, 0.1); add(lo + 2, 0.1);
+  return d;
+}
+
+/** A hitter's per-PA rates as of a date; `slot` = tonight's batting order when posted. */
+export function hitterProfile(rows, { asOf = null, slot = null } = {}) {
   const games = hitterGames(rowsBefore(rows, asOf));
   const pa = (r) => Number(r.plate_appearances) || Number(r.at_bats) || 0;
   const singles = (r) => (Number(r.hits) || 0) - (Number(r.doubles) || 0) - (Number(r.triples) || 0) - (Number(r.hr) || 0);
@@ -95,7 +122,8 @@ export function hitterProfile(rows, { asOf = null } = {}) {
     games: games.length,
     rows: games,
     asOf: asOf || (games.length ? dateOf(games[games.length - 1]) : null),
-    paDist: paDistribution(games),
+    paDist: slotPaDistribution(slot) || paDistribution(games),
+    slot: slot || null,
     rates: {
       hits: rate((r) => r.hits, 'hits'),
       singles: rate(singles, 'singles'),
@@ -360,7 +388,9 @@ export function screenBoard(markets, context) {
     const isPitcher = norm(m.prop_type).startsWith('pitcher_');
     let profile = profiles.get(`${key}|${isPitcher}`);
     if (!profile) {
-      profile = isPitcher ? pitcherProfile(rows, { asOf: context.asOf }) : hitterProfile(rows, { asOf: context.asOf });
+      profile = isPitcher
+        ? pitcherProfile(rows, { asOf: context.asOf })
+        : hitterProfile(rows, { asOf: context.asOf, slot: context.slotFor ? context.slotFor(key) : null });
       profiles.set(`${key}|${isPitcher}`, profile);
     }
     if ((isPitcher ? profile.starts : profile.games) < 5) continue;
@@ -372,9 +402,10 @@ export function screenBoard(markets, context) {
     if (!mkt) continue;
     // The book's number is information too: the model's P(over) is shrunk
     // toward the vig-free market probability (context.marketBlend, default
-    // 0.3) — it tames the tails the replay showed the raw model overstating
-    // and leaves the ranking to the disagreement that survives.
-    const beta = Number.isFinite(context.marketBlend) ? context.marketBlend : 0.3;
+    // 0.5 — the August replay's best-calibrated weight: every decile of the
+    // blended number hit within a point of itself) and the ranking is left
+    // to the disagreement that survives.
+    const beta = Number.isFinite(context.marketBlend) ? context.marketBlend : 0.5;
     const pOver = mkt.oneSided ? probOver(dist, m.line) : (1 - beta) * probOver(dist, m.line) + beta * mkt.over;
     const edgeOver = m.over_odds != null ? pOver - mkt.over : null;
     const edgeUnder = m.under_odds != null ? (1 - pOver) - mkt.under : null;
