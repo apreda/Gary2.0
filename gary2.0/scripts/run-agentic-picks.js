@@ -22,6 +22,7 @@ import {
 import { exitAfterFlushing } from './lib/processLifecycle.js';
 import { ncaabSeason } from '../src/utils/dateUtils.js';
 import { countRealStats } from '../src/services/agentic/statsSubstance.js';
+import { mlbCaseHeadings } from '../src/services/agentic/orchestrator/mlbCaseMenu.js';
 import {
   classifyNcaafFbsGames,
   ncaafSlateDateForInstant,
@@ -178,6 +179,9 @@ async function runMlbJuneEngine(game, runnerOptions) {
   const paths = extractJuneBilateralPaths(raw, game.home_team, game.away_team);
   result.path_home = result.path_home ?? paths.path_home;
   result.path_away = result.path_away ?? paths.path_away;
+  // THE CASE ORDER (Sep 2 2026): which club's case was written last —
+  // the ledger's measurement of "last case wins".
+  result.case_last = result.case_last ?? mlbCaseHeadings(game.home_team, game.away_team, game).lastSide;
   result._modelUsed = result._modelUsed ?? modelUsed;
   result._promptSha = result._promptSha ?? await junePromptSha();
   return result;
@@ -2081,6 +2085,7 @@ async function main() {
             // THE BLIND REPORT (Aug 12): both win paths ride every pick.
             path_away: result.path_away ?? null,
             path_home: result.path_home ?? null,
+            case_last: result.case_last ?? null,
             homeTeam: result.homeTeam,
             awayTeam: result.awayTeam,
             // UI display fields

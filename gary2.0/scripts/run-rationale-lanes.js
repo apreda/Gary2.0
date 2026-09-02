@@ -12,7 +12,7 @@
  * Gary: nothing here reaches a prompt or a desk.
  */
 import '../src/loadEnv.js';
-import { laneRowFor, summarizeLanes, summarizeCaseLanes } from '../src/services/agentic/rationaleLanes.js';
+import { laneRowFor, summarizeLanes, summarizeCaseLanes, summarizeCaseOrder } from '../src/services/agentic/rationaleLanes.js';
 
 const { supabaseAdmin, supabase } = await import('../src/supabaseClient.js');
 const db = supabaseAdmin || supabase;
@@ -77,6 +77,11 @@ export function printLaneTable(rows, label) {
   }
   // THE CASES (Sep 2 2026): the same lanes read across the two Pass 1
   // cases — picked side vs the other side — beside the card's count.
+  // THE CASE ORDER (Sep 2 2026): does the bet follow the case written last?
+  const order = summarizeCaseOrder(rows);
+  if (order.n) {
+    console.log(`  case order (${order.n} stamped): bet the LAST case ${order.pickedLast} (${order.pickedLastRecord}) · bet the FIRST case ${order.pickedFirst} (${order.pickedFirstRecord}) · home last ${order.byLast.home.n} → home taken ${order.byLast.home.pickedLast} · away last ${order.byLast.away.n} → away taken ${order.byLast.away.pickedLast}`);
+  }
   const cases = summarizeCaseLanes(rows).filter((c) => c.pickedCase || c.otherCase || c.card);
   if (cases.length && cases[0].of) {
     console.log(`  cases (${cases[0].of} sided): lane · card · picked-side case · other-side case · picked-case record`);

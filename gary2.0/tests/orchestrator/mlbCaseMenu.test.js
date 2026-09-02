@@ -1,11 +1,35 @@
 import { describe, it, expect } from 'vitest';
-import { mlbCappedMenu, mlbCaseHeadings, mlbPass1Opening, ticketMenu, menuTruthLines } from '../../src/services/agentic/orchestrator/mlbCaseMenu.js';
+import { mlbCappedMenu, mlbCaseHeadings, mlbCaseOrder, mlbPass1Opening, ticketMenu, menuTruthLines } from '../../src/services/agentic/orchestrator/mlbCaseMenu.js';
 import { buildPass1Message } from '../../src/services/agentic/orchestrator/passBuilders.js';
 import { MLB_CONSTITUTION } from '../../src/services/agentic/constitution/mlbConstitution.js';
 
 const capped = { moneyline_home: -230, moneyline_away: 210, spread_home: -1.5, spread_home_odds: -111, spread_away: 1.5, spread_away_odds: -109 };
 const cappedAway = { moneyline_home: 184, moneyline_away: -220, spread_home: 1.5, spread_home_odds: -125, spread_away: -1.5, spread_away_odds: 104 };
 const legal = { moneyline_home: -150, moneyline_away: 130, spread_home: -1.5, spread_home_odds: 120, spread_away: 1.5, spread_away_odds: -140 };
+
+describe('mlbCaseOrder — the case written last alternates by game id (founder GO, Sep 2)', () => {
+  it('even id home first, odd id away first, no id home first', () => {
+    expect(mlbCaseOrder({ id: 5059862 })).toBe('home-first');
+    expect(mlbCaseOrder({ id: 5059863 })).toBe('away-first');
+    expect(mlbCaseOrder({ bdl_game_id: '5059863' })).toBe('away-first');
+    expect(mlbCaseOrder({})).toBe('home-first');
+    expect(mlbCaseOrder(null)).toBe('home-first');
+  });
+  it('the headings print in the game\'s order and name the club read last', () => {
+    const even = mlbCaseHeadings('Braves', 'Rockies', { ...legal, id: 100 });
+    expect(even.first).toBe('CASE FOR BACKING BRAVES TONIGHT:');
+    expect(even.second).toBe('CASE FOR BACKING ROCKIES TONIGHT:');
+    expect(even.lastSide).toBe('away');
+    const odd = mlbCaseHeadings('Braves', 'Rockies', { ...legal, id: 101 });
+    expect(odd.first).toBe('CASE FOR BACKING ROCKIES TONIGHT:');
+    expect(odd.second).toBe('CASE FOR BACKING BRAVES TONIGHT:');
+    expect(odd.lastSide).toBe('home');
+    const msg = buildPass1Message('DESK', 'Braves', 'Rockies', '2026-09-02', 'baseball_mlb', -1.5, { game: { ...legal, id: 101 } });
+    expect(msg.indexOf('CASE FOR BACKING ROCKIES TONIGHT:')).toBeLessThan(msg.indexOf('CASE FOR BACKING BRAVES TONIGHT:'));
+    const p = MLB_CONSTITUTION.bilateralCasePrompt('Braves', 'Rockies', { ...legal, id: 101 });
+    expect(p.indexOf('CASE FOR BACKING ROCKIES TONIGHT:')).toBeLessThan(p.indexOf('CASE FOR BACKING BRAVES TONIGHT:'));
+  });
+});
 
 describe('mlbCappedMenu', () => {
   it('names the tickets when the home favorite is past the cap', () => {

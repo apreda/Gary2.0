@@ -95,7 +95,26 @@ export function mlbGameKind(game, homeTeam, awayTeam) {
 }
 
 /**
- * The two Pass 1 case headings, home first — the club's name on every board.
+ * THE CASE ORDER (founder GO, Sep 2 2026): which case is written last.
+ * Home first on every game meant the away case was always the last thing
+ * read before the bet — and the ledger showed the away side taken far more
+ * often than the board suggests (Aug 18-Sep 1: the away favorite 82% of
+ * the time it existed vs the home favorite 56%; away picks 49-54, home
+ * 43-36). Alternate by game id, deterministically, so half the games read
+ * home last; the ledger records which case was last and says in a week
+ * whether "last case wins" is real. No id → home first.
+ */
+export function mlbCaseOrder(game) {
+  const raw = game?.id ?? game?.bdl_game_id ?? game?.gamePk ?? null;
+  if (raw == null || raw === '') return 'home-first';
+  const n = Number(String(raw).replace(/\D/g, ''));
+  if (!Number.isFinite(n)) return 'home-first';
+  return n % 2 === 0 ? 'home-first' : 'away-first';
+}
+
+/**
+ * The two Pass 1 case headings — the club's name on every board, in the
+ * game's case order (`first`/`second`; `lastSide` names the club read last).
  * (Founder, Sep 2 2026: a heading that says "-1.5" or "+1.5" sends the case
  * hunting margin and one-run stats; the cases argue the game. On a run-line
  * game the OPENER names the tickets, the headings do not.)
@@ -103,13 +122,20 @@ export function mlbGameKind(game, homeTeam, awayTeam) {
 export function mlbCaseHeadings(homeTeam, awayTeam, game) {
   const H = (s) => String(s || '').toUpperCase();
   const g = mlbGameKind(game, homeTeam, awayTeam);
+  const home = `CASE FOR BACKING ${H(homeTeam)} TONIGHT:`;
+  const away = `CASE FOR BACKING ${H(awayTeam)} TONIGHT:`;
+  const order = mlbCaseOrder(game);
   return {
     kind: g.kind,
     capped: g.kind === 'runline',
     fav: g.fav ?? null,
     dog: g.dog ?? null,
-    home: `CASE FOR BACKING ${H(homeTeam)} TONIGHT:`,
-    away: `CASE FOR BACKING ${H(awayTeam)} TONIGHT:`,
+    home,
+    away,
+    order,
+    first: order === 'home-first' ? home : away,
+    second: order === 'home-first' ? away : home,
+    lastSide: order === 'home-first' ? 'away' : 'home',
   };
 }
 

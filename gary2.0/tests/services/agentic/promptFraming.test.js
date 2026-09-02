@@ -71,7 +71,7 @@ describe('MLB game lane runs the restored June engine (Aug 18 restoration)', () 
     const mlbStart = pb.indexOf('function buildMlbPass1');
     const mlbPass1 = pb.slice(mlbStart, pb.indexOf('\nfunction ', mlbStart + 10) > 0 ? pb.indexOf('\nfunction ', mlbStart + 10) : undefined);
     expect(mlbPass1).not.toContain('THE SYMMETRY RULE');
-    expect(mlbPass1).toContain('${headings.home}');
+    expect(mlbPass1).toContain('${headings.first}'); // the case order alternates by game id (Sep 2)
     // The case headings come from THE CASE MENU: who wins, on every board
     // (Sep 2 2026 — the ticket headings of Sep 1 are retired).
     const menu = src('orchestrator/mlbCaseMenu.js');

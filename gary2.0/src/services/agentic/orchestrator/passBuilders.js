@@ -520,9 +520,9 @@ ${factors}
 
 Before completing this pass, end with BOTH sections, using these EXACT headings on their own lines (the system stores each case under its heading):
 
-${headings.home}
+${headings.first}
 
-${headings.away}
+${headings.second}
 
 Do NOT declare a side or a pick yet — the bet question comes at the end. When your investigation is complete, output this exact line on its own line:
 INVESTIGATION COMPLETE

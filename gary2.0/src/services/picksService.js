@@ -375,6 +375,8 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null, options = {
       // THE BLIND REPORT (Aug 12): both win paths.
       path_away: pick.path_away ?? null,
       path_home: pick.path_home ?? null,
+      // THE CASE ORDER (Sep 2 2026): which case was written last.
+      case_last: pick.case_last ?? null,
       // WINNERS rank fields (Aug 12: the whitelist trap's fourth catch —
       // see the mapper note above).
       winners_class: pick.winners_class ?? null,

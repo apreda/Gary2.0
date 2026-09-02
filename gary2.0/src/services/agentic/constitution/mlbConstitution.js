@@ -78,8 +78,8 @@ Use the exact tag shown in the scout report for this game.
   bilateralCasePrompt: (homeTeam, awayTeam, game = null) => {
     const h = mlbCaseHeadings(homeTeam, awayTeam, game);
     return `Before outputting INVESTIGATION COMPLETE, end your Pass 1 synthesis with both sections, using these EXACT headings on their own lines (the system stores each case under its heading):
-${h.home}
-${h.away}
+${h.first}
+${h.second}
 (Each case: 2-3 paragraphs, the case for taking that side tonight.)`;
   }
 };

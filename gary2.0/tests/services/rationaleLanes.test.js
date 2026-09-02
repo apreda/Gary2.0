@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { tagRationale, sideOfPick, laneRowFor, summarizeLanes } from '../../src/services/agentic/rationaleLanes.js';
 import { formatLineHistory } from '../../src/services/oddsSnapshots.js';
+import { summarizeCaseOrder } from '../../src/services/agentic/rationaleLanes.js';
 
 describe('tagRationale', () => {
   it('tags the lanes a rationale leans on, by desk section', () => {
@@ -71,5 +72,25 @@ describe('formatLineHistory', () => {
     expect(rl).not.toContain('moneyline');
     const same = formatLineHistory({ first, latest: { ...now, moneyline_home: -134, moneyline_away: 116 }, boards: 2 }, { ...now, moneyline_home: -134, moneyline_away: 116 }, 'Red Sox', 'Mariners', 'today', 'moneyline');
     expect(same).toContain('unchanged since first seen');
+  });
+});
+
+describe('summarizeCaseOrder — does the bet follow the case written last?', () => {
+  it('splits by the club read last and skips rows without a stamp', () => {
+    const rows = [
+      { pick_is_home: true, case_last: 'home', result: 'won' },   // bet the last case (home last)
+      { pick_is_home: false, case_last: 'home', result: 'lost' }, // bet the first case
+      { pick_is_home: false, case_last: 'away', result: 'won' },  // bet the last case (away last)
+      { pick_is_home: false, case_last: 'away', result: 'lost' }, // bet the last case
+      { pick_is_home: true, case_last: null, result: 'won' },     // unstamped: skipped
+      { pick_is_home: null, case_last: 'home', result: 'won' },   // unknown side: skipped
+    ];
+    const o = summarizeCaseOrder(rows);
+    expect(o.n).toBe(4);
+    expect(o.pickedLast).toBe(3);
+    expect(o.pickedLastRecord).toBe('2-1');
+    expect(o.pickedFirst).toBe(1);
+    expect(o.pickedFirstRecord).toBe('0-1');
+    expect(o.byLast).toEqual({ home: { n: 2, pickedLast: 1 }, away: { n: 2, pickedLast: 2 } });
   });
 });

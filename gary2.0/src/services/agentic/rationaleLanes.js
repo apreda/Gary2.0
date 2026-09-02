@@ -108,7 +108,32 @@ export function laneRowFor(gameDate, pick, result) {
     case_away_lanes: tagRationale(pick.path_away, pick.league || pick.sport),
     case_home_chars: String(pick.path_home || '').length,
     case_away_chars: String(pick.path_away || '').length,
+    // THE CASE ORDER (Sep 2 2026): which club's case was written last,
+    // stamped by the runner; null before the alternation shipped.
+    case_last: pick.case_last ?? null,
   };
+}
+
+/**
+ * Did the bet follow the case written last? Rows with a known side and a
+ * stamped case order only. `byLast` splits the tally by which club's case
+ * came last, so a home/away lean and a last-case lean can be told apart.
+ */
+export function summarizeCaseOrder(rows) {
+  const xs = rows.filter((r) => (r.pick_is_home === true || r.pick_is_home === false) && (r.case_last === 'home' || r.case_last === 'away'));
+  const rec = (arr) => {
+    const g = arr.filter((r) => r.result === 'won' || r.result === 'lost');
+    const w = g.filter((r) => r.result === 'won').length;
+    return `${w}-${g.length - w}`;
+  };
+  const pickedLast = xs.filter((r) => (r.pick_is_home ? 'home' : 'away') === r.case_last);
+  const pickedFirst = xs.filter((r) => (r.pick_is_home ? 'home' : 'away') !== r.case_last);
+  const byLast = {};
+  for (const side of ['home', 'away']) {
+    const sub = xs.filter((r) => r.case_last === side);
+    byLast[side] = { n: sub.length, pickedLast: sub.filter((r) => (r.pick_is_home ? 'home' : 'away') === side).length };
+  }
+  return { n: xs.length, pickedLast: pickedLast.length, pickedLastRecord: rec(pickedLast), pickedFirst: pickedFirst.length, pickedFirstRecord: rec(pickedFirst), byLast };
 }
 
 /**
