@@ -112,8 +112,12 @@ const vendorName = (v) => (v ? String(v).replace(/[_-]+/g, ' ').replace(/\b\w/g,
  * Facts only — where it opened, where it is, and which book each is from
  * when they differ, because two books' prices are not a move.
  */
-export function formatLineHistory(history, now, homeTeam, awayTeam, scope = 'today') {
+export function formatLineHistory(history, now, homeTeam, awayTeam, scope = 'today', tickets = 'both') {
   if (!history?.first) return null;
+  // Which tickets the sentence covers (MLB, Sep 2 2026: a moneyline game's
+  // history is the moneyline; a run-line game's is the run line).
+  const wantMl = tickets !== 'runline';
+  const wantRl = tickets !== 'moneyline';
   const f = history.first;
   const nowBoard = boardOf(now || {});
   const openMl = `${homeTeam} ${fmtMl(f.moneyline_home)} / ${awayTeam} ${fmtMl(f.moneyline_away)}`;
@@ -122,15 +126,17 @@ export function formatLineHistory(history, now, homeTeam, awayTeam, scope = 'tod
   const nowRl = `${homeTeam} ${fmtRl(nowBoard.spread_home, nowBoard.spread_home_odds)} / ${awayTeam} ${fmtRl(nowBoard.spread_away, nowBoard.spread_away_odds)}`;
   const when = fmtEt(f.seen_at);
   const sameBook = (f.line_vendor ?? null) === (nowBoard.line_vendor ?? null) || !f.line_vendor || !nowBoard.line_vendor;
-  if (openMl === nowMl && openRl === nowRl) {
+  if ((!wantMl || openMl === nowMl) && (!wantRl || openRl === nowRl)) {
     return `Line history ${scope}: unchanged since first seen ${when} ET.`;
   }
   if (!sameBook) {
     // Different books, different numbers — say so rather than call it a move.
-    return `Line history ${scope}: first seen ${when} ET at ${vendorName(f.line_vendor)} — moneyline ${openMl}, run/spread line ${openRl}; the board now shows ${vendorName(nowBoard.line_vendor)} — moneyline ${nowMl}, line ${nowRl}. Different books; not a like-for-like move.`;
+    const openBits = [wantMl ? `moneyline ${openMl}` : null, wantRl ? `run/spread line ${openRl}` : null].filter(Boolean).join(', ');
+    const nowBits = [wantMl ? `moneyline ${nowMl}` : null, wantRl ? `line ${nowRl}` : null].filter(Boolean).join(', ');
+    return `Line history ${scope}: first seen ${when} ET at ${vendorName(f.line_vendor)} — ${openBits}; the board now shows ${vendorName(nowBoard.line_vendor)} — ${nowBits}. Different books; not a like-for-like move.`;
   }
-  const bits = [`Line history ${scope}: first seen ${when} ET — moneyline ${openMl}`];
-  if (openMl !== nowMl) bits.push(`now ${nowMl}`);
-  if (openRl !== nowRl) bits.push(`line opened ${openRl}, now ${nowRl}`);
+  const bits = [`Line history ${scope}: first seen ${when} ET — ${wantMl ? `moneyline ${openMl}` : `line ${openRl}`}`];
+  if (wantMl && openMl !== nowMl) bits.push(`now ${nowMl}`);
+  if (wantRl && openRl !== nowRl) bits.push(wantMl ? `line opened ${openRl}, now ${nowRl}` : `now ${nowRl}`);
   return `${bits.join('; ')}.`;
 }

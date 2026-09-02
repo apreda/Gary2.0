@@ -1687,7 +1687,7 @@ export async function buildMlbScoutReport(game, options = {}) {
       const gameDay = startTime ? new Date(startTime).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null;
       if (gameId != null && gameDay) {
         const hist = await getOddsHistory('baseball_mlb', gameDay, gameId);
-        const line = formatLineHistory(hist, game, homeTeam, awayTeam);
+        const line = formatLineHistory(hist, game, homeTeam, awayTeam, 'today', kind.kind);
         if (line) lines.push(line);
       }
     } catch { /* history is additive */ }

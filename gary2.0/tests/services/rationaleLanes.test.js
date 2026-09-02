@@ -60,4 +60,16 @@ describe('formatLineHistory', () => {
   it('is null with no history', () => {
     expect(formatLineHistory(null, {}, 'A', 'B')).toBeNull();
   });
+  it('covers only the game\'s own tickets when asked (MLB, Sep 2)', () => {
+    const first = { seen_at: '2026-09-01T09:00:00Z', moneyline_home: -134, moneyline_away: 116, spread_home: -1.5, spread_home_odds: 155, spread_away: 1.5, spread_away_odds: -180 };
+    const now = { moneyline_home: -138, moneyline_away: 118, spread_home: -1.5, spread_home_odds: 150, spread_away: 1.5, spread_away_odds: -175 };
+    const ml = formatLineHistory({ first, latest: now, boards: 2 }, now, 'Red Sox', 'Mariners', 'today', 'moneyline');
+    expect(ml).toContain('moneyline Red Sox -134 / Mariners +116; now Red Sox -138 / Mariners +118');
+    expect(ml).not.toContain('-1.5');
+    const rl = formatLineHistory({ first, latest: now, boards: 2 }, now, 'Red Sox', 'Mariners', 'today', 'runline');
+    expect(rl).toContain('line Red Sox -1.5 (+155) / Mariners +1.5 (-180); now Red Sox -1.5 (+150) / Mariners +1.5 (-175)');
+    expect(rl).not.toContain('moneyline');
+    const same = formatLineHistory({ first, latest: { ...now, moneyline_home: -134, moneyline_away: 116 }, boards: 2 }, { ...now, moneyline_home: -134, moneyline_away: 116 }, 'Red Sox', 'Mariners', 'today', 'moneyline');
+    expect(same).toContain('unchanged since first seen');
+  });
 });

@@ -313,8 +313,13 @@ Your JSON must include all three fields: "final_pick", "rationale", AND "confide
   // not betting talk.
   const synthesis = `What's your bet, and what are the reasons why?`;
 
-  return `
-<decision_checkpoint>
+  // MLB (founder GO, Sep 2 2026): the decision turn is the question and the
+  // output contract, nothing else — no checkpoint block (pass names and the
+  // tool-era "do not restart" warning are internal), no broadcast-open
+  // instruction (the one composition rule that survived Aug 27 — it put the
+  // weather on 13 of 15 cards), no license sentence, no RECORDS doctrine.
+  // Football keeps its text pending the Week 1 review.
+  const checkpoint = isMLB ? '' : `<decision_checkpoint>
 ## PASS 2.5 - FINAL DECISION CHECKPOINT
 
 You have completed investigation and synthesis in Pass 1. This is the final decision checkpoint.
@@ -323,7 +328,25 @@ ${lineContext}
 Do NOT restart analysis. Do NOT run a full re-investigation. The desk you have already read is your complete evidence.
 </decision_checkpoint>
 
-<synthesis>
+`;
+  const cardOpenNote = isMLB ? '' : ' Open with a line or two setting the stage like a broadcast — the scene, not the case. Past the open, no mandated structure — write it the way this game deserves.';
+  const tokenExample = isMLB ? 'MLB_BULLPEN_WORKLOAD' : 'PACE_HOME_AWAY';
+  const naExample = isMLB ? 'xwOBA: N/A' : 'offensive_rating: N/A';
+  const judgmentLine = isMLB ? '' : 'Judgment calls informed by data are valid.\n\n';
+  const fabricationRule = `NO FABRICATION — STAT PROVENANCE (HARD RULE): Every specific number you write (${statExamples}) must appear VERBATIM in this conversation's scout report or other provided data. Your training-data numbers pre-date this season and citing one is a fabrication even if it sounds plausible. This also covers QUANTITATIVE DESCRIPTORS: ${descriptorExamples} If a stat you want is not in your data, OMIT THE CLAIM and write around it — a rationale with fewer numbers is fine; a rationale with an invented number is not.`;
+  const constraintsList = isMLB
+    ? `1. PLAYER NAMES: Only from roster section. Your training data pre-dates tonight — every number from the scout report or other provided data.
+2. Do NOT predict your own margin or final score.
+3. ${fabricationRule}
+4. NO EMOJIS. No tactical/scheme/film claims the provided data can't support.`
+    : `1. PLAYER NAMES: Only from roster section. Your training data pre-dates tonight — every number from the scout report or other provided data.
+2. RECORDS: Records describe what happened, not what will happen.
+3. Do NOT predict your own margin or final score.
+4. ${fabricationRule}
+5. NO EMOJIS. No tactical/scheme/film claims the provided data can't support.`;
+
+  return `
+${checkpoint}<synthesis>
 ${synthesis}
 </synthesis>
 
@@ -340,23 +363,17 @@ ${finalDecisionInstruction}
 
 [Your card rationale — plain text prose]
 
-This draft is the rationale that appears on the pick card: your pick, and the real reasons you landed on it, in your own words and your own shape. Open with a line or two setting the stage like a broadcast — the scene, not the case. Past the open, no mandated structure — write it the way this game deserves. The card prints your pick and its price directly above this text, so the reader has already seen the ticket before your first word.
+This draft is the rationale that appears on the pick card: your pick, and the real reasons you landed on it, in your own words and your own shape.${cardOpenNote} The card prints your pick and its price directly above this text, so the reader has already seen the ticket before your first word.
 
-Your rationale is an OFFICIAL PUBLISHED STATEMENT: never mention tokens, feeds, tools, or data requests — no "The PACE_HOME_AWAY data shows..." and no "offensive_rating: N/A". If data is missing or N/A, don't use it: focus on the stats you DO have, and never apologize for or explain missing data.
+Your rationale is an OFFICIAL PUBLISHED STATEMENT: never mention tokens, feeds, tools, or data requests — no "The ${tokenExample} data shows..." and no "${naExample}". If data is missing or N/A, don't use it: focus on the stats you DO have, and never apologize for or explain missing data.
 
 **ESTABLISHED INJURY RULE:**
 If a player has been out for multiple games, that absence is not new information — the line was SET with that absence already factored in. The team's recent stats, form, and record already reflect life without that player. Citing a non-fresh injury as a reason for your pick is the same as citing something the line already knows. The only injuries that can inform your pick are FRESH ones (0-2 games missed) where the market may not have fully adjusted yet. If you name a player listed under ESTABLISHED ABSENCES in your rationale, you are using old news that is already in the price.
 
-Judgment calls informed by data are valid.
-
-<negative_constraints>
+${judgmentLine}<negative_constraints>
 CRITICAL CONSTRAINTS (all system prompt rules apply — these are reminders of the most violated ones):
 
-1. PLAYER NAMES: Only from roster section. Your training data pre-dates tonight — every number from the scout report or other provided data.
-2. RECORDS: Records describe what happened, not what will happen.
-3. Do NOT predict your own margin or final score.
-4. NO FABRICATION — STAT PROVENANCE (HARD RULE): Every specific number you write (${statExamples}) must appear VERBATIM in this conversation's scout report or other provided data. Your training-data numbers pre-date this season and citing one is a fabrication even if it sounds plausible. This also covers QUANTITATIVE DESCRIPTORS: ${descriptorExamples} If a stat you want is not in your data, OMIT THE CLAIM and write around it — a rationale with fewer numbers is fine; a rationale with an invented number is not.
-5. NO EMOJIS. No tactical/scheme/film claims the provided data can't support.
+${constraintsList}
 </negative_constraints>
 
 ## STRUCTURED OUTPUT (REQUIRED AFTER THE PROSE)
