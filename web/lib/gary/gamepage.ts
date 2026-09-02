@@ -1,5 +1,6 @@
 import {
   fetchArchiveDates,
+  fetchArchiveDayIndex,
   fetchArchiveGamePicks,
   fetchArchiveGameResults,
   fetchArchivePropPicks,
@@ -159,24 +160,19 @@ export interface GameDay {
   publishedAt: string | null;
 }
 
-async function fetchBoardPublishedAt(date: string, revalidate = 3600): Promise<string | null> {
-  const rows = await rest<Array<{ created_at: string | null }>>(
-    `daily_picks?select=created_at&date=eq.${date}&order=created_at.asc&limit=1`,
-    { revalidate },
-  ).catch(() => []);
-  const value = rows[0]?.created_at ?? null;
-  return value && Number.isFinite(new Date(value).getTime()) ? value : null;
-}
-
 export async function fetchGameDay(sportSlug: string, date: string): Promise<GameDay | null> {
   const cfg = sportBySlug(sportSlug);
   if (!cfg || !isArchiveDate(date)) return null;
-  const [allPicks, results, slate, publishedAt] = await Promise.all([
+  // The board's publish time comes from the ONE cached archive index (counts +
+  // published_at for every day), never a per-date probe of daily_picks.
+  const [allPicks, results, slate, index] = await Promise.all([
     fetchArchiveGamePicks(date),
     fetchArchiveGameResults(date).catch(() => [] as GameResultRow[]),
     fetchDailySlate(date, 3600).catch(() => [] as SlateRow[]),
-    fetchBoardPublishedAt(date),
+    fetchArchiveDayIndex().catch(() => []),
   ]);
+  const publishedRaw = index.find(r => r.date === date)?.published_at ?? null;
+  const publishedAt = publishedRaw && Number.isFinite(new Date(publishedRaw).getTime()) ? publishedRaw : null;
   const picks = allPicks.filter(p => isGamePick(p) && normalizeLeague(p.league, p.sport) === cfg.code);
   if (picks.length === 0) return null;
   return {
@@ -270,8 +266,10 @@ export async function fetchPickIndexForDates(
 
 /** Dates on which this league had at least one game pick, newest first. */
 export async function fetchLeagueDates(leagueCode: string, revalidate = 3600): Promise<string[]> {
+  // One row per (day, league) from the grouped view — a few hundred rows for
+  // the whole history, so no limit ever truncates the older season.
   const rows = await rest<{ date: string; league: string | null; sport: string | null }[]>(
-    `pick_page_index?select=date,league,sport&order=date.desc&limit=1000`,
+    `pick_day_index?select=date,league,sport&order=date.desc&limit=1000`,
     { revalidate },
   ).catch(() => []);
   const dates = new Set<string>();

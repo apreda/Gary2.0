@@ -1,7 +1,7 @@
 import { estDateStr, todayEST } from './dates';
 import { parsePicksJson } from './picks';
 import { mergeGameResults } from './results';
-import { rest, restAll } from './supabase';
+import { rest } from './supabase';
 import type {
   GameResultRow,
   GaryPick,
@@ -23,19 +23,13 @@ interface WeeklyPicksRow {
   picks: unknown;
 }
 
-interface ArchiveIndexRow {
+/** One row per stored day from the `archive_day_index` view: counts only, no JSON body. */
+export interface ArchiveDayIndexRow {
   date: string;
-}
-
-interface ArchiveGameIndexRow extends ArchiveIndexRow {
-  away_team: string | null;
-  home_team: string | null;
-  pick: string | null;
-}
-
-interface ArchiveInsightIndexRow extends ArchiveIndexRow {
-  headline: string | null;
-  detail: string | null;
+  published_at: string | null;
+  game_count: number;
+  prop_count: number;
+  research_count: number;
 }
 
 export interface ArchiveDay {
@@ -68,11 +62,6 @@ type ArchiveEditorialContent = {
   insights: Array<{ headline?: string | null; detail?: string | null }>;
 };
 
-type ArchiveIndexSources = {
-  games: ArchiveGameIndexRow[];
-  props: ArchiveIndexRow[];
-  insights: ArchiveInsightIndexRow[];
-};
 
 /** Strict real yyyy-MM-dd that is not later than the supplied ET day. */
 export function isArchiveDate(value: string, today = todayEST()): boolean {
@@ -225,56 +214,41 @@ export function adjacentArchiveDates(
 }
 
 /**
- * Pure, lightweight index builder used by the archive and sitemap. A row in
- * `pick_page_index` already represents a real published game call. Non-empty
- * prop rows contribute a conservative minimum of one item because the index
- * intentionally does not download the JSON body. Research text is small
- * enough to validate exactly. Requiring two known meaningful items prevents
- * the sitemap from advertising an empty, thin, or noindex archive leaf.
+ * The archive index from per-day COUNTS (the `archive_day_index` view). A day
+ * earns a public leaf when it holds at least two known meaningful items: each
+ * unique game call counts one, a non-empty prop board counts one (the index
+ * never downloads the JSON body to count props exactly), and each research
+ * note of 30+ characters counts one. Thin, future, and empty days are dropped,
+ * so the sitemap never advertises a noindex leaf. Newest first.
  */
-export function buildArchiveDateSummaries(
-  sources: ArchiveIndexSources,
+export function summarizeArchiveDayIndex(
+  rows: ArchiveDayIndexRow[],
   today = todayEST(),
 ): ArchiveDateSummary[] {
-  const games = new Map<string, Set<string>>();
-  const props = new Set<string>();
-  const research = new Map<string, number>();
-
-  for (const row of sources.games) {
-    if (!isArchiveDate(row.date, today) || !row.away_team || !row.home_team || !row.pick) continue;
-    const key = [row.away_team, row.home_team, row.pick]
-      .map(value => value.trim().toLowerCase())
-      .join('|');
-    games.set(row.date, new Set([...(games.get(row.date) ?? []), key]));
+  const byDate = new Map<string, ArchiveDayIndexRow>();
+  for (const row of rows) {
+    if (!isArchiveDate(row.date, today)) continue;
+    const prev = byDate.get(row.date);
+    byDate.set(row.date, prev ? {
+      ...prev,
+      game_count: prev.game_count + row.game_count,
+      prop_count: prev.prop_count + row.prop_count,
+      research_count: prev.research_count + row.research_count,
+    } : row);
   }
-  for (const row of sources.props) if (isArchiveDate(row.date, today)) props.add(row.date);
-  for (const row of sources.insights) {
-    if (isArchiveDate(row.date, today) && meaningfulInsight(row)) {
-      research.set(row.date, (research.get(row.date) ?? 0) + 1);
-    }
-  }
-
-  const dates = mergeArchiveDates([
-    [...games.keys()],
-    [...props],
-    [...research.keys()],
-  ], today);
-
-  return dates.flatMap(date => {
-    const gameCount = games.get(date)?.size ?? 0;
-    const hasGamePicks = gameCount > 0;
-    const hasProps = props.has(date);
-    const researchCount = research.get(date) ?? 0;
-    const hasResearch = researchCount > 0;
-    const knownMeaningfulItems = gameCount + (hasProps ? 1 : 0) + researchCount;
-    if (knownMeaningfulItems < 2) return [];
-    return [{
-      date,
-      hasGamePicks,
-      hasProps,
-      hasResearch,
-    }];
-  });
+  return [...byDate.values()]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .flatMap(row => {
+      const hasProps = row.prop_count > 0;
+      const known = row.game_count + (hasProps ? 1 : 0) + row.research_count;
+      if (known < 2) return [];
+      return [{
+        date: row.date,
+        hasGamePicks: row.game_count > 0,
+        hasProps,
+        hasResearch: row.research_count > 0,
+      }];
+    });
 }
 
 export async function fetchArchiveGamePicks(date: string, revalidate = 3600): Promise<GaryPick[]> {
@@ -348,25 +322,23 @@ export async function fetchArchiveDay(date: string, revalidate = 3600): Promise<
   return { picks, props, insights, gameResults, propResults };
 }
 
+/**
+ * The whole archive index in ONE bounded request (~336 rows, counts only).
+ * Sep 1 2026: the previous version paged three full tables through PostgREST
+ * (pick_page_index, prop_picks, and 13 pages of insight_connections text) from
+ * every archive surface — the index, every month, every day, and the sitemap.
+ * Nothing on the site may scan a table's history to render a list of dates.
+ */
+export async function fetchArchiveDayIndex(revalidate = 3600): Promise<ArchiveDayIndexRow[]> {
+  return rest<ArchiveDayIndexRow[]>(
+    'archive_day_index?select=date,published_at,game_count,prop_count,research_count&order=date.desc&limit=1000',
+    { revalidate },
+  );
+}
+
 /** Dates whose stored board contains original analysis or multiple real items. */
 export async function fetchArchiveDateSummaries(revalidate = 3600): Promise<ArchiveDateSummary[]> {
-  const [games, props, insights] = await Promise.all([
-    // Never scan the historical JSON bodies here. These narrow indexes stay
-    // cacheable as the archive grows and keep production prerenders bounded.
-    restAll<ArchiveGameIndexRow>(
-      'pick_page_index?select=date,away_team,home_team,pick&order=date.desc,away_team.asc,home_team.asc,pick.asc',
-      { revalidate },
-    ),
-    restAll<ArchiveIndexRow>(
-      'prop_picks?select=date&picks=not.eq.%5B%5D&order=date.desc',
-      { revalidate },
-    ),
-    restAll<ArchiveInsightIndexRow>(
-      'insight_connections?select=date,headline,detail&or=(headline.not.is.null,detail.not.is.null)&order=date.desc,id.asc',
-      { revalidate },
-    ),
-  ]);
-  return buildArchiveDateSummaries({ games, props, insights });
+  return summarizeArchiveDayIndex(await fetchArchiveDayIndex(revalidate));
 }
 
 /** Substantive public board dates; no mutation or pipeline hook. */

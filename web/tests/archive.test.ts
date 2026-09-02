@@ -4,7 +4,7 @@ import {
   archiveDateLabel,
   archiveEditorialStats,
   archiveMonthLabel,
-  buildArchiveDateSummaries,
+  summarizeArchiveDayIndex,
   dedupeArchivePicks,
   filterWeeklyPicksForDate,
   isArchiveDate,
@@ -80,51 +80,22 @@ describe('archive date and weekly-pick helpers', () => {
     expect(archiveEditorialStats({ picks: [terse, { ...terse, pick: 'B +1.5' }], props: [], insights: [] }).substantive).toBe(true);
   });
 
-  it('builds a newest-first lightweight index and excludes thin research, future, and duplicate rows', () => {
-    const summaries = buildArchiveDateSummaries({
-      games: [
-        { date: '2026-08-31', away_team: 'A', home_team: 'B', pick: 'A ML' },
-        { date: '2026-08-31', away_team: 'C', home_team: 'D', pick: 'C ML' },
-        { date: '2026-08-29', away_team: 'E', home_team: 'F', pick: 'E ML' },
-        { date: '2026-09-02', away_team: 'Future', home_team: 'Game', pick: 'Future ML' },
-      ],
-      props: [{ date: '2026-08-30' }],
-      insights: [
-        { date: '2026-08-30', headline: 'Market context', detail: 'A meaningful stored research note for this board.' },
-        { date: '2026-08-29', headline: 'Short', detail: null },
-        { date: '2026-08-28', headline: 'Rotation context', detail: 'A meaningful stored research note for this board.' },
-        { date: '2026-08-28', headline: 'Travel context', detail: 'Another meaningful stored research note for this board.' },
-      ],
-    }, '2026-09-01');
+  it('builds a newest-first index from per-day counts and drops thin, future, and empty days', () => {
+    const row = (date: string, game_count: number, prop_count: number, research_count: number) =>
+      ({ date, published_at: `${date}T13:00:00+00:00`, game_count, prop_count, research_count });
+    const summaries = summarizeArchiveDayIndex([
+      row('2026-08-31', 2, 0, 0),   // two game calls -> in
+      row('2026-08-30', 0, 12, 1),  // props (count one) + one research note -> in
+      row('2026-08-29', 1, 0, 0),   // one terse call -> out
+      row('2026-08-28', 0, 0, 2),   // two research notes -> in
+      row('2026-08-27', 0, 3, 0),   // props alone count one -> out
+      row('2026-09-02', 9, 9, 9),   // future -> out
+      row('bad-date', 9, 9, 9),
+    ], '2026-09-01');
     expect(summaries).toEqual([
       { date: '2026-08-31', hasGamePicks: true, hasProps: false, hasResearch: false },
       { date: '2026-08-30', hasGamePicks: false, hasProps: true, hasResearch: true },
       { date: '2026-08-28', hasGamePicks: false, hasProps: false, hasResearch: true },
     ]);
-
-    const substantiveDays = {
-      '2026-08-31': {
-        picks: [
-          { awayTeam: 'A', homeTeam: 'B', pick: 'A ML' },
-          { awayTeam: 'C', homeTeam: 'D', pick: 'C ML' },
-        ],
-        props: [], insights: [],
-      },
-      '2026-08-30': {
-        picks: [],
-        props: [{ player: 'Jane Doe', bet: 'Over 1.5 hits' }],
-        insights: [{ headline: 'Market context', detail: 'A meaningful stored research note for this board.' }],
-      },
-      '2026-08-28': {
-        picks: [], props: [],
-        insights: [
-          { headline: 'Rotation context', detail: 'A meaningful stored research note for this board.' },
-          { headline: 'Travel context', detail: 'Another meaningful stored research note for this board.' },
-        ],
-      },
-    };
-    for (const summary of summaries) {
-      expect(archiveEditorialStats(substantiveDays[summary.date as keyof typeof substantiveDays]).substantive).toBe(true);
-    }
   });
 });
