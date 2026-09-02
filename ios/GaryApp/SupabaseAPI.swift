@@ -506,6 +506,41 @@ enum SupabaseAPI {
     
     /// Fetch daily picks for a specific date (excludes NFL)
     /// Returns empty array if no picks exist for the given date - NO FALLBACK
+    /// THE WINNERS BOARD (founder GO, Sep 2 2026): one row per game pick —
+    /// on the board or not, why (first_dog | big_game | review), and the
+    /// reviewer's verdict. The Winners tab shows the on-board rows for any
+    /// league that has rows for the date; a league with none (dates before
+    /// the reviewer shipped) keeps the old slot curation.
+    struct WinnersReviewRow: Decodable {
+        let game_date: String?
+        let league: String?
+        let game_id: String?
+        let pick_text: String?
+        let on_board: Bool?
+        let reason: String?
+        let verdict: String?
+    }
+
+    /// Never throws: a failed read is an empty list, and the shelf falls back
+    /// to slot curation rather than blanking the board.
+    static func fetchWinnersReviews(date: String) async -> [WinnersReviewRow] {
+        let url = buildURL(table: "winners_reviews", query: [
+            URLQueryItem(name: "select", value: "game_date,league,game_id,pick_text,on_board,reason,verdict"),
+            URLQueryItem(name: "game_date", value: "eq.\(date)")
+        ])
+        do {
+            let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                print("[SupabaseAPI] fetchWinnersReviews failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+                return []
+            }
+            return try JSONDecoder().decode([WinnersReviewRow].self, from: data)
+        } catch {
+            print("[SupabaseAPI] fetchWinnersReviews failed: \(error.localizedDescription)")
+            return []
+        }
+    }
+
     static func fetchDailyPicks(date: String) async throws -> [GaryPick] {
         let url = buildURL(table: "daily_picks", query: [
             URLQueryItem(name: "select", value: "picks::text,date"),

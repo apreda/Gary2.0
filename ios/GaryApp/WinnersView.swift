@@ -120,6 +120,9 @@ struct PremiumPicksView: View {
     /// Which Winners slot each of today's curated game picks fills (pick.id →
     /// slot) — drives the wordless edge-rail cue and the shelf's slot order.
     @State private var winnersSlotMap: [String: WinnersSlot] = [:]
+    /// Leagues whose board is the reviewer's rows today (Sep 2 2026) — their
+    /// shelf never pads to a promised count; the board is what it is.
+    @State private var reviewedLeagues: Set<String> = []
     // Real per-league game count from today's slate — lets the pre-post
     // "coming soon" state show the actual shelf shape (N sealed placeholders
     // per league) instead of a generic fixed count (founder, Jul 6: match
@@ -977,6 +980,12 @@ struct PremiumPicksView: View {
     /// TODAY's still-live board keeps filling in.
     private func shelfPadCount(_ shelf: GameShelf) -> Int {
         guard !shelf.settled else { return 0 }
+        // A reviewed league's board is exactly its on-board picks (Sep 2
+        // 2026): zero to a handful a day, never a promised six. One sealed
+        // card holds the lane only while nothing has made the board yet.
+        if reviewedLeagues.contains(shelf.league.uppercased()) {
+            return shelf.picks.isEmpty ? 1 : 0
+        }
         let target: Int
         if shelf.league.uppercased() == "WC" {
             // WC ships 2 plays/match — the target scales with tonight's real
@@ -1724,6 +1733,10 @@ struct PremiumPicksView: View {
         // board row for a date is written the prior morning, so both exist.
         async let boardTodayF = SupabaseAPI.fetchTomorrowBoard(date: today)
         async let boardYF = SupabaseAPI.fetchTomorrowBoard(date: yesterday)
+        // THE WINNERS BOARD (founder GO, Sep 2 2026): the reviewer's rows —
+        // which of the day's picks are on the board and why. Never throws.
+        async let reviewsTodayF = SupabaseAPI.fetchWinnersReviews(date: today)
+        async let reviewsYF = SupabaseAPI.fetchWinnersReviews(date: yesterday)
         // Storefront records: a wider graded window, trimmed to last 10 per sport.
         let recordWindowStart: String = {
             var cal = Calendar(identifier: .gregorian)
@@ -1817,12 +1830,29 @@ struct PremiumPicksView: View {
 
         let bigGamesToday = (await boardTodayF)?.big_games ?? []
         let bigGamesY = (await boardYF)?.big_games ?? []
+        let reviewsToday = await reviewsTodayF
+        let reviewsY = await reviewsYF
+        let reviewedToday = Set(reviewsToday.compactMap { $0.league?.uppercased() })
 
         var gShelves: [GameShelf] = []
         var slotMap: [String: WinnersSlot] = [:]
-        // Slot curation replaces the old top-3 confidence cut (founder call,
-        // Jul 23 2026: the card is a day of action, not a leaderboard). WC kept
-        // its own two-plays-per-match ordering while it existed.
+        // THE WINNERS BOARD (founder GO, Sep 2 2026): a league with reviewer
+        // rows for the date shows exactly its on-board picks — the day's
+        // first dog, the big game, and every STRONG review — in first-pitch
+        // order, no cap, accumulating through the day. Slot curation (the
+        // Jul 23 day-of-action card) stays only for leagues and dates with no
+        // rows, i.e. before the reviewer shipped.
+        func boardPicks(_ picks: [GaryPick], reviews: [SupabaseAPI.WinnersReviewRow], league: String) -> [GaryPick]? {
+            let rows = reviews.filter { ($0.league ?? "").uppercased() == league.uppercased() }
+            guard !rows.isEmpty else { return nil }
+            let onBoard = Set(rows.filter { $0.on_board == true }.compactMap { $0.game_id })
+            return picks
+                .filter { p in
+                    guard let gid = p.game_id else { return false }
+                    return onBoard.contains(String(gid))
+                }
+                .sorted { ($0.commence_time ?? "") < ($1.commence_time ?? "") }
+        }
         func curated(_ picks: [GaryPick], bigGames: [TomorrowBigGame]) -> [GaryPick] {
             let (chosen, slots) = curateWinnersSlots(picks, bigGames: bigGames)
             slotMap.merge(slots) { cur, _ in cur }
@@ -1832,16 +1862,16 @@ struct PremiumPicksView: View {
             let shelfCap = lg == "WC" ? 12 : Self.winnersCardCap
             if let tp = todayByLeague[lg], !tp.isEmpty {
                 let picks = lg == "WC" ? Array(sortedWC(tp).prefix(shelfCap))
-                                       : curated(tp, bigGames: bigGamesToday)
+                                       : (boardPicks(tp, reviews: reviewsToday, league: lg) ?? curated(tp, bigGames: bigGamesToday))
                 gShelves.append(GameShelf(league: lg, picks: picks, settled: false))
             } else if let yp = yByLeague[lg], !yp.isEmpty {
                 // Feeds the coming-soon lane list pre-picks; the settled cards
                 // themselves only render once fresh picks exist elsewhere
                 // (isTodayComingSoon intercepts first) or on a picked date.
-                // Curated too, so yesterday's graded card mirrors the same
-                // four-slot shape (rails intact on the settled board).
+                // Yesterday reads the same board rows, so the graded card is
+                // the card people saw.
                 let picks = lg == "WC" ? Array(sortedWC(yp).prefix(shelfCap))
-                                       : curated(yp, bigGames: bigGamesY)
+                                       : (boardPicks(yp, reviews: reviewsY, league: lg) ?? curated(yp, bigGames: bigGamesY))
                 gShelves.append(GameShelf(league: lg, picks: picks, settled: true))
             } else if slateLeagues.contains(lg) {
                 // In-season (a game on today's slate) but picks haven't posted —
@@ -1930,6 +1960,7 @@ struct PremiumPicksView: View {
             gameShelves = gShelves
             propShelves = pShelves
             winnersSlotMap = slotMap
+            reviewedLeagues = reviewedToday
             todaySlateCounts = slateCounts
             todaySlateRows = slateRows
             sportRecords = sRec
