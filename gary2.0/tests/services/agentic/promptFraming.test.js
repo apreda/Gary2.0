@@ -65,14 +65,18 @@ describe('MLB game lane runs the restored June engine (Aug 18 restoration)', () 
     expect(pb).toContain('MLB GAME LANE RESTORED');
     expect(pb).toContain('return buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread, extras.game || null)');
     expect(pb).not.toContain('this lane is deleted');
-    // The bilateral ask and the symmetry rule ride Pass 1
-    expect(pb).toContain('THE SYMMETRY RULE');
-    // The case headings come from THE CASE MENU (Sep 1 2026): who-wins on a
-    // legal board, the actual tickets on a capped one.
-    expect(pb).toContain('${headings.home}');
+    // THE SYMMETRY RULE is OUT of the MLB Pass 1 (founder, Sep 2 2026): a
+    // tool-era comparison order that, desk-only, read as "lay every stat
+    // side by side". Football's builders keep it pending the Week 1 review.
+    const mlbStart = pb.indexOf('function buildMlbPass1');
+    const mlbPass1 = pb.slice(mlbStart, pb.indexOf('\nfunction ', mlbStart + 10) > 0 ? pb.indexOf('\nfunction ', mlbStart + 10) : undefined);
+    expect(mlbPass1).not.toContain('THE SYMMETRY RULE');
+    expect(mlbPass1).toContain('${headings.home}');
+    // The case headings come from THE CASE MENU: who wins, on every board
+    // (Sep 2 2026 — the ticket headings of Sep 1 are retired).
     const menu = src('orchestrator/mlbCaseMenu.js');
     expect(menu).toContain('CASE FOR BACKING ${H(homeTeam)} TONIGHT:');
-    expect(menu).toContain('OR THE ${H(menu.dog)} OUTRIGHT AT ${menu.dogMl}, TONIGHT:');
+    expect(menu).not.toContain('OUTRIGHT AT');
   });
 
   it('the researcher is dead for every sport (founder kill, Aug 27) — no briefing, no ask channel', () => {

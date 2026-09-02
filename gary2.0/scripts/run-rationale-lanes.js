@@ -12,7 +12,7 @@
  * Gary: nothing here reaches a prompt or a desk.
  */
 import '../src/loadEnv.js';
-import { laneRowFor, summarizeLanes } from '../src/services/agentic/rationaleLanes.js';
+import { laneRowFor, summarizeLanes, summarizeCaseLanes } from '../src/services/agentic/rationaleLanes.js';
 
 const { supabaseAdmin, supabase } = await import('../src/supabaseClient.js');
 const db = supabaseAdmin || supabase;
@@ -74,6 +74,15 @@ export function printLaneTable(rows, label) {
   console.log(`\n🧭 RATIONALE LANES — ${label}: ${rows.length} picks, ${graded.length} graded (${w}-${graded.length - w})`);
   for (const s of summarizeLanes(rows)) {
     console.log(`  ${s.lane.padEnd(26)} ${String(s.cited).padStart(3)}/${s.of}   ${s.record}`);
+  }
+  // THE CASES (Sep 2 2026): the same lanes read across the two Pass 1
+  // cases — picked side vs the other side — beside the card's count.
+  const cases = summarizeCaseLanes(rows).filter((c) => c.pickedCase || c.otherCase || c.card);
+  if (cases.length && cases[0].of) {
+    console.log(`  cases (${cases[0].of} sided): lane · card · picked-side case · other-side case · picked-case record`);
+    for (const c of cases) {
+      console.log(`  ${c.lane.padEnd(26)} card ${String(c.card).padStart(2)} · picked ${String(c.pickedCase).padStart(2)} · other ${String(c.otherCase).padStart(2)} · ${c.record}`);
+    }
   }
 }
 

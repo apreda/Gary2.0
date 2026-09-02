@@ -5,7 +5,6 @@ import { auditDeskManifest } from '../../src/services/agentic/scoutReport/sports
 const team = (name, over = {}) => ({
   name,
   stand: `${name}: division rank 1 · streak W3`,
-  seasonStats: `${name}: .260 AVG / .760 OPS / 4.8 R/G`,
   lineup: `${name}:\n  1. Leadoff Guy (CF) [Bats: L]\n  SP: Ace Arm (Throws: R)`,
   bench: `${name}: Bench Bat (1B, bats R) .250/.700, 5 HR (120 AB)`,
   starter: `${name}: Ace Arm — 10-5, 3.10 ERA, 1.10 WHIP, 150 K, 160.0 IP (26 2026 starts)`,
@@ -14,7 +13,6 @@ const team = (name, over = {}) => ({
   pen: `${name}: Closer Man — 30 SV, 2.10 ERA`,
   penWorkload: `${name}: Closer Man pitched yesterday (18 pitches)`,
   penPress: `${name}:\nThe closer has been described as fresh.`,
-  defense: `${name} (138 GP):\n  Fielding: 60 E, 0.985 FPCT, 4700 TC, 110 DP\n  Team Pitching: 3.90 ERA, 1.22 WHIP`,
   injuries: `${name}:\n  [FRESH — 1 team game missed] Star Bat (LF) — Hamstring`,
   flags: `FRESH ABSENCE: Star Bat (${name}) — placed on the injured list 2026-08-31. First game(s) without him.`,
   spot: `${name}:\n  Won their last 2.\n  Last 7: 5-2`,
@@ -86,15 +84,16 @@ describe('renderBucketsDesk', () => {
     expect(awayBlock).toContain('San Francisco Giants: Closer Man');
   });
 
-  it('folds defense into Season stats and has no Catcher or Defense subsection', () => {
+  it('has no Season stats, Defense or Catcher subsection (founder, Sep 2: comparison bait) and reads recency first', () => {
     const text = renderBucketsDesk(pieces());
+    expect(text).not.toContain('── Season stats ──');
     expect(text).not.toContain('── Defense ──');
     expect(text).not.toContain('── Catcher');
     const homeBlock = text.slice(text.indexOf('═══ ATLANTA BRAVES ═══'), text.indexOf('═══ SAN FRANCISCO GIANTS ═══'));
-    const ss = homeBlock.indexOf('── Season stats ──');
-    const lu = homeBlock.indexOf("── Tonight's lineup ──");
-    // Recency first: the club opens with Right now, before its standings.
+    // Recency first: the club opens with Right now, before its standings,
+    // and the standings sit right before tonight's lineup.
     expect(homeBlock.indexOf('── Right now ──')).toBeLessThan(homeBlock.indexOf('── Where they stand ──'));
+    expect(homeBlock.indexOf('── Where they stand ──')).toBeLessThan(homeBlock.indexOf("── Tonight's lineup ──"));
     // The pen reads the last games, then every arm, then the beat.
     const penGames = homeBlock.indexOf('The last games, newest first, appearance by appearance:');
     const penArms = homeBlock.indexOf('Each arm, newest work first:');
@@ -102,10 +101,8 @@ describe('renderBucketsDesk', () => {
     expect(penGames).toBeGreaterThan(-1);
     expect(penGames).toBeLessThan(penArms);
     expect(penArms).toBeLessThan(penPress);
-    const def = homeBlock.indexOf('Defense:\nAtlanta Braves (138 GP):');
-    expect(def).toBeGreaterThan(ss);
-    expect(def).toBeLessThan(lu);
   });
+
 
   it('puts the market last and the price nowhere else', () => {
     const text = renderBucketsDesk(pieces());
@@ -116,14 +113,14 @@ describe('renderBucketsDesk', () => {
 
   it('prints an honest absence line for required pieces and omits optional ones', () => {
     const p = pieces();
-    p.home.seasonStats = null;      // required → absence line
+    p.home.stand = null;            // required → absence line
     p.home.penPress = null;         // optional → subsection body omits it
     p.home.lastNight = null;
     p.home.boxScores = null;
     p.matchup.park = null;          // required → absence line
     p.matchup.weather = null;       // pending, not absent — its own wording
     const text = renderBucketsDesk(p);
-    expect(text).toContain('Atlanta Braves: team season stats unavailable this run');
+    expect(text).toContain('Atlanta Braves: standings context unavailable this run');
     expect(text).toContain('park profile unavailable this run');
     expect(text).toContain('Weather: not yet posted in the game feed for this build.');
     const homeBlock = text.slice(text.indexOf('═══ ATLANTA BRAVES ═══'), text.indexOf('═══ SAN FRANCISCO GIANTS ═══'));
@@ -153,8 +150,8 @@ describe('renderBucketsDesk', () => {
     const audit = auditDeskManifest(renderBucketsDesk(pieces()), 'buckets');
     expect(audit.missing).toEqual([]);
     expect(audit.empty).toEqual([]);
-    // 8 team subsections (graded once each, both clubs) + 4 matchup + 1 market.
-    expect(audit.present.length).toBe(13);
+    // 7 team subsections (graded once each, both clubs) + 4 matchup + 1 market.
+    expect(audit.present.length).toBe(12);
   });
 
   it('is flagged by the manifest when a per-team subsection appears for only one club', () => {

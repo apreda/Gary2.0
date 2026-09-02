@@ -369,7 +369,10 @@ export async function buildMlbDesk(game, options = {}) {
   const homeTeam = game.homeTeam || game.home_team?.full_name || game.home_team;
   const awayTeam = game.awayTeam || game.away_team?.full_name || game.away_team;
 
-  const scout = await buildScoutReport(game, 'baseball_mlb', options);
+  // The props desk keeps the team season blocks the game desk dropped
+  // (founder, Sep 2 2026 — comparison bait for a side pick, still context
+  // for a prop): keepSeasonBlocks is this product's own choice.
+  const scout = await buildScoutReport(game, 'baseball_mlb', { ...(options || {}), keepSeasonBlocks: true });
   const scoutText = scout.garyText || scout.text || '';
 
   const season = new Date().getFullYear();

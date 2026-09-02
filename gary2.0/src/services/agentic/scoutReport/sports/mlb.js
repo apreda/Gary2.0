@@ -85,8 +85,14 @@ const SCOUT_MATCHUP_SECTIONS = [
 // dropped from it by founder call (Sep 1 2026 — the running game rides the
 // catcher's own lineup row), so that fetch is skipped outright.
 const BUCKETS_SKIPPED_SHELF_TOKENS = new Set(['MLB_CATCHER_DEFENSE']);
+// THE SEASON BLOCKS (founder, Sep 2 2026): the side-by-side team season
+// lines — TEAM SEASON STATS and TEAM DEFENSE — are comparison bait on the
+// game desk (".757 OPS vs .734", "58 errors vs 77" decided losing cards
+// that the other case had already answered for tonight). They leave the
+// game desk in both layouts; the props desk keeps them (keepSeasonBlocks).
+const SEASON_BLOCK_SHELF_TOKENS = new Set(['MLB_TEAM_DEFENSE']);
 
-async function buildScoutMatchupShelf(game, homeTeam, awayTeam, gamePk, deskLayout = 'buckets') {
+async function buildScoutMatchupShelf(game, homeTeam, awayTeam, gamePk, deskLayout = 'buckets', keepSeasonBlocks = false) {
   // Lazy imports — a top-level import of the stat router from inside the
   // scout family creates an init-order cycle (router → fetchers → scout);
   // at call time every module is initialized and the cycle is harmless.
@@ -94,9 +100,9 @@ async function buildScoutMatchupShelf(game, homeTeam, awayTeam, gamePk, deskLayo
   const { summarizeStatForContext } = await import('../../orchestrator/orchestratorHelpers.js');
   const opt = { game: { ...game, gamePk: gamePk ?? game.gamePk, id: game.id ?? game.bdl_game_id } };
   const buckets = deskLayout === 'buckets';
-  const sections = buckets
-    ? SCOUT_MATCHUP_SECTIONS.filter(([token]) => !BUCKETS_SKIPPED_SHELF_TOKENS.has(token))
-    : SCOUT_MATCHUP_SECTIONS;
+  const sections = SCOUT_MATCHUP_SECTIONS.filter(([token]) =>
+    !(buckets && BUCKETS_SKIPPED_SHELF_TOKENS.has(token))
+    && !(!keepSeasonBlocks && SEASON_BLOCK_SHELF_TOKENS.has(token)));
   // Per-token halves ride along for the four-bucket layout: every MLB
   // fetcher here returns pre-formatted homeValue/awayValue strings.
   const byToken = {};
@@ -142,6 +148,9 @@ export async function buildMlbScoutReport(game, options = {}) {
   // sections. Every builder below keeps its home/away halves so the bucket
   // layout can group by club.
   const deskLayout = resolveDeskLayout(options);
+  // Season blocks print only when a caller asks (the props desk) — see
+  // SEASON_BLOCK_SHELF_TOKENS. The game desk never carries them.
+  const keepSeasonBlocks = options.keepSeasonBlocks === true;
 
   console.log(`[Scout Report] Building MLB report: ${awayTeam} @ ${homeTeam} (layout: ${deskLayout})`);
 
@@ -1505,7 +1514,7 @@ export async function buildMlbScoutReport(game, options = {}) {
   // the end result with zero context of what happened." After-a-loss /
   // after-a-win / finale / off-day season records are the exact species —
   // end-results as pattern bait. Its one recency clause (14-day run rates)
-  // is covered by the run-shape lines and TEAM SEASON STATS' season R/G.)
+  // is covered by the run-shape lines and the standings' season shape.)
 
   // ═══════════════════════════════════════════════════════════════════
   // RECENT RESULTS (last 10 games for each team — individual game scores)
@@ -2604,7 +2613,8 @@ export async function buildMlbScoutReport(game, options = {}) {
   } catch { situationSection = ''; }
 
   // ═══════════════════════════════════════════════════════════════════
-  // TEAM SEASON STATS — FORMAT COMPARISON SECTION
+  // TEAM SEASON STATS — FORMAT COMPARISON SECTION (props desk only since
+  // Sep 2 2026; the game desk dropped it — founder: comparison bait)
   // ═══════════════════════════════════════════════════════════════════
   let teamSeasonStatsSection = '';
   const seasonStatsBySide = { home: null, away: null };
@@ -2707,7 +2717,7 @@ export async function buildMlbScoutReport(game, options = {}) {
   // path is team-ID based). Every other join uses clubMatches (Aug 19).
   function lastWord(name) { return (name || '').toLowerCase().split(' ').pop(); }
 
-  const matchupShelf = await buildScoutMatchupShelf(game, homeTeam, awayTeam, gamePk, deskLayout).catch(() => ({ text: '', byToken: {} }));
+  const matchupShelf = await buildScoutMatchupShelf(game, homeTeam, awayTeam, gamePk, deskLayout, keepSeasonBlocks).catch(() => ({ text: '', byToken: {} }));
   const matchupShelfSection = matchupShelf.text;
   const shelfHalf = (token, side) => matchupShelf.byToken?.[token]?.[side] ?? null;
 
@@ -2725,7 +2735,6 @@ export async function buildMlbScoutReport(game, options = {}) {
   const teamPieces = (side, name) => ({
     name,
     stand: standingsBySide[side],
-    seasonStats: seasonStatsBySide[side],
     lineup: lineupBySide[side],
     bench: benchBySide[side] ? benchBySide[side].replace(new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}: `), '') : null,
     starter: probablesBySide[side],
@@ -2736,7 +2745,6 @@ export async function buildMlbScoutReport(game, options = {}) {
     penPress: penPressBySide[side],
     // (Catcher: the starting catcher's running-game line rides his lineup
     // row; the team-wide catcher list has no bucket home — founder, Sep 1.)
-    defense: shelfHalf('MLB_TEAM_DEFENSE', side),
     injuries: injuriesBySide[side],
     flags: situationFlagsBySide[side],
     spot: spotBySide[side],
@@ -2801,10 +2809,7 @@ ${smallSampleFlagsSection}
 ═══ CONFIRMED LINEUPS ═══
 ${confirmedLineupsSection}
 
-${benchSection ? `═══ THE BENCH TONIGHT ═══\n${benchSection}\n\n` : ''}${matchupShelfSection ? matchupShelfSection + '\n\n' : ''}═══ TEAM SEASON STATS ═══
-${teamSeasonStatsSection || 'No team season stats available.'}
-
-${standingsSection ? `═══ STANDINGS & SEASON SHAPE ═══\n${standingsSection}\n\n` : ''}═══ INJURIES (BDL Structured) ═══
+${benchSection ? `═══ THE BENCH TONIGHT ═══\n${benchSection}\n\n` : ''}${matchupShelfSection ? matchupShelfSection + '\n\n' : ''}${keepSeasonBlocks ? `═══ TEAM SEASON STATS ═══\n${teamSeasonStatsSection || 'No team season stats available.'}\n\n` : ''}${standingsSection ? `═══ STANDINGS & SEASON SHAPE ═══\n${standingsSection}\n\n` : ''}═══ INJURIES (BDL Structured) ═══
 ${injuriesSection || 'No structured injury data available.'}
 
 ═══ RECENT FORM ═══

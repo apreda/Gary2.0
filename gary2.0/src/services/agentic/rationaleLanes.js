@@ -35,6 +35,10 @@ export const LANES = [
   ['discounts_momentum', /not momentum|not the (handicap|bet|foundation)|set(ting)? the streaks aside|does not decide|do not determine|not predictive/i],
   ['schedule_rest', /day off|off day|\brest\b|\brested\b|\btravel\b|doubleheader|getaway|road trip|homestand/i],
   ['line_history', /line (history|moved|movement)|opened at|first seen/i],
+  // THE TALLY DEVICE (Sep 2 2026): the closing line of a card decided by
+  // adding up who is better rather than by how tonight's game goes — the
+  // shape of the five Sep 1 losses. Measured, never shown to Gary.
+  ['tally_device', /more reliable paths?|sturdier path|stronger (season-long |overall )?foundation|deeper season-long|larger body of work|broader (matchup |season )?profile|more ways to (win|finish|survive)|better team overall|the better club/i],
   // Football lanes (Sep 1 2026) — the desk sections a football rationale cites.
   ['fb_quarterback', /quarterback|\bQB\b|passer|under center/i],
   ['fb_epa_success', /\bEPA\b|success rate|yards per play|explosive/i],
@@ -55,9 +59,22 @@ export function tagRationale(text, league = '') {
     .map(([key]) => key);
 }
 
+/** The club named on the ticket. */
+export function pickTeam(pick) {
+  return String(pick.pick || '').split(' ML')[0].split(' -1.5')[0].split(' +1.5')[0].trim();
+}
+
+/** true = the ticket is the home side, false = away, null = unrecognised. */
+export function pickIsHome(pick) {
+  const team = pickTeam(pick);
+  if (team && team === pick.homeTeam) return true;
+  if (team && team === pick.awayTeam) return false;
+  return null;
+}
+
 /** fav | dog | pick-em | unknown — from the pick's own side price on the board. */
 export function sideOfPick(pick) {
-  const team = String(pick.pick || '').split(' ML')[0].split(' -1.5')[0].split(' +1.5')[0].trim();
+  const team = pickTeam(pick);
   const isHome = team === pick.homeTeam;
   const priced = (v) => (v == null || v === '' ? NaN : Number(v));
   const mine = priced(isHome ? pick.moneylineHome : pick.moneylineAway);
@@ -83,7 +100,35 @@ export function laneRowFor(gameDate, pick, result) {
     prompt_sha: pick.prompt_sha || null,
     lanes: tagRationale(pick.rationale, pick.league || pick.sport),
     rationale_chars: String(pick.rationale || '').length,
+    // THE CASES (Sep 2 2026): both Pass 1 cases tagged the same way, and
+    // which side the ticket took — so the ledger can say what the picked
+    // case and the other case leaned on, not just the card.
+    pick_is_home: pickIsHome(pick),
+    case_home_lanes: tagRationale(pick.path_home, pick.league || pick.sport),
+    case_away_lanes: tagRationale(pick.path_away, pick.league || pick.sport),
+    case_home_chars: String(pick.path_home || '').length,
+    case_away_chars: String(pick.path_away || '').length,
   };
+}
+
+/**
+ * The cases beside the card: per lane, how many picked-side cases and
+ * other-side cases carried it, and the record of picks whose picked-side
+ * case carried it. Rows without a recognisable side are skipped.
+ */
+export function summarizeCaseLanes(rows) {
+  const sided = rows.filter((r) => r.pick_is_home === true || r.pick_is_home === false);
+  const pickedOf = (r) => (r.pick_is_home ? r.case_home_lanes : r.case_away_lanes) || [];
+  const otherOf = (r) => (r.pick_is_home ? r.case_away_lanes : r.case_home_lanes) || [];
+  const out = [];
+  for (const [key] of LANES) {
+    const picked = sided.filter((r) => pickedOf(r).includes(key));
+    const other = sided.filter((r) => otherOf(r).includes(key));
+    const graded = picked.filter((r) => r.result === 'won' || r.result === 'lost');
+    const w = graded.filter((r) => r.result === 'won').length;
+    out.push({ lane: key, card: rows.filter((r) => r.lanes.includes(key)).length, pickedCase: picked.length, otherCase: other.length, of: sided.length, record: `${w}-${graded.length - w}` });
+  }
+  return out;
 }
 
 /** Summary table: per lane, picks citing it and their record. */

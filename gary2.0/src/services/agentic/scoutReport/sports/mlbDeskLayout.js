@@ -29,6 +29,9 @@ export function resolveDeskLayout(options = {}) {
   return pick(options.deskLayout) || pick(process.env.GARY_MLB_DESK_LAYOUT) || 'buckets';
 }
 
+// (Founder, Sep 2 2026: no Season stats subsection either — the side-by-side
+// club lines were comparison bait; season lines live where they belong to
+// one player, the starter and every arm.)
 // Team-block subsections in reading order. The manifest expects each once
 // per club; the test suite pins the order.
 // (Founder, Sep 1: no separate Catcher or Defense subsections — the
@@ -43,7 +46,6 @@ export function resolveDeskLayout(options = {}) {
 export const TEAM_SUBSECTIONS = [
   'Right now',
   'Where they stand',
-  'Season stats',
   "Tonight's lineup",
   "Tonight's starter",
   'The pen',
@@ -80,11 +82,6 @@ function renderTeam(t) {
   ])));
 
   blocks.push(sub('Where they stand', has(t.stand) ? t.stand : `${name}: ${absent('standings context')}`));
-
-  blocks.push(sub('Season stats', joinBlocks([
-    has(t.seasonStats) ? t.seasonStats : `${name}: ${absent('team season stats')}`,
-    has(t.defense) ? `Defense:\n${t.defense}` : null,
-  ])));
 
   blocks.push(sub("Tonight's lineup", joinBlocks([
     has(t.lineup) ? t.lineup : `${name}: lineup not yet posted — treat as missing data, not as a quiet lane.`,

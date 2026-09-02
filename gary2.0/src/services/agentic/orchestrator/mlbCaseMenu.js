@@ -1,8 +1,8 @@
 /**
  * THE CASE MENU (founder GO, Sep 1 2026): on a game where the favorite's
  * moneyline is heavier than the house limit, the bet is the run line (or
- * the underdog outright) — and Pass 1's two cases must say so from the
- * first line, not after the read is finished. The Aug 28-31 ledger showed
+ * the underdog outright) — and Pass 1's opening line says so before the
+ * read begins (Sep 2: the cases themselves argue who wins on every board). The Aug 28-31 ledger showed
  * every capped-favorite read finishing as "who wins" and being relabeled
  * onto -1.5 in Pass 2.5; 0 of 11 run-line rationales weighed the other
  * side of the 1.5. Menu language only — no factor, no direction.
@@ -79,26 +79,19 @@ export function mlbCappedMenu(game, homeTeam, awayTeam, cap = GAME_ML_CAP) {
 }
 
 /**
- * The two Pass 1 case headings, home first. On a capped game they name the
- * actual tickets; otherwise the who-wins headings the June engine has
- * always used.
+ * The two Pass 1 case headings, home first — who wins, on every board.
+ * Sep 1 named the tickets on a capped game; founder, Sep 2 2026: a case
+ * headed "+1.5" argued "it stays close" instead of the game (the Blue Jays
+ * card). The cases argue who wins; the capped opener still says the
+ * favorite's moneyline is not a ticket, and the run line or the dog outright
+ * is chosen in Pass 2.5 with the board. `capped` still selects the opener.
  */
 export function mlbCaseHeadings(homeTeam, awayTeam, game) {
-  const menu = mlbCappedMenu(game, homeTeam, awayTeam);
   const H = (s) => String(s || '').toUpperCase();
-  if (!menu) {
-    return {
-      capped: false,
-      home: `CASE FOR BACKING ${H(homeTeam)} TONIGHT:`,
-      away: `CASE FOR BACKING ${H(awayTeam)} TONIGHT:`,
-    };
-  }
-  const favHeading = `CASE FOR ${H(menu.fav)} ${menu.favLine} TONIGHT:`;
-  const dogHeading = `CASE FOR ${H(menu.dog)} ${menu.dogLine}, OR THE ${H(menu.dog)} OUTRIGHT AT ${menu.dogMl}, TONIGHT:`;
   return {
-    capped: true,
-    home: menu.fav === homeTeam ? favHeading : dogHeading,
-    away: menu.fav === awayTeam ? favHeading : dogHeading,
+    capped: Boolean(mlbCappedMenu(game, homeTeam, awayTeam)),
+    home: `CASE FOR BACKING ${H(homeTeam)} TONIGHT:`,
+    away: `CASE FOR BACKING ${H(awayTeam)} TONIGHT:`,
   };
 }
 

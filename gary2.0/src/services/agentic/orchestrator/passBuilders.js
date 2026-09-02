@@ -734,15 +734,6 @@ ${scoutReport}
 ${mlbAwareness}
 </season_context>
 
-<investigation_rules>
-## INVESTIGATION RULES
-
-**THE SYMMETRY RULE:**
-- If you call a stat for Team A, you MUST call the equivalent for Team B
-- Cherry-picking stats for one side = incomplete picture = bad bet
-
-</investigation_rules>
-
 <reading_the_game>
 ## READING THIS GAME
 
