@@ -101,6 +101,7 @@ import {
   summarizeRelieverLog,
   isPenArm,
   renderOuting,
+  situationPhrase,
   renderArmBlock,
   penAvailabilityLines,
   clubNick,
@@ -162,18 +163,35 @@ describe('renderOuting + renderArmBlock', () => {
     const sum = summarizeRelieverLog([split('2026-08-24'), split('2026-08-29'), split('2026-08-31', {}, { saves: 1 })], '2026-09-01');
     const lines = renderArmBlock({ name: 'Aroldis Chapman', hand: 'L', sum, usage: '47 G, 7× back-to-back days, avg 16 pitches' });
     expect(lines[0]).toBe('  Aroldis Chapman (LHP) — 1 SV, 0 HLD');
-    expect(lines[1]).toContain('Last pitched: yesterday (08-31), 15 pitches');
-    expect(lines[1]).toContain('last 7 days: 2 G, 2.0 IP, 0 ER, 30 pitches');
-    expect(lines[2]).toMatch(/^    Last 3 outings, newest first: 08-31 vs Mariners/);
+    expect(lines[1]).toBe('    Role, as used: finished the game 0 of 3 times · has not entered with runners on base');
+    expect(lines[2]).toContain('Last pitched: yesterday (08-31), 15 pitches');
+    expect(lines[2]).toContain('last 7 days: 2 G, 2.0 IP, 0 ER, 30 pitches');
+    expect(lines[3]).toMatch(/^    Last 3 outings, newest first: 08-31 vs Mariners/);
     // Season is the LAST line; the usage string's own "N G, " is not repeated.
-    expect(lines[3]).toMatch(/^    Season: 3 G, 0\.00 ERA, 0\.00 WHIP, 3 K, 0 BB in 3\.0 IP — every rate here rests on 3\.0 IP · Usage: 7× back-to-back days/);
-    expect(lines).toHaveLength(4);
+    expect(lines[4]).toMatch(/^    Season: 3 G, 0\.00 ERA, 0\.00 WHIP, 3 K, 0 BB in 3\.0 IP — every rate here rests on 3\.0 IP · Usage: 7× back-to-back days/);
+    expect(lines).toHaveLength(5);
   });
   it('tags a bulk arm with his starts and a man who has not pitched', () => {
     const bulk = summarizeRelieverLog([split('2026-08-10', {}, { gamesStarted: 1, inningsPitched: '5.0' }), split('2026-08-29', {}, { inningsPitched: '4.1' })], '2026-09-01');
     expect(renderArmBlock({ name: 'Brayan Bello', hand: 'R', sum: bulk, usage: null })[0]).toBe('  Brayan Bello (RHP) — 0 SV, 0 HLD · 1 GS this season');
     const none = summarizeRelieverLog([], '2026-09-01');
     expect(renderArmBlock({ name: 'New Guy', hand: null, sum: none, usage: null })[1]).toContain('Has not pitched this season');
+  });
+  it('carries the situation of each outing and the role counts when the play-by-play is known', () => {
+    const ctx = { inning: 4, half: 'T', awayScore: 8, homeScore: 1, maxOn: 2 };
+    expect(situationPhrase(ctx, true)).toBe('in T4 trailing 1-8, 2 on');
+    expect(situationPhrase(ctx, false)).toBe('in T4 leading 8-1, 2 on');
+    expect(situationPhrase({ inning: 9, half: 'B', awayScore: 3, homeScore: 3, maxOn: 3 }, true)).toBe('in B9 tied 3-3, bases loaded');
+    expect(situationPhrase(null, true)).toBeNull();
+    const r = split('2026-09-01', { game: { gamePk: 824716 }, player: { id: 681544 } }, { inningsPitched: '2.1', hits: 2, earnedRuns: 1, baseOnBalls: 1, strikeOuts: 2, numberOfPitches: 53, inheritedRunners: 1, gamesFinished: 0 });
+    expect(renderOuting(r, ctx)).toBe('09-01 vs Mariners: in T4 trailing 1-8, 2 on, 2.1 IP, 2 H, 1 ER, 1 BB, 2 K, 53 p, inherited 0/1 scored');
+    const sum = summarizeRelieverLog([split('2026-08-28', {}, { gamesFinished: 1 }), r], '2026-09-02');
+    const ctxByPk = new Map([[824716, new Map([[681544, ctx]])]]);
+    const lines = renderArmBlock({ name: 'Wyatt Olds', hand: 'R', sum, usage: null, ctxByPk });
+    expect(lines[1]).toBe('    Role, as used: finished the game 1 of 2 times · entered with runners on base 1 time (1 inherited, 0 scored)');
+    expect(lines[3]).toContain('09-01 vs Mariners: in T4 trailing 1-8, 2 on, 2.1 IP');
+    const avail = penAvailabilityLines([{ name: 'Wyatt Olds', sum }], '2026-09-02', ctxByPk);
+    expect(avail[0]).toBe('Pitched yesterday (09-01): Wyatt Olds 53 p (in T4 trailing 1-8, 2 on, 2.1 IP).');
   });
 });
 
@@ -186,7 +204,7 @@ describe('penAvailabilityLines', () => {
       { name: 'Grinder', sum: summarizeRelieverLog([split('2026-08-28'), split('2026-08-29'), split('2026-08-31')], '2026-09-01') },
     ];
     const lines = penAvailabilityLines(arms, '2026-09-01');
-    expect(lines[0]).toBe('Pitched yesterday (08-31): Speier 15 p, Muñoz 28 p, Grinder 15 p.');
+    expect(lines[0]).toBe('Pitched yesterday (08-31): Speier 15 p (1.0 IP), Muñoz 28 p (1.0 IP), Grinder 15 p (1.0 IP).');
     expect(lines[1]).toBe('Pitched both of the last two days: Speier. Pitched 3 of the last 4 days: Grinder.');
     expect(lines[2]).toBe('Not used in the last 3 days: Vargas.');
     expect(lines.join(' ')).not.toMatch(/unavailable|fresh|tired|should/i);

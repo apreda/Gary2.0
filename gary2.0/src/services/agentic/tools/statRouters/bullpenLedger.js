@@ -120,7 +120,7 @@ export function summarizeRelieverLog(splits = [], todayEt = null) {
   const rows = (splits || [])
     .filter((g) => g?.date && (g.gameType == null || g.gameType === 'R'))
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
-  const sum = { g: rows.length, gs: 0, reliefG: 0, outs: 0, er: 0, h: 0, bb: 0, k: 0, sv: 0, hld: 0, bs: 0 };
+  const sum = { g: rows.length, gs: 0, reliefG: 0, outs: 0, er: 0, h: 0, bb: 0, k: 0, sv: 0, hld: 0, bs: 0, gf: 0, irGames: 0, ir: 0, irs: 0 };
   const relief = [];
   const pitchesByDate = new Map();
   for (const r of rows) {
@@ -135,6 +135,9 @@ export function summarizeRelieverLog(splits = [], todayEt = null) {
     sum.sv += Number(s.saves) || 0;
     sum.hld += Number(s.holds) || 0;
     sum.bs += Number(s.blownSaves) || 0;
+    sum.gf += Number(s.gamesFinished) || 0;
+    const ir = Number(s.inheritedRunners) || 0;
+    if (ir > 0) { sum.irGames += 1; sum.ir += ir; sum.irs += Number(s.inheritedRunnersScored) || 0; }
     if (!gs) { sum.reliefG += 1; relief.push(r); }
     const p = Number(s.numberOfPitches) || 0;
     pitchesByDate.set(r.date, (pitchesByDate.get(r.date) || 0) + p);
@@ -181,12 +184,33 @@ export function isPenArm(sum) {
   return sum.daysSinceRelief != null && sum.daysSinceRelief >= 0 && sum.daysSinceRelief <= 14;
 }
 
-/** One outing from the game log: "08-31 vs Mariners, 1.0 IP, 0 H, 0 ER, 0 BB, 2 K, 15 p (HLD)". */
-export function renderOuting(r) {
+/**
+ * The situation an arm walked into, from the play-by-play entry context
+ * (inning, half, score before his first pitch, most runners on during his
+ * stint), phrased from his own club's side: "in T4 trailing 1-8, 2 on".
+ * Null when the game's play-by-play was not fetched.
+ */
+export function situationPhrase(ctx, isHome) {
+  if (!ctx || ctx.inning == null) return null;
+  const mine = isHome === false ? ctx.awayScore : ctx.homeScore;
+  const theirs = isHome === false ? ctx.homeScore : ctx.awayScore;
+  const state = mine > theirs ? `leading ${mine}-${theirs}` : mine < theirs ? `trailing ${mine}-${theirs}` : `tied ${mine}-${theirs}`;
+  const jam = ctx.maxOn >= 3 ? ', bases loaded' : ctx.maxOn === 2 ? ', 2 on' : '';
+  return `in ${ctx.half}${ctx.inning} ${state}${jam}`;
+}
+
+/**
+ * One outing from the game log, with the situation when the play-by-play
+ * is known: "09-01 vs Mariners: in T4 trailing 1-8, 2 on, 2.1 IP, 2 H, 1 ER,
+ * 1 BB, 2 K, 53 p, inherited 0/1 scored". `ctx` is that game's entry
+ * context for this arm (see situationPhrase) or null.
+ */
+export function renderOuting(r, ctx = null) {
   const s = r?.stat || {};
   const where = r?.isHome === false ? '@' : 'vs';
+  const situation = situationPhrase(ctx, r?.isHome);
   const bits = [
-    `${String(r?.date || '').slice(5)} ${where} ${clubNick(r?.opponent?.name)}`,
+    `${String(r?.date || '').slice(5)} ${where} ${clubNick(r?.opponent?.name)}${situation ? `: ${situation}` : ''}`,
     `${s.inningsPitched ?? '?'} IP`,
     `${Number(s.hits) || 0} H`,
     `${Number(s.earnedRuns) || 0} ER`,
@@ -212,13 +236,29 @@ export function renderOuting(r) {
  * `usage` is computeRelieverUsagePattern's string (its leading "N G, " is
  * dropped — the season line already carries G).
  */
-export function renderArmBlock({ name, hand, sum, usage }) {
+export function renderArmBlock({ name, hand, sum, usage, ctxByPk = null }) {
   const lines = [];
+  const ctxFor = (r) => {
+    const pk = r?.game?.gamePk;
+    const pid = r?.player?.id;
+    const game = pk != null && ctxByPk ? ctxByPk.get(pk) : null;
+    return game && pid != null ? game.get(pid) || null : null;
+  };
   const era = sum.outs > 0 ? ((sum.er * 27) / sum.outs).toFixed(2) : '—';
   const whip = sum.outs > 0 ? (((sum.h + sum.bb) * 3) / sum.outs).toFixed(2) : '—';
   const role = [`${sum.sv} SV`, `${sum.hld} HLD`, sum.bs ? `${sum.bs} BS` : null].filter(Boolean).join(', ');
   const startsTag = sum.gs > 0 ? ` · ${sum.gs} GS this season` : '';
   lines.push(`  ${name}${hand ? ` (${hand}HP)` : ''} — ${role}${startsTag}`);
+  // ROLE, AS USED (founder, Sep 2): how the manager actually deploys him,
+  // as counts — games he finished, entries with runners on base and what
+  // he did with them. No labels; the counts say closer, fireman or long man.
+  if (sum.g > 0) {
+    const roleBits = [`finished the game ${sum.gf} of ${sum.g} times`];
+    roleBits.push(sum.irGames
+      ? `entered with runners on base ${sum.irGames} time${sum.irGames === 1 ? '' : 's'} (${sum.ir} inherited, ${sum.irs} scored)`
+      : 'has not entered with runners on base');
+    lines.push(`    Role, as used: ${roleBits.join(' · ')}`);
+  }
   let lastBit = 'Has not pitched this season';
   if (sum.last) {
     const d = sum.daysSinceLast;
@@ -233,7 +273,7 @@ export function renderArmBlock({ name, hand, sum, usage }) {
   lines.push(`    ${lastBit}${weekBit}`);
   if (sum.last3.length) {
     const label = sum.last3.length === 1 ? 'Last outing' : `Last ${sum.last3.length} outings, newest first`;
-    lines.push(`    ${label}: ${sum.last3.map(renderOuting).join(' · ')}`);
+    lines.push(`    ${label}: ${sum.last3.map((r) => renderOuting(r, ctxFor(r))).join(' · ')}`);
   }
   const tiny = sum.outs > 0 && sum.outs < 30 ? ` — every rate here rests on ${outsToIp(sum.outs)} IP` : '';
   const usageBit = usage ? ` · Usage: ${String(usage).replace(/^\d+ G, /, '')}` : '';
@@ -246,13 +286,22 @@ export function renderArmBlock({ name, hand, sum, usage }) {
  * many pitches, who worked both of the last two days, three of the last
  * four, and who has not pitched in three days. No availability verdicts.
  */
-export function penAvailabilityLines(arms, todayEt) {
+export function penAvailabilityLines(arms, todayEt, ctxByPk = null) {
   const d1 = shiftDate(todayEt, -1);
   const d2 = shiftDate(todayEt, -2);
   const d3 = shiftDate(todayEt, -3);
   const d4 = shiftDate(todayEt, -4);
   const on = (a, d) => d != null && a.sum.pitchesByDate.has(d);
-  const withPitches = (a, d) => `${a.name} ${a.sum.pitchesByDate.get(d)} p`;
+  const withPitches = (a, d) => {
+    const outing = a.sum.rows.find((r) => r.date === d);
+    const pk = outing?.game?.gamePk;
+    const pid = outing?.player?.id;
+    const ctx = pk != null && pid != null && ctxByPk ? ctxByPk.get(pk)?.get(pid) || null : null;
+    const situation = situationPhrase(ctx, outing?.isHome);
+    const ip = outing?.stat?.inningsPitched;
+    const detail = [situation, ip != null ? `${ip} IP` : null].filter(Boolean).join(', ');
+    return `${a.name} ${a.sum.pitchesByDate.get(d)} p${detail ? ` (${detail})` : ''}`;
+  };
   const yesterday = arms.filter((a) => on(a, d1)).map((a) => withPitches(a, d1));
   const both = arms.filter((a) => on(a, d1) && on(a, d2)).map((a) => a.name);
   const threeOfFour = arms.filter((a) => [d1, d2, d3, d4].filter((d) => on(a, d)).length >= 3).map((a) => a.name);

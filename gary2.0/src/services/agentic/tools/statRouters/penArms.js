@@ -13,9 +13,9 @@
  * counts; nothing here says "unavailable" — the press lane carries what the
  * manager announced.
  */
-import { findMlbTeam, getTeamRoster, getPitcherGameLogRaw, getMlbPeopleHands } from '../../../mlbStatsApiService.js';
+import { findMlbTeam, getTeamRoster, getPitcherGameLogRaw, getMlbPeopleHands, getPitcherEntryContext } from '../../../mlbStatsApiService.js';
 import { computeRelieverUsagePattern } from '../../scoutReport/sports/mlbSeasonContext.js';
-import { summarizeRelieverLog, isPenArm, renderArmBlock, penAvailabilityLines, outsToIp } from './bullpenLedger.js';
+import { summarizeRelieverLog, isPenArm, renderArmBlock, penAvailabilityLines, outsToIp, daysBetween } from './bullpenLedger.js';
 
 const todayEtStr = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 
@@ -60,14 +60,29 @@ export async function buildPenArmsForTeam(team, teamName, { todayEt } = {}) {
   }
 
   const hands = await getMlbPeopleHands(arms.map((a) => a.id)).catch(() => new Map());
+  // THE SITUATION OF EACH OUTING (founder, Sep 2: "what inning did that guy
+  // come in? what was the score? what was the situation?"): the official
+  // play-by-play for every game in the arms' recent outings, last 14 days
+  // (one cached fetch per game; a failed fetch leaves that outing bare).
+  const pks = new Set();
+  for (const a of arms) {
+    for (const r of a.sum.last3) {
+      const d = daysBetween(r.date, today);
+      if (r?.game?.gamePk != null && d != null && d >= 0 && d <= 14) pks.add(r.game.gamePk);
+    }
+  }
+  const ctxByPk = new Map();
+  await Promise.all([...pks].map(async (pk) => {
+    try { ctxByPk.set(pk, await getPitcherEntryContext(pk)); } catch { /* bare outing */ }
+  }));
   // High-leverage arms first (saves, then holds, then innings) — the order a
   // fan lists a pen in; every arm prints.
   arms.sort((a, b) => b.sum.sv - a.sum.sv || b.sum.hld - a.sum.hld || b.sum.outs - a.sum.outs);
   const failedNote = failed ? ` (${failed} more pitcher${failed === 1 ? '' : 's'} whose game log did not load)` : '';
   lines.push(`${teamName} pen — ${arms.length} arms on the active roster${failedNote}, newest work first:`);
-  lines.push(...penAvailabilityLines(arms, today));
+  lines.push(...penAvailabilityLines(arms, today, ctxByPk));
   for (const a of arms) {
-    lines.push(...renderArmBlock({ ...a, hand: hands?.get?.(a.id)?.throw || null }));
+    lines.push(...renderArmBlock({ ...a, hand: hands?.get?.(a.id)?.throw || null, ctxByPk }));
   }
   let uOuts = 0;
   let uEr = 0;
