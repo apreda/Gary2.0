@@ -141,10 +141,30 @@ export function isLegitPropResult(r: PropResultRow): boolean {
   return has(r.player_name) || has(r.prop_type) || has(r.bet) || has(r.line_value);
 }
 
+/**
+ * THE PROPS BOOK starts Sep 2 2026 — the day the props system was rebuilt
+ * (the old multi-pass props brain deleted, THE PROP SHEETS added; founder,
+ * Sep 2: "make sure nothing from this old system that lost us thousands can
+ * ever be used again"). Every older row stays in the archive by date; the
+ * record the site states is the system that is live.
+ */
+export const PROPS_BOOK_SINCE = '2026-09-02';
+
+/** The HR lane is the fun lane — its own tracker, never the props record (founder, Jul 29 2026). */
+export function isHrLaneResult(r: PropResultRow): boolean {
+  if ((r.sport ?? '').trim().toUpperCase() === 'MLB HR') return true;
+  return (r.prop_type ?? '').toLowerCase().includes('home_run');
+}
+
+/** The rows the props record is computed over: legit, core lane, from the book's start. */
+export function propsBookRows(rows: PropResultRow[]): PropResultRow[] {
+  return rows.filter(r => isLegitPropResult(r) && !isHrLaneResult(r) && (r.game_date ?? '') >= PROPS_BOOK_SINCE);
+}
+
 /** Props use the odds COLUMN (text), with pick_text tail as fallback. */
 export function computePropsRecord(rows: PropResultRow[]): Record_ {
   let wins = 0, losses = 0, pushes = 0, netUnits = 0;
-  for (const r of rows.filter(isLegitPropResult)) {
+  for (const r of propsBookRows(rows)) {
     const nr = normResult(r.result);
     if (nr === 'won') wins++;
     else if (nr === 'lost') losses++;
@@ -175,7 +195,7 @@ export async function fetchAllGameResults(revalidate = 3600): Promise<GameResult
 
 export async function fetchAllPropResults(revalidate = 3600): Promise<PropResultRow[]> {
   return restAll<PropResultRow>(
-    'prop_results?select=game_date,player_name,prop_type,line_value,actual_value,result,odds,pick_text,matchup,bet&order=game_date.desc', { revalidate });
+    'prop_results?select=game_date,player_name,prop_type,line_value,actual_value,result,odds,pick_text,matchup,bet,sport&order=game_date.desc', { revalidate });
 }
 
 /**
@@ -193,7 +213,7 @@ export async function fetchGameResultsForDate(date: string, revalidate = 600): P
 /** One day's graded props, filtered to the legitimately gradeable rows. */
 export async function fetchPropResultsForDate(date: string, revalidate = 600): Promise<PropResultRow[]> {
   const rows = await rest<PropResultRow[]>(
-    `prop_results?select=game_date,player_name,prop_type,line_value,actual_value,result,odds,pick_text,matchup,bet&game_date=eq.${date}`,
+    `prop_results?select=game_date,player_name,prop_type,line_value,actual_value,result,odds,pick_text,matchup,bet,sport&game_date=eq.${date}`,
     { revalidate },
   );
   return rows.filter(isLegitPropResult);

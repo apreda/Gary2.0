@@ -47,8 +47,11 @@ export function resultsCsv(games: GameResultRow[], props: PropResultRow[]): stri
     const selection = row.pick_text ?? [row.player_name, row.bet, row.line_value, row.prop_type]
       .filter(value => value !== null && value !== undefined && String(value).length > 0)
       .join(' ');
+    // The full ledger keeps every graded prop, old system included; the
+    // league column labels the lane ('MLB HR' = the fun lane) so a reader can
+    // separate them the way the site's record does.
     rows.push([
-      'prop', row.game_date, '', row.matchup, selection, row.result,
+      'prop', row.game_date, row.sport ?? '', row.matchup, selection, row.result,
       row.actual_value, effectiveOdds(row.pick_text, row.odds), '',
     ]);
   }

@@ -222,12 +222,9 @@ export default async function ResultsPage() {
         <h2 className="font-display text-2xl uppercase text-hi">Player Props</h2>
         <StitchRule tone="faint" className="mt-3" />
         <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-mid">
-          Props record: <span className="tnum font-mono text-hi">{propsRec.wins}-{propsRec.losses}</span> ({propsRec.pct}%).
-          Props are higher variance than game lines and Gary&apos;s prop model was rebuilt in June 2026 —
-          the record stays public either way.
-        </p>
-        <p className="tnum mt-2 font-mono text-[13px] text-low">
-          ≈18% of graded winning props carry no recorded odds and grade at a flat 0.9u in the units figure.
+          Props record since Sep 2, 2026: <span className="tnum font-mono text-hi">{propsRec.wins}-{propsRec.losses}</span>{propsRec.graded > 0 ? ` (${propsRec.pct}%)` : ''}.
+          The props system was rebuilt on Sep 2, 2026 and the book starts there; every older graded prop stays in the
+          archive by date. Home-run picks are tracked on their own and never count here.
         </p>
       </section>
 

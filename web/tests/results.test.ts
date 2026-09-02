@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   effectiveOdds, unitsFor, computeRecord, mergeGameResults,
-  currentStreak, recordByLeague, isLegitPropResult,
+  currentStreak, recordByLeague, isLegitPropResult, computePropsRecord, propsBookRows, isHrLaneResult, PROPS_BOOK_SINCE,
 } from '@/lib/gary/results';
 import type { GameResultRow, NflResultRow, PropResultRow } from '@/lib/gary/types';
 
@@ -177,5 +177,25 @@ describe('isLegitPropResult (iOS Views.swift:290 port)', () => {
   });
   it('drops fully anonymous rows', () => {
     expect(isLegitPropResult(prop({}))).toBe(false);
+  });
+});
+
+describe('the props book (Sep 2 2026): starts at the rebuild, never the HR lane', () => {
+  const prop = (over: Partial<PropResultRow>): PropResultRow => ({
+    game_date: '2026-09-03', player_name: 'Manny Machado', prop_type: 'total_bases', line_value: 1.5,
+    actual_value: 2, result: 'won', odds: '-115', pick_text: null, matchup: 'Padres @ Reds', bet: 'over', sport: 'MLB', ...over,
+  });
+  it('rows before the book start are archive, not record', () => {
+    expect(PROPS_BOOK_SINCE).toBe('2026-09-02');
+    const rows = [prop({ game_date: '2026-09-01' }), prop({ game_date: '2026-09-02' }), prop({ game_date: '2026-09-03', result: 'lost' })];
+    expect(propsBookRows(rows).map(r => r.game_date)).toEqual(['2026-09-02', '2026-09-03']);
+    expect(computePropsRecord(rows)).toMatchObject({ wins: 1, losses: 1, graded: 2, pct: 50 });
+  });
+  it('the HR lane is excluded by sport tag or by prop type', () => {
+    expect(isHrLaneResult(prop({ sport: 'MLB HR', prop_type: 'home_runs' }))).toBe(true);
+    expect(isHrLaneResult(prop({ sport: null, prop_type: 'home_runs' }))).toBe(true);
+    expect(isHrLaneResult(prop({}))).toBe(false);
+    const rec = computePropsRecord([prop({}), prop({ sport: 'MLB HR', prop_type: 'home_runs', result: 'lost' })]);
+    expect(rec).toMatchObject({ wins: 1, losses: 0, graded: 1 });
   });
 });

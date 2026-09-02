@@ -73,6 +73,8 @@ export interface PropResultRow {
   line_value: number | string | null; actual_value: number | string | null;
   result: string | null; odds: string | null; pick_text: string | null;
   matchup: string | null; bet: string | null;
+  /** 'MLB' | 'MLB HR' | 'NFL' | 'NCAAF' | null on rows older than the column. */
+  sport?: string | null;
 }
 
 export interface InsightRow {
