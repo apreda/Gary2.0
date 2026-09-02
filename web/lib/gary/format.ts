@@ -1,6 +1,45 @@
-import type { PropPick } from './types';
+import type { InjuryEntry, InjuryReport, PropPick } from './types';
 
 const EST = 'America/New_York';
+
+/* ── Injuries ────────────────────────────────────────────────────────────── */
+
+function injuryEntryText(entry: InjuryEntry): string | null {
+  const name = (entry.name ?? '').trim();
+  if (!name) return null;
+  const status = (entry.status ?? '').trim();
+  const description = (entry.description ?? '').trim();
+  return `${name}${status ? ` (${status})` : ''}${description ? ` — ${description}` : ''}`;
+}
+
+/**
+ * The injury note as printable lines. MLB picks store a sentence; football
+ * picks store `{ away: [...], home: [...] }` lists — one line per side that
+ * has anyone listed, led by that side's club name. Sep 2 2026: every NCAAF
+ * game page threw "Objects are not valid as a React child" on the raw field.
+ */
+export function injuryLines(
+  injuries: string | InjuryReport | null | undefined,
+  awayTeam?: string | null,
+  homeTeam?: string | null,
+): string[] {
+  if (injuries == null) return [];
+  if (typeof injuries === 'string') {
+    const text = injuries.trim();
+    return text ? [text] : [];
+  }
+  if (typeof injuries !== 'object') return [];
+  const side = (label: string | null | undefined, entries: InjuryEntry[] | null | undefined): string | null => {
+    const items = (Array.isArray(entries) ? entries : [])
+      .map(entry => (entry && typeof entry === 'object' ? injuryEntryText(entry) : null))
+      .filter((text): text is string => !!text);
+    if (items.length === 0) return null;
+    const lead = (label ?? '').trim();
+    return `${lead ? `${lead}: ` : ''}${items.join('; ')}`;
+  };
+  return [side(awayTeam, injuries.away), side(homeTeam, injuries.home)]
+    .filter((line): line is string => !!line);
+}
 
 /* ── Time ────────────────────────────────────────────────────────────────── */
 

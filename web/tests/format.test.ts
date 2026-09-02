@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
+import { injuryLines,
   etTime,
   leadSection,
   marketLine,
@@ -147,5 +147,26 @@ describe('scoutSectionsExcluding', () => {
   });
   it('keeps everything when nothing overlaps', () => {
     expect(scoutSectionsExcluding('A brand new thought entirely here.', 'Nothing like it at all.')).toHaveLength(1);
+  });
+});
+
+describe('injuryLines', () => {
+  it('passes an MLB sentence through and drops blanks', () => {
+    expect(injuryLines('  Starter on the IL. ', 'Reds', 'Cubs')).toEqual(['Starter on the IL.']);
+    expect(injuryLines('   ', 'Reds', 'Cubs')).toEqual([]);
+    expect(injuryLines(null, 'Reds', 'Cubs')).toEqual([]);
+    expect(injuryLines(undefined)).toEqual([]);
+  });
+
+  it('renders a football report as one line per side that has anyone listed', () => {
+    expect(injuryLines({
+      away: [{ name: 'Tank Dell', status: 'Questionable', description: 'Dell (knee) participated in drills.' }],
+      home: [{ name: 'Storm Duck', status: 'PUP-P' }, { name: '', status: 'Out' }],
+    }, 'North Carolina Tar Heels', 'TCU Horned Frogs')).toEqual([
+      'North Carolina Tar Heels: Tank Dell (Questionable) — Dell (knee) participated in drills.',
+      'TCU Horned Frogs: Storm Duck (PUP-P)',
+    ]);
+    expect(injuryLines({ away: [], home: [] }, 'A', 'B')).toEqual([]);
+    expect(injuryLines({ home: [{ name: 'X' }] }, 'A', null)).toEqual(['X']);
   });
 });

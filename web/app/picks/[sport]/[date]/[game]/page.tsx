@@ -7,7 +7,7 @@ import { JsonLd } from '@/components/JsonLd';
 import { ScoutRead } from '@/components/ScoutRead';
 import { ResultLetter, StitchRule } from '@/components/Terminal';
 import { isArchiveDate } from '@/lib/gary/archive';
-import { etDateLabel, etTime, marketLine, oddsText, parseGameTime, propCall, propLabel, scoutSectionsExcluding } from '@/lib/gary/format';
+import { etDateLabel, etTime, injuryLines, marketLine, oddsText, parseGameTime, propCall, propLabel, scoutSectionsExcluding } from '@/lib/gary/format';
 import {
   fetchGameDay,
   fetchGameProps,
@@ -217,6 +217,7 @@ export default async function GamePage({ params }: { params: Params }) {
         const plain = pick.rationale_plain?.trim();
         const full = pick.rationale?.trim();
         const deeper = plain && full && full !== plain ? scoutSectionsExcluding(full, plain) : null;
+        const injuries = injuryLines(pick.injuries, pick.awayTeam, pick.homeTeam);
         return (
           <section key={`read-${pick.pick}`} className="mt-10">
             <h2 className="font-display text-[1.7rem] uppercase leading-none text-hi">
@@ -236,10 +237,12 @@ export default async function GamePage({ params }: { params: Params }) {
             ) : (
               <ScoutRead text={full} />
             )}
-            {pick.injuries && (
+            {injuries.length > 0 && (
               <div className="mt-6">
                 <p className="font-mono text-[10.5px] font-bold uppercase tracking-[0.09em] text-gold/70">Injuries noted</p>
-                <p className="mt-1.5 text-[15px] leading-[1.68] text-mid">{pick.injuries}</p>
+                {injuries.map(line => (
+                  <p key={line} className="mt-1.5 text-[15px] leading-[1.68] text-mid">{line}</p>
+                ))}
               </div>
             )}
           </section>

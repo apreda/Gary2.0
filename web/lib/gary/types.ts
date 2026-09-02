@@ -11,6 +11,20 @@ export interface StatRow {
   away?: Record<string, string | number | null>;
 }
 
+/** One listed player on a football injury report (the pick JSON stores a list per side). */
+export interface InjuryEntry {
+  name?: string | null; status?: string | null; description?: string | null;
+}
+
+/**
+ * `injuries` is polymorphic in daily_picks: MLB picks carry a sentence (or
+ * nothing); NFL/NCAAF picks carry `{ away: InjuryEntry[], home: InjuryEntry[] }`.
+ * Render through `injuryLines()`, never as a bare React child.
+ */
+export interface InjuryReport {
+  away?: InjuryEntry[] | null; home?: InjuryEntry[] | null;
+}
+
 export interface GaryPick {
   pick?: string; type?: string; odds?: number; confidence?: number;
   homeTeam?: string; awayTeam?: string; league?: string; sport?: string;
@@ -19,7 +33,7 @@ export interface GaryPick {
   rationale_plain?: string;
   gameSignificance?: string; pick_category?: string;
   pick_id?: string; statsData?: StatRow[]; sportsbook_odds?: SportsbookLine[];
-  injuries?: string; is_top_pick?: boolean;
+  injuries?: string | InjuryReport | null; is_top_pick?: boolean;
   moneylineHome?: number; moneylineAway?: number;
   spread?: number; spreadOdds?: number; total?: number; trapAlert?: boolean;
   tournamentContext?: string;
