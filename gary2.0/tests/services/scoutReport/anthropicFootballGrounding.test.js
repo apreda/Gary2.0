@@ -11,6 +11,7 @@ vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/codexCliSes
 import { codexCliWebSearch } from '../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js';
 import {
   fetchAnthropicFootballCurrentState,
+  isSearchRefusal,
   scrubFootballGroundingText,
 } from '../../../src/services/agentic/scoutReport/shared/anthropicFootballGrounding.js';
 
@@ -179,6 +180,27 @@ describe('codex-first football search (Sep 1 2026)', () => {
     expect(result?.provider).toBe('codex-web-search');
     expect(result?.data).toContain('Buffalo Bills');
     expect(result?.data).toContain('Carolina Panthers');
+  });
+
+  it('a codex draft that is a refusal falls through — an apology never reaches the desk', async () => {
+    const refusal = "## FINDINGS\n\nI apologize, but I cannot provide the coverage you've requested. The Buffalo Bills and the Carolina Panthers have not yet played any regular season games, so there is no recent usage to report. "
+      + "I'd be happy to provide this analysis after the teams have played regular season games. ".repeat(6);
+    codexCliWebSearch.mockResolvedValueOnce({ success: true, data: refusal, raw: null });
+    const fetchImpl = vi.fn(async () => ({ ok: false, status: 503, headers: { get: () => null }, json: async () => ({}) }));
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+    const result = await fetchAnthropicFootballCurrentState({
+      homeTeam: 'Buffalo Bills', awayTeam: 'Carolina Panthers', sport: 'NFL', fetchImpl,
+    });
+    expect(fetchImpl).toHaveBeenCalled();
+    expect(result).toBeNull();
+  });
+
+  it('isSearchRefusal spots the model declining and leaves reporting alone', () => {
+    expect(isSearchRefusal("I apologize, but I cannot provide the coverage you've requested.")).toBe(true);
+    expect(isSearchRefusal('The initial searches returned only depth charts. Let me search for game analysis.')).toBe(true);
+    expect(isSearchRefusal("I'm unable to find game coverage for this matchup.")).toBe(true);
+    expect(isSearchRefusal('The Bills held the Panthers to 12 points; the pass rush produced five sacks.')).toBe(false);
+    expect(isSearchRefusal('')).toBe(false);
   });
 
   it('a codex draft that names only one team falls through to Anthropic', async () => {

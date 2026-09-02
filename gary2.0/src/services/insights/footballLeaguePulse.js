@@ -176,10 +176,12 @@ async function buildNflForm({ date, season, bdl }) {
 const SERIOUS_STATUS = /^(out|doubtful|injured reserve|ir)$/i;
 
 async function buildNflInjurySheet({ date, season, bdl }) {
-  // League-wide team ids come from the standings call (all 32); the injuries
-  // endpoint filters by team ids.
-  const standings = asArray(await safeCall(() => bdl.getNflStandings(season), []));
-  const teamIds = standings.map((s) => s?.team?.id).filter((id) => id != null);
+  // League-wide team ids come from the teams endpoint (all 32); the injuries
+  // endpoint filters by team ids. (Not the standings call: that feed is
+  // withheld until the regular season is underway — preseason never counts —
+  // and the injury sheet must not go dark with it.)
+  const teams = asArray(await safeCall(() => bdl.getTeams('americanfootball_nfl'), []));
+  const teamIds = teams.map((t) => t?.id).filter((id) => id != null);
   if (!teamIds.length) return null;
 
   const reports = asArray(await safeCall(() => bdl.getNflPlayerInjuries(teamIds), []));

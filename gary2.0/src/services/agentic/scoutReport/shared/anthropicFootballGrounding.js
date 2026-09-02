@@ -217,9 +217,25 @@ export function mentionsTeam(lowerText, teamName) {
     || (place.length >= 4 && lowerText.includes(place));
 }
 
+/**
+ * A draft that is the model declining is not reporting. Seen live Sep 2 2026
+ * on a Week-1 desk built eight days out: "I apologize, but I cannot provide
+ * the coverage you've requested…" and "## FINDINGS — I cannot provide the
+ * analysis…" named both teams, cleared the length floor, and were printed
+ * on the desk as THE SKILL PLAYERS and THE DEFENSES. An empty lane is an
+ * absent module, never a placeholder — and never an apology.
+ */
+const REFUSAL = /\b(?:I apologi[sz]e|I(?:'m| am) (?:sorry|unable to)|I can(?:not|'t) (?:provide|fulfil|fulfill|complete|find)|I(?:'d| would) be happy to (?:provide|help)|Let me search)\b/i;
+export function isSearchRefusal(text) {
+  return REFUSAL.test(String(text || ''));
+}
+
 /** The one validation floor every provider's draft must clear. */
 function validateNarrative(rawText, { mustMention, minChars }) {
   const cleaned = scrubFootballGroundingText(stripSearchNarration(rawText));
+  if (isSearchRefusal(cleaned)) {
+    return { ok: false, cleaned, missing: [], reason: 'the search answered with a refusal instead of coverage' };
+  }
   const lower = cleaned.toLowerCase();
   const missing = mustMention.filter((name) => !mentionsTeam(lower, name));
   if (cleaned.length < minChars || missing.length > 0) {
@@ -247,7 +263,7 @@ async function runFootballSearch({
           console.log(`[${label}] codex web search OK (${v.cleaned.length} chars, ${Date.now() - startedAt}ms, $0)`);
           return { data: v.cleaned, provider: 'codex-web-search', searchCount: null };
         }
-        console.warn(`[${label}] codex draft failed validation (chars=${v.cleaned.length}, missing=${v.missing.join('|') || 'none'}) — falling back to Anthropic`);
+        console.warn(`[${label}] codex draft failed validation (${v.reason || `chars=${v.cleaned.length}, missing=${v.missing.join('|') || 'none'}`}) — falling back to Anthropic`);
       } else {
         console.warn(`[${label}] codex search failed (${viaCodex.error || 'empty'}) — falling back to Anthropic`);
       }
@@ -342,7 +358,8 @@ async function runFootballSearch({
       const cleaned = v.cleaned;
       const missing = v.missing;
       if (!v.ok) {
-        console.warn(`[${label}] narrative validation failed (chars=${cleaned.length}, missing=${missing.join('|') || 'none'})`);
+        console.warn(`[${label}] narrative validation failed (${v.reason || `chars=${cleaned.length}, missing=${missing.join('|') || 'none'}`})`);
+        if (v.reason) return fail(v.reason);
         return fail(missing.length
           ? `the search returned text that did not mention ${missing.join(' or ')}`
           : `the search returned only ${cleaned.length} characters`);
@@ -564,9 +581,9 @@ Write one clearly labelled section per team.`
   },
   {
     key: 'defense',
-    label: 'THE DEFENCES',
+    label: 'THE DEFENSES',
     maxUses: 6,
-    build: ({ homeTeam, awayTeam, league, known }) => `Use live web search to find what has been written about how the DEFENCES of ${homeTeam} and ${awayTeam} have been playing over their last few games in ${league}. Search each separately.
+    build: ({ homeTeam, awayTeam, league, known }) => `Use live web search to find what has been written about how the DEFENSES of ${homeTeam} and ${awayTeam} have been playing over their last few games in ${league}. Search each separately.
 ${known}
 Report, per defence:
 - what opponents have been doing to it successfully, in the writer's account — where it is being attacked and by what kind of play;

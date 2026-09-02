@@ -2076,9 +2076,29 @@ const ballDontLieService = {
    * @param {number} season - Season year (e.g., 2025)
    * @returns {Promise<Array>} - Array of team standings with record, division, conference
    */
+  /**
+   * PRESEASON NEVER COUNTS (founder law, Aug 21 2026). BDL's /nfl/v1/standings
+   * carries the August exhibition results until the regular season is
+   * underway (probed Sep 2 2026, a week before Week 1: every club showed a
+   * 2-1 / 3-0 line with a win streak and a playoff seed; completed seasons
+   * show exactly 17 games per club, so the exhibitions drop out once real
+   * games exist). Until at least one regular-season game of that season is
+   * final, the feed is exhibition standings and no consumer gets it.
+   */
+  async nflStandingsCountable(season) {
+    if (!season) return false;
+    const week1 = await this.getGames('americanfootball_nfl', { seasons: [Number(season)], weeks: [1], per_page: 100 });
+    return (week1 || []).some((g) => g?.postseason === false
+      && (String(g?.status_state || '').toLowerCase() === 'final' || /^final/i.test(String(g?.status || ''))));
+  },
+
   async getNflStandings(season, ttlMinutes = 60) {
     try {
       if (!season) return [];
+      if (!(await this.nflStandingsCountable(season))) {
+        console.log(`🏈 [Ball Don't Lie] NFL ${season} standings withheld — the regular season is not underway, the feed is preseason results`);
+        return [];
+      }
       const cacheKey = `nfl_standings_${season}`;
       return await getCachedOrFetch(cacheKey, async () => {
         const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/standings?season=${season}`;
@@ -3786,6 +3806,10 @@ const ballDontLieService = {
     try {
       // NCAAB/NCAAF standings require conference_id — use getNcaabStandings() instead
       if (sportKey === 'basketball_ncaab' || sportKey === 'americanfootball_ncaaf') {
+        return [];
+      }
+      if (sportKey === 'americanfootball_nfl' && !(await this.nflStandingsCountable(params?.season))) {
+        console.log(`🏈 [Ball Don't Lie] NFL ${params?.season} standings withheld — the regular season is not underway, the feed is preseason results`);
         return [];
       }
       const cacheKey = `${sportKey}_standings_${JSON.stringify(params)}`;
