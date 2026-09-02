@@ -80,7 +80,7 @@ export async function buildPenArmsForTeam(team, teamName, { todayEt } = {}) {
     uBb += a.sum.bb;
   }
   if (uOuts > 0) {
-    lines.push(`${teamName} pen as a unit, full season, these ${arms.length} arms: ${((uEr * 27) / uOuts).toFixed(2)} ERA, ${(((uH + uBb) * 3) / uOuts).toFixed(2)} WHIP over ${outsToIp(uOuts)} IP — not a recent-form figure; the game-by-game ledger above carries the recent work`);
+    lines.push(`${teamName} pen as a unit, full season, these ${arms.length} arms: ${((uEr * 27) / uOuts).toFixed(2)} ERA, ${(((uH + uBb) * 3) / uOuts).toFixed(2)} WHIP over ${outsToIp(uOuts)} IP — not a recent-form figure; the game-by-game ledger carries the recent work`);
   }
   return { lines, arms, ok: true };
 }
