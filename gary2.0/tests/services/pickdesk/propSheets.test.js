@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  buildPropSheets, hitterMarketLine, pitcherMarketLine, pitchCountLine, paPerGame, handsFaced, pitcherStarts,
+  buildPropSheets, hitterMarketLine, pitcherMarketLine, pitchCountLine, paPerGame, handsFaced, pitcherStarts, lineupTendencies,
 } from '../../../src/services/pickdesk/propSheets.js';
 
 // Oldest → newest, the chrono contract.
@@ -36,6 +36,14 @@ describe('prop sheet lines', () => {
     expect(pitchCountLine(starts([5]).map((r) => ({ ...r, pitch_count: null })))).toBeNull();
     expect(paPerGame([])).toBeNull();
   });
+  it('lineup tendencies read the opposing nine from the rows on hand, and say how many were covered', () => {
+    const rows = [{ plate_appearances: 4, at_bats: 4, k: 1, bb: 0 }, { plate_appearances: 5, at_bats: 4, k: 2, bb: 1 }];
+    const chrono = new Map(['a', 'b', 'c', 'd', 'e'].map((n) => [n, rows]));
+    const nine = [...'abcdefghi'].map((n) => ({ name: n }));
+    expect(lineupTendencies(nine, chrono)).toBe("tonight's nine, season: 33 of every 100 plate appearances a strikeout, 11 a walk (5 of 9 with numbers)");
+    expect(lineupTendencies(nine, new Map([['a', rows]]))).toBeNull();
+  });
+
   it('hands faced counts the lineup by bat side', () => {
     expect(handsFaced([{ batsThrows: 'L/R' }, { batsThrows: 'R/R' }, { batsThrows: 'S/R' }, { batsThrows: 'L/L' }, { batsThrows: '?' }]))
       .toBe('2 LHB / 1 RHB / 1 switch / 1 unlisted');

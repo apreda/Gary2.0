@@ -98,6 +98,32 @@ export function paPerGame(rows) {
   return pas.reduce((a, b) => a + b, 0) / pas.length;
 }
 
+/**
+ * The opposing nine's season strikeout and walk tendencies, from the chrono
+ * rows the board already fetched for them — "tonight's nine, season: 22 of
+ * every 100 plate appearances a strikeout, 8 a walk (8 of 9 with numbers)".
+ * Null when fewer than five of them have rows; the count of who's covered
+ * always prints, so a thin read is never mistaken for the whole lineup.
+ */
+export function lineupTendencies(batters, chronoByPlayer) {
+  let pa = 0, k = 0, bb = 0, covered = 0;
+  const total = (batters || []).length;
+  for (const b of batters || []) {
+    const rows = chronoByPlayer?.get(norm(b?.name));
+    if (!rows) continue;
+    const games = hitterGames(rows);
+    const paSum = games.reduce((a, r) => a + (Number(r?.plate_appearances) || 0), 0);
+    if (!paSum) continue;
+    covered += 1;
+    pa += paSum;
+    k += games.reduce((a, r) => a + (Number(r?.k) || 0), 0);
+    bb += games.reduce((a, r) => a + (Number(r?.bb) || 0), 0);
+  }
+  if (covered < 5 || !pa) return null;
+  const per100 = (n) => Math.round((100 * n) / pa);
+  return `tonight's nine, season: ${per100(k)} of every 100 plate appearances a strikeout, ${per100(bb)} a walk (${covered} of ${total} with numbers)`;
+}
+
 /** "5 LHB / 3 RHB / 1 switch" for a lineup's batters. */
 export function handsFaced(batters) {
   let l = 0, r = 0, s = 0, unknown = 0;
@@ -200,10 +226,11 @@ export function buildPropSheets({ markets, chronoByPlayer, lineups, homeTeam, aw
         const hand = throwHand(sp.batsThrows);
         const head = [
           `SP ${spEntry.name}${hand ? ` (${hand})` : ''}`,
-          faced ? `faces ${faced}` : `the ${side.theirs ? 'opposing' : ''} lineup is not yet posted`.replace('  ', ' '),
+          faced ? `faces ${faced}` : 'the opposing lineup is not yet posted',
         ].join(' · ');
         const pitches = pitchCountLine(rows);
-        lines.push(head, ...marketLines.map((l) => `   ${l}`), ...(pitches ? [`   ${pitches}`] : []));
+        const nine = lineupTendencies(side.theirs?.batters, chronoByPlayer);
+        lines.push(head, ...marketLines.map((l) => `   ${l}`), ...(pitches ? [`   ${pitches}`] : []), ...(nine ? [`   ${nine}`] : []));
       }
     }
 
