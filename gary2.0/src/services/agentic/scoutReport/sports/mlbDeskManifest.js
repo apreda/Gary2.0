@@ -19,7 +19,7 @@ const REQUIRED = [
   ['THE SITUATION', '═══ THE SITUATION ═══'],
   ['PROBABLE PITCHERS', '═══ PROBABLE PITCHERS ═══'],
   ['CONFIRMED LINEUPS', '═══ CONFIRMED LINEUPS ═══'],
-  ['THE PEN', '═══ THE PEN — high-leverage arms ═══'],
+  ['THE PEN', '═══ THE PEN — every arm, newest work first ═══'],
   ['BULLPEN WORKLOAD', '═══ BULLPEN WORKLOAD'],
   ['THE PARK', '═══ THE PARK ═══'],
   ['BETTING CONTEXT', '═══ BETTING CONTEXT ═══'],

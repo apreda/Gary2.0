@@ -74,7 +74,7 @@ const SCOUT_MATCHUP_SECTIONS = [
   ['MLB_PITCH_TYPES_SP', '═══ SP PITCH TYPES (usage / whiff / xwOBA per pitch) ═══'],
   ['MLB_TEAM_DEFENSE', '═══ TEAM DEFENSE ═══'],
   ['MLB_CATCHER_DEFENSE', '═══ CATCHERS — the running game ═══'],
-  ['MLB_CLOSER_RELIEVER_STATS', '═══ THE PEN — high-leverage arms ═══'],
+  ['MLB_CLOSER_RELIEVER_STATS', '═══ THE PEN — every arm, newest work first ═══'],
   ['MLB_BULLPEN_WORKLOAD', '═══ BULLPEN WORKLOAD (recent appearances) ═══'],
   ['MLB_PARK_FACTORS', '═══ THE PARK ═══'],
 ];
@@ -312,9 +312,9 @@ export async function buildMlbScoutReport(game, options = {}) {
     // the beat is writing about each bullpen, attributed. Failure ≠ empty
     // (funnel law): a thrown search is marked failed and prints an
     // honest-absence line; a clean empty result omits the section.
-    openaiWebSearch(buildPenPressQuery(homeTeam), { maxTokens: 1200, freshnessHours: 72 })
+    openaiWebSearch(buildPenPressQuery(homeTeam), { maxTokens: 1400, freshnessHours: 96 })
       .then(r => (r?.success === false ? { failed: true } : { text: r?.data || '' })).catch(() => ({ failed: true })),
-    openaiWebSearch(buildPenPressQuery(awayTeam), { maxTokens: 1200, freshnessHours: 72 })
+    openaiWebSearch(buildPenPressQuery(awayTeam), { maxTokens: 1400, freshnessHours: 96 })
       .then(r => (r?.success === false ? { failed: true } : { text: r?.data || '' })).catch(() => ({ failed: true })),
     // (OUR-OWN-RECAPS fetch DELETED Aug 12 2026: it existed only as the
     // WIRE section's fallback, and the WIRE dissolved into colocated

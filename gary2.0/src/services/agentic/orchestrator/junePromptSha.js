@@ -34,6 +34,10 @@ const DOSSIER_SURFACE_FILES = [
   '../scoutReport/sports/mlbInjuryContext.js',
   '../scoutReport/sports/pitcherArc.js',
   '../tools/statRouters/mlbFetchers.js',
+  // The pen renderers (Sep 2 2026): every arm newest work first, the games
+  // as games — desk text, so an edit there is an era.
+  '../tools/statRouters/bullpenLedger.js',
+  '../tools/statRouters/penArms.js',
   // The grounded-search facades shape desk content (breaking news, press
   // lanes) — retriever changes are era changes (added Sep 1 2026 with the
   // codex-first grounding cutover).

@@ -179,12 +179,16 @@ export function renderBoxScore(gameHead, box) {
  * attributed — awareness only, no conclusions asked for and none implied.
  */
 export function buildPenPressQuery(teamName) {
+  // GAME BY GAME (founder GO, Sep 2 2026): the beat's account of the last
+  // three games' bullpen innings — when the starter came out, who followed
+  // in what order, what happened — beside the roles, moves and availability
+  // notes. Reported facts only, attributed and dated.
   return (
-    `MLB: what the press is reporting about the ${teamName} bullpen right now — ` +
-    `how the pen has actually been used in the current series and the last few games as written by reporters ` +
-    `(who has been entrusted with late innings, who worked multiple days, who was unavailable and why), ` +
-    `any meltdowns or escapes as described in game coverage, the closer situation and any role changes as reported, ` +
-    `fresh reliever injuries, activations, call-ups or option moves, and manager comments about bullpen decisions or availability. ` +
-    `Attribute claims to the outlet. Report only what has been published — no predictions, no betting advice, no opinions of your own. Write the report directly: do not narrate your search process, do not describe what you are about to look for, and do not mention searching at all.`
+    `MLB: what the press is reporting about the ${teamName} bullpen right now, game by game — ` +
+    `for each of the team's last three games as written by reporters: when the starter came out and why, who pitched after him in what order and how each of those innings went, any meltdown or escape as described in game coverage; ` +
+    `which relievers have worked on consecutive days or carried heavy pitch counts, who was reported unavailable or being rested and why, ` +
+    `the closer situation and any role changes as reported, fresh reliever injuries, activations, call-ups or option moves, ` +
+    `and manager comments about bullpen decisions, matchups or availability for the next game. ` +
+    `Attribute claims to the outlet and date them. Report only what has been published — no predictions, no betting advice, no opinions of your own. Write the report directly: do not narrate your search process, do not describe what you are about to look for, and do not mention searching at all.`
   );
 }

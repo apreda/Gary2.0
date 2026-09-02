@@ -95,8 +95,13 @@ describe('renderBucketsDesk', () => {
     const lu = homeBlock.indexOf("── Tonight's lineup ──");
     // Recency first: the club opens with Right now, before its standings.
     expect(homeBlock.indexOf('── Right now ──')).toBeLessThan(homeBlock.indexOf('── Where they stand ──'));
-    // The pen reads recent work before its season lines.
-    expect(homeBlock.indexOf('Recent work, appearance by appearance:')).toBeLessThan(homeBlock.indexOf('Season lines:'));
+    // The pen reads the last games, then every arm, then the beat.
+    const penGames = homeBlock.indexOf('The last games, newest first, appearance by appearance:');
+    const penArms = homeBlock.indexOf('Each arm, newest work first:');
+    const penPress = homeBlock.indexOf('As reported:');
+    expect(penGames).toBeGreaterThan(-1);
+    expect(penGames).toBeLessThan(penArms);
+    expect(penArms).toBeLessThan(penPress);
     const def = homeBlock.indexOf('Defense:\nAtlanta Braves (138 GP):');
     expect(def).toBeGreaterThan(ss);
     expect(def).toBeLessThan(lu);

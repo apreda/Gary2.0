@@ -19,14 +19,12 @@ import {
   getGameBoxScore,
   getPitcherPlatoonSplits,
   getPitcherEntryContext,
-  getMlbPeopleHands,
-  getPitcherGameLogRaw,
 } from '../../../mlbStatsApiService.js';
-import { computeRelieverUsagePattern } from '../../scoutReport/sports/mlbSeasonContext.js';
 import { getPitcherArsenal, getPitcherStatcastProfile } from '../../../baseballSavantService.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { formatSampleSuffix } from './statRouterCommon.js';
 import { bullpenLedgerDate, outsToIp, relieverBoxEntries } from './bullpenLedger.js';
+import { fetchPenArms } from './penArms.js';
 // Bridge-aware search seam (Sep 1 2026): ALL grounding in this file routes
 // like the WORLD lane — codex GPT Pro bridge first ($0), then the API chain.
 // Claude CLI is out of the pick lane (founder).
@@ -57,37 +55,6 @@ async function currentRosterFolds(teamName) {
   return rosterFoldCache.get(teamName);
 }
 
-// Fold → MLBAM person id, same roster fetch — lets the pen sections reach a
-// man's official game log (usage patterns) and pitch hand (Aug 18 fills).
-// Aug 19: also carries a fold-set of actual PITCHERS, so a position player's
-// mop-up innings can never list him as a pen arm (the Straw case — an
-// outfielder rendered as "Myles Straw (RHP)" because his 3.0 garbage-time
-// innings cleared the membership floor).
-const rosterIdCache = new Map();
-async function currentRosterIdsByFold(teamName) {
-  if (!rosterIdCache.has(teamName)) {
-    rosterIdCache.set(teamName, (async () => {
-      try {
-        const { findMlbTeam, getTeamRoster } = await import('../../../mlbStatsApiService.js');
-        const t = await findMlbTeam(teamName);
-        if (!t?.id) return null;
-        const roster = await getTeamRoster(t.id);
-        const map = new Map();
-        const pitcherFolds = new Set();
-        for (const r of roster || []) {
-          const f = foldName(r.name);
-          if (!f || r.id == null) continue;
-          map.set(f, r.id);
-          if (String(r.positionType || r.position || '') === 'Pitcher' || String(r.position || '') === 'P') pitcherFolds.add(f);
-        }
-        if (!map.size) return null;
-        map.pitcherFolds = pitcherFolds.size ? pitcherFolds : null;
-        return map;
-      } catch { return null; }
-    })());
-  }
-  return rosterIdCache.get(teamName);
-}
 const goneTag = (rosterFolds, name) =>
   rosterFolds && !rosterFolds.has(foldName(name)) ? ' — not on current roster' : '';
 
@@ -1865,7 +1832,7 @@ export const mlbFetchers = {
         const trailingIsTonight = trailing && (norm(trailing.opp) === norm(tonightOpp)
           || norm(trailing.opp).includes(norm(nickOf(tonightOpp)))
           || norm(tonightOpp).includes(norm(nickOf(trailing.opp))));
-        lines.push(`${teamName} pen, ${trailingIsTonight ? `this series vs ${nickOf(trailing.opp)}` : `last series (vs ${nickOf(trailing?.opp)})`}, appearance by appearance:`);
+        lines.push(`${teamName} pen, ${trailingIsTonight ? `this series vs ${nickOf(trailing.opp)}` : `last series (vs ${nickOf(trailing?.opp)})`} and the last three games, newest first, appearance by appearance:`);
 
         usedApi = true;
         // ONE boxscore walk over the whole fetch: full appearance lines for
@@ -1875,6 +1842,7 @@ export const mlbFetchers = {
         const perGamePen = []; // { pk, date, outs, er }
         const armTotals = new Map(); // detail window: name -> { outs, pitches, er, dates[] }
         const gameDates = [];        // detail window, chronological
+        const detailRows = [];       // detail window rows, printed newest first
         for (const game of allRecentGames) {
           const date = bullpenLedgerDate(game);
           const inDetail = detailPks.has(game.gamePk);
@@ -1940,9 +1908,32 @@ export const mlbFetchers = {
           perGamePen.push({ pk: game.gamePk, date, outs: gOuts, er: gEr });
           if (inDetail) {
             gameDates.push(date);
-            lines.push(relievers.length ? `${date}: ${relievers.join(', ')}` : `${date}: No reliever appearances`);
+            // THE GAME AS A GAME (founder GO, Sep 2 2026): the result, the
+            // starter's line and where he left it, then the pen in order.
+            const mine = game?.teams?.[sideKey];
+            const theirs = game?.teams?.[sideKey === 'home' ? 'away' : 'home'];
+            const result = mine?.score != null && theirs?.score != null
+              ? `${mine.isWinner ? 'W' : theirs.isWinner ? 'L' : 'T'} ${mine.score}-${theirs.score} ${sideKey === 'home' ? 'vs' : '@'} ${nickOf(theirs?.team?.name)}`
+              : null;
+            const spId = Array.isArray(side.pitchers) ? side.pitchers[0] : null;
+            const sp = spId != null ? side.players?.[`ID${spId}`] : null;
+            let spLine = null;
+            if (sp) {
+              const st = sp.stats?.pitching || {};
+              const firstRelPid = relieverBoxEntries(side)[0]?.pid;
+              const ec = firstRelPid != null ? entryCtx.get(firstRelPid) : null;
+              const left = ec?.inning != null
+                ? `, left in ${ec.half}${ec.inning} with the score ${ec.awayScore}-${ec.homeScore} (away-home)`
+                : (relievers.length ? '' : ', went the distance');
+              spLine = `SP ${sp.person?.fullName || 'starter'} ${st.inningsPitched ?? '?'} IP, ${st.earnedRuns ?? '?'} ER${st.numberOfPitches != null ? `, ${st.numberOfPitches} pitches` : ''}${left}`;
+            }
+            const penPart = relievers.length
+              ? (spLine ? `then ${relievers.join(', ')}` : relievers.join(', '))
+              : 'no reliever appearances';
+            detailRows.push(`${date}${result ? ` (${result})` : ''}: ${[spLine, penPart].filter(Boolean).join(' — ')}`);
           }
         }
+        lines.push(...detailRows.reverse());
         // Roll-up (founder, Jul 30): the aggregate facts beside the ledger —
         // total relief IP, arms used, and who worked both of the last two
         // game days. Facts only.
@@ -2299,156 +2290,12 @@ export const mlbFetchers = {
   // MLB NEW: Closer/Reliever, Catcher Defense, RISP, Team Defense
   // ═══════════════════════════════════════════════════════════════════
 
-  MLB_CLOSER_RELIEVER_STATS: async (sport, home, away, season, options) => {
-    const homeTeam = home.full_name || home.name;
-    const awayTeam = away.full_name || away.name;
-    const currentYear = new Date().getFullYear();
-    const homeLines = [];
-    const awayLines = [];
-    let usedBdl = false;
-    let closerSeasonLabel = '';
-    let closerFallbackNote = '';
-
-    for (const [team, teamName, lines] of [[home, homeTeam, homeLines], [away, awayTeam, awayLines]]) {
-      const bdlTeamId = await resolveBdlTeamId(team);
-      if (!bdlTeamId) {
-        lines.push(`${teamName}: Unable to resolve team ID`);
-        continue;
-      }
-
-      try {
-        const result = await fetchSeasonStatsWithFallback({ teamId: bdlTeamId, season: currentYear });
-        if (result.isFallback) {
-          closerSeasonLabel = ` (${result.season} season)`;
-          closerFallbackNote = ' (prior season data — current season not yet started)';
-        }
-        // A reliever = zero starts (Jul 30; the old ip<50 heuristic misfiled
-        // low-IP starters and dropped late-season setup workhorses). Saves,
-        // then holds, then innings — high-leverage arms, not just save totals.
-        // EVERY ARM (founder GO, Aug 6 eve: "each member of the bullpen laid
-        // out") — the old top-4 cap hid the middle relief that owns innings
-        // 5-7 when a starter exits early. High-leverage arms still sort first.
-        const rows = (result.stats || [])
-          .filter(s => s.pitching_ip > 0 && (s.pitching_gs || 0) === 0 && s.pitching_era != null)
-          // Membership floor (same small-sample honesty as the >=20 AB hitter
-          // gate): 3+ IP or any save/hold — a position player's mop-up inning
-          // is not a pen arm (live catch: a catcher at 18.00 in 1.0 IP).
-          .filter(s => (Number(s.pitching_ip) || 0) >= 3 || (s.pitching_sv || 0) > 0 || (s.pitching_hld || 0) > 0);
-
-        // ONE ROW PER ARM (Aug 12): BDL season stats return one row per team
-        // STINT, so a midseason acquisition printed twice with two partial
-        // lines (live catch: Jack Anderson ×2 on the Aug 12 desk). Merge by
-        // folded name — outs-weighted ERA/WHIP, counting stats summed.
-        const byArm = new Map();
-        for (const s of rows) {
-          const nm = s.player?.full_name || s.player?.last_name || 'Unknown';
-          const key = foldName(nm);
-          const ipn = Number(s.pitching_ip) || 0;
-          const outs = Math.floor(ipn) * 3 + Math.round((ipn % 1) * 10);
-          const acc = byArm.get(key) || { name: nm, outs: 0, er: 0, whipOuts: 0, sv: 0, hld: 0, k: 0, bb: 0 };
-          acc.outs += outs;
-          acc.er += ((Number(s.pitching_era) || 0) * outs) / 27;
-          acc.whipOuts += (Number(s.pitching_whip) || 0) * outs;
-          acc.sv += s.pitching_sv || 0;
-          acc.hld += s.pitching_hld || 0;
-          acc.k += s.pitching_k || 0;
-          acc.bb += s.pitching_bb || 0;
-          byArm.set(key, acc);
-        }
-        const merged = [...byArm.values()].sort((a, b) => b.sv - a.sv || b.hld - a.hld || b.outs - a.outs);
-
-        const rosterFolds = await currentRosterFolds(teamName);
-        // TONIGHT'S PEN ONLY (founder, Aug 12: "of course we shouldn't be
-        // showing Gary people who are not on the team"): with the roster
-        // known, departed arms drop from the print entirely. If filtering
-        // would empty the list (roster/stats disagree badly), fall back to
-        // the full list with gone-tags — never print an empty pen over a
-        // data mismatch. Unknown roster keeps everyone untagged, as before.
-        const onRoster = rosterFolds ? merged.filter(a => rosterFolds.has(foldName(a.name))) : merged;
-        const rosterFiltered = Boolean(rosterFolds) && onRoster.length > 0;
-        let relievers = rosterFiltered ? onRoster : merged;
-
-        if (relievers.length > 0) {
-          usedBdl = true;
-          // TEAM-LABELED (Aug 12): the desk renders home + away values back
-          // to back, so unheadered arm lines read as ONE anonymous list —
-          // Gary couldn't tell whose pen was whose (the Orioles-Twins miss).
-          // LABEL TRUTH (founder, Sep 1 2026): these are FULL-SEASON lines.
-          // "current" only says which arms are counted (tonight's roster);
-          // the old "(current roster)" / "(current arms, season)" labels were
-          // being quoted back as if they described what the pen is doing now.
-          lines.push(`${teamName} pen${rosterFiltered ? ' — arms on tonight\'s roster, full-season lines' : ' — full-season lines'}:`);
-          // HANDEDNESS + SEASON USAGE PATTERN (founder GO, Aug 18): the arm's
-          // throwing side and the manager's actual rules for him — how often
-          // he works back-to-back days, his pitch loads, multi-inning use —
-          // from the official game log. Facts only; availability is the
-          // brain's read off these plus the recent-workload ledger.
-          const idByFold = await currentRosterIdsByFold(teamName).catch(() => null);
-          // Position players out of the pen (Aug 19, the Straw case): when
-          // the roster knows who the actual pitchers are, only they list.
-          // Fail-open — an unknown roster excludes no one.
-          if (idByFold?.pitcherFolds) {
-            relievers = relievers.filter((a) => idByFold.pitcherFolds.has(foldName(a.name)));
-          }
-          const armIds = idByFold ? relievers.map((a) => idByFold.get(foldName(a.name))).filter((id) => id != null) : [];
-          const hands = armIds.length ? await getMlbPeopleHands(armIds).catch(() => new Map()) : new Map();
-          const usageByFold = new Map();
-          if (idByFold) {
-            await Promise.all(relievers.map(async (a) => {
-              const mid = idByFold.get(foldName(a.name));
-              if (mid == null) return;
-              try {
-                const log = await getPitcherGameLogRaw(mid, currentYear);
-                const pattern = computeRelieverUsagePattern(log);
-                if (pattern) usageByFold.set(foldName(a.name), pattern);
-              } catch { /* usage line is additive */ }
-            }));
-          }
-          for (const a of relievers) {
-            const era = a.outs > 0 ? ((a.er * 27) / a.outs).toFixed(2) : '—';
-            const whip = a.outs > 0 ? (a.whipOuts / a.outs).toFixed(2) : '—';
-            const ip = `${Math.floor(a.outs / 3)}.${a.outs % 3}`;
-            const mid = idByFold ? idByFold.get(foldName(a.name)) : null;
-            const throwsC = mid != null ? hands.get(mid)?.throw : null;
-            // Short-sample honesty (founder GO, Aug 19 — same law as the
-            // starters): a 3.2-IP arm's 9.82 ERA is a sample, not a season.
-            const tiny = a.outs > 0 && a.outs < 30
-              ? ` — every rate here rests on ${ip} IP`
-              : '';
-            lines.push(`  ${a.name}${throwsC ? ` (${throwsC}HP)` : ''}: ${a.sv} SV, ${a.hld} HLD, ${era} ERA, ${whip} WHIP, ${a.k} K, ${a.bb} BB in ${ip} IP${tiny}${rosterFiltered ? '' : goneTag(rosterFolds, a.name)}`);
-            const usage = usageByFold.get(foldName(a.name));
-            if (usage) lines.push(`    Usage (season): ${usage}`);
-          }
-          // THE PEN AS A UNIT (founder GO, Aug 6 eve: "the overall bullpen
-          // stats too") — season aggregate over the arms printed above (the
-          // roster filter already excluded departed innings when known).
-          let uOuts = 0, uEr = 0, uWhipOuts = 0;
-          for (const a of relievers) {
-            if (a.outs <= 0) continue;
-            uOuts += a.outs;
-            uEr += a.er;
-            uWhipOuts += a.whipOuts;
-          }
-          if (uOuts > 0) {
-            lines.push(`${teamName} pen as a unit, full season${rosterFiltered ? ' (arms on tonight\'s roster only)' : ''}: ${((uEr * 27) / uOuts).toFixed(2)} ERA, ${(uWhipOuts / uOuts).toFixed(2)} WHIP over ${Math.floor(uOuts / 3)}.${uOuts % 3} IP — not a recent-form figure; recent work is under Workload`);
-          }
-          continue;
-        }
-      } catch (e) {
-        console.warn(`[MLB Fetchers] BDL closer/reliever stats failed for ${teamName}:`, e.message);
-      }
-
-      // No BDL data — return clean no-data instead of expensive Grounding
-      lines.push(`${teamName}: No 2026 closer/reliever data available yet (season may not have started)`);
-    }
-
-    return {
-      homeValue: homeLines.join('\n'),
-      awayValue: awayLines.join('\n'),
-      comparison: `Closer & key reliever stats for ${awayTeam} @ ${homeTeam}${closerFallbackNote}`,
-      source: usedBdl ? `BDL API${closerSeasonLabel}` : 'BDL (no data)',
-    };
-  },
+  // THE PEN — every arm, newest work first (founder GO, Sep 2 2026): built
+  // roster-first from the official game logs in penArms.js. The BDL-stint
+  // list this replaced dropped any arm under 3 IP with the club and anyone
+  // with a start on his record — the Sep 1 Red Sox desk printed four arms of
+  // eight, and the "pen as a unit" line was built from the four.
+  MLB_CLOSER_RELIEVER_STATS: async (sport, home, away, season, options) => fetchPenArms(sport, home, away, season, options),
 
   MLB_CATCHER_DEFENSE: async (sport, home, away, season, options) => {
     const homeTeam = home.full_name || home.name;

@@ -266,7 +266,7 @@ const MATCHUP_SECTIONS = [
   // duplicates... a bunch of bullpen info that is just season stats." The
   // CLOSERS section carries the pen's arms — SV/HLD/ERA/WHIP/IP + roster
   // truth — and BULLPEN WORKLOAD carries the recency.)
-  ['MLB_CLOSER_RELIEVER_STATS', '═══ THE PEN — high-leverage arms ═══'],
+  ['MLB_CLOSER_RELIEVER_STATS', '═══ THE PEN — every arm, newest work first ═══'],
   ['MLB_BULLPEN_WORKLOAD', '═══ BULLPEN WORKLOAD (recent appearances) ═══'],
   ['MLB_PARK_FACTORS', '═══ THE PARK ═══'],
 ];
@@ -507,7 +507,7 @@ export async function buildMlbDesk(game, options = {}) {
     '═══ PROBABLE PITCHERS ═══',
     '═══ PITCHER SAMPLE CONTEXT ═══',
     '═══ SP PITCH TYPES (usage / whiff / xwOBA per pitch) ═══',
-    '═══ THE PEN — high-leverage arms ═══',
+    '═══ THE PEN — every arm, newest work first ═══',
     '═══ BULLPEN WORKLOAD (recent appearances) ═══',
     '═══ CATCHERS — the running game ═══',
   ];

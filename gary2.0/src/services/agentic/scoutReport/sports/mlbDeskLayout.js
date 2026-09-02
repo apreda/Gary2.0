@@ -97,10 +97,12 @@ function renderTeam(t) {
     has(t.pitchTypes) ? `Pitch types (usage / whiff / xwOBA per pitch):\n${t.pitchTypes}` : `${name}: ${absent('starter pitch types')}`,
   ])));
 
+  // THE PEN (founder GO, Sep 2 2026): the last games as games, then every
+  // arm newest work first, then what the beat wrote. No season-first pen.
   blocks.push(sub('The pen', joinBlocks([
-    has(t.penWorkload) ? `Recent work, appearance by appearance:\n${t.penWorkload}` : `${name}: ${absent('bullpen workload')}`,
+    has(t.penWorkload) ? `The last games, newest first, appearance by appearance:\n${t.penWorkload}` : `${name}: ${absent('bullpen workload')}`,
+    has(t.pen) ? `Each arm, newest work first:\n${t.pen}` : `${name}: ${absent('pen arms')}`,
     has(t.penPress) ? `As reported:\n${t.penPress}` : null,
-    has(t.pen) ? `Season lines:\n${t.pen}` : `${name}: ${absent('high-leverage arms')}`,
   ])));
 
   blocks.push(sub('Injuries', joinBlocks([

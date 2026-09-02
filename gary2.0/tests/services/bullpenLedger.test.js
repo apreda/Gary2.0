@@ -95,3 +95,118 @@ describe('outsToIp', () => {
     expect(outsToIp(0)).toBe('0.0');
   });
 });
+
+// ═══ EVERY ARM, NEWEST WORK FIRST (founder GO, Sep 2 2026) ═══
+import {
+  summarizeRelieverLog,
+  isPenArm,
+  renderOuting,
+  renderArmBlock,
+  penAvailabilityLines,
+  clubNick,
+  ipToOuts,
+  shiftDate,
+} from '../../src/services/agentic/tools/statRouters/bullpenLedger.js';
+
+const split = (date, over = {}, stat = {}) => ({
+  date,
+  gameType: 'R',
+  isHome: true,
+  opponent: { name: 'Seattle Mariners' },
+  ...over,
+  stat: { gamesStarted: 0, inningsPitched: '1.0', earnedRuns: 0, hits: 0, baseOnBalls: 0, strikeOuts: 1, numberOfPitches: 15, saves: 0, holds: 0, blownSaves: 0, wins: 0, losses: 0, inheritedRunners: 0, inheritedRunnersScored: 0, ...stat },
+});
+
+describe('summarizeRelieverLog', () => {
+  it('sums the regular season only, newest three first, and dates the last outing', () => {
+    const log = [
+      split('2026-03-10', { gameType: 'S' }, { earnedRuns: 9 }), // spring: never counts
+      split('2026-08-24'),
+      split('2026-08-29', { isHome: false, opponent: { name: 'New York Yankees' } }, { holds: 1, numberOfPitches: 13 }),
+      split('2026-08-31', {}, { strikeOuts: 2, saves: 1, numberOfPitches: 15 }),
+    ];
+    const s = summarizeRelieverLog(log, '2026-09-01');
+    expect(s.g).toBe(3);
+    expect(s.er).toBe(0);
+    expect(s.outs).toBe(9);
+    expect(s.sv).toBe(1);
+    expect(s.hld).toBe(1);
+    expect(s.last3.map((r) => r.date)).toEqual(['2026-08-31', '2026-08-29', '2026-08-24']);
+    expect(s.daysSinceLast).toBe(1);
+    expect(s.last7).toEqual({ g: 2, outs: 6, er: 0, pitches: 28 });
+    expect(s.pitchesByDate.get('2026-08-31')).toBe(15);
+  });
+});
+
+describe('isPenArm', () => {
+  it('keeps a pure reliever and a bulk arm used in relief this fortnight; drops the rotation and tonight\'s starter', () => {
+    const reliever = summarizeRelieverLog([split('2026-08-31')], '2026-09-01');
+    expect(isPenArm(reliever)).toBe(true);
+    // A starter whose latest appearance was a start never prints in the pen.
+    const starter = summarizeRelieverLog([split('2026-08-20', {}, { gamesStarted: 1, inningsPitched: '6.0' }), split('2026-08-26', {}, { gamesStarted: 1, inningsPitched: '5.0' })], '2026-09-01');
+    expect(isPenArm(starter)).toBe(false);
+    // Bello's shape: starts on the record, used as the bulk arm three days ago.
+    const bulk = summarizeRelieverLog([split('2026-08-10', {}, { gamesStarted: 1, inningsPitched: '5.0' }), split('2026-08-29', {}, { inningsPitched: '4.1', earnedRuns: 4, numberOfPitches: 94 })], '2026-09-01');
+    expect(isPenArm(bulk)).toBe(true);
+    // A swingman whose last relief use is a month old is rotation, not pen.
+    const stale = summarizeRelieverLog([split('2026-07-20'), split('2026-08-26', {}, { gamesStarted: 1 }), split('2026-07-30', {}, { gamesStarted: 1 })], '2026-09-01');
+    expect(isPenArm(stale)).toBe(false);
+    expect(isPenArm(summarizeRelieverLog([], '2026-09-01'))).toBe(false);
+  });
+});
+
+describe('renderOuting + renderArmBlock', () => {
+  it('prints one outing as a line and one arm newest work first, season last', () => {
+    const outing = renderOuting(split('2026-08-31', { isHome: false, opponent: { name: 'Boston Red Sox' } }, { hits: 2, earnedRuns: 1, strikeOuts: 3, numberOfPitches: 23, blownSaves: 1, inheritedRunners: 1, inheritedRunnersScored: 1 }));
+    expect(outing).toBe('08-31 @ Red Sox, 1.0 IP, 2 H, 1 ER, 0 BB, 3 K, 23 p, inherited 1/1 scored (BS)');
+    const sum = summarizeRelieverLog([split('2026-08-24'), split('2026-08-29'), split('2026-08-31', {}, { saves: 1 })], '2026-09-01');
+    const lines = renderArmBlock({ name: 'Aroldis Chapman', hand: 'L', sum, usage: '47 G, 7× back-to-back days, avg 16 pitches' });
+    expect(lines[0]).toBe('  Aroldis Chapman (LHP) — 1 SV, 0 HLD');
+    expect(lines[1]).toContain('Last pitched: yesterday (08-31), 15 pitches');
+    expect(lines[1]).toContain('last 7 days: 2 G, 2.0 IP, 0 ER, 30 pitches');
+    expect(lines[2]).toMatch(/^    Last 3 outings, newest first: 08-31 vs Mariners/);
+    // Season is the LAST line; the usage string's own "N G, " is not repeated.
+    expect(lines[3]).toMatch(/^    Season: 3 G, 0\.00 ERA, 0\.00 WHIP, 3 K, 0 BB in 3\.0 IP — every rate here rests on 3\.0 IP · Usage: 7× back-to-back days/);
+    expect(lines).toHaveLength(4);
+  });
+  it('tags a bulk arm with his starts and a man who has not pitched', () => {
+    const bulk = summarizeRelieverLog([split('2026-08-10', {}, { gamesStarted: 1, inningsPitched: '5.0' }), split('2026-08-29', {}, { inningsPitched: '4.1' })], '2026-09-01');
+    expect(renderArmBlock({ name: 'Brayan Bello', hand: 'R', sum: bulk, usage: null })[0]).toBe('  Brayan Bello (RHP) — 0 SV, 0 HLD · 1 GS this season');
+    const none = summarizeRelieverLog([], '2026-09-01');
+    expect(renderArmBlock({ name: 'New Guy', hand: null, sum: none, usage: null })[1]).toContain('Has not pitched this season');
+  });
+});
+
+describe('penAvailabilityLines', () => {
+  it('lists yesterday with pitch counts, consecutive days, and who has sat three days — as facts', () => {
+    const arms = [
+      { name: 'Speier', sum: summarizeRelieverLog([split('2026-08-30'), split('2026-08-31', {}, { numberOfPitches: 15 })], '2026-09-01') },
+      { name: 'Muñoz', sum: summarizeRelieverLog([split('2026-08-31', {}, { numberOfPitches: 28 })], '2026-09-01') },
+      { name: 'Vargas', sum: summarizeRelieverLog([split('2026-08-27')], '2026-09-01') },
+      { name: 'Grinder', sum: summarizeRelieverLog([split('2026-08-28'), split('2026-08-29'), split('2026-08-31')], '2026-09-01') },
+    ];
+    const lines = penAvailabilityLines(arms, '2026-09-01');
+    expect(lines[0]).toBe('Pitched yesterday (08-31): Speier 15 p, Muñoz 28 p, Grinder 15 p.');
+    expect(lines[1]).toBe('Pitched both of the last two days: Speier. Pitched 3 of the last 4 days: Grinder.');
+    expect(lines[2]).toBe('Not used in the last 3 days: Vargas.');
+    expect(lines.join(' ')).not.toMatch(/unavailable|fresh|tired|should/i);
+  });
+});
+
+describe('small helpers', () => {
+  it('nicknames, innings, calendar shifts', () => {
+    expect(clubNick('Boston Red Sox')).toBe('Red Sox');
+    expect(clubNick('Toronto Blue Jays')).toBe('Blue Jays');
+    expect(clubNick('Athletics')).toBe('Athletics');
+    expect(ipToOuts('1.2')).toBe(5);
+    expect(ipToOuts('0.0')).toBe(0);
+    expect(shiftDate('2026-09-01', -1)).toBe('2026-08-31');
+  });
+});
+
+describe('MLB_CLOSER_RELIEVER_STATS wiring', () => {
+  it('delegates to the roster-first pen builder — never the BDL stint list again', () => {
+    expect(fetchersSrc).toContain("MLB_CLOSER_RELIEVER_STATS: async (sport, home, away, season, options) => fetchPenArms(");
+    expect(fetchersSrc).toContain("import { fetchPenArms } from './penArms.js';");
+  });
+});

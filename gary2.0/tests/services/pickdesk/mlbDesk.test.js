@@ -89,7 +89,7 @@ describe('buildMlbDesk — the three shelves, blind', () => {
     expect(week).toBeGreaterThan(pitching);
     const lineups = deskTextBlind.indexOf('═══ CONFIRMED LINEUPS ═══');
     const starters = deskTextBlind.indexOf('═══ PROBABLE PITCHERS ═══');
-    const pen = deskTextBlind.indexOf('═══ THE PEN — high-leverage arms ═══');
+    const pen = deskTextBlind.indexOf('═══ THE PEN — every arm, newest work first ═══');
     expect(lineups).toBeGreaterThan(clubs);
     expect(lineups).toBeLessThan(matchup);
     expect(starters).toBeGreaterThan(pitching);
