@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { tagRationale, sideOfPick, laneRowFor, summarizeLanes } from '../../src/services/agentic/rationaleLanes.js';
+import { tagRationale, sideOfPick, laneRowFor, summarizeLanes, summarizeWinners } from '../../src/services/agentic/rationaleLanes.js';
 import { formatLineHistory } from '../../src/services/oddsSnapshots.js';
 import { summarizeCaseOrder } from '../../src/services/agentic/rationaleLanes.js';
 
@@ -92,5 +92,37 @@ describe('summarizeCaseOrder — does the bet follow the case written last?', ()
     expect(o.pickedFirst).toBe(1);
     expect(o.pickedFirstRecord).toBe('0-1');
     expect(o.byLast).toEqual({ home: { n: 2, pickedLast: 1 }, away: { n: 2, pickedLast: 2 } });
+  });
+});
+
+describe('laneRowFor + summarizeWinners — the Winners board beside the result', () => {
+  const pick = (over) => ({ pick: 'Boston Red Sox ML', homeTeam: 'Boston Red Sox', awayTeam: 'Seattle Mariners', league: 'MLB', game_id: '1', odds: -120, rationale: 'x', ...over });
+
+  it('a row with no review row is unstamped, never off-the-board', () => {
+    const row = laneRowFor('2026-09-02', pick(), { result: 'won' });
+    expect(row.winners_on_board).toBeNull();
+    expect(row.winners_reason).toBeNull();
+    expect(row.winners_verdict).toBeNull();
+    const row2 = laneRowFor('2026-09-02', pick(), { result: 'won' }, { on_board: true, reason: 'first_dog', verdict: 'WEAK' });
+    expect(row2).toMatchObject({ winners_on_board: true, winners_reason: 'first_dog', winners_verdict: 'WEAK' });
+  });
+
+  it('counts the board vs off, by why and by verdict, with units from the odds', () => {
+    const rows = [
+      laneRowFor('d', pick({ odds: 130 }), { result: 'won' }, { on_board: true, reason: 'first_dog', verdict: 'WEAK' }),
+      laneRowFor('d', pick({ odds: -150, game_id: '2' }), { result: 'lost' }, { on_board: true, reason: 'review', verdict: 'STRONG' }),
+      laneRowFor('d', pick({ odds: -110, game_id: '3' }), { result: 'won' }, { on_board: false, reason: null, verdict: 'WEAK' }),
+      laneRowFor('d', pick({ odds: -110, game_id: '4' }), { result: 'push' }, { on_board: true, reason: 'big_game', verdict: null }),
+      laneRowFor('d', pick({ odds: -110, game_id: '5' }), { result: 'won' }),
+    ];
+    const s = summarizeWinners(rows);
+    expect(s.stamped).toBe(3);
+    expect(s.on).toEqual({ n: 2, w: 1, l: 1, record: '1-1', units: 0.3 });
+    expect(s.off).toEqual({ n: 1, w: 1, l: 0, record: '1-0', units: 0.91 });
+    expect(s.byReason.first_dog.record).toBe('1-0');
+    expect(s.byReason.review.record).toBe('0-1');
+    expect(s.byVerdict.STRONG.record).toBe('0-1');
+    expect(s.byVerdict.WEAK.record).toBe('2-0');
+    expect(summarizeWinners([]).stamped).toBe(0);
   });
 });

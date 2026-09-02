@@ -12,7 +12,7 @@
  * Gary: nothing here reaches a prompt or a desk.
  */
 import '../src/loadEnv.js';
-import { laneRowFor, summarizeLanes, summarizeCaseLanes, summarizeCaseOrder } from '../src/services/agentic/rationaleLanes.js';
+import { laneRowFor, summarizeLanes, summarizeCaseLanes, summarizeCaseOrder, summarizeWinners } from '../src/services/agentic/rationaleLanes.js';
 
 const { supabaseAdmin, supabase } = await import('../src/supabaseClient.js');
 const db = supabaseAdmin || supabase;
@@ -35,12 +35,18 @@ export async function tagRationaleLanes(dates) {
   const { data: results, error: e2 } = await db.from('game_results').select('game_id, game_date, result, pick_text').in('game_date', dates);
   if (e2) throw e2;
   const byGame = new Map((results || []).map((r) => [`${r.game_date}|${String(r.game_id)}|${r.pick_text}`, r]));
+  // THE WINNERS BOARD (Sep 2 2026): each pick's winners_reviews row rides
+  // beside its result — on the board or not, why, the reviewer's verdict.
+  const { data: reviews, error: e6 } = await db.from('winners_reviews').select('game_date, league, game_id, on_board, reason, verdict').in('game_date', dates);
+  if (e6) throw e6;
+  const byReview = new Map((reviews || []).map((w) => [`${w.game_date}|${String(w.league).toUpperCase()}|${String(w.game_id)}`, w]));
+  const reviewFor = (date, league, gid) => byReview.get(`${date}|${String(league).toUpperCase()}|${String(gid)}`) || null;
   const rows = [];
   for (const d of days || []) {
     for (const p of d.picks || []) {
       if (!p?.pick || !p?.rationale) continue;
       const r = byGame.get(`${d.date}|${String(p.game_id)}|${p.pick}`) || null;
-      rows.push(laneRowFor(d.date, p, r));
+      rows.push(laneRowFor(d.date, p, r, reviewFor(d.date, p.league || p.sport, p.game_id)));
     }
   }
   // NFL lives in its own weekly table; its results carry the game date.
@@ -57,7 +63,7 @@ export async function tagRationaleLanes(dates) {
         if (!p?.pick || !p?.rationale || !wanted.has(gid)) continue;
         const r = byNfl.get(`${gid}|${p.pick}`) || null;
         if (!r) continue;
-        rows.push(laneRowFor(r.game_date, { ...p, league: 'NFL', game_id: gid }, r));
+        rows.push(laneRowFor(r.game_date, { ...p, league: 'NFL', game_id: gid }, r, reviewFor(r.game_date, 'NFL', gid)));
       }
     }
   }
@@ -78,6 +84,14 @@ export function printLaneTable(rows, label) {
   // THE CASES (Sep 2 2026): the same lanes read across the two Pass 1
   // cases — picked side vs the other side — beside the card's count.
   // THE CASE ORDER (Sep 2 2026): does the bet follow the case written last?
+  // THE WINNERS BOARD (Sep 2 2026): on the board vs off, by why, by verdict.
+  const wb = summarizeWinners(rows);
+  if (wb.stamped) {
+    const fmt = (r) => `${r.record} ${r.units >= 0 ? '+' : ''}${r.units}u`;
+    const by = (o) => Object.entries(o).map(([k, r]) => `${k} ${fmt(r)}`).join(' · ');
+    console.log(`  🏆 winners (${wb.stamped} stamped): ON THE BOARD ${wb.on.n} → ${fmt(wb.on)} · off the board ${wb.off.n} → ${fmt(wb.off)}`);
+    console.log(`     why on: ${by(wb.byReason) || 'none'} · reviewer verdict (all stamped): ${by(wb.byVerdict) || 'none'}`);
+  }
   const order = summarizeCaseOrder(rows);
   if (order.n) {
     console.log(`  case order (${order.n} stamped): bet the LAST case ${order.pickedLast} (${order.pickedLastRecord}) · bet the FIRST case ${order.pickedFirst} (${order.pickedFirstRecord}) · home last ${order.byLast.home.n} → home taken ${order.byLast.home.pickedLast} · away last ${order.byLast.away.n} → away taken ${order.byLast.away.pickedLast}`);

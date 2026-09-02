@@ -964,15 +964,35 @@ async function processGenericGames(table, date, leagueFilter = null, { settlemen
   for (const row of rows) {
     const picks = typeof row.picks === 'string' ? JSON.parse(row.picks) : (row.picks || row.picks_array || []);
 
-    // Winners game picks = top 3 per league by (is_top_pick, then confidence) —
-    // mirrors the app's Winners game shelves (sortedBest().prefix(3)). We stamp
-    // is_winners_pick on the graded row so Home can show a Winners-only record.
+    // THE WINNERS BOARD (founder GO, Sep 2 2026): one definition everywhere —
+    // a pick is a Winners pick when its winners_reviews row says on_board
+    // (first dog, big game, or the reviewer's STRONG). A league with no
+    // review rows for these picks (dates before the reviewer shipped) keeps
+    // the old rule: top 3 per league by (is_top_pick, then confidence).
     const winnerKey = (p) => `${(p.league || '').toUpperCase()}|${p.pick}|${p.awayTeam} @ ${p.homeTeam}`;
     const winnerKeys = new Set();
+    const reviewByKey = new Map();
+    try {
+      const ids = [...new Set(picks.map((p) => String(p?.game_id ?? p?.bdl_game_id ?? '')).filter(Boolean))];
+      if (ids.length) {
+        const { data: wr, error: wrErr } = await supabase.from('winners_reviews').select('league, game_id, on_board').in('game_id', ids);
+        if (wrErr) throw wrErr;
+        for (const r of wr || []) reviewByKey.set(`${String(r.league || '').toUpperCase()}|${String(r.game_id)}`, r.on_board === true);
+      }
+    } catch (e) {
+      console.warn(`   ⚠️ winners_reviews read failed (${e.message}) — falling back to the top-3 rule for this row`);
+    }
+    const leaguesReviewed = new Set([...reviewByKey.keys()].map((k) => k.split('|')[0]));
     {
       const byLeague = {};
       for (const p of picks) (byLeague[(p.league || 'UNKNOWN').toUpperCase()] ||= []).push(p);
       for (const lg of Object.keys(byLeague)) {
+        if (leaguesReviewed.has(lg)) {
+          for (const p of byLeague[lg]) {
+            if (reviewByKey.get(`${lg}|${String(p?.game_id ?? p?.bdl_game_id ?? '')}`)) winnerKeys.add(winnerKey(p));
+          }
+          continue;
+        }
         const ranked = byLeague[lg].slice().sort((a, b) => {
           const at = a.is_top_pick ? 1 : 0, bt = b.is_top_pick ? 1 : 0;
           if (at !== bt) return bt - at;

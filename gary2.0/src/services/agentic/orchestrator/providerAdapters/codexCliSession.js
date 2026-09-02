@@ -219,4 +219,36 @@ export async function codexCliWebSearch(prompt, options = {}) {
   }
 }
 
-export default { isCodexCliModel, createCodexCliSession, sendToCodexCliSession, resetCodexCliSessionChat, codexCliWebSearch };
+/**
+ * One-shot ask on the subscription: a single prompt, one answer, optional
+ * web search, its own breaker lane (founder GO, Sep 2 2026 — THE WINNERS
+ * REVIEWER rides this: "a GPT model that is cheaper... still a smart brain").
+ * A system prompt, when given, leads the stdin text; `exec` has no separate
+ * system slot. Same { success, data, raw } contract as codexCliWebSearch.
+ */
+export async function codexCliOneShot(prompt, options = {}) {
+  const model = options.model || 'gpt-5.6-sol';
+  const effort = String(options.effort || 'high').replace(/[^a-z]/g, '');
+  const breakerKey = options.breakerKey || 'codex-oneshot';
+  try {
+    const args = [
+      'exec', '--skip-git-repo-check', '-s', 'read-only', '--json',
+      '-m', model,
+      ...(options.search ? ['-c', 'tools.web_search=true'] : []),
+      '-c', `model_reasoning_effort="${effort}"`,
+      '-',
+    ];
+    const stdinText = options.systemPrompt ? `${options.systemPrompt}\n\n${prompt}` : prompt;
+    const { code, stdout, stderr } = await runCodex(args, stdinText, options.timeoutMs || 6 * 60 * 1000, breakerKey);
+    if (code !== 0) throw toError(stderr || stdout);
+    const { text, usage } = parseEvents(stdout);
+    const clean = String(text || '').trim();
+    console.log(`[Codex one-shot] ${breakerKey} (${model}, ${effort}${options.search ? ', search' : ''}) returned ${clean.length} chars (GPT Pro — $0 marginal)`);
+    return { success: clean.length > 0, data: clean, raw: stdout, usage: usage || null };
+  } catch (e) {
+    console.warn(`[Codex one-shot] ${breakerKey} failed: ${e.message}`);
+    return { success: false, data: '', raw: null, error: e.message };
+  }
+}
+
+export default { isCodexCliModel, createCodexCliSession, sendToCodexCliSession, resetCodexCliSessionChat, codexCliWebSearch, codexCliOneShot };

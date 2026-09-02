@@ -384,7 +384,87 @@ function normalizeVendorForReceipt(value) {
 }
 const { supabase } = await import('../src/supabaseClient.js');
 const { classOf, classWinRates, winnersScore } = await import('../src/services/pickdesk/winnersScore.js');
-const { judgeWinnersCase } = await import('../src/services/pickdesk/winnersJudge.js');
+const { reviewPick } = await import('../src/services/pickdesk/winnersReviewer.js');
+const { isFirstDogOfDay, isBigGame, winnersDecision, loadBigGameOverrides } = await import('../src/services/pickdesk/winnersRules.js');
+const { pickIsHome } = await import('../src/services/agentic/rationaleLanes.js');
+
+/**
+ * THE WINNERS ROUTE (founder GO, Sep 2 2026): runs AFTER the pick is stored,
+ * never before — the free pick posts on time; the Winners row follows.
+ *   1. THE FIRST DOG OF THE DAY — the league's first plus-money moneyline,
+ *      automatic. 2. THE BIG GAME — automatic. 3. THE REVIEWER — a separate
+ *      brain answers the founder's checklist against the desk and both
+ *      cases; STRONG goes on the board. Everything lands in winners_reviews
+ *      (one row per game), which the page, the record and the ledger read.
+ * Fail-soft end to end: nothing here can throw into the pick loop.
+ */
+async function routeToWinners({ league, game, slate, result, cleanPick, deskText }) {
+  try {
+    const gameDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    const gameId = String(cleanPick.game_id ?? cleanPick.bdl_game_id ?? game?.id ?? '');
+    let firstDog = false;
+    let bigGame = false;
+    try {
+      const stored = await picksService.getStoredPicksForDate(gameDate, league);
+      firstDog = isFirstDogOfDay({ ...cleanPick, game_id: gameId }, stored);
+      bigGame = isBigGame({
+        league,
+        game: {
+          ...(game || {}),
+          id: gameId,
+          commence_time: cleanPick.commence_time || game?.commence_time || null,
+          home_team: cleanPick.homeTeam,
+          away_team: cleanPick.awayTeam,
+          homeRanking: cleanPick.homeRanking ?? game?.homeRanking ?? null,
+          awayRanking: cleanPick.awayRanking ?? game?.awayRanking ?? null,
+        },
+        slate: Array.isArray(slate) && slate.length > 1 ? slate : [],
+        dateEt: gameDate,
+        overrides: loadBigGameOverrides(),
+      });
+    } catch (ruleErr) {
+      console.warn(`   ⚠️ [Winners] rules skipped (${ruleErr.message})`);
+    }
+    const rev = deskText
+      ? await reviewPick({
+          league,
+          deskText,
+          caseHome: cleanPick.path_home ?? result?.path_home ?? null,
+          caseAway: cleanPick.path_away ?? result?.path_away ?? null,
+          homeTeam: cleanPick.homeTeam,
+          awayTeam: cleanPick.awayTeam,
+          pickText: cleanPick.pick,
+          odds: cleanPick.odds,
+          betType: cleanPick.type,
+          pickIsHome: pickIsHome(cleanPick),
+          rationale: cleanPick.rationale,
+        })
+      : { ok: false, error: 'no desk text on the result' };
+    const decision = winnersDecision({ verdict: rev.ok ? rev.verdict : null, firstDog, bigGame });
+    const oddsNum = Number(cleanPick.odds);
+    await picksService.storeWinnersReview({
+      game_date: gameDate,
+      league,
+      game_id: gameId,
+      pick_text: cleanPick.pick,
+      matchup: `${cleanPick.awayTeam} @ ${cleanPick.homeTeam}`,
+      odds: Number.isFinite(oddsNum) ? Math.round(oddsNum) : null,
+      bet_type: cleanPick.type || null,
+      on_board: decision.on_board,
+      reason: decision.reason,
+      verdict: rev.ok ? rev.verdict : null,
+      decided_by: rev.ok ? rev.decided_by : null,
+      review: rev.ok ? rev.review : null,
+      review_error: rev.ok ? null : (rev.error || 'review failed'),
+      model: rev.model || null,
+      ms: Number.isFinite(rev.ms) ? Math.round(rev.ms) : null,
+      reviewed_at: new Date().toISOString(),
+    });
+    console.log(`🏆 [Winners] ${cleanPick.pick}: ${decision.on_board ? 'ON THE BOARD' : 'off the board'}${decision.reason ? ` (${decision.reason})` : ''} · review ${rev.ok ? `${rev.verdict} — ${rev.decided_by}` : `failed: ${rev.error}`}${rev.ms ? ` · ${Math.round(rev.ms / 1000)}s` : ''}`);
+  } catch (e) {
+    console.warn(`   ⚠️ [Winners] route skipped (${e.message}) — pick unaffected`);
+  }
+}
 
 const DAILY_SLATE_LEAGUE = {
   americanfootball_nfl: 'NFL',
@@ -2046,18 +2126,9 @@ async function main() {
             }
           }
 
-          // WINNERS JUDGE v2 (founder GO, Aug 10): a separate brain scores
-          // the sealed case against its own desk — the Winners-page rank.
-          // Selection only; fail-soft null can never delay a stored pick.
-          const winnersJudge = result.deskText
-            ? await judgeWinnersCase({
-                finalPick: finalPickText,
-                readWinner: result.read_winner ?? null,
-                gameRead: result.game_read ?? null,
-                rationale: result.rationale ?? null,
-                deskText: result.deskText,
-              }).catch(() => null)
-            : null;
+          // (The Aug 10 Winners judge ran here; it was gated on a field the
+          // orchestrator never set and died in late August. THE WINNERS
+          // REVIEWER — Sep 2 — runs after the store; see routeToWinners.)
 
           const cleanPick = {
             pick: finalPickText,
@@ -2074,9 +2145,6 @@ async function main() {
             // null = unrankable pick text.
             winners_class: classOf(finalPickText),
             winners_score: winnersScore(finalPickText, result.confidence ?? null, await getWinnersClassRates()),
-            // v2 judge object {score, case_strength, coherence, specificity,
-            // basis, model} — the Winners rank; class/score above = reference.
-            winners_judge: winnersJudge,
             // THE BLIND SPLIT (Aug 5): the sealed pre-lines read — the winner
             // Gary named before any price reached the session, and his why.
             // Null on non-desk lanes; the ledger reads ticket-vs-read crossings.
@@ -2230,15 +2298,21 @@ async function main() {
               console.log(`✅ [${config.name}] Pick(s) stored to Supabase`);
               // THE DESK snapshot (spec 2026-07-26): the pick is a pure
               // function of the desk — persist exactly what Gary read.
-              // Non-blocking by contract.
-              if (result.deskText) {
+              // Non-blocking by contract. (Sep 2: the orchestrator returns
+              // the desk as _context.scoutReport — the old `deskText` key
+              // never existed, so no desk was stored from Jul 26 to Sep 2.)
+              const deskText = result?._context?.scoutReport || null;
+              if (deskText) {
                 await picksService.storeDeskSnapshot({
                   game_date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }),
                   matchup: `${cleanPick.awayTeam} @ ${cleanPick.homeTeam}`,
                   pick: cleanPick.pick,
-                  desk: result.deskText,
+                  desk: deskText,
                 });
               }
+              // THE WINNERS ROUTE (founder GO, Sep 2 2026): after the store,
+              // never before. First dog, big game, then the reviewer.
+              await routeToWinners({ league: config.name, game, slate: games, result, cleanPick, deskText });
             } catch (storeErr) {
               console.log(`⚠️  [${config.name}] Immediate store failed (will retry at end): ${storeErr.message}`);
             }

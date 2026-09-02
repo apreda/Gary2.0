@@ -86,9 +86,14 @@ export function sideOfPick(pick) {
 }
 
 /** One ledger row from a stored pick + its graded result (result may be null). */
-export function laneRowFor(gameDate, pick, result) {
+export function laneRowFor(gameDate, pick, result, winners = null) {
   const odds = Number(pick.odds);
   return {
+    // THE WINNERS BOARD (Sep 2 2026): the pick's winners_reviews row beside
+    // its result — on the board or not, why, and the reviewer's verdict.
+    winners_on_board: winners == null ? null : winners.on_board === true,
+    winners_reason: winners?.reason ?? null,
+    winners_verdict: winners?.verdict ?? null,
     game_date: gameDate,
     league: String(pick.league || pick.sport || ''),
     game_id: String(pick.game_id ?? ''),
@@ -166,4 +171,33 @@ export function summarizeLanes(rows) {
     out.push({ lane: key, cited: rows.filter((r) => r.lanes.includes(key)).length, of: rows.length, record: `${w}-${xs.length - w}` });
   }
   return out;
+}
+
+const unitsOf = (r) => {
+  const o = Number(r.odds);
+  if (r.result === 'won') return Number.isFinite(o) && o !== 0 ? (o > 0 ? o / 100 : 100 / Math.abs(o)) : 0;
+  return r.result === 'lost' ? -1 : 0;
+};
+const recordOf = (rs) => {
+  const w = rs.filter((r) => r.result === 'won').length;
+  const units = Math.round(rs.reduce((s, r) => s + unitsOf(r), 0) * 100) / 100;
+  return { n: rs.length, w, l: rs.length - w, record: `${w}-${rs.length - w}`, units };
+};
+
+/**
+ * THE WINNERS BOARD read (Sep 2 2026): graded rows with a winners stamp,
+ * on the board vs off, split by why they were on (first_dog | big_game |
+ * review) and by the reviewer's verdict (STRONG | WEAK | none) regardless of
+ * the board — so the rules and the reviewer can be judged apart.
+ */
+export function summarizeWinners(rows) {
+  const stamped = (rows || []).filter((r) => (r.result === 'won' || r.result === 'lost') && r.winners_on_board != null);
+  const on = stamped.filter((r) => r.winners_on_board === true);
+  const off = stamped.filter((r) => r.winners_on_board !== true);
+  const byReason = {};
+  for (const r of on) (byReason[r.winners_reason || 'unknown'] ||= []).push(r);
+  const byVerdict = {};
+  for (const r of stamped) (byVerdict[r.winners_verdict || 'none'] ||= []).push(r);
+  const map = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, recordOf(v)]));
+  return { stamped: stamped.length, on: recordOf(on), off: recordOf(off), byReason: map(byReason), byVerdict: map(byVerdict) };
 }
