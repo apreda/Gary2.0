@@ -107,6 +107,25 @@ export default async function ArchivePage() {
               ))}
             </div>
           </section>
+
+          <section aria-labelledby="all-stored-dates">
+            <h2 id="all-stored-dates" className="font-display text-2xl uppercase text-hi">All stored dates</h2>
+            <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-mid">
+              Jump directly to any daily board without stepping through a monthly shelf.
+            </p>
+            <ol className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 md:grid-cols-4">
+              {summaries.map(summary => (
+                <li key={summary.date}>
+                  <Link
+                    href={`/archive/${summary.date}`}
+                    className="font-mono text-[11px] text-gold underline decoration-gold/40 underline-offset-4 hover:text-gold-light"
+                  >
+                    {archiveDateLabel(summary.date)}
+                  </Link>
+                </li>
+              ))}
+            </ol>
+          </section>
         </div>
       ) : (
         <div className="mt-8 rounded-panel border border-line bg-card p-8 text-center">

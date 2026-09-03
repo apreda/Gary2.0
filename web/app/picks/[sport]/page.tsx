@@ -6,6 +6,7 @@ import { GameRow } from '@/components/board/GameRow';
 import { GameTile } from '@/components/board/GameTile';
 import { BoardGrid } from '@/components/board/BoardGrid';
 import { BookDayProvider } from '@/components/book/BookDay';
+import { ambiguousGamePickReceiptKeys } from '@/lib/book/model';
 import { UnderlineTabs } from '@/components/UnderlineTabs';
 import { PageMasthead, StitchRule } from '@/components/Terminal';
 import { LiveScoreStrip } from '@/components/LiveChip';
@@ -209,7 +210,10 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
           </p>
         </div>
       ) : (
-        <BookDayProvider date={date}>
+        <BookDayProvider
+          date={date}
+          ambiguousGamePickReceiptKeys={ambiguousGamePickReceiptKeys(allPicks ?? [], date)}
+        >
           <div className="mt-8">
             <BoardGrid
               items={board.map(g => ({

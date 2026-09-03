@@ -72,13 +72,15 @@ export function computeRecord(rows: GameResultRow[]): Record_ {
 }
 
 const dedupeKey = (r: GameResultRow) =>
-  `${(r.pick_text ?? '').trim().toLowerCase()}|${r.game_date ?? ''}`;
+  [r.league, r.game_date, r.matchup, r.pick_text]
+    .map(value => (value ?? '').trim().toLowerCase())
+    .join('|');
 
 /**
  * NFL results live in BOTH nfl_results (majority) AND game_results (9 legacy
  * stray rows). The two tables have an off-by-one game_date mismatch (kickoff
- * date vs grading date), so the (pick_text|game_date) dedupe key is a no-op
- * for those rows and games would double-count.
+ * date vs grading date), so a row-identity dedupe key is a no-op for those
+ * rows and games would double-count.
  *
  * Fix: nfl_results is the authoritative source for NFL. Drop any row from
  * gameRows whose league is NFL BEFORE merging. The existing key dedupe still

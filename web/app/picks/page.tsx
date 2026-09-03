@@ -6,6 +6,7 @@ import { GameRow, Slab } from '@/components/board/GameRow';
 import { GameTile } from '@/components/board/GameTile';
 import { BoardGrid } from '@/components/board/BoardGrid';
 import { BookDayProvider } from '@/components/book/BookDay';
+import { AccountCta } from '@/components/AccountCta';
 import { ReceiptLine } from '@/components/ReceiptLine';
 import { UnderlineTabs } from '@/components/UnderlineTabs';
 import { PageMasthead, StitchRule } from '@/components/Terminal';
@@ -19,6 +20,7 @@ import { hubGradedDateEST, nowMs, todayEST } from '@/lib/gary/dates';
 import { SPORTS, sportByCode } from '@/lib/gary/leagues';
 import type { GaryPick } from '@/lib/gary/types';
 import { pageMetadata } from '@/lib/seo/metadata';
+import { ambiguousGamePickReceiptKeys } from '@/lib/book/model';
 
 export const revalidate = 600;
 
@@ -128,8 +130,18 @@ export default async function PicksPage() {
         </div>
       )}
 
+      <AccountCta
+        nextPath="/picks"
+        title="Call your side before the game"
+        body="Tail Gary or fade him, then let My Book grade your prediction automatically. It tracks a record—no wager is placed."
+        className="mt-7"
+      />
+
       {board.length > 0 && (
-        <BookDayProvider date={date}>
+        <BookDayProvider
+          date={date}
+          ambiguousGamePickReceiptKeys={ambiguousGamePickReceiptKeys(picks, date)}
+        >
           <section className="mt-11">
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
               <h2 className="font-display text-[1.6rem] uppercase leading-none text-hi">The board</h2>

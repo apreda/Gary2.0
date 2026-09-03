@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { AccountCta } from '@/components/AccountCta';
 import { PageMasthead, StatTile, StitchRule, ResultLetter } from '@/components/Terminal';
 import {
   fetchAllGameResults, fetchAllPropResults, computeRecord, computePropsRecord,
@@ -102,7 +103,7 @@ export default async function ResultsPage() {
       <PageMasthead
         title="Sports picks results and track record"
         meta="EVERY PICK GRADED"
-        sub="Every pick is stored before lock, graded after the final, and stays on the record — wins, losses, and pushes. Units assume flat 1-unit stakes at the listed odds."
+        sub="The headline record below covers Gary's game picks. Player props are reported separately, and every published result stays on the record. Units assume flat 1-unit stakes at the listed odds."
       />
 
       {/* The receipts — why this record can be trusted (and most can't) */}
@@ -135,7 +136,7 @@ export default async function ResultsPage() {
       {/* Headline — the all-time figure carries the page */}
       <section className="mt-7 grid items-end gap-8 lg:grid-cols-12">
         <div className="lg:col-span-6">
-          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-gold">All-time</p>
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-gold">Game picks · all-time</p>
           <p className="tnum mt-2 font-mono text-[clamp(3rem,7vw,5rem)] font-bold leading-none text-hi">
             {allTime.wins.toLocaleString()}
             <span className="text-faint">–</span>
@@ -172,6 +173,13 @@ export default async function ResultsPage() {
           />
         </div>
       </section>
+
+      <AccountCta
+        nextPath="/results"
+        title="Put your calls beside Gary’s"
+        body="Start a free Book, tail or fade posted picks, and build a separately labeled record graded by the same final scores."
+        className="mt-10"
+      />
 
       {/* By sport */}
       <section className="mt-16">

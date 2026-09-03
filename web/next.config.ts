@@ -14,9 +14,16 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     const noIndex = [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }];
+    const tokenPage = [
+      ...noIndex,
+      { key: 'Referrer-Policy', value: 'no-referrer' },
+      { key: 'Cache-Control', value: 'private, no-store, max-age=0' },
+    ];
     return [
       { source: '/api/:path*', headers: noIndex },
       { source: '/auth/:path*', headers: noIndex },
+      { source: '/email/confirm', headers: tokenPage },
+      { source: '/email/unsubscribe', headers: tokenPage },
     ];
   },
 };

@@ -11,7 +11,7 @@ export const metadata: Metadata = pageMetadata({
 export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-3xl px-5 py-12">
-      <PageMasthead title="Privacy policy" meta="Last updated: September 1, 2026">
+      <PageMasthead title="Privacy policy" meta="Last updated: September 3, 2026">
         <p className="mt-2 font-mono text-[11px] text-low">Operated by Gary A.I. LLC</p>
       </PageMasthead>
 
@@ -41,18 +41,37 @@ export default function PrivacyPage() {
               agent so we can operate and protect that signup.
             </li>
             <li>
-              We use <strong className="text-hi">Vercel Analytics</strong> to collect
-              anonymous usage statistics (pages visited, referrer, country, device type). This
-              data is aggregated and not linked to any individual.
+              If you subscribe to website updates, we collect your email address, chosen email
+              cadence, consent time and source, limited request information such as browser user
+              agent, and delivery status. We use that information to send the daily-board alert
+              and/or weekly public-record receipt you requested. Every message includes an
+              unsubscribe link. We also use a keyed, one-way request fingerprint for short-lived
+              signup rate limiting; the raw network address is not stored in the email tables.
             </li>
             <li>
-              Gary also uses first-party product and attribution analytics. The Website creates
-              a random <code className="font-mono text-hi">gary_web_id</code> in local browser
-              storage and sends that identifier, an event name, the web platform label, and
-              limited page or call-to-action properties to Supabase. Tracked App Store redirects
-              also store the campaign token, referring page, and browser user-agent string. We
-              use this information to measure product usage, campaign performance, and abuse;
-              it is not used for cross-site advertising.
+              If you choose <strong className="text-hi">Allow analytics</strong>, we use Vercel
+              Analytics and Speed Insights to collect aggregate page-use and performance
+              information such as pages visited, referrer, country, device type, and loading
+              measurements. These services are not used for cross-site advertising.
+            </li>
+            <li>
+              With the same permission, Gary creates a random{' '}
+              <code className="font-mono text-hi">gary_web_id</code> in local browser storage.
+              That pseudonymous identifier links first-party product events across visits and is
+              sent with an allowlisted event name and limited page, campaign, or call-to-action
+              properties to a service-only Supabase table. We do not include account email
+              addresses, full referring URLs, or URL query strings in those events.
+            </li>
+            <li>
+              Standard App Store handoffs are measured only after you allow analytics. Gary also
+              operates explicitly tracked campaign links at <code className="font-mono text-hi">/get</code>{' '}
+              and <code className="font-mono text-hi">/c/&lt;handle&gt;</code>; those links record an
+              aggregate click, campaign or creator label, surface, and referring hostname even
+              when no analytics choice is available on the redirect. New click records do not
+              store a browser user-agent or network address. For abuse prevention, the server
+              temporarily converts its trusted client-address header into a keyed one-way rate
+              key; the raw address is not stored, durable event and click records do not contain
+              the key, and scheduled cleanup removes rate keys within approximately ten minutes.
             </li>
           </ul>
 
@@ -82,10 +101,10 @@ export default function PrivacyPage() {
             <li>Provide, maintain, and improve the Service.</li>
             <li>Manage optional accounts and keep account-linked features available across web and iOS.</li>
             <li>Store, display, and grade Your Book activity that you choose to create.</li>
-            <li>Send push notifications or one-time launch notifications you have opted into.</li>
+            <li>Send push notifications, one-time launch notifications, or recurring website updates you have opted into.</li>
             <li>
-              Analyze aggregate, anonymous usage patterns to improve performance and content
-              (Website analytics only).
+              Analyze consented aggregate performance data and pseudonymous Website product-use
+              patterns to improve performance and content.
             </li>
             <li>Ensure platform security and prevent abuse.</li>
           </ul>
@@ -95,10 +114,15 @@ export default function PrivacyPage() {
           <h2 className="mb-3 font-display text-xl text-hi">3. Cookies &amp; Analytics</h2>
           <p>
             The Website uses essential cookies for optional account sessions. It also uses local
-            browser storage for preferences such as the display value of one betting unit.
-            Vercel Analytics collects anonymous page-view data without cross-site advertising
-            cookies. We do not place cross-site advertising cookies. You can browse the public
-            content without signing in.
+            browser storage for preferences such as the display value of one betting unit. Your
+            analytics choice is stored in local browser storage and a same-site preference cookie
+            so the Website can honor it during page use and standard App Store handoffs. Persistent
+            first-party analytics, Vercel Analytics, and Speed Insights stay off unless you choose
+            Allow analytics. Choose <strong className="text-hi">Privacy choices</strong> at the
+            bottom of any page to allow, decline, or later change that choice; declining removes
+            Gary&rsquo;s stored analytics identifier and attribution history. We do not place
+            cross-site advertising cookies. You can browse public content without signing in or
+            enabling analytics.
           </p>
         </section>
 
@@ -110,7 +134,8 @@ export default function PrivacyPage() {
           <ul className="list-disc space-y-2 pl-5">
             <li>
               <strong className="text-hi">Service providers</strong> (e.g., Supabase for
-              authentication and database hosting, and Vercel for infrastructure and analytics)
+              authentication and database hosting, Vercel for infrastructure and analytics, and
+              Resend for email delivery)
               who process data on our behalf.
             </li>
             <li>
@@ -131,9 +156,14 @@ export default function PrivacyPage() {
           <p>
             Account and Your Book data are retained while your account remains active or as
             needed to provide the features you requested. Launch-notification data is retained
-            for the stated notification and related operational needs. First-party event and link
-            attribution records are retained for operational analytics and campaign measurement
-            until they are no longer reasonably needed for those purposes. You may request deletion
+            for the stated notification and related operational needs. Website-update subscriptions
+            remain active until you unsubscribe; after that, we retain a suppression record and
+            limited delivery logs as reasonably necessary to honor the request, prevent duplicate
+            sends, troubleshoot delivery, and meet legal obligations. Consented first-party product
+            events and App Store handoff or campaign-link records are retained for operational
+            analytics and campaign measurement until they are no longer reasonably needed for
+            those purposes. Analytics abuse-prevention rate keys are deleted on a scheduled basis
+            within approximately ten minutes. You may request deletion
             of your account and associated personal data at any time by emailing{' '}
             <a
               href="mailto:privacy@betwithgary.ai"
@@ -141,7 +171,7 @@ export default function PrivacyPage() {
             >
               privacy@betwithgary.ai
             </a>
-            . Anonymous analytics data is retained per Vercel&rsquo;s standard retention policies.
+            . Aggregate Vercel analytics data is retained per Vercel&rsquo;s standard retention policies.
           </p>
         </section>
 

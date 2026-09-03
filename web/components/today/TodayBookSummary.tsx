@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { supabaseBrowser } from '@/lib/auth/client';
+import { accountHref } from '@/lib/auth/redirect';
 
 interface SummaryBet {
   status: string;
@@ -79,13 +80,14 @@ export function TodayBookSummary() {
       {state.kind === 'signed-out' && (
         <div className="mt-4">
           <p className="text-[14px] leading-relaxed text-mid">
-            Sign in to see your pending rides and verified record beside today&apos;s board.
+            Start a free Book to tail or fade today&apos;s calls and build a verified record beside Gary&apos;s.
+            Tracks your prediction — no wager is placed.
           </p>
           <Link
-            href="/account?next=%2Ftoday"
+            href={accountHref('/today', 'signup')}
             className="mt-4 inline-flex rounded-chip bg-gold px-4 py-2.5 text-[13.5px] font-semibold text-ink transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
           >
-            Sign in
+            Start My Book — free
           </Link>
         </div>
       )}

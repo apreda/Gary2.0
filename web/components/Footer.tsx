@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { StitchRule } from './Terminal';
+import { EmailSignup } from './EmailSignup';
 
 const COLUMNS: { heading: string; links: { href: string; label: string; external?: boolean }[] }[] = [
   {
@@ -21,6 +22,7 @@ const COLUMNS: { heading: string; links: { href: string; label: string; external
     heading: 'Product',
     links: [
       { href: '/app', label: 'Gary for iOS' },
+      { href: '/install', label: 'Add Website to Home Screen' },
       { href: '/pricing', label: 'Pricing' },
       { href: '/how-it-works', label: 'How It Works' },
     ],
@@ -48,6 +50,10 @@ export function Footer() {
   return (
     <footer className="mt-24 border-t border-line">
       <div className="mx-auto max-w-6xl px-5 py-12">
+        <EmailSignup source="site_footer" />
+
+        <StitchRule tone="faint" className="my-10" />
+
         <div className="grid gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
           {/* Colophon */}
           <div>

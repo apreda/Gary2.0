@@ -3,8 +3,7 @@
 import { useEffect, useState } from 'react';
 import { SPORTS } from '@/lib/gary/leagues';
 import { PRICING } from '@/lib/gary/pricing';
-import { APP_STORE_URL } from '@/components/AppStoreButton';
-import { logEvent } from '@/lib/gary/analytics';
+import { beginAppStoreHandoff, logEvent } from '@/lib/gary/analytics';
 
 type Sel = { plan: 'all_access' | 'all_access_annual' | 'single'; sport?: string };
 
@@ -18,14 +17,25 @@ export function PricingPlans() {
   function pick(next: Sel) {
     setSel(next);
     const billing = next.plan === 'all_access_annual' ? 'annual' : 'monthly';
-    logEvent('plan_selected', { ...next, surface: 'web', billing });
+    logEvent('plan_selected', {
+      ...next,
+      sport: next.sport?.toLowerCase(),
+      surface: 'web',
+      billing,
+    });
   }
 
   function unlock() {
-    logEvent('checkout_started', { ...sel, surface: 'web_pricing' });
+    const billing = sel.plan === 'all_access_annual' ? 'annual' : 'monthly';
     // Entitlements key on the app identity, so the canonical purchase path is
     // the app. The web page sells + proves; the app closes.
-    window.location.href = APP_STORE_URL;
+    window.location.assign(
+      beginAppStoreHandoff('pricing_plan', {
+        plan: sel.plan,
+        sport: sel.sport?.toLowerCase(),
+        billing,
+      }),
+    );
   }
 
   const isSel = (plan: Sel['plan'], sport?: string) => sel.plan === plan && sel.sport === sport;

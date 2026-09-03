@@ -2,6 +2,7 @@ import { Disclosure } from '@/components/Disclosure';
 import { ScoutRead } from '@/components/ScoutRead';
 import { TailFadeRow } from '@/components/book/TailFadeRow';
 import { sportByCode } from '@/lib/gary/leagues';
+import { gameBookTrackingUnavailableReason } from '@/lib/book/model';
 import { etTime, marketLine, oddsText, parseGameTime, pickDropTime, scoutSectionsExcluding } from '@/lib/gary/format';
 import type { BoardGame } from '@/lib/gary/board';
 
@@ -137,7 +138,12 @@ export function GameRow({ game, now }: { game: BoardGame; now?: number }) {
               </Disclosure>
             )}
             {/* Renders only inside a BookDayProvider — board pages opt in. */}
-            <TailFadeRow pickText={pick.pick ?? ''} pickId={pick.pick_id} commence={game.commence} />
+            <TailFadeRow
+              pickText={pick.pick ?? ''}
+              pickId={pick.pick_id}
+              commence={game.commence}
+              trackingUnavailableReason={gameBookTrackingUnavailableReason(game.league)}
+            />
           </>
         )}
       </div>

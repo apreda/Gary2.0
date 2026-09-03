@@ -1,4 +1,5 @@
-import { daysAgoEST } from '@/lib/gary/dates';
+import { daysAgoEST, estDateStr } from '@/lib/gary/dates';
+import { parseGameTime } from '@/lib/gary/format';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // YOUR BOOK — shared model + pure math (web port of iOS UserBookView.swift).
@@ -31,6 +32,94 @@ export interface UserBet {
   lock_at: string | null;
   placed_at: string | null;
   graded_by: string | null;
+}
+
+/** The ledger's calendar key is the game's Eastern-time start date. Weekly
+ * NFL cards can span several dates, so the page's display date is only a
+ * fallback for old rows without a parseable kickoff. */
+export function gameDateForBook(
+  commence: string | null | undefined,
+  fallbackDate: string,
+): string {
+  const parsed = parseGameTime(commence);
+  return parsed ? estDateStr(parsed) : fallbackDate;
+}
+
+/** Collision-safe client key for the ledger's date + exact-pick identity. */
+export function gamePickReceiptKey(gameDate: string, pickText: string): string {
+  return JSON.stringify([gameDate, pickText]);
+}
+
+export type TailFadeCounts = Record<string, { tails: number; fades: number }>;
+
+/** Public tail/fade totals are returned for one requested date. Keep them off
+ * rows from another day on a multi-date board. */
+export function tailFadeCountForGame(
+  counts: TailFadeCounts,
+  countsDate: string,
+  gameDate: string,
+  pickText: string,
+): { tails: number; fades: number } | undefined {
+  return countsDate === gameDate ? counts[pickText] : undefined;
+}
+
+/** NFL calls are canonical in weekly_nfl_picks, while the shared placement
+ * RPC intentionally resolves daily_picks only. Hide a control that must fail;
+ * this changes neither the call nor its analysis. */
+export function gameBookTrackingUnavailableReason(league: string): string | null {
+  return league.trim().toUpperCase() === 'NFL'
+    ? 'Book tracking is not available for weekly NFL calls yet. The pick and analysis are unchanged.'
+    : null;
+}
+
+/** The shared Book ledger currently identifies game rows by date + exact pick
+ * text. If two games on the same date publish the same text, the website must
+ * not pretend it can attach a receipt to either one unambiguously. */
+export function ambiguousGamePickReceiptKeys(
+  picks: Array<{
+    pick?: string | null;
+    type?: string | null;
+    commence_time?: string | null;
+  }>,
+  fallbackDate: string,
+): string[] {
+  const counts = new Map<string, number>();
+  for (const pick of picks) {
+    if ((pick.type ?? 'game').toLowerCase() === 'prop') continue;
+    if (typeof pick.pick !== 'string' || pick.pick.trim() === '') continue;
+    const gameDate = gameDateForBook(pick.commence_time, fallbackDate);
+    const key = gamePickReceiptKey(gameDate, pick.pick);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return [...counts].filter(([, count]) => count > 1).map(([key]) => key);
+}
+
+/** Match the receipt for this exact website board item. Repeated selections
+ * on a later slate must remain independent. */
+export function findExistingGameBet(
+  rows: UserBet[],
+  gameDate: string,
+  pickText: string,
+): UserBet | null {
+  return rows.find(
+    bet => bet.game_date === gameDate && bet.pick_type === 'game' && bet.pick_text === pickText,
+  ) ?? null;
+}
+
+export function findExistingPropBet(
+  rows: UserBet[],
+  gameDate: string,
+  player: string,
+  propType: string,
+): UserBet | null {
+  const wantedPlayer = player.trim().toLowerCase();
+  const wantedType = propType.trim().toLowerCase();
+  return rows.find(
+    bet => bet.game_date === gameDate &&
+      bet.pick_type === 'prop' &&
+      (bet.player_name ?? '').trim().toLowerCase() === wantedPlayer &&
+      (bet.prop_type ?? '').trim().toLowerCase() === wantedType,
+  ) ?? null;
 }
 
 /** Tails/fades are system-graded — the unfakeable ledger. */

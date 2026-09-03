@@ -75,7 +75,7 @@ describe('computeRecord', () => {
 });
 
 describe('mergeGameResults (NFL split across two tables)', () => {
-  // BUG 2 — off-by-one game_date means the (pick_text|game_date) key NEVER matches
+  // BUG 2 — off-by-one game_date means the row-identity key NEVER matches
   // for legacy NFL rows in game_results. Drop all NFL rows from gameRows before
   // merging; nfl_results is the authoritative source for NFL.
   it('drops legacy NFL strays from game_results', () => {
@@ -114,6 +114,12 @@ describe('mergeGameResults (NFL split across two tables)', () => {
     const dup2 = row({ league: 'MLB', pick_text: 'Phillies ML -120', game_date: '2026-01-10' });
     const result = mergeGameResults([], [dup1, dup2]);
     expect(result).toHaveLength(1);
+  });
+
+  it('keeps identical market calls on different matchups', () => {
+    const first = row({ league: 'WC', game_date: '2026-07-06', matchup: 'Belgium @ USA', pick_text: 'Under 2.5' });
+    const second = row({ league: 'WC', game_date: '2026-07-06', matchup: 'Spain @ Portugal', pick_text: 'Under 2.5' });
+    expect(mergeGameResults([], [first, second])).toHaveLength(2);
   });
 
   it('nfl_results rows stamp league NFL on output', () => {

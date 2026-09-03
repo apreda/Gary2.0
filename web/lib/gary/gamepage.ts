@@ -58,6 +58,17 @@ function sameTeam(a?: string | null, b?: string | null): boolean {
   return x === y || x.includes(y) || y.includes(x);
 }
 
+function matchupTeams(matchup?: string | null): { away: string; home: string } | null {
+  const parts = (matchup ?? '').trim().split(/\s+(?:@|at|vs\.?|versus)\s+/i);
+  if (parts.length !== 2 || !parts[0]?.trim() || !parts[1]?.trim()) return null;
+  return { away: parts[0], home: parts[1] };
+}
+
+function sameMatchup(away: string | null | undefined, home: string | null | undefined, matchup?: string | null): boolean {
+  const teams = matchupTeams(matchup);
+  return !!teams && sameTeam(away, teams.away) && sameTeam(home, teams.home);
+}
+
 export function isGamePick(p: GaryPick): boolean {
   return (p.type ?? 'game') !== 'prop' && !!p.awayTeam && !!p.homeTeam;
 }
@@ -76,51 +87,65 @@ export function findGamePicks(picks: GaryPick[], leagueCode: string, slug: strin
 
 /** Normalize a pick string for matching: lowercase, no trailing odds, single spaces. */
 export function normalizePickText(s?: string | null): string {
-  return (s ?? '').toLowerCase().replace(ODDS_TAIL, '').replace(/\s+/g, ' ').trim();
+  return (s ?? '')
+    .toLowerCase()
+    .replace(ODDS_TAIL, '')
+    .replace(/\bmoney\s*line\b/g, 'ml')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**
- * The graded row for a pick. Exact pick text (odds ignored) inside the same
- * league is the contract the grader writes; the matchup fallback catches a
- * re-priced pick and still requires both clubs so Red Sox never answers for
- * White Sox.
+ * The graded row for a pick. A result must belong to the same league and
+ * matchup before its pick text can match. This matters for common totals such
+ * as "Under 2.5", which can occur several times on one day's board.
  */
 export function matchPickResult(pick: GaryPick, results: GameResultRow[]): GameResultRow | null {
   const league = normalizeLeague(pick.league, pick.sport);
   const want = normalizePickText(pick.pick);
-  const inLeague = results.filter(r => !league || normalizeLeague(r.league) === league);
-  const exact = inLeague.find(r => normalizePickText(r.pick_text) === want);
-  if (exact) return exact;
-  return (
-    inLeague.find(
-      r =>
-        r.matchup &&
-        sameTeam(pick.awayTeam, r.matchup.split(/@|vs\.?/i)[0]) &&
-        sameTeam(pick.homeTeam, r.matchup.split(/@|vs\.?/i)[1]) &&
-        normalizePickText(r.pick_text).split(' ')[0] === want.split(' ')[0],
-    ) ?? null
+  const inMatchup = results.filter(
+    r => (!league || normalizeLeague(r.league) === league) && sameMatchup(pick.awayTeam, pick.homeTeam, r.matchup),
   );
+  return inMatchup.find(r => normalizePickText(r.pick_text) === want) ?? null;
 }
 
 /** Props written for this game: the prop's matchup names both clubs. */
 export function propsForGame(props: PropPick[], pick: GaryPick): PropPick[] {
-  return props.filter(pr => {
-    const m = pr.matchup ?? '';
-    if (!m) return false;
-    return sameTeam(pick.awayTeam, m.split(/@|vs\.?/i)[0]) && sameTeam(pick.homeTeam, m.split(/@|vs\.?/i)[1] ?? m);
-  });
+  return props.filter(pr => sameMatchup(pick.awayTeam, pick.homeTeam, pr.matchup));
 }
 
-/** A prop's graded row: same player, and the bet or prop type appears in the graded text. */
+function normalizedPropType(value?: string | null): string {
+  return (value ?? '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+[+-]?\d+(?:\.\d+)?$/, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function sameLine(a?: string | number | null, b?: string | number | null): boolean {
+  if (a == null || a === '' || b == null || b === '') return a == null || a === '';
+  const x = Number(a);
+  const y = Number(b);
+  if (Number.isFinite(x) && Number.isFinite(y)) return x === y;
+  return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+}
+
+/** A prop's graded row: exact player, matchup, full market, side, and line. */
 export function matchPropResult(prop: PropPick, results: PropResultRow[]): PropResultRow | null {
   const player = (prop.player ?? '').trim().toLowerCase();
-  if (!player) return null;
-  const type = (prop.prop ?? '').toLowerCase();
+  const type = normalizedPropType(prop.prop);
+  if (!player || !type || !prop.matchup) return null;
+  const wantedMatchup = matchupTeams(prop.matchup);
+  if (!wantedMatchup) return null;
+  const bet = (prop.bet ?? '').trim().toLowerCase();
   return (
     results.find(r => {
       if ((r.player_name ?? '').trim().toLowerCase() !== player) return false;
-      const hay = `${r.prop_type ?? ''} ${r.pick_text ?? ''} ${r.bet ?? ''}`.toLowerCase();
-      return !type || hay.includes(type.split('_')[0]);
+      if (!sameMatchup(wantedMatchup.away, wantedMatchup.home, r.matchup)) return false;
+      if (normalizedPropType(r.prop_type) !== type) return false;
+      if (bet && (r.bet ?? '').trim().toLowerCase() !== bet) return false;
+      return sameLine(prop.line, r.line_value);
     }) ?? null
   );
 }

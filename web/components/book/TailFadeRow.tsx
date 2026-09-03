@@ -3,9 +3,26 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useBookDay, useUnitDollars } from './BookDay';
-import { fmtNet, fmtStake, type UserBet } from '@/lib/book/model';
+import {
+  findExistingGameBet,
+  findExistingPropBet,
+  fmtNet,
+  fmtStake,
+  gameDateForBook,
+  gamePickReceiptKey,
+  tailFadeCountForGame,
+  type UserBet,
+} from '@/lib/book/model';
+import {
+  bookIntentAccountHref,
+  clearBookIntent,
+  gameIntentKey,
+  propIntentKey,
+  readBookIntent,
+} from '@/lib/auth/book-intent';
 import { parseGameTime } from '@/lib/gary/format';
-import { estDateStr, todayEST } from '@/lib/gary/dates';
+import { todayEST } from '@/lib/gary/dates';
+import { logBookActionStarted, logFirstBookAction } from '@/lib/gary/analytics';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tail/Fade rows — the same interaction as the app's card backs. One tap arms
@@ -16,13 +33,6 @@ import { estDateStr, todayEST } from '@/lib/gary/dates';
 
 const FADE_TINT = '#8B93A7';
 const STREAK_TINT = '#E5844B';
-
-/** The pick's ET calendar date — from its own start time, so a late-night
- *  card can never post against the wrong daily_picks row. */
-function pickDateEST(commence?: string | null): string {
-  const d = parseGameTime(commence);
-  return d ? estDateStr(d) : todayEST();
-}
 
 function useLocked(commence?: string | null): boolean {
   const [locked, setLocked] = useState(false);
@@ -169,7 +179,7 @@ function StakePicker({
         disabled={busy}
         className="rounded-chip bg-gold px-3.5 py-1.5 font-mono text-[11.5px] font-bold text-ink transition-opacity hover:opacity-90 disabled:opacity-50"
       >
-        Lock it in
+        Confirm in My Book
       </button>
       <button
         type="button"
@@ -191,10 +201,12 @@ export function TailFadeRow({
   pickText,
   pickId,
   commence,
+  trackingUnavailableReason,
 }: {
   pickText: string;
   pickId?: string | null;
   commence?: string | null;
+  trackingUnavailableReason?: string | null;
 }) {
   const ctx = useBookDay();
   const router = useRouter();
@@ -203,11 +215,16 @@ export function TailFadeRow({
   const [arming, setArming] = useState<'tail' | 'fade' | null>(null);
   const [busy, setBusy] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
-
-  if (!ctx || !pickText) return null;
-
-  const mine = ctx.mine.find(b => b.pick_text === pickText && b.pick_type === 'game') ?? null;
-  const riders = ctx.counts[pickText];
+  const intentKey = gameIntentKey(pickId, pickText);
+  const gameDate = gameDateForBook(commence, ctx?.date ?? todayEST());
+  const receiptKey = gamePickReceiptKey(gameDate, pickText);
+  const ambiguous = ctx?.ambiguousGamePickReceiptKeys.has(receiptKey) ?? false;
+  const mine = !ambiguous && ctx ? findExistingGameBet(ctx.mine, gameDate, pickText) : null;
+  // The provider's aggregate is explicitly for its primary date. Never show
+  // that number beside a different day from a multi-date weekly board.
+  const riders = ambiguous || !ctx
+    ? undefined
+    : tailFadeCountForGame(ctx.counts, ctx.date, gameDate, pickText);
   const ridersLine =
     riders && riders.tails + riders.fades > 0
       ? [riders.tails > 0 ? `${riders.tails} RIDING` : null, riders.fades > 0 ? `${riders.fades} FADING` : null]
@@ -215,12 +232,48 @@ export function TailFadeRow({
           .join(' · ')
       : null;
 
+  useEffect(() => {
+    if (!ctx?.ready || !ctx.signedIn || arming) return;
+    const intent = readBookIntent(window.location.search);
+    if (intent?.kind !== 'game' || intent.key !== intentKey) return;
+    const timer = window.setTimeout(() => {
+      const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      window.history.replaceState(window.history.state, '', clearBookIntent(current));
+      if (!ambiguous && !mine && !locked) setArming(intent.side);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [ambiguous, arming, ctx?.ready, ctx?.signedIn, intentKey, locked, mine]);
+
+  if (!ctx || !pickText) return null;
+
+  if (trackingUnavailableReason) {
+    return (
+      <p className="mt-4 text-right font-mono text-[9.5px] leading-relaxed text-low">
+        {trackingUnavailableReason}
+      </p>
+    );
+  }
+
+  if (ambiguous) {
+    return (
+      <p className="mt-4 text-right font-mono text-[9.5px] leading-relaxed text-low">
+        Book tracking is unavailable for this call because another game has the
+        same listed selection. The pick and analysis are unchanged.
+      </p>
+    );
+  }
+
   if (!mine && locked) return null; // never advertise a bet you can no longer place
 
   const arm = (side: 'tail' | 'fade') => {
     setErrorText(null);
+    logBookActionStarted(side, {
+      content_type: 'game',
+      ...(pickId ? { item_id: pickId.toLowerCase() } : {}),
+    });
     if (!ctx.signedIn) {
-      router.push('/account');
+      const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      router.push(bookIntentAccountHref(current, { kind: 'game', side, key: intentKey }));
       return;
     }
     setArming(side);
@@ -229,16 +282,21 @@ export function TailFadeRow({
   const place = async (stake: number, streak: boolean) => {
     setBusy(true);
     try {
+      const action = arming!;
       const { placeBet } = await import('@/lib/book/api');
       const bet = await placeBet({
-        gameDate: pickDateEST(commence),
+        gameDate,
         pickId,
         pickText,
-        kind: arming!,
+        kind: action,
         stake,
         streak,
       });
       ctx.addBet(bet);
+      logFirstBookAction(action, {
+        content_type: 'game',
+        ...(pickId ? { item_id: pickId.toLowerCase() } : {}),
+      });
       setArming(null);
     } catch (e) {
       setErrorText(e instanceof Error ? e.message : 'We could not save that right now.');
@@ -294,6 +352,11 @@ export function TailFadeRow({
           </button>
         </div>
       )}
+      {!mine && (
+        <p className="mt-2 text-right font-mono text-[9.5px] leading-relaxed text-low">
+          Tracks your prediction — no wager is placed.
+        </p>
+      )}
       <ErrorLine text={errorText} />
     </div>
   );
@@ -319,22 +382,34 @@ export function PropTailFadeRow({
   const [errorText, setErrorText] = useState<string | null>(null);
 
   const propToken = (prop.split(' ')[0] ?? '').toLowerCase();
-  if (!ctx || !player || !propToken) return null;
+  const intentKey = propIntentKey(player, propToken);
+  // Props are stored in the provider's daily prop_picks row. Preserve that
+  // publication-date identity; only game cards can span a weekly board.
+  const gameDate = ctx?.date ?? gameDateForBook(commence, todayEST());
+  const mine = ctx ? findExistingPropBet(ctx.mine, gameDate, player, propToken) : null;
 
-  const mine =
-    ctx.mine.find(
-      b =>
-        b.pick_type === 'prop' &&
-        (b.player_name ?? '').toLowerCase() === player.toLowerCase() &&
-        (b.prop_type ?? '').toLowerCase() === propToken,
-    ) ?? null;
+  useEffect(() => {
+    if (!ctx?.ready || !ctx.signedIn || arming) return;
+    const intent = readBookIntent(window.location.search);
+    if (intent?.kind !== 'prop' || intent.key !== intentKey) return;
+    const timer = window.setTimeout(() => {
+      const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      window.history.replaceState(window.history.state, '', clearBookIntent(current));
+      if (!mine && !locked) setArming(intent.side);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [arming, ctx?.ready, ctx?.signedIn, intentKey, locked, mine]);
+
+  if (!ctx || !player || !propToken) return null;
 
   if (!mine && locked) return null;
 
   const arm = (side: 'tail' | 'fade') => {
     setErrorText(null);
+    logBookActionStarted(side, { content_type: 'prop' });
     if (!ctx.signedIn) {
-      router.push('/account');
+      const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      router.push(bookIntentAccountHref(current, { kind: 'prop', side, key: intentKey }));
       return;
     }
     setArming(side);
@@ -343,15 +418,17 @@ export function PropTailFadeRow({
   const place = async (stake: number) => {
     setBusy(true);
     try {
+      const action = arming!;
       const { placePropBet } = await import('@/lib/book/api');
       const bet = await placePropBet({
-        gameDate: pickDateEST(commence),
+        gameDate,
         player,
         propType: propToken,
-        kind: arming!,
+        kind: action,
         stake,
       });
       ctx.addBet(bet);
+      logFirstBookAction(action, { content_type: 'prop' });
       setArming(null);
     } catch (e) {
       setErrorText(e instanceof Error ? e.message : 'We could not save that right now.');
@@ -403,6 +480,11 @@ export function PropTailFadeRow({
             FADE THE BEAR
           </button>
         </div>
+      )}
+      {!mine && (
+        <p className="mt-2 text-right font-mono text-[9.5px] leading-relaxed text-low">
+          Tracks your prediction — no wager is placed.
+        </p>
       )}
       <ErrorLine text={errorText} />
     </div>

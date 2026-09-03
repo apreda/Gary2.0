@@ -107,10 +107,27 @@ describe('matchPickResult', () => {
     expect(matchPickResult(pick({ pick: 'Cubs ML -125' }), results)?.final_score).toBe('6-3');
   });
 
-  it('falls back to the matchup when the text differs, still requiring both clubs', () => {
+  it('normalizes moneyline wording while still requiring both clubs', () => {
     const r = matchPickResult(pick({ awayTeam: 'Red Sox', homeTeam: 'Yankees', pick: 'Red Sox moneyline' }), results);
     expect(r?.final_score).toBe('1-16');
     expect(matchPickResult(pick({ awayTeam: 'Red Sox', homeTeam: 'Rays', pick: 'Red Sox moneyline' }), results)).toBeNull();
+  });
+
+  it('does not borrow a different market from the same matchup', () => {
+    const sameGame: GameResultRow[] = [
+      { game_date: '2026-08-30', league: 'MLB', matchup: 'Cubs @ Reds', pick_text: 'Cubs ML -118', result: 'won', final_score: '6-3', confidence: 0.7 },
+      { game_date: '2026-08-30', league: 'MLB', matchup: 'Cubs @ Reds', pick_text: 'Cubs -1.5 +135', result: 'lost', final_score: '6-3', confidence: 0.6 },
+    ];
+    expect(matchPickResult(pick({ pick: 'Cubs -2.5 +190' }), sameGame)).toBeNull();
+  });
+
+  it('never borrows an identical total from another matchup', () => {
+    const totals: GameResultRow[] = [
+      { game_date: '2026-07-06', league: 'WC', matchup: 'Belgium @ USA', pick_text: 'Under 2.5', result: 'lost', final_score: '4-1', confidence: 0.6 },
+      { game_date: '2026-07-06', league: 'WC', matchup: 'Spain @ Portugal', pick_text: 'Under 2.5', result: 'won', final_score: '1-0', confidence: 0.6 },
+    ];
+    const spain = pick({ league: 'WC', awayTeam: 'Spain', homeTeam: 'Portugal', pick: 'Under 2.5' });
+    expect(matchPickResult(spain, totals)?.final_score).toBe('1-0');
   });
 });
 
@@ -128,6 +145,29 @@ describe('props', () => {
     expect(mine.map(p => p.player)).toEqual(['Kyle Tucker']);
     expect(matchPropResult(mine[0], propResults)?.result).toBe('won');
     expect(matchPropResult(props[1], propResults)).toBeNull();
+  });
+
+  it('accepts the written “at” matchup separator without matching another game', () => {
+    const written = [
+      { ...props[0], matchup: 'Cubs at Reds' },
+      { ...props[1], matchup: 'Red Sox at Yankees' },
+    ];
+    expect(propsForGame(written, pick({})).map(p => p.player)).toEqual(['Kyle Tucker']);
+  });
+
+  it('does not confuse two markets for the same player and matchup', () => {
+    const earnedRuns: PropPick = {
+      player: 'Connor Prielipp', prop: 'pitcher_earned_runs 2.5', bet: 'over', line: '2.5', matchup: 'Twins @ Athletics',
+    };
+    const strikeouts: PropPick = {
+      player: 'Connor Prielipp', prop: 'pitcher_strikeouts 5.5', bet: 'over', line: '5.5', matchup: 'Twins @ Athletics',
+    };
+    const splitResults: PropResultRow[] = [
+      { game_date: '2026-08-26', player_name: 'Connor Prielipp', prop_type: 'pitcher_earned_runs', line_value: 2.5, actual_value: 3, result: 'won', odds: '-110', pick_text: 'Connor Prielipp over 2.5 pitcher_earned_runs', matchup: 'Twins @ Athletics', bet: 'over' },
+      { game_date: '2026-08-26', player_name: 'Connor Prielipp', prop_type: 'pitcher_strikeouts', line_value: 5.5, actual_value: 5, result: 'lost', odds: '-110', pick_text: 'Connor Prielipp over 5.5 pitcher_strikeouts', matchup: 'Twins @ Athletics', bet: 'over' },
+    ];
+    expect(matchPropResult(earnedRuns, splitResults)?.result).toBe('won');
+    expect(matchPropResult(strikeouts, splitResults)?.result).toBe('lost');
   });
 });
 

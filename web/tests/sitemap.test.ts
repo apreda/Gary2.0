@@ -3,7 +3,12 @@ import sitemap from '@/app/sitemap';
 import archiveSitemap from '@/app/archive/sitemap';
 import gameSitemap from '@/app/picks/sitemap';
 import robots from '@/app/robots';
-import { sitemapIdsForCount } from '@/lib/seo/sitemap';
+import { GET as sitemapIndex } from '@/app/sitemap-index.xml/route';
+import {
+  sitemapIdsForCount,
+  sitemapIndexXml,
+  sitemapUrlsForCount,
+} from '@/lib/seo/sitemap';
 import type { ArchiveDateSummary } from '@/lib/gary/archive';
 import { SPORTS } from '@/lib/gary/leagues';
 import type { PickIndexRow } from '@/lib/gary/gamepage';
@@ -48,6 +53,7 @@ const FIXED = [
   '/data-sources',
   '/corrections',
   '/app',
+  '/install',
   '/press',
   '/contact',
   '/terms',
@@ -139,13 +145,25 @@ describe('sitemap', () => {
     expect(sitemapIdsForCount(40_001)).toEqual([{ id: 0 }, { id: 1 }]);
   });
 
-  it('advertises the root, archive, and generated game sitemaps in robots.txt', async () => {
-    index.push({ date: '2026-08-30', league: 'MLB', sport: null, away_team: 'Cubs', home_team: 'Reds' });
-    const result = await robots();
-    expect(result.sitemap).toEqual([
+  it('builds a sitemap index that expands with permanent-game shards', async () => {
+    expect(sitemapUrlsForCount(40_001)).toEqual([
       'https://www.betwithgary.ai/sitemap.xml',
       'https://www.betwithgary.ai/archive/sitemap.xml',
       'https://www.betwithgary.ai/picks/sitemap/0.xml',
+      'https://www.betwithgary.ai/picks/sitemap/1.xml',
     ]);
+    expect(sitemapIndexXml(40_001)).toContain('<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">');
+    expect(sitemapIndexXml(40_001)).toContain('<loc>https://www.betwithgary.ai/picks/sitemap/1.xml</loc>');
+
+    index.push({ date: '2026-08-30', league: 'MLB', sport: null, away_team: 'Cubs', home_team: 'Reds' });
+    const response = await sitemapIndex();
+    expect(response.headers.get('content-type')).toBe('application/xml; charset=utf-8');
+    expect(await response.text()).toContain('<loc>https://www.betwithgary.ai/picks/sitemap/0.xml</loc>');
+  });
+
+  it('advertises the sitemap index in robots.txt', async () => {
+    index.push({ date: '2026-08-30', league: 'MLB', sport: null, away_team: 'Cubs', home_team: 'Reds' });
+    const result = await robots();
+    expect(result.sitemap).toBe('https://www.betwithgary.ai/sitemap-index.xml');
   });
 });
