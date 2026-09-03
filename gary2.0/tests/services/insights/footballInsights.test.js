@@ -523,7 +523,9 @@ describe('football generator registration and row contract', () => {
 
     expect(fantasy.map((row) => row.category)).toEqual(['fantasy_usage']);
     expect(fantasy[0]).toMatchObject({ player_id: 101, team_id: 1, game_id: 900 });
-    expect(fantasy[0].headline).toContain('2025 baseline');
+    // MLB's card contract: the headline is the player. The baseline label the
+    // user reads is built from meta (evidence_scope + season) by the card.
+    expect(fantasy[0].headline).toBe('Feature Back');
     expect(fantasy[0].detail).toContain('prior-season baseline, not current form');
     expect(fantasy[0].meta).toMatchObject({
       kind: 'fantasy_usage',
@@ -749,7 +751,7 @@ describe('football generator registration and row contract', () => {
 
     expect(fantasy).toHaveLength(1);
     expect(fantasy[0]).toMatchObject({ player_id: 601, team_id: 10, game_id: 457157 });
-    expect(fantasy[0].headline).toContain('2025 baseline');
+    expect(fantasy[0].headline).toBe('Returning Back');
     expect(fantasy[0].detail).toContain('prior-season baseline');
     expect(fantasy[0].meta).toMatchObject({
       kind: 'fantasy_usage',

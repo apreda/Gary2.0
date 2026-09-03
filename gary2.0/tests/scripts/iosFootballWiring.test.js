@@ -147,24 +147,30 @@ describe('Football Field density', () => {
 });
 
 describe('Football Fantasy density', () => {
-  it('lets the selected league and lane title speak for themselves', () => {
-    expect(footballIntel).not.toContain('Text(isNFL ? "NFL FANTASY" : "COLLEGE PLAYER BOARD")');
-    const rowBody = sliceStruct(footballIntel, 'private struct FootballFantasyRow');
-    expect(rowBody).not.toContain('Text(signal.kind.chip)');
-    expect(rowBody).not.toContain('Text(signal.headline)');
-    expect(rowBody).not.toContain('Text(signal.detail)');
-    expect(rowBody).toContain('Text(FootballFantasyEvidence.playerTitle(for: signal))');
-    expect(rowBody).toContain('Text(position.uppercased())');
+  it("renders football fantasy through MLB's own card, never a bespoke football page", () => {
+    // Founder, Sep 3 2026: "MLB is the template, the ONLY differences should be
+    // that NFL is NFL content". The football fantasy page, its row and its
+    // evidence helper are gone; every league routes through FantasyCornerPage.
+    expect(footballIntel).not.toContain('struct FootballFantasyPage');
+    expect(footballIntel).not.toContain('struct FootballFantasyRow');
+    expect(footballIntel).not.toContain('enum FootballFantasyEvidence');
+    expect(hubView).toContain('FantasyCornerPage(');
+    for (const lane of [
+      'usage: items(.fantasyUsage)',
+      'scoring: items(.fantasyRedZone) + items(.fantasyMatchup)',
+      'trending: items(.fantasyTrend)',
+    ]) {
+      expect(hubView).toContain(lane);
+    }
   });
 
-  it('keeps roster-verified prior-season provenance visible in dense NFL and NCAAF rows', () => {
-    expect(footballIntel).toContain('before.lowercased().hasSuffix("baseline")');
-    expect(footballIntel).toContain('after.range(of: " logged ", options: [.caseInsensitive])');
-    expect(footballIntel).toContain('headline.range(of: #"\\b(?:19|20)\\d{2}\\b"#, options: [.regularExpression])');
-    expect(footballIntel).toContain('return "\\(headline[year]) BASELINE"');
-    expect(footballIntel).toContain('return "PRIOR BASELINE"');
-    expect(footballIntel).toContain('if let baseline = FootballFantasyEvidence.baselineLabel(for: signal)');
-    expect(footballIntel).toContain('Text(baseline)');
+  it('keeps roster-verified prior-season provenance visible on the shared fantasy card', () => {
+    // The label moved from the deleted football row's headline to the MLB
+    // card's stat strip when the two pages merged. What the user sees — the
+    // season plus the word BASELINE on a prior-season row — is unchanged, and
+    // it now reads the structured meta instead of parsing the headline.
+    const strip = sliceStruct(hubView, 'fileprivate struct FantasyCard: View {');
+    expect(strip).toContain('if m.evidence_scope == "prior_season_baseline", let y = m.season?.display { bits.append("\\(y) baseline") }');
   });
 
   it('opens grounded football evidence instead of the MLB-only player-card placeholder', () => {
@@ -227,7 +233,8 @@ describe('Football Hub runs MLB\'s page', () => {
   });
 
   it('keeps modules out of the story feed and gives the dark day its own card', () => {
-    expect(hubView).toContain('moduleKinds: Set<SignalKind> = [.theSweat, .afterGary, .nextSlate]');
+    const moduleKinds = hubView.match(/moduleKinds: Set<SignalKind> = \[([^\]]+)\]/)?.[1] ?? '';
+    for (const kind of ['.theSweat', '.afterGary', '.nextSlate']) expect(moduleKinds).toContain(kind);
     expect(hubView).toContain('FootballNextSlatePreview(signal: next, accent: GaryColors.gold)');
     expect(hubView).toContain('slateRows.isEmpty && leagueSignals.contains { $0.kind == .nextSlate }');
     // The card stands in for the morning notice rather than stacking with it.
@@ -263,7 +270,9 @@ describe('Football Picks overview', () => {
     // own Hub and game-page renderers — through MLB's prose row they read as
     // gibberish. MARKET RANGE has no authoritative slate row to prove kickoff
     // against here, and the season series belongs to its own game page.
-    expect(feed).toContain('case .theSweat, .afterGary, .marketRange: return false');
+    expect(feed).toMatch(/case \.theSweat, \.afterGary, \.marketRange(?:, \.\w+)*: return false/);
+    // The league's practice grid is a game-page module with its own renderer.
+    expect(feed).toContain('.practiceReport');
     expect(feed).toContain('case .h2h: return false');
   });
 
@@ -272,8 +281,10 @@ describe('Football Picks overview', () => {
     expect(views).toContain('nextSlate: kd == .nextSlate ? meta : nil');
     expect(views).toContain('FootballNextSlatePreview(signal: nextSlateSignal');
     expect(footballIntel).toContain('struct FootballNextSlatePreview: View');
-    expect(footballIntel).toContain('isNFL ? nil : signals.first { $0.kind == .nextSlate }');
-    expect(footballIntel).toContain('visibleSignals.isEmpty, let nextSlate');
+    // The dark-day branch moved to the Picks page when the football quiet
+    // state was deleted (Sep 3): NCAAF only, and only on an empty board.
+    expect(views).toContain('guard sport == "NCAAF" else { return nil }');
+    expect(views).toContain('} else if let nextSlateSignal {');
     expect(footballIntel).toContain('return "KICKOFF TIMES TBD"');
     expect(footballIntel).not.toContain('3:00 PM');
   });
@@ -283,7 +294,8 @@ describe('Football Picks overview', () => {
     // shows only when there is no slate, and never as a story.
     expect(hubView).toContain('slateRows.isEmpty && leagueSignals.contains { $0.kind == .nextSlate }');
     expect(hubView).toContain('if showsNextSlateCard, let next = leagueSignals.first(where: { $0.kind == .nextSlate })');
-    expect(hubView).toContain('moduleKinds: Set<SignalKind> = [.theSweat, .afterGary, .nextSlate]');
+    const moduleKinds = hubView.match(/moduleKinds: Set<SignalKind> = \[([^\]]+)\]/)?.[1] ?? '';
+    for (const kind of ['.theSweat', '.afterGary', '.nextSlate']) expect(moduleKinds).toContain(kind);
   });
 
   it('merges stale date-only and confirmed rows by exact provider game id', () => {
