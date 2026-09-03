@@ -70,9 +70,9 @@ describe('the Codex bridge in tools mode', () => {
     expect(c).toContain('? formatCodexFunctionResponses(message)');
   });
 
-  it('the researcher runs Haiku first and falls back to Luna on the sub', () => {
-    expect(GAME_RESEARCH_MODEL).toBe('anthropic-claude-haiku-4-5');
-    expect(GAME_RESEARCH_FALLBACK_MODEL).toBe('codex-gpt-5.6-luna');
+  it('the researcher runs Luna on the sub first and falls back to Haiku', () => {
+    expect(GAME_RESEARCH_MODEL).toBe('codex-gpt-5.6-luna');
+    expect(GAME_RESEARCH_FALLBACK_MODEL).toBe('anthropic-claude-haiku-4-5');
     const loop = src('orchestrator/agentLoop.js');
     expect(loop).toContain('const RESEARCH_MODELS = [GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL]');
     expect(loop).toContain('for (const researchModel of RESEARCH_MODELS) {');
