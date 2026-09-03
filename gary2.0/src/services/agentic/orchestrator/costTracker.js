@@ -25,6 +25,8 @@ const MODEL_RATES = {
   // Subscription bridges: $0 marginal (Sep 1 2026 — unknown names used to
   // fall back to Haiku rates, so codex logged phantom dollars).
   'codex-gpt-5.6-sol':        { input: 0, output: 0 },
+  'codex-gpt-5.6-luna':       { input: 0, output: 0 },
+  'codex-gpt-5.6-terra':      { input: 0, output: 0 },
   'claude-opus-5':            { input: 0, output: 0 },
   'claude-fable-5':           { input: 0, output: 0 },
   // Metered Anthropic API cascade rungs (Sep 1 2026 cutover), list price.

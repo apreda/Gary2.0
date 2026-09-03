@@ -69,7 +69,7 @@ try {
 // silently.
 const { GAME_RESEARCH_MODEL } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
 const researcherOff = String(process.env.GARY_RESEARCHER || 'on').toLowerCase() === 'off';
-const researchKeyOk = researcherOff || (GAME_RESEARCH_MODEL.startsWith('anthropic-') ? !!process.env.ANTHROPIC_API_KEY : !!process.env.OPENAI_API_KEY);
+const researchKeyOk = researcherOff || GAME_RESEARCH_MODEL.startsWith('codex-') || (GAME_RESEARCH_MODEL.startsWith('anthropic-') ? !!process.env.ANTHROPIC_API_KEY : !!process.env.OPENAI_API_KEY);
 if (!process.env.OPENAI_API_KEY || !researchKeyOk) {
   console.error(`[JuneEngine] 🚨 REQUIRED API KEY MISSING (${!process.env.OPENAI_API_KEY ? 'OPENAI_API_KEY' : `researcher ${GAME_RESEARCH_MODEL}`}) — MLB picks WILL FAIL loudly until it lands in .env. There is no fallback system.`);
 } else {

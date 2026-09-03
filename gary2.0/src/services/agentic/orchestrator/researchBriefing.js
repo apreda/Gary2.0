@@ -266,7 +266,7 @@ Current preseason personnel, announced starter rest, rotations, injuries and coa
       _costTracker: options._costTracker || null,
       // EVERY game sport's research runs the Haiku tier (June engine, Aug 18
       // 2026 — the founder's one-system law: no Gemini in any pick lane).
-      modelName: GAME_RESEARCH_MODEL,
+      modelName: options.researchModel || GAME_RESEARCH_MODEL,
       systemPrompt: `You are the research assistant for a sports bettor named Gary. Your job is to find the full context and nuance behind the stats — the stuff a human bettor would know but raw numbers don't show.
 
 A stat by itself is just a number. Your job is to figure out WHY. An efficiency spike could be a real shift or 3 games against tanking teams. A player's absence could be devastating or already absorbed. A record could be misleading because of blowout variance. You find the story behind the data.
@@ -378,7 +378,11 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
       const factorPrompt = isNflAugustPreseasonScoutPlan
         ? `Analyze required NFL preseason factor: ${factorName}. Use only the verified scout report in your context. Return factual findings for BOTH teams; distinguish current preseason personnel/rotation evidence from the prior-season performance baseline. If evidence is unavailable, state that plainly. Return exactly one JSON object and do not make a pick.`
         : factorTokens.length > 0
-        ? `Investigate factor: ${factorName} now and write your findings.`
+        ? (briefingSession?.provider === 'codex-cli' && briefingSession?.tools
+          // On the bridge (tools mode, Sep 3 2026) the first move is spelled
+          // out: the text protocol has no harness nudging the model to call.
+          ? `Investigate factor: ${factorName} now. Its tokens: ${factorTokens.join(', ')}. Reply FIRST with ONLY the tool_calls JSON object fetching the tokens this factor needs (add any other fetch_stats or fetch_narrative_context calls you want). Write your findings only after the TOOL RESULTS arrive.`
+          : `Investigate factor: ${factorName} now and write your findings.`)
         : `Analyze factor: ${factorName} using the data already in the scout report and write your findings.`;
 
       // Lever 1: reset the chat for this factor (reusing the cached model) so prior
@@ -752,7 +756,7 @@ export function extractResearcherQuestions(text, maxQuestions = 6) {
 }
 
 /** One follow-up session per game, created lazily on Gary's first question. */
-export async function createResearcherFollowUpSession({ scoutReportContent, briefing, sport, homeTeam, awayTeam, _costTracker = null }) {
+export async function createResearcherFollowUpSession({ scoutReportContent, briefing, sport, homeTeam, awayTeam, _costTracker = null, researchModel = null }) {
   const systemPrompt = `You are the research assistant for a sports bettor named Gary. He read your briefing and has follow-up questions. Answer them factually.
 
 RULES:
@@ -769,7 +773,7 @@ ${scoutReportContent}
 ${briefing}`;
   return createModelSession({
     _costTracker,
-    modelName: GAME_RESEARCH_MODEL,
+    modelName: researchModel || GAME_RESEARCH_MODEL,
     systemPrompt,
     tools: toolDefinitions,
     thinkingLevel: 'high',

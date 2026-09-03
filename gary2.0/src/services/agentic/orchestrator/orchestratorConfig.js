@@ -18,7 +18,13 @@ export const GAME_PICK_MODEL = process.env.GARY_MODEL_OVERRIDE || 'gpt-5.6-sol';
 // THE RESEARCHER IS DEAD (founder, Aug 27 2026 — all sports): the desk is the
 // entire evidence and the brains run tool-less. GAME_RESEARCH_MODEL survives
 // ONLY as validateSessionModel's reroute target for refused model names.
+// THE RESEARCH ASSISTANT (founder, Sep 3 2026: "use Haiku then Luna when
+// Haiku is out of money — simple"): the Aug 18 Haiku researcher first
+// (metered, ~12¢ a game); if the Anthropic key is out of credit or the call
+// fails, Luna through the Codex bridge in tools mode — $0 on the sub, a
+// different model from Gary's Sol.
 export const GAME_RESEARCH_MODEL = process.env.GARY_RESEARCH_MODEL || 'anthropic-claude-haiku-4-5';
+export const GAME_RESEARCH_FALLBACK_MODEL = process.env.GARY_RESEARCH_FALLBACK_MODEL || 'codex-gpt-5.6-luna';
 // (MLB_RESEARCH_MODEL deleted Sep 1 2026 — zero consumers after the
 // researcher kill.)
 // The MLB June brain: Sol on the $0 codex bridge. GARY_MLB_BRAIN_MODEL is the
@@ -65,6 +71,8 @@ export const DESK_FALLBACK_MODELS = ['codex-gpt-5.6-sol', 'anthropic-claude-opus
 export const DESK_COST_PER_M = {
   'gpt-5.6-sol': [5, 30],
   'codex-gpt-5.6-sol': [0, 0],
+  'codex-gpt-5.6-luna': [0, 0],
+  'codex-gpt-5.6-terra': [0, 0],
   'claude-fable-5': [0, 0],
   'claude-opus-5': [0, 0],
   'claude-sonnet-5': [0, 0],

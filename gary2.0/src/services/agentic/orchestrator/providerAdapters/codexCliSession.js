@@ -21,6 +21,16 @@
  * Failure mapping: usage-cap / rate-limit text sets isQuotaError so the desk
  * cascade escalates onward (Gemini last) — two capped subscriptions still
  * never mean a dark slate.
+ *
+ * TOOLS MODE (founder, Sep 3 2026: "go from 12 cents a game to free"): the
+ * research assistant is a tool loop, and the CLI has no function calling.
+ * When a session is created WITH tools, the catalog rides the first message
+ * as a strict JSON call protocol; a reply that is a {"tool_calls":[…]} object
+ * comes back to the caller in the same chat-completions toolCalls shape the
+ * API adapters return, and the caller's function responses go back on the
+ * same thread as a TOOL RESULTS message. The research prompt, factor plan and
+ * tool executors do not change — only the model call moves onto the sub.
+ * Brains stay tool-less: a session created without tools is unchanged.
  */
 import { spawn } from 'child_process';
 import { isCliTripped, recordCliTimeout, recordCliSuccess, trippedError } from './cliCircuitBreaker.js';
@@ -43,6 +53,48 @@ export function isCodexCliModel(modelName) {
   return typeof modelName === 'string' && modelName.startsWith('codex-');
 }
 const cliModelOf = (modelName) => String(modelName).replace(/^codex-/, '');
+
+/** The tool catalog as text: name, purpose, parameters (JSON schema). */
+export function renderCodexToolProtocol(tools = []) {
+  const catalog = (tools || []).map((t) => {
+    const f = t?.function || t;
+    return `- ${f.name}: ${String(f.description || '').replace(/\s+/g, ' ').trim()}\n  parameters: ${JSON.stringify(f.parameters || {})}`;
+  }).join('\n');
+  return `## TOOLS (call protocol)
+This is not a coding session: there is no shell, no file system and no repository here. The ONLY tools are the ones listed below, and they run outside this conversation. To call one or more, reply with ONLY a JSON object — no prose before or after, no code fence — shaped exactly like this:
+{"tool_calls":[{"name":"fetch_stats","arguments":{"token":"EXAMPLE_TOKEN"}}]}
+Each call names a tool and gives its arguments as an object. You may put several calls in one reply. The results come back in the next message under TOOL RESULTS. When you have what you need, reply with your normal answer as text (no "tool_calls" key).
+RULE: whenever you are asked to investigate a factor, your FIRST reply is the tool_calls object fetching what that factor needs — never findings written from memory or from the report alone. Write the findings only after the TOOL RESULTS arrive.
+
+${catalog}`;
+}
+
+/** Caller's function responses → one TOOL RESULTS turn on the thread. */
+export function formatCodexFunctionResponses(responses = []) {
+  const blocks = (responses || []).map((r) => `### ${r.name}\n${typeof r.content === 'string' ? r.content : JSON.stringify(r.content)}`);
+  return `TOOL RESULTS\n\n${blocks.join('\n\n')}\n\nContinue: reply with another JSON tool_calls object if you need more, or write your answer as text.`;
+}
+
+/** A reply that is a tool_calls object → chat-completions toolCalls; else null. */
+export function parseCodexToolCalls(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return null;
+  const unfenced = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  const start = unfenced.indexOf('{');
+  const end = unfenced.lastIndexOf('}');
+  if (start < 0 || end <= start) return null;
+  let obj;
+  try { obj = JSON.parse(unfenced.slice(start, end + 1)); } catch { return null; }
+  if (!obj || !Array.isArray(obj.tool_calls) || obj.tool_calls.length === 0) return null;
+  const calls = obj.tool_calls
+    .filter((c) => c && typeof c.name === 'string' && c.name.trim())
+    .map((c, i) => ({
+      id: `codex_call_${Date.now()}_${i}`,
+      type: 'function',
+      function: { name: c.name.trim(), arguments: JSON.stringify(c.arguments && typeof c.arguments === 'object' ? c.arguments : (c.args && typeof c.args === 'object' ? c.args : {})) },
+    }));
+  return calls.length ? calls : null;
+}
 
 // The breaker is keyed per LANE, not per binary: a web search lane running
 // under a deliberately short cap (football grounding: 150s across up to ten
@@ -113,13 +165,17 @@ export async function createCodexCliSession(options = {}) {
     systemPrompt = '',
     thinkingLevel = 'high',
     _costTracker = null,
+    tools = null,
   } = options;
-  console.log(`[Session] Created ${modelName} session via Codex CLI adapter (GPT Pro bridge, tools: 0)`);
+  const toolList = Array.isArray(tools) && tools.length ? tools : null;
+  console.log(`[Session] Created ${modelName} session via Codex CLI adapter (GPT Pro bridge, tools: ${toolList ? toolList.length : 0})`);
   return {
     provider: 'codex-cli',
     modelName,
     thinkingLevel,
-    _systemPrompt: systemPrompt,
+    // Tools mode: the catalog rides the first message with the system prompt.
+    _systemPrompt: toolList ? `${systemPrompt}\n\n${renderCodexToolProtocol(toolList)}` : systemPrompt,
+    tools: toolList,
     codexThreadId: null, // set after the first send; `exec resume` continues it
     _costTracker,
   };
@@ -134,9 +190,12 @@ export function resetCodexCliSessionChat(session, seedHistory = []) {
   return session;
 }
 
-export async function sendToCodexCliSession(session, message, _options = {}) {
+export async function sendToCodexCliSession(session, message, options = {}) {
   const startTime = Date.now();
-  const text = typeof message === 'string' ? message : JSON.stringify(message);
+  // Tools mode: the caller's function responses ride as one TOOL RESULTS turn.
+  const text = (session.tools && options.isFunctionResponse && Array.isArray(message))
+    ? formatCodexFunctionResponses(message)
+    : (typeof message === 'string' ? message : JSON.stringify(message));
   let body = session._seedText ? `${session._seedText}\n\n${text}` : text;
   session._seedText = null;
 
@@ -155,7 +214,8 @@ export async function sendToCodexCliSession(session, message, _options = {}) {
     if (session._systemPrompt) body = `${session._systemPrompt}\n\n${body}`;
   }
 
-  const { code, stdout, stderr } = await runCodex(args, body);
+  // A research (tools) session trips its own breaker lane, never the brain's.
+  const { code, stdout, stderr } = await runCodex(args, body, CALL_TIMEOUT_MS, session.tools ? 'codex-research' : 'codex');
   const duration = Date.now() - startTime;
   if (code !== 0) {
     const error = toError(stderr || stdout);
@@ -175,10 +235,12 @@ export async function sendToCodexCliSession(session, message, _options = {}) {
   if (session._costTracker) session._costTracker.addUsage(session.modelName, usage);
   console.log(`[Session] Codex CLI response in ${duration}ms (tokens: ${usage.total_tokens}, cached: ${usage.cached_tokens}, GPT Pro — $0 marginal)`);
 
+  // Tools mode: a tool_calls reply comes back as toolCalls; brains stay tool-less.
+  const toolCalls = session.tools ? parseCodexToolCalls(content) : null;
   return {
-    content,
-    toolCalls: null, // brain calls run tool-less by construction
-    finishReason: 'stop',
+    content: toolCalls ? null : content,
+    toolCalls,
+    finishReason: toolCalls ? 'tool_calls' : 'stop',
     usage,
     raw: stdout,
   };

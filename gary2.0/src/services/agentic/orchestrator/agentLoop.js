@@ -1,4 +1,4 @@
-import { CONFIG, GAME_PICK_MODEL, GAME_ML_CAP, validateSessionModel } from './orchestratorConfig.js';
+import { CONFIG, GAME_PICK_MODEL, GAME_ML_CAP, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, validateSessionModel } from './orchestratorConfig.js';
 import { createModelSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
 import { buildResearchBriefing, extractResearcherQuestions, createResearcherFollowUpSession, askResearcher } from './researchBriefing.js';
 import { createCostTracker } from './costTracker.js';
@@ -332,7 +332,12 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   let _researcherFollowUpSession = null;
   let _researcherQuestionsUsed = 0;
   const RESEARCHER_QUESTION_BUDGET = 6;
-  const RESEARCH_BRIEFING_TIMEOUT_MS = Number(process.env.GARY_RESEARCH_TIMEOUT_MS) || 8 * 60 * 1000;
+  // 20 minutes: the bridge answers a tool turn in 15-25s and a game runs
+  // ~30 of them; Haiku finishes in 3-5 minutes either way.
+  const RESEARCH_BRIEFING_TIMEOUT_MS = Number(process.env.GARY_RESEARCH_TIMEOUT_MS) || 20 * 60 * 1000;
+  // The sub first, the metered Haiku researcher second (Sep 3 2026).
+  const RESEARCH_MODELS = [GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL].filter((m, i, a) => m && a.indexOf(m) === i);
+  let _researchModelUsed = null;
   // MLB (the June engine) and NBA (the April winning era) run it; football
   // stays desk-only pending its own review.
   const researcherOn = String(process.env.GARY_RESEARCHER || 'on').toLowerCase() !== 'off'
@@ -347,31 +352,40 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     _researchBriefing = handedBriefing;
     console.log(`[Research Briefing] ♻️ Re-using the main read's briefing (${_researchBriefing.length} chars) — the researcher is not run again`);
   } else if (researcherOn) {
-    console.log(`[Research Briefing] 🔬 Running the research briefing (Haiku with tools) — Gary waits for completion`);
-    try {
-      const briefingResult = await Promise.race([
-        buildResearchBriefing(options.scoutReport, sport, homeTeam, awayTeam, { ...options, _costTracker: costTracker }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error(`research briefing timed out after ${RESEARCH_BRIEFING_TIMEOUT_MS / 1000}s`)), RESEARCH_BRIEFING_TIMEOUT_MS)),
-      ]);
-      if (briefingResult && typeof briefingResult === 'object') {
-        _researchBriefing = briefingResult.briefing;
-        if (briefingResult.calledTokens?.length > 0) {
-          for (const { token } of briefingResult.calledTokens) {
-            if (!token) continue;
-            _flashCalledTokens.add(token);
-            const base = token.split(':')[0];
-            if (base && base !== token) _flashCalledTokens.add(base);
+    const failures = [];
+    for (const researchModel of RESEARCH_MODELS) {
+      console.log(`[Research Briefing] 🔬 Running the research briefing (${researchModel} with tools) — Gary waits for completion`);
+      try {
+        const briefingResult = await Promise.race([
+          buildResearchBriefing(options.scoutReport, sport, homeTeam, awayTeam, { ...options, _costTracker: costTracker, researchModel }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error(`research briefing timed out after ${RESEARCH_BRIEFING_TIMEOUT_MS / 1000}s`)), RESEARCH_BRIEFING_TIMEOUT_MS)),
+        ]);
+        if (briefingResult && typeof briefingResult === 'object') {
+          _researchBriefing = briefingResult.briefing;
+          if (briefingResult.calledTokens?.length > 0) {
+            for (const { token } of briefingResult.calledTokens) {
+              if (!token) continue;
+              _flashCalledTokens.add(token);
+              const base = token.split(':')[0];
+              if (base && base !== token) _flashCalledTokens.add(base);
+            }
           }
+        } else if (briefingResult && typeof briefingResult === 'string') {
+          _researchBriefing = briefingResult;
         }
-      } else if (briefingResult && typeof briefingResult === 'string') {
-        _researchBriefing = briefingResult;
+        if (!_researchBriefing) throw new Error('the research assistant returned an empty briefing');
+        _researchModelUsed = researchModel;
+        console.log(`[Research Briefing] ✅ Briefing ready (${_researchBriefing.length} chars, ${researchModel})`);
+        break;
+      } catch (err) {
+        failures.push(`${researchModel}: ${err.message}`);
+        console.warn(`[Research Briefing] ⚠️ ${researchModel} failed (${err.message})${RESEARCH_MODELS.indexOf(researchModel) < RESEARCH_MODELS.length - 1 ? ' — trying the next researcher' : ''}`);
       }
-      if (!_researchBriefing) throw new Error('the research assistant returned an empty briefing');
-      console.log(`[Research Briefing] ✅ Briefing ready (${_researchBriefing.length} chars)`);
-    } catch (err) {
+    }
+    if (!_researchBriefing) {
       // The June engine hard-failed here (a game without its researcher is
       // not the June system). Kept: the runner's cascade re-runs the game.
-      throw new Error(`[HARD FAIL] Research assistant failed for ${homeTeam} @ ${awayTeam} (${sport}): ${err.message}`);
+      throw new Error(`[HARD FAIL] Research assistant failed for ${homeTeam} @ ${awayTeam} (${sport}): ${failures.join(' | ')}`);
     }
   }
   if (researcherOn && isNBASport) {
@@ -1568,6 +1582,7 @@ INVESTIGATION COMPLETE`;
           try {
             if (!_researcherFollowUpSession) {
               _researcherFollowUpSession = await createResearcherFollowUpSession({
+                researchModel: _researchModelUsed,
                 scoutReportContent: options.scoutReport || '',
                 briefing: _researchBriefing,
                 sport, homeTeam, awayTeam,
