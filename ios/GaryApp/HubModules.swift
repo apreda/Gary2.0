@@ -415,6 +415,7 @@ extension SignalKind {
         case "after_gary", "after gary": return .afterGary
         case "market_range", "market range": return .marketRange
         case "next_slate", "next slate": return .nextSlate
+        case "practice_report", "practice report": return .practiceReport
         // NFL fantasy lanes. These are kept separate from MLB waiver/closer
         // categories because their evidence and labels are sport-specific.
         case "fantasy_usage", "usage", "usage_role", "snap_share", "target_share", "rush_share": return .fantasyUsage

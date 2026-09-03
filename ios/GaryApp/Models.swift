@@ -280,6 +280,19 @@ final class SwapMeta: Decodable {
     let latest_two: Double?         // fantasy_trend: latest two games
     let prior_sample: Double?       // fantasy_trend: the preceding sample
     let percent_change: Double?
+    // THE QUARTERBACKS plates (quarterback rows from footballQbWatch, Sep 3
+    // 2026): the named starter, his side, and his passing line as numbers.
+    let qb: String?
+    let abbr: String?
+    let injury_status: String?
+    let passing: PassingLine?
+    // THE PRACTICE REPORT (practice_report rows, Sep 3 2026): the league's
+    // official ledger — this week's participation by day and the game status.
+    let practice: PracticeDays?
+    let latest: String?             // today's code: FP · LP · DNP
+    let game_status: String?
+    let latest_day: String?
+    let practice_text: String?
     // Head-to-head payload (kind == "h2h"): season series dominance + last meeting.
     let dominant: String?
     let opponent: String?
@@ -326,6 +339,28 @@ final class SwapMeta: Decodable {
 }
 
 /// One exact sportsbook quote inside an AFTER GARY receipt.
+/// A quarterback's season passing line (BDL season_stats), stored by the
+/// writer alongside its prose form; `prior` = last season's line while the
+/// current one has no sample.
+struct PassingLine: Decodable {
+    let yards: Double?
+    let pct: Double?
+    let ypa: Double?
+    let td: Int?
+    let ints: Int?
+    let games: Int?
+    let season: Int?
+    let prior: Bool?
+}
+
+/// One player's practice participation this week, as the league printed it:
+/// "FP" full · "LP" limited · "DNP" did not participate · nil = not listed that day.
+struct PracticeDays: Decodable {
+    let wed: String?
+    let thu: String?
+    let fri: String?
+}
+
 struct FootballMarketSnapshot: Decodable {
     let line: Double?
     let odds: Double?

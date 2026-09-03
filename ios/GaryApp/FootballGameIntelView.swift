@@ -120,6 +120,8 @@ struct FootballGameIntelView: View {
     private var qbMetricRows: [Signal] { qbRows.filter { $0.lane?.home?.value != nil || $0.lane?.away?.value != nil } }
     private var qbPlateRows: [Signal] { Array(qbMetricRows.prefix(3)) }
     private var injuryWireRows: [Signal] { morningRows([.injury]) }
+    /// The league's official report for this game (footballPracticeReport).
+    private var practiceRows: [Signal] { morningRows([.practiceReport]) }
     private var numberRailRows: [Signal] {
         morningRows([.paceScript, .turnoverEdge, .explosivePlay, .trenches], cap: 4)
     }
@@ -164,7 +166,9 @@ struct FootballGameIntelView: View {
     /// numbers (yards per attempt, passing yards per game …). Built from the
     /// quarterback lane's meta.away / meta.home, so nothing is inferred.
     private var quarterbackTakeRow: (row: Signal, take: String)? {
-        for s in qbRows {
+        // The named starters' read leads (the duel), the team passing read
+        // follows — the same order MLB's ARMS takes: the arms, then the staffs.
+        for s in starterRows + qbRows.filter({ $0.lane?.qb == nil }) {
             if let r = s.lane?.read?.trimmingCharacters(in: .whitespacesAndNewlines), !r.isEmpty { return (s, r) }
             let d = s.detail.trimmingCharacters(in: .whitespacesAndNewlines)
             if !d.isEmpty { return (s, d) }
@@ -193,7 +197,38 @@ struct FootballGameIntelView: View {
         if let g = t?.games, g > 0 { return "\(num) · \(g) G" }
         return num
     }
+    /// The named starters (footballQbWatch rows carry `meta.qb`, `meta.side`
+    /// and the line as numbers since Sep 3 2026), away then home.
+    private var starterRows: [Signal] {
+        let named = qbRows.filter { $0.lane?.qb != nil }
+        return named.filter { $0.lane?.side == "away" } + named.filter { $0.lane?.side == "home" }
+    }
+    private func starterRow(home: Bool) -> Signal? {
+        starterRows.first { $0.lane?.side == (home ? "home" : "away") }
+    }
+
     private func quarterbackPlate(home: Bool) -> ScoutArmsPlate? {
+        // MLB's ARMS shows the two STARTERS by name (founder, Sep 3 2026:
+        // "normally this would be the QBs and not the teams"). The plate is
+        // the quarterback and his line; the team passing metrics are the
+        // fallback only for a side with no named starter.
+        if let s = starterRow(home: home), let qb = s.lane?.qb {
+            var stacks: [ScoutArmsStack] = []
+            if let p = s.lane?.passing {
+                let year = (p.prior == true && p.season != nil) ? " · \(p.season!)" : ""
+                if let v = p.ypa { stacks.append(ScoutArmsStack(label: "Yds / att\(year)", value: String(format: "%.2f", v))) }
+                if let v = p.pct { stacks.append(ScoutArmsStack(label: "Comp %", value: String(format: "%.1f", v))) }
+                if let v = p.yards { stacks.append(ScoutArmsStack(label: "Pass yds", value: String(format: "%.0f", v))) }
+                if let td = p.td, let ints = p.ints { stacks.append(ScoutArmsStack(label: "TD-INT", value: "\(td)-\(ints)")) }
+                if let g = p.games { stacks.append(ScoutArmsStack(label: "Games", value: "\(g)")) }
+            }
+            if let status = s.lane?.injury_status, !status.isEmpty {
+                stacks.append(ScoutArmsStack(label: "Status", value: status.uppercased()))
+            }
+            let surname = qb.split(separator: " ").last.map(String.init) ?? qb
+            return ScoutArmsPlate(name: surname.uppercased(),
+                                  stacks: stacks.isEmpty ? [ScoutArmsStack(label: "Starter", value: "QB1")] : stacks)
+        }
         let stacks = qbPlateRows.compactMap { s -> ScoutArmsStack? in
             let side = home ? s.lane?.home : s.lane?.away
             guard let v = Self.sideValue(side) else { return nil }
@@ -287,10 +322,11 @@ struct FootballGameIntelView: View {
     /// is its own card (the live proof, the receipt) or not this game's
     /// (next slate). A capped section's overflow lands here, never nowhere.
     private var moreIntel: [Signal] {
-        let wholeKindShown: Set<SignalKind> = [.h2h, .injury, .theSweat, .nextSlate, .afterGary]
+        let wholeKindShown: Set<SignalKind> = [.h2h, .injury, .theSweat, .nextSlate, .afterGary, .practiceReport]
         var shownIds = Set(railLaneRows.map(\.id))
         if quarterbackPlate(home: false) != nil || quarterbackPlate(home: true) != nil {
             shownIds.formUnion(qbPlateRows.map(\.id))
+            shownIds.formUnion(starterRows.map(\.id))
             if let take = quarterbackTakeRow { shownIds.insert(take.row.id) }
         }
         return edges.filter { s in
@@ -357,7 +393,8 @@ struct FootballGameIntelView: View {
             PlayerIntelSection(matchup: matchup, gameId: exactGameID)
             FootballAvailabilityCard(awayLabel: sides.away, homeLabel: sides.home,
                                      confirmed: availability,
-                                     wireAway: wireRows(home: false), wireHome: wireRows(home: true))
+                                     wireAway: wireRows(home: false), wireHome: wireRows(home: true),
+                                     practice: practiceRows)
             if !moreIntel.isEmpty {
                 EdgesSection(title: "MORE INTEL", edges: moreIntel).padding(.top, 8)
             }
@@ -568,36 +605,126 @@ private struct FootballAvailabilityCard: View {
     let confirmed: [FootballEvidence.Availability]
     let wireAway: [Signal]
     let wireHome: [Signal]
+    /// The league's official report rows for this game (practice_report):
+    /// this week's Wed/Thu/Fri participation and the game status, per side.
+    var practice: [Signal] = []
 
-    private enum Layer: String, CaseIterable { case wire = "Injury wire", confirmed = "Confirmed" }
-    @State private var state: Layer = .wire
     @State private var homeUp = true
+    @State private var open: Set<String> = []
 
-    private var confirmedAvailable: Bool { !confirmed.isEmpty }
-    private var shownConfirmed: [FootballEvidence.Availability] {
-        confirmed.filter { $0.team == (homeUp ? homeLabel : awayLabel) }
+    /// One printed line of the report. Days are nil when the league did not
+    /// list the player that day; `official` marks a row off the league page.
+    private struct Line: Identifiable {
+        let id: String
+        let name: String
+        let position: String?
+        let injury: String?
+        let status: String?
+        let note: String?
+        let wed: String?, thu: String?, fri: String?
+        let latest: String?
+        let official: Bool
     }
-    private var shownWire: [Signal] { homeUp ? wireHome : wireAway }
 
     private static func statusColor(_ status: String?) -> Color {
         switch (status ?? "").uppercased() {
-        case "OUT", "IR", "DOUBTFUL", "SUSPENDED": return Color(hex: "#cf6b5b")
-        case "QUESTIONABLE", "LIMITED", "DNP": return GaryColors.gold
+        case "OUT", "IR", "DOUBTFUL", "SUSPENDED", "DNP": return Color(hex: "#cf6b5b")
+        case "QUESTIONABLE", "LIMITED", "LP": return GaryColors.gold
         default: return Color(hex: "#63D17E")
         }
     }
+    private static func statusRank(_ status: String?, _ latest: String?) -> Int {
+        switch (status ?? "").uppercased() {
+        case "OUT", "IR": return 0
+        case "DOUBTFUL": return 1
+        case "QUESTIONABLE": return 2
+        default: break
+        }
+        switch (latest ?? "").uppercased() {
+        case "DNP": return 3
+        case "LP": return 4
+        default: return 5
+        }
+    }
+
+    /// "Cade Mays (C) is out for DET" → "Cade Mays (C)".
+    private static func subject(of headline: String) -> String {
+        if let r = headline.range(of: #"\s+(is|was|remains|has been)\s"#, options: .regularExpression) {
+            return String(headline[..<r.lowerBound])
+        }
+        return headline
+    }
+
+    /// The dossier's note or the wire's line for a name — the tap-to-open text.
+    private func note(for name: String, home: Bool) -> String? {
+        let key = name.lowercased()
+        if let a = confirmed.first(where: { $0.team == (home ? homeLabel : awayLabel) && $0.name.lowercased() == key }),
+           let d = a.detail, !d.isEmpty { return d }
+        if let w = (home ? wireHome : wireAway).first(where: { Self.subject(of: $0.headline).lowercased().hasPrefix(key) }) {
+            let d = w.detail.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !d.isEmpty { return d }
+        }
+        return nil
+    }
+
+    private func lines(home: Bool) -> [Line] {
+        let side = home ? "home" : "away"
+        let official = practice.filter { $0.lane?.side == side }
+        if !official.isEmpty {
+            return official.map { s in
+                let m = s.lane
+                return Line(id: s.id.uuidString, name: s.headline, position: m?.position, injury: m?.injury,
+                            status: m?.game_status, note: note(for: s.headline, home: home),
+                            wed: m?.practice?.wed, thu: m?.practice?.thu, fri: m?.practice?.fri,
+                            latest: m?.latest, official: true)
+            }
+            .sorted { Self.statusRank($0.status, $0.latest) < Self.statusRank($1.status, $1.latest) }
+        }
+        // No league page for this game yet (a non-report day, the preseason):
+        // the dossier's report, then the wire — same grammar, no day columns.
+        var out: [Line] = confirmed.filter { $0.team == (home ? homeLabel : awayLabel) }.map { a in
+            Line(id: a.id, name: a.name, position: nil, injury: nil, status: a.status, note: a.detail,
+                 wed: nil, thu: nil, fri: nil, latest: nil, official: false)
+        }
+        let seen = Set(out.map { $0.name.lowercased() })
+        for w in (home ? wireHome : wireAway) {
+            let name = Self.subject(of: w.headline)
+            guard !seen.contains(name.lowercased()) else { continue }
+            out.append(Line(id: w.id.uuidString, name: name, position: nil, injury: nil, status: w.value,
+                            note: w.detail, wed: nil, thu: nil, fri: nil, latest: nil, official: false))
+        }
+        return out
+    }
+
+    private var shown: [Line] { lines(home: homeUp) }
+    private var hasDays: Bool { shown.contains { $0.official } }
+    private var latestDay: String? {
+        practice.first { $0.lane?.side == (homeUp ? "home" : "away") }?.lane?.latest_day?.uppercased()
+    }
 
     var body: some View {
-        // Hidden entirely when neither layer has a row — an absent module,
-        // never an empty box.
-        if confirmedAvailable || !wireAway.isEmpty || !wireHome.isEmpty {
+        // Hidden entirely when nothing is listed — an absent module, never an
+        // empty box.
+        if !confirmed.isEmpty || !wireAway.isEmpty || !wireHome.isEmpty || !practice.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
-                tabs
-                content.padding(.horizontal, 14).padding(.top, 12)
-                teamToggle.padding(.top, 14).padding(.bottom, 4).frame(maxWidth: .infinity)
+                header.padding(.horizontal, 18).padding(.bottom, 8)
+                columns.padding(.horizontal, 18).padding(.bottom, 2)
+                if shown.isEmpty {
+                    pending(title: "NO LISTED ABSENCES", sub: "Everyone on the report is available")
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(shown) { line in
+                            Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+                            row(line)
+                        }
+                    }
+                    .padding(.horizontal, 18)
+                }
+                if hasDays { key.padding(.horizontal, 18).padding(.top, 10) }
+                teamToggle.padding(.top, 12).padding(.bottom, 4).frame(maxWidth: .infinity)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 10)
+            .padding(.vertical, 12)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(GaryColors.warmWhite.opacity(0.03))
@@ -605,22 +732,127 @@ private struct FootballAvailabilityCard: View {
                         .stroke(GaryColors.warmWhite.opacity(0.09), lineWidth: 1))
             )
             .padding(.horizontal, 16)
-            .onAppear { if confirmedAvailable { state = .confirmed } }
         }
     }
 
-    private var tabs: some View {
-        HStack {
-            ForEach(Layer.allCases, id: \.self) { s in
-                Button { withAnimation(.easeInOut(duration: 0.2)) { state = s } } label: {
-                    Text(s.rawValue).font(GaryFonts.text(16, state == s ? .bold : .medium))
-                        .foregroundStyle(state == s ? Color.white : Color.white.opacity(0.38))
-                }.buttonStyle(.plain)
-                if s != Layer.allCases.last { Spacer() }
-            }
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(hasDays ? "PRACTICE REPORT" : "THE INJURY REPORT")
+                .font(GaryFonts.display(19)).tracking(1.2).foregroundStyle(GaryColors.gold)
             Spacer()
+            if hasDays, let latestDay {
+                Text("THROUGH \(latestDay)")
+                    .font(GaryFonts.data(9.5, .semibold)).tracking(1.1).foregroundStyle(.white.opacity(0.42))
+            } else {
+                Text("\(shown.count) LISTED")
+                    .font(GaryFonts.data(9.5, .semibold)).tracking(1.1).foregroundStyle(.white.opacity(0.42))
+            }
         }
-        .padding(.horizontal, 22).padding(.top, 2)
+    }
+
+    private var columns: some View {
+        HStack(spacing: 0) {
+            Text("PLAYER").font(GaryFonts.data(9.5, .semibold)).tracking(1.1).foregroundStyle(.white.opacity(0.42))
+            Spacer()
+            if hasDays {
+                ForEach(["WED", "THU", "FRI"], id: \.self) { d in
+                    Text(d).font(GaryFonts.data(9.5, .semibold)).tracking(1.1).foregroundStyle(.white.opacity(0.42))
+                        .frame(width: 30)
+                }
+            }
+            Text("STATUS").font(GaryFonts.data(9.5, .semibold)).tracking(1.1).foregroundStyle(.white.opacity(0.42))
+                .frame(width: 88, alignment: .trailing)
+        }
+    }
+
+    @ViewBuilder private func dot(_ code: String?) -> some View {
+        switch (code ?? "").uppercased() {
+        case "FP":
+            Circle().fill(Color(hex: "#63D17E")).frame(width: 10, height: 10)
+        case "LP":
+            ZStack {
+                Circle().stroke(GaryColors.gold, lineWidth: 1.2)
+                Circle().fill(GaryColors.gold).mask(alignment: .leading) { Rectangle().frame(width: 5) }
+            }.frame(width: 10, height: 10)
+        case "DNP":
+            Circle().stroke(Color(hex: "#cf6b5b"), lineWidth: 1.2).frame(width: 10, height: 10)
+        default:
+            Text("–").font(GaryFonts.data(11)).foregroundStyle(.white.opacity(0.25))
+        }
+    }
+
+    private func row(_ line: Line) -> some View {
+        let isOpen = open.contains(line.id)
+        return Button {
+            guard line.note != nil else { return }
+            withAnimation(.easeInOut(duration: 0.18)) {
+                if isOpen { open.remove(line.id) } else { open.insert(line.id) }
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text(line.name)
+                                .font(GaryFonts.text(14.5, .semibold)).foregroundStyle(.white)
+                                .fixedSize(horizontal: false, vertical: true)
+                            if let pos = line.position, !pos.isEmpty {
+                                Text(pos.uppercased())
+                                    .font(GaryFonts.data(9.5, .bold)).foregroundStyle(.white.opacity(0.42))
+                            }
+                        }
+                        if let injury = line.injury, !injury.isEmpty {
+                            Text(injury).font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.55))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    Spacer(minLength: 6)
+                    if hasDays {
+                        ForEach(Array([line.wed, line.thu, line.fri].enumerated()), id: \.offset) { _, code in
+                            dot(code).frame(width: 30)
+                        }
+                    }
+                    HStack(spacing: 6) {
+                        if let status = line.status, !status.isEmpty {
+                            Text(status.uppercased())
+                                .font(GaryFonts.data(10.5, .bold)).tracking(1.1)
+                                .foregroundStyle(Self.statusColor(status))
+                                .lineLimit(1).minimumScaleFactor(0.7)
+                        }
+                        if line.note != nil {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(.white.opacity(0.35))
+                                .rotationEffect(.degrees(isOpen ? 180 : 0))
+                        }
+                    }
+                    .frame(width: 88, alignment: .trailing)
+                }
+                if isOpen, let note = line.note {
+                    Text(note)
+                        .font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.62))
+                        .lineSpacing(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 2)
+                }
+            }
+            .padding(.vertical, 9)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var key: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 14) {
+                HStack(spacing: 5) { dot("FP"); Text("FULL") }
+                HStack(spacing: 5) { dot("LP"); Text("LIMITED") }
+                HStack(spacing: 5) { dot("DNP"); Text("DID NOT PRACTICE") }
+            }
+            Text("THE NFL'S OFFICIAL INJURY REPORT")
+                .tracking(1.1)
+        }
+        .font(GaryFonts.data(9.5, .semibold)).foregroundStyle(.white.opacity(0.42))
     }
 
     private var teamToggle: some View {
@@ -636,75 +868,15 @@ private struct FootballAvailabilityCard: View {
         }
     }
 
-    @ViewBuilder private var content: some View {
-        if state == .confirmed && !confirmedAvailable {
-            pending(title: "REPORT NOT CONFIRMED YET", sub: "Posts with Gary's pick", hint: "Tap Injury wire for the morning report")
-        } else if state == .confirmed {
-            if shownConfirmed.isEmpty {
-                pending(title: "NO LISTED ABSENCES", sub: "Everyone on the report is available", hint: nil)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(shownConfirmed.enumerated()), id: \.element.id) { i, a in
-                        if i > 0 { Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1) }
-                        row(name: a.name, status: a.status, detail: a.detail)
-                    }
-                }
-            }
-        } else if shownWire.isEmpty {
-            pending(title: "NO INJURY NEWS YET", sub: "The wire fills from 6 AM ET", hint: nil)
-        } else {
-            VStack(spacing: 0) {
-                ForEach(Array(shownWire.enumerated()), id: \.element.id) { i, sg in
-                    if i > 0 { Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1) }
-                    row(name: Self.subject(of: sg.headline), status: sg.value, detail: sg.detail)
-                }
-            }
-        }
-    }
-
-    /// "Cade Mays (C) is out for DET" → "Cade Mays (C)".
-    private static func subject(of headline: String) -> String {
-        if let r = headline.range(of: #"\s+(is|was|remains|has been)\s"#, options: .regularExpression) {
-            return String(headline[..<r.lowerBound])
-        }
-        return headline
-    }
-
-    private func row(name: String, status: String?, detail: String?) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(name)
-                    .font(GaryFonts.text(15, .semibold)).foregroundStyle(.white)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 8)
-                if let status, !status.isEmpty {
-                    Text(status.uppercased())
-                        .font(GaryFonts.mono(11, bold: true)).tracking(1.2)
-                        .foregroundStyle(Self.statusColor(status))
-                        .lineLimit(1)
-                }
-            }
-            if let detail, !detail.isEmpty {
-                Text(detail)
-                    .font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.62))
-                    .lineSpacing(3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(.vertical, 8)
-    }
-
-    private func pending(title: String, sub: String, hint: String?) -> some View {
+    private func pending(title: String, sub: String) -> some View {
         VStack(spacing: 6) {
             Text(title)
                 .font(GaryFonts.mono(14, bold: true)).tracking(2.5).foregroundStyle(GaryColors.gold)
                 .multilineTextAlignment(.center)
             Text(sub).font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.5))
-            if let hint { Text(hint).font(GaryFonts.mono(9.5)).foregroundStyle(.white.opacity(0.38)) }
         }
         .padding(.vertical, 22).padding(.horizontal, 26)
         .frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(GaryColors.cardBg.opacity(0.5)))
     }
 }
 
@@ -1110,7 +1282,7 @@ enum FootballTodayFeed {
     static func rows(_ signals: [Signal]) -> [Signal] {
         signals.filter { signal in
             switch signal.kind {
-            case .theSweat, .afterGary, .marketRange: return false
+            case .theSweat, .afterGary, .marketRange, .practiceReport: return false
             // The season series belongs to its game page, not the day's list
             // (the same rule MLB's Today feed follows).
             case .h2h: return false

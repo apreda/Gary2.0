@@ -774,6 +774,7 @@ struct HubView: View {
         case .afterGary:                              anchor = "afterGary"
         case .marketRange:                            anchor = isFootball ? "edges" : "more"
         case .nextSlate:                              anchor = "nextSlate"
+        case .practiceReport:                         anchor = "field"
         case .theSweat:                               anchor = "theSweat"
         case .fantasyUsage, .fantasyRedZone,
              .fantasyMatchup, .fantasyTrend:          anchor = "fantasy"
@@ -878,7 +879,7 @@ struct HubView: View {
     /// Rows that own a module of their own and must never be told as a story.
     /// `.nextSlate` is the dark-day schedule card — it would otherwise headline
     /// an empty NCAAF Tuesday as if a schedule were an insight.
-    private static let moduleKinds: Set<SignalKind> = [.theSweat, .afterGary, .nextSlate]
+    private static let moduleKinds: Set<SignalKind> = [.theSweat, .afterGary, .nextSlate, .practiceReport]
 
     /// Rows that can actually carry the front page. Modules render in their own
     /// slots, so they must not decide whether the page reads as empty.
@@ -1057,7 +1058,7 @@ struct HubView: View {
         // "the H2H parts here doesnt need to be on The Hub") — the team season
         // series lives on the Picks page game view, where the ledger renders.
         // Without this it would fall through to More Edges and reappear.
-        var placed: Set<SignalKind> = Self.fantasyKinds.union([.regression, .streak, .h2h, .theSweat, .nextSlate])
+        var placed: Set<SignalKind> = Self.fantasyKinds.union([.regression, .streak, .h2h, .theSweat, .nextSlate, .practiceReport])
         for b in beats { for k in b.kinds { placed.insert(k) } }
         return leagueSignals.filter { !placed.contains($0.kind) && $0.confirmedXI == nil }
     }

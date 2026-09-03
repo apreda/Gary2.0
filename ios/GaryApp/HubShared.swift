@@ -113,6 +113,9 @@ enum SignalKind {
     // Football-only product modules: live factor tracking on a game page and
     // the post-publish market receipt in The Hub.
     case theSweat, afterGary, marketRange, nextSlate
+    // The NFL's official injury report — the Wed/Thu/Fri practice grid on the
+    // game page (Sep 3 2026). A module, never a story.
+    case practiceReport
     // Football season-long fantasy lanes: current role, scoring-area work,
     // opponent, and movement over recent games for both NFL and NCAAF.
     case fantasyUsage, fantasyRedZone, fantasyMatchup, fantasyTrend
@@ -159,6 +162,7 @@ enum SignalKind {
         case .afterGary: return "arrow.trianglehead.2.clockwise.rotate.90"
         case .marketRange: return "arrow.left.and.right"
         case .nextSlate: return "calendar.badge.clock"
+        case .practiceReport: return "list.clipboard"
         case .fantasyUsage: return "chart.bar.fill"
         case .fantasyRedZone: return "scope"
         case .fantasyMatchup: return "person.2.fill"
@@ -226,6 +230,7 @@ enum SignalKind {
         case .afterGary: return "AFTER GARY"
         case .marketRange: return "MARKET RANGE"
         case .nextSlate: return "NEXT SLATE"
+        case .practiceReport: return "PRACTICE REPORT"
         case .fantasyUsage: return "USAGE & ROLE"
         case .fantasyRedZone: return "RED-ZONE ROLE"
         case .fantasyMatchup: return "MATCHUP"

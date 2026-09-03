@@ -31,7 +31,15 @@ function passingLine(stat) {
   if (ypa != null) parts.push(`${ypa} yards per attempt`);
   if (Number.isFinite(td) && Number.isFinite(ints)) parts.push(`${td}-${ints} TD-INT`);
   if (!parts.length) return null;
-  return { text: parts.join(', '), games: Number.isFinite(games) ? games : null, ypa, pct, td, ints };
+  return {
+    text: parts.join(', '),
+    games: Number.isFinite(games) ? games : null,
+    yards: Number.isFinite(yards) ? yards : null,
+    ypa: ypa != null ? Number(ypa) : null,
+    pct: pct != null ? Number(pct) : null,
+    td: Number.isFinite(td) ? td : null,
+    ints: Number.isFinite(ints) ? ints : null,
+  };
 }
 
 async function seasonLineFor(bdl, playerId, season) {
@@ -116,6 +124,17 @@ export async function computeFootballQbWatch(ctx) {
           prior_season_line: line?.prior ?? null,
           injury_status: qb.injuryStatus || null,
           through: date,
+          // THE QUARTERBACKS plates (founder, Sep 3 2026 — MLB's ARMS shows the
+          // two starters by name, so does this): the starter, his side, and
+          // the line as numbers. The sentence above stays the prose form.
+          qb: qb.name,
+          abbr,
+          side: side.key,
+          team_id: side.team.id,
+          passing: line
+            ? { yards: line.yards, pct: line.pct, ypa: line.ypa, td: line.td, ints: line.ints,
+                games: line.games, season: line.season, prior: Boolean(line.prior) }
+            : null,
         },
       }));
     }

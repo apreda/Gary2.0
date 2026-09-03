@@ -27,6 +27,9 @@ import { ballDontLieService } from '../src/services/ballDontLieService.js';
 import { gameLabel } from '../src/services/insights/shared.js';
 import { footballSeasonForDate, loadFootballSlate } from '../src/services/insights/footballData.js';
 import { computeNflFantasyEdges } from '../src/services/insights/computers/nflFantasyEdges.js';
+import { computeFootballQbWatch } from '../src/services/insights/computers/footballQbWatch.js';
+import { computeFootballPracticeReport } from '../src/services/insights/computers/footballPracticeReport.js';
+import { fetchOfficialInjuryReport } from '../src/services/insights/nflOfficialInjuryReport.js';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
@@ -110,22 +113,84 @@ async function loadConnections() {
       .neq('category', 'next_slate')
       .order('relevance_score', { ascending: false });
     if (error) throw error;
-    // The stored fantasy rows predate the card contract (Sep 3 2026); the
-    // live writer regenerates them below in the shape the Fantasy Corner reads.
-    for (const r of data) if (!String(r.category).startsWith('fantasy_')) rows.push(retime(r, g));
+    // The stored fantasy rows predate the card contract and the stored
+    // per-QB rows predate the plate contract (both Sep 3 2026); the live
+    // writers regenerate them below in the shapes the pages read. Team
+    // passing rows (no named starter) stay.
+    for (const r of data) {
+      if (String(r.category).startsWith('fantasy_')) continue;
+      if (r.category === 'quarterback' && /starts at quarterback/i.test(r.headline || '')) continue;
+      rows.push(retime(r, g));
+    }
   }
-  rows.push(...await loadFantasyRows());
+  if (process.argv.includes('--keep-live')) {
+    // Design iteration: keep the last run's writer rows (Sol reads cost minutes).
+    rows.push(...keptLiveRows());
+  } else {
+    rows.push(...await loadLiveRows('fantasy', computeNflFantasyEdges));
+    rows.push(...await loadLiveRows('quarterback', computeFootballQbWatch));
+  }
+  rows.push(...await loadPracticeRows());
   return rows.sort((a, b) => (b.relevance_score ?? 0) - (a.relevance_score ?? 0));
 }
 
-/** Runs the real NFL fantasy writer against the cloned slates (BDL + the analyst pass). */
-async function loadFantasyRows() {
+/**
+ * THE PRACTICE REPORT for the mock day: the league page carries no Week 1
+ * tables until Wed Sep 9, so the sim borrows three archived 2025 weeks as the
+ * mock week's Wednesday, Thursday and Friday snapshots — run through the real
+ * computer, day by day, with each day's rows fed back as the prior snapshots
+ * the production run would read from insight_connections. Real players,
+ * real statuses; the week is borrowed and the fixture says so here.
+ */
+async function loadPracticeRows() {
+  const out = [];
+  const days = [['wed', 16, '2026-09-02'], ['thu', 17, '2026-09-03'], ['fri', 18, '2026-09-04']];
+  for (const date of [...new Set(GAMES.map((g) => g.date))]) {
+    const games = await loadFootballSlate({ bdl: ballDontLieService, league: 'nfl', date });
+    const wanted = games.filter((game) => gameById.has(String(game?.id)));
+    if (!wanted.length) continue;
+    let prior = [];
+    let latest = [];
+    for (const [, week, mockDate] of days) {
+      const snapshot = prior;
+      latest = await computeFootballPracticeReport({
+        date: mockDate, league: 'nfl', games: wanted, helpers: { gameLabel },
+        officialInjuryReport: () => fetchOfficialInjuryReport({ season: 2025, week }),
+        rest: { supabaseUrl: 'mock', key: 'mock', client: { get: async () => ({ data: snapshot }) } },
+      });
+      prior = latest.map((r) => ({ date: mockDate, game_id: String(r.game_id), headline: r.headline, meta: r.meta }));
+    }
+    const text = (v) => (v == null ? null : String(v));
+    for (const r of latest) {
+      const g = gameById.get(String(r.game_id));
+      if (!g) continue;
+      out.push(retime({ ...r, date, league: 'NFL', game_id: text(r.game_id), team_id: text(r.team_id), player_id: null, result: null, result_note: null }, g));
+    }
+  }
+  console.log(`  practice_report rows built from the archived 2025 weeks: ${out.length}`);
+  return out;
+}
+
+/** The fantasy + starter rows already in the fixture on disk (`--keep-live`). */
+function keptLiveRows() {
+  let swift = '';
+  try { swift = fs.readFileSync(OUT, 'utf8'); } catch { return []; }
+  const m = swift.match(/static let insightConnections = #"""\n([\s\S]*?)\n"""#/);
+  if (!m) return [];
+  const rows = JSON.parse(m[1]);
+  const kept = rows.filter((r) => String(r.category).startsWith('fantasy_') || (r.category === 'quarterback' && r.meta?.qb));
+  console.log(`  live writer rows kept from the fixture on disk: ${kept.length}`);
+  return kept;
+}
+
+/** Runs a real NFL insight writer against the cloned slates (BDL + its analyst pass). */
+async function loadLiveRows(label, computer) {
   const out = [];
   for (const date of [...new Set(GAMES.map((g) => g.date))]) {
     const games = await loadFootballSlate({ bdl: ballDontLieService, league: 'nfl', date });
     const wanted = games.filter((game) => gameById.has(String(game?.id)));
     if (!wanted.length) { console.warn(`no BDL slate rows for ${date}`); continue; }
-    const rows = await computeNflFantasyEdges({
+    const rows = await computer({
       date, season: footballSeasonForDate(date), league: 'nfl', games: wanted,
       slateGameIds: new Set(wanted.map((game) => game.id)), bdl: ballDontLieService, helpers: { gameLabel },
     });
@@ -141,7 +206,7 @@ async function loadFantasyRows() {
       }, g));
     }
   }
-  console.log(`  fantasy rows regenerated by the live writer: ${out.length}`);
+  console.log(`  ${label} rows regenerated by the live writer: ${out.length}`);
   return out;
 }
 

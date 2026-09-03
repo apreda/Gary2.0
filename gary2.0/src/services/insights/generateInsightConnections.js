@@ -71,6 +71,7 @@ import { computeFootballDefensiveEdges } from './computers/footballDefensiveEdge
 import { computeFootballHeadToHead } from './computers/footballHeadToHead.js';
 import { computeFootballRestSpacing } from './computers/footballRestSpacing.js';
 import { computeFootballStandings } from './computers/footballStandings.js';
+import { computeFootballPracticeReport } from './computers/footballPracticeReport.js';
 import { computeNflFantasyEdges } from './computers/nflFantasyEdges.js';
 import { computeNcaafFantasyEdges } from './computers/ncaafFantasyEdges.js';
 import { computeNcaafNextSlate } from './computers/ncaafNextSlate.js';
@@ -140,6 +141,9 @@ const FOOTBALL_COMPUTERS = [
 const NFL_COMPUTERS = [
   ...FOOTBALL_COMPUTERS,
   computeNflFantasyEdges,
+  // The league's official injury report — the Wed/Thu/Fri practice grid on
+  // the game page (founder, Sep 3 2026). NFL-only: no college league ledger.
+  computeFootballPracticeReport,
   // Form and record lanes off the NFL standings row. NFL-only: the college
   // standings route answers one conference at a time, so a Saturday slate has
   // no single authoritative call to read.
