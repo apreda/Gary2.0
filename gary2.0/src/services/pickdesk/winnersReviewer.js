@@ -116,7 +116,7 @@ ${pickText}${fmtOdds(odds)} — ${kind}.${picked ? ` The picked side is ${picked
 ${rationale || '(no card stored)'}
 
 ## WHAT A BLIND READ OF THE TWO CASES FOUND (it did not know the bet)
-Stronger case: ${cmp.stronger_case || 'unknown'}. Both weak: ${cmp.both_weak || 'unknown'}. ${cmp.evidence || ''}
+Stronger case: ${cmp.stronger_named || cmp.stronger_case || 'unknown'}. Both weak: ${cmp.both_weak || 'unknown'}. ${cmp.evidence || ''}
 ${picked && blind?.cases?.[picked] ? `The ${picked} case — recent not season: ${blind.cases[picked].recent_not_season?.answer || '?'}; a tonight reason: ${blind.cases[picked].tonight_reason?.answer || '?'} (${blind.cases[picked].tonight_reason?.evidence || ''}).` : ''}
 
 ## THE QUESTIONS (answer PART 4 and PART 5 only; use web search for Part 5)
