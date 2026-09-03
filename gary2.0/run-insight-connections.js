@@ -663,6 +663,16 @@ async function run() {
   for (const league of leagues) {
     console.log(`\n── ${league} ──`);
 
+    // LEAGUE PULSE FIRST (founder, Sep 3 2026). The pulse tables are built
+    // from the slate and the league's own boards — they need nothing the
+    // per-game generator produces. Built LAST, they were lost every time the
+    // plist hard-cap killed this stage mid-run (7 kills to date; NCAAF's AP
+    // Top 25 vanished twice on Sep 3 alone, and the college Hub lost its
+    // rankings board for the day). Cheap, independent work goes first so a
+    // capped stage costs picks, never the boards. The call is idempotent
+    // (upsert on date+league+tab) and non-fatal.
+    await buildAndStorePulse({ date: targetDate, league });
+
     // PER-LANE CHECKPOINT (Aug 27 2026). The insights plist hard-caps this
     // stage (GARY_CAP_FOOTBALL) and the alarm kills the whole process when the
     // subscription-bridge lane reads run long — on Aug 27 every pass computed
@@ -771,10 +781,7 @@ async function run() {
         );
       }
       console.log(`   No connections generated for ${league} on ${targetDate}.`);
-      // League Pulse is INDEPENDENT of the connections (it builds league-wide
-      // tables straight from the slate), so still build it on a 0-connection day.
-      // NON-FATAL + dry-run-aware internally.
-      await buildAndStorePulse({ date: targetDate, league });
+      // League Pulse already ran at the top of this league's pass.
       continue;
     }
 
@@ -787,8 +794,6 @@ async function run() {
       // Player insight cards (MLB rides connections; football rides the slate); in dry-run
       // this prints the pack count + one sample payload instead of writing.
       await buildAndStoreCards({ date: targetDate, league, connections });
-      // League Pulse builds its own league-wide tables from the slate.
-      await buildAndStorePulse({ date: targetDate, league });
       continue;
     }
 
@@ -930,8 +935,10 @@ async function run() {
       // After the connections insert succeeds, build + store this league's
       // per-player breakdown packs (MLB + NFL/NCAAF). NON-FATAL — guarded internally.
       await buildAndStoreCards({ date: targetDate, league, connections });
-      // League Pulse — league-wide leaderboard tables, full-row UPSERT
-      // each run (live snapshot). NON-FATAL — guarded internally.
+      // League Pulse REFRESH — the board was already written at the top of
+      // this pass; this second upsert picks up anything that landed during
+      // the run (moved odds, a new injury). A hard-cap kill now costs the
+      // refresh, never the board itself. NON-FATAL — guarded internally.
       await buildAndStorePulse({ date: targetDate, league });
     } catch (err) {
       hadError = true;

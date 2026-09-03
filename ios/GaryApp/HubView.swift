@@ -509,6 +509,15 @@ struct HubView: View {
     @State private var pulseByLeague: [String: [LeaguePulseRow]] = [:]
     @State private var pulseTab: String? = nil
     private var pulseRows: [LeaguePulseRow] { pulseByLeague[sel.label] ?? [] }
+    /// The AP poll pack — the college page's own board (Sep 3 2026).
+    private var pollBoardRow: LeaguePulseRow? {
+        sel == .ncaaf ? pulseRows.first(where: { $0.tab == "rankings" }) : nil
+    }
+    /// The shelf carries every table EXCEPT the one already standing at the
+    /// top of the page — the poll is shown once, in full, not twice.
+    private var shelfPulseRows: [LeaguePulseRow] {
+        pollBoardRow == nil ? pulseRows : pulseRows.filter { $0.tab != "rankings" }
+    }
     @State private var pendingScrollAnchor: String? = nil
     /// Beats currently expanded past their top rows ("See all n").
     @State private var openBeats: Set<String> = []
@@ -1225,10 +1234,10 @@ struct HubView: View {
     @ViewBuilder private var referenceShelf: some View {
         // MLB, NFL, and NCAAF all carry pulse tabs now (Aug 27 2026); the dict
         // read keeps a league with no stored tabs collapsed to nothing.
-        if [.mlb, .nfl, .ncaaf].contains(sel), !pulseRows.isEmpty {
+        if [.mlb, .nfl, .ncaaf].contains(sel), !shelfPulseRows.isEmpty {
             HubCollapsible(anchor: "pulse", open: $openBeats,
                            title: "League Pulse", sub: "league-wide tables") {
-                HubLeaguePulse(rows: pulseRows, selectedTab: $pulseTab,
+                HubLeaguePulse(rows: shelfPulseRows, selectedTab: $pulseTab,
                                cardFor: { intelCard(for: $0) },
                                onPlayer: { namedCard = $0 },
                                onTeam: { openTeamCard(named: $0) })
@@ -1336,6 +1345,15 @@ struct HubView: View {
                 HubSlateStrip(rows: slateRows) { r in
                     gameSheet = HubGameSel(row: r)
                 }
+            }
+
+            // THE POLL (founder, Sep 3 2026). College is ranked, so the league
+            // page opens on the board a fan opens ESPN for. It sits with the
+            // slate, above the editorial, and the agate table it came from
+            // stays out of the shelf so the poll has exactly one home.
+            if sel == .ncaaf, let poll = pollBoardRow {
+                NcaafPollBoard(row: poll) { openTeamCard(named: $0) }
+                    .id("poll")
             }
 
             // Football dark day (NFL + NCAAF since Aug 24): no slate to strip,
@@ -1571,7 +1589,8 @@ struct HubView: View {
             if !items(.regression).isEmpty { out.append(("regression", "Regression")) }
             if sel == .wc, !items(.xgRegression).isEmpty { out.append(("xgboard", "xG")) }
         }
-        if sel == .mlb, !pulseRows.isEmpty { out.append(("pulse", "Pulse")) }
+        if pollBoardRow != nil { out.append(("poll", "Top 25")) }
+        if !shelfPulseRows.isEmpty { out.append(("pulse", "Pulse")) }
         if !selStreakRows.isEmpty { out.append(("streaks", "Streaks")) }
         if !leagueSignals.isEmpty {
             let featured = featuredStoryIDs
@@ -1829,6 +1848,97 @@ fileprivate func hubSideLabel(_ abbr: String?, _ team: String?, league: String? 
     let mapped = teamAbbrevFromName(t, league: league)
     if !mapped.isEmpty { return mapped.uppercased() }
     return String(t.uppercased().filter { $0.isLetter }.prefix(3))
+}
+
+/// AP TOP 25 — the college board a fan expects on the league page (founder,
+/// Sep 3 2026: "needs the Rankings like when I got on ESPN"). It reads the
+/// stored `rankings` pulse pack, so the poll on the page and the poll in the
+/// tables are the same rows; nothing is re-derived or re-ranked here. Two
+/// columns keep 25 schools inside a page the editorial still owns, and every
+/// school is whole — the poll never abbreviates and never truncates.
+fileprivate struct NcaafPollBoard: View {
+    let row: LeaguePulseRow
+    let onTeam: (String) -> Void
+
+    private struct Entry: Identifiable {
+        let id: Int
+        let rank: String
+        let team: String
+        let trailing: String
+    }
+
+    private var entries: [Entry] {
+        row.rows.enumerated().compactMap { i, cells in
+            let team = (cells["team"] ?? "").trimmingCharacters(in: .whitespaces)
+            guard !team.isEmpty else { return nil }
+            let record = (cells["record"] ?? "").trimmingCharacters(in: .whitespaces)
+            let trend = (cells["trendcol"] ?? "").trimmingCharacters(in: .whitespaces)
+            var trailing = record
+            if trend != "" && trend != "—" {
+                trailing = trailing.isEmpty ? trend : "\(trailing) · \(trend)"
+            }
+            return Entry(id: i, rank: cells["rank"] ?? "", team: team, trailing: trailing)
+        }
+    }
+
+    /// Split down the middle so the ranks read 1-13 then 14-25, the way a
+    /// printed poll reads — never 1, 2 across.
+    private var columns: [[Entry]] {
+        let all = entries
+        guard all.count > 8 else { return [all] }
+        let half = Int((Double(all.count) / 2).rounded(.up))
+        return [Array(all.prefix(half)), Array(all.dropFirst(half))]
+    }
+
+    var body: some View {
+        if !entries.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                // No count beside the head — the title already says 25.
+                HubHead(title: row.title ?? "AP Top 25")
+                if let sub = row.subtitle?.trimmingCharacters(in: .whitespaces), !sub.isEmpty {
+                    Text(sub)
+                        .font(HubFont.body(11.5))
+                        .foregroundStyle(.white.opacity(0.62))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 18)
+                }
+                HStack(alignment: .top, spacing: 16) {
+                    ForEach(Array(columns.enumerated()), id: \.offset) { _, col in
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(col) { e in
+                                Button { onTeam(e.team) } label: { line(e) }
+                                    .buttonStyle(.plain)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(.horizontal, 18)
+            }
+        }
+    }
+
+    private func line(_ e: Entry) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            Text(e.rank)
+                .font(HubFont.data(12.5))
+                .foregroundStyle((Int(e.rank) ?? 99) <= 5 ? GaryColors.gold : .white.opacity(0.5))
+                .frame(minWidth: 20, alignment: .trailing)
+            Text(e.team)
+                .font(HubFont.body(13, .semibold))
+                .foregroundStyle(.white)
+                .fixedSize(horizontal: false, vertical: true)
+                .multilineTextAlignment(.leading)
+            Spacer(minLength: 4)
+            if !e.trailing.isEmpty {
+                Text(e.trailing)
+                    .font(HubFont.data(11))
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+        }
+        .padding(.vertical, 5.5)
+        .contentShape(Rectangle())
+    }
 }
 
 fileprivate struct HubSlateStrip: View {

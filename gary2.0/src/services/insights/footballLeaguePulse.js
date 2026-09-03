@@ -247,19 +247,44 @@ async function buildNcaafRankings({ date, season, bdl }) {
   if (!poll.length) return null;
 
   const prior = pollSeason !== season;
-  const rows = poll
+  const ranked = poll
     .filter((r) => Number.isFinite(Number(r?.rank)))
     .sort((a, b) => Number(a.rank) - Number(b.rank))
-    .slice(0, 25)
-    .map((r) => ({
+    .slice(0, 25);
+
+  // A poll whose every record is blank or 0-0 is the PRESEASON poll — the one
+  // AP publishes before a snap is played (founder, Sep 3 2026: the board said
+  // "Week 1 poll with records" over a column of 0-0s, which reads as this
+  // week's records). Name it for what it is and drop the empty column rather
+  // than print a record nobody has yet.
+  const preseasonPoll = ranked.every((r) => {
+    const rec = String(r?.record || '').trim();
+    return rec === '' || /^0\s*-\s*0(\s*-\s*0)?$/.test(rec);
+  });
+
+  // A poll is read by SCHOOL, not by ticker — the board says Ohio State the
+  // way the AP prints it, while every other football table stays on the
+  // abbreviations its matchups need.
+  const school = (t) => t?.college || t?.full_name || t?.name || t?.abbreviation || '—';
+
+  // Preseason trend is "NR" for all 25 (nobody has moved yet); a column of
+  // NRs is noise, so it appears only once the poll starts moving.
+  const movedPoll = ranked.some((r) => /^[+-]/.test(String(r?.trend || '')));
+
+  const rows = ranked.map((r) => {
+    const row = {
       rank: String(r.rank),
-      team: sideName(r?.team),
-      record: r?.record || '',
+      team: school(r?.team),
       points: r?.points != null ? String(r.points) : '',
-      trendcol: r?.trend != null && r?.trend !== '' ? String(r.trend) : '—',
-      trend: String(r?.trend || '').startsWith('+') ? 'hot'
-        : String(r?.trend || '').startsWith('-') ? 'cold' : '',
-    }));
+    };
+    if (!preseasonPoll) row.record = r?.record || '';
+    if (movedPoll) {
+      row.trendcol = r?.trend != null && r?.trend !== '' ? String(r.trend) : '—';
+      row.trend = String(r?.trend || '').startsWith('+') ? 'hot'
+        : String(r?.trend || '').startsWith('-') ? 'cold' : '';
+    }
+    return row;
+  });
   if (!rows.length) return null;
 
   return {
@@ -269,14 +294,16 @@ async function buildNcaafRankings({ date, season, bdl }) {
     title: prior ? `AP Top 25 — Final ${pollSeason}` : 'AP Top 25',
     subtitle: prior
       ? "Last season's final poll; the new season's poll replaces it when it posts"
-      : `Week ${poll[0]?.week ?? ''} poll with records`,
+      : preseasonPoll
+        ? 'The preseason poll — it stands until AP posts the next one'
+        : `Week ${poll[0]?.week ?? ''} poll with records`,
     sort_note: 'by rank',
     columns: [
       { key: 'rank', label: '#', align: 'trailing', emphasis: 'stat' },
       { key: 'team', label: 'TEAM', align: 'leading', emphasis: 'primary' },
-      { key: 'record', label: 'REC', align: 'trailing', emphasis: 'stat' },
+      ...(preseasonPoll ? [] : [{ key: 'record', label: 'REC', align: 'trailing', emphasis: 'stat' }]),
       { key: 'points', label: 'PTS', align: 'trailing', emphasis: 'muted' },
-      { key: 'trendcol', label: 'TREND', align: 'trailing', emphasis: 'muted' },
+      ...(movedPoll ? [{ key: 'trendcol', label: 'TREND', align: 'trailing', emphasis: 'muted' }] : []),
     ],
     rows,
   };
