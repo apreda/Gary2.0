@@ -2332,7 +2332,7 @@ async function main() {
                   const todayEt = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
                   const shadow = await buildShadowPick({
                     game, homeTeam: cleanPick.homeTeam, awayTeam: cleanPick.awayTeam, todayEt,
-                    garyPick: cleanPick.pick, db: supabaseAdmin || supabase,
+                    garyPick: cleanPick.pick, deskText, db: supabaseAdmin || supabase,
                   });
                   if (shadow.ok) {
                     const r = shadow.row;

@@ -18,6 +18,7 @@ export const DEFAULT_WEIGHTS = {
   pen: 2.0,        // points per full unit of (home pen availability − away pen availability), each 0..1
   lineup: 0.8,     // points per missing regular, cap 3 a side
   leash: 1.0,      // points against a side whose starter is on a short leash
+  news: 1.0,       // multiplier on the late-news reader's typed facts (newsReader.js FACT_POINTS)
   rlShare: 0.8,    // how much of the moneyline move the run line inherits
   cap: 4.0,        // total adjustment cap, points
 };
@@ -189,6 +190,13 @@ export function adjust(features, weights = DEFAULT_WEIGHTS) {
       pts += d;
       drivers.push({ name: `${side} starter short leash`, pts: round1(d), detail: leash.expectedPitches != null ? `${leash.expectedPitches} pitches a start, ${leash.daysSince} days since his last` : `${leash.daysSince} days since his last start` });
     }
+  }
+  // THE LATE-NEWS READER (Sep 3 2026): typed facts the feeds cannot show,
+  // already de-duplicated against the three feed features by newsReader.js.
+  const news = features?.news;
+  if (news && Number.isFinite(Number(news.pts)) && Number(news.pts) !== 0) {
+    pts += Number(news.pts);
+    for (const d of Array.isArray(news.drivers) ? news.drivers : []) drivers.push(d);
   }
   const capped = Math.max(-w.cap, Math.min(w.cap, pts));
   return { pts: round1(capped), raw: round1(pts), drivers };

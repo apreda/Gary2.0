@@ -15,6 +15,7 @@ import { getMlbSchedule, getProbablePitchers, getPitcherGameLogRaw, getConfirmed
 import { buildPenArmsForTeam } from '../agentic/tools/statRouters/penArms.js';
 import { fetchSeasonStatsWithFallback, resolveBdlTeamId } from '../agentic/tools/statRouters/mlbFetchers.js';
 import { decide, penAvailability, starterLeash, lineupAbsence, nameKey, DEFAULT_WEIGHTS } from './marketModel.js';
+import { readLateNews, newsAdjustment } from './newsReader.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const SHADOW_MODEL_VERSION = 'shadow-v1-2026-09-03';
@@ -84,7 +85,7 @@ async function hittersFor(teamName) {
 }
 
 /** Tonight's features for both clubs. Each feature is null when its feed is missing. */
-export async function gatherFeatures({ gamePk, homeTeam, awayTeam, todayEt }) {
+export async function gatherFeatures({ gamePk, homeTeam, awayTeam, todayEt, deskText = null, weights = null }) {
   const year = new Date().getFullYear();
   const notes = [];
   const [probables, lineups, homePen, awayPen, homeHitters, awayHitters] = await Promise.all([
@@ -105,11 +106,19 @@ export async function gatherFeatures({ gamePk, homeTeam, awayTeam, todayEt }) {
     leash: { ...starterLeash(log, todayEt), starter: starter?.fullName || null },
     lineup: lineupAbsence(lineup, hitters),
   });
-  return {
-    home: side(homePen, homeLog, lineups?.home, homeHitters, probables?.home),
-    away: side(awayPen, awayLog, lineups?.away, awayHitters, probables?.away),
-    notes,
-  };
+  const home = side(homePen, homeLog, lineups?.home, homeHitters, probables?.home);
+  const away = side(awayPen, awayLog, lineups?.away, awayHitters, probables?.away);
+  // THE LATE-NEWS READER: the fourth fact, what the feeds cannot show. One
+  // LLM call with web search → typed facts → points, de-duplicated against
+  // the three feed features above. Skipped when there is no desk to read.
+  let news = { facts: [], pts: 0, drivers: [], error: deskText ? null : 'no desk text', ms: 0 };
+  if (deskText) {
+    const read = await readLateNews({ homeTeam, awayTeam, todayEt, deskText });
+    const adj = newsAdjustment(read.facts, { home, away }, weights || DEFAULT_WEIGHTS);
+    news = { facts: read.facts, pts: adj.pts, drivers: adj.drivers, error: read.error || null, ms: read.ms };
+    if (read.error) notes.push(`news reader: ${read.error}`);
+  }
+  return { home, away, news, notes };
 }
 
 /**
@@ -117,7 +126,7 @@ export async function gatherFeatures({ gamePk, homeTeam, awayTeam, todayEt }) {
  * child analyzed (board prices, bookmakers, commence_time, id). Returns the
  * stored row or { ok:false, error }.
  */
-export async function buildShadowPick({ game, homeTeam, awayTeam, gamePk = null, todayEt, garyPick = null, db }) {
+export async function buildShadowPick({ game, homeTeam, awayTeam, gamePk = null, todayEt, garyPick = null, deskText = null, db }) {
   try {
     const board = {
       moneyline_home: game?.moneyline_home ?? null,
@@ -129,8 +138,8 @@ export async function buildShadowPick({ game, homeTeam, awayTeam, gamePk = null,
       line_vendor: game?.line_vendor ?? null,
     };
     const pk = gamePk || await resolveGamePk(game, homeTeam, awayTeam, todayEt).catch(() => null);
-    const features = await gatherFeatures({ gamePk: pk, homeTeam, awayTeam, todayEt });
     const weights = loadShadowWeights();
+    const features = await gatherFeatures({ gamePk: pk, homeTeam, awayTeam, todayEt, deskText, weights });
     const d = decide({ board, bookmakers: game?.bookmakers || null, features, weights, homeName: clubNick(homeTeam), awayName: clubNick(awayTeam) });
     if (!d.ok) return { ok: false, error: d.error };
     const c = d.choice;

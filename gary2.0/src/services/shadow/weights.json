@@ -1,8 +1,9 @@
 {
-  "_how": "THE SHADOW MODEL weights, in probability points. Hand-set Sep 3 2026; refit weekly against the closing line (scripts/run-shadow-read.js prints each driver's agreement with the close). A commit is live at the next batch.",
+  "_how": "THE SHADOW MODEL weights, in probability points. Hand-set Sep 3 2026; refit weekly against the closing line (scripts/run-shadow-read.js prints each driver's agreement with the close). A commit is live at the next batch. news = multiplier on the late-news reader's typed facts (closer unavailable 0.8, reliever 0.4, pitch limit / opener / scratched starter 1.0, lineup scratch 0.8; confidence high 1x / medium 0.75x / low 0.5x).",
   "pen": 2.0,
   "lineup": 0.8,
   "leash": 1.0,
+  "news": 1.0,
   "rlShare": 0.8,
   "cap": 4.0
 }
