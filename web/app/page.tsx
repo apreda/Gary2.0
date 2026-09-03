@@ -9,8 +9,9 @@ import { Eyebrow } from '@/components/Eyebrow';
 import { StitchRule, StatTile, GhostLink } from '@/components/Terminal';
 import { fetchTodayGamePicks, fetchTodayPropPicks, selectTopPick, selectTopProps } from '@/lib/gary/picks';
 import { fetchDailySlate } from '@/lib/gary/board';
-import { fetchAllGameResults, computeRecord, currentStreak, sinceDate, effectiveOdds } from '@/lib/gary/results';
+import { fetchAllGameResults, computeRecord, currentStreak, sinceDate } from '@/lib/gary/results';
 import { todayEST, daysAgoEST } from '@/lib/gary/dates';
+import { accountHref } from '@/lib/auth/redirect';
 import { pageMetadata } from '@/lib/seo/metadata';
 
 export const revalidate = 600;
@@ -102,11 +103,11 @@ export default async function Home() {
               >
                 Open today&apos;s desk
               </Link>
-              <GhostLink href="/picks">See today&apos;s picks</GhostLink>
+              <GhostLink href={accountHref('/you', 'signup')}>Start My Book — free</GhostLink>
             </div>
             {l30 && allTime && (
               <p className="rise rise-5 tnum mt-7 font-mono text-[12px] text-low">
-                LAST 30 DAYS {l30.wins}–{l30.losses} · ALL-TIME {allTime.wins}–{allTime.losses} ({allTime.pct}%)
+                LAST 30 DAYS {l30.wins}–{l30.losses} · ALL-TIME GAME PICKS {allTime.wins}–{allTime.losses} ({allTime.pct}%)
               </p>
             )}
           </div>
@@ -128,25 +129,6 @@ export default async function Home() {
                 height={140}
                 className="absolute -bottom-7 -left-9 -rotate-12"
               />
-
-              {/* Today's actual top pick, pinned to the frame */}
-              {topPick && (
-                <div className="rise rise-4 absolute -left-16 top-3 w-[220px] rounded-chip border border-gold/60 bg-chip px-3.5 py-2.5 shadow-card">
-                  <p className="font-mono text-[9px] font-bold uppercase tracking-[0.04em] text-low">
-                    Today&apos;s free pick · {(topPick.league ?? '').toUpperCase()}
-                  </p>
-                  <div className="mt-1.5 flex items-baseline justify-between gap-2">
-                    <span className="min-w-0 break-words font-mono text-[13px] font-bold leading-snug text-gold">
-                      {(topPick.pick ?? '').replace(/[+-]\d{3,}\s*$/, '').trim()}
-                    </span>
-                    {(topPick.odds ?? effectiveOdds(topPick.pick)) != null && (
-                      <span className="tnum shrink-0 font-mono text-[12px] font-bold text-low">
-                        {String(topPick.odds ?? effectiveOdds(topPick.pick))}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
 
               {/* The current streak, owned either way */}
               {streak && (
@@ -213,7 +195,7 @@ export default async function Home() {
                   {allTime.losses.toLocaleString()}
                 </p>
                 <p className="mt-4 max-w-lg text-[15px] leading-relaxed text-mid">
-                  Every pick Gary has made, graded against final scores the next morning.
+                  Every game pick Gary has made, graded against final scores the next morning.
                   No deletions, no restatements — losses stay on the books with the wins.
                 </p>
                 <div className="mt-6">

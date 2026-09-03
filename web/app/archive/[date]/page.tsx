@@ -14,7 +14,9 @@ import {
   fetchArchiveDay,
   isArchiveDate,
 } from '@/lib/gary/archive';
-import type { GameResultRow, InsightRow, PropResultRow } from '@/lib/gary/types';
+import { gameSlug } from '@/lib/gary/gamepage';
+import { normalizeLeague, sportByCode } from '@/lib/gary/leagues';
+import type { GameResultRow, GaryPick, InsightRow, PropResultRow } from '@/lib/gary/types';
 import { SITE_URL, pageMetadata } from '@/lib/seo/metadata';
 
 export const revalidate = 3600;
@@ -35,6 +37,13 @@ function archiveDescription(
     counts.gradedResults > 0 ? `${counts.gradedResults} graded result${counts.gradedResults === 1 ? '' : 's'}` : null,
   ].filter(Boolean).join(', ');
   return `Review Gary AI's stored sports-pick board for ${label}${contents ? `: ${contents}` : ''}. Original analysis and graded results stay separate.`;
+}
+
+export function archiveGamePath(pick: GaryPick, date: string): string | null {
+  const code = normalizeLeague(pick.league, pick.sport);
+  const sport = code ? sportByCode(code) : undefined;
+  if (!sport || !pick.awayTeam?.trim() || !pick.homeTeam?.trim()) return null;
+  return `/picks/${sport.slug}/${date}/${gameSlug(pick.awayTeam, pick.homeTeam)}`;
 }
 
 export async function generateMetadata({
@@ -88,6 +97,19 @@ export default async function ArchiveDatePage({
   const { previous, next } = adjacentArchiveDates(summaries.map(summary => summary.date), date);
   const canonical = `${SITE_URL}/archive/${date}`;
   const description = archiveDescription(label, counts);
+  const gameLinks = picks.flatMap(pick => {
+    const href = archiveGamePath(pick, date);
+    return href ? [{ href, pick }] : [];
+  });
+  const leagueBoardMap = new Map<string, { href: string; label: string }>();
+  for (const { pick } of gameLinks) {
+    const code = normalizeLeague(pick.league, pick.sport);
+    const sport = code ? sportByCode(code) : undefined;
+    if (sport) {
+      leagueBoardMap.set(sport.slug, { href: `/picks/${sport.slug}/${date}`, label: sport.name });
+    }
+  }
+  const leagueBoards = [...leagueBoardMap.values()];
 
   return (
     <main className="mx-auto max-w-6xl px-5 pb-20 pt-12">
@@ -143,16 +165,40 @@ export default async function ArchiveDatePage({
         />
       </div>
 
+      {leagueBoards.length > 0 && (
+        <nav aria-label="League boards for this archive date" className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-[11px] uppercase tracking-[0.05em]">
+          <span className="text-low">Browse this date</span>
+          {leagueBoards.map(board => (
+            <Link
+              key={board.href}
+              href={board.href}
+              className="text-gold underline decoration-gold/40 underline-offset-4 hover:text-gold-light"
+            >
+              {board.label} board
+            </Link>
+          ))}
+        </nav>
+      )}
+
       {picks.length > 0 && (
         <ArchiveSection title="Game picks" count={picks.length}>
           <div className="grid gap-5 md:grid-cols-2">
-            {picks.map((pick, index) => (
-              <PickCard
-                key={pick.pick_id ?? `${pick.awayTeam}-${pick.homeTeam}-${pick.pick}-${index}`}
-                pick={pick}
-                expanded
-              />
-            ))}
+            {picks.map((pick, index) => {
+              const href = archiveGamePath(pick, date);
+              return (
+                <div key={pick.pick_id ?? `${pick.awayTeam}-${pick.homeTeam}-${pick.pick}-${index}`}>
+                  <PickCard pick={pick} expanded />
+                  {href && (
+                    <Link
+                      href={href}
+                      className="mt-2 inline-block font-mono text-[11px] uppercase tracking-[0.04em] text-gold underline decoration-gold/40 underline-offset-4 hover:text-gold-light"
+                    >
+                      Permanent matchup analysis →
+                    </Link>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </ArchiveSection>
       )}

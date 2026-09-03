@@ -79,15 +79,15 @@ export default async function NflPage({
             <span className="text-gold">this season.</span>
           </h1>
           <p className="mt-5 max-w-xl text-[16px] leading-relaxed text-mid">
-            A pick for every game, every week — free in the app, with the reasoning behind
+            A pick for every game, every week — free on the website and in the app, with the reasoning behind
             it, and every result on his record, wins and losses.{' '}
             {preseason
               ? 'The first card drops for Kickoff: Patriots at Seahawks, Wednesday September 9.'
-              : 'The season is on — today’s card is live in the app.'}
+              : 'The season is on — today’s card is live on the website and in the app.'}
           </p>
           <div className="mt-7 flex flex-wrap items-center gap-4">
             <AppStoreButton surface="nfl_page_hero" />
-            <GhostLink href="/results">See the record</GhostLink>
+            <GhostLink href="/picks/nfl">Open the free NFL board</GhostLink>
           </div>
         </div>
         <div className="hidden justify-center lg:col-span-4 lg:flex">

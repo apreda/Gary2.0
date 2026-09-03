@@ -1,15 +1,22 @@
 import { describe, it, expect } from 'vitest';
 import {
+  ambiguousGamePickReceiptKeys,
   bookRecord,
   cumulativeSeries,
   filterBets,
+  findExistingGameBet,
+  findExistingPropBet,
   fmtNet,
   fmtNetTotal,
   fmtStake,
+  gameBookTrackingUnavailableReason,
+  gameDateForBook,
+  gamePickReceiptKey,
   groupLedgerDays,
   isVerified,
   manualUnits,
   trackerStats,
+  tailFadeCountForGame,
   windowSince,
   type UserBet,
 } from '@/lib/book/model';
@@ -29,6 +36,77 @@ describe('isVerified (the WITH GARY ledger boundary)', () => {
     expect(isVerified(bet({ kind: 'tail' }))).toBe(true);
     expect(isVerified(bet({ kind: 'fade' }))).toBe(true);
     expect(isVerified(bet({ kind: 'manual' }))).toBe(false);
+  });
+});
+
+describe('board receipt identity', () => {
+  it('flags exact duplicate game selections across the complete day', () => {
+    expect(ambiguousGamePickReceiptKeys([
+      { pick: 'Under 2.5', type: 'game' },
+      { pick: 'Home +3.5', type: 'game' },
+      { pick: 'Under 2.5', type: 'game' },
+    ], '2026-09-03')).toEqual([gamePickReceiptKey('2026-09-03', 'Under 2.5')]);
+  });
+
+  it('keeps the shared ledger identity exact and ignores blanks and props', () => {
+    expect(ambiguousGamePickReceiptKeys([
+      { pick: 'Under 2.5', type: 'game' },
+      { pick: 'under 2.5', type: 'game' },
+      { pick: 'Under 2.5 ', type: 'game' },
+      { pick: 'Under 2.5', type: 'prop' },
+      { pick: '  ', type: 'game' },
+      { pick: '', type: 'game' },
+    ], '2026-09-03')).toEqual([]);
+  });
+
+  it('flags the same exact text even when it comes from different leagues', () => {
+    expect(ambiguousGamePickReceiptKeys([
+      { pick: 'Over 7.5', type: 'game' },
+      { pick: 'Over 7.5' },
+    ], '2026-09-03')).toEqual([gamePickReceiptKey('2026-09-03', 'Over 7.5')]);
+  });
+
+  it('keeps identical weekly selections independent across kickoff dates', () => {
+    expect(ambiguousGamePickReceiptKeys([
+      { pick: 'Over 47.5', commence_time: '2026-09-04T00:00:00Z' },
+      { pick: 'Over 47.5', commence_time: '2026-09-05T00:00:00Z' },
+    ], '2026-09-03')).toEqual([]);
+  });
+
+  it('uses the kickoff ET date and falls back only when kickoff is unavailable', () => {
+    expect(gameDateForBook('2026-09-04T01:30:00Z', '2026-09-04')).toBe('2026-09-03');
+    expect(gameDateForBook(null, '2026-09-04')).toBe('2026-09-04');
+  });
+
+  it('never displays community totals fetched for another board date', () => {
+    const counts = { 'Over 47.5': { tails: 8, fades: 3 } };
+    expect(tailFadeCountForGame(counts, '2026-09-03', '2026-09-03', 'Over 47.5'))
+      .toEqual({ tails: 8, fades: 3 });
+    expect(tailFadeCountForGame(counts, '2026-09-03', '2026-09-04', 'Over 47.5'))
+      .toBeUndefined();
+  });
+
+  it('suppresses the weekly NFL control while leaving daily-sport controls available', () => {
+    expect(gameBookTrackingUnavailableReason('NFL')).toContain('weekly NFL');
+    expect(gameBookTrackingUnavailableReason('MLB')).toBeNull();
+  });
+
+  it('does not reuse the same game selection from an older date', () => {
+    const rows = [
+      bet({ id: 'old', game_date: '2026-08-10', pick_text: 'Mets ML -120' }),
+      bet({ id: 'today', game_date: '2026-09-03', pick_text: 'Mets ML -120' }),
+    ];
+    expect(findExistingGameBet(rows, '2026-09-03', 'Mets ML -120')?.id).toBe('today');
+    expect(findExistingGameBet(rows, '2026-09-04', 'Mets ML -120')).toBeNull();
+  });
+
+  it('keeps repeated player markets separate by board date', () => {
+    const rows = [
+      bet({ id: 'old', pick_type: 'prop', game_date: '2026-08-10', player_name: 'Aaron Judge', prop_type: 'total_bases' }),
+      bet({ id: 'today', pick_type: 'prop', game_date: '2026-09-03', player_name: 'Aaron Judge', prop_type: 'total_bases' }),
+    ];
+    expect(findExistingPropBet(rows, '2026-09-03', 'aaron judge', 'TOTAL_BASES')?.id).toBe('today');
+    expect(findExistingPropBet(rows, '2026-09-04', 'Aaron Judge', 'total_bases')).toBeNull();
   });
 });
 

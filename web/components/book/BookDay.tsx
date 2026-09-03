@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { UserBet } from '@/lib/book/model';
 
 /**
@@ -12,8 +12,10 @@ import type { UserBet } from '@/lib/book/model';
  */
 
 interface BookDayState {
+  date: string;
   ready: boolean;
   signedIn: boolean;
+  ambiguousGamePickReceiptKeys: ReadonlySet<string>;
   counts: Record<string, { tails: number; fades: number }>;
   mine: UserBet[];
   addBet: (bet: UserBet) => void;
@@ -44,13 +46,25 @@ export function useUnitDollars(): [number, (v: number) => void] {
   return [value, set];
 }
 
-export function BookDayProvider({ date, children }: { date: string; children: React.ReactNode }) {
+export function BookDayProvider({
+  date,
+  ambiguousGamePickReceiptKeys = [],
+  children,
+}: {
+  date: string;
+  ambiguousGamePickReceiptKeys?: string[];
+  children: React.ReactNode;
+}) {
   const activationRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(false);
   const [ready, setReady] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
   const [counts, setCounts] = useState<Record<string, { tails: number; fades: number }>>({});
   const [mine, setMine] = useState<UserBet[]>([]);
+  const ambiguousReceiptKeySet = useMemo(
+    () => new Set(ambiguousGamePickReceiptKeys),
+    [ambiguousGamePickReceiptKeys],
+  );
 
   useEffect(() => {
     if (active) return;
@@ -123,7 +137,16 @@ export function BookDayProvider({ date, children }: { date: string; children: Re
   }, []);
 
   return (
-    <BookDayContext.Provider value={{ ready, signedIn, counts, mine, addBet, removeBet }}>
+    <BookDayContext.Provider value={{
+      date,
+      ready,
+      signedIn,
+      ambiguousGamePickReceiptKeys: ambiguousReceiptKeySet,
+      counts,
+      mine,
+      addBet,
+      removeBet,
+    }}>
       <div
         ref={activationRef}
         onMouseEnter={() => setActive(true)}

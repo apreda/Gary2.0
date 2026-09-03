@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { safeNextPath } from '@/lib/auth/redirect';
+import { accountHref, resetPasswordHref, safeNextPath } from '@/lib/auth/redirect';
 
 describe('safeNextPath', () => {
   it('keeps internal paths, queries, and fragments', () => {
@@ -19,5 +19,18 @@ describe('safeNextPath', () => {
     expect(safeNextPath('%')).toBe('/account');
     expect(safeNextPath('/%E0%A4%A')).toBe('/account');
     expect(safeNextPath(null, '/today')).toBe('/today');
+  });
+});
+
+describe('account auth links', () => {
+  it('encodes a local return path and signup mode', () => {
+    expect(accountHref('/results?window=30d#recent', 'signup')).toBe(
+      '/account?next=%2Fresults%3Fwindow%3D30d%23recent&mode=signup',
+    );
+  });
+
+  it('never carries an external redirect into account or reset flows', () => {
+    expect(accountHref('https://evil.example/steal')).toBe('/account?next=%2F');
+    expect(resetPasswordHref('//evil.example/steal')).toBe('/account/reset?next=%2Faccount');
   });
 });

@@ -66,6 +66,11 @@ export function Leaderboard({ garyRows, myHandle }: { garyRows: GaryRows; myHand
         </div>
       </div>
 
+      <p className="border-b border-line px-5 py-3 text-[12px] leading-relaxed text-low">
+        Scope: settled Book tails and fades across game picks and core player props; home-run threats are excluded.
+        Gary&apos;s Results headline counts game picks only and lists props separately.
+      </p>
+
       {rows === null ? (
         <p className="px-5 py-6 font-mono text-[11.5px] text-low">Loading the board</p>
       ) : rows.length === 0 ? (

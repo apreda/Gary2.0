@@ -148,9 +148,11 @@ export default async function SportResultsPage({ params }: { params: Promise<{ s
         <Link href="/results" className="text-sm text-gold underline decoration-gold/40 transition-colors hover:text-gold-light">
           ← All sports record
         </Link>
-        <Link href={`/picks/${cfg.slug}`} className="text-sm text-gold underline decoration-gold/40 transition-colors hover:text-gold-light">
-          Today&apos;s {cfg.name} picks →
-        </Link>
+        {cfg.code !== 'WC' && (
+          <Link href={`/picks/${cfg.slug}`} className="text-sm text-gold underline decoration-gold/40 transition-colors hover:text-gold-light">
+            Today&apos;s {cfg.name} picks →
+          </Link>
+        )}
       </div>
     </main>
   );

@@ -27,8 +27,8 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   const day = etDateLabel(date);
   return pageMetadata({
     canonical: `/picks/${cfg.slug}/${date}`,
-    title: `${cfg.longName} Picks, ${day} — Every Game, Graded | Gary AI`,
-    description: `Gary's ${cfg.longName} picks for ${day}: every game on the board with the reasoning behind each pick, and how each one finished.`,
+    title: `${cfg.longName} Picks, ${day} — Every Game, Public Results | Gary AI`,
+    description: `Gary's ${cfg.longName} picks for ${day}: every game on the board with the reasoning behind each pick, with results added publicly after the final.`,
   });
 }
 
@@ -143,8 +143,8 @@ export default async function LeagueDayPage({ params }: { params: Params }) {
       <StitchRule tone="faint" className="mt-12" />
       <section className="mt-8 flex flex-wrap items-center justify-between gap-5">
         <p className="max-w-xl text-[15px] leading-relaxed text-mid">
-          Every pick Gary posts is graded in public and stays on his record, wins and losses. The full card, the props,
-          and the ride-or-fade book live in the app.
+          Every pick Gary posts is graded in public and stays on his record, wins and losses. The website also carries
+          the full daily desk, player props, and Your Book; iOS is available if you prefer the native app.
         </p>
         <AppStoreButton surface={`league_day_${cfg.slug}`} />
       </section>

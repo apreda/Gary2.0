@@ -46,6 +46,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     entry('/data-sources', 0.5, 'monthly'),
     entry('/corrections', 0.4, 'monthly'),
     entry('/app', 0.6, 'monthly'),
+    entry('/install', 0.5, 'monthly'),
     entry('/press', 0.4, 'weekly'),
     entry('/contact', 0.2, 'yearly'),
     entry('/terms', 0.1, 'yearly'),

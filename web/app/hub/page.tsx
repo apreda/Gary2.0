@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { AccountCta } from '@/components/AccountCta';
 import { ClampFade } from '@/components/ClampFade';
 import { PageMasthead, StitchRule } from '@/components/Terminal';
 import {
@@ -165,8 +166,16 @@ export default async function HubPage() {
       </PageMasthead>
 
       {safeInsights.length === 0 && (
-        <div className="mt-7 rounded-panel border border-line bg-card p-10 text-center text-low">
-          Today&apos;s board is still loading — edges land with the morning research run.
+        <div className="mt-7 rounded-panel border border-line bg-card p-7 sm:p-10">
+          <p className="text-center text-low">
+            Today&apos;s board is still loading — edges land with the morning research run.
+          </p>
+          <AccountCta
+            nextPath="/hub"
+            title="Keep a record while the board builds"
+            body="Your free Book follows every call you choose to tail or fade and grades it after the final."
+            className="mt-6 text-left"
+          />
         </div>
       )}
 
@@ -195,6 +204,15 @@ export default async function HubPage() {
           </section>
         );
       })}
+
+      {safeInsights.length > 0 && (
+        <AccountCta
+          nextPath="/hub"
+          title="Turn a read into your own call"
+          body="Open today’s picks, choose tail or fade, and let your free Book keep the verified record."
+          className="mt-14"
+        />
+      )}
     </main>
   );
 }

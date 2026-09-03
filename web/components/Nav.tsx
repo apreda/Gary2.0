@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
+import { accountHref } from '@/lib/auth/redirect';
+import { useSupabaseSessionHint } from '@/lib/auth/session-hint';
 
 const LINKS = [
   { href: '/today', label: 'Today' },
@@ -20,7 +22,12 @@ const focusRing =
 
 export function Nav() {
   const pathname = usePathname();
+  const signedIn = useSupabaseSessionHint();
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const accountPath = signedIn
+    ? '/account'
+    : accountHref(pathname.startsWith('/account') ? '/you' : pathname, 'signup');
+  const accountLabel = signedIn ? 'Account' : 'Join free';
 
   return (
     <header className="sticky top-0 z-40 bg-ink/85 backdrop-blur">
@@ -58,11 +65,15 @@ export function Nav() {
 
         <div className="flex items-center gap-3">
           <Link
-            href="/account"
+            href={accountPath}
             prefetch={false}
-            className={`hidden rounded-card border border-gold/40 px-4 py-2 text-[13px] text-gold transition-colors hover:border-gold/70 hover:text-gold-light sm:inline-flex ${focusRing}`}
+            className={`hidden rounded-card px-4 py-2 text-[13px] transition-colors sm:inline-flex ${focusRing} ${
+              signedIn
+                ? 'border border-gold/40 text-gold hover:border-gold/70 hover:text-gold-light'
+                : 'bg-gold font-semibold text-ink hover:bg-gold-light'
+            }`}
           >
-            Account
+            {accountLabel}
           </Link>
 
           {/* Mobile disclosure menu — no JS, real icon */}
@@ -94,13 +105,13 @@ export function Nav() {
                 </Link>
               ))}
               <Link
-                href="/account"
+                href={accountPath}
                 prefetch={false}
                 onClick={e => e.currentTarget.closest('details')?.removeAttribute('open')}
                 aria-current={pathname === '/account' ? 'page' : undefined}
                 className={`block px-5 py-3.5 text-sm text-gold sm:hidden ${focusRing}`}
               >
-                Account
+                {accountLabel}
               </Link>
             </div>
           </details>

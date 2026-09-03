@@ -7,6 +7,8 @@ import { ReceiptLine } from '@/components/ReceiptLine';
 import { Slab } from '@/components/board/GameRow';
 import { KeyStats, PropCall, PropRow } from '@/components/board/PropRow';
 import { BookDayProvider } from '@/components/book/BookDay';
+import { PropTailFadeRow } from '@/components/book/TailFadeRow';
+import { AccountCta } from '@/components/AccountCta';
 import { PageMasthead, StitchRule } from '@/components/Terminal';
 import { fetchTodayPropPicks, isLongShot, selectTopProps } from '@/lib/gary/picks';
 import { computePropsRecord, fetchPropResultsForDate } from '@/lib/gary/results';
@@ -61,6 +63,7 @@ function FeaturedProp({ prop }: { prop: PropPick }) {
             <ScoutRead text={read} />
           </div>
         </div>
+        <PropTailFadeRow player={prop.player ?? ''} prop={prop.prop ?? ''} commence={prop.commence_time} />
       </div>
     </article>
   );
@@ -149,31 +152,38 @@ export default async function PropsPage() {
         />
       </div>
 
-      {featured && (
-        <section className="mt-7">
-          <FeaturedProp prop={featured} />
-        </section>
-      )}
+      <BookDayProvider date={date}>
+        {featured && (
+          <section className="mt-7">
+            <FeaturedProp prop={featured} />
+          </section>
+        )}
 
-      {games.length > 0 && (
-        <section className="mt-12">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <h2 className="font-display text-[1.6rem] uppercase leading-none text-hi">The rest of the board</h2>
-            <span className="tnum font-mono text-[11px] font-bold uppercase tracking-[0.06em] text-low">
-              {total} {total === 1 ? 'prop' : 'props'} · {games.length}{' '}
-              {games.length === 1 ? 'game' : 'games'}
-            </span>
-          </div>
-          <StitchRule tone="faint" className="mt-4" />
-          <BookDayProvider date={date}>
+        {games.length > 0 && (
+          <section className="mt-12">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+              <h2 className="font-display text-[1.6rem] uppercase leading-none text-hi">The rest of the board</h2>
+              <span className="tnum font-mono text-[11px] font-bold uppercase tracking-[0.06em] text-low">
+                {total} {total === 1 ? 'prop' : 'props'} · {games.length}{' '}
+                {games.length === 1 ? 'game' : 'games'}
+              </span>
+            </div>
+            <StitchRule tone="faint" className="mt-4" />
             <div className="mt-6 space-y-4">
               {games.map(([matchup, items]) => (
                 <GamePropPanel key={matchup} matchup={matchup} props={items} />
               ))}
             </div>
-          </BookDayProvider>
-        </section>
-      )}
+          </section>
+        )}
+      </BookDayProvider>
+
+      <AccountCta
+        nextPath="/props"
+        title="Make a call before it starts"
+        body="Tail or fade any listed prop above, then let Gary grade your prediction in My Book. It stays a record—not a real-money wager."
+        className="mt-10"
+      />
 
       {total === 0 && (
         <div className="mt-8 flex flex-col items-center justify-center rounded-panel border border-line bg-card p-10 text-center">

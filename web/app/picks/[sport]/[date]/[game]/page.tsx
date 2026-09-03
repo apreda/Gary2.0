@@ -5,6 +5,7 @@ import { AppStoreButton } from '@/components/AppStoreButton';
 import { Eyebrow } from '@/components/Eyebrow';
 import { JsonLd } from '@/components/JsonLd';
 import { ScoutRead } from '@/components/ScoutRead';
+import { ShareActions } from '@/components/ShareActions';
 import { ResultLetter, StitchRule } from '@/components/Terminal';
 import { isArchiveDate } from '@/lib/gary/archive';
 import { etDateLabel, etTime, injuryLines, marketLine, oddsText, parseGameTime, propCall, propLabel, scoutSectionsExcluding } from '@/lib/gary/format';
@@ -57,24 +58,25 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   const day = await fetchGameDay(cfg.slug, date);
   const picks = day ? findGamePicks(day.picks, cfg.code, game) : [];
   if (!day || picks.length === 0) return { robots: { index: false } };
-  const pick = picks[0];
+  const pick = [...picks].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0];
   const canonicalSlug = gameSlug(pick.awayTeam, pick.homeTeam);
   const result = matchPickResult(pick, day.results);
   const res = (result?.result ?? '').trim().toLowerCase();
   const label = etDateLabel(date);
   const summary = pageSummary(pick);
-  const hero = callOf(pick).split(/\s+/).slice(0, 4).join('|');
-  const card =
-    `/api/share-card?hero=${encodeURIComponent(hero)}&league=${encodeURIComponent(cfg.code)}` +
-    `&meta=${encodeURIComponent(`${headline(pick)} · ${label}`.toUpperCase())}` +
-    (res === 'won' || res === 'lost' ? `&result=${res}` : '');
+  const card = `/picks/${cfg.slug}/${date}/${canonicalSlug}/card`;
   return pageMetadata({
     canonical: `/picks/${cfg.slug}/${date}/${canonicalSlug}`,
     title: `${headline(pick)} Prediction and Pick, ${label} | Gary AI`,
     description: summary
       ? `Gary's pick: ${callOf(pick)}. ${summary}`
       : `Gary's ${cfg.longName} pick for ${headline(pick)} on ${label}, with the full reasoning and the graded result.`,
-    openGraph: { images: [{ url: card, width: 1080, height: 1080, alt: `${callOf(pick)} — Gary's pick` }] },
+    openGraph: {
+      type: 'article',
+      ...(day.publishedAt ? { publishedTime: day.publishedAt } : {}),
+      ...(day.publishedAt && !res ? { modifiedTime: day.publishedAt } : {}),
+      images: [{ url: card, width: 1080, height: 1080, alt: `${callOf(pick)} — Gary's pick` }],
+    },
     twitter: { card: 'summary_large_image' },
   });
 }
@@ -119,10 +121,14 @@ export default async function GamePage({ params }: { params: Params }) {
   const venue = slate?.venue ?? lead.venue ?? null;
 
   const pageUrl = `${SITE_URL}/picks/${cfg.slug}/${date}/${canonicalSlug}`;
+  const imageUrl = `${pageUrl}/card`;
   const body = picks.map(p => (p.rationale ?? p.rationale_plain ?? '')).filter(Boolean).join('\n\n');
   const sourceBooks = [...new Set(
     picks.flatMap(pick => pick.sportsbook_odds ?? []).map(line => line.book?.trim()).filter((book): book is string => !!book),
   )];
+  const hasRecordedOutcome = picks.some(pick => matchPickResult(pick, day.results)) ||
+    props.some(prop => matchPropResult(prop, propResults));
+  const modifiedAt = day.publishedAt && !hasRecordedOutcome ? day.publishedAt : null;
 
   return (
     <main className="mx-auto max-w-3xl px-5 pb-20 pt-12">
@@ -140,9 +146,21 @@ export default async function GamePage({ params }: { params: Params }) {
         headline: `${headline(lead)}: ${callOf(lead)}`,
         description: pageSummary(lead),
         ...(day.publishedAt ? { datePublished: day.publishedAt } : {}),
+        ...(modifiedAt ? { dateModified: modifiedAt } : {}),
+        image: {
+          '@type': 'ImageObject',
+          url: imageUrl,
+          width: 1080,
+          height: 1080,
+        },
         author: { '@type': 'Organization', name: 'Gary AI', url: SITE_URL },
-        publisher: { '@type': 'Organization', name: 'Gary A.I. LLC', url: SITE_URL },
-        mainEntityOfPage: pageUrl,
+        publisher: {
+          '@type': 'Organization',
+          name: 'Gary A.I. LLC',
+          url: SITE_URL,
+          logo: { '@type': 'ImageObject', url: `${SITE_URL}/brand/GaryIconBG.png` },
+        },
+        mainEntityOfPage: { '@type': 'WebPage', '@id': pageUrl },
         isAccessibleForFree: true,
         articleBody: body,
         about: {
@@ -173,6 +191,16 @@ export default async function GamePage({ params }: { params: Params }) {
         )}
         <StitchRule className="mt-5" />
       </header>
+
+      <ShareActions
+        title={`${headline(lead)} — Gary AI`}
+        text={`Gary's pick: ${callOf(lead)}. Read the full analysis and follow the public result.`}
+        url={pageUrl}
+        surface="matchup_page"
+        contentType="pick"
+        itemId={`${cfg.slug}:${date}:${canonicalSlug}`}
+        className="mt-6"
+      />
 
       {/* The call(s) and the result */}
       <section className="mt-8 grid gap-4">
@@ -323,8 +351,8 @@ export default async function GamePage({ params }: { params: Params }) {
       <StitchRule className="mt-12" />
       <section className="mt-8 flex flex-wrap items-center justify-between gap-5">
         <p className="max-w-xl text-[15px] leading-relaxed text-mid">
-          Every pick posts before the game and is graded after, in public. In the app you can ride or fade any
-          of them, and your book keeps score against Gary&apos;s.
+          Every pick posts before the game and is graded after, in public. My Book on this website lets you tail
+          or fade listed calls and keeps your record separately labeled; Gary is also available as a native iOS app.
         </p>
         <AppStoreButton surface={`game_page_${cfg.slug}`} />
       </section>

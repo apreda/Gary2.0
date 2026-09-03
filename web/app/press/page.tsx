@@ -185,6 +185,34 @@ export default async function PressPage() {
         </div>
       </section>
 
+      <section className="mt-10 rounded-panel border border-line bg-card p-6">
+        <Eyebrow>CITE GARY</Eyebrow>
+        <h2 className="mt-2 font-display text-2xl uppercase text-hi">A live, auditable game-pick record badge</h2>
+        <p className="mt-3 text-[14px] leading-relaxed text-mid">
+          Publishers, newsletters, and independent analysts can embed this badge when citing
+          Gary&rsquo;s game-pick record. It refreshes from the same public ledger as the model audit
+          and links readers to the underlying results.
+        </p>
+        <Link
+          href="/results/audit"
+          className="mt-5 block max-w-[520px] rounded-panel focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70"
+        >
+          {/* This is intentionally a plain img: it is itself the documented embeddable asset. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/record-badge.svg"
+            alt="Gary AI public game-pick record badge"
+            width="520"
+            height="112"
+            className="h-auto w-full"
+          />
+        </Link>
+        <p className="mt-5 font-mono text-[11px] font-bold uppercase tracking-[0.05em] text-low">
+          Copy this embed code
+        </p>
+        <CopyBlock>{`<a href="${BRAND.domain}/results/audit"><img src="${BRAND.domain}/record-badge.svg" alt="Gary AI public game-pick record"></a>`}</CopyBlock>
+      </section>
+
       {/* Assets */}
       <section className="mt-10">
         <Eyebrow>BRAND ASSETS</Eyebrow>

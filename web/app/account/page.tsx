@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
-import { Suspense } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { PageMasthead } from '@/components/Terminal';
 import { supabaseServer, currentUser } from '@/lib/auth/server';
+import { resetPasswordHref, safeNextPath } from '@/lib/auth/redirect';
 import { pageMetadata } from '@/lib/seo/metadata';
 import { SignInForm } from './SignInForm';
 
@@ -25,20 +25,32 @@ async function signOut() {
   redirect('/account');
 }
 
-export default async function AccountPage() {
-  const user = await currentUser();
+type AccountSearchParams = Promise<{
+  next?: string | string[];
+  mode?: string | string[];
+  error?: string | string[];
+  password?: string | string[];
+}>;
+
+const first = (value: string | string[] | undefined) =>
+  Array.isArray(value) ? value[0] : value;
+
+export default async function AccountPage({ searchParams }: { searchParams: AccountSearchParams }) {
+  const [user, query] = await Promise.all([currentUser(), searchParams]);
+  const nextPath = safeNextPath(first(query.next));
+  const initialMode = first(query.mode) === 'signup' ? 'signup' : 'signin';
+  const initialError = first(query.error) === 'signin'
+    ? 'Sign-in couldn’t finish. Please try again.'
+    : null;
 
   if (!user) {
     return (
       <main className="mx-auto max-w-4xl px-5 py-12">
-        <PageMasthead
-          title="Sign in"
-          sub="One account for the app and the web — your picks, your book, your record."
+        <SignInForm
+          initialMode={initialMode}
+          nextPath={nextPath}
+          initialError={initialError}
         />
-        {/* useSearchParams inside the form wants a boundary when prerendering */}
-        <Suspense>
-          <SignInForm />
-        </Suspense>
       </main>
     );
   }
@@ -53,6 +65,11 @@ export default async function AccountPage() {
       <PageMasthead title="Account" sub="Signed in — the same identity as the iOS app." />
 
       <div className="mt-7 max-w-md rounded-panel border border-line bg-card px-7 py-7">
+        {first(query.password) === 'updated' && (
+          <p role="status" className="mb-5 rounded-chip border border-gold/35 bg-chip px-4 py-3 text-[13.5px] text-gold">
+            Your password has been updated.
+          </p>
+        )}
         <p className="font-mono text-[11px] uppercase tracking-[0.04em] text-low">Signed in as</p>
         <p className="mt-1 text-[15px] text-hi">{label}</p>
 
@@ -77,6 +94,12 @@ export default async function AccountPage() {
             className="text-[13.5px] text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold"
           >
             Open your book →
+          </Link>
+          <Link
+            href={resetPasswordHref('/account')}
+            className="text-[13.5px] text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold"
+          >
+            Reset password →
           </Link>
         </div>
       </div>

@@ -31,3 +31,23 @@ export function safeNextPath(
     return fallback;
   }
 }
+
+export type AccountMode = 'signin' | 'signup';
+
+/** Build one encoded, local-only account URL for every conversion surface. */
+export function accountHref(
+  nextPath: string,
+  mode: AccountMode = 'signin',
+): string {
+  const params = new URLSearchParams();
+  params.set('next', safeNextPath(nextPath, '/'));
+  if (mode === 'signup') params.set('mode', 'signup');
+  return `/account?${params.toString()}`;
+}
+
+/** Keep the page a visitor meant to return to through password recovery. */
+export function resetPasswordHref(nextPath: string): string {
+  const params = new URLSearchParams();
+  params.set('next', safeNextPath(nextPath, '/account'));
+  return `/account/reset?${params.toString()}`;
+}

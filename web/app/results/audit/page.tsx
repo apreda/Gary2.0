@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { JsonLd } from '@/components/JsonLd';
+import { ShareActions } from '@/components/ShareActions';
 import { PageMasthead, StitchRule } from '@/components/Terminal';
 import { confidenceAudit, monthlyGameAudit } from '@/lib/gary/ledger';
 import { computePropsRecord, fetchAllGameResults, fetchAllPropResults } from '@/lib/gary/results';
+import type { GameResultRow, PropResultRow } from '@/lib/gary/types';
 import { pageMetadata, SITE_URL } from '@/lib/seo/metadata';
 
 export const revalidate = 3600;
@@ -24,6 +26,58 @@ function monthLabel(month: string): string {
   });
 }
 
+export function datasetTemporalCoverage(
+  games: GameResultRow[],
+  props: PropResultRow[],
+): string | undefined {
+  const dates = [...games, ...props]
+    .map(row => row.game_date)
+    .filter((date): date is string => !!date && /^\d{4}-\d{2}-\d{2}$/.test(date))
+    .sort();
+  return dates.length > 0 ? `${dates[0]}/${dates[dates.length - 1]}` : undefined;
+}
+
+export function resultsDataset(games: GameResultRow[], props: PropResultRow[]) {
+  const temporalCoverage = datasetTemporalCoverage(games, props);
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Dataset',
+    '@id': `${SITE_URL}/results/audit#dataset`,
+    name: 'Gary AI public sports picks results ledger',
+    description: 'Game-pick and player-prop outcomes published by Gary AI, including losses and pushes.',
+    url: `${SITE_URL}/results/audit`,
+    creator: { '@type': 'Organization', name: 'Gary A.I. LLC', url: SITE_URL },
+    isAccessibleForFree: true,
+    keywords: [
+      'sports pick results',
+      'sports prediction outcomes',
+      'confidence calibration',
+      'flat-stake units',
+    ],
+    ...(temporalCoverage ? { temporalCoverage } : {}),
+    variableMeasured: [
+      'Outcome (win, loss, or push)',
+      'Listed odds',
+      'Confidence label',
+      'Flat-stake net units',
+    ],
+    distribution: [
+      {
+        '@type': 'DataDownload',
+        name: 'Gary AI results ledger (CSV)',
+        encodingFormat: 'text/csv',
+        contentUrl: `${SITE_URL}/results.csv`,
+      },
+      {
+        '@type': 'DataDownload',
+        name: 'Gary AI results ledger (JSON)',
+        encodingFormat: 'application/json',
+        contentUrl: `${SITE_URL}/results.json`,
+      },
+    ],
+  };
+}
+
 export default async function ResultsAuditPage() {
   const [games, props] = await Promise.all([fetchAllGameResults(), fetchAllPropResults()]);
   const months = monthlyGameAudit(games);
@@ -32,18 +86,7 @@ export default async function ResultsAuditPage() {
 
   return (
     <main className="mx-auto max-w-5xl px-5 pb-20 pt-12">
-      <JsonLd data={{
-        '@context': 'https://schema.org',
-        '@type': 'Dataset',
-        name: 'Gary AI public sports picks results ledger',
-        description: 'Game-pick and player-prop outcomes published by Gary AI, including losses and pushes.',
-        url: `${SITE_URL}/results/audit`,
-        creator: { '@type': 'Organization', name: 'Gary A.I. LLC', url: SITE_URL },
-        distribution: [
-          { '@type': 'DataDownload', encodingFormat: 'text/csv', contentUrl: `${SITE_URL}/results.csv` },
-          { '@type': 'DataDownload', encodingFormat: 'application/json', contentUrl: `${SITE_URL}/results.json` },
-        ],
-      }} />
+      <JsonLd data={resultsDataset(games, props)} />
 
       <PageMasthead
         title="Gary AI model audit"
@@ -56,6 +99,16 @@ export default async function ResultsAuditPage() {
         <a href="/results.csv" className="text-gold underline decoration-gold/40 underline-offset-4">Download CSV</a>
         <a href="/results.json" className="text-gold underline decoration-gold/40 underline-offset-4">Download JSON</a>
       </div>
+
+      <ShareActions
+        title="Gary AI model audit"
+        text="See Gary AI's monthly results, confidence calibration, and complete public sports-picks ledger."
+        url={`${SITE_URL}/results/audit`}
+        surface="results_audit"
+        contentType="dataset"
+        itemId="public_results_ledger"
+        className="mt-6"
+      />
 
       <section className="mt-12">
         <h2 className="font-display text-2xl uppercase text-hi">Monthly game-pick tape</h2>
@@ -111,7 +164,11 @@ export default async function ResultsAuditPage() {
           {propRecord.wins}-{propRecord.losses}{propRecord.pushes ? `-${propRecord.pushes}` : ''} · {propRecord.pct}% · {fmtUnits(propRecord.netUnits)} · {propRecord.graded} graded
         </p>
         <p className="mt-3 max-w-2xl text-[14px] leading-relaxed text-low">
-          Some historical winning props have no recorded odds and use the disclosed 0.9-unit fallback in net-unit calculations. The raw export retains the original missing values.
+          This record starts September 2, 2026 and covers Gary&rsquo;s core player-prop
+          board; the separate Home Run Threat lane is excluded. Older and home-run
+          rows remain available in the raw CSV and JSON ledgers. Some winning rows
+          have no recorded odds and use the disclosed 0.9-unit fallback in net-unit
+          calculations; the exports retain the original missing values.
         </p>
       </section>
 

@@ -1,9 +1,9 @@
 import type { Metadata, Viewport } from 'next';
 import { Barlow_Condensed, Inter, JetBrains_Mono } from 'next/font/google';
-import { Analytics } from '@vercel/analytics/react';
 import { Nav } from '@/components/Nav';
 import { Footer } from '@/components/Footer';
 import { JsonLd } from '@/components/JsonLd';
+import { GrowthAnalytics } from '@/components/GrowthAnalytics';
 import './globals.css';
 
 const barlow = Barlow_Condensed({ weight: ['600', '700'], subsets: ['latin'], variable: '--font-barlow' });
@@ -58,7 +58,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Nav />
         {children}
         <Footer />
-        <Analytics />
+        <GrowthAnalytics />
       </body>
     </html>
   );
