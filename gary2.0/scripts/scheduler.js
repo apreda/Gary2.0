@@ -287,7 +287,7 @@ async function captureClosingBoards() {
       const games = await fetchGamesForETDate(w.sport.key, w.dateStr, { gameIds: [w.gameId] });
       const { recordOddsSnapshots } = await import('../src/services/oddsSnapshots.js');
       const n = await recordOddsSnapshots(w.sport.key, Array.isArray(games) ? games : []);
-      log(`📏 CLOSING BOARD: ${w.matchup} — ${n} book board(s) recorded at first pitch (id ${w.gameId})`);
+      log(`📏 CLOSING BOARD: ${w.matchup} — ${n} board change(s) recorded at first pitch; unchanged boards stand as the close (id ${w.gameId})`);
     } catch (e) {
       log(`⚠️ closing board skipped for ${w.matchup} (${e.message})`);
     }
