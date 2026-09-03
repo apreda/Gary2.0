@@ -129,16 +129,6 @@ When recent stats diverge from season baseline:
 ### SPREAD AWARENESS
 Report your findings factually. Gary will evaluate which factors matter for this matchup and spread number.
 
-### PLAYOFF SERIES CONTEXT
-**Only investigate this section if the scout report's tournamentContext indicates "NBA Playoffs".**
-- Pull the current series state: which team leads, the series record (e.g., 2-1), and which game this is (Game 1-7)
-- Pull the score and margin of each prior game already played in this series
-- Pull rotation/minute distribution from prior games in the series — did any player's role change between games?
-- Pull which venue hosted each prior game (home/road for each team)
-- Pull each key player's production across the games already played in this series
-- Compare series-specific stats to each team's season baseline
-- Report findings factually for both teams
-
 ### YOUR SCOUT REPORT IS YOUR BASELINE
 The scout report provides the starting point. You are free to re-fetch any stat for deeper investigation.`;
 

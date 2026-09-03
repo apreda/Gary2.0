@@ -2,6 +2,7 @@ import { createModelSession, sendToSessionWithRetry, resetSessionChat } from './
 import { getFlashInvestigationPrompt } from '../flashInvestigationPrompts.js';
 import { getMlbSeasonAwareness } from './spreadEvaluationFactors.js';
 import { GAME_RESEARCH_MODEL } from './orchestratorConfig.js';
+import { NBA_RESEARCHER_RULES } from './nbaWinningEra.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, nflSeason, getESTDate, toESTDate } from '../../../utils/dateUtils.js';
 import { toolDefinitions, getTokensForSport } from '../tools/toolDefinitions.js';
@@ -251,6 +252,7 @@ Current preseason personnel, announced starter rest, rotations, injuries and coa
 
     const isNCAABSport = sport === 'basketball_ncaab' || sport === 'NCAAB';
     const isMLBSport = sport === 'baseball_mlb' || sport === 'MLB';
+    const isNBASport = sport === 'basketball_nba' || sport === 'NBA'; // the April winning era reads April's researcher rules
     const isNHLSport = sport === 'icehockey_nhl' || sport === 'NHL';
     // (Restored Aug 18 2026 — the June engine returns for MLB games.)
     const mlbAwarenessBlock = isMLBSport ? `\n\n${getMlbSeasonAwareness()}\n` : '';
@@ -278,13 +280,13 @@ ${mlbAwarenessBlock}
 ${researchProvenanceBlock}
 CRITICAL RULES:
 - Report specific numbers with context: "Team went 2-4 with -8.3 net rating during games 60-65 when Player X was out — but 3 of those were against top-10 defenses"
-- Report each factor's findings, and weight them honestly: for each, note whether it meaningfully moves THIS game or is minor context. Most individual factors move a single game far less than they look like they do — say so when that's the case. Gary makes the final call and connects the dots, but your job is to tell him what carries real weight and what is small, not to present every factor as equally important
+${isNBASport ? NBA_RESEARCHER_RULES.reporting : `- Report each factor's findings, and weight them honestly: for each, note whether it meaningfully moves THIS game or is minor context. Most individual factors move a single game far less than they look like they do — say so when that's the case. Gary makes the final call and connects the dots, but your job is to tell him what carries real weight and what is small, not to present every factor as equally important`}
 - If you reference opponent quality or recency distortion, include concrete evidence (named opponents and/or score/result context), not generic claims like "weaker opposition"
 - When citing any trend (L5/L10 or recent stretch), include concrete sample context: opponent names/results and who was active/inactive in that window
 - For search/grounding results, use factual events only. Ignore picks, predictions, and opinion content
 - Do NOT pick a side or recommend a bet — your job is factual research only
 - Do NOT fabricate stats — only report what comes from the scout report or your tool calls
-- Every figure you cite must exist verbatim in the scout report or a tool return. A metric neither provides (wRC+, xERA, FIP, SIERA, BABIP, DRS, pop time, and the like) is NOT AVAILABLE — say so instead of recalling or deriving a value. Never present arithmetic you performed (a computed differential, an inferred rate) as a fetched stat; if you must derive, label it as your own calculation from named inputs
+${isNBASport ? NBA_RESEARCHER_RULES.figures : `- Every figure you cite must exist verbatim in the scout report or a tool return. A metric neither provides (wRC+, xERA, FIP, SIERA, BABIP, DRS, pop time, and the like) is NOT AVAILABLE — say so instead of recalling or deriving a value. Never present arithmetic you performed (a computed differential, an inferred rate) as a fetched stat; if you must derive, label it as your own calculation from named inputs`}
 
 OUTPUT FORMAT — for each factor you investigate, write your findings as a JSON object:
 {"factor": "Factor name", "keyFinding": "1-2 sentence finding", "numbers": "Concrete stats for BOTH teams — repeat the exact figures in THIS field; never leave it empty", "context": "Opponent quality / who played / sample window context — never leave it empty"}

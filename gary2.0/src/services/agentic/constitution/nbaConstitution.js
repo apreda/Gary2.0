@@ -1,4 +1,10 @@
 /**
+ * THE NBA WINNING ERA (founder, Sep 3 2026): this file is the Apr 8 2026
+ * constitution (commit 57e5ddd4), the last regular-season tree of the
+ * 152-106 run — verbatim. The May 26-27 playoff batch (playoff bullets,
+ * the deleted THE SPREAD section) never reaches it. See nbaWinningEra.js.
+ */
+/**
  * NBA Constitution - NBA-Specific Context for Gary
  *
  * Phase-aligned delivery:
@@ -33,13 +39,11 @@ export const NBA_CONSTITUTION = {
   pass1Context: `
 ### NBA AWARENESS
 
-- **Each game is its own event.** Season aggregate stats barely shift game-to-game, but outcomes are highly variable — even contenders lose ~25% of games during the regular season, and playoff series swing on rotation tweaks and one-game adjustments. If you find yourself picking the same team multiple games in a row, ask yourself: am I evaluating tonight's specific matchup (rest, rotation choices, recent role changes, opponent adjustments since the last meeting) — or am I leaning on season-level stats that haven't moved? Yesterday's outcome doesn't change tonight's analysis. Investigate what's different.
-- **Playoff adjustments happen fast.** Between playoff games, coaches change matchups, defensive schemes, rotations, and player usage. A weakness that got exploited in one game often gets schemed against by the next. A hot shooter in Game 1 may face a different defender / coverage in Game 2. Do not assume the same personnel issues, rotation patterns, or tactical mismatches that showed up in one game will repeat next game — investigate what each side is likely to adjust.
-- **Playoff stats are a separate sample from regular season.** Rotations tighten (typically 8-9 deep instead of 11+), star usage rates climb, pace usually drops, and effort/intensity changes the math on volume stats. When a playoff game is in front of you, weigh playoff-specific stats (this postseason's pace, efficiency, on/off splits) more heavily than the regular-season baseline. The regular season is context, not the bet.
-- A stat is a description of what happened, not a reason for what will happen. Cite stats to describe the situation. Reason for yourself about whether they actually matter for tonight's specific matchup.
 - Star player availability, minute restrictions, and rest decisions can materially change game context
-- Back-to-backs, travel burden, and schedule density affect teams differently depending on roster depth and playing style
-- Roster depth matters — when stars sit, the gap between bench units often determines outcomes
+- Back-to-backs, travel burden, and schedule density are widely known and often priced quickly
+- NBA outcomes are volatile game-to-game — separate stable team baseline from short-window noise
+- Public attention concentrates on marquee teams and nationally televised games — narrative pressure can affect how numbers are set
+- Roster depth matters more than casual observers realize — when stars sit, the gap between bench units often determines outcomes
 - Mid-season trades and buyout additions take time to integrate — new players need to learn systems and build chemistry before the addition translates to results
 
 ### NBA INJURY LABELS (READ FROM SCOUT REPORT)
@@ -49,9 +53,15 @@ Injury duration tags are assigned by the NBA scout-report pipeline and are sport
 - **FRESH** — New absence (0-2 games missed, <5 calendar days). Market may not have fully adjusted.
 - **SHORT-TERM** — Recent absence (≤3 games missed). Line is beginning to reflect the absence.
 - **PRICED IN** — Established absence (4-19 games missed). The team's recent stats, form, and record already reflect life without this player.
-- **SEASON-LONG** — Extended absence (20+ games). The team's entire season has been played without this player. Fully baked into every number you see.
+- **SEASON-LONG** — Extended absence (20+ games). Fully baked into every number you see.
 
 Use the exact tag shown in the scout report for this game.
+
+### THE SPREAD
+- NBA spreads move quickly once injury news breaks — by tip-off, most absences are fully reflected in the number
+- Public betting volume in the NBA gravitates toward big-market teams, nationally televised games, and teams on winning streaks — lines for those games reflect different market dynamics than under-the-radar matchups
+- Rest advantages (opponent on a back-to-back, long road trip) are widely known and typically priced — the edge is in HOW a team performs in those spots, not that the spot exists
+- Home court advantage in the NBA is real but varies significantly by arena and team
 
 ### LARGE-LEAD GAME DYNAMICS
 - NBA games change shape when one team builds a large lead — starters get rest, rotations shift to bench units, pace can change, and the intensity level shifts for both teams

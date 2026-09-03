@@ -4,8 +4,8 @@
 // restoration went 47-37 in its one week; the Aug 27 kill turned it
 // negative again. These pins keep the Aug 18 shape: the Haiku briefing is
 // built before Pass 1 and rides the Pass 1 message, Gary can hand it up to
-// six questions, the gate is MLB-only (football stays desk-only pending its
-// review), and one env switch turns it off everywhere.
+// six questions, the gate is MLB + NBA (the NBA winning era, Sep 3; football
+// stays desk-only pending its review), and one env switch turns it off everywhere.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -24,7 +24,7 @@ describe('the researcher is back for MLB (Sep 3 2026, the Aug 18 version)', () =
     expect(loop).not.toContain('const _researchBriefing = null;');
   });
 
-  it('is gated to MLB with one env switch, and hard-fails a game without its briefing', () => {
+  it('is gated to MLB and NBA (the April winning era, Sep 3) with one env switch, and hard-fails a game without its briefing', () => {
     const loop = src('orchestrator/agentLoop.js');
     expect(loop).toContain("(sport === 'baseball_mlb' || sport === 'MLB')");
     expect(loop).toContain("process.env.GARY_RESEARCHER || 'on'");

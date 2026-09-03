@@ -152,3 +152,23 @@ describe('game-pick market truth', () => {
     expect(noLine).toBeNull();
   });
 });
+
+
+// Sep 3 2026 (NBA winning-era smoke): the Codex bridge answered the
+// format-only turn with the JSON object alone — no code fence — and the
+// bare-JSON fallback only knew the legacy "pick" key, so a perfect
+// "final_pick" answer was rejected twelve times in a row.
+describe('bare JSON with final_pick (no code fence)', () => {
+  it('parses a fenceless final_pick object the way it parses a fenced one', () => {
+    const bare = `{
+  "final_pick": "Boston Celtics -6.5 -110",
+  "rationale": "Gary's Take\\n\\n${rationale}",
+  "confidence_score": 0.67
+}`;
+    const pick = parseGaryResponse(bare, 'Boston Celtics', 'Miami Heat', 'basketball_nba', { spread_home: -6.5, spread_home_odds: -110, spread_away: 6.5, spread_away_odds: -110 });
+    expect(pick).toBeTruthy();
+    expect(pick.pick).toContain('Boston Celtics');
+    expect(pick.odds).toBe(-110);
+    expect(pick.confidence).toBeCloseTo(0.67, 2);
+  });
+});

@@ -74,6 +74,7 @@ if (!process.env.OPENAI_API_KEY || !researchKeyOk) {
   console.error(`[JuneEngine] 🚨 REQUIRED API KEY MISSING (${!process.env.OPENAI_API_KEY ? 'OPENAI_API_KEY' : `researcher ${GAME_RESEARCH_MODEL}`}) — MLB picks WILL FAIL loudly until it lands in .env. There is no fallback system.`);
 } else {
   console.log(`[JuneEngine] ⚾ MLB games run the June engine (brain: ${MLB_JUNE_BRAIN_MODEL}, researcher: ${researcherOff ? 'OFF (GARY_RESEARCHER=off)' : GAME_RESEARCH_MODEL}, model cascade: ${DESK_FALLBACK_MODELS.join(' → ')}).`);
+  console.log(`[NbaWinningEra] 🏀 NBA games run the Apr 8 2026 winning-era prompts (brain: ${GAME_PICK_MODEL}, researcher: ${researcherOff ? 'OFF (GARY_RESEARCHER=off)' : GAME_RESEARCH_MODEL})`);
 }
 
 // Era stamp for the restored lane: one hash over the engine's full surface —

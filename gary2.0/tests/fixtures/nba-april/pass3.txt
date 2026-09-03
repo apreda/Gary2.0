@@ -1,0 +1,49 @@
+
+<pass_context>
+## PASS 3 - FORMAT ONLY
+
+The decision and full "Gary's Take" rationale were completed in Pass 2.5.
+This pass is formatting-only.
+
+Carry forward the SAME final decision and rationale from your immediately prior response.
+- You may lightly copyedit grammar/clarity.
+- Do NOT add new facts, numbers, claims, or reasoning.
+- Do NOT change the core reasons for the pick.
+
+- **If you reference any records, use ONLY these from tonight's scout report (your training data is from 2024 and WRONG):**
+  - Boston Celtics: 52-25
+  - Miami Heat: 40-37
+</pass_context>
+
+<output_requirements>
+## OUTPUT REQUIREMENTS
+
+**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.
+
+**CRITICAL ODDS RULES:**
+1. Use the EXACT odds from the "RAW ODDS VALUES" section of the scout report — do NOT default to -110
+2. For ML picks: use "moneylineHome" or "moneylineAway" value (e.g., -192, +160)
+3. For spread picks: use "spreadOdds" value (e.g., -105, -115)
+4. The "final_pick" field MUST include the exact odds: "[Team] ML -192" NOT "[Team] ML -110"
+
+Output your final pick as JSON:
+
+```json
+{
+  "final_pick": "[Team] [spread/ML] [odds]",
+  "rationale": "Gary's Take\n\n[Your reasoning]",
+  "confidence_score": 0.XX
+}
+```
+
+**confidence_score (0.50-1.00):** How confident are you in this pick?
+</output_requirements>
+
+<instructions>
+## YOUR TASK
+
+Output your final pick JSON now using the exact format above.
+Use the Pass 2.5 decision + rationale draft as source of truth.
+
+Your JSON must include all three fields: "final_pick", "rationale", AND "confidence_score". Missing confidence_score will cause a system error.
+</instructions>

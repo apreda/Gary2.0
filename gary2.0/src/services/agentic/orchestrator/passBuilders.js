@@ -5,6 +5,7 @@
 import { getNbaSpreadFactors, getNflSpreadFactors, getNcaafSpreadFactors, getMlbSpreadFactors, getMlbSeasonAwareness, getFootballSeasonAwareness } from './spreadEvaluationFactors.js';
 import { GAME_ML_CAP } from './orchestratorConfig.js';
 import { mlbCaseHeadings, mlbPass1Opening } from './mlbCaseMenu.js';
+import { NBA_PASS1_INVESTIGATE_LINES } from './nbaWinningEra.js';
 
 /**
  * Build the PASS 1 user message - Identify battlegrounds, DO NOT pick a side yet
@@ -76,7 +77,7 @@ Tonight's spread: ${favoriteLabel} -${absSpread} / ${underdogLabel} +${absSpread
 
 The spread number you see tonight was set AFTER the schedule, injuries, and rest situation were known. The question is not whether these factors exist — everyone can see them — but whether the spread has accounted for them correctly for THIS game. Records and rankings describe what has happened — they are not reasons for or against a spread.
 
-You are picking which side of this spread to take. The full desk above is your evidence.
+${NBA_PASS1_INVESTIGATE_LINES}
 
 Before completing Pass 1, include BOTH sections:
 Case for ${homeTeam}

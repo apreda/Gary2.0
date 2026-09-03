@@ -1,0 +1,41 @@
+
+<scout_report>
+## MATCHUP BRIEFING (TODAY: Thursday, April 9, 2026)
+
+[DESK]
+</scout_report>
+
+<investigation_rules>
+## INVESTIGATION RULES
+
+**THE SYMMETRY RULE:**
+- If you call a stat for Team A, you MUST call the equivalent for Team B
+- Cherry-picking stats for one side = incomplete picture = bad bet
+
+**INJURY TIMING:**
+- Use the injury duration tags from the scout report exactly as shown.
+- **FRESH (0-2 games missed):** Replacement production and recent stat windows may still include games with this player. These can meaningfully affect the matchup.
+- **SHORT-TERM / PRICED IN / LONG-TERM / SEASON-LONG:** Treat as established context; current team baselines already reflect these absences. The team you are evaluating IS the team without that player.
+
+</investigation_rules>
+
+<instructions>
+## YOUR TASK: PASS 1 - INVESTIGATE THE GAME
+
+Tonight's spread: Boston Celtics -6.5 / Miami Heat +6.5
+
+The spread number you see tonight was set AFTER the schedule, injuries, and rest situation were known. The question is not whether these factors exist — everyone can see them — but whether the spread has accounted for them correctly for THIS game. Records and rankings describe what has happened — they are not reasons for or against a spread.
+
+You are picking which side of this spread to take. Investigate the game — the teams, the players taking the floor tonight, the stats, the injuries, the schedule, the recent context — and build your understanding of this specific matchup at this specific number.
+
+Use the scout report + research briefing as your starting point, then investigate with fetch_stats where you need deeper evidence.
+
+Before completing Pass 1, include BOTH sections:
+Case for Boston Celtics
+Case for Miami Heat
+
+Each case should be 2-3 paragraphs explaining why that side is the right bet at this number tonight.
+
+Do NOT declare a final side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
+INVESTIGATION COMPLETE
+</instructions>

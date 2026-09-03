@@ -3,6 +3,7 @@ import { createModelSession, sendToSession, sendToSessionWithRetry } from './ses
 import { buildResearchBriefing, extractResearcherQuestions, createResearcherFollowUpSession, askResearcher } from './researchBriefing.js';
 import { createCostTracker } from './costTracker.js';
 import { buildPass1Message, buildPass2Message, buildPass3Unified, buildMlCapRetryMessage } from './passBuilders.js';
+import { buildNbaBriefingBlock, buildNbaPass25Message, buildNbaPass3Message } from './nbaWinningEra.js';
 import { parseGaryResponse, normalizePickFormat } from './responseParser.js';
 import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from './statAudit.js';
 import { isInvestigationSufficient, summarizeStatForContext, formatNum, formatPct, summarizePlayerGameLogs, summarizeMlbPlayerGameLogs, summarizePlayerStats, summarizeNbaPlayerAdvancedStats, pruneContextIfNeeded, normalizeSportToLeague, MAX_CONTEXT_MESSAGES, PRUNE_AFTER_ITERATION } from './orchestratorHelpers.js';
@@ -293,7 +294,11 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       console.log(`[Orchestrator] Bilateral cases verified (homeLen=${caseCheck.homeLen}, awayLen=${caseCheck.awayLen})`);
     }
 
-    const pass2Content = buildPass2Message(homeTeam, awayTeam, sport, options.spread ?? null, options.pass25DecisionGuards || '', options.game || {});
+    // NBA: the Apr 8 2026 Pass 2.5 decision turn (prose draft, no JSON yet;
+    // Pass 3 formats it). Every other sport: the shared Pass 2.
+    const pass2Content = isNBASport
+      ? buildNbaPass25Message(homeTeam, awayTeam, options.spread ?? 0, options.pass25DecisionGuards || '')
+      : buildPass2Message(homeTeam, awayTeam, sport, options.spread ?? null, options.pass25DecisionGuards || '', options.game || {});
     messages.push({ role: 'user', content: pass2Content });
     nextMessageToSend = pass2Content;
     _pass2Injected = true;
@@ -328,8 +333,10 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   let _researcherQuestionsUsed = 0;
   const RESEARCHER_QUESTION_BUDGET = 6;
   const RESEARCH_BRIEFING_TIMEOUT_MS = Number(process.env.GARY_RESEARCH_TIMEOUT_MS) || 8 * 60 * 1000;
+  // MLB (the June engine) and NBA (the April winning era) run it; football
+  // stays desk-only pending its own review.
   const researcherOn = String(process.env.GARY_RESEARCHER || 'on').toLowerCase() !== 'off'
-    && (sport === 'baseball_mlb' || sport === 'MLB')
+    && ((sport === 'baseball_mlb' || sport === 'MLB') || isNBASport)
     && !!options.scoutReport;
   // A briefing handed in (the notebook shadow re-reading the main read's
   // desk, Sep 3 2026) is used as-is: same desk, same research, the
@@ -367,7 +374,17 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       throw new Error(`[HARD FAIL] Research assistant failed for ${homeTeam} @ ${awayTeam} (${sport}): ${err.message}`);
     }
   }
-  if (researcherOn) {
+  if (researcherOn && isNBASport) {
+    // April 8 2026 hand-off, for NBA: the briefing, the spread line, the
+    // two-case reminder, INVESTIGATION COMPLETE — no ask-the-researcher
+    // channel (April had none).
+    const caseReminder = bilateralFn ? `\n\n${bilateralFn(homeTeam, awayTeam)}` : '';
+    const briefingBlock = buildNbaBriefingBlock(_researchBriefing, homeTeam, awayTeam, options.spread ?? null, caseReminder);
+    userMessage = userMessage + briefingBlock;
+    nextMessageToSend = userMessage;
+    messages[1] = { role: 'user', content: userMessage };
+    console.log(`[Orchestrator] 📋 Research briefing included before Pass 1 (${_researchBriefing.length} chars) — Gary tasked with spread investigation`);
+  } else if (researcherOn) {
     const brainHasTools = !['claude-cli', 'codex-cli'].includes(currentSession?.provider);
     const investigateAsk = brainHasTools
       ? `Investigate further with your own fetch_stats calls wherever your read wants more evidence — duplicates of already-fetched stats return nothing new, so only novel requests cost anything. You can also hand a question to your research assistant: write a line starting with ASK RESEARCHER: followed by the question (one per line, up to 6 per game) and the answer comes back with verified figures.`
@@ -1481,7 +1498,7 @@ INVESTIGATION COMPLETE`;
         }
       } else if (pass2AlreadyInjected && !pass3AlreadyInjected) {
         // Pass 2 evaluation done — inject Pass 3 for final output
-        const pass3Content = buildPass3Unified(homeTeam, awayTeam, options);
+        const pass3Content = (isNBASport ? buildNbaPass3Message(homeTeam, awayTeam, options) : buildPass3Unified(homeTeam, awayTeam, options));
         messages.push({ role: 'user', content: pass3Content });
         _pass3Injected = true;
         console.log(`[Orchestrator] Injected Pass 3 (Final Output)`);
@@ -1672,7 +1689,7 @@ INVESTIGATION COMPLETE`
           // claims get warnings without burning a round-trip — they fire on
           // ~23% of non-MLB picks and no tool can source them anyway.
           const audit = auditGamePick(earlyPick, messages);
-          if (audit.retryable.length > 0 && !_statAuditRetried && iteration < effectiveMaxIterations) {
+          if (audit.retryable.length > 0 && !_statAuditRetried && !isNBASport && iteration < effectiveMaxIterations) {
             _statAuditRetried = true;
             console.warn(`[StatAudit] ⚠️ ${audit.unsupported.length}/${audit.checked} numeric claim(s) not found in provided data (${audit.retryable.length} retryable) — requesting corrected rationale:\n  ${audit.unsupported.join('\n  ')}`);
             messages.push({ role: 'assistant', content: message.content });
@@ -1718,7 +1735,7 @@ INVESTIGATION COMPLETE`
 
       messages.push({ role: 'assistant', content: message.content });
 
-      const pass3Content = buildPass3Unified(homeTeam, awayTeam, options);
+      const pass3Content = (isNBASport ? buildNbaPass3Message(homeTeam, awayTeam, options) : buildPass3Unified(homeTeam, awayTeam, options));
       messages.push({ role: 'user', content: pass3Content });
       nextMessageToSend = pass3Content;
       _pass3Injected = true;
@@ -1786,7 +1803,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
       // Stat audit (same contract as the Pass 2 short-circuit exit above):
       // retry only for retryable claims; windowed/derived claims warn-only.
       const audit = auditGamePick(pick, messages);
-      if (audit.retryable.length > 0 && !_statAuditRetried && iteration < effectiveMaxIterations) {
+      if (audit.retryable.length > 0 && !_statAuditRetried && !isNBASport && iteration < effectiveMaxIterations) {
         _statAuditRetried = true;
         console.warn(`[StatAudit] ⚠️ ${audit.unsupported.length}/${audit.checked} numeric claim(s) not found in provided data (${audit.retryable.length} retryable) — requesting corrected rationale:\n  ${audit.unsupported.join('\n  ')}`);
         messages.push({ role: 'assistant', content: message.content });

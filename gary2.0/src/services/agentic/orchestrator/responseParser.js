@@ -86,7 +86,10 @@ export function parseGaryResponse(content, homeTeam, awayTeam, sport, gameOdds =
   // Try to find raw JSON object
   // Use greedy [\s\S]* before the final } to match the LAST closing brace,
   // not the first (which could be an inner nested object)
-  const rawJsonMatch = content.match(/\{[\s\S]*?"pick"[\s\S]*\}/);
+  // Bare JSON (no code fence — the Codex bridge answers a format-only turn
+  // with the object alone, Sep 3 2026): accept the current "final_pick" key
+  // as well as the legacy "pick" key.
+  const rawJsonMatch = content.match(/\{[\s\S]*?"(?:final_)?pick"[\s\S]*\}/);
   if (rawJsonMatch) {
     let jsonStr = rawJsonMatch[0];
     try {

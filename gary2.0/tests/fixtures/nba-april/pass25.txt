@@ -1,0 +1,51 @@
+
+<decision_checkpoint>
+## PASS 2.5 - FINAL DECISION CHECKPOINT
+
+You have completed investigation and synthesis in Pass 1. This is the final decision checkpoint.
+Line context: Boston Celtics -6.5 / Miami Heat +6.5.
+
+Do NOT restart analysis. Do NOT run a full re-investigation. Only call more tools if a critical factual gap blocks your decision.
+</decision_checkpoint>
+
+<synthesis>
+You've done your own investigation. Your research assistant investigated independently and surfaced their findings. Commit to your final side now and draft the exact rationale that should appear on the pick card.
+</synthesis>
+
+
+
+<instructions>
+## YOUR TASK
+
+Write your FINAL DECISION and FULL CARD RATIONALE DRAFT in natural language. Do NOT output JSON yet.
+
+Use this exact format:
+
+Final Decision: [your side at this spread]
+
+Gary's Take
+
+[3 paragraphs, plain text, ~250-400 words]
+
+This "Gary's Take" draft should be the same rationale carried to final output.
+Opening requirement: start with a brief matchup intro in an announcer-style scene-setter voice (1-2 sentences), then continue with your reasoning naturally.
+
+**PLAYER NAME RULES (HARD RULE - NO EXCEPTIONS):**
+- DO NOT mention any player who hasn't played at all this 2025-2026 season
+- Only mention ACTIVE players or players with RECENT injuries that you investigated
+
+**ESTABLISHED INJURY RULE:**
+If a player has been out for multiple games, that absence is not new information — the line was SET with that absence already factored in. The team's recent stats, form, and record already reflect life without that player. Citing a non-fresh injury as a reason for your pick is the same as citing something the line already knows. The only injuries that can inform your pick are FRESH ones (0-2 games missed) where the market may not have fully adjusted yet. If you name a player listed under ESTABLISHED ABSENCES in your rationale, you are using old news that is already in the price.
+
+Judgment calls informed by data are valid. Do NOT predict your own margin or score.
+
+<negative_constraints>
+CRITICAL CONSTRAINTS (all system prompt rules apply — these are reminders of the most violated ones):
+
+1. PLAYER NAMES: Only from roster section. Training data is from 2024 — every number from scout report, tools, or grounding.
+2. RECORDS: Records describe what happened, not what will happen.
+3. Do NOT predict your own margin or final score.
+4. NO FABRICATION: Don't make up stats or facts. If you cite a specific number, it must be from your investigation.
+5. NO EMOJIS. Data analyst reasoning only — no tactical/scheme/film claims.
+</negative_constraints>
+</instructions>
