@@ -21,7 +21,7 @@ import { hasNcaafPropStatEvidence } from '../../../src/services/ncaafPropStats.j
 // ═══ Football props ask — the MLB contract in football's day grammar ════════
 describe('football props ask (product contract)', () => {
   it('is the MLB ask with today grammar and the inactive wording', () => {
-    expect(FOOTBALL_PROPS_ASK).toContain("Pick the prop bets you want from today's board — an empty list means you pass this game.");
+    expect(FOOTBALL_PROPS_ASK).toContain("Take two prop bets from today's board — two prop cards is what this game publishes.");
     expect(FOOTBALL_PROPS_ASK).toContain("fresh news — today's inactive — is the exception");
     expect(FOOTBALL_PROPS_ASK).toContain('"prop_type": "[key from the board]"');
     expect(FOOTBALL_PROPS_ASK).toContain('confidence_score (0.50–1.00)');

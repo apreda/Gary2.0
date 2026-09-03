@@ -44,9 +44,9 @@ Each prop you take publishes as its own card with its own "Gary's Take" — the 
 
 // The home-run card's contract (Sep 3 2026): MLB only — the football ask is
 // the same contract without it.
-export const THE_HOME_RUN_ASK = 'From THE HOME RUN BOARD, when one is printed, take one home run bet or none; it publishes as its own card.';
+export const THE_HOME_RUN_ASK = 'From THE HOME RUN BOARD, when one is printed, take one home run bet; it publishes as its own card.';
 
-export const THE_PROPS_ASK = `Pick the prop bets you want from tonight's board — an empty list means you pass this game. ${THE_HOME_RUN_ASK}
+export const THE_PROPS_ASK = `Take two prop bets from tonight's board — two prop cards is what this game publishes. ${THE_HOME_RUN_ASK}
 
 Injuries: an absence already games old is already in the price and in the team's recent results; fresh news — today's scratch — is the exception.
 
@@ -384,7 +384,7 @@ export function buildHomeRunBoard(candidates, { clearedClauseFor = null } = {}) 
     return `  ${m.player}${m.team ? ` (${m.team})` : ''}: OVER home_runs ${m.line} (${fmtOdds(s.odds)})${cleared ? ` — ${cleared}` : ''}`;
   });
   return {
-    text: `═══ THE HOME RUN BOARD (one long shot, or none) ═══\n${lines.join('\n')}`,
+    text: `═══ THE HOME RUN BOARD (one long shot) ═══\n${lines.join('\n')}`,
     players: new Set(candidates.map((s) => norm(s.market.player))),
   };
 }

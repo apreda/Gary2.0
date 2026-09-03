@@ -160,11 +160,11 @@ describe('THE HOME RUN BOARD (propsBrain)', async () => {
       { market: { player: 'Not HR', prop_type: 'hits', line: 0.5, over_odds: -150, under_odds: 120 }, side: 'over', edge: 0.2, odds: -150 }];
     expect(selectHrCandidates(screened).map((s) => s.market.player)).toEqual(['Value A', 'Value B', 'Value C']);
     const b = buildHomeRunBoard(selectHrCandidates(screened), { clearedClauseFor: (k) => (k === 'value a' ? 'over in 2 of his last 15' : null) });
-    expect(b.text).toBe('═══ THE HOME RUN BOARD (one long shot, or none) ═══\n  Value A (LAD): OVER home_runs 0.5 (+550) — over in 2 of his last 15\n  Value B (LAD): OVER home_runs 0.5 (+700)\n  Value C (LAD): OVER home_runs 0.5 (+420)');
+    expect(b.text).toBe('═══ THE HOME RUN BOARD (one long shot) ═══\n  Value A (LAD): OVER home_runs 0.5 (+550) — over in 2 of his last 15\n  Value B (LAD): OVER home_runs 0.5 (+700)\n  Value C (LAD): OVER home_runs 0.5 (+420)');
     expect(buildHomeRunBoard([])).toEqual({ text: '', players: new Set() });
   });
   it('the ask carries the home-run card contract', () => {
     expect(THE_PROPS_ASK).toContain(THE_HOME_RUN_ASK);
-    expect(THE_HOME_RUN_ASK).toBe('From THE HOME RUN BOARD, when one is printed, take one home run bet or none; it publishes as its own card.');
+    expect(THE_HOME_RUN_ASK).toBe('From THE HOME RUN BOARD, when one is printed, take one home run bet; it publishes as its own card.');
   });
 });

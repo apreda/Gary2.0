@@ -18,7 +18,7 @@ Each prop you take publishes as its own card with its own "Gary's Take" — the 
   });
 
   it('the ask is the approved contract and allows passing', () => {
-    expect(THE_PROPS_ASK).toContain('Pick the prop bets you want from tonight\'s board — an empty list means you pass this game.');
+    expect(THE_PROPS_ASK).toContain('Take two prop bets from tonight\'s board — two prop cards is what this game publishes.');
     expect(THE_PROPS_ASK).toContain('fresh news — today\'s scratch — is the exception');
     expect(THE_PROPS_ASK).toContain('"prop_type": "[key from the board]"');
     expect(THE_PROPS_ASK).toContain('confidence_score (0.50–1.00)');

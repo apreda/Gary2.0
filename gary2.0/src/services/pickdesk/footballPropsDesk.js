@@ -52,7 +52,7 @@ export const isFootballFunLane = (propType) => /anytime_?(?:td|touchdown)/.test(
 
 // Football props ask — the MLB contract with football's day grammar (the
 // founder's tonight→today porting rule, c3691c04) and the TD fun-lane label.
-export const FOOTBALL_PROPS_ASK = `Pick the prop bets you want from today's board — an empty list means you pass this game.
+export const FOOTBALL_PROPS_ASK = `Take two prop bets from today's board — two prop cards is what this game publishes.
 
 Injuries: an absence already games old is already in the price and in the team's recent results; fresh news — today's inactive — is the exception.
 
