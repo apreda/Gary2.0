@@ -33,6 +33,7 @@ import UIKit
 //   hscroll 300                  scroll EVERY horizontal rail on screen by px
 //                                (shelf card rails — QA screenshots can't swipe)
 //   dismiss                      dismiss the presented sheet
+//   mock nfl on|off              serve the cloned NFL day (GaryMock.swift)
 //
 // The observer is only registered in DEBUG (`start()` is a no-op in Release),
 // so nothing can post these commands in a shipping binary.
@@ -46,6 +47,7 @@ enum GaryTour {
         CFNotificationCenterAddObserver(center, nil, { _, _, _, _, _ in
             DispatchQueue.main.async { GaryTour.fire() }
         }, "com.gary.tour" as CFString, nil, .deliverImmediately)
+        GaryMock.restore()
         #endif
     }
 
@@ -80,6 +82,11 @@ enum GaryTour {
         case "recelebrate":
             CelebratedWins.clearAll()
             post(verb, arg)
+        case "mock":
+            // "mock nfl on" / "mock nfl off" — the sim-only cloned NFL day
+            // (GaryMock.swift). Persists across relaunches; relaunch to drop
+            // the in-memory boards after flipping it.
+            GaryMock.set(arg.hasSuffix("on"))
         default:
             post(verb, arg)
         }

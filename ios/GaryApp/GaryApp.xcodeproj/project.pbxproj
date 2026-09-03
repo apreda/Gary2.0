@@ -69,6 +69,8 @@
 		E6905D0BB1424B9D57295179 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB7CFB0C652C052F27B7B06E /* DesignSystem.swift */; };
 		F04B411A8C0D4A2B9E711001 /* FootballGameIntelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04B411A8C0D4A2B9E711002 /* FootballGameIntelView.swift */; };
 		F04B411A8C0D4A2B9E711003 /* FootballProofContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04B411A8C0D4A2B9E711004 /* FootballProofContract.swift */; };
+		F04B411A8C0D4A2B9E7110A1 /* GaryMock.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04B411A8C0D4A2B9E7110A2 /* GaryMock.swift */; };
+		F04B411A8C0D4A2B9E7110A3 /* GaryMockFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04B411A8C0D4A2B9E7110A4 /* GaryMockFixture.swift */; };
 		F2A5809FF32535CE29C4E79A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26AE11992E449EB95857D6E3 /* SettingsView.swift */; };
 		FA4DDE4BB0C86346543A168F /* SecretsLocal.swift.example in Resources */ = {isa = PBXBuildFile; fileRef = 1392B4ABEB07112212968AAF /* SecretsLocal.swift.example */; };
 		FAE577A219F049637480970D /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 423887686C6839DEC44C0DEA /* GoogleService-Info.plist */; };
@@ -138,6 +140,8 @@
 		ECE32BA2E5208CC9E994A26A /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		F04B411A8C0D4A2B9E711002 /* FootballGameIntelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballGameIntelView.swift; sourceTree = "<group>"; };
 		F04B411A8C0D4A2B9E711004 /* FootballProofContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballProofContract.swift; sourceTree = "<group>"; };
+		F04B411A8C0D4A2B9E7110A2 /* GaryMock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaryMock.swift; sourceTree = "<group>"; };
+		F04B411A8C0D4A2B9E7110A4 /* GaryMockFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaryMockFixture.swift; sourceTree = "<group>"; };
 		F0616A3C8A2F0268B8A05C4D /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		F3971BE744C5F972B9A2C2C3 /* Oswald-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Oswald-Bold.ttf"; sourceTree = "<group>"; };
 		FBB94BA05B70C7412D0F1576 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -187,6 +191,8 @@
 				CB7CFB0C652C052F27B7B06E /* DesignSystem.swift */,
 				F04B411A8C0D4A2B9E711002 /* FootballGameIntelView.swift */,
 				F04B411A8C0D4A2B9E711004 /* FootballProofContract.swift */,
+				F04B411A8C0D4A2B9E7110A2 /* GaryMock.swift */,
+				F04B411A8C0D4A2B9E7110A4 /* GaryMockFixture.swift */,
 				089A2D29640F62FFCD6A4769 /* GaryApp.entitlements */,
 				49489C7FC0ABE55881B19E13 /* GaryApp.swift */,
 				8AF21EE7054E8EF36A963E61 /* GaryTour.swift */,
@@ -390,6 +396,8 @@
 				E6905D0BB1424B9D57295179 /* DesignSystem.swift in Sources */,
 				F04B411A8C0D4A2B9E711001 /* FootballGameIntelView.swift in Sources */,
 				F04B411A8C0D4A2B9E711003 /* FootballProofContract.swift in Sources */,
+				F04B411A8C0D4A2B9E7110A1 /* GaryMock.swift in Sources */,
+				F04B411A8C0D4A2B9E7110A3 /* GaryMockFixture.swift in Sources */,
 				40771064325B4E728A735AEA /* GaryApp.swift in Sources */,
 				AD40BD1C591C0853AB20200A /* GaryTour.swift in Sources */,
 				0BE6FB14629F5618AA09EDD3 /* HomeAdditions.swift in Sources */,
