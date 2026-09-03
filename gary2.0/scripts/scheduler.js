@@ -239,6 +239,7 @@ async function fireOnPostedLineups(livePending, entry, match, now) {
     const tiers = (livePending || []).filter((e) => scheduleEntryKey(e) === key && !isScheduleEntryHeld(e) && !isScheduleEntryRetired(e));
     const first = tiers.sort((a, b) => a.triggerTime - b.triggerTime)[0];
     if (!first || first.triggerTime.getTime() <= now) return; // already due or fired
+    if (first.tier !== 1) return; // the primary already ran; retries keep their own clocks
     const { getConfirmedLineups } = await import('../src/services/mlbStatsApiService.js');
     const lineups = await getConfirmedLineups(match.gamePk);
     if (!bothLineupsPosted(lineups)) return;
