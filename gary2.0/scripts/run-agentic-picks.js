@@ -63,13 +63,17 @@ try {
 // missing key fails loudly instead of rerouting to a second system.
 // ═══════════════════════════════════════════════════════════════════════════
 // ONE LANE (founder, Aug 27): MLB runs the June engine unconditionally —
-// no pickdesk fallback, and as of the afternoon kill, NO RESEARCHER: the
-// desk is Gary's entire evidence. Keys still power the desk's press lanes
-// and the brains; a missing key fails loudly, never silently.
-if (!process.env.OPENAI_API_KEY) {
-  console.error(`[JuneEngine] 🚨 OPENAI_API_KEY MISSING — the brain bridge and desk press lanes WILL FAIL loudly until it lands in .env. There is no fallback system.`);
+// no pickdesk fallback. THE RESEARCHER RETURNS (founder GO, Sep 3 2026):
+// the Aug 18 Haiku research briefing runs before Pass 1 again for MLB, so
+// the researcher key is required too; a missing key fails loudly, never
+// silently.
+const { GAME_RESEARCH_MODEL } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
+const researcherOff = String(process.env.GARY_RESEARCHER || 'on').toLowerCase() === 'off';
+const researchKeyOk = researcherOff || (GAME_RESEARCH_MODEL.startsWith('anthropic-') ? !!process.env.ANTHROPIC_API_KEY : !!process.env.OPENAI_API_KEY);
+if (!process.env.OPENAI_API_KEY || !researchKeyOk) {
+  console.error(`[JuneEngine] 🚨 REQUIRED API KEY MISSING (${!process.env.OPENAI_API_KEY ? 'OPENAI_API_KEY' : `researcher ${GAME_RESEARCH_MODEL}`}) — MLB picks WILL FAIL loudly until it lands in .env. There is no fallback system.`);
 } else {
-  console.log(`[JuneEngine] ⚾ MLB games run the June engine, desk-only (brain: ${MLB_JUNE_BRAIN_MODEL}, model cascade: ${DESK_FALLBACK_MODELS.join(' → ')}; researcher: OFF — founder kill, Aug 27).`);
+  console.log(`[JuneEngine] ⚾ MLB games run the June engine (brain: ${MLB_JUNE_BRAIN_MODEL}, researcher: ${researcherOff ? 'OFF (GARY_RESEARCHER=off)' : GAME_RESEARCH_MODEL}, model cascade: ${DESK_FALLBACK_MODELS.join(' → ')}).`);
 }
 
 // Era stamp for the restored lane: one hash over the engine's full surface —

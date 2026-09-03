@@ -1,5 +1,6 @@
 import { CONFIG, GAME_PICK_MODEL, GAME_ML_CAP, validateSessionModel } from './orchestratorConfig.js';
 import { createModelSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
+import { buildResearchBriefing, extractResearcherQuestions, createResearcherFollowUpSession, askResearcher } from './researchBriefing.js';
 import { createCostTracker } from './costTracker.js';
 import { buildPass1Message, buildPass2Message, buildPass3Unified, buildMlCapRetryMessage } from './passBuilders.js';
 import { parseGaryResponse, normalizePickFormat } from './responseParser.js';
@@ -312,15 +313,61 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
 
   const effectiveMaxIterations = CONFIG.maxIterations;
 
-  // THE RESEARCHER IS DEAD — ALL SPORTS (founder, Aug 27: "make sure then
-  // this is the process for ALL sports"). His rationale, recorded: the
-  // briefing was a second author we could not control — it decided which
-  // findings surfaced, Gary clung to whatever it surfaced, and the desk
-  // could not be standardized while it wrote. Everything Gary sees is now
-  // the desk, section by section, the same shape every game, so how he
-  // USES the same information becomes observable. No briefing, no
-  // ask-the-researcher, no injected block. The desk is the evidence.
-  const _researchBriefing = null;
+  // THE RESEARCHER RETURNS FOR MLB (founder GO, Sep 3 2026). The record:
+  // June's engine with its research assistant went 188-136 (+26u); the
+  // Jul 26 lane deletion turned it negative; the Aug 18 restoration went
+  // 47-37 in its one week; the Aug 27 kill turned it negative again (57-69
+  // since). "If it wins all of June and wins when we put it back in, it
+  // needs to come back as it was Aug 17-23." This is that version: the
+  // Haiku researcher investigates every factor with tools and web grounding
+  // before Pass 1, its briefing rides the Pass 1 message, and Gary can hand
+  // it up to six questions mid-investigation. Football stays desk-only
+  // pending its own review (GARY_RESEARCHER=off disables it everywhere).
+  let _researchBriefing = null;
+  let _researcherFollowUpSession = null;
+  let _researcherQuestionsUsed = 0;
+  const RESEARCHER_QUESTION_BUDGET = 6;
+  const RESEARCH_BRIEFING_TIMEOUT_MS = Number(process.env.GARY_RESEARCH_TIMEOUT_MS) || 8 * 60 * 1000;
+  const researcherOn = String(process.env.GARY_RESEARCHER || 'on').toLowerCase() !== 'off'
+    && (sport === 'baseball_mlb' || sport === 'MLB')
+    && !!options.scoutReport;
+  if (researcherOn) {
+    console.log(`[Research Briefing] 🔬 Running the research briefing (Haiku with tools) — Gary waits for completion`);
+    try {
+      const briefingResult = await Promise.race([
+        buildResearchBriefing(options.scoutReport, sport, homeTeam, awayTeam, { ...options, _costTracker: costTracker }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`research briefing timed out after ${RESEARCH_BRIEFING_TIMEOUT_MS / 1000}s`)), RESEARCH_BRIEFING_TIMEOUT_MS)),
+      ]);
+      if (briefingResult && typeof briefingResult === 'object') {
+        _researchBriefing = briefingResult.briefing;
+        if (briefingResult.calledTokens?.length > 0) {
+          for (const { token } of briefingResult.calledTokens) {
+            if (!token) continue;
+            _flashCalledTokens.add(token);
+            const base = token.split(':')[0];
+            if (base && base !== token) _flashCalledTokens.add(base);
+          }
+        }
+      } else if (briefingResult && typeof briefingResult === 'string') {
+        _researchBriefing = briefingResult;
+      }
+      if (!_researchBriefing) throw new Error('the research assistant returned an empty briefing');
+      console.log(`[Research Briefing] ✅ Briefing ready (${_researchBriefing.length} chars)`);
+    } catch (err) {
+      // The June engine hard-failed here (a game without its researcher is
+      // not the June system). Kept: the runner's cascade re-runs the game.
+      throw new Error(`[HARD FAIL] Research assistant failed for ${homeTeam} @ ${awayTeam} (${sport}): ${err.message}`);
+    }
+    const brainHasTools = !['claude-cli', 'codex-cli'].includes(currentSession?.provider);
+    const investigateAsk = brainHasTools
+      ? `Investigate further with your own fetch_stats calls wherever your read wants more evidence — duplicates of already-fetched stats return nothing new, so only novel requests cost anything. You can also hand a question to your research assistant: write a line starting with ASK RESEARCHER: followed by the question (one per line, up to 6 per game) and the answer comes back with verified figures.`
+      : `Your research assistant stays on call. To dig deeper into anything — a split the briefing summarized, a number you want verified, a factor it did not cover — write a line starting with ASK RESEARCHER: followed by the question (one per line, up to 6 per game). The answers come back with verified figures before you continue. Weigh the briefing's findings honestly rather than repeating them.`;
+    const briefingBlock = `\n\n## RESEARCH BRIEFING (from your research assistant)\n\nYour research assistant investigated every factor with full tool access. These are structured, verified findings. Everything it covers is already fetched.\n\n${_researchBriefing}\n\n---\n\n${investigateAsk}`;
+    userMessage = userMessage + briefingBlock;
+    nextMessageToSend = userMessage;
+    messages[1] = { role: 'user', content: userMessage };
+    console.log(`[Orchestrator] 📋 Research briefing included before Pass 1 (${_researchBriefing.length} chars)`);
+  }
 
 
   while (iteration < effectiveMaxIterations) {
@@ -1479,7 +1526,44 @@ INVESTIGATION COMPLETE`;
       const { categoryCount: gateCategories, totalCalls: gateCalls } = isInvestigationSufficient(toolCallHistory, iteration);
       const markedComplete = hasInvestigationCompleteMarker(message.content || '');
 
-      // (ask-the-researcher protocol removed with the researcher — Aug 27.)
+      // ASK-THE-RESEARCHER (founder GO, Aug 18 2026; restored Sep 3):
+      // questions outrank a completion marker in the same message — the
+      // answers block tells Gary to re-emit INVESTIGATION COMPLETE when he
+      // is actually done.
+      if (_researchBriefing) {
+        const remaining = RESEARCHER_QUESTION_BUDGET - _researcherQuestionsUsed;
+        const questions = remaining > 0 ? extractResearcherQuestions(message.content || '', remaining) : [];
+        if (questions.length > 0) {
+          messages.push({ role: 'assistant', content: message.content });
+          _researcherQuestionsUsed += questions.length;
+          console.log(`[Orchestrator] 🙋 ${questions.length} researcher question(s) from Gary (${_researcherQuestionsUsed}/${RESEARCHER_QUESTION_BUDGET} used)`);
+          let answersText;
+          try {
+            if (!_researcherFollowUpSession) {
+              _researcherFollowUpSession = await createResearcherFollowUpSession({
+                scoutReportContent: options.scoutReport || '',
+                briefing: _researchBriefing,
+                sport, homeTeam, awayTeam,
+                _costTracker: costTracker,
+              });
+            }
+            answersText = await askResearcher(_researcherFollowUpSession, questions, { sport, homeTeam, awayTeam, options });
+          } catch (err) {
+            console.warn(`[Orchestrator] ⚠️ researcher follow-up failed: ${err.message}`);
+            answersText = `The researcher could not be reached (${err.message}). Work from the desk and the briefing.`;
+          }
+          const budgetLine = _researcherQuestionsUsed >= RESEARCHER_QUESTION_BUDGET
+            ? '\n\nYour question budget is exhausted — synthesize from what you have.'
+            : `\n\nYou may ask ${RESEARCHER_QUESTION_BUDGET - _researcherQuestionsUsed} more question(s) the same way.`;
+          const answersMsg = {
+            role: 'user',
+            content: `## RESEARCHER ANSWERS\n\n${answersText}${budgetLine}\n\nContinue Pass 1. When your synthesis is complete (including both cases), output exactly:\nINVESTIGATION COMPLETE`,
+          };
+          messages.push(answersMsg);
+          nextMessageToSend = answersMsg;
+          continue;
+        }
+      }
 
       if (markedComplete) {
         if (!isNFLSport && !isNCAAFSport) {
