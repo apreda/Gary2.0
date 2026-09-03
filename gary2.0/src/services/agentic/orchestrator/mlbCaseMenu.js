@@ -147,10 +147,19 @@ export function mlbCaseHeadings(homeTeam, awayTeam, game) {
  */
 export function mlbPass1Opening(headings) {
   if (headings && headings.kind === 'runline') {
-    return `You're deciding what to bet on tonight's game below. Tonight is a run-line game: ${headings.fav} -1.5 or ${headings.dog} +1.5. The board comes first; everything else follows.\n\n${MLB_PRICED_IN_SENTENCE}`;
+    return `You're deciding what to bet on tonight's game below. Tonight is a run-line game: ${headings.fav} -1.5 or ${headings.dog} +1.5. The board comes first; everything else follows.\n\n${MLB_PRICED_IN_SENTENCE}\n\n${MLB_WHERE_TO_LOOK}`;
   }
-  return `You're deciding what to bet on tonight's game below. The board comes first; everything else follows.\n\n${MLB_PRICED_IN_SENTENCE}`;
+  return `You're deciding what to bet on tonight's game below. The board comes first; everything else follows.\n\n${MLB_PRICED_IN_SENTENCE}\n\n${MLB_WHERE_TO_LOOK}`;
 }
+
+/**
+ * WHERE TO LOOK (founder GO, Sep 3 2026): the second half of the NBA change.
+ * Feb 28's spread awareness came with a short list of what to look at for a
+ * spread; the single sentence version that followed went 152-106. This is
+ * the MLB list — where tonight lives on the desk. Investigation only: it
+ * names places, never what a fact means for the bet.
+ */
+export const MLB_WHERE_TO_LOOK = "Where tonight lives on the desk: this starter against this lineup, by hand and by recent form; which arms in each pen can actually go tonight and who threw yesterday; who is out or back in the confirmed nine; the park and the weather tonight; and what the beat has reported today.";
 
 /**
  * WHAT THE PRICE ALREADY HOLDS (founder GO, Sep 3 2026, wording verbatim).

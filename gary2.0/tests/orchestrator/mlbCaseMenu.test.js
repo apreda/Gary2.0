@@ -150,3 +150,15 @@ describe('what the price already holds (founder GO, Sep 3 2026)', () => {
     expect(text).toContain('The market already knows what you know');
   });
 });
+
+describe('where to look (founder GO, Sep 3 2026)', () => {
+  it('both openers carry the where-to-look line after the priced-in sentence, and it names places only', async () => {
+    const { mlbPass1Opening, MLB_PRICED_IN_SENTENCE, MLB_WHERE_TO_LOOK } = await import('../../src/services/agentic/orchestrator/mlbCaseMenu.js');
+    for (const h of [{ kind: 'moneyline' }, { kind: 'runline', fav: 'Dodgers', dog: 'Padres' }]) {
+      const msg = mlbPass1Opening(h);
+      expect(msg.indexOf(MLB_PRICED_IN_SENTENCE)).toBeLessThan(msg.indexOf(MLB_WHERE_TO_LOOK));
+    }
+    expect(MLB_WHERE_TO_LOOK).toContain('which arms in each pen can actually go tonight');
+    expect(MLB_WHERE_TO_LOOK).not.toMatch(/\b(edge|value|fade|favorite|underdog|means|therefore|so take|bet the)\b/i);
+  });
+});

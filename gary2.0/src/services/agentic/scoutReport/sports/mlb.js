@@ -784,7 +784,11 @@ export async function buildMlbScoutReport(game, options = {}) {
           const withBody = stories.filter((s) => s.st?.body);
           for (const { g, st } of withBody.slice().reverse()) {
             pitcherStoryPks.set(g.gamePk, `${pitcher.fullName || 'the starter'} (${label})`);
-            const flatBody = String(st.body).replace(/\s*\n+\s*/g, ' ');
+            // THE LEANER DESK (founder GO, Sep 3 2026): a start's recap is the
+            // headline and its lead, not the whole article — three full
+            // recaps a starter were ~14K characters a side of prose the
+            // lanes ledger never saw a card lean on.
+            const flatBody = sentenceTrim(String(st.body).replace(/\s*\n+\s*/g, ' '), 900);
             parts.push(`  His start ${g.date} ${g.isHome ? 'vs' : '@'} ${g.opponent}, as written${st.headline ? ` — ${st.headline}` : ''}: ${flatBody}`);
           }
         }
@@ -821,7 +825,7 @@ export async function buildMlbScoutReport(game, options = {}) {
           const end = str.lastIndexOf('. ');
           return end > 0 ? str.slice(0, end + 1) : str;
         };
-        const press = pressRaw ? sentenceSnap(sentenceTrim(pressRaw.replace(/\s*\n+\s*/g, ' '), 4000)) : '';
+        const press = pressRaw ? sentenceSnap(sentenceTrim(pressRaw.replace(/\s*\n+\s*/g, ' '), 2000)) : '';
         if (press && press.length > 60 && !/^(no|none|unverified)\b/i.test(press)) {
           parts.push(`  His recent work, as written: ${press}`);
         } else if (pressBySide[side]) {
@@ -1154,8 +1158,17 @@ export async function buildMlbScoutReport(game, options = {}) {
     standingsSection = parts.join('\n\n');
     for (const [side, teamId, bdlId, nm] of [['home', homeTeamId, homeTeamBdlId, homeTeam], ['away', awayTeamId, awayTeamBdlId, awayTeam]]) {
       const arc = arcById.get(bdlId);
+      // SEPTEMBER, AS FACTS (founder GO, Sep 3 2026): the race with the games
+      // left, and which regulars have been sitting — the MLB cousin of the
+      // NBA rest edge. Facts on the club's line; fail-soft.
+      let sept = null;
+      try {
+        const { septemberLine } = await import('./mlbSeptember.js');
+        sept = await septemberLine({ teamName: nm, mlbTeamId: teamId, standingsCtx: ctx.get(teamId) });
+      } catch { sept = null; }
       const bits = [
         ctxLine(teamId, nm),
+        sept,
         divTable(divisionOf(nm)),
         arc ? `Season shape: ${nm} ${arc}` : null,
       ].filter(Boolean);
@@ -1227,9 +1240,11 @@ export async function buildMlbScoutReport(game, options = {}) {
     const entries = [];
     // Untrimmed (founder ruling, Aug 26). A story already printed whole in
     // the probables block prints here as a pointer, never twice.
-    const bodyOrPointer = (pk, story) => (pitcherStoryPks.has(pk)
-      ? `(full story printed above, under ${pitcherStoryPks.get(pk)}'s starts as written)`
-      : String(story.body).replace(/\s*\n+\s*/g, ' '));
+    // THE LEANER DESK (founder GO, Sep 3 2026): last night's story keeps its
+    // lead and body to a page; a series story keeps its headline and lead.
+    const bodyOrPointer = (pk, story, cap = 2000) => (pitcherStoryPks.has(pk)
+      ? `(story printed above, under ${pitcherStoryPks.get(pk)}'s starts as written)`
+      : sentenceTrim(String(story.body).replace(/\s*\n+\s*/g, ' '), cap));
     if (homeLast && awayLast && homeLast.gamePk === awayLast.gamePk) {
       const story = wireStoryByPk.get(homeLast.gamePk);
       if (story) {
@@ -1243,7 +1258,7 @@ export async function buildMlbScoutReport(game, options = {}) {
         const story = g && wireStoryByPk.get(g.gamePk);
         if (story) {
           lastNightPks.add(g.gamePk);
-          const entry = `${wireLabel(g, nick)} — ${story.headline}\n${bodyOrPointer(g.gamePk, story)}`;
+          const entry = `${wireLabel(g, nick)} — ${story.headline}\n${bodyOrPointer(g.gamePk, story, 700)}`;
           entries.push(entry);
           lastNightBySide[side] = entry;
         }
@@ -1415,7 +1430,7 @@ export async function buildMlbScoutReport(game, options = {}) {
         if (st?.body) {
           recap += pitcherStoryPks.has(game.gamePk)
             ? `\n    As written: (full story printed above, under ${pitcherStoryPks.get(game.gamePk)}'s starts as written)`
-            : `\n    As written: ${String(st.body).replace(/\s*\n+\s*/g, ' ')}`;
+            : `\n    As written: ${sentenceTrim(String(st.body).replace(/\s*\n+\s*/g, ' '), 1200)}`;
         }
       }
       return recap;
