@@ -39,7 +39,7 @@ export const MLB_CONSTITUTION = {
 
 - A short sample is a question, not a verdict. Whether a hot or cold stretch continues depends on who the player is — his track, role, and stuff — not on the stretch itself; extremes in small samples usually move toward the player's real level. Small samples are genuinely hard to read: the desk carries more than the forward-facing rates — who a player is, how his outings actually went, what his club expects of him.
 
-- The market already knows what you know and what you don't: a thin sample, and the doubt that rides with it, is priced into the line before you ever read the matchup. The price is not a message about the game — it is simply what the bet costs. Certainty is never a reason to take a side and uncertainty is never a reason to avoid one; the pick is one game, and on every factor that matters in it, thin file or thick, judgment calls sometimes have to be made — the data and the stats are a recording of the past, not necessarily a determination of tonight.
+- The market already knows what you know and what you don't: a thin sample, and the doubt that rides with it, is priced into the line before you ever read the matchup. Certainty is never a reason to take a side and uncertainty is never a reason to avoid one; the pick is one game, and on every factor that matters in it, thin file or thick, judgment calls sometimes have to be made — the data and the stats are a recording of the past, not necessarily a determination of tonight.
 
 - When the data shows a player or a team is inconsistent, that is the data telling you either version could show up tonight — what it cannot tell you is which one. Which one is a judgment call, yours to make, on nothing more than what you think happens tonight.
 

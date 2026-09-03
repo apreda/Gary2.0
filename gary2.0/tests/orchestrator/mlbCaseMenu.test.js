@@ -132,3 +132,21 @@ describe('ticketMenu / menuTruthLines — one definition of a ticket', () => {
     expect(m.tickets).toEqual(['A -150', 'B +130']);
   });
 });
+
+describe('what the price already holds (founder GO, Sep 3 2026)', () => {
+  it('both openers carry the sentence verbatim, after "The board comes first"', async () => {
+    const { mlbPass1Opening, MLB_PRICED_IN_SENTENCE } = await import('../../src/services/agentic/orchestrator/mlbCaseMenu.js');
+    expect(MLB_PRICED_IN_SENTENCE).toBe('The prices on the board were set after the starters, the records, the run differential, the season offense and pen numbers, and the park were known. The question is not whether those things exist, everyone can see them, but whether the price has accounted for them correctly for tonight\'s game. Records and run differential describe what has happened; they are not reasons for or against a price.');
+    for (const h of [{ kind: 'moneyline' }, { kind: 'runline', fav: 'Dodgers', dog: 'Padres' }]) {
+      const msg = mlbPass1Opening(h);
+      expect(msg.indexOf('The board comes first; everything else follows.')).toBeLessThan(msg.indexOf(MLB_PRICED_IN_SENTENCE));
+      expect(msg).not.toMatch(/cheap|expensive|underdog|favorite is|value/i);
+    }
+  });
+  it('the Aug 19 "price is not a message" clause is retired from the MLB constitution', async () => {
+    const { readFileSync } = await import('node:fs');
+    const text = readFileSync(new URL('../../src/services/agentic/constitution/mlbConstitution.js', import.meta.url), 'utf8');
+    expect(text).not.toContain('The price is not a message about the game');
+    expect(text).toContain('The market already knows what you know');
+  });
+});

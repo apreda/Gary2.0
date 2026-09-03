@@ -147,7 +147,21 @@ export function mlbCaseHeadings(homeTeam, awayTeam, game) {
  */
 export function mlbPass1Opening(headings) {
   if (headings && headings.kind === 'runline') {
-    return `You're deciding what to bet on tonight's game below. Tonight is a run-line game: ${headings.fav} -1.5 or ${headings.dog} +1.5. The board comes first; everything else follows.`;
+    return `You're deciding what to bet on tonight's game below. Tonight is a run-line game: ${headings.fav} -1.5 or ${headings.dog} +1.5. The board comes first; everything else follows.\n\n${MLB_PRICED_IN_SENTENCE}`;
   }
-  return "You're deciding what to bet on tonight's game below. The board comes first; everything else follows.";
+  return `You're deciding what to bet on tonight's game below. The board comes first; everything else follows.\n\n${MLB_PRICED_IN_SENTENCE}`;
 }
+
+/**
+ * WHAT THE PRICE ALREADY HOLDS (founder GO, Sep 3 2026, wording verbatim).
+ * The NBA precedent: one sentence naming what the spread was set after and
+ * asking whether it accounted for those things correctly went 152-106
+ * (+30u, ~2 SD) from Feb 28 to Apr 12 2026, after 162-146 without it, and
+ * the single-sentence version beat the paragraphs. The MLB ledger (Aug 5 to
+ * Sep 2) lost on favorites chosen for records, run differential and "the
+ * better team" — the things already in the price. Awareness only: it names
+ * what everyone can see and asks the question; no side, no factor, no word
+ * about a price being cheap or expensive (a moneyline "is the price right"
+ * leans to the dog; a spread leans nowhere).
+ */
+export const MLB_PRICED_IN_SENTENCE = 'The prices on the board were set after the starters, the records, the run differential, the season offense and pen numbers, and the park were known. The question is not whether those things exist, everyone can see them, but whether the price has accounted for them correctly for tonight\'s game. Records and run differential describe what has happened; they are not reasons for or against a price.';
