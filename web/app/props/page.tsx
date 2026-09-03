@@ -8,7 +8,7 @@ import { Slab } from '@/components/board/GameRow';
 import { KeyStats, PropCall, PropRow } from '@/components/board/PropRow';
 import { BookDayProvider } from '@/components/book/BookDay';
 import { PageMasthead, StitchRule } from '@/components/Terminal';
-import { fetchTodayPropPicks, splitHrThreats, selectTopProps } from '@/lib/gary/picks';
+import { fetchTodayPropPicks, isLongShot, selectTopProps } from '@/lib/gary/picks';
 import { computePropsRecord, fetchPropResultsForDate } from '@/lib/gary/results';
 import { normalizeLeague } from '@/lib/gary/leagues';
 import { etDateLabel, etTime, parseGameTime } from '@/lib/gary/format';
@@ -66,25 +66,22 @@ function FeaturedProp({ prop }: { prop: PropPick }) {
   );
 }
 
-/** Rail card for the HR Threats shelf — name, call, one stat. */
-function ThreatCard({ prop }: { prop: PropPick }) {
-  const stat = Array.isArray(prop.key_stats) ? prop.key_stats[0] : undefined;
-  return (
-    <li className="flex w-[290px] shrink-0 snap-start flex-col rounded-card border border-line bg-card p-4 shadow-card">
-      <p className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-faint">{prop.matchup}</p>
-      <p className="mt-1.5 font-display text-[1.25rem] uppercase leading-tight text-hi">{prop.player}</p>
-      <div className="mt-3">
-        <PropCall prop={prop} />
-      </div>
-      {stat && <p className="mt-3 font-mono text-[11.5px] leading-[1.5] text-low">· {stat}</p>}
-    </li>
-  );
-}
-
 /** Props for one game, in one panel — the way a bettor reads a card. */
 function GamePropPanel({ matchup, props }: { matchup: string; props: PropPick[] }) {
   const time = etTime(props[0]?.commence_time);
-  const league = normalizeLeague(props[0]?.league, props[0]?.sport) ?? '';
+  // The lane stamp is not a league: a panel of MLB props plus its home run is
+  // an MLB panel.
+  const league = normalizeLeague(props[0]?.league, props[0]?.sport) === 'MLB HR'
+    ? 'MLB'
+    : normalizeLeague(props[0]?.league, props[0]?.sport) ?? '';
+  // The long shot rides last, behind the props it shares a game with.
+  const core = props.filter(p => !isLongShot(p));
+  const longShots = props.filter(isLongShot);
+  const ordered = [...core, ...longShots];
+  const count = [
+    `${core.length} ${core.length === 1 ? 'prop' : 'props'}`,
+    longShots.length ? '1 long shot' : null,
+  ].filter(Boolean).join(' · ');
   return (
     <article className="quant-panel overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 border-b border-line px-5 py-3">
@@ -93,13 +90,11 @@ function GamePropPanel({ matchup, props }: { matchup: string; props: PropPick[] 
           <span className="font-display text-[1.15rem] uppercase leading-none text-hi">{matchup}</span>
         </span>
         <span className="font-mono text-[11px] font-bold uppercase tracking-[0.06em] text-low">
-          {[time, league, `${props.length} ${props.length === 1 ? 'prop' : 'props'}`]
-            .filter(Boolean)
-            .join(' · ')}
+          {[time, league, count].filter(Boolean).join(' · ')}
         </span>
       </div>
       <div className="divide-y divide-line">
-        {props.map((p, i) => (
+        {ordered.map((p, i) => (
           <PropRow key={`${p.player}-${p.prop}-${i}`} prop={p} />
         ))}
       </div>
@@ -116,14 +111,17 @@ export default async function PropsPage() {
   ]);
   const yesterday = computePropsRecord(gradedRows);
 
-  const featured = props && props.length > 0 ? selectTopProps(props, 1)[0] : null;
+  // The showcase is the product, never the fun lane.
+  const coreProps = props ? props.filter(p => !isLongShot(p)) : [];
+  const featured = coreProps.length > 0 ? selectTopProps(coreProps, 1)[0] : null;
   const boardProps = props ? props.filter(p => p !== featured) : [];
-  const { hr, rest } = splitHrThreats(boardProps);
 
   // Grouped by game, in first-pitch order — a bettor looking at Mariners @
-  // Rangers wants all three of its props together, not scattered down a grid.
+  // Rangers wants all of its cards together, the long shot included (founder,
+  // Sep 3 2026: the home run is a pick card, not a shelf at the bottom of the
+  // page), not scattered down a grid.
   const byGame = new Map<string, PropPick[]>();
-  for (const p of rest) {
+  for (const p of boardProps) {
     const key = p.matchup?.trim() || 'Other';
     byGame.set(key, [...(byGame.get(key) ?? []), p]);
   }
@@ -174,26 +172,6 @@ export default async function PropsPage() {
               ))}
             </div>
           </BookDayProvider>
-        </section>
-      )}
-
-      {hr.length > 0 && (
-        <section className="mt-12">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <h2 className="font-display text-[1.6rem] uppercase leading-none text-hi">Home run threats</h2>
-            <span className="font-mono text-[11px] font-bold uppercase tracking-[0.06em] text-low">
-              {hr.length} hitters
-            </span>
-          </div>
-          <p className="mt-1.5 text-[14.5px] text-mid">Hitters with the conditions to leave the yard today.</p>
-          <StitchRule tone="faint" className="mt-4" />
-          <div className="rail-scroll -mx-5 mt-6 overflow-x-auto px-5 pb-2">
-            <ul className="flex w-max snap-x gap-3">
-              {selectTopProps(hr, 12).map((p, i) => (
-                <ThreatCard key={`${p.player}-${i}`} prop={p} />
-              ))}
-            </ul>
-          </div>
         </section>
       )}
 

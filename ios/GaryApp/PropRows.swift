@@ -226,7 +226,7 @@ struct CompactPropRow: View {
         case "NBA", "NCAAB", "WNBA": return "basketball.fill"
         case "NFL", "NCAAF", "NFL TDS": return "football.fill"
         case "NHL": return "hockey.puck.fill"
-        case "MLB": return "baseball.fill"
+        case "MLB", "MLB HR": return "baseball.fill"
         case "EPL": return "soccerball"
         default: return "sportscourt.fill"
         }
@@ -273,7 +273,17 @@ struct CompactPropRow: View {
     // share/tier/take footer, diagonal stamp when settled.
 
     private var eyebrowLabel: String {
-        "GARY'S PICK"
+        // The home run says what it is (founder, Sep 3 2026: "It's a long-shot
+        // bet. We don't expect it to hit that often. It's for fun."). Same card,
+        // same anatomy — only the eyebrow tells the reader which lane he is in.
+        prop.isHRLane ? "THE LONG SHOT" : "GARY'S PICK"
+    }
+
+    /// The meta row's league token names a LEAGUE. "MLB HR" is a lane stamp, so
+    /// a home run card reads MLB there and wears its lane in the eyebrow.
+    private var leagueToken: String {
+        let raw = (prop.effectiveLeague ?? "").uppercased()
+        return raw == "MLB HR" ? "MLB" : raw
     }
 
     /// "MATT CHAPMAN" over "H+R+RBI OVER 0.5" — the player IS the headline
@@ -437,7 +447,7 @@ struct CompactPropRow: View {
                 HStack(alignment: .center, spacing: 8) {
                     // Game-card parity, Jul 4: just the league — "· PROP" doesn't
                     // exist on the game card's token, so it doesn't exist here either.
-                    Text((prop.effectiveLeague ?? "").uppercased())
+                    Text(leagueToken)
                         .font(GaryFonts.mono(11 * pf, bold: true)).tracking(1.2)
                         .foregroundStyle(propLeagueTint)
                         .lineLimit(1)

@@ -685,16 +685,15 @@ struct PicksCarouselView: View {
     /// Non-HR props (total_bases, strikeouts) get mislabeled "MLB HR" upstream;
     /// route those to the regular MLB tab so the HR tab shows only HR bets
     /// (mirrors the storefront's propLeagueKey guard).
+    /// A prop's tab key. Every "MLB HR" row — the genuine long shot and the
+    /// odd non-HR prop mislabeled upstream — routes to the MLB chip: the home
+    /// run belongs to its game's cards, and there is no separate HR tab.
     private func propSportKey(_ p: PropPick) -> String {
         let key = (p.effectiveLeague ?? "").uppercased()
-        if key == "MLB HR" {
-            let t = (p.prop ?? "").lowercased()
-            if !t.contains("home_run") && !t.contains("home run") { return "MLB" }
-        }
-        return key
+        return key == "MLB HR" ? "MLB" : key
     }
     private var filteredProps: [PropPick] {
-        let base = store.slateProps.filter { !isHomeRunProp($0) }   // HR retired from Picks
+        let base = store.slateProps
         return sport == "ALL" ? base : base.filter { propSportKey($0) == sport }
     }
     /// TODAY's matchup rail uses today's FRESH props only. store.allProps is
@@ -704,13 +703,17 @@ struct PicksCarouselView: View {
     /// today's matchup tabs or yesterday's games leak into TODAY (the
     /// "Jays @ Sox · WEDNESDAY 6:45 PM" bug under a sport with no props yet).
     private var filteredTodayProps: [PropPick] {
-        let today = store.allProps.filter { !isHomeRunProp($0) }   // HR retired from Picks; NFL TDs stay under NFL
+        // 2.25 (founder, Sep 3 2026): the home run IS a pick card — four cards a
+        // game, two props, the game pick and the long shot. It rides the game's
+        // own carousel under the MLB chip (propSportKey), stays last in that
+        // carousel, and still never touches a record or the free showcase.
+        let today = store.allProps   // NFL TDs stay under NFL
         return sport == "ALL" ? today : today.filter { propSportKey($0) == sport }
     }
     /// Yesterday's own props (sport-scoped, no TD picks) — the source for the
     /// Yesterday matchup row so every settled game shows, not just slate leftovers.
     private var filteredYesterdayProps: [PropPick] {
-        let yp = store.yesterdayPropsAll.filter { !isHomeRunProp($0) }   // ungated: all of yesterday; NFL TDs stay under NFL
+        let yp = store.yesterdayPropsAll   // ungated: all of yesterday; HR + NFL TDs ride their game
         return sport == "ALL" ? yp : yp.filter { propSportKey($0) == sport }
     }
     /// PERF#1(b): the heavy grouping/merge/look-ahead, memoized into `gamesMemo`
@@ -1192,7 +1195,10 @@ struct PicksCarouselView: View {
         // TODAY is strictly today's slate. Yesterday's settled cards live only
         // behind the explicit Yesterday selector; an empty morning board shows
         // PICKS INCOMING instead of relabeling an old result as today's pick.
-        let dayProps = pickDay == .yesterday ? filteredYesterdayProps : filteredTodayProps
+        // The showcase is the PRODUCT: the long shot rides its game's carousel,
+        // never the free page's headline card (founder, Jul 29 — HR is drama).
+        let dayProps = (pickDay == .yesterday ? filteredYesterdayProps : filteredTodayProps)
+            .filter { !isHomeRunProp($0) }
         return Array(dayProps.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.prefix(2))
     }
     /// The selected day's top game pick. The Today overview never borrows a
@@ -1217,7 +1223,8 @@ struct PicksCarouselView: View {
         return rows.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
     }
     private var freshShowcaseProp: PropPick? {
-        filteredTodayProps.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
+        filteredTodayProps.filter { !isHomeRunProp($0) }
+            .sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
     }
 
     /// Only a lock for the currently visible slate day + league may render.

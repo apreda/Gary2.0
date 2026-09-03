@@ -76,12 +76,21 @@ export function groupPicksByLeague(picks: GaryPick[]): Map<string, GaryPick[]> {
   return m;
 }
 
-/** Split props into the HR Threats lane (sport 'MLB HR') vs everything else. */
+/**
+ * The long shot (sport 'MLB HR'): one home run a game, priced for the fun of
+ * it. It publishes as a pick card beside that game's props (founder, Sep 3
+ * 2026) and never counts in the props record.
+ */
+export function isLongShot(p: PropPick): boolean {
+  return normalizeLeague(p.league, p.sport) === 'MLB HR';
+}
+
+/** Split props into the long-shot lane vs the core board. */
 export function splitHrThreats(props: PropPick[]): { hr: PropPick[]; rest: PropPick[] } {
   const hr: PropPick[] = [];
   const rest: PropPick[] = [];
   for (const p of props) {
-    (normalizeLeague(p.league, p.sport) === 'MLB HR' ? hr : rest).push(p);
+    (isLongShot(p) ? hr : rest).push(p);
   }
   return { hr, rest };
 }

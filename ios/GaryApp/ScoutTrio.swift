@@ -770,8 +770,15 @@ struct PicksGamePage: View {
         }
     }
     private var topProps: [PropPick] {
-        // The slip scales — show up to 5, strongest first.
-        Array(group.props.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.prefix(5))
+        // The slip scales — show up to 5, strongest first, and the home run
+        // ALWAYS rides last (founder, Sep 3 2026: four cards a game — two
+        // props, the game pick, then the long shot). One HR card per game;
+        // its price, not its confidence, is the reason it is on the page.
+        let core = group.props.filter { !$0.isHRLane }
+            .sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }
+        let longShots = group.props.filter { $0.isHRLane }
+            .sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }
+        return Array(core.prefix(5)) + Array(longShots.prefix(1))
     }
 
     /// One league identity for the whole page. Prefer the card payload, then

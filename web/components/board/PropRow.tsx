@@ -2,6 +2,7 @@ import { Disclosure } from '@/components/Disclosure';
 import { ScoutRead } from '@/components/ScoutRead';
 import { PropTailFadeRow } from '@/components/book/TailFadeRow';
 import { isOverCall, oddsText, propCall, parseScoutSections } from '@/lib/gary/format';
+import { isLongShot } from '@/lib/gary/picks';
 import type { PropPick } from '@/lib/gary/types';
 
 /**
@@ -51,11 +52,19 @@ export function PropRow({ prop }: { prop: PropPick }) {
   const read = (prop.rationale ?? prop.analysis ?? '').trim();
   const hasRead = parseScoutSections(read).length > 0;
   const conf = prop.confidence ? Math.round(prop.confidence * 100) : null;
+  // The long shot wears its lane so nobody reads it as a core prop: it is one
+  // home run a game, for the fun of it, and it never enters the props record.
+  const longShot = isLongShot(prop);
 
   return (
     <div className="px-5 py-4">
       <div className="flex flex-wrap items-start justify-between gap-x-5 gap-y-3">
         <div className="min-w-0">
+          {longShot && (
+            <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-gold">
+              The long shot
+            </p>
+          )}
           <p className="font-display text-[clamp(1.15rem,3vw,1.45rem)] uppercase leading-tight text-hi">
             {prop.player}
           </p>
