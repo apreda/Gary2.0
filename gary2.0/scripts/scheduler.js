@@ -240,6 +240,11 @@ async function fireOnPostedLineups(livePending, entry, match, now) {
     const first = tiers.sort((a, b) => a.triggerTime - b.triggerTime)[0];
     if (!first || first.triggerTime.getTime() <= now) return; // already due or fired
     if (first.tier !== 1) return; // the primary already ran; retries keep their own clocks
+    // A restart rebuilds every tier; a game whose pick is already stored
+    // has nothing to fire early (the child would only exit on its dedup).
+    const { picksService } = await import('../src/services/picksService.js');
+    const stored = await picksService.pickAlreadyStoredByGameId(entry.sport.name || 'MLB', entry.slateDate || getTodayETDateStr(), entry.gameId).catch(() => null);
+    if (stored?.exists) { lineupFiredGames.add(key); return; }
     const { getConfirmedLineups } = await import('../src/services/mlbStatsApiService.js');
     const lineups = await getConfirmedLineups(match.gamePk);
     if (!bothLineupsPosted(lineups)) return;
