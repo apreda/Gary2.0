@@ -178,34 +178,47 @@ function getTopNflPropCandidates(props, maxPlayersPerTeam = 7, homeTeamName = nu
  * Calculate hit rate for an NFL player prop against recent game logs.
  * Tells Gary "hit O 245.5 pass yards in 7/10 games."
  */
+/** Board prop type → the field on a summarized BDL game row. */
+const NFL_PROP_TO_FIELD = {
+  'passing_yards': 'pass_yds', 'player_pass_yds': 'pass_yds', 'pass_yds': 'pass_yds',
+  'rushing_yards': 'rush_yds', 'player_rush_yds': 'rush_yds', 'rush_yds': 'rush_yds',
+  'receiving_yards': 'rec_yds', 'player_rec_yds': 'rec_yds', 'rec_yds': 'rec_yds',
+  'receptions': 'receptions', 'player_receptions': 'receptions',
+  'passing_touchdowns': 'pass_tds', 'passing_tds': 'pass_tds', 'player_pass_tds': 'pass_tds', 'pass_tds': 'pass_tds',
+  'rushing_touchdowns': 'rush_tds', 'player_rush_tds': 'rush_tds', 'rush_tds': 'rush_tds',
+  'receiving_touchdowns': 'rec_tds', 'player_rec_tds': 'rec_tds', 'rec_tds': 'rec_tds',
+  'completions': 'pass_comp', 'passing_completions': 'pass_comp', 'player_completions': 'pass_comp',
+  'interceptions': 'ints', 'player_interceptions': 'ints',
+  'pass_attempts': 'pass_att', 'passing_attempts': 'pass_att', 'player_pass_attempts': 'pass_att',
+  'rushing_attempts': 'rush_att', 'rush_attempts': 'rush_att', 'player_rush_attempts': 'rush_att'
+};
+
+const NFL_ANYTIME_TD_TYPES = ['anytime_touchdown', 'anytime_td', 'player_anytime_td'];
+
+/**
+ * The actual value one summarized game row contributes to a market — the one
+ * definition the cleared counts and THE NFL PROP SHEETS both read, so a sheet
+ * can never disagree with the count printed beside the same line.
+ */
+export function nflStatForProp(game, propType) {
+  if (!game) return null;
+  const normalizedType = String(propType || '').toLowerCase();
+  if (NFL_ANYTIME_TD_TYPES.includes(normalizedType)) {
+    return numberOrZero(game.rush_tds) + numberOrZero(game.rec_tds);
+  }
+  const field = NFL_PROP_TO_FIELD[normalizedType] || normalizedType;
+  const value = game[field];
+  return value === undefined ? null : value;
+}
+
 export function calculateNflHitRate(games, propType, line) {
   if (!games || games.length === 0 || line == null) return null;
-
-  const propToField = {
-    'passing_yards': 'pass_yds', 'player_pass_yds': 'pass_yds', 'pass_yds': 'pass_yds',
-    'rushing_yards': 'rush_yds', 'player_rush_yds': 'rush_yds', 'rush_yds': 'rush_yds',
-    'receiving_yards': 'rec_yds', 'player_rec_yds': 'rec_yds', 'rec_yds': 'rec_yds',
-    'receptions': 'receptions', 'player_receptions': 'receptions',
-    'passing_touchdowns': 'pass_tds', 'passing_tds': 'pass_tds', 'player_pass_tds': 'pass_tds', 'pass_tds': 'pass_tds',
-    'rushing_touchdowns': 'rush_tds', 'player_rush_tds': 'rush_tds', 'rush_tds': 'rush_tds',
-    'receiving_touchdowns': 'rec_tds', 'player_rec_tds': 'rec_tds', 'rec_tds': 'rec_tds',
-    'completions': 'pass_comp', 'passing_completions': 'pass_comp', 'player_completions': 'pass_comp',
-    'interceptions': 'ints', 'player_interceptions': 'ints',
-    'pass_attempts': 'pass_att', 'passing_attempts': 'pass_att', 'player_pass_attempts': 'pass_att',
-    'rushing_attempts': 'rush_att', 'rush_attempts': 'rush_att', 'player_rush_attempts': 'rush_att'
-  };
-
-  const normalizedType = propType?.toLowerCase();
-  const field = propToField[normalizedType] || normalizedType;
-  const isAnytimeTd = ['anytime_touchdown', 'anytime_td', 'player_anytime_td'].includes(normalizedType);
 
   let hitsOver = 0, hitsUnder = 0, pushes = 0;
   const values = [];
 
   for (const game of games) {
-    const value = isAnytimeTd
-      ? numberOrZero(game.rush_tds) + numberOrZero(game.rec_tds)
-      : game[field];
+    const value = nflStatForProp(game, propType);
     if (value === undefined || value === null) continue;
     values.push(value);
     if (value > line) hitsOver++;
@@ -438,19 +451,21 @@ async function fetchNflSeasonStatsBatch(playerIdMap, teamIds, season) {
 }
 
 /**
- * Fetch game logs for all prop candidates (last 5 games).
+ * Fetch game logs for all prop candidates. Ten games (Sep 3 2026): THE NFL
+ * PROP SHEETS print a market's actual values newest first, and five rows of a
+ * seventeen-game season is a thinner history than any bettor would pull up.
  */
-async function fetchNflPlayerGameLogs(playerIdMap, season, seasonType = 2) {
+async function fetchNflPlayerGameLogs(playerIdMap, season, seasonType = 2, numGames = 10) {
   const playerIds = Object.values(playerIdMap).map(p => p?.id || p).filter(id => id);
   if (playerIds.length === 0) {
     console.warn('[NFL Props Context] No player IDs for game logs');
     return {};
   }
 
-  console.log(`[NFL Props Context] Fetching game logs for ${playerIds.length} players...`);
+  console.log(`[NFL Props Context] Fetching game logs for ${playerIds.length} players (${season}, type ${seasonType})...`);
   try {
-    const logsMap = await ballDontLieService.getNflPlayerGameLogsBatch(playerIds, season, 5, 15, { seasonType });
-    console.log(`[NFL Props Context] ✓ Got game logs for ${Object.keys(logsMap).length} players`);
+    const logsMap = await ballDontLieService.getNflPlayerGameLogsBatch(playerIds, season, numGames, 15, { seasonType });
+    console.log(`[NFL Props Context] ✓ Got ${season} game logs for ${Object.keys(logsMap).length} players`);
     return logsMap;
   } catch (e) {
     console.warn('[NFL Props Context] Failed to fetch game logs:', e.message);
@@ -830,10 +845,26 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
 
   // Fetch player season stats and game logs in parallel
   console.log('[NFL Props Context] Fetching player season stats and game logs...');
-  const [playerSeasonStats, playerGameLogs] = await Promise.all([
+  // THE WEEK 1 CARRY (Sep 3 2026): BDL publishes no rows for a season until
+  // its first game is final, so an opening-week board has zero current-season
+  // stats and zero game logs. The last completed regular season rides along,
+  // labeled as last year — never merged into this year's numbers.
+  const carryPrior = dataWindow.baselineSeason !== dataWindow.priorSeason
+    || dataWindow.recentSeason !== dataWindow.priorSeason
+    || dataWindow.recentSeasonType !== dataWindow.priorSeasonType;
+  const [playerSeasonStats, playerGameLogs, priorGameLogsRaw, priorSeasonStatsRaw] = await Promise.all([
     fetchNflSeasonStatsBatch(playerIdMap, teamIds, dataWindow.baselineSeason),
-    fetchNflPlayerGameLogs(playerIdMap, dataWindow.recentSeason, dataWindow.recentSeasonType)
+    fetchNflPlayerGameLogs(playerIdMap, dataWindow.recentSeason, dataWindow.recentSeasonType),
+    carryPrior
+      ? fetchNflPlayerGameLogs(playerIdMap, dataWindow.priorSeason, dataWindow.priorSeasonType)
+      : Promise.resolve(null),
+    carryPrior && dataWindow.baselineSeason !== dataWindow.priorSeason
+      ? fetchNflSeasonStatsBatch(playerIdMap, teamIds, dataWindow.priorSeason)
+      : Promise.resolve(null),
   ]);
+  const priorGameLogs = priorGameLogsRaw || (carryPrior ? {} : null);
+  const priorSeasonStats = priorSeasonStatsRaw
+    || (carryPrior && dataWindow.baselineSeason === dataWindow.priorSeason ? playerSeasonStats : null);
 
   const playersWithStats = Object.keys(playerSeasonStats).length;
   const playersWithLogs = Object.keys(playerGameLogs).length;
@@ -925,6 +956,12 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     playerStats,
     playerSeasonStats,
     playerGameLogs,
+    playerIdMap,
+    // Last year, carried and labeled — the sheets' fallback while the current
+    // season is empty or thin. Null when this season is already the prior one.
+    priorSeasonStats,
+    priorGameLogs,
+    dataWindow,
     narrativeContext,
     lineMovementData: {
       movements: lineMovements,

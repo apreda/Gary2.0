@@ -29,6 +29,7 @@ import {
   calculateNflHitRate,
 } from '../agentic/nflPropsAgenticContext.js';
 import { buildNcaafPropsAgenticContext } from '../agentic/ncaafPropsAgenticContext.js';
+import { buildFootballPropSheets } from './footballPropSheets.js';
 import { buildScoutReport } from '../agentic/scoutReport/scoutReportBuilder.js';
 import { normalizePropBetDirection } from '../agentic/propsSharedUtils.js';
 import { ncaafSlateDateForInstant } from '../ncaafGamePolicy.js';
@@ -125,6 +126,53 @@ async function fetchFootballGameCall(league, game) {
   } catch { return null; }
 }
 
+const EMPTY_EVIDENCE = {
+  gamesByName: new Map(), priorGamesByName: new Map(), positionByName: new Map(), countingWindow: new Map(),
+};
+
+/**
+ * The evidence maps behind the sheets and the cleared counts, keyed by the
+ * board's player names: this season's games, last season's games (the Week 1
+ * carry — BDL has no rows for a season until its first game is final), the
+ * position, and the window the counts are actually allowed to read.
+ */
+export function buildNflEvidenceMaps(context) {
+  const gamesByName = new Map();
+  const priorGamesByName = new Map();
+  const positionByName = new Map();
+  const countingWindow = new Map();
+  const season = String(context?.dataWindow?.season ?? '');
+  const priorSeason = String(context?.dataWindow?.priorSeason ?? '');
+
+  for (const c of context?.propCandidates || []) {
+    const key = norm(c?.player);
+    const id = c?.playerId;
+    if (!key || id == null) continue;
+    const currentLogs = context?.playerGameLogs?.[id];
+    const priorLogs = context?.priorGameLogs?.[id];
+    const current = Array.isArray(currentLogs?.games) ? currentLogs.games : null;
+    const prior = Array.isArray(priorLogs?.games) ? priorLogs.games : null;
+    if (current?.length) gamesByName.set(key, currentLogs);
+    if (prior?.length) priorGamesByName.set(key, priorLogs);
+    // A count reads whichever season it actually came from, and says which.
+    if (current && current.length >= 3) countingWindow.set(key, { games: current, label: season });
+    else if (prior?.length) countingWindow.set(key, { games: prior, label: priorSeason });
+    const seasonStat = context?.playerSeasonStats?.[id] || context?.priorSeasonStats?.[id];
+    const position = seasonStat?.player?.position_abbreviation || seasonStat?.player?.position;
+    if (position) positionByName.set(key, position);
+  }
+  return { gamesByName, priorGamesByName, positionByName, countingWindow };
+}
+
+/** "over in 6 of his last 10 games in 2025" — the season is never implied. */
+export function clearedCountClause(countingWindow, playerKey, propType, line) {
+  const window = countingWindow?.get(playerKey);
+  if (!window) return null;
+  const hitRate = calculateNflHitRate(window.games, propType, line);
+  if (!hitRate || hitRate.totalGames < 3) return null;
+  return `over in ${hitRate.hitsOver} of his last ${hitRate.totalGames} games${window.label ? ` in ${window.label}` : ''}`;
+}
+
 /**
  * The football props brain. Returns { picks, explicitPass, validatedPlayers,
  * boardProps } in the props CLI's mapping shape — the chassis (gates, caps,
@@ -168,21 +216,9 @@ export async function analyzeFootballPropsDesk(game, playerProps, options = {}) 
   // 3. Cleared counts from NFL game logs ("over in 4 of his last 5 games").
   // NCAAF has season totals only — no per-game logs, so no counts (fail-soft;
   // never a fabricated rate).
-  const gamesByName = new Map();
-  if (league === 'NFL') {
-    for (const c of context.propCandidates || []) {
-      const logs = c?.playerId != null ? context.playerGameLogs?.[c.playerId] : null;
-      const games = logs?.games;
-      if (Array.isArray(games) && games.length) gamesByName.set(norm(c.player), games);
-    }
-  }
-  const clearedClauseFor = (playerKey, propType, line) => {
-    const games = gamesByName.get(playerKey);
-    if (!games) return null;
-    const hitRate = calculateNflHitRate(games, propType, line);
-    if (!hitRate || hitRate.totalGames < 3) return null;
-    return `over in ${hitRate.hitsOver} of his last ${hitRate.totalGames} games`;
-  };
+  const evidence = league === 'NFL' ? buildNflEvidenceMaps(context) : EMPTY_EVIDENCE;
+  const { gamesByName, priorGamesByName, positionByName, countingWindow } = evidence;
+  const clearedClauseFor = (playerKey, propType, line) => clearedCountClause(countingWindow, playerKey, propType, line);
 
   // 4. THE PROP BOARD — Board V2 with football's fun lane.
   const board = buildPropBoardV2(boardProps, {
@@ -220,12 +256,33 @@ export async function analyzeFootballPropsDesk(game, playerProps, options = {}) 
     ? `\n\n═══ THE PLAYERS — provider-verified stats for today's board ═══\n${context.playerStats}`
     : '';
 
-  const userMessage = `## THE DESK — ${matchup}\n\n${scoutText}${playersShelf}${gameCall}\n\n${board.text}\n\n${FOOTBALL_PROPS_ASK}`;
+  // THE PROP SHEETS (Sep 3 2026) — the football half of the MLB sheets: every
+  // board player's own values against the exact stat his markets settle on.
+  // NCAAF has season totals only, no per-game logs, so it prints no sheets.
+  let sheetsBlock = '';
+  if (league === 'NFL') {
+    const sheets = buildFootballPropSheets({
+      markets: board.markets,
+      gamesByName,
+      priorGamesByName,
+      positionByName,
+      seasonLabel: String(context.dataWindow?.season ?? ''),
+      priorSeasonLabel: String(context.dataWindow?.priorSeason ?? ''),
+      homeTeam,
+      awayTeam,
+    });
+    if (sheets.text) {
+      sheetsBlock = `\n\n${sheets.text}`;
+      console.log(`   [Football Props] sheets: ${sheets.players} player(s) of ${board.players.size} on the board`);
+    }
+  }
+
+  const userMessage = `## THE DESK — ${matchup}\n\n${scoutText}${playersShelf}${gameCall}\n\n${board.text}${sheetsBlock}\n\n${FOOTBALL_PROPS_ASK}`;
 
   const { parsed, audits, usage, explicitPass, respondingModel } = await runPropsDeskBrain({
     systemPrompt: buildGaryPropsSystemPrompt(todayLong()),
     userMessage,
-    corpus: [{ content: `${scoutText}${playersShelf}${gameCall}\n${board.text}` }],
+    corpus: [{ content: `${scoutText}${playersShelf}${gameCall}\n${board.text}${sheetsBlock}` }],
     recentScores: null,
   });
 

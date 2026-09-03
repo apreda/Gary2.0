@@ -58,11 +58,25 @@ describe('NFL player-prop evidence windows', () => {
       seasonType: 1,
       phase: 'NFL Preseason',
       baselineSeason: 2025,
+      priorSeason: 2025,
+      priorSeasonType: 2,
+      priorLabel: '2025 regular season',
       baselineLabel: '2025 prior completed regular-season baseline (not current preseason form)',
       recentSeason: 2026,
       recentSeasonType: 1,
       recentLabel: '2026 preseason games only',
     });
+  });
+
+  it('carries the prior regular season for a Week 1 board with no games yet', () => {
+    const week1 = { season_type: 2, commence_time: '2026-09-11T00:20:00Z' };
+    const window = nflPropsDataWindow(week1);
+
+    expect(window.season).toBe(2026);
+    expect(window.baselineSeason).toBe(2026);
+    expect(window.priorSeason).toBe(2025);
+    expect(window.priorSeasonType).toBe(2);
+    expect(window.priorLabel).toBe('2025 regular season');
   });
 
   it('honors explicit regular-season metadata even if the date is in August', () => {

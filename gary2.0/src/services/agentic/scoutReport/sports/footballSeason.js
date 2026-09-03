@@ -89,6 +89,14 @@ export function nflPropsDataWindow(game = {}, value = null) {
     seasonType,
     phase,
     baselineSeason,
+    // The last completed regular season, always carried (Sep 3 2026). BDL
+    // publishes no rows for a season until its first game is final, so a
+    // Week 1 board has zero current-season stats and zero game logs: the
+    // prop sheets fall back to this season, labeled as last year, and stop
+    // leaning on it once the current season has games of its own.
+    priorSeason: season - 1,
+    priorSeasonType: 2,
+    priorLabel: `${season - 1} regular season`,
     baselineLabel: seasonType === 1
       ? `${baselineSeason} prior completed regular-season baseline (not current preseason form)`
       : `${season} ${seasonType === 3 ? 'postseason' : 'regular-season'} performance`,
