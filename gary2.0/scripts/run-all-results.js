@@ -1809,6 +1809,23 @@ async function main(targetDate = getTargetDate()) {
     console.warn(`  ⚠️ Shadow read failed (non-fatal): ${e.message}`);
   }
 
+  // THE NOTEBOOK (Sep 3 2026): autopsies for the day's graded picks (the
+  // real Gary's and the notebook shadow's), grade the notebook shadow, and
+  // print the three systems side by side. Never reaches the real pick.
+  try {
+    const { runAutopsies, gradeDiary, printThreeWay } = await import('./run-diary.js');
+    const dayBefore = new Date(new Date(`${targetDate}T12:00:00Z`).getTime() - 86400000).toISOString().slice(0, 10);
+    for (const d of [dayBefore, targetDate]) {
+      await gradeDiary([d]);
+      const r = await runAutopsies(d);
+      if (r.jobs) console.log(`  📓 ${d}: ${r.done}/${r.jobs} autopsies written`);
+    }
+    await gradeDiary([dayBefore, targetDate]);
+    await printThreeWay([dayBefore, targetDate], `${dayBefore} → ${targetDate}`);
+  } catch (e) {
+    console.warn(`  ⚠️ Notebook step failed (non-fatal): ${e.message}`);
+  }
+
   console.log(`\n════════════════════════════════════════`);
   console.log(`SUMMARY FOR ${targetDate}`);
   console.log(`Daily:  ${daily.w}W - ${daily.l}L`);

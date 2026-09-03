@@ -96,7 +96,12 @@ export async function analyzeGame(game, sport, options = {}) {
     // Check cache first — props reuses scout report from game picks.
     // Game object included in the key so MLB doubleheaders (same matchup, same
     // date) don't collide on the second game's scout report.
-    let scoutReportData = loadCachedScoutReport(homeTeam, awayTeam, sport, game);
+    // THE NOTEBOOK SHADOW (Sep 3 2026): a second read of the SAME desk with
+    // the reader's own notebook appended — the desk arrives prebuilt as text
+    // and is neither rebuilt nor cached here.
+    let scoutReportData = typeof options.prebuiltScoutReport === 'string' && options.prebuiltScoutReport.trim()
+      ? options.prebuiltScoutReport
+      : loadCachedScoutReport(homeTeam, awayTeam, sport, game);
     if (!scoutReportData) {
       console.log('[Orchestrator] Building scout report...');
       scoutReportData = await buildScoutReport(game, sport, { sportsbookOdds: options.sportsbookOdds, testAllowMissingLineups: options.testAllowMissingLineups });

@@ -13,6 +13,7 @@
  */
 
 // MUST load env vars FIRST before any other imports
+import path from 'node:path';
 import '../src/loadEnv.js';
 import {
   assertPicksStillPregame,
@@ -2342,6 +2343,32 @@ async function main() {
                   }
                 } catch (shadowErr) {
                   console.warn(`   ⚠️ [Shadow] skipped (${shadowErr.message}) — pick unaffected`);
+                }
+                // THE NOTEBOOK SHADOW (founder GO, Sep 3 2026): Gary with a
+                // memory — a second read of the same desk with his notebook
+                // appended, in its own detached process so it never delays
+                // this child or touches the real pick. It reads the desk
+                // snapshot stored above; if that store failed there is no
+                // desk to re-read and the shadow simply skips.
+                if (deskText) {
+                  try {
+                    const { spawn } = await import('node:child_process');
+                    const { openSync, mkdirSync } = await import('node:fs');
+                    const todayEt = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+                    const logDir = path.join(process.cwd(), 'logs', 'scheduler');
+                    mkdirSync(logDir, { recursive: true });
+                    const logFd = openSync(path.join(logDir, `diary-${todayEt}-${cleanPick.game_id ?? game?.id ?? 'game'}.log`), 'a');
+                    const child = spawn(process.execPath, [
+                      path.join(process.cwd(), 'scripts', 'run-diary-pick.js'),
+                      '--game-id', String(cleanPick.game_id ?? game?.id ?? ''),
+                      '--date', todayEt,
+                      '--matchup', `${cleanPick.awayTeam} @ ${cleanPick.homeTeam}`,
+                    ], { detached: true, stdio: ['ignore', logFd, logFd], env: { ...process.env, ANTHROPIC_API_KEY: '' } });
+                    child.unref();
+                    console.log(`📓 [Diary] notebook shadow started for ${cleanPick.awayTeam} @ ${cleanPick.homeTeam} (pid ${child.pid})`);
+                  } catch (diaryErr) {
+                    console.warn(`   ⚠️ [Diary] not started (${diaryErr.message}) — pick unaffected`);
+                  }
                 }
               }
             } catch (storeErr) {
