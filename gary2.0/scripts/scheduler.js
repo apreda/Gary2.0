@@ -17,7 +17,7 @@
 
 import '../src/loadEnv.js';
 import { spawn, execSync } from 'child_process';
-import { existsSync, mkdirSync, appendFileSync } from 'fs';
+import { existsSync, mkdirSync, appendFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import {
   activeNcaafRecoverySlateDate,
@@ -191,6 +191,26 @@ function log(msg) {
     const logFile = join(LOG_DIR, `scheduler-${getTodayETDateStr()}.log`);
     appendFileSync(logFile, line + '\n');
   } catch {}
+  beat();
+}
+
+// THE HEARTBEAT (Sep 3 2026). On Sep 2 the scheduler printed "Trigger window:
+// 4 runnable game(s)" at 7:10 PM and never wrote another line until a hand
+// restart at 9:26 AM — no error, no exit, no KeepAlive respawn, two games
+// never picked. Same shape as Sep 1 (8 PM → 10:50 AM) and Jun 21 (the
+// live-scores job after a laptop-sleep event). A process that is alive
+// touches this file every 30 seconds; com.gary.scheduler-watchdog (launchd,
+// every 120s) reloads the job when the file is older than five minutes.
+// The plan rebuilds on start and stored games are skipped, so a reload is
+// always safe. Outside the repo on purpose: the watchdog reads it whether or
+// not this checkout is healthy.
+const HEARTBEAT_FILE = join(process.env.HOME || '/Users/adam.preda', 'Library', 'Logs', 'Gary2.0', 'scheduler', 'heartbeat');
+function beat() {
+  try { writeFileSync(HEARTBEAT_FILE, `${Date.now()} pid=${process.pid}\n`); } catch {}
+}
+function startHeartbeat() {
+  beat();
+  setInterval(beat, 30_000).unref();
 }
 
 // A 24/7 daemon must SURVIVE transient network blips. Waking from sleep often
@@ -1621,6 +1641,7 @@ async function sleepUntilPlanTime() {
 // MAIN
 // ═══════════════════════════════════════════════════════════════════════════
 async function main() {
+  startHeartbeat();
   const args = process.argv.slice(2);
 
   if (args.includes('--now')) {

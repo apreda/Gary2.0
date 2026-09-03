@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.gary.scheduler-watchdog</string>
+
+    <!-- THE SCHEDULER WATCHDOG (Sep 3 2026). The pick scheduler
+         (com.gary.scheduler) writes ~/Library/Logs/Gary2.0/scheduler/heartbeat
+         every 30 seconds while its process is alive. On Sep 2 2026 it printed
+         its 7:10 PM trigger line and then wrote nothing until a hand restart at
+         9:26 AM — no error, no exit, no KeepAlive respawn — and two games
+         never got picks (Sep 1 8 PM → 10:50 AM and Jun 21 had the same shape,
+         after laptop-sleep events). KeepAlive only restarts a process that
+         exits; this restarts one that has stopped moving. If the heartbeat is
+         older than five minutes (or missing), reload the job the same way the
+         live-scores watchdog does: bootout + bootstrap + kickstart, because a
+         bare kickstart does not reset a launchd job that sleep has decoupled.
+         The scheduler rebuilds its plan on start and skips games already
+         stored, so a reload is always safe. Install:
+           cp scripts/launchd/com.gary.scheduler-watchdog.plist ~/Library/LaunchAgents/
+           launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.gary.scheduler-watchdog.plist -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>-c</string>
+        <string>HB=/Users/adam.preda/Library/Logs/Gary2.0/scheduler/heartbeat; WLOG=/Users/adam.preda/Library/Logs/Gary2.0/scheduler/watchdog.log; U=$(/usr/bin/id -u); PLIST=/Users/adam.preda/Library/LaunchAgents/com.gary.scheduler.plist; NOW=$(/bin/date +%s); MT=$([ -f "$HB" ] &amp;&amp; /usr/bin/stat -f %m "$HB" || echo 0); AGE=$((NOW - MT)); if [ $AGE -gt 300 ]; then echo "$(/bin/date '+%Y-%m-%d %H:%M:%S') scheduler heartbeat STALE (age ${AGE}s) — reloading com.gary.scheduler" >> "$WLOG"; /bin/launchctl bootout "gui/$U/com.gary.scheduler" 2>/dev/null; /bin/sleep 2; /bin/launchctl bootstrap "gui/$U" "$PLIST" 2>>"$WLOG"; /bin/launchctl kickstart -k "gui/$U/com.gary.scheduler" 2>>"$WLOG"; fi</string>
+    </array>
+
+    <key>StartInterval</key>
+    <integer>120</integer>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/adam.preda/Library/Logs/Gary2.0/scheduler/watchdog-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/adam.preda/Library/Logs/Gary2.0/scheduler/watchdog-stderr.log</string>
+</dict>
+</plist>

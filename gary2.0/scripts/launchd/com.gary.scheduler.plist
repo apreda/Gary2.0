@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Comment</key>
+	<string>Gary 2.0 SUBSCRIPTION BRIDGE (Jul 29 2026): local per-game scheduler resurrected from retired-2026-07-22, now with the desk brains on the founder's Claude subscription (GARY_MODEL_OVERRIDE) instead of metered APIs. Railway scheduler must stay DOWN while this runs — one writer only. Restore path: launchctl bootout this + the watchdog, then `railway up` from gary2.0/.</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>CLAUDE_CLI_PATH</key>
+		<string>/Users/adam.preda/.local/bin/claude</string>
+		<key>GARY_GROUNDING_VIA_CLAUDE</key>
+		<string>1</string>
+		<key>GARY_MODEL_OVERRIDE</key>
+		<string>codex-gpt-5.6-sol</string>
+		<key>GARY_PROPS_MODEL_OVERRIDE</key>
+		<string>codex-gpt-5.6-sol</string>
+		<key>PATH</key>
+		<string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:/Users/adam.preda/.local/bin</string>
+	</dict>
+	<key>KeepAlive</key>
+	<true/>
+	<key>Label</key>
+	<string>com.gary.scheduler</string>
+	<key>ProcessType</key>
+	<string>Interactive</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/bin/caffeinate</string>
+		<string>-i</string>
+        <string>-s</string>
+		<string>/opt/homebrew/bin/node</string>
+		<string>/Users/adam.preda/Desktop/Gary2.0/gary2.0/scripts/scheduler.js</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>/Users/adam.preda/Library/Logs/Gary2.0/scheduler/launchd-stderr.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/adam.preda/Library/Logs/Gary2.0/scheduler/launchd-stdout.log</string>
+	<key>WorkingDirectory</key>
+	<string>/Users/adam.preda/Desktop/Gary2.0/gary2.0</string>
+</dict>
+</plist>
