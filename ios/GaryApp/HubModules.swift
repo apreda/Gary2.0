@@ -898,12 +898,24 @@ struct SignalRow: View {
     }
 
     let s: Signal
-    /// nil = a read-only row (Picks tab's edge lists) — no chevron, no
-    /// navigation promise. The Hub passes a handler and gets both.
+    /// nil = a read-only row (Picks tab's edge lists) — no navigation
+    /// promise. The Hub passes a handler and gets it once the row has no read
+    /// to open.
     var onTap: ((String) -> Void)? = nil
+    /// Collapsed by default (founder, Sep 3 2026 — the Hub's story rows are
+    /// the template): headline + value + chevron.down; a tap opens the read.
+    /// Football reads run 450-660 characters, so an always-open row was a
+    /// wall of text under the pick card.
+    @State private var expanded = false
 
     var body: some View {
-        Button { onTap?(s.game) } label: {
+        Button {
+            if !dedupedDetail.isEmpty {
+                withAnimation(.easeInOut(duration: 0.18)) { expanded.toggle() }
+            } else {
+                onTap?(s.game)
+            }
+        } label: {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     // League-aware chip labels: WC's venue intel is tagged .ballpark, and
@@ -914,14 +926,12 @@ struct SignalRow: View {
                     Text(s.game.uppercased()).font(GaryFonts.mono(9, bold: false)).tracking(0.6).foregroundStyle(.white.opacity(0.62)).lineLimit(1)
                 }
                 HStack(alignment: .top, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(s.headline).font(GaryFonts.text(16)).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
-                        if !dedupedDetail.isEmpty {
-                            Text(dedupedDetail).font(.system(size: 12.5)).foregroundStyle(.white.opacity(0.65)).fixedSize(horizontal: false, vertical: true)
-                        }
-                        // Spark mini-bar removed on the Picks edge rows (user call — the
-                        // little 2-bar block read as ambiguous).
-                    }
+                    // The headline is the fact and always shows whole (no
+                    // ellipsis, ever); only the read collapses.
+                    Text(s.headline).font(GaryFonts.text(16)).foregroundStyle(.white)
+                        .fixedSize(horizontal: false, vertical: true)
+                    // Spark mini-bar removed on the Picks edge rows (user call — the
+                    // little 2-bar block read as ambiguous).
                     Spacer(minLength: 6)
                     // Streak values never render — the headline already says
                     // "won 9 straight" and a W9 beside it is the same fact
@@ -935,12 +945,24 @@ struct SignalRow: View {
                                 .overlay(Capsule().stroke(s.tone.color.opacity(0.28), lineWidth: 1))
                         }
                     }
-                    if onTap != nil {
+                    if !dedupedDetail.isEmpty {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.62))
+                            .rotationEffect(.degrees(expanded ? 180 : 0))
+                            .padding(.top, 5)
+                    } else if onTap != nil {
                         Image(systemName: "chevron.right")
                             .font(.system(size: 9, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.25))
                             .padding(.top, 5)
                     }
+                }
+                if expanded, !dedupedDetail.isEmpty {
+                    Text(dedupedDetail).font(.system(size: 12.5)).foregroundStyle(.white.opacity(0.65))
+                        .lineSpacing(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 2)
                 }
                 if let xi = s.confirmedXI {
                     ConfirmedXISheetView(meta: xi)

@@ -266,6 +266,20 @@ final class SwapMeta: Decodable {
     let days_out: Int?
     let season_line: String?       // return watch: ".839 OPS" / "3.10 ERA"
     let drop_note: String?         // cut list: the number that says cut
+    // Football Fantasy Corner payloads (fantasy_usage / fantasy_matchup /
+    // fantasy_trend — founder, Sep 3 2026: MLB is the template): tier, read
+    // and verdict ride the shared fields above; these are the stat-strip
+    // numbers the football writers store.
+    let unit: String?               // "OPP/G" | "TGT/G" | college volume token
+    let per_game: Double?
+    let games_played: Int?
+    let evidence_scope: String?     // "current_season" | "prior_season_baseline"
+    let season: InsightMetaValue?   // a number in football metas; text-safe elsewhere
+    let total: Double?              // fantasy_matchup: the game total
+    let implied_team_total: Double?
+    let latest_two: Double?         // fantasy_trend: latest two games
+    let prior_sample: Double?       // fantasy_trend: the preceding sample
+    let percent_change: Double?
     // Head-to-head payload (kind == "h2h"): season series dominance + last meeting.
     let dominant: String?
     let opponent: String?

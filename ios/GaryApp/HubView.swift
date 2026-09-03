@@ -1275,18 +1275,8 @@ struct HubView: View {
             return AnyView(hubError)
         }
         if hubScope == "fantasy" {
-            if sel == .nfl || sel == .ncaaf {
-                return AnyView(
-                    FootballFantasyPage(
-                        league: sel,
-                        signals: leagueSignals.filter {
-                            Self.fantasyKinds.contains($0.kind)
-                                || $0.kind == .nextSlate
-                        },
-                        loaded: didLoad
-                    ) { s in openSignal(s) }
-                )
-            }
+            // One Fantasy Corner for every league (founder, Sep 3 2026: MLB
+            // is the template; football differs only in its content).
             return AnyView(
                 FantasyCornerPage(
                     pickups: items(.fantasyPickups),
@@ -1294,6 +1284,10 @@ struct HubView: View {
                     twoStarts: items(.twoStart),
                     closers: items(.closerWatch),
                     returners: items(.returnWatch),
+                    league: sel,
+                    usage: items(.fantasyUsage),
+                    scoring: items(.fantasyRedZone) + items(.fantasyMatchup),
+                    trending: items(.fantasyTrend),
                     loaded: didLoad
                 ) { s in openSignal(s) }
             )
@@ -3285,6 +3279,24 @@ fileprivate struct FantasyCard: View {
                 if let a = m.avg { bits.append(String(format: "%.3f AVG", a)) }
                 if let b = m.batting_order { bits.append("bats \(b)") }
             }
+        // Football lanes (founder, Sep 3 2026: MLB is the template — same
+        // card, football's numbers). Matchup leads, numbers follow.
+        case "fantasy_usage":
+            if let o = m.opp, !o.isEmpty { bits.append("vs \(o)") }
+            if let n = m.per_game, let u = m.unit { bits.append("\(HubFmt.stat(n)) \(u)") }
+            if let g = m.games_played { bits.append("\(g) G") }
+            if m.evidence_scope == "prior_season_baseline", let y = m.season?.display { bits.append("\(y) baseline") }
+        case "fantasy_matchup":
+            if let o = m.opp, !o.isEmpty { bits.append("vs \(o)") }
+            if let i = m.implied_team_total { bits.append("\(HubFmt.stat(i)) implied") }
+            if let t = m.total { bits.append("O/U \(HubFmt.stat(t))") }
+            if let n = m.per_game, let u = m.unit { bits.append("\(HubFmt.stat(n)) \(u)") }
+        case "fantasy_trend":
+            if let o = m.opp, !o.isEmpty { bits.append("vs \(o)") }
+            if let p = m.percent_change { bits.append(String(format: "%@%.0f%% workload", p >= 0 ? "+" : "", p)) }
+            if let a = m.latest_two, let b = m.prior_sample, let u = m.unit {
+                bits.append("\(HubFmt.stat(a)) vs \(HubFmt.stat(b)) \(u.lowercased())")
+            }
         default: break
         }
         return bits.isEmpty ? nil : bits.joined(separator: "  ·  ")
@@ -3378,11 +3390,21 @@ fileprivate struct FantasyCornerPage: View {
     let twoStarts: [Signal]
     let closers: [Signal]
     let returners: [Signal]
+    /// Football (founder, Sep 3 2026: MLB is the template — the ONLY
+    /// difference is that NFL is NFL content): the same masthead, headers and
+    /// FantasyCard, carrying football's lanes instead of baseball's.
+    var league: HubLeagueSel = .mlb
+    var usage: [Signal] = []
+    var scoring: [Signal] = []
+    var trending: [Signal] = []
     let loaded: Bool
     let onTap: (Signal) -> Void
 
+    private var isFootball: Bool { league == .nfl || league == .ncaaf }
     private var total: Int {
-        pickups.count + cuts.count + twoStarts.count + closers.count + returners.count
+        isFootball
+            ? usage.count + scoring.count + trending.count
+            : pickups.count + cuts.count + twoStarts.count + closers.count + returners.count
     }
     private var addArms: [Signal] { pickups.filter { ($0.fantasy?.role ?? "") == "SP" } }
     private var addBats: [Signal] { pickups.filter { ($0.fantasy?.role ?? "") != "SP" } }
@@ -3410,6 +3432,25 @@ fileprivate struct FantasyCornerPage: View {
                     .foregroundStyle(.white.opacity(0.55))
                     .padding(.horizontal, 18)
                     .fixedSize(horizontal: false, vertical: true)
+            } else if isFootball {
+                if !usage.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HubHead(title: "The Waiver Wire", count: usage.count)
+                        FantasyCardList(items: usage, accent: GaryColors.gold, onTap: onTap)
+                    }
+                }
+                if !scoring.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HubHead(title: "Scoring Spots", count: scoring.count)
+                        FantasyCardList(items: scoring, accent: HubPalette.green, onTap: onTap)
+                    }
+                }
+                if !trending.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HubHead(title: "Trending", count: trending.count)
+                        FantasyCardList(items: trending, accent: GaryColors.gold, onTap: onTap)
+                    }
+                }
             } else {
                 if !pickups.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {

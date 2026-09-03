@@ -10,6 +10,18 @@
 
 import { makeRow, median, TONES } from '../shared.js';
 import { selectFootballOddsByGame } from '../footballData.js';
+import { generateSolText } from '../solText.js';
+
+// THE CARD CONTRACT (founder, Sep 3 2026 — FOOTBALL = MLB SHAPE): the Hub's
+// Fantasy Corner renders college rows through the same FantasyCard as MLB's
+// waiver column — headline = the player's NAME, an availability tier, the
+// stat-strip fields under meta, and Gary's read + verdict from the same
+// analyst pass. Kept in this file, never shared with the NFL writer.
+function tierFor(score) {
+  if (score >= 74) return 'MUST_ADD';
+  if (score >= 60) return 'STREAM';
+  return 'DEEP';
+}
 
 const MAX_GAMES = 6;
 const MAX_PER_TEAM = 2;
@@ -202,9 +214,8 @@ function usageRow(candidate, context, { season, helpers }) {
   const name = playerName(row);
   if (!name || !context?.game) return null;
   const scope = baseline ? 'prior_season_baseline' : 'current_season';
-  const headline = baseline
-    ? `${season} baseline: ${name} logged ${metric.value} ${metric.label}`
-    : `${name} has ${metric.value} ${metric.label} in ${season}`;
+  const headline = name;
+  const relevance = Math.min(91, Math.round(55 + metric.value / THRESHOLDS[baseline ? 'baseline' : 'current'][metric.role] * 9));
   const detail = baseline
     ? `BDL confirms ${name} is currently active for ${teamLabel(context.team)}. ` +
       `The ${metric.value} ${metric.label} are his verified ${season} season total, shown as a prior-season baseline rather than current form or a projection.`
@@ -218,7 +229,7 @@ function usageRow(candidate, context, { season, helpers }) {
     game: helpers.gameLabel(context.game),
     value: `${metric.value} ${metric.token}`,
     tone: TONES.NEUTRAL,
-    relevance_score: Math.min(91, Math.round(55 + metric.value / THRESHOLDS[baseline ? 'baseline' : 'current'][metric.role] * 9)),
+    relevance_score: relevance,
     player_id: candidate.player_id,
     team_id: context.team?.id ?? candidate.team_id,
     game_id: context.game?.id,
@@ -233,6 +244,11 @@ function usageRow(candidate, context, { season, helpers }) {
       team_id: context.team?.id ?? candidate.team_id,
       role: metric.role,
       evidence_scope: scope,
+      tier: tierFor(relevance),
+      per_game: finite(metric.value),
+      unit: metric.token,
+      opp: teamLabel(context.opponent),
+      reason: `${metric.value} ${metric.label}${baseline ? ` in ${season}` : ` in ${season}`} · next vs ${teamLabel(context.opponent)}`,
     },
   });
 }
@@ -242,16 +258,17 @@ function matchupRow(candidate, context, { season, helpers, slateMedian }) {
   if (total == null || total < 52 || (slateMedian != null && total < slateMedian + 3)) return null;
   const name = playerName(candidate.row);
   if (!name) return null;
+  const relevance = Math.min(92, Math.round(60 + Math.max(0, total - 50) * 2));
   return makeRow({
     category: 'fantasy_matchup',
-    headline: `${name}'s game carries a ${total.toFixed(1).replace(/\.0$/, '')} total`,
+    headline: name,
     detail: `${context.market?.row?.vendor || 'The current sportsbook market'} lists ` +
       `${teamLabel(context.team)} versus ${teamLabel(context.opponent)} at ${total.toFixed(1).replace(/\.0$/, '')}. ` +
       `That is current scoring-environment context for a player with ${candidate.baseline ? `a labeled ${season} usage baseline` : `verified ${season} volume`}, not a player projection.`,
     game: helpers.gameLabel(context.game),
     value: `${total.toFixed(1).replace(/\.0$/, '')} O/U`,
     tone: TONES.NEUTRAL,
-    relevance_score: Math.min(92, Math.round(60 + Math.max(0, total - 50) * 2)),
+    relevance_score: relevance,
     line_val: total,
     player_id: candidate.player_id,
     team_id: context.team?.id ?? candidate.team_id,
@@ -269,6 +286,11 @@ function matchupRow(candidate, context, { season, helpers, slateMedian }) {
       total,
       slate_total_median: slateMedian,
       evidence_scope: candidate.baseline ? 'prior_season_baseline' : 'current_season',
+      tier: tierFor(relevance),
+      per_game: finite(candidate.metric?.value),
+      unit: candidate.metric?.token || null,
+      opp: teamLabel(context.opponent),
+      reason: `O/U ${total.toFixed(1).replace(/\.0$/, '')} vs ${teamLabel(context.opponent)}`,
     },
   });
 }
@@ -347,7 +369,50 @@ export async function computeNcaafFantasyEdges(ctx) {
     `[ncaafFantasyEdges] NCAAF ${date}: ${currentCandidates.length} current + ` +
       `${baselineCandidates.length} roster-verified baseline candidate(s) -> ${rows.length} row(s)`,
   );
+  // The same analyst pass MLB's waiver column runs (fantasyPickups.js): ONE
+  // call writes Gary's read + verdict per row from the grounded facts above.
+  // Fenced to the listed numbers; any failure keeps the computed detail.
+  await writeAnalystReads(rows);
   return rows;
+}
+
+/** Per-player grounded fact sheet → 2-3 sentence read + a verdict line. */
+async function writeAnalystReads(rows) {
+  if (!rows.length) return;
+  const facts = rows.map((r, i) => {
+    const m = r.meta || {};
+    const scope = m.evidence_scope === 'prior_season_baseline'
+      ? `${m.season} season baseline (prior season — the current one has no sample yet; BDL confirms he is active for ${m.team})`
+      : `${m.season} season totals`;
+    const lane = m.kind === 'fantasy_usage' ? 'VOLUME' : 'MATCHUP';
+    return `${i}. ${lane} ${r.headline} (${m.position || 'FLEX'}, ${m.team}) — ${m.reason}. Evidence: ${scope}. Availability tier: ${m.tier}. Game: ${r.game}.`;
+  }).join('\n');
+
+  const prompt = `You are Gary — the bettor whose season-long fantasy column publishes in this app. You write as yourself, never as an AI, and your training data is old: the facts below are current and they are ALL you may use — never introduce a statistic, injury, trend, or player that isn't listed.
+
+For each player below: the case for adding him today, and the call for who should.
+
+Return STRICT JSON only: {"reads":[{"i":0,"read":"...","verdict":"..."}]}
+
+PLAYERS:
+${facts}`;
+
+  try {
+    const resp = await generateSolText(prompt, { maxTokens: 4000 });
+    const text = typeof resp === 'string' ? resp : (resp?.content ?? resp?.text ?? '');
+    const jsonStr = text.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(jsonStr.slice(jsonStr.indexOf('{'), jsonStr.lastIndexOf('}') + 1));
+    for (const item of parsed?.reads || []) {
+      const r = rows[item?.i];
+      if (!r || !item?.read) continue;
+      const verdict = (item.verdict || '').trim();
+      r.meta = { ...(r.meta || {}), computed_detail: r.detail, read: item.read.trim(), ...(verdict ? { verdict } : {}) };
+      r.detail = `${item.read.trim()}${verdict ? ` ${verdict}` : ''}`;
+    }
+    console.log(`[ncaafFantasyEdges] analyst reads attached: ${(parsed?.reads || []).length}/${rows.length}`);
+  } catch (err) {
+    console.error('[ncaafFantasyEdges] analyst pass failed (computed details kept):', err?.message || err);
+  }
 }
 
 export const ncaafFantasyInternals = Object.freeze({

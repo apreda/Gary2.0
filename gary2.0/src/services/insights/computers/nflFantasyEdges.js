@@ -10,6 +10,19 @@
 
 import { makeRow, median, TONES } from '../shared.js';
 import { selectFootballOddsByGame } from '../footballData.js';
+import { generateSolText } from '../solText.js';
+
+// THE CARD CONTRACT (founder, Sep 3 2026 — FOOTBALL = MLB SHAPE): the Hub's
+// Fantasy Corner renders NFL rows through the same FantasyCard as MLB's
+// waiver column, so every row carries what fantasyPickups.js writes —
+// headline = the player's NAME, an availability tier, the stat-strip fields
+// under meta, and Gary's read + verdict from the same analyst pass. The
+// computed sentence stays as the fallback detail when the pass fails.
+function tierFor(score) {
+  if (score >= 74) return 'MUST_ADD';
+  if (score >= 60) return 'STREAM';
+  return 'DEEP';
+}
 
 const MAX_CANDIDATES = 8;
 const MAX_PER_TEAM = 2;
@@ -223,11 +236,10 @@ function usageRow({ candidate, usage, game, team, opponent, season, helpers, bas
   const name = playerName(candidate);
   const value = fixed(usage.perGame);
   if (!name || value == null) return null;
+  const relevance = Math.min(92, Math.round(52 + (usage.perGame / usage.threshold) * 18));
   return makeRow({
     category: 'fantasy_usage',
-    headline: baseline
-      ? `${name}: ${value} ${usage.unit.toLowerCase()} in the ${season} baseline`
-      : `${name} is at ${value} ${usage.noun}`,
+    headline: name,
     detail: `${name} averaged ${value} ${usage.noun} across ${usage.games.length} ` +
       `${season} regular-season games. ${baseline
         ? `BDL confirms ${name} is currently active for ${teamLabel(team)}; this is a labeled prior-season baseline, not current form. `
@@ -237,7 +249,7 @@ function usageRow({ candidate, usage, game, team, opponent, season, helpers, bas
     game: helpers.gameLabel(game),
     value: `${value} ${usage.unit}`,
     tone: TONES.NEUTRAL,
-    relevance_score: Math.min(92, Math.round(52 + (usage.perGame / usage.threshold) * 18)),
+    relevance_score: relevance,
     spark: [...usage.values].reverse(),
     player_id: playerId(candidate),
     team_id: team?.id ?? null,
@@ -254,11 +266,16 @@ function usageRow({ candidate, usage, game, team, opponent, season, helpers, bas
       team_id: team?.id ?? null,
       role: usage.role,
       evidence_scope: baseline ? 'prior_season_baseline' : 'current_season',
+      tier: tierFor(relevance),
+      per_game: Number(value),
+      unit: usage.unit,
+      opp: teamLabel(opponent),
+      reason: `${value} ${usage.noun}${baseline ? ` in ${season}` : ''} · next vs ${teamLabel(opponent)}`,
     },
   });
 }
 
-function trendRow({ candidate, usage, game, team, season, helpers }) {
+function trendRow({ candidate, usage, game, team, opponent, season, helpers }) {
   if (usage.games.length < 4) return null;
   const newest = average(usage.values.slice(0, 2));
   const prior = average(usage.values.slice(2, 5));
@@ -269,16 +286,17 @@ function trendRow({ candidate, usage, game, team, season, helpers }) {
   const name = playerName(candidate);
   const deltaText = `${delta > 0 ? '+' : ''}${fixed(delta)}`;
   const direction = delta > 0 ? 'up' : 'down';
+  const relevance = Math.min(94, Math.round(58 + Math.abs(pct) / 2));
   return makeRow({
     category: 'fantasy_trend',
-    headline: `${name}'s recent workload is ${direction} ${Math.abs(Math.round(pct))}%`,
+    headline: name,
     detail: `${name} averaged ${fixed(newest)} ${usage.unit.toLowerCase()} over the latest two games ` +
       `versus ${fixed(prior)} across the preceding ${Math.min(3, usage.games.length - 2)}. ` +
       `The comparison uses verified ${season} game logs; ${name} is currently listed for ${teamLabel(team)}.`,
     game: helpers.gameLabel(game),
     value: `${deltaText} ${usage.unit}`,
     tone: delta > 0 ? TONES.HOT : TONES.COLD,
-    relevance_score: Math.min(94, Math.round(58 + Math.abs(pct) / 2)),
+    relevance_score: relevance,
     spark: [...usage.values].reverse(),
     player_id: playerId(candidate),
     team_id: team?.id ?? null,
@@ -297,6 +315,10 @@ function trendRow({ candidate, usage, game, team, season, helpers }) {
       delta,
       percent_change: pct,
       evidence_scope: 'current_season',
+      tier: tierFor(relevance),
+      unit: usage.unit,
+      opp: teamLabel(opponent),
+      reason: `workload ${direction} ${Math.abs(Math.round(pct))}% — ${fixed(newest)} vs ${fixed(prior)} ${usage.unit.toLowerCase()}, last 2 vs prior ${Math.min(3, usage.games.length - 2)}`,
     },
   });
 }
@@ -318,11 +340,10 @@ function matchupRow({ candidate, usage, game, team, opponent, season, helpers, m
   const name = playerName(candidate);
   const environment = implied != null ? implied : total;
   const value = implied != null ? `${fixed(environment)} IMPLIED` : `${fixed(environment)} O/U`;
+  const relevance = Math.min(92, Math.round(62 + Math.max(0, (environment || 0) - 24) * 3));
   return makeRow({
     category: 'fantasy_matchup',
-    headline: implied != null
-      ? `${name}'s team carries a ${fixed(environment)} implied total`
-      : `${name}'s game carries a ${fixed(environment)} total`,
+    headline: name,
     detail: `${market.row?.vendor || 'The current sportsbook market'} puts ${teamLabel(team)} versus ` +
       `${teamLabel(opponent)} in one of this slate's stronger scoring environments. ` +
       `That is market context for a player ${baseline
@@ -331,7 +352,7 @@ function matchupRow({ candidate, usage, game, team, opponent, season, helpers, m
     game: helpers.gameLabel(game),
     value,
     tone: TONES.NEUTRAL,
-    relevance_score: Math.min(92, Math.round(62 + Math.max(0, (environment || 0) - 24) * 3)),
+    relevance_score: relevance,
     line_val: total,
     player_id: playerId(candidate),
     team_id: team?.id ?? null,
@@ -351,6 +372,13 @@ function matchupRow({ candidate, usage, game, team, opponent, season, helpers, m
       slate_implied_median: impliedMedian,
       slate_total_median: totalMedian,
       evidence_scope: baseline ? 'prior_season_baseline' : 'current_season',
+      tier: tierFor(relevance),
+      per_game: usage.perGame != null ? Number(fixed(usage.perGame)) : null,
+      unit: usage.unit,
+      opp: teamLabel(opponent),
+      reason: implied != null
+        ? `${fixed(implied)} implied team total${total != null ? ` · O/U ${fixed(total)}` : ''} vs ${teamLabel(opponent)}`
+        : `O/U ${fixed(total)} vs ${teamLabel(opponent)}`,
     },
   });
 }
@@ -456,7 +484,53 @@ export async function computeNflFantasyEdges(ctx) {
       `${generated.rows.length} grounded fantasy row(s)` +
       `${generated.rows.some((row) => row.meta?.evidence_scope === 'prior_season_baseline') ? ' (prior-season baseline)' : ''}`,
   );
+  // The same analyst pass MLB's waiver column runs (fantasyPickups.js): ONE
+  // call writes Gary's read + verdict per row from the grounded facts above.
+  // The model is fenced to the listed numbers; any failure keeps the computed
+  // detail, so the card never goes dark.
+  await writeAnalystReads(generated.rows);
   return generated.rows;
+}
+
+/** Per-player grounded fact sheet → 2-3 sentence read + a verdict line. */
+async function writeAnalystReads(rows) {
+  if (!rows.length) return;
+  const facts = rows.map((r, i) => {
+    const m = r.meta || {};
+    const scope = m.evidence_scope === 'prior_season_baseline'
+      ? `${m.season} season baseline (prior season — the current one has no sample yet; BDL confirms he is active for ${m.team})`
+      : `${m.season} season, ${m.games_played ?? 'current'} games`;
+    const lane = m.kind === 'fantasy_usage' ? 'ROLE'
+      : m.kind === 'fantasy_trend' ? 'TREND'
+        : 'MATCHUP';
+    return `${i}. ${lane} ${r.headline} (${m.position || 'FLEX'}, ${m.team}) — ${m.reason}. Evidence: ${scope}. Availability tier: ${m.tier}. Game: ${r.game}.`;
+  }).join('\n');
+
+  const prompt = `You are Gary — the bettor whose season-long fantasy column publishes in this app. You write as yourself, never as an AI, and your training data is old: the facts below are current and they are ALL you may use — never introduce a statistic, injury, trend, or player that isn't listed.
+
+For each player below: the case for adding him today, and the call for who should.
+
+Return STRICT JSON only: {"reads":[{"i":0,"read":"...","verdict":"..."}]}
+
+PLAYERS:
+${facts}`;
+
+  try {
+    const resp = await generateSolText(prompt, { maxTokens: 4000 });
+    const text = typeof resp === 'string' ? resp : (resp?.content ?? resp?.text ?? '');
+    const jsonStr = text.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(jsonStr.slice(jsonStr.indexOf('{'), jsonStr.lastIndexOf('}') + 1));
+    for (const item of parsed?.reads || []) {
+      const r = rows[item?.i];
+      if (!r || !item?.read) continue;
+      const verdict = (item.verdict || '').trim();
+      r.meta = { ...(r.meta || {}), computed_detail: r.detail, read: item.read.trim(), ...(verdict ? { verdict } : {}) };
+      r.detail = `${item.read.trim()}${verdict ? ` ${verdict}` : ''}`;
+    }
+    console.log(`[nflFantasyEdges] analyst reads attached: ${(parsed?.reads || []).length}/${rows.length}`);
+  } catch (err) {
+    console.error('[nflFantasyEdges] analyst pass failed (computed details kept):', err?.message || err);
+  }
 }
 
 export const nflFantasyInternals = Object.freeze({
