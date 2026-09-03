@@ -50,7 +50,7 @@ const norm = (s) => String(s || '').toLowerCase().trim();
 export const LEAGUE = {
   hits: 0.232, singles: 0.150, doubles: 0.046, triples: 0.004, hr: 0.032,
   bb: 0.083, k: 0.226, sb: 0.013, runs: 0.118, rbi: 0.113,
-  p_k: 0.226, p_bb: 0.083, p_h: 0.232, er: 0.104,
+  p_k: 0.226, p_bb: 0.083, p_h: 0.232, er: 0.104, p_hr: 0.030,
   bf_per_start: 22,
 };
 const PRIOR_PA = 100;      // shrinkage weight toward the league rate
@@ -223,14 +223,24 @@ const blendDists = (empirical, parametric, n) => {
  * empirical part carries the clumpiness (runs and RBI come in bunches that
  * a Poisson at his rate never sees).
  */
-export function hitterDistribution(profile, propType) {
-  const parametric = hitterParametric(profile, propType);
+export function hitterDistribution(profile, propType, oppPitcher = null) {
+  const parametric = hitterParametric(profile, propType, oppPitcher);
   if (!parametric) return null;
   const empirical = empiricalDistribution(profile.rows, propType, profile.asOf);
+  // The home-run lane is the one market where the arm matters more than the
+  // history: the empirical blend is skipped so the starter's tendency carries.
+  if (norm(propType).includes('home_run') && oppPitcher?.hr != null) return parametric;
   return blendDists(empirical, parametric, profile.games);
 }
 
-function hitterParametric(profile, propType) {
+/** The opposing starter's HR-allowed rate against the league, capped. */
+export const pitcherHrScale = (oppPitcher) => {
+  const r = oppPitcher?.hr;
+  if (!Number.isFinite(r) || !r) return 1;
+  return Math.min(1.6, Math.max(0.6, r / LEAGUE.p_hr));
+};
+
+function hitterParametric(profile, propType, oppPitcher = null) {
   const t = norm(propType);
   const { rates, paDist } = profile;
   const bern = (p) => mixOverPa(paDist, (pa) => binomial(pa, Math.min(0.95, Math.max(0.001, p))));
@@ -240,7 +250,7 @@ function hitterParametric(profile, propType) {
     case 'singles': return bern(rates.singles);
     case 'doubles': return bern(rates.doubles);
     case 'triples': return bern(rates.triples);
-    case 'home_runs': case 'first_home_run': return bern(rates.hr);
+    case 'home_runs': case 'first_home_run': return bern(rates.hr * pitcherHrScale(oppPitcher));
     case 'walks': return bern(rates.bb);
     case 'strikeouts': return bern(rates.k);
     case 'stolen_bases': return bern(rates.sb);
@@ -276,6 +286,7 @@ export function pitcherProfile(rows, { asOf = null } = {}) {
       bb: rate((r) => r.p_bb, 'p_bb'),
       h: rate((r) => r.p_hits, 'p_h'),
       er: rate((r) => r.er, 'er'),
+      hr: rate((r) => r.p_hr, 'p_hr'),
     },
     outs,
   };
@@ -396,7 +407,7 @@ export function screenBoard(markets, context) {
     if ((isPitcher ? profile.starts : profile.games) < 5) continue;
     const dist = isPitcher
       ? pitcherDistribution(profile, m.prop_type, context.lineupFor ? context.lineupFor(key) : null)
-      : hitterDistribution(profile, m.prop_type);
+      : hitterDistribution(profile, m.prop_type, context.oppPitcherFor ? context.oppPitcherFor(key) : null);
     if (!dist) continue;
     const mkt = marketProbabilities(m.over_odds, m.under_odds);
     if (!mkt) continue;

@@ -18,7 +18,7 @@ import path from 'path';
 import { createClient } from '@supabase/supabase-js';
 import { ballDontLieService } from '../src/services/ballDontLieService.js';
 import { statForProp } from '../src/services/pickdesk/propsBrain.js';
-import { screenBoard, lineupRates, payout, LEAGUE } from '../src/services/pickdesk/propModel.js';
+import { screenBoard, lineupRates, payout, LEAGUE, pitcherProfile } from '../src/services/pickdesk/propModel.js';
 
 const args = Object.fromEntries(process.argv.slice(2).filter((a) => a.startsWith('--')).map((a) => {
   const [k, v] = a.slice(2).split('=');
@@ -112,6 +112,22 @@ for (const snap of snapshots) {
     return lineupRates(rows, { asOf });
   };
   const teamOfRow = (r) => r?.team_name ?? r?.team?.display_name ?? r?.team?.full_name ?? null;
+  const slotByName = new Map();
+  for (const sd of sides) for (const b of sd.batters) if (b?.name && b?.battingOrder != null) slotByName.set(norm(b.name), Number(b.battingOrder));
+  // The opposing starter for every hitter: the box's starters (games_started 1) by team.
+  const starters = box.filter((r) => Number(r.games_started) === 1 && r.player?.id != null);
+  const oppStarterProfile = new Map();   // hitter key → { hr } as of the date
+  const starterProfileFor = async (row) => {
+    const rows = await chrono(row.player.id);
+    return pitcherProfile(rows, { asOf });
+  };
+  const teamOfHitter = new Map();
+  for (const r of box) if (r.player?.id != null) teamOfHitter.set(norm(r.player.full_name || `${r.player.first_name} ${r.player.last_name}`), teamOfRow(r));
+  for (const st of starters) {
+    const prof = await starterProfileFor(st);
+    const stTeam = teamOfRow(st);
+    for (const [k, t] of teamOfHitter) if (t && stTeam && norm(t) !== norm(stTeam)) oppStarterProfile.set(k, { hr: prof.rates.hr });
+  }
 
   // Resolve every market's player once; pull rows; screen.
   const marketRows = [];
@@ -130,6 +146,8 @@ for (const snap of snapshots) {
   const screened = screenBoard(marketRows, {
     asOf,
     marketBlend: BLEND,
+    slotFor: (k) => slotByName.get(k) ?? null,
+    oppPitcherFor: (k) => oppStarterProfile.get(k) || null,
     rowsFor: (k) => rowsByKey.get(k),
     lineupFor: (k) => lineupByKey.get(k) || null,
   });

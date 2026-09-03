@@ -21,7 +21,7 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import { buildMlbDesk, fetchTonightsGameCall } from './mlbDesk.js';
 import { buildPropSheets } from './propSheets.js';
-import { screenBoard, lineupRates } from './propModel.js';
+import { screenBoard, lineupRates, pitcherProfile } from './propModel.js';
 import { PROPS_DESK_MODEL, LEGACY_BRAIN_FALLBACK, DESK_FALLBACK_MODELS, DESK_COST_PER_M } from '../agentic/orchestrator/orchestratorConfig.js';
 import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { normalizePropBetDirection } from '../agentic/propsSharedUtils.js';
@@ -42,7 +42,11 @@ Your training data is old; the desk is current.
 
 Each prop you take publishes as its own card with its own "Gary's Take" — the reasoning is yours. No emojis. Never mention data feeds, tools, or missing data.`;
 
-export const THE_PROPS_ASK = `Pick the prop bets you want from tonight's board — an empty list means you pass this game.
+// The home-run card's contract (Sep 3 2026): MLB only — the football ask is
+// the same contract without it.
+export const THE_HOME_RUN_ASK = 'From THE HOME RUN BOARD, when one is printed, take one home run bet or none; it publishes as its own card.';
+
+export const THE_PROPS_ASK = `Pick the prop bets you want from tonight's board — an empty list means you pass this game. ${THE_HOME_RUN_ASK}
 
 Injuries: an absence already games old is already in the price and in the team's recent results; fresh news — today's scratch — is the exception.
 
@@ -126,6 +130,7 @@ export function statForProp(row, propType) {
     case 'pitcher_hits_allowed': return n(row.p_hits);
     case 'pitcher_walks': return n(row.p_bb);
     case 'pitcher_earned_runs': return n(row.er);
+    case 'pitcher_home_runs': return n(row.p_hr);
     default: return null;
   }
 }
@@ -352,6 +357,36 @@ export function selectCandidates(screened, { candidates = SCREEN_CANDIDATES, flo
     out.push(s);
   }
   return out;
+}
+
+// ═══ THE HOME RUN BOARD (Sep 3 2026) — one long shot per game, by value ═══
+// Founder: "you are in charge of HR too… I just don't want to see the top
+// guys every single night… it's a long-shot bet, it's for fun." The August
+// replay (3,836 HR markets): the book's HR prices carry a 15% edge, and
+// "the highest chance to homer" — the same sluggers nightly — is the WORST
+// way to play them (-25% ROI). The best: the biggest gap between the
+// player's own chance (his HR rate over tonight's plate appearances,
+// scaled by the starter he faces) and what the price implies — breakeven
+// on a -15% market, and 116 different names across 326 games. The board is
+// the three biggest gaps; Gary takes one, or none.
+export const HR_CANDIDATES = 3;
+export function selectHrCandidates(screened, { candidates = HR_CANDIDATES } = {}) {
+  return (screened || [])
+    .filter((s) => isHrType(s.market.prop_type) && s.side === 'over' && propOddsService.isOddsTakeable(s.odds, s.market.prop_type))
+    .sort((a, b) => b.edge - a.edge)
+    .slice(0, candidates);
+}
+export function buildHomeRunBoard(candidates, { clearedClauseFor = null } = {}) {
+  if (!candidates.length) return { text: '', players: new Set() };
+  const lines = candidates.map((s) => {
+    const m = s.market;
+    const cleared = clearedClauseFor ? clearedClauseFor(norm(m.player), m.prop_type, m.line) : null;
+    return `  ${m.player}${m.team ? ` (${m.team})` : ''}: OVER home_runs ${m.line} (${fmtOdds(s.odds)})${cleared ? ` — ${cleared}` : ''}`;
+  });
+  return {
+    text: `═══ THE HOME RUN BOARD (one long shot, or none) ═══\n${lines.join('\n')}`,
+    players: new Set(candidates.map((s) => norm(s.market.player))),
+  };
 }
 
 /**
@@ -651,20 +686,35 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
     };
     const slotByName = new Map();
     for (const side of [lineups?.home, lineups?.away]) for (const b of side?.batters || []) if (b?.name && b?.battingOrder != null) slotByName.set(norm(b.name), Number(b.battingOrder));
+    const oppPitcherFor = (key) => {
+      const inSide = (side) => (side?.batters || []).some((b) => norm(b?.name) === key);
+      const opp = inSide(lineups?.home) ? lineups?.away?.pitcher : inSide(lineups?.away) ? lineups?.home?.pitcher : null;
+      const rows = opp?.name ? chronoByPlayer.get(norm(opp.name)) : null;
+      if (!rows) return null;
+      return { hr: pitcherProfile(rows).rates.hr };
+    };
     const screened = screenBoard(board.markets, {
       asOf: null,
       rowsFor: (k) => chronoByPlayer.get(k),
       lineupFor: opposingRowsFor,
       slotFor: (k) => slotByName.get(k) ?? null,
+      oppPitcherFor,
     });
     candidates = selectCandidates(screened);
     candidates.forEach((s, i) => screenByKey.set(`${norm(s.market.player)}|${norm(s.market.prop_type)}|${s.side}`, { ...s, rank: i + 1 }));
-    const screenedBoard = buildScreenedBoard(candidates, {
-      clearedClauseFor: (key, propType, line) => clearedClause(chronoByPlayer.get(key), propType, line),
-    });
+    const clearedFor = (key, propType, line) => clearedClause(chronoByPlayer.get(key), propType, line);
+    const screenedBoard = buildScreenedBoard(candidates, { clearedClauseFor: clearedFor });
+    // THE HOME RUN BOARD rides the same call: one long shot per game, by value.
+    const hrCandidates = selectHrCandidates(screened);
+    hrCandidates.forEach((s, i) => screenByKey.set(`${norm(s.market.player)}|${norm(s.market.prop_type)}|over`, { ...s, rank: i + 1 }));
+    const hrBoard = buildHomeRunBoard(hrCandidates, { clearedClauseFor: clearedFor });
     if (screenedBoard.players.size) {
-      readBoard = { ...board, text: screenedBoard.text, players: screenedBoard.players };
-      console.log(`   [Props Brain] screen: ${candidates.length} candidates of ${screened.length} priced markets (gaps ${candidates.map((c) => (100 * c.edge).toFixed(0) + '%').join(' ')})`);
+      readBoard = {
+        ...board,
+        text: `${screenedBoard.text}${hrBoard.text ? `\n\n${hrBoard.text}` : ''}`,
+        players: new Set([...screenedBoard.players, ...hrBoard.players]),
+      };
+      console.log(`   [Props Brain] screen: ${candidates.length} candidates of ${screened.length} priced markets (gaps ${candidates.map((c) => (100 * c.edge).toFixed(0) + '%').join(' ')}) · HR board ${hrCandidates.map((c) => `${c.market.player} ${fmtOdds(c.odds)}`).join(', ') || 'none'}`);
     }
   }
 

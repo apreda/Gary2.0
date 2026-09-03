@@ -90,6 +90,15 @@ export function pitchCountLine(rows) {
   return `pitches, last ${recent.length} starts: ${recent.join(' ')}`;
 }
 
+/** Home runs allowed by start, newest first — the arm the HR board's hitters face. */
+export function homeRunsAllowedLine(rows) {
+  const starts = pitcherStarts(rows);
+  const vals = starts.map((r) => (r?.p_hr != null ? Number(r.p_hr) : null)).filter((v) => v != null);
+  if (!vals.length) return null;
+  const recent = vals.slice(-PITCHER_STARTS).reverse();
+  return `home runs allowed, last ${recent.length} starts: ${recent.join(' ')} · ${vals.reduce((a, b) => a + b, 0)} in ${vals.length} starts`;
+}
+
 /** Plate appearances per game this season. */
 export function paPerGame(rows) {
   const games = hitterGames(rows);
@@ -229,8 +238,9 @@ export function buildPropSheets({ markets, chronoByPlayer, lineups, homeTeam, aw
           faced ? `faces ${faced}` : 'the opposing lineup is not yet posted',
         ].join(' · ');
         const pitches = pitchCountLine(rows);
+        const hrAllowed = homeRunsAllowedLine(rows);
         const nine = lineupTendencies(side.theirs?.batters, chronoByPlayer);
-        lines.push(head, ...marketLines.map((l) => `   ${l}`), ...(pitches ? [`   ${pitches}`] : []), ...(nine ? [`   ${nine}`] : []));
+        lines.push(head, ...marketLines.map((l) => `   ${l}`), ...(pitches ? [`   ${pitches}`] : []), ...(hrAllowed ? [`   ${hrAllowed}`] : []), ...(nine ? [`   ${nine}`] : []));
       }
     }
 

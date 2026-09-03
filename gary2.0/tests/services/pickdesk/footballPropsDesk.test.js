@@ -8,6 +8,7 @@ import {
 } from '../../../src/services/pickdesk/footballPropsDesk.js';
 import {
   THE_PROPS_ASK,
+  THE_HOME_RUN_ASK,
   PROPS_PROMPT_SHA,
   buildPropBoardV2,
   selectPrimaryMarkets,
@@ -32,8 +33,9 @@ describe('football props ask (product contract)', () => {
   it('carries its own prompt era, distinct from the MLB props era', () => {
     expect(FOOTBALL_PROPS_PROMPT_SHA).toMatch(/^[0-9a-f]{12}$/);
     expect(FOOTBALL_PROPS_PROMPT_SHA).not.toBe(PROPS_PROMPT_SHA);
-    // The two contracts differ ONLY in day grammar + injury noun — same laws.
-    expect(THE_PROPS_ASK.replace(/tonight's/g, "today's").replace("today's scratch", "today's inactive"))
+    // The two contracts differ ONLY in day grammar + injury noun + MLB's
+    // home-run card sentence — same laws.
+    expect(THE_PROPS_ASK.replace(` ${THE_HOME_RUN_ASK}`, '').replace(/tonight's/g, "today's").replace("today's scratch", "today's inactive"))
       .toBe(FOOTBALL_PROPS_ASK);
   });
 });
