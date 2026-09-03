@@ -2323,6 +2323,7 @@ async function main() {
                   matchup: `${cleanPick.awayTeam} @ ${cleanPick.homeTeam}`,
                   pick: cleanPick.pick,
                   desk: deskText,
+                  research_briefing: result?._context?.researchBriefing || null,
                 });
               }
               // THE WINNERS ROUTE (founder GO, Sep 2 2026): after the store,

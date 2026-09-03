@@ -331,7 +331,15 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   const researcherOn = String(process.env.GARY_RESEARCHER || 'on').toLowerCase() !== 'off'
     && (sport === 'baseball_mlb' || sport === 'MLB')
     && !!options.scoutReport;
-  if (researcherOn) {
+  // A briefing handed in (the notebook shadow re-reading the main read's
+  // desk, Sep 3 2026) is used as-is: same desk, same research, the
+  // researcher paid once. Nothing else about the flow changes.
+  const handedBriefing = typeof options.prebuiltResearchBriefing === 'string' && options.prebuiltResearchBriefing.trim()
+    ? options.prebuiltResearchBriefing : null;
+  if (researcherOn && handedBriefing) {
+    _researchBriefing = handedBriefing;
+    console.log(`[Research Briefing] ♻️ Re-using the main read's briefing (${_researchBriefing.length} chars) — the researcher is not run again`);
+  } else if (researcherOn) {
     console.log(`[Research Briefing] 🔬 Running the research briefing (Haiku with tools) — Gary waits for completion`);
     try {
       const briefingResult = await Promise.race([
@@ -358,6 +366,8 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       // not the June system). Kept: the runner's cascade re-runs the game.
       throw new Error(`[HARD FAIL] Research assistant failed for ${homeTeam} @ ${awayTeam} (${sport}): ${err.message}`);
     }
+  }
+  if (researcherOn) {
     const brainHasTools = !['claude-cli', 'codex-cli'].includes(currentSession?.provider);
     const investigateAsk = brainHasTools
       ? `Investigate further with your own fetch_stats calls wherever your read wants more evidence — duplicates of already-fetched stats return nothing new, so only novel requests cost anything. You can also hand a question to your research assistant: write a line starting with ASK RESEARCHER: followed by the question (one per line, up to 6 per game) and the answer comes back with verified figures.`

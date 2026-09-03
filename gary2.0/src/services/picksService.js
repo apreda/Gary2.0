@@ -745,14 +745,16 @@ async function storeTestPicks(picks, testName = null, testNotes = null) {
  * pick. Non-blocking by contract — a snapshot failure logs and never touches
  * the pick flow.
  */
-async function storeDeskSnapshot({ game_date, matchup, pick, desk }) {
+async function storeDeskSnapshot({ game_date, matchup, pick, desk, research_briefing = null }) {
   try {
     if (!game_date || !matchup || !desk) return { success: false, error: 'missing fields' };
     // pick_desks is RLS-locked with no anon policies (service writes only) —
     // the anon client failed silently here for all of Jul 26.
+    // The research briefing rides along (Sep 3 2026) so the notebook shadow
+    // re-reads the same research instead of paying the researcher twice.
     const { error } = await (supabaseAdmin || supabase)
       .from('pick_desks')
-      .upsert({ game_date, matchup, pick: pick || null, desk }, { onConflict: 'game_date,matchup' });
+      .upsert({ game_date, matchup, pick: pick || null, desk, research_briefing: research_briefing || null }, { onConflict: 'game_date,matchup' });
     if (error) throw error;
     return { success: true };
   } catch (e) {

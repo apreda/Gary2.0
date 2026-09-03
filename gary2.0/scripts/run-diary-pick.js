@@ -45,13 +45,15 @@ async function main() {
   const homeTeam = s.home_team; const awayTeam = s.away_team;
   const matchup = MATCHUP || `${awayTeam} @ ${homeTeam}`;
 
-  const { data: deskRows } = await db.from('pick_desks').select('desk, pick').eq('game_date', DATE).eq('matchup', matchup).limit(1);
+  const { data: deskRows } = await db.from('pick_desks').select('desk, pick, research_briefing').eq('game_date', DATE).eq('matchup', matchup).limit(1);
   let desk = deskRows?.[0]?.desk || null;
+  let briefing = deskRows?.[0]?.research_briefing || null;
   if (!desk) {
     // Fall back to any desk for the same clubs today (the pick text on the desk row can differ).
-    const { data: alt } = await db.from('pick_desks').select('desk, matchup').eq('game_date', DATE);
+    const { data: alt } = await db.from('pick_desks').select('desk, matchup, research_briefing').eq('game_date', DATE);
     const hit = (alt || []).find((r) => norm(r.matchup) === norm(matchup));
     desk = hit?.desk || null;
+    briefing = hit?.research_briefing || null;
   }
   if (!desk) { console.error(`[Diary] no stored desk for ${matchup} on ${DATE} — the notebook shadow reads the same desk or nothing`); process.exit(1); }
 
@@ -61,7 +63,7 @@ async function main() {
   const since = new Date(new Date(`${DATE}T12:00:00Z`).getTime() - 45 * 86400000).toISOString().slice(0, 10);
   const { data: autopsies } = await db.from('pick_autopsies').select('*').eq('league', 'MLB').gte('game_date', since).lt('game_date', DATE).order('game_date', { ascending: false }).limit(400);
   const notebook = buildNotebook(autopsies || [], { homeTeam, awayTeam });
-  console.log(`[Diary] ${matchup}: desk ${desk.length} chars · notebook from ${notebook.notes} autopsies (${notebook.text.length} chars) · Gary took ${gary?.pick || '—'}`);
+  console.log(`[Diary] ${matchup}: desk ${desk.length} chars · briefing ${briefing ? `${briefing.length} chars (re-used from the main read)` : 'none stored — the researcher runs again'} · notebook from ${notebook.notes} autopsies (${notebook.text.length} chars) · Gary took ${gary?.pick || '—'}`);
   if (DRY) { console.log(notebook.text || '(empty notebook)'); process.exit(0); }
 
   const game = {
@@ -74,10 +76,10 @@ async function main() {
   const { analyzeGame } = await import('../src/services/agentic/orchestrator/orchestratorMain.js');
   const { MLB_JUNE_BRAIN_MODEL } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
   const t0 = Date.now();
-  let result = await analyzeGame(game, 'baseball_mlb', { prebuiltScoutReport: deskWithNotebook, modelOverride: MLB_JUNE_BRAIN_MODEL, nocache: true });
+  let result = await analyzeGame(game, 'baseball_mlb', { prebuiltScoutReport: deskWithNotebook, prebuiltResearchBriefing: briefing, modelOverride: MLB_JUNE_BRAIN_MODEL, nocache: true });
   if (result?.error || !result?.pick) {
     console.warn(`[Diary] first read failed (${result?.error || 'no pick'}) — one retry`);
-    result = await analyzeGame(game, 'baseball_mlb', { prebuiltScoutReport: deskWithNotebook, modelOverride: MLB_JUNE_BRAIN_MODEL, nocache: true });
+    result = await analyzeGame(game, 'baseball_mlb', { prebuiltScoutReport: deskWithNotebook, prebuiltResearchBriefing: briefing, modelOverride: MLB_JUNE_BRAIN_MODEL, nocache: true });
   }
   if (result?.error || !result?.pick) { console.error(`[Diary] no pick (${result?.error || 'empty'})`); process.exit(1); }
 
