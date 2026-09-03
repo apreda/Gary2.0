@@ -128,7 +128,7 @@ export function findParkData(venueName, homeTeamName) {
 // When current season has no data (early season / Opening Day), falls back to prior season
 // Returns { stats, season, isFallback } so callers can label the data correctly
 const MIN_GAMES_FOR_CURRENT_SEASON = 5; // Below this, prior season is more useful
-async function fetchSeasonStatsWithFallback({ teamId, playerIds, season }) {
+export async function fetchSeasonStatsWithFallback({ teamId, playerIds, season }) {
   const currentYear = season || new Date().getFullYear();
   const priorYear = currentYear - 1;
 
@@ -196,7 +196,7 @@ async function fetchSplitsWithFallback(playerId, season) {
 }
 
 // Helper: resolve BDL team ID from team object or name
-async function resolveBdlTeamId(team) {
+export async function resolveBdlTeamId(team) {
   // If team already has a numeric id from BDL, use it
   if (team?.id && typeof team.id === 'number') return team.id;
   const name = team?.full_name || team?.name;

@@ -1798,6 +1798,17 @@ async function main(targetDate = getTargetDate()) {
     console.warn(`  ⚠️ Closing-line read failed (non-fatal): ${e.message}`);
   }
 
+  // THE SHADOW READ (Sep 3 2026): grade the shadow model's MLB picks from
+  // the official finals and print Gary vs the shadow on the same ruler.
+  try {
+    const { readShadow, printShadowRead } = await import('./run-shadow-read.js');
+    const dayBefore = new Date(new Date(`${targetDate}T12:00:00Z`).getTime() - 86400000).toISOString().slice(0, 10);
+    const shadowRows = await readShadow([dayBefore, targetDate]);
+    if (shadowRows.length) await printShadowRead(shadowRows, [dayBefore, targetDate], `${dayBefore} → ${targetDate}`);
+  } catch (e) {
+    console.warn(`  ⚠️ Shadow read failed (non-fatal): ${e.message}`);
+  }
+
   console.log(`\n════════════════════════════════════════`);
   console.log(`SUMMARY FOR ${targetDate}`);
   console.log(`Daily:  ${daily.w}W - ${daily.l}L`);

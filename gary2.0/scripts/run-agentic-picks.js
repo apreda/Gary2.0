@@ -387,6 +387,7 @@ const { classOf, classWinRates, winnersScore } = await import('../src/services/p
 const { reviewPick } = await import('../src/services/pickdesk/winnersReviewer.js');
 const { isFirstDogOfDay, isBigGame, winnersDecision, loadBigGameOverrides } = await import('../src/services/pickdesk/winnersRules.js');
 const { pickIsHome } = await import('../src/services/agentic/rationaleLanes.js');
+const { buildShadowPick } = await import('../src/services/shadow/shadowPick.js');
 
 /**
  * THE WINNERS ROUTE (founder GO, Sep 2 2026): runs AFTER the pick is stored,
@@ -2313,6 +2314,27 @@ async function main() {
               // THE WINNERS ROUTE (founder GO, Sep 2 2026): after the store,
               // never before. First dog, big game, then the reviewer.
               await routeToWinners({ league: config.name, game, slate: games, result, cleanPick, deskText });
+              // THE SHADOW MODEL (founder GO, Sep 3 2026): a second system's
+              // bet for the same game, stored beside Gary's and never shown
+              // to him or to fans; graded and read nightly against his.
+              if (config.name === 'MLB') {
+                try {
+                  const { supabaseAdmin, supabase } = await import('../src/supabaseClient.js');
+                  const todayEt = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+                  const shadow = await buildShadowPick({
+                    game, homeTeam: cleanPick.homeTeam, awayTeam: cleanPick.awayTeam, todayEt,
+                    garyPick: cleanPick.pick, db: supabaseAdmin || supabase,
+                  });
+                  if (shadow.ok) {
+                    const r = shadow.row;
+                    console.log(`🧪 [Shadow] ${r.pick_text} (market ${(r.p_market * 100).toFixed(1)}% → ${(r.p_adj * 100).toFixed(1)}% home, ${r.adjustment_pts >= 0 ? '+' : ''}${r.adjustment_pts} pts: ${(r.drivers || []).map((d) => d.name).join(', ') || 'no tonight adjustment'}) · Gary ${cleanPick.pick} · ${r.agree_with_gary === false ? 'DIFFERENT side' : r.agree_with_gary ? 'same side' : 'side unread'}`);
+                  } else {
+                    console.warn(`   ⚠️ [Shadow] no shadow pick (${shadow.error})`);
+                  }
+                } catch (shadowErr) {
+                  console.warn(`   ⚠️ [Shadow] skipped (${shadowErr.message}) — pick unaffected`);
+                }
+              }
             } catch (storeErr) {
               console.log(`⚠️  [${config.name}] Immediate store failed (will retry at end): ${storeErr.message}`);
             }
