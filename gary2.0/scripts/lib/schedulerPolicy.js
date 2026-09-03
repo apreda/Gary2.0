@@ -644,3 +644,17 @@ export async function runPerGameDecisionPipeline({
     }
   }));
 }
+
+/**
+ * PICK WHEN BOTH LINEUPS POST (founder GO, Sep 3 2026): a lineup is posted
+ * when the official boxscore carries at least `min` batters for a club.
+ * Accepts { home, away } or { homeLineup, awayLineup } arrays. A missing
+ * feed, one club, or a partial card is not "posted" — the T-90 ladder waits.
+ */
+export function bothLineupsPosted(lineups, min = 9) {
+  if (!lineups || typeof lineups !== 'object') return false;
+  const home = lineups.home ?? lineups.homeLineup ?? null;
+  const away = lineups.away ?? lineups.awayLineup ?? null;
+  const ok = (l) => Array.isArray(l) && l.filter((b) => b && (b.battingOrder != null || b.name || b.id != null)).length >= min;
+  return ok(home) && ok(away);
+}

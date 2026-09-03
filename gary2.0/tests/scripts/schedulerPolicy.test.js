@@ -756,3 +756,17 @@ describe('scheduler reliability policy', () => {
     expect(completedGames.size).toBe(8);
   });
 });
+
+describe('bothLineupsPosted — pick when both lineups post (Sep 3 2026)', () => {
+  const nine = Array.from({ length: 9 }, (_, i) => ({ name: `B${i + 1}`, battingOrder: i + 1 }));
+  it('needs nine batters a side, from either key shape', async () => {
+    const { bothLineupsPosted } = await import('../../scripts/lib/schedulerPolicy.js');
+    expect(bothLineupsPosted({ home: nine, away: nine })).toBe(true);
+    expect(bothLineupsPosted({ homeLineup: nine, awayLineup: nine })).toBe(true);
+    expect(bothLineupsPosted({ home: nine, away: nine.slice(0, 8) })).toBe(false);
+    expect(bothLineupsPosted({ home: nine, away: null })).toBe(false);
+    expect(bothLineupsPosted({ home: nine })).toBe(false);
+    expect(bothLineupsPosted(null)).toBe(false);
+    expect(bothLineupsPosted({ home: [...nine, { name: 'DH', battingOrder: 10 }], away: nine })).toBe(true);
+  });
+});

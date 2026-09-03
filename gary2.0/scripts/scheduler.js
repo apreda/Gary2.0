@@ -213,6 +213,88 @@ function startHeartbeat() {
   setInterval(beat, 30_000).unref();
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// PICK WHEN BOTH LINEUPS POST (founder GO, Sep 3 2026)
+// ─────────────────────────────────────────────────────────────────────────
+import { bothLineupsPosted } from './lib/schedulerPolicy.js';
+
+/** Set when a trigger was pulled earlier; the sleeping main loop wakes and re-plans. */
+let queueWake = false;
+const LINEUP_WATCH_LEAD_MS = 240 * 60 * 1000;
+const lineupFiredGames = new Set();
+
+/**
+ * From T-240, when MLB's official boxscore carries a full lineup for both
+ * clubs, pull the game's earliest unfired tier to NOW. Runs inside the drift
+ * guard's 10-minute check with the official match already in hand. Facts
+ * only: a partial lineup is not a lineup; a failed feed waits for the ladder.
+ */
+async function fireOnPostedLineups(livePending, entry, match, now) {
+  try {
+    if (entry?.sport?.key !== 'baseball_mlb' || !match?.gamePk) return;
+    const key = scheduleEntryKey(entry);
+    if (lineupFiredGames.has(key)) return;
+    const leadMs = entry.startTime.getTime() - now;
+    if (leadMs <= 0 || leadMs > LINEUP_WATCH_LEAD_MS) return;
+    const tiers = (livePending || []).filter((e) => scheduleEntryKey(e) === key && !isScheduleEntryHeld(e) && !isScheduleEntryRetired(e));
+    const first = tiers.sort((a, b) => a.triggerTime - b.triggerTime)[0];
+    if (!first || first.triggerTime.getTime() <= now) return; // already due or fired
+    const { getConfirmedLineups } = await import('../src/services/mlbStatsApiService.js');
+    const lineups = await getConfirmedLineups(match.gamePk);
+    if (!bothLineupsPosted(lineups)) return;
+    lineupFiredGames.add(key);
+    const wasET = first.triggerTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
+    first.triggerTime = new Date(now);
+    queueWake = true;
+    log(`📋 LINEUPS POSTED: ${entry.matchup} — both clubs' nine are official ${Math.round(leadMs / 60000)} min before first pitch; firing the game pick now instead of ${wasET} ET (id ${entry.gameId})`);
+  } catch (e) {
+    log(`⚠️ lineup watch skipped for ${entry?.matchup || '?'} (${e.message}) — the T-90 ladder stands`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// THE CLOSING BOARD (founder GO, Sep 3 2026): one odds fetch per game at
+// first pitch, recorded to odds_snapshots (every book), so the closing-line
+// read has a real close instead of the last pick tier's board.
+// ─────────────────────────────────────────────────────────────────────────
+const closingWatch = new Map(); // `${sport.key}:${gameId}` → { sport, dateStr, gameId, startTime, matchup, done }
+const CLOSING_CAPTURE_SPORTS = new Set(['baseball_mlb', 'americanfootball_nfl', 'americanfootball_ncaaf']);
+let closingTimer = null;
+
+function registerClosingCapture(entries) {
+  for (const e of entries || []) {
+    if (!e?.sport?.key || !CLOSING_CAPTURE_SPORTS.has(e.sport.key) || e.gameId == null || !(e.startTime instanceof Date)) continue;
+    const key = `${e.sport.key}:${e.gameId}`;
+    if (!closingWatch.has(key)) closingWatch.set(key, { sport: e.sport, dateStr: e.slateDate || e.dateStr || getTodayETDateStr(), gameId: e.gameId, startTime: e.startTime, matchup: e.matchup, done: false });
+  }
+}
+
+async function captureClosingBoards() {
+  const now = Date.now();
+  for (const [key, w] of closingWatch) {
+    if (w.done) continue;
+    const start = w.startTime.getTime();
+    if (now < start - 90_000) continue;            // not yet: capture inside the last 90 seconds
+    if (now > start + 20 * 60_000) { w.done = true; continue; } // too late to call it a close
+    w.done = true;
+    try {
+      const games = await fetchGamesForETDate(w.sport.key, w.dateStr, { gameIds: [w.gameId] });
+      const { recordOddsSnapshots } = await import('../src/services/oddsSnapshots.js');
+      const n = await recordOddsSnapshots(w.sport.key, Array.isArray(games) ? games : []);
+      log(`📏 CLOSING BOARD: ${w.matchup} — ${n} book board(s) recorded at first pitch (id ${w.gameId})`);
+    } catch (e) {
+      log(`⚠️ closing board skipped for ${w.matchup} (${e.message})`);
+    }
+  }
+  for (const [key, w] of closingWatch) if (w.done && Date.now() > w.startTime.getTime() + 6 * 3600_000) closingWatch.delete(key);
+}
+
+function startClosingCapture() {
+  if (closingTimer) return;
+  closingTimer = setInterval(() => { captureClosingBoards().catch(() => {}); }, 60_000);
+  closingTimer.unref();
+}
+
 // A 24/7 daemon must SURVIVE transient network blips. Waking from sleep often
 // hits the network before DNS is ready — `getaddrinfo ENOTFOUND ...supabase.co`
 // — and on Jun 21 2026 exactly that crashed the scheduler mid-morning (main()'s
@@ -506,6 +588,7 @@ async function buildPlan(etDateStr) {
   }
 
   schedule.sort((a, b) => a.triggerTime - b.triggerTime);
+  registerClosingCapture(schedule);
   // schedule.length is trigger ENTRIES, not unique games. Each game produces
   // up to RETRY_LEAD_TIMES_MINUTES.length entries (currently 4: T-90/60/30/15),
   // but only the first successful tier actually generates a pick — the rest
@@ -821,6 +904,7 @@ async function fetchOfficialMlbStarts(etDateStr) {
       if (Number.isNaN(start.getTime())) continue;
       const normalizedStatus = normalizeMlbGameStatus(g.status);
       games.push({
+        gamePk: g.gamePk ?? null,
         home: g.teams?.home?.team?.name || '',
         away: g.teams?.away?.team?.name || '',
         start,
@@ -955,6 +1039,12 @@ async function startMlbDriftGuard(getPendingEntries) {
           continue;
         }
 
+        // PICK WHEN BOTH LINEUPS POST (founder GO, Sep 3 2026): most clubs
+        // post two to four hours out; a fixed T-90 waited on the last of
+        // them and took the price after the crowd had reacted. From T-240,
+        // once the official boxscore carries nine batters a side, the
+        // game's first tier fires now; the T-90 ladder stays as the fallback.
+        await fireOnPostedLineups(livePending, entry, match, now);
         const deltaMs = match.start.getTime() - entry.startTime.getTime();
         if (isScheduleEntryHeld(entry)) {
           const persisted = await persistOfficialMlbStatusTransition(
@@ -1179,7 +1269,9 @@ async function executeDecisionLaneSchedule(schedule, {
       await sleepUntilWallClock(triggerTime);
     }
 
-    // A drift correction may have re-ordered the queue while we slept.
+    // A drift correction (or a lineup-post fire) may have re-ordered the
+    // queue while we slept.
+    queueWake = false;
     batch = nextTriggerBatch(pendingEntries, {
       now: Date.now(),
       crossLaneLookaheadMs: CROSS_LANE_TRIGGER_LOOKAHEAD_MS,
@@ -1616,6 +1708,9 @@ function instantForETDate(etDateStr, hourET, minuteET) {
 // resumes the process — naturally self-recovering after sleep.
 async function sleepUntilWallClock(targetDate) {
   while (Date.now() < targetDate.getTime()) {
+    // A lineup-post fire (Sep 3 2026) pulls a trigger earlier while the loop
+    // sleeps toward a later one; the loop re-plans the batch on every wake.
+    if (queueWake) return;
     const remaining = targetDate.getTime() - Date.now();
     await new Promise(r => setTimeout(r, Math.min(60_000, remaining)));
   }
@@ -1642,6 +1737,7 @@ async function sleepUntilPlanTime() {
 // ═══════════════════════════════════════════════════════════════════════════
 async function main() {
   startHeartbeat();
+  startClosingCapture();
   const args = process.argv.slice(2);
 
   if (args.includes('--now')) {

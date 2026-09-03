@@ -1786,6 +1786,18 @@ async function main(targetDate = getTargetDate()) {
     console.warn(`  ⚠️ Rationale lanes failed (non-fatal): ${e.message}`);
   }
 
+  // THE CLOSING-LINE READ (Sep 3 2026): each pick's price against its own
+  // ticket's price at first pitch and against the day's open — the ruler
+  // every desk test is read on. Never reaches Gary. Non-fatal.
+  try {
+    const { readClosingLines, printClosingLine } = await import('./run-closing-line.js');
+    const dayBefore = new Date(new Date(`${targetDate}T12:00:00Z`).getTime() - 86400000).toISOString().slice(0, 10);
+    const lineRows = await readClosingLines([dayBefore, targetDate]);
+    printClosingLine(lineRows, `${dayBefore} → ${targetDate}`);
+  } catch (e) {
+    console.warn(`  ⚠️ Closing-line read failed (non-fatal): ${e.message}`);
+  }
+
   console.log(`\n════════════════════════════════════════`);
   console.log(`SUMMARY FOR ${targetDate}`);
   console.log(`Daily:  ${daily.w}W - ${daily.l}L`);

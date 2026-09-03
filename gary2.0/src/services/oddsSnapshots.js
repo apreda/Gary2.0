@@ -41,18 +41,61 @@ function boardOf(g) {
 const BOARD_KEYS = ['moneyline_home', 'moneyline_away', 'spread_home', 'spread_home_odds', 'spread_away', 'spread_away_odds', 'line_vendor'];
 const sameBoard = (a, b) => a && b && BOARD_KEYS.every((k) => (a[k] ?? null) === (b[k] ?? null));
 
-/** Record the boards of a fetched slate. Never throws. */
+const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/**
+ * EVERY BOOK PER SNAPSHOT (founder GO, Sep 3 2026): the selected vendor's
+ * board (what Gary saw) plus one board per bookmaker the odds feed carried,
+ * so the closing-line read can compare a pick against its own book's close
+ * and the ledger can see the whole market. Bookmakers arrive in the unified
+ * shape { key, markets: [{ key: 'h2h'|'spreads', outcomes: [{ name, price, point }] }] }.
+ */
+export function boardsOfGame(g) {
+  const selected = boardOf(g);
+  const out = [];
+  const seen = new Set();
+  if (selected.moneyline_home != null || selected.moneyline_away != null || selected.spread_home_odds != null) {
+    out.push(selected);
+    if (selected.line_vendor) seen.add(selected.line_vendor);
+  }
+  const home = norm(g.home_team);
+  const away = norm(g.away_team);
+  for (const bk of Array.isArray(g.bookmakers) ? g.bookmakers : []) {
+    const vendor = bk?.key ? String(bk.key).toLowerCase() : null;
+    if (!vendor || seen.has(vendor)) continue;
+    const board = { moneyline_home: null, moneyline_away: null, spread_home: null, spread_home_odds: null, spread_away: null, spread_away_odds: null, line_vendor: vendor };
+    const sideOf = (name) => {
+      const n = norm(name);
+      if (!n) return null;
+      if (n === home || home.endsWith(n) || n.endsWith(home)) return 'home';
+      if (n === away || away.endsWith(n) || n.endsWith(away)) return 'away';
+      return null;
+    };
+    for (const m of Array.isArray(bk.markets) ? bk.markets : []) {
+      for (const o of Array.isArray(m?.outcomes) ? m.outcomes : []) {
+        const side = sideOf(o?.name);
+        if (!side) continue;
+        if (m.key === 'h2h') board[`moneyline_${side}`] = num(o.price);
+        if (m.key === 'spreads') { board[`spread_${side}`] = num(o.point); board[`spread_${side}_odds`] = num(o.price); }
+      }
+    }
+    if (board.moneyline_home == null && board.moneyline_away == null && board.spread_home_odds == null) continue;
+    seen.add(vendor);
+    out.push(board);
+  }
+  return out;
+}
+
+/** Record the boards of a fetched slate — every book, on change only. Never throws. */
 export async function recordOddsSnapshots(sport, games) {
   try {
     if (!SNAPSHOT_SPORTS.has(sport) || !Array.isArray(games) || games.length === 0) return 0;
     const rows = games
-      .map((g) => {
+      .flatMap((g) => {
         const gameId = String(g.bdl_game_id ?? g.id ?? '');
         const gameDate = etDate(g.start_time || g.commence_time);
-        if (!gameId || !gameDate) return null;
-        const board = boardOf(g);
-        if (board.moneyline_home == null && board.moneyline_away == null && board.spread_home_odds == null) return null;
-        return { sport, game_date: gameDate, game_id: gameId, home_team: String(g.home_team || ''), away_team: String(g.away_team || ''), ...board };
+        if (!gameId || !gameDate) return [];
+        return boardsOfGame(g).map((board) => ({ sport, game_date: gameDate, game_id: gameId, home_team: String(g.home_team || ''), away_team: String(g.away_team || ''), ...board }));
       })
       .filter(Boolean);
     if (!rows.length) return 0;
@@ -65,10 +108,10 @@ export async function recordOddsSnapshots(sport, games) {
       .order('seen_at', { ascending: false });
     const lastByGame = new Map();
     for (const r of latest || []) {
-      const k = `${r.game_date}|${r.game_id}`;
+      const k = `${r.game_date}|${r.game_id}|${r.line_vendor ?? ''}`;
       if (!lastByGame.has(k)) lastByGame.set(k, r);
     }
-    const changed = rows.filter((r) => !sameBoard(lastByGame.get(`${r.game_date}|${r.game_id}`), r));
+    const changed = rows.filter((r) => !sameBoard(lastByGame.get(`${r.game_date}|${r.game_id}|${r.line_vendor ?? ''}`), r));
     if (!changed.length) return 0;
     const { error } = await (await db()).from('odds_snapshots').insert(changed);
     if (error) { console.warn(`[Odds Snapshots] insert failed: ${error.message}`); return 0; }
@@ -83,7 +126,7 @@ export async function recordOddsSnapshots(sport, games) {
  * The day's first and latest boards for one game, plus how many distinct
  * boards were seen. Null when nothing is recorded. Never throws.
  */
-export async function getOddsHistory(sport, gameDate, gameId) {
+export async function getOddsHistory(sport, gameDate, gameId, vendor = null) {
   try {
     const { data, error } = await (await db())
       .from('odds_snapshots')
@@ -93,7 +136,19 @@ export async function getOddsHistory(sport, gameDate, gameId) {
       .eq('game_id', String(gameId))
       .order('seen_at', { ascending: true });
     if (error || !data?.length) return null;
-    return { first: data[0], latest: data[data.length - 1], boards: data.length };
+    // Rows are one per book since Sep 3 2026. The desk's history is one
+    // book's story: the caller's vendor when it has rows, else the book
+    // with the most rows (the selected board's book on a normal day), so
+    // "first seen" and "now" stay like for like.
+    const want = vendor ? String(vendor).toLowerCase() : null;
+    let rows = want ? data.filter((r) => (r.line_vendor ?? null) === want) : [];
+    if (!rows.length) {
+      const counts = new Map();
+      for (const r of data) counts.set(r.line_vendor ?? '', (counts.get(r.line_vendor ?? '') || 0) + 1);
+      const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
+      rows = data.filter((r) => (r.line_vendor ?? '') === top);
+    }
+    return { first: rows[0], latest: rows[rows.length - 1], boards: rows.length };
   } catch {
     return null;
   }
