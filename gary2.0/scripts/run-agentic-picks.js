@@ -423,6 +423,13 @@ async function routeToWinners({ league, game, slate, result, cleanPick, deskText
         dateEt: gameDate,
         overrides: loadBigGameOverrides(),
       });
+      // THE BIG GAME from the whole slate (founder ruling, Sep 3 2026): the
+      // daily slate publisher decided it for the day; this child only sees
+      // its own game, so it reads the row.
+      if (!bigGame) {
+        const named = await picksService.getWinnersBigGame(gameDate, league);
+        if (named && String(named.game_id) === gameId) bigGame = true;
+      }
     } catch (ruleErr) {
       console.warn(`   ⚠️ [Winners] rules skipped (${ruleErr.message})`);
     }
@@ -439,6 +446,8 @@ async function routeToWinners({ league, game, slate, result, cleanPick, deskText
           betType: cleanPick.type,
           pickIsHome: pickIsHome(cleanPick),
           rationale: cleanPick.rationale,
+          // The blind read sees the cases in the game's own order.
+          first: league === 'MLB' && mlbCaseHeadings(cleanPick.homeTeam, cleanPick.awayTeam, game).order === 'away-first' ? 'away' : 'home',
         })
       : { ok: false, error: 'no desk text on the result' };
     const decision = winnersDecision({ verdict: rev.ok ? rev.verdict : null, firstDog, bigGame });

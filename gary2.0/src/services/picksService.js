@@ -816,6 +816,37 @@ async function storeWinnersReview(row) {
   }
 }
 
+/** THE BIG GAME from the whole slate (Sep 3 2026): one row per league per day. */
+async function storeWinnersBigGame(row) {
+  try {
+    if (!row?.game_date || !row?.league || row?.game_id == null) return { success: false, error: 'missing keys' };
+    const { error } = await (supabaseAdmin || supabase)
+      .from('winners_big_games')
+      .upsert({ ...row, game_id: String(row.game_id), decided_at: new Date().toISOString() }, { onConflict: 'game_date,league' });
+    if (error) throw error;
+    return { success: true };
+  } catch (e) {
+    console.warn(`   [Winners] big game not stored (${e.message})`);
+    return { success: false, error: e.message };
+  }
+}
+
+/** The day's big game for a league, or null. Read-only; null on any failure. */
+async function getWinnersBigGame(gameDate, league) {
+  try {
+    const { data, error } = await (supabaseAdmin || supabase)
+      .from('winners_big_games')
+      .select('game_id, matchup, reason')
+      .eq('game_date', String(gameDate))
+      .eq('league', String(league || '').toUpperCase())
+      .limit(1);
+    if (error || !data?.length) return null;
+    return data[0];
+  } catch {
+    return null;
+  }
+}
+
 // Export both styles!
 const picksService = {
   storeDailyPicksInDatabase,
@@ -824,6 +855,8 @@ const picksService = {
   storeDeskSnapshot,
   getStoredPicksForDate,
   storeWinnersReview,
+  storeWinnersBigGame,
+  getWinnersBigGame,
   nflGameAlreadyHasPick,
   getNFLWeekStart,
   getNFLWeekNumber,
