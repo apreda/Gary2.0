@@ -28,7 +28,7 @@ const supabase = createClient(url, key, { auth: { autoRefreshToken: false, persi
 
 const { data, error } = await supabase
   .from('prop_lane_ledger')
-  .select('game_date,player,prop_token,bet,odds_num,confidence,league,prompt_sha,board_version,lane,result,units')
+  .select('game_date,player,prop_token,bet,odds_num,confidence,league,prompt_sha,board_version,lane,result,units,screen_rank,screen_gap,screen_p,price_p')
   .gte('game_date', SINCE)
   .eq('lane', LANE)
   .order('game_date', { ascending: true });
@@ -79,3 +79,44 @@ table('By confidence', (r) => {
   if (!Number.isFinite(c)) return 'unstated';
   return c >= 0.8 ? '0.80+' : c >= 0.7 ? '0.70-0.79' : c >= 0.6 ? '0.60-0.69' : 'under 0.60';
 });
+
+// THE SCREEN, live (Sep 3 2026). The August replay's one durable finding was
+// that the menu's first line carried the policy: rank 1 replayed 68% and
+// +12%, ranks 4-6 negative. These two tables are how that claim gets tested
+// on real money instead of on August.
+const screened = rows.filter((r) => r.screen_rank != null && Number.isFinite(Number(r.screen_rank)));
+if (screened.length) {
+  const screenTable = (title, keyOf) => {
+    const groups = new Map();
+    for (const r of screened) {
+      const k = keyOf(r);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(r);
+    }
+    console.log(`\n${title}`);
+    for (const [k, list] of [...groups.entries()].sort((a, b) => String(a[0]).localeCompare(String(b[0])))) {
+      console.log(`  ${String(k).padEnd(34)} ${String(list.length).padStart(4)}  ${fmt(tally(list))}`);
+    }
+  };
+  screenTable('By menu rank (1 = the biggest gap)', (r) => `rank ${Number(r.screen_rank)}`);
+  screenTable('By model gap over the price', (r) => {
+    const g = Number(r.screen_gap);
+    if (!Number.isFinite(g)) return 'unstamped';
+    if (g >= 0.10) return '10 points or more';
+    if (g >= 0.07) return '7 to 9 points';
+    if (g >= 0.05) return '5 to 6 points';
+    return 'under 5 points';
+  });
+  const model = tally(screened);
+  const hit = model.pct;
+  const mean = (key) => {
+    const values = screened.map((r) => Number(r[key])).filter((v) => Number.isFinite(v) && v > 0);
+    return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
+  };
+  const avgScreen = mean('screen_p');
+  const avgPrice = mean('price_p');
+  console.log('\nThe screen against itself');
+  console.log(`  model said        ${avgScreen != null ? `${(100 * avgScreen).toFixed(1)}%` : 'unstamped'}`);
+  console.log(`  the price said    ${avgPrice != null ? `${(100 * avgPrice).toFixed(1)}%` : 'unstamped'}`);
+  console.log(`  they actually hit ${hit != null ? `${hit.toFixed(1)}%` : 'nothing graded yet'} over ${model.n} bets`);
+}
