@@ -2,8 +2,8 @@
  * WINNERS SELECTION SCORE v1 (founder GO, Aug 10 2026 — "any system right
  * now is better than none; do what you think is best and I'll tweak").
  *
- * A transparent, ledger-empirical rank for choosing the Winners-page picks —
- * computed OUTSIDE Gary, from what his pick classes have actually done:
+ * Historical diagnostic stored with picks; it no longer selects Winners.
+ * Computed outside Gary from observed pick-class results:
  *
  *   score = trailing-30d win rate of the pick's shape class
  *         + 0.10 × (confidence − 0.59)
@@ -13,8 +13,9 @@
  * small tiebreak only. A class with fewer than 8 graded picks in the window
  * falls back to 0.5 — never let three results anoint or bury a class.
  *
- * Stored per pick as winners_class + winners_score; the app's slot chooser
- * can sort by it. Pure functions here; the runner owns the ledger fetch.
+ * Stored per pick as winners_class + winners_score for historical analysis.
+ * Exact-ticket review and winners_board now determine admission. This score
+ * is neither Gary's confidence nor a calibrated probability.
  */
 
 /** Pick text → shape class. Null when the text carries no readable price. */

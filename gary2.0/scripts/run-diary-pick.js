@@ -13,6 +13,7 @@
 import '../src/loadEnv.js';
 import { buildNotebook } from '../src/services/diary/notebook.js';
 import { pickSideOf, pickPointOf } from '../src/services/closingLine.js';
+import { matchingDesk, pregameEvidence } from '../src/services/diary/evidence.js';
 
 const arg = (k, d = null) => { const i = process.argv.indexOf(k); return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : d; };
 const GAME_ID = arg('--game-id');
@@ -45,20 +46,17 @@ async function main() {
   const homeTeam = s.home_team; const awayTeam = s.away_team;
   const matchup = MATCHUP || `${awayTeam} @ ${homeTeam}`;
 
-  const { data: deskRows } = await db.from('pick_desks').select('desk, pick, research_briefing').eq('game_date', DATE).eq('matchup', matchup).limit(1);
-  let desk = deskRows?.[0]?.desk || null;
-  let briefing = deskRows?.[0]?.research_briefing || null;
-  if (!desk) {
-    // Fall back to any desk for the same clubs today (the pick text on the desk row can differ).
-    const { data: alt } = await db.from('pick_desks').select('desk, matchup, research_briefing').eq('game_date', DATE);
-    const hit = (alt || []).find((r) => norm(r.matchup) === norm(matchup));
-    desk = hit?.desk || null;
-    briefing = hit?.research_briefing || null;
-  }
-  if (!desk) { console.error(`[Diary] no stored desk for ${matchup} on ${DATE} — the notebook shadow reads the same desk or nothing`); process.exit(1); }
-
-  const { data: picksRow } = await db.from('daily_picks').select('picks').eq('date', DATE);
+  const { data: picksRow, error: picksError } = await db.from('daily_picks').select('picks').eq('date', DATE);
+  if (picksError) throw picksError;
   const gary = (picksRow?.[0]?.picks || []).find((p) => String(p?.game_id) === String(GAME_ID) && String(p?.league).toUpperCase() === 'MLB') || null;
+  const sameMatchupGames = new Set((picksRow?.[0]?.picks || []).filter((p) => String(p?.league).toUpperCase() === 'MLB'
+    && norm(p.homeTeam) === norm(homeTeam) && norm(p.awayTeam) === norm(awayTeam)).map((p) => String(p.game_id))).size;
+  const { data: deskRows, error: deskError } = await db.from('pick_desks').select('desk, matchup, pick, research_briefing').eq('game_date', DATE);
+  if (deskError) throw deskError;
+  const original = gary ? matchingDesk(deskRows, { homeTeam, awayTeam, pickText: gary.pick, sameMatchupGames }) : null;
+  const desk = original?.desk || null;
+  const briefing = original?.research_briefing || null;
+  if (!desk) { console.error(`[Diary] no unambiguous original desk for ${matchup} on ${DATE} — the notebook shadow reads the same desk or nothing`); process.exit(1); }
 
   const since = new Date(new Date(`${DATE}T12:00:00Z`).getTime() - 45 * 86400000).toISOString().slice(0, 10);
   const { data: autopsies } = await db.from('pick_autopsies').select('*').eq('league', 'MLB').gte('game_date', since).lt('game_date', DATE).order('game_date', { ascending: false }).limit(400);
@@ -99,9 +97,17 @@ async function main() {
     rationale: result.rationale || null, path_home: result.path_home ?? paths.path_home, path_away: result.path_away ?? paths.path_away,
     notebook: notebook.text || null, notebook_notes: notebook.notes, gary_pick: gary?.pick || null,
     agree_with_gary: garySide && side ? garySide === side : null, model: MLB_JUNE_BRAIN_MODEL, computed_at: new Date().toISOString(),
+    pregame_evidence: pregameEvidence({
+      pickText, price, model: MLB_JUNE_BRAIN_MODEL, era: result._promptSha || null,
+      rationale: result.rationale || null, caseHome: result.path_home ?? paths.path_home, caseAway: result.path_away ?? paths.path_away,
+      desk: result._context?.scoutReport || deskWithNotebook,
+      briefing: result._context?.researchBriefing || result._researchBriefing || briefing,
+      notebook: notebook.text || null, capturedAt: new Date().toISOString(), provenance: 'diary_decision_inputs',
+    }),
   };
-  const { error } = await db.from('diary_picks').upsert(row, { onConflict: 'game_date,league,game_id' });
+  const { data: stored, error } = await db.from('diary_picks').upsert(row, { onConflict: 'game_date,league,game_id', ignoreDuplicates: true }).select('game_id');
   if (error) { console.error(`[Diary] store failed: ${error.message}`); process.exit(1); }
+  if (!stored?.length) { console.log(`[Diary] original ${matchup} decision already stored; left intact`); process.exit(0); }
   console.log(`[Diary] 📓 ${matchup}: ${pickText} · Gary ${gary?.pick || '—'} · ${row.agree_with_gary === false ? 'DIFFERENT side' : row.agree_with_gary ? 'same side' : 'side unread'} · ${Math.round((Date.now() - t0) / 1000)}s`);
   process.exit(0);
 }

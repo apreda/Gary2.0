@@ -377,9 +377,8 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null, options = {
       path_home: pick.path_home ?? null,
       // THE CASE ORDER (Sep 2 2026): which case was written last.
       case_last: pick.case_last ?? null,
-      // WINNERS rank fields (Aug 12: the whitelist trap's fourth catch —
-      // see the mapper note above). The Sep 2 reviewer's verdict lives in
-      // winners_reviews, joined by (game_date, league, game_id) — never here.
+      // Historical diagnostics only; exact-ticket admission lives in
+      // winners_board. These fields never qualify a ticket.
       winners_class: pick.winners_class ?? null,
       winners_score: pick.winners_score ?? null,
       // Which brain produced this pick — fields absent from this object never reach the DB.
@@ -763,61 +762,6 @@ async function storeDeskSnapshot({ game_date, matchup, pick, desk, research_brie
   }
 }
 
-/**
- * THE WINNERS RULES need the league's picks already stored for an ET date
- * (the first plus-money moneyline of the day is automatic). NFL picks live in
- * the weekly table, keyed by the ET date of each pick's kickoff; everything
- * else is the day's daily_picks row. Read-only; empty on any failure.
- */
-async function getStoredPicksForDate(gameDate, league) {
-  const lg = String(league || '').toUpperCase();
-  const date = String(gameDate || '').trim();
-  if (!date) return [];
-  try {
-    if (lg === 'NFL') {
-      const weekPicks = await getWeeklyNFLPicks(getNFLWeekStart(new Date(`${date}T12:00:00-04:00`)));
-      return (weekPicks || []).filter((p) => {
-        const t = p?.commence_time ? new Date(p.commence_time) : null;
-        return t && !Number.isNaN(t.getTime()) && t.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) === date;
-      });
-    }
-    const { data, error } = await (supabaseAdmin || supabase)
-      .from('daily_picks')
-      .select('picks')
-      .or(`date.eq.${date},date.like.%${date}%`)
-      .limit(5);
-    if (error || !data?.length) return [];
-    const all = [];
-    for (const row of data) {
-      const rowPicks = Array.isArray(row.picks) ? row.picks : (() => { try { return JSON.parse(row.picks || '[]'); } catch { return []; } })();
-      all.push(...rowPicks);
-    }
-    return all.filter((p) => String(p?.league || p?.sport || '').toUpperCase() === lg);
-  } catch (e) {
-    console.warn(`   [Winners] stored-picks read failed for ${lg} ${date} (${e.message}) — treating as none stored`);
-    return [];
-  }
-}
-
-/**
- * THE WINNERS REVIEW row (Sep 2 2026): one per (game_date, league, game_id) —
- * the verdict, the reason it is on or off the board, and the reviewer's
- * answers. Service write; a failed write is logged and never blocks a pick.
- */
-async function storeWinnersReview(row) {
-  try {
-    if (!row?.game_date || !row?.league || row?.game_id == null) return { success: false, error: 'missing keys' };
-    const { error } = await (supabaseAdmin || supabase)
-      .from('winners_reviews')
-      .upsert({ ...row, game_id: String(row.game_id) }, { onConflict: 'game_date,league,game_id' });
-    if (error) throw error;
-    return { success: true };
-  } catch (e) {
-    console.warn(`   [Winners] review not stored (${e.message}) — pick unaffected`);
-    return { success: false, error: e.message };
-  }
-}
-
 /** THE BIG GAME from the whole slate (Sep 3 2026): one row per league per day. */
 async function storeWinnersBigGame(row) {
   try {
@@ -855,8 +799,6 @@ const picksService = {
   storeTestPicks,
   storeWeeklyNFLPicks,
   storeDeskSnapshot,
-  getStoredPicksForDate,
-  storeWinnersReview,
   storeWinnersBigGame,
   getWinnersBigGame,
   nflGameAlreadyHasPick,

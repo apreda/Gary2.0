@@ -61,16 +61,15 @@ func winnersTeamAbbr(_ team: String?) -> String {
     return String(last.prefix(3)).uppercased()
 }
 
-/// The trust band — Gary's last-10 graded record per league, always on the
-/// board (Aug 3 2026: the core product page sold conviction without ever
-/// showing the record; wins AND losses sell it honestly). Taps to Billfold.
+/// Gary's last-10 graded game picks per league, explicitly labeled ALL PICKS.
+/// This is overall form, not Winners-only performance. Taps to Billfold.
 struct WinnersRecordBand: View {
     let records: [(league: String, w: Int, l: Int)]
     let onLedger: () -> Void
     var body: some View {
         if !records.isEmpty {
             HStack(spacing: 12) {
-                Text("LAST 10")
+                Text("ALL PICKS\nLAST 10")
                     .font(GaryFonts.accent(10)).tracking(1)
                     .foregroundStyle(GaryColors.gold)
                 ForEach(records, id: \.league) { r in
@@ -114,7 +113,10 @@ struct PremiumPicksView: View {
     /// sports still render, while this flag prevents a missing desk from being
     /// described as an honest empty/coming-soon board.
     @State private var boardDataFailed = false
-    // Per-sport shelves: each sport shows TODAY's pick if it has one, else its last graded result.
+    @State private var admittedBoardCache: [String: SupabaseAPI.WinnersBoardSnapshot] = [:]
+    @State private var loadedBoardDate: String?
+    @State private var boardLoadToken = UUID()
+    // Per-sport shelves show admissions for the selected date only.
     @State private var gameShelves: [GameShelf] = []
     @State private var propShelves: [PropShelf] = []
     /// Which Winners slot each of today's curated game picks fills (pick.id →
@@ -284,7 +286,7 @@ struct PremiumPicksView: View {
         // The room's normal system every day (founder, Jul 13): before fresh
         // picks post, TODAY shows the coming-soon placeholder cards — never
         // yesterday's board, which lives under the date menu.
-        selectedDate == nil && !todayHasFreshPicks
+        selectedDate == nil && !todayHasFreshPicks && !boardDataFailed
     }
 
     /// The board is a mixed shelf list, so college football claims the floor
@@ -491,10 +493,10 @@ struct PremiumPicksView: View {
                 Image(systemName: selectedDate == nil ? "lock.badge.clock" : "calendar.badge.exclamationmark")
                     .font(.system(size: 42)).foregroundStyle(.white.opacity(0.25))
                 Text(boardDataFailed ? "Board data unavailable. Pull to retry."
-                     : selectedDate != nil ? "No graded picks on this day."
+                     : selectedDate != nil ? "No Winners selections on this date."
                      : todaySlateCounts.isEmpty
                      ? "No games today. Yesterday's card is under the date above."
-                     : "Gary's best bets post a few hours before first pitch.")
+                     : "No Winners selections yet. Picks appear after review.")
                     .font(GaryFonts.text(14)).foregroundStyle(.white.opacity(0.62))
                     .multilineTextAlignment(.center)
             }
@@ -570,7 +572,7 @@ struct PremiumPicksView: View {
     /// picks/match; everything else shows its usual top-3 shelf).
     private func comingSoonShelf(_ league: String) -> some View {
         let games = todaySlateCounts[league.uppercased()] ?? 1
-        let count = league.uppercased() == "WC" ? min(games * 2, 12) : min(max(games, 1), 3)
+        let count = 1 // One empty-state card, never a promised number of admissions.
         return VStack(alignment: .leading, spacing: 10) {
             shelfHeader(league, status: "·  \(games) game\(games == 1 ? "" : "s") tonight")
             ScrollView(.horizontal, showsIndicators: false) {
@@ -579,7 +581,7 @@ struct PremiumPicksView: View {
                         // The ORIGINAL "TODAY'S CARD / COMING SOON" face (founder,
                         // Jul 6: he asked to add per-sport headers to this, not to
                         // replace the wording) — leagueTag is the only new thing.
-                        MembersOnlyCardFace(state: .placeholder(note: "PICKS DROP ~90 MIN BEFORE EACH GAME"),
+                        MembersOnlyCardFace(state: .placeholder(note: "SELECTIONS APPEAR AFTER REVIEW"),
                                             leagueTag: league.uppercased())
                             .frame(width: UIScreen.main.bounds.width - (GaryLayout.gutter * 2 + 12))
                     }
@@ -595,10 +597,10 @@ struct PremiumPicksView: View {
     /// Plain-language how-it-works + the door to yesterday's results.
     private var comingSoonIntro: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("TODAY'S CARD ISN'T OUT YET")
+            Text("NO WINNERS SELECTIONS YET")
                 .font(.system(size: 12.5, weight: .semibold).monospacedDigit()).tracking(1.4)
                 .foregroundStyle(GaryColors.gold)
-            Text("Gary posts his best picks about 90 minutes before each game, once lineups are in. Every pick gets graded here the next morning — wins and losses.")
+            Text("Picks enter Winners after review. The board can stay small or empty, and prop selections arrive in stages. Every published selection stays in its dated record — wins and losses.")
                 .font(GaryFonts.text(13.5))
                 .foregroundStyle(.white.opacity(0.85))
                 .lineSpacing(2)
@@ -650,7 +652,7 @@ struct PremiumPicksView: View {
     private func teasedTodayCard(for league: String) -> some View {
         // Winners is the members' room — the pre-drop state speaks the same
         // sealed-card language as the wrapper (no blur, no pick data to leak).
-        MembersOnlyCardFace(state: .coming(note: "DROPS ~90 MIN BEFORE GAME TIME"),
+        MembersOnlyCardFace(state: .coming(note: "SELECTIONS APPEAR AFTER REVIEW"),
                             leagueTag: league.uppercased())
             .frame(width: UIScreen.main.bounds.width - (GaryLayout.gutter * 2 + 12))
     }
@@ -991,7 +993,7 @@ struct PremiumPicksView: View {
     /// shelf (yesterday's LAST RESULT fallback, or a graded past day) — only
     /// TODAY's still-live board keeps filling in.
     private func shelfPadCount(_ shelf: GameShelf) -> Int {
-        guard !shelf.settled else { return 0 }
+        guard (selectedDate ?? SupabaseAPI.todayEST()) < SupabaseAPI.winnersAdmissionCutover, !shelf.settled else { return 0 }
         // A reviewed league's board is exactly its on-board picks (Sep 2
         // 2026): zero to a handful a day, never a promised six. One sealed
         // card holds the lane only while nothing has made the board yet.
@@ -1073,7 +1075,7 @@ struct PremiumPicksView: View {
                         // sparse, half-finished board without these; they say
                         // more of tonight's plays are still coming.
                         ForEach(0..<shelfPadCount(shelf), id: \.self) { _ in
-                            MembersOnlyCardFace(state: .placeholder(note: "PICKS DROP ~90 MIN BEFORE EACH GAME"),
+                            MembersOnlyCardFace(state: .placeholder(note: "SELECTIONS APPEAR AFTER REVIEW"),
                                                 leagueTag: shelf.league.uppercased())
                                 .frame(width: UIScreen.main.bounds.width - (GaryLayout.gutter * 2 + 12))
                         }
@@ -1308,10 +1310,8 @@ struct PremiumPicksView: View {
             .map { (league: $0.league, count: $0.props.count, unit: "prop", live: !$0.settled) }
     }
 
-    /// The locked-sports storefront: a contiguous tail below everything the
-    /// user paid for. No blur, no hostage cards — each locked board sells
-    /// itself with its REAL last-10 record (sometimes that means admitting
-    /// 3–7; honesty is the brand).
+    /// The locked-sports storefront uses the same explicitly labeled overall
+    /// game-pick record as the form band, not a Winners-only performance claim.
     private func storefrontTail(_ boards: [(league: String, count: Int, unit: String, live: Bool)]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HubSectionHeader(eyebrow: "More boards", sub: "Sports you haven't unlocked")
@@ -1356,7 +1356,7 @@ struct PremiumPicksView: View {
                                 Text("\(rec.w)–\(rec.l)")
                                     .font(GaryFonts.mono(15, bold: true))
                                     .foregroundStyle(rec.w >= rec.l ? GaryColors.win : GaryColors.loss)
-                                Text("LAST 10")
+                                Text("ALL PICKS · LAST 10")
                                     .font(GaryFonts.mono(9.5, bold: true)).tracking(0.8)
                                     .foregroundStyle(.white.opacity(0.6))
                             }
@@ -1371,7 +1371,7 @@ struct PremiumPicksView: View {
     }
 
     private func propPlaceholderRow(for league: String) -> some View {
-        Text("No \(league) props yet — next slate posts ~90 min before \(shelfStartNoun(for: league)).")
+        Text("No \(league) prop selections yet. Picks appear after review.")
             .font(GaryFonts.text(13))
             .foregroundStyle(.white.opacity(0.62))
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1395,17 +1395,8 @@ struct PremiumPicksView: View {
         }
     }
 
-    /// Empty shelves use the sport's real start language. Football was still
-    /// inheriting the basketball "tip" copy after its boards became first-class.
-    private func shelfStartNoun(for league: String) -> String {
-        switch league.uppercased() {
-        case "NFL", "NCAAF": return "kickoff"
-        default: return "tip"
-        }
-    }
-
     private func placeholderRow(for league: String) -> some View {
-        let msg = "No \(league) pick yet — next slate posts ~90 min before \(shelfStartNoun(for: league))."
+        let msg = "No \(league) selections yet. Picks appear after review."
         return Text(msg)
             .font(GaryFonts.text(13))
             .foregroundStyle(.white.opacity(0.62))
@@ -1424,90 +1415,9 @@ struct PremiumPicksView: View {
 
     // MARK: - Data
 
-    /// Trailing American price in the pick text ("Padres +1.5 +104" → 104,
-    /// "Guardians ML -142" → -142). nil when the text carries no price.
-    private func americanPrice(_ pick: GaryPick) -> Int? {
-        guard let text = pick.pick?.trimmingCharacters(in: .whitespaces),
-              let r = text.range(of: "[+-]\\d{2,4}$", options: .regularExpression)
-        else { return nil }
-        return Int(text[r])
-    }
-
-    /// How many plays a league's Winners card carries for the day — games and
-    /// props alike (founder, Aug 6: "we're capping that at six total picks.
-    /// Same thing goes with the prop side"). The four slots fill first; the
-    /// day's later picks accumulate behind them up to this.
+    /// Pre-cutover history keeps its original six-prop display cap. Current
+    /// Winners membership and limits are owned by the publication service.
     static let winnersCardCap = 6
-
-    /// Builds the Winners card from a league's game picks: the four slots
-    /// (anchor/dog/marquee/nightcap) fill first, then the card keeps
-    /// ACCUMULATING up to `winnersCardCap` as the day's later picks post.
-    /// Returns the curated picks in slot order plus the pick.id → slot map
-    /// that orders them. Selection is downstream-only: Gary still picks every
-    /// game exactly as before — this layer just chooses which make the card.
-    private func curateWinnersSlots(_ picks: [GaryPick],
-                                    bigGames: [TomorrowBigGame]) -> ([GaryPick], [String: WinnersSlot]) {
-        // One candidate per game — the higher-confidence side wins, so a
-        // double-stored game (both sides, the Jul 22 grading find) can never
-        // put Gary against himself on the card.
-        var byGame: [String: GaryPick] = [:]
-        for p in picks {
-            let k = "\(gpTeamKey(p.awayTeam))@\(gpTeamKey(p.homeTeam))"
-            if let cur = byGame[k], (cur.confidence ?? 0) >= (p.confidence ?? 0) { continue }
-            byGame[k] = p
-        }
-        var pool = Array(byGame.values)
-        var slots: [String: WinnersSlot] = [:]
-        var chosen: [GaryPick] = []
-        func take(_ p: GaryPick, _ s: WinnersSlot) {
-            slots[p.id] = s
-            chosen.append(p)
-            pool.removeAll { $0.id == p.id }
-        }
-        // ANCHOR — the board's strongest conviction (manual top-pick flag outranks).
-        if let a = pool.max(by: { l, r in
-            let lt = l.is_top_pick ?? false, rt = r.is_top_pick ?? false
-            if lt != rt { return rt }
-            return (l.confidence ?? 0) < (r.confidence ?? 0)
-        }) { take(a, .anchor) }
-        // DOG — Gary's best plus-money conviction; on a day he likes no dog,
-        // the best price left stands in honestly rather than manufacturing one.
-        if !pool.isEmpty {
-            let plus = pool.filter { (americanPrice($0) ?? Int.min) > 0 }
-            let d = plus.max { ($0.confidence ?? 0) < ($1.confidence ?? 0) }
-                ?? pool.max { (americanPrice($0) ?? Int.min) < (americanPrice($1) ?? Int.min) }
-            if let d { take(d, .dog) }
-        }
-        // MARQUEE — the highest-ranked big game still on the board (the
-        // pipeline already ranks big_games daily; fans watch that game anyway).
-        for g in bigGames.sorted(by: { $0.rank < $1.rank }) {
-            guard let mk = gpKey(from: g.matchup),
-                  let m = pool.first(where: { "\(gpTeamKey($0.awayTeam))@\(gpTeamKey($0.homeTeam))" == mk })
-            else { continue }
-            take(m, .marquee)
-            break
-        }
-        // NIGHTCAP — the latest start left, so the card closes the day out.
-        if let n = pool.max(by: { ($0.commence_time ?? "") < ($1.commence_time ?? "") }) {
-            take(n, .nightcap)
-        }
-        // THE CARD ACCUMULATES, IT NEVER SWAPS (founder, Aug 6: "these picks
-        // that are happening and finishing get replaced. That should not
-        // happen... they should all stay there").
-        //
-        // The four slots re-derived from the WHOLE list on every refresh, and
-        // NIGHTCAP is by definition "the latest start" — so each evening pick
-        // that posted evicted the afternoon game a user had been watching,
-        // sometimes mid-game. Ordering by start time makes membership
-        // monotonic instead: a later pick can only ever be added AFTER the
-        // ones already on the card, never in place of one. Slotted picks keep
-        // their rhythm at the front; the rest fill by first pitch to the cap.
-        for extra in pool.sorted(by: { ($0.commence_time ?? "") < ($1.commence_time ?? "") }) {
-            guard chosen.count < Self.winnersCardCap else { break }
-            chosen.append(extra)
-        }
-        return (chosen, slots)
-    }
 
     private func sortedBest(_ picks: [GaryPick]) -> [GaryPick] {
         picks.sorted { a, b in
@@ -1576,20 +1486,8 @@ struct PremiumPicksView: View {
         return key == "MLB HR" ? "MLB" : key
     }
 
-    /// Premium props: the top 5 by confidence across the sport — no per-game
-    /// cap, so a game whose props BOTH qualify forms a slip and a game with
-    /// one qualifier stands as a single card. The mix falls out of the data.
-    /// The prop card accumulates the same way the game card does (founder,
-    /// Aug 6: "Same thing goes with the prop side"), capped at
-    /// `winnersCardCap`.
-    ///
-    /// This REPLACES the straight confidence cut. A top-N-by-confidence set
-    /// re-ranks every refresh, so a late high-conviction prop evicted one a
-    /// user had been watching — the same eviction the game card had. Start
-    /// time is monotonic (props post T-90 before their game, so a later prop
-    /// can only sort behind the ones already on the card); confidence still
-    /// breaks ties inside a slot, keeping the best-first feel where it can't
-    /// cost stability. No per-game cap, as before.
+    /// Legacy history only (before the immutable admission cutover). Current
+    /// boards display every published snapshot without local selection.
     private func selectPremiumProps(_ props: [PropPick]) -> [PropPick] {
         let ordered = props.sorted { a, b in
             let at = a.commence_time ?? "", bt = b.commence_time ?? ""
@@ -1619,7 +1517,12 @@ struct PremiumPicksView: View {
     /// Browse a past day — every game + prop pick Gary made that date, all settled
     /// (flip-backs + CASHED/LOST stamps), ordered by sport. No live/slate logic.
     private func loadHistorical(_ date: String) async {
-        await MainActor.run { loading = true }
+        if date >= SupabaseAPI.winnersAdmissionCutover {
+            await loadAdmittedBoard(date, isToday: false)
+            return
+        }
+        let token = UUID()
+        await MainActor.run { boardLoadToken = token; loading = true }
         async let gamesF = fetchIsolatedGamePickSources(date: date)
         async let propsF = SupabaseAPI.fetchPropPicks(date: date)
         async let resultsF = SupabaseAPI.fetchAllGameResults(since: date)
@@ -1678,12 +1581,16 @@ struct PremiumPicksView: View {
         }
 
         await MainActor.run {
+            guard !Task.isCancelled, boardLoadToken == token, selectedDate == date else { return }
             gameResultsMap = rMap
             gameScoresMap = sMap
             matchupScoresMap = mMap
             propResultsMap = pMap
             gameShelves = gShelves
             propShelves = pShelves
+            loadedBoardDate = date
+            winnersSlotMap = [:]
+            reviewedLeagues = []
             boardDataFailed = !gameSnapshot.failures.isEmpty || propsFailed || resultsFailed || propResultsFailed
             loading = false
         }
@@ -1726,266 +1633,140 @@ struct PremiumPicksView: View {
     }
 
     private func load() async {
-        let today = SupabaseAPI.todayEST()
-        let yesterday = SupabaseAPI.yesterdayEST()
+        await loadAdmittedBoard(SupabaseAPI.todayEST(), isToday: true)
+    }
 
-        let previousGameShelves = gameShelves
-        let previousPropShelves = propShelves
-        let previousGameResults = gameResultsMap
-        let previousGameScores = gameScoresMap
-        let previousMatchupScores = matchupScoresMap
-        let previousPropResults = propResultsMap
+    /// A publication is read from its immutable snapshot for this date. Empty
+    /// succeeds as empty; only a transient transport failure can use this date's
+    /// last good snapshot. No raw picks, reviewer fallback, or prior-day shelves.
+    private func loadAdmittedBoard(_ date: String, isToday: Bool) async {
+        let token = UUID()
+        await MainActor.run {
+            boardLoadToken = token
+            loading = loadedBoardDate != date || !hasContent
+        }
+        let retainingThisDate = loadedBoardDate == date
+        let previousGameResults = retainingThisDate ? gameResultsMap : [:]
+        let previousGameScores = retainingThisDate ? gameScoresMap : [:]
+        let previousMatchupScores = retainingThisDate ? matchupScoresMap : [:]
+        let previousPropResults = retainingThisDate ? propResultsMap : [:]
 
-        async let todayGameF = fetchIsolatedGamePickSources(date: today)
-        async let yGameF = fetchIsolatedGamePickSources(date: yesterday)
-        async let resultsF = SupabaseAPI.fetchAllGameResults(since: yesterday)
-        async let todayPropsF = SupabaseAPI.fetchPropPicks(date: today)
-        async let slateF = SupabaseAPI.fetchDailySlate(date: today)
-        // Pipeline-ranked big games (marquee slot) for both shelf days — the
-        // board row for a date is written the prior morning, so both exist.
-        async let boardTodayF = SupabaseAPI.fetchTomorrowBoard(date: today)
-        async let boardYF = SupabaseAPI.fetchTomorrowBoard(date: yesterday)
-        // THE WINNERS BOARD (founder GO, Sep 2 2026): the reviewer's rows —
-        // which of the day's picks are on the board and why. Never throws.
-        async let reviewsTodayF = SupabaseAPI.fetchWinnersReviews(date: today)
-        async let reviewsYF = SupabaseAPI.fetchWinnersReviews(date: yesterday)
-        // Storefront records: a wider graded window, trimmed to last 10 per sport.
         let recordWindowStart: String = {
-            var cal = Calendar(identifier: .gregorian)
-            if let tz = TimeZone(identifier: "America/New_York") { cal.timeZone = tz }
-            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = cal.timeZone
-            return f.string(from: cal.date(byAdding: .day, value: -12, to: Date()) ?? Date())
+            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+            f.timeZone = TimeZone(identifier: "America/New_York")
+            var cal = Calendar(identifier: .gregorian); cal.timeZone = f.timeZone
+            let anchor = f.date(from: date) ?? Date()
+            return f.string(from: cal.date(byAdding: .day, value: -12, to: anchor) ?? anchor)
         }()
-        async let recordResultsF = SupabaseAPI.fetchAllGameResults(since: recordWindowStart)
+        async let admittedF = SupabaseAPI.fetchWinnersBoard(date: date)
+        async let resultsF = SupabaseAPI.fetchAllGameResults(since: recordWindowStart)
+        async let propResultsF = SupabaseAPI.fetchRecentPropResults(limit: 1000)
+        async let slateF = SupabaseAPI.fetchDailySlate(date: date)
+        async let entitlementsF = SupabaseAPI.fetchEntitlements()
 
-        let todaySnapshot = await todayGameF
-        let yesterdaySnapshot = await yGameF
-        let todayGame = mergeGamePickSnapshot(
-            todaySnapshot,
-            retaining: previousGameShelves.filter { !$0.settled }.flatMap(\.picks)
-        )
-        let yGame = mergeGamePickSnapshot(
-            yesterdaySnapshot,
-            retaining: previousGameShelves.filter(\.settled).flatMap(\.picks)
-        )
+        var board = SupabaseAPI.WinnersBoardSnapshot()
+        var admissionFailed = false
+        do {
+            let fresh = try await admittedF
+            board = await MainActor.run {
+                // Publications never disappear or change price after admission.
+                let retained = SupabaseAPI.retainWinnersPublications(previous: admittedBoardCache[date], incoming: fresh)
+                admittedBoardCache[date] = retained
+                return retained
+            }
+        } catch {
+            admissionFailed = true
+            if SupabaseAPI.isTransientExternalFailure(error) {
+                board = await MainActor.run { admittedBoardCache[date] ?? SupabaseAPI.WinnersBoardSnapshot() }
+            }
+        }
         var results: [GameResult] = []
         var resultsFailed = false
-        var resultsTransientFailure = false
+        var retainGameResults = false
         do { results = try await resultsF } catch {
             resultsFailed = true
-            resultsTransientFailure = SupabaseAPI.isTransientExternalFailure(error)
+            retainGameResults = SupabaseAPI.isTransientExternalFailure(error)
         }
-        var todayProps: [PropPick] = []
-        var todayPropsFailed = false
-        do { todayProps = try await todayPropsF } catch {
-            todayPropsFailed = true
-            todayProps = SupabaseAPI.isTransientExternalFailure(error)
-                ? previousPropShelves.filter { !$0.settled }.flatMap(\.props)
-                : []
-        }
-        // Leagues with a GAME on today's slate = in-season. Off-season sports
-        // (NBA/NHL once their season ends) have no game today, so we skip their
-        // empty placeholder lane instead of showing a misleading "next slate
-        // posts ~90 min before tip" message for a sport that isn't playing.
-        let slateRows = await slateF
-        let slateLeagues = Set(slateRows.compactMap { $0.league?.uppercased() })
-        let slateCounts = Dictionary(grouping: slateRows) { ($0.league ?? "").uppercased() }
-            .mapValues(\.count)
-
-        // Yesterday's result map for settled (last-result) shelves.
-        var rMap: [String: String] = resultsTransientFailure ? previousGameResults : [:]
-        var sMap: [String: String] = resultsTransientFailure ? previousGameScores : [:]
-        var mMap: [String: String] = resultsTransientFailure ? previousMatchupScores : [:]
-        for r in results.filter({ $0.game_date == yesterday }) {
-            guard let k = gpKey(from: r.matchup), let outcome = r.result else { continue }
-            let key = garyGameResultKey(matchupKey: k, pickText: r.pick_text)
-            rMap[key] = outcome.lowercased()
-            if let s = r.final_score, !s.trimmingCharacters(in: .whitespaces).isEmpty {
-                sMap[key] = s
-                mMap[k] = s   // matchup-only: props borrow their game's final
-            }
-        }
-
-        // All-Star specials are FREE board content (the week's whole funnel
-        // points at the Picks tab) — they never enter the Winners room. Also
-        // fixes the shelf tripling one special: shelves assume one game pick
-        // per matchup, and the board carries five on one event.
-        let todayByLeague = Dictionary(grouping: todayGame.filter { ($0.type ?? "") != "special" }, by: { leagueKey($0) })
-        let yByLeague = Dictionary(grouping: yGame.filter { ($0.type ?? "") != "special" }, by: { leagueKey($0) })
-
-        // Board order (user call, Jun 11): lead with what's playing tonight.
-        // A league with picks TODAY outranks one without; among tonight's
-        // slates the World Cup / NBA / NHL bump the everyday MLB slate down,
-        // and the rest hold canonical order. Props-only categories (MLB HR,
-        // NFL TDs) are never game shelves.
-        func boardRank(_ lg: String) -> Int {
-            switch lg {
-            case "WC":  return 0
-            case "NBA": return 1
-            case "NHL": return 2
-            case "MLB": return 3
-            default:    return 4 + (canonicalSports.firstIndex(of: lg) ?? canonicalSports.count)
-            }
-        }
-        var order: [String] = []
-        for lg in (canonicalSports + Array(todayByLeague.keys) + Array(yByLeague.keys))
-        where !order.contains(lg) && !Sport.from(league: lg).isPropsOnly {
-            order.append(lg)
-        }
-        order.sort { a, b in
-            let aToday = todayByLeague[a]?.isEmpty == false
-            let bToday = todayByLeague[b]?.isEmpty == false
-            if aToday != bToday { return aToday }      // tonight's slates lead
-            let ra = boardRank(a), rb = boardRank(b)
-            return ra != rb ? ra < rb : a < b
-        }
-
-        let bigGamesToday = (await boardTodayF)?.big_games ?? []
-        let bigGamesY = (await boardYF)?.big_games ?? []
-        let reviewsToday = await reviewsTodayF
-        let reviewsY = await reviewsYF
-        let reviewedToday = Set(reviewsToday.compactMap { $0.league?.uppercased() })
-
-        var gShelves: [GameShelf] = []
-        var slotMap: [String: WinnersSlot] = [:]
-        // THE WINNERS BOARD (founder GO, Sep 2 2026): a league with reviewer
-        // rows for the date shows exactly its on-board picks — the day's
-        // first dog, the big game, and every STRONG review — in first-pitch
-        // order, no cap, accumulating through the day. Slot curation (the
-        // Jul 23 day-of-action card) stays only for leagues and dates with no
-        // rows, i.e. before the reviewer shipped.
-        func boardPicks(_ picks: [GaryPick], reviews: [SupabaseAPI.WinnersReviewRow], league: String) -> [GaryPick]? {
-            let rows = reviews.filter { ($0.league ?? "").uppercased() == league.uppercased() }
-            guard !rows.isEmpty else { return nil }
-            let onBoard = Set(rows.filter { $0.on_board == true }.compactMap { $0.game_id })
-            return picks
-                .filter { p in
-                    guard let gid = p.game_id else { return false }
-                    return onBoard.contains(String(gid))
-                }
-                .sorted { ($0.commence_time ?? "") < ($1.commence_time ?? "") }
-        }
-        func curated(_ picks: [GaryPick], bigGames: [TomorrowBigGame]) -> [GaryPick] {
-            let (chosen, slots) = curateWinnersSlots(picks, bigGames: bigGames)
-            slotMap.merge(slots) { cur, _ in cur }
-            return chosen
-        }
-        for lg in order {
-            let shelfCap = lg == "WC" ? 12 : Self.winnersCardCap
-            if let tp = todayByLeague[lg], !tp.isEmpty {
-                let picks = lg == "WC" ? Array(sortedWC(tp).prefix(shelfCap))
-                                       : (boardPicks(tp, reviews: reviewsToday, league: lg) ?? curated(tp, bigGames: bigGamesToday))
-                gShelves.append(GameShelf(league: lg, picks: picks, settled: false))
-            } else if let yp = yByLeague[lg], !yp.isEmpty {
-                // Feeds the coming-soon lane list pre-picks; the settled cards
-                // themselves only render once fresh picks exist elsewhere
-                // (isTodayComingSoon intercepts first) or on a picked date.
-                // Yesterday reads the same board rows, so the graded card is
-                // the card people saw.
-                let picks = lg == "WC" ? Array(sortedWC(yp).prefix(shelfCap))
-                                       : (boardPicks(yp, reviews: reviewsY, league: lg) ?? curated(yp, bigGames: bigGamesY))
-                gShelves.append(GameShelf(league: lg, picks: picks, settled: true))
-            } else if slateLeagues.contains(lg) {
-                // In-season (a game on today's slate) but picks haven't posted —
-                // hold the lane with a placeholder. Off-season sports (no game
-                // today) are skipped entirely, not shown as an empty "coming" lane.
-                gShelves.append(GameShelf(league: lg, picks: [], settled: false))
-            }
-        }
-
-        // Bump empty game shelves BELOW the sports that actually have picks, so an
-        // empty lane (e.g. NBA during an outage) never sits between populated ones.
-        // Stable partition: populated shelves keep their ranked order; empties trail.
-        gShelves = gShelves.filter { !$0.picks.isEmpty } + gShelves.filter { $0.picks.isEmpty }
-
-        // Premium props from today's slate: best prop per game, capped at 4 per
-        // sport. A league with no props yet falls back to YESTERDAY's props as
-        // LAST RESULT — graded stamps on, flips intact (mirrors the game shelves).
-        // PERF (Jul 13): fetch the pair concurrently — they were serial.
-        async let yPropsF = SupabaseAPI.fetchPropPicks(date: yesterday)
-        async let recentPropResultsF = SupabaseAPI.fetchRecentPropResults(limit: 100)
-        var yProps: [PropPick] = []
-        var yesterdayPropsFailed = false
-        do { yProps = try await yPropsF } catch {
-            yesterdayPropsFailed = true
-            yProps = SupabaseAPI.isTransientExternalFailure(error)
-                ? previousPropShelves.filter(\.settled).flatMap(\.props)
-                : []
-        }
-        var recentPropResults: [PropResult] = []
+        var propResults: [PropResult] = []
         var propResultsFailed = false
-        var propResultsTransientFailure = false
-        do { recentPropResults = try await recentPropResultsF } catch {
+        var retainPropResults = false
+        do { propResults = try await propResultsF } catch {
             propResultsFailed = true
-            propResultsTransientFailure = SupabaseAPI.isTransientExternalFailure(error)
+            retainPropResults = SupabaseAPI.isTransientExternalFailure(error)
         }
-        // Exact prop identity and NOT yesterday-only: on a day-game slate props
-        // grade mid-afternoon. Date + player + type + line + matchup keeps a
-        // same-player alternate market from borrowing another prop's outcome.
-        var pMap: [String: String] = propResultsTransientFailure ? previousPropResults : [:]
-        for r in recentPropResults {
-            guard let key = winnerPropResultKey(for: r),
-                  let result = r.result, !result.isEmpty else { continue }
-            pMap[key] = result.lowercased()
-        }
-        let propsByLeague = Dictionary(grouping: todayProps, by: { propLeagueKey($0) })
-        let yPropsByLeague = Dictionary(grouping: yProps, by: { propLeagueKey($0) })
-        var pShelves: [PropShelf] = []
-        for lg in order {
-            if let ps = propsByLeague[lg], !ps.isEmpty {
-                pShelves.append(PropShelf(league: lg, props: selectPremiumProps(ps), settled: false))
-            } else if let yps = yPropsByLeague[lg], !yps.isEmpty {
-                pShelves.append(PropShelf(league: lg, props: selectPremiumProps(yps), settled: true))
-            } else if propSports.contains(lg) && slateLeagues.contains(lg) {
-                // In-season prop sport (a game on today's slate) holds its lane
-                // with a placeholder until props post. Off-season → skipped.
-                pShelves.append(PropShelf(league: lg, props: [], settled: false))
+        let slateRows = await slateF
+        let entitlements = await entitlementsF
+
+        var rMap: [String: String] = retainGameResults ? previousGameResults : [:]
+        var sMap: [String: String] = retainGameResults ? previousGameScores : [:]
+        var mMap: [String: String] = retainGameResults ? previousMatchupScores : [:]
+        for result in results where result.game_date == date {
+            guard let matchup = gpKey(from: result.matchup), let outcome = result.result else { continue }
+            let key = garyGameResultKey(matchupKey: matchup, pickText: result.pick_text)
+            rMap[key] = outcome.lowercased()
+            if let score = result.final_score, !score.trimmingCharacters(in: .whitespaces).isEmpty {
+                sMap[key] = score
+                mMap[matchup] = score
             }
         }
-
-        // Same rule for prop shelves: empty prop lanes trail the populated ones.
-        pShelves = pShelves.filter { !$0.props.isEmpty } + pShelves.filter { $0.props.isEmpty }
-
-        // Last-10 graded record per sport (newest first) for the storefront tail.
-        var sRec: [String: (w: Int, l: Int)] = [:]
-        let recordRows = ((try? await recordResultsF) ?? []).countable
-        let byLeague = Dictionary(grouping: recordRows.filter { $0.result == "won" || $0.result == "lost" },
-                                  by: { $0.effectiveLeague ?? "?" })
-        for (lg, rows) in byLeague {
-            let last10 = rows.sorted { ($0.game_date ?? "") > ($1.game_date ?? "") }.prefix(10)
-            sRec[lg] = (last10.filter { $0.result == "won" }.count,
-                        last10.filter { $0.result == "lost" }.count)
+        var pMap: [String: String] = retainPropResults ? previousPropResults : [:]
+        for result in propResults where result.game_date == date {
+            guard let key = winnerPropResultKey(for: result), let outcome = result.result, !outcome.isEmpty else { continue }
+            pMap[key] = outcome.lowercased()
         }
 
-        let entitlements = await SupabaseAPI.fetchEntitlements()
+        let byLeague = Dictionary(grouping: board.games, by: { leagueKey($0) })
+        let propsByLeague = Dictionary(grouping: board.props, by: { propLeagueKey($0) })
+        let slateCounts = isToday ? Dictionary(grouping: slateRows) { ($0.league ?? "").uppercased() }.mapValues(\.count) : [:]
+        var order: [String] = []
+        for league in canonicalSports + Array(byLeague.keys) + Array(propsByLeague.keys) + Array(slateCounts.keys)
+        where !order.contains(league) && !Sport.from(league: league).isPropsOnly {
+            order.append(league)
+        }
+        order.sort { sportRank($0) == sportRank($1) ? $0 < $1 : sportRank($0) < sportRank($1) }
+        let gShelves = order.compactMap { league -> GameShelf? in
+            let picks = byLeague[league] ?? []
+            guard !picks.isEmpty || (isToday && slateCounts[league] != nil) else { return nil }
+            return GameShelf(league: league, picks: picks, settled: !isToday)
+        }
+        let pShelves = order.compactMap { league -> PropShelf? in
+            let picks = propsByLeague[league] ?? []
+            guard !picks.isEmpty || (isToday && propSports.contains(league) && slateCounts[league] != nil) else { return nil }
+            return PropShelf(league: league, props: picks, settled: !isToday)
+        }
 
-        // Never commit a cancelled preload as an empty Winners board. The
-        // existing board stays intact, and the selectedTab hook above retries
-        // as soon as Winners becomes the active destination.
+        // This tail is explicitly labeled ALL PICKS, never Winners performance.
+        var records: [String: (w: Int, l: Int)] = [:]
+        let recordRows = results.countable.filter {
+            ($0.game_date ?? "") <= date && ($0.result == "won" || $0.result == "lost")
+        }
+        for (league, rows) in Dictionary(grouping: recordRows, by: { $0.effectiveLeague ?? "?" }) {
+            let last10 = rows.sorted { ($0.game_date ?? "") > ($1.game_date ?? "") }.prefix(10)
+            records[league] = (last10.filter { $0.result == "won" }.count, last10.filter { $0.result == "lost" }.count)
+        }
+
         guard !Task.isCancelled else { return }
-
         await MainActor.run {
+            // A slower request for another selected date cannot overwrite this one.
+            guard boardLoadToken == token, (selectedDate ?? SupabaseAPI.todayEST()) == date else { return }
             gameResultsMap = rMap
             gameScoresMap = sMap
             matchupScoresMap = mMap
             propResultsMap = pMap
-            gameShelves = gShelves
-            propShelves = pShelves
-            winnersSlotMap = slotMap
-            reviewedLeagues = reviewedToday
+            gameShelves = gShelves.filter { !$0.picks.isEmpty } + gShelves.filter { $0.picks.isEmpty }
+            propShelves = pShelves.filter { !$0.props.isEmpty } + pShelves.filter { $0.props.isEmpty }
+            winnersSlotMap = [:]
+            reviewedLeagues = Set(order)
             todaySlateCounts = slateCounts
-            todaySlateRows = slateRows
-            sportRecords = sRec
+            todaySlateRows = isToday ? slateRows : []
+            sportRecords = records
             entitledSports = entitlements
-            boardDataFailed = !todaySnapshot.failures.isEmpty
-                || !yesterdaySnapshot.failures.isEmpty
-                || todayPropsFailed
-                || yesterdayPropsFailed
-                || resultsFailed
-                || propResultsFailed
+            loadedBoardDate = date
+            boardDataFailed = admissionFailed || resultsFailed || propResultsFailed
             loading = false
         }
     }
+
 }
 
 /// SFSafariViewController wrapper — the in-app checkout browser. The Safari

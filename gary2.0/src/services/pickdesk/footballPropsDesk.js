@@ -29,6 +29,7 @@ import {
   calculateNflHitRate,
 } from '../agentic/nflPropsAgenticContext.js';
 import { buildNcaafPropsAgenticContext } from '../agentic/ncaafPropsAgenticContext.js';
+import { NCAAF_PROPS_EVIDENCE_SHA } from '../agentic/ncaafPropsEvidenceSha.js';
 import { buildFootballPropSheets } from './footballPropSheets.js';
 import { buildScoutReport } from '../agentic/scoutReport/scoutReportBuilder.js';
 import { normalizePropBetDirection } from '../agentic/propsSharedUtils.js';
@@ -72,6 +73,10 @@ export const FOOTBALL_PROPS_PROMPT_SHA = createHash('sha256')
   .update(buildGaryPropsSystemPrompt('{date}') + FOOTBALL_PROPS_ASK)
   .digest('hex')
   .slice(0, 12);
+
+export const NCAAF_FOOTBALL_PROPS_PROMPT_SHA = createHash('sha256')
+  .update(FOOTBALL_PROPS_PROMPT_SHA + NCAAF_PROPS_EVIDENCE_SHA)
+  .digest('hex').slice(0, 12);
 
 // ── GARY'S GAME CALL (published pick as DATA, same as the MLB desk) ─────────
 // NFL game picks live in weekly_nfl_picks keyed (week_start, season); NCAAF
@@ -279,6 +284,8 @@ export async function analyzeFootballPropsDesk(game, playerProps, options = {}) 
 
   const userMessage = `## THE DESK — ${matchup}\n\n${scoutText}${playersShelf}${gameCall}\n\n${board.text}${sheetsBlock}\n\n${FOOTBALL_PROPS_ASK}`;
 
+  const winnersEvidence = { deskText: `${scoutText}${playersShelf}${gameCall}\n${board.text}${sheetsBlock}`, observedAt: new Date().toISOString(), homeTeam, awayTeam };
+
   const { parsed, audits, usage, explicitPass, respondingModel } = await runPropsDeskBrain({
     systemPrompt: buildGaryPropsSystemPrompt(todayLong()),
     userMessage,
@@ -295,7 +302,7 @@ export async function analyzeFootballPropsDesk(game, playerProps, options = {}) 
     odds: p.odds != null ? String(p.odds) : null,
     confidence: p.confidence_score ?? null,
     rationale: p.rationale,
-    prompt_sha: FOOTBALL_PROPS_PROMPT_SHA,
+    prompt_sha: league === 'NCAAF' ? NCAAF_FOOTBALL_PROPS_PROMPT_SHA : FOOTBALL_PROPS_PROMPT_SHA,
     model: respondingModel,
     // TD SPLIT — the football fun lane, same definition as MLB's HR lane:
     // anytime TD is drama, never the core props record.
@@ -309,6 +316,7 @@ export async function analyzeFootballPropsDesk(game, playerProps, options = {}) 
     explicitPass,
     validatedPlayers,
     boardProps,
+    winnersEvidence,
     _usage: usage,
   };
 }

@@ -548,8 +548,8 @@ struct HomeMarqueeTracker: View {
         let result: (String, Color)?   // settled stamp, nil until final
         /// Exact daily-slate mirror while the live poll catches up.
         var slateInterruptionLabel: String? = nil
-        /// Hero-eligible but not a ribbon chip (Aug 4: every slate game can
-        /// hold the countdown; the rail stays big-games-only).
+        /// Every slate game can hold the countdown; marquee games and Gary's
+        /// published underdogs also remain available in the ribbon.
         var railWorthy: Bool = true
         var isLive: Bool { live?.isLive == true }
         var interruptionLabel: String? {
@@ -594,7 +594,7 @@ struct HomeMarqueeTracker: View {
         }
     }
     private func upNext(_ e: Entry) -> Bool { !e.isLive && !e.started && !e.isFinal }
-    /// The rail: every other big game, docked beside the hero (founder:
+    /// The rail: other marquee games and posted underdogs beside the hero (founder:
     /// no drop-down — the space was already there).
     private var rail: [Entry] {
         entries.filter { $0.id != hero?.id && $0.railWorthy }.sorted { a, b in
@@ -1184,10 +1184,12 @@ struct HeadlineFlipCard: View {
 
     /// The box's stat line: baseball counts homers, football counts
     /// touchdowns (founder, Sep 4 2026 — the football card is the MLB card
-    /// "to a tee except HR are TD"). nil when the night's box carried neither.
+    /// "to a tee except HR are TD"; later that day: the label is the short
+    /// form, "HRs" and "TDs", the way the box's team codes are short). nil
+    /// when the night's box carried neither.
     private var boxStatLine: (label: String, total: Int)? {
-        if let a = story.awayTD, let h = story.homeTD { return ("TOUCHDOWNS", a + h) }
-        if let a = story.awayHR, let h = story.homeHR { return ("HOMERS", a + h) }
+        if let a = story.awayTD, let h = story.homeTD { return ("TDs", a + h) }
+        if let a = story.awayHR, let h = story.homeHR { return ("HRs", a + h) }
         return nil
     }
 

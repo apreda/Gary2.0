@@ -4,11 +4,11 @@
  * The market board comes from The Odds API, but no player reaches Gary until
  * Ball Don't Lie proves all three facts below:
  *   1. the player is on one (and only one) of the two current team rosters;
- *   2. the player has a BDL player-season stat row;
+ *   2. the player has a dated BDL player-game stat sample;
  *   3. that row contains the field needed for the offered prop.
  *
- * Current-season stats win. At the opening of a new season, the same player's
- * prior-season BDL row may be used, clearly labeled as prior-season evidence.
+ * Current-season stats win. The same current-roster player's prior-season
+ * player-game rows may be used, labeled with their actual year and school.
  * Lines and prices are never derived from stats.
  */
 
@@ -21,6 +21,7 @@ import {
   safeApiCallArray,
 } from './sharedUtils.js';
 import { footballSeasonForDate } from './scoutReport/sports/footballSeason.js';
+import { cleanNcaafPlayerRows, aggregateNcaafPlayerRows, formatNcaafPlayerEvidence } from './scoutReport/sports/ncaafPlayerEvidence.js';
 import {
   hasNcaafPropStatEvidence,
   ncaafStatPlayerId,
@@ -202,10 +203,10 @@ function present(stats, field) {
   return value === null || value === undefined || value === '' ? null : Number(value);
 }
 
-function formatPlayerStats(candidates) {
+function formatPlayerStats(candidates, season) {
   const lines = [
-    'BDL-VERIFIED NCAAF PLAYER EVIDENCE',
-    'Values below are labeled SEASON TOTALS, not per-game averages. No unavailable split is inferred.',
+    'NCAAF PLAYER EVIDENCE — active roster + dated BDL player_stats',
+    'Values below are sums of the dated game rows in each stated sample, not per-game averages or a guarantee of a complete season. Prior school and season remain labeled. Missing fields stay unavailable.',
   ];
   for (const candidate of candidates) {
     const stats = candidate.stats || {};
@@ -225,7 +226,7 @@ function formatPlayerStats(candidates) {
       const value = present(stats, field);
       return Number.isFinite(value) ? `${value} ${label}` : null;
     }).filter(Boolean);
-    lines.push(`- ${candidate.player} (${candidate.team}) — BDL ${candidate.statsSeason} season totals: ${parts.join(', ')}`);
+    lines.push(`- ${candidate.player} (${candidate.team}) — BDL game-row totals: ${parts.join(', ')}${formatNcaafPlayerEvidence(stats.evidence, season)}`);
   }
   return lines.join('\n');
 }
@@ -264,16 +265,24 @@ export async function buildNcaafPropsAgenticContext(game, playerProps, options =
     .flatMap((prop) => (rosterIndex.get(normalizePlayerName(prop.player)) || []).map((player) => player.id)))];
   const playerIds = marketPlayerIds.length ? marketPlayerIds : rosterPlayerIds;
 
-  const [currentStats, previousStats] = await Promise.all([
-    safeApiCallArray(
-      () => ballDontLieService.getNcaafPlayerSeasonStats({ playerIds, season }, options.nocache ? 0 : 10),
-      `NCAAF Props: ${season} player stats`,
-    ),
-    safeApiCallArray(
-      () => ballDontLieService.getNcaafPlayerSeasonStats({ playerIds, season: season - 1 }, options.nocache ? 0 : 30),
-      `NCAAF Props: ${season - 1} player stats`,
-    ),
-  ]);
+  const asOf = new Date(Math.min(Date.now(), kickoff.getTime()));
+  const fetchSample = async (sampleSeason) => {
+    const rows = [];
+    for (let offset = 0; offset < playerIds.length; offset += 100) {
+      rows.push(...await safeApiCallArray(
+        () => ballDontLieService.getNcaafPlayerGameStats({ playerIds: playerIds.slice(offset, offset + 100), season: sampleSeason }, options.nocache ? 0 : (sampleSeason === season ? 10 : 360)),
+        `NCAAF Props: ${sampleSeason} dated player games`,
+      ));
+    }
+    const clean = cleanNcaafPlayerRows(rows, { season: sampleSeason, playerIds, asOf });
+    return {
+      stats: [...aggregateNcaafPlayerRows(clean.rows, sampleSeason)].map(([id, line]) => ({ ...line, player: { id } })),
+      diagnostics: clean.diagnostics,
+    };
+  };
+  const [current, previous] = await Promise.all([fetchSample(season), fetchSample(season - 1)]);
+  const currentStats = current.stats;
+  const previousStats = previous.stats;
 
   const { accepted, rejected } = validateNcaafPropBoard({
     props: playerProps,
@@ -291,7 +300,7 @@ export async function buildNcaafPropsAgenticContext(game, playerProps, options =
   }
 
   const candidates = candidateRows(accepted);
-  const playerStats = formatPlayerStats(candidates);
+  const playerStats = formatPlayerStats(candidates, season);
   const marketSnapshot = buildMarketSnapshot(
     game.bookmakers || [],
     home.full_name || game.home_team,
@@ -310,7 +319,7 @@ export async function buildNcaafPropsAgenticContext(game, playerProps, options =
       kickoff: formatGameTimeEST(game.commence_time),
       odds: marketSnapshot,
       marketSource: 'The Odds API (current event markets)',
-      statsSource: 'Ball Don\'t Lie (verified roster + season player stats)',
+      statsSource: 'Ball Don\'t Lie (active roster + dated player-game rows)',
     },
     tokenData: {
       propCandidates: candidates,
@@ -328,7 +337,7 @@ export async function buildNcaafPropsAgenticContext(game, playerProps, options =
       recentForm: {
         targetTrend: null,
         usageTrend: null,
-        formTrend: `BDL ${candidate.statsSeason} season totals (not a fabricated per-game rate)`,
+        formTrend: `BDL summed dated game rows${formatNcaafPlayerEvidence(candidate.stats.evidence, season)}`,
       },
     })),
     playerStats,
@@ -337,6 +346,8 @@ export async function buildNcaafPropsAgenticContext(game, playerProps, options =
     narrativeContext: null,
     meta: {
       season,
+      evidenceAsOf: asOf.toISOString(),
+      evidenceChecks: { current: current.diagnostics, previous: previous.diagnostics },
       gameTime: game.commence_time,
       marketRows: playerProps.length,
       validatedMarketRows: accepted.length,

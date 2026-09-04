@@ -19,6 +19,7 @@
 import { createHash } from 'crypto';
 import { ncaafPropOddsService, NcaafPropMarketError } from '../ncaafPropOddsService.js';
 import { buildNcaafPropsAgenticContext } from '../agentic/ncaafPropsAgenticContext.js';
+import { NCAAF_PROPS_EVIDENCE_SHA } from '../agentic/ncaafPropsEvidenceSha.js';
 import { buildGaryPropsSystemPrompt, runPropsDeskBrain, todayLong } from './propsBrain.js';
 import { isFootballFunLane } from './footballPropsDesk.js';
 import { propOddsService } from '../propOddsService.js';
@@ -64,10 +65,9 @@ Output:
 bet is "over" or "under" — "over" for one-priced lines like anytime_td.
 confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.`;
 
-// Prompt-era fingerprint — template hash, date placeholder; moves only when
-// the contract wording moves. Same scheme as propsBrain.PROPS_PROMPT_SHA.
+// NCAAF's era includes the dated-game evidence surface as well as its prompt.
 export const NCAAF_PIGGYBACK_PROMPT_SHA = createHash('sha256')
-  .update(buildGaryPropsSystemPrompt('{date}') + THE_PIGGYBACK_ASK)
+  .update(buildGaryPropsSystemPrompt('{date}') + THE_PIGGYBACK_ASK + NCAAF_PROPS_EVIDENCE_SHA)
   .digest('hex')
   .slice(0, 12);
 
@@ -201,12 +201,17 @@ ${rationale || ''}
 ═══ THE PROP MENU — live prices, mainstream books ═══
 ${renderPiggybackMenu(options)}
 
+═══ DATED PLAYER EVIDENCE ═══
+${context.playerStats || 'No dated player evidence available.'}
+
 ${THE_PIGGYBACK_ASK}`;
+
+  const winnersEvidence = { deskText: `${pickText}\n${rationale || ''}\n${renderPiggybackMenu(options)}\n${context.playerStats || ''}`, observedAt: new Date().toISOString(), homeTeam, awayTeam };
 
   const { parsed, explicitPass, respondingModel } = await runPropsDeskBrain({
     systemPrompt: buildGaryPropsSystemPrompt(todayLong()),
     userMessage,
-    corpus: [{ content: `${pickText}\n${rationale || ''}\n${renderPiggybackMenu(options)}` }],
+    corpus: [{ content: winnersEvidence.deskText }],
     recentScores: null,
   });
 
@@ -231,5 +236,5 @@ ${THE_PIGGYBACK_ASK}`;
     game_id: String(gameId),
   }));
 
-  return { picks, explicitPass, menuSize: options.length, reason: null };
+  return { picks, explicitPass, menuSize: options.length, reason: null, winnersEvidence };
 }

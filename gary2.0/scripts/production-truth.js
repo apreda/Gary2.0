@@ -68,7 +68,17 @@ try {
   const grab = (k) => (plist.match(new RegExp(`"${k}" => "([^"]+)"`)) || [])[1] || '(unset)';
   line('Game model (plist)', grab('GARY_MODEL_OVERRIDE'));
   line('Props model (plist)', grab('GARY_PROPS_MODEL_OVERRIDE'));
+  line('MLB model (plist)', grab('GARY_MLB_BRAIN_MODEL'));
 } catch (e) { failed = true; line('Plist envs', `(unavailable: ${e.message})`); }
+
+// Winners is an independent worker: review availability cannot delay picks.
+try {
+  const status = execSync(`launchctl print gui/${process.getuid()}/com.gary.winners`).toString();
+  const pid = status.match(/\bpid = (\d+)/)?.[1];
+  const running = /state = running/.test(status);
+  line('Winners worker', running ? `PID ${pid || '?'} · running` : '❌ NOT RUNNING');
+  if (!running) failed = true;
+} catch { line('Winners worker', '❌ NOT LOADED'); failed = true; }
 
 // 5. What today's STORED picks actually carry.
 try {

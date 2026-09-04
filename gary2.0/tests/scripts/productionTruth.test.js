@@ -32,7 +32,8 @@ vi.mock('fs', () => ({
 
 function healthyCommand(command) {
   if (command.startsWith('pgrep')) return '123 /gary/gary2.0/scripts/scheduler.js';
-  if (command.startsWith('plutil')) return '"GARY_MODEL_OVERRIDE" => "model"';
+  if (command.startsWith('plutil')) return '"GARY_MODEL_OVERRIDE" => "model"\n"GARY_MLB_BRAIN_MODEL" => "mlb-model"';
+  if (command.startsWith('launchctl print')) return 'state = running\npid = 456';
   if (command.startsWith('npx supabase')) {
     return JSON.stringify([{ slug: 'grade-results', updated_at: 2_000_000_000_000, version: 1 }]);
   }
@@ -68,7 +69,26 @@ describe('production truth reports a failing exit status when evidence is missin
     const result = await runCheck();
     expect(result.exitCode).toBe(0);
     expect(result.output).toContain('no game picks yet');
+    expect(result.output).toMatch(/MLB model \(plist\)\s+mlb-model/);
+    expect(result.output).toMatch(/Winners worker\s+PID 456 · running/);
     expect(result.output).toContain('✅ Production is this repo.');
+  });
+
+  it.each([
+    ['stopped', 'state = waiting\nlast exit code = 0', '❌ NOT RUNNING'],
+    ['unavailable', null, '❌ NOT LOADED'],
+  ])('fails when the independent Winners worker is %s', async (_label, status, expected) => {
+    checks.exec.mockImplementation((command) => {
+      if (command.startsWith('launchctl print')) {
+        if (status === null) throw new Error('Could not find service com.gary.winners');
+        return status;
+      }
+      return healthyCommand(command);
+    });
+    const result = await runCheck();
+    expect(result.exitCode).toBe(1);
+    expect(result.output).toContain(expected);
+    expect(result.output).not.toContain('✅ Production is this repo.');
   });
 
   it.each([

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ballDontLieService } from '../../../src/services/ballDontLieService.js';
 import {
   buildNcaafRosterIndex,
+  buildNcaafPropsAgenticContext,
   fetchCompleteNcaafRoster,
   validateNcaafPropBoard,
 } from '../../../src/services/agentic/ncaafPropsAgenticContext.js';
@@ -27,6 +28,25 @@ const rosterIndex = buildNcaafRosterIndex({ homeRoster, awayRoster, homeTeam, aw
 afterEach(() => vi.restoreAllMocks());
 
 describe('NCAAF roster validation source', () => {
+  it('builds prop evidence from dated games without consulting mislabeled season totals', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-09-04T20:00:00Z'));
+    vi.spyOn(ballDontLieService, 'getTeams').mockResolvedValue([{ id: 1, full_name: homeTeam }, { id: 2, full_name: awayTeam }]);
+    vi.spyOn(ballDontLieService, 'getPlayersActive').mockImplementation(async (_, args) => args.team_ids[0] === 1 ? homeRoster : awayRoster);
+    const totals = vi.spyOn(ballDontLieService, 'getNcaafPlayerSeasonStats').mockRejectedValue(new Error('must not use season endpoint'));
+    vi.spyOn(ballDontLieService, 'getNcaafPlayerGameStats').mockImplementation(async ({ season }) => [{
+      player: { id: 21 }, team: { id: 2, full_name: awayTeam }, season,
+      game: { id: season, season, date: `${season}-08-29T20:00:00Z` },
+      passing_yards: 250, passing_attempts: 30,
+    }]);
+    const context = await buildNcaafPropsAgenticContext({ id: 123, home_team: homeTeam, away_team: awayTeam, commence_time: '2026-09-05T20:00:00Z' }, [
+      { player: 'Arch Manning', prop_type: 'passing_yards', line: 268.5 },
+    ]);
+    expect(totals).not.toHaveBeenCalled();
+    expect(context.playerStats).toContain('250 pass yds');
+    expect(context.playerStats).toContain('2026; 1 dated game row; 2026-08-29');
+    expect(context.meta.evidenceChecks.current.conflicts).toBe(0);
+  });
+
   it('paginates and deduplicates the complete current BDL roster', async () => {
     const first = { id: 11, first_name: 'Julian', last_name: 'Sayin' };
     const second = { id: 12, first_name: 'Jeremiah', last_name: 'Smith' };

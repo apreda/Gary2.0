@@ -755,6 +755,8 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
   const sheetsBlock = sheets.text ? `\n\n${sheets.text}` : '';
   const userMessage = `## THE DESK — ${awayTeam} @ ${homeTeam}\n\n${desk.deskText}${gameCall}\n\n${readBoard.text}${sheetsBlock}\n\n${THE_PROPS_ASK}`;
 
+  const winnersEvidence = { deskText: `${desk.deskText}${gameCall}\n${readBoard.text}${sheetsBlock}`, observedAt: new Date().toISOString(), homeTeam, awayTeam };
+
   const { parsed, audits, usage, explicitPass, respondingModel } = await runPropsDeskBrain({
     systemPrompt: buildGaryPropsSystemPrompt(todayLong()),
     userMessage,
@@ -797,6 +799,7 @@ export async function analyzeMlbPropsDesk(game, playerProps, options = {}) {
     picks,
     explicitPass,
     validatedPlayers,
+    winnersEvidence,
     _usage: usage,
   };
 }

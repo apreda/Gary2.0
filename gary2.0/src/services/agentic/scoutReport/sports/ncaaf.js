@@ -36,6 +36,7 @@ import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
 import { footballSeasonForDate, footballSeasonLabel } from './footballSeason.js';
 import { getOddsHistory, formatLineHistory } from '../../../oddsSnapshots.js';
 import { ncaafTeamConferenceId } from '../../../ncaafGamePolicy.js';
+import { cleanNcaafPlayerRows, aggregateNcaafPlayerRows, formatNcaafPlayerEvidence } from './ncaafPlayerEvidence.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // CFP SEEDING & BOWL GAME CONSTANTS
@@ -600,10 +601,10 @@ ONLY report ACTUAL games that have been PLAYED - do not predict future games.`;
 
 /**
  * Fetch key players for both NCAAF teams
- * Uses roster + season stats to show who's on the team
+ * Uses the active roster + dated player-game rows to show who is on the team
  * This prevents hallucinations about players who've transferred
  */
-async function fetchNcaafKeyPlayers(homeTeam, awayTeam, sport, season = footballSeasonForDate('NCAAF')) {
+async function fetchNcaafKeyPlayers(homeTeam, awayTeam, sport, season = footballSeasonForDate('NCAAF'), asOf = new Date()) {
   try {
     const bdlSport = sportToBdlKey(sport);
     if (bdlSport !== 'americanfootball_ncaaf') {
@@ -621,28 +622,41 @@ async function fetchNcaafKeyPlayers(homeTeam, awayTeam, sport, season = football
 
     console.log(`[Scout Report] Fetching NCAAF rosters for ${homeTeam} (ID: ${homeTeamData?.id}) and ${awayTeam} (ID: ${awayTeamData?.id})`);
 
-    // Fetch rosters and season stats for both teams in parallel
-    const [homePlayers, awayPlayers, homeStats, awayStats] = await Promise.all([
-      homeTeamData ? ballDontLieService.getNcaafTeamPlayers(homeTeamData.id) : [],
-      awayTeamData ? ballDontLieService.getNcaafTeamPlayers(awayTeamData.id) : [],
-      homeTeamData ? ballDontLieService.getNcaafPlayerSeasonStats({ teamId: homeTeamData.id, season }) : [],
-      awayTeamData ? ballDontLieService.getNcaafPlayerSeasonStats({ teamId: awayTeamData.id, season }) : []
+    // Active rosters are authoritative; season-total rows are not. Prior-year
+    // rows are fetched by CURRENT player IDs so transfers keep their old school
+    // attribution without importing players who have departed.
+    const [homePlayers, awayPlayers] = await Promise.all([
+      homeTeamData ? ballDontLieService.getNcaafTeamPlayers(homeTeamData.id, 360) : [],
+      awayTeamData ? ballDontLieService.getNcaafTeamPlayers(awayTeamData.id, 360) : []
+    ]);
+    const fetchEvidence = async (players, team) => {
+      if (!team || !players?.length) return { stats: new Map(), diagnostics: [] };
+      const ids = players.map(player => player.id).filter(id => id != null);
+      const current = cleanNcaafPlayerRows(
+        await ballDontLieService.getNcaafPlayerGameStats({ teamId: team.id, season }),
+        { season, playerIds: ids, teamId: team.id, asOf }
+      );
+      const stats = aggregateNcaafPlayerRows(current.rows, season);
+      const missing = ids.filter(id => !stats.has(String(id)));
+      const priorRows = [];
+      // The provider accepts at most 100 player IDs. The prior-season cache is
+      // shared with the college Hub and does not need refreshing every pick.
+      for (let offset = 0; offset < missing.length; offset += 100) {
+        priorRows.push(...await ballDontLieService.getNcaafPlayerGameStats({
+          playerIds: missing.slice(offset, offset + 100), season: season - 1
+        }, 360));
+      }
+      const prior = cleanNcaafPlayerRows(priorRows, { season: season - 1, playerIds: missing, asOf });
+      for (const [id, line] of aggregateNcaafPlayerRows(prior.rows, season - 1)) stats.set(id, line);
+      return { stats, diagnostics: [current.diagnostics, prior.diagnostics] };
+    };
+    const [homeEvidence, awayEvidence] = await Promise.all([
+      fetchEvidence(homePlayers, homeTeamData), fetchEvidence(awayPlayers, awayTeamData)
     ]);
 
-    // Process each team's roster to get key players with stats
-    const processTeamRoster = (players, seasonStats, teamName) => {
+    const processTeamRoster = (players, evidence) => {
       if (!players || players.length === 0) return null;
-
-      // Create a map of player stats by player ID
-      const statsMap = {};
-      (seasonStats || []).forEach(stat => {
-        if (stat.player?.id) {
-          // Only keep most recent season stats if multiple entries
-          if (!statsMap[stat.player.id] || stat.season > (statsMap[stat.player.id].season || 0)) {
-            statsMap[stat.player.id] = stat;
-          }
-        }
-      });
+      const statsMap = evidence.stats;
 
       // Group by position
       const qbs = players.filter(p => ['QB'].includes(p.position_abbreviation?.toUpperCase()));
@@ -653,7 +667,7 @@ async function fetchNcaafKeyPlayers(homeTeam, awayTeam, sport, season = football
 
       // Enrich with stats and sort by production
       const enrichPlayer = (player) => {
-        const stats = statsMap[player.id] || {};
+        const stats = statsMap.get(String(player.id)) || {};
         return {
           ...player,
           seasonStats: stats
@@ -690,54 +704,59 @@ async function fetchNcaafKeyPlayers(homeTeam, awayTeam, sport, season = football
           name: `${p.first_name} ${p.last_name}`,
           position: 'QB',
           jersey: p.jersey_number,
-          passingYards: p.seasonStats.passing_yards || 0,
-          passingTDs: p.seasonStats.passing_touchdowns || 0,
-          passingINTs: p.seasonStats.passing_interceptions || 0,
-          rushingYards: p.seasonStats.rushing_yards || 0,
-          rushingTDs: p.seasonStats.rushing_touchdowns || 0,
+          evidence: p.seasonStats.evidence || null,
+          passingYards: p.seasonStats.passing_yards ?? null,
+          passingTDs: p.seasonStats.passing_touchdowns ?? null,
+          passingINTs: p.seasonStats.passing_interceptions ?? null,
+          rushingYards: p.seasonStats.rushing_yards ?? null,
+          rushingTDs: p.seasonStats.rushing_touchdowns ?? null,
           qbRating: p.seasonStats.passing_rating?.toFixed(1) || null
         })),
         rbs: sortedRBs.map(p => ({
           name: `${p.first_name} ${p.last_name}`,
           position: 'RB',
           jersey: p.jersey_number,
-          rushingYards: p.seasonStats.rushing_yards || 0,
-          rushingTDs: p.seasonStats.rushing_touchdowns || 0,
+          evidence: p.seasonStats.evidence || null,
+          rushingYards: p.seasonStats.rushing_yards ?? null,
+          rushingTDs: p.seasonStats.rushing_touchdowns ?? null,
           rushingAvg: p.seasonStats.rushing_avg?.toFixed(1) || null,
-          receptions: p.seasonStats.receptions || 0,
-          receivingYards: p.seasonStats.receiving_yards || 0
+          receptions: p.seasonStats.receptions ?? null,
+          receivingYards: p.seasonStats.receiving_yards ?? null
         })),
         wrs: sortedWRs.map(p => ({
           name: `${p.first_name} ${p.last_name}`,
           position: 'WR',
           jersey: p.jersey_number,
-          receptions: p.seasonStats.receptions || 0,
-          receivingYards: p.seasonStats.receiving_yards || 0,
-          receivingTDs: p.seasonStats.receiving_touchdowns || 0,
+          evidence: p.seasonStats.evidence || null,
+          receptions: p.seasonStats.receptions ?? null,
+          receivingYards: p.seasonStats.receiving_yards ?? null,
+          receivingTDs: p.seasonStats.receiving_touchdowns ?? null,
           receivingAvg: p.seasonStats.receiving_avg?.toFixed(1) || null
         })),
         tes: sortedTEs.map(p => ({
           name: `${p.first_name} ${p.last_name}`,
           position: 'TE',
           jersey: p.jersey_number,
-          receptions: p.seasonStats.receptions || 0,
-          receivingYards: p.seasonStats.receiving_yards || 0,
-          receivingTDs: p.seasonStats.receiving_touchdowns || 0
+          evidence: p.seasonStats.evidence || null,
+          receptions: p.seasonStats.receptions ?? null,
+          receivingYards: p.seasonStats.receiving_yards ?? null,
+          receivingTDs: p.seasonStats.receiving_touchdowns ?? null
         })),
         defense: sortedDefense.map(p => ({
           name: `${p.first_name} ${p.last_name}`,
           position: p.position_abbreviation,
           jersey: p.jersey_number,
-          tackles: p.seasonStats.total_tackles || 0,
-          sacks: p.seasonStats.sacks || 0,
-          interceptions: p.seasonStats.interceptions || 0,
-          tacklesForLoss: p.seasonStats.tackles_for_loss || 0
+          evidence: p.seasonStats.evidence || null,
+          tackles: p.seasonStats.total_tackles ?? null,
+          sacks: p.seasonStats.sacks ?? null,
+          interceptions: p.seasonStats.interceptions ?? null,
+          tacklesForLoss: p.seasonStats.tackles_for_loss ?? null
         }))
       };
     };
 
-    const homeKeyPlayers = processTeamRoster(homePlayers, homeStats, homeTeam);
-    const awayKeyPlayers = processTeamRoster(awayPlayers, awayStats, awayTeam);
+    const homeKeyPlayers = processTeamRoster(homePlayers, homeEvidence);
+    const awayKeyPlayers = processTeamRoster(awayPlayers, awayEvidence);
 
     const homeCount = (homeKeyPlayers?.qbs?.length || 0) + (homeKeyPlayers?.rbs?.length || 0) +
                       (homeKeyPlayers?.wrs?.length || 0) + (homeKeyPlayers?.tes?.length || 0) +
@@ -750,7 +769,10 @@ async function fetchNcaafKeyPlayers(homeTeam, awayTeam, sport, season = football
 
     return {
       home: homeKeyPlayers,
-      away: awayKeyPlayers
+      away: awayKeyPlayers,
+      season,
+      fetchedAt: new Date().toISOString(),
+      diagnostics: { home: homeEvidence.diagnostics, away: awayEvidence.diagnostics }
     };
   } catch (error) {
     console.error('[Scout Report] Error fetching NCAAF key players:', error.message);
@@ -770,39 +792,41 @@ function formatNcaafKeyPlayers(homeTeam, awayTeam, keyPlayers) {
     return '';
   }
 
+  const value = number => number ?? 'N/A';
+  const provenance = player => formatNcaafPlayerEvidence(player.evidence, keyPlayers.season);
   const formatQB = (player) => {
     const stats = player.passingYards > 0
-      ? ` - ${player.passingYards} yds, ${player.passingTDs} TD, ${player.passingINTs} INT${player.qbRating ? `, ${player.qbRating} QBR` : ''}`
+      ? ` - ${player.passingYards} yds, ${value(player.passingTDs)} TD, ${value(player.passingINTs)} INT${player.qbRating ? `, ${player.qbRating} QBR` : ''}`
       : '';
-    return `  • QB: #${player.jersey || '?'} ${player.name}${stats}`;
+    return `  • QB: #${player.jersey || '?'} ${player.name}${stats}${provenance(player)}`;
   };
 
   const formatRB = (player) => {
     const stats = player.rushingYards > 0
-      ? ` - ${player.rushingYards} rush yds, ${player.rushingTDs} TD${player.rushingAvg ? ` (${player.rushingAvg} avg)` : ''}`
+      ? ` - ${player.rushingYards} rush yds, ${value(player.rushingTDs)} TD${player.rushingAvg ? ` (${player.rushingAvg} avg)` : ''}`
       : '';
-    return `  • RB: #${player.jersey || '?'} ${player.name}${stats}`;
+    return `  • RB: #${player.jersey || '?'} ${player.name}${stats}${provenance(player)}`;
   };
 
   const formatWR = (player) => {
     const stats = player.receivingYards > 0
-      ? ` - ${player.receptions} rec, ${player.receivingYards} yds, ${player.receivingTDs} TD`
+      ? ` - ${value(player.receptions)} rec, ${player.receivingYards} yds, ${value(player.receivingTDs)} TD`
       : '';
-    return `  • WR: #${player.jersey || '?'} ${player.name}${stats}`;
+    return `  • WR: #${player.jersey || '?'} ${player.name}${stats}${provenance(player)}`;
   };
 
   const formatTE = (player) => {
     const stats = player.receivingYards > 0
-      ? ` - ${player.receptions} rec, ${player.receivingYards} yds, ${player.receivingTDs} TD`
+      ? ` - ${value(player.receptions)} rec, ${player.receivingYards} yds, ${value(player.receivingTDs)} TD`
       : '';
-    return `  • TE: #${player.jersey || '?'} ${player.name}${stats}`;
+    return `  • TE: #${player.jersey || '?'} ${player.name}${stats}${provenance(player)}`;
   };
 
   const formatDefense = (player) => {
     const stats = player.tackles > 0
       ? ` - ${player.tackles} tkl${player.sacks ? `, ${player.sacks} sck` : ''}${player.interceptions ? `, ${player.interceptions} INT` : ''}`
       : '';
-    return `  • ${player.position}: #${player.jersey || '?'} ${player.name}${stats}`;
+    return `  • ${player.position}: #${player.jersey || '?'} ${player.name}${stats}${provenance(player)}`;
   };
 
   const formatTeamSection = (teamName, players, isHome) => {
@@ -838,13 +862,15 @@ function formatNcaafKeyPlayers(homeTeam, awayTeam, keyPlayers) {
     return lines.join('\n');
   };
 
+  const exclusions = Object.entries(keyPlayers.diagnostics || {}).flatMap(([side, checks]) => (checks || []).map(check => Object.entries(check).filter(([, count]) => count > 0).map(([reason, count]) => `${reason}: ${count}`).join(', ')).filter(Boolean).map(text => `${side}: ${text}`));
   const homeSection = formatTeamSection(homeTeam, keyPlayers.home, true);
   const awaySection = formatTeamSection(awayTeam, keyPlayers.away, false);
 
   return `
-KEY PLAYERS (CURRENT ROSTER)
+KEY PLAYERS (CURRENT ACTIVE ROSTER; BDL player_stats summed by dated game)
+As of ${keyPlayers.fetchedAt || 'fetch time unavailable'}. Each line names its season, observed sample and date span. Missing fields are N/A; averages are calculated from those game rows. Roster membership does not establish a starting role.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${homeSection}
+${exclusions.length ? `Evidence checks (excluded rows): ${exclusions.join('; ')}\n` : ''}${homeSection}
 
 ${awaySection}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1015,7 +1041,7 @@ export async function buildNcaafScoutReport(game, options = {}) {
 
   // For NCAAF, fetch key players (roster + stats) to prevent hallucinations
   let ncaafKeyPlayers = null;
-  ncaafKeyPlayers = await fetchNcaafKeyPlayers(homeTeam, awayTeam, sportKey, ncaafSeasonYear);
+  ncaafKeyPlayers = await fetchNcaafKeyPlayers(homeTeam, awayTeam, sportKey, ncaafSeasonYear, new Date(Math.min(Date.now(), Date.parse(game.commence_time) || Date.now())));
 
   // Provider-grounded conference identity only; no subjective conference tiers.
   let conferenceContextSection = '';

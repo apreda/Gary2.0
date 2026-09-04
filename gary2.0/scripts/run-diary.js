@@ -3,7 +3,8 @@
  * THE NOTEBOOK, nightly (founder GO, Sep 3 2026):
  *   1. Autopsies — for every graded MLB pick on the date(s), the real Gary's
  *      and the notebook shadow's alike (same reader): read the game back,
- *      grade the stated reason, write the one-line note. Upsert pick_autopsies.
+ *      assess original evidence separately from the result. Preserve the
+ *      original inputs and immutable review in pick_autopsies.
  *   2. Grade the notebook shadow's picks from the official finals and read
  *      them on the closing-line ruler.
  *   3. Print the three systems side by side: Gary, Gary with the notebook,
@@ -16,8 +17,9 @@
  */
 import '../src/loadEnv.js';
 import { gameStory, writeAutopsy } from '../src/services/diary/autopsy.js';
-import { readPick } from '../src/services/closingLine.js';
+import { readPick, pickSideOf } from '../src/services/closingLine.js';
 import { getMlbSchedule } from '../src/services/mlbStatsApiService.js';
+import { matchingDesk, pregameEvidence } from '../src/services/diary/evidence.js';
 
 const { supabaseAdmin, supabase } = await import('../src/supabaseClient.js');
 const db = supabaseAdmin || supabase;
@@ -59,46 +61,60 @@ function gradeFrom(side, betType, point, fin) {
 }
 
 /** Step 1: autopsies for the real Gary's and the shadow's graded picks on a date. */
-export async function runAutopsies(date, { onlySource = null } = {}) {
-  const finals = await finalsFor(date);
-  const { data: existing } = await db.from('pick_autopsies').select('game_id, source').eq('game_date', date).eq('league', 'MLB');
+export async function runAutopsies(date, { onlySource = null, database = db, getFinals = finalsFor, getStory = gameStory, review = writeAutopsy } = {}) {
+  const finals = await getFinals(date);
+  const { data: existing, error: existingError } = await database.from('pick_autopsies').select('game_id, source').eq('game_date', date).eq('league', 'MLB');
+  if (existingError) throw existingError;
   const have = new Set((existing || []).map((r) => `${r.source}|${String(r.game_id)}`));
   const jobs = [];
   if (onlySource !== 'diary') {
-    const { data: days } = await db.from('daily_picks').select('picks').eq('date', date);
-    const { data: results } = await db.from('game_results').select('game_id, pick_text, result').eq('game_date', date);
+    const { data: days, error: daysError } = await database.from('daily_picks').select('picks').eq('date', date);
+    const { data: results, error: resultsError } = await database.from('game_results').select('game_id, pick_text, result').eq('game_date', date);
+    if (daysError || resultsError) throw daysError || resultsError;
+    const { data: desks, error: deskError } = await database.from('pick_desks').select('matchup, pick, desk, research_briefing, created_at').eq('game_date', date);
+    if (deskError) console.warn(`  ⚠️ original desks unavailable: ${deskError.message}; decision quality will remain unknown`);
     const res = new Map((results || []).map((r) => [`${String(r.game_id)}|${r.pick_text}`, r.result]));
     for (const p of days?.[0]?.picks || []) {
       if (String(p?.league).toUpperCase() !== 'MLB' || p?.game_id == null || !p?.rationale) continue;
       const result = res.get(`${String(p.game_id)}|${p.pick}`) ?? null;
-      if (!result || result === 'push' || have.has(`gary|${String(p.game_id)}`)) continue;
-      const side = String(p.pick || '').toLowerCase().startsWith(String(p.homeTeam || '').split(' ').pop().toLowerCase()) ? 'home' : 'away';
-      jobs.push({ source: 'gary', game_id: String(p.game_id), pick_text: p.pick, result, home_team: p.homeTeam, away_team: p.awayTeam, rationale: p.rationale, caseText: side === 'home' ? p.path_home : p.path_away });
+      if (!['won', 'lost', 'push'].includes(result) || have.has(`gary|${String(p.game_id)}`)) continue;
+      const side = pickSideOf({ pick: p.pick, homeTeam: p.homeTeam, awayTeam: p.awayTeam });
+      const sameMatchupGames = new Set((days?.[0]?.picks || []).filter((other) => String(other?.league).toUpperCase() === 'MLB'
+        && norm(other.homeTeam) === norm(p.homeTeam) && norm(other.awayTeam) === norm(p.awayTeam)).map((other) => String(other.game_id))).size;
+      const desk = matchingDesk(desks, { homeTeam: p.homeTeam, awayTeam: p.awayTeam, pickText: p.pick, sameMatchupGames });
+      jobs.push({ source: 'gary', game_id: String(p.game_id), pick_text: p.pick, result, home_team: p.homeTeam, away_team: p.awayTeam, rationale: p.rationale, caseText: side === 'home' ? p.path_home : side === 'away' ? p.path_away : null,
+        pregameEvidence: pregameEvidence({ pickText: p.pick, price: p.odds, model: p.model, era: p.prompt_sha, rationale: p.rationale, caseHome: p.path_home, caseAway: p.path_away, desk: desk?.desk, briefing: desk?.research_briefing, capturedAt: desk?.created_at, provenance: desk ? 'stored_pick_desks_exact_ticket' : 'card_only_original_desk_missing' }),
+      });
     }
   }
   if (onlySource !== 'gary') {
-    const { data: diary } = await db.from('diary_picks').select('*').eq('game_date', date).eq('league', 'MLB');
+    const { data: diary, error: diaryError } = await database.from('diary_picks').select('*').eq('game_date', date).eq('league', 'MLB');
+    if (diaryError) throw diaryError;
     for (const d of diary || []) {
-      if (!d.result || d.result === 'push' || !d.rationale || have.has(`diary|${String(d.game_id)}`)) continue;
-      jobs.push({ source: 'diary', game_id: String(d.game_id), pick_text: d.pick_text, result: d.result, home_team: d.home_team, away_team: d.away_team, rationale: d.rationale, caseText: d.side === 'home' ? d.path_home : d.path_away });
+      if (!['won', 'lost', 'push'].includes(d.result) || !d.rationale || have.has(`diary|${String(d.game_id)}`)) continue;
+      jobs.push({ source: 'diary', game_id: String(d.game_id), pick_text: d.pick_text, result: d.result, home_team: d.home_team, away_team: d.away_team, rationale: d.rationale, caseText: d.side === 'home' ? d.path_home : d.side === 'away' ? d.path_away : null,
+        pregameEvidence: d.pregame_evidence || pregameEvidence({ pickText: d.pick_text, price: d.price, model: d.model, rationale: d.rationale, caseHome: d.path_home, caseAway: d.path_away, notebook: d.notebook, capturedAt: d.computed_at, provenance: 'legacy_diary_original_data_missing' }),
+      });
     }
   }
   let done = 0;
   for (const j of jobs) {
     const fin = findFinal(finals, j.away_team, j.home_team);
-    const story = fin ? await gameStory({ gamePk: fin.gamePk, gameDate: date, homeTeam: j.home_team, awayTeam: j.away_team }) : '';
-    const out = await writeAutopsy({ homeTeam: j.home_team, awayTeam: j.away_team, gameDate: date, pickText: j.pick_text, result: j.result, rationale: j.rationale, caseText: j.caseText, story });
+    const story = fin ? await getStory({ gamePk: fin.gamePk, gameDate: date, homeTeam: j.home_team, awayTeam: j.away_team }) : '';
+    const out = await review({ homeTeam: j.home_team, awayTeam: j.away_team, gameDate: date, pickText: j.pick_text, result: j.result, rationale: j.rationale, caseText: j.caseText, pregameEvidence: j.pregameEvidence, story });
     if (!out.ok) { console.warn(`  ⚠️ autopsy skipped ${j.source} ${j.away_team} @ ${j.home_team}: ${out.error}`); continue; }
     const a = out.autopsy;
-    const { error } = await db.from('pick_autopsies').upsert({
+    const { data: inserted, error } = await database.from('pick_autopsies').upsert({
       game_date: date, league: 'MLB', game_id: j.game_id, source: j.source, pick_text: j.pick_text, result: j.result,
       home_team: j.home_team, away_team: j.away_team, final_score: fin ? `${j.away_team} ${fin.ar}, ${j.home_team} ${fin.hr}` : null,
       mechanism_stated: a.mechanism_stated, reason_type: a.reason_type, decided_by: a.decided_by, mechanism_label: a.mechanism_label,
-      reason_status: a.reason_status, note: a.note || null, game_story: story ? story.slice(0, 4000) : null, model: out.model, ms: out.ms, computed_at: new Date().toISOString(),
-    }, { onConflict: 'game_date,league,game_id,source' });
+      reason_status: a.reason_status, note: a.note || null, game_story: story || null, model: out.model, ms: out.ms, computed_at: new Date().toISOString(),
+      review_version: a.review_version, pregame_evidence: j.pregameEvidence, decision_review: a.decision_review, outcome_review: a.outcome_review,
+    }, { onConflict: 'game_date,league,game_id,source', ignoreDuplicates: true }).select('game_id');
     if (error) { console.warn(`  ⚠️ autopsy not stored: ${error.message}`); continue; }
+    if (!inserted?.length) continue;
     done += 1;
-    console.log(`  📓 ${j.source.padEnd(5)} ${j.away_team} @ ${j.home_team} · ${j.pick_text} ${j.result} · ${a.reason_type} was ${a.reason_status || '?'} · ${a.note || '(side-note dropped)'}`);
+    console.log(`  📓 ${j.source.padEnd(5)} ${j.away_team} @ ${j.home_team} · ${j.pick_text} ${j.result} · decision ${a.decision_review.assessment} · claim ${a.outcome_review.claim_status} · ${a.note || '(no supported note)'}`);
   }
   return { jobs: jobs.length, done };
 }

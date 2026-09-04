@@ -221,3 +221,47 @@ describe('atomic prop-picks client', () => {
     })).rejects.toThrow('did not return game_ids');
   });
 });
+
+describe('Winners receives the persisted prop decision after atomic publication', () => {
+  const storedProp = (over = {}) => nflProp({ odds: '-115', rationale: 'Original card', model: 'Sol', prompt_sha: 'unchanged-era', commence_time: '2026-09-04T23:00:00Z', ...over });
+  const setup = ({ incoming, published, readError = null } = {}) => {
+    const events = [];
+    const query = { select: () => query, eq: () => query, maybeSingle: async () => { events.push('read-published'); return { data: { picks: published }, error: readError }; } };
+    const client = { rpc: vi.fn(async () => { events.push('published'); return { data: { added: 1, skipped: 1, game_ids: ['1393557'], added_game_ids: ['1393557'] }, error: null }; }), from: vi.fn(() => query) };
+    const evidence = { '1393557': { deskText: 'Original desk before the Sol call', observedAt: '2026-09-04T16:00:00Z' } };
+    return { events, client, evidence, incoming };
+  };
+  it('passes the same service client and only the exact final published price/card', async () => {
+    const first = storedProp({ player: 'James Cook' });
+    const skippedIncoming = storedProp({ player: 'Josh Allen', odds: '-125', rationale: 'New unposted argument' });
+    const existingPublished = storedProp({ player: 'Josh Allen', odds: '-110', rationale: 'Original prior card' });
+    const run = setup({ incoming: [first, skippedIncoming], published: [first, existingPublished] });
+    const enqueue = vi.fn(async () => { run.events.push('queue'); });
+    const result = await storePropPicksAtomic({ client: run.client, date: '2026-09-04', leagueLabel: 'NFL', picks: run.incoming, winnersEvidenceByGame: run.evidence, enqueueWinners: enqueue });
+    expect(result.added).toBe(1);
+    expect(run.events).toEqual(['published', 'read-published', 'queue']);
+    expect(enqueue).toHaveBeenCalledWith(run.client, { date: '2026-09-04', league: 'NFL', picks: [first], evidenceByGame: run.evidence });
+    expect(enqueue.mock.calls[0][1].picks[0]).toMatchObject({ odds: '-115', model: 'Sol', prompt_sha: 'unchanged-era' });
+  });
+  it('leaves the public write successful when queueing or confirmation fails', async () => {
+    const pick = storedProp();
+    const run = setup({ incoming: [pick], published: [pick] });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = await storePropPicksAtomic({ client: run.client, date: '2026-09-04', leagueLabel: 'NFL', picks: run.incoming, winnersEvidenceByGame: run.evidence, enqueueWinners: async () => { throw new Error('queue offline'); } });
+    expect(result.added).toBe(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('publication remains intact'));
+    const failure = setup({ incoming: [pick], published: [pick], readError: new Error('read unavailable') });
+    const queue = vi.fn();
+    expect((await storePropPicksAtomic({ client: failure.client, date: '2026-09-04', leagueLabel: 'NFL', picks: failure.incoming, winnersEvidenceByGame: failure.evidence, enqueueWinners: queue })).added).toBe(1);
+    expect(queue).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+  it('does not touch Winners when no production evidence handoff is supplied', async () => {
+    const pick = storedProp();
+    const run = setup({ incoming: [pick], published: [pick] });
+    const queue = vi.fn();
+    await storePropPicksAtomic({ client: run.client, date: '2026-09-04', leagueLabel: 'NFL', picks: run.incoming, enqueueWinners: queue });
+    expect(run.client.from).not.toHaveBeenCalled();
+    expect(queue).not.toHaveBeenCalled();
+  });
+});

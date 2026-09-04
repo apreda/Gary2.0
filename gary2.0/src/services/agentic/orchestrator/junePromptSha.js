@@ -57,6 +57,7 @@ const DOSSIER_SURFACE_FILES = [
   // Pass 1 — an edit there is an era.
   '../flashInvestigationPrompts.js',
   './researchBriefing.js',
+  './evidenceQuality.js',
   './investigationFactors.js',
 ];
 
@@ -77,6 +78,7 @@ export function junePromptSha() {
     // receives that live outside the hashed files. Each is a new era.
     'MLB_RESEARCHER=ON (founder GO, Sep 3 2026 — the Aug 18 June-engine researcher returns for MLB: Haiku briefing before Pass 1, ask-the-researcher up to 6; football desk-only pending its review)',
     'ONE BRAIN PER PICK (founder, Aug 27 2026 — no mid-conversation model switch; a failed brain means the whole game re-runs on the next one)',
+    'RESEARCH HANDOFF=attributed figures and interpretation; no blanket verification (Sep 4 2026)',
     'PASS1 NUDGES=DESK-ONLY v2 (Sep 1 2026 — stall/reminder messages AND the empty-response + fallback nudges in agentLoop.js are desk-only for game lanes; agentLoop is outside this hash, so wording changes there must bump this marker)',
     // The RENDERED system prompt (identity + FACT-CHECKING + BASE_RULES).
     // Until Sep 1 2026 this surface sat outside the hash — a system-prompt

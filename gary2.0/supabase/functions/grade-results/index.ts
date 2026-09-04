@@ -47,6 +47,7 @@ import {
   type SequentialBackgroundTask,
 } from "./recapBackground.ts";
 import { settleUserBetsForDates } from "./userbets.ts";
+import { resultAlreadyCurrent, winnersFlags, WINNERS_CUTOVER_DATE } from "./winners.ts";
 
 // Supabase exposes this runtime global in deployed Edge Functions. Describe
 // only the API used here so local Deno checks do not pull unrelated SDK types.
@@ -100,6 +101,13 @@ async function sbGet(table: string, query: string): Promise<any[]> {
   return await res.json();
 }
 
+async function readWinnersFlags(date: string, picks: any[]): Promise<boolean[]> {
+  const board = date >= WINNERS_CUTOVER_DATE
+    ? await sbGet("winners_board", `game_date=eq.${date}&kind=eq.game&select=game_date,league,kind,game_id,pick_snapshot`)
+    : [];
+  return winnersFlags(date, picks, board);
+}
+
 // ── grading ──────────────────────────────────────────────────────────────────
 // gradeGame (MLB 2-way) lives in the pure, unit-tested ./grading.ts (imported
 // above), which resolves the pick's side using only the tokens that
@@ -124,7 +132,7 @@ async function writeResult(row: any): Promise<"insert" | "update" | "noop" | "fa
   // we look for one pre-contract NULL-game row to adopt in place. This keeps
   // same-day rematches and doubleheaders independent while repairing history
   // without ever creating a second result.
-  const fields = "id,result,final_score,game_id,league";
+  const fields = "id,result,final_score,game_id,league,is_winners_pick";
   let existing = await sbGet("game_results",
     `game_date=eq.${row.game_date}` +
     `&league=ilike.${encodeURIComponent(row.league)}` +
@@ -143,9 +151,7 @@ async function writeResult(row: any): Promise<"insert" | "update" | "noop" | "fa
   }
   if (existing.length) {
     const e = existing[0];
-    const identityCurrent = String(e.game_id ?? "") === row.game_id
-      && String(e.league ?? "") === row.league;
-    if (identityCurrent && e.result === row.result && e.final_score === row.final_score) return "noop";
+    if (resultAlreadyCurrent(e, row)) return "noop";
     const res = await fetch(`${SUPABASE_URL}/rest/v1/game_results?id=eq.${e.id}`, {
       method: "PATCH", headers: { ...sbHeaders, Prefer: "return=minimal" },
       body: JSON.stringify({ result: row.result, final_score: row.final_score,
@@ -649,6 +655,17 @@ Deno.serve(async (req) => {
   // adjacent-day series games). Default: today + yesterday (late finals).
   const dateParam = new URL(req.url).searchParams.get("date");
   const dates = /^\d{4}-\d{2}-\d{2}$/.test(dateParam ?? "") ? [dateParam!] : [estDate(0), estDate(-1)];
+  // Read-only production verification of the same immutable-board selector.
+  // This branch returns before provider reads, grading, recaps or settlement.
+  if (new URL(req.url).searchParams.get("winners") === "1") {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateParam ?? "")) return Response.json({ ok: false, error: "need date=YYYY-MM-DD" }, { status: 400 });
+    const rows = await sbGet("daily_picks", `date=eq.${dateParam}&select=picks`);
+    const picks = rows[0]?.picks ?? [];
+    const flags = await readWinnersFlags(dateParam!, picks);
+    return Response.json({ ok: true, read_only: true, date: dateParam, policy: dateParam! >= WINNERS_CUTOVER_DATE ? "immutable-board" : "historical-top-three",
+      picks: picks.map((pick: any, index: number) => ({ league: pick.league, game_id: pick.game_id ?? pick.bdl_game_id,
+        pick: pick.pick, odds: pick.odds, is_winners_pick: flags[index] })) });
+  }
   const stats = { insert: 0, update: 0, noop: 0, fail: 0, skipped: 0, invalidIdentity: 0,
     recap: 0, recap_regenerated: 0, recap_exists: 0, recap_fail: 0, recap_queued: 0 };
   // Per-run evidence caches shared across recaps (BDL box score + prop_results).
@@ -719,21 +736,10 @@ Deno.serve(async (req) => {
     const picks: any[] = rows[0]?.picks ?? [];
     if (!picks.length) continue;
 
-    // is_winners_pick = top 3 per league by (is_top_pick, then confidence).
-    const winnerKeys = new Set<string>();
-    const byLeague: Record<string, any[]> = {};
-    for (const p of picks) (byLeague[String(p.league ?? "UNKNOWN").toUpperCase()] ||= []).push(p);
-    for (const lg of Object.keys(byLeague)) {
-      const ranked = byLeague[lg].slice().sort((a, b) => {
-        const at = a.is_top_pick ? 1 : 0, bt = b.is_top_pick ? 1 : 0;
-        if (at !== bt) return bt - at;
-        return (b.confidence ?? 0) - (a.confidence ?? 0);
-      });
-      for (const p of ranked.slice(0, 3))
-        winnerKeys.add(`${String(p.league ?? "").toUpperCase()}|${p.pick}|${p.awayTeam} @ ${p.homeTeam}`);
-    }
-    const isWinner = (p: any) =>
-      winnerKeys.has(`${String(p.league ?? "").toUpperCase()}|${p.pick}|${p.awayTeam} @ ${p.homeTeam}`);
+    // A failed authoritative read aborts this day before any flags are written.
+    const flags = await readWinnersFlags(date, picks);
+    const flagByPick = new Map(picks.map((pick, index) => [pick, flags[index]]));
+    const isWinner = (pick: any) => flagByPick.get(pick) === true;
 
     for (const pick of picks) {
       const league = normalizedResultSport(pick.league) ?? "";

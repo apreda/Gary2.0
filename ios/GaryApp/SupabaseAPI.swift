@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 import SwiftUI
 
 // MARK: - Smart Cache for Performance
@@ -539,6 +540,89 @@ enum SupabaseAPI {
             print("[SupabaseAPI] fetchWinnersReviews failed: \(error.localizedDescription)")
             return []
         }
+    }
+
+    /// Immutable Winners publications. Empty is a valid board; failure throws.
+    /// Private review evidence and rejected candidates never reach this endpoint.
+    struct WinnersBoardSnapshot {
+        var games: [GaryPick] = []
+        var props: [PropPick] = []
+        var gamePublicationIDs: [String] = []
+        var propPublicationIDs: [String] = []
+    }
+
+    static let winnersAdmissionCutover = "2026-09-04"
+
+    static func fetchWinnersBoard(date: String) async throws -> WinnersBoardSnapshot {
+        let url = buildURL(table: "winners_board", query: [
+            URLQueryItem(name: "select", value: "candidate_id,game_date,kind,league,pick_snapshot,admitted_at"),
+            URLQueryItem(name: "game_date", value: "eq.\(date)"),
+            URLQueryItem(name: "order", value: "admitted_at.asc,candidate_id.asc")
+        ])
+        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw NSError(domain: "SupabaseAPI.fetchWinnersBoard", code: (response as? HTTPURLResponse)?.statusCode ?? -1)
+        }
+        return try decodeWinnersBoard(data, date: date)
+    }
+
+    static func decodeWinnersBoard(_ data: Data, date: String) throws -> WinnersBoardSnapshot {
+        guard let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Invalid Winners board"))
+        }
+        var snapshot = WinnersBoardSnapshot()
+        var seen: Set<String> = []
+        for row in rows {
+            guard row["game_date"] as? String == date,
+                  let publicationID = row["candidate_id"] as? String, !publicationID.isEmpty,
+                  seen.insert(publicationID).inserted,
+                  let league = row["league"] as? String, !league.isEmpty,
+                  let kind = row["kind"] as? String, var ticket = row["pick_snapshot"] as? [String: Any] else {
+                throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Missing Winners ticket"))
+            }
+            if AppFlags.hidesWorldCupRow(league) { continue }
+            if ticket["league"] == nil || ticket["league"] is NSNull { ticket["league"] = league }
+            if let gameID = ticket["game_id"] as? String, let number = Int(gameID) { ticket["game_id"] = number }
+            if kind == "game" {
+                let ticketData = try JSONSerialization.data(withJSONObject: [ticket])
+                let normalized = try normalizeStoredGamePickPayload(ticketData)
+                let picks = try JSONDecoder().decode([GaryPick].self, from: normalized)
+                try validateStoredGamePicks(picks, source: "winners_board")
+                guard let pick = picks.first, pick.league?.uppercased() == league.uppercased() else {
+                    throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Winners game league mismatch"))
+                }
+                snapshot.games.append(pick)
+                snapshot.gamePublicationIDs.append(publicationID)
+            } else if kind == "prop" {
+                if let line = ticket["line"] as? NSNumber, CFGetTypeID(line) != CFBooleanGetTypeID() { ticket["line"] = line.stringValue }
+                guard let pick = PropPick.from(dict: ticket), pick.hasValidStoredPayload,
+                      pick.effectiveLeague?.uppercased() == league.uppercased() else {
+                    throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Invalid Winners prop ticket"))
+                }
+                snapshot.props.append(pick)
+                snapshot.propPublicationIDs.append(publicationID)
+            } else {
+                throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Unknown Winners ticket kind"))
+            }
+        }
+        return snapshot
+    }
+
+    /// Merge only within one date's cache. Earlier publications retain their
+    /// original ticket and price even if a slower response arrives afterward.
+    static func retainWinnersPublications(previous: WinnersBoardSnapshot?, incoming: WinnersBoardSnapshot) -> WinnersBoardSnapshot {
+        guard var result = previous else { return incoming }
+        var games = Set(result.gamePublicationIDs)
+        var props = Set(result.propPublicationIDs)
+        for (publicationID, pick) in zip(incoming.gamePublicationIDs, incoming.games) where games.insert(publicationID).inserted {
+            result.gamePublicationIDs.append(publicationID)
+            result.games.append(pick)
+        }
+        for (publicationID, pick) in zip(incoming.propPublicationIDs, incoming.props) where props.insert(publicationID).inserted {
+            result.propPublicationIDs.append(publicationID)
+            result.props.append(pick)
+        }
+        return result
     }
 
     static func fetchDailyPicks(date: String) async throws -> [GaryPick] {

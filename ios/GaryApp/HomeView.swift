@@ -2053,6 +2053,13 @@ struct HomeView: View {
         return (parts.1.isEmpty || isTotal || hasLine) ? name : "\(name) \(parts.1)"
     }
 
+    /// A published plus-money MONEYLINE, not a run line or spread with plus
+    /// odds. This Home feature never changes Gary's pick or Winners admission.
+    private static func isPostedMoneylineUnderdog(_ pick: GaryPick) -> Bool {
+        guard let ticket = pick.pick?.trimmingCharacters(in: .whitespacesAndNewlines) else { return false }
+        return ticket.range(of: #"\bML\s+\+[1-9]\d{2,3}$"#, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
     /// The day's big games joined with Gary's picks + the live board — the
     /// MARQUEE tracker's feed, ranked by the pipeline (todayBoard.big_games).
     /// A same-day All-Star special rides in too (see `specialMarqueeEntry`) so
@@ -2179,8 +2186,9 @@ struct HomeView: View {
         // HERO FILLERS (founder, Aug 4: the countdown counts to the NEXT game
         // to start TODAY — tomorrow's tease only once today is truly done).
         // Every slate game not already a big game becomes hero-eligible at
-        // rank 99 (soonest wins the hero; rank only breaks ties) but never a
-        // ribbon chip (railWorthy=false keeps the rail big-games-only).
+        // rank 99 (soonest wins the hero; rank only breaks ties). A posted
+        // underdog also joins the existing ribbon, keeping those picks visible
+        // on Home without granting automatic admission to Winners.
         let bigKeys: Set<String> = Set(bigs.compactMap { big -> String? in
             guard let matchup = big.matchup else { return nil }
             return Self.homeMarqueeGameKey(league: big.league, gameID: big.bdl_game_id,
@@ -2199,6 +2207,7 @@ struct HomeView: View {
                 }
                 return Self.homeBoardPick(p, league: br.league, gameID: nil, away: a, home: h)
             }
+            let featuresUnderdog = calls.contains(where: Self.isPostedMoneylineUnderdog)
             let fillerLive = sheetLive(matchup, league: br.league ?? "", gameID: br.bdl_game_id,
                                        commence: br.commence_time)
             let storedRows = sheetResults(for: matchup, away: a, home: h,
@@ -2248,7 +2257,7 @@ struct HomeView: View {
                 league: br.league,
                 matchupFull: matchup,
                 title: "\(Self.shortTeam(a)) @ \(Self.shortTeam(h))",
-                context: nil,
+                context: featuresUnderdog ? "GARY'S UNDERDOG PICK" : nil,
                 commence: br.commence_time,
                 pickLine: calls.isEmpty ? nil : calls.map { Self.homePickLabel($0.pick) }.joined(separator: "  ·  "),
                 pendingLine: nil,
@@ -2257,7 +2266,7 @@ struct HomeView: View {
                 verdict: verdicts.first,
                 result: result,
                 slateInterruptionLabel: slateInterruption,
-                railWorthy: false
+                railWorthy: featuresUnderdog
             )
         }
         return bigEntries + fillers + [specialMarqueeEntry].compactMap { $0 }

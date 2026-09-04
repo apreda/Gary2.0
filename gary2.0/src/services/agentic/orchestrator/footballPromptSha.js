@@ -7,6 +7,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const SHARED_SURFACE = [
   './footballPromptSha.js',
   './passBuilders.js',
+  './evidenceQuality.js',
   './agentLoop.js',
   './orchestratorMain.js',
   // The system prompt file (extracted from orchestratorMain Sep 1 2026 —
@@ -57,6 +58,7 @@ const SPORT_SURFACE = {
   NCAAF: [
     '../constitution/ncaafConstitution.js',
     '../scoutReport/sports/ncaaf.js',
+    '../scoutReport/sports/ncaafPlayerEvidence.js',
     '../tools/statRouters/ncaafFetchers.js',
     // (nflFetchers.js left this list Sep 1 2026: LEAGUE_ISOLATED in the
     // router blocks NCAAF from the NFL fetchers — the Aug 25 isolation law —

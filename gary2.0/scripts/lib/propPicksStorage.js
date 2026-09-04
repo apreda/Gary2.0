@@ -120,6 +120,8 @@ export async function storePropPicksAtomic({
   leagueLabel,
   picks,
   forceRun = false,
+  winnersEvidenceByGame = null,
+  enqueueWinners = null,
 }) {
   if (!client?.rpc) throw new Error('Atomic prop storage requires a Supabase RPC client');
 
@@ -156,6 +158,22 @@ export async function storePropPicksAtomic({
     : null;
   if (returnedGameIds == null) {
     throw new Error(`Atomic prop storage did not return game_ids for ${date}`);
+  }
+
+  if (winnersEvidenceByGame) {
+    try {
+      const { enqueueWinnersProps, publishedDecisionMatches } = await import('../../src/services/pickdesk/winnersAdmissions.js');
+      const addedIds = new Set([...(data.added_game_ids || []), ...(data.replaced_game_ids || [])].map(String));
+      const {data:published,error:readError}=await client.from('prop_picks').select('picks').eq('date',date).maybeSingle();
+      if(readError)throw readError;
+      // The RPC reports additions by game, not by individual ticket. A mixed
+      // added/skipped batch must never queue the skipped incoming price/card.
+      const confirmed=(published?.picks || []).filter(p=>String(p.sport || p.league || '').toUpperCase()===sport && addedIds.has(String(p.game_id ?? p.bdl_game_id))
+        && storagePicks.some(incoming=>publishedDecisionMatches(incoming,p,{date,league:sport,kind:'prop'})));
+      await (enqueueWinners || enqueueWinnersProps)(client, { date, league: sport,
+        picks: confirmed,
+        evidenceByGame: winnersEvidenceByGame });
+    } catch (e) { console.warn(`[Winners] Props queue failed: ${e.message}; publication remains intact`); }
   }
 
   return {

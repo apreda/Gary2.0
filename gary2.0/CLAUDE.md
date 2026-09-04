@@ -1,8 +1,31 @@
 # CLAUDE.md
 
-Latest operational handoff: read `../CLAUDE_HANDOFF_2026-08-24.md` before taking over.
+Latest operational handoff: read `../HANDOFF_2026-09-04_WINNERS_EVIDENCE.md` before taking over. Earlier launch and App Store context remains in `../HANDOFF_2026-09-04_ASTRA.md` and `../CLAUDE_HANDOFF_2026-08-24.md`.
 
 Gary 2.0 is an AI sports betting platform (MLB, NFL, NCAAF live; NBA pinned for relaunch; NHL/NCAAB deleted Aug 27 2026). ONE brain per pick: the research assistant (Haiku, tools + search, briefing before Pass 1) is BACK for MLB and NBA (founder GO, Sep 3 2026 — `GARY_RESEARCHER=off` is the switch); football stays desk-only pending its review. NBA reads the Apr 8 2026 winning-era prompts verbatim (`orchestrator/nbaWinningEra.js`, Sep 3 2026 — do not touch). Gemini is retired everywhere. Gary evaluates and decides on `codex-gpt-6-astra` (founder GO, Sep 4 2026; codex bridge, zero tools; failures re-run the WHOLE game on the next model in the cascade Sol via codex → opus-5 → sonnet-5; truth in `orchestratorConfig.js` + the scheduler plist). Game primaries are Astra; props stay on Sol (founder correction, Sep 4 2026). Research, Winners review, and content retain their existing models. Core orchestration lives in `src/services/agentic/orchestrator/agentLoop.js`; the desk builders in `src/services/agentic/scoutReport/`; sport awareness in `src/services/agentic/constitution/`. Pick generation scripts in `scripts/` (`run-agentic-picks.js` is the entry; MLB runs the June engine unconditionally — founder, Aug 27 2026: ONE pick system; the separate pickdesk game brain is deleted, though the props desk still lives in `src/services/pickdesk/`). Database is Supabase. All project context, architecture details, and user preferences are in the auto-memory files at `/Users/adam.preda/.claude/projects/-Users-adam-preda/memory/`.
+
+## Winners and evidence (founder GO, Sep 4 2026)
+
+Game picks use Astra; props stay on Sol. Confidence is Gary's own judgment,
+not a calibrated win probability or an admission gate. The exact-ticket
+reviewer stays on Sol. The independent `com.gary.winners` launch agent runs
+`scripts/run-winners-board.js --watch`: original published picks/evidence enter
+`winners_candidates`, all review decisions are logged, and only qualified
+pregame tickets may enter `winners_board`. Six is a maximum per league and
+kind. Prop capacity follows the slate's early/middle/late windows (2/4/6),
+with unused slots carried forward. Confidence only orders already-qualified
+candidates available together. Published ticket snapshots never change.
+The app reads these snapshots for current and historical dates from Sep 4;
+empty/error responses never invoke old local selection. Existing Sep 4
+publications were captured as a separate legacy policy, not rebranded as
+new-review successes. Read prospective outcomes with `node scripts/winners-book.js`.
+
+The notebook remains a separate experiment. Its v2 autopsies distinguish
+pregame evidence assessment from outcome realization, cite original inputs,
+and review wins, losses, and pushes. Legacy hindsight notes stay historical.
+NCAAF player evidence comes from dated game rows with season/sample labels;
+the known-poisoned season-total endpoint must not feed game or prop decisions.
+Do not remove the pinned NBA prompts or change injury handling.
 
 ## Layer 3 Violations — The Only Rule That Matters
 
@@ -29,9 +52,7 @@ scratch to fit the app and its page. Do not keep, consult, or create design-spec
 files/rules (all prior ones were deleted on his order, July 7 2026); his reactions in
 the live conversation are the only design input.
 
-Behavior vs. visuals: prop-slip grouping and Winners selection logic
-(selectPremiumProps: straight confidence cut, no per-game cap) encode hard-won
-BEHAVIORAL rules — keep the behavior even when restyling the visuals.
+Behavior vs. visuals: prop-slip grouping remains intact. Winners admission now comes only from the immutable server board (founder GO, Sep 4 2026), not local confidence/start-time selection. Home retains its featured games. Do not reintroduce automatic first-underdog or marquee admission.
 
 ## LOCKED: Injury Handling
 

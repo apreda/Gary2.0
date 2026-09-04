@@ -6,6 +6,7 @@ import { getNbaSpreadFactors, getNflSpreadFactors, getNcaafSpreadFactors, getMlb
 import { GAME_ML_CAP } from './orchestratorConfig.js';
 import { mlbCaseHeadings, mlbPass1Opening } from './mlbCaseMenu.js';
 import { NBA_PASS1_INVESTIGATE_LINES } from './nbaWinningEra.js';
+import { DECISION_EVIDENCE_QUESTIONS } from './evidenceQuality.js';
 
 /**
  * Build the PASS 1 user message - Identify battlegrounds, DO NOT pick a side yet
@@ -305,14 +306,9 @@ export function buildPass2Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spor
 
 Your JSON must include all three fields: "final_pick", "rationale", AND "confidence_score". Missing confidence_score will cause a system error.`;
 
-  // THE BARE ASK (founder GO, Aug 27, superseding the same-morning neutral
-  // rewrite): the decision turn asks what a person would ask — nothing else.
-  // Every synthesis speech this turn ever carried (side cases, "the board",
-  // burden-of-proof framing, commit/process narration) is gone for every
-  // sport; "no different than I was talking to a human." The instructions
-  // block below is untouched — it is the output contract (format, rails),
-  // not betting talk.
-  const synthesis = `What's your bet, and what are the reasons why?`;
+  // Founder GO Sep 4: a small evidence check, with the side and confidence
+  // still Gary's judgment. NBA's separate April prompts remain pinned.
+  const synthesis = `What's your bet, and what are the reasons why?${isMLB || isFootball ? `\n\n${DECISION_EVIDENCE_QUESTIONS}` : ''}`;
 
   // MLB (founder GO, Sep 2 2026): the decision turn is the question and the
   // output contract, nothing else — no checkpoint block (pass names and the

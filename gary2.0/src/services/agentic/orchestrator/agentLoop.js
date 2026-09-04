@@ -1,3 +1,4 @@
+import { cleanNcaafPlayerRows, aggregateNcaafPlayerRows } from '../scoutReport/sports/ncaafPlayerEvidence.js';
 import { CONFIG, GAME_PICK_MODEL, GAME_ML_CAP, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, validateSessionModel } from './orchestratorConfig.js';
 import { createModelSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
 import { buildResearchBriefing, extractResearcherQuestions, createResearcherFollowUpSession, askResearcher } from './researchBriefing.js';
@@ -401,9 +402,9 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   } else if (researcherOn) {
     const brainHasTools = !['claude-cli', 'codex-cli'].includes(currentSession?.provider);
     const investigateAsk = brainHasTools
-      ? `Investigate further with your own fetch_stats calls wherever your read wants more evidence — duplicates of already-fetched stats return nothing new, so only novel requests cost anything. You can also hand a question to your research assistant: write a line starting with ASK RESEARCHER: followed by the question (one per line, up to 6 per game) and the answer comes back with verified figures.`
-      : `Your research assistant stays on call. To dig deeper into anything — a split the briefing summarized, a number you want verified, a factor it did not cover — write a line starting with ASK RESEARCHER: followed by the question (one per line, up to 6 per game). The answers come back with verified figures before you continue. Weigh the briefing's findings honestly rather than repeating them.`;
-    const briefingBlock = `\n\n## RESEARCH BRIEFING (from your research assistant)\n\nYour research assistant investigated every factor with full tool access. These are structured, verified findings. Everything it covers is already fetched.\n\n${_researchBriefing}\n\n---\n\n${investigateAsk}`;
+      ? `Investigate further with your own fetch_stats calls wherever your read wants more evidence — duplicates of already-fetched stats return nothing new, so only novel requests cost anything. You can also hand a question to your research assistant: write a line starting with ASK RESEARCHER: followed by the question (one per line, up to 6 per game) and the answer comes back with its supporting evidence when available.`
+      : `Your research assistant stays on call. To dig deeper into anything — a split the briefing summarized, a number you want verified, a factor it did not cover — write a line starting with ASK RESEARCHER: followed by the question (one per line, up to 6 per game). The answers come back with their supporting evidence when available before you continue. Weigh the briefing's findings honestly rather than repeating them.`;
+    const briefingBlock = `\n\n## RESEARCH BRIEFING (from your research assistant)\n\nYour research assistant investigated the factors with tool access. Its interpretations are separate from the figures and source references it reports. Neither the briefing nor a repeated report independently verifies a claim. The original desk and tool evidence remain the source of truth; unresolved discrepancies stay unresolved.\n\n${_researchBriefing}\n\n---\n\n${investigateAsk}`;
     userMessage = userMessage + briefingBlock;
     nextMessageToSend = userMessage;
     messages[1] = { role: 'user', content: userMessage };
@@ -1223,8 +1224,16 @@ INVESTIGATION COMPLETE`;
                 trend: r.trend
               }));
             } else {
-              // Get player season stats for the team
-              const seasonStats = await ballDontLieService.getNcaafPlayerSeasonStats({ teamId: team.id, season });
+              // Dated game evidence only: the college season-total endpoint
+              // can relabel prior-year lines as the current season.
+              const [roster, rows] = await Promise.all([
+                ballDontLieService.getNcaafTeamPlayers(team.id, 360),
+                ballDontLieService.getNcaafPlayerGameStats({ teamId: team.id, season }),
+              ]);
+              const players = new Map(roster.map(player => [String(player.id), player]));
+              const checked = cleanNcaafPlayerRows(rows, { season, playerIds: [...players.keys()], teamId: team.id });
+              const seasonStats = [...aggregateNcaafPlayerRows(checked.rows, season)].map(([id, line]) => ({ ...line, player: players.get(id) }));
+              statResult.evidenceChecks = checked.diagnostics;
 
               if (args.stat_type === 'OFFENSE') {
                 // Filter offensive players (QBs, RBs, WRs, TEs)
@@ -1243,16 +1252,17 @@ INVESTIGATION COMPLETE`;
                   player: `${s.player?.first_name} ${s.player?.last_name}`,
                   position: s.player?.position_abbreviation,
                   jersey: s.player?.jersey_number,
-                  passingYards: s.passing_yards || 0,
-                  passingTDs: s.passing_touchdowns || 0,
-                  passingINTs: s.passing_interceptions || 0,
+                  evidence: s.evidence,
+                  passingYards: s.passing_yards ?? null,
+                  passingTDs: s.passing_touchdowns ?? null,
+                  passingINTs: s.passing_interceptions ?? null,
                   qbRating: s.passing_rating?.toFixed(1) || null,
-                  rushingYards: s.rushing_yards || 0,
-                  rushingTDs: s.rushing_touchdowns || 0,
+                  rushingYards: s.rushing_yards ?? null,
+                  rushingTDs: s.rushing_touchdowns ?? null,
                   rushingAvg: s.rushing_avg?.toFixed(1) || null,
-                  receptions: s.receptions || 0,
-                  receivingYards: s.receiving_yards || 0,
-                  receivingTDs: s.receiving_touchdowns || 0
+                  receptions: s.receptions ?? null,
+                  receivingYards: s.receiving_yards ?? null,
+                  receivingTDs: s.receiving_touchdowns ?? null
                 }));
 
               } else if (args.stat_type === 'DEFENSE') {
@@ -1272,12 +1282,13 @@ INVESTIGATION COMPLETE`;
                   player: `${s.player?.first_name} ${s.player?.last_name}`,
                   position: s.player?.position_abbreviation,
                   jersey: s.player?.jersey_number,
-                  tackles: s.total_tackles || 0,
-                  soloTackles: s.solo_tackles || 0,
-                  tacklesForLoss: s.tackles_for_loss || 0,
-                  sacks: s.sacks || 0,
-                  interceptions: s.interceptions || 0,
-                  passesDefended: s.passes_defended || 0
+                  evidence: s.evidence,
+                  tackles: s.total_tackles ?? null,
+                  soloTackles: s.solo_tackles ?? null,
+                  tacklesForLoss: s.tackles_for_loss ?? null,
+                  sacks: s.sacks ?? null,
+                  interceptions: s.interceptions ?? null,
+                  passesDefended: s.passes_defended ?? null
                 }));
               }
 

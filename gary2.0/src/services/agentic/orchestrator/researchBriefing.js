@@ -1,3 +1,4 @@
+import { RESEARCH_EVIDENCE_RULES, renderEvidenceBriefing } from './evidenceQuality.js';
 import { createModelSession, sendToSessionWithRetry, resetSessionChat } from './sessionManager.js';
 import { getFlashInvestigationPrompt } from '../flashInvestigationPrompts.js';
 import { getMlbSeasonAwareness } from './spreadEvaluationFactors.js';
@@ -113,8 +114,11 @@ function renderStructuredBriefing(payload) {
  * findings carry too. Per-field caps keep the carry-forward block small across all
  * factors; the FULL text still lives in _accumulatedFactors for the final briefing.
  */
-function renderFindingsSoFar(accumulated) {
+function renderFindingsSoFar(accumulated, evidenceAware = false) {
   if (!accumulated || accumulated.length === 0) return '';
+  if (evidenceAware) {
+    return '## PRIOR RESEARCH (reported evidence and interpretations; repetition is not independent support)\n\n' + renderEvidenceBriefing(accumulated);
+  }
   const blocks = accumulated.map(f => {
     const name = f.factor || f.name || f.title || 'Unknown';
     const finding = String(f.keyFinding || f.key_finding || f.finding || '').slice(0, 260);
@@ -278,7 +282,7 @@ ${isNflAugustPreseasonScoutPlan
 ${investigationMethodology}
 ${mlbAwarenessBlock}
 ${researchProvenanceBlock}
-CRITICAL RULES:
+${isNBASport ? '' : RESEARCH_EVIDENCE_RULES}CRITICAL RULES:
 - Report specific numbers with context: "Team went 2-4 with -8.3 net rating during games 60-65 when Player X was out — but 3 of those were against top-10 defenses"
 ${isNBASport ? NBA_RESEARCHER_RULES.reporting : `- Report each factor's findings, and weight them honestly: for each, note whether it meaningfully moves THIS game or is minor context. Most individual factors move a single game far less than they look like they do — say so when that's the case. Gary makes the final call and connects the dots, but your job is to tell him what carries real weight and what is small, not to present every factor as equally important`}
 - If you reference opponent quality or recency distortion, include concrete evidence (named opponents and/or score/result context), not generic claims like "weaker opposition"
@@ -289,7 +293,7 @@ ${isNBASport ? NBA_RESEARCHER_RULES.reporting : `- Report each factor's findings
 ${isNBASport ? NBA_RESEARCHER_RULES.figures : `- Every figure you cite must exist verbatim in the scout report or a tool return. A metric neither provides (wRC+, xERA, FIP, SIERA, BABIP, DRS, pop time, and the like) is NOT AVAILABLE — say so instead of recalling or deriving a value. Never present arithmetic you performed (a computed differential, an inferred rate) as a fetched stat; if you must derive, label it as your own calculation from named inputs`}
 
 OUTPUT FORMAT — for each factor you investigate, write your findings as a JSON object:
-{"factor": "Factor name", "keyFinding": "1-2 sentence finding", "numbers": "Concrete stats for BOTH teams — repeat the exact figures in THIS field; never leave it empty", "context": "Opponent quality / who played / sample window context — never leave it empty"}
+{"factor": "Factor name", "keyFinding": "1-2 sentence finding", "numbers": "Concrete stats for BOTH teams — repeat the exact figures in THIS field; never leave it empty", "context": "Opponent quality / who played / sample window context — never leave it empty"${isNBASport ? '' : ', "sources": "Desk section / tool token / source URL and publication date when supplied; identify missing attribution", "uncertainties": "Unresolved facts, conflicting reports and missing sample context; do not invent any"'}}
 
 Do NOT make a pick or recommendation.
 
@@ -390,7 +394,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
       // scout report + compact findings-so-far so each factor still investigates with
       // full context + all prior CONCLUSIONS. resetSessionChat re-attaches the system
       // prompt inline if the session is not cache-backed (never a naked chat).
-      const _findingsSoFar = renderFindingsSoFar(completedFactorFindings.filter(Boolean));
+      const _findingsSoFar = renderFindingsSoFar(completedFactorFindings.filter(Boolean), !isNBASport);
       const _seedUserText = _findingsSoFar ? `${briefingPrompt}\n\n---\n\n${_findingsSoFar}` : briefingPrompt;
       // Clone only the mutable chat handle. All factor sessions reuse the one
       // cache-backed GenerativeModel; no additional cache or system prompt is
@@ -690,7 +694,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
     if (!parsed.payload) {
       console.warn(`[Research Briefing] Parse issue: ${parsed.error} — rendering directly`);
       // Fallback: render directly from accumulated factors without normalization
-      const directBriefing = _accumulatedFactors.map(f => {
+      const directBriefing = !isNBASport ? renderEvidenceBriefing(_accumulatedFactors) : _accumulatedFactors.map(f => {
         const name = f.factor || f.name || f.title || 'Unknown';
         const finding = f.keyFinding || f.key_finding || f.finding || '';
         const numbers = f.numbers || f.stats || '';
@@ -700,7 +704,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
       return { briefing: directBriefing, calledTokens };
     }
 
-    const briefing = renderStructuredBriefing(parsed.payload);
+    const briefing = isNBASport ? renderStructuredBriefing(parsed.payload) : renderEvidenceBriefing(_accumulatedFactors);
     console.log(`[Research Briefing] ✅ Briefing rendered (${briefing.length} chars)`);
 
     // Coverage diagnostics
@@ -759,7 +763,7 @@ export function extractResearcherQuestions(text, maxQuestions = 6) {
 export async function createResearcherFollowUpSession({ scoutReportContent, briefing, sport, homeTeam, awayTeam, _costTracker = null, researchModel = null }) {
   const systemPrompt = `You are the research assistant for a sports bettor named Gary. He read your briefing and has follow-up questions. Answer them factually.
 
-RULES:
+${sport === 'NBA' || sport === 'basketball_nba' ? '' : RESEARCH_EVIDENCE_RULES}RULES:
 - Answer with exact figures for BOTH teams where the question allows — never vague words where a number exists.
 - Use your tools when the data is not already in the scout report or briefing; cite the sample window (which games, how many) for any trend.
 - Keep each answer under 130 words. Answer the question asked — no extra factors, no advice.
