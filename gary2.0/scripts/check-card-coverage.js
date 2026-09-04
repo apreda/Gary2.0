@@ -59,26 +59,28 @@ for (const league of leagues) {
   const leagueSignals = (signals || []).filter((s) => s.league === league);
   const leagueCards = (cards || []).filter((c) => c.league === league);
   const cardIds = new Set(leagueCards.map((c) => String(c.player_id)));
-  const cardNames = new Set(leagueCards.map((c) => nameKey(c.player_name)).filter(Boolean));
 
+  // A PLAYER ROW is one the lane stamped with a player id. A row with no id
+  // that still resolves by name is football's path and counts as a bonus —
+  // team rows (a bullpen, a head-to-head) are neither and must not inflate
+  // the denominator, or the watch reports misses that do not exist.
   const withPlayer = leagueSignals.filter((s) => s.player_id != null);
-  const byId = withPlayer.filter((s) => cardIds.has(String(s.player_id)));
-  // The app resolves a nameless row against the packs by name, so count that
-  // path too — it is the one that carries every football lane.
-  const byName = leagueSignals.filter((s) => !cardIds.has(String(s.player_id ?? ''))
-    && cardNames.has(nameKey(headName(s.headline))));
+  const reachable = withPlayer.filter((s) => cardIds.has(String(s.player_id))
+    || resolvesByName(headName(s.headline), leagueCards));
+  const nameOnly = leagueSignals.filter((s) => s.player_id == null
+    && resolvesByName(headName(s.headline), leagueCards));
   const thin = leagueCards.filter((c) => isThin(c.payload)).length;
-  const reachable = byId.length + byName.length;
-  const namesOnRows = withPlayer.length + byName.length;
+  const namesOnRows = withPlayer.length;
 
   console.log(`  ${league.padEnd(6)} ${String(leagueCards.length).padStart(4)} card(s)`
-    + `  ·  ${reachable}/${namesOnRows} player row(s) reach one`
+    + `  ·  ${reachable.length}/${namesOnRows} player row(s) reach one`
+    + `${nameOnly.length ? ` (+${nameOnly.length} by name)` : ''}`
     + `  ·  ${thin} thin`);
 
   if (leagueSignals.length && !leagueCards.length) {
     failures.push(`${league}: ${leagueSignals.length} row(s) on the board and NO cards at all`);
-  } else if (namesOnRows && reachable < namesOnRows) {
-    const gap = namesOnRows - reachable;
+  } else if (namesOnRows && reachable.length < namesOnRows) {
+    const gap = namesOnRows - reachable.length;
     const line = `${league}: ${gap} player row(s) open an empty card`;
     if (STRICT || gap > namesOnRows / 2) failures.push(line);
     else console.log(`         ⚠️  ${line}`);
@@ -98,6 +100,31 @@ if (failures.length) {
   process.exit(1);
 }
 console.log('\n✅ Every player row on the board reaches a card.');
+
+/**
+ * The app's own name resolver (HubView.intelCard): exact key, then either
+ * string containing the other, then the agate short form "J. Caminero".
+ * The watch has to count what the app can actually open, not a stricter match.
+ */
+function resolvesByName(name, cards) {
+  const k = nameKey(name);
+  if (k.length < 5) return false;
+  for (const c of cards) {
+    const n = nameKey(c.player_name || c.payload?.name);
+    if (n && (n === k || n.includes(k) || k.includes(n))) return true;
+  }
+  const tokens = String(name || '').split(/\s+/).filter(Boolean);
+  if (tokens.length < 2) return false;
+  const surname = nameKey(tokens[tokens.length - 1]);
+  const initial = (tokens[0].match(/[A-Za-z]/g) || []).join('');
+  if (surname.length < 3 || initial.length !== 1) return false;
+  return cards.some((c) => {
+    const parts = String(c.player_name || c.payload?.name || '').split(/\s+/).filter(Boolean);
+    if (parts.length < 2) return false;
+    return nameKey(parts[parts.length - 1]) === surname
+      && parts[0].toLowerCase().startsWith(initial.toLowerCase());
+  });
+}
 
 function nameKey(name) {
   return String(name || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
