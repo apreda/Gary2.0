@@ -82,8 +82,12 @@ const PRICE_TALK = /\b(?:plus|even)[- ]money\b|\bpric(?:e|es|ed|ing)\b|\bjuice\b
 //  - an unresolved pronoun: he/his/they/their with NO name in the sentence
 //    itself (a capitalized word beyond position 0 counts as the name).
 // First-person stays — "I'm", "my" is Gary himself, never unresolved.
-const TORN_OPENER = /^(?:but|and|so|yet|still|also|plus|though|however|meanwhile|that|those|these|this|he|his|him|she|her|they|their|them|it['\u2019]?s why)\b/i;
-const THIRD_PERSON = /\b(?:he|his|him|she|her|they|their|them)\b/i;
+const TORN_OPENER = /^(?:but|and|so|yet|still|also|plus|though|however|meanwhile|that|those|these|this|he|his|him|she|her|they|their|them|it|its)\b/i;
+const THIRD_PERSON = /\b(?:he|his|him|she|her|they|their|them|it|its)\b/i;
+// References to a previous paragraph do not become self-contained just because
+// another player happens to be named later in the sentence (Sep 3–4 posts).
+const BACK_REFERENCE = /\b(?:that|those|these|this)\s+(?:uncertainty|opportunity|advantages?|edges?|risks?|matchup|split|splits|production|stretch|span|form|case|read|number|numbers)\b/i;
+const STAT_ABBREVIATIONS = new Set(['ERA', 'WHIP', 'OPS', 'ER', 'K', 'BB', 'HR', 'RBI', 'AVG', 'OBP', 'SLG', 'MLB', 'NFL', 'NBA', 'NCAAF', 'AAA', 'AA']);
 // Sentence-initial capitalization is ambiguous, so word[0] only counts as a
 // name when it is not an ordinary sentence-starter ("Holmes has..." resolves
 // a later "he"; "Their bullpen..." never does — TORN_OPENER catches those).
@@ -94,14 +98,20 @@ const STARTER_STOPWORDS = new Set([
 ]);
 function hasResolvingProperNoun(t) {
   const words = String(t).split(/\s+/).map((w) => w.replace(/^["'\u201C\u2018(]+/, ''));
-  if (words.slice(1).some((w) => /^[A-Z][a-zA-Z'\u2019.-]+/.test(w))) return true;
+  const namedWord = (w) => /^[A-ZÀ-ÖØ-Þ][\p{L}'\u2019.-]+/u.test(w)
+    && !STAT_ABBREVIATIONS.has(w.replace(/[^A-Z]/g, ''));
+  if (words.slice(1).some(namedWord)) return true;
   const first = words[0] || '';
-  return /^[A-Z][a-zA-Z'\u2019.-]+/.test(first) && !STARTER_STOPWORDS.has(first.toLowerCase());
+  return namedWord(first) && !STARTER_STOPWORDS.has(first.toLowerCase());
 }
 export function isStandaloneSentence(sentence) {
   const t = String(sentence ?? '').trim();
   if (TORN_OPENER.test(t)) return false;
-  if (THIRD_PERSON.test(t) && !hasResolvingProperNoun(t)) return false;
+  if (BACK_REFERENCE.test(t)) return false;
+  // A name after "his/he" cannot resolve the opening subject. Statistical
+  // abbreviations never count as names: ER/K/BB let the Sep 3 Rangers post pass.
+  const pronoun = THIRD_PERSON.exec(t);
+  if (pronoun && !hasResolvingProperNoun(t.slice(0, pronoun.index))) return false;
   return true;
 }
 
@@ -131,6 +141,18 @@ export function reasonCandidates(rationale) {
   return splitSentences(rationale).filter(isReasonSentence);
 }
 
+/** The final boundary shared by model selection and deterministic fallback. */
+export function isSafeReasonPair(rationale, pair, budget) {
+  if (!pair || typeof pair.opening !== 'string' || typeof pair.closing !== 'string') return false;
+  if (!Number.isFinite(budget) || budget < 0) return false;
+  const { opening, closing } = pair;
+  const candidates = reasonCandidates(rationale).map(normWs);
+  const safe = (sentence) => sentence.trim().length > 0
+    && isReasonSentence(sentence) && candidates.includes(normWs(sentence));
+  return safe(opening) && (closing === '' || (safe(closing) && normWs(opening) !== normWs(closing)))
+    && opening.length + closing.length <= budget;
+}
+
 const digitGroups = (s) => (String(s).match(/\d[\d.,%]*/g) || []).length;
 
 /** Gary's stance/thesis sentence class — the first-person read that says WHY
@@ -150,7 +172,9 @@ const STANCE = /\b(i(?:'|’)?m backing|i(?:'|’)?m taking|i(?:'|’)?ll take|m
  */
 export function fallbackReasonPair(rationale, budget) {
   const cands = reasonCandidates(rationale);
-  if (!cands.length) return fallbackVerbatimPair(rationale, budget);
+  // No safe reason is a visible copy failure, never permission to reintroduce
+  // headings, stakes, prices, or context-dependent prose through a fallback.
+  if (!cands.length) return null;
   const stanceIdx = cands.findIndex((s) => STANCE.test(s));
   // Opening preference: the stance sentence, then digit-bearing reasons in
   // card order (a digit-less non-stance sentence is usually atmosphere —

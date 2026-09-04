@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import { LaunchOffer } from '@/components/LaunchOffer';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { AppStoreButton } from '@/components/AppStoreButton';
@@ -20,7 +21,7 @@ export const metadata: Metadata = pageMetadata({
   canonical: '/',
   title: 'Gary AI — Free Sports Picks for Every Game, Every Day',
   description:
-    'Free daily picks with written reasoning across MLB, NBA, NFL, NHL, NCAAB, and NCAAF, plus a daily research desk and public track record.',
+    'Find your game. See Gary’s pick. Free MLB, NFL and NCAAF picks with written reasoning, a public record, and a private bet tracker.',
 });
 
 export default async function Home() {
@@ -86,22 +87,20 @@ export default async function Home() {
                 details retain the page's restrained entrance motion. */}
             <h1 className="mt-5 font-display text-[clamp(3.4rem,9.5vw,7.5rem)] uppercase leading-[0.9] text-hi">
               <span className="mb-3 block text-[0.42em] tracking-[0.025em] text-gold">Free sports picks.</span>
-              Every game.
+              Find your game.
               <br />
-              Every day.
-              <br />
-              <span className="text-gold">On the record.</span>
+              <span className="text-gold">See Gary&apos;s pick.</span>
             </h1>
             <p className="rise rise-3 mt-6 max-w-xl text-lg leading-relaxed text-mid">
-              Gary covers the full slate free — every pick with the reasoning behind it,
-              every result graded in public, and a one-scroll Today desk for the whole morning briefing.
+              At the game or on the couch, see what Gary thinks about your matchup.
+              The full slate and written reasoning stay free, with wins and losses on the public record.
             </p>
             <div className="rise rise-4 mt-8 flex flex-wrap items-center gap-4">
               <Link
                 href="/today"
                 className="inline-flex items-center rounded-card bg-gold px-5 py-3 text-sm font-semibold text-ink transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
               >
-                Open today&apos;s desk
+                Find your game
               </Link>
               <GhostLink href={accountHref('/you', 'signup')}>Start My Book — free</GhostLink>
             </div>
@@ -146,6 +145,8 @@ export default async function Home() {
           </div>
         </div>
       </section>
+
+      <div className="mx-auto max-w-6xl px-5"><LaunchOffer /></div>
 
       {/* ── The tape ──────────────────────────────────────────────── */}
       {recentWins && <RecordTicker items={recentWins} />}
@@ -195,8 +196,8 @@ export default async function Home() {
                   {allTime.losses.toLocaleString()}
                 </p>
                 <p className="mt-4 max-w-lg text-[15px] leading-relaxed text-mid">
-                  Every game pick Gary has made, graded against final scores the next morning.
-                  No deletions, no restatements — losses stay on the books with the wins.
+                  Published game picks are graded against final scores when results are available.
+                  Losses stay on the books with wins; corrections are documented.
                 </p>
                 <div className="mt-6">
                   <GhostLink href="/results">The full ledger</GhostLink>
@@ -239,9 +240,9 @@ export default async function Home() {
         <h2 className="font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-gold">How Gary works</h2>
         <div className="mt-5 grid gap-4 md:grid-cols-3">
           {[
-            ['Research', 'A research agent investigates every game with live data — odds, stats, injuries, splits, weather.'],
+            ['The evidence', 'Gary starts with a sport-specific desk of available odds, stats and matchup context. MLB also uses a research assistant.'],
             ['The call', 'Gary weighs the evidence against each sport’s written rules and makes the call, with a confidence rating.'],
-            ['On the record', 'Every pick is written up, fact-checked, graded the next morning, and added to the public ledger.'],
+            ['On the record', 'Read the reasoning, then check the result. Reviews can catch unsupported claims; they cannot guarantee accuracy or a win.'],
           ].map(([title, body], i) => (
             <div key={title} className="quant-panel p-6">
               <span className="tnum font-mono text-[11px] font-bold text-gold">0{i + 1}</span>
@@ -269,13 +270,13 @@ export default async function Home() {
               <span className="text-gold">Conviction is the upgrade.</span>
             </h2>
             <p className="mt-4 max-w-lg text-[15px] leading-relaxed text-mid">
-              The website carries the full free slate. The app adds Winners — the handful
-              of plays per sport Gary would actually bet — plus live game tracking and the
-              complete Billfold ledger.
+              The full slate is free on web and iOS. Winners is Gary&apos;s reviewed shortlist,
+              with published tickets kept on the record. Your account owns your access
+              and your private Book.
             </p>
             <ul className="mt-7 max-w-lg">
               {[
-                ['Winners', 'Gary’s highest-conviction board, each with its own graded record. From $9.99/mo.'],
+                ['Winners', 'A reviewed shortlist with its own record. Included in launch preview and founding access.'],
                 ['Live tracking', 'Scores update on your picks in real time, game by game.'],
                 ['The Billfold', 'All-time, last 30, net units at flat stakes — the whole ledger in your pocket.'],
                 ['Alerts', 'A push the moment the day’s board posts.'],
@@ -308,9 +309,9 @@ export default async function Home() {
                 {[
                   ['MLB', 'PHI ML', '-118', false],
                   ['MLB', 'TOTAL BASES O 1.5', '+105', false],
-                  ['NBA', 'BOS -3.5', '-110', true],
-                  ['NHL', 'EDM ML', '+120', true],
-                  ['NBA', 'PG13 PTS O 22.5', '-115', true],
+                  ['NFL', 'TEAM -3.5', '-110', true],
+                  ['NCAAF', 'TEAM ML', '+120', true],
+                  ['MLB', 'PITCHER K O 5.5', '-115', true],
                 ].map(([lg, pick, odds, locked], i) => (
                   <div key={i} className="mt-2.5 rounded-chip border border-line bg-card px-3 py-2.5">
                     <div className="flex items-center justify-between">
@@ -333,7 +334,7 @@ export default async function Home() {
                   </div>
                 ))}
                 <p className="mt-4 text-center font-mono text-[8.5px] uppercase tracking-[0.04em] text-faint">
-                  Unlocks in the app
+                  Illustration · check your account for access
                 </p>
               </div>
             </div>

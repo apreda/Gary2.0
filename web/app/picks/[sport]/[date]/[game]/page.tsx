@@ -5,6 +5,7 @@ import { AppStoreButton } from '@/components/AppStoreButton';
 import { Eyebrow } from '@/components/Eyebrow';
 import { JsonLd } from '@/components/JsonLd';
 import { ScoutRead } from '@/components/ScoutRead';
+import { MeaningfulPickView } from '@/components/MeaningfulPickView';
 import { ShareActions } from '@/components/ShareActions';
 import { ResultLetter, StitchRule } from '@/components/Terminal';
 import { isArchiveDate } from '@/lib/gary/archive';
@@ -254,7 +255,9 @@ export default async function GamePage({ params }: { params: Params }) {
             <StitchRule tone="faint" className="mb-6 mt-4" />
             {plain ? (
               <>
-                <ScoutRead text={plain} />
+                <MeaningfulPickView path={`/picks/${cfg.slug}/${date}/${canonicalSlug}`}>
+                  <ScoutRead text={plain} />
+                </MeaningfulPickView>
                 {deeper && deeper.length > 0 && (
                   <>
                     <p className="mt-7 font-mono text-[10.5px] font-bold uppercase tracking-[0.09em] text-gold/70">The full analysis</p>
@@ -263,7 +266,9 @@ export default async function GamePage({ params }: { params: Params }) {
                 )}
               </>
             ) : (
-              <ScoutRead text={full} />
+              full ? <MeaningfulPickView path={`/picks/${cfg.slug}/${date}/${canonicalSlug}`}>
+                <ScoutRead text={full} />
+              </MeaningfulPickView> : null
             )}
             {injuries.length > 0 && (
               <div className="mt-6">

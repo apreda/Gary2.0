@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { SPORTS } from '@/lib/gary/leagues';
 import { PRICING } from '@/lib/gary/pricing';
-import { beginAppStoreHandoff, logEvent } from '@/lib/gary/analytics';
+import { accountHref } from '@/lib/auth/redirect';
+import { logEvent } from '@/lib/gary/analytics';
 
 type Sel = { plan: 'all_access' | 'all_access_annual' | 'single'; sport?: string };
 
@@ -26,16 +27,9 @@ export function PricingPlans() {
   }
 
   function unlock() {
-    const billing = sel.plan === 'all_access_annual' ? 'annual' : 'monthly';
-    // Entitlements key on the app identity, so the canonical purchase path is
-    // the app. The web page sells + proves; the app closes.
-    window.location.assign(
-      beginAppStoreHandoff('pricing_plan', {
-        plan: sel.plan,
-        sport: sel.sport?.toLowerCase(),
-        billing,
-      }),
-    );
+    // Your membership resolves preview, founding and paid access on the server.
+    // The selected catalog price is informational; no checkout starts here.
+    window.location.assign(accountHref('/you'));
   }
 
   const isSel = (plan: Sel['plan'], sport?: string) => sel.plan === plan && sel.sport === sport;
@@ -46,7 +40,7 @@ export function PricingPlans() {
       {/* Single sports lead (Sep 1 2026): the realistic first yes for a fan who knows one sport */}
       <div>
         <div className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-low">
-          Single sports — {PRICING.single}/mo each
+          Plans for accounts without included access — {PRICING.single}/mo per sport
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
           {singles.map(s => {
@@ -66,7 +60,7 @@ export function PricingPlans() {
                   </span>
                   <Mark on={on} />
                 </div>
-                <span className="text-[11.5px] text-low">Winners board</span>
+                <span className="text-[11.5px] text-low">{s.code === 'NBA' ? 'NBA relaunch planned' : 'Winners board'}</span>
                 <span className="flex items-baseline gap-0.5">
                   <span className="font-mono text-[13px] font-bold text-gold">{PRICING.single}</span>
                   <span className="font-mono text-[9px] text-white/35">/mo</span>
@@ -141,15 +135,13 @@ export function PricingPlans() {
 }
 
 function ctaLabel(sel: Sel): string {
-  if (sel.plan === 'all_access') return `CHOOSE ALL-ACCESS IN THE APP`;
-  if (sel.plan === 'all_access_annual') return `CHOOSE ALL-ACCESS — ${PRICING.allAccessAnnual}/YR IN THE APP`;
-  return `UNLOCK ${sel.sport} WINNERS — ${PRICING.single}/MO`;
+  return sel.plan === 'single' ? `CHECK YOUR ${sel.sport} ACCESS` : 'CHECK YOUR WINNERS ACCESS';
 }
 
 function ctaCaption(sel: Sel): string {
-  if (sel.plan === 'all_access') return `New subscribers: ${PRICING.trialDays} days free, then ${PRICING.allAccessMonthly}/mo. Returning subscribers pay ${PRICING.allAccessMonthly}/mo. Manage anytime in the app.`;
+  if (sel.plan === 'all_access') return `New subscribers: ${PRICING.trialDays} days free, then ${PRICING.allAccessMonthly}/mo. Returning subscribers pay ${PRICING.allAccessMonthly}/mo. Your account shows included access before any purchase.`;
   if (sel.plan === 'all_access_annual')
-    return `New subscribers: ${PRICING.trialDays} days free, then ${PRICING.allAccessAnnual}/yr. Returning subscribers pay ${PRICING.allAccessAnnual}/yr — ${PRICING.allAccessAnnualMonthly}/mo. Manage anytime in the app.`;
+    return `New subscribers: ${PRICING.trialDays} days free, then ${PRICING.allAccessAnnual}/yr. Returning subscribers pay ${PRICING.allAccessAnnual}/yr — ${PRICING.allAccessAnnualMonthly}/mo. Your account shows included access before any purchase.`;
   return `Every ${sel.sport} play Gary backs — the Winners board. ${PRICING.single}/mo, cancel anytime.`;
 }
 

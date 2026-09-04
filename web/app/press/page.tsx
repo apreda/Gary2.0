@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { LAUNCH_OFFER } from '@/lib/gary/launch-offer';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Eyebrow } from '@/components/Eyebrow';
@@ -24,7 +25,7 @@ const BRAND_FACTS = [
   ['X / Twitter', `${BRAND.x} (${BRAND.xUrl})`],
   ['Support', BRAND.supportEmail],
   ['Sports covered', BRAND.sports.join(', ')],
-  ['Price', 'Full slate free. Winners (Gary’s conviction board) from $9.99/mo per sport or All-Access — sold in the iOS app.'],
+  ['Price', `Full slate free. ${LAUNCH_OFFER} Other accounts can choose Winners from $9.99/mo per sport after the preview, or All-Access.`],
 ];
 
 const ASSETS = [

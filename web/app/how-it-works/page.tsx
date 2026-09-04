@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { LaunchOffer } from '@/components/LaunchOffer';
+import { ACTIVE_COVERAGE, FREE_OFFER, LAUNCH_OFFER } from '@/lib/gary/launch-offer';
 import Link from 'next/link';
 import { Eyebrow } from '@/components/Eyebrow';
 import { JsonLd } from '@/components/JsonLd';
@@ -7,23 +9,25 @@ import { AnalysisDisclosure } from '@/components/AnalysisDisclosure';
 import { PageMasthead, StitchRule, GhostLink } from '@/components/Terminal';
 import { pageMetadata } from '@/lib/seo/metadata';
 
+export const revalidate = 3600;
+
 export const metadata: Metadata = pageMetadata({
   canonical: '/how-it-works',
   title: 'How Gary Works — Methodology | Gary AI',
   description:
-    'How Gary AI makes free daily sports picks: live-data research, written reasoning for every call, audited stats, and every pick graded the next morning.',
+    'How Gary AI makes free daily sports picks: available sports data, written reasoning, reviewed Winners selections, and a public graded record.',
 });
 
 const faqItems = [
   {
     question: 'Is Gary free?',
     answer:
-      "The full slate is — every game's pick with the written reasoning, every day, plus the props board, the Hub, and the complete public track record. Winners, Gary's highest-conviction board, is the paid product: from $9.99/mo per sport in the iOS app, or All-Access for every board.",
+      `${FREE_OFFER} ${LAUNCH_OFFER}`,
   },
   {
     question: 'What sports does Gary cover?',
     answer:
-      'MLB, NBA, NFL, NHL, NCAAB, and NCAAF. Game picks and player props are covered across all active seasons — and the complete 2026 FIFA World Cup record stays on the board.',
+      ACTIVE_COVERAGE,
   },
   {
     question: 'Does Gary place bets?',
@@ -54,22 +58,22 @@ const steps = [
   {
     num: '01',
     title: 'Research',
-    body: `A research agent investigates every matchup before a pick is produced. It pulls live odds from multiple sportsbooks, season statistics and recent-game logs, injury reports with dates, platoon and matchup splits, ballpark and venue factors, and weather where applicable. The agent works through a structured investigation — it only reports what it can verify against the underlying data, and it flags gaps rather than filling them with assumptions.`,
+    body: `Gary starts with a sport-specific desk of available odds, season and recent-game statistics, dated injury reports and matchup context. MLB also uses a research assistant to investigate the supplied evidence and additional sources; football currently uses its prepared data desk. Coverage varies by sport and provider. Missing or stale information can limit a call, and automated research can still make mistakes.`,
   },
   {
     num: '02',
     title: 'The call',
-    body: `Gary evaluates the research against a written constitution for each sport. MLB weighs starting pitching quality and market price. NCAAB accounts for guard-play dynamics, rest situations, and home-court context. Each sport has its own rules, and those rules stay consistent — Gary doesn't post a pick just because there's a game on the board. When Gary makes a call, he assigns a confidence rating from 50 to 100 percent and writes out the full reasoning in plain language. The rationale covers what the data showed, what Gary weighed, and why the line looks wrong.`,
+    body: `Gary considers both sides of the matchup and the available price, then makes a call with written reasoning. The full game slate is the free resource; it is not a recommendation to bet every game. Confidence expresses Gary’s judgment, not a calibrated probability of winning. Read the assumptions and opposing evidence alongside the pick.`,
   },
   {
     num: '03',
-    title: 'Fact-check',
-    body: `Before a pick is published, a second pass audits the numeric claims in the writeup against the underlying data that was actually fetched. If a rationale cites a player's recent average or a team's record in a specific situation, those numbers are verified. Picks that fail the audit are corrected or retried — they don't go out as written. This check was added after a review of losing picks found stale inputs and numeric claims that the fetched data did not support in some writeups.`,
+    title: 'Winners review',
+    body: `Winners is a separate shortlist of published picks. A review examines the original evidence, the exact line and odds, opposing evidence and unresolved assumptions before a ticket can qualify. There are at most six game selections and six props per league; spaces may remain empty. Once published, a Winners ticket is preserved. Review does not guarantee every factual claim is correct or that a ticket will win.`,
   },
   {
     num: '04',
     title: 'Grading',
-    body: `Every pick is graded against official final scores the morning after — wins, losses, and pushes. There is no cherry-picking or restatement of the record. The complete history is public at betwithgary.ai/results, broken down by sport, with net units calculated at flat 1-unit stakes. Losing streaks stay on the record the same as winning streaks.`,
+    body: `Published picks are graded against final scores or player results when those results are available. Wins, losses and pushes stay visible. Delayed results remain pending; documented corrections can change a grade. The complete history is public at betwithgary.ai/results, broken down by sport, with net units calculated at flat 1-unit stakes. Losing streaks stay on the record the same as winning streaks.`,
   },
 ];
 
@@ -81,10 +85,11 @@ export default function HowItWorksPage() {
       <PageMasthead
         title="How Gary AI makes sports picks"
         meta="METHODOLOGY"
-        sub="Gary covers MLB, NBA, NFL, NHL, NCAAB, and NCAAF. Every pick follows the same four-step process, from research to graded result."
+        sub={ACTIVE_COVERAGE}
       />
 
       <AnalysisDisclosure className="mt-7" />
+      <LaunchOffer className="mt-7" />
 
       {/* Four-step methodology — numbered rail, not gray boxes */}
       <div className="mt-12">

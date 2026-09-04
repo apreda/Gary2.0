@@ -6,12 +6,9 @@
  * together (Stripe link/trial → iOS GaryPricing → here), never one alone —
  * the site must never quote a number Stripe won't honor.
  *
- * June 9 2026 flip — STAGED: $29.99/mo + 7-day trial + $179/yr annual. The
- * Stripe TEST catalog matches (prices on prod_UeKymtDX7E8fsw, 7-day
- * card-required trials on both links). ⚠️ PRE-SHIP (owner, live mode):
- * recreate the $29.99/7-day and $179/yr prices + payment links in LIVE mode
- * and swap the RELEASE links in iOS GaryPricing's checkoutLinks — this page
- * deploys together with that swap, never before.
+ * Current account-owned billing checks included preview/founding access before
+ * checkout. These catalog prices apply only when no included entitlement exists.
+ * Keep actual Stripe prices and iOS pricing aligned when changing this catalog.
  */
 export const PRICING = {
   allAccessMonthly: '$29.99',
@@ -31,7 +28,7 @@ export const GATING: { capability: string; free: boolean; paid: boolean }[] = [
   { capability: 'Public track record / Billfold', free: true, paid: true },
   { capability: 'The Hub — edges, trends, receipts', free: true, paid: true },
   { capability: 'Winners — the plays Gary would actually bet', free: false, paid: true },
-  { capability: "Each board's own graded record", free: false, paid: true },
-  { capability: 'Live in-game tracking on your boards', free: false, paid: true },
-  { capability: 'Alerts the second a board posts', free: false, paid: true },
+  { capability: "Historical Winners boards and graded record", free: true, paid: true },
+  { capability: 'Your private Book, manual tracking and verified comparisons', free: true, paid: true },
+
 ];

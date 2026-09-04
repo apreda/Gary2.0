@@ -1,0 +1,300 @@
+{
+  "status": "action_required",
+  "exit_code": 1,
+  "issues": [
+    {
+      "code": "ENGAGEMENT_DRAFTS_STALE",
+      "severity": "action_required",
+      "detail": "Daily engagement cron is active; latest draft day is 2026-08-20."
+    }
+  ],
+  "current_slate": {
+    "stored_picks": 7,
+    "logged_pick_threads": 7,
+    "pending_picks": 0,
+    "deadline_passed_without_log": 0,
+    "missing_or_invalid_start": 0
+  },
+  "checked_at": "2026-09-04T23:02:04.593035+00:00",
+  "cohorts": [
+    {
+      "bookmarks": 0,
+      "cohort": "immature_or_unobserved",
+      "first_post": "2026-09-01T20:25:39.805006+00:00",
+      "impressions": 176,
+      "last_post": "2026-09-01T20:25:39.805006+00:00",
+      "likes": 0,
+      "link_clicks": null,
+      "max_observation_days": 3.1,
+      "mean_impressions": 176,
+      "measured_bookmarks": 1,
+      "measured_impressions": 1,
+      "measured_likes": 1,
+      "measured_link_clicks": 0,
+      "measured_profile_clicks": 1,
+      "measured_replies": 1,
+      "measured_reposts": 1,
+      "median_impressions": 176,
+      "min_observation_days": 3.1,
+      "newest_metric_snapshot": "2026-09-04T22:45:02.34+00:00",
+      "oldest_metric_snapshot": "2026-09-04T22:45:02.34+00:00",
+      "posts": 1,
+      "profile_clicks": 0,
+      "replies": 1,
+      "reposts": 0,
+      "thread_format": "launch_pin",
+      "threads_with_own_reply": 0,
+      "threads_with_quoted_original": 0
+    },
+    {
+      "bookmarks": 6,
+      "cohort": "immature_or_unobserved",
+      "first_post": "2026-08-26T00:45:17.852323+00:00",
+      "impressions": 35565,
+      "last_post": "2026-09-04T00:15:19.519611+00:00",
+      "likes": 27,
+      "link_clicks": null,
+      "max_observation_days": 5.95,
+      "mean_impressions": 564.5,
+      "measured_bookmarks": 63,
+      "measured_impressions": 63,
+      "measured_likes": 63,
+      "measured_link_clicks": 0,
+      "measured_profile_clicks": 63,
+      "measured_replies": 63,
+      "measured_reposts": 63,
+      "median_impressions": 471,
+      "min_observation_days": 0.94,
+      "newest_metric_snapshot": "2026-09-04T22:45:02.34+00:00",
+      "oldest_metric_snapshot": "2026-08-31T00:15:04.062+00:00",
+      "posts": 63,
+      "profile_clicks": 164,
+      "replies": 47,
+      "reposts": 1,
+      "thread_format": "standard",
+      "threads_with_own_reply": 42,
+      "threads_with_quoted_original": 0
+    },
+    {
+      "bookmarks": 0,
+      "cohort": "mature_observed",
+      "first_post": "2026-08-21T14:00:04.926101+00:00",
+      "impressions": 516,
+      "last_post": "2026-08-21T14:00:04.926101+00:00",
+      "likes": 1,
+      "link_clicks": null,
+      "max_observation_days": 6.37,
+      "mean_impressions": 516,
+      "measured_bookmarks": 1,
+      "measured_impressions": 1,
+      "measured_likes": 1,
+      "measured_link_clicks": 0,
+      "measured_profile_clicks": 1,
+      "measured_replies": 1,
+      "measured_reposts": 1,
+      "median_impressions": 516,
+      "min_observation_days": 6.37,
+      "newest_metric_snapshot": "2026-08-27T23:00:04.117+00:00",
+      "oldest_metric_snapshot": "2026-08-27T23:00:04.117+00:00",
+      "posts": 1,
+      "profile_clicks": 18,
+      "replies": 0,
+      "reposts": 1,
+      "thread_format": "recap",
+      "threads_with_own_reply": 0,
+      "threads_with_quoted_original": 0
+    },
+    {
+      "bookmarks": 7,
+      "cohort": "mature_observed",
+      "first_post": "2026-08-21T23:00:06.757761+00:00",
+      "impressions": 52484,
+      "last_post": "2026-08-29T22:00:34.378269+00:00",
+      "likes": 38,
+      "link_clicks": null,
+      "max_observation_days": 6.36,
+      "mean_impressions": 530.1,
+      "measured_bookmarks": 99,
+      "measured_impressions": 99,
+      "measured_likes": 99,
+      "measured_link_clicks": 0,
+      "measured_profile_clicks": 99,
+      "measured_replies": 99,
+      "measured_reposts": 99,
+      "median_impressions": 434,
+      "min_observation_days": 5.03,
+      "newest_metric_snapshot": "2026-09-04T22:45:02.34+00:00",
+      "oldest_metric_snapshot": "2026-08-27T23:00:04.117+00:00",
+      "posts": 99,
+      "profile_clicks": 315,
+      "replies": 67,
+      "reposts": 2,
+      "thread_format": "standard",
+      "threads_with_own_reply": 57,
+      "threads_with_quoted_original": 0
+    },
+    {
+      "bookmarks": 1,
+      "cohort": "mature_observed",
+      "first_post": "2026-08-22T01:45:12.417533+00:00",
+      "impressions": 12326,
+      "last_post": "2026-08-24T02:30:07.990181+00:00",
+      "likes": 7,
+      "link_clicks": null,
+      "max_observation_days": 6.1,
+      "mean_impressions": 385.2,
+      "measured_bookmarks": 32,
+      "measured_impressions": 32,
+      "measured_likes": 32,
+      "measured_link_clicks": 0,
+      "measured_profile_clicks": 32,
+      "measured_replies": 32,
+      "measured_reposts": 32,
+      "median_impressions": 293,
+      "min_observation_days": 5.72,
+      "newest_metric_snapshot": "2026-08-29T23:45:03.087+00:00",
+      "oldest_metric_snapshot": "2026-08-27T23:00:04.117+00:00",
+      "posts": 32,
+      "profile_clicks": 93,
+      "replies": 17,
+      "reposts": 0,
+      "thread_format": "verdict",
+      "threads_with_own_reply": 0,
+      "threads_with_quoted_original": 32
+    }
+  ],
+  "daily": [
+    {
+      "date": "2026-08-21",
+      "logged_posts": 25,
+      "pick_threads": 12
+    },
+    {
+      "date": "2026-08-22",
+      "logged_posts": 30,
+      "pick_threads": 15
+    },
+    {
+      "date": "2026-08-23",
+      "logged_posts": 10,
+      "pick_threads": 5
+    },
+    {
+      "date": "2026-08-24",
+      "logged_posts": 4,
+      "pick_threads": 4
+    },
+    {
+      "date": "2026-08-25",
+      "logged_posts": 12,
+      "pick_threads": 12
+    },
+    {
+      "date": "2026-08-26",
+      "logged_posts": 15,
+      "pick_threads": 15
+    },
+    {
+      "date": "2026-08-27",
+      "logged_posts": 7,
+      "pick_threads": 7
+    },
+    {
+      "date": "2026-08-28",
+      "logged_posts": 15,
+      "pick_threads": 15
+    },
+    {
+      "date": "2026-08-29",
+      "logged_posts": 22,
+      "pick_threads": 22
+    },
+    {
+      "date": "2026-08-30",
+      "logged_posts": 14,
+      "pick_threads": 14
+    },
+    {
+      "date": "2026-08-31",
+      "logged_posts": 0,
+      "pick_threads": 0
+    },
+    {
+      "date": "2026-09-01",
+      "logged_posts": 16,
+      "pick_threads": 15
+    },
+    {
+      "date": "2026-09-02",
+      "logged_posts": 13,
+      "pick_threads": 13
+    },
+    {
+      "date": "2026-09-03",
+      "logged_posts": 13,
+      "pick_threads": 13
+    }
+  ],
+  "email_subscriptions": [],
+  "engagement": {
+    "draft_rows": 179,
+    "latest_sheet_date": "2026-08-20"
+  },
+  "et_date": "2026-09-04",
+  "jobs": [
+    {
+      "active": true,
+      "jobname": "social-auto-post-hourly",
+      "last_finished_at": "2026-09-04T23:00:00.343741+00:00",
+      "last_sql_status": "succeeded",
+      "last_started_at": "2026-09-04T23:00:00.309869+00:00",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "active": true,
+      "jobname": "engagement-sheet-daily",
+      "last_finished_at": "2026-09-04T14:30:00.143892+00:00",
+      "last_sql_status": "succeeded",
+      "last_started_at": "2026-09-04T14:30:00.13543+00:00",
+      "schedule": "30 14 * * *"
+    }
+  ],
+  "latest_poster_response": {
+    "created": "2026-09-04T23:00:00.346912+00:00",
+    "health": {
+      "failed_posts": 0,
+      "issues": [],
+      "missed_picks": 0,
+      "posted_picks": 2,
+      "status": "ok"
+    },
+    "status_code": 200
+  },
+  "redirects_separate_sources": [
+    {
+      "ct": "x_bio",
+      "first_event": "2026-08-21T04:50:27.127398+00:00",
+      "last_event": "2026-09-03T17:42:37.744529+00:00",
+      "raw_events": 15,
+      "source_table": "legacy_link_clicks"
+    }
+  ],
+  "reply_queue": [],
+  "retained_degraded_responses": 0,
+  "retained_poster_responses": 1,
+  "waitlist_rows": 0,
+  "window": {
+    "end_exclusive": "2026-09-04",
+    "start_inclusive": "2026-08-21"
+  },
+  "measurement_notes": [
+    "14 completed Eastern dates; today is excluded from audience comparisons.",
+    "Mature observed = published at least 6 days ago with a metric snapshot at least 5 days after publication; all other rows are separate.",
+    "Every metric reports its non-null denominator. Null is unavailable, never zero.",
+    "Impressions and clicks sum thread components, not unique people; reply totals include own replies and are not an audience conversation count.",
+    "Legacy verdict metrics also include the quoted original pick via cta_tweet_id; their totals overlap the original pick and must not be added as incremental reach.",
+    "Legacy and new redirect tables are reported separately and never summed: overlap, bots, and repeat visitors are unresolved. Obvious test/audit/smoke/qa campaign labels are excluded, not all test traffic.",
+    "pg_net retains a limited recent response history. A successful cron enqueue is not proof of a successful X post.",
+    "No X balance, installation, revenue, or retention claim is inferred from this readout. No external APIs are refreshed."
+  ]
+}

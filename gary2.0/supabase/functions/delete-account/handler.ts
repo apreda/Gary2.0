@@ -91,6 +91,13 @@ export function createDeleteAccountHandler(config: Configuration, request: typeo
         } else if ((await cancel.json()).status !== "canceled") throw new Error("subscription cancellation unconfirmed");
         canceled++;
       }
+      // Legacy iOS product events are keyed by account UUID rather than an
+      // auth foreign key. Delete only this authenticated owner's events;
+      // never accept an installation identifier or account id from the body.
+      const analytics = await request(`${config.supabaseURL}/rest/v1/app_events?identity=eq.${owner}`, {
+        method: "DELETE", headers: adminHeaders,
+      });
+      if (!analytics.ok) throw new Error("could not remove account analytics");
       // Revoke refresh sessions globally before deleting their underlying user.
       // Existing JWTs expire naturally; the auth/user lookup and user FKs also
       // prevent a deleted account from opening checkout or creating user rows.
@@ -101,10 +108,18 @@ export function createDeleteAccountHandler(config: Configuration, request: typeo
       signedOut = true;
       const deleted = await request(`${config.supabaseURL}/auth/v1/admin/users/${owner}`, { method: "DELETE", headers: adminHeaders });
       if (!deleted.ok) throw new Error("account deletion failed");
-      return json({ ok: true, deleted: userID, canceled_subscriptions: canceled });
+      // Native id-token sign-in never retained Apple refresh/access tokens.
+      // TN3194 requires deletion to proceed and users to be directed to remove
+      // Apple's remaining authorization manually in this existing-account case.
+      const appleIdentity = Array.isArray(user.identities) && user.identities.some((identity: { provider?: string }) => identity.provider === "apple");
+      return json({ ok: true, deleted: userID, canceled_subscriptions: canceled,
+        apple_revocation_required: appleIdentity,
+        ...(appleIdentity ? { apple_revocation_url: "https://support.apple.com/en-us/102571" } : {}),
+      });
     } catch (error) {
       // Public rows are removed only by the auth deletion's transaction. A
-      // failed cancellation leaves all account data intact and can be retried.
+      // failed cancellation preserves the account and can be retried. Optional
+      // analytics may already be removed if a later auth operation fails.
       if (deletionMarked && userID) {
         try {
           await request(`${config.supabaseURL}/rest/v1/account_deletion_requests?user_id=eq.${encodeURIComponent(userID)}`, {

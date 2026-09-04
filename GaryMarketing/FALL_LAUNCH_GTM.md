@@ -1,3 +1,5 @@
+> **September 4 update:** Use [the current launch runbook](launch-2026-09/LAUNCH_RUNBOOK.md) for the account-based founding offer, execution order and current channel-policy decisions. Use [the 2.25/899 review pack](APP_REVIEW_2_25_899.md) for submission facts. Earlier offer, release-state and policy statements below are historical.
+
 # GARY — FALL LAUNCH GTM
 ## The true launch: NFL Kickoff, Wednesday September 9, 2026
 

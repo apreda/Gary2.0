@@ -3,7 +3,7 @@
 // pick whose FIRST PITCH is still 5-120 min away. Posting is game-paced, not clock-paced — see the LEAD_*
 // constants below.
 // (The noon personality post is RETIRED as of Jun 29 2026 — runPersonalityMode early-returns; dry-run preview only.)
-// (The morning recap ledger is RETIRED as of Aug 21 2026 — runRecapMode early-returns; dry-run preview only.)
+// Daily recap restored Sep 4 2026: one post per sport, 10 AM ET with retries through 2 PM.
 // (The verdict quote-tweets are RETIRED as of Aug 24 2026 — runVerdictMode early-returns; dry-run preview only.)
 // (The /api/take-card and /api/pick-card-app routes are no longer used here.)
 // Metrics: every run also refreshes impressions/likes/replies/retweets for posts from the last 6 days (KPI stays live 24/7).
@@ -27,7 +27,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { matchVerdicts, plainVerdict, buildVerdictPrompt, trimTweet, isValidVerdict } from "./verdicts.ts";
 import { composeWeekTape } from "./weektape.ts";
 import { composeRecaps, type RecapRow } from "./recap.ts";
-import { fallbackReasonPair, isVerbatimSnippet, reasonCandidates, splitSentences } from "../_shared/verbatimSnippets.js";
+import { fallbackReasonPair, isSafeReasonPair, reasonCandidates } from "../_shared/verbatimSnippets.js";
+import { socialRunHealth } from "./health.js";
 import { barePick } from "./barepick.ts";
 import { computeStanding } from "./pl.ts";
 import { selectPicks, type Slot } from "./window.ts";
@@ -197,6 +198,7 @@ async function fetchMetricsBatch(ids: string[]): Promise<Record<string, any>> {
       body: JSON.stringify({ tweetIds: chunk }),
     });
     const j = await r.json();
+    if (!r.ok || !j.success) throw new Error(`X metrics read failed: ${JSON.stringify(j).slice(0, 300)}`);
     if (j.success && Array.isArray(j.tweets)) for (const t of j.tweets) byId[t.id] = t;
   }
   return byId;
@@ -476,20 +478,17 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
     // sentence choice when it is not. Sentences are never trimmed (no
     // ellipsis, ever) and never restyled — Gary's punctuation is Gary's.
     const rationaleText = String(chosen.rationale ?? "");
-    const allSentences = splitSentences(rationaleText);
-    if (allSentences.length === 0) {
-      throw new Error(`No rationale sentences for "${chosen.pick}", refusing to post`);
-    }
     // REASONS ONLY (founder, Aug 17): the two lines carry Gary's analysis.
     // Stake/odds-restatement sentences never reach the candidate list — the
     // injected pick line between them already says the bet.
     const candidates = reasonCandidates(rationaleText);
-    const list = candidates.length >= 2 ? candidates : allSentences;
+    const list = candidates;
+    if (!list.length) throw new Error(`NO_SAFE_COPY: no standalone reason for "${chosen.pick}", refusing to post`);
     // Two newline-pairs join the three segments; keep the whole post ≤ 278.
     const budget = 278 - pickLine.length - 4;
     const numbered = list.map((s, i) => `${i + 1}. ${s}`).join("\n");
-    const user = `Choose the two sentences for a single bet's post. Return ONLY JSON: {"opening": "...", "closing": "..."}.
-Both values MUST be sentences copied character-for-character from the numbered list below — different sentences, and their combined length must be at most ${budget} characters.
+    const user = `Choose up to two sentences for a single bet's post. Return ONLY JSON: {"opening": "...", "closing": "..."}.
+Both nonempty values MUST be sentences copied character-for-character from the numbered list below — different sentences, and their combined length must be at most ${budget} characters. If only one safe sentence fits, use it as opening and return an empty closing.
 Both must be REASONS for the pick — Gary's argument and analysis. NEVER the scene-setting opener (weather, park, time of day, atmosphere) and NEVER a sentence that merely restates the bet or its odds.
 Each chosen sentence must STAND ALONE for a reader who has seen nothing else: every person it mentions is named IN the sentence, and it never opens mid-argument ("But…", "Those advantages…", "He…").
 opening: the sentence that carries Gary's ARGUMENT — his read of the game, WHY the bet exists (often first-person: "I'm backing… because", "My read is…"); never a bare stat fragment. closing: the single strongest supporting reason — concrete numbers belong here, under the argument, not in place of it.
@@ -497,12 +496,8 @@ ${isTopPick ? "This is Gary's highest-conviction play on the whole board today �
 
 SENTENCES:
 ${numbered}`;
-    const norm = (s: string) => s.replace(/\s+/g, " ").trim();
-    const inList = (s: string) => list.some((c) => norm(c) === norm(s));
     const selectionOk = (o: string, c: string) =>
-      isVerbatimSnippet(rationaleText, o) && isVerbatimSnippet(rationaleText, c)
-      && inList(o) && inList(c)
-      && o.trim() !== c.trim() && (o.length + c.length) <= budget;
+      isSafeReasonPair(rationaleText, { opening: o, closing: c }, budget);
     // OUTAGE PATH (Aug 21 2026). The model only SELECTS which two of Gary's own
     // sentences to run — `fallbackReasonPair` below chooses from the identical
     // list, so the posted words are the same either way. Before this, a THROWN
@@ -518,7 +513,7 @@ ${numbered}`;
     if (!selectionOk(opening, closing)) {
       // One retry with the violation named, then the deterministic fallback.
       out = await selectHookSentences(
-        `${user}\n\nYour previous selection was rejected: each value must be COPIED EXACTLY from the numbered list (no edits, no merging, only listed sentences) and the two must be different sentences fitting ${budget} characters combined.`,
+        `${user}\n\nYour previous selection was rejected: use only complete standalone sentences COPIED EXACTLY from the numbered list, fitting ${budget} characters combined. Use one sentence with an empty closing if a pair cannot fit.`,
       );
       opening = String(out.opening ?? "").trim();
       closing = String(out.closing ?? "").trim();
@@ -526,11 +521,13 @@ ${numbered}`;
     if (!selectionOk(opening, closing)) {
       const pair = fallbackReasonPair(rationaleText, budget);
       if (!pair) {
-        throw new Error(`No verbatim sentence pair fits for "${chosen.pick}", refusing to post`);
+        throw new Error(`NO_SAFE_COPY: no whole standalone reason fits for "${chosen.pick}", refusing to post`);
       }
       opening = pair.opening;
       closing = pair.closing;
     }
+    // Every path crosses the same safety boundary, including vendor outages.
+    if (!selectionOk(opening, closing)) throw new Error(`NO_SAFE_COPY: final reason validation failed for "${chosen.pick}"`);
     const hook = [opening, pickLine, closing].filter(Boolean).join("\n\n");
     if (hook.length > 280) {
       throw new Error(`Hook exceeds X limit for "${chosen.pick}" — ${hook.length} characters, refusing to post`);
@@ -866,12 +863,22 @@ Write something real: a confession, a reflection, a sharp aside about sweating e
 }
 
 Deno.serve(async (req) => {
+  let dryRun = false;
+  let runKind = "scheduled";
+  // pg_cron success means the HTTP request was enqueued, not that X accepted
+  // it. The retained pg_net response provides the real result to the read-only
+  // marketing-readiness command. No additional cron, posts, or alerts.
+  const respond = (body: any, init?: ResponseInit) => Response.json({
+    ...body, service: "social-auto-post", checked_at: new Date().toISOString(),
+    dry_run: dryRun, run_kind: runKind, health: socialRunHealth(body),
+  }, init);
   try {
     const url = new URL(req.url);
     const preview = url.searchParams.get("preview") === "1";
-    const dryRun = url.searchParams.get("dry_run") === "1" || preview;
+    dryRun = url.searchParams.get("dry_run") === "1" || preview;
     const force = url.searchParams.get("force_mode") ?? (preview ? "pick" : null);
     const metricsOnly = url.searchParams.get("metrics_only") === "1";
+    runKind = force ? "manual" : metricsOnly ? "metrics" : "scheduled";
 
     const { date: today, hour, weekday } = etParts();
     const nowMs = Date.now();
@@ -890,7 +897,7 @@ Deno.serve(async (req) => {
           : await refreshMetrics();
       } catch (e) { console.error("metrics refresh failed: " + String(e)); metrics = { error: String(e) }; }
     }
-    if (metricsOnly) return Response.json({ metrics_only: true, metrics });
+    if (metricsOnly) return respond({ metrics_only: true, metrics });
 
     // Missing key is a WARNING, never a run-killer: sentence SELECTION is the
     // only thing the model does here, and the deterministic verbatim chooser
@@ -911,31 +918,31 @@ Deno.serve(async (req) => {
     if (force === "verdict") {
       const verdict = await runVerdictMode(today, dryRun);
       console.log(JSON.stringify({ mode: "verdict", verdict }).slice(0, 500));
-      return Response.json({ mode: "verdict", metrics, verdict });
+      return respond({ mode: "verdict", metrics, verdict });
     }
 
     if (force === "arc") {
       const arc = await runArcUpdateMode(today, dryRun);
       console.log(JSON.stringify({ mode: "arc", arc }).slice(0, 500));
-      return Response.json({ mode: "arc", metrics, arc });
+      return respond({ mode: "arc", metrics, arc });
     }
 
     if (force === "week_tape") {
       const weekTape = await runWeekTapeMode(today, dryRun);
       console.log(JSON.stringify({ mode: "week_tape", weekTape }).slice(0, 500));
-      return Response.json({ mode: "week_tape", metrics, weekTape });
+      return respond({ mode: "week_tape", metrics, weekTape });
     }
 
     if (force === "recap") {
       const recap = await runRecapMode(today, dryRun);
       console.log(JSON.stringify({ mode: "recap", recap }).slice(0, 500));
-      return Response.json({ mode: "recap", metrics, recap });
+      return respond({ mode: "recap", metrics, recap });
     }
 
     if (force === "personality") {
       const personality = await runPersonalityMode(today, dryRun);
       console.log(JSON.stringify({ mode: "personality", personality }).slice(0, 500));
-      return Response.json({ mode: "personality", metrics, personality });
+      return respond({ mode: "personality", metrics, personality });
     }
 
     // Aug 5 2026: modes no longer COMPETE for the hour. The old chain resolved ET hour 12 to the RETIRED
@@ -958,13 +965,13 @@ Deno.serve(async (req) => {
     }
 
     if (hour < POST_HOURS_START || hour > POST_HOURS_END) {
-      return Response.json({ posted: false, reason: `ET hour ${hour} is outside the posting window`, metrics, verdict, recap, weekTape, arc });
+      return respond({ posted: false, reason: `ET hour ${hour} is outside the posting window`, metrics, verdict, recap, weekTape, arc });
     }
     const result = await runPickMode(today, nowMs, dryRun, preview);
     console.log(JSON.stringify({ mode: "pick", verdict, recap, weekTape, arc, ...result }).slice(0, 500));
-    return Response.json({ mode: "pick", metrics, verdict, recap, weekTape, arc, ...result });
+    return respond({ mode: "pick", metrics, verdict, recap, weekTape, arc, ...result });
   } catch (e) {
     console.error(String(e));
-    return Response.json({ error: String(e) }, { status: 500 });
+    return respond({ error: String(e) }, { status: 500 });
   }
 });

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { LaunchOffer } from '@/components/LaunchOffer';
 import Image from 'next/image';
 import { permanentRedirect } from 'next/navigation';
 import { Eyebrow } from '@/components/Eyebrow';
@@ -40,7 +41,7 @@ const covenant = [
   },
   {
     title: 'The record',
-    body: 'Every result is on the record by morning, wins and losses. The running tape is public and never edited.',
+    body: 'Wins and losses stay on the public record. Results are graded when available, with delayed results pending and corrections documented.',
   },
   {
     title: 'Free',
@@ -94,6 +95,8 @@ export default async function NflPage({
           <Image src="/brand/gary-icon.png" alt="Gary the bear" width={260} height={260} />
         </div>
       </section>
+
+      <LaunchOffer className="mt-8" />
 
       {/* Kickoff board */}
       <section className="mt-14">

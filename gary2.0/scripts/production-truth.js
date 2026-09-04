@@ -15,6 +15,7 @@ import '../src/loadEnv.js';
 import { execSync } from 'child_process';
 import { createClient } from '@supabase/supabase-js';
 import { diskEras, gitStamp, PROJECT_DIR } from './lib/eraTruth.js';
+import { edgeSharedDependencies } from './lib/edgeSharedDependencies.js';
 
 const line = (label, value) => console.log(`${label.padEnd(22)} ${value}`);
 let failed = false;
@@ -104,7 +105,7 @@ try {
 //    production → the whole check fails.
 console.log('\n─── DEPLOY PARITY (edge functions) ───');
 try {
-  const { readdirSync, readFileSync, existsSync, statSync } = await import('fs');
+  const { readdirSync, existsSync, statSync } = await import('fs');
   const { join } = await import('path');
   const fnRoot = join(PROJECT_DIR, 'supabase', 'functions');
   const deployed = JSON.parse(execSync(
@@ -120,9 +121,6 @@ try {
   const isDirty = (relPath) => {
     return execSync(`git status --porcelain -- ${JSON.stringify(relPath)}`, { cwd: PROJECT_DIR }).toString().trim().length > 0;
   };
-  const sharedLastMs = gitLastMs('supabase/functions/_shared');
-  const sharedDirty = isDirty('supabase/functions/_shared');
-
   const localFns = readdirSync(fnRoot).filter((name) => {
     if (name.startsWith('_') || name.startsWith('.')) return false;
     return statSync(join(fnRoot, name)).isDirectory() && existsSync(join(fnRoot, name, 'index.ts'));
@@ -130,11 +128,10 @@ try {
 
   for (const fn of localFns) {
     const rel = `supabase/functions/${fn}`;
-    const usesShared = readdirSync(join(fnRoot, fn))
-      .filter((f) => f.endsWith('.ts') || f.endsWith('.js'))
-      .some((f) => readFileSync(join(fnRoot, fn, f), 'utf8').includes('_shared/'));
-    const dirty = isDirty(rel) || (usesShared && sharedDirty);
-    const localMs = Math.max(gitLastMs(rel), usesShared ? sharedLastMs : 0);
+    const sharedPaths = edgeSharedDependencies(fnRoot, fn)
+      .map((path) => `supabase/functions/${path}`);
+    const dirty = isDirty(rel) || sharedPaths.some(isDirty);
+    const localMs = Math.max(gitLastMs(rel), ...sharedPaths.map(gitLastMs));
     const row = deployedBySlug.get(fn);
     if (!row) {
       line(fn, '🚨 NEVER DEPLOYED (no remote function with this slug)');

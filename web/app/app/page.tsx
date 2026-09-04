@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { LaunchOffer } from '@/components/LaunchOffer';
+import { LAUNCH_OFFER } from '@/lib/gary/launch-offer';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Eyebrow } from '@/components/Eyebrow';
@@ -7,6 +9,8 @@ import { JsonLd } from '@/components/JsonLd';
 import { StitchRule, GhostLink } from '@/components/Terminal';
 import { pageMetadata } from '@/lib/seo/metadata';
 import { softwareApplicationJsonLd } from '@/lib/seo/software-application';
+
+export const revalidate = 3600;
 
 export const metadata: Metadata = pageMetadata({
   canonical: '/app',
@@ -26,14 +30,14 @@ const features = [
     tab: 'WINNERS',
     title: 'Winners',
     description:
-      "Winners is Gary's highest-conviction board — the handful of plays per sport he would actually bet, each board with its own graded record. This is the paid product: from $9.99/mo per sport, or All-Access for every board.",
+      `Winners is a reviewed shortlist of exact published tickets, with its own graded record. ${LAUNCH_OFFER} Other accounts can choose a Winners plan after the preview.`,
     premium: true,
   },
   {
     tab: 'HUB',
     title: 'The Hub',
     description:
-      "The insight board Gary's research produces alongside picks: heat checks, platoon edges, ballpark shifts, regression watches, Home Run Threats, and situational angles. Each lane is graded against results the next morning.",
+      "The insight board Gary's research produces alongside picks: heat checks, platoon edges, ballpark shifts, regression watches, Home Run Threats, and situational angles. Available lanes include result reviews; coverage and publication vary by sport.",
   },
   {
     tab: 'PICKS',
@@ -60,8 +64,8 @@ function WinnersBoardMock() {
       <div className="stitch-gold mt-2" />
       {[
         ['MLB', 'PHI ML', '-118', false],
-        ['NBA', 'BOS -3.5', '-110', true],
-        ['NHL', 'EDM ML', '+120', true],
+        ['NFL', 'TEAM -3.5', '-110', true],
+        ['NCAAF', 'TEAM ML', '+120', true],
       ].map(([lg, pick, odds, locked], i) => (
         <div key={i} className="mt-2.5 rounded-chip border border-line bg-card px-3 py-2.5">
           <div className="flex items-center justify-between">
@@ -84,7 +88,7 @@ function WinnersBoardMock() {
         </div>
       ))}
       <p className="mt-3 text-center font-mono text-[8.5px] uppercase tracking-[0.04em] text-faint">
-        Unlocks in the app
+        Illustration · account access applies
       </p>
     </div>
   );
@@ -105,9 +109,9 @@ export default function AppPage() {
             <span className="text-gold">lives in the app</span>
           </h1>
           <p className="mt-5 max-w-xl text-[16px] leading-relaxed text-mid">
-            The website publishes the full slate every day, free. The app adds Winners —
-            Gary&apos;s paid conviction board — plus live score tracking, the Hub insight
-            board, and the Billfold performance ledger, all in one place.
+            Find your game. See Gary&apos;s pick. Read the reasoning, follow the result,
+            and keep your own private Book. Web and iOS share your account and Winners
+            access, while the full slate stays free.
           </p>
           <div className="mt-7 flex flex-wrap items-center gap-4">
             <AppStoreButton surface="app_page_hero" />
@@ -119,9 +123,11 @@ export default function AppPage() {
         </div>
       </section>
 
-      {/* 5-tab feature walkthrough */}
+      <LaunchOffer className="mt-8" />
+
+      {/* Feature walkthrough */}
       <section className="mt-20">
-        <Eyebrow>FIVE SCREENS. ONE APP.</Eyebrow>
+        <Eyebrow>YOUR GAME. YOUR GARY.</Eyebrow>
         <StitchRule className="mt-4" />
         <div className="mt-2">
           {features.map((f, i) => (
@@ -135,7 +141,7 @@ export default function AppPage() {
                     </span>
                     {f.premium && (
                       <span className="rounded-chip border border-gold/40 px-2.5 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-gold">
-                        FROM $9.99/MO
+                        ACCOUNT ACCESS
                       </span>
                     )}
                   </div>
@@ -173,12 +179,12 @@ export default function AppPage() {
           </ul>
         </div>
         <div className="quant-panel p-7">
-          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-gold">Winners — the paid board</p>
+          <p className="font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-gold">Winners — reviewed selections</p>
           <ul className="mt-4 space-y-2.5 text-[15px] text-mid">
             <li>The handful per sport Gary would actually bet</li>
             <li>Each board&apos;s own graded record</li>
             <li>Live in-game tracking on your boards</li>
-            <li>An alert the second a board posts</li>
+            <li>Included during launch preview and for founding accounts</li>
           </ul>
         </div>
       </section>

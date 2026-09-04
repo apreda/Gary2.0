@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { supabaseBrowser } from '@/lib/auth/client';
 import { announceSessionHintChanged } from '@/lib/auth/session-hint';
+import { deletionSuccessHref } from '@/lib/auth/deletion-result';
 import { bookButton, bookField } from './LogBet';
 
 export function DeleteAccount() {
@@ -48,7 +49,7 @@ export function DeleteAccount() {
         /* Optional storage. */
       }
       announceSessionHintChanged();
-      window.location.assign('/account?deleted=1');
+      window.location.assign(deletionSuccessHref(data));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Account deletion could not finish.');
       setBusy(false);

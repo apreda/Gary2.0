@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { LaunchOffer } from '@/components/LaunchOffer';
+import { FREE_OFFER, LAUNCH_OFFER } from '@/lib/gary/launch-offer';
 import Link from 'next/link';
 import { Eyebrow } from '@/components/Eyebrow';
 import { JsonLd } from '@/components/JsonLd';
@@ -16,29 +18,29 @@ export const metadata: Metadata = pageMetadata({
   canonical: '/pricing',
   title: 'Gary AI Pricing — Unlock Winners, the Picks Gary Would Bet',
   description:
-    'The full slate is free. Winners — the picks Gary would actually bet, each board with its public record — is $9.99/mo per sport or All-Access. Cancel anytime.',
+    `Free game picks, reasoning and your Book. ${LAUNCH_OFFER}`,
 });
 
 const faqItems = [
   {
     question: "What do I actually pay for if the picks are free?",
     answer:
-      "The website publishes Gary's full slate — every game, every sport, with the reasoning — free. No bettor bets every game. Winners is the handful per sport Gary would actually put money on, with each board's own graded record. You're paying for the conviction and the discipline, not access to picks.",
+      "The full game slate and reasoning stay free. Winners is a reviewed shortlist of exact published tickets, with its own graded record. You do not need to bet every game to enjoy seeing what Gary thinks. Launch preview and founding access include Winners without a purchase.",
   },
   {
     question: 'How much is it?',
     answer:
-      `A single sport's Winners board is ${PRICING.single}/mo. All-Access — every active board — is ${PRICING.allAccessMonthly}/mo with a ${PRICING.trialDays}-day free trial for new subscribers. Returning subscribers pay the plan price without another trial. Everything bills through Stripe and cancels anytime.`,
+      `After the preview, accounts without included access can choose a single sport’s Winners board at ${PRICING.single}/mo. All-Access — every active board — is ${PRICING.allAccessMonthly}/mo with a ${PRICING.trialDays}-day free trial for new subscribers. Returning subscribers pay the plan price without another trial. Everything bills through Stripe and cancels anytime.`,
   },
   {
     question: 'Where do I subscribe?',
     answer:
-      'In the Gary iOS app. Your unlocked boards follow your account, and you manage or cancel from the app. The website is where you see the plans, the proof, and the free slate.',
+      'Sign in and open Your membership on your profile. Your account shows included access, available plans and billing management on web and iOS. Preview and founding accounts are not charged for access they already have.',
   },
   {
     question: 'What stays free?',
     answer:
-      'The full daily slate across every sport, the written reasoning on each pick, the Hub, and the complete public track record — including the losses. The free tier is the resource; it never goes behind a paywall.',
+      FREE_OFFER,
   },
 ];
 
@@ -89,6 +91,8 @@ export default async function PricingPage() {
         )}
       </section>
 
+      <LaunchOffer className="mt-8" />
+
       {/* Plans */}
       <section className="mt-12">
         <PricingPlans />
@@ -117,11 +121,11 @@ export default async function PricingPage() {
       {/* Trust strip — the brain behind the card */}
       <section className="mt-16 rounded-panel border border-line bg-elev px-7 py-8">
         <Eyebrow>WHY THE CARD IS WORTH IT</Eyebrow>
-        <h2 className="mt-2 font-display text-2xl uppercase text-hi">A research agent does the work first</h2>
+        <h2 className="mt-2 font-display text-2xl uppercase text-hi">A shortlist with evidence behind it</h2>
         <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-mid">
-          Every matchup is investigated with live odds, stats, injuries, and splits. Gary weighs it against
-          each sport&apos;s rules, makes the call, and a fact-check audits the numbers before anything posts.
-          Then every pick is graded the next morning — winners and losers, on the record.
+          Winners reviews the original evidence behind a published pick, including the exact price,
+          opposing evidence and unresolved assumptions. Space can stay empty. Published tickets
+          stay on the record through wins and losses; review is not a guarantee of accuracy or profit.
         </p>
         <Link href="/how-it-works" className="mt-4 inline-block text-sm text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold">
           The full methodology →

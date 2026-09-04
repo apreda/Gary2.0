@@ -19,13 +19,18 @@ const MEANINGFUL_VIEW_PREFIX = 'gary_meaningful_view_v1:';
 const FIRST_BOOK_ACTION_KEY = 'gary_first_book_action_v1';
 const SIGNUP_COMPLETED_PREFIX = 'gary_signup_completed_v1:';
 const RETURN_VISIT_AFTER_MS = 4 * 60 * 60 * 1_000;
+const SESSION_IDLE_MS = 30 * 60 * 1_000;
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 let documentAttributionCaptured = false;
+let ephemeralIdentity: string | undefined;
+let memorySession: { id: string; lastSeenAt: number } | undefined;
+const memoryViews = new Set<string>();
 
 export type AttributionTouch = {
   source: string;
   medium: string;
   campaign?: string;
+  content?: string;
   referrer?: string;
   landing: string;
 };
@@ -63,7 +68,7 @@ export function webIdentity(): string {
     localStorage.setItem(IDENTITY_KEY, identity);
     return identity;
   } catch {
-    return randomUuid();
+    return ephemeralIdentity ??= randomUuid();
   }
 }
 
@@ -125,12 +130,14 @@ export function attributionTouch(input: {
   const utmSource = cleanToken(url.searchParams.get('utm_source')) ?? cleanToken(url.searchParams.get('src'));
   const utmMedium = cleanToken(url.searchParams.get('utm_medium'));
   const campaign = cleanToken(url.searchParams.get('utm_campaign'));
+  const content = cleanToken(url.searchParams.get('utm_content'));
 
-  if (utmSource || utmMedium || campaign) {
+  if (utmSource || utmMedium || campaign || content) {
     return {
       source: utmSource ?? referrer ?? 'campaign',
       medium: utmMedium ?? 'campaign',
       ...(campaign ? { campaign } : {}),
+      ...(content ? { content } : {}),
       ...(referrer ? { referrer } : {}),
       landing: cleanPath(url.pathname),
     };
@@ -181,7 +188,7 @@ function writeAttribution(state: AttributionState): void {
 }
 
 function hasExplicitAttribution(url: URL): boolean {
-  return ['utm_source', 'utm_medium', 'utm_campaign', 'src'].some(key => url.searchParams.has(key));
+  return ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'src'].some(key => url.searchParams.has(key));
 }
 
 function flattenedAttribution(state: AttributionState | undefined): WebEventProperties {
@@ -190,11 +197,13 @@ function flattenedAttribution(state: AttributionState | undefined): WebEventProp
     first_source: state.first.source,
     first_medium: state.first.medium,
     first_campaign: state.first.campaign,
+    first_content: state.first.content,
     first_referrer: state.first.referrer,
     first_landing: state.first.landing,
     latest_source: state.latest.source,
     latest_medium: state.latest.medium,
     latest_campaign: state.latest.campaign,
+    latest_content: state.latest.content,
     latest_referrer: state.latest.referrer,
     latest_landing: state.latest.landing,
   };
@@ -203,7 +212,11 @@ function flattenedAttribution(state: AttributionState | undefined): WebEventProp
 /** Fire-and-forget tracking through the consent-gated, same-origin web endpoint. */
 export function trackWebEvent(event: WebEvent, props: WebEventProperties = {}): void {
   if (typeof window === 'undefined' || !hasAnalyticsConsent()) return;
-  const merged = safeWebEventProperties(event, { ...flattenedAttribution(readAttribution()), ...props });
+  const merged = safeWebEventProperties(event, {
+    ...flattenedAttribution(readAttribution()),
+    ...(memorySession ? { session_id: memorySession.id } : {}),
+    ...props,
+  });
   if (!merged) return;
 
   try {
@@ -227,13 +240,17 @@ export function initializeGrowthAnalytics(pathname: string): void {
   const now = Date.now();
   const previous = readAttribution();
   const current = attributionTouch({ url: window.location.href, referrer: document.referrer });
-  let isNewSession = false;
+  let priorSession = memorySession;
   try {
-    isNewSession = sessionStorage.getItem(SESSION_KEY) !== '1';
-    sessionStorage.setItem(SESSION_KEY, '1');
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    const stored = raw ? JSON.parse(raw) : null;
+    if (stored && UUID_V4.test(stored.id) && Number.isFinite(stored.lastSeenAt)) priorSession = stored;
   } catch {
-    // Treat storage-disabled browsers as one ephemeral session per page load.
+    // Legacy values and blocked storage fall back to an in-memory session.
   }
+  const isNewSession = !priorSession || now - priorSession.lastSeenAt >= SESSION_IDLE_MS;
+  memorySession = { id: isNewSession ? randomUuid() : priorSession!.id, lastSeenAt: now };
+  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(memorySession)); } catch { /* optional storage */ }
 
   const currentUrl = new URL(window.location.href);
   const isFreshExternalEntry = !documentAttributionCaptured && current.referrer !== undefined;
@@ -245,6 +262,8 @@ export function initializeGrowthAnalytics(pathname: string): void {
     lastSeenAt: now,
   };
   writeAttribution(next);
+
+  if (isNewSession) trackWebEvent('session_started', { path: cleanPath(pathname), session_id: memorySession.id });
 
   const completedSignupMethod = currentUrl.searchParams.get('_gary_signup');
   if (completedSignupMethod === 'email' || completedSignupMethod === 'google') {
@@ -264,18 +283,30 @@ export function initializeGrowthAnalytics(pathname: string): void {
     });
   }
 
-  const clean = cleanPath(pathname);
-  if (PICK_PATH.test(clean)) {
-    try {
-      const key = `${MEANINGFUL_VIEW_PREFIX}${clean}`;
-      if (sessionStorage.getItem(key) !== '1') {
-        sessionStorage.setItem(key, '1');
-        trackWebEvent('meaningful_pick_view', { path: clean, content_type: 'pick' });
-      }
-    } catch {
-      trackWebEvent('meaningful_pick_view', { path: clean, content_type: 'pick' });
-    }
-  }
+}
+
+/** Call only after the pick's reasoning has been visible for the reading interval. */
+export function logMeaningfulPickView(pathname: string): void {
+  if (typeof window === 'undefined' || !hasAnalyticsConsent()) return;
+  const path = cleanPath(pathname);
+  if (!PICK_PATH.test(path)) return;
+  initializeGrowthAnalytics(window.location.pathname);
+  const key = `${MEANINGFUL_VIEW_PREFIX}${memorySession!.id}:${path}`;
+  if (memoryViews.has(key)) return;
+  try {
+    if (sessionStorage.getItem(key) === '1') return;
+    sessionStorage.setItem(key, '1');
+  } catch { /* in-memory deduplication still applies */ }
+  memoryViews.add(key);
+  trackWebEvent('meaningful_pick_view', { path, content_type: 'pick', measurement_version: 'reasoning_v2' });
+}
+
+/** Reset ephemeral state too when consent is withdrawn. */
+export function resetGrowthAnalyticsMemory(): void {
+  documentAttributionCaptured = false;
+  ephemeralIdentity = undefined;
+  memorySession = undefined;
+  memoryViews.clear();
 }
 
 function handoffSurface(surface: string): string {

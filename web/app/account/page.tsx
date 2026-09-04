@@ -8,6 +8,7 @@ import { pageMetadata } from '@/lib/seo/metadata';
 import { SignInForm } from './SignInForm';
 import { ProfileEditor } from '@/components/book/ProfileEditor';
 import { DeleteAccount } from '@/components/book/DeleteAccount';
+import { AccountDeleted } from '@/components/book/AccountDeleted';
 import { AccessCard } from '@/components/book/AccessCard';
 
 export const metadata: Metadata = pageMetadata({
@@ -34,6 +35,7 @@ type AccountSearchParams = Promise<{
   error?: string | string[];
   password?: string | string[];
   deleted?: string | string[];
+  apple_permission?: string | string[];
 }>;
 
 const first = (value: string | string[] | undefined) =>
@@ -52,7 +54,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Acco
   if (!user) {
     return (
       <main className="mx-auto max-w-4xl px-5 py-12">
-        {first(query.deleted) === '1' && <p role="status" className="mb-5 rounded-chip border border-gold/35 p-4 text-[13px] text-gold">Your account has been deleted.</p>}
+        {first(query.deleted) === '1' && <AccountDeleted applePermissionRemains={first(query.apple_permission) === '1'} />}
         <SignInForm
           initialMode={initialMode}
           nextPath={nextPath}

@@ -1,11 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { hasSheetAccess } from "./auth.js";
 
 // engagement-sheet — Engine 2 (Jul 5 2026). Every morning: 8-10 drafted Gary replies under big open-reply
 // sports accounts' fresh tweets, served as a token-gated mobile page the founder opens from his phone.
 // He taps "Open on X", pastes the draft, sends — manual distribution the API reply-ban can't do for us.
 //   GET ?token=SECRET                → the sheet page (HTML, today's rows)
-//   GET ?token=SECRET&generate=1     → rebuild today's sheet (X recent-search → score → Gemini drafts)
+//   GET ?token=SECRET&generate=1     → rebuild today's sheet (X recent-search → score → Anthropic drafts)
 //   GET ?token=SECRET&generate=1&dry_run=1 → build + return JSON without writing rows
 // Deployed --no-verify-jwt (a phone browser sends no JWT); SHEET_TOKEN secret is the gate.
 // Targets live in the engagement_targets table (founder-editable, no redeploys). Outbound ONLY — replies
@@ -33,7 +34,7 @@ const WINDOW_MS = 6 * 3600_000; // only tweets from the last 6h
 // ---------- OAuth 1.0a (identical signing to post-tweet-media) ----------
 async function hmacSha1(key: Uint8Array, message: string): Promise<string> {
   const enc = new TextEncoder();
-  const k = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
+  const k = await crypto.subtle.importKey("raw", new Uint8Array(key), { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
   const sig = await crypto.subtle.sign("HMAC", k, enc.encode(message));
   return btoa(String.fromCharCode(...new Uint8Array(sig)));
 }
@@ -301,7 +302,7 @@ Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
     const token = url.searchParams.get("token") ?? "";
-    if (!SHEET_TOKEN || token !== SHEET_TOKEN) {
+    if (!hasSheetAccess(SHEET_TOKEN, token)) {
       return new Response("Not found", { status: 401 });
     }
     if (url.searchParams.get("generate") === "1") {

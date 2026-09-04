@@ -11,7 +11,7 @@ import {
   writeAnalyticsConsent,
   type AnalyticsConsent,
 } from '@/lib/gary/analytics-consent';
-import { initializeGrowthAnalytics } from '@/lib/gary/analytics';
+import { initializeGrowthAnalytics, resetGrowthAnalyticsMemory } from '@/lib/gary/analytics';
 
 const VercelAnalytics = dynamic(
   () => import('@vercel/analytics/react').then(module => module.Analytics),
@@ -27,6 +27,11 @@ function GrowthSignals() {
 
   useEffect(() => {
     initializeGrowthAnalytics(pathname);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') initializeGrowthAnalytics(pathname);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, [pathname]);
 
   return (
@@ -50,11 +55,19 @@ export function GrowthAnalytics() {
   const [manualChoicesOpen, setManualChoicesOpen] = useState(false);
   const choicesOpen = consent === 'undecided' || manualChoicesOpen;
 
+  useEffect(() => {
+    if (consent === 'declined') {
+      clearGrowthAnalyticsStorage();
+      resetGrowthAnalyticsMemory();
+    }
+  }, [consent]);
+
   function choose(next: Exclude<AnalyticsConsent, 'undecided'>) {
     writeAnalyticsConsent(next);
     setManualChoicesOpen(false);
     if (next === 'declined') {
       clearGrowthAnalyticsStorage();
+      resetGrowthAnalyticsMemory();
       stripPendingAnalyticsMarkers();
     }
   }

@@ -4,6 +4,7 @@ import {
   fallbackReasonPair,
   fallbackVerbatimPair,
   isStandaloneSentence,
+  isSafeReasonPair,
   isVerbatimSnippet,
   reasonCandidates,
   splitSentences,
@@ -144,11 +145,61 @@ describe('reasonCandidates', () => {
 describe('composer wiring', () => {
   it('selects verbatim sentences instead of writing angle/edge prose', () => {
     expect(composerSrc).toContain('VERBATIM_RULES');
-    expect(composerSrc).toContain('isVerbatimSnippet(');
+    expect(composerSrc).toContain('isSafeReasonPair(');
     expect(composerSrc).toContain('reasonCandidates(');
     expect(composerSrc).toContain('fallbackReasonPair(');
     expect(composerSrc).not.toContain('PICK_HOOK_SCHEMA');
     expect(composerSrc).not.toContain('Write the hook for a single bet');
+  });
+});
+
+describe('September 3–4 published copy regressions', () => {
+  const tornRangers = 'Over his last three starts, he has worked 19.0 innings with 3 ER, 19 K and 0 BB, and his five home starts have produced a 1.20 ERA over 30.0 innings.';
+  const tornBrewers = 'Bauers’ .869 OPS against right-handed pitching fits that opportunity, while Chourio and Contreras bring recent production from the other side.';
+  const tornTech = 'In that uncertainty, Georgia Tech has the more dependable foundation for controlling the game.';
+  const tornBullpen = 'Its bullpen owns a 3.10 ERA over the last 10 days and delivered five scoreless innings Wednesday; Chicago’s bullpen has a 7.58 ERA over that span, with Jacob Webb’s fresh right-forearm contusion adding uncertainty.';
+  const safe = 'Cleveland owns the better bullpen, and that is the primary risk.';
+
+  it.each([tornRangers, tornBrewers, tornTech, tornBullpen])('rejects the actual context-dependent published sentence: %s', (sentence) => {
+    expect(isStandaloneSentence(sentence)).toBe(false);
+    expect(reasonCandidates(sentence)).toEqual([]);
+    expect(fallbackReasonPair(sentence, 278)).toBeNull();
+    expect(isSafeReasonPair(sentence, { opening: sentence, closing: '' }, 278)).toBe(false);
+  });
+
+  it('does not treat later names or capitalized stats as the missing subject', () => {
+    expect(isStandaloneSentence('Over his last three starts, ERA and WHIP fell against Detroit.')).toBe(false);
+    expect(isStandaloneSentence('With 12 K and 2 BB, his control improved.')).toBe(false);
+    expect(isStandaloneSentence('Vásquez has 12 K over his last two starts.')).toBe(true);
+    expect(isStandaloneSentence('St. Louis has won three of its last four games.')).toBe(true);
+  });
+
+  it('keeps a useful risk sentence and named in-sentence references intact', () => {
+    expect(isStandaloneSentence(safe)).toBe(true);
+    expect(isStandaloneSentence('Detmers has allowed one run across his last 20 innings.')).toBe(true);
+  });
+
+  it('a single safe sentence survives both model selection and fallback without unsafe padding', () => {
+    const card = `${tornRangers}\n\n${safe}\n\nThe price is -140.\n\nGary's Take`;
+    expect(reasonCandidates(card)).toEqual([safe]);
+    const pair = fallbackReasonPair(card, 278);
+    expect(pair).toEqual({ opening: safe, closing: '' });
+    expect(isSafeReasonPair(card, pair, 278)).toBe(true);
+    expect(isSafeReasonPair(card, { opening: safe, closing: 'The price is -140.' }, 278)).toBe(false);
+  });
+
+  it('zero approved candidates cannot escape through the old unrestricted fallback', () => {
+    const card = "Gary's Take\n\nThe price is -140.\n\nHe has a 2.10 ERA.";
+    expect(fallbackReasonPair(card, 278)).toBeNull();
+    expect(isSafeReasonPair(card, { opening: "Gary's Take", closing: '' }, 278)).toBe(false);
+  });
+
+  it('the final boundary rejects fragments, rewritten claims, duplicates and over-budget copy', () => {
+    const card = `${safe} Detmers has allowed one run across his last 20 innings.`;
+    expect(isSafeReasonPair(card, { opening: 'Detmers has allowed one run.', closing: '' }, 278)).toBe(false);
+    expect(isSafeReasonPair(card, { opening: safe.replace('better', 'best'), closing: '' }, 278)).toBe(false);
+    expect(isSafeReasonPair(card, { opening: safe, closing: safe }, 278)).toBe(false);
+    expect(isSafeReasonPair(card, { opening: safe, closing: '' }, safe.length - 1)).toBe(false);
   });
 });
 

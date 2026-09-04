@@ -1,0 +1,45 @@
+# Website launch measurement
+
+The web changes carry the exact current offer: launch preview until October 1, 2026 at midnight Eastern, with accounts created before that cutoff retaining founding Winners access. The implementation does not choose a later expiry or change eligibility, subscription prices or trial rules. The account determines included access before paid checkout. Full game picks and reasoning, available props, the Hub, public record and the private Book remain free.
+
+Source is ready for the root deployment. The additive database migration `20260904225312_web_useful_session_funnel.sql` is already applied to production; its new deduplication index and service-only writer/read permissions were verified. Historical migration mismatches prevented a full CLI push, so only this named migration was applied through Supabase's migration tool. No historical versions were repaired or replayed.
+
+## What is measured
+
+Only browsers that allow optional analytics send these website events. No account ID, email, sportsbook credentials, stake or private wager data is attached. A pseudonymous browser UUID and session UUID join the events; sessions renew after 30 minutes without measured navigation/foreground activity. Separate tabs can have separate sessions. This is observed website use, not a count of unique people.
+
+`session_started` records the denominator and safe source/medium/campaign/creative labels, referrer hostname and pathname. Use `utm_content` for the creative, alongside `utm_source`, `utm_medium` and `utm_campaign`. Raw query strings, referrer paths and fragments are discarded.
+
+`meaningful_pick_view` with `measurement_version=reasoning_v2` records actual pick reasoning visible for five continuous foreground seconds on an expanded board card or game-detail page. A route load alone does not count. Closed content, a thin visible sliver and a hidden tab do not count. Repeated reads of the same game in one session are deduplicated in the browser and the database. A later session can read the same game again. This is an opportunity to read, not proof that someone understood or acted on the pick.
+
+Return cohorts use the browser's first **observed** session in the reporting week, then look for another session at least 24 hours and less than seven days later. Only completed seven-day observation windows enter the retention denominator. The report includes both overall and useful-first-session return counts. Legacy page-load events do not enter this funnel. No consent, storage blockers, failed requests, deleted storage and different devices create measurement gaps.
+
+## Run the weekly report
+
+From `web/`, with existing `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` supplied securely in the environment:
+
+```sh
+npm run report:funnel -- --week 2026-08-31
+```
+
+Without `--week`, the default is the previous complete Monday–Sunday UTC week. To use this checkout's existing ignored backend environment file without printing or copying credentials:
+
+```sh
+node --env-file=../gary2.0/.env.local --experimental-strip-types scripts/weekly-funnel.mjs --week 2026-08-31
+```
+
+The script makes GET requests only, paginates through the relevant session history, and prints aggregate counts and channel labels without browser IDs. Rates are `null` for an empty denominator, unfinished return windows are excluded and cohorts under 20 observations are flagged. A 250,000-event safeguard stops rather than printing partial totals; larger history will need database aggregation. No scheduler or recurring job was added.
+
+Before web deployment on September 4, the live read-only report correctly returned zero new sessions, zero useful sessions and null return rates. These are expected baseline values, not a failed launch or an observed retention rate. Evidence is in `evidence/web-measurement-2026-09-04.json`.
+
+## Campaign handoff and deployment
+
+The private Book route is `/you`. A content link can use `/today?utm_source=x&utm_medium=organic_social&utm_campaign=launch_2026_09&utm_content=game_card` or the corresponding `/you` destination. Use distinct descriptive creative tokens and compare useful sessions alongside clicks; small numbers are directional only.
+
+The production website's `/go/app` redirect reaches app `6751238914` with the existing custom product page parameter. It currently emits no usable provider token or general website campaign token. Existing X bio route `/get` emits campaign `x_bio` and the custom page parameter, but no provider token. Obtain the real App Store Connect provider token and set `APP_STORE_PROVIDER_TOKEN`; set the chosen verified web campaign in `APP_STORE_WEB_CAMPAIGN_TOKEN`, then redeploy and inspect redirect metadata. Existing X customization is `APP_STORE_X_BIO_CAMPAIGN_TOKEN`, and the custom page override is `APP_STORE_CUSTOM_PRODUCT_PAGE_ID`. No fabricated values were installed. Clicks are not proof of installation, first app use or paid conversion.
+
+Vercel project `gary2.0` is linked from `web/.vercel/project.json`. The current production workflow is the parent's explicit main-branch commit/push, followed by build/deployment verification. `web/vercel.json` skips deployments when the web tree is unchanged; this change touches that tree. Root runs `npm run verify` and `npm run smoke:web` before shipping. The database is deployed; the source and this evidence await that web release.
+
+## Account deletion follow-up
+
+When successful deletion returns `apple_revocation_required=true`, the web signed-out confirmation now says Gary deletion is complete and shows Apple's separate sign-in-permission removal instructions. It links only to the fixed trusted Apple support URL, never to an arbitrary backend-provided URL. This mirrors the deployed backend success response and does not hold account deletion open.

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gary · September launch content</title>
+<style>
+@font-face{font-family:Display;src:url(assets/display.ttf)}
+@font-face{font-family:Mono;src:url(assets/mono.ttf)}
+*{box-sizing:border-box}body{margin:0;background:#e8e3d8;color:#f7f2e4;font-family:Arial,sans-serif}
+.gallery{color:#15130f;padding:30px 40px;display:flex;gap:26px;align-items:center;font-size:16px}.gallery strong{margin-right:auto}.gallery a{color:inherit;text-decoration:none;border-bottom:1px solid #958b70;padding:6px 0}
+.art{position:relative;width:1080px;height:1350px;overflow:hidden;isolation:isolate;background:#11130f;margin:0 auto;padding:65px 70px}
+.mast{display:flex;align-items:center;justify-content:space-between;position:relative;z-index:3;height:49px}.name{font-family:Display;font-size:41px;letter-spacing:1px}.name i{font-style:normal;color:#dabb48}.issue{font:16px Mono;letter-spacing:2px;text-transform:uppercase}
+.rule{height:1px;background:currentColor;opacity:.25;margin-top:24px}.label{font:18px Mono;letter-spacing:2.3px;text-transform:uppercase}
+h1{font:154px/.86 Display;margin:38px 0 0;letter-spacing:-1.5px;text-transform:uppercase}.gold{color:#e1bc47}.copy{font:31px/1.42 Arial,sans-serif;color:#d7d8cc;max-width:660px}.footer{position:absolute;left:70px;right:70px;bottom:46px;z-index:3;display:flex;justify-content:space-between;align-items:flex-end}.footer strong{font:20px Mono}.legal{font:16px/1.5 Arial,sans-serif;color:#b5b7ac;text-align:right}.corner{position:absolute;width:22px;height:22px;border:2px solid #e1bc47}.corner.tl{left:24px;top:24px;border-right:0;border-bottom:0}.corner.br{right:24px;bottom:24px;border-left:0;border-top:0}
+.field{position:absolute;z-index:-1;left:280px;right:-500px;top:230px;bottom:-500px;transform:rotate(-20deg);border:2px solid #717b4b;opacity:.18;background:repeating-linear-gradient(0deg,transparent 0,transparent 170px,#717b4b 171px,#717b4b 173px)}
+.find{background:radial-gradient(ellipse at 87% 83%,#344224 0,transparent 60%),#101710}.find h1{max-width:790px}.find .label{margin-top:57px}.find .copy{margin-top:34px;max-width:550px}.find .bear{position:absolute;right:4px;bottom:147px;width:430px;transform:rotate(-8deg);filter:drop-shadow(0 24px 20px #0009);z-index:1}.route{position:absolute;left:73px;bottom:211px;width:370px}.route div{display:flex;align-items:center;gap:18px;font:23px Mono;padding:15px 0;border-bottom:1px solid #ecead223}.route span{color:#c7ad59;font-size:15px}.find .tag{position:absolute;right:77px;top:182px;font:14px Mono;letter-spacing:2px;writing-mode:vertical-rl;color:#9fae86}
+.reason{background:#eee9dd;color:#222019}.reason .name i{color:#8b6516}.reason .label{margin-top:56px;color:#786c4b}.reason h1{font-size:143px;max-width:830px}.reason h1 .gold{color:#987116}.reason .copy{color:#565247;max-width:780px;margin-top:28px;font-size:29px}.reason .ticket{position:absolute;left:70px;right:70px;top:675px;height:450px;overflow:hidden;border-radius:27px;border:1px solid #44350025;box-shadow:0 21px 45px #57421820;background:#a48935}.reason .ticket img{width:100%;position:absolute;top:-370px;left:0}.reason .example{position:absolute;left:70px;bottom:195px;font:15px Mono;color:#756f60}.reason .footer{color:#39372e}.reason .legal{color:#756f60}.reason .corner{border-color:#9c7b2b}
+.record{background:#131413}.record .label{margin-top:63px;color:#bdc5b2}.record h1{font-size:149px;line-height:.9}.record .win{color:#a7c598}.record .loss{color:#d6a18d}.record .booklines{position:absolute;left:70px;right:70px;top:650px;border-top:1px solid #8c967b55}.record .row{display:flex;align-items:center;border-bottom:1px solid #8c967b44;padding:25px 0;gap:30px}.record .row b{font:23px Mono;color:#b6beaa;font-weight:normal;width:45px}.record .row strong{font:38px Display;text-transform:uppercase;letter-spacing:.3px}.record .row span{font:21px/1.3 Arial,sans-serif;margin-left:auto;text-align:right;color:#bfc3b5;max-width:365px}.record .copy{position:absolute;left:70px;bottom:190px;font-size:28px;max-width:790px}.record .fine{font-size:17px;color:#919a86;display:block;margin-top:13px}
+.book{background:#e0bc49;color:#242014}.book .name i{color:#735912}.book .label{margin-top:55px;color:#665323}.book h1{font-size:154px}.book .copy{color:#504521;max-width:710px}.book .entry{margin-top:67px;background:#191b15;border-radius:15px;padding:34px;color:#eeeedb;box-shadow:14px 14px 0 #a18229;transform:rotate(-2deg)}.book .entry .entrytitle{font:17px Mono;color:#d5c180;padding-bottom:27px;border-bottom:1px solid #6e745755}.book .cells{display:grid;grid-template-columns:1fr 1fr;gap:28px;padding-top:26px}.book .cells label{display:block;font:15px Mono;text-transform:uppercase;color:#a8b195;margin-bottom:13px}.book .cells span{display:block;font-size:25px}.book .cells small{color:#939c86;font-size:21px}.book .note{margin-top:27px;border-top:1px solid #6e745755;padding-top:24px;font-size:22px;color:#bfc6b1}.book .footer{color:#282315}.book .legal{color:#66572c}.book .corner{border-color:#3b341b}.book .example{font:15px Mono;color:#6d5926;margin-top:34px}
+.art:not(.selected){display:none}
+body.export .gallery{display:none}body.export{background:#101710}.art.wide{width:1600px;height:900px;padding:48px 67px}.wide .footer{left:67px;right:67px;bottom:35px}.wide .rule{margin-top:14px}.wide .label{margin-top:34px}.wide h1{font-size:141px;margin-top:28px;max-width:1000px}.wide.find h1{font-size:125px}.wide.find .copy{max-width:620px;font-size:26px;margin-top:29px}.wide.find .bear{width:510px;right:50px;bottom:122px}.wide.find .tag{right:72px;top:151px}.wide.find .route{display:none}.wide.find .route div{font-size:19px;gap:10px;border:0}.wide .legal{font-size:15px}.wide.reason h1{font-size:146px;max-width:720px}.wide.reason .copy{max-width:660px;font-size:27px;margin-top:32px}.wide.reason .ticket{left:870px;right:60px;top:215px;height:345px;border-radius:20px;transform:rotate(4deg)}.wide.reason .ticket img{top:-263px}.wide.reason .example{left:880px;bottom:240px;font-size:14px}.wide.record h1{font-size:139px}.wide.record .booklines{left:880px;right:67px;top:236px}.wide.record .row{gap:13px;padding:22px 0}.wide.record .row b{font-size:16px;width:22px}.wide.record .row strong{font-size:29px}.wide.record .row span{font-size:17px;max-width:237px}.wide.record .copy{left:70px;bottom:178px;font-size:25px;max-width:700px}.wide.record .fine{font-size:16px}.wide.book h1{font-size:142px;max-width:750px}.wide.book .copy{max-width:670px;font-size:27px}.wide.book .entry{position:absolute;left:845px;right:66px;top:242px;margin:0;padding:27px}.wide.book .cells{gap:26px}.wide.book .cells span{font-size:23px}.wide.book .note{font-size:19px}.wide.book .example{position:absolute;left:865px;bottom:153px;font-size:14px}
+@media(max-width:1100px){body:not(.export) .art{transform-origin:top left;zoom:.6}.gallery{flex-wrap:wrap}}
+</style>
+</head>
+<body>
+<nav class="gallery"><strong>GARY · LAUNCH CONTENT · DRAFTS FOR REVIEW</strong><a href="?piece=find">Find your game</a><a href="?piece=reason">Read the reasoning</a><a href="?piece=record">Check the record</a><a href="?piece=book">Your Book</a><a id="wide-link" href="?piece=find&wide=1">X landscape</a></nav>
+<main>
+<article class="art find" id="find" aria-label="Find your game campaign artwork">
+ <span class="corner tl"></span><span class="corner br"></span><div class="field"></div>
+ <header class="mast"><div class="name">GARY <i>A.I.</i></div><div class="issue">Every game. A point of view.</div></header><div class="rule"></div>
+ <div class="label">For the game you’re watching.</div><h1>FIND YOUR<br>GAME.<br><span class="gold">SEE GARY’S<br>PICK.</span></h1>
+ <p class="copy">Free game picks.<br>The full breakdown.<br>Your decision.</p><div class="tag">MLB · NFL · COLLEGE FOOTBALL</div>
+ <div class="route"><div><span>01</span> Pick the game.</div><div><span>02</span> Read Gary’s take.</div><div><span>03</span> Make your decision.</div></div>
+ <img class="bear" src="assets/gary.png" alt="Gary bear mark">
+ <footer class="footer"><strong>betwithgary.ai</strong><div class="legal">21+ · Sports information.<br>No wagers placed. No guaranteed outcomes.</div></footer>
+</article>
+<article class="art reason" id="reason" aria-label="Read Gary's reasoning campaign artwork">
+ <span class="corner tl"></span><span class="corner br"></span>
+ <header class="mast"><div class="name">GARY <i>A.I.</i></div><div class="issue">Look past the pick.</div></header><div class="rule"></div>
+ <div class="label">Every game pick has a breakdown.</div><h1>THE PICK.<br><span class="gold">THE WHY.</span></h1>
+ <p class="copy">Read Gary’s case for the pick.<br>See the matchup behind the decision.<br>Then make up your own mind.</p>
+ <div class="ticket"><img src="assets/winners-example-2026-09-04.png" alt="Actual Gary app showing a Tigers moneyline pick"></div>
+ <div class="example">APP EXAMPLE · SEPTEMBER 4, 2026 · NOT A CURRENT BET</div>
+ <footer class="footer"><strong>betwithgary.ai</strong><div class="legal">21+ · Sports information.<br>No wagers placed. No guaranteed outcomes.</div></footer>
+</article>
+<article class="art record" id="record" aria-label="Inspect Gary's record campaign artwork">
+ <span class="corner tl"></span><span class="corner br"></span>
+ <header class="mast"><div class="name">GARY <i>A.I.</i></div><div class="issue">You can check.</div></header><div class="rule"></div>
+ <div class="label">The record tells the story.</div><h1><span class="win">WINS STAY.</span><br><span class="loss">LOSSES STAY.</span></h1>
+ <div class="booklines"><div class="row"><b>01</b><strong>The pick</strong><span>Gary’s pick before the game.</span></div><div class="row"><b>02</b><strong>The result</strong><span>How the pick actually finished.</span></div><div class="row"><b>03</b><strong>The context</strong><span>Dates, prices and the full sample.</span></div></div>
+ <p class="copy">Check the game-pick record.<br>Including the days Gary would rather forget.<span class="fine">Game-pick and core-prop records are separate.<br>Home-run and touchdown fun picks are excluded.</span></p>
+ <footer class="footer"><strong>betwithgary.ai/results</strong><div class="legal">21+ · Past results do not<br>guarantee future outcomes.</div></footer>
+</article>
+<article class="art book" id="book" aria-label="Your Book campaign artwork">
+ <span class="corner tl"></span><span class="corner br"></span>
+ <header class="mast"><div class="name">GARY <i>A.I.</i></div><div class="issue">Keep your own record.</div></header><div class="rule"></div>
+ <div class="label">Your Book · Manual tracking</div><h1>YOUR BOOK.<br>YOUR RECORD.</h1><p class="copy">Save your picks, odds and notes.<br>Record what happened.<br>See your own habits over time.</p>
+ <div class="entry"><div class="entrytitle">WHAT GOES IN YOUR BOOK</div><div class="cells"><div><label>Your pick</label><span>Game, prop or parlay</span></div><div><label>Your price</label><span>The odds you took</span></div><div><label>Your stake</label><span>Recorded in units</span></div><div><label>Your notes</label><span>Why you chose it</span></div></div><div class="note">Private by default. Yours to review.</div></div><div class="example">FEATURE OVERVIEW · NO SPORTSBOOK CONNECTION REQUIRED</div>
+ <footer class="footer"><strong>betwithgary.ai/you</strong><div class="legal">21+ · Tracking only.<br>No wagers placed in Gary.</div></footer>
+</article>
+</main>
+<script>
+const params=new URLSearchParams(location.search);const piece=['find','reason','record','book'].includes(params.get('piece'))?params.get('piece'):'find';const art=document.getElementById(piece);art.classList.add('selected');if(params.has('wide'))art.classList.add('wide');if(params.has('export'))document.body.classList.add('export');document.getElementById('wide-link').href='?piece='+piece+'&wide=1';
+</script>
+</body>
+</html>

@@ -1,4 +1,5 @@
 export const WEB_EVENTS = [
+  'session_started',
   'meaningful_pick_view',
   'signup_started',
   'signup_completed',
@@ -32,20 +33,24 @@ const TOKEN = /^[a-z0-9._-]+$/;
 const ITEM_ID = /^[a-z0-9._:-]+$/;
 
 const ATTRIBUTION_KEYS = [
+  'session_id',
   'first_source',
   'first_medium',
   'first_campaign',
+  'first_content',
   'first_referrer',
   'first_landing',
   'latest_source',
   'latest_medium',
   'latest_campaign',
+  'latest_content',
   'latest_referrer',
   'latest_landing',
 ] as const;
 
 const EVENT_KEYS: Record<WebEvent, readonly string[]> = {
-  meaningful_pick_view: ['path', 'content_type'],
+  session_started: ['path'],
+  meaningful_pick_view: ['path', 'content_type', 'measurement_version'],
   signup_started: ['method'],
   signup_completed: ['method'],
   email_signup_completed: ['cadence', 'source'],
@@ -60,6 +65,7 @@ const EVENT_KEYS: Record<WebEvent, readonly string[]> = {
 };
 
 const REQUIRED_KEYS: Record<WebEvent, readonly string[]> = {
+  session_started: ['path', 'session_id'],
   meaningful_pick_view: ['path', 'content_type'],
   signup_started: ['method'],
   signup_completed: ['method'],
@@ -87,7 +93,8 @@ function validPropertyValue(event: WebEvent, key: string, value: unknown): value
 
   if (key === 'path' || key === 'first_landing' || key === 'latest_landing') return PATH.test(value);
   if (key === 'first_referrer' || key === 'latest_referrer') return HOST.test(value);
-  if (key === 'click_id') return UUID_V4.test(value);
+  if (key === 'click_id' || key === 'session_id') return UUID_V4.test(value);
+  if (key === 'measurement_version') return value === 'reasoning_v2';
   if (key === 'item_id') return value.length <= 160 && ITEM_ID.test(value);
   if (key === 'method') {
     return event === 'signup_started' || event === 'signup_completed'

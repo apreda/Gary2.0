@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
+    "report:funnel": "node --experimental-strip-types scripts/weekly-funnel.mjs",
     "typecheck": "next typegen && tsc --noEmit --incremental false"
   },
   "dependencies": {

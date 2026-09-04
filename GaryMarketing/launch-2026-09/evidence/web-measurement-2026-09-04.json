@@ -1,0 +1,65 @@
+{
+  "checked_at_utc": "2026-09-04T22:55:50Z",
+  "status": "Database applied; web implementation awaiting root production deployment",
+  "migration": {
+    "name": "web_useful_session_funnel",
+    "version": "20260904225312",
+    "local_path": "gary2.0/supabase/migrations/20260904225312_web_useful_session_funnel.sql",
+    "applied": true,
+    "method": "Supabase apply_migration; preserved historical migration history",
+    "dedup_index_exists": true,
+    "anon_reads": false,
+    "authenticated_reads": false,
+    "anon_writer": false,
+    "authenticated_writer": false,
+    "service_writer": true
+  },
+  "production_baseline": {
+    "sessions": 0,
+    "reasoning_v2_views": 0,
+    "seven_day_return_percent": null,
+    "interpretation": "Expected before the new website code is deployed. Historical page-load events are excluded; no backfill or fabricated activation/retention."
+  },
+  "weekly_report_check": {
+    "week_start_utc": "2026-08-31",
+    "read_only": true,
+    "partial_week": true,
+    "sessions": 0,
+    "useful_sessions": 0,
+    "return_rate": null,
+    "small_sample": true,
+    "raw_id_output": false
+  },
+  "campaign_redirect_metadata": [
+    {
+      "route": "/go/app?surface=home_app_section",
+      "status": 302,
+      "destination_host": "apps.apple.com",
+      "app_id": "6751238914",
+      "provider_token_emitted": false,
+      "campaign_token_emitted": false,
+      "custom_product_page_emitted": true
+    },
+    {
+      "route": "/get",
+      "status": 302,
+      "destination_host": "apps.apple.com",
+      "app_id": "6751238914",
+      "provider_token_emitted": false,
+      "campaign_token": "x_bio",
+      "custom_product_page_emitted": true
+    }
+  ],
+  "verification": {
+    "web_full_tests": "290/290 before final mounted-return edge-case test",
+    "final_focused_tests": "15/15 including isolated PostgreSQL and mounted-return behavior",
+    "typecheck": "pass after final change",
+    "eslint": "pass before final small visibility change",
+    "diff_check": "pass"
+  },
+  "remaining_external_configuration": [
+    "Verified App Store Connect provider token for APP_STORE_PROVIDER_TOKEN; current redirects emit none.",
+    "Verified web campaign token for APP_STORE_WEB_CAMPAIGN_TOKEN; main website redirect emits none.",
+    "Apple campaign eligibility/reporting, installation/first-open/paid conversion and cross-device matching are not established by website click/session metrics."
+  ]
+}

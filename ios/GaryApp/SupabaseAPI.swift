@@ -1287,27 +1287,24 @@ enum SupabaseAPI {
         try? await WinnersAccessStore.checkout(leagues: leagues)
     }
 
-    /// Fire-and-forget conversion-funnel event → the shared `app_events` table
-    /// via the `log_app_event` SECURITY DEFINER RPC (same trust model as
-    /// `register_push_token`: the anon key can write but can't read/enumerate).
-    /// The web pricing page posts to the SAME RPC, so iOS + web land in one
-    /// funnel. Never throws, never blocks UI — detached and best-effort.
+    /// Optional first-party events. Off until explicitly enabled in Settings;
+    /// only allowlisted plan properties are sent, with no signed-out identifier.
     static func logEvent(_ event: String, _ props: [String: Any] = [:]) {
-        guard let url = URL(string: "\(Secrets.supabaseURL)/rest/v1/rpc/log_app_event") else { return }
+        guard let payload = PrivacyPreferences.eventPayload(event, props: props,
+                    accountID: UserDefaults.standard.string(forKey: "gary_user_id")),
+              let url = URL(string: "\(Secrets.supabaseURL)/rest/v1/rpc/log_app_event") else { return }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(Secrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(Secrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-        let payload: [String: Any] = [
-            "p_event": event,
-            "p_identity": identityId,
-            "p_platform": "ios",
-            "p_props": props,
-        ]
         guard let body = try? JSONSerialization.data(withJSONObject: payload) else { return }
         req.httpBody = body
-        Task.detached { _ = try? await URLSession.shared.data(for: req) }
+        Task.detached {
+            // A preference change before this task starts must stop the send.
+            guard UserDefaults.standard.bool(forKey: PrivacyPreferences.analyticsKey) else { return }
+            _ = try? await URLSession.shared.data(for: req)
+        }
     }
 
     static func fetchInsightLedger(date: String) async -> [InsightLedgerRow] {

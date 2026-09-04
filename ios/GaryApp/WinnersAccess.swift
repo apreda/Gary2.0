@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import StoreKit
 
 struct WinnersSubscription: Codable {
     let product_key: String
@@ -64,6 +65,11 @@ struct WinnersAccessSnapshot: Codable {
     }
 
     static func checkout(leagues: [String] = [], plan: String? = nil) async throws -> URL {
+        #if !DEBUG
+        guard ExternalCheckoutPolicy.permitsPurchase(countryCode: await Storefront.current?.countryCode) else {
+            throw UserBookError.server(ExternalCheckoutPolicy.unavailableMessage)
+        }
+        #endif
         guard AuthManager.shared.isAuthenticated else { throw UserBookError.notSignedIn }
         var payload: [String: Any] = ["leagues": leagues]
         if let plan { payload["plan"] = plan }

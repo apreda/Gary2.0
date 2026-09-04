@@ -1,0 +1,4 @@
+[functions.engagement-sheet]
+# Private founder page and existing cron authenticate with SHEET_TOKEN inside
+# the handler. They do not send a Supabase JWT. Keep the token gate enabled.
+verify_jwt = false

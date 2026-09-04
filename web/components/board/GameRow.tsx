@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Disclosure } from '@/components/Disclosure';
 import { ScoutRead } from '@/components/ScoutRead';
+import { MeaningfulPickView } from '@/components/MeaningfulPickView';
 import { TailFadeRow } from '@/components/book/TailFadeRow';
 import { sportByCode } from '@/lib/gary/leagues';
 import { etTime, marketLine, oddsText, parseGameTime, pickDropTime, scoutSectionsExcluding } from '@/lib/gary/format';
@@ -131,7 +132,11 @@ export function GameRow({ game, now, analysisHref }: { game: BoardGame; now?: nu
               )}
             </div>
 
-            {lead && <ScoutRead text={lead} tone="tight" className="mt-3.5" />}
+            {lead && (analysisHref ? (
+              <MeaningfulPickView path={analysisHref}>
+                <ScoutRead text={lead} tone="tight" className="mt-3.5" />
+              </MeaningfulPickView>
+            ) : <ScoutRead text={lead} tone="tight" className="mt-3.5" />)}
             {deeperSections.length > 0 && (
               <Disclosure summary="The full analysis" className="mt-4">
                 <ScoutRead sections={deeperSections} tone="tight" />

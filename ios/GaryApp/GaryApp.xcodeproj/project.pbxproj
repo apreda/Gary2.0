@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C04E9001AABBCCDD11223301 /* PrivacyPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = C04E9001AABBCCDD11223302 /* PrivacyPreferences.swift */; };
 		050FAB3C2FBD1312014A6102 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 921968E9FC0E6DE90F6EAD89 /* GoogleSignIn */; };
 		0984340298B6C347AF6F4588 /* BebasNeue-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C20455738476664B4F69306C /* BebasNeue-Regular.ttf */; };
 		0B397BC2A4AF390C22016E57 /* MLBGameIntelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DAD9374914257AC6D8B7EC /* MLBGameIntelView.swift */; };
@@ -81,6 +82,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		C04E9001AABBCCDD11223302 /* PrivacyPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyPreferences.swift; sourceTree = "<group>"; };
 		008FA1BAD0680B6769DD9D2A /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
 		00BBC4AB067AFFD32ED58FB1 /* GoogleService-Info.plist.example */ = {isa = PBXFileReference; path = "GoogleService-Info.plist.example"; sourceTree = "<group>"; };
 		0110A48840365DDC8DBFCABF /* UserBookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserBookView.swift; sourceTree = "<group>"; };
@@ -220,6 +222,7 @@
 				430996827B4DF85995FED6C0 /* SecretsLocal.swift */,
 				1392B4ABEB07112212968AAF /* SecretsLocal.swift.example */,
 				26AE11992E449EB95857D6E3 /* SettingsView.swift */,
+				C04E9001AABBCCDD11223302 /* PrivacyPreferences.swift */,
 				58C162EF98D65308171329E2 /* SupabaseAPI.swift */,
 				0110A48840365DDC8DBFCABF /* UserBookView.swift */,
 				E42EB87F7613B5B15EF2560E /* WinnersAccess.swift */,
@@ -422,6 +425,7 @@
 				8B47B0D0D084C52747EA7346 /* Secrets.swift in Sources */,
 				A641F13CFD4AAED442495A5E /* SecretsLocal.swift in Sources */,
 				F2A5809FF32535CE29C4E79A /* SettingsView.swift in Sources */,
+				C04E9001AABBCCDD11223301 /* PrivacyPreferences.swift in Sources */,
 				D810CCA6C81972A7A21BD77F /* SupabaseAPI.swift in Sources */,
 				0E2DFD72AAC6F9DA0E624548 /* UserBookView.swift in Sources */,
 				DA6929ABA0783579FD371853 /* WinnersAccess.swift in Sources */,
@@ -489,7 +493,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 898;
+				CURRENT_PROJECT_VERSION = 899;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -576,7 +580,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 898;
+				CURRENT_PROJECT_VERSION = 899;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_NS_ASSERTIONS = NO;

@@ -13,6 +13,10 @@ struct SettingsView: View {
     @State private var deleting = false
     @State private var deleteError: String? = nil
     @State private var showSignIn = false
+    @State private var showDeletionComplete = false
+    @State private var needsAppleRevocation = false
+    @AppStorage(PrivacyPreferences.analyticsKey) private var analyticsAllowed = false
+    @Environment(\.openURL) private var openURL
     /// Billfold/Home results format — CASH by default (user call, Jun 18) at a
     /// hypothetical $100/bet; off = the units view. Default must match the
     /// Billfold declaration or the toggle reads stale.
@@ -48,6 +52,8 @@ struct SettingsView: View {
                         .offset(y: animateIn ? 0 : 20)
                         .animation(.easeOut(duration: 0.5).delay(0.2), value: animateIn)
 
+                    section("PRIVACY") { privacyRows }
+
                     section("LEGAL") { legalRows }
                         .opacity(animateIn ? 1 : 0)
                         .offset(y: animateIn ? 0 : 20)
@@ -77,7 +83,8 @@ struct SettingsView: View {
                 deleting = true
                 Task {
                     do {
-                        try await authManager.deleteAccount()
+                        needsAppleRevocation = try await authManager.deleteAccount()
+                        showDeletionComplete = true
                     } catch {
                         deleteError = (error as? LocalizedError)?.errorDescription ?? "Couldn't delete your account. Please try again."
                     }
@@ -91,6 +98,18 @@ struct SettingsView: View {
             Button("OK", role: .cancel) { deleteError = nil }
         } message: {
             Text(deleteError ?? "")
+        }
+        .alert("Account Deleted", isPresented: $showDeletionComplete) {
+            if needsAppleRevocation {
+                Button("Apple Sign-In Settings") {
+                    openURL(URL(string: "https://support.apple.com/en-us/102571")!)
+                }
+            }
+            Button("Done", role: .cancel) {}
+        } message: {
+            Text(needsAppleRevocation
+                 ? "Your Gary account and subscriptions are removed. To remove Apple's remaining sign-in permission too, open iPhone Settings → your name → Sign in with Apple → Gary → Stop Using Sign in with Apple."
+                 : "Your Gary account has been deleted and your Gary subscriptions have been canceled.")
         }
         .sheet(isPresented: $showSignIn) {
             AuthView()
@@ -301,6 +320,19 @@ struct SettingsView: View {
     }
 
     // MARK: - Legal
+
+    private var privacyRows: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle("Share product analytics", isOn: $analyticsAllowed)
+                .font(GaryFonts.text(15))
+                .tint(GaryColors.gold)
+            Text("Help improve Gary by sharing which plans and checkout steps you use. Signed-in events use your account ID; signed-out events have no persistent identifier. No bet notes or payment-card details. Off by default; turn it off here any time. Essential account, billing and notification services still work.")
+                .font(GaryFonts.text(12))
+                .foregroundStyle(.white.opacity(0.65))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+    }
 
     @ViewBuilder
     private var legalRows: some View {

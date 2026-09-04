@@ -36,6 +36,7 @@ final class AuthManager: ObservableObject {
 
     private var baseURL: String { Secrets.supabaseURL.absoluteString }
     private var apiKey: String { Secrets.supabaseAnonKey }
+    private var appleRevocationObserver: NSObjectProtocol?
 
     private func authURL(_ path: String) throws -> URL {
         guard let url = URL(string: "\(baseURL)\(path)") else {
@@ -47,8 +48,15 @@ final class AuthManager: ObservableObject {
     // MARK: - Init
 
     private init() {
+        appleRevocationObserver = NotificationCenter.default.addObserver(
+            forName: ASAuthorizationAppleIDProvider.credentialRevokedNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.checkAppleCredential() }
+        }
         Task {
             await checkExistingSession()
+            checkAppleCredential()
         }
     }
 
@@ -226,6 +234,10 @@ final class AuthManager: ObservableObject {
         if http.statusCode == 200 {
             let session = try JSONDecoder().decode(AuthResponse.self, from: data)
             handleAuthResponse(session)
+            if isAuthenticated {
+                KeychainStore.set("gary_apple_subject", credential.user)
+                KeychainStore.set("gary_apple_account", userId)
+            }
         } else {
             let errorBody = try? JSONDecoder().decode(AuthErrorResponse.self, from: data)
             let diagnostic = errorBody?.error_description ?? errorBody?.msg ?? "HTTP \(http.statusCode)"
@@ -444,7 +456,7 @@ final class AuthManager: ObservableObject {
     /// Permanently deletes the signed-in user's account + their data via the
     /// `delete-account` edge function (which verifies the caller from this token,
     /// then admin-deletes their rows + auth user), then clears the local session.
-    func deleteAccount() async throws {
+    func deleteAccount() async throws -> Bool {
         guard !accessToken.isEmpty,
               let url = URL(string: "\(baseURL)/functions/v1/delete-account") else {
             throw AuthError.unauthorized
@@ -462,7 +474,26 @@ final class AuthManager: ObservableObject {
             if result?["signed_out"] as? Bool == true, currentUser?.id == owner { clearSession() }
             throw AuthError.serverError(result?["error"] as? String ?? "Account deletion did not finish. Please sign in again and retry.")
         }
-        if currentUser?.id == owner { clearSession() }
+        let appleRevocation = result?["apple_revocation_required"] as? Bool == true
+        if currentUser?.id == owner {
+            UserDefaults.standard.removeObject(forKey: PrivacyPreferences.analyticsKey)
+            clearSession()
+        }
+        return appleRevocation
+    }
+
+    /// Apple may revoke the provider credential independently of a Supabase
+    /// session. Never let an old callback sign out a different account.
+    private func checkAppleCredential() {
+        guard let subject = KeychainStore.get("gary_apple_subject"),
+              let owner = KeychainStore.get("gary_apple_account"), owner == userId else { return }
+        ASAuthorizationAppleIDProvider().getCredentialState(forUserID: subject) { [weak self] state, error in
+            guard error == nil, state == .revoked || state == .notFound else { return }
+            Task { @MainActor in
+                guard let self, self.userId == owner else { return }
+                self.signOut()
+            }
+        }
     }
 
     // MARK: - Helpers
@@ -574,6 +605,8 @@ final class AuthManager: ObservableObject {
         currentUser = nil
         isAuthenticated = false
         infoMessage = nil
+        KeychainStore.delete("gary_apple_subject")
+        KeychainStore.delete("gary_apple_account")
     }
 }
 

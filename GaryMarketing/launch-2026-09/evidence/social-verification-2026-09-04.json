@@ -1,0 +1,45 @@
+{
+  "checked_date_et": "2026-09-04",
+  "scope": "Verbatim X copy safety, observable poster outcomes, daily read-only marketing readiness",
+  "source_checkout": "/Users/adam.preda/Desktop/Gary2.0",
+  "deployment": {
+    "function": "social-auto-post",
+    "version": 94,
+    "status": "ACTIVE",
+    "updated_at": "2026-09-04T22:51:44.780Z",
+    "jwt_verification": true,
+    "retrieved_deployed_source_checks": [
+      "Final safe-reason validation covers model and fallback paths",
+      "Candidate list never escapes to all unfiltered sentences",
+      "No-safe-candidate fallback returns null rather than unrestricted prose",
+      "Scheduled responses include service identity and bounded health categories"
+    ],
+    "manual_post_or_metrics_refresh_triggered": false
+  },
+  "verification": {
+    "focused_backend_tests": 56,
+    "focused_backend_failures": 0,
+    "complete_edge_tests": 150,
+    "complete_edge_failures": 0,
+    "deno_typecheck": "passed",
+    "diff_whitespace_check": "passed",
+    "stored_copy_coverage": {
+      "source": "daily_picks",
+      "date_start_inclusive": "2026-08-21",
+      "date_end_inclusive": "2026-09-04",
+      "daily_rows": 15,
+      "stored_rationales": 186,
+      "valid_two_sentence_fallbacks": 186,
+      "valid_one_sentence_fallbacks": 0,
+      "blocked": 0,
+      "unsafe_fallbacks": 0,
+      "new_model_calls_or_picks": 0
+    }
+  },
+  "limits": [
+    "Stored-copy coverage tests sentence availability and verbatim integrity, not the factual accuracy or betting quality of underlying rationales.",
+    "This file does not claim installations, unique users, profit, or retention.",
+    "The separate readiness snapshot reports known stale engagement drafts honestly; it does not revive the reply engine.",
+    "No tweet, account profile, billing balance, spend cap, or external notification was changed by manual action. The existing automated posting schedule continues normally."
+  ]
+}

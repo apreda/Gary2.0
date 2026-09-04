@@ -55,6 +55,7 @@ struct PlansSheetView: View {
         let streakChar: String; let streakLen: Int
     }
     @State private var appeared = false
+    @State private var checkoutAvailable = false
 
     /// Real, current graded record — never fabricated. Pulled from the same
     /// game_results source as the Results tab; the strip hides entirely if the
@@ -99,7 +100,20 @@ struct PlansSheetView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 22) {
                     topBar
-                    allPlansScreen
+                    if checkoutAvailable {
+                        allPlansScreen
+                    } else {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text("Winners access").font(GaryFonts.display(28))
+                            Text(ExternalCheckoutPolicy.unavailableMessage)
+                                .font(GaryFonts.text(15))
+                                .foregroundStyle(.white.opacity(0.7))
+                            if !signedIn {
+                                Button("Sign In", action: onAccount).tint(GaryColors.gold)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                    }
                 }
                 .padding(.top, 8)
                 .padding(.bottom, 28)
@@ -107,9 +121,19 @@ struct PlansSheetView: View {
                 .offset(y: appeared ? 0 : 8)
             }
         }
-        .safeAreaInset(edge: .bottom) { ctaBar }
+        .safeAreaInset(edge: .bottom) { if checkoutAvailable { ctaBar } }
         .preferredColorScheme(.dark)
         .task { await loadRecord() }
+        .task {
+            #if DEBUG
+            checkoutAvailable = true // Stripe test-mode simulator QA only.
+            #else
+            checkoutAvailable = ExternalCheckoutPolicy.permitsPurchase(countryCode: await Storefront.current?.countryCode)
+            for await storefront in Storefront.updates {
+                checkoutAvailable = ExternalCheckoutPolicy.permitsPurchase(countryCode: storefront.countryCode)
+            }
+            #endif
+        }
         .onAppear {
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.35)) { appeared = true }
             SupabaseAPI.logEvent("paywall_viewed", [
@@ -430,6 +454,7 @@ struct PlansSheetView: View {
     }
 
     private func primaryAction() {
+        guard checkoutAvailable else { return }
         switch selection {
         case .allAccess:       onSelect("ALL")
         case .allAccessAnnual: onSelect("ALL_ANNUAL")

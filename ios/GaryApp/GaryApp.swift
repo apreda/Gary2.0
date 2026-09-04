@@ -18,10 +18,9 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         // used to abort the app before its first frame. Validate the plist first:
         // a bad local/Xcode Cloud secret may disable push, but it can never make
         // Gary unlaunchable again.
-        if configureFirebaseIfValid() {
-            Messaging.messaging().delegate = self
-            requestNotificationPermissions(application)
-        }
+        // Push is optional: avoid initializing its SDK (and installation
+        // diagnostics) before the user grants notification permission.
+        requestNotificationPermissions(application)
         
         return true
     }
@@ -43,6 +42,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             return false
         }
         FirebaseApp.configure()
+        FirebaseApp.app()?.isDataCollectionDefaultEnabled = false
         return FirebaseApp.app() != nil
     }
     
@@ -50,6 +50,9 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, _ in
             if granted {
                 DispatchQueue.main.async {
+                    guard FirebaseApp.app() != nil || self.configureFirebaseIfValid() else { return }
+                    Messaging.messaging().delegate = self
+                    Messaging.messaging().isAutoInitEnabled = true
                     application.registerForRemoteNotifications()
                 }
             }
@@ -81,6 +84,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     }
     
     private func sendTokenToBackend(_ token: String) async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional || settings.authorizationStatus == .ephemeral else { return }
         // Register the device token via the register_push_token RPC (SECURITY
         // DEFINER, server-side upsert). Replaces the old direct PostgREST upsert
         // into push_tokens so the table needs NO anon policies — the anon key can
