@@ -550,7 +550,7 @@ async function storedConnectionPlayers(date, league) {
       params: {
         date: `eq.${date}`,
         league: `eq.${league}`,
-        select: 'player_id',
+        select: 'player_id,headline',
         player_id: 'not.is.null',
         limit: 500,
       },
@@ -671,10 +671,20 @@ async function buildAndStoreCards({ date, league, connections }) {
     }
     // The day's whole cast: this pass's connections plus every player already
     // stored for the date, so lane order can never cost a player his card.
+    const stored = await storedConnectionPlayers(date, league);
     const allConnections = [
       ...(Array.isArray(connections) ? connections : []),
-      ...await storedConnectionPlayers(date, league),
+      ...stored,
     ];
+    // SOME LANES STAMP AN MLBAM ID, NOT A BDL ONE (Sep 4 2026): the two-start
+    // lane's ids (deGrom 594798, Skenes 694973) can never match a pack keyed by
+    // BDL id, so the row's NAME rides along as an extra subject and the pack
+    // gets built under the id the app can actually resolve.
+    for (const row of [...allConnections]) {
+      const head = String(row?.headline || '').split(/[:(,/·—]/)[0].trim();
+      if (head.length >= 5 && /\s/.test(head)) extraPlayerNames.push(head);
+    }
+    extraPlayerNames = [...new Set(extraPlayerNames)];
     const packs = await buildPlayerInsightCards({
       date, league, connections: allConnections, games, extraPlayerNames,
     });
