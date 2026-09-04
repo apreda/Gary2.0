@@ -1,16 +1,20 @@
 /**
- * BACKFILL THE BOX LINE (Aug 5 2026).
+ * BACKFILL THE BOX LINE (Aug 5 2026; football added Sep 4 2026).
  *
  * game_recaps.box landed after these rows were written, so the headline card
  * had runs and no hits for every game already recapped. This walks a date's
- * MLB recaps, re-fetches that game's batting lines from BDL, and PATCHes the
- * box in. It NEVER touches headline/recap/bullets — no model call, no rewrite;
- * the prose those rows already carry is what shipped and stays.
+ * recaps, re-fetches that game's box from BDL, and PATCHes it in. It NEVER
+ * touches headline/recap/bullets — no model call, no rewrite; the prose those
+ * rows already carry is what shipped and stays.
+ *
+ * Baseball counts hits and home runs; football counts touchdowns (founder,
+ * Sep 4 2026: the football card is the MLB card "to a tee except HR are TD").
  *
  * Usage: node scripts/backfill-recap-box.js 2026-08-04 [2026-08-05 ...]
+ *        node scripts/backfill-recap-box.js --league=NCAAF 2026-09-03
  */
 import { createClient } from '@supabase/supabase-js';
-import { buildBoxLine } from '../src/services/gameRecap.js';
+import { buildBoxLine, buildFootballBoxLine, buildFootballBoxLineFromPlays } from '../src/services/gameRecap.js';
 await import('../src/loadEnv.js');
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -18,7 +22,14 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_S
 const BDL_API_KEY = process.env.BALLDONTLIE_API_KEY || process.env.VITE_BALL_DONT_LIE_API_KEY || process.env.BALL_DONT_LIE_API_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const dates = process.argv.slice(2).filter((a) => /^\d{4}-\d{2}-\d{2}$/.test(a));
+const args = process.argv.slice(2);
+const dates = args.filter((a) => /^\d{4}-\d{2}-\d{2}$/.test(a));
+const LEAGUE = (args.find((a) => a.startsWith('--league='))?.split('=')[1] ?? 'MLB').toUpperCase();
+const STAT_PATH = { MLB: 'mlb/v1/stats', NFL: 'nfl/v1/stats', NCAAF: 'ncaaf/v1/player_stats' }[LEAGUE];
+if (!STAT_PATH) {
+  console.error(`Unsupported league: ${LEAGUE} (MLB, NFL, NCAAF)`);
+  process.exit(1);
+}
 if (!dates.length) {
   console.error('Usage: node scripts/backfill-recap-box.js YYYY-MM-DD [...]');
   process.exit(1);
@@ -28,9 +39,22 @@ async function statsForGame(gameId) {
   if (!BDL_API_KEY || gameId == null) return null;
   try {
     const res = await fetch(
-      `https://api.balldontlie.io/mlb/v1/stats?game_ids[]=${gameId}&per_page=100`,
+      `https://api.balldontlie.io/${STAT_PATH}?game_ids[]=${gameId}&per_page=100`,
       { headers: { Authorization: BDL_API_KEY }, signal: AbortSignal.timeout(20_000) },
     );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.data?.length ? data.data : null;
+  } catch { return null; }
+}
+
+/** One football game's plays — the exact touchdown count, returns included. */
+async function playsForGame(gameId) {
+  if (!BDL_API_KEY || gameId == null || LEAGUE === 'MLB') return null;
+  const path = LEAGUE === 'NFL' ? 'nfl/v1/plays' : 'ncaaf/v1/plays';
+  try {
+    const res = await fetch(`https://api.balldontlie.io/${path}?game_id=${gameId}&per_page=100`,
+      { headers: { Authorization: BDL_API_KEY }, signal: AbortSignal.timeout(20_000) });
     if (!res.ok) return null;
     const data = await res.json();
     return data?.data?.length ? data.data : null;
@@ -40,7 +64,7 @@ async function statsForGame(gameId) {
 for (const date of dates) {
   const { data: recaps } = await supabase
     .from('game_recaps').select('id,matchup,box')
-    .eq('game_date', date).eq('league', 'MLB');
+    .eq('game_date', date).eq('league', LEAGUE);
   const { data: pickRows } = await supabase
     .from('daily_picks').select('picks').eq('date', date);
   const { data: results } = await supabase
@@ -52,20 +76,25 @@ for (const date of dates) {
     picks.map((p) => [`${p.awayTeam} @ ${p.homeTeam}`, p.game_id]));
   const scoreByMatchup = new Map((results || []).map((r) => [r.matchup, r.final_score]));
 
-  console.log(`\n📦 ${date} — ${recaps?.length ?? 0} MLB recap(s)`);
+  console.log(`\n📦 ${date} — ${recaps?.length ?? 0} ${LEAGUE} recap(s)`);
   let written = 0, skipped = 0;
 
   for (const row of recaps || []) {
-    // Refresh rows written before HR joined the box, too.
-    if (row.box?.away?.hr != null) { skipped++; continue; }
+    // Refresh rows written before the league's stat line joined the box.
+    const already = LEAGUE === 'MLB' ? row.box?.away?.hr : row.box?.away?.td;
+    if (already != null) { skipped++; continue; }
     const gameId = gameIdByMatchup.get(row.matchup);
     const [away, home] = String(row.matchup || '').split(' @ ');
     const [awayScore, homeScore] = String(scoreByMatchup.get(row.matchup) || '')
       .split('-').map(Number);
     const stats = await statsForGame(gameId);
-    const box = buildBoxLine({ mlbStats: stats, awayTeam: away, homeTeam: home, awayScore, homeScore });
+    const sides = { awayTeam: away, homeTeam: home, awayScore, homeScore };
+    const box = LEAGUE === 'MLB'
+      ? buildBoxLine({ mlbStats: stats, ...sides })
+      : (buildFootballBoxLineFromPlays({ plays: await playsForGame(gameId), ...sides })
+         ?? buildFootballBoxLine({ playerStats: stats, ...sides }));
     if (!box) {
-      console.log(`   ⏭️  ${row.matchup}: no batting lines`);
+      console.log(`   ⏭️  ${row.matchup}: no usable box`);
       skipped++;
       continue;
     }
@@ -74,7 +103,10 @@ for (const date of dates) {
       console.error(`   ❌ ${row.matchup}: ${error.message}`);
       continue;
     }
-    console.log(`   ✅ ${row.matchup}: ${away} ${box.away.runs}R ${box.away.hits}H · ${home} ${box.home.runs}R ${box.home.hits}H`);
+    const line = (side, name) => LEAGUE === 'MLB'
+      ? `${name} ${side.runs}R ${side.hits}H`
+      : `${name} ${side.runs} (${side.td} TD)`;
+    console.log(`   ✅ ${row.matchup}: ${line(box.away, away)} · ${line(box.home, home)}`);
     written++;
   }
   console.log(`   → ${written} written, ${skipped} skipped`);

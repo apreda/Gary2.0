@@ -336,6 +336,48 @@ export async function generateRecap({ pick, result, evidence }) {
  * and the card treats null as "runs only".
  */
 /**
+ * THE FOOTBALL BOX LINE, from the play feed — the exact count.
+ *
+ * Every touchdown is a scoring play worth six, whoever scored it: offense,
+ * defense, or a return. Counting plays therefore gets the ones the player box
+ * cannot see, which is why this is preferred over buildFootballBoxLine (a
+ * Georgia Tech game on Sep 3 2026 scored 13 with zero offensive touchdowns in
+ * the player box — the six points came back on defense).
+ *
+ * Six points a touchdown still cannot exceed what the side scored; a feed that
+ * disagrees with its own scoreboard drops the box rather than printing it.
+ */
+export function buildFootballBoxLineFromPlays({ plays, awayTeam, homeTeam, awayScore, homeScore }) {
+  if (!Array.isArray(plays) || !plays.length) return null;
+  const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  const awayName = norm(awayTeam), homeName = norm(homeTeam);
+  if (!awayName || !homeName || awayName === homeName) return null;
+  const matches = (team, side) => !!team && !!side && (team.includes(side) || side.includes(team));
+
+  let awayTd = 0, homeTd = 0, sawScoring = false, sawTeam = false;
+  for (const play of plays) {
+    if (!play?.scoring_play) continue;
+    sawScoring = true;
+    if (Number(play?.score_value) !== 6) continue;
+    const team = norm(play?.team?.college ?? play?.team?.full_name ?? play?.team?.name);
+    const isAway = matches(team, awayName), isHome = matches(team, homeName);
+    if (isAway === isHome) continue;
+    sawTeam = true;
+    if (isAway) awayTd += 1; else homeTd += 1;
+  }
+  // No scoring plays at all means the feed has no play data for this game —
+  // not a 0-0 game (which would still carry kickoffs and punts).
+  if (!sawScoring || !sawTeam) return null;
+  if (Number.isFinite(awayScore) && awayTd * 6 > awayScore) return null;
+  if (Number.isFinite(homeScore) && homeTd * 6 > homeScore) return null;
+
+  return {
+    away: { runs: Number.isFinite(awayScore) ? awayScore : null, hits: null, hr: null, td: awayTd },
+    home: { runs: Number.isFinite(homeScore) ? homeScore : null, hits: null, hr: null, td: homeTd },
+  };
+}
+
+/**
  * THE FOOTBALL BOX LINE (founder, Sep 4 2026: the football headline card is
  * the MLB card "to a tee except HR are TD"). Baseball's box counts home runs;
  * football's counts touchdowns, from the provider's own player lines.
@@ -344,7 +386,9 @@ export async function generateRecap({ pick, result, evidence }) {
  * touchdown are the same score, so only rushing + receiving are summed.
  * Defensive and special-teams scores are not in the player box, so this is
  * the game's OFFENSIVE touchdowns — a return score would leave the number one
- * light rather than invent one.
+ * light rather than invent one. Prefer buildFootballBoxLineFromPlays, which
+ * counts every six-point play; this is the fallback for a game with no play
+ * feed.
  *
  * Returns null unless BOTH sides resolve, the same rule the baseball box
  * follows: a half-built box is worse than none.

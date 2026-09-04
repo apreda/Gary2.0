@@ -28,7 +28,8 @@
 
 import { createClient } from '@supabase/supabase-js';
 import {
-  generateRecap, filterPropsForGame, buildBoxLine, buildFootballBoxLine, gameOnlyHeadline, headlineNeedsRepair,
+  generateRecap, filterPropsForGame, buildBoxLine, buildFootballBoxLine, buildFootballBoxLineFromPlays,
+  gameOnlyHeadline, headlineNeedsRepair,
 } from '../src/services/gameRecap.js';
 import { buildGameEvidence } from '../src/services/factCheck.js';
 // Load environment variables FIRST (centralized)
@@ -134,6 +135,24 @@ async function fetchMlbStatsForGames(gameIds) {
 }
 
 
+
+/**
+ * One football game's plays. Every touchdown is a six-point scoring play, so
+ * this is the only feed that sees a defensive or return score.
+ */
+async function footballPlays(league, gameId) {
+  if (!BDL_API_KEY || gameId == null) return null;
+  const path = league === 'NFL' ? 'nfl/v1/plays' : 'ncaaf/v1/plays';
+  try {
+    const res = await fetch(`https://api.balldontlie.io/${path}?game_id=${gameId}&per_page=100`, {
+      headers: { Authorization: BDL_API_KEY },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!res.ok) return null;
+    const payload = await res.json();
+    return payload?.data?.length ? payload.data : null;
+  } catch { return null; }
+}
 
 /**
  * The same prefetch for football, so the headline card's box can count
@@ -374,12 +393,16 @@ async function main(targetDate) {
         recap: recap.recap,
         bullets: recap.bullets || [],
       };
-      const box = league === 'MLB'
-        ? buildBoxLine({ mlbStats, awayTeam: pick.awayTeam, homeTeam: pick.homeTeam, awayScore, homeScore })
-        : buildFootballBoxLine({
-            playerStats: footballStatsByGame.get(`${league}:${pick.game_id}`),
-            awayTeam: pick.awayTeam, homeTeam: pick.homeTeam, awayScore, homeScore,
-          });
+      let box = null;
+      if (league === 'MLB') {
+        box = buildBoxLine({ mlbStats, awayTeam: pick.awayTeam, homeTeam: pick.homeTeam, awayScore, homeScore });
+      } else {
+        // The play feed counts EVERY touchdown, defense and returns included;
+        // the player box is the fallback when a game has no plays.
+        const sides = { awayTeam: pick.awayTeam, homeTeam: pick.homeTeam, awayScore, homeScore };
+        box = buildFootballBoxLineFromPlays({ plays: await footballPlays(league, pick.game_id), ...sides })
+          ?? buildFootballBoxLine({ playerStats: footballStatsByGame.get(`${league}:${pick.game_id}`), ...sides });
+      }
       if (box) row.box = box;
 
       if (dryRun) {
