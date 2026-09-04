@@ -33,6 +33,7 @@ const { ballDontLieService } = await import('./src/services/ballDontLieService.j
 const { buildLeaguePulse } = await import('./src/services/insights/leaguePulse.js');
 const { buildFootballLeaguePulse } = await import('./src/services/insights/footballLeaguePulse.js');
 const { buildFootballPlayerInsightCards } = await import('./src/services/insights/footballPlayerInsightCards.js');
+const { buildNcaafPlayerInsightCards } = await import('./src/services/insights/ncaafPlayerInsightCards.js');
 const { loadFootballSlate } = await import('./src/services/insights/footballData.js');
 const {
   footballHubRunIsEmptyFailure,
@@ -469,6 +470,29 @@ async function deleteDayCards(date, league) {
   });
 }
 
+/**
+ * The day's posted college props (prop_picks is one jsonb row per date; each
+ * entry carries `sport`). The NCAAF pack builder prints a player's own lines
+ * from these. A failed read is an empty list — the section simply stays off.
+ */
+async function loadNcaafPropEntries(date) {
+  if (!supabaseUrl) return [];
+  try {
+    const { data } = await axios({
+      method: 'GET',
+      url: `${supabaseUrl}/rest/v1/prop_picks`,
+      headers: restHeaders,
+      params: { date: `eq.${date}`, select: 'picks' },
+    });
+    return (Array.isArray(data) ? data : [])
+      .flatMap((row) => (Array.isArray(row?.picks) ? row.picks : (row?.picks?.picks || [])))
+      .filter((entry) => String(entry?.sport || entry?.league || '').toUpperCase() === 'NCAAF');
+  } catch (err) {
+    console.warn(`   ⚠️  [NCAAF] prop entries unavailable for the packs: ${err.message}`);
+    return [];
+  }
+}
+
 /** INSERT freshly-built packs (idempotency comes from deleteDayCards first). */
 async function insertCards(rows) {
   const sanitized = JSON.parse(JSON.stringify(rows));
@@ -495,9 +519,15 @@ async function buildAndStoreCards({ date, league, connections }) {
       const games = await loadFootballSlate({
         bdl: ballDontLieService, league: league.toLowerCase(), date,
       });
-      const packs = await buildFootballPlayerInsightCards({
-        date, league, games, bdl: ballDontLieService,
-      });
+      // College packs ride their own builder (NCAAF Picks page parity, Sep 4
+      // 2026 — league isolation law): the NFL builder is NFL-only.
+      const packs = league === 'NCAAF'
+        ? await buildNcaafPlayerInsightCards({
+          date, games, bdl: ballDontLieService, propEntries: await loadNcaafPropEntries(date),
+        })
+        : await buildFootballPlayerInsightCards({
+          date, league, games, bdl: ballDontLieService,
+        });
       if (!Array.isArray(packs) || packs.length === 0) {
         console.log(`   ℹ️  No player insight cards built for ${league} (${date}).`);
         return;

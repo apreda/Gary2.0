@@ -1275,9 +1275,10 @@ struct HubView: View {
         if didLoad, fetchErrorLeagues.contains(sel), leagueSignals.isEmpty {
             return AnyView(hubError)
         }
-        if hubScope == "fantasy" {
-            // One Fantasy Corner for every league (founder, Sep 3 2026: MLB
-            // is the template; football differs only in its content).
+        if hubScope == "fantasy", sel != .ncaaf {
+            // One Fantasy Corner for every league but college (founder, Sep 3
+            // 2026: MLB is the template; football differs only in its content;
+            // Sep 4: no fantasy desk for NCAAF).
             return AnyView(
                 FantasyCornerPage(
                     pickups: items(.fantasyPickups),
@@ -1736,8 +1737,13 @@ fileprivate struct HubMasthead: View {
                         }
                     }
                 }
-                scopeWord("THE HUB", on: hubScope != "fantasy") { hubScope = "hub" }
-                scopeWord("FANTASY", on: hubScope == "fantasy") { hubScope = "fantasy" }
+                scopeWord("THE HUB", on: hubScope != "fantasy" || sel == .ncaaf) { hubScope = "hub" }
+                // No fantasy desk for college (founder, Sep 4 2026: "NCAAF
+                // doesn't need fantasy"): the scope word is gone on the NCAAF
+                // desk and the page below never routes there.
+                if sel != .ncaaf {
+                    scopeWord("FANTASY", on: hubScope == "fantasy") { hubScope = "fantasy" }
+                }
                 Spacer(minLength: 8)
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {

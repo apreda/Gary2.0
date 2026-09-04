@@ -15,10 +15,8 @@
 //   * status row    — the wire injury report, verbatim status
 //   * props         — the game's posted player prop lines
 //
-// NCAAF (fail-closed): season-stat leaders per slate team (passing/rushing/
-// receiving yards). No depth chart, no injury feed, no props — those sections
-// are simply absent. Before the season's first games the lane emits nothing:
-// college rosters churn too much to present a prior season as this team.
+// NFL-only (league isolation law): the college packs live in
+// ncaafPlayerInsightCards.js with their own sources; the runner routes by league.
 //
 // Defensive contract (house rules): NEVER throws; a missing source drops the
 // section, a player who cannot be grounded is skipped.
@@ -29,7 +27,6 @@ import { footballSeasonForDate } from './footballData.js';
 const safeCall = (fn, fallback) => safeCallShared(fn, fallback, 'footballPlayerCards');
 
 const MAX_PROPS = 4;
-const NCAAF_LEADERS_PER_TEAM = 3;
 
 function isPreseasonDate(date) {
   return Number(String(date || '').slice(5, 7)) === 8;
@@ -283,100 +280,19 @@ async function buildNflPacks({ date, bdl, games }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NCAAF — season-stat leaders per slate team (current season only)
-// ─────────────────────────────────────────────────────────────────────────────
-
-function ncaafLeaderLine(row) {
-  const passYds = finite(row?.passing_yards);
-  const rushYds = finite(row?.rushing_yards);
-  const recYds = finite(row?.receiving_yards);
-  const bits = [];
-  if (passYds) {
-    bits.push(`${passYds} pass yds`);
-    const tds = finite(row?.passing_touchdowns);
-    if (tds != null) bits.push(`${tds} TD`);
-  }
-  if (rushYds) {
-    bits.push(`${rushYds} rush yds`);
-    const tds = finite(row?.rushing_touchdowns);
-    if (tds) bits.push(`${tds} rush TD`);
-  }
-  if (recYds) {
-    const rec = finite(row?.receptions);
-    bits.push(`${rec != null ? `${rec} rec · ` : ''}${recYds} rec yds`);
-  }
-  return bits.length ? bits.join(' · ') : null;
-}
-
-async function buildNcaafPacks({ date, bdl, games }) {
-  const season = footballSeasonForDate(date);
-  const packs = [];
-
-  for (const game of games) {
-    const awayTeam = game.away_team ?? game.visitor_team;
-    const homeTeam = game.home_team;
-    if (!awayTeam?.id || !homeTeam?.id || game?.id == null) continue;
-    const gameLabelText = `${sideName(awayTeam)} @ ${sideName(homeTeam)}`;
-
-    for (const [team, opponent] of [[awayTeam, homeTeam], [homeTeam, awayTeam]]) {
-      const rows = await safeCall(
-        () => bdl.getNcaafPlayerSeasonStats({ teamId: team.id, season }), [],
-      );
-      const leaders = (Array.isArray(rows) ? rows : [])
-        .map((r) => ({
-          row: r,
-          volume: (finite(r?.passing_yards) || 0) + (finite(r?.rushing_yards) || 0) + (finite(r?.receiving_yards) || 0),
-        }))
-        .filter((x) => x.volume > 0 && (x.row?.player?.id != null))
-        .sort((a, b) => b.volume - a.volume)
-        .slice(0, NCAAF_LEADERS_PER_TEAM);
-
-      for (const { row } of leaders) {
-        const player = row.player;
-        const name = [player?.first_name, player?.last_name].filter(Boolean).join(' ')
-          || player?.full_name || null;
-        const line1 = ncaafLeaderLine(row);
-        if (!name || !line1) continue;
-        packs.push({
-          date,
-          league: 'NCAAF',
-          player_id: String(player.id),
-          player_name: name,
-          team_abbr: sideName(team),
-          game_id: String(game.id),
-          payload: {
-            type: finite(row?.passing_yards) ? 'quarterback' : 'skill',
-            name,
-            team: sideName(team),
-            position: player?.position_abbreviation || player?.position || null,
-            game: gameLabelText,
-            opponent: { name: fullName(opponent), hand: null },
-            season: { line1, line2: `${season} season` },
-            statsSectionTitle: 'THE SHEET',
-          },
-        });
-      }
-    }
-  }
-  return packs;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Public entry
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Build football player insight card packs for a day's slate.
+ * Build the NFL player insight card packs for a day's slate.
  * @returns {Promise<Array<{date,league,player_id,player_name,team_abbr,game_id,payload}>>}
  */
 export async function buildFootballPlayerInsightCards({ date, league, games, bdl } = {}) {
   const lg = String(league || '').toUpperCase();
-  if (lg !== 'NFL' && lg !== 'NCAAF') return [];
+  if (lg !== 'NFL') return [];
   if (!bdl || !Array.isArray(games) || !games.length) return [];
 
-  const packs = lg === 'NFL'
-    ? await safeCall(() => buildNflPacks({ date, bdl, games }), [])
-    : await safeCall(() => buildNcaafPacks({ date, bdl, games }), []);
+  const packs = await safeCall(() => buildNflPacks({ date, bdl, games }), []);
 
   console.log(`[footballPlayerCards] ${lg} ${date}: built ${packs.length} pack(s) across ${games.length} game(s).`);
   return packs;

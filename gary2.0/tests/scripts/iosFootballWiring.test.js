@@ -597,3 +597,11 @@ describe('Billfold canonical NFL metadata', () => {
     expect(supabaseApi).toContain('"game_date", value: "gte.\\(dateFilter)"');
   });
 });
+
+describe('college Hub has no fantasy desk (founder, Sep 4 2026)', () => {
+  it('hides the FANTASY scope word on the NCAAF desk and never routes NCAAF to the fantasy page', () => {
+    expect(hubView).toMatch(/if sel != \.ncaaf \{\s*\n\s*scopeWord\("FANTASY", on: hubScope == "fantasy"\)/);
+    expect(hubView).toContain('scopeWord("THE HUB", on: hubScope != "fantasy" || sel == .ncaaf)');
+    expect(hubView).toContain('if hubScope == "fantasy", sel != .ncaaf {');
+  });
+});

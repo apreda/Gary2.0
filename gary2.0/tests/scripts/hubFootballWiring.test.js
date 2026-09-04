@@ -56,3 +56,23 @@ describe('football Hub invocation wiring', () => {
     expect(packageJson.scripts['hub:football']).toBe('node run-insight-connections.js --league NFL,NCAAF');
   });
 });
+
+describe('college player packs (NCAAF Picks page parity, Sep 4 2026)', () => {
+  const footballCards = readFileSync(
+    new URL('../../src/services/insights/footballPlayerInsightCards.js', import.meta.url),
+    'utf8',
+  );
+
+  it('routes NCAAF packs to the NCAAF-owned builder with the day\'s posted props', () => {
+    expect(runner).toContain("await import('./src/services/insights/ncaafPlayerInsightCards.js')");
+    expect(runner).toContain('buildNcaafPlayerInsightCards({');
+    expect(runner).toContain('propEntries: await loadNcaafPropEntries(date)');
+    expect(runner).toContain("league === 'NCAAF'\n        ? await buildNcaafPlayerInsightCards({");
+  });
+
+  it('keeps the NFL pack builder NFL-only — no college branch inside it', () => {
+    expect(footballCards).not.toContain('buildNcaafPacks');
+    expect(footballCards).not.toContain("lg !== 'NFL' && lg !== 'NCAAF'");
+    expect(footballCards).not.toContain('NCAAF_LEADERS_PER_TEAM');
+  });
+});

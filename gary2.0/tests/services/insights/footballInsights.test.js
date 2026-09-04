@@ -14,11 +14,17 @@ const bdl = vi.hoisted(() => ({
   getNflRosterDepth: vi.fn(),
   getNflStandings: vi.fn(),
   getNflPlayerSeasonStats: vi.fn(),
+  getNcaafTeamPlayers: vi.fn(),
+  getNcaafStandings: vi.fn(),
+  getNcaafPlayerGameStats: vi.fn(),
 }));
+const ncaafSearch = vi.hoisted(() => ({ searchGrounded: vi.fn() }));
 
 vi.mock('../../../src/services/ballDontLieService.js', () => ({
   ballDontLieService: bdl,
 }));
+// The college availability lane's grounded search — never a real call here.
+vi.mock('../../../src/services/insights/ncaafSearch.js', () => ncaafSearch);
 
 // The Gary layer is a live content-model call; tests keep the computed detail
 // by letting the read attach deterministically.
@@ -83,6 +89,10 @@ beforeEach(() => {
   bdl.getNflRosterDepth.mockResolvedValue({ home: [], away: [] });
   bdl.getNflStandings.mockResolvedValue([]);
   bdl.getNflPlayerSeasonStats.mockResolvedValue([]);
+  bdl.getNcaafTeamPlayers.mockResolvedValue([]);
+  bdl.getNcaafStandings.mockResolvedValue([]);
+  bdl.getNcaafPlayerGameStats.mockResolvedValue([]);
+  ncaafSearch.searchGrounded.mockResolvedValue({ success: false, data: null, error: 'not mocked' });
 });
 
 describe('football season and exact-date slates', () => {
@@ -601,171 +611,6 @@ describe('football generator registration and row contract', () => {
     );
   });
 
-  it('does not manufacture an NCAAF fantasy lane from team-game evidence', async () => {
-    const slate = {
-      id: 457157,
-      date: '2026-09-12T16:00:00.000Z',
-      season: 2026,
-      visitor_team: { id: 10, abbreviation: 'UNC', conference: 1 },
-      home_team: { id: 43, abbreviation: 'TCU', conference: 3 },
-    };
-    const completed = {
-      id: 457100,
-      date: '2026-09-05T16:00:00.000Z',
-      season: 2026,
-      status: 'post',
-      visitor_team: { id: 10 },
-      home_team: { id: 43 },
-      away_score: 35,
-      home_score: 14,
-    };
-    bdl.getGames
-      .mockResolvedValueOnce([slate])
-      .mockResolvedValueOnce([completed]);
-    bdl.getTeams.mockResolvedValue([
-      { id: 10, conference: 1 },
-      { id: 43, conference: 3 },
-    ]);
-    bdl.getTeamStats.mockResolvedValue([
-      {
-        team: { id: 10 },
-        game: {
-          id: 457100,
-          date: '2026-09-05T16:00:00.000Z',
-          season: 2026,
-          week: 2,
-        },
-        rushing_yards: 220,
-        passing_yards: 280,
-        total_yards: 500,
-        turnovers: 0,
-        yards_per_play: 7.2,
-      },
-      {
-        team: { id: 43 },
-        game: {
-          id: 457100,
-          date: '2026-09-05T16:00:00.000Z',
-          season: 2026,
-          week: 2,
-        },
-        rushing_yards: 90,
-        passing_yards: 160,
-        total_yards: 250,
-        turnovers: 3,
-        yards_per_play: 4.1,
-      },
-    ]);
-
-    const result = await generateInsightConnections({ date: '2026-09-12', league: 'NCAAF' });
-
-    expect(result.connections.length).toBeGreaterThan(0);
-    expect(result.connections.some((row) => row.category.startsWith('fantasy_'))).toBe(false);
-    expect(bdl.getNflAdvancedRushingStats).not.toHaveBeenCalled();
-    expect(bdl.getNflAdvancedReceivingStats).not.toHaveBeenCalled();
-  });
-
-  it('builds NCAAF fantasy usage only from exact current-season player totals', async () => {
-    const slate = {
-      id: 457157,
-      date: '2026-09-12T16:00:00.000Z',
-      season: 2026,
-      visitor_team: { id: 10, abbreviation: 'UNC', conference: 1 },
-      home_team: { id: 43, abbreviation: 'TCU', conference: 3 },
-    };
-    bdl.getGames.mockResolvedValue([slate]);
-    bdl.getTeams.mockResolvedValue([
-      { id: 10, conference: 1 },
-      { id: 43, conference: 3 },
-    ]);
-    bdl.getNcaafPlayerSeasonStats.mockImplementation(async ({ season }) => season === 2026 ? [
-      {
-        player: { id: 501, first_name: 'Current', last_name: 'Quarterback', position_abbreviation: 'QB' },
-        team: { id: 10, abbreviation: 'UNC' },
-        passing_attempts: 210,
-      },
-      {
-        player: { id: 502, first_name: 'Current', last_name: 'Runner', position_abbreviation: 'RB' },
-        team: { id: 10, abbreviation: 'UNC' },
-        rushing_attempts: 92,
-        receptions: 14,
-      },
-      {
-        player: { id: 503, first_name: 'Current', last_name: 'Receiver', position_abbreviation: 'WR' },
-        team: { id: 43, abbreviation: 'TCU' },
-        receptions: 48,
-      },
-    ] : []);
-
-    const result = await generateInsightConnections({ date: '2026-09-12', league: 'NCAAF' });
-    const fantasy = result.connections.filter((row) => row.category.startsWith('fantasy_'));
-
-    expect(fantasy).toHaveLength(3);
-    expect(fantasy.every((row) => row.category === 'fantasy_usage')).toBe(true);
-    expect(fantasy.every((row) => row.meta?.kind === 'fantasy_usage')).toBe(true);
-    expect(fantasy.every((row) => row.meta?.evidence_scope === 'current_season')).toBe(true);
-    expect(fantasy.every((row) => row.meta?.season === 2026)).toBe(true);
-    expect(new Set(fantasy.map((row) => String(row.team_id)))).toEqual(new Set(['10', '43']));
-    expect(bdl.getPlayersActive).not.toHaveBeenCalled();
-  });
-
-  it('labels and roster-validates an NCAAF prior-season fantasy baseline', async () => {
-    const slate = {
-      id: 457157,
-      date: '2026-08-29T16:00:00.000Z',
-      season: 2026,
-      visitor_team: { id: 10, abbreviation: 'UNC', conference: 1 },
-      home_team: { id: 43, abbreviation: 'TCU', conference: 3 },
-    };
-    bdl.getGames.mockResolvedValue([slate]);
-    bdl.getTeams.mockResolvedValue([
-      { id: 10, conference: 1 },
-      { id: 43, conference: 3 },
-    ]);
-    bdl.getNcaafPlayerSeasonStats.mockImplementation(async ({ season }) => season === 2025 ? [
-      {
-        player: { id: 601, first_name: 'Returning', last_name: 'Back', position_abbreviation: 'RB' },
-        team: { id: 10, abbreviation: 'UNC' },
-        rushing_attempts: 150,
-        receptions: 25,
-      },
-      {
-        player: { id: 602, first_name: 'Departed', last_name: 'Wideout', position_abbreviation: 'WR' },
-        team: { id: 43, abbreviation: 'TCU' },
-        receptions: 65,
-      },
-    ] : []);
-    bdl.getPlayersActive.mockResolvedValue({
-      data: [{
-        id: 601,
-        first_name: 'Returning',
-        last_name: 'Back',
-        position_abbreviation: 'RB',
-        team: { id: 10, abbreviation: 'UNC' },
-      }],
-      meta: null,
-    });
-
-    const result = await generateInsightConnections({ date: '2026-08-29', league: 'NCAAF' });
-    const fantasy = result.connections.filter((row) => row.category.startsWith('fantasy_'));
-
-    expect(fantasy).toHaveLength(1);
-    expect(fantasy[0]).toMatchObject({ player_id: 601, team_id: 10, game_id: 457157 });
-    expect(fantasy[0].headline).toBe('Returning Back');
-    expect(fantasy[0].detail).toContain('prior-season baseline');
-    expect(fantasy[0].meta).toMatchObject({
-      kind: 'fantasy_usage',
-      team: 'UNC',
-      season: 2025,
-      evidence_scope: 'prior_season_baseline',
-    });
-    expect(bdl.getPlayersActive).toHaveBeenCalledWith(
-      'americanfootball_ncaaf',
-      { player_ids: ['601', '602'], per_page: 100 },
-      10,
-    );
-  });
-
   it('emits only material BDL total-vs-slate context for the market lane', async () => {
     const games = [
       nflSlateGame,
@@ -903,13 +748,40 @@ describe('NFL depth lanes (availability, QB watch, situational)', () => {
     expect(row.meta.source).toBe('balldontlie_standings');
   });
 
-  it('keeps every NFL depth lane an NCAAF no-op because its feeds are NFL endpoints', async () => {
-    bdl.getGames.mockResolvedValue([]);
-    bdl.getTeams.mockResolvedValue([]);
+  it('runs the college depth lanes on an NCAAF slate and never the NFL feeds or a fantasy lane', async () => {
+    const stanford = { id: 13, conference: 1, college: 'Stanford', name: 'Cardinal', full_name: 'Stanford Cardinal', abbreviation: 'STAN' };
+    const miami = { id: 8, conference: 1, college: 'Miami', name: 'Hurricanes', full_name: 'Miami Hurricanes', abbreviation: 'MIA' };
+    bdl.getGames.mockImplementation(async (sport, params) => (params?.dates
+      ? [{ id: 457163, date: '2026-10-10T23:30:00.000Z', season: 2026, week: 7, home_team: stanford, visitor_team: miami }]
+      : []));
+    bdl.getTeams.mockResolvedValue([{ id: 13, conference: 1 }, { id: 8, conference: 1 }]);
+    bdl.getNcaafTeamPlayers.mockImplementation(async (teamId) => (teamId === 13
+      ? [{ id: 501, first_name: 'Ben', last_name: 'Gulbranson', position_abbreviation: 'QB', team: stanford }]
+      : [{ id: 601, first_name: 'Carson', last_name: 'Beck', position_abbreviation: 'QB', team: miami }]));
+    bdl.getNcaafPlayerSeasonStats.mockImplementation(async ({ teamId, season }) => (season === 2026 && teamId === 13
+      ? [{ player: { id: 501 }, passing_attempts: 120, passing_completions: 80, passing_yards: 1000, passing_touchdowns: 8, passing_interceptions: 3, passing_yards_per_game: 250 }]
+      : []));
+    bdl.getNcaafStandings.mockResolvedValue([
+      { team: stanford, conference: { id: 1, name: 'ACC', abbreviation: 'ACC' }, wins: 4, losses: 1, home_record: '3-0', away_record: '1-1', conference_record: '2-0' },
+      { team: miami, conference: { id: 1, name: 'ACC', abbreviation: 'ACC' }, wins: 3, losses: 2, home_record: '2-1', away_record: '1-2', conference_record: '1-1' },
+    ]);
+    ncaafSearch.searchGrounded.mockResolvedValue({ success: true, data: JSON.stringify([
+      { player: 'Carson Beck', team: 'Miami', status: 'questionable', note: 'Beck (elbow) was limited this week.', source: 'ESPN' },
+    ]) });
+    // An NFL report sitting in the mock must stay unread by a college run.
     bdl.getNflPlayerInjuries.mockResolvedValue([injuryReport()]);
 
-    const result = await generateInsightConnections({ date: '2026-09-12', league: 'NCAAF' });
-    expect(result.connections.filter((r) => ['injury', 'situational'].includes(r.category))).toEqual([]);
+    const result = await generateInsightConnections({ date: '2026-10-10', league: 'NCAAF' });
+    const categories = new Set(result.connections.map((r) => r.category));
+
+    expect(categories.has('quarterback')).toBe(true);
+    expect(categories.has('team_record')).toBe(true);
+    expect(categories.has('injury')).toBe(true);
+    expect([...categories].some((c) => c.startsWith('fantasy_'))).toBe(false);
+    expect(result.connections.find((r) => r.category === 'quarterback').headline)
+      .toBe("Ben Gulbranson leads STAN's passing this season");
+    expect(result.connections.find((r) => r.category === 'injury').headline)
+      .toBe('Carson Beck (QB) is questionable for MIA');
     expect(bdl.getNflPlayerInjuries).not.toHaveBeenCalled();
     expect(bdl.getNflStandings).not.toHaveBeenCalled();
     expect(bdl.getNflRosterDepth).not.toHaveBeenCalled();

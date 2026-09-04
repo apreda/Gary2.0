@@ -73,7 +73,9 @@ import { computeFootballRestSpacing } from './computers/footballRestSpacing.js';
 import { computeFootballStandings } from './computers/footballStandings.js';
 import { computeFootballPracticeReport } from './computers/footballPracticeReport.js';
 import { computeNflFantasyEdges } from './computers/nflFantasyEdges.js';
-import { computeNcaafFantasyEdges } from './computers/ncaafFantasyEdges.js';
+import { computeNcaafQbWatch } from './computers/ncaafQbWatch.js';
+import { computeNcaafAvailability } from './computers/ncaafAvailability.js';
+import { computeNcaafStandings } from './computers/ncaafStandings.js';
 import { computeNcaafNextSlate } from './computers/ncaafNextSlate.js';
 import { computeNflNextSlate } from './computers/nflNextSlate.js';
 
@@ -152,7 +154,18 @@ const NFL_COMPUTERS = [
 
 const NCAAF_COMPUTERS = [
   ...FOOTBALL_COMPUTERS,
-  computeNcaafFantasyEdges,
+  // The college depth lanes (NCAAF Picks page parity, founder Sep 3-4 2026):
+  // the same sections the NFL page carries, each fed by a college source in
+  // its own file — league isolation law, no `if (ncaaf)` inside an NFL lane.
+  // THE QUARTERBACKS: the passing leader per side off the active roster.
+  computeNcaafQbWatch,
+  // AVAILABILITY: the week's reports off a grounded search, roster-verified
+  // (BDL publishes no college injury feed).
+  computeNcaafAvailability,
+  // Form and record rows off the per-conference standings + the game index.
+  computeNcaafStandings,
+  // No fantasy lane for college (founder, Sep 4 2026: "NCAAF doesn't need
+  // fantasy") — ncaafFantasyEdges.js is deleted, the Hub hides the desk.
 ];
 
 const COMPUTERS_BY_LEAGUE = {
