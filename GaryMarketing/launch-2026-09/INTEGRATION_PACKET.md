@@ -16,7 +16,7 @@ The initial audit's August 21–September 3 ET stored X snapshot contained 196 l
 
 No verified App Store install count, retained-user total, adult-audience percentage, geographic split or paid conversion rate is claimed here. Website useful-session measurement is newly corrected and needs observation time. The evidence packet is deliberately incomplete until those facts exist.
 
-Before external outreach, attach a dated seven-day and 30-day report showing consent coverage, useful sessions and returning cohorts. Add actual native acquisition figures if available, clearly labeled. Ask willing adult users about the sports/books they use and the difficulty of manual entry; do not infer age or sportsbook relationships from X impressions.
+Before external outreach, attach dated seven-day and 30-day reports describing consent exclusions, useful sessions and mature return cohorts. The current reporter produces one UTC week at a time; a 30-day summary needs a separately defined analysis, with browser cohorts deduplicated rather than weekly browser counts added together. The percentage of all visitors who consent is not measured. Add actual native acquisition figures if available, clearly labeled. Ask willing adult users about the sports/books they use and the difficulty of manual entry; do not infer age or sportsbook relationships from X impressions.
 
 Internal readiness threshold for a paid pilot: at least 10 willing adult users who already use Your Book and specifically request importing, plus a quote whose monthly cost fits a documented acquisition/retention hypothesis. This is a proposed spending gate, not a vendor minimum or a promise to those users.
 

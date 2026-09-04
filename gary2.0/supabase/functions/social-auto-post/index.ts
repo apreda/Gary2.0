@@ -29,6 +29,7 @@ import { composeWeekTape } from "./weektape.ts";
 import { composeRecaps, type RecapRow } from "./recap.ts";
 import { fallbackReasonPair, isSafeReasonPair, reasonCandidates } from "../_shared/verbatimSnippets.js";
 import { socialRunHealth } from "./health.js";
+import { mergeSocialPickSources, hasLoggedTicket } from "./pickSources.js";
 import { barePick } from "./barepick.ts";
 import { computeStanding } from "./pl.ts";
 import { selectPicks, type Slot } from "./window.ts";
@@ -375,10 +376,15 @@ function buildPropsReply(gameProps: any[], handoff: string): string | null {
 }
 
 async function runPickMode(today: string, nowMs: number, dryRun: boolean, preview = false) {
-  const { data: dpRows, error: dpErr } = await sb.from("daily_picks").select("picks").eq("date", today);
+  const [{ data: dpRows, error: dpErr }, { data: weeklyRows, error: weeklyErr }] = await Promise.all([
+    sb.from("daily_picks").select("picks").eq("date", today),
+    sb.from("weekly_nfl_picks").select("week_start,picks").lte("week_start", today).order("week_start", { ascending: false }).limit(1),
+  ]);
   if (dpErr) throw dpErr;
-  const picks: any[] = dpRows?.[0]?.picks ?? [];
-  if (!picks.length) return { posted: false, reason: "no picks loaded yet" };
+  // A weekly lookup outage remains visible while healthy daily games continue.
+  const source_errors = weeklyErr ? ["WEEKLY_NFL_SOURCE_UNAVAILABLE"] : [];
+  const picks: any[] = mergeSocialPickSources((dpRows ?? []).flatMap((row) => row.picks ?? []), weeklyRows?.[0], today);
+  if (!picks.length) return { posted: false, reason: "no picks loaded yet", source_errors };
 
   // The day's props, fetched once — each game thread's reply lists ITS OWN props
   // (founder, Aug 14). A fetch failure costs the replies, never the pick tweets.
@@ -393,11 +399,14 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
   // Whitelist the ACTUAL pick-thread formats: with verdict/arc/wc rows in the same log, a blacklist would let
   // them eat the 3/day cap (three verdicts would silently block the day's real picks) and suppress the handoff.
   const pickThreads = (logRows ?? []).filter((r) => ["standard", "top_pick"].includes(r.thread_format ?? ""));
-  if (pickThreads.length >= PICKS_PER_DAY && !preview) return { posted: false, reason: `daily cap of ${PICKS_PER_DAY} reached` };
-  const postedSet = new Set(pickThreads.map((r) => r.pick_text));
+  if (pickThreads.length >= PICKS_PER_DAY && !preview) return { posted: false, reason: `daily cap of ${PICKS_PER_DAY} reached`, source_errors };
+  // Existing UNIQUE(post_date,pick_text) is the publication contract. Keep
+  // conservative text dedup through schedule corrections. Identical-ticket
+  // doubleheaders require a separate log-identity migration; readiness reports
+  // their exact-start coverage gap rather than allowing an unloggable tweet.
 
   const MIN = 60_000;
-  const unposted = picks.filter((p) => !postedSet.has(p.pick));
+  const unposted = picks.filter((p) => !hasLoggedTicket(p, pickThreads));
 
   // HARD DEADLINE (Aug 5 2026, founder's law): a pick is postable ONLY while first pitch is still at least
   // LEAD_MIN_MIN ahead of us. The deleted code did the opposite on two paths — `postable` kept any game that
@@ -433,7 +442,7 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
       : reserved
       ? `cap spent; ${reserved} slot(s) held for later day-parts`
       : `daily cap of ${PICKS_PER_DAY} reached`;
-    return { posted: false, reason, eligible: eligibleCount, budget, reserved, missed };
+    return { posted: false, reason, eligible: eligibleCount, budget, reserved, missed, source_errors };
   }
 
   const maxConf = Math.max(...picks.map((p) => parseFloat(p.confidence ?? 0)));
@@ -553,20 +562,24 @@ ${numbered}`;
     const handoffId = handoff ? await postTweet(handoff, hookId) : null;
     const startEt = new Date(chosen.commence_time).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour12: false, hour: "2-digit" });
     const slot = parseInt(startEt) < 14 ? "morning" : parseInt(startEt) < 17 ? "afternoon" : parseInt(startEt) < 21 ? "evening" : "late";
-    await sb.from("social_post_log").insert({
+    const { error: postLogError } = await sb.from("social_post_log").insert({
       post_date: today, slot, league, pick_text: chosen.pick, confidence: conf || null,
       commence_time: chosen.commence_time, thread_format: isTopPick ? "top_pick" : "standard",
       hook_tweet_id: hookId, reasoning_tweet_id: handoffId, cta_tweet_id: null,
       thread_url: `https://x.com/BetwithGary/status/${hookId}`, post_text: hook,
     });
     threadsSoFar++;
-    results.push({ posted: true, pick: chosen.pick, lead_min: Math.round((new Date(chosen.commence_time).getTime() - nowMs) / MIN), thread_url: `https://x.com/BetwithGary/status/${hookId}` });
+    // The tweet already exists. Surface failed persistence without publishing
+    // another tweet in this run. Cross-run crash recovery needs durable intent.
+    if (postLogError) console.error(`POST_LOG_WRITE_FAILED: tweet ${hookId} exists but its log could not be stored`);
+    results.push({ posted: true, pick: chosen.pick, lead_min: Math.round((new Date(chosen.commence_time).getTime() - nowMs) / MIN), thread_url: `https://x.com/BetwithGary/status/${hookId}`,
+      ...(postLogError ? { error: "POST_LOG_WRITE_FAILED" } : {}) });
    } catch (e) {
     console.error(`pick post failed for ${chosen.pick}: ` + String(e));
     results.push({ posted: false, pick: chosen.pick, error: String(e) });
    }
   }
-  return { posted: results.some((r) => r.posted), results, count_today: threadsSoFar, missed };
+  return { posted: results.some((r) => r.posted), results, count_today: threadsSoFar, missed, source_errors };
 }
 
 // VERDICT LOOP (Engine 0, Jul 2026): when a game Gary tweeted a pick for goes FINAL, quote-tweet HIS OWN

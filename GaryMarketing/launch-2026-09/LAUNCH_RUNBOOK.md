@@ -6,6 +6,8 @@ September 4, 2026. Accountable owner: Adam. This replaces the offer, dates, chan
 
 **Find your game. See Gary’s pick.** Free game picks with written reasoning are the first useful experience. The public record lets people judge Gary. Your Book lets them track their own decisions. Winners is the selected board; its September 4 selection process has its own history and must earn its reputation.
 
+Use a matchup with a published pick in any demonstration. Coverage is an operational promise to earn: the September 4 check found scheduled games without generated picks. Avoid “every game, always available” claims until the production report demonstrates that reliability. Hold a slate-wide promotion when the report shows unresolved gaps for games past their scheduled start.
+
 Use the account-based offer consistently:
 
 > Winners is open for the launch preview until October 1, 2026 at midnight Eastern. Accounts created before that cutoff retain founding access to Winners. No purchase is needed for included access.
@@ -22,7 +24,7 @@ Winners and Insights can become a clearer combined experience later. Do not anno
 | September 5–12 | Four prepared product pieces, used at selected times alongside existing game publishing | Working destination, final copy and artwork review; accurate feature availability that day |
 | September 9 | Normal NFL kickoff publishing | Actual published pregame pick; scheduled poster healthy |
 | September 13 | First-Sunday marketing launch and founder introduction | Available app/site features; current release state; no promise that an unapproved binary is available |
-| September 14–30 | Weekly acquisition/return review and conversations with willing adult users | Counts with observation windows and consent coverage; recorded user feedback |
+| September 14–30 | Weekly acquisition/return review and conversations with willing adult users | Counts with observation windows and consent exclusions; recorded user feedback |
 | After audience evidence | Vendor diligence and a small authorized data-import pilot | Demand, economics, data rights, privacy and sandbox acceptance criteria in the integration packet |
 
 September 9 kickoff is Patriots at Seattle at 8:20 PM ET. The September 13 marketing date does not determine Apple's release date. [Official game preview](https://www.patriots.com/news/game-preview-patriots-at-seahawks-week-1)
@@ -33,11 +35,11 @@ Adam owns publication, support and account access until another person is assign
 
 | When | Action | Decision it supports |
 |---|---|---|
-| Before the day's first promotional post | Run the read-only marketing readiness command; inspect today’s coverage, actual poster responses and missing metrics | Fix a publishing failure before promoting the feed |
+| Before the day's first promotional post | Run the read-only marketing readiness command; inspect scheduled-game coverage, stored-pick publishing, actual poster responses and missing metrics separately | Resolve missing-pick and publishing failures before promoting complete coverage |
 | On posting days | Review and answer relevant human questions and support requests | Learn what prevents the first useful experience; avoid unsolicited automatic replies |
 | Once each week | Prepare up to three original product or explanation pieces; reuse the supplied exports where appropriate | Keep quality sustainable; add product value to the pick feed |
 | Monday, after the previous UTC week ends | Run the website funnel report and review the public record post | Compare acquisition and return using explicit denominators |
-| After seven days of exposure | Compare creative cohorts, with counts before percentages | Keep the pieces that bring readers into relevant reasoning and back for another visit |
+| After seven days of exposure | Compare sessions and useful sessions by creative; review overall mature return cohorts separately | Keep pieces that bring readers into relevant reasoning; assess return without claiming per-creative retention |
 
 From `gary2.0`, run `node scripts/marketing-readiness.js` for the read-only social report. From `web`, run `npm run report:funnel -- --week YYYY-MM-DD` for a completed UTC week. The report definitions and evidence snapshots live alongside the implementation. Missing link-click, install, geography or retention data stays **unavailable**, not zero. X thread impressions are not unique reach; self-replies are not independent audience conversations.
 

@@ -1,6 +1,14 @@
 {
-  "checked_at_utc": "2026-09-04T22:55:50Z",
-  "status": "Database applied; web implementation awaiting root production deployment",
+  "checked_at_utc": "2026-09-04T23:17:24Z",
+  "status": "Database and website deployed; live public flows verified; acquisition cohort not yet observed",
+  "website_deployment": {
+    "commit": "ec751968d50d791f45959106a4abdc23a9341ff0",
+    "vercel_url": "https://gary20-2u30fx90t-adam-predas-projects.vercel.app",
+    "production_host": "www.betwithgary.ai",
+    "state": "Ready",
+    "live_checks": ["account-based offer", "pricing sign-in destination", "build-qualified privacy controls", "pending iOS rollout notice", "expanded game reasoning and permanent game page"],
+    "qa_analytics_consent": "declined; no synthetic production acquisition events"
+  },
   "migration": {
     "name": "web_useful_session_funnel",
     "version": "20260904225312",
@@ -15,12 +23,15 @@
     "service_writer": true
   },
   "production_baseline": {
+    "checked_at_utc": "2026-09-04T22:55:50Z",
+    "phase": "before website deployment",
     "sessions": 0,
     "reasoning_v2_views": 0,
     "seven_day_return_percent": null,
     "interpretation": "Expected before the new website code is deployed. Historical page-load events are excluded; no backfill or fabricated activation/retention."
   },
   "weekly_report_check": {
+    "checked_at_utc": "2026-09-04T23:17:24Z",
     "week_start_utc": "2026-08-31",
     "read_only": true,
     "partial_week": true,
@@ -51,11 +62,13 @@
     }
   ],
   "verification": {
-    "web_full_tests": "290/290 before final mounted-return edge-case test",
+    "web_full_tests": "291/291 including final mounted-return edge-case test",
     "final_focused_tests": "15/15 including isolated PostgreSQL and mounted-return behavior",
     "typecheck": "pass after final change",
     "eslint": "pass before final small visibility change",
-    "diff_check": "pass"
+    "diff_check": "pass",
+    "fixture_smoke": "pass from credential-free source snapshot",
+    "public_copy_followup": "33 relevant tests and TypeScript passed"
   },
   "remaining_external_configuration": [
     "Verified App Store Connect provider token for APP_STORE_PROVIDER_TOKEN; current redirects emit none.",

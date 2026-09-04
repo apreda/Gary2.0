@@ -28,6 +28,8 @@ Show only freshly verified figures from the declared window. No win-rate or ROI 
 
 ## 3. Your own Book · about 30 seconds
 
+Capture the website's Book for this version; use native-app footage only after the matching iOS update is released and its behavior is verified.
+
 | Time | Picture | Spoken words |
 |---|---|---|
 | 0–5 s | Adam | “I wanted a place to keep track of my own decisions, too.” |

@@ -4,22 +4,26 @@
   "source_checkout": "/Users/adam.preda/Desktop/Gary2.0",
   "deployment": {
     "function": "social-auto-post",
-    "version": 94,
+    "version": 96,
     "status": "ACTIVE",
-    "updated_at": "2026-09-04T22:51:44.780Z",
+    "updated_at": "2026-09-04T23:22:21.425Z",
     "jwt_verification": true,
     "retrieved_deployed_source_checks": [
       "Final safe-reason validation covers model and fallback paths",
       "Candidate list never escapes to all unfiltered sentences",
       "No-safe-candidate fallback returns null rather than unrestricted prose",
-      "Scheduled responses include service identity and bounded health categories"
+      "Scheduled responses include service identity and bounded health categories",
+      "Latest active weekly NFL picks are merged for today in Eastern time; canonical daily rows take precedence",
+      "Publisher retains conservative ticket-text dedup matching UNIQUE(post_date,pick_text); corrected start times do not create new post eligibility",
+      "NFL source identity uses bdl_game_id before game_id; readiness separates exact-start coverage from publisher legacy dedup",
+      "A failed log insert after a successful tweet is reported as POST_LOG_WRITE_FAILED without republishing inside that run"
     ],
     "manual_post_or_metrics_refresh_triggered": false
   },
   "verification": {
-    "focused_backend_tests": 56,
+    "focused_backend_tests": 60,
     "focused_backend_failures": 0,
-    "complete_edge_tests": 150,
+    "complete_edge_tests": 163,
     "complete_edge_failures": 0,
     "deno_typecheck": "passed",
     "diff_whitespace_check": "passed",
@@ -55,7 +59,8 @@
     "current_slate_stored_picks": 7,
     "current_slate_logged_threads": 7,
     "post_rows_with_expected_bare_pick": 2,
-    "pick_line_policy": "Exact deterministic barePick output; existing founder policy removes book prices while preserving side and spread/total"
+    "pick_line_policy": "Exact deterministic barePick output; existing founder policy removes book prices while preserving side and spread/total",
+    "deployed_version_at_observation": 94
   },
   "engagement_sheet_repair": {
     "function": "engagement-sheet",
@@ -74,5 +79,90 @@
     "next_scheduled_generation": "2026-09-05T14:30:00Z",
     "latest_existing_draft_date": "2026-08-20",
     "observation_limit": "Draft freshness remains stale until the next natural generation succeeds; only authenticated viewing was exercised."
+  },
+  "nfl_source_verification": {
+    "deployed_version": 96,
+    "source_retrieved": true,
+    "read_only_live_source_snapshot": "2026-09-04T23:23:11.619902+00:00",
+    "stored_merged_picks": 7,
+    "already_logged_by_exact_ticket_and_start": 7,
+    "weekly_nfl_games_today": 0,
+    "existing_log_window": {
+      "start_inclusive": "2026-08-21",
+      "end_inclusive": "2026-09-04",
+      "standard_or_top_pick_rows": 169,
+      "missing_commence_time": 0,
+      "today_pick_threads": 7,
+      "today_missing_commence_time": 0
+    },
+    "fixture_cases": [
+      "Eastern game date across UTC midnight",
+      "stale and future weeks",
+      "wrong game date",
+      "mixed MLB and NFL",
+      "canonical daily precedence",
+      "legacy ID-free identity",
+      "distinct doubleheaders",
+      "unchanged pregame deadline",
+      "observable weekly source outage"
+    ],
+    "live_limit": "No NFL game is scheduled today; the NFL merge is verified with real stored source shape and fixtures, not a live NFL publication. No manual post or metrics refresh invoked.",
+    "historical_live_source_replay": {
+      "week_start": "2026-08-25",
+      "stored_weekly_picks": 16,
+      "with_bdl_game_id": 16,
+      "selected_on_correct_et_day": 16,
+      "canonical_daily_id_alias_precedence": 16,
+      "provider_calls_or_publications": 0
+    },
+    "dedup_limit": "Existing UNIQUE(post_date,pick_text) prevents posting an identical ticket twice in a day, even for separate doubleheader games. Publisher intentionally retains this safe legacy limit; readiness requires exact scheduled start and can report unresolved coverage. Persisted game identity and durable cross-run recovery for tweet-success/log-failure require separate work."
+  },
+  "slate_generation_observation": {
+    "checked_at": "2026-09-04T23:23:11.619902+00:00",
+    "scheduled_games": 21,
+    "games_with_stored_pick": 7,
+    "scheduled_start_passed_without_pick": 6,
+    "future_games_without_pick": 8,
+    "interrupted_games_without_pick": 0,
+    "unknown_start_without_pick": 0,
+    "game_identity": "league + exact bdl_game_id/game_id when available, otherwise exact normalized teams + kickoff; early Tigers game8968598 does not cover late game5059887",
+    "observed_generation_failures": [
+      {
+        "game_id": "457907",
+        "event": "Final NCAAF retry ended without a pick; Astra and Sol parsing failed, then both Anthropic fallback requests rejected for insufficient credits.",
+        "scheduler_log_line": 81142,
+        "game_log_lines": [
+          2440,
+          2669,
+          2677,
+          2713,
+          2743
+        ]
+      },
+      {
+        "game_id": "5059885",
+        "event": "Red Sox–Orioles primary hit the 2700-second hard deadline at17:29ET; props stored but no game call.",
+        "scheduler_log_line": 81004
+      },
+      {
+        "game_id": "5059886",
+        "event": "Cubs–Marlins primary hit the 2700-second hard deadline at18:16ET; props stored but no game call.",
+        "scheduler_log_line": 81175
+      },
+      {
+        "game_id": "5059888",
+        "event": "Giants–Mets primary hit the 2700-second hard deadline at19:03ET; props stored but no game call.",
+        "scheduler_log_line": 81394
+      },
+      {
+        "game_id": "5059882",
+        "event": "Angels–Pirates delay hold at18:49ET released at18:59ET using the earlier18:45ET start; still no published game pick.",
+        "scheduler_log_line": 81342
+      }
+    ],
+    "scheduler_log": "/Users/adam.preda/Library/Logs/Gary2.0/scheduler/launchd-stdout.log",
+    "ncaaf_game_log": "/Users/adam.preda/Desktop/Gary2.0/gary2.0/logs/scheduler/2026-09-04---ncaaf---game-id-457907---date-2026-09-04.log",
+    "scope_limit": "Read-only diagnosis. No game generation, research, provider budget, funding or schedule mutations. Stored schedule status/time is not independent proof that a game actually started.",
+    "stored_picks_without_matching_slate": 0
   }
 }

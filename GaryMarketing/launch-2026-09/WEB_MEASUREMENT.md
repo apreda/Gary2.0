@@ -2,7 +2,7 @@
 
 The web changes carry the exact current offer: launch preview until October 1, 2026 at midnight Eastern, with accounts created before that cutoff retaining founding Winners access. The implementation does not choose a later expiry or change eligibility, subscription prices or trial rules. The account determines included access before paid checkout. Full game picks and reasoning, available props, the Hub, public record and the private Book remain free.
 
-Source is ready for the root deployment. The additive database migration `20260904225312_web_useful_session_funnel.sql` is already applied to production; its new deduplication index and service-only writer/read permissions were verified. Historical migration mismatches prevented a full CLI push, so only this named migration was applied through Supabase's migration tool. No historical versions were repaired or replayed.
+The website changes are live on `www.betwithgary.ai`, deployed from `ec751968` on September 4. The additive database migration `20260904225312_web_useful_session_funnel.sql` is also applied to production; its new deduplication index and service-only writer/read permissions were verified. Historical migration mismatches prevented a full CLI push, so only this named migration was applied through Supabase's migration tool. No historical versions were repaired or replayed.
 
 ## What is measured
 
@@ -32,13 +32,15 @@ The script makes GET requests only, paginates through the relevant session histo
 
 Before web deployment on September 4, the live read-only report correctly returned zero new sessions, zero useful sessions and null return rates. These are expected baseline values, not a failed launch or an observed retention rate. Evidence is in `evidence/web-measurement-2026-09-04.json`.
 
+The post-deployment check at 7:17 PM ET still had no observed consented acquisition cohort. Return rates remain unavailable; the new code has not been live long enough to measure seven-day return.
+
 ## Campaign handoff and deployment
 
-The private Book route is `/you`. A content link can use `/today?utm_source=x&utm_medium=organic_social&utm_campaign=launch_2026_09&utm_content=game_card` or the corresponding `/you` destination. Use distinct descriptive creative tokens and compare useful sessions alongside clicks; small numbers are directional only.
+The private Book route is `/you`. The prepared campaign uses `/picks?utm_source=x&utm_medium=organic_social&utm_campaign=launch_sep26&utm_content=find_game_v1` and the corresponding `/you` and `/results` destinations. Preserve the exact campaign and creative values in `content/README.md`; compare useful sessions alongside clicks. Small numbers are directional only.
 
 The production website's `/go/app` redirect reaches app `6751238914` with the existing custom product page parameter. It currently emits no usable provider token or general website campaign token. Existing X bio route `/get` emits campaign `x_bio` and the custom page parameter, but no provider token. Obtain the real App Store Connect provider token and set `APP_STORE_PROVIDER_TOKEN`; set the chosen verified web campaign in `APP_STORE_WEB_CAMPAIGN_TOKEN`, then redeploy and inspect redirect metadata. Existing X customization is `APP_STORE_X_BIO_CAMPAIGN_TOKEN`, and the custom page override is `APP_STORE_CUSTOM_PRODUCT_PAGE_ID`. No fabricated values were installed. Clicks are not proof of installation, first app use or paid conversion.
 
-Vercel project `gary2.0` is linked from `web/.vercel/project.json`. The current production workflow is the parent's explicit main-branch commit/push, followed by build/deployment verification. `web/vercel.json` skips deployments when the web tree is unchanged; this change touches that tree. Root runs `npm run verify` and `npm run smoke:web` before shipping. The database is deployed; the source and this evidence await that web release.
+Vercel project `gary2.0` is linked from `web/.vercel/project.json`. The main-branch push deployed successfully; production resolves to `gary20-2u30fx90t-adam-predas-projects.vercel.app` for `ec751968`. Repository verification, the website fixture smoke check and live public-page checks passed. The live browser declined optional analytics so QA did not manufacture a production acquisition cohort. `web/vercel.json` skips deployments when the web tree is unchanged.
 
 ## Account deletion follow-up
 

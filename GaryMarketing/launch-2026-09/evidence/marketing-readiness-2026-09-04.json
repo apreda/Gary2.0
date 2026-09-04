@@ -6,6 +6,11 @@
       "code": "ENGAGEMENT_DRAFTS_STALE",
       "severity": "action_required",
       "detail": "Daily engagement cron is active; latest draft day is 2026-08-20."
+    },
+    {
+      "code": "SLATE_PICK_COVERAGE_GAP",
+      "severity": "action_required",
+      "detail": "6 slate games have passed their stored scheduled start without a matching published game pick. Inspect generation and schedule status; this does not prove the games actually started."
     }
   ],
   "current_slate": {
@@ -15,7 +20,16 @@
     "deadline_passed_without_log": 0,
     "missing_or_invalid_start": 0
   },
-  "checked_at": "2026-09-04T23:02:04.593035+00:00",
+  "slate_coverage": {
+    "scheduled_games": 21,
+    "games_with_stored_pick": 7,
+    "scheduled_start_passed_without_pick": 6,
+    "future_games_without_pick": 8,
+    "interrupted_games_without_pick": 0,
+    "unknown_start_without_pick": 0,
+    "stored_picks_without_matching_slate": 0
+  },
+  "checked_at": "2026-09-04T23:23:11.619902+00:00",
   "cohorts": [
     {
       "bookmarks": 0,
@@ -245,9 +259,9 @@
     {
       "active": true,
       "jobname": "social-auto-post-hourly",
-      "last_finished_at": "2026-09-04T23:00:00.343741+00:00",
+      "last_finished_at": "2026-09-04T23:15:00.159511+00:00",
       "last_sql_status": "succeeded",
-      "last_started_at": "2026-09-04T23:00:00.309869+00:00",
+      "last_started_at": "2026-09-04T23:15:00.14553+00:00",
       "schedule": "*/15 * * * *"
     },
     {
@@ -260,12 +274,12 @@
     }
   ],
   "latest_poster_response": {
-    "created": "2026-09-04T23:00:00.346912+00:00",
+    "created": "2026-09-04T23:15:01.448996+00:00",
     "health": {
       "failed_posts": 0,
       "issues": [],
       "missed_picks": 0,
-      "posted_picks": 2,
+      "posted_picks": 0,
       "status": "ok"
     },
     "status_code": 200
@@ -281,7 +295,7 @@
   ],
   "reply_queue": [],
   "retained_degraded_responses": 0,
-  "retained_poster_responses": 1,
+  "retained_poster_responses": 2,
   "waitlist_rows": 0,
   "window": {
     "end_exclusive": "2026-09-04",
@@ -289,6 +303,10 @@
   },
   "measurement_notes": [
     "14 completed Eastern dates; today is excluded from audience comparisons.",
+    "Current stored-pick posting coverage is separate from full daily_slate coverage. Game IDs take precedence; fallback matching requires league, both exact normalized teams and exact start, so one doubleheader pick cannot cover both games.",
+    "Both publication and posting coverage use the poster's shared daily_picks + latest active weekly_nfl_picks merge, restricted to the weekly game's ET date and deduplicated by game identity; daily picks take precedence.",
+    "Stored schedule times/statuses may lag real events; interrupted games are separate and future games are not declared missed.",
+    "Publisher dedup remains conservative by exact ticket text per date, matching its existing unique database index. Readiness requires exact start for logged coverage; identical-ticket doubleheaders and corrected start times can therefore produce an honest unverified coverage gap. Full game-identity logging and cross-run recovery after a tweet succeeds but logging fails remain separate work.",
     "Mature observed = published at least 6 days ago with a metric snapshot at least 5 days after publication; all other rows are separate.",
     "Every metric reports its non-null denominator. Null is unavailable, never zero.",
     "Impressions and clicks sum thread components, not unique people; reply totals include own replies and are not an audience conversation count.",

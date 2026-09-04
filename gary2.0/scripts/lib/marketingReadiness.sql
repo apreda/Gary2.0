@@ -67,10 +67,29 @@ WITH clock AS (
   GROUP BY ct
 ), today_picks AS (
   SELECT pick->>'pick' AS pick, pick->>'commence_time' AS commence_time,
-    EXISTS (SELECT 1 FROM public.social_post_log l WHERE l.post_date = c.et_day::text
-      AND l.thread_format IN ('standard', 'top_pick') AND l.pick_text = pick->>'pick') AS logged
+    coalesce(pick->>'bdl_game_id', pick->>'game_id') AS game_id, pick->>'league' AS league,
+    pick->>'awayTeam' AS away_team, pick->>'homeTeam' AS home_team
   FROM public.daily_picks d CROSS JOIN clock c CROSS JOIN LATERAL jsonb_array_elements(d.picks::jsonb) pick
-  WHERE d.date::text = c.et_day::text
+  WHERE d.date::text = c.et_day::text AND coalesce(pick->>'type', 'game') <> 'prop'
+), latest_nfl_week AS (
+  -- Same week selection as web/lib/gary/picks.ts. The evaluator additionally
+  -- restricts each game's kickoff to today's ET date and deduplicates games.
+  SELECT w.week_start, w.picks FROM public.weekly_nfl_picks w CROSS JOIN clock c
+  WHERE w.week_start <= c.et_day ORDER BY w.week_start DESC LIMIT 1
+), current_week_nfl_picks AS (
+  SELECT w.week_start, pick->>'pick' AS pick, pick->>'commence_time' AS commence_time,
+    coalesce(pick->>'bdl_game_id', pick->>'game_id') AS game_id, coalesce(pick->>'league', 'NFL') AS league,
+    pick->>'awayTeam' AS away_team, pick->>'homeTeam' AS home_team
+  FROM latest_nfl_week w CROSS JOIN clock c CROSS JOIN LATERAL jsonb_array_elements(w.picks) pick
+  WHERE w.week_start >= c.et_day - 6 AND coalesce(pick->>'type', 'game') <> 'prop'
+), today_slate AS (
+  SELECT s.league, s.away_team, s.home_team, s.commence_time,
+    s.bdl_game_id AS game_id, s.game_status, s.kickoff_status
+  FROM public.daily_slate s CROSS JOIN clock c WHERE s.date = c.et_day
+), today_post_logs AS (
+  SELECT l.pick_text AS pick, l.commence_time
+  FROM public.social_post_log l CROSS JOIN clock c WHERE l.post_date = c.et_day::text
+    AND l.thread_format IN ('standard', 'top_pick')
 )
 SELECT json_build_object(
   'checked_at', c.checked_at, 'et_date', c.et_day,
@@ -86,5 +105,8 @@ SELECT json_build_object(
   'redirects_separate_sources', coalesce((SELECT json_agg(x) FROM redirects x), '[]'::json),
   'waitlist_rows', (SELECT count(*) FROM public.launch_waitlist),
   'email_subscriptions', coalesce((SELECT json_agg(x) FROM (SELECT status, count(*) AS rows FROM public.web_email_subscriptions GROUP BY status) x), '[]'::json),
-  'today_picks', coalesce((SELECT json_agg(x) FROM today_picks x), '[]'::json)
+  'today_picks', coalesce((SELECT json_agg(x) FROM today_picks x), '[]'::json),
+  'current_week_nfl_picks', coalesce((SELECT json_agg(x) FROM current_week_nfl_picks x), '[]'::json),
+  'today_slate', coalesce((SELECT json_agg(x) FROM today_slate x), '[]'::json),
+  'today_post_logs', coalesce((SELECT json_agg(x) FROM today_post_logs x), '[]'::json)
 ) AS snapshot FROM clock c;
