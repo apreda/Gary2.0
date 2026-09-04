@@ -22,15 +22,56 @@ function getCached(key) {
   if (entry && Date.now() - entry.ts < CACHE_TTL) return entry.data;
   return null;
 }
-function setCache(key, data) {
-  cache.set(key, { data, ts: Date.now() });
+function setCache(key, data, ts = Date.now()) {
+  cache.set(key, { data, ts });
 }
 
+// Concurrent callers (including the two clubs' pen builders) can miss their
+// completed caches together. Share only the pending transport; each caller
+// retains its existing cache policy, and uncached live reads stay fresh.
+const apiInflight = new Map();
+
 async function apiFetch(path) {
-  const url = `${BASE_URL}${path}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`MLB Stats API ${res.status}: ${url}`);
-  return res.json();
+  if (apiInflight.has(path)) return apiInflight.get(path);
+  const pending = (async () => {
+    const url = `${BASE_URL}${path}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`MLB Stats API ${res.status}: ${url}`);
+    return res.json();
+  })().finally(() => apiInflight.delete(path));
+  apiInflight.set(path, pending);
+  return pending;
+}
+
+// The scoring, batter, and bullpen views read the same completed-game feed.
+// Retain a bounded set of raw responses and share requests already underway.
+const playByPlayCache = new Map();
+const playByPlayInflight = new Map();
+const MAX_PLAY_BY_PLAY_GAMES = 32;
+
+async function getGamePlayByPlay(gamePk) {
+  const key = String(gamePk);
+  const cached = playByPlayCache.get(key);
+  if (cached && Date.now() - cached.ts < CACHE_TTL) {
+    playByPlayCache.delete(key);
+    playByPlayCache.set(key, cached);
+    return cached;
+  }
+  playByPlayCache.delete(key);
+  if (playByPlayInflight.has(key)) return playByPlayInflight.get(key);
+
+  const pending = apiFetch(`/game/${gamePk}/playByPlay`)
+    .then(data => {
+      const response = { data, ts: Date.now() };
+      playByPlayCache.set(key, response);
+      if (playByPlayCache.size > MAX_PLAY_BY_PLAY_GAMES) {
+        playByPlayCache.delete(playByPlayCache.keys().next().value);
+      }
+      return response;
+    })
+    .finally(() => playByPlayInflight.delete(key));
+  playByPlayInflight.set(key, pending);
+  return pending;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -392,7 +433,7 @@ export async function getScoringFlowAttributed(gamePk) {
   const key = `scoring_flow_attr_${gamePk}`;
   const cached = getCached(key);
   if (cached) return cached;
-  const data = await apiFetch(`/game/${gamePk}/playByPlay`);
+  const { data, ts } = await getGamePlayByPlay(gamePk);
   const all = data?.allPlays || [];
   const idxs = Array.isArray(data?.scoringPlays) ? data.scoringPlays : [];
   const lines = [];
@@ -406,7 +447,8 @@ export async function getScoringFlowAttributed(gamePk) {
     const off = pitcher ? ` — off ${String(pitcher).split(' ').pop()}` : '';
     lines.push(`[${half}${inning}] ${desc}${off} (${p.result.awayScore}-${p.result.homeScore})`);
   }
-  setCache(key, lines);
+  // Derived views expire with their source, even if first read much later.
+  setCache(key, lines, ts);
   return lines;
 }
 
@@ -421,7 +463,7 @@ export async function getBatterGameTrips(gamePk) {
   const key = `batter_trips_${gamePk}`;
   const cached = getCached(key);
   if (cached) return cached;
-  const data = await apiFetch(`/game/${gamePk}/playByPlay`);
+  const { data, ts } = await getGamePlayByPlay(gamePk);
   const all = data?.allPlays || [];
   const ord = (n) => (n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`);
   const EV = {
@@ -460,7 +502,7 @@ export async function getBatterGameTrips(gamePk) {
     const rbiBit = abbrev !== 'HR' && rbi > 0 ? `, ${rbi} RBI` : '';
     (trips[bid] ||= []).push(`${abbrev}${pitcher ? ` ${joiner} ${pitcher}` : ''} (${ord(inning)}${aboardBit}${scoreBit}${rbiBit})`);
   }
-  setCache(key, trips);
+  setCache(key, trips, ts);
   return trips;
 }
 
@@ -473,7 +515,7 @@ export async function getPitcherEntryContext(gamePk) {
   const key = `pitcher_entry_ctx_v2_${gamePk}`;
   const cached = getCached(key);
   if (cached) return cached;
-  const data = await apiFetch(`/game/${gamePk}/playByPlay`);
+  const { data, ts } = await getGamePlayByPlay(gamePk);
   const all = data?.allPlays || [];
   const ctx = new Map();
   let prevAway = 0;
@@ -495,7 +537,7 @@ export async function getPitcherEntryContext(gamePk) {
     if (p?.result?.awayScore != null) prevAway = p.result.awayScore;
     if (p?.result?.homeScore != null) prevHome = p.result.homeScore;
   }
-  setCache(key, ctx);
+  setCache(key, ctx, ts);
   return ctx;
 }
 

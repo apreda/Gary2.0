@@ -9,7 +9,6 @@ import {
   filterWeeklyPicksForDate,
   isArchiveDate,
   isArchiveMonth,
-  mergeArchiveDates,
 } from '@/lib/gary/archive';
 import type { GaryPick } from '@/lib/gary/types';
 
@@ -35,13 +34,6 @@ describe('isArchiveDate', () => {
 });
 
 describe('archive date and weekly-pick helpers', () => {
-  it('merges unique valid dates newest first', () => {
-    expect(mergeArchiveDates([
-      ['2026-08-31', '2026-09-01'],
-      ['2026-09-01', 'bad', '2026-09-02'],
-    ], '2026-09-01')).toEqual(['2026-09-01', '2026-08-31']);
-  });
-
   it('places weekly picks only on their ET game date', () => {
     const picks: GaryPick[] = [
       { pick_id: 'early', commence_time: '2026-09-04T00:30:00Z' },

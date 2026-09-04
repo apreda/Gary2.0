@@ -1,0 +1,84 @@
+name: Verify
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: 'true'
+  TZ: America/New_York
+
+jobs:
+  backend:
+    name: Backend unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: gary2.0
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: gary2.0/package-lock.json
+      - name: Locate isolated PostgreSQL test binaries
+        run: |
+          if ! command -v pg_config >/dev/null 2>&1; then
+            echo "::error::PostgreSQL server tools are required for the Winners database tests; pg_config is missing." >&2
+            exit 1
+          fi
+          pg_bin_dir="$(pg_config --bindir)"
+          for binary in initdb pg_ctl psql postgres; do
+            if [ ! -x "$pg_bin_dir/$binary" ]; then
+              echo "::error::Missing PostgreSQL test binary: $pg_bin_dir/$binary" >&2
+              exit 1
+            fi
+          done
+          echo "GARY_TEST_PG_BIN=$pg_bin_dir" >> "$GITHUB_ENV"
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Run backend unit tests
+        run: npm test -- --silent=passed-only
+      - name: Run edge helper tests
+        run: npm run test:edge
+
+  web:
+    name: Web unit tests and types
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Run web unit tests
+        run: npm test -- --silent=passed-only
+      - name: Check route and TypeScript types
+        run: npm run typecheck
+      - name: Check fixture-backed web pages and results export
+        working-directory: .
+        run: npm run smoke:web

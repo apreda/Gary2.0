@@ -1,5 +1,4 @@
 import { clearCache as _clearCache, initApi, API_KEY } from './bdlCore.js';
-import { oddsMethods } from './bdlOdds.js';
 import { gamesMethods } from './bdlGames.js';
 import { playersMethods } from './bdlPlayers.js';
 import { teamStatsMethods } from './bdlTeamStats.js';
@@ -46,7 +45,6 @@ const ballDontLieService = {
   },
 
   // Merge all method groups
-  ...oddsMethods,
   ...gamesMethods,
   ...playersMethods,
   ...teamStatsMethods,
