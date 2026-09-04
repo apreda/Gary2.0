@@ -399,21 +399,34 @@ struct HubView: View {
     /// football when today's pack exists for the id. Team-backed rows use
     /// the team card, with the compact signal overlay as the safe fallback.
     private func openSignal(_ s: Signal) {
-        // Football rows open the player pack sheet ONLY when today's football
-        // pack verifiably exists for that player id (the pipeline builds
-        // NFL/NCAAF packs since Aug 27 2026); otherwise the edge overlay stays
-        // the fallback, so a football tap can never land on a permanent
-        // "building" screen. The MLB team-card pipeline remains MLB-only.
-        if sel == .nfl || sel == .ncaaf {
-            if let pid = s.playerId, intelCards.contains(where: { $0.player_id == pid }) {
-                breakdownSignal = s
-            } else {
-                selectedSignal = s
-            }
+        // 1. The row's own id, when today's pack exists for it — the direct hit.
+        if let pid = s.playerId, intelCards.contains(where: { $0.player_id == pid }) {
+            breakdownSignal = s
+            return
         }
-        else if s.playerId != nil { breakdownSignal = s }
-        else if s.teamId != nil || s.h2h != nil { teamCardSignal = s }
+        // 2. THE NAME (founder, Sep 4 2026: "if i click a players name the
+        // player card should show up ... everywhere"). Football lanes carry no
+        // player id at all, and some MLB lanes carry one the pack build missed,
+        // so the row's own name is resolved against the day's packs before any
+        // fallback. A resolved name opens the SAME card, prefetched.
+        if let row = intelCard(for: Self.signalPlayerName(s)) {
+            namedCard = row
+            return
+        }
+        // 3. No pack anywhere: the team card when the row is about a team, else
+        // the edge overlay — which at least carries the row's own numbers. An
+        // empty player card is never the answer.
+        if s.teamId != nil || s.h2h != nil { teamCardSignal = s }
         else { selectedSignal = s }
+    }
+
+    /// The player a row is about, as the row spells him. Lanes append their own
+    /// punctuation ("Max Scherzer: 6.16 ERA vs 4.21 xERA", "Grant Taylor /
+    /// Bryan Hudson"), so the name is the head of the headline. Hyphens stay —
+    /// Crow-Armstrong is one name.
+    static func signalPlayerName(_ s: Signal) -> String {
+        let head = s.headline.components(separatedBy: CharacterSet(charactersIn: ":(,/·—")).first ?? s.headline
+        return head.trimmingCharacters(in: .whitespaces)
     }
 
     /// The display name a team card is about (mirrors the sheet's own header).

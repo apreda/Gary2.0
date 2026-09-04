@@ -521,13 +521,66 @@ async function loadNcaafPropEntries(date) {
 }
 
 /** INSERT freshly-built packs (idempotency comes from deleteDayCards first). */
+/**
+ * Write the day's packs. Two guards, both learned the hard way on Sep 4 2026,
+ * when college cards had never once reached the table:
+ *
+ * 1. DEDUPE. The table is unique on (date, league, player_id), and one batch
+ *    carrying the same player twice — a transfer listed on two rosters, a
+ *    reused provider id — failed the WHOLE insert. Thirty good packs were lost
+ *    to one repeat, every pass, silently (the caller only warns).
+ * 2. UPSERT. A pack that already exists is now overwritten instead of
+ *    conflicting, so a second pass of the day updates rather than aborts and
+ *    the additive college build can run as often as it needs to.
+ */
+/**
+ * Every player the DAY has surfaced, not just the ones this pass built.
+ *
+ * The card build reads the connections it was handed, and lanes that write
+ * later in the run — or in an earlier run — never reached it: on Sep 4 2026,
+ * 24 of the day's 65 player-backed MLB rows had no card, so tapping Scherzer
+ * or Giolito on the Hub opened an empty one. Reading the stored rows back
+ * makes the candidate set the whole day, whatever order the lanes ran in.
+ */
+async function storedConnectionPlayers(date, league) {
+  if (!supabaseUrl) return [];
+  try {
+    const { data } = await axios.get(`${supabaseUrl}/rest/v1/insight_connections`, {
+      headers: restHeaders,
+      params: {
+        date: `eq.${date}`,
+        league: `eq.${league}`,
+        select: 'player_id',
+        player_id: 'not.is.null',
+        limit: 500,
+      },
+    });
+    return (Array.isArray(data) ? data : []).filter((r) => r?.player_id != null);
+  } catch (e) {
+    console.warn(`   [Cards] stored-connection players skipped: ${e.message}`);
+    return [];
+  }
+}
+
 async function insertCards(rows) {
-  const sanitized = JSON.parse(JSON.stringify(rows));
+  const byKey = new Map();
+  for (const row of rows) {
+    const key = `${row.date}|${row.league}|${row.player_id}`;
+    if (!byKey.has(key)) byKey.set(key, row);
+  }
+  const deduped = [...byKey.values()];
+  if (deduped.length !== rows.length) {
+    console.log(`   ℹ️  ${rows.length - deduped.length} duplicate player id(s) collapsed before write.`);
+  }
+  const sanitized = JSON.parse(JSON.stringify(deduped));
   await axios({
     method: 'POST',
     url: CARDS_REST_URL,
     data: sanitized,
-    headers: { ...restHeaders, Prefer: 'return=minimal' },
+    headers: {
+      ...restHeaders,
+      Prefer: 'return=minimal,resolution=merge-duplicates',
+    },
   });
 }
 
@@ -616,7 +669,15 @@ async function buildAndStoreCards({ date, league, connections }) {
     } catch (e) {
       console.warn(`   [Cards] streak-subject fetch skipped: ${e.message}`);
     }
-    const packs = await buildPlayerInsightCards({ date, league, connections, games, extraPlayerNames });
+    // The day's whole cast: this pass's connections plus every player already
+    // stored for the date, so lane order can never cost a player his card.
+    const allConnections = [
+      ...(Array.isArray(connections) ? connections : []),
+      ...await storedConnectionPlayers(date, league),
+    ];
+    const packs = await buildPlayerInsightCards({
+      date, league, connections: allConnections, games, extraPlayerNames,
+    });
 
     if (!Array.isArray(packs) || packs.length === 0) {
       console.log(`   ℹ️  No player insight cards built for ${league} (${date}).`);
