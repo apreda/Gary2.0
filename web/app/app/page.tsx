@@ -104,14 +104,18 @@ export default function AppPage() {
         <div className="lg:col-span-7">
           <Eyebrow>FREE ON IOS</Eyebrow>
           <h1 className="mt-4 font-display text-[clamp(2.8rem,6vw,4.5rem)] leading-[0.94] text-hi">
-            The full Gary experience
+            Gary&apos;s picks
             <br />
-            <span className="text-gold">lives in the app</span>
+            <span className="text-gold">right in your pocket</span>
           </h1>
           <p className="mt-5 max-w-xl text-[16px] leading-relaxed text-mid">
-            Find your game. See Gary&apos;s pick. Read the reasoning, follow the result,
-            and keep your own private Book. Web and iOS share your account and Winners
-            access, while the full slate stays free.
+            Find your game. See Gary&apos;s pick. Read the reasoning and follow the result,
+            while the full slate stays free.
+          </p>
+          <p className="mt-3 max-w-xl text-[13px] leading-relaxed text-mid">
+            The latest account and manual bet-tracking updates are available on the website;
+            the iOS update is pending Apple&apos;s approval.{' '}
+            <Link href="/you" className="text-gold underline underline-offset-2">Open Your Book on the web</Link>.
           </p>
           <div className="mt-7 flex flex-wrap items-center gap-4">
             <AppStoreButton surface="app_page_hero" />

@@ -78,17 +78,20 @@ export default async function PricingPage() {
         </p>
         {l30 && allTime && (l30.wins + l30.losses) > 0 && (
           <div className="mx-auto mt-6 inline-flex flex-wrap items-center justify-center gap-3 rounded-full border border-line bg-card px-5 py-2.5">
-            <span className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-faint">Full free-slate record · last 30 days</span>
+            <span className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-faint">Free game-pick record · last 30 days</span>
             <span className="tnum font-mono text-sm font-bold">
               <span className="text-win">{l30.wins}</span>
               <span className="text-faint">–</span>
               <span className="text-loss">{l30.losses}</span>
             </span>
             <span className="tnum text-[12px] text-low">
-              · all-time {allTime.pct}% on {allTime.graded.toLocaleString()} graded · every result public
+              · all-time {allTime.pct}% on {allTime.graded.toLocaleString()} graded · game picks only
             </span>
           </div>
         )}
+        <p className="mx-auto mt-3 max-w-xl text-[12px] leading-relaxed text-low">
+          Player props are reported separately. Home Run and Touchdown fun picks are excluded from the headline record.
+        </p>
       </section>
 
       <LaunchOffer className="mt-8" />

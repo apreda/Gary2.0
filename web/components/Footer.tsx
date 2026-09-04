@@ -62,8 +62,9 @@ export function Footer() {
               <span className="font-mono text-[15px] uppercase tracking-[0.04em] text-gold">Gary A.I.</span>
             </div>
             <p className="mt-3 max-w-xs text-[13px] leading-relaxed text-low">
-              Every game. Every day. On the record. Free picks for the full slate, with the
-              reasoning behind them — and every result graded in public.
+              Find your game. See Gary&apos;s pick. Free game picks and reasoning, with a
+              public game-pick record. Player props are reported separately; Home Run and
+              Touchdown fun picks are excluded from the headline record.
             </p>
           </div>
 

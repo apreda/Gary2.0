@@ -41,5 +41,38 @@
     "This file does not claim installations, unique users, profit, or retention.",
     "The separate readiness snapshot reports known stale engagement drafts honestly; it does not revive the reply engine.",
     "No tweet, account profile, billing balance, spend cap, or external notification was changed by manual action. The existing automated posting schedule continues normally."
-  ]
+  ],
+  "natural_cron_verification": {
+    "scheduled_at": "2026-09-04T23:00:00Z",
+    "http_status": 200,
+    "health_status": "ok",
+    "posted_picks": 2,
+    "failed_posts": 0,
+    "missed_picks": 0,
+    "stored_new_post_rows": 2,
+    "post_rows_with_safe_verbatim_reason_pair": 2,
+    "verification": "Read-only social_post_log rows joined to stored daily_picks; no manual posting invocation",
+    "current_slate_stored_picks": 7,
+    "current_slate_logged_threads": 7,
+    "post_rows_with_expected_bare_pick": 2,
+    "pick_line_policy": "Exact deterministic barePick output; existing founder policy removes book prices while preserving side and spread/total"
+  },
+  "engagement_sheet_repair": {
+    "function": "engagement-sheet",
+    "version": 6,
+    "updated_at": "2026-09-04T22:58:56.450Z",
+    "jwt_verification": false,
+    "authentication": "Private SHEET_TOKEN gate; missing, empty and whitespace-only configured tokens fail closed",
+    "valid_view_status": 200,
+    "valid_view_is_sheet": true,
+    "wrong_token_status": 401,
+    "missing_token_status": 401,
+    "focused_auth_tests": 3,
+    "focused_auth_failures": 0,
+    "deno_typecheck": "passed with --node-modules-dir=none",
+    "generation_requested": false,
+    "next_scheduled_generation": "2026-09-05T14:30:00Z",
+    "latest_existing_draft_date": "2026-08-20",
+    "observation_limit": "Draft freshness remains stale until the next natural generation succeeds; only authenticated viewing was exercised."
+  }
 }
