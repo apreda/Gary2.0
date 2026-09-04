@@ -1,22 +1,19 @@
-// THE COLLEGE STANDINGS LANE — the NFL page's form and record rows, for
-// college (NCAAF Picks page parity, founder Sep 3-4 2026).
+// THE COLLEGE STANDINGS LANE — the NFL page's record rows, for college
+// (NCAAF Picks page parity, founder Sep 3-4 2026).
 //
 // Source contract: BDL /ncaaf/v1/standings answers ONE conference per call, so
 // this lane reads the slate's conferences one at a time and joins each side to
 // its own conference table. Every printed record — wins, losses, home,
-// away, conference — is the row's own field. The streak is counted off the
-// team's final games in the provider game index, newest first. A side missing
-// from its table drops its facts; nothing is estimated.
+// away, conference — is the row's own field. A side missing from its table
+// drops its facts; nothing is estimated. No streak row: the college standings
+// row carries no streak, and counting one off the game index costs a fetch
+// per team under BDL's three-a-minute gate.
 //
 // NCAAF-owned: this file never reads an NFL feed (league isolation law).
 
 import { makeRow, TONES } from '../shared.js';
 import { attachLaneReads, detailFact } from '../laneReads.js';
-import { toTeamResults } from '../../agentic/tools/statRouters/footballTeamGames.js';
 
-const SPORT_KEY = 'americanfootball_ncaaf';
-/** A streak has to be real form, not a coin flip — three games either way. */
-const MIN_STREAK = 3;
 /** Split records only speak once both teams have played enough at that site. */
 const MIN_SITE_GAMES = 3;
 /** Under a fifth of a win, a site split is noise dressed as a trend. */
@@ -50,65 +47,8 @@ function sampleWord(n) {
   return `${n} game${n === 1 ? '' : 's'}`;
 }
 
-function overallRecord(row) {
-  const wins = finite(row?.wins);
-  const losses = finite(row?.losses);
-  if (wins == null || losses == null) return null;
-  return `${wins}-${losses}`;
-}
-
 function conferenceLabel(row, team) {
   return row?.conference?.abbreviation || row?.conference?.name || team?.conference_name || null;
-}
-
-/** Consecutive wins (+) or losses (-) off the team's finals, newest first. */
-function currentStreak(results) {
-  if (!results.length) return 0;
-  const won = results[0].won;
-  let n = 0;
-  for (const r of results) {
-    if (r.won !== won) break;
-    n += 1;
-  }
-  return won ? n : -n;
-}
-
-function streakRow({ side, opponent, game, helpers, season, through }) {
-  const streak = side.streak;
-  if (!Number.isFinite(streak) || Math.abs(streak) < MIN_STREAK) return null;
-  const won = streak > 0;
-  const length = Math.abs(streak);
-  const overall = overallRecord(side.row);
-  const name = teamName(side.team);
-
-  return makeRow({
-    category: 'streak',
-    headline: won ? `${name} has won ${length} straight` : `${name} has lost ${length} straight`,
-    detail:
-      `${name} carries a ${length}-game ${won ? 'winning' : 'losing'} streak into this one` +
-      `${overall ? `, sitting at ${overall} on the season` : ''}. ` +
-      `They face ${teamName(opponent.team)} in ${game ? helpers.gameLabel(game) : 'this matchup'}. ` +
-      `${season} results through ${through}.`,
-    game: helpers.gameLabel(game),
-    value: `${won ? 'W' : 'L'}${length}`,
-    tone: won ? TONES.HOT : TONES.COLD,
-    relevance_score: Math.min(88, 56 + length * 5),
-    // The football grader's contract: row.team_id names the side that held
-    // the edge. A winning streak is that claim; a losing streak is context.
-    ...(won ? { team_id: side.team?.id } : {}),
-    game_id: game?.id,
-    meta: {
-      source: 'balldontlie_ncaaf_standings',
-      league: 'NCAAF',
-      season,
-      through,
-      metric: 'win_streak',
-      team_id: side.team?.id,
-      abbreviation: name,
-      win_streak: streak,
-      overall_record: overall,
-    },
-  });
 }
 
 /** The home team's home record against the visitor's road record. */
@@ -213,20 +153,9 @@ async function loadStandingsByTeam(bdl, season, games) {
   return byTeam;
 }
 
-/** The team's finals this season, newest first (streak input). */
-async function loadResults(bdl, teamId, season) {
-  try {
-    const games = await bdl.getGames(SPORT_KEY, { team_ids: [teamId], seasons: [season], per_page: 100 });
-    return toTeamResults(games, teamId);
-  } catch (err) {
-    console.warn(`[ncaafStandings] game index for team ${teamId} failed: ${err?.message || err}`);
-    return [];
-  }
-}
-
 /**
- * Streak, site split, and conference-game rows for every slate game whose
- * sides both appear in their conference tables.
+ * Site split and conference-game rows for every slate game whose sides both
+ * appear in their conference tables.
  */
 export async function computeNcaafStandings(ctx) {
   const { games, season, bdl, helpers, date } = ctx;
@@ -240,12 +169,6 @@ export async function computeNcaafStandings(ctx) {
 
   const through = date;
   const rows = [];
-  const resultsCache = new Map();
-  const resultsFor = async (teamId) => {
-    const key = String(teamId);
-    if (!resultsCache.has(key)) resultsCache.set(key, await loadResults(bdl, teamId, season));
-    return resultsCache.get(key);
-  };
 
   for (const game of slate) {
     const awayTeam = game?.away_team ?? game?.visitor_team;
@@ -256,14 +179,10 @@ export async function computeNcaafStandings(ctx) {
     // Both sides or nothing — a one-sided record is a guess about the other.
     if (!awayRow || !homeRow) continue;
 
-    const away = { team: awayTeam, row: awayRow, streak: currentStreak(await resultsFor(awayTeam.id)) };
-    const home = { team: homeTeam, row: homeRow, streak: currentStreak(await resultsFor(homeTeam.id)) };
+    const away = { team: awayTeam, row: awayRow };
+    const home = { team: homeTeam, row: homeRow };
     const shared = { game, helpers, season, through };
 
-    for (const [side, opponent] of [[away, home], [home, away]]) {
-      const streak = streakRow({ side, opponent, ...shared });
-      if (streak) rows.push(streak);
-    }
     const site = siteRecordRow({ away, home, ...shared });
     if (site) rows.push(site);
     const conference = conferenceRow({ away, home, ...shared });

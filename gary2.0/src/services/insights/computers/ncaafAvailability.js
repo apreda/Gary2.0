@@ -17,10 +17,12 @@ import { makeRow, TONES } from '../shared.js';
 import { attachLaneReads, detailFact } from '../laneReads.js';
 import { searchGrounded } from '../ncaafSearch.js';
 import { nameKey, playerName } from '../ncaafNames.js';
+import { gamesWithRowsToday, runWithinBudget } from '../ncaafLaneLedger.js';
 
 const MAX_PER_GAME = 4;
 const SEARCH_TIMEOUT_MS = Math.max(30_000, Number(process.env.GARY_NCAAF_AVAILABILITY_TIMEOUT_MS) || 120_000);
-const CONCURRENCY = Math.max(1, Number(process.env.GARY_NCAAF_AVAILABILITY_CONCURRENCY) || 4);
+/** Rosters do not change inside a day; share them across the day's passes. */
+const ROSTER_TTL_MINUTES = 360;
 
 // The report vocabulary — the phrase the headline prints, its weight, and
 // whether it ends the player's night. Anything else is not a status.
@@ -100,10 +102,8 @@ Return STRICT JSON only — an array, no prose before or after:
 }
 
 async function loadRosters(bdl, awayTeam, homeTeam) {
-  const [away, home] = await Promise.all([
-    bdl.getNcaafTeamPlayers(awayTeam.id),
-    bdl.getNcaafTeamPlayers(homeTeam.id),
-  ]);
+  const away = await bdl.getNcaafTeamPlayers(awayTeam.id, ROSTER_TTL_MINUTES);
+  const home = await bdl.getNcaafTeamPlayers(homeTeam.id, ROSTER_TTL_MINUTES);
   const index = new Map();
   for (const [team, roster] of [[awayTeam, away], [homeTeam, home]]) {
     for (const p of roster || []) {
@@ -187,24 +187,6 @@ async function reportForGame({ game, date, helpers, bdl }) {
   });
 }
 
-/** A bounded pool: every slate game, at most CONCURRENCY searches in flight. */
-async function mapPool(items, limit, fn) {
-  const out = new Array(items.length);
-  let next = 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (next < items.length) {
-      const i = next;
-      next += 1;
-      try { out[i] = await fn(items[i]); } catch (err) {
-        console.warn(`[ncaafAvailability] game ${items[i]?.id}: ${err?.message || err}`);
-        out[i] = [];
-      }
-    }
-  });
-  await Promise.all(workers);
-  return out.flat();
-}
-
 /**
  * One row per roster-verified report on the slate, capped per game with the
  * most consequential first.
@@ -215,8 +197,11 @@ export async function computeNcaafAvailability(ctx) {
   if (league !== 'ncaaf') return [];
   if (!bdl || !(games || []).length) return [];
 
-  const rows = await mapPool((games || []).filter((g) => g?.id != null), CONCURRENCY,
-    (game) => reportForGame({ game, date, helpers, bdl }));
+  const done = await gamesWithRowsToday({ date, category: 'injury' });
+  const rows = await runWithinBudget({
+    games, done, label: 'ncaafAvailability',
+    work: (game) => reportForGame({ game, date, helpers, bdl }),
+  });
 
   await attachLaneReads('ncaafAvailability', rows, detailFact, {
     ask: 'what this report actually changes about the game — who absorbs the work if he sits, what the status word means this close to kickoff, and which side of the ball feels it',

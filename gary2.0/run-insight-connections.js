@@ -470,6 +470,33 @@ async function deleteDayCards(date, league) {
   });
 }
 
+/** Game ids (strings) that already carry packs today — the additive college write's ledger. */
+async function packedGameIdsToday(date, league) {
+  try {
+    const { data } = await axios({
+      method: 'GET',
+      url: CARDS_REST_URL,
+      headers: restHeaders,
+      params: { date: `eq.${date}`, league: `eq.${league}`, select: 'game_id' },
+    });
+    return new Set((Array.isArray(data) ? data : []).map((r) => r?.game_id).filter(Boolean).map(String));
+  } catch (err) {
+    console.warn(`   ⚠️  [${league}] packed-games ledger unavailable: ${err.message} — packing the whole slate`);
+    return new Set();
+  }
+}
+
+/** DELETE only the named games' packs (the additive college write). */
+async function deleteGameCards(date, league, gameIds) {
+  if (!gameIds.length) return;
+  await axios({
+    method: 'DELETE',
+    url: CARDS_REST_URL,
+    headers: { ...restHeaders, Prefer: 'return=minimal' },
+    params: { date: `eq.${date}`, league: `eq.${league}`, game_id: `in.(${gameIds.join(',')})` },
+  });
+}
+
 /**
  * The day's posted college props (prop_picks is one jsonb row per date; each
  * entry carries `sport`). The NCAAF pack builder prints a player's own lines
@@ -521,9 +548,13 @@ async function buildAndStoreCards({ date, league, connections }) {
       });
       // College packs ride their own builder (NCAAF Picks page parity, Sep 4
       // 2026 — league isolation law): the NFL builder is NFL-only.
+      // College packs are ADDITIVE across the day's passes (BDL's three-a-minute
+      // gate: one pass cannot pack a 28-game Saturday): the builder skips games
+      // already packed today and the write deletes only the games it rewrites.
+      const packedGames = league === 'NCAAF' ? await packedGameIdsToday(date, league) : new Set();
       const packs = league === 'NCAAF'
         ? await buildNcaafPlayerInsightCards({
-          date, games, bdl: ballDontLieService, propEntries: await loadNcaafPropEntries(date),
+          date, games, bdl: ballDontLieService, propEntries: await loadNcaafPropEntries(date), done: packedGames,
         })
         : await buildFootballPlayerInsightCards({
           date, league, games, bdl: ballDontLieService,
@@ -547,7 +578,11 @@ async function buildAndStoreCards({ date, league, connections }) {
         console.log(JSON.stringify(rows[0]?.payload, null, 2));
         return;
       }
-      await deleteDayCards(date, league);
+      if (league === 'NCAAF') {
+        await deleteGameCards(date, league, [...new Set(rows.map((r) => r.game_id).filter(Boolean))]);
+      } else {
+        await deleteDayCards(date, league);
+      }
       await insertCards(rows);
       console.log(`   ✅ Stored ${rows.length} player insight card(s) for ${league} (${date}).`);
     } catch (err) {

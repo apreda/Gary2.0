@@ -9,6 +9,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const search = vi.hoisted(() => ({ searchGrounded: vi.fn() }));
 vi.mock('../../../src/services/insights/ncaafSearch.js', () => search);
+const ledger = vi.hoisted(() => ({ gamesWithRowsToday: vi.fn(async () => new Set()) }));
+vi.mock('../../../src/services/insights/ncaafLaneLedger.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, gamesWithRowsToday: ledger.gamesWithRowsToday };
+});
 vi.mock('../../../src/services/insights/solText.js', () => ({
   generateSolText: vi.fn(async () => JSON.stringify({ reads: [] })),
 }));
@@ -47,6 +52,8 @@ let ctx;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.useRealTimers();
+  ledger.gamesWithRowsToday.mockResolvedValue(new Set());
   bdl = {
     getNcaafTeamPlayers: vi.fn(async (teamId) => (teamId === 13 ? stanfordRoster : teamId === 8 ? miamiRoster : [])),
     getNflPlayerInjuries: vi.fn(async () => []),
@@ -69,9 +76,10 @@ describe('computeNcaafAvailability', () => {
     expect(bdl.getNflPlayerInjuries).not.toHaveBeenCalled();
   });
 
-  it('asks one grounded search per game, naming both programs and the game date', async () => {
+  it('asks one grounded search per game, naming both programs and the game date, off day-long rosters', async () => {
     await computeNcaafAvailability(ctx);
     expect(search.searchGrounded).toHaveBeenCalledTimes(1);
+    expect(bdl.getNcaafTeamPlayers).toHaveBeenCalledWith(13, 360);
     const prompt = String(search.searchGrounded.mock.calls[0][0]);
     expect(prompt).toContain('Miami Hurricanes');
     expect(prompt).toContain('Stanford Cardinal');
@@ -149,5 +157,26 @@ describe('computeNcaafAvailability', () => {
     bdl.getNcaafTeamPlayers.mockRejectedValue(new Error('503'));
     expect(await computeNcaafAvailability(ctx)).toEqual([]);
     expect(search.searchGrounded).not.toHaveBeenCalled();
+  });
+
+  it('skips games that already carry an injury row today and stops when the budget is spent', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-05T10:00:00Z'));
+    process.env.GARY_NCAAF_LANE_BUDGET_MS = '60000';
+    const later = { ...game, id: 457170, date: '2026-09-06T00:00:00.000Z' };
+    const earlier = { ...game, id: 457150, date: '2026-09-05T16:00:00.000Z' };
+    ctx.games = [later, game, earlier];
+    ledger.gamesWithRowsToday.mockResolvedValue(new Set(['457150']));
+    search.searchGrounded.mockImplementation(async () => {
+      vi.setSystemTime(new Date(Date.now() + 61_000));
+      return reply([]);
+    });
+
+    await computeNcaafAvailability(ctx);
+
+    expect(ledger.gamesWithRowsToday).toHaveBeenCalledWith(expect.objectContaining({ date: '2026-09-05', category: 'injury' }));
+    expect(search.searchGrounded).toHaveBeenCalledTimes(1);
+    expect(String(search.searchGrounded.mock.calls[0][0])).toContain('Miami Hurricanes at Stanford Cardinal');
+    delete process.env.GARY_NCAAF_LANE_BUDGET_MS;
   });
 });

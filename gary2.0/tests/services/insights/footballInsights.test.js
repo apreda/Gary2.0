@@ -19,12 +19,17 @@ const bdl = vi.hoisted(() => ({
   getNcaafPlayerGameStats: vi.fn(),
 }));
 const ncaafSearch = vi.hoisted(() => ({ searchGrounded: vi.fn() }));
+const ncaafLedger = vi.hoisted(() => ({ gamesWithRowsToday: vi.fn(async () => new Set()) }));
 
 vi.mock('../../../src/services/ballDontLieService.js', () => ({
   ballDontLieService: bdl,
 }));
 // The college availability lane's grounded search — never a real call here.
 vi.mock('../../../src/services/insights/ncaafSearch.js', () => ncaafSearch);
+vi.mock('../../../src/services/insights/ncaafLaneLedger.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, gamesWithRowsToday: ncaafLedger.gamesWithRowsToday };
+});
 
 // The Gary layer is a live content-model call; tests keep the computed detail
 // by letting the read attach deterministically.
@@ -758,8 +763,10 @@ describe('NFL depth lanes (availability, QB watch, situational)', () => {
     bdl.getNcaafTeamPlayers.mockImplementation(async (teamId) => (teamId === 13
       ? [{ id: 501, first_name: 'Ben', last_name: 'Gulbranson', position_abbreviation: 'QB', team: stanford }]
       : [{ id: 601, first_name: 'Carson', last_name: 'Beck', position_abbreviation: 'QB', team: miami }]));
-    bdl.getNcaafPlayerSeasonStats.mockImplementation(async ({ teamId, season }) => (season === 2026 && teamId === 13
-      ? [{ player: { id: 501 }, passing_attempts: 120, passing_completions: 80, passing_yards: 1000, passing_touchdowns: 8, passing_interceptions: 3, passing_yards_per_game: 250 }]
+    // Per-game rows are the season truth (the season-totals endpoint is never read).
+    bdl.getNcaafPlayerGameStats.mockImplementation(async ({ playerIds, season }) => (season === 2026 && playerIds.includes(501)
+      ? [{ player: { id: 501 }, team: stanford, game: { id: 400, date: '2026-09-05T20:00:00.000Z', season: 2026 },
+        passing_attempts: 30, passing_completions: 20, passing_yards: 250, passing_touchdowns: 2, passing_interceptions: 1 }]
       : []));
     bdl.getNcaafStandings.mockResolvedValue([
       { team: stanford, conference: { id: 1, name: 'ACC', abbreviation: 'ACC' }, wins: 4, losses: 1, home_record: '3-0', away_record: '1-1', conference_record: '2-0' },
@@ -785,5 +792,6 @@ describe('NFL depth lanes (availability, QB watch, situational)', () => {
     expect(bdl.getNflPlayerInjuries).not.toHaveBeenCalled();
     expect(bdl.getNflStandings).not.toHaveBeenCalled();
     expect(bdl.getNflRosterDepth).not.toHaveBeenCalled();
+    expect(bdl.getNcaafPlayerSeasonStats).not.toHaveBeenCalled();
   });
 });

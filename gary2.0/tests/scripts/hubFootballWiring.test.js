@@ -70,6 +70,13 @@ describe('college player packs (NCAAF Picks page parity, Sep 4 2026)', () => {
     expect(runner).toContain("league === 'NCAAF'\n        ? await buildNcaafPlayerInsightCards({");
   });
 
+  it('writes college packs additively — only the games it rewrites are deleted, and the ledger feeds the builder', () => {
+    expect(runner).toContain('done: packedGames');
+    expect(runner).toContain("await packedGameIdsToday(date, league)");
+    expect(runner).toContain("await deleteGameCards(date, league, [...new Set(rows.map((r) => r.game_id).filter(Boolean))]);");
+    expect(runner).toContain("game_id: `in.(${gameIds.join(',')})`");
+  });
+
   it('keeps the NFL pack builder NFL-only — no college branch inside it', () => {
     expect(footballCards).not.toContain('buildNcaafPacks');
     expect(footballCards).not.toContain("lg !== 'NFL' && lg !== 'NCAAF'");

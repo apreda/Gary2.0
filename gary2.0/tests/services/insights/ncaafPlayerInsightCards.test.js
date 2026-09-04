@@ -2,16 +2,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // PLAYER INTEL, for college (NCAAF Picks page parity, founder Sep 3-4 2026):
 // the NFL pack's contents — season line, LAST N log with the opponent and the
-// site off the team's own game index, HOME/ROAD splits, the day's posted
-// props — for the college leaders by role. Current season first; before a
-// team's first game, LAST SEASON for the players on THIS season's roster,
-// labeled. NCAAF-owned: no NFL feed is read.
+// site off the pair's game index, HOME/ROAD splits, the day's posted props —
+// for the college leaders by role. Truth sources: the active roster (who is
+// here) and per-game player_stats rows (who has played; the season line is
+// their sum). The season-totals endpoint is never read — its "2026" rows were
+// prior-season lines before Week 1. Before a team's first game, LAST SEASON
+// for the players on THIS season's roster, labeled. Budgeted and additive
+// across the day's passes. NCAAF-owned: no NFL feed is read.
 
 const { buildNcaafPlayerInsightCards } = await import('../../../src/services/insights/ncaafPlayerInsightCards.js');
 
 const stanford = { id: 13, conference: 1, college: 'Stanford', name: 'Cardinal', full_name: 'Stanford Cardinal', abbreviation: 'STAN' };
 const miami = { id: 8, conference: 1, college: 'Miami', name: 'Hurricanes', full_name: 'Miami Hurricanes', abbreviation: 'MIA' };
 const iowa = { id: 60, conference: 5, college: 'Iowa', name: 'Hawkeyes', full_name: 'Iowa Hawkeyes', abbreviation: 'IOWA' };
+const duke = { id: 20, conference: 1, college: 'Duke', name: 'Blue Devils', full_name: 'Duke Blue Devils', abbreviation: 'DUKE' };
 
 const game = { id: 457163, date: '2026-10-10T23:30:00.000Z', season: 2026, week: 7, home_team: stanford, visitor_team: miami };
 
@@ -29,17 +33,9 @@ const stanfordRoster = [
   player(508, 'David', 'Bailey', 'LB'),
 ];
 
-const seasonRow = (id, values, season = 2026) => ({
-  player: { id }, team: stanford, season,
-  passing_attempts: 0, passing_completions: 0, passing_yards: 0, passing_touchdowns: 0, passing_interceptions: 0,
-  rushing_attempts: 0, rushing_yards: 0, rushing_touchdowns: 0,
-  receptions: 0, receiving_yards: 0, receiving_touchdowns: 0,
-  ...values,
-});
-
-const gameRow = (playerId, gameId, date, values) => ({
-  player: { id: playerId }, team: stanford,
-  game: { id: gameId, date, season: 2026, home_team: null, visitor_team: null },
+const gameRow = (playerId, gameId, date, values, { season = 2026, team = stanford, week = null } = {}) => ({
+  player: { id: playerId }, team,
+  game: { id: gameId, date, season, week, home_team: null, visitor_team: null },
   passing_attempts: 0, passing_completions: 0, passing_yards: 0, passing_touchdowns: 0, passing_interceptions: 0,
   rushing_attempts: 0, rushing_yards: 0, rushing_touchdowns: 0,
   receptions: 0, receiving_targets: 0, receiving_yards: 0, receiving_touchdowns: 0,
@@ -55,10 +51,11 @@ function finalGame(id, date, team, opponent, scored, allowed, { home = true } = 
 let bdl;
 
 beforeEach(() => {
+  vi.useRealTimers();
   bdl = {
     getNcaafTeamPlayers: vi.fn(async (teamId) => (teamId === 13 ? stanfordRoster : [])),
-    getNcaafPlayerSeasonStats: vi.fn(async () => []),
     getNcaafPlayerGameStats: vi.fn(async () => []),
+    getNcaafPlayerSeasonStats: vi.fn(async () => []),
     getGames: vi.fn(async () => []),
     getNflRosterDepth: vi.fn(),
     getNflPlayerGameLogsBatch: vi.fn(),
@@ -66,36 +63,34 @@ beforeEach(() => {
 });
 
 describe('buildNcaafPlayerInsightCards', () => {
-  it('packs the leaders by role with the NFL sections: season line, dated log off the game index, splits, props', async () => {
-    bdl.getNcaafPlayerSeasonStats.mockImplementation(async ({ teamId, season }) => (teamId === 13 && season === 2026 ? [
-      seasonRow(501, { passing_attempts: 120, passing_completions: 80, passing_yards: 1000, passing_touchdowns: 8, passing_interceptions: 3, rushing_attempts: 20, rushing_yards: 90 }),
-      seasonRow(502, { passing_attempts: 10, passing_yards: 70 }),
-      seasonRow(503, { rushing_attempts: 80, rushing_yards: 400, rushing_touchdowns: 4, receptions: 10, receiving_yards: 60 }),
-      seasonRow(504, { receptions: 30, receiving_yards: 420, receiving_touchdowns: 3 }),
-      seasonRow(505, { receptions: 22, receiving_yards: 300 }),
-      seasonRow(506, { receptions: 15, receiving_yards: 180, receiving_touchdowns: 2 }),
-      seasonRow(507, { receptions: 4, receiving_yards: 40 }),
-      seasonRow(508, { total_tackles: 40 }),
-    ] : []));
+  it('packs the leaders by role from the per-game rows: summed season line, dated log off the pair\'s game index, splits, props', async () => {
+    bdl.getNcaafPlayerGameStats.mockImplementation(async ({ playerIds, season }) => {
+      expect(season).toBe(2026);
+      // The roster's skill players, both quarterbacks included; never the linebacker.
+      expect([...playerIds].sort((a, b) => a - b)).toEqual([501, 502, 503, 504, 505, 506, 507]);
+      return [
+        gameRow(501, 1, '2026-09-05T23:00:00.000Z', { passing_attempts: 30, passing_completions: 20, passing_yards: 250, passing_touchdowns: 2, passing_interceptions: 1 }),
+        gameRow(501, 2, '2026-09-12T23:00:00.000Z', { passing_attempts: 40, passing_completions: 24, passing_yards: 310, passing_touchdowns: 1, passing_interceptions: 2, rushing_attempts: 4, rushing_yards: 35 }),
+        gameRow(501, 3, '2026-09-19T23:00:00.000Z', { passing_attempts: 25, passing_completions: 18, passing_yards: 200, passing_touchdowns: 3 }),
+        gameRow(502, 3, '2026-09-19T23:00:00.000Z', { passing_attempts: 3, passing_completions: 2, passing_yards: 20 }),
+        gameRow(503, 1, '2026-09-05T23:00:00.000Z', { rushing_attempts: 18, rushing_yards: 110, rushing_touchdowns: 1, receptions: 2, receiving_yards: 15 }),
+        gameRow(503, 2, '2026-09-12T23:00:00.000Z', { rushing_attempts: 20, rushing_yards: 90 }),
+        gameRow(504, 1, '2026-09-05T23:00:00.000Z', { receptions: 6, receiving_targets: 9, receiving_yards: 90, receiving_touchdowns: 1 }),
+        gameRow(504, 3, '2026-09-19T23:00:00.000Z', { receptions: 4, receiving_targets: 5, receiving_yards: 50 }),
+        gameRow(505, 2, '2026-09-12T23:00:00.000Z', { receptions: 5, receiving_targets: 7, receiving_yards: 70 }),
+        gameRow(506, 2, '2026-09-12T23:00:00.000Z', { receptions: 3, receiving_targets: 4, receiving_yards: 40, receiving_touchdowns: 1 }),
+        gameRow(507, 1, '2026-09-05T23:00:00.000Z', { receptions: 1, receiving_targets: 1, receiving_yards: 8 }),
+      ];
+    });
     bdl.getGames.mockImplementation(async (sport, params) => {
       expect(sport).toBe('americanfootball_ncaaf');
-      return params.team_ids[0] === 13 ? [
+      expect([...params.team_ids].sort((a, b) => a - b)).toEqual([8, 13]);
+      expect(params.seasons).toEqual([2026]);
+      return [
         finalGame(1, '2026-09-05T23:00:00.000Z', stanford, iowa, 24, 10),
         finalGame(2, '2026-09-12T23:00:00.000Z', stanford, miami, 20, 31, { home: false }),
         finalGame(3, '2026-09-19T23:00:00.000Z', stanford, iowa, 27, 13),
         { id: 4, date: '2026-10-17T23:00:00.000Z', status: 'pre', home_team: stanford, visitor_team: iowa },
-      ] : [];
-    });
-    bdl.getNcaafPlayerGameStats.mockImplementation(async ({ playerIds, season }) => {
-      expect(season).toBe(2026);
-      expect(playerIds).toContain(501);
-      return [
-        gameRow(501, 1, '2026-09-05T23:00:00.000Z', { passing_attempts: 30, passing_completions: 20, passing_yards: 250, passing_touchdowns: 2, passing_interceptions: 1 }),
-        gameRow(501, 2, '2026-09-12T23:00:00.000Z', { passing_attempts: 40, passing_completions: 24, passing_yards: 310, passing_touchdowns: 1, passing_interceptions: 2, rushing_yards: 35 }),
-        gameRow(501, 3, '2026-09-19T23:00:00.000Z', { passing_attempts: 25, passing_completions: 18, passing_yards: 200, passing_touchdowns: 3 }),
-        gameRow(504, 1, '2026-09-05T23:00:00.000Z', { receptions: 6, receiving_targets: 9, receiving_yards: 90, receiving_touchdowns: 1 }),
-        gameRow(504, 3, '2026-09-19T23:00:00.000Z', { receptions: 4, receiving_targets: 5, receiving_yards: 50 }),
-        gameRow(503, 1, '2026-09-05T23:00:00.000Z', { rushing_attempts: 18, rushing_yards: 110, rushing_touchdowns: 1 }),
       ];
     });
     const propEntries = [
@@ -107,9 +102,11 @@ describe('buildNcaafPlayerInsightCards', () => {
 
     const packs = await buildNcaafPlayerInsightCards({ date: '2026-10-10', games: [game], bdl, propEntries });
 
-    // QB1, RB1, the top three receivers — the depth chart's key players.
+    // QB1 (above the floor), RB1, the top three receivers — the key players.
     expect(packs.map((p) => p.player_id).sort()).toEqual(['501', '503', '504', '505', '506']);
     expect(packs.every((p) => p.league === 'NCAAF' && p.game_id === '457163' && p.date === '2026-10-10')).toBe(true);
+    expect(bdl.getNcaafPlayerSeasonStats).not.toHaveBeenCalled();
+    expect(bdl.getNcaafTeamPlayers).toHaveBeenCalledWith(13, 360);
 
     const qb = packs.find((p) => p.player_id === '501');
     expect(qb.player_name).toBe('Ben Gulbranson');
@@ -118,9 +115,9 @@ describe('buildNcaafPlayerInsightCards', () => {
       type: 'quarterback', name: 'Ben Gulbranson', team: 'STAN', position: 'QB', game: 'MIA @ STAN',
       opponent: { name: 'Miami Hurricanes', hand: null }, statsSectionTitle: 'THE SHEET',
     });
-    expect(qb.payload.season).toEqual({ line1: '1000 pass yds · 8 TD · 3 INT · 120 att', line2: '90 rush yds · 20 carries — 2026 season' });
+    expect(qb.payload.season).toEqual({ line1: '760 pass yds · 6 TD · 3 INT · 95 att', line2: '35 rush yds · 4 carries — 2026 season, 3 games' });
     expect(qb.payload.formRows[0]).toEqual({ label: 'LAST 3', value: '253.3 pass yds/g', detail: null });
-    // Newest first, the opponent and the site from the team's own game index.
+    // Newest first, the opponent and the site off the pair's game index.
     expect(qb.payload.formRows.slice(1)).toEqual([
       { label: 'vs Iowa Hawkeyes', value: '18/25, 200 yds, 3 TD, 0 INT', detail: null },
       { label: 'at Miami Hurricanes', value: '24/40, 310 yds, 1 TD, 2 INT, 35 rush yds', detail: null },
@@ -130,7 +127,6 @@ describe('buildNcaafPlayerInsightCards', () => {
       { label: 'HOME', value: '225 pass yds/g', detail: '2 games' },
       { label: 'ROAD', value: '310 pass yds/g', detail: '1 game' },
     ]);
-    // Only this game's college props, one per market.
     expect(qb.payload.props).toEqual([
       { label: 'PASS YDS', line: '245.5', odds: '-115', rate: null },
       { label: 'PASS TDS', line: '1.5', odds: '+105', rate: null },
@@ -138,59 +134,97 @@ describe('buildNcaafPlayerInsightCards', () => {
 
     const wr = packs.find((p) => p.player_id === '504');
     expect(wr.payload.type).toBe('skill');
-    expect(wr.payload.season.line1).toBe('30 rec · 420 rec yds · 3 TD');
+    expect(wr.payload.season).toEqual({ line1: '10 rec · 140 rec yds · 1 TD', line2: '2026 season, 2 games' });
     expect(wr.payload.formRows[0]).toEqual({ label: 'LAST 2', value: '70 rec yds/g', detail: null });
     expect(wr.payload.formRows[1]).toEqual({ label: 'vs Iowa Hawkeyes', value: '4 rec 50 yds (5 tgt)', detail: null });
     expect(wr.payload.props).toBeNull();
 
     const rb = packs.find((p) => p.player_id === '503');
-    expect(rb.payload.season.line1).toBe('400 rush yds · 80 carries · 4 TD');
-    expect(rb.payload.formRows[1]).toEqual({ label: 'vs Iowa Hawkeyes', value: '18 car 110 yds 1 TD', detail: null });
+    expect(rb.payload.season.line1).toBe('200 rush yds · 38 carries · 1 TD');
+    expect(rb.payload.season.line2).toBe('2 rec · 15 rec yds — 2026 season, 2 games');
+    expect(rb.payload.formRows[1]).toEqual({ label: 'at Miami Hurricanes', value: '20 car 90 yds', detail: null });
 
     expect(bdl.getNflRosterDepth).not.toHaveBeenCalled();
     expect(bdl.getNflPlayerGameLogsBatch).not.toHaveBeenCalled();
   });
 
-  it('reads last season only for this season\'s roster before the first game, and labels every section with the year', async () => {
-    bdl.getNcaafPlayerSeasonStats.mockImplementation(async ({ teamId, playerIds, season }) => {
+  it('labels the log by week when the pair\'s game index is unavailable, and keeps splits off', async () => {
+    bdl.getNcaafPlayerGameStats.mockResolvedValue([
+      gameRow(501, 1, '2026-09-05T23:00:00.000Z', { passing_attempts: 30, passing_completions: 20, passing_yards: 250 }, { week: 1 }),
+    ]);
+    bdl.getGames.mockRejectedValue(new Error('503'));
+
+    const packs = await buildNcaafPlayerInsightCards({ date: '2026-10-10', games: [game], bdl, propEntries: [] });
+    const qb = packs.find((p) => p.player_id === '501');
+
+    expect(qb.payload.formRows[1]).toEqual({ label: 'Wk 1 · Sep 5', value: '20/30, 250 yds, 0 TD, 0 INT', detail: null });
+    expect(qb.payload.splits).toBeNull();
+  });
+
+  it('reads last season only for this season\'s roster before the first game, labels every section with the year, and names the prior school', async () => {
+    bdl.getNcaafTeamPlayers.mockImplementation(async (teamId) => (teamId === 8
+      ? [player(55826, 'Darian', 'Mensah', 'QB', miami), player(603, 'Mark', 'Fletcher Jr.', 'RB', miami)]
+      : []));
+    bdl.getNcaafPlayerGameStats.mockImplementation(async ({ playerIds, season }) => {
       if (season === 2026) return [];
-      expect(teamId).toBeUndefined();
-      expect(playerIds).toEqual(stanfordRoster.map((p) => p.id));
+      expect([...playerIds].sort((a, b) => a - b)).toEqual([603, 55826]);
       return [
-        seasonRow(999, { passing_attempts: 400, passing_yards: 3600, passing_touchdowns: 30 }, 2025),
-        seasonRow(501, { passing_attempts: 200, passing_completions: 130, passing_yards: 1500, passing_touchdowns: 10, passing_interceptions: 6 }, 2025),
-        seasonRow(504, { receptions: 40, receiving_yards: 600, receiving_touchdowns: 5 }, 2025),
+        gameRow(55826, 21, '2025-09-06T20:00:00.000Z', { passing_attempts: 35, passing_completions: 25, passing_yards: 300, passing_touchdowns: 3 }, { season: 2025, team: duke }),
+        gameRow(55826, 22, '2025-09-13T20:00:00.000Z', { passing_attempts: 30, passing_completions: 18, passing_yards: 210, passing_touchdowns: 1, passing_interceptions: 1 }, { season: 2025, team: duke }),
+        gameRow(603, 23, '2025-11-22T20:00:00.000Z', { rushing_attempts: 15, rushing_yards: 88, rushing_touchdowns: 1 }, { season: 2025, team: miami }),
       ];
     });
-    bdl.getGames.mockImplementation(async (sport, params) => (params.seasons[0] === 2025 && params.team_ids[0] === 13
-      ? [finalGame(11, '2025-11-22T23:00:00.000Z', stanford, iowa, 17, 20)]
+    bdl.getGames.mockImplementation(async (sport, params) => (params.seasons[0] === 2025
+      ? [finalGame(23, '2025-11-22T20:00:00.000Z', miami, iowa, 17, 20)]
       : []));
-    bdl.getNcaafPlayerGameStats.mockImplementation(async ({ season }) => (season === 2025 ? [
-      { ...gameRow(501, 11, '2025-11-22T23:00:00.000Z', { passing_attempts: 33, passing_completions: 21, passing_yards: 240, passing_touchdowns: 1, passing_interceptions: 0 }), game: { id: 11, date: '2025-11-22T23:00:00.000Z', season: 2025 } },
-    ] : []));
 
     const packs = await buildNcaafPlayerInsightCards({ date: '2026-09-05', games: [game], bdl, propEntries: [] });
 
-    expect(packs.map((p) => p.player_id).sort()).toEqual(['501', '504']);
-    const qb = packs.find((p) => p.player_id === '501');
-    expect(qb.payload.season.line2).toBe('2025 season — prior season, he is on the 2026 active roster');
-    expect(qb.payload.formRows[0].label).toBe('LAST 1 — 2025 SEASON');
-    expect(qb.payload.formRows[1]).toEqual({ label: 'vs Iowa Hawkeyes', value: '21/33, 240 yds, 1 TD, 0 INT', detail: null });
-    const wr = packs.find((p) => p.player_id === '504');
-    expect(wr.payload.season.line2).toBe('2025 season — prior season, he is on the 2026 active roster');
-    expect(wr.payload.formRows).toBeNull();
+    expect(packs.map((p) => p.player_id).sort()).toEqual(['55826', '603']);
+    const qb = packs.find((p) => p.player_id === '55826');
+    expect(qb.payload.season.line2).toBe('2025 season at DUKE, 2 games — prior season; he is on the 2026 MIA roster');
+    expect(qb.payload.formRows[0].label).toBe('LAST 2 — 2025 SEASON');
+    // Duke's games are not in the Miami-Stanford index: labeled by date.
+    expect(qb.payload.formRows[1].label).toBe('Sep 13, 2025');
+    expect(qb.payload.splits).toBeNull();
+    const rb = packs.find((p) => p.player_id === '603');
+    expect(rb.payload.season.line2).toBe('2025 season, 1 game — prior season; he is on the 2026 MIA roster');
+    expect(rb.payload.formRows[1]).toEqual({ label: 'vs Iowa Hawkeyes', value: '15 car 88 yds 1 TD', detail: null });
   });
 
-  it('writes no pack for a player with no grounded section and none for a game whose roster fails', async () => {
+  it('skips a rostered passer under the attempts floor, writes no pack for a player with no section, and none for a game whose roster fails', async () => {
     const other = { ...game, id: 457164, home_team: iowa, visitor_team: miami };
     bdl.getNcaafTeamPlayers.mockImplementation(async (teamId) => {
-      if (teamId === 13) return stanfordRoster;
+      if (teamId === 13) return [player(502, 'Elijah', 'Brown', 'QB')];
       if (teamId === 60) throw new Error('503');
       return [];
     });
+    bdl.getNcaafPlayerGameStats.mockImplementation(async ({ season }) => (season === 2026
+      ? [gameRow(502, 3, '2026-09-19T23:00:00.000Z', { passing_attempts: 3, passing_completions: 2, passing_yards: 20 })]
+      : []));
 
     const packs = await buildNcaafPlayerInsightCards({ date: '2026-09-05', games: [game, other], bdl, propEntries: [] });
 
     expect(packs).toEqual([]);
+  });
+
+  it('works games in kickoff order, skips games already packed today, and stops when the budget is spent', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-05T10:00:00Z'));
+    process.env.GARY_NCAAF_LANE_BUDGET_MS = '60000';
+    const later = { ...game, id: 457170, date: '2026-09-06T00:00:00.000Z', home_team: duke, visitor_team: miami };
+    const middle = { ...game, date: '2026-09-05T23:30:00.000Z' };
+    const earlier = { ...game, id: 457150, date: '2026-09-05T16:00:00.000Z' };
+    const rosters = [];
+    bdl.getNcaafTeamPlayers.mockImplementation(async (teamId) => {
+      rosters.push(teamId);
+      vi.setSystemTime(new Date(Date.now() + 61_000));
+      return [];
+    });
+
+    await buildNcaafPlayerInsightCards({ date: '2026-09-05', games: [later, middle, earlier], bdl, propEntries: [], done: new Set(['457150']) });
+
+    expect(rosters).toEqual([8, 13]);
+    delete process.env.GARY_NCAAF_LANE_BUDGET_MS;
   });
 });

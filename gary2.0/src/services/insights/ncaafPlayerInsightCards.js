@@ -4,27 +4,34 @@
 // page parity, founder Sep 3-4 2026: the NFL pack's contents, for the
 // college leaders by role.
 //
-// Candidates: each slate side's active roster (BDL /ncaaf/v1/players/active)
-// — the passing leader, the rushing leader, the top three receivers, by this
-// season's numbers. Sections, every one a real feed value:
-//   * season line — the player's season row (player_season_stats)
-//   * formRows    — the last five finals (player_stats), each joined to the
-//                   team's OWN game index for the opponent and the site; the
-//                   window is labeled with its real season
-//   * splits      — home/road per-game yardage from the same window
-//   * props       — the day's posted college props for this player, this game
+// Truth sources (verified live Sep 4 2026):
+//   * BDL /ncaaf/v1/players/active — who is on the team NOW.
+//   * BDL /ncaaf/v1/player_stats (seasons[]) — the per-game rows: who has
+//     played and what he did. The season line is their SUM; the log is the
+//     last five of them; the splits come from the same window.
+//   * BDL /ncaaf/v1/games for the pair — one call per game — names the
+//     opponent and the site of each logged game (college per-game rows carry
+//     `game.home_team: null`). Without it the log is labeled by week.
+// The season-totals endpoint is never read: before Week 1 its "2026" rows
+// were full prior-season lines wearing this year's label.
 //
-// Before a team's first game the current season has no rows, so the pack
-// reads LAST season for the players on THIS season's roster and labels every
-// section with the year — a transferred-out player never gets a pack.
+// Candidates: each side's roster QB / RB / WR / TE — the passing leader
+// (above the attempts floor), the rushing leader, the top three receivers,
+// by this season's rows. Before a team's first game, LAST season's rows for
+// the players on THIS season's roster, every section labeled with the year
+// and the school he played for. Props: the day's posted college props for
+// this player, this game.
 //
-// NCAAF-owned: never reads an NFL feed (league isolation law). NEVER throws:
-// a missing source drops the section, an ungroundable player is skipped.
+// Fetch discipline: three BDL requests a minute account-wide, so the builder
+// works games in kickoff order inside a time budget and skips games already
+// packed today (the runner's additive write keeps them). NCAAF-owned: never
+// reads an NFL feed (league isolation law). NEVER throws.
 
 import { safeCall as safeCallShared } from './shared.js';
 import { footballSeasonForDate } from './footballData.js';
 import { toTeamResults } from '../agentic/tools/statRouters/footballTeamGames.js';
 import { nameKey, playerName } from './ncaafNames.js';
+import { runWithinBudget } from './ncaafLaneLedger.js';
 
 const safeCall = (fn, fallback) => safeCallShared(fn, fallback, 'ncaafPlayerCards');
 
@@ -32,6 +39,12 @@ const SPORT_KEY = 'americanfootball_ncaaf';
 const LOG_WINDOW = 5;
 const MAX_PROPS = 4;
 const RECEIVERS_PER_TEAM = 3;
+/** A passing leader has to have thrown a real share — one game's worth. */
+const MIN_PASS_ATTEMPTS = 15;
+/** Rosters do not change inside a day; share them across the day's passes. */
+const ROSTER_TTL_MINUTES = 360;
+const SKILL = new Set(['QB', 'RB', 'FB', 'WR', 'TE']);
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function finite(value) {
   const n = Number(value);
@@ -65,51 +78,63 @@ function oddsText(value) {
 /** 253.33 -> "253.3", 225 -> "225". */
 function perGame(total, games) {
   if (!games) return null;
-  const v = Math.round((total / games) * 10) / 10;
-  return String(v);
+  return String(Math.round((total / games) * 10) / 10);
 }
 
-// ── season line ──────────────────────────────────────────────────────────────
-
-function passingUnit(row) {
-  const yds = finite(row?.passing_yards);
-  const att = finite(row?.passing_attempts);
-  if (!att || !yds) return null;
-  const td = finite(row?.passing_touchdowns) ?? 0;
-  const ints = finite(row?.passing_interceptions) ?? 0;
-  return `${yds} pass yds · ${td} TD · ${ints} INT · ${att} att`;
+function dayLabel(iso, { year = false } = {}) {
+  const t = Date.parse(iso || '');
+  if (!Number.isFinite(t)) return null;
+  const d = new Date(t);
+  const base = `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
+  return year ? `${base}, ${d.getUTCFullYear()}` : base;
 }
 
-function rushingUnit(row) {
-  const yds = finite(row?.rushing_yards);
-  const car = finite(row?.rushing_attempts);
-  if (!yds && !car) return null;
-  const td = finite(row?.rushing_touchdowns);
-  return [`${yds ?? 0} rush yds`, car ? `${car} carries` : null, td ? `${td} TD` : null].filter(Boolean).join(' · ');
+// ── the per-game rows, summed ───────────────────────────────────────────────
+
+const SUM_KEYS = [
+  'passing_attempts', 'passing_completions', 'passing_yards', 'passing_touchdowns', 'passing_interceptions',
+  'rushing_attempts', 'rushing_yards', 'rushing_touchdowns',
+  'receptions', 'receiving_targets', 'receiving_yards', 'receiving_touchdowns',
+];
+
+function sumRows(rows) {
+  const totals = Object.fromEntries(SUM_KEYS.map((k) => [k, 0]));
+  for (const r of rows) for (const k of SUM_KEYS) totals[k] += finite(r?.[k]) ?? 0;
+  totals.games = rows.length;
+  const teams = [...new Set(rows.map((r) => r?.team?.abbreviation).filter(Boolean))];
+  totals.team = teams.length === 1 ? teams[0] : null;
+  return totals;
 }
 
-function receivingUnit(row) {
-  const yds = finite(row?.receiving_yards);
-  const rec = finite(row?.receptions);
-  if (!yds && !rec) return null;
-  const td = finite(row?.receiving_touchdowns);
-  return [rec != null ? `${rec} rec` : null, `${yds ?? 0} rec yds`, td ? `${td} TD` : null].filter(Boolean).join(' · ');
+function passingUnit(t) {
+  if (!t.passing_attempts) return null;
+  return `${t.passing_yards} pass yds · ${t.passing_touchdowns} TD · ${t.passing_interceptions} INT · ${t.passing_attempts} att`;
 }
 
-function seasonLine(row, role, { season, prior, currentSeason }) {
-  const units = {
-    passing: passingUnit(row),
-    rushing: rushingUnit(row),
-    receiving: receivingUnit(row),
-  };
+function rushingUnit(t) {
+  if (!t.rushing_yards && !t.rushing_attempts) return null;
+  return [`${t.rushing_yards} rush yds`, t.rushing_attempts ? `${t.rushing_attempts} carries` : null, t.rushing_touchdowns ? `${t.rushing_touchdowns} TD` : null]
+    .filter(Boolean).join(' · ');
+}
+
+function receivingUnit(t) {
+  if (!t.receiving_yards && !t.receptions) return null;
+  return [`${t.receptions} rec`, `${t.receiving_yards} rec yds`, t.receiving_touchdowns ? `${t.receiving_touchdowns} TD` : null]
+    .filter(Boolean).join(' · ');
+}
+
+function seasonLine(totals, role, { season, prior, currentSeason, abbr }) {
+  const units = { passing: passingUnit(totals), rushing: rushingUnit(totals), receiving: receivingUnit(totals) };
   const order = role === 'quarterback'
     ? ['passing', 'rushing', 'receiving']
     : role === 'rusher' ? ['rushing', 'receiving', 'passing'] : ['receiving', 'rushing', 'passing'];
   const lines = order.map((k) => units[k]).filter(Boolean);
   if (!lines.length) return null;
+  const games = `${totals.games} game${totals.games === 1 ? '' : 's'}`;
+  const school = prior && totals.team && totals.team !== abbr ? ` at ${totals.team}` : '';
   const label = prior
-    ? `${season} season — prior season, he is on the ${currentSeason} active roster`
-    : `${season} season`;
+    ? `${season} season${school}, ${games} — prior season; he is on the ${currentSeason} ${abbr} roster`
+    : `${season} season, ${games}`;
   return { line1: lines[0], line2: [lines.slice(1).join(' · ') || null, label].filter(Boolean).join(' — ') };
 }
 
@@ -139,16 +164,18 @@ function roleStat(role) {
   return { key: 'receiving_yards', noun: 'rec yds/g' };
 }
 
-/** The player's finals, newest first, each joined to the team's game index. */
-function logFor(rows, gameIndex) {
+/** The player's rows newest first, each joined to the pair's index when it knows the game. */
+function logFor(rows, gameIndex, prior) {
   return (rows || [])
     .map((r) => {
       const meta = gameIndex.get(String(r?.game?.id));
-      if (!meta) return null;
-      return { row: r, date: meta.date, opponent: meta.opponent, home: meta.home };
+      const date = meta?.date || r?.game?.date || null;
+      const label = meta
+        ? `${meta.home ? 'vs' : 'at'} ${meta.opponent || '—'}`
+        : (prior ? dayLabel(date, { year: true }) : (r?.game?.week != null ? `Wk ${r.game.week} · ${dayLabel(date)}` : dayLabel(date)));
+      return { row: r, date, label: label || '—', home: meta ? meta.home : null };
     })
-    .filter(Boolean)
-    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
     .slice(0, LOG_WINDOW);
 }
 
@@ -160,18 +187,18 @@ function formRows(log, role, { season, prior }) {
   const rows = [{ label, value: `${perGame(total, log.length)} ${noun}`, detail: null }];
   for (const g of log) {
     const line = statLineForGame(g.row, role);
-    if (!line) continue;
-    rows.push({ label: `${g.home ? 'vs' : 'at'} ${g.opponent || '—'}`, value: line, detail: null });
+    if (line) rows.push({ label: g.label, value: line, detail: null });
   }
   return rows;
 }
 
 function splits(log, role) {
-  if (!log.length) return null;
+  const known = log.filter((g) => g.home != null);
+  if (!known.length) return null;
   const { key, noun } = roleStat(role);
   const rows = [];
   for (const [label, home] of [['HOME', true], ['ROAD', false]]) {
-    const mine = log.filter((g) => g.home === home);
+    const mine = known.filter((g) => g.home === home);
     if (!mine.length) continue;
     const total = mine.reduce((sum, g) => sum + (finite(g.row[key]) ?? 0), 0);
     rows.push({ label, value: `${perGame(total, mine.length)} ${noun}`, detail: `${mine.length} game${mine.length === 1 ? '' : 's'}` });
@@ -201,124 +228,145 @@ function propsFor(entries, name, gameId) {
 
 // ── candidates ───────────────────────────────────────────────────────────────
 
-/** This season's rows for the roster, else last season's for the same roster. */
-async function seasonRowsFor(bdl, team, roster, season) {
-  const ids = new Set(roster.map((p) => String(p.id)));
-  const onRoster = (rows) => (Array.isArray(rows) ? rows : []).filter((r) => ids.has(String(r?.player?.id)));
-  const current = onRoster(await bdl.getNcaafPlayerSeasonStats({ teamId: team.id, season }));
-  if (current.length) return { rows: current, season, prior: false };
-  const prior = onRoster(await bdl.getNcaafPlayerSeasonStats({ playerIds: roster.map((p) => p.id), season: season - 1 }));
-  return { rows: prior, season: season - 1, prior: true };
+function groupByPlayer(rows, ids) {
+  const allowed = new Set(ids.map(String));
+  const grouped = new Map();
+  for (const r of Array.isArray(rows) ? rows : []) {
+    const id = String(r?.player?.id);
+    if (!allowed.has(id)) continue;
+    if (!grouped.has(id)) grouped.set(id, []);
+    grouped.get(id).push(r);
+  }
+  return grouped;
 }
 
-function leaders(roster, rows) {
-  const byId = new Map(rows.map((r) => [String(r?.player?.id), r]));
-  const withRow = roster.map((p) => ({ player: p, pos: position(p), row: byId.get(String(p.id)) })).filter((x) => x.row);
-  const top = (pool, stat, count) => pool
-    .map((x) => ({ ...x, v: finite(x.row[stat]) ?? 0 }))
-    .filter((x) => x.v > 0)
-    .sort((a, b) => b.v - a.v)
+/** QB1 above the floor, RB1, the top three receivers — by the summed rows. */
+function leaders(roster, grouped) {
+  const withTotals = roster
+    .map((p) => ({ player: p, pos: position(p), rows: grouped.get(String(p.id)) || [] }))
+    .filter((x) => x.rows.length)
+    .map((x) => ({ ...x, totals: sumRows(x.rows) }));
+  const top = (pool, stat, count, floor = 1) => pool
+    .filter((x) => x.totals[stat] >= floor)
+    .sort((a, b) => b.totals[stat] - a.totals[stat])
     .slice(0, count);
   return [
-    ...top(withRow.filter((x) => x.pos === 'QB'), 'passing_attempts', 1),
-    ...top(withRow.filter((x) => x.pos === 'RB' || x.pos === 'FB'), 'rushing_yards', 1),
-    ...top(withRow.filter((x) => x.pos === 'WR' || x.pos === 'TE'), 'receiving_yards', RECEIVERS_PER_TEAM),
+    ...top(withTotals.filter((x) => x.pos === 'QB'), 'passing_attempts', 1, MIN_PASS_ATTEMPTS),
+    ...top(withTotals.filter((x) => x.pos === 'RB' || x.pos === 'FB'), 'rushing_yards', 1),
+    ...top(withTotals.filter((x) => x.pos === 'WR' || x.pos === 'TE'), 'receiving_yards', RECEIVERS_PER_TEAM),
   ];
 }
 
-async function gameIndexFor(bdl, team, season) {
-  const games = await safeCall(() => bdl.getGames(SPORT_KEY, { team_ids: [team.id], seasons: [season], per_page: 100 }), []);
+/** This season's rows for the roster's skill players, else last season's for the same players. */
+async function rowsFor(bdl, ids, season) {
+  const current = await bdl.getNcaafPlayerGameStats({ playerIds: ids, season });
+  if (Array.isArray(current) && current.length) return { rows: current, season, prior: false };
+  const prior = await bdl.getNcaafPlayerGameStats({ playerIds: ids, season: season - 1 });
+  return { rows: Array.isArray(prior) ? prior : [], season: season - 1, prior: true };
+}
+
+/** The pair's game index for a season, one call: game id -> opponent, site, date. */
+async function pairIndex(bdl, awayTeam, homeTeam, season) {
+  const games = await safeCall(
+    () => bdl.getGames(SPORT_KEY, { team_ids: [awayTeam.id, homeTeam.id], seasons: [season], per_page: 100 }), [],
+  );
   const index = new Map();
-  for (const r of toTeamResults(games, team.id)) {
-    if (r.gameId != null) index.set(String(r.gameId), { date: r.date, opponent: r.opponent, home: r.home });
+  for (const team of [awayTeam, homeTeam]) {
+    for (const r of toTeamResults(games, team.id)) {
+      if (r.gameId != null) index.set(`${team.id}:${r.gameId}`, { date: r.date, opponent: r.opponent, home: r.home });
+    }
   }
   return index;
 }
 
-/**
- * Build the day's college packs.
- * @param {object} args { date, games, bdl, propEntries }
- * @returns {Promise<Array<{date,league,player_id,player_name,team_abbr,game_id,payload}>>}
- */
-export async function buildNcaafPlayerInsightCards({ date, games, bdl, propEntries = [] } = {}) {
-  if (!bdl || !Array.isArray(games) || !games.length) return [];
-  const currentSeason = footballSeasonForDate(date);
+async function packsForGame({ game, date, currentSeason, bdl, propEntries }) {
+  const awayTeam = game?.away_team ?? game?.visitor_team;
+  const homeTeam = game?.home_team;
+  if (!awayTeam?.id || !homeTeam?.id) return [];
+  const gameLabelText = `${sideName(awayTeam)} @ ${sideName(homeTeam)}`;
   const packs = [];
+  const indexBySeason = new Map();
 
-  for (const game of games) {
-    const awayTeam = game?.away_team ?? game?.visitor_team;
-    const homeTeam = game?.home_team;
-    if (!awayTeam?.id || !homeTeam?.id || game?.id == null) continue;
-    const gameLabelText = `${sideName(awayTeam)} @ ${sideName(homeTeam)}`;
+  for (const [team, opponent] of [[awayTeam, homeTeam], [homeTeam, awayTeam]]) {
+    let roster;
+    try {
+      roster = ((await bdl.getNcaafTeamPlayers(team.id, ROSTER_TTL_MINUTES)) || [])
+        .filter((p) => p?.id != null && playerName(p) && SKILL.has(position(p)));
+    } catch (err) {
+      console.warn(`[ncaafPlayerCards] roster failed for ${sideName(team)}: ${err?.message || err} — side skipped`);
+      continue;
+    }
+    if (!roster.length) continue;
 
-    for (const [team, opponent] of [[awayTeam, homeTeam], [homeTeam, awayTeam]]) {
-      let roster;
-      try {
-        roster = ((await bdl.getNcaafTeamPlayers(team.id)) || []).filter((p) => p?.id != null && playerName(p));
-      } catch (err) {
-        console.warn(`[ncaafPlayerCards] roster failed for ${sideName(team)}: ${err?.message || err} — side skipped`);
-        continue;
-      }
-      if (!roster.length) continue;
+    let window;
+    try {
+      window = await rowsFor(bdl, roster.map((p) => p.id), currentSeason);
+    } catch (err) {
+      console.warn(`[ncaafPlayerCards] per-game rows failed for ${sideName(team)}: ${err?.message || err} — side skipped`);
+      continue;
+    }
+    const grouped = groupByPlayer(window.rows, roster.map((p) => p.id));
+    const picked = leaders(roster, grouped);
+    if (!picked.length) continue;
 
-      let window;
-      try {
-        window = await seasonRowsFor(bdl, team, roster, currentSeason);
-      } catch (err) {
-        console.warn(`[ncaafPlayerCards] season rows failed for ${sideName(team)}: ${err?.message || err} — side skipped`);
-        continue;
-      }
-      const picked = leaders(roster, window.rows);
-      if (!picked.length) continue;
+    if (!indexBySeason.has(window.season)) {
+      indexBySeason.set(window.season, await pairIndex(bdl, awayTeam, homeTeam, window.season));
+    }
+    const index = indexBySeason.get(window.season);
+    const teamIndex = new Map([...index].filter(([k]) => k.startsWith(`${team.id}:`)).map(([k, v]) => [k.split(':')[1], v]));
+    const abbr = sideName(team);
 
-      const gameIndex = await gameIndexFor(bdl, team, window.season);
-      const gameRows = await safeCall(
-        () => bdl.getNcaafPlayerGameStats({ playerIds: picked.map((x) => x.player.id), season: window.season }), [],
-      );
-      const rowsByPlayer = new Map();
-      for (const r of Array.isArray(gameRows) ? gameRows : []) {
-        const pid = String(r?.player?.id);
-        if (!rowsByPlayer.has(pid)) rowsByPlayer.set(pid, []);
-        rowsByPlayer.get(pid).push(r);
-      }
+    for (const { player, pos, rows, totals } of picked) {
+      const name = playerName(player);
+      const role = roleFor(pos);
+      const log = logFor(rows, teamIndex, window.prior);
+      const season = seasonLine(totals, role, { season: window.season, prior: window.prior, currentSeason, abbr });
+      const form = formRows(log, role, { season: window.season, prior: window.prior });
+      const split = splits(log, role);
+      const props = propsFor(propEntries, name, game.id);
+      // A pack with no grounded section is not a pack.
+      if (!season && !form && !split && !props) continue;
 
-      for (const { player, pos, row } of picked) {
-        const name = playerName(player);
-        const role = roleFor(pos);
-        const log = logFor(rowsByPlayer.get(String(player.id)), gameIndex);
-        const season = seasonLine(row, role, { season: window.season, prior: window.prior, currentSeason });
-        const form = formRows(log, role, { season: window.season, prior: window.prior });
-        const split = splits(log, role);
-        const props = propsFor(propEntries, name, game.id);
-        // A pack with no grounded section is not a pack.
-        if (!season && !form && !split && !props) continue;
-
-        packs.push({
-          date,
-          league: 'NCAAF',
-          player_id: String(player.id),
-          player_name: name,
-          team_abbr: sideName(team),
-          game_id: String(game.id),
-          payload: {
-            type: role === 'quarterback' ? 'quarterback' : 'skill',
-            name,
-            team: sideName(team),
-            position: pos || null,
-            game: gameLabelText,
-            opponent: { name: fullName(opponent), hand: null },
-            season,
-            formRows: form,
-            splits: split,
-            props,
-            statsSectionTitle: 'THE SHEET',
-          },
-        });
-      }
+      packs.push({
+        date,
+        league: 'NCAAF',
+        player_id: String(player.id),
+        player_name: name,
+        team_abbr: abbr,
+        game_id: String(game.id),
+        payload: {
+          type: role === 'quarterback' ? 'quarterback' : 'skill',
+          name,
+          team: abbr,
+          position: pos || null,
+          game: gameLabelText,
+          opponent: { name: fullName(opponent), hand: null },
+          season,
+          formRows: form,
+          splits: split,
+          props,
+          statsSectionTitle: 'THE SHEET',
+        },
+      });
     }
   }
+  return packs;
+}
 
-  console.log(`[ncaafPlayerCards] NCAAF ${date}: ${packs.length} pack(s) across ${games.length} game(s)`);
+/**
+ * Build the day's college packs for the games not yet packed today, in
+ * kickoff order, inside the lane budget.
+ * @param {object} args { date, games, bdl, propEntries, done }
+ * @returns {Promise<Array<{date,league,player_id,player_name,team_abbr,game_id,payload}>>}
+ */
+export async function buildNcaafPlayerInsightCards({ date, games, bdl, propEntries = [], done = new Set() } = {}) {
+  if (!bdl || !Array.isArray(games) || !games.length) return [];
+  const currentSeason = footballSeasonForDate(date);
+  const packs = await runWithinBudget({
+    games, done, label: 'ncaafPlayerCards',
+    work: (game) => packsForGame({ game, date, currentSeason, bdl, propEntries }),
+  });
+  console.log(`[ncaafPlayerCards] NCAAF ${date}: ${packs.length} pack(s)`);
   return packs;
 }
 

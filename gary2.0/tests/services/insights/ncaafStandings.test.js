@@ -133,59 +133,14 @@ describe('computeNcaafStandings', () => {
     expect(rows.filter((r) => r.meta?.metric === 'conference_record')).toEqual([]);
   });
 
-  it('writes a streak of three or more off the final games, hot for wins only', async () => {
+  it('never reads the game index — a streak would cost a fetch per team under the shared gate', async () => {
     bdl.getNcaafStandings.mockResolvedValue([
-      standingsRow(stanford, acc, { wins: 4, losses: 1 }),
-      standingsRow(miami, acc, { wins: 3, losses: 2 }),
+      standingsRow(stanford, acc, { wins: 4, losses: 1, home_record: '3-0', away_record: '1-1', conference_record: '2-0' }),
+      standingsRow(miami, acc, { wins: 3, losses: 2, home_record: '2-1', away_record: '1-2', conference_record: '1-1' }),
     ]);
-    bdl.getGames.mockImplementation(async (sport, params) => {
-      expect(sport).toBe('americanfootball_ncaaf');
-      const teamId = params.team_ids[0];
-      if (teamId === 13) {
-        return [
-          finalGame(1, '2026-09-05T23:00:00.000Z', stanford, iowa, 10, 24),
-          finalGame(2, '2026-09-12T23:00:00.000Z', stanford, miami, 31, 20, { home: false }),
-          finalGame(3, '2026-09-19T23:00:00.000Z', stanford, iowa, 27, 13),
-          finalGame(4, '2026-10-03T23:00:00.000Z', stanford, iowa, 21, 17),
-          { id: 5, date: '2026-10-17T23:00:00.000Z', status: 'pre', home_team: stanford, visitor_team: iowa },
-        ];
-      }
-      return [
-        finalGame(6, '2026-09-26T23:00:00.000Z', miami, iowa, 10, 24),
-        finalGame(7, '2026-10-03T23:00:00.000Z', miami, iowa, 13, 20),
-      ];
-    });
-
     const rows = await computeNcaafStandings(ctx);
-    const streaks = rows.filter((r) => r.category === 'streak');
-
-    expect(streaks.length).toBe(1);
-    expect(streaks[0].headline).toBe('STAN has won 3 straight');
-    expect(streaks[0].value).toBe('W3');
-    expect(streaks[0].team_id).toBe(13);
-    expect(streaks[0].detail).toContain('4-1 on the season');
-    expect(streaks[0].meta).toMatchObject({ metric: 'win_streak', win_streak: 3, overall_record: '4-1' });
-  });
-
-  it('keeps a losing streak as context with no side stamped as the edge', async () => {
-    bdl.getNcaafStandings.mockResolvedValue([
-      standingsRow(stanford, acc, { wins: 1, losses: 4 }),
-      standingsRow(miami, acc, { wins: 3, losses: 2 }),
-    ]);
-    bdl.getGames.mockImplementation(async (sport, params) => (params.team_ids[0] === 13
-      ? [
-        finalGame(1, '2026-09-19T23:00:00.000Z', stanford, iowa, 7, 24),
-        finalGame(2, '2026-09-26T23:00:00.000Z', stanford, iowa, 10, 20),
-        finalGame(3, '2026-10-03T23:00:00.000Z', stanford, iowa, 3, 30),
-      ]
-      : []));
-
-    const rows = await computeNcaafStandings(ctx);
-    const cold = rows.find((r) => r.category === 'streak');
-
-    expect(cold.headline).toBe('STAN has lost 3 straight');
-    expect(cold.value).toBe('L3');
-    expect(cold.team_id).toBeUndefined();
+    expect(bdl.getGames).not.toHaveBeenCalled();
+    expect(rows.filter((r) => r.category === 'streak')).toEqual([]);
   });
 
   it('drops a side missing from its conference table instead of guessing a record', async () => {
