@@ -396,7 +396,7 @@ struct FootballGameIntelView: View {
                                      wireAway: wireRows(home: false), wireHome: wireRows(home: true),
                                      practice: practiceRows)
             if !moreIntel.isEmpty {
-                EdgesSection(title: "MORE INTEL", edges: moreIntel).padding(.top, 8)
+                MoreIntelPanel(signals: moreIntel).padding(.top, 8)
             }
             if !sweatSignals.isEmpty {
                 FootballSweatSection(signals: sweatSignals, accent: accent)
@@ -599,6 +599,49 @@ private enum FootballEvidence {
 /// "Injury wire" is the morning layer (the insight rows, from 6 AM);
 /// "Confirmed" is the dossier's own report once Gary has spoken. An empty
 /// state stays honest, in MLB's own words.
+/// MORE INTEL in the page's own container (founder, Sep 4 2026: "mostly the
+/// same but just slightly different than the other parts containers on the
+/// page"). Same 14pt corner, same warm-white surface, same 16pt page inset as
+/// the injury report above it — one deeper fill and a gold hairline across the
+/// top edge mark it as the closing section: everything Gary read that no other
+/// section on this page claimed.
+private struct MoreIntelPanel: View {
+    let signals: [Signal]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("MORE INTEL")
+                    .font(GaryFonts.display(19)).tracking(1.2).foregroundStyle(GaryColors.gold)
+                Spacer()
+                Text("\(signals.count) READ\(signals.count == 1 ? "" : "S")")
+                    .font(GaryFonts.data(9.5, .semibold)).tracking(1.1).foregroundStyle(.white.opacity(0.42))
+            }
+            .padding(.horizontal, 18)
+            .padding(.bottom, 8)
+
+            // The rows are the page feed's rows, unchanged — only their
+            // surround is new, so a read never looks different here than it
+            // does anywhere else it appears.
+            VStack(spacing: 0) { ForEach(signals) { SignalRow(s: $0) } }
+                .padding(.horizontal, 18)
+        }
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(GaryColors.warmWhite.opacity(0.05))
+                .overlay(alignment: .top) {
+                    Rectangle().fill(GaryColors.gold.opacity(0.5))
+                        .frame(height: 1)
+                        .padding(.horizontal, 14)
+                }
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(GaryColors.warmWhite.opacity(0.11), lineWidth: 1))
+        )
+        .padding(.horizontal, 16)
+    }
+}
+
 private struct FootballAvailabilityCard: View {
     let awayLabel: String
     let homeLabel: String
