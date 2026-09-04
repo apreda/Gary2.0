@@ -1,5 +1,6 @@
 import { fetchTodayGamePicks } from '@/lib/gary/picks';
-import { normalizeLeague, sportByCode } from '@/lib/gary/leagues';
+import { normalizeLeague } from '@/lib/gary/leagues';
+import { fetchPublishedPickPaths, publishedPickPath } from '@/lib/gary/pick-links';
 import { todayEST } from '@/lib/gary/dates';
 
 export const revalidate = 600;
@@ -12,20 +13,22 @@ const esc = (s: string) =>
    .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 
 export async function GET() {
-  const picks = await fetchTodayGamePicks().catch(() => []);
   const date = todayEST();
+  const picks = await fetchTodayGamePicks();
+  const publishedPaths = await fetchPublishedPickPaths(picks, date);
   const pubDate = new Date().toUTCString();
 
-  const items = picks.map((p, i) => {
+  const items = picks.flatMap(p => {
+    const path = publishedPickPath(p, date, publishedPaths);
+    if (!path) return [];
     const code = normalizeLeague(p.league, p.sport) ?? '';
-    const cfg = sportByCode(code);
-    const link = cfg ? `${SITE}/picks/${cfg.slug}` : `${SITE}/picks`;
+    const link = `${SITE}${path}`;
     const title = `${code ? `${code}: ` : ''}${p.awayTeam} @ ${p.homeTeam} — ${p.pick ?? ''}`;
     const take = (p.rationale ?? '').replace(/^Gary's Take\s*/i, '').trim();
     return `    <item>
       <title>${esc(title)}</title>
       <link>${link}</link>
-      <guid isPermaLink="false">${esc(p.pick_id ?? `${date}-${i}`)}</guid>
+      <guid isPermaLink="false">${esc(p.pick_id ?? `${link}#${encodeURIComponent(p.pick ?? '')}`)}</guid>
       <pubDate>${pubDate}</pubDate>
       ${take ? `<description>${esc(take)}</description>` : ''}
     </item>`;
@@ -37,7 +40,7 @@ export async function GET() {
     <title>Gary AI — Free Daily Sports Picks</title>
     <link>${SITE}/picks</link>
     <atom:link href="${SITE}/feed.xml" rel="self" type="application/rss+xml"/>
-    <description>Every pick on today's board with Gary's written reasoning. Full slate, free, graded in public the next morning.</description>
+    <description>Published picks from today's board with Gary's written reasoning and a permanent matchup page. Free, with results graded in public.</description>
     <language>en-us</language>
     <lastBuildDate>${pubDate}</lastBuildDate>
 ${items.join('\n')}

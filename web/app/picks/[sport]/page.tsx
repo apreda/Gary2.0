@@ -12,6 +12,7 @@ import { PageMasthead, StitchRule } from '@/components/Terminal';
 import { LiveScoreStrip } from '@/components/LiveChip';
 import { JsonLd } from '@/components/JsonLd';
 import { fetchTodayGamePicks } from '@/lib/gary/picks';
+import { fetchPublishedPickPaths, publishedPickPath } from '@/lib/gary/pick-links';
 import { buildBoard, fetchDailySlate } from '@/lib/gary/board';
 import { fetchAllGameResults, computeRecord, sinceDate } from '@/lib/gary/results';
 import { normalizeLeague, SPORTS, sportBySlug } from '@/lib/gary/leagues';
@@ -115,6 +116,7 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
   const picks = allPicks
     ? allPicks.filter(p => normalizeLeague(p.league, p.sport) === cfg.code)
     : null;
+  const publishedPaths = await fetchPublishedPickPaths(picks ?? [], date).catch(() => new Set<string>());
 
   // Same board as /picks, narrowed to this league: every game shows, posted or
   // not, so a quiet morning reads as a schedule instead of an empty page.
@@ -220,7 +222,7 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
                 key: g.key,
                 label: `${g.away} at ${g.home}`,
                 tile: <GameTile game={g} now={now} />,
-                panel: <GameRow game={g} now={now} />,
+                panel: <GameRow game={g} now={now} analysisHref={publishedPickPath(g.pick, date, publishedPaths)} />,
               }))}
             />
           </div>

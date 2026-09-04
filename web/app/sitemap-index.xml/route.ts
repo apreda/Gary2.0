@@ -4,7 +4,8 @@ import { gameSitemapEntries, sitemapIndexXml } from '@/lib/seo/sitemap';
 export const revalidate = 3600;
 
 export async function GET() {
-  const rows = await fetchPickIndex().catch(() => []);
+  // Never replace a working shard inventory with one inferred from an outage.
+  const rows = await fetchPickIndex();
   const xml = sitemapIndexXml(gameSitemapEntries(rows).length);
 
   return new Response(xml, {

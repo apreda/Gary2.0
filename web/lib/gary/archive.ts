@@ -238,7 +238,7 @@ export function summarizeArchiveDayIndex(
     });
 }
 
-export async function fetchArchiveGamePicks(date: string, revalidate = 3600): Promise<GaryPick[]> {
+export async function fetchArchiveGamePicks(date: string, revalidate = date === todayEST() ? 600 : 3600): Promise<GaryPick[]> {
   assertQueryDate(date);
   const [dailyRows, weeklyRows] = await Promise.all([
     rest<DatedPicksRow[]>(
@@ -258,7 +258,7 @@ export async function fetchArchiveGamePicks(date: string, revalidate = 3600): Pr
   return dedupeArchivePicks([...daily, ...weekly]);
 }
 
-export async function fetchArchivePropPicks(date: string, revalidate = 3600): Promise<PropPick[]> {
+export async function fetchArchivePropPicks(date: string, revalidate = date === todayEST() ? 600 : 3600): Promise<PropPick[]> {
   assertQueryDate(date);
   const rows = await rest<DatedPicksRow[]>(
     `prop_picks?select=date,picks&date=eq.${date}`,
@@ -267,7 +267,7 @@ export async function fetchArchivePropPicks(date: string, revalidate = 3600): Pr
   return rows.flatMap(row => parsePicksJson<PropPick>(row.picks));
 }
 
-export async function fetchArchiveInsights(date: string, revalidate = 3600): Promise<InsightRow[]> {
+export async function fetchArchiveInsights(date: string, revalidate = date === todayEST() ? 600 : 3600): Promise<InsightRow[]> {
   assertQueryDate(date);
   return rest<InsightRow[]>(
     `insight_connections?select=*&date=eq.${date}&order=relevance_score.desc.nullslast`,
@@ -275,7 +275,7 @@ export async function fetchArchiveInsights(date: string, revalidate = 3600): Pro
   );
 }
 
-export async function fetchArchiveGameResults(date: string, revalidate = 3600): Promise<GameResultRow[]> {
+export async function fetchArchiveGameResults(date: string, revalidate = date === todayEST() ? 600 : 3600): Promise<GameResultRow[]> {
   assertQueryDate(date);
   const [games, nfl] = await Promise.all([
     rest<GameResultRow[]>(
@@ -290,7 +290,7 @@ export async function fetchArchiveGameResults(date: string, revalidate = 3600): 
   return mergeGameResults(nfl, games);
 }
 
-export async function fetchArchivePropResults(date: string, revalidate = 3600): Promise<PropResultRow[]> {
+export async function fetchArchivePropResults(date: string, revalidate = date === todayEST() ? 600 : 3600): Promise<PropResultRow[]> {
   assertQueryDate(date);
   return rest<PropResultRow[]>(
     `prop_results?select=game_date,player_name,prop_type,line_value,actual_value,result,odds,pick_text,matchup,bet&game_date=eq.${date}&result=not.is.null&order=player_name.asc`,
@@ -298,7 +298,7 @@ export async function fetchArchivePropResults(date: string, revalidate = 3600): 
   );
 }
 
-export async function fetchArchiveDay(date: string, revalidate = 3600): Promise<ArchiveDay> {
+export async function fetchArchiveDay(date: string, revalidate = date === todayEST() ? 600 : 3600): Promise<ArchiveDay> {
   const [picks, props, insights, gameResults, propResults] = await Promise.all([
     fetchArchiveGamePicks(date, revalidate),
     fetchArchivePropPicks(date, revalidate),
@@ -316,7 +316,7 @@ export async function fetchArchiveDay(date: string, revalidate = 3600): Promise<
  * every archive surface — the index, every month, every day, and the sitemap.
  * Nothing on the site may scan a table's history to render a list of dates.
  */
-export async function fetchArchiveDayIndex(revalidate = 3600): Promise<ArchiveDayIndexRow[]> {
+export async function fetchArchiveDayIndex(revalidate = 600): Promise<ArchiveDayIndexRow[]> {
   return rest<ArchiveDayIndexRow[]>(
     'archive_day_index?select=date,published_at,game_count,prop_count,research_count&order=date.desc&limit=1000',
     { revalidate },
@@ -324,11 +324,11 @@ export async function fetchArchiveDayIndex(revalidate = 3600): Promise<ArchiveDa
 }
 
 /** Dates whose stored board contains original analysis or multiple real items. */
-export async function fetchArchiveDateSummaries(revalidate = 3600): Promise<ArchiveDateSummary[]> {
+export async function fetchArchiveDateSummaries(revalidate = 600): Promise<ArchiveDateSummary[]> {
   return summarizeArchiveDayIndex(await fetchArchiveDayIndex(revalidate));
 }
 
 /** Substantive public board dates; no mutation or pipeline hook. */
-export async function fetchArchiveDates(revalidate = 3600): Promise<string[]> {
+export async function fetchArchiveDates(revalidate = 600): Promise<string[]> {
   return (await fetchArchiveDateSummaries(revalidate)).map(summary => summary.date);
 }

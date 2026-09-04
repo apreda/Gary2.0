@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   adjacentDates,
+  fetchPickIndex,
+  fetchPickIndexForDates,
   findGamePicks,
   gamePagePaths,
   gameSlug,
@@ -187,6 +189,49 @@ describe('page helpers', () => {
     expect(s.endsWith(' ')).toBe(false);
   });
 
+  it('uses prose after a historical fixed-width stats table without changing the analysis', () => {
+    const rationale = [
+      'TALE OF THE TAPE',
+      '',
+      '                    UTSA Roadrunners     FIU Panthers',
+      'Record                6-6       ←           4-8',
+      'Passing TDs            31       ←            18',
+      'Key Injuries      D. Martin (OUT)      M. Clark (OUT)',
+      '',
+      "Gary's Take",
+      'Both teams bring different passing attacks to this bowl game. The matchup turns on the secondary.',
+    ].join('\n');
+    const historical = pick({ rationale, rationale_plain: rationale });
+    expect(pageSummary(historical)).toBe('Both teams bring different passing attacks to this bowl game.');
+    expect(historical.rationale).toBe(rationale);
+    expect(historical.rationale_plain).toBe(rationale);
+  });
+
+  it('skips Markdown headings and tables and preserves wrapped prose', () => {
+    const rationale = [
+      '## TALE OF THE TAPE',
+      '| Team | Record |',
+      '| --- | --- |',
+      '| Cubs | 6-4 |',
+      '',
+      "**Gary’s Take**",
+      'The Cubs bring a rested bullpen',
+      'into the final game of the series. Both starters have worked deep recently.',
+    ].join('\n');
+    expect(pageSummary(pick({ rationale }))).toBe('The Cubs bring a rested bullpen into the final game of the series.');
+  });
+
+  it('falls back to full analysis when the plain read has no prose', () => {
+    expect(pageSummary(pick({ rationale_plain: 'TALE OF THE TAPE\n\n| Record | 6-4 |' })))
+      .toBe('Chase Burns gives the Reds a real starting-pitching edge.');
+    expect(pageSummary(pick({ rationale_plain: '', rationale: '' }))).toBe('');
+  });
+
+  it('keeps a useful plain read ahead of the full analysis', () => {
+    expect(pageSummary(pick({ rationale_plain: 'The bullpen is rested. The next sentence is additional context.' })))
+      .toBe('The bullpen is rested.');
+  });
+
   it('builds one page path per (sport, date, matchup) from the index view', () => {
     const paths = gamePagePaths([
       { date: '2026-08-30', league: 'MLB', sport: null, away_team: 'Cubs', home_team: 'Reds' },
@@ -200,5 +245,28 @@ describe('page helpers', () => {
       { sport: 'mlb', date: '2026-08-30', slug: 'cubs-at-reds' },
       { sport: 'mlb', date: '2026-08-30', slug: 'rays-at-padres' },
     ]);
+  });
+});
+
+describe('pick index pagination', () => {
+  it('uses the unique row key to order equal-date rows on every page and date slice', async () => {
+    const page = Array.from({ length: 1000 }, (_, index) => ({
+      date: '2026-08-30', league: 'MLB', sport: null,
+      away_team: `Away ${index}`, home_team: 'Home',
+    }));
+    const urls: URL[] = [];
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
+      const url = new URL(String(input));
+      urls.push(url);
+      return new Response(JSON.stringify(url.searchParams.get('offset') === '0' ? page : [page[0]]));
+    });
+    try {
+      expect(await fetchPickIndex()).toHaveLength(1001);
+      expect(await fetchPickIndexForDates(['2026-08-30'])).toHaveLength(1001);
+      expect(urls.map(url => url.searchParams.get('offset'))).toEqual(['0', '1000', '0', '1000']);
+      expect(urls.every(url => url.searchParams.get('order') === 'date.desc,row_key.asc')).toBe(true);
+    } finally {
+      fetchMock.mockRestore();
+    }
   });
 });

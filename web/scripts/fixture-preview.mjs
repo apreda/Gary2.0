@@ -44,7 +44,13 @@ const nflResult = {
 const tables = {
   daily_picks: [{ id: 'local-qa', date, picks: [pick] }],
   weekly_nfl_picks: [],
-  pick_page_index: [],
+  pick_page_index: [{ row_key: pick.pick_id, date, league: 'MLB', sport: null,
+    away_team: pick.awayTeam, home_team: pick.homeTeam }],
+  pick_day_index: [{ date, league: 'MLB', sport: null }],
+  archive_day_index: [{ date, published_at: `${date}T12:00:00Z`, game_count: 1,
+    prop_count: 0, research_count: 1 }],
+  insight_connections: [{ id: 1, date, headline: 'Local QA archive research',
+    detail: 'Local QA fixture research accompanies the stored Cubs pick for archive discovery verification.' }],
   prop_picks: [],
   daily_slate: [{ date, league: 'MLB', away_team: pick.awayTeam, home_team: pick.homeTeam,
     commence_time: pick.commence_time, venue: pick.venue, ml_away: '-110', ml_home: '+100' }],
@@ -141,8 +147,25 @@ try {
       if (path === '/picks') {
         const text = main.replace(/<[^>]+>/g, '');
         assert.match(text, /Yesterday\s*1-1/, 'The rendered Yesterday receipt must count authoritative NFL results');
+        assert(main.includes(`href="/picks/mlb/${date}/chicago-cubs-at-cincinnati-reds"`),
+          'Published cards must expose a permanent analysis anchor in server-rendered HTML');
       }
       console.log(`PASS ${path}: real server-rendered page contains expected content`);
+    }
+    const matchup = `/picks/mlb/${date}/chicago-cubs-at-cincinnati-reds`;
+    for (const [path, expected] of [
+      ['/picks/mlb', `href="${matchup}"`],
+      [matchup, 'Local QA fixture.'],
+      [`/archive/${date}`, `href="${matchup}"`],
+      ['/archive/sitemap.xml', `<loc>https://www.betwithgary.ai/archive/${date}</loc>`],
+      ['/picks/sitemap/0.xml', `<loc>https://www.betwithgary.ai${matchup}</loc>`],
+      ['/sitemap-index.xml', '<loc>https://www.betwithgary.ai/archive/sitemap.xml</loc>'],
+      ['/feed.xml', `<link>https://www.betwithgary.ai${matchup}</link>`],
+    ]) {
+      const response = await fetch(`${origin}${path}`, { signal: AbortSignal.timeout(90_000) });
+      assert.equal(response.status, 200, `${path} status`);
+      assert((await response.text()).includes(expected), `${path} must include its published fixture content`);
+      console.log(`PASS ${path}: permanent analysis discovery`);
     }
     const response = await fetch(`${origin}/results.json`, { signal: AbortSignal.timeout(30_000) });
     assert.equal(response.status, 200);
