@@ -57,8 +57,13 @@ describe('NCAAF verified Tale of the Tape storage mapping', () => {
 describe('NCAAF game-runner FBS policy wiring', () => {
   it('persists exact provider abbreviations for college pick-card labels', () => {
     expect(runner).toContain('season_type: game?.season_type ?? null');
-    expect(runner).toContain('homeTeamAbbreviation: game?.home_team?.abbreviation ?? null');
-    expect(runner).toContain('awayTeamAbbreviation: (game?.away_team ?? game?.visitor_team)?.abbreviation ?? null');
+    // Sep 3 2026: the odds-feed game carries its teams as STRINGS, so the
+    // object read never fired for college and cards printed whole school
+    // names. attachNcaafGameMetadata now stamps the provider's own short form
+    // by exact identity, and the payload falls back to it. Still exact — the
+    // resolver matches the BDL team directory, it never invents a short form.
+    expect(runner).toContain('homeTeamAbbreviation: game?.home_team?.abbreviation ?? game?.homeAbbreviation ?? null');
+    expect(runner).toContain('awayTeamAbbreviation: (game?.away_team ?? game?.visitor_team)?.abbreviation ?? game?.awayAbbreviation ?? null');
   });
 
   it('uses provider ids and canonical conference shapes instead of exact team-name matching', () => {

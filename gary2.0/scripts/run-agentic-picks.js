@@ -2182,8 +2182,13 @@ async function main() {
               published_at: footballPublishedAt,
               published_market: footballPublishedMarket,
               season_type: game?.season_type ?? null,
-              homeTeamAbbreviation: game?.home_team?.abbreviation ?? null,
-              awayTeamAbbreviation: (game?.away_team ?? game?.visitor_team)?.abbreviation ?? null,
+              // The odds-feed game carries its teams as STRINGS, so the
+              // object read below is only ever true on a provider game; the
+              // stamped fields (attachNcaafGameMetadata) are what actually
+              // fill college cards. Without one the card prints the whole
+              // school name and the meta row truncates.
+              homeTeamAbbreviation: game?.home_team?.abbreviation ?? game?.homeAbbreviation ?? null,
+              awayTeamAbbreviation: (game?.away_team ?? game?.visitor_team)?.abbreviation ?? game?.awayAbbreviation ?? null,
             } : {}),
             moneylineHome: result.moneylineHome,
             moneylineAway: result.moneylineAway,

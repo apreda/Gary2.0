@@ -904,6 +904,7 @@ struct CompactPickRow: View {
     private var awayName: String { Formatters.shortTeamName(pick.awayTeam, league: pick.league) }
     private var homeName: String { Formatters.shortTeamName(pick.homeTeam, league: pick.league) }
     private var isNCAAB: Bool { (pick.league ?? "").uppercased() == "NCAAB" }
+    private var isNCAAF: Bool { (pick.league ?? "").uppercased() == "NCAAF" }
     private var isCFP: Bool { pick.isCFP }
     private var pickParts: (pick: String, odds: String) { pick.formattedPickParts }
 
@@ -1112,16 +1113,23 @@ struct CompactPickRow: View {
         sideIsPicked(full: pick.homeTeam, short: homeName, otherFull: pick.awayTeam)
     }
 
+    /// The number a college team wears next to its name: a playoff SEED when
+    /// the game is a CFP game, otherwise its AP poll rank (founder, Sep 3
+    /// 2026: "for the team names on the Pick cards we could just put the
+    /// ranking next to the team"). Both ride the pick itself — NCAAF ranks are
+    /// stamped on the game at pick time, so the number is the poll as it stood
+    /// when Gary made the call. Unranked stays bare; nothing is guessed.
     private var awaySeedTag: String? {
-        if isNCAAB, let r = pick.awayRanking { return "#\(r)" }
         if isCFP, let s = pick.awaySeed { return "#\(s)" }
+        if isNCAAB || isNCAAF, let r = pick.awayRanking { return "#\(r)" }
         return nil
     }
     private var homeSeedTag: String? {
-        if isNCAAB, let r = pick.homeRanking { return "#\(r)" }
         if isCFP, let s = pick.homeSeed { return "#\(s)" }
+        if isNCAAB || isNCAAF, let r = pick.homeRanking { return "#\(r)" }
         return nil
     }
+    private var isRankedMatchup: Bool { awaySeedTag != nil || homeSeedTag != nil }
 
     // MARK: Headline front (June 11 2026 — THE pick card design, everywhere)
     //
@@ -1236,10 +1244,20 @@ struct CompactPickRow: View {
         // "vs Seaha…". When the tag carries words beyond the bare league, the
         // matchup rides abbreviations instead (the board's own register), and
         // the price keeps its fixed slot either way. No ellipsis, ever.
-        let compact = significanceTag != (pick.league ?? "").uppercased()
+        // A ranked college game rides abbreviations too: the number is two more
+        // characters on each side, and this row scales rather than truncates.
+        let compact = significanceTag != (pick.league ?? "").uppercased() || isRankedMatchup
         let awayLabel = compact ? metaTeamAbbrev(homeSide: false) : awayName
         let homeLabel = compact ? metaTeamAbbrev(homeSide: true) : homeName
-        let opponent = homeIsPicked ? "vs \(awayLabel)"
+        func ranked(_ tag: String?, _ label: String) -> String {
+            guard let tag else { return label }
+            return "\(tag) \(label)"
+        }
+        // When either side is ranked, BOTH sides print — the "vs opponent"
+        // short form would hide the number on the team Gary actually picked.
+        let opponent = isRankedMatchup
+            ? "\(ranked(awaySeedTag, awayLabel)) @ \(ranked(homeSeedTag, homeLabel))"
+            : homeIsPicked ? "vs \(awayLabel)"
             : awayIsPicked ? "@ \(homeLabel)"
             : "\(awayLabel) @ \(homeLabel)"
         let parts = [opponent]
@@ -1440,10 +1458,15 @@ struct CompactPickRow: View {
                     // ellipsized to "-..." — a hard-law violation). The odds are
                     // their own fixed-size Text with top layout priority; the
                     // opponent scales down instead. No ellipsis, ever.
+                    // Scales, never truncates. A college card whose pick was
+                    // written before the provider abbreviations were stamped
+                    // still carries the whole school name here ("Colorado"),
+                    // and at the old 0.6 floor that row printed "vs COLORA…" —
+                    // the hard law says shorten or scale, never clip.
                     (Text(metaLine).foregroundColor(metaBodyTint))
                         .font(GaryFonts.text(13.5 * pf, .medium))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.6)
+                        .minimumScaleFactor(0.45)
                     if !pickParts.odds.isEmpty {
                         (Text("· ").foregroundColor(metaDotTint)
                             + Text(pickParts.odds).foregroundColor(oddsTint))

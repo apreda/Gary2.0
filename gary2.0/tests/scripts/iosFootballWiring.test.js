@@ -298,6 +298,24 @@ describe('Football Picks overview', () => {
     for (const kind of ['.theSweat', '.afterGary', '.nextSlate']) expect(moduleKinds).toContain(kind);
   });
 
+  it('wears the AP rank next to college team names on the pick card', () => {
+    // Founder, Sep 3 2026: "for the team names on the Pick cards we could just
+    // put the ranking next to the team". The rank rides the pick itself
+    // (attachNcaafGameMetadata stamps it at pick time), so the card reads
+    // stored data — it never re-derives a poll. CFP seeds still win on a
+    // playoff game, and an unranked side stays bare.
+    expect(views).toContain('if isNCAAB || isNCAAF, let r = pick.awayRanking { return "#\\(r)" }');
+    expect(views).toContain('if isNCAAB || isNCAAF, let r = pick.homeRanking { return "#\\(r)" }');
+    expect(views).toContain('private var isRankedMatchup: Bool { awaySeedTag != nil || homeSeedTag != nil }');
+    // Both sides print when either is ranked — the "vs opponent" short form
+    // would hide the number on the team Gary actually picked.
+    expect(views).toContain('let opponent = isRankedMatchup');
+    // The seed tag is checked BEFORE the poll rank, so a playoff game shows
+    // its bracket seed rather than the poll it left behind.
+    const away = views.slice(views.indexOf('private var awaySeedTag: String? {'));
+    expect(away.indexOf('pick.awaySeed')).toBeLessThan(away.indexOf('pick.awayRanking'));
+  });
+
   it('merges stale date-only and confirmed rows by exact provider game id', () => {
     expect(views).toContain('func providerIdentity(league: String?, gameId: Int?)');
     expect(views).toContain('providerKey.flatMap { providerIndex[$0] }');

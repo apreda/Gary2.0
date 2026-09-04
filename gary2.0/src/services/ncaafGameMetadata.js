@@ -72,12 +72,18 @@ export async function loadNcaafMetadataSources({ season = null } = {}) {
 export function resolveNcaafTeamMetadata(team, sources) {
   const key = normalizeNcaafTeamName(teamNameOf(team));
   const providerTeam = key ? sources?.byName?.get(key) : null;
-  if (!providerTeam) return { conference: null, ranking: null };
+  if (!providerTeam) return { conference: null, ranking: null, abbreviation: null };
 
   const conferenceId = ncaafTeamConferenceId(providerTeam);
   return {
     conference: NCAAF_CONFERENCE_DISPLAY[conferenceId] ?? null,
     ranking: sources?.rankByTeamId?.get(String(providerTeam.id)) ?? null,
+    // The provider's own short form (WAKE, GT, COLO). The pick path receives
+    // games whose team fields are odds-feed STRINGS, so nothing downstream can
+    // read an abbreviation off the game object — without this the card falls
+    // back to the full school name and the meta row truncates (founder law:
+    // no ellipsis, ever). Exact identity only; unresolved stays null.
+    abbreviation: providerTeam.abbreviation ?? null,
   };
 }
 
@@ -109,6 +115,8 @@ export async function attachNcaafGameMetadata(games, { season = null } = {}) {
     game.awayConference = away.conference;
     game.homeRanking = home.ranking;
     game.awayRanking = away.ranking;
+    game.homeAbbreviation = home.abbreviation;
+    game.awayAbbreviation = away.abbreviation;
     if (home.conference || away.conference) stamped += 1;
   }
   console.log(`[NCAAF Metadata] stamped conference/rank on ${stamped}/${rows.length} games`);
