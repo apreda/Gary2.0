@@ -131,7 +131,9 @@ export function recordByLeague(rows: GameResultRow[]): Map<string, Record_> {
   const buckets = new Map<string, GameResultRow[]>();
   for (const r of rows) {
     const league = (r.league ?? 'OTHER').toUpperCase();
-    buckets.set(league, [...(buckets.get(league) ?? []), r]);
+    const bucket = buckets.get(league);
+    if (bucket) bucket.push(r);
+    else buckets.set(league, [r]);
   }
   return new Map([...buckets].map(([k, v]) => [k, computeRecord(v)]));
 }
@@ -216,10 +218,17 @@ export async function fetchAllPropResults(revalidate = 3600): Promise<PropResult
  * ten minutes and must not drag 20k rows through each rebuild.
  */
 export async function fetchGameResultsForDate(date: string, revalidate = 600): Promise<GameResultRow[]> {
-  return rest<GameResultRow[]>(
-    `game_results?select=game_date,league,matchup,pick_text,result,final_score,confidence&game_date=eq.${date}`,
-    { revalidate },
-  );
+  const [games, nfl] = await Promise.all([
+    rest<GameResultRow[]>(
+      `game_results?select=game_date,league,matchup,pick_text,result,final_score,confidence&game_date=eq.${date}`,
+      { revalidate },
+    ),
+    rest<NflResultRow[]>(
+      `nfl_results?select=game_date,matchup,pick_text,result,final_score,confidence,week_number,season,season_type,home_team,away_team,home_score,away_score&game_date=eq.${date}`,
+      { revalidate },
+    ),
+  ]);
+  return mergeGameResults(nfl, games);
 }
 
 /** One day's graded props, filtered to the legitimately gradeable rows. */
