@@ -47,6 +47,7 @@ import {
   type SequentialBackgroundTask,
 } from "./recapBackground.ts";
 import { settleUserBetsForDates } from "./userbets.ts";
+import { isServiceAudit } from "./audit-auth.ts";
 import { resultAlreadyCurrent, winnersFlags, WINNERS_CUTOVER_DATE } from "./winners.ts";
 
 // Supabase exposes this runtime global in deployed Edge Functions. Describe
@@ -658,6 +659,7 @@ Deno.serve(async (req) => {
   // Read-only production verification of the same immutable-board selector.
   // This branch returns before provider reads, grading, recaps or settlement.
   if (new URL(req.url).searchParams.get("winners") === "1") {
+    if (!isServiceAudit(req, SERVICE_KEY)) return Response.json({ ok: false, error: "Service authorization required" }, { status: 403 });
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateParam ?? "")) return Response.json({ ok: false, error: "need date=YYYY-MM-DD" }, { status: 400 });
     const rows = await sbGet("daily_picks", `date=eq.${dateParam}&select=picks`);
     const picks = rows[0]?.picks ?? [];

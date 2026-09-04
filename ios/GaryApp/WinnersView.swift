@@ -1814,7 +1814,9 @@ struct PremiumPicksView: View {
             // A slower request for another selected date cannot overwrite this one.
             guard boardLoadToken == token, owner == authManager.currentUser?.id, (selectedDate ?? SupabaseAPI.todayEST()) == date else { return }
             lockedBoardSummaries = board.boards.filter { $0.locked && $0.count > 0 }
-            if let serverAccess = board.access { access.snapshot = serverAccess }
+            // A cached ticket response cannot restore an old grant after the
+            // parallel access refresh reports expiration or revocation.
+            if !admissionFailed, let serverAccess = board.access { access.snapshot = serverAccess }
             gameResultsMap = rMap
             gameScoresMap = sMap
             matchupScoresMap = mMap

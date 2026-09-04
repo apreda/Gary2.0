@@ -4,6 +4,9 @@ import { admittedGameKeys, isWinnersGame } from '../../src/services/pickdesk/win
 
 const pick = { league: 'MLB', game_id: '42', pick: 'Mariners ML', odds: 150, homeTeam: 'Boston', awayTeam: 'Seattle', confidence: 0.51 };
 const board = [{ game_date: '2026-09-04', league: 'MLB', kind: 'game', game_id: '42', pick_snapshot: pick }];
+const serviceCredential = 'test-service-credential';
+const auditURL = 'https://test.invalid/grade-results?winners=1&date=2026-09-04';
+const serviceRequest = () => new Request(auditURL, { headers: { Authorization: `Bearer ${serviceCredential}` } });
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.resetModules(); });
 
@@ -37,18 +40,24 @@ describe('Cloud Winners publication identity', () => {
 
 async function edgeHandler() {
   let handler;
-  vi.stubGlobal('Deno', { env: { get: name => name === 'SUPABASE_URL' ? 'https://test.invalid' : 'test-credential' }, serve: fn => { handler = fn; } });
+  const env = {
+    SUPABASE_URL: 'https://test.invalid',
+    SUPABASE_SERVICE_ROLE_KEY: serviceCredential,
+    BALLDONTLIE_API_KEY: 'test-provider-credential',
+  };
+  vi.stubGlobal('Deno', { env: { get: name => env[name] }, serve: fn => { handler = fn; } });
   vi.stubGlobal('EdgeRuntime', { waitUntil: vi.fn() });
   await import('../../supabase/functions/grade-results/index.ts');
   return handler;
 }
 
 describe('Read-only deployed selector verification', () => {
-  it('returns actual selector decisions using GETs only, without provider calls or settlement', async () => {
+  it('returns actual selector decisions to service authorization using GETs only, without provider calls or settlement', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(Response.json([{ picks: [pick] }])).mockResolvedValueOnce(Response.json(board));
     vi.stubGlobal('fetch', fetchMock);
     const handler = await edgeHandler();
-    const response = await handler(new Request('https://test.invalid/grade-results?winners=1&date=2026-09-04'));
+    const response = await handler(serviceRequest());
+    expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ ok: true, read_only: true, policy: 'immutable-board', picks: [{ game_id: '42', odds: 150, is_winners_pick: true }] });
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0][0]).toContain('/rest/v1/daily_picks?');
@@ -57,12 +66,31 @@ describe('Read-only deployed selector verification', () => {
     expect(globalThis.EdgeRuntime.waitUntil).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['anonymous', undefined],
+    ['public key', 'Bearer test-anon-credential'],
+    ['user token', 'Bearer test-user-credential'],
+    ['wrong scheme', `Basic ${serviceCredential}`],
+  ])('denies %s before reading paid selections or starting settlement', async (_label, authorization) => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const handler = await edgeHandler();
+    const response = await handler(new Request(auditURL, {
+      headers: authorization ? { Authorization: authorization } : {},
+    }));
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ ok: false, error: 'Service authorization required' });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(globalThis.EdgeRuntime.waitUntil).not.toHaveBeenCalled();
+  });
+
   it('propagates a failed board read without returning guessed flags or making writes', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(Response.json([{ picks: [pick] }])).mockResolvedValueOnce(new Response('unavailable', { status: 503 }));
     vi.stubGlobal('fetch', fetchMock);
     const handler = await edgeHandler();
-    await expect(handler(new Request('https://test.invalid/grade-results?winners=1&date=2026-09-04'))).rejects.toThrow('winners_board GET 503');
+    await expect(handler(serviceRequest())).rejects.toThrow('winners_board GET 503');
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.every(([, options]) => !options.method || options.method === 'GET')).toBe(true);
     expect(globalThis.EdgeRuntime.waitUntil).not.toHaveBeenCalled();
   });
 });

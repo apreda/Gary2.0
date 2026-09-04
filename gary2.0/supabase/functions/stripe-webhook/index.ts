@@ -13,7 +13,6 @@
 // $179/yr (7-day card-required trials), test + live. Old $34.99 links stay
 // mapped: the shipped App Store build still sells through them until the
 // next release, and existing subscribers renew on them indefinitely.
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const SECRETS = [
   Deno.env.get("STRIPE_WEBHOOK_SECRET") ?? "",      // test endpoint
@@ -56,114 +55,69 @@ const LINK_MAP: Record<string, { key: string; pass: string }> = {
   plink_1TeztHLJVzRZvO5HH6WHQHxI: { key: "ALL", pass: "all" },
 };
 
-async function hmacHex(secret: string, payload: string): Promise<string> {
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const mac = await crypto.subtle.sign("HMAC", key, enc.encode(payload));
-  return Array.from(new Uint8Array(mac)).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
+// Validate the exact raw body, support rotating signatures, and read Stripe's
+// current subscription state so late checkout events cannot resurrect a cancel.
+import { subscriptionState, verifyStripeSignature } from "../create-checkout/billing.ts";
+import { cancelUnavailableOwnerSubscription } from "../create-checkout/lifecycle.ts";
 
-async function validSignature(body: string, header: string | null): Promise<boolean> {
-  if (!header || SECRETS.length === 0) return false;
-  const parts = Object.fromEntries(header.split(",").map((p) => p.split("=") as [string, string]));
-  const t = parts["t"];
-  const v1 = parts["v1"];
-  if (!t || !v1) return false;
-  // Reject stale events (replay defense, 5 min tolerance).
-  if (Math.abs(Date.now() / 1000 - Number(t)) > 300) return false;
-  for (const secret of SECRETS) {
-    if ((await hmacHex(secret, `${t}.${body}`)) === v1) return true;
-  }
-  return false;
-}
-
-async function rest(path: string, method: string, body: unknown, prefer?: string): Promise<Response> {
-  return fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    method,
-    headers: {
-      apikey: SERVICE_KEY,
-      Authorization: `Bearer ${SERVICE_KEY}`,
-      "Content-Type": "application/json",
-      ...(prefer ? { Prefer: prefer } : {}),
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+async function stripe(path: string, live: boolean) {
+  const key = Deno.env.get(live ? "STRIPE_SECRET_KEY_LIVE" : "STRIPE_SECRET_KEY_TEST");
+  if (!key) throw new Error("Stripe key unavailable");
+  const res = await fetch(`https://api.stripe.com/v1/${path}`, { headers: { Authorization: `Bearer ${key}` } });
+  if (!res.ok) throw new Error(`Stripe lookup failed: ${res.status}`);
+  return res.json();
 }
 
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
   const body = await req.text();
-
-  if (!(await validSignature(body, req.headers.get("stripe-signature")))) {
-    return new Response("bad signature", { status: 401 });
-  }
-
-  const event = JSON.parse(body);
-
-  // --- Cancellation: revoke the entitlement(s) tied to this subscription. ---
-  if (event.type === "customer.subscription.deleted") {
-    const subId: string | null = event.data?.object?.id ?? null;
-    if (!subId) return new Response(JSON.stringify({ ignored: "no sub id" }), { status: 200 });
-    const res = await rest(
-      `user_entitlements?stripe_subscription_id=eq.${subId}`,
-      "PATCH",
-      { status: "canceled" },
-      "return=minimal",
-    );
-    if (!res.ok) {
-      console.error("revoke failed", res.status, await res.text());
-      return new Response("revoke failed", { status: 500 }); // Stripe retries
+  if (!await verifyStripeSignature(body, req.headers.get("stripe-signature"), SECRETS)) return new Response("bad signature", { status: 401 });
+  try {
+    const event = JSON.parse(body);
+    if (!event.id || !Number.isFinite(event.created) || typeof event.livemode !== "boolean") return new Response("bad event", { status: 400 });
+    const live = event.livemode;
+    const object = event.data?.object ?? {};
+    let subId: string | null = null;
+    let owner: string | null = null;
+    let sports: string[] | null = null;
+    let pass: string | null = null;
+    if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
+      subId = typeof object.subscription === "string" ? object.subscription : object.subscription?.id;
+      owner = object.client_reference_id ?? null;
+      const mapped = object.payment_link ? LINK_MAP[object.payment_link] : null;
+      sports = object.metadata?.sports ? object.metadata.sports.split(",").map((s: string) => s.trim()) : mapped ? [mapped.key] : null;
+      pass = object.metadata?.pass ?? mapped?.pass ?? null;
+      if (!subId) return new Response(JSON.stringify({ ignored: "non-subscription checkout" }), { status: 200 });
+    } else if (["customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted", "customer.subscription.paused", "customer.subscription.resumed"].includes(event.type)) {
+      subId = object.id;
+    } else if (["invoice.paid", "invoice.payment_failed", "invoice.payment_action_required"].includes(event.type)) {
+      subId = object.subscription ?? object.parent?.subscription_details?.subscription;
+    } else return new Response(JSON.stringify({ ignored: event.type }), { status: 200 });
+    if (typeof subId !== "string" || !/^sub_[A-Za-z0-9]+$/.test(subId)) return new Response("no subscription", { status: 200 });
+    let sub = await stripe(`subscriptions/${encodeURIComponent(subId)}`, live);
+    if (sub.livemode !== live) throw new Error("Subscription mode mismatch");
+    sub = await cancelUnavailableOwnerSubscription(sub, SUPABASE_URL, SERVICE_KEY,
+      Deno.env.get(live ? "STRIPE_SECRET_KEY_LIVE" : "STRIPE_SECRET_KEY_TEST")!, fetch);
+    owner = sub.metadata?.owner ?? owner;
+    sports = sub.metadata?.sports ? sub.metadata.sports.split(",").map((s: string) => s.trim()) : sports;
+    pass = sub.metadata?.pass ?? pass;
+    const state = subscriptionState(sub);
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/sync_subscription_access`, {
+      method: "POST", headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ p_subscription_id: subId, p_owner: owner, p_sports: sports,
+        p_pass: pass, p_status: state.status, p_expires_at: state.expires_at,
+        p_cancel: state.cancel_at_period_end, p_customer: state.stripe_customer_id,
+        p_livemode: live, p_event_created: event.created }),
+    });
+    if (!res.ok) throw new Error(`Access synchronization failed: ${res.status}`);
+    if (!await res.json()) {
+      // A legacy subscription update can beat checkout delivery; returning 500
+      // lets Stripe retry once the owner/session mapping arrives.
+      return new Response("waiting for checkout identity", { status: 500 });
     }
-    return new Response(JSON.stringify({ revoked: subId }), { status: 200 });
+    return new Response(JSON.stringify({ synced: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+  } catch (e) {
+    console.error("stripe synchronization failed", (e as Error).message);
+    return new Response("synchronization failed", { status: 500 });
   }
-
-  if (event.type !== "checkout.session.completed") {
-    return new Response(JSON.stringify({ ignored: event.type }), { status: 200 });
-  }
-
-  // --- Purchase: grant. ---
-  const session = event.data?.object ?? {};
-  const installationId: string | null = session.client_reference_id ?? null;
-  const linkId: string | null = session.payment_link ?? null;
-
-  // Bundle / server-created sessions name their sports in metadata.
-  const metaSports: string[] = (session.metadata?.sports ?? "")
-    .split(",").map((s: string) => s.trim()).filter(Boolean);
-  const mapped = linkId ? LINK_MAP[linkId] : null;
-  const grants: { key: string; pass: string }[] = metaSports.length
-    ? metaSports.map((s) => ({ key: s, pass: session.metadata?.pass ?? "monthly" }))
-    : mapped ? [mapped] : [];
-
-  if (!installationId || grants.length === 0) {
-    console.error("unmapped checkout", { installationId, linkId, session: session.id });
-    // 200 so Stripe doesn't retry forever; the session id is logged for manual grant.
-    return new Response(JSON.stringify({ unmapped: true }), { status: 200 });
-  }
-
-  // One row per sport; bundle rows suffix the session id so the
-  // stripe_session_id uniqueness stays per-grant idempotent.
-  const rows = grants.map((g, i) => ({
-    installation_id: installationId,
-    product_key: g.key,
-    pass_type: g.pass,
-    status: "active",
-    stripe_session_id: grants.length === 1 ? session.id : `${session.id}:${g.key}`,
-    stripe_payment_link: linkId,
-    stripe_subscription_id: session.subscription ?? null,
-    amount_cents: i === 0 ? (session.amount_total ?? null) : null,
-  }));
-
-  const res = await rest(
-    "user_entitlements?on_conflict=stripe_session_id",
-    "POST",
-    rows,
-    "resolution=ignore-duplicates,return=minimal",
-  );
-
-  if (!res.ok) {
-    console.error("entitlement write failed", res.status, await res.text());
-    return new Response("write failed", { status: 500 }); // Stripe will retry
-  }
-
-  return new Response(JSON.stringify({ granted: grants.map((g) => g.key) }), { status: 200 });
 });

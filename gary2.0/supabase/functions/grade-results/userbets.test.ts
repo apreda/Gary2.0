@@ -69,7 +69,7 @@ test("push-only settles stay silent", () => {
   assertEquals(settleMessage({ events: [{ kind: "tail", status: "push", units: 0, streak_pick: false }], streakAfter: null }), null);
 });
 
-import { assertThrows } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { throws as assertThrows } from "node:assert/strict";
 import { matchingGameGrade, matchingPropGrade, fetchUserBetsForDates, settleUserBetsForDates } from "./userbets.ts";
 test("void remains neutral for tail and fade", () => {
   assertEquals(settleUserBet("tail", "void", 1, 120), { status: "void", units: 0, estimated: false });
