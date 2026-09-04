@@ -122,6 +122,17 @@ function getArgValue(flag) {
 }
 
 const dryRun = args.includes('--dry-run');
+/**
+ * CARDS ONLY (Sep 4 2026). The player packs are built at the END of a league's
+ * stage, behind every lane — and each lane owns its own minutes, so the college
+ * stage spends its whole hard cap before the card build is ever reached. That
+ * is why college cards had never appeared even once the write was repaired: the
+ * process was killed on the way there, every pass, every day.
+ *
+ * This flag runs the card build alone, off the day's STORED connections, so it
+ * can hold its own stage in the daily job with its own budget.
+ */
+const cardsOnly = args.includes('--cards-only');
 // Manual force-refresh: wipe the day's rows first, then regenerate from scratch.
 // The scheduled runs are additive-freeze (no churn); --reset is the escape hatch
 // for rebuilding a lane by hand. NOT used by the cron path.
@@ -798,6 +809,13 @@ async function run() {
 
   for (const league of leagues) {
     console.log(`\n── ${league} ──`);
+
+    if (cardsOnly) {
+      // The card build reads the day's stored connections itself, so it needs
+      // nothing this run would have computed.
+      await buildAndStoreCards({ date: targetDate, league, connections: [] });
+      continue;
+    }
 
     // LEAGUE PULSE FIRST (founder, Sep 3 2026). The pulse tables are built
     // from the slate and the league's own boards — they need nothing the
