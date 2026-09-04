@@ -1809,6 +1809,22 @@ struct HomeScrollOffsetKey: PreferenceKey {
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
+/// Home's background, borrowed by another page (founder, Sep 4 2026: "put in
+/// the same background the home page has for the Picks and Winners pages ...
+/// just for NCAAF only"). The living obsidian layer plus the floor, exactly
+/// as Home mixes them; the parallax is owned here and sits still, since only
+/// Home drives the ground from its own scroll.
+struct BorrowedHomeBackground: View {
+    @StateObject private var parallax = GroundParallax()
+
+    var body: some View {
+        ZStack {
+            LiquidGlassBackground(grainDensity: 0.0009, grainOpacityRange: 0.008...0.018)
+            HomeFloorGround(parallax: parallax)
+        }
+    }
+}
+
 struct HomeFloorGround: View {
     @ObservedObject var parallax: GroundParallax
 

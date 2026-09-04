@@ -287,9 +287,21 @@ struct PremiumPicksView: View {
         selectedDate == nil && !todayHasFreshPicks
     }
 
+    /// The board is a mixed shelf list, so college football claims the floor
+    /// whenever it is ON the board (founder, Sep 4 2026: the background is for
+    /// NCAAF only). Off a college day, the page keeps the flat house ink.
+    private var boardHasNCAAF: Bool {
+        gameShelves.contains { $0.league.uppercased() == "NCAAF" }
+            || propShelves.contains { $0.league.uppercased() == "NCAAF" }
+    }
+
     var body: some View {
         ZStack {
-            LiquidGlassBackground(grainDensity: 0)
+            if boardHasNCAAF {
+                BorrowedHomeBackground()
+            } else {
+                LiquidGlassBackground(grainDensity: 0)
+            }
 
             GeometryReader { viewport in
                 ScrollViewReader { proxy in

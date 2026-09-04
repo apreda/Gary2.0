@@ -1343,7 +1343,13 @@ struct PicksCarouselView: View {
 
     var body: some View {
         ZStack {
-            LiquidGlassBackground(grainDensity: 0)
+            // College football reads on Home's floor (founder, Sep 4 2026);
+            // every other league keeps the flat house ink.
+            if sport == "NCAAF" {
+                BorrowedHomeBackground()
+            } else {
+                LiquidGlassBackground(grainDensity: 0)
+            }
             VStack(spacing: 0) {
                 masthead
                 slateStrip
