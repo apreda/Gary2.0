@@ -9,7 +9,6 @@ import {
   fmtNet,
   fmtNetTotal,
   fmtStake,
-  gameBookTrackingUnavailableReason,
   gameDateForBook,
   gamePickReceiptKey,
   groupLedgerDays,
@@ -89,11 +88,6 @@ describe('board receipt identity', () => {
       .toBeUndefined();
   });
 
-  it('supports weekly NFL through the canonical server placement resolver', () => {
-    expect(gameBookTrackingUnavailableReason('NFL')).toBeNull();
-    expect(gameBookTrackingUnavailableReason('MLB')).toBeNull();
-  });
-
   it('does not reuse the same game selection from an older date', () => {
     const rows = [
       bet({ id: 'old', game_date: '2026-08-10', pick_text: 'Mets ML -120' }),
@@ -142,6 +136,10 @@ describe('windowSince + filterBets', () => {
   it('season floor is the era start; all has no floor', () => {
     expect(windowSince('season', now)).toBe('2026-03-01');
     expect(windowSince('all', now)).toBeNull();
+  });
+  it('starts a new season at Eastern New Year, matching the public rankings', () => {
+    expect(windowSince('season', new Date('2027-01-01T04:59:59Z'))).toBe('2026-03-01');
+    expect(windowSince('season', new Date('2027-01-01T05:00:00Z'))).toBe('2027-01-01');
   });
   it('filters by date floor and by kind', () => {
     const rows = [

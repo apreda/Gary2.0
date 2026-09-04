@@ -70,11 +70,14 @@ export function buildBoard(slate: SlateRow[], picks: GaryPick[]): BoardGame[] {
     const league = normalizeLeague(row.league) ?? (row.league ?? '').toUpperCase();
     const pick =
       picks.find(
-        p =>
-          !used.has(p) &&
-          (p.type ?? 'game') !== 'prop' &&
-          sameTeam(p.awayTeam, row.away_team) &&
-          sameTeam(p.homeTeam, row.home_team),
+        p => {
+          const pickLeague = normalizeLeague(p.league, p.sport);
+          return !used.has(p) &&
+            (p.type ?? 'game') !== 'prop' &&
+            (!league || !pickLeague || pickLeague === league) &&
+            sameTeam(p.awayTeam, row.away_team) &&
+            sameTeam(p.homeTeam, row.home_team);
+        },
       ) ?? null;
     if (pick) used.add(pick);
     return {

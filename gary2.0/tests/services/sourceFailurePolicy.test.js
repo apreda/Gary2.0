@@ -14,6 +14,20 @@ describe('source failure classification', () => {
     (code) => expect(isTransientExternalSourceError({ code })).toBe(true),
   );
 
+  it.each(['UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT'])(
+    'recognizes %s directly and as the cause of a failed fetch',
+    (code) => {
+      const cause = Object.assign(new Error('provider timed out'), { code });
+      expect(isTransientExternalSourceError(cause)).toBe(true);
+      expect(sourceFailure('NFL', new TypeError('fetch failed', { cause }))).toEqual({
+        league: 'NFL',
+        error: 'fetch failed',
+        kind: 'transient_external',
+        transient_external: true,
+      });
+    },
+  );
+
   it('never treats schema/config wording as an external outage', () => {
     const error = new Error('network schema timeout: missing API key');
     expect(isTransientExternalSourceError(error)).toBe(false);

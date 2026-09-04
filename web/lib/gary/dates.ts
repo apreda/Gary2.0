@@ -21,10 +21,12 @@ export function todayEST(now: Date = new Date()): string {
   return estDateStr(now);
 }
 
-/** yyyy-MM-dd in EST for N days before `now`. Kept here (not inline in a
+/** yyyy-MM-dd for N Eastern calendar days before `now`. Kept here (not inline in a
  *  component) so the Date read stays out of render — React 19 purity rule. */
 export function daysAgoEST(days: number, now: Date = new Date()): string {
-  return estDateStr(new Date(now.getTime() - days * 86400000));
+  const [year, month, day] = estDateStr(now).split('-').map(Number);
+  // Shift the calendar date, not elapsed hours: DST days can have 23 or 25 hours.
+  return new Date(Date.UTC(year, month - 1, day - days)).toISOString().slice(0, 10);
 }
 
 /** The wall clock, read once per request. Lives here (not inline in a page)

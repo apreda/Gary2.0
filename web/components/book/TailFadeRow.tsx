@@ -203,12 +203,10 @@ export function TailFadeRow({
   pickText,
   pickId,
   commence,
-  trackingUnavailableReason,
 }: {
   pickText: string;
   pickId?: string | null;
   commence?: string | null;
-  trackingUnavailableReason?: string | null;
 }) {
   const ctx = useBookDay();
   const router = useRouter();
@@ -248,14 +246,6 @@ export function TailFadeRow({
   }, [ambiguous, arming, ctx?.ready, ctx?.signedIn, intentKey, locked, mine]);
 
   if (!ctx || !pickText) return null;
-
-  if (trackingUnavailableReason) {
-    return (
-      <p className="mt-4 text-right font-mono text-[9.5px] leading-relaxed text-low">
-        {trackingUnavailableReason}
-      </p>
-    );
-  }
 
   if (ambiguous) {
     return (

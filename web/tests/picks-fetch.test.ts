@@ -57,4 +57,22 @@ describe('fetchTodayGamePicks', () => {
 
     expect(await fetchTodayGamePicks()).toEqual([dailyPick]);
   });
+
+  it('keeps the current NFL board when a future week has already been stored', async () => {
+    const currentPick = { pick: 'Chiefs ML -120', league: 'NFL' };
+    const weeklyRows = [
+      { week_start: '2026-09-08', picks: [{ pick: 'Bills ML -130', league: 'NFL' }] },
+      { week_start: '2026-09-01', picks: [currentPick] },
+      { week_start: '2026-08-25', picks: [{ pick: 'Jets ML -110', league: 'NFL' }] },
+    ];
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      const url = new URL(input);
+      if (url.pathname.endsWith('/daily_picks')) return Response.json([]);
+      const upperBound = url.searchParams.get('week_start')?.replace(/^lte\./, '');
+      const eligible = weeklyRows.filter(row => !upperBound || row.week_start <= upperBound);
+      return Response.json(eligible.slice(0, Number(url.searchParams.get('limit'))));
+    }));
+
+    expect(await fetchTodayGamePicks()).toEqual([currentPick]);
+  });
 });

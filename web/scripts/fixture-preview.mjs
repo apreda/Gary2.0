@@ -62,12 +62,34 @@ const tables = {
 };
 const unexpected = new Set();
 const observedTables = new Set();
-const api = createServer((req, res) => {
+const api = createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', `http://127.0.0.1:${port}`);
   res.setHeader('Access-Control-Allow-Headers', 'apikey, authorization, content-type, x-client-info');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Content-Type', 'application/json');
   if (req.method === 'OPTIONS') { res.writeHead(204).end(); return; }
   const url = new URL(req.url, 'http://127.0.0.1');
+  // This one POST is a public read RPC; mutations remain unavailable.
+  if (req.method === 'POST' && url.pathname === '/rest/v1/rpc/your_book_leaderboard_v3') {
+    try {
+      let body = '';
+      for await (const chunk of req) {
+        body += chunk;
+        if (body.length > 8192) { res.writeHead(413).end(); return; }
+      }
+      const args = JSON.parse(body);
+      assert(['7d', '30d', 'season'].includes(args.p_window));
+      assert(['streak', 'units', 'wins', 'record'].includes(args.p_sort));
+      assert(['all', 'MLB', 'NFL', 'NBA', 'NCAAF'].includes(args.p_league));
+      observedTables.add('your_book_leaderboard_v3');
+      res.end(JSON.stringify({ rows: [], me: null, qualified_count: 0, min_decided: 5,
+        my_decided: 0, has_more: false, window: args.p_window, sort: args.p_sort, league: args.p_league }));
+    } catch {
+      unexpected.add(`${req.method} ${url.pathname}: invalid fixture arguments`);
+      res.writeHead(400).end(JSON.stringify({ error: 'Invalid rankings fixture request' }));
+    }
+    return;
+  }
   const table = url.pathname.match(/^\/rest\/v1\/([a-z_]+)$/)?.[1];
   if (req.method !== 'GET' || !Object.hasOwn(tables, table)) {
     unexpected.add(`${req.method} ${url.pathname}`);
@@ -138,6 +160,7 @@ try {
     for (const [path, expected] of [
       ['/', 'Free sports picks.'], ['/picks', 'Local QA fixture.'],
       ['/results', 'Sports picks results and track record'],
+      ['/leaderboard', 'Earn your place.'],
     ]) {
       const response = await fetch(`${origin}${path}`, { signal: AbortSignal.timeout(90_000) });
       assert.equal(response.status, 200, `${path} status`);
@@ -172,6 +195,13 @@ try {
     const ledger = await response.json();
     assert.deepEqual(ledger.games.map(row => [row.league, row.result]), [['NFL', 'lost'], ['MLB', 'won']]);
     assert.deepEqual(ledger.props, []);
+    const rankingsResponse = await fetch(`${apiUrl}/rest/v1/rpc/your_book_leaderboard_v3`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_window: '7d', p_sort: 'record', p_league: 'NFL' }),
+    });
+    assert.equal(rankingsResponse.status, 200);
+    assert.deepEqual(await rankingsResponse.json(), { rows: [], me: null, qualified_count: 0,
+      min_decided: 5, my_decided: 0, has_more: false, window: '7d', sort: 'record', league: 'NFL' });
     assert.deepEqual([...unexpected], [], 'All data requests must have explicit fixtures');
     for (const table of ['daily_picks', 'daily_slate', 'game_results', 'nfl_results', 'prop_results']) {
       assert(observedTables.has(table), `This run's fixture API must receive ${table}; another preview may occupy the port`);

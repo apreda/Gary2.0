@@ -70,14 +70,6 @@ export function tailFadeCountForGame(
   return countsDate === gameDate ? counts[pickText] : undefined;
 }
 
-/** NFL calls are canonical in weekly_nfl_picks, while the shared placement
- * RPC intentionally resolves daily_picks only. Hide a control that must fail;
- * this changes neither the call nor its analysis. */
-export function gameBookTrackingUnavailableReason(league: string): string | null {
-  void league;
-  return null;
-}
-
 /** The shared Book ledger currently identifies game rows by date + exact pick
  * text. If two games on the same date publish the same text, the website must
  * not pretend it can attach a receipt to either one unambiguously. */
@@ -204,14 +196,17 @@ export function bookRecord(rows: UserBet[]): BookRecord {
 export type Timeframe = '7d' | '30d' | 'season' | 'all';
 export type Source = 'all' | 'tail' | 'fade' | 'manual';
 
-/** First day of the current record era — matches the iOS season floor. */
+/** First day of the verified record era. Later seasons start on January 1. */
 export const SEASON_START = '2026-03-01';
 
 /** Inclusive ISO floor for a timeframe, or null for no floor. */
 export function windowSince(tf: Timeframe, now: Date = new Date()): string | null {
   if (tf === '7d') return daysAgoEST(6, now);
   if (tf === '30d') return daysAgoEST(29, now);
-  if (tf === 'season') return SEASON_START;
+  if (tf === 'season') {
+    const yearStart = `${estDateStr(now).slice(0, 4)}-01-01`;
+    return yearStart > SEASON_START ? yearStart : SEASON_START;
+  }
   return null;
 }
 

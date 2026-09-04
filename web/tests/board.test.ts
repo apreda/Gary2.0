@@ -51,6 +51,36 @@ describe('buildBoard', () => {
     expect(board.filter(g => g.pick).length).toBe(1);
   });
 
+  it('keeps matching club nicknames in different leagues on their own games', () => {
+    const mlb: GaryPick = {
+      league: 'baseball_mlb', awayTeam: 'Cardinals', homeTeam: 'Giants', pick: 'Cardinals ML -110',
+    };
+    const nfl: GaryPick = {
+      sport: 'americanfootball_nfl', awayTeam: 'Cardinals', homeTeam: 'Giants', pick: 'Cardinals +3.5 -110',
+    };
+    const board = buildBoard([
+      slateRow({ league: 'MLB', away_team: 'Cardinals', home_team: 'Giants' }),
+      slateRow({ league: 'NFL', away_team: 'Cardinals', home_team: 'Giants' }),
+    ], [nfl, mlb]);
+
+    expect(board).toHaveLength(2);
+    expect(board.find(game => game.league === 'MLB')?.pick).toBe(mlb);
+    expect(board.find(game => game.league === 'NFL')?.pick).toBe(nfl);
+  });
+
+  it('retains a pick separately when only another league has the same matchup on the slate', () => {
+    const nfl: GaryPick = {
+      league: 'NFL', awayTeam: 'Cardinals', homeTeam: 'Giants', pick: 'Cardinals +3.5 -110',
+    };
+    const board = buildBoard([
+      slateRow({ league: 'MLB', away_team: 'Cardinals', home_team: 'Giants' }),
+    ], [nfl]);
+
+    expect(board).toHaveLength(2);
+    expect(board.find(game => game.league === 'MLB')?.pick).toBeNull();
+    expect(board.find(game => game.league === 'NFL')?.pick).toBe(nfl);
+  });
+
   it('keeps a posted pick that has no slate row', () => {
     const pick: GaryPick = {
       awayTeam: 'Bills',

@@ -6,8 +6,8 @@ import {
   isLegitPropResult,
   unitsFor,
 } from '@/lib/gary/results';
-import { daysAgoEST } from '@/lib/gary/dates';
-import { SEASON_START } from './model';
+import { estDateStr } from '@/lib/gary/dates';
+import { windowSince } from './model';
 import type { BoardRow } from './api';
 
 /**
@@ -47,6 +47,8 @@ function boardRowFrom(rows: Settled[]): BoardRow | null {
 export type GaryRows = Record<'7d' | '30d' | 'season', BoardRow | null>;
 
 export async function garyBoardRows(): Promise<GaryRows> {
+  const now = new Date();
+  const today = estDateStr(now);
   const [games, props] = await Promise.all([
     fetchAllGameResults().catch(() => []),
     fetchAllPropResults().catch(() => []),
@@ -55,7 +57,7 @@ export async function garyBoardRows(): Promise<GaryRows> {
   const settled: Settled[] = [];
   for (const g of games) {
     const result = (g.result ?? '').trim().toLowerCase();
-    if (!['won', 'lost', 'push'].includes(result)) continue;
+    if ((g.game_date ?? '') > today || !['won', 'lost', 'push'].includes(result)) continue;
     settled.push({
       date: g.game_date ?? '',
       result,
@@ -68,7 +70,7 @@ export async function garyBoardRows(): Promise<GaryRows> {
     // ALLOWED stays the core prop it is.
     if (isHrLaneResult(p)) continue;
     const result = (p.result ?? '').trim().toLowerCase();
-    if (!['won', 'lost', 'push'].includes(result)) continue;
+    if ((p.game_date ?? '') > today || !['won', 'lost', 'push'].includes(result)) continue;
     settled.push({
       date: p.game_date ?? '',
       result,
@@ -76,7 +78,11 @@ export async function garyBoardRows(): Promise<GaryRows> {
     });
   }
 
-  const since = { '7d': daysAgoEST(7), '30d': daysAgoEST(30), season: SEASON_START } as const;
+  const since = {
+    '7d': windowSince('7d', now) ?? '',
+    '30d': windowSince('30d', now) ?? '',
+    season: windowSince('season', now) ?? '',
+  };
   return {
     '7d': boardRowFrom(settled.filter(r => r.date >= since['7d'])),
     '30d': boardRowFrom(settled.filter(r => r.date >= since['30d'])),

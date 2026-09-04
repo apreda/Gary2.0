@@ -123,17 +123,6 @@ export async function fetchMyStreak(): Promise<UserStreak | null> {
   return (data?.[0] as UserStreak | undefined) ?? null;
 }
 
-/** The signed-in user's claimed handle, if any. */
-export async function fetchMyHandle(): Promise<string | null> {
-  return (await fetchMyProfile()).profile?.display_name ?? null;
-}
-
-export async function claimHandle(name: string): Promise<string> {
-  const { data, error } = await supabaseBrowser().rpc('claim_handle', { p_name: name });
-  if (error) throw new Error(friendly(error.message));
-  return asRow<{ display_name: string }>(data).display_name;
-}
-
 export interface BoardRow {
   display_name: string;
   wins: number;
@@ -141,16 +130,6 @@ export interface BoardRow {
   pushes: number;
   units: number;
   best_streak: number;
-}
-
-/** Public standings (aggregate-only RPC; anon-readable by design). */
-export async function fetchLeaderboard(window: '7d' | '30d' | 'season'): Promise<BoardRow[]> {
-  const { data, error } = await supabaseBrowser().rpc('your_book_leaderboard', { p_window: window });
-  if (error) {
-    console.warn('[YourBook] leaderboard fetch failed:', error.message);
-    throw new Error('The leaderboard could not load. Please retry.');
-  }
-  return (data ?? []) as BoardRow[];
 }
 
 /** Public riders/faders counts per pick_text for a date (aggregate only). */

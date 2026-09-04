@@ -152,6 +152,35 @@ describe('tomorrow board source health', () => {
     expect(mocks.axios).not.toHaveBeenCalled();
   });
 
+  it.each(['UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT'])(
+    'refreshes the healthy league and preserves the timed-out league for %s',
+    async (code) => {
+      mocks.buildLeagueRows.mockImplementation(async (sport) => {
+        if (sport.league === 'NBA') return [freshNba];
+        throw new TypeError('fetch failed', {
+          cause: Object.assign(new Error('provider timed out'), { code }),
+        });
+      });
+
+      let failure;
+      try { await writeTomorrowBoard('2099-10-05'); } catch (error) { failure = error; }
+
+      expect(failure).toBeInstanceOf(TomorrowBoardSourceError);
+      expect(failure.result).toMatchObject({
+        source_health: 'degraded',
+        preserved_leagues: ['NFL'],
+        failures: [{ league: 'NFL', kind: 'transient_external', transient_external: true }],
+      });
+      expect(mocks.axios).toHaveBeenCalledOnce();
+      const posted = mocks.axios.mock.calls[0][0].data;
+      expect(posted.board).toHaveLength(2);
+      expect(posted.board).toEqual(expect.arrayContaining([
+        expect.objectContaining({ league: 'NBA', bdl_game_id: 10 }),
+        expect.objectContaining({ league: 'NFL', bdl_game_id: 20, custom_last_good_field: 'keep me' }),
+      ]));
+    },
+  );
+
   it('does not preserve or publish a failed league for an internal/schema failure', async () => {
     mocks.buildLeagueRows.mockImplementation(async (sport) => {
       if (sport.league === 'NBA') return [freshNba];

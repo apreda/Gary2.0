@@ -6,9 +6,8 @@
  * Usage:
  *   node scripts/run-agentic-picks.js --nba
  *   node scripts/run-agentic-picks.js --nfl
- *   node scripts/run-agentic-picks.js --nhl
- *   node scripts/run-agentic-picks.js --ncaab
  *   node scripts/run-agentic-picks.js --ncaaf
+ *   node scripts/run-agentic-picks.js --mlb
  *   node scripts/run-agentic-picks.js --all
  */
 
@@ -30,6 +29,17 @@ import {
 } from '../src/services/ncaafGamePolicy.js';
 import { classifyPickMarketSide } from './lib/pickSideClassification.js';
 import { footballCaseSnapshot } from './lib/footballCaseSnapshot.js';
+import { SPORT_CONFIG, selectPickSports } from './lib/pickRunSports.js';
+
+// Reject retired lanes before provider initialization or the era-run ledger.
+const args = process.argv.slice(2);
+let sportsToRun;
+try {
+  sportsToRun = selectPickSports(args);
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
+}
 
 // Now import modules that depend on env vars
 const { analyzeGame } = await import('../src/services/agentic/orchestrator/index.js');
@@ -554,17 +564,6 @@ process.on('SIGINT', () => {
 // GARY PICK GENERATION
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Configuration
-// All US sports use EST-based "today" filtering - games happening today that haven't started yet
-const SPORT_CONFIG = {
-  nba: { key: 'basketball_nba', name: 'NBA', emoji: '🏀', useToday: true }, // Today's games (EST)
-  nfl: { key: 'americanfootball_nfl', name: 'NFL', emoji: '🏈', daysAhead: 7 }, // NFL is weekly
-  nhl: { key: 'icehockey_nhl', name: 'NHL', emoji: '🏒', isBeta: true, useToday: true }, // Today's games (EST)
-  ncaab: { key: 'basketball_ncaab', name: 'NCAAB', emoji: '🏀', useToday: true }, // Today's games (EST) — Flash pre-investigates 20-30 stat calls per game; Gary's own fetch_stats are supplementary
-  ncaaf: { key: 'americanfootball_ncaaf', name: 'NCAAF', emoji: '🏈', fbsOnly: true, useToday: true }, // Today's games (EST)
-  mlb: { key: 'baseball_mlb', name: 'MLB', emoji: '⚾', useToday: true },
-};
-
 // ═══════════════════════════════════════════════════════════════════════════
 // PICK LOGGING & TRANSPARENCY
 // ═══════════════════════════════════════════════════════════════════════════
@@ -587,10 +586,6 @@ function getGameKey(homeTeam, awayTeam) {
 }
 
 // Parse arguments
-const args = process.argv.slice(2);
-const runAll = args.includes('--all');
-const sportsToRun = [];
-
 function getArgValue(flag) {
   // Supports: --flag value  |  --flag=value
   const eq = args.find((a) => a.startsWith(`${flag}=`));
@@ -647,17 +642,6 @@ const gameOffset = parseInt(getArgValue('--offset'), 10) || 0;
 // --time flag to filter games by start time in EST (e.g., "12" for 12pm, "12,1" for 12pm and 1pm)
 const timeFilter = getArgValue('--time');
 
-if (runAll) {
-  sportsToRun.push('nba', 'nfl', 'nhl', 'ncaab', 'ncaaf');
-} else {
-  if (args.includes('--nba')) sportsToRun.push('nba');
-  if (args.includes('--nfl')) sportsToRun.push('nfl');
-  if (args.includes('--nhl')) sportsToRun.push('nhl');
-  if (args.includes('--ncaab')) sportsToRun.push('ncaab');
-  if (args.includes('--ncaaf')) sportsToRun.push('ncaaf');
-  if (args.includes('--mlb')) sportsToRun.push('mlb');
-}
-
 if (sportsToRun.length === 0) {
   console.log(`
 ╔══════════════════════════════════════════════════════════════════╗
@@ -667,9 +651,8 @@ if (sportsToRun.length === 0) {
 ║  Usage:                                                          ║
 ║    node scripts/run-agentic-picks.js --nba                       ║
 ║    node scripts/run-agentic-picks.js --nfl                       ║
-║    node scripts/run-agentic-picks.js --nhl   (BETA)              ║
-║    node scripts/run-agentic-picks.js --ncaab                     ║
 ║    node scripts/run-agentic-picks.js --ncaaf                     ║
+║    node scripts/run-agentic-picks.js --mlb                       ║
 ║    node scripts/run-agentic-picks.js --all                       ║
 ║                                                                  ║
 ║  Or combine sports:                                              ║

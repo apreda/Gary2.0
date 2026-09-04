@@ -42,12 +42,12 @@ export async function fetchTodayGamePicks(revalidate = 600): Promise<GaryPick[]>
       `daily_picks?select=date,picks&date=eq.${date}`, { revalidate },
     ),
     rest<WeeklyNflPicksRow[]>(
-      `weekly_nfl_picks?select=week_start,picks&order=week_start.desc&limit=1`, { revalidate },
+      `weekly_nfl_picks?select=week_start,picks&week_start=lte.${date}&order=week_start.desc&limit=1`, { revalidate },
     ),
   ]);
   const picks = rows.flatMap(r => parsePicksJson<GaryPick>(r.picks));
 
-  // NFL is weekly — include the most recent week's picks only if today falls
+  // NFL is weekly — include the latest started week's picks only if today falls
   // inside that week (week_start .. week_start+6).
   if (weekly.length > 0) {
     const start = new Date(`${weekly[0].week_start}T12:00:00Z`).getTime();

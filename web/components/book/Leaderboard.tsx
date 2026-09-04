@@ -85,7 +85,7 @@ export function Leaderboard({ garyRows, myHandle }: { garyRows?: GaryRows; myHan
               key={s.key}
               disabled={moreBusy}
               aria-pressed={s.key === sort}
-              onClick={() => change(() => setSort(s.key))}
+              onClick={() => { if (s.key !== sort) change(() => setSort(s.key)); }}
               className={`${bookButton} ${s.key === sort ? 'border-gold bg-gold/10 text-gold' : ''}`}
             >
               {s.label}
@@ -99,7 +99,7 @@ export function Leaderboard({ garyRows, myHandle }: { garyRows?: GaryRows; myHan
                 key={w.key}
                 disabled={moreBusy}
                 aria-pressed={w.key === window_}
-                onClick={() => change(() => setWindow(w.key))}
+                onClick={() => { if (w.key !== window_) change(() => setWindow(w.key)); }}
                 className={`py-1 text-[12px] ${w.key === window_ ? 'border-b border-gold text-gold' : 'text-mid'}`}
               >
                 {w.label}
