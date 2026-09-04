@@ -89,6 +89,14 @@ separate silent faults:
    goes to the team card first; with no pack anywhere it opens the edge overlay,
    never an empty card.
 
+**Not in any commit, and worth knowing.** Another session deleted **81
+fabricated college fantasy rows** by hand across Aug 29, Sep 3 and Sep 4 — the
+provider serves last season's line under this season's label before a team has
+played, and the corrected endpoint still does it. The college board is clean as
+of this afternoon. If college fantasy numbers look impossible again, that is the
+first thing to check. A migration also landed in production that is easy to
+miss: `pick_desks` now carries a `research_briefing` column.
+
 **Marketing.** The daily recap tweet is back, **one post per sport**, 10 AM ET
 with a self-healing window through 2 PM. Composition is pure and node-testable
 in `gary2.0/supabase/functions/social-auto-post/recap.ts`. Preview any day with
