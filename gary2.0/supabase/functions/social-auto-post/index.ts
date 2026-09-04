@@ -26,6 +26,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { matchVerdicts, plainVerdict, buildVerdictPrompt, trimTweet, isValidVerdict } from "./verdicts.ts";
 import { composeWeekTape } from "./weektape.ts";
+import { composeRecaps, type RecapRow } from "./recap.ts";
 import { fallbackReasonPair, isVerbatimSnippet, reasonCandidates, splitSentences } from "../_shared/verbatimSnippets.js";
 import { barePick } from "./barepick.ts";
 import { computeStanding } from "./pl.ts";
@@ -110,14 +111,6 @@ function yesterdayOf(today: string): string {
 }
 
 // "2026-06-28" -> "June 28th" (ordinal suffix for the recap header).
-function ordinalDate(ymd: string): string {
-  const d = new Date(ymd + "T12:00:00Z");
-  const month = d.toLocaleDateString("en-US", { month: "long", timeZone: "UTC" });
-  const day = d.getUTCDate();
-  const suffix = (day % 100 >= 11 && day % 100 <= 13) ? "th" : (["th", "st", "nd", "rd"][day % 10] ?? "th");
-  return `${month} ${day}${suffix}`;
-}
-
 type JsonSchema = Record<string, unknown>;
 
 async function callAnthropicLLM(system: string, user: string): Promise<string> {
@@ -732,71 +725,78 @@ async function runArcUpdateMode(today: string, dryRun: boolean) {
   return { posted: true, standing: s, thread_url: `https://x.com/BetwithGary/status/${tweetId}` };
 }
 
-// REVIVED Jul 8 2026 (founder): full per-sport list of every GAME pick from yesterday — no LLM, no
-// personality, no mood. Deterministic template only ("no personality needed because its simple
-// instructions"). Format:
-//   July 7th:
+// THE DAILY RECAP — yesterday's game picks, ONE POST PER SPORT.
 //
-//   MLB: 7-0
-//   - Dodgers -1.5 ✅
-//   - Braves ML ❌
-//   ...
-// Props excluded (founder: "just do game picks not props"). Closes with the app plug + 1-2 hashtags
-// (founder, Jul 8 — an explicit exception to the account's usual zero-hashtag rule, THIS SURFACE ONLY).
-// Hashtags are drawn from whichever leagues actually appear that day, so they stay genuinely relevant
-// instead of static filler.
+// Revived Jul 8 2026, retired Aug 21 2026 ("they dont do well at all"), and
+// revived AGAIN Sep 4 2026 by the founder — split by sport this time: "this
+// same tweet for MLB and then another one for NCAAF". One post carrying every
+// league buried whichever sport a reader came for; each sport now gets its own
+// tape with its own date line and its own record. Format:
+//   September 3rd:
+//
+//   NCAAF: 3-1
+//   - UAB +27.5 -118 ✅
+//   - Georgia Tech -6.5 -110 ❌
+//
+//   Every game, every day. The full card is in the app.
+//
+// Deterministic: no LLM, no mood, no opening commentary. Props excluded
+// (founder: "just do game picks not props"). Composition lives in recap.ts;
+// this function is the fetch, the per-sport dedup and the post.
 async function runRecapMode(today: string, dryRun: boolean) {
-  // RETIRED Aug 21 2026 (founder: "we should not do a recap tweets anymore they
-  // dont do well at all"). The morning ledger never earned its slot — it is a
-  // results table posted to people who were not following the card live, and it
-  // consistently under-performed the pick threads and the verdict quote-tweets,
-  // which carry the same receipts at the moment anyone actually cares.
-  // Same shape as the retired personality post: the live path early-returns,
-  // the dry-run path below still composes so it can be previewed. To revert,
-  // delete this line.
-  if (!dryRun) return { posted: false, reason: "recap post retired (founder, Aug 21 2026)" };
-  const { data: existing } = await sb.from("social_post_log").select("id").eq("post_date", today).eq("thread_format", "recap").limit(1);
-  if (existing?.length && !dryRun) return { posted: false, reason: "recap already posted today" };
   const y = yesterdayOf(today);
-  const { data: results, error } = await sb.from("game_results").select("league, result, pick_text, confidence").eq("game_date", y);
+
+  // Game picks live in two tables: game_results carries MLB + college football
+  // (and every other league), nfl_results carries the NFL with its own season
+  // type. Preseason is dropped in composeRecaps, so an August NFL exhibition
+  // never rides a tape that states a record.
+  const [{ data: results, error }, { data: nflRows, error: nflError }] = await Promise.all([
+    sb.from("game_results").select("league, result, pick_text, confidence").eq("game_date", y),
+    sb.from("nfl_results").select("result, pick_text, confidence, season_type").eq("game_date", y),
+  ]);
   if (error) throw error;
-  const graded = (results ?? []).filter((r) => r.result === "won" || r.result === "lost" || r.result === "push");
-  if (!graded.length) return { posted: false, reason: "no graded game results for yesterday yet" };
+  if (nflError) throw nflError;
 
-  const marker = (result: string) => result === "won" ? "✅" : result === "lost" ? "❌" : "(push)";
-  const bySport = new Map<string, { won: number; lost: number; picks: any[] }>();
-  for (const r of graded) {
-    const rec = bySport.get(r.league) ?? { won: 0, lost: 0, picks: [] };
-    if (r.result === "won") rec.won++; else if (r.result === "lost") rec.lost++;
-    rec.picks.push(r);
-    bySport.set(r.league, rec);
+  const rows: RecapRow[] = [
+    ...(results ?? []).map((r: any) => ({
+      league: r.league, result: r.result, pick_text: r.pick_text, confidence: r.confidence,
+    })),
+    ...(nflRows ?? []).map((r: any) => ({
+      league: "NFL", result: r.result, pick_text: r.pick_text, confidence: r.confidence,
+      season_type: r.season_type,
+    })),
+  ];
+
+  const posts = composeRecaps(rows, y);
+  if (!posts.length) return { posted: false, reason: "no graded game results for yesterday yet" };
+
+  if (dryRun) return { posted: false, dry_run: true, posts };
+
+  // Dedup is PER SPORT: a run that posted MLB and then failed on NCAAF must
+  // post only the college tape when it retries, never MLB twice.
+  const { data: already } = await sb.from("social_post_log")
+    .select("league").eq("post_date", today).eq("thread_format", "recap");
+  const posted = new Set((already ?? []).map((r: any) => String(r.league ?? "").toUpperCase()));
+
+  const sent: { league: string; thread_url: string }[] = [];
+  const skipped: string[] = [];
+  for (const post of posts) {
+    if (posted.has(post.league)) { skipped.push(post.league); continue; }
+    const tweetId = await postTweet(post.text);
+    const { error: insErr } = await sb.from("social_post_log").insert({
+      post_date: today, slot: "recap", league: post.league,
+      pick_text: `DAILY RECAP ${post.league} ${today}`, thread_format: "recap",
+      hook_tweet_id: tweetId, cta_tweet_id: null,
+      thread_url: `https://x.com/BetwithGary/status/${tweetId}`, post_text: post.text,
+    });
+    // A posted tweet with no log row would repost tomorrow's run — fail loudly
+    // rather than quietly risking a duplicate.
+    if (insErr) throw new Error(`posted ${tweetId} (${post.league}) but log insert FAILED: ${insErr.message}`);
+    sent.push({ league: post.league, thread_url: `https://x.com/BetwithGary/status/${tweetId}` });
   }
-  const sortedEntries = [...bySport.entries()].sort((a, b) => b[1].picks.length - a[1].picks.length || a[0].localeCompare(b[0]));
-  const sections = sortedEntries.map(([league, rec]) => {
-    const lines = [...rec.picks]
-      .sort((a, b) => parseFloat(b.confidence ?? 0) - parseFloat(a.confidence ?? 0))
-      .map((p) => `- ${p.pick_text} ${marker(p.result)}`);
-    return `${league}: ${rec.won}-${rec.lost}\n${lines.join("\n")}`;
-  });
-  // MORNING TAPE — THE LEDGER ONLY (founder, Aug 14 2026: "on these tweets we dont at all need to have
-  // that part of commentary at the top at all"). An LLM-written opening line led this post from Aug 5;
-  // it is gone. The record speaks for itself, and a paragraph of mood on top of a results table is exactly
-  // the editorial one-liner the founder has cut everywhere else it appeared.
-  //
-  // The post's brand job is unchanged and is why it exists: full transparency on wins AND losses, visible
-  // proof Gary picks every single game, and a pull into the app for the full card. So the LEDGER stays
-  // exactly as complete as it was — every pick, every result, nothing hidden on a bad day. The win/loss
-  // markers stay too: in a results table they are scannable structure, not hype decoration.
-  const text = `${ordinalDate(y)}:\n\n${sections.join("\n\n")}\n\nEvery game, every day. The full card is in the app.`;
 
-  if (dryRun) return { posted: false, dry_run: true, text };
-
-  const tweetId = await postTweet(text);
-  await sb.from("social_post_log").insert({
-    post_date: today, slot: "recap", league: "RECAP", pick_text: `DAILY RECAP ${today}`, thread_format: "recap",
-    hook_tweet_id: tweetId, cta_tweet_id: null, thread_url: `https://x.com/BetwithGary/status/${tweetId}`, post_text: text,
-  });
-  return { posted: true, text, thread_url: `https://x.com/BetwithGary/status/${tweetId}` };
+  if (!sent.length) return { posted: false, reason: `recap already posted today (${skipped.join(", ")})` };
+  return { posted: true, sent, skipped };
 }
 
 // WEEK TAPE (Sep 1 2026, co-founder ruling after the marketing review): ONE post a week, Monday late
