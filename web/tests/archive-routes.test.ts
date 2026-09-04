@@ -1,6 +1,6 @@
+import { archiveGamePath } from '@/lib/gary/archive-path';
 import { describe, expect, it } from 'vitest';
 import {
-  archiveGamePath,
   generateStaticParams as generateArchiveDateParams,
 } from '@/app/archive/[date]/page';
 import { generateStaticParams as generateArchiveMonthParams } from '@/app/archive/month/[month]/page';

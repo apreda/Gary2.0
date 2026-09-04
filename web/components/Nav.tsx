@@ -10,11 +10,11 @@ const LINKS = [
   { href: '/today', label: 'Today' },
   { href: '/picks', label: 'Picks' },
   { href: '/props', label: 'Props' },
+  { href: '/winners', label: 'Winners' },
   { href: '/results', label: 'Results' },
   { href: '/hub', label: 'Hub' },
   { href: '/you', label: 'Your Book' },
-  { href: '/how-it-works', label: 'How It Works' },
-  { href: '/pricing', label: 'Pricing' },
+  { href: '/leaderboard', label: 'Leaderboard' },
 ];
 
 const focusRing =
@@ -43,7 +43,7 @@ export function Nav() {
         </Link>
 
         {/* Desktop links — active route wears the 2px gold underline (the app's tab rule) */}
-        <div className="hidden items-center gap-7 lg:flex">
+        <div className="hidden items-center gap-5 lg:flex">
           {LINKS.map(l => {
             const active = isActive(l.href);
             return (

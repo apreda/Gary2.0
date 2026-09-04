@@ -37,18 +37,20 @@ const STREAK_TINT = '#E5844B';
 function useLocked(commence?: string | null): boolean {
   const [locked, setLocked] = useState(false);
   useEffect(() => {
-    const timer = window.setTimeout(() => {
+    const update = () => {
       const d = parseGameTime(commence);
-      if (d) setLocked(Date.now() >= d.getTime());
-    }, 0);
-    return () => window.clearTimeout(timer);
+      setLocked(d ? Date.now() >= d.getTime() : false);
+    };
+    const timer = window.setTimeout(update, 0);
+    const interval = window.setInterval(update, 15000);
+    return () => { window.clearTimeout(timer); window.clearInterval(interval); };
   }, [commence]);
   return locked;
 }
 
 function ErrorLine({ text }: { text: string | null }) {
   if (!text) return null;
-  return <p className="mt-2 font-mono text-[10.5px] text-loss/90">{text}</p>;
+  return <p role="alert" className="mt-2 font-mono text-[10.5px] text-loss/90">{text}</p>;
 }
 
 function ResultTag({ bet, unitDollars }: { bet: UserBet; unitDollars: number }) {
@@ -218,11 +220,12 @@ export function TailFadeRow({
   const intentKey = gameIntentKey(pickId, pickText);
   const gameDate = gameDateForBook(commence, ctx?.date ?? todayEST());
   const receiptKey = gamePickReceiptKey(gameDate, pickText);
-  const ambiguous = ctx?.ambiguousGamePickReceiptKeys.has(receiptKey) ?? false;
-  const mine = !ambiguous && ctx ? findExistingGameBet(ctx.mine, gameDate, pickText) : null;
+  const sharedText = ctx?.ambiguousGamePickReceiptKeys.has(receiptKey) ?? false;
+  const ambiguous = !pickId && sharedText;
+  const mine = !ambiguous && ctx ? findExistingGameBet(ctx.mine, gameDate, pickText, pickId) : null;
   // The provider's aggregate is explicitly for its primary date. Never show
   // that number beside a different day from a multi-date weekly board.
-  const riders = ambiguous || !ctx
+  const riders = sharedText || !ctx
     ? undefined
     : tailFadeCountForGame(ctx.counts, ctx.date, gameDate, pickText);
   const ridersLine =
@@ -368,10 +371,16 @@ export function PropTailFadeRow({
   player,
   prop,
   commence,
+  gameId,
+  line,
+  side,
 }: {
   player: string;
   prop: string;
   commence?: string | null;
+  gameId?: string | null;
+  line?: number | null;
+  side?: string | null;
 }) {
   const ctx = useBookDay();
   const router = useRouter();
@@ -386,7 +395,7 @@ export function PropTailFadeRow({
   // Props are stored in the provider's daily prop_picks row. Preserve that
   // publication-date identity; only game cards can span a weekly board.
   const gameDate = ctx?.date ?? gameDateForBook(commence, todayEST());
-  const mine = ctx ? findExistingPropBet(ctx.mine, gameDate, player, propToken) : null;
+  const mine = ctx ? findExistingPropBet(ctx.mine, gameDate, player, propToken, gameId, line, side) : null;
 
   useEffect(() => {
     if (!ctx?.ready || !ctx.signedIn || arming) return;
@@ -415,7 +424,7 @@ export function PropTailFadeRow({
     setArming(side);
   };
 
-  const place = async (stake: number) => {
+  const place = async (stake: number, streak: boolean) => {
     setBusy(true);
     try {
       const action = arming!;
@@ -426,6 +435,7 @@ export function PropTailFadeRow({
         propType: propToken,
         kind: action,
         stake,
+        gameId, line, side, streak,
       });
       ctx.addBet(bet);
       logFirstBookAction(action, { content_type: 'prop' });
@@ -466,7 +476,7 @@ export function PropTailFadeRow({
         <StakePicker
           side={arming}
           tailColor="#D7DCE4"
-          showStreak={false}
+          showStreak
           busy={busy}
           onConfirm={place}
           onBack={() => setArming(null)}

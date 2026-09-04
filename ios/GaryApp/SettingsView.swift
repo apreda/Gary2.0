@@ -85,7 +85,7 @@ struct SettingsView: View {
                 }
             }
         } message: {
-            Text("This permanently deletes your account and all of your data. This can't be undone.")
+            Text("This cancels your Gary subscriptions and permanently deletes your profile, bets, and account data. This can't be undone.")
         }
         .alert("Couldn't Delete Account", isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })) {
             Button("OK", role: .cancel) { deleteError = nil }

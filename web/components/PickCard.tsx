@@ -1,7 +1,7 @@
 import { Eyebrow } from './Eyebrow';
 import { ClampFade } from './ClampFade';
 import { sportByCode } from '@/lib/gary/leagues';
-import { effectiveOdds } from '@/lib/gary/results';
+import { effectiveOdds } from '@/lib/gary/odds';
 import type { GaryPick } from '@/lib/gary/types';
 
 function confidencePct(c?: number) {

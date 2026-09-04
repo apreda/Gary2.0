@@ -22,7 +22,7 @@
 // prop_type stored to match existing rows: first token of the prop string
 // ("home_runs", "total_bases", "hits_runs_rbis").
 
-import { settleUserBet, patchUserBet } from "../grade-results/userbets.ts";
+import { settleUserBet, patchUserBet, fetchUserBetsForDates, matchingPropGrade } from "../grade-results/userbets.ts";
 import { updateUserStreak } from "../grade-results/streaks.ts";
 import { notifySettles, type UserSettleBatch } from "../grade-results/push.ts";
 import { gradePropResult } from "./grading.ts";
@@ -330,33 +330,37 @@ Deno.serve(async (req) => {
     for (const w of writes.slice(0, 40)) sample.push({ player: w.player_name, prop: w.prop_type,
       bet: w.bet, line: w.line_value, actual: w.actual_value, result: w.result });
   } else {
-    for (const w of writes) { stats[await writeProp(w)]++; }
+    const durableWrites: any[] = [];
+    for (const w of writes) {
+      const outcome = await writeProp(w); stats[outcome]++;
+      if (outcome !== "fail") durableWrites.push(w);
+    }
 
     // Your Book: settle prop tail/fades against this run's grades; never fatal.
     try {
-      const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/user_bets?game_date=in.(${dates.join(",")})` +
-        `&pick_type=eq.prop&status=eq.pending&kind=in.(tail,fade)` +
-        `&select=id,kind,game_date,player_name,prop_type,stake_units,odds_american,user_id,streak_pick`,
-        { headers: sbHeaders },
-      );
-      if (res.ok) {
-        const rows: any[] = await res.json();
-        const byKey = new Map(writes.map((w) => [
-          `${w.game_date}|${normalizeName(w.player_name)}|${String(w.prop_type).toLowerCase()}`, w.result,
+      const rows = await fetchUserBetsForDates(dates, SUPABASE_URL, sbHeaders, "prop");
+      {
+        // Include already-persisted grades so a retry heals personal bets even
+        // when the expensive provider work was skipped. New successful writes
+        // replace earlier grades by exact game/line/side identity.
+        const byIdentity = new Map([...settled, ...durableWrites].map((w) => [
+          propResultIdentityKey({ gameDate: w.game_date, sport: w.sport, gameId: w.game_id,
+            playerName: w.player_name, propType: w.prop_type, bet: w.bet, line: w.line_value }), w,
         ]));
+        byIdentity.delete(null);
+        const userGrades = [...byIdentity.values()];
         const pushBatch = new Map<string, UserSettleBatch>();
         for (const r of rows) {
-          const result = byKey.get(
-            `${r.game_date}|${normalizeName(r.player_name ?? "")}|${String(r.prop_type ?? "").toLowerCase()}`);
+          const result = matchingPropGrade(r, userGrades);
           if (!result) continue;
           const s = settleUserBet(r.kind, result, Number(r.stake_units), r.odds_american ?? null);
+          if (r.status === s.status && Number(r.units_net) === s.units && r.graded_by === "system") continue;
           const ok = await patchUserBet(SUPABASE_URL, sbHeaders, r.id, {
             status: s.status, units_net: s.units,
             ...(s.estimated ? { odds_estimated: true } : {}),
             graded_at: new Date().toISOString(), graded_by: "system",
-          });
-          if (ok && r.user_id) {
+          }, r.status);
+          if (ok && r.user_id && r.status === "pending") {
             if (!pushBatch.has(r.user_id)) pushBatch.set(r.user_id, { events: [], streakAfter: null });
             const b = pushBatch.get(r.user_id)!;
             b.events.push({ kind: r.kind, status: s.status, units: s.units, streak_pick: !!r.streak_pick });

@@ -119,6 +119,7 @@ struct PremiumPicksView: View {
     // Per-sport shelves show admissions for the selected date only.
     @State private var gameShelves: [GameShelf] = []
     @State private var propShelves: [PropShelf] = []
+    @State private var lockedBoardSummaries: [SupabaseAPI.WinnersBoardSummary] = []
     /// Which Winners slot each of today's curated game picks fills (pick.id →
     /// slot) — drives the wordless edge-rail cue and the shelf's slot order.
     @State private var winnersSlotMap: [String: WinnersSlot] = [:]
@@ -147,10 +148,12 @@ struct PremiumPicksView: View {
     @State private var selectedDate: String? = nil
     /// Coming-soon popup: dismissed → collapses to a compact top strip, cards stay.
 
-    // Per-sport entitlements, granted by the Stripe webhook and keyed to the
-    // auth user (or this install when signed out). isPremium stays as the
-    // all-access dev/QA preview toggle.
+    // Per-sport access follows the authenticated account. The preview toggle
+    // changes DEBUG display only; the server still controls ticket reads.
     @State private var entitledSports: Set<String> = []
+    @ObservedObject private var access = WinnersAccessStore.shared
+    @State private var checkoutError: String?
+    @State private var checkoutBusy = false
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var authManager: AuthManager
     @State private var showAuthSheet = false
@@ -161,23 +164,17 @@ struct PremiumPicksView: View {
     @State private var pendingCheckout: String? = nil
     @State private var pendingBundle: [String]? = nil
     @State private var pendingAuth = false
+    @State private var lastAccountID = AuthManager.shared.currentUser?.id
     // Stripe checkout rides an IN-APP browser (SFSafariViewController) — US
     // App Store guideline 3.1.1 allows external purchases for digital goods
     // incl. in-app web views (post-Epic, verified June 2026). Apple Pay +
     // autofill work in SFSafariViewController; the user never leaves the app.
     @State private var checkoutItem: CheckoutItem? = nil
-    /// 2.18 PAYWALL ON (Jul 2 2026, founder call): Winners boards gate behind
-    /// Stripe checkout. The free slate (Picks tab) stays free — Winners is the
-    /// paid conviction layer, per the Jun 8 pricing overhaul.
-    // Jul 5 2026 (founder): shipping the update FREE — payments wait. Every
-    // user gets the full members room (sealed cards, tap to reveal) "for a
-    // good while." All checkout/entitlement logic stays intact behind this.
-    /// Sep 1 2026 (co-founder ruling, marketing review): Winners stays free
-    /// for everyone through September, and any device that first opened Gary
-    /// before October 1 keeps it free for the rest of the season — the
-    /// founding cohort. Installs after that date meet the paywall. The stamp
-    /// and the date live in FoundingCohort (end of this file).
-    static var freeLaunch: Bool { FoundingCohort.winnersFree }
+    /// The server owns account access. Before its first response the only
+    /// safe local allowance is the public preview period, never a device stamp.
+    @MainActor static var freeLaunch: Bool {
+        WinnersAccessStore.shared.snapshot?.isFreeAccess ?? (Date() < FoundingCohort.paywallStart)
+    }
 
     /// Dev/QA all-access — honored in DEBUG builds ONLY. A Release binary
     /// ignores the flag entirely, so defaults tampering (jailbreak, backup
@@ -190,7 +187,8 @@ struct PremiumPicksView: View {
         #endif
     }
     private func sportUnlocked(_ lg: String) -> Bool {
-        Self.freeLaunch || devAllAccess || entitledSports.contains("ALL") || entitledSports.contains(lg)
+        if let selectedDate, selectedDate < SupabaseAPI.todayEST() { return true }
+        return devAllAccess || (access.snapshot?.unlocks(lg) ?? (Date() < FoundingCohort.paywallStart))
     }
     /// Stripe Payment Links, June 5 pricing: single sport $9.99/mo and
     /// All-Access monthly/annual plans. Debug builds sell TEST links
@@ -228,17 +226,19 @@ struct PremiumPicksView: View {
         // (cancel/manage requires identity; device-bound subs are a trap).
         guard authManager.isAuthenticated else {
             SupabaseAPI.logEvent("checkout_blocked_signin", ["sport": league, "surface": surface])
-            showAuthSheet = true; return
+            pendingCheckout = league; showAuthSheet = true; return
         }
-        guard let base = Self.checkoutLinks[league],
-              let url = URL(string: "\(base)?client_reference_id=\(SupabaseAPI.identityId)") else { return }
-        SupabaseAPI.logEvent("checkout_started", [
-            "plan": league == "ALL" ? "all_access"
-                  : (league == "ALL_ANNUAL" ? "all_access_annual" : "single"),
-            "sport": league, "surface": surface,
-        ])
-        checkoutItem = CheckoutItem(url: url)
+        guard !checkoutBusy else { return }
+        checkoutBusy = true
+        Task {
+            defer { checkoutBusy = false }
+            do {
+                let url = try await WinnersAccessStore.checkout(leagues: league.hasPrefix("ALL") ? [] : [league], plan: league.hasPrefix("ALL") ? league : nil)
+                checkoutItem = CheckoutItem(url: url)
+            } catch { checkoutError = error.localizedDescription }
+        }
     }
+
     @State private var sportRecords: [String: (w: Int, l: Int)] = [:]
 
     // In-season / imminent sports shown as rows (placeholders when a sport has no pick yet).
@@ -272,12 +272,14 @@ struct PremiumPicksView: View {
 
     private var hasContent: Bool {
         gameShelves.contains { !$0.picks.isEmpty } || propShelves.contains { !$0.props.isEmpty }
+            || lockedBoardSummaries.contains { $0.count > 0 }
     }
     /// Fresh = a pick for TODAY (settled == false, non-empty). Yesterday's
     /// last-result fallback (settled == true) and empty slate placeholders don't count.
     private var todayHasFreshPicks: Bool {
         gameShelves.contains { !$0.settled && !$0.picks.isEmpty }
         || propShelves.contains { !$0.settled && !$0.props.isEmpty }
+        || (selectedDate == nil && lockedBoardSummaries.contains { $0.count > 0 })
     }
     /// On TODAY with nothing fresh yet, show the "board drops soon" state (blurred
     /// placeholder cards) instead of yesterday's results — those live under the date
@@ -295,6 +297,7 @@ struct PremiumPicksView: View {
     private var boardHasNCAAF: Bool {
         gameShelves.contains { $0.league.uppercased() == "NCAAF" }
             || propShelves.contains { $0.league.uppercased() == "NCAAF" }
+            || lockedBoardSummaries.contains { $0.league.uppercased() == "NCAAF" }
     }
 
     var body: some View {
@@ -379,11 +382,25 @@ struct PremiumPicksView: View {
                 if selectedDate == nil { Task { await reload() } }
             }
         }
-        .onChange(of: authManager.isAuthenticated) { _ in
-            // Sign-in/out swaps the identity entitlements key on — refetch.
-            Task { entitledSports = await SupabaseAPI.fetchEntitlements() }
+        .onChange(of: authManager.currentUser?.id) { _ in
+            boardLoadToken = UUID()
+            entitledSports = []; admittedBoardCache = [:]; gameShelves = []; propShelves = []; lockedBoardSummaries = []
+            checkoutItem = nil; checkoutError = nil
+            if lastAccountID != nil || authManager.currentUser?.id == nil {
+                pendingCheckout = nil; pendingBundle = nil; pendingAuth = false
+            }
+            lastAccountID = authManager.currentUser?.id
+            access.clear()
+            Task { await reload() }
         }
-        .sheet(isPresented: $showAuthSheet) { AuthView(startInSignUp: true) }
+        .alert("Winners access", isPresented: Binding(get: { checkoutError != nil }, set: { if !$0 { checkoutError = nil } })) {
+            Button("OK") { checkoutError = nil }
+        } message: { Text(checkoutError ?? "") }
+        .sheet(isPresented: $showAuthSheet, onDismiss: {
+            guard authManager.isAuthenticated else { pendingCheckout = nil; pendingBundle = nil; return }
+            if let league = pendingCheckout { pendingCheckout = nil; openCheckout(league, surface: "signed_in") }
+            else if let leagues = pendingBundle { pendingBundle = nil; openBundleCheckout(leagues) }
+        }) { AuthView(startInSignUp: true) }
         .sheet(isPresented: $showPlansSheet, onDismiss: {
             if pendingAuth { pendingAuth = false; showAuthSheet = true }
             if let lg = pendingCheckout { pendingCheckout = nil; openCheckout(lg, surface: "paywall_sheet") }
@@ -398,7 +415,7 @@ struct PremiumPicksView: View {
         .sheet(item: $checkoutItem, onDismiss: {
             // In-app checkout doesn't background the app, so scenePhase never
             // fires — pick up fresh grants the moment the sheet closes.
-            Task { entitledSports = await SupabaseAPI.fetchEntitlements() }
+            Task { entitledSports = await SupabaseAPI.fetchEntitlements(); await reload() }
         }) { item in
             SafariView(url: item.url).ignoresSafeArea()
         }
@@ -422,11 +439,13 @@ struct PremiumPicksView: View {
     /// Bundle checkout goes through the create-checkout edge function — the
     /// picked sports ride in session metadata. Same sign-in gate as links.
     private func openBundleCheckout(_ leagues: [String]) {
-        guard authManager.isAuthenticated else { showAuthSheet = true; return }
+        guard authManager.isAuthenticated else { pendingBundle = leagues; showAuthSheet = true; return }
+        guard !checkoutBusy else { return }
+        checkoutBusy = true
         Task {
-            if let url = await SupabaseAPI.createCheckout(leagues: leagues) {
-                await MainActor.run { checkoutItem = CheckoutItem(url: url) }
-            }
+            defer { checkoutBusy = false }
+            do { checkoutItem = CheckoutItem(url: try await WinnersAccessStore.checkout(leagues: leagues)) }
+            catch { checkoutError = error.localizedDescription }
         }
     }
 
@@ -436,6 +455,7 @@ struct PremiumPicksView: View {
         guard let sport = picksFocus.focusSport, !loading else { return }
         if gameShelves.contains(where: { $0.league == sport }) { mode = .games }
         else if propShelves.contains(where: { $0.league == sport }) { mode = .props }
+        else if let locked = lockedBoardSummaries.first(where: { $0.league == sport }) { mode = locked.kind == "game" ? .games : .props }
         else { picksFocus.focusSport = nil; return }
         withAnimation(.easeInOut(duration: 0.35)) {
             proxy.scrollTo((mode == .games ? "g-" : "p-") + sport, anchor: .top)
@@ -719,6 +739,9 @@ struct PremiumPicksView: View {
                 // follow as blurred previews — the user sees the real board
                 // exactly as members do, just unreadable (tap = checkout).
                 // The storefront menu (records, the honest hook) closes it out.
+                ForEach(lockedBoardSummaries.filter { $0.kind == "game" }) { summary in
+                    lockedBoardCard(summary).id("g-\(summary.league)")
+                }
                 ForEach(gameShelves.filter { sportUnlocked($0.league) }) { shelf in
                     gameShelfView(shelf)
                         .id("g-\(shelf.league)")
@@ -732,7 +755,9 @@ struct PremiumPicksView: View {
                 }
                 winnersRecordBand
             } else {
-                if propShelves.isEmpty {
+                let lockedProps = lockedBoardSummaries.filter { $0.kind == "prop" }
+                ForEach(lockedProps) { summary in lockedBoardCard(summary).id("p-\(summary.league)") }
+                if propShelves.isEmpty && lockedProps.isEmpty {
                     propsEmptyState
                 } else {
                     ForEach(propShelves.filter { sportUnlocked($0.league) }) { shelf in
@@ -789,8 +814,8 @@ struct PremiumPicksView: View {
                         .font(GaryFonts.text(15, .semibold))
                         .foregroundStyle(.white.opacity(0.92))
                     Text(FoundingCohort.beforePaywallStart
-                         ? "Gary's full card — game picks and props — is open to everyone through September. Be in before October 1 and Winners stays free for the rest of the season."
-                         : "You were in before October 1, so every board stays open for the rest of the season.")
+                         ? "Gary's full card — game picks and props — is open to everyone through September. Create your free account before October 1 to keep founding access on every device."
+                         : "Your account has founding access. Every Winners board is included when you're signed in.")
                         .font(.system(size: 12))
                         .foregroundStyle(.white.opacity(0.55))
                         .lineSpacing(2)
@@ -865,6 +890,8 @@ struct PremiumPicksView: View {
                             Text("\(GaryPricing.trialDays)-DAY FREE TRIAL")
                                 .font(GaryFonts.mono(9.5, bold: true)).tracking(0.8)
                                 .foregroundStyle(.white.opacity(0.6))
+                            Text("New subscribers")
+                                .font(.system(size: 10)).foregroundStyle(.white.opacity(0.6))
                         }
                         Text("Start ›")
                             .font(.system(size: 12, weight: .semibold))
@@ -1295,6 +1322,36 @@ struct PremiumPicksView: View {
         }
     }
 
+    /// The locked state contains only server-approved counts. No hidden pick
+    /// text, matchup, price, or reasoning is downloaded to draw this card.
+    private func lockedBoardCard(_ summary: SupabaseAPI.WinnersBoardSummary) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            shelfHeader(summary.league, status: "·  \(summary.count) \(summary.kind == "prop" ? "PROP" : "PICK")\(summary.count == 1 ? "" : "S") PUBLISHED")
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 12) {
+                    Image(systemName: "lock.shield").font(.system(size: 27, weight: .medium)).foregroundStyle(GaryColors.gold)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("\(summary.league) Winners is ready.").font(GaryFonts.text(19, .semibold)).foregroundStyle(GaryColors.warmWhite)
+                        Text("\(summary.count) reviewed \(summary.kind == "prop" ? "prop selection" : "game pick")\(summary.count == 1 ? "" : "s") on this board.")
+                            .font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.6)).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Text("A \(summary.league) or All-Access pass opens the published picks and Gary's analysis. Your personal book, leaderboard and past Winners results stay free.")
+                    .font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.6)).fixedSize(horizontal: false, vertical: true)
+                Button { plansFocus = summary.league; showPlansSheet = true } label: {
+                    Text("See \(summary.league) access").font(GaryFonts.text(14, .semibold)).foregroundStyle(.black)
+                        .frame(maxWidth: .infinity).padding(.vertical, 14).background(Capsule().fill(GaryColors.gold))
+                }.buttonStyle(.plain)
+                if !authManager.isAuthenticated {
+                    Button("Already a member? Sign in") { showAuthSheet = true }
+                        .font(GaryFonts.text(13, .semibold)).foregroundStyle(GaryColors.gold).padding(.vertical, 4)
+                }
+            }.padding(18).background(RoundedRectangle(cornerRadius: 16).fill(GaryColors.cardBg)
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(GaryColors.gold.opacity(0.22))))
+                .pageGutter()
+        }
+    }
+
     /// Every locked game board for the storefront — the complete purchase
     /// menu, slate or no slate (an empty board still sells its season pass).
     /// WC's empty board reads as the pre-order row until kickoff.
@@ -1641,6 +1698,7 @@ struct PremiumPicksView: View {
     /// last good snapshot. No raw picks, reviewer fallback, or prior-day shelves.
     private func loadAdmittedBoard(_ date: String, isToday: Bool) async {
         let token = UUID()
+        let owner = authManager.currentUser?.id
         await MainActor.run {
             boardLoadToken = token
             loading = loadedBoardDate != date || !hasContent
@@ -1669,10 +1727,11 @@ struct PremiumPicksView: View {
         do {
             let fresh = try await admittedF
             board = await MainActor.run {
-                // Publications never disappear or change price after admission.
-                let retained = SupabaseAPI.retainWinnersPublications(previous: admittedBoardCache[date], incoming: fresh)
-                admittedBoardCache[date] = retained
-                return retained
+                guard boardLoadToken == token, owner == authManager.currentUser?.id else { return SupabaseAPI.WinnersBoardSnapshot() }
+                // Publication snapshots stay immutable, but permission to read
+                // them can change. A fresh authorized response replaces visibility.
+                admittedBoardCache[date] = fresh
+                return fresh
             }
         } catch {
             admissionFailed = true
@@ -1696,6 +1755,7 @@ struct PremiumPicksView: View {
         }
         let slateRows = await slateF
         let entitlements = await entitlementsF
+        guard owner == authManager.currentUser?.id, boardLoadToken == token else { return }
 
         var rMap: [String: String] = retainGameResults ? previousGameResults : [:]
         var sMap: [String: String] = retainGameResults ? previousGameScores : [:]
@@ -1724,12 +1784,16 @@ struct PremiumPicksView: View {
             order.append(league)
         }
         order.sort { sportRank($0) == sportRank($1) ? $0 < $1 : sportRank($0) < sportRank($1) }
+        let lockedGames = Set(board.boards.filter { $0.locked && $0.kind == "game" }.map(\.league))
+        let lockedProps = Set(board.boards.filter { $0.locked && $0.kind == "prop" }.map(\.league))
         let gShelves = order.compactMap { league -> GameShelf? in
+            guard !lockedGames.contains(league) else { return nil }
             let picks = byLeague[league] ?? []
             guard !picks.isEmpty || (isToday && slateCounts[league] != nil) else { return nil }
             return GameShelf(league: league, picks: picks, settled: !isToday)
         }
         let pShelves = order.compactMap { league -> PropShelf? in
+            guard !lockedProps.contains(league) else { return nil }
             let picks = propsByLeague[league] ?? []
             guard !picks.isEmpty || (isToday && propSports.contains(league) && slateCounts[league] != nil) else { return nil }
             return PropShelf(league: league, props: picks, settled: !isToday)
@@ -1748,7 +1812,9 @@ struct PremiumPicksView: View {
         guard !Task.isCancelled else { return }
         await MainActor.run {
             // A slower request for another selected date cannot overwrite this one.
-            guard boardLoadToken == token, (selectedDate ?? SupabaseAPI.todayEST()) == date else { return }
+            guard boardLoadToken == token, owner == authManager.currentUser?.id, (selectedDate ?? SupabaseAPI.todayEST()) == date else { return }
+            lockedBoardSummaries = board.boards.filter { $0.locked && $0.count > 0 }
+            if let serverAccess = board.access { access.snapshot = serverAccess }
             gameResultsMap = rMap
             gameScoresMap = sMap
             matchupScoresMap = mMap
@@ -1785,24 +1851,9 @@ struct SafariView: UIViewControllerRepresentable {
     func updateUIViewController(_ vc: SFSafariViewController, context: Context) {}
 }
 
-/// The pricing page — every plan in one place, in the terminal's own
-/// language. Opened from blurred board previews (focused on that sport)
-/// and from the All-Access section's "All plans" row.
-
-// MARK: - Founding cohort (Sep 1 2026)
-//
-// Winners stays free for everyone through September. A device that first
-// opened Gary before `paywallStart` keeps Winners free for the rest of the
-// season; an install after that date meets the paywall. The first-open stamp
-// lives in the Keychain (it survives a reinstall) and is written the first
-// time this build runs. A device that already carried Gary before this build
-// shipped has UserDefaults history — the intro flag, the session counter, a
-// signed-in id — and is stamped as founding too: nobody is demoted for
-// updating late.
-//
-// The promise is always keepable. If this build slips past October 1, every
-// device is stamped on its first run of the new build, which happens after the
-// date only for people who were ALREADY using Gary — and they carry history.
+// MARK: - Launch dates and the historical first-open stamp
+// Server account records determine founding and paid access. Keep the old
+// device stamp for continuity and future migration; it never opens a board.
 enum FoundingCohort {
     /// Midnight, October 1 2026, Eastern.
     static let paywallStart: Date = {
@@ -1830,7 +1881,7 @@ enum FoundingCohort {
     }
 
     /// The gate every Winners surface reads (via `PremiumPicksView.freeLaunch`).
-    static var winnersFree: Bool { firstOpen < paywallStart }
+    @MainActor static var winnersFree: Bool { PremiumPicksView.freeLaunch }
 
     /// Copy switch: the free room reads one way before the date, another after.
     static var beforePaywallStart: Bool { Date() < paywallStart }

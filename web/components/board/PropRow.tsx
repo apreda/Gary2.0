@@ -2,7 +2,7 @@ import { Disclosure } from '@/components/Disclosure';
 import { ScoutRead } from '@/components/ScoutRead';
 import { PropTailFadeRow } from '@/components/book/TailFadeRow';
 import { isOverCall, oddsText, propCall, parseScoutSections } from '@/lib/gary/format';
-import { isLongShot } from '@/lib/gary/picks';
+import { isLongShot } from '@/lib/gary/prop-lanes';
 import type { PropPick } from '@/lib/gary/types';
 
 /**
@@ -87,7 +87,9 @@ export function PropRow({ prop }: { prop: PropPick }) {
       )}
 
       {/* Renders only inside a BookDayProvider — board pages opt in. */}
-      <PropTailFadeRow player={prop.player ?? ''} prop={prop.prop ?? ''} commence={prop.commence_time} />
+      {!longShot && <PropTailFadeRow player={prop.player ?? ''} prop={prop.prop ?? ''} commence={prop.commence_time}
+        gameId={prop.game_id != null || prop.bdl_game_id != null ? String(prop.game_id ?? prop.bdl_game_id) : null}
+        line={prop.line != null && Number.isFinite(Number(prop.line)) ? Number(prop.line) : null} side={prop.bet} />}
     </div>
   );
 }

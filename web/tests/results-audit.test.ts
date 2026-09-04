@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { datasetTemporalCoverage, resultsDataset } from '@/app/results/audit/page';
+import { datasetTemporalCoverage, resultsDataset } from '@/lib/gary/results-dataset';
 import type { GameResultRow, PropResultRow } from '@/lib/gary/types';
 
 const game = (game_date: string | null): GameResultRow => ({

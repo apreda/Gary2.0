@@ -28,7 +28,7 @@ const faqItems = [
   {
     question: 'How much is it?',
     answer:
-      `A single sport's Winners board is ${PRICING.single}/mo. All-Access — every active board — is ${PRICING.allAccessMonthly}/mo with a ${PRICING.trialDays}-day free trial. Everything bills through Stripe and cancels anytime.`,
+      `A single sport's Winners board is ${PRICING.single}/mo. All-Access — every active board — is ${PRICING.allAccessMonthly}/mo with a ${PRICING.trialDays}-day free trial for new subscribers. Returning subscribers pay the plan price without another trial. Everything bills through Stripe and cancels anytime.`,
   },
   {
     question: 'Where do I subscribe?',

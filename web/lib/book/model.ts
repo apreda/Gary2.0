@@ -32,6 +32,13 @@ export interface UserBet {
   lock_at: string | null;
   placed_at: string | null;
   graded_by: string | null;
+  is_favorite?: boolean;
+  notes?: string | null;
+  bookmaker?: string | null;
+  source_game_id?: string | null;
+  source_pick_id?: string | null;
+  source_line?: number | null;
+  source_side?: string | null;
 }
 
 /** The ledger's calendar key is the game's Eastern-time start date. Weekly
@@ -67,9 +74,8 @@ export function tailFadeCountForGame(
  * RPC intentionally resolves daily_picks only. Hide a control that must fail;
  * this changes neither the call nor its analysis. */
 export function gameBookTrackingUnavailableReason(league: string): string | null {
-  return league.trim().toUpperCase() === 'NFL'
-    ? 'Book tracking is not available for weekly NFL calls yet. The pick and analysis are unchanged.'
-    : null;
+  void league;
+  return null;
 }
 
 /** The shared Book ledger currently identifies game rows by date + exact pick
@@ -100,10 +106,18 @@ export function findExistingGameBet(
   rows: UserBet[],
   gameDate: string,
   pickText: string,
+  pickId?: string | null,
 ): UserBet | null {
-  return rows.find(
+  const matching = rows.filter(
     bet => bet.game_date === gameDate && bet.pick_type === 'game' && bet.pick_text === pickText,
-  ) ?? null;
+  );
+  if (pickId) {
+    const exact = matching.find(b => b.source_pick_id === pickId);
+    if (exact) return exact;
+    const legacy = matching.filter(b => !b.source_pick_id && !b.source_game_id);
+    return legacy.length === 1 ? legacy[0] : null;
+  }
+  return matching.length === 1 ? matching[0] : null;
 }
 
 export function findExistingPropBet(
@@ -111,20 +125,58 @@ export function findExistingPropBet(
   gameDate: string,
   player: string,
   propType: string,
+  gameId?: string | null,
+  line?: number | null,
+  side?: string | null,
 ): UserBet | null {
   const wantedPlayer = player.trim().toLowerCase();
   const wantedType = propType.trim().toLowerCase();
-  return rows.find(
+  const matching = rows.filter(
     bet => bet.game_date === gameDate &&
       bet.pick_type === 'prop' &&
       (bet.player_name ?? '').trim().toLowerCase() === wantedPlayer &&
       (bet.prop_type ?? '').trim().toLowerCase() === wantedType,
-  ) ?? null;
+  );
+  if (gameId) {
+    const exact = matching.find(b => b.source_game_id === gameId &&
+      (line == null || b.source_line === line) && (!side || b.source_side?.toLowerCase() === side.toLowerCase()));
+    if (exact) return exact;
+    const legacy = matching.filter(b => !b.source_game_id);
+    return legacy.length === 1 ? legacy[0] : null;
+  }
+  return matching.length === 1 ? matching[0] : null;
 }
 
 /** Tails/fades are system-graded — the unfakeable ledger. */
 export const isVerified = (b: UserBet) => b.kind === 'tail' || b.kind === 'fade';
 export const isSettled = (b: UserBet) => b.status !== 'pending';
+
+export function isBetLocked(bet: UserBet, now = Date.now()): boolean {
+  if (bet.kind === 'manual') return false;
+  const lock = bet.lock_at ? Date.parse(bet.lock_at) : NaN;
+  return bet.status !== 'pending' || !Number.isFinite(lock) || lock <= now;
+}
+
+export function searchBets(rows: UserBet[], search: string, league: string, status: string, favoritesOnly: boolean): UserBet[] {
+  const query = search.trim().toLowerCase();
+  return rows.filter(b => (!league || b.league === league) &&
+    (!status || (status === 'settled' ? isSettled(b) : b.status === status)) &&
+    (!favoritesOnly || b.is_favorite) &&
+    (!query || [b.pick_text, b.matchup, b.notes, b.bookmaker, b.player_name].some(v => v?.toLowerCase().includes(query))));
+}
+
+/** CSV cells stay data even when a personal note begins with a formula. */
+export function betsCsv(rows: UserBet[]): string {
+  const cell = (value: unknown) => {
+    let s = value == null ? '' : String(value);
+    if (typeof value === 'string' && /^[\s]*[=+@-]/.test(s)) s = `'${s}`;
+    return `"${s.replaceAll('"', '""')}"`;
+  };
+  return [
+    ['Date', 'League', 'Selection', 'Source', 'Status', 'American odds', 'Stake units', 'Net units', 'Graded by', 'Favorite', 'Streak pick', 'Sportsbook', 'Notes'],
+    ...rows.map(b => [b.game_date, b.league, b.pick_text, b.kind, b.status, b.odds_american, b.stake_units, b.units_net, b.graded_by, !!b.is_favorite, !!b.streak_pick, b.bookmaker, b.notes]),
+  ].map(row => row.map(cell).join(',')).join('\r\n');
+}
 
 export interface BookRecord {
   wins: number;
@@ -157,8 +209,8 @@ export const SEASON_START = '2026-03-01';
 
 /** Inclusive ISO floor for a timeframe, or null for no floor. */
 export function windowSince(tf: Timeframe, now: Date = new Date()): string | null {
-  if (tf === '7d') return daysAgoEST(7, now);
-  if (tf === '30d') return daysAgoEST(30, now);
+  if (tf === '7d') return daysAgoEST(6, now);
+  if (tf === '30d') return daysAgoEST(29, now);
   if (tf === 'season') return SEASON_START;
   return null;
 }
@@ -191,9 +243,14 @@ export function trackerStats(rows: UserBet[]): TrackerStats {
   const net = settled.reduce((s, b) => s + (b.units_net ?? 0), 0);
 
   const withOdds = settled.filter(b => b.odds_american != null);
-  const avgOdds = withOdds.length > 0
-    ? Math.round(withOdds.reduce((s, b) => s + (b.odds_american ?? 0), 0) / withOdds.length)
-    : null;
+  // Average payouts in decimal space; averaging American odds could produce
+  // impossible prices such as +53 when favorites and underdogs are mixed.
+  const decimalAverage = withOdds.length > 0 ? withOdds.reduce((sum, b) => {
+    const price = b.odds_american!;
+    return sum + (price > 0 ? 1 + price / 100 : 1 + 100 / Math.abs(price));
+  }, 0) / withOdds.length : null;
+  const avgOdds = decimalAverage === null ? null : Math.round(decimalAverage >= 2
+    ? (decimalAverage - 1) * 100 : -100 / (decimalAverage - 1));
 
   const byDay = new Map<string, number>();
   for (const b of settled) {

@@ -41,6 +41,7 @@ export interface GaryPick {
 }
 
 export interface PropPick {
+  game_id?: string | number; bdl_game_id?: string | number;
   player?: string; team?: string; prop?: string; bet?: string;
   line?: string | number; odds?: number; confidence?: number;
   sport?: string; league?: string; matchup?: string;

@@ -544,7 +544,17 @@ enum SupabaseAPI {
 
     /// Immutable Winners publications. Empty is a valid board; failure throws.
     /// Private review evidence and rejected candidates never reach this endpoint.
+    struct WinnersBoardSummary: Decodable, Identifiable {
+        let league: String
+        let kind: String
+        let count: Int
+        let locked: Bool
+        var id: String { "\(league):\(kind)" }
+    }
+
     struct WinnersBoardSnapshot {
+        var boards: [WinnersBoardSummary] = []
+        var access: WinnersAccessSnapshot?
         var games: [GaryPick] = []
         var props: [PropPick] = []
         var gamePublicationIDs: [String] = []
@@ -554,16 +564,19 @@ enum SupabaseAPI {
     static let winnersAdmissionCutover = "2026-09-04"
 
     static func fetchWinnersBoard(date: String) async throws -> WinnersBoardSnapshot {
-        let url = buildURL(table: "winners_board", query: [
-            URLQueryItem(name: "select", value: "candidate_id,game_date,kind,league,pick_snapshot,admitted_at"),
-            URLQueryItem(name: "game_date", value: "eq.\(date)"),
-            URLQueryItem(name: "order", value: "admitted_at.asc,candidate_id.asc")
-        ])
-        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            throw NSError(domain: "SupabaseAPI.fetchWinnersBoard", code: (response as? HTTPURLResponse)?.statusCode ?? -1)
+        let data = try await WinnersAccessStore.request("rest/v1/rpc/get_winners_board", body: ["p_date": date])
+        guard let envelope = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let tickets = envelope["tickets"] as? [[String: Any]] else {
+            throw URLError(.cannotParseResponse)
         }
-        return try decodeWinnersBoard(data, date: date)
+        var snapshot = try decodeWinnersBoard(JSONSerialization.data(withJSONObject: tickets), date: date)
+        if let boards = envelope["boards"] {
+            snapshot.boards = try JSONDecoder().decode([WinnersBoardSummary].self, from: JSONSerialization.data(withJSONObject: boards))
+        }
+        if let access = envelope["access"] {
+            snapshot.access = try JSONDecoder().decode(WinnersAccessSnapshot.self, from: JSONSerialization.data(withJSONObject: access))
+        }
+        return snapshot
     }
 
     static func decodeWinnersBoard(_ data: Data, date: String) throws -> WinnersBoardSnapshot {
@@ -573,8 +586,19 @@ enum SupabaseAPI {
         var snapshot = WinnersBoardSnapshot()
         var seen: Set<String> = []
         for row in rows {
+            // Postgres bigint candidate IDs arrive as JSON numbers from the
+            // access RPC; older PostgREST fixtures encode them as strings.
+            let publicationID: String? = {
+                if let text = row["candidate_id"] as? String, !text.isEmpty { return text }
+                if let number = row["candidate_id"] as? NSNumber,
+                   CFGetTypeID(number) != CFBooleanGetTypeID(),
+                   number.doubleValue > 0, number.doubleValue.rounded() == number.doubleValue {
+                    return number.stringValue
+                }
+                return nil
+            }()
             guard row["game_date"] as? String == date,
-                  let publicationID = row["candidate_id"] as? String, !publicationID.isEmpty,
+                  let publicationID,
                   seen.insert(publicationID).inserted,
                   let league = row["league"] as? String, !league.isEmpty,
                   let kind = row["kind"] as? String, var ticket = row["pick_snapshot"] as? [String: Any] else {
@@ -1252,43 +1276,15 @@ enum SupabaseAPI {
     /// table — the old direct SELECT let anyone dump every installation_id
     /// and impersonate one for a free unlock.
     static func fetchEntitlements() async -> Set<String> {
-        struct Row: Decodable { let product_key: String? }
-        guard let url = URL(string: "\(Secrets.supabaseURL)/rest/v1/rpc/get_entitlements") else { return [] }
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue(Secrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
-        req.setValue("Bearer \(Secrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-        req.httpBody = try? JSONSerialization.data(withJSONObject: ["p_ids": Array(Set([identityId, installationId]))])
-        guard let (data, response) = try? await URLSession.shared.data(for: req),
-              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let rows = try? JSONDecoder().decode([Row].self, from: data) else { return [] }
-        return Set(rows.compactMap { $0.product_key })
+        await WinnersAccessStore.shared.refresh()
+        return await MainActor.run { Set(WinnersAccessStore.shared.snapshot?.sports ?? []) }
     }
 
     /// Server-created Stripe Checkout for bundles ("any two sports") — the
     /// sport selection rides in session metadata, which payment links can't
     /// carry. Debug builds checkout in Stripe test mode; Release is live.
     static func createCheckout(leagues: [String]) async -> URL? {
-        guard let url = URL(string: "\(Secrets.supabaseURL)/functions/v1/create-checkout") else { return nil }
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue(Secrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
-        req.setValue("Bearer \(Secrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-        #if DEBUG
-        let mode = "test"
-        #else
-        let mode = "live"
-        #endif
-        req.httpBody = try? JSONSerialization.data(withJSONObject: [
-            "leagues": leagues, "identity": identityId, "mode": mode,
-        ])
-        guard let (data, response) = try? await URLSession.shared.data(for: req),
-              let http = response as? HTTPURLResponse, http.statusCode == 200,
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let urlString = obj["url"] as? String else { return nil }
-        return URL(string: urlString)
+        try? await WinnersAccessStore.checkout(leagues: leagues)
     }
 
     /// Fire-and-forget conversion-funnel event → the shared `app_events` table

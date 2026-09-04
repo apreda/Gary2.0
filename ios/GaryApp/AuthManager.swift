@@ -55,34 +55,46 @@ final class AuthManager: ObservableObject {
     // MARK: - Session Check
 
     func checkExistingSession() async {
+        defer { isLoading = false }
         guard !accessToken.isEmpty else {
-            isLoading = false
             return
         }
-
-        // Try to get current user with stored token
+        let originalToken = accessToken
         do {
             let user = try await fetchCurrentUser()
             remember(user)
             isAuthenticated = true
-        } catch {
-            // Token expired — try refresh
+        } catch is CancellationError {
+            return
+        } catch AuthError.unauthorized {
+            guard accessToken == originalToken else { return }
             if !refreshToken.isEmpty {
                 do {
                     try await refreshSession()
                     let user = try await fetchCurrentUser()
                     remember(user)
                     isAuthenticated = true
-                } catch {
-                    // Refresh failed — clear everything
+                } catch is CancellationError {
+                    return
+                } catch AuthError.unauthorized {
                     clearSession()
+                } catch {
+                    restoreCachedIdentity()
                 }
             } else {
                 clearSession()
             }
+        } catch {
+            guard accessToken == originalToken else { return }
+            restoreCachedIdentity()
         }
+    }
 
-        isLoading = false
+    private func restoreCachedIdentity() {
+        guard !accessToken.isEmpty, !userId.isEmpty else { return }
+        currentUser = GaryUser(id: userId, email: userEmail.isEmpty ? nil : userEmail,
+                              phone: nil, created_at: nil, user_metadata: nil)
+        isAuthenticated = true
     }
 
     // MARK: - Email/Password Sign Up
@@ -413,13 +425,14 @@ final class AuthManager: ObservableObject {
     // MARK: - Sign Out
 
     func signOut() {
-        // Fire-and-forget server logout
+        // Capture before clearing so the server actually revokes this session.
+        let tokenToRevoke = accessToken
         Task {
             let url = try authURL("/auth/v1/logout")
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue(apiKey, forHTTPHeaderField: "apikey")
-            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("Bearer \(tokenToRevoke)", forHTTPHeaderField: "Authorization")
             _ = try? await URLSession.shared.data(for: request)
         }
 
@@ -436,6 +449,7 @@ final class AuthManager: ObservableObject {
               let url = URL(string: "\(baseURL)/functions/v1/delete-account") else {
             throw AuthError.unauthorized
         }
+        let owner = currentUser?.id
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue(apiKey, forHTTPHeaderField: "apikey")
@@ -443,11 +457,12 @@ final class AuthManager: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            let msg = String(data: data, encoding: .utf8) ?? "Account deletion failed."
-            throw AuthError.serverError(msg)
+        let result = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode), result?["ok"] as? Bool == true else {
+            if result?["signed_out"] as? Bool == true, currentUser?.id == owner { clearSession() }
+            throw AuthError.serverError(result?["error"] as? String ?? "Account deletion did not finish. Please sign in again and retry.")
         }
-        clearSession()
+        if currentUser?.id == owner { clearSession() }
     }
 
     // MARK: - Helpers
@@ -479,35 +494,39 @@ final class AuthManager: ObservableObject {
     }
 
     private func fetchCurrentUser() async throws -> GaryUser {
+        let token = accessToken
         let url = try authURL("/auth/v1/user")
         var request = URLRequest(url: url)
         request.setValue(apiKey, forHTTPHeaderField: "apikey")
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw AuthError.unauthorized
-        }
+        guard accessToken == token else { throw CancellationError() }
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        if [400, 401, 403].contains(http.statusCode) { throw AuthError.unauthorized }
+        guard http.statusCode == 200 else { throw URLError(.badServerResponse) }
 
         return try JSONDecoder().decode(GaryUser.self, from: data)
     }
 
     private func refreshSession() async throws {
+        let sessionToRefresh = refreshToken
         let url = try authURL("/auth/v1/token?grant_type=refresh_token")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(apiKey, forHTTPHeaderField: "apikey")
 
-        let body: [String: Any] = ["refresh_token": refreshToken]
+        let body: [String: Any] = ["refresh_token": sessionToRefresh]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw AuthError.unauthorized
-        }
+        guard refreshToken == sessionToRefresh else { throw CancellationError() }
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        if http.statusCode == 400 || http.statusCode == 401 || http.statusCode == 403 { throw AuthError.unauthorized }
+        guard http.statusCode == 200 else { throw URLError(.badServerResponse) }
 
         let session = try JSONDecoder().decode(AuthResponse.self, from: data)
         accessToken = session.access_token
@@ -531,12 +550,23 @@ final class AuthManager: ObservableObject {
     /// token responses omit the embedded user, so every later `/user` fetch
     /// must refresh the same durable fields instead of updating only the UI.
     private func remember(_ user: GaryUser) {
+        if userId != user.id { clearProfileCache() }
         userId = user.id
         userEmail = user.email ?? ""
         currentUser = user
     }
 
+    private func clearProfileCache() {
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: "myHandle")
+        defaults.removeObject(forKey: "myProfileAvatar")
+        WinnersAccessStore.shared.clear()
+        defaults.removeObject(forKey: "userUnitDollars")
+        try? FileManager.default.removeItem(at: FileManager.default.temporaryDirectory.appendingPathComponent("Gary-my-bets.csv"))
+    }
+
     private func clearSession() {
+        clearProfileCache()
         accessToken = ""
         refreshToken = ""
         userId = ""

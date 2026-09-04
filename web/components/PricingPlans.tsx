@@ -39,7 +39,7 @@ export function PricingPlans() {
   }
 
   const isSel = (plan: Sel['plan'], sport?: string) => sel.plan === plan && sel.sport === sport;
-  const singles = SPORTS.filter(s => !s.retired);
+  const singles = SPORTS.filter(s => ['MLB', 'NFL', 'NBA', 'NCAAF'].includes(s.code));
 
   return (
     <div>
@@ -85,7 +85,7 @@ export function PricingPlans() {
         }`}
       >
         <span className="absolute -top-2.5 left-4 rounded-md bg-gold px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.04em] text-ink">
-          Best value · {PRICING.trialDays} days free
+          Best value · {PRICING.trialDays} days free for new subscribers
         </span>
         <Radio on={isSel('all_access_annual')} />
         <div className="min-w-0 flex-1">
@@ -108,7 +108,7 @@ export function PricingPlans() {
         }`}
       >
         <span className="absolute -top-2.5 left-4 rounded-md bg-gold px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.04em] text-ink">
-          {PRICING.trialDays} days free
+          New subscribers · {PRICING.trialDays} days free
         </span>
         <Radio on={isSel('all_access')} />
         <div className="min-w-0 flex-1">
@@ -141,15 +141,15 @@ export function PricingPlans() {
 }
 
 function ctaLabel(sel: Sel): string {
-  if (sel.plan === 'all_access') return `START ${PRICING.trialDays}-DAY FREE TRIAL IN THE APP`;
-  if (sel.plan === 'all_access_annual') return `START FREE TRIAL — ${PRICING.allAccessAnnual}/YR IN THE APP`;
+  if (sel.plan === 'all_access') return `CHOOSE ALL-ACCESS IN THE APP`;
+  if (sel.plan === 'all_access_annual') return `CHOOSE ALL-ACCESS — ${PRICING.allAccessAnnual}/YR IN THE APP`;
   return `UNLOCK ${sel.sport} WINNERS — ${PRICING.single}/MO`;
 }
 
 function ctaCaption(sel: Sel): string {
-  if (sel.plan === 'all_access') return `${PRICING.trialDays} days free, then ${PRICING.allAccessMonthly}/mo. Manage anytime in the app.`;
+  if (sel.plan === 'all_access') return `New subscribers: ${PRICING.trialDays} days free, then ${PRICING.allAccessMonthly}/mo. Returning subscribers pay ${PRICING.allAccessMonthly}/mo. Manage anytime in the app.`;
   if (sel.plan === 'all_access_annual')
-    return `${PRICING.trialDays} days free, then ${PRICING.allAccessAnnual}/yr — ${PRICING.allAccessAnnualMonthly}/mo. Manage anytime in the app.`;
+    return `New subscribers: ${PRICING.trialDays} days free, then ${PRICING.allAccessAnnual}/yr. Returning subscribers pay ${PRICING.allAccessAnnual}/yr — ${PRICING.allAccessAnnualMonthly}/mo. Manage anytime in the app.`;
   return `Every ${sel.sport} play Gary backs — the Winners board. ${PRICING.single}/mo, cancel anytime.`;
 }
 

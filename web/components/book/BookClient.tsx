@@ -1,178 +1,67 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { fetchMyBets, fetchMyProfile, fetchMyStreak, type MyProfile, type UserStreak } from '@/lib/book/api';
 import {
-  claimHandle,
-  fetchMyBets,
-  fetchMyHandle,
-  fetchMyStreak,
-  type UserStreak,
-} from '@/lib/book/api';
-import {
+  betsCsv,
   bookRecord,
   cumulativeSeries,
   filterBets,
   fmtNetTotal,
   isVerified,
+  searchBets,
   trackerStats,
   type Source,
   type Timeframe,
   type UserBet,
 } from '@/lib/book/model';
+import { supabaseBrowser } from '@/lib/auth/client';
 import type { GaryRows } from '@/lib/book/gary';
 import { useUnitDollars } from './BookDay';
 import { Ledger, OpenSlips } from './BookSlips';
 import { Leaderboard } from './Leaderboard';
-import { LogBet } from './LogBet';
+import { bookButton, bookField, LogBet } from './LogBet';
+import { ProfileEditor, profileAvatar } from './ProfileEditor';
 import { RideChart } from './RideChart';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// YOUR BOOK — the signed-in tracker (web port of the app's YOU page).
-// Two ledgers, never mixed: WITH GARY (system-graded tails/fades, the
-// flagship unfakeable number) and YOUR PLAYS (self-graded, labeled).
-// ─────────────────────────────────────────────────────────────────────────────
-
-const STREAK_TINT = '#E5844B';
-
-const TIMEFRAMES: { key: Timeframe; label: string }[] = [
-  { key: '7d', label: '7D' },
-  { key: '30d', label: '30D' },
-  { key: 'season', label: 'SEASON' },
-  { key: 'all', label: 'ALL' },
-];
-
-const SOURCES: { key: Source; label: string }[] = [
-  { key: 'all', label: 'EVERYTHING' },
-  { key: 'tail', label: 'TAILS' },
-  { key: 'fade', label: 'FADES' },
-  { key: 'manual', label: 'YOUR PLAYS' },
-];
-
-function chipTabs<K extends string>(
-  items: { key: K; label: string }[],
-  active: K,
-  onPick: (k: K) => void,
-) {
-  return (
-    <div className="flex items-center gap-4">
-      {items.map(item => (
-        <button
-          key={item.key}
-          type="button"
-          onClick={() => onPick(item.key)}
-          aria-pressed={active === item.key}
-          className={`flex flex-col items-center gap-[3px] font-mono text-[10.5px] font-bold tracking-[0.08em] transition-colors ${
-            active === item.key ? 'text-gold' : 'text-low hover:text-mid'
-          }`}
-        >
-          {item.label}
-          <span aria-hidden className={`h-[1.5px] w-full ${active === item.key ? 'bg-gold' : 'bg-transparent'}`} />
-        </button>
-      ))}
-    </div>
-  );
-}
 
 function RecordPanel({
   title,
-  sub,
   rows,
   unitDollars,
-  flagship,
+  verified,
 }: {
   title: string;
-  sub: string;
   rows: UserBet[];
   unitDollars: number;
-  flagship?: boolean;
+  verified?: boolean;
 }) {
-  const settled = rows.filter(b => b.status !== 'pending');
-  const rec = bookRecord(settled);
+  const r = bookRecord(rows.filter((b) => b.status !== 'pending'));
   return (
-    <div className={`rounded-card border bg-card px-5 py-4 ${flagship ? 'border-gold/40' : 'border-line'}`}>
-      <p className={`font-mono text-[10.5px] font-bold uppercase tracking-[0.1em] ${flagship ? 'text-gold' : 'text-low'}`}>
+    <div className={`rounded-panel border bg-card p-5 ${verified ? 'border-gold/35' : 'border-line'}`}>
+      <p className={`font-mono text-[10px] uppercase tracking-widest ${verified ? 'text-gold' : 'text-low'}`}>
         {title}
       </p>
-      {rec.wins + rec.losses + rec.pushes > 0 ? (
-        <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-          <span className="tnum font-display text-[1.9rem] leading-none text-hi">
-            {rec.wins}-{rec.losses}
-            {rec.pushes > 0 ? `-${rec.pushes}` : ''}
-          </span>
-          <span
-            className={`tnum font-mono text-[13.5px] font-bold ${
-              rec.units > 0 ? 'text-win' : rec.units < 0 ? 'text-loss' : 'text-mid'
-            }`}
-          >
-            {fmtNetTotal(rec.units, unitDollars)}
-          </span>
-          {rec.pct !== null && <span className="tnum font-mono text-[11.5px] text-low">{rec.pct}%</span>}
-        </div>
-      ) : (
-        <p className="mt-2 text-[13.5px] text-mid">{sub}</p>
-      )}
+      <div className="mt-3 flex flex-wrap items-baseline gap-4">
+        <span className="font-display text-3xl text-hi">
+          {r.wins}–{r.losses}
+          {r.pushes ? `–${r.pushes}` : ''}
+        </span>
+        <span className={`font-mono text-[13px] ${r.units >= 0 ? 'text-win' : 'text-loss'}`}>
+          {fmtNetTotal(r.units, unitDollars)}
+        </span>
+      </div>
+      <p className="mt-2 text-[11px] text-low">
+        {verified ? 'Tails + fades · settled automatically' : 'Manual bets · results entered by you'}
+      </p>
     </div>
   );
 }
-
-function StatTile({ label, value }: { label: string; value: string | null }) {
+function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-card border border-line bg-card px-4 py-3">
-      <p className="font-mono text-[9.5px] font-bold uppercase tracking-[0.1em] text-low">{label}</p>
-      <p className="tnum mt-1 font-display text-[1.35rem] leading-none text-hi">{value ?? '—'}</p>
-    </div>
-  );
-}
-
-/** Inline unit-size ask — shows until a value is saved or dismissed. */
-function UnitAsk({ onSave, onSkip }: { onSave: (v: number) => void; onSkip: () => void }) {
-  const [text, setText] = useState('');
-  const quick = [10, 25, 50, 100];
-  return (
-    <div className="rounded-card border border-line bg-card px-5 py-4">
-      <p className="font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-gold">
-        What&apos;s a unit worth to you?
-      </p>
-      <p className="mt-1 text-[13px] text-mid">
-        Your typical bet, in dollars. Your book shows real money from then on.
-      </p>
-      <div className="mt-3 flex flex-wrap items-center gap-4">
-        {quick.map(amt => (
-          <button
-            key={amt}
-            type="button"
-            onClick={() => setText(String(amt))}
-            className={`flex flex-col items-center gap-[3px] font-mono text-[12px] font-bold ${
-              text === String(amt) ? 'text-gold' : 'text-low hover:text-mid'
-            }`}
-          >
-            ${amt}
-            <span aria-hidden className={`h-[1.5px] w-full ${text === String(amt) ? 'bg-gold' : 'bg-transparent'}`} />
-          </button>
-        ))}
-        <span className="flex items-center gap-1.5 rounded-chip border border-line bg-chip px-3 py-2">
-          <span className="font-mono text-[13px] text-low">$</span>
-          <input
-            type="text"
-            inputMode="decimal"
-            placeholder="25"
-            value={text}
-            onChange={e => setText(e.target.value)}
-            className="w-[64px] bg-transparent font-mono text-[13.5px] font-bold text-hi outline-none placeholder:text-low"
-          />
-        </span>
-        <button
-          type="button"
-          onClick={() => {
-            const v = parseFloat(text);
-            if (Number.isFinite(v) && v > 0) onSave(v);
-            else onSkip();
-          }}
-          className="rounded-chip bg-gold px-4 py-2 font-mono text-[11.5px] font-bold text-ink transition-opacity hover:opacity-90"
-        >
-          {parseFloat(text) > 0 ? 'Save' : 'Keep units for now'}
-        </button>
-      </div>
+      <p className="font-mono text-[9px] uppercase tracking-wider text-low">{label}</p>
+      <p className="mt-1 font-display text-2xl text-hi">{value}</p>
     </div>
   );
 }
@@ -180,180 +69,351 @@ function UnitAsk({ onSave, onSkip }: { onSave: (v: number) => void; onSkip: () =
 export function BookClient({ garyRows }: { garyRows: GaryRows }) {
   const [bets, setBets] = useState<UserBet[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [profile, setProfile] = useState<MyProfile | null>(null);
   const [streak, setStreak] = useState<UserStreak | null>(null);
-  const [handle, setHandle] = useState<string | null>(null);
   const [timeframe, setTimeframe] = useState<Timeframe>('all');
   const [source, setSource] = useState<Source>('all');
+  const [search, setSearch] = useState('');
+  const [league, setLeague] = useState('');
+  const [status, setStatus] = useState('');
+  const [favorites, setFavorites] = useState(false);
   const [showLog, setShowLog] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [unitDollars, setUnitDollars] = useUnitDollars();
-  const [unitAskDismissed, setUnitAskDismissed] = useState(false);
-
-  const [claimText, setClaimText] = useState('');
-  const [claimBusy, setClaimBusy] = useState(false);
-  const [claimError, setClaimError] = useState<string | null>(null);
-
+  const [reloadKey, setReloadKey] = useState(0);
+  const requestVersion = useRef(0);
   const reload = useCallback(async () => {
-    const rows = await fetchMyBets();
-    setBets(rows);
-    setLoading(false);
-  }, []);
-
+    const request = ++requestVersion.current;
+    try {
+      const [rows, s, p] = await Promise.all([fetchMyBets(), fetchMyStreak(), fetchMyProfile()]);
+      if (request !== requestVersion.current) return;
+      setBets(rows);
+      setStreak(s);
+      setProfile(p);
+      setUnitDollars(Number(p.preferences?.unit_value ?? 0));
+      setError(null);
+    } catch (e) {
+      if (request === requestVersion.current)
+        setError(e instanceof Error ? e.message : 'Your book could not load. Please retry.');
+    } finally {
+      if (request === requestVersion.current) setLoading(false);
+    }
+  }, [setUnitDollars]);
   useEffect(() => {
     let cancelled = false;
-    const timer = window.setTimeout(() => {
-      void Promise.all([fetchMyBets(), fetchMyStreak(), fetchMyHandle()]).then(([rows, nextStreak, nextHandle]) => {
-        if (cancelled) return;
-        setBets(rows);
-        setStreak(nextStreak);
-        setHandle(nextHandle);
-        setLoading(false);
-      });
-    }, 0);
+    const load = () => {
+      if (!cancelled) void reload();
+    };
+    const timer = window.setTimeout(load, 0);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') load();
+    }, 60000);
+    const onFocus = () => load();
+    window.addEventListener('focus', onFocus);
+    const { data: auth } = supabaseBrowser().auth.onAuthStateChange((event: string) => {
+      if (event === 'SIGNED_OUT') {
+        requestVersion.current += 1;
+        setBets([]);
+        setProfile(null);
+        setStreak(null);
+        window.location.assign('/you');
+      }
+    });
     return () => {
       cancelled = true;
-      window.clearTimeout(timer);
+      requestVersion.current += 1;
+      clearTimeout(timer);
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      auth.subscription.unsubscribe();
     };
-  }, []);
-
-  const claim = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setClaimBusy(true);
-    setClaimError(null);
-    try {
-      setHandle(await claimHandle(claimText.trim()));
-    } catch (err) {
-      setClaimError(err instanceof Error ? err.message : 'Try another handle.');
-    } finally {
-      setClaimBusy(false);
-    }
-  };
-
-  const withGary = bets.filter(isVerified);
-  const yourPlays = bets.filter(b => b.kind === 'manual');
-  const filtered = filterBets(bets, timeframe, source);
+  }, [reload]);
+  const handle = profile?.profile?.display_name;
+  const filtered = searchBets(filterBets(bets, timeframe, source), search, league, status, favorites);
   const stats = trackerStats(filtered);
   const series = cumulativeSeries(filtered);
-  const hasAnyBet = bets.length > 0;
-
+  const exportBook = () => {
+    const url = URL.createObjectURL(
+      new Blob(['\uFEFF', betsCsv(filtered)], { type: 'text/csv;charset=utf-8;' }),
+    );
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'gary-your-book.csv';
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const streakPicks = bets.filter((b) => b.streak_pick && b.status === 'pending');
   return (
     <div className="mt-7 space-y-5">
-      {/* Identity row: handle + streak + log */}
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
-        {handle ? (
-          <span className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full border border-gold/70 font-mono text-[14px] font-bold uppercase text-gold">
-              {handle[0]}
-            </span>
-            <span className="font-mono text-[14px] font-bold tracking-[0.03em] text-hi">{handle}</span>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <span
+            aria-hidden
+            className="flex h-12 w-12 items-center justify-center rounded-full border border-gold/50 font-mono text-lg text-gold"
+          >
+            {profileAvatar(profile?.profile?.avatar, handle ?? 'You')}
           </span>
-        ) : (
-          <form onSubmit={claim} className="flex flex-wrap items-center gap-2.5">
-            <input
-              type="text"
-              placeholder="Claim a handle"
-              value={claimText}
-              onChange={e => setClaimText(e.target.value)}
-              minLength={3}
-              maxLength={18}
-              className="w-[170px] rounded-chip border border-line bg-chip px-3.5 py-2 font-mono text-[13px] text-hi placeholder:text-low focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70"
-            />
-            <button
-              type="submit"
-              disabled={claimBusy || claimText.trim().length < 3}
-              className="rounded-chip border border-gold/60 px-3.5 py-2 font-mono text-[11.5px] font-bold text-gold transition-colors hover:bg-gold/10 disabled:opacity-50"
-            >
-              Claim it
-            </button>
-            {claimError && <span className="font-mono text-[10.5px] text-loss/90">{claimError}</span>}
-          </form>
-        )}
-        {(streak?.current ?? 0) >= 2 && (
-          <span className="font-mono text-[11px] font-bold tracking-[0.08em]" style={{ color: STREAK_TINT }}>
-            DAY {streak!.current} OF THE STREAK
-          </span>
-        )}
-        <span className="flex-1" />
-        <button
-          type="button"
-          onClick={() => setShowLog(v => !v)}
-          className="rounded-chip border border-line px-3.5 py-2 font-mono text-[11.5px] font-bold text-mid transition-colors hover:border-gold/50 hover:text-hi"
-        >
-          + Log a bet
-        </button>
+          <div>
+            <p className="font-display text-2xl text-hi">{handle ?? 'Your next chapter'}</p>
+            <p className="mt-1 text-[11px] text-low">
+              {profile?.profile?.leaderboard_visible
+                ? 'Public verified record · private personal bets'
+                : 'Your Book is private'}
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => setShowProfile((v) => !v)} className={bookButton}>
+            {showProfile ? 'Close profile' : 'Edit profile'}
+          </button>
+          <button
+            onClick={() => setShowLog((v) => !v)}
+            className="rounded-chip bg-gold px-4 py-2 text-[12px] font-semibold text-ink"
+          >
+            {showLog ? 'Close form' : '+ Log a bet'}
+          </button>
+        </div>
       </div>
-
-      {!handle && (
-        <p className="max-w-2xl font-mono text-[10.5px] leading-relaxed text-low">
-          A claimed handle and your aggregate verified With Gary record can appear on the public
-          leaderboard once you qualify. Manually logged plays, dollar stakes, and your email stay private.
-        </p>
+      {error && (
+        <div className="rounded-card border border-loss/35 p-4">
+          <p role="alert" className="text-[13px] text-loss">
+            {error}
+          </p>
+          <button onClick={reload} className={`${bookButton} mt-3`}>
+            Retry
+          </button>
+          <Link href="/account?next=%2Fyou" className="ml-4 text-[12px] text-gold">
+            Check sign-in
+          </Link>
+        </div>
       )}
-
+      {showProfile && profile && (
+        <ProfileEditor
+          initial={profile}
+          onSaved={(p) => {
+            setProfile(p);
+            setReloadKey((n) => n + 1);
+          }}
+        />
+      )}
+      {!loading && !profile?.profile?.handle && !showProfile && (
+        <div className="rounded-card border border-gold/25 bg-card p-4 text-[13px] text-mid">
+          Claim your handle and decide whether to join the rankings.{' '}
+          <button className="text-gold underline underline-offset-4" onClick={() => setShowProfile(true)}>
+            Set up your profile
+          </button>
+        </div>
+      )}
       {showLog && (
         <LogBet
-          onLogged={bet => setBets(prev => [bet, ...prev])}
+          onLogged={(bet) => {
+            setBets((prev) => [bet, ...prev.filter((b) => b.id !== bet.id)]);
+          }}
           onClose={() => setShowLog(false)}
         />
       )}
-
-      {unitDollars === 0 && !unitAskDismissed && hasAnyBet && (
-        <UnitAsk onSave={setUnitDollars} onSkip={() => setUnitAskDismissed(true)} />
-      )}
-
-      {/* The two ledgers, never mixed */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <RecordPanel
-          title="With Gary"
-          sub="Ride or fade a pick on the board and the record starts here — graded by the same system that grades Gary."
-          rows={withGary}
-          unitDollars={unitDollars}
-          flagship
-        />
-        <RecordPanel
-          title="Your plays"
-          sub="Bets you log yourself, graded by you, labeled that way."
-          rows={yourPlays}
-          unitDollars={unitDollars}
-        />
-      </div>
-
       {loading ? (
-        <p className="font-mono text-[11.5px] text-low">Loading your book</p>
-      ) : hasAnyBet ? (
-        <>
-          {/* Tracker controls */}
-          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-            {chipTabs(TIMEFRAMES, timeframe, setTimeframe)}
-            {chipTabs(SOURCES, source, setSource)}
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatTile label="Win %" value={stats.winPct !== null ? `${stats.winPct}%` : null} />
-            <StatTile label="ROI" value={stats.roiPct !== null ? `${stats.roiPct >= 0 ? '+' : ''}${stats.roiPct}%` : null} />
-            <StatTile
-              label="Avg odds"
-              value={stats.avgOdds !== null ? (stats.avgOdds > 0 ? `+${stats.avgOdds}` : `${stats.avgOdds}`) : null}
-            />
-            <StatTile
-              label="Best day"
-              value={stats.bestDay ? fmtNetTotal(stats.bestDay.units, unitDollars) : null}
-            />
-          </div>
-
-          <RideChart series={series} unitDollars={unitDollars} />
-          <OpenSlips bets={filtered} unitDollars={unitDollars} onChanged={reload} />
-          <Ledger bets={filtered} unitDollars={unitDollars} />
-        </>
+        <p role="status" className="py-8 text-[13px] text-mid">
+          Opening your book…
+        </p>
       ) : (
-        <div className="rounded-panel border border-line bg-card px-6 py-8 text-center">
-          <p className="text-[15px] text-mid">
-            Your book is empty. Ride or fade a pick on the board, or log a bet you placed elsewhere —
-            every result lands here, graded on the record.
-          </p>
-        </div>
+        <>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <RecordPanel
+              title="With Gary · verified"
+              rows={bets.filter(isVerified)}
+              unitDollars={unitDollars}
+              verified
+            />
+            <RecordPanel
+              title="Your plays · private"
+              rows={bets.filter((b) => b.kind === 'manual')}
+              unitDollars={unitDollars}
+            />
+          </div>
+          <section className="rounded-panel border border-[#E5844B]/25 bg-card p-5">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className="font-mono text-[11px] uppercase tracking-widest text-[#E5844B]">
+                  Your streak
+                </h2>
+                <p className="mt-2 font-display text-3xl text-hi">
+                  {streak?.current ?? 0} <span className="text-lg text-mid">correct picks in a row</span>
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="font-mono text-[11px] text-low">PERSONAL BEST</p>
+                <p className="font-display text-3xl text-[#E5844B]">{streak?.best ?? 0}</p>
+              </div>
+            </div>
+            <p className="mt-3 text-[12px] leading-relaxed text-mid">
+              Choose one verified call for each game date before it starts. Wins build your streak; a loss
+              resets it. Pushes, voids, and days off leave it intact. Favorites are your private bookmarks and
+              can include any bet.
+            </p>
+            {streakPicks.length > 0 ? (
+              <div className="mt-3 space-y-1">
+                {streakPicks.map((b) => (
+                  <p key={b.id} className="text-[12px] text-gold">
+                    Next up · {b.game_date} · {b.pick_text}
+                  </p>
+                ))}
+              </div>
+            ) : (
+              <Link
+                href="/picks"
+                className="mt-3 inline-block text-[12px] text-gold underline underline-offset-4"
+              >
+                Find your next streak pick →
+              </Link>
+            )}
+          </section>
+          {bets.length > 0 ? (
+            <>
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap gap-2">
+                    {(['7d', '30d', 'season', 'all'] as Timeframe[]).map((t) => (
+                      <button
+                        key={t}
+                        aria-pressed={timeframe === t}
+                        onClick={() => setTimeframe(t)}
+                        className={`${bookButton} ${timeframe === t ? 'border-gold text-gold' : ''}`}
+                      >
+                        {t === 'all' ? 'All time' : t === 'season' ? 'Season' : t.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={exportBook} disabled={!filtered.length} className={bookButton}>
+                    Export CSV ({filtered.length})
+                  </button>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="text-[11px] text-mid">
+                    Search your book
+                    <input
+                      className={bookField}
+                      type="search"
+                      placeholder="Selection, player, sportsbook, notes…"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                    />
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <label className="text-[11px] text-mid">
+                      Source
+                      <select
+                        className={bookField}
+                        value={source}
+                        onChange={(e) => setSource(e.target.value as Source)}
+                      >
+                        <option value="all">All</option>
+                        <option value="tail">Tails</option>
+                        <option value="fade">Fades</option>
+                        <option value="manual">Yours</option>
+                      </select>
+                    </label>
+                    <label className="text-[11px] text-mid">
+                      Sport
+                      <select
+                        className={bookField}
+                        value={league}
+                        onChange={(e) => setLeague(e.target.value)}
+                      >
+                        <option value="">All</option>
+                        {[...new Set(bets.map((b) => b.league).filter(Boolean))].sort().map((l) => (
+                          <option key={l} value={l!}>
+                            {l}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="text-[11px] text-mid">
+                      Status
+                      <select
+                        className={bookField}
+                        value={status}
+                        onChange={(e) => setStatus(e.target.value)}
+                      >
+                        <option value="">All</option>
+                        <option value="pending">Open</option>
+                        <option value="settled">Settled</option>
+                        <option value="won">Won</option>
+                        <option value="lost">Lost</option>
+                        <option value="push">Push</option>
+                        <option value="void">Void</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 text-[12px] text-mid">
+                  <input
+                    type="checkbox"
+                    className="accent-gold"
+                    checked={favorites}
+                    onChange={(e) => setFavorites(e.target.checked)}
+                  />{' '}
+                  Favorites only
+                </label>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <Stat label="Win rate" value={stats.winPct == null ? '—' : `${stats.winPct}%`} />
+                <Stat label="Return on stake" value={stats.roiPct == null ? '—' : `${stats.roiPct}%`} />
+                <Stat
+                  label="Average odds"
+                  value={stats.avgOdds == null ? '—' : `${stats.avgOdds > 0 ? '+' : ''}${stats.avgOdds}`}
+                />
+                <Stat
+                  label="Best day"
+                  value={stats.bestDay ? fmtNetTotal(stats.bestDay.units, unitDollars) : '—'}
+                />
+              </div>
+              <p className="text-[11px] leading-relaxed text-low">
+                Stats and chart follow your filters.{' '}
+                {source === 'all'
+                  ? 'This view includes both verified calls and your self-graded personal bets.'
+                  : source === 'manual'
+                    ? 'These results are self-graded and private.'
+                    : 'These calls are graded by Gary’s result system.'}
+              </p>
+              {filtered.length ? (
+                <>
+                  <RideChart series={series} unitDollars={unitDollars} />
+                  <OpenSlips bets={filtered} unitDollars={unitDollars} onChanged={reload} />
+                  <Ledger bets={filtered} unitDollars={unitDollars} onChanged={reload} />
+                </>
+              ) : (
+                <p className="rounded-card border border-line p-5 text-[13px] text-mid">
+                  No bets match these filters. Change your search or date range to see more.
+                </p>
+              )}
+            </>
+          ) : (
+            !error && (
+              <div className="rounded-panel border border-line bg-card p-6">
+                <h2 className="font-display text-2xl text-hi">Every record starts with one call.</h2>
+                <p className="mt-2 text-[13px] leading-relaxed text-mid">
+                  Tail or fade a published pick to build your verified record, or log a bet you placed
+                  elsewhere. This tracks predictions and never places a wager.
+                </p>
+                <div className="mt-4 flex gap-4">
+                  <Link href="/picks" className="text-[13px] text-gold underline underline-offset-4">
+                    Explore today&apos;s picks →
+                  </Link>
+                  <button
+                    onClick={() => setShowLog(true)}
+                    className="text-[13px] text-gold underline underline-offset-4"
+                  >
+                    Log your first bet
+                  </button>
+                </div>
+              </div>
+            )
+          )}
+        </>
       )}
-
-      <Leaderboard garyRows={garyRows} myHandle={handle} />
+      <Leaderboard key={reloadKey} garyRows={garyRows} myHandle={handle} />
     </div>
   );
 }

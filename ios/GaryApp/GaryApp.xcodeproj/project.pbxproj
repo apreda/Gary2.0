@@ -75,6 +75,9 @@
 		F2A5809FF32535CE29C4E79A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26AE11992E449EB95857D6E3 /* SettingsView.swift */; };
 		FA4DDE4BB0C86346543A168F /* SecretsLocal.swift.example in Resources */ = {isa = PBXBuildFile; fileRef = 1392B4ABEB07112212968AAF /* SecretsLocal.swift.example */; };
 		FAE577A219F049637480970D /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 423887686C6839DEC44C0DEA /* GoogleService-Info.plist */; };
+		324609B2D349E9C4A8B65059 /* ProfileExperience.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504772BE6AB695908974B7B2 /* ProfileExperience.swift */; };
+		6199AE6DBA24A673E008525A /* UserBetDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B5D1C43C3ED917E9B33E58 /* UserBetDetailSheet.swift */; };
+		DA6929ABA0783579FD371853 /* WinnersAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = E42EB87F7613B5B15EF2560E /* WinnersAccess.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -147,6 +150,9 @@
 		F0616A3C8A2F0268B8A05C4D /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		F3971BE744C5F972B9A2C2C3 /* Oswald-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Oswald-Bold.ttf"; sourceTree = "<group>"; };
 		FBB94BA05B70C7412D0F1576 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		504772BE6AB695908974B7B2 /* ProfileExperience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileExperience.swift; sourceTree = "<group>"; };
+		F0B5D1C43C3ED917E9B33E58 /* UserBetDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserBetDetailSheet.swift; sourceTree = "<group>"; };
+		E42EB87F7613B5B15EF2560E /* WinnersAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinnersAccess.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -216,6 +222,9 @@
 				26AE11992E449EB95857D6E3 /* SettingsView.swift */,
 				58C162EF98D65308171329E2 /* SupabaseAPI.swift */,
 				0110A48840365DDC8DBFCABF /* UserBookView.swift */,
+				E42EB87F7613B5B15EF2560E /* WinnersAccess.swift */,
+				F0B5D1C43C3ED917E9B33E58 /* UserBetDetailSheet.swift */,
+				504772BE6AB695908974B7B2 /* ProfileExperience.swift */,
 				073A6BFCDD5D5E5DE86DC846 /* ViewsShared.swift */,
 				2F2CCDF3FCD06FA671EB3F94 /* HomeView.swift */,
 				D6F1F7A9FD73F0CFCBF2F57F /* HomeFrontPage.swift */,
@@ -415,6 +424,9 @@
 				F2A5809FF32535CE29C4E79A /* SettingsView.swift in Sources */,
 				D810CCA6C81972A7A21BD77F /* SupabaseAPI.swift in Sources */,
 				0E2DFD72AAC6F9DA0E624548 /* UserBookView.swift in Sources */,
+				DA6929ABA0783579FD371853 /* WinnersAccess.swift in Sources */,
+				6199AE6DBA24A673E008525A /* UserBetDetailSheet.swift in Sources */,
+				324609B2D349E9C4A8B65059 /* ProfileExperience.swift in Sources */,
 				4EC2B7A1B9697343A9C0E6F9 /* ViewsShared.swift in Sources */,
 				93B93DF3AECBE25E4485E1AD /* HomeView.swift in Sources */,
 				FC9486BE5CE032E2F48C6573 /* HomeFrontPage.swift in Sources */,
@@ -477,7 +489,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 897;
+				CURRENT_PROJECT_VERSION = 898;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -564,7 +576,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 897;
+				CURRENT_PROJECT_VERSION = 898;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_NS_ASSERTIONS = NO;

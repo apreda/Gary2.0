@@ -1,72 +1,33 @@
-// deno test streaks.test.ts — streak transition math for THE STREAK.
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { applyStreakResult } from "./streaks.ts";
-
-const day = (n: number) => `2026-08-${String(n).padStart(2, "0")}`;
-
-Deno.test("first win starts the streak", () => {
-  assertEquals(applyStreakResult(null, day(1), "won"), {
-    current: 1, best: 1, prev_current: 0, last_counted_date: day(1), last_result: "won",
-  });
+import { recomputeStreak, type StreakPlay } from "./streaks.ts";
+const plays = (...statuses: string[]): StreakPlay[] => statuses.map((status, i) => ({
+  id: String(i), game_date: `2026-08-${String(i * 2 + 1).padStart(2, "0")}`, status,
+}));
+Deno.test("wins count once and missed days preserve designated streak", () => {
+  const r = recomputeStreak(plays("won", "won", "won"));
+  assertEquals(r.current, 3); assertEquals(r.best, 3); assertEquals(r.prev_current, 2);
 });
-
-Deno.test("consecutive wins extend and raise best", () => {
-  const s1 = applyStreakResult(null, day(1), "won")!;
-  const s2 = applyStreakResult(s1, day(2), "won")!;
-  assertEquals(s2.current, 2);
-  assertEquals(s2.best, 2);
-  assertEquals(s2.prev_current, 1);
+Deno.test("push and void preserve run", () => {
+  assertEquals(recomputeStreak(plays("won", "push", "void", "won")).current, 2);
 });
-
-Deno.test("a loss resets to zero, best survives", () => {
-  const s = { current: 5, best: 7, prev_current: 4, last_counted_date: day(3), last_result: "won" };
-  const out = applyStreakResult(s, day(4), "lost")!;
-  assertEquals(out.current, 0);
-  assertEquals(out.best, 7);
+Deno.test("earlier unresolved pick blocks later wins", () => {
+  assertEquals(recomputeStreak(plays("won", "pending", "won")).current, 1);
 });
-
-Deno.test("a missed day does not break the streak (only a loss does)", () => {
-  const s = { current: 3, best: 3, prev_current: 2, last_counted_date: day(1), last_result: "won" };
-  const out = applyStreakResult(s, day(5), "won")!; // three idle days between
-  assertEquals(out.current, 4);
+Deno.test("late settlement uses game chronology, not arrival order", () => {
+  const p = plays("won", "lost", "won", "won");
+  assertEquals(recomputeStreak([p[3], p[1], p[0], p[2]]), recomputeStreak(p));
+  assertEquals(recomputeStreak(p).current, 2);
 });
-
-Deno.test("push and void hold — no change at all", () => {
-  const s = { current: 3, best: 3, prev_current: 2, last_counted_date: day(1), last_result: "won" };
-  assertEquals(applyStreakResult(s, day(2), "push"), null);
-  assertEquals(applyStreakResult(s, day(2), "void"), null);
+Deno.test("older correction repairs both current and best", () => {
+  const p = plays("won", "won", "won", "lost", "won");
+  assertEquals(recomputeStreak(p).best, 3);
+  p[1].status = "lost";
+  assertEquals(recomputeStreak(p).best, 1);
+  assertEquals(recomputeStreak(p).current, 1);
+  assertEquals(recomputeStreak(p), recomputeStreak(p));
 });
-
-Deno.test("same-day repeat with same result is a no-op", () => {
-  const s = { current: 4, best: 4, prev_current: 3, last_counted_date: day(2), last_result: "won" };
-  assertEquals(applyStreakResult(s, day(2), "won"), null);
-});
-
-Deno.test("same-day re-grade won->lost rewinds the day then applies the loss", () => {
-  const s = { current: 4, best: 6, prev_current: 3, last_counted_date: day(2), last_result: "won" };
-  const out = applyStreakResult(s, day(2), "lost")!;
-  assertEquals(out.current, 0);
-  assertEquals(out.best, 6);
-  assertEquals(out.last_result, "lost");
-});
-
-Deno.test("same-day re-grade lost->won rewinds the day then applies the win", () => {
-  const s = { current: 0, best: 6, prev_current: 3, last_counted_date: day(2), last_result: "lost" };
-  const out = applyStreakResult(s, day(2), "won")!;
-  assertEquals(out.current, 4);       // 3 + 1
-  assertEquals(out.best, 6);
-  assertEquals(out.prev_current, 3);  // day base unchanged on a re-grade
-});
-
-Deno.test("same-day re-grade to push rewinds the day entirely", () => {
-  const s = { current: 4, best: 6, prev_current: 3, last_counted_date: day(2), last_result: "won" };
-  const out = applyStreakResult(s, day(2), "push")!;
-  assertEquals(out.current, 3);
-  assertEquals(out.last_result, "push");
-});
-
-Deno.test("best never decreases through any transition", () => {
-  const s = { current: 6, best: 6, prev_current: 5, last_counted_date: day(2), last_result: "won" };
-  const out = applyStreakResult(s, day(2), "lost")!;
-  assertEquals(out.best, 6);
+Deno.test("correction to void removes result and reconnects surviving wins", () => {
+  const p = plays("won", "lost", "won"); p[1].status = "void";
+  assertEquals(recomputeStreak(p).current, 2);
+  assertEquals(recomputeStreak(p).best, 2);
 });

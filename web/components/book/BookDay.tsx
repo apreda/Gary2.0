@@ -32,16 +32,21 @@ export function useBookDay(): BookDayState | null {
 export function useUnitDollars(): [number, (v: number) => void] {
   const [value, setValue] = useState(0);
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const raw = window.localStorage.getItem('userUnitDollars');
-      const v = raw ? parseFloat(raw) : 0;
-      if (Number.isFinite(v) && v > 0) setValue(v);
-    }, 0);
-    return () => window.clearTimeout(timer);
+    const read = () => {
+      try {
+        const raw = window.sessionStorage.getItem('userUnitDollars');
+        const v = raw ? Number(raw) : 0;
+        setValue(Number.isFinite(v) && v > 0 ? v : 0);
+      } catch { setValue(0); }
+    };
+    const timer = window.setTimeout(read, 0);
+    window.addEventListener('gary:unit-changed', read);
+    return () => { window.clearTimeout(timer); window.removeEventListener('gary:unit-changed', read); };
   }, []);
   const set = useCallback((v: number) => {
     setValue(v);
-    window.localStorage.setItem('userUnitDollars', String(v));
+    try { window.sessionStorage.setItem('userUnitDollars', String(v)); } catch { /* Browser storage is optional. */ }
+    window.dispatchEvent(new Event('gary:unit-changed'));
   }, []);
   return [value, set];
 }
@@ -61,6 +66,9 @@ export function BookDayProvider({
   const [signedIn, setSignedIn] = useState(false);
   const [counts, setCounts] = useState<Record<string, { tails: number; fades: number }>>({});
   const [mine, setMine] = useState<UserBet[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [sessionEpoch, setSessionEpoch] = useState(0);
+  const [, setUnitDollars] = useUnitDollars();
   const ambiguousReceiptKeySet = useMemo(
     () => new Set(ambiguousGamePickReceiptKeys),
     [ambiguousGamePickReceiptKeys],
@@ -90,15 +98,26 @@ export function BookDayProvider({
     if (!active) return;
 
     let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
     (async () => {
       try {
         // Keep the sizeable Supabase browser SDK out of an ordinary board
         // visit. Load it only after the visitor shows intent to open or use
         // the interactive Book controls.
-        const [{ supabaseBrowser }, { fetchMyBets, fetchTailCounts }] = await Promise.all([
+        const [{ supabaseBrowser }, { fetchMyBets, fetchMyProfile, fetchTailCounts }] = await Promise.all([
           import('@/lib/auth/client'),
           import('@/lib/book/api'),
         ]);
+        if (cancelled) return;
+        const { data: authChanges } = supabaseBrowser().auth.onAuthStateChange((event: string) => {
+          if (event === 'SIGNED_OUT' || event === 'SIGNED_IN') {
+            cancelled = true;
+            setMine([]); setCounts({}); setLoadError(null); setReady(false);
+            setSignedIn(event === 'SIGNED_IN'); setUnitDollars(0);
+            setSessionEpoch(n => n + 1);
+          }
+        });
+        unsubscribe = () => authChanges.subscription.unsubscribe();
         const [{ data: session }, dayCounts] = await Promise.all([
           supabaseBrowser().auth.getSession(),
           fetchTailCounts(date),
@@ -108,14 +127,15 @@ export function BookDayProvider({
         const authed = session.session != null;
         setSignedIn(authed);
         if (authed) {
-          const bets = await fetchMyBets();
+          const [bets, profile] = await Promise.all([fetchMyBets(), fetchMyProfile()]);
           // Cancellation guard: never latch an empty result over a live row.
-          if (!cancelled && bets.length > 0) setMine(bets);
+          if (!cancelled) { setMine(bets); setUnitDollars(Number(profile.preferences?.unit_value ?? 0)); }
+        } else {
+          setMine([]); setUnitDollars(0);
         }
       } catch {
         if (!cancelled) {
-          setCounts({});
-          setSignedIn(false);
+          setLoadError('Your saved Book choices could not load. Refresh before making another call.');
         }
       } finally {
         // A feed failure must not leave the controls in a permanent loading
@@ -125,11 +145,12 @@ export function BookDayProvider({
     })();
     return () => {
       cancelled = true;
+      unsubscribe?.();
     };
-  }, [active, date]);
+  }, [active, date, sessionEpoch, setUnitDollars]);
 
   const addBet = useCallback((bet: UserBet) => {
-    setMine(prev => [bet, ...prev.filter(b => b.id !== bet.id)]);
+    setMine(prev => [bet, ...prev.filter(b => b.id !== bet.id).map(b => bet.streak_pick && b.game_date === bet.game_date ? { ...b, streak_pick: false } : b)]);
   }, []);
 
   const removeBet = useCallback((id: string) => {
@@ -153,6 +174,7 @@ export function BookDayProvider({
         onFocusCapture={() => setActive(true)}
         onPointerDownCapture={() => setActive(true)}
       >
+        {loadError && <p role="alert" className="mb-4 rounded-chip border border-loss/30 p-3 text-[12px] text-loss">{loadError} <button type="button" className="underline" onClick={() => { setLoadError(null); setReady(false); setSessionEpoch(n => n + 1); }}>Retry</button></p>}
         {children}
       </div>
     </BookDayContext.Provider>

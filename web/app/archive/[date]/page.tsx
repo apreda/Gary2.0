@@ -14,9 +14,9 @@ import {
   fetchArchiveDay,
   isArchiveDate,
 } from '@/lib/gary/archive';
-import { gameSlug } from '@/lib/gary/gamepage';
+import { archiveGamePath } from '@/lib/gary/archive-path';
 import { normalizeLeague, sportByCode } from '@/lib/gary/leagues';
-import type { GameResultRow, GaryPick, InsightRow, PropResultRow } from '@/lib/gary/types';
+import type { GameResultRow, InsightRow, PropResultRow } from '@/lib/gary/types';
 import { SITE_URL, pageMetadata } from '@/lib/seo/metadata';
 
 export const revalidate = 3600;
@@ -39,12 +39,6 @@ function archiveDescription(
   return `Review Gary AI's stored sports-pick board for ${label}${contents ? `: ${contents}` : ''}. Original analysis and graded results stay separate.`;
 }
 
-export function archiveGamePath(pick: GaryPick, date: string): string | null {
-  const code = normalizeLeague(pick.league, pick.sport);
-  const sport = code ? sportByCode(code) : undefined;
-  if (!sport || !pick.awayTeam?.trim() || !pick.homeTeam?.trim()) return null;
-  return `/picks/${sport.slug}/${date}/${gameSlug(pick.awayTeam, pick.homeTeam)}`;
-}
 
 export async function generateMetadata({
   params,

@@ -1,7 +1,8 @@
 import { rest, restAll } from './supabase';
 import type { GameResultRow, NflResultRow, PropResultRow } from './types';
 
-const ODDS_TAIL = /[+-]\d{3,}\s*$/;
+import { effectiveOdds } from './odds';
+export { effectiveOdds } from './odds';
 
 /**
  * Normalize a result string to lowercase, trimmed.
@@ -11,17 +12,6 @@ const ODDS_TAIL = /[+-]\d{3,}\s*$/;
  */
 const normResult = (r: string | null | undefined) => (r ?? '').trim().toLowerCase();
 
-/**
- * Port of iOS GameResult.effectiveOdds (Models.swift:1154).
- * game_results/nfl_results have NO odds column — the line lives at the tail
- * of pick_text ("Knicks ML +154"). Prefer an explicit odds value if present.
- */
-export function effectiveOdds(pickText: string | null | undefined, odds?: string | null): string | null {
-  if (odds && odds.trim().length > 0) return odds.trim();
-  if (!pickText) return null;
-  const m = pickText.match(ODDS_TAIL);
-  return m ? m[0].trim() : null;
-}
 
 function parseAmericanOdds(odds: string | null | undefined): number | null {
   if (!odds) return null;

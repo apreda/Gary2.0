@@ -389,14 +389,14 @@ struct PlansSheetView: View {
     private var ctaLabel: String {
         if !signedIn {
             switch selection {
-            case .allAccess, .allAccessAnnual: return "SIGN IN TO START YOUR TRIAL"
+            case .allAccess, .allAccessAnnual: return "SIGN IN TO CHOOSE ALL-ACCESS"
             case .sports:
                 return pickedSports.isEmpty ? "PICK A SPORT" : "SIGN IN TO START"
             }
         }
         switch selection {
-        case .allAccess:       return "START \(GaryPricing.trialDays)-DAY FREE TRIAL"
-        case .allAccessAnnual: return "START FREE TRIAL — \(GaryPricing.allAccessAnnual)/YR"
+        case .allAccess:       return "CHOOSE ALL-ACCESS"
+        case .allAccessAnnual: return "CHOOSE ANNUAL — \(GaryPricing.allAccessAnnual)/YR"
         case .sports:
             switch pickedSports.count {
             case 0:  return "PICK A SPORT"
@@ -412,9 +412,9 @@ struct PlansSheetView: View {
                             : "You'll sign in first, then secure checkout opens."
         switch selection {
         case .allAccess:
-            return "\(GaryPricing.trialDaysFree), then \(GaryPricing.allAccessMonthly)/mo. Cancel anytime. \(tail)"
+            return "New subscribers: \(GaryPricing.trialDaysFree), then \(GaryPricing.allAccessMonthly)/mo. Returning subscribers pay the regular price. Cancel anytime. \(tail)"
         case .allAccessAnnual:
-            return "\(GaryPricing.trialDaysFree), then \(GaryPricing.allAccessAnnual)/yr — \(GaryPricing.allAccessAnnualMonthly)/mo. Cancel anytime. \(tail)"
+            return "New subscribers: \(GaryPricing.trialDaysFree), then \(GaryPricing.allAccessAnnual)/yr — \(GaryPricing.allAccessAnnualMonthly)/mo. Returning subscribers pay the regular price. Cancel anytime. \(tail)"
         case .sports:
             if capHint {
                 return "Three is the max — All-Access covers all 7 boards for \(GaryPricing.allAccessMonthly)/mo."

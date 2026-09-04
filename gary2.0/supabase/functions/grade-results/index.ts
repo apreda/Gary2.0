@@ -675,7 +675,7 @@ Deno.serve(async (req) => {
   const recapTasks: SequentialBackgroundTask[] = [];
   const backgroundRecaps = { recap: 0, regenerated: 0, exists: 0, fail: 0 };
   // Your Book: every pick graded this run, so user tail/fades settle after the loop.
-  const gradedForUserBets: Array<{ game_date: string; pick_text: string; result: string }> = [];
+  const gradedForUserBets: Array<{ game_date: string; pick_text: string; result: string; league: string; game_id: string }> = [];
 
   // Pull MLB games once (final-status only matters at grade time).
   // MLB games are ET-filtered per date: BDL indexes by UTC instant, so a late-ET game
@@ -787,7 +787,7 @@ Deno.serve(async (req) => {
         matchup: `${pick.awayTeam} @ ${pick.homeTeam}`, is_winners_pick: isWinner(pick),
       });
       stats[outcome]++;
-      if (outcome !== "fail") gradedForUserBets.push({ game_date: date, pick_text: pick.pick, result });
+      if (outcome !== "fail") gradedForUserBets.push({ game_date: date, pick_text: pick.pick, result, league, game_id: exactGameId });
 
       // GROUNDED betting recap (game_recaps) — queue it only after the grade is
       // durably written. The queue is registered with EdgeRuntime.waitUntil

@@ -6,6 +6,9 @@ import { supabaseServer, currentUser } from '@/lib/auth/server';
 import { resetPasswordHref, safeNextPath } from '@/lib/auth/redirect';
 import { pageMetadata } from '@/lib/seo/metadata';
 import { SignInForm } from './SignInForm';
+import { ProfileEditor } from '@/components/book/ProfileEditor';
+import { DeleteAccount } from '@/components/book/DeleteAccount';
+import { AccessCard } from '@/components/book/AccessCard';
 
 export const metadata: Metadata = pageMetadata({
   canonical: '/account',
@@ -30,6 +33,7 @@ type AccountSearchParams = Promise<{
   mode?: string | string[];
   error?: string | string[];
   password?: string | string[];
+  deleted?: string | string[];
 }>;
 
 const first = (value: string | string[] | undefined) =>
@@ -41,11 +45,14 @@ export default async function AccountPage({ searchParams }: { searchParams: Acco
   const initialMode = first(query.mode) === 'signup' ? 'signup' : 'signin';
   const initialError = first(query.error) === 'signin'
     ? 'Sign-in couldn’t finish. Please try again.'
+    : first(query.error) === 'deletion'
+      ? 'Account deletion did not finish. Sign in again to retry.'
     : null;
 
   if (!user) {
     return (
       <main className="mx-auto max-w-4xl px-5 py-12">
+        {first(query.deleted) === '1' && <p role="status" className="mb-5 rounded-chip border border-gold/35 p-4 text-[13px] text-gold">Your account has been deleted.</p>}
         <SignInForm
           initialMode={initialMode}
           nextPath={nextPath}
@@ -63,8 +70,9 @@ export default async function AccountPage({ searchParams }: { searchParams: Acco
   return (
     <main className="mx-auto max-w-4xl px-5 py-12">
       <PageMasthead title="Account" sub="Signed in — the same identity as the iOS app." />
+      <div className="mt-7 grid items-start gap-5 md:grid-cols-2"><ProfileEditor /><AccessCard /></div>
 
-      <div className="mt-7 max-w-md rounded-panel border border-line bg-card px-7 py-7">
+      <div className="mt-7 rounded-panel border border-line bg-card px-7 py-7">
         {first(query.password) === 'updated' && (
           <p role="status" className="mb-5 rounded-chip border border-gold/35 bg-chip px-4 py-3 text-[13.5px] text-gold">
             Your password has been updated.
@@ -103,6 +111,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Acco
           </Link>
         </div>
       </div>
+      <DeleteAccount />
     </main>
   );
 }

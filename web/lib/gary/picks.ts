@@ -1,3 +1,5 @@
+import { isLongShot } from './prop-lanes';
+export { isLongShot } from './prop-lanes';
 import { rest } from './supabase';
 import { todayEST } from './dates';
 import { normalizeLeague } from './leagues';
@@ -76,14 +78,6 @@ export function groupPicksByLeague(picks: GaryPick[]): Map<string, GaryPick[]> {
   return m;
 }
 
-/**
- * The long shot (sport 'MLB HR'): one home run a game, priced for the fun of
- * it. It publishes as a pick card beside that game's props (founder, Sep 3
- * 2026) and never counts in the props record.
- */
-export function isLongShot(p: PropPick): boolean {
-  return normalizeLeague(p.league, p.sport) === 'MLB HR';
-}
 
 /** Split props into the long-shot lane vs the core board. */
 export function splitHrThreats(props: PropPick[]): { hr: PropPick[]; rest: PropPick[] } {

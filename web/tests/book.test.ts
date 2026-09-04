@@ -18,6 +18,9 @@ import {
   trackerStats,
   tailFadeCountForGame,
   windowSince,
+  betsCsv,
+  isBetLocked,
+  searchBets,
   type UserBet,
 } from '@/lib/book/model';
 
@@ -86,8 +89,8 @@ describe('board receipt identity', () => {
       .toBeUndefined();
   });
 
-  it('suppresses the weekly NFL control while leaving daily-sport controls available', () => {
-    expect(gameBookTrackingUnavailableReason('NFL')).toContain('weekly NFL');
+  it('supports weekly NFL through the canonical server placement resolver', () => {
+    expect(gameBookTrackingUnavailableReason('NFL')).toBeNull();
     expect(gameBookTrackingUnavailableReason('MLB')).toBeNull();
   });
 
@@ -163,7 +166,7 @@ describe('trackerStats', () => {
     ]);
     expect(stats.winPct).toBe(67);
     expect(stats.roiPct).toBe(66); // 2.63 net / 4 staked
-    expect(stats.avgOdds).toBe(53); // (-120 + 140 + 140) / 3
+    expect(stats.avgOdds).toBe(121); // Average payout, converted back to valid American odds.
     expect(stats.bestDay).toEqual({ date: '2026-08-10', units: 1.8 });
   });
   it('everything null with no settled bets', () => {
@@ -172,6 +175,34 @@ describe('trackerStats', () => {
     expect(stats.roiPct).toBeNull();
     expect(stats.avgOdds).toBeNull();
     expect(stats.bestDay).toBeNull();
+  });
+});
+
+describe('Book safety and complete tracking', () => {
+  it('locks verified slips at kickoff and when kickoff is unknown', () => {
+    expect(isBetLocked(bet({ status: 'pending', lock_at: null }))).toBe(true);
+    expect(isBetLocked(bet({ status: 'pending', lock_at: '2026-09-04T20:00:00Z' }), Date.parse('2026-09-04T20:00:00Z'))).toBe(true);
+    expect(isBetLocked(bet({ status: 'pending', lock_at: '2026-09-04T20:00:00Z' }), Date.parse('2026-09-04T19:59:00Z'))).toBe(false);
+    expect(isBetLocked(bet({ kind: 'manual' }))).toBe(false);
+  });
+  it('searches private notes and combines favorite, sport, and result filters', () => {
+    const rows = [bet({ id: 'yes', is_favorite: true, notes: 'Wind read', league: 'MLB' }), bet({ id: 'no', notes: 'Wind read' })];
+    expect(searchBets(rows, 'wind', 'MLB', 'won', true).map(b => b.id)).toEqual(['yes']);
+  });
+  it('exports quoted multiline cells without spreadsheet formula injection', () => {
+    const csv = betsCsv([bet({ pick_text: '=SUM(1,2)', notes: 'He said "yes"\nThen no', odds_american: -110 })]);
+    expect(csv).toContain('"\'=SUM(1,2)"');
+    expect(csv).toContain('"He said ""yes""\nThen no"');
+    expect(csv).toContain('"-110"');
+  });
+  it('7 and 30 day windows include today without an extra day', () => {
+    const now = new Date('2026-09-04T12:00:00Z');
+    expect(windowSince('7d', now)).toBe('2026-08-29');
+    expect(windowSince('30d', now)).toBe('2026-08-06');
+  });
+  it('distinguishes the same player market across doubleheader games', () => {
+    const rows = [bet({ pick_type: 'prop', player_name: 'Judge', prop_type: 'hits', source_game_id: 'first', source_line: 1.5, source_side: 'over' }), bet({ id: 'second', pick_type: 'prop', player_name: 'Judge', prop_type: 'hits', source_game_id: 'second', source_line: 1.5, source_side: 'over' })];
+    expect(findExistingPropBet(rows, '2026-08-10', 'Judge', 'hits', 'second', 1.5, 'over')?.id).toBe('second');
   });
 });
 

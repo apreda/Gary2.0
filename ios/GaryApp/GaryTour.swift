@@ -73,6 +73,19 @@ enum GaryTour {
             NotificationCenter.default.post(name: Notification.Name("ShowSettingsMenu"), object: nil)
         case "profile":
             NotificationCenter.default.post(name: Notification.Name("ShowProfile"), object: nil)
+        #if DEBUG && targetEnvironment(simulator)
+        case "qa-signin":
+            // Test accounts are supplied explicitly inside this simulator's
+            // sandbox. Never accept credentials in notification text or logs.
+            let path = NSTemporaryDirectory() + "gary-tour-auth.json"
+            struct Credentials: Decodable { let email: String; let password: String }
+            guard let data = FileManager.default.contents(atPath: path),
+                  let credentials = try? JSONDecoder().decode(Credentials.self, from: data) else { return }
+            try? FileManager.default.removeItem(atPath: path)
+            Task { try? await AuthManager.shared.signIn(email: credentials.email, password: credentials.password) }
+        case "qa-signout":
+            Task { @MainActor in AuthManager.shared.signOut() }
+        #endif
         case "reveal":
             revealBudget = max(1, Int(arg) ?? 1)
             post(verb, arg)

@@ -1,125 +1,195 @@
 'use client';
 
 import { useState } from 'react';
-import { logManual } from '@/lib/book/api';
+import { logManual, updateBet } from '@/lib/book/api';
 import type { UserBet } from '@/lib/book/model';
 import { todayEST } from '@/lib/gary/dates';
 
-const LEAGUES = ['MLB', 'NFL', 'NBA', 'NHL', 'NCAAF', 'NCAAB', 'OTHER'];
+const LEAGUES = ['MLB', 'NFL', 'NBA', 'NCAAF', 'OTHER'];
+export const bookField =
+  'mt-1 w-full rounded-chip border border-line bg-chip px-3.5 py-2.5 text-[14px] text-hi placeholder:text-low focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70';
+export const bookButton =
+  'rounded-chip border border-line px-3.5 py-2 text-[12px] font-medium text-mid transition-colors hover:border-gold/50 hover:text-hi disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70';
+const label = 'block text-[12px] text-mid';
 
-const focusRing =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink';
-
-const field = `w-full rounded-chip border border-line bg-chip px-3.5 py-2.5 text-[14px] text-hi placeholder:text-low ${focusRing}`;
-
-/**
- * Log an outside bet — YOUR PLAYS, self-graded and labeled that way. The
- * verified WITH GARY ledger never mixes with these.
- */
-export function LogBet({ onLogged, onClose }: { onLogged: (bet: UserBet) => void; onClose: () => void }) {
-  const [league, setLeague] = useState('MLB');
-  const [description, setDescription] = useState('');
-  const [oddsText, setOddsText] = useState('');
-  const [stake, setStake] = useState(1.0);
+export function LogBet({
+  onLogged,
+  onClose,
+  existing,
+}: {
+  onLogged: (bet: UserBet) => void;
+  onClose: () => void;
+  existing?: UserBet;
+}) {
+  const [league, setLeague] = useState(existing?.league ?? 'MLB');
+  const [description, setDescription] = useState(existing?.pick_text ?? '');
+  const [oddsText, setOddsText] = useState(String(existing?.odds_american ?? -110));
+  const [stakeText, setStakeText] = useState(String(existing?.stake_units ?? 1));
+  const [date, setDate] = useState(existing?.game_date ?? todayEST());
+  const [notes, setNotes] = useState(existing?.notes ?? '');
+  const [bookmaker, setBookmaker] = useState(existing?.bookmaker ?? '');
+  const [favorite, setFavorite] = useState(existing?.is_favorite ?? false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const desc = description.trim();
-    if (!desc) return;
-    let odds: number | null = null;
-    if (oddsText.trim()) {
-      const n = parseInt(oddsText.replace('+', ''), 10);
-      if (!Number.isFinite(n) || Math.abs(n) < 100) {
-        setError('Odds look off — use American odds like -110 or +145, or leave it blank.');
-        return;
-      }
-      odds = n;
+    const odds = Number(oddsText);
+    const stake = Number(stakeText);
+    if (!/^[+-]?\d+$/.test(oddsText.trim()) || Math.abs(odds) < 100 || Math.abs(odds) > 100000) {
+      setError('Enter American odds, such as -110 or +145.');
+      return;
+    }
+    if (!Number.isFinite(stake) || stake < 0.01 || stake > 10) {
+      setError('Stake must be between 0.01 and 10 units.');
+      return;
     }
     setBusy(true);
     setError(null);
     try {
-      const bet = await logManual({ league, description: desc, odds, stake, gameDate: todayEST() });
+      const bet = existing
+        ? await updateBet(existing.id, {
+            league,
+            pick_text: desc,
+            description: desc,
+            odds_american: odds,
+            stake_units: stake,
+            game_date: date,
+            notes,
+            bookmaker,
+            is_favorite: favorite,
+          })
+        : await logManual({
+            league,
+            description: desc,
+            odds,
+            stake,
+            gameDate: date,
+            notes,
+            bookmaker,
+            favorite,
+          });
       onLogged(bet);
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'We could not save that bet. Please try again.');
+      setError(err instanceof Error ? err.message : 'We could not save that bet. Please retry.');
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <form onSubmit={submit} className="rounded-card border border-line bg-card px-5 py-4">
-      <p className="font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-gold">Log a bet</p>
-      <p className="mt-1 text-[13px] text-mid">
-        A bet you placed elsewhere. It lands in YOUR PLAYS — you grade it when it settles.
+    <form onSubmit={submit} className="rounded-panel border border-gold/30 bg-card p-5 sm:p-6">
+      <h2 className="font-display text-2xl text-hi">{existing ? 'Edit your bet' : 'Log your own bet'}</h2>
+      <p className="mt-1 text-[13px] leading-relaxed text-mid">
+        Your private record. Enter the odds you took and settle the result yourself. These bets never count
+        toward public rankings or verified streaks.
       </p>
-
-      <div className="mt-4 flex flex-wrap gap-3">
-        <select
-          value={league}
-          onChange={e => setLeague(e.target.value)}
-          className={`rounded-chip border border-line bg-chip px-3 py-2.5 text-[13.5px] text-hi ${focusRing}`}
-          aria-label="League"
-        >
-          {LEAGUES.map(l => (
-            <option key={l} value={l}>
-              {l}
-            </option>
-          ))}
-        </select>
-        <input
-          type="text"
-          required
-          placeholder="Yankees ML, Soto 2+ hits parlay, anything"
-          value={description}
-          onChange={e => setDescription(e.target.value)}
-          className={`${field} min-w-[220px] flex-1`}
-        />
-      </div>
-
-      <div className="mt-3 flex flex-wrap items-center gap-3">
-        <input
-          type="text"
-          inputMode="numeric"
-          placeholder="Odds (-110)"
-          value={oddsText}
-          onChange={e => setOddsText(e.target.value)}
-          className={`${field} w-[130px]`}
-        />
-        <label className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.05em] text-low">
-          Stake
-          <select
-            value={stake}
-            onChange={e => setStake(parseFloat(e.target.value))}
-            className={`rounded-chip border border-line bg-chip px-3 py-2.5 text-[13.5px] text-hi ${focusRing}`}
-          >
-            {[0.5, 1, 1.5, 2, 3, 5].map(s => (
-              <option key={s} value={s}>
-                {s.toFixed(1)}u
-              </option>
-            ))}
-          </select>
+      <fieldset disabled={busy} className="mt-5 space-y-4 disabled:opacity-60">
+        <label className={label}>
+          Selection
+          <input
+            className={bookField}
+            required
+            maxLength={300}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Yankees moneyline, a player prop, or a parlay"
+          />
         </label>
-        <button
-          type="submit"
-          disabled={busy || !description.trim()}
-          className={`rounded-chip bg-gold px-4 py-2.5 font-mono text-[12px] font-bold text-ink transition-opacity hover:opacity-90 disabled:opacity-50 ${focusRing}`}
-        >
-          Save it
-        </button>
-        <button
-          type="button"
-          onClick={onClose}
-          className={`font-mono text-[11.5px] text-low transition-colors hover:text-mid ${focusRing}`}
-        >
-          Cancel
-        </button>
-      </div>
-
-      {error && <p className="mt-3 font-mono text-[11px] text-loss/90">{error}</p>}
+        <div className="grid grid-cols-2 gap-4">
+          <label className={label}>
+            Sport
+            <select className={bookField} value={league} onChange={(e) => setLeague(e.target.value)}>
+              {LEAGUES.map((l) => (
+                <option key={l}>{l}</option>
+              ))}
+            </select>
+          </label>
+          <label className={label}>
+            Game date (Eastern)
+            <input
+              className={bookField}
+              type="date"
+              required
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+          </label>
+          <label className={label}>
+            American odds
+            <input
+              className={bookField}
+              inputMode="text"
+              required
+              value={oddsText}
+              onChange={(e) => setOddsText(e.target.value)}
+            />
+          </label>
+          <label className={label}>
+            Stake in units
+            <input
+              className={bookField}
+              type="number"
+              inputMode="decimal"
+              min="0.01"
+              max="10"
+              step="0.01"
+              required
+              value={stakeText}
+              onChange={(e) => setStakeText(e.target.value)}
+            />
+          </label>
+        </div>
+        <label className={label}>
+          Sportsbook <span className="text-low">(optional)</span>
+          <input
+            className={bookField}
+            maxLength={80}
+            value={bookmaker}
+            onChange={(e) => setBookmaker(e.target.value)}
+            placeholder="Where you placed the bet"
+          />
+        </label>
+        <label className={label}>
+          Private notes <span className="text-low">(optional)</span>
+          <textarea
+            className={bookField}
+            rows={2}
+            maxLength={2000}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Why you made this call"
+          />
+        </label>
+        <label className="flex items-center gap-2 text-[13px] text-mid">
+          <input
+            type="checkbox"
+            checked={favorite}
+            onChange={(e) => setFavorite(e.target.checked)}
+            className="accent-gold"
+          />{' '}
+          Save as a favorite
+        </label>
+        <div className="flex gap-3">
+          <button
+            type="submit"
+            disabled={!description.trim()}
+            className="rounded-chip bg-gold px-5 py-2.5 text-[13px] font-semibold text-ink disabled:opacity-50"
+          >
+            {busy ? 'Saving…' : 'Save bet'}
+          </button>
+          <button type="button" onClick={onClose} className={bookButton}>
+            Cancel
+          </button>
+        </div>
+      </fieldset>
+      {error && (
+        <p role="alert" className="mt-3 text-[13px] text-loss">
+          {error}
+        </p>
+      )}
     </form>
   );
 }
