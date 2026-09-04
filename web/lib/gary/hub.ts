@@ -1,6 +1,6 @@
 import { rest } from './supabase';
 import { todayEST, hubGradedDateEST } from './dates';
-import type { InsightRow, PlayerCardRow } from './types';
+import type { InsightRow } from './types';
 
 export type LaneKey =
   | 'streak' | 'h2h' | 'hot' | 'cold' | 'injury' | 'debut' | 'situational'
@@ -87,13 +87,6 @@ export async function fetchTodayInsights(revalidate = 600): Promise<InsightRow[]
 export async function fetchGradedYesterday(revalidate = 3600): Promise<InsightRow[]> {
   return rest<InsightRow[]>(
     `insight_connections?select=id,date,result&date=eq.${hubGradedDateEST()}&result=not.is.null`,
-    { revalidate },
-  );
-}
-
-export async function fetchPlayerCards(revalidate = 600): Promise<PlayerCardRow[]> {
-  return rest<PlayerCardRow[]>(
-    `player_insight_cards?select=*&date=eq.${todayEST()}`,
     { revalidate },
   );
 }

@@ -25,11 +25,6 @@ jobs:
     defaults:
       run:
         working-directory: gary2.0
-    env:
-      # Calendar tests initialize a client at import time; these are dummy values.
-      # Provider and storage calls in the unit suite use mocks or injected clients.
-      SUPABASE_URL: https://example.supabase.test
-      SUPABASE_ANON_KEY: test-anon-key
     steps:
       - uses: actions/checkout@v6
         with:
@@ -43,6 +38,8 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Run backend unit tests
         run: npm test -- --silent=passed-only
+      - name: Run edge helper tests
+        run: npm run test:edge
 
   web:
     name: Web unit tests and types
@@ -66,7 +63,8 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Run web unit tests
         run: npm test -- --silent=passed-only
-      - name: Generate Next.js route types
-        run: npm exec -- next typegen
-      - name: Check TypeScript
-        run: npm exec -- tsc --noEmit --incremental false
+      - name: Check route and TypeScript types
+        run: npm run typecheck
+      - name: Check fixture-backed web pages and results export
+        working-directory: .
+        run: npm run smoke:web

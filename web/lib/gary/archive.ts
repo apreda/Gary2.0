@@ -136,19 +136,6 @@ export function dedupeArchivePicks(picks: GaryPick[]): GaryPick[] {
   });
 }
 
-export function mergeArchiveDates(
-  groups: string[][],
-  today = todayEST(),
-): string[] {
-  const dates = new Set<string>();
-  for (const group of groups) {
-    for (const date of group) {
-      if (isArchiveDate(date, today)) dates.add(date);
-    }
-  }
-  return [...dates].sort((a, b) => b.localeCompare(a));
-}
-
 function cleanText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }

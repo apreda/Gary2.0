@@ -86,12 +86,6 @@ export interface InsightRow {
   result: string | null; result_note: string | null;
 }
 
-export interface PlayerCardRow {
-  date: string; league: string | null; player_id: string | null;
-  player_name: string | null; team_abbr: string | null; game_id: string | null;
-  payload: Record<string, unknown> | null;
-}
-
 export interface LiveScoreRow {
   date: string; league: string | null; game_id: string | null;
   away_abbr: string | null; home_abbr: string | null;

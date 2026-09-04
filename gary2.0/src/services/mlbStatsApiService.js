@@ -26,11 +26,21 @@ function setCache(key, data, ts = Date.now()) {
   cache.set(key, { data, ts });
 }
 
+// Concurrent callers (including the two clubs' pen builders) can miss their
+// completed caches together. Share only the pending transport; each caller
+// retains its existing cache policy, and uncached live reads stay fresh.
+const apiInflight = new Map();
+
 async function apiFetch(path) {
-  const url = `${BASE_URL}${path}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`MLB Stats API ${res.status}: ${url}`);
-  return res.json();
+  if (apiInflight.has(path)) return apiInflight.get(path);
+  const pending = (async () => {
+    const url = `${BASE_URL}${path}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`MLB Stats API ${res.status}: ${url}`);
+    return res.json();
+  })().finally(() => apiInflight.delete(path));
+  apiInflight.set(path, pending);
+  return pending;
 }
 
 // The scoring, batter, and bullpen views read the same completed-game feed.

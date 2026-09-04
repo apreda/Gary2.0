@@ -76,13 +76,3 @@ export async function fetchTodayPropPicks(revalidate = 600): Promise<PropPick[]>
 export function isLongShot(p: PropPick): boolean {
   return normalizeLeague(p.league, p.sport) === 'MLB HR';
 }
-
-/** Split props into the long-shot lane vs the core board. */
-export function splitHrThreats(props: PropPick[]): { hr: PropPick[]; rest: PropPick[] } {
-  const hr: PropPick[] = [];
-  const rest: PropPick[] = [];
-  for (const p of props) {
-    (isLongShot(p) ? hr : rest).push(p);
-  }
-  return { hr, rest };
-}
