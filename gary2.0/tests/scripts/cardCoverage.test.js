@@ -19,7 +19,10 @@ describe('the player card reaches every named row', () => {
 
   it('builds from the whole day, not just the pass that happens to run', () => {
     expect(runner).toContain('async function storedConnectionPlayers(date, league)');
-    expect(runner).toContain('...await storedConnectionPlayers(date, league)');
+    expect(runner).toContain('const stored = await storedConnectionPlayers(date, league);');
+    // A lane that stamps an MLBAM id instead of the provider's still gets its
+    // player a pack, through the headline name.
+    expect(runner).toContain("String(row?.headline || '').split(/[:(,/·—]/)[0].trim()");
   });
 
   it('opens a card by NAME when the row carries no player id', () => {
@@ -43,7 +46,11 @@ describe('the player card reaches every named row', () => {
     expect(watch).toContain('row(s) on the board and NO cards at all');
     expect(watch).toContain('every card is thin (identity only, no numbers)');
     expect(watch).toContain('process.exit(1)');
-    // It counts the name path too, because that is the one football rides.
-    expect(watch).toContain('cardNames.has(nameKey(headName(s.headline)))');
+    // It counts the name path too, because that is the one football rides,
+    // and it uses the APP's resolver so it never reports a miss the app opens.
+    expect(watch).toContain('function resolvesByName(name, cards)');
+    expect(watch).toContain('n.includes(k) || k.includes(n)');
+    // Team rows are not player rows and must not inflate the denominator.
+    expect(watch).toContain('const withPlayer = leagueSignals.filter((s) => s.player_id != null);');
   });
 });
