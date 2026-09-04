@@ -186,11 +186,16 @@ describe('Football Fantasy density', () => {
     // Aug 20: the guard grew from fantasy-only to EVERY football row —
     // quarterback/availability rows carry player_id and fell through to the
     // MLB-only PlayerInsightSheet (a permanent "building" screen for NFL ids).
-    // Aug 27: the pipeline builds football packs, so the guard gates on
-    // verified pack existence — the pack sheet opens only when today's
-    // intelCards hold the tapped id, the edge overlay stays the fallback.
-    // The invariant is unchanged: no football tap can land on a placeholder.
-    expect(hubView).toMatch(/if sel == \.nfl \|\| sel == \.ncaaf \{\s*\n\s*if let pid = s\.playerId, intelCards\.contains\(where: \{ \$0\.player_id == pid \}\) \{\s*\n\s*breakdownSignal = s\s*\n\s*\} else \{\s*\n\s*selectedSignal = s\s*\n\s*\}\s*\n\s*\}\s*\n\s*else if s\.playerId != nil \{ breakdownSignal = s \}/);
+    // Aug 27: the pipeline builds football packs, so the guard gated on
+    // verified pack existence by ID.
+    // Sep 4 2026: football lanes carry NO player id at all, so the id gate
+    // could never open a card for them. The route is now id+pack, then the
+    // row's NAME against today's packs, then the overlay. The invariant is
+    // unchanged and now covers every league: a tap with no pack behind it
+    // lands on the edge overlay, never on an empty player card.
+    expect(hubView).toContain('if let pid = s.playerId, intelCards.contains(where: { $0.player_id == pid }) {');
+    expect(hubView).toContain('if let row = intelCard(for: Self.signalPlayerName(s)) {');
+    expect(hubView).toMatch(/if s\.teamId != nil \|\| s\.h2h != nil \{ teamCardSignal = s \}\s*\n\s*else \{ selectedSignal = s \}/);
     expect(hubView).not.toContain('(sel == .nfl || sel == .ncaaf), Self.fantasyKinds.contains(s.kind)');
   });
 });
