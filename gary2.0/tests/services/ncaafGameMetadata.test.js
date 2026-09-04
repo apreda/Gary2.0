@@ -11,7 +11,7 @@ import {
 
 const sources = {
   byName: new Map([
-    ['usc trojans', { id: 61, full_name: 'USC Trojans', conference: '4' }],
+    ['usc trojans', { id: 61, full_name: 'USC Trojans', conference: '4', abbreviation: 'USC' }],
     ['san jose state spartans', { id: 90, full_name: 'San José State Spartans', conference: '8' }],
     ['notre dame fighting irish', { id: 87, full_name: 'Notre Dame Fighting Irish', conference: '6' }],
     ['north dakota state bison', { id: 140, full_name: 'North Dakota State Bison', conference: '17' }],
@@ -22,12 +22,12 @@ const sources = {
 describe('resolveNcaafTeamMetadata', () => {
   it('resolves conference display name and AP rank by exact identity', () => {
     expect(resolveNcaafTeamMetadata('USC Trojans', sources))
-      .toEqual({ conference: 'Big Ten', ranking: 21 });
+      .toEqual({ conference: 'Big Ten', ranking: 21, abbreviation: 'USC' });
   });
 
   it('handles accented provider names and team objects', () => {
     expect(resolveNcaafTeamMetadata({ full_name: 'San José State Spartans' }, sources))
-      .toEqual({ conference: 'Mountain West', ranking: null });
+      .toEqual({ conference: 'Mountain West', ranking: null, abbreviation: null });
   });
 
   it('independents display as Independents', () => {
@@ -37,12 +37,15 @@ describe('resolveNcaafTeamMetadata', () => {
 
   it('a non-FBS conference id maps to null, never a guessed name', () => {
     expect(resolveNcaafTeamMetadata('North Dakota State Bison', sources))
-      .toEqual({ conference: null, ranking: null });
+      .toEqual({ conference: null, ranking: null, abbreviation: null });
   });
 
   it('an unresolvable team gets nulls, never a substring match', () => {
+    // Unresolved means unresolved: no conference, no rank, and no short form
+    // to print on a card (Sep 4 2026 — the resolver now carries the provider's
+    // own abbreviation so college pick cards stop printing whole school names).
     expect(resolveNcaafTeamMetadata('USC', sources))
-      .toEqual({ conference: null, ranking: null });
+      .toEqual({ conference: null, ranking: null, abbreviation: null });
   });
 });
 

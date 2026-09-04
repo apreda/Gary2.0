@@ -1358,6 +1358,39 @@ const ballDontLieService = {
   },
 
   /**
+   * NCAAF standings — ONE conference per call, the way the route answers
+   * (GET /ncaaf/v1/standings?season=&conference_id=). The college standings
+   * lane reads the slate's conferences one at a time; getStandingsGeneric
+   * deliberately refuses NCAAF. Season + conference are both required —
+   * without them the route would answer for nobody in particular.
+   * @returns {Array} rows { team, conference, wins, losses, home_record, away_record, conference_record, ... }
+   */
+  async getNcaafStandings(season, conferenceId, ttlMinutes = 60) {
+    // Number(null) is 0 — an absent id must never read as conference 0.
+    if (season == null || conferenceId == null) return [];
+    const seasonNum = Number(season);
+    const confNum = Number(conferenceId);
+    if (!Number.isInteger(seasonNum) || !Number.isInteger(confNum) || confNum <= 0) return [];
+    try {
+      const cacheKey = `ncaaf_standings_${seasonNum}_${confNum}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}/ncaaf/v1/standings${buildQuery({ season: seasonNum, conference_id: confNum })}`;
+        const resp = await fetch(url, { headers: { Authorization: API_KEY }, signal: AbortSignal.timeout(BDL_TIMEOUT_MS) });
+        if (!resp.ok) {
+          const err = new Error(`HTTP ${resp.status}`);
+          err.status = resp.status;
+          throw err;
+        }
+        const json = await resp.json().catch(() => ({}));
+        return Array.isArray(json?.data) ? json.data : [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error('[Ball Don\'t Lie] ncaaf getNcaafStandings error:', e.message);
+      return [];
+    }
+  },
+
+  /**
    * Generic players fetch with HTTP fallback
    */
   async getPlayersGeneric(sportKey, params = {}, ttlMinutes = 10) {
@@ -3100,6 +3133,23 @@ const ballDontLieService = {
   /**
    * NCAAF player season stats (single season, optional player filter)
    */
+  /**
+   * Keep only rows the provider actually stamped with the season we asked for.
+   * BDL's college stat endpoints ignore a filter written in the wrong form and
+   * answer 200 OK with the oldest rows in the table, so a silent mis-filter
+   * reads as real data everywhere downstream (Sep 4 2026).
+   */
+  _onlySeason(rows, season, label) {
+    const list = Array.isArray(rows) ? rows : [];
+    const want = Number(season);
+    if (!Number.isFinite(want)) return list;
+    const kept = list.filter((row) => Number(row?.season ?? row?.game?.season) === want);
+    if (kept.length !== list.length) {
+      console.warn(`[Ball Don't Lie] ncaaf ${label}: dropped ${list.length - kept.length} row(s) outside season ${want} — the provider ignored the season filter.`);
+    }
+    return kept;
+  },
+
   async getNcaafPlayerSeasonStats({ playerIds, playerId, teamIds, teamId, season } = {}, ttlMinutes = 10) {
     try {
       if (!season) return [];
@@ -3110,11 +3160,14 @@ const ballDontLieService = {
       }
       const cacheKey = `ncaaf_player_season_stats_${(pidArr || []).join('-')}_${(tidArr || []).join('-')}_${season}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        // `seasons[]`, not the scalar `season`: with team_ids[] alongside it,
-        // the scalar form returns ZERO rows and no error (verified live Aug 25
-        // 2026). fetchNCAAFStartingQBFromStats calls this with a teamId, so its
-        // NCAAF starting-QB fallback has been silently empty.
-        const query = { 'seasons[]': [season], per_page: 100 };
+        // THE SCALAR `season`, not `seasons[]` (verified live Sep 4 2026).
+        // The two college player endpoints take OPPOSITE forms and neither
+        // errors on the wrong one — they silently return the oldest rows in
+        // the table. On /player_season_stats, `seasons[]=2026` came back as
+        // 2004-2006, which is how Ray Rice and Calvin Johnson reached the
+        // college Fantasy Corner as this week's waiver wire. (/player_stats
+        // is the mirror image and wants seasons[] — see the method below.)
+        const query = { season, per_page: 100 };
         if (Array.isArray(pidArr) && pidArr.length) {
           query['player_ids[]'] = pidArr.slice(0, 100);
         }
@@ -3123,7 +3176,10 @@ const ballDontLieService = {
         }
         const url = `${BALLDONTLIE_API_BASE_URL}/ncaaf/v1/player_season_stats${buildQuery(query)}`;
         const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
-        return response.data?.data || [];
+        // The rows carry their own season, so the filter is CHECKED, never
+        // trusted: a provider flip back to the other form can shorten this
+        // lane, but it can no longer publish a player from twenty years ago.
+        return this._onlySeason(response.data?.data, season, 'player_season_stats');
       }, ttlMinutes);
     } catch (e) {
       console.error('[Ball Don\'t Lie] ncaaf getNcaafPlayerSeasonStats error:', e.message);
@@ -3211,7 +3267,9 @@ const ballDontLieService = {
           seen.add(String(next));
           cursor = next;
         }
-        return rows;
+        // Same check as its sibling: this endpoint wants seasons[] today, and
+        // the wrong form here would also answer with 2004 rather than an error.
+        return this._onlySeason(rows, season, 'player_stats');
       }, ttlMinutes);
     } catch (e) {
       console.error('[Ball Don\'t Lie] ncaaf getNcaafPlayerGameStats error:', e.message);
