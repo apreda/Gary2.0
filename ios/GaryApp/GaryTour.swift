@@ -86,7 +86,15 @@ enum GaryTour {
             // "mock nfl on" / "mock nfl off" — the sim-only cloned NFL day
             // (GaryMock.swift). Persists across relaunches; relaunch to drop
             // the in-memory boards after flipping it.
+            //
+            // GaryMock.swift is compiled DEBUG-only, so this verb has to be
+            // too: unguarded, it failed the RELEASE archive outright (Sep 4
+            // 2026 — "cannot find 'GaryMock' in scope"), which is a build that
+            // cannot ship. The restore() call above is already guarded; this
+            // one was missed.
+            #if DEBUG
             GaryMock.set(arg.hasSuffix("on"))
+            #endif
         default:
             post(verb, arg)
         }
