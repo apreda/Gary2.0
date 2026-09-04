@@ -51,8 +51,8 @@ export const GAME_ML_CAP = Number(process.env.GARY_ML_CAP || -179);
 export const LEGACY_BRAIN_FALLBACK = 'anthropic-claude-haiku-4-5';
 // validateSessionModel's reroute target for refused model names.
 export const LEGACY_RESEARCH_MODEL = 'anthropic-claude-haiku-4-5';
-// Props lane default = the brain the plists actually set (codex bridge).
-export const PROPS_DESK_MODEL = process.env.GARY_PROPS_MODEL_OVERRIDE || 'codex-gpt-6-astra';
+// Props stay on Sol through the codex bridge (founder, Sep 4 2026).
+export const PROPS_DESK_MODEL = process.env.GARY_PROPS_MODEL_OVERRIDE || 'codex-gpt-5.6-sol';
 
 // Quota cascade for the desk lanes (founder approved Jul 29, after the Jul 28
 // OpenAI balance outage shipped 6 games with no pick): when a desk brain

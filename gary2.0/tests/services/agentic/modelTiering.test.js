@@ -14,7 +14,7 @@ import path from 'node:path';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const agentLoopSrc = readFileSync(path.join(__dirname, '../../../src/services/agentic/orchestrator/agentLoop.js'), 'utf8');
 
-describe('model tiering: separate game and props lanes on the Astra bridge', () => {
+describe('model tiering: Astra games and Sol props through the codex bridge', () => {
   it('the orchestrator is the game lane only — primaryModel is the game brain (props mode deleted Sep 2 2026)', () => {
     expect(agentLoopSrc).toContain('const primaryModel = modelOverride ? modelOverride : GAME_PICK_MODEL;');
     expect(agentLoopSrc).not.toContain('PROPS_DESK_MODEL');
@@ -22,7 +22,7 @@ describe('model tiering: separate game and props lanes on the Astra bridge', () 
 
   it('props default to the codex bridge — the brain the plists actually set — overridable only via the env seam (Gemini retired Aug 24 2026)', () => {
     const configSrc = readFileSync(path.join(__dirname, '../../../src/services/agentic/orchestrator/orchestratorConfig.js'), 'utf8');
-    expect(configSrc).toMatch(/PROPS_DESK_MODEL = process\.env\.GARY_PROPS_MODEL_OVERRIDE \|\| 'codex-gpt-6-astra'/);
+    expect(configSrc).toMatch(/PROPS_DESK_MODEL = process\.env\.GARY_PROPS_MODEL_OVERRIDE \|\| 'codex-gpt-5\.6-sol'/);
     expect(configSrc).toMatch(/GAME_PICK_MODEL = process\.env\.GARY_MODEL_OVERRIDE \|\| 'codex-gpt-6-astra'/);
     expect(configSrc).toMatch(/MLB_JUNE_BRAIN_MODEL = process\.env\.GARY_MLB_BRAIN_MODEL \|\| 'codex-gpt-6-astra'/);
     // The founder's Aug 24 vendor ban, encoded: no Gemini model may be a
