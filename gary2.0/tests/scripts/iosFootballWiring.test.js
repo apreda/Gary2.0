@@ -353,19 +353,17 @@ describe('Football Picks overview', () => {
     expect(supabaseApi).toContain('sourceErrors.allSatisfy(isTransientExternalFailure)');
   });
 
-  it('keeps Winners shelves isolated when one sport source fails', () => {
-    expect(views).toContain('func fetchIsolatedGamePickSources(');
-    expect(views).toContain('async let dailyTask = SupabaseAPI.fetchDailyPicks(date: date)');
-    expect(views).toContain('async let nflTask = SupabaseAPI.fetchWeeklyNFLPicks(for: date)');
-    expect(views).toContain('snapshot.transientExternalFailures.contains(.daily) && league != "NFL"');
-    expect(views).toContain('snapshot.transientExternalFailures.contains(.nfl) && league == "NFL"');
-    // (.ncaabFuture retention pin removed Sep 1 2026 — the NCAAB tournament lane left the app.)
-    expect(views).toContain('retaining: previousGameShelves.filter { !$0.settled }.flatMap(\\.picks)');
-    expect(views).toContain('retaining: previousGameShelves.filter(\\.settled).flatMap(\\.picks)');
-    expect(views).toContain('? previousPropShelves.filter { !$0.settled }.flatMap(\\.props)');
-    expect(views).toContain('? previousPropShelves.filter(\\.settled).flatMap(\\.props)');
-    expect(views).toContain('boardDataFailed = !todaySnapshot.failures.isEmpty');
-    expect(views).not.toContain('async let todayGameF = SupabaseAPI.fetchAllPicks(date: today)');
+  it('loads Winners from immutable per-date admissions and isolates failures from raw pick feeds', () => {
+    const winners = views.slice(views.indexOf('private func loadAdmittedBoard'), views.indexOf('/// SFSafariViewController'));
+    expect(winners).toContain('async let admittedF = SupabaseAPI.fetchWinnersBoard(date: date)');
+    expect(winners).toContain('admittedBoardCache[date]');
+    expect(winners).toContain('SupabaseAPI.isTransientExternalFailure(error)');
+    expect(winners).toContain('boardDataFailed = admissionFailed || resultsFailed || propResultsFailed');
+    expect(winners).not.toContain('fetchDailyPicks');
+    expect(winners).not.toContain('fetchWeeklyNFLPicks');
+    expect(winners).not.toContain('fetchPropPicks');
+    expect(winners).not.toContain('selectPremiumProps');
+    expect(winners).not.toContain('yesterday');
   });
 
   it('keeps Home and Yesterday pick desks isolated on cold and rolling loads', () => {

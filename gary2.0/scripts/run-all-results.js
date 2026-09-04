@@ -13,6 +13,8 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { admittedGameKeys, isWinnersGame } from '../src/services/pickdesk/winnersBook.js';
+import { WINNERS_CUTOVER_DATE } from '../src/services/pickdesk/winnersAdmissions.js';
 import { pickSide, matchGame } from '../src/services/teamMatch.js';
 import { factCheckPick, buildGameEvidence } from '../src/services/factCheck.js';
 import { generateRecap, filterPropsForGame, headlineNeedsRepair } from '../src/services/gameRecap.js';
@@ -964,41 +966,44 @@ async function processGenericGames(table, date, leagueFilter = null, { settlemen
   for (const row of rows) {
     const picks = typeof row.picks === 'string' ? JSON.parse(row.picks) : (row.picks || row.picks_array || []);
 
-    // THE WINNERS BOARD (founder GO, Sep 2 2026): one definition everywhere —
-    // a pick is a Winners pick when its winners_reviews row says on_board
-    // (first dog, big game, or the reviewer's STRONG). A league with no
-    // review rows for these picks (dates before the reviewer shipped) keeps
-    // the old rule: top 3 per league by (is_top_pick, then confidence).
-    const winnerKey = (p) => `${(p.league || '').toUpperCase()}|${p.pick}|${p.awayTeam} @ ${p.homeTeam}`;
+    // Since Sep 4, only an exact immutable Winners publication can stamp a
+    // result. Never manufacture admission from confidence or a missing review.
+    const ids = [...new Set(picks.map(p => String(p?.game_id ?? p?.bdl_game_id ?? '')).filter(Boolean))];
+    let boardKeys = new Set();
+    if (ids.length) {
+      const { data: board, error: boardError } = await supabase.from('winners_board')
+        .select('game_date,league,kind,game_id,pick_snapshot')
+        .eq('kind', 'game').gte('game_date', WINNERS_CUTOVER_DATE).in('game_id', ids);
+      // Do not overwrite an existing true flag with false during a read outage.
+      if (boardError) throw new Error(`Winners admission read failed: ${boardError.message}`);
+      boardKeys = admittedGameKeys(board);
+    }
+
+    // Preserve the historical definition only for dates before the cutover.
+    const winnerKey = p => `${(p.league || '').toUpperCase()}|${p.pick}|${p.awayTeam} @ ${p.homeTeam}`;
     const winnerKeys = new Set();
     const reviewByKey = new Map();
-    try {
-      const ids = [...new Set(picks.map((p) => String(p?.game_id ?? p?.bdl_game_id ?? '')).filter(Boolean))];
-      if (ids.length) {
-        const { data: wr, error: wrErr } = await supabase.from('winners_reviews').select('league, game_id, on_board').in('game_id', ids);
-        if (wrErr) throw wrErr;
-        for (const r of wr || []) reviewByKey.set(`${String(r.league || '').toUpperCase()}|${String(r.game_id)}`, r.on_board === true);
-      }
-    } catch (e) {
-      console.warn(`   ⚠️ winners_reviews read failed (${e.message}) — falling back to the top-3 rule for this row`);
-    }
-    const leaguesReviewed = new Set([...reviewByKey.keys()].map((k) => k.split('|')[0]));
-    {
-      const byLeague = {};
-      for (const p of picks) (byLeague[(p.league || 'UNKNOWN').toUpperCase()] ||= []).push(p);
-      for (const lg of Object.keys(byLeague)) {
-        if (leaguesReviewed.has(lg)) {
-          for (const p of byLeague[lg]) {
-            if (reviewByKey.get(`${lg}|${String(p?.game_id ?? p?.bdl_game_id ?? '')}`)) winnerKeys.add(winnerKey(p));
-          }
-          continue;
+    if (date < WINNERS_CUTOVER_DATE) {
+      try {
+        if (ids.length) {
+          const { data: wr, error: wrErr } = await supabase.from('winners_reviews')
+            .select('league,game_id,on_board').lt('game_date', WINNERS_CUTOVER_DATE).in('game_id', ids);
+          if (wrErr) throw wrErr;
+          for (const review of wr || []) reviewByKey.set(`${String(review.league || '').toUpperCase()}|${String(review.game_id)}`, review.on_board === true);
         }
-        const ranked = byLeague[lg].slice().sort((a, b) => {
-          const at = a.is_top_pick ? 1 : 0, bt = b.is_top_pick ? 1 : 0;
-          if (at !== bt) return bt - at;
-          return (b.confidence ?? 0) - (a.confidence ?? 0);
-        });
-        for (const p of ranked.slice(0, 3)) winnerKeys.add(winnerKey(p));
+      } catch (error) {
+        console.warn(`   ⚠️ historical winners_reviews read failed (${error.message}) — retaining the legacy top-3 rule before ${WINNERS_CUTOVER_DATE}`);
+      }
+      const leaguesReviewed = new Set([...reviewByKey.keys()].map(key => key.split('|')[0]));
+      const byLeague = {};
+      for (const pick of picks) (byLeague[(pick.league || 'UNKNOWN').toUpperCase()] ||= []).push(pick);
+      for (const [league, leaguePicks] of Object.entries(byLeague)) {
+        if (leaguesReviewed.has(league)) {
+          for (const pick of leaguePicks) if (reviewByKey.get(`${league}|${String(pick.game_id ?? pick.bdl_game_id ?? '')}`)) winnerKeys.add(winnerKey(pick));
+        } else {
+          const ranked = leaguePicks.slice().sort((a, b) => Number(!!b.is_top_pick) - Number(!!a.is_top_pick) || (b.confidence ?? 0) - (a.confidence ?? 0));
+          for (const pick of ranked.slice(0, 3)) winnerKeys.add(winnerKey(pick));
+        }
       }
     }
 
@@ -1164,7 +1169,8 @@ async function processGenericGames(table, date, leagueFilter = null, { settlemen
           : targetTable === 'nfl_results'
             ? await supportsExactNFLResultIdentity()
             : false;
-        const isWinnersPick = winnerKeys.has(winnerKey(pick));
+        const isWinnersPick = isWinnersGame({ gameDate, league, gameId: resolvedGameId, pickText: pick.pick, odds: pick.odds,
+          boardKeys, legacyWinner: winnerKeys.has(winnerKey(pick)) });
         const insertPayload = league === 'NFL'
           ? buildNflResultWritePayload({
               mode: 'insert',

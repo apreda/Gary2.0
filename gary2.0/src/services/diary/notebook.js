@@ -2,9 +2,10 @@
  * THE NOTEBOOK (founder GO, Sep 3 2026): the reader's own record of his own
  * bets, built from his autopsies and put in front of him before the next
  * read. It is his memory, in his words, with the counts beside every line
- * so a hot week cannot sound like a law. A note is a mechanism and an
- * outcome, never a side — the format enforces it. Pure functions.
+ * so a hot week cannot sound like a law. Outcome realization and original
+ * decision quality stay separate. Pure functions; no public-pick hook.
  */
+import { AUTOPSY_REVIEW_VERSION } from './evidence.js';
 
 /** What the reader said would decide it (extracted from his own card). */
 export const REASON_TYPES = [
@@ -41,7 +42,7 @@ const rec = (rows) => {
   return { n: g.length, w, l: g.length - w };
 };
 
-/** Per reason type: bets, record, and how often the stated reason actually decided the game. */
+/** Per reason: descriptive results and evidence assessments, never factor weights. */
 export function summarizeByReason(autopsies) {
   const by = new Map();
   for (const a of autopsies || []) {
@@ -52,9 +53,14 @@ export function summarizeByReason(autopsies) {
   const out = [];
   for (const [reason, rows] of by) {
     const r = rec(rows);
-    const judged = rows.filter((x) => ['right', 'wrong', 'irrelevant'].includes(x.reason_status));
-    const right = judged.filter((x) => x.reason_status === 'right').length;
-    out.push({ reason, bets: rows.length, record: `${r.w}-${r.l}`, w: r.w, l: r.l, judged: judged.length, right, rightRate: judged.length ? Math.round((100 * right) / judged.length) : null });
+    const assessments = rows.map((x) => x.decision_review?.assessment || 'unknown');
+    out.push({
+      reason, bets: rows.length, record: `${r.w}-${r.l}`, w: r.w, l: r.l,
+      factualErrors: assessments.filter((x) => ['factual_error', 'mixed'].includes(x)).length,
+      assumptions: assessments.filter((x) => ['unsupported_assumption', 'mixed'].includes(x)).length,
+      noIdentifiedError: assessments.filter((x) => x === 'no_identified_error').length,
+      unknown: assessments.filter((x) => x === 'unknown').length,
+    });
   }
   return out.sort((a, b) => b.bets - a.bets);
 }
@@ -80,25 +86,30 @@ const PLAIN = {
  * small. Empty when there is nothing yet.
  */
 export function buildNotebook(autopsies, { homeTeam = null, awayTeam = null, maxNotes = 8, maxChars = 3200 } = {}) {
-  const rows = (autopsies || []).filter((a) => a && a.note && !isSideNote(a.note));
+  // Prior autopsies judged the explanation from the result. Preserve those
+  // rows in storage, but do not carry their hindsight lessons into new reads.
+  const rows = (autopsies || []).filter((a) => a?.review_version === AUTOPSY_REVIEW_VERSION && a.decision_review && a.outcome_review);
   if (!rows.length) return { text: '', notes: 0 };
   const table = summarizeByReason(rows);
   const lines = [];
   lines.push('═══ YOUR NOTEBOOK — your own notes on your own bets this season ═══');
-  lines.push('What you said would decide it, how those bets went, and how often that reason actually decided the game. Counts are small early; a small count is a small count.');
+  lines.push('Wins and losses are outcomes, not proof about decision quality. These are case-specific reviews of the original evidence; no identified error is not proof of a good bet. Unknown means the preserved record cannot settle the question.');
+  const games = new Set(rows.map((a) => `${a.game_date}|${a.game_id || `${a.away_team}@${a.home_team}`}`)).size;
+  lines.push(`${rows.length} reviewed tickets from ${games} game${games === 1 ? '' : 's'}. Gary and notebook tickets from the same game are correlated observations, not independent evidence. Counts describe this sample and do not prescribe sides or factor weights.`);
   for (const t of table) {
     const small = t.bets < 8 ? ' (small count)' : '';
-    lines.push(`- ${PLAIN[t.reason] || t.reason}: ${t.bets} bet${t.bets === 1 ? '' : 's'}, ${t.record}; it decided the game ${t.right} of ${t.judged}${small}`);
+    lines.push(`- ${PLAIN[t.reason] || t.reason}: ${t.bets} tickets, result ${t.record}; factual errors ${t.factualErrors}, unsupported assumptions ${t.assumptions}, no identified error ${t.noIdentifiedError}, unknown ${t.unknown}${small}`);
   }
   const clubs = [homeTeam, awayTeam].filter(Boolean).map((s) => String(s).toLowerCase());
   const involves = (a) => clubs.some((c) => String(a.home_team || '').toLowerCase() === c || String(a.away_team || '').toLowerCase() === c);
   const sorted = rows.slice().sort((a, b) => (involves(b) - involves(a)) || String(b.game_date).localeCompare(String(a.game_date)));
   lines.push('');
-  lines.push('Your newest notes, in your words:');
+  lines.push('Newest case reviews (a single outcome is not a new strategy):');
   let used = 0;
   for (const a of sorted) {
     if (used >= maxNotes) break;
-    lines.push(`- ${a.game_date} ${a.away_team} @ ${a.home_team}, you took ${a.pick_text} (${a.result || 'ungraded'}): ${a.note}`);
+    const note = a.note && !isSideNote(a.note) ? ` ${a.note}` : '';
+    lines.push(`- ${a.game_date} ${a.away_team} @ ${a.home_team}, ${a.source === 'diary' ? 'notebook' : 'Gary'} took ${a.pick_text} (${a.result || 'ungraded'}): original decision ${a.decision_review.assessment || 'unknown'}; claim afterward ${a.outcome_review.claim_status || 'unknown'}; variance ${a.outcome_review.variance || 'unknown'}.${note}`);
     used += 1;
   }
   let text = lines.join('\n');

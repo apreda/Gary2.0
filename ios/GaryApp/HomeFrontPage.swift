@@ -548,8 +548,8 @@ struct HomeMarqueeTracker: View {
         let result: (String, Color)?   // settled stamp, nil until final
         /// Exact daily-slate mirror while the live poll catches up.
         var slateInterruptionLabel: String? = nil
-        /// Hero-eligible but not a ribbon chip (Aug 4: every slate game can
-        /// hold the countdown; the rail stays big-games-only).
+        /// Every slate game can hold the countdown; marquee games and Gary's
+        /// published underdogs also remain available in the ribbon.
         var railWorthy: Bool = true
         var isLive: Bool { live?.isLive == true }
         var interruptionLabel: String? {
@@ -594,7 +594,7 @@ struct HomeMarqueeTracker: View {
         }
     }
     private func upNext(_ e: Entry) -> Bool { !e.isLive && !e.started && !e.isFinal }
-    /// The rail: every other big game, docked beside the hero (founder:
+    /// The rail: other marquee games and posted underdogs beside the hero (founder:
     /// no drop-down — the space was already there).
     private var rail: [Entry] {
         entries.filter { $0.id != hero?.id && $0.railWorthy }.sorted { a, b in

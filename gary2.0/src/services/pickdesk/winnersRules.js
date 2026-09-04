@@ -1,21 +1,5 @@
-/**
- * THE WINNERS RULES (founder GO, Sep 2 2026) — the two automatic routes onto
- * the Winners page, and the one decision that combines them with the
- * reviewer's verdict. Pure functions; the runner owns every fetch.
- *
- *   1. THE FIRST DOG OF THE DAY. The first plus-money MONEYLINE pick Gary
- *      stores for a league that day goes on Winners the moment it stores, no
- *      review. One per league per day (Winners is sold per sport). A +1.5 on
- *      a run-line game is not a dog for this rule. Every dog after the first
- *      passes the reviewer exactly like a favorite.
- *
- *   2. THE BIG GAME. Gary's pick from the day's big game goes on regardless.
- *      NFL: the national-window game (Sunday night; any Monday or Thursday
- *      game). NCAAF: both teams ranked, lowest combined ranking; if no
- *      ranked-vs-ranked game, the highest-ranked team's game. MLB: Sunday
- *      Night Baseball only, or a game the founder names in winnersBigGames.json.
- *
- * Downstream only: nothing here reaches a prompt or a desk.
+/** Home feature helpers and exact-ticket Winners qualification.
+ * Dogs and marquee games remain Home features; neither grants admission.
  */
 
 import { readFileSync } from 'node:fs';
@@ -139,15 +123,7 @@ export function ncaafBigGameId(slate = []) {
   return one.length ? one[0].id : null;
 }
 
-/**
- * The one decision: on the board or not, and why. The automatic routes win
- * in this order — first dog, big game — then the reviewer's verdict.
- *
- * @returns {{ on_board: boolean, reason: 'first_dog'|'big_game'|'review'|null }}
- */
-export function winnersDecision({ verdict = null, firstDog = false, bigGame = false } = {}) {
-  if (firstDog) return { on_board: true, reason: 'first_dog' };
-  if (bigGame) return { on_board: true, reason: 'big_game' };
-  if (verdict === 'STRONG') return { on_board: true, reason: 'review' };
-  return { on_board: false, reason: null };
+/** Qualification only. The admissions ledger enforces capacity and publication. */
+export function winnersDecision({ verdict = null } = {}) {
+  return verdict === 'STRONG' ? { on_board: true, reason: 'review' } : { on_board: false, reason: null };
 }

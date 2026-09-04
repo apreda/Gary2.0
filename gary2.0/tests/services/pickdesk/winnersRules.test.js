@@ -14,7 +14,7 @@ describe('winnersRules — the first dog of the day', () => {
     expect(isPlusMoneyMoneyline(null)).toBe(false);
   });
 
-  it('the first plus-money moneyline stored for the league is automatic; the second is not', () => {
+  it('identifies the first plus-money moneyline for Home featuring', () => {
     const dog = { type: 'moneyline', odds: 125, game_id: '2', league: 'MLB' };
     expect(isFirstDogOfDay(dog, [])).toBe(true);
     expect(isFirstDogOfDay(dog, [{ type: 'moneyline', odds: -150, game_id: '1' }])).toBe(true);
@@ -82,9 +82,9 @@ describe('winnersRules — the big game', () => {
 });
 
 describe('winnersRules — the decision', () => {
-  it('first dog, then big game, then the reviewer verdict', () => {
-    expect(winnersDecision({ firstDog: true, bigGame: true, verdict: 'WEAK' })).toEqual({ on_board: true, reason: 'first_dog' });
-    expect(winnersDecision({ bigGame: true, verdict: 'WEAK' })).toEqual({ on_board: true, reason: 'big_game' });
+  it('requires qualification even for the first dog or big game', () => {
+    expect(winnersDecision({ firstDog: true, bigGame: true, verdict: 'WEAK' })).toEqual({ on_board: false, reason: null });
+    expect(winnersDecision({ bigGame: true, verdict: 'WEAK' })).toEqual({ on_board: false, reason: null });
     expect(winnersDecision({ verdict: 'STRONG' })).toEqual({ on_board: true, reason: 'review' });
     expect(winnersDecision({ verdict: 'WEAK' })).toEqual({ on_board: false, reason: null });
     expect(winnersDecision({ verdict: null })).toEqual({ on_board: false, reason: null });

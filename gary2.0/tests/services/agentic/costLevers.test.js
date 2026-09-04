@@ -45,7 +45,7 @@ describe('the researcher is back for MLB (Sep 3 2026, the Aug 18 version)', () =
     expect(loop).toContain('if (researcherOn && handedBriefing) {');
     expect(loop).toContain('} else if (researcherOn) {');
     const diary = readFileSync(path.join(__dirname, '../../../scripts/run-diary-pick.js'), 'utf8');
-    expect(diary).toContain("select('desk, pick, research_briefing')");
+    expect(diary).toContain("select('desk, matchup, pick, research_briefing')");
     expect(diary.match(/prebuiltResearchBriefing: briefing/g)?.length).toBe(2);
     const runner = readFileSync(path.join(__dirname, '../../../scripts/run-agentic-picks.js'), 'utf8');
     expect(runner).toContain('research_briefing: result?._context?.researchBriefing || null');

@@ -1,0 +1,35 @@
+// These are evidence questions, never instructions about which side to pick.
+export const DECISION_EVIDENCE_QUESTIONS = 'Which supplied facts carry this decision? What remains an assumption? What unresolved fact could change it?';
+
+export const RESEARCH_EVIDENCE_RULES = `EVIDENCE HANDLING:
+- Keep reported facts separate from your interpretation. For each decisive figure, name the desk section or tool token; for a reported event, retain the source URL and publication date when supplied. Never invent a missing source or date.
+- Retain the season, date span and sample size with a number. A current-season label alone does not establish freshness; check it against the dated games. Keep prior-season context labeled with its actual season and team.
+- Check conflicting figures against their definitions, dates and samples. If the conflict remains unresolved, record both versions and their sources rather than silently choosing one.
+- The same report repeated in several sections is one report. Identify a repeated source rather than counting repetition as independent support.\n`;
+
+const value = input => typeof input === 'string' ? input.trim() : Array.isArray(input) ? input.map(item => typeof item === 'string' ? item : JSON.stringify(item)).join('; ') : '';
+
+/** Research text is attributed, not automatically certified by its author. */
+export function renderEvidenceBriefing(factors) {
+  const seen = new Map();
+  return factors.map((factor, index) => {
+    const name = value(factor.factor || factor.factorName || factor.name || factor.title) || `Factor ${index + 1}`;
+    const finding = value(factor.keyFinding || factor.key_finding || factor.finding);
+    const numbers = value(factor.numbers || factor.stats);
+    const context = value(factor.context || factor.sampleContext || factor.sample_context);
+    const sources = value(factor.sources);
+    const uncertainty = value(factor.uncertainties || factor.conflicts);
+    const signature = JSON.stringify([finding, numbers, context, sources, uncertainty]);
+    const earlier = seen.get(signature);
+    if (earlier) return `**${name}**\nRepeats the same research as ${earlier}; see that entry. This is not an independent source.`;
+    seen.set(signature, name);
+    return [
+      `**${name}**`,
+      `Researcher's interpretation: ${finding || 'Not supplied'}`,
+      `Reported figures (check against cited evidence): ${numbers || 'No figures supplied'}`,
+      `Sample / date / context: ${context || 'Not supplied'}`,
+      `Source references supplied by researcher: ${sources || 'Not supplied; attribution unverified'}`,
+      `Unresolved facts or conflicting reports: ${uncertainty || 'Not reported; this does not establish that none exist'}`,
+    ].join('\n');
+  }).join('\n\n').trim();
+}

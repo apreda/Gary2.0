@@ -29,6 +29,7 @@ import {
   ncaafSlateDateForInstant,
 } from '../src/services/ncaafGamePolicy.js';
 import { classifyPickMarketSide } from './lib/pickSideClassification.js';
+import { footballCaseSnapshot } from './lib/footballCaseSnapshot.js';
 
 // Now import modules that depend on env vars
 const { analyzeGame } = await import('../src/services/agentic/orchestrator/index.js');
@@ -388,97 +389,31 @@ function exactFootballMarketBook(sportsbookOdds, result) {
 function normalizeVendorForReceipt(value) {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
-const { supabase } = await import('../src/supabaseClient.js');
+const { supabase, supabaseAdmin: winnersAdmin } = await import('../src/supabaseClient.js');
 const { classOf, classWinRates, winnersScore } = await import('../src/services/pickdesk/winnersScore.js');
-const { reviewPick } = await import('../src/services/pickdesk/winnersReviewer.js');
-const { isFirstDogOfDay, isBigGame, winnersDecision, loadBigGameOverrides } = await import('../src/services/pickdesk/winnersRules.js');
-const { pickIsHome } = await import('../src/services/agentic/rationaleLanes.js');
+const { enqueueWinnersCandidate, isProductionWinnersRun, confirmedPublishedGame, winnersPickIsHome } = await import('../src/services/pickdesk/winnersAdmissions.js');
 const { buildShadowPick } = await import('../src/services/shadow/shadowPick.js');
 
-/**
- * THE WINNERS ROUTE (founder GO, Sep 2 2026): runs AFTER the pick is stored,
- * never before — the free pick posts on time; the Winners row follows.
- *   1. THE FIRST DOG OF THE DAY — the league's first plus-money moneyline,
- *      automatic. 2. THE BIG GAME — automatic. 3. THE REVIEWER — a separate
- *      brain answers the founder's checklist against the desk and both
- *      cases; STRONG goes on the board. Everything lands in winners_reviews
- *      (one row per game), which the page, the record and the ledger read.
- * Fail-soft end to end: nothing here can throw into the pick loop.
- */
-async function routeToWinners({ league, game, slate, result, cleanPick, deskText }) {
+/** Queue the published ticket and original evidence; independent review never delays props. */
+async function routeToWinners({ league, game, result, cleanPick, deskText }) {
   try {
-    const gameDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-    const gameId = String(cleanPick.game_id ?? cleanPick.bdl_game_id ?? game?.id ?? '');
-    let firstDog = false;
-    let bigGame = false;
-    try {
-      const stored = await picksService.getStoredPicksForDate(gameDate, league);
-      firstDog = isFirstDogOfDay({ ...cleanPick, game_id: gameId }, stored);
-      bigGame = isBigGame({
-        league,
-        game: {
-          ...(game || {}),
-          id: gameId,
-          commence_time: cleanPick.commence_time || game?.commence_time || null,
-          home_team: cleanPick.homeTeam,
-          away_team: cleanPick.awayTeam,
-          homeRanking: cleanPick.homeRanking ?? game?.homeRanking ?? null,
-          awayRanking: cleanPick.awayRanking ?? game?.awayRanking ?? null,
-        },
-        slate: Array.isArray(slate) && slate.length > 1 ? slate : [],
-        dateEt: gameDate,
-        overrides: loadBigGameOverrides(),
-      });
-      // THE BIG GAME from the whole slate (founder ruling, Sep 3 2026): the
-      // daily slate publisher decided it for the day; this child only sees
-      // its own game, so it reads the row.
-      if (!bigGame) {
-        const named = await picksService.getWinnersBigGame(gameDate, league);
-        if (named && String(named.game_id) === gameId) bigGame = true;
-      }
-    } catch (ruleErr) {
-      console.warn(`   ⚠️ [Winners] rules skipped (${ruleErr.message})`);
-    }
-    const rev = deskText
-      ? await reviewPick({
-          league,
-          deskText,
-          caseHome: cleanPick.path_home ?? result?.path_home ?? null,
-          caseAway: cleanPick.path_away ?? result?.path_away ?? null,
-          homeTeam: cleanPick.homeTeam,
-          awayTeam: cleanPick.awayTeam,
-          pickText: cleanPick.pick,
-          odds: cleanPick.odds,
-          betType: cleanPick.type,
-          pickIsHome: pickIsHome(cleanPick),
-          rationale: cleanPick.rationale,
-          // The blind read sees the cases in the game's own order.
-          first: league === 'MLB' && mlbCaseHeadings(cleanPick.homeTeam, cleanPick.awayTeam, game).order === 'away-first' ? 'away' : 'home',
-        })
-      : { ok: false, error: 'no desk text on the result' };
-    const decision = winnersDecision({ verdict: rev.ok ? rev.verdict : null, firstDog, bigGame });
-    const oddsNum = Number(cleanPick.odds);
-    await picksService.storeWinnersReview({
-      game_date: gameDate,
-      league,
-      game_id: gameId,
-      pick_text: cleanPick.pick,
-      matchup: `${cleanPick.awayTeam} @ ${cleanPick.homeTeam}`,
-      odds: Number.isFinite(oddsNum) ? Math.round(oddsNum) : null,
-      bet_type: cleanPick.type || null,
-      on_board: decision.on_board,
-      reason: decision.reason,
-      verdict: rev.ok ? rev.verdict : null,
-      decided_by: rev.ok ? rev.decided_by : null,
-      review: rev.ok ? rev.review : null,
-      review_error: rev.ok ? null : (rev.error || 'review failed'),
-      model: rev.model || null,
-      ms: Number.isFinite(rev.ms) ? Math.round(rev.ms) : null,
-      reviewed_at: new Date().toISOString(),
+    const kickoff = cleanPick.commence_time || game?.commence_time;
+    const gameDate = new Date(kickoff).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    await enqueueWinnersCandidate(winnersAdmin, {
+      date: gameDate, league, kind: 'game', pick: cleanPick,
+      evidence: {
+        deskText, caseHome: cleanPick.path_home ?? result?.path_home ?? null,
+        caseAway: cleanPick.path_away ?? result?.path_away ?? null,
+        researchBriefing: result?._context?.researchBriefing || result?._researchBriefing || null,
+        homeTeam: cleanPick.homeTeam, awayTeam: cleanPick.awayTeam,
+        pickIsHome: winnersPickIsHome(cleanPick), commenceTime: kickoff,
+        observedAt: new Date().toISOString(),
+        first: league === 'MLB' && mlbCaseHeadings(cleanPick.homeTeam, cleanPick.awayTeam, game).order === 'away-first' ? 'away' : 'home',
+      },
     });
-    console.log(`🏆 [Winners] ${cleanPick.pick}: ${decision.on_board ? 'ON THE BOARD' : 'off the board'}${decision.reason ? ` (${decision.reason})` : ''} · review ${rev.ok ? `${rev.verdict} — ${rev.decided_by}` : `failed: ${rev.error}`}${rev.ms ? ` · ${Math.round(rev.ms / 1000)}s` : ''}`);
+    console.log(`🏆 [Winners] Queued exact-ticket review: ${cleanPick.pick}`);
   } catch (e) {
-    console.warn(`   ⚠️ [Winners] route skipped (${e.message}) — pick unaffected`);
+    console.warn(`⚠️ [Winners] queue failed (${e.message}); reconciliation will record the publication gap`);
   }
 }
 
@@ -1489,6 +1424,9 @@ async function main() {
         }
 
         if (result && !result.error && result.pick) {
+          if(['americanfootball_nfl','americanfootball_ncaaf'].includes(config.key)) {
+            Object.assign(result,footballCaseSnapshot(result,game.home_team,game.away_team));
+          }
           // Check minimum stats requirement (for NCAAB especially)
           // Use UNIQUE stats count — exclude rejected tokens (quality: 'unavailable')
           const allTokens = (result.toolCallHistory || [])
@@ -2142,9 +2080,7 @@ async function main() {
             }
           }
 
-          // (The Aug 10 Winners judge ran here; it was gated on a field the
-          // orchestrator never set and died in late August. THE WINNERS
-          // REVIEWER — Sep 2 — runs after the store; see routeToWinners.)
+          // Winners reviews the exact stored ticket in its independent worker.
 
           const cleanPick = {
             pick: finalPickText,
@@ -2155,10 +2091,7 @@ async function main() {
             // conviction Gary never stated, and the ledger read it as real).
             // The loud warn below is the founder-ordered alert for that case.
             confidence: result.confidence ?? null,
-            // WINNERS SCORE v1 (founder GO, Aug 10): ledger-empirical rank
-            // for the Winners-page slot chooser — the pick's class 30d win
-            // rate plus a small confidence tiebreak. App sorts by it;
-            // null = unrankable pick text.
+            // Historical class diagnostics; these do not select Winners.
             winners_class: classOf(finalPickText),
             winners_score: winnersScore(finalPickText, result.confidence ?? null, await getWinnersClassRates()),
             // THE BLIND SPLIT (Aug 5): the sealed pre-lines read — the winner
@@ -2312,29 +2245,35 @@ async function main() {
 
           // Store each pick immediately so it appears in the app as soon as it's ready
           // Skip immediate store in test mode — test picks are stored in batch at the end
-          if (shouldStore && !useTestTable && cleanPick.type !== 'pass' && cleanPick.pick !== 'PASS') {
+          if (isProductionWinnersRun({shouldStore,useTestTable,dryRun:args.includes('--dry-run')}) && cleanPick.type !== 'pass' && cleanPick.pick !== 'PASS') {
             try {
               console.log(`\n📤 [${config.name}] Storing ${picksForGame.length} pick(s) immediately: ${picksForGame.map(p => p.pick).join(' | ')}`);
               await storePicks(picksForGame);
               console.log(`✅ [${config.name}] Pick(s) stored to Supabase`);
+              const publishedDate=new Date(cleanPick.commence_time || game?.commence_time).toLocaleDateString('en-CA',{timeZone:'America/New_York'});
+              let publishedPick=null;
+              try {
+                publishedPick=await confirmedPublishedGame({date:publishedDate,league:config.name,pick:cleanPick},{readPublished:picksService.pickAlreadyStoredByGameId});
+                if(!publishedPick)console.warn('[Winners] Incoming decision was not the stored ticket; original published evidence left intact');
+              }catch(e){console.warn(`[Winners] Publication verification unavailable: ${e.message}; public pick remains stored`);}
               // THE DESK snapshot (spec 2026-07-26): the pick is a pure
               // function of the desk — persist exactly what Gary read.
               // Non-blocking by contract. (Sep 2: the orchestrator returns
               // the desk as _context.scoutReport — the old `deskText` key
               // never existed, so no desk was stored from Jul 26 to Sep 2.)
               const deskText = result?._context?.scoutReport || null;
-              if (deskText) {
+              if (deskText && publishedPick) {
                 await picksService.storeDeskSnapshot({
-                  game_date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }),
+                  game_date: publishedDate,
                   matchup: `${cleanPick.awayTeam} @ ${cleanPick.homeTeam}`,
                   pick: cleanPick.pick,
                   desk: deskText,
                   research_briefing: result?._context?.researchBriefing || null,
                 });
               }
-              // THE WINNERS ROUTE (founder GO, Sep 2 2026): after the store,
-              // never before. First dog, big game, then the reviewer.
-              await routeToWinners({ league: config.name, game, slate: games, result, cleanPick, deskText });
+              // Every newly published ticket enters the same review queue;
+              // feature status and underdog status do not admit it.
+              if(publishedPick)await routeToWinners({ league: config.name, game, result, cleanPick:publishedPick, deskText });
               // THE SHADOW MODEL (founder GO, Sep 3 2026): a second system's
               // bet for the same game, stored beside Gary's and never shown
               // to him or to fans; graded and read nightly against his.
@@ -2361,7 +2300,7 @@ async function main() {
                 // this child or touches the real pick. It reads the desk
                 // snapshot stored above; if that store failed there is no
                 // desk to re-read and the shadow simply skips.
-                if (deskText) {
+                if (deskText && publishedPick) {
                   try {
                     const { spawn } = await import('node:child_process');
                     const { openSync, mkdirSync } = await import('node:fs');
@@ -2394,7 +2333,7 @@ async function main() {
           // prop rails (prop_picks → grading, records, the game's card).
           // Fail-soft by contract: a props failure never touches the stored
           // game pick. NFL keeps its full props desk — this lane is college's.
-          if (config.key === 'americanfootball_ncaaf' && shouldStore
+          if (config.key === 'americanfootball_ncaaf' && shouldStore && !args.includes('--dry-run')
               && cleanPick.type !== 'pass' && cleanPick.pick !== 'PASS') {
             try {
               const { runNcaafPiggyback } = await import('../src/services/pickdesk/ncaafPiggybackProps.js');
@@ -2406,7 +2345,7 @@ async function main() {
               if (!piggyback.picks.length) {
                 console.log(`   [NCAAF Piggyback] no props stored (${piggyback.reason || 'Gary passed the menu'}; menu size ${piggyback.menuSize})`);
               } else {
-                await storeNcaafPiggybackProps(piggyback.picks, { useTestTable });
+                await storeNcaafPiggybackProps(piggyback.picks, { useTestTable, winnersEvidence: piggyback.winnersEvidence });
                 console.log(`   [NCAAF Piggyback] stored ${piggyback.picks.length} prop(s): ${piggyback.picks.map((p) => `${p.player} ${p.bet.toUpperCase()} ${p.prop} ${p.line} @ ${p.odds}`).join(' | ')}`);
               }
             } catch (piggybackErr) {
@@ -2633,7 +2572,7 @@ async function checkExistingPick(league, homeTeam, awayTeam, gameDate = null, ga
  * fallback); --test mirrors the props CLI's isolated test_prop_picks merge.
  * Dates follow the GAME's NCAAF slate date, never the run's wall clock.
  */
-async function storeNcaafPiggybackProps(rows, { useTestTable: toTestTable = false } = {}) {
+async function storeNcaafPiggybackProps(rows, { useTestTable: toTestTable = false, winnersEvidence = null } = {}) {
   if (!rows.length) return;
   const { storePropPicksAtomic, stampFootballTdCategory } = await import('./lib/propPicksStorage.js');
 
@@ -2664,10 +2603,11 @@ async function storeNcaafPiggybackProps(rows, { useTestTable: toTestTable = fals
 
   for (const [date, datePicks] of byDate) {
     const result = await storePropPicksAtomic({
-      client: supabase,
+      client: winnersAdmin,
       date,
       leagueLabel: 'NCAAF',
       picks: datePicks,
+      winnersEvidenceByGame: Object.fromEntries(datePicks.map(p => [String(p.game_id), winnersEvidence || {}])),
       forceRun: false,
     });
     console.log(`✅ [NCAAF Piggyback] atomic prop storage (${date}): ${result.added} added, ${result.skipped} already present`);
