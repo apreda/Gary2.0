@@ -64,7 +64,7 @@ const unexpected = new Set();
 const observedTables = new Set();
 const api = createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', `http://127.0.0.1:${port}`);
-  res.setHeader('Access-Control-Allow-Headers', 'apikey, authorization, content-type, x-client-info');
+  res.setHeader('Access-Control-Allow-Headers', 'apikey, authorization, content-type, content-profile, x-client-info');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Content-Type', 'application/json');
   if (req.method === 'OPTIONS') { res.writeHead(204).end(); return; }
@@ -195,6 +195,16 @@ try {
     const ledger = await response.json();
     assert.deepEqual(ledger.games.map(row => [row.league, row.result]), [['NFL', 'lost'], ['MLB', 'won']]);
     assert.deepEqual(ledger.props, []);
+    const preflight = await fetch(`${apiUrl}/rest/v1/rpc/your_book_leaderboard_v3`, {
+      method: 'OPTIONS', headers: { Origin: origin, 'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'apikey,authorization,content-type,content-profile,x-client-info' },
+    });
+    assert.equal(preflight.status, 204);
+    assert.equal(preflight.headers.get('access-control-allow-origin'), origin);
+    for (const header of ['apikey', 'authorization', 'content-type', 'content-profile', 'x-client-info']) {
+      assert(preflight.headers.get('access-control-allow-headers')?.split(', ').includes(header),
+        `Browser rankings preflight must allow ${header}`);
+    }
     const rankingsResponse = await fetch(`${apiUrl}/rest/v1/rpc/your_book_leaderboard_v3`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ p_window: '7d', p_sort: 'record', p_league: 'NFL' }),
