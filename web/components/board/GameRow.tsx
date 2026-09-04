@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Disclosure } from '@/components/Disclosure';
 import { ScoutRead } from '@/components/ScoutRead';
 import { TailFadeRow } from '@/components/book/TailFadeRow';
@@ -49,7 +50,7 @@ function calledSide(pickText: string | undefined, club: string): boolean {
  * UP NEXT hero: wire lines, the rest of the market underneath, the call in
  * gold, the reasoning below it.
  */
-export function GameRow({ game, now }: { game: BoardGame; now?: number }) {
+export function GameRow({ game, now, analysisHref }: { game: BoardGame; now?: number; analysisHref?: string | null }) {
   const { pick } = game;
   const started =
     now != null && (parseGameTime(game.commence)?.getTime() ?? Number.MAX_SAFE_INTEGER) <= now;
@@ -136,6 +137,16 @@ export function GameRow({ game, now }: { game: BoardGame; now?: number }) {
               <Disclosure summary="The full analysis" className="mt-4">
                 <ScoutRead sections={deeperSections} tone="tight" />
               </Disclosure>
+            )}
+            {analysisHref && (
+              <p className="mt-4 text-[13px] leading-relaxed">
+                <Link
+                  href={analysisHref}
+                  className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold"
+                >
+                  {pick.awayTeam} at {pick.homeTeam}: pick and full analysis
+                </Link>
+              </p>
             )}
             {/* Renders only inside a BookDayProvider — board pages opt in. */}
             <TailFadeRow

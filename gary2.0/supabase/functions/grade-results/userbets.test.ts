@@ -1,41 +1,42 @@
-// deno test userbets.test.ts — pure settlement math for user tail/fade bets.
-import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+// npm run test:edge — pure settlement math for user tail/fade bets.
+import test from "node:test";
+import { deepStrictEqual as assertEquals } from "node:assert/strict";
 import { settleUserBet } from "./userbets.ts";
 
-Deno.test("tail inherits a win, pays at the pick's price", () => {
+test("tail inherits a win, pays at the pick's price", () => {
   const r = settleUserBet("tail", "won", 1, -158);
   assertEquals(r.status, "won");
   assertEquals(Math.round(r.units * 100), 63); // 100/158 = 0.633
   assertEquals(r.estimated, false);
 });
 
-Deno.test("tail inherits a loss at flat stake", () => {
+test("tail inherits a loss at flat stake", () => {
   assertEquals(settleUserBet("tail", "lost", 2, -158), { status: "lost", units: -2, estimated: false });
 });
 
-Deno.test("fade inverts the pick result", () => {
+test("fade inverts the pick result", () => {
   assertEquals(settleUserBet("fade", "lost", 1, 136).status, "won");
   assertEquals(settleUserBet("fade", "won", 1, 136).status, "lost");
 });
 
-Deno.test("fade win pays at the fade's own stored odds", () => {
+test("fade win pays at the fade's own stored odds", () => {
   const r = settleUserBet("fade", "lost", 1, 136);
   assertEquals(Math.round(r.units * 100), 136);
 });
 
-Deno.test("push stays push for both kinds, zero units", () => {
+test("push stays push for both kinds, zero units", () => {
   assertEquals(settleUserBet("tail", "push", 1, -110), { status: "push", units: 0, estimated: false });
   assertEquals(settleUserBet("fade", "push", 3, null), { status: "push", units: 0, estimated: true });
 });
 
-Deno.test("missing odds settle at assumed -110 and are flagged estimated", () => {
+test("missing odds settle at assumed -110 and are flagged estimated", () => {
   const r = settleUserBet("fade", "lost", 1, null);
   assertEquals(r.status, "won");
   assertEquals(r.units, 0.91); // 100/110 rounded to 2 places
   assertEquals(r.estimated, true);
 });
 
-Deno.test("positive-odds tail win pays odds/100", () => {
+test("positive-odds tail win pays odds/100", () => {
   const r = settleUserBet("tail", "won", 2, 240);
   assertEquals(Math.round(r.units * 100), 480);
 });
@@ -43,17 +44,17 @@ Deno.test("positive-odds tail win pays odds/100", () => {
 // ── settle push copy shapes ──────────────────────────────────────────────────
 import { settleMessage } from "./push.ts";
 
-Deno.test("single tail win push copy", () => {
+test("single tail win push copy", () => {
   const m = settleMessage({ events: [{ kind: "tail", status: "won", units: 0.63, streak_pick: false }], streakAfter: null })!;
   assertEquals(m.body, "Your tail won: +0.63u.");
 });
 
-Deno.test("single fade loss with streak over", () => {
+test("single fade loss with streak over", () => {
   const m = settleMessage({ events: [{ kind: "fade", status: "lost", units: -1, streak_pick: true }], streakAfter: { current: 0 } })!;
   assertEquals(m.body, "Your fade lost: -1.00u. The streak is over.");
 });
 
-Deno.test("multi-settle summary with living streak", () => {
+test("multi-settle summary with living streak", () => {
   const m = settleMessage({
     events: [
       { kind: "tail", status: "won", units: 0.91, streak_pick: true },
@@ -64,25 +65,25 @@ Deno.test("multi-settle summary with living streak", () => {
   assertEquals(m.body, "3 plays settled (2-1): +1.11u on the night. Day 5 of the streak.");
 });
 
-Deno.test("push-only settles stay silent", () => {
+test("push-only settles stay silent", () => {
   assertEquals(settleMessage({ events: [{ kind: "tail", status: "push", units: 0, streak_pick: false }], streakAfter: null }), null);
 });
 
 import { assertThrows } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { matchingGameGrade, matchingPropGrade, fetchUserBetsForDates, settleUserBetsForDates } from "./userbets.ts";
-Deno.test("void remains neutral for tail and fade", () => {
+test("void remains neutral for tail and fade", () => {
   assertEquals(settleUserBet("tail", "void", 1, 120), { status: "void", units: 0, estimated: false });
   assertEquals(settleUserBet("fade", "void", 1, 120), { status: "void", units: 0, estimated: false });
 });
-Deno.test("unsettled/unknown result must never become a fade win", () => {
+test("unsettled/unknown result must never become a fade win", () => {
   assertThrows(() => settleUserBet("fade", "pending", 1, 110));
   assertThrows(() => settleUserBet("tail", "", 1, 110));
   assertThrows(() => settleUserBet("tail", "won", Number.NaN, 110));
 });
-Deno.test("invalid stored price is explicitly estimated", () => {
+test("invalid stored price is explicitly estimated", () => {
   assertEquals(settleUserBet("tail", "won", 1, 0), { status: "won", units: 0.91, estimated: true });
 });
-Deno.test("game grades require correct source identity and legacy ambiguity is rejected", () => {
+test("game grades require correct source identity and legacy ambiguity is rejected", () => {
   const grades = [
     { game_date: "2026-09-04", pick_text: "Tigers ML", game_id: "1", league: "MLB", result: "won" },
     { game_date: "2026-09-04", pick_text: "Tigers ML", game_id: "2", league: "MLB", result: "lost" },
@@ -92,7 +93,7 @@ Deno.test("game grades require correct source identity and legacy ambiguity is r
   assertEquals(matchingGameGrade({ ...row, source_game_id: "2" }, grades), "lost");
   assertEquals(matchingGameGrade({ ...row, source_game_id: "3" }, grades), undefined);
 });
-Deno.test("prop grading distinguishes doubleheaders and lines", () => {
+test("prop grading distinguishes doubleheaders and lines", () => {
   const base = { game_date: "2026-09-04", player_name: "José One", prop_type: "strikeouts", sport: "MLB", bet: "over", line_value: 5.5 };
   const grades = [{ ...base, game_id: "1", result: "won" }, { ...base, game_id: "2", result: "lost" }];
   const row = { game_date: base.game_date, player_name: "Jose One", prop_type: base.prop_type, league: "MLB" };
@@ -100,7 +101,7 @@ Deno.test("prop grading distinguishes doubleheaders and lines", () => {
   assertEquals(matchingPropGrade({ ...row, source_game_id: "2", source_line: 5.5, source_side: "over" }, grades), "lost");
   assertEquals(matchingPropGrade({ ...row, source_game_id: "2", source_line: 6.5, source_side: "over" }, grades), undefined);
 });
-Deno.test("settlement fetches all user pages before any writes", async () => {
+test("settlement fetches all user pages before any writes", async () => {
   const original = globalThis.fetch;
   const calls: string[] = [];
   globalThis.fetch = ((input: string | URL | Request) => {
@@ -113,7 +114,7 @@ Deno.test("settlement fetches all user pages before any writes", async () => {
     assertEquals(calls[1].includes("offset=500"), true);
   } finally { globalThis.fetch = original; }
 });
-Deno.test("older corrections update saved grade once and repeats do not write", async () => {
+test("older corrections update saved grade once and repeats do not write", async () => {
   const original = globalThis.fetch;
   let row: any = { id: "bet", game_date: "2026-09-04", pick_text: "Home ML", pick_type: "game", kind: "tail",
     stake_units: 1, odds_american: 150, status: "won", units_net: 1.5, graded_by: "system", source_game_id: "1" };
@@ -131,7 +132,7 @@ Deno.test("older corrections update saved grade once and repeats do not write", 
   } finally { globalThis.fetch = original; }
 });
 
-Deno.test("persisted NFL and college prop grades settle older pending receipts without new MLB grading", async () => {
+test("persisted NFL and college prop grades settle older pending receipts without new MLB grading", async () => {
   const original = globalThis.fetch;
   const rows = [
     { id: "nfl-bet", game_date: "2026-09-01", pick_text: "Bills ML", pick_type: "game", kind: "tail", league: "NFL",
@@ -156,7 +157,7 @@ Deno.test("persisted NFL and college prop grades settle older pending receipts w
     assertEquals(patched.prop.status, "won"); assertEquals(patched.prop.units_net, 0.91);
   } finally { globalThis.fetch = original; }
 });
-Deno.test("unavailable persisted result source never voids a valid pending receipt", async () => {
+test("unavailable persisted result source never voids a valid pending receipt", async () => {
   const original = globalThis.fetch; let patches = 0;
   globalThis.fetch = ((input: string | URL | Request, options?: RequestInit) => {
     if (options?.method === "PATCH") patches++;
@@ -169,7 +170,7 @@ Deno.test("unavailable persisted result source never voids a valid pending recei
 });
 
 import { patchUserBet } from "./userbets.ts";
-Deno.test("conditional settlement avoids duplicate notifications from concurrent graders", async () => {
+test("conditional settlement avoids duplicate notifications from concurrent graders", async () => {
   const original = globalThis.fetch; let requested = "";
   globalThis.fetch = ((input: string | URL | Request) => { requested = String(input); return Promise.resolve(new Response("[]")); }) as typeof fetch;
   try {

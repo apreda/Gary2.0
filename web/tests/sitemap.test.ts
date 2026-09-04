@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import sitemap from '@/app/sitemap';
-import archiveSitemap from '@/app/archive/sitemap';
-import gameSitemap from '@/app/picks/sitemap';
+import archiveSitemap from '@/lib/seo/archive-sitemap';
+import { GET as archiveXml } from '@/app/archive/inventory.xml/route';
+import gameSitemap, { generateSitemaps } from '@/app/picks/sitemap';
 import robots from '@/app/robots';
 import { GET as sitemapIndex } from '@/app/sitemap-index.xml/route';
 import {
@@ -17,6 +18,7 @@ const BASE_URL = 'https://www.betwithgary.ai';
 const pathOf = (url: string) => new URL(url).pathname;
 
 const clock = vi.hoisted(() => ({ today: '2026-09-01' }));
+const failures = vi.hoisted(() => ({ picks: false, archive: false }));
 const index: PickIndexRow[] = [];
 const archive: ArchiveDateSummary[] = [];
 
@@ -27,12 +29,18 @@ vi.mock('@/lib/gary/dates', async importOriginal => {
 
 vi.mock('@/lib/gary/gamepage', async importOriginal => {
   const mod = await importOriginal<typeof import('@/lib/gary/gamepage')>();
-  return { ...mod, fetchPickIndex: async () => index };
+  return { ...mod, fetchPickIndex: async () => {
+    if (failures.picks) throw new Error('Pick index unavailable');
+    return index;
+  } };
 });
 
 vi.mock('@/lib/gary/archive', async importOriginal => {
   const mod = await importOriginal<typeof import('@/lib/gary/archive')>();
-  return { ...mod, fetchArchiveDateSummaries: async () => archive };
+  return { ...mod, fetchArchiveDateSummaries: async () => {
+    if (failures.archive) throw new Error('Archive index unavailable');
+    return archive;
+  } };
 });
 
 const FIXED = [
@@ -65,6 +73,8 @@ describe('sitemap', () => {
     index.length = 0;
     archive.length = 0;
     clock.today = '2026-09-01';
+    failures.picks = false;
+    failures.archive = false;
   });
 
   it('lists every public indexable route exactly once', async () => {
@@ -165,5 +175,35 @@ describe('sitemap', () => {
     index.push({ date: '2026-08-30', league: 'MLB', sport: null, away_team: 'Cubs', home_team: 'Reds' });
     const result = await robots();
     expect(result.sitemap).toBe('https://www.betwithgary.ai/sitemap-index.xml');
+  });
+
+  it('fails archive regeneration instead of returning a successful empty inventory', async () => {
+    archive.push({ date: '2026-09-01', hasGamePicks: true, hasProps: true, hasResearch: false });
+    expect(await archiveSitemap()).toHaveLength(2);
+    failures.archive = true;
+    await expect(archiveSitemap()).rejects.toThrow('Archive index unavailable');
+    await expect(archiveXml()).rejects.toThrow('Archive index unavailable');
+    failures.archive = false;
+    expect(await archiveSitemap()).toHaveLength(2);
+  });
+
+  it('fails game regeneration and shard discovery when the pick index is unavailable', async () => {
+    failures.picks = true;
+    await expect(gameSitemap({ id: Promise.resolve('0') })).rejects.toThrow('Pick index unavailable');
+    await expect(generateSitemaps()).rejects.toThrow('Pick index unavailable');
+    await expect(sitemapIndex()).rejects.toThrow('Pick index unavailable');
+  });
+
+  it('still supports a successfully read empty source', async () => {
+    expect(await archiveSitemap()).toEqual([]);
+    expect(await gameSitemap({ id: Promise.resolve('0') })).toEqual([]);
+    expect(await generateSitemaps()).toEqual([{ id: 0 }]);
+  });
+
+  it('serves today’s archive as XML from the regenerating route', async () => {
+    archive.push({ date: clock.today, hasGamePicks: true, hasProps: true, hasResearch: false });
+    const response = await archiveXml();
+    expect(response.headers.get('content-type')).toBe('application/xml; charset=utf-8');
+    expect(await response.text()).toContain(`<loc>${BASE_URL}/archive/${clock.today}</loc>`);
   });
 });

@@ -114,8 +114,9 @@ export default async function ResultsAuditPage() {
         </p>
         <p className="mt-3 max-w-2xl text-[14px] leading-relaxed text-low">
           This record starts September 2, 2026 and covers Gary&rsquo;s core player-prop
-          board; the separate Home Run Threat lane is excluded. Older and home-run
-          rows remain available in the raw CSV and JSON ledgers. Some winning rows
+          board. Older core player-prop rows remain available in the raw CSV and
+          JSON ledgers. The separate Home Run Threat lane is excluded from both
+          this record and those downloads. Some winning rows
           have no recorded odds and use the disclosed 0.9-unit fallback in net-unit
           calculations; the exports retain the original missing values.
         </p>

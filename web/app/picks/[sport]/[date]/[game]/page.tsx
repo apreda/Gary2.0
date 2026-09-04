@@ -67,7 +67,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   const card = `/picks/${cfg.slug}/${date}/${canonicalSlug}/card`;
   return pageMetadata({
     canonical: `/picks/${cfg.slug}/${date}/${canonicalSlug}`,
-    title: `${headline(pick)} Prediction and Pick, ${label} | Gary AI`,
+    title: `${headline(pick)} Prediction and Pick, ${label}, ${date.slice(0, 4)} | Gary AI`,
     description: summary
       ? `Gary's pick: ${callOf(pick)}. ${summary}`
       : `Gary's ${cfg.longName} pick for ${headline(pick)} on ${label}, with the full reasoning and the graded result.`,

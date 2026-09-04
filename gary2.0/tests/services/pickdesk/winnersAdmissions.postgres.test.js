@@ -1,27 +1,52 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { execFileSync, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { accessSync, constants, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 const run=promisify(execFile);
-const bin='/opt/homebrew/bin';
-const supported=['initdb','pg_ctl','psql'].every(name=>existsSync(`${bin}/${name}`));
+// PostgreSQL on macOS needs an explicit locale when launched from a clean env.
+const pgEnv={...process.env,LC_ALL:'C'};
+let bin=process.env.GARY_TEST_PG_BIN;
+if (!bin) {
+  try {
+    bin=execFileSync('pg_config',['--bindir'],{encoding:'utf8',stdio:['ignore','pipe','ignore'],timeout:5000}).trim();
+  } catch {
+    bin='';
+  }
+}
+const missing=['initdb','pg_ctl','psql','postgres'].filter(name=>{
+  if (!bin) return true;
+  try { accessSync(path.join(bin,name),constants.X_OK); return false; }
+  catch { return true; }
+});
+const supported=missing.length===0;
+if (!supported) {
+  const message=`Isolated Postgres tests need executable ${missing.join(', ')}. Set GARY_TEST_PG_BIN to the server binary directory (pg_config --bindir). Checked: ${bin || 'pg_config unavailable'}.`;
+  if (process.env.GARY_TEST_PG_BIN || process.env.CI==='true' || process.env.CI==='1') throw new Error(message);
+  console.warn(`Skipping Winners database contract: ${message}`);
+}
 let directory; let started=false;
 const args=()=>['-h',directory,'-p','55439','-U','testadmin','-d','postgres','-X','-v','ON_ERROR_STOP=1','-At'];
-const sql=s=>execFileSync(`${bin}/psql`,[...args(),'-c',s],{encoding:'utf8',stdio:['pipe','pipe','pipe']}).trim();
+const sql=s=>execFileSync(`${bin}/psql`,[...args(),'-c',s],{env:pgEnv,encoding:'utf8',stdio:['pipe','pipe','pipe']}).trim();
 const add=(status='qualified',n=1,extra='')=>sql(`INSERT INTO public.winners_candidates(game_date,league,kind,game_id,ticket_key,market_key,pick_text,odds,commence_time,pick_snapshot,evidence_snapshot,status,created_at,reviewed_at,attempts)
 SELECT '2026-09-04','MLB','prop',i::text,'ticket-'||i,'market-'||i,'a prop',-110,now()+interval '3 hours',jsonb_build_object('confidence',i/10.0),'{}','${status}',now()-interval '5 minutes',now()-interval '3 minutes',0 FROM generate_series(1,${n}) i; ${extra}`);
 describe.skipIf(!supported)('Winners database contract on isolated local Postgres',()=>{
   beforeAll(()=>{
     directory=mkdtempSync(path.join(tmpdir(),'gary-winners-pg-'));
-    execFileSync(`${bin}/initdb`,['-D',`${directory}/data`,'-A','trust','-U','testadmin','--no-locale'],{stdio:'ignore'});
-    execFileSync(`${bin}/pg_ctl`,['-D',`${directory}/data`,'-l',`${directory}/server.log`,'-o',`-k ${directory} -h '' -p 55439`,'-w','start'],{stdio:'ignore'});
-    started=true;
+    try {
+      execFileSync(`${bin}/initdb`,['-D',`${directory}/data`,'-A','trust','-U','testadmin','--no-locale'],{env:pgEnv,stdio:'pipe'});
+      execFileSync(`${bin}/pg_ctl`,['-D',`${directory}/data`,'-l',`${directory}/server.log`,'-o',`-k ${directory} -h '' -p 55439`,'-w','start'],{env:pgEnv,stdio:'pipe'});
+      started=true;
+    } catch(error) {
+      let serverLog='';
+      try { serverLog=readFileSync(`${directory}/server.log`,'utf8'); } catch {}
+      throw new Error(`Could not start isolated Winners Postgres: ${error.stderr?.toString() || error.message}\n${serverLog}`,{cause:error});
+    }
     sql(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS; CREATE TABLE public.daily_slate(date text,league text,commence_time timestamptz); GRANT SELECT ON public.daily_slate TO service_role;`);
     for(const name of ['20260904203500_winners_admissions.sql','20260904203650_winners_review_recovery.sql','20260904205218_winners_prop_cohort_reservations.sql'])sql(readFileSync(new URL(`../../../supabase/migrations/${name}`,import.meta.url),'utf8'));
   },30000);
-  afterAll(()=>{if(started)execFileSync(`${bin}/pg_ctl`,['-D',`${directory}/data`,'-m','immediate','-w','stop'],{stdio:'ignore'});if(directory)rmSync(directory,{recursive:true,force:true});});
+  afterAll(()=>{if(started)execFileSync(`${bin}/pg_ctl`,['-D',`${directory}/data`,'-m','immediate','-w','stop'],{env:pgEnv,stdio:'ignore'});if(directory)rmSync(directory,{recursive:true,force:true});});
   beforeEach(()=>sql('TRUNCATE public.winners_decision_events,public.winners_board,public.winners_candidates,public.daily_slate RESTART IDENTITY CASCADE;'));
   it('grants read-only board access and denies anon evidence and privileged functions',()=>{
     expect(sql("SET ROLE anon; SELECT count(*) FROM public.winners_board;")).toContain('0');
@@ -44,7 +69,7 @@ describe.skipIf(!supported)('Winners database contract on isolated local Postgre
   it('atomically caps concurrent release at six and keeps admitted snapshots immutable',async()=>{
     sql("INSERT INTO public.daily_slate VALUES ('2026-09-04','MLB',now()+interval '3 hours');");add('qualified',10);
     sql("UPDATE public.winners_candidates SET status='rejected',pick_snapshot='{\"confidence\":99}' WHERE id=1; UPDATE public.winners_candidates SET status='pending',pick_snapshot='{\"confidence\":999}' WHERE id=2;");
-    const releases=await Promise.all([1,2].map(()=>run(`${bin}/psql`,[...args(),'-c',"SET ROLE service_role; SELECT public.release_winners_board('2026-09-04','MLB','prop');"])));
+    const releases=await Promise.all([1,2].map(()=>run(`${bin}/psql`,[...args(),'-c',"SET ROLE service_role; SELECT public.release_winners_board('2026-09-04','MLB','prop');"],{env:pgEnv})));
     expect(releases.map(r=>r.stdout.trim().split('\n').pop()).sort()).toEqual(['0','6']);
     expect(sql('SELECT count(*) FROM public.winners_board;')).toBe('6');
     expect(sql('SELECT min(candidate_id) FROM public.winners_board;')).toBe('5');

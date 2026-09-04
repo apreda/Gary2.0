@@ -164,14 +164,30 @@ export function adjacentDates(datesDesc: string[], date: string): { prev: string
   return { prev: older[0] ?? null, next: newer[newer.length - 1] ?? null };
 }
 
-/** One-line summary for <meta name="description">: the read's first sentence, capped, never mid-word. */
+/** Find prose before collapsing whitespace, which would turn historical tables into sentences. */
+function summaryProse(source?: string): string {
+  for (const block of (source ?? '').split(/\r?\n\s*\r?\n/)) {
+    const prose = block.split(/\r?\n/).filter(line => {
+      // Markdown tables and older fixed-width “TALE OF THE TAPE” rows.
+      return !/^\s*#{1,6}\s/.test(line) && !/\||[←→]|\S(?: {2,}|\t+)\S/.test(line);
+    }).map(line => line.trim().replace(/\*\*|__/g, '')).filter(line => {
+      return line && !/^(?:Gary['’]s Take|TALE OF THE TAPE):?$/i.test(line) &&
+        !/^[A-Z][A-Z &/'’-]{2,40}:?$/.test(line) && !/^[-=*_]{3,}$/.test(line);
+    }).join(' ').replace(/^Gary['’]s Take\s*:?\s*/i, '')
+      .replace(/^[A-Z][A-Z &/'’-]{2,40}:\s*/, '')
+      .replace(/\s+/g, ' ').trim();
+    if (prose) return prose;
+  }
+  return '';
+}
+
+/** One-line search/Article summary: the first prose sentence, capped, never mid-word. */
 export function pageSummary(pick: GaryPick, max = 155): string {
-  const src = (pick.rationale_plain ?? pick.rationale ?? '').replace(/^Gary's Take\s*/i, '').replace(/\s+/g, ' ').trim();
-  const firstBlock = src.split(/(?<=[.!?])\s+/)[0] ?? '';
-  const text = firstBlock.replace(/^[A-Z][A-Z &/'-]{2,40}:\s*/, '');
+  const src = summaryProse(pick.rationale_plain) || summaryProse(pick.rationale);
+  const text = src.split(/(?<=[.!?])\s+/)[0] ?? '';
   if (text.length <= max) return text;
-  const cut = text.slice(0, max);
-  return `${cut.slice(0, cut.lastIndexOf(' '))}`;
+  const cut = text.slice(0, max + 1);
+  return cut.slice(0, Math.max(0, cut.lastIndexOf(' '))).trimEnd();
 }
 
 /* ── Data ─────────────────────────────────────────────────────────────────── */
@@ -271,7 +287,8 @@ export function publishedGamePathSet(rows: PickIndexRow[]): Set<string> {
 }
 
 export async function fetchPickIndex(revalidate = 3600): Promise<PickIndexRow[]> {
-  return restAll<PickIndexRow>('pick_page_index?select=date,league,sport,away_team,home_team&order=date.desc', {
+  // The view's unique row_key keeps equal-date rows on stable page boundaries.
+  return restAll<PickIndexRow>('pick_page_index?select=date,league,sport,away_team,home_team&order=date.desc,row_key.asc', {
     revalidate,
   });
 }
@@ -284,7 +301,7 @@ export async function fetchPickIndexForDates(
   const valid = [...new Set(dates.filter((date): date is string => !!date && isArchiveDate(date)))];
   if (valid.length === 0) return [];
   return restAll<PickIndexRow>(
-    `pick_page_index?select=date,league,sport,away_team,home_team&date=in.(${valid.join(',')})&order=date.desc,away_team.asc,home_team.asc`,
+    `pick_page_index?select=date,league,sport,away_team,home_team&date=in.(${valid.join(',')})&order=date.desc,row_key.asc`,
     { revalidate },
   );
 }

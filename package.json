@@ -1,0 +1,11 @@
+{
+  "name": "gary-development",
+  "private": true,
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "setup": "npm --prefix gary2.0 ci && npm --prefix web ci",
+    "verify": "npm --prefix gary2.0 test && npm --prefix gary2.0 run test:edge && npm --prefix web test && npm --prefix web run typecheck",
+    "preview": "node --experimental-strip-types web/scripts/fixture-preview.mjs",
+    "smoke:web": "node --experimental-strip-types web/scripts/fixture-preview.mjs --check"
+  }
+}

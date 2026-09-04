@@ -5,7 +5,7 @@ import { GAME_SITEMAP_SIZE, gameSitemapEntries, sitemapIdsForCount } from '@/lib
 export const revalidate = 3600;
 
 export async function generateSitemaps() {
-  const rows = await fetchPickIndex().catch(() => []);
+  const rows = await fetchPickIndex();
   return sitemapIdsForCount(gameSitemapEntries(rows).length);
 }
 
@@ -16,7 +16,8 @@ export default async function gameSitemap({
 }): Promise<MetadataRoute.Sitemap> {
   const part = Number(await id);
   if (!Number.isInteger(part) || part < 0) return [];
-  const rows = await fetchPickIndex().catch(() => []);
+  // Throw on failed reads so ISR retains the last successful inventory.
+  const rows = await fetchPickIndex();
   const entries = gameSitemapEntries(rows);
   return entries.slice(part * GAME_SITEMAP_SIZE, (part + 1) * GAME_SITEMAP_SIZE);
 }

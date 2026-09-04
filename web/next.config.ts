@@ -6,6 +6,11 @@ const nextConfig: NextConfig = {
     // not jump from a 72/110px display all the way to a 256/384px candidate.
     imageSizes: [32, 48, 64, 72, 96, 100, 110, 128, 140, 144, 200, 220, 256, 280, 384],
   },
+  async rewrites() {
+    // Keep the submitted sitemap URL while avoiding Next 16.3's static
+    // metadata output classification, which drops sitemap revalidation.
+    return [{ source: '/archive/sitemap.xml', destination: '/archive/inventory.xml' }];
+  },
   async redirects() {
     return [
       { source: '/changelog', destination: '/', permanent: true },

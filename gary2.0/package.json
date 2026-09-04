@@ -23,6 +23,7 @@
     "hub:nfl": "node run-insight-connections.js --league NFL",
     "hub:ncaaf": "node run-insight-connections.js --league NCAAF",
     "test": "vitest run",
+    "test:edge": "node --experimental-strip-types --test \"supabase/functions/**/*.test.ts\"",
     "test:watch": "vitest"
   },
   "dependencies": {

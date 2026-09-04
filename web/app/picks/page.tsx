@@ -13,6 +13,7 @@ import { PageMasthead, StitchRule } from '@/components/Terminal';
 import { LiveScoreStrip } from '@/components/LiveChip';
 import { JsonLd } from '@/components/JsonLd';
 import { fetchTodayGamePicks, selectTopPick } from '@/lib/gary/picks';
+import { fetchPublishedPickPaths, publishedPickPath } from '@/lib/gary/pick-links';
 import { boardLeagues, buildBoard, fetchDailySlate } from '@/lib/gary/board';
 import { computeRecord, fetchGameResultsForDate } from '@/lib/gary/results';
 import { etDateLabel, etTime, oddsText } from '@/lib/gary/format';
@@ -80,6 +81,7 @@ export default async function PicksPage() {
   ]);
 
   const board = buildBoard(slate, picks);
+  const publishedPaths = await fetchPublishedPickPaths(picks, date).catch(() => new Set<string>());
   // One clock read for the whole render — the board uses it to stop promising
   // a posting time that has already gone by.
   const now = nowMs();
@@ -172,7 +174,7 @@ export default async function PicksPage() {
                           key: g.key,
                           label: `${g.away} at ${g.home}`,
                           tile: <GameTile game={g} now={now} />,
-                          panel: <GameRow game={g} now={now} />,
+                          panel: <GameRow game={g} now={now} analysisHref={publishedPickPath(g.pick, date, publishedPaths)} />,
                         }))}
                     />
                   </div>
@@ -185,7 +187,7 @@ export default async function PicksPage() {
                     key: g.key,
                     label: `${g.away} at ${g.home}`,
                     tile: <GameTile game={g} now={now} />,
-                    panel: <GameRow game={g} now={now} />,
+                    panel: <GameRow game={g} now={now} analysisHref={publishedPickPath(g.pick, date, publishedPaths)} />,
                   }))}
                 />
               </div>

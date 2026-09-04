@@ -1,8 +1,6 @@
-import { isLongShot } from './prop-lanes';
 export { isLongShot } from './prop-lanes';
 import { rest } from './supabase';
 import { todayEST } from './dates';
-import { normalizeLeague } from './leagues';
 import type { DailyPicksRow, GaryPick, PropPick, PropPicksRow, WeeklyNflPicksRow } from './types';
 
 /**
@@ -39,16 +37,18 @@ export function selectTopProps(props: PropPick[], n: number): PropPick[] {
 /** All of today's game picks (daily_picks + current weekly_nfl_picks when in week). */
 export async function fetchTodayGamePicks(revalidate = 600): Promise<GaryPick[]> {
   const date = todayEST();
-  const rows = await rest<DailyPicksRow[]>(
-    `daily_picks?select=date,picks&date=eq.${date}`, { revalidate },
-  );
+  const [rows, weekly] = await Promise.all([
+    rest<DailyPicksRow[]>(
+      `daily_picks?select=date,picks&date=eq.${date}`, { revalidate },
+    ),
+    rest<WeeklyNflPicksRow[]>(
+      `weekly_nfl_picks?select=week_start,picks&order=week_start.desc&limit=1`, { revalidate },
+    ),
+  ]);
   const picks = rows.flatMap(r => parsePicksJson<GaryPick>(r.picks));
 
   // NFL is weekly — include the most recent week's picks only if today falls
   // inside that week (week_start .. week_start+6).
-  const weekly = await rest<WeeklyNflPicksRow[]>(
-    `weekly_nfl_picks?select=week_start,picks&order=week_start.desc&limit=1`, { revalidate },
-  );
   if (weekly.length > 0) {
     const start = new Date(`${weekly[0].week_start}T12:00:00Z`).getTime();
     const today = new Date(`${date}T12:00:00Z`).getTime();
@@ -66,25 +66,4 @@ export async function fetchTodayPropPicks(revalidate = 600): Promise<PropPick[]>
     `prop_picks?select=date,picks&date=eq.${date}`, { revalidate },
   );
   return rows.flatMap(r => parsePicksJson<PropPick>(r.picks));
-}
-
-/** Group game picks by normalized league code. */
-export function groupPicksByLeague(picks: GaryPick[]): Map<string, GaryPick[]> {
-  const m = new Map<string, GaryPick[]>();
-  for (const p of picks) {
-    const code = normalizeLeague(p.league, p.sport) ?? 'OTHER';
-    m.set(code, [...(m.get(code) ?? []), p]);
-  }
-  return m;
-}
-
-
-/** Split props into the long-shot lane vs the core board. */
-export function splitHrThreats(props: PropPick[]): { hr: PropPick[]; rest: PropPick[] } {
-  const hr: PropPick[] = [];
-  const rest: PropPick[] = [];
-  for (const p of props) {
-    (isLongShot(p) ? hr : rest).push(p);
-  }
-  return { hr, rest };
 }
