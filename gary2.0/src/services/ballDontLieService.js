@@ -5714,21 +5714,37 @@ const ballDontLieService = {
       if (!playerIds || playerIds.length === 0) return {};
       const cacheKey = `mlb_players_by_ids_${playerIds.sort().join(',')}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/players${buildQuery({ player_ids: playerIds, per_page: 100 })}`;
-        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
-        const players = response.data?.data || [];
+        // ONE PAGE IS NOT THE ANSWER (Sep 4 2026). This asked for per_page 100
+        // and read the first page only, so a 327-id request resolved 100 names
+        // and silently dropped 227 — the Hub's player cards for off-slate arms
+        // (Scherzer, Giolito) had nothing to hang a card on and were skipped
+        // every single day. Ids go out in chunks of 100 and every chunk pages
+        // to its end.
+        const CHUNK = 100;
         const playerMap = {};
-        for (const player of players) {
-          playerMap[player.id] = {
-            name: player.full_name || `${player.first_name} ${player.last_name}`,
-            position: player.position,
-            batsThrows: player.bats_throws,
-            team: player.team?.display_name || player.team?.name || 'Unknown',
-            teamAbbr: player.team?.abbreviation || '',
-            teamId: player.team?.id
-          };
+        for (let i = 0; i < playerIds.length; i += CHUNK) {
+          const chunk = playerIds.slice(i, i + CHUNK);
+          let cursor = null;
+          for (let page = 0; page < 10; page++) {
+            const query = { player_ids: chunk, per_page: 100 };
+            if (cursor != null) query.cursor = cursor;
+            const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/players${buildQuery(query)}`;
+            const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
+            for (const player of response.data?.data || []) {
+              playerMap[player.id] = {
+                name: player.full_name || `${player.first_name} ${player.last_name}`,
+                position: player.position,
+                batsThrows: player.bats_throws,
+                team: player.team?.display_name || player.team?.name || 'Unknown',
+                teamAbbr: player.team?.abbreviation || '',
+                teamId: player.team?.id
+              };
+            }
+            cursor = response.data?.meta?.next_cursor ?? null;
+            if (cursor == null) break;
+          }
         }
-        console.log(`[BDL] Resolved ${Object.keys(playerMap).length} MLB player names`);
+        console.log(`[BDL] Resolved ${Object.keys(playerMap).length} of ${playerIds.length} MLB player name(s)`);
         return playerMap;
       }, 60);
     } catch (error) {
