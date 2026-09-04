@@ -25,6 +25,10 @@ npm run smoke:web
 and Next/TypeScript checks. `smoke:web` runs the real Next app against a local
 read-only fixture API, verifies Home/Picks/Results and the results export,
 then stops both servers. It tests server rendering, not browser interactions.
+The Winners database cases create an isolated temporary PostgreSQL instance.
+Install PostgreSQL with `pg_config` on PATH, or set `GARY_TEST_PG_BIN` to its
+binary directory. CI requires those cases; local runs explicitly report a skip
+when PostgreSQL is unavailable.
 
 For browser QA, use `npm run preview` (default `http://127.0.0.1:3100/picks`;
 override with `-- --port=3101`). Open the full Cubs card, check its fixture
