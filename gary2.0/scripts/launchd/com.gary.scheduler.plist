@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>Comment</key>
-	<string>Gary 2.0 SUBSCRIPTION BRIDGE (Jul 29 2026): local per-game scheduler resurrected from retired-2026-07-22, now with the desk brains on the founder's Claude subscription (GARY_MODEL_OVERRIDE) instead of metered APIs. Railway scheduler must stay DOWN while this runs — one writer only. Restore path: launchctl bootout this + the watchdog, then `railway up` from gary2.0/.</string>
+	<string>Gary 2.0 SUBSCRIPTION BRIDGE (Sep 4 2026): game and props brains run Astra through the founder's ChatGPT Codex subscription. Railway scheduler must stay DOWN while this runs — one writer only. Restore path: launchctl bootout this + the watchdog, then `railway up` from gary2.0/.</string>
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>CLAUDE_CLI_PATH</key>
@@ -11,9 +11,11 @@
 		<key>GARY_GROUNDING_VIA_CLAUDE</key>
 		<string>1</string>
 		<key>GARY_MODEL_OVERRIDE</key>
-		<string>codex-gpt-5.6-sol</string>
+		<string>codex-gpt-6-astra</string>
+		<key>GARY_MLB_BRAIN_MODEL</key>
+		<string>codex-gpt-6-astra</string>
 		<key>GARY_PROPS_MODEL_OVERRIDE</key>
-		<string>codex-gpt-5.6-sol</string>
+		<string>codex-gpt-6-astra</string>
 		<key>PATH</key>
 		<string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:/Users/adam.preda/.local/bin</string>
 	</dict>

@@ -12,8 +12,8 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Non-MLB game lanes' configured brain; production's scheduler plist sets
-// GARY_MODEL_OVERRIDE=codex-gpt-5.6-sol so every game brain rides the bridge.
-export const GAME_PICK_MODEL = process.env.GARY_MODEL_OVERRIDE || 'gpt-5.6-sol';
+// GARY_MODEL_OVERRIDE=codex-gpt-6-astra so every game brain rides the bridge.
+export const GAME_PICK_MODEL = process.env.GARY_MODEL_OVERRIDE || 'codex-gpt-6-astra';
 
 // THE RESEARCHER IS DEAD (founder, Aug 27 2026 — all sports): the desk is the
 // entire evidence and the brains run tool-less. GAME_RESEARCH_MODEL survives
@@ -22,14 +22,14 @@ export const GAME_PICK_MODEL = process.env.GARY_MODEL_OVERRIDE || 'gpt-5.6-sol';
 // Haiku is out of money — simple"): the Aug 18 Haiku researcher first
 // (metered, ~12¢ a game); if the Anthropic key is out of credit or the call
 // fails, Luna through the Codex bridge in tools mode — $0 on the sub, a
-// different model from Gary's Sol.
+// different model from Gary's Astra.
 export const GAME_RESEARCH_MODEL = process.env.GARY_RESEARCH_MODEL || 'anthropic-claude-haiku-4-5';
 export const GAME_RESEARCH_FALLBACK_MODEL = process.env.GARY_RESEARCH_FALLBACK_MODEL || 'codex-gpt-5.6-luna';
 // (MLB_RESEARCH_MODEL deleted Sep 1 2026 — zero consumers after the
 // researcher kill.)
-// The MLB June brain: Sol on the $0 codex bridge. GARY_MLB_BRAIN_MODEL is the
-// env seam for a paid API-Sol experiment run.
-export const MLB_JUNE_BRAIN_MODEL = process.env.GARY_MLB_BRAIN_MODEL || 'codex-gpt-5.6-sol';
+// The MLB June brain: Astra on the codex bridge (founder GO, Sep 4 2026).
+// GARY_MLB_BRAIN_MODEL is the explicit per-lane override.
+export const MLB_JUNE_BRAIN_MODEL = process.env.GARY_MLB_BRAIN_MODEL || 'codex-gpt-6-astra';
 
 // HOUSE LIMIT (founder, Aug 18 — restored from the pickdesk-era -179 rule):
 // no moneyline heavier than this ships to users. Payout law, not value
@@ -52,7 +52,7 @@ export const LEGACY_BRAIN_FALLBACK = 'anthropic-claude-haiku-4-5';
 // validateSessionModel's reroute target for refused model names.
 export const LEGACY_RESEARCH_MODEL = 'anthropic-claude-haiku-4-5';
 // Props lane default = the brain the plists actually set (codex bridge).
-export const PROPS_DESK_MODEL = process.env.GARY_PROPS_MODEL_OVERRIDE || 'codex-gpt-5.6-sol';
+export const PROPS_DESK_MODEL = process.env.GARY_PROPS_MODEL_OVERRIDE || 'codex-gpt-6-astra';
 
 // Quota cascade for the desk lanes (founder approved Jul 29, after the Jul 28
 // OpenAI balance outage shipped 6 games with no pick): when a desk brain
@@ -69,6 +69,7 @@ export const DESK_FALLBACK_MODELS = ['codex-gpt-5.6-sol', 'anthropic-claude-opus
 // Bridge entries are $0 (no marginal token cost on a subscription); the
 // anthropic- API rungs are metered and logged at list price.
 export const DESK_COST_PER_M = {
+  'codex-gpt-6-astra': [0, 0],
   'gpt-5.6-sol': [5, 30],
   'codex-gpt-5.6-sol': [0, 0],
   'codex-gpt-5.6-luna': [0, 0],
