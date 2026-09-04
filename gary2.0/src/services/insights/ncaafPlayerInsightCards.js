@@ -252,7 +252,7 @@ function groupByPlayer(rows, ids) {
  * player costs nothing extra to include, and a named player with no rows still
  * gets his identity card rather than an empty sheet.
  */
-function leaders(roster, grouped, named = new Set()) {
+function leaders(roster, grouped, named = new Set(), wholeRoster = null) {
   const withTotals = roster
     .map((p) => ({ player: p, pos: position(p), rows: grouped.get(String(p.id)) || [] }))
     .filter((x) => x.rows.length)
@@ -269,11 +269,18 @@ function leaders(roster, grouped, named = new Set()) {
   if (!named.size) return picked;
 
   const already = new Set(picked.map((x) => String(x.player?.id)));
-  for (const p of roster) {
-    if (already.has(String(p?.id)) || !named.has(nameKey(playerName(p)))) continue;
-    const rows = grouped.get(String(p.id)) || [];
-    picked.push({ player: p, pos: position(p), rows, totals: sumRows(rows) });
-    already.add(String(p?.id));
+  // The stats call covers the skill players, so anyone named off THAT list
+  // arrives with his rows. A named lineman or safety comes from the whole
+  // roster with none — an identity card, no extra provider call, and the row's
+  // own read still rides the card as its edge. Every one of the 11 college
+  // rows left uncovered on Sep 4 2026 was an injury row about exactly them.
+  for (const pool of [roster, wholeRoster].filter(Boolean)) {
+    for (const p of pool) {
+      if (already.has(String(p?.id)) || !named.has(nameKey(playerName(p)))) continue;
+      const rows = grouped.get(String(p.id)) || [];
+      picked.push({ player: p, pos: position(p), rows, totals: sumRows(rows) });
+      already.add(String(p?.id));
+    }
   }
   return picked;
 }
@@ -309,10 +316,11 @@ async function packsForGame({ game, date, currentSeason, bdl, propEntries, named
   const indexBySeason = new Map();
 
   for (const [team, opponent] of [[awayTeam, homeTeam], [homeTeam, awayTeam]]) {
-    let roster;
+    let roster, wholeRoster;
     try {
-      roster = ((await bdl.getNcaafTeamPlayers(team.id, ROSTER_TTL_MINUTES)) || [])
-        .filter((p) => p?.id != null && playerName(p) && SKILL.has(position(p)));
+      wholeRoster = ((await bdl.getNcaafTeamPlayers(team.id, ROSTER_TTL_MINUTES)) || [])
+        .filter((p) => p?.id != null && playerName(p));
+      roster = wholeRoster.filter((p) => SKILL.has(position(p)));
     } catch (err) {
       console.warn(`[ncaafPlayerCards] roster failed for ${sideName(team)}: ${err?.message || err} — side skipped`);
       continue;
@@ -327,7 +335,7 @@ async function packsForGame({ game, date, currentSeason, bdl, propEntries, named
       continue;
     }
     const grouped = groupByPlayer(window.rows, roster.map((p) => p.id));
-    const picked = leaders(roster, grouped, named);
+    const picked = leaders(roster, grouped, named, wholeRoster);
     if (!picked.length) continue;
 
     if (!indexBySeason.has(window.season)) {
