@@ -1,4 +1,4 @@
-import { computeRecord, effectiveOdds, isLegitPropResult, type Record_ } from './results';
+import { computeRecord, effectiveOdds, isHrLaneResult, isLegitPropResult, type Record_ } from './results';
 import type { GameResultRow, PropResultRow } from './types';
 
 const GRADED = new Set(['won', 'lost', 'push']);
@@ -25,7 +25,10 @@ export function publicResultsLedger(
   const graded = (result: string | null) => GRADED.has((result ?? '').trim().toLowerCase());
   return {
     games: games.filter(row => graded(row.result)),
-    props: props.filter(row => graded(row.result) && isLegitPropResult(row)),
+    // The home-run lane is not published (founder, Sep 4 2026): it is a card
+    // for the fun of it, tracked internally, so it stays out of the CSV and
+    // the JSON exactly as it stays out of the record they back.
+    props: props.filter(row => graded(row.result) && isLegitPropResult(row) && !isHrLaneResult(row)),
   };
 }
 
@@ -47,9 +50,9 @@ export function resultsCsv(games: GameResultRow[], props: PropResultRow[]): stri
     const selection = row.pick_text ?? [row.player_name, row.bet, row.line_value, row.prop_type]
       .filter(value => value !== null && value !== undefined && String(value).length > 0)
       .join(' ');
-    // The full ledger keeps every graded prop, old system included; the
-    // league column labels the lane ('MLB HR' = the fun lane) so a reader can
-    // separate them the way the site's record does.
+    // The ledger keeps every graded CORE prop, old system included — the
+    // home-run lane is filtered out upstream, so what a reader downloads is
+    // the same set the published record is computed over.
     rows.push([
       'prop', row.game_date, row.sport ?? '', row.matchup, selection, row.result,
       row.actual_value, effectiveOdds(row.pick_text, row.odds), '',

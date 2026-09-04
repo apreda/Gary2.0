@@ -32,6 +32,36 @@ describe('public ledger exports and audits', () => {
     expect(ledger.props).toEqual(props);
   });
 
+  it('keeps the home-run lane out of the public download entirely', () => {
+    // Founder, Sep 4 2026: the long shot publishes as a card and is tracked
+    // internally only — it is in no public record, the ledger included.
+    const longShot: PropResultRow = {
+      game_date: '2026-09-03', player_name: 'Heriberto Hernandez', prop_type: 'home_runs',
+      line_value: 0.5, actual_value: 1, result: 'won', odds: '+310',
+      pick_text: 'Heriberto Hernandez Over 0.5 Home Runs', matchup: 'Marlins @ Royals',
+      bet: 'Over', sport: 'MLB HR',
+    };
+    const unstamped = { ...longShot, sport: null, player_name: 'Joshua Baez', result: 'lost' };
+
+    const ledger = publicResultsLedger(games, [...props, longShot, unstamped]);
+    expect(ledger.props).toEqual(props);
+
+    const csv = resultsCsv(games, [...props, longShot, unstamped]);
+    expect(csv).not.toContain('Heriberto Hernandez');
+    expect(csv).not.toContain('Joshua Baez');
+    expect(csv).not.toContain('MLB HR');
+  });
+
+  it("keeps a pitcher's home runs allowed in the public download", () => {
+    // "pitcher_home_runs" is home runs ALLOWED — an ordinary core prop.
+    const pitcherProp: PropResultRow = {
+      game_date: '2026-09-03', player_name: 'Blade Tidwell', prop_type: 'pitcher_home_runs',
+      line_value: 0.5, actual_value: 0, result: 'won', odds: '-120',
+      pick_text: 'Blade Tidwell Under 0.5 Home Runs Allowed', matchup: 'Giants @ Pirates', bet: 'Under',
+    };
+    expect(resultsCsv(games, [pitcherProp])).toContain('Blade Tidwell');
+  });
+
   it('neutralizes spreadsheet-formula prefixes in CSV text', () => {
     const csv = resultsCsv([{ ...games[0], pick_text: '=HYPERLINK("bad")' }], []);
     expect(csv).toContain("'=HYPERLINK");

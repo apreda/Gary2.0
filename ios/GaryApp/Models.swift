@@ -1835,8 +1835,12 @@ struct PropPick: Identifiable, Codable {
     /// prop text — "home_runs 0.5" / "home runs" reads as an HR bet.
     var isHRLane: Bool {
         if let lane, !lane.isEmpty { return lane.uppercased() == "HR" }
-        let t = (prop ?? "").lowercased()
-        return t.contains("home_run") || t.contains("home run")
+        // The prop text is "market line" ("home_runs 0.5"), so read the market
+        // token. A pitcher's home runs ALLOWED is a core prop, never the fun
+        // lane — a substring match made it wear the long shot's clothes.
+        let t = (prop ?? "").lowercased().trimmingCharacters(in: .whitespaces)
+        if t.hasPrefix("pitcher") { return false }
+        return t.hasPrefix("home_run") || t.hasPrefix("home run")
     }
     
     /// Get the sport/league (checks both fields)
@@ -2117,9 +2121,14 @@ struct PropResult: Decodable {
     /// on its own Billfold chip + longshot tracker, never part of the official
     /// props record). The grader's lane stamp wins; prop_type is the fallback
     /// because older rows lack the stamp (and grader rows can lack a sport column).
+    /// The fun lane. The fallback reads the BATTER'S market: a pitcher's
+    /// "pitcher_home_runs" is home runs ALLOWED — an ordinary core prop — and
+    /// a substring match would quietly drop it from the record it belongs in.
     var isHRResult: Bool {
         if let lane, !lane.isEmpty { return lane.uppercased() == "HR" }
-        return (prop_type ?? "").lowercased().contains("home_run")
+        let type = (prop_type ?? "").lowercased().trimmingCharacters(in: .whitespaces)
+        if type.hasPrefix("pitcher") { return false }
+        return type == "home_runs" || type == "home_run" || type == "home runs"
     }
 }
 

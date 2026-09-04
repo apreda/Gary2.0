@@ -62,4 +62,24 @@ describe('the long shot rides the Picks page', () => {
     expect(models).toContain('var isHRLane: Bool {');
     expect(viewsShared).toContain('$0.effectiveLeague ?? "") == "MLB" && !$0.isHRResult');
   });
+
+  // Founder, Sep 4 2026: "i want ... the HR picks not being tracked publicly,
+  // only for our internal stuff". The card publishes; the tally does not.
+  it('shows the long shot NOWHERE on a public record surface', () => {
+    const billfold = ios('BillfoldView.swift');
+    expect(billfold).not.toContain('hrFunTracker');
+    expect(billfold).not.toContain('HR THREATS');
+    expect(billfold).not.toContain('hrLaneResults');
+    // No chip either — not even the lane's own.
+    expect(viewsShared).not.toContain("leagues.insert(\"MLB HR\")");
+    // A selection persisted from an older build resolves to nothing.
+    expect(viewsShared).toMatch(/case \.mlbHR:[\s\S]{0,320}?filteredBySport = \[\]/);
+  });
+
+  it('never mistakes a pitcher\'s home runs allowed for the fun lane', () => {
+    // "pitcher_home_runs" is home runs ALLOWED — a core prop. A substring
+    // match on "home_run" silently dropped it from the record it belongs in.
+    expect(models).toContain('if type.hasPrefix("pitcher") { return false }');
+    expect(models).toContain('if t.hasPrefix("pitcher") { return false }');
+  });
 });

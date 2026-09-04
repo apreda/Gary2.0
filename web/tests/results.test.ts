@@ -201,6 +201,8 @@ describe('the props book (Sep 2 2026): starts at the rebuild, never the HR lane'
     expect(isHrLaneResult(prop({ sport: 'MLB HR', prop_type: 'home_runs' }))).toBe(true);
     expect(isHrLaneResult(prop({ sport: null, prop_type: 'home_runs' }))).toBe(true);
     expect(isHrLaneResult(prop({}))).toBe(false);
+    // Home runs ALLOWED is a pitcher's core prop, never the fun lane.
+    expect(isHrLaneResult(prop({ sport: null, prop_type: 'pitcher_home_runs' }))).toBe(false);
     const rec = computePropsRecord([prop({}), prop({ sport: 'MLB HR', prop_type: 'home_runs', result: 'lost' })]);
     expect(rec).toMatchObject({ wins: 1, losses: 0, graded: 1 });
   });

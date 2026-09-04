@@ -152,10 +152,20 @@ export function isLegitPropResult(r: PropResultRow): boolean {
  */
 export const PROPS_BOOK_SINCE = '2026-09-02';
 
-/** The HR lane is the fun lane — its own tracker, never the props record (founder, Jul 29 2026). */
+/**
+ * The home run is the fun lane: one long shot a game, published as a card and
+ * tracked internally only (founder, Sep 4 2026 — it never reaches a public
+ * record, the downloadable ledger included).
+ *
+ * The fallback reads the BATTER'S market. "pitcher_home_runs" is home runs
+ * ALLOWED — an ordinary core prop — so a substring match on "home_run" would
+ * quietly drop it from the record it belongs in.
+ */
 export function isHrLaneResult(r: PropResultRow): boolean {
   if ((r.sport ?? '').trim().toUpperCase() === 'MLB HR') return true;
-  return (r.prop_type ?? '').toLowerCase().includes('home_run');
+  const type = (r.prop_type ?? '').toLowerCase().trim();
+  if (type.startsWith('pitcher')) return false;
+  return type === 'home_runs' || type === 'home_run' || type === 'home runs';
 }
 
 /** The rows the props record is computed over: legit, core lane, from the book's start. */

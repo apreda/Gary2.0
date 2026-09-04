@@ -321,7 +321,6 @@ struct BillfoldView: View {
                             recentCarousel
                             dailyLedger
                             performanceLedger
-                            hrFunTracker
                         }
                         .padding(.top, 4)
                         .padding(.bottom, 120)
@@ -756,9 +755,11 @@ struct BillfoldView: View {
                         .font(.system(size: 12, weight: .medium, design: .default))
                         .foregroundStyle(brass)
 
-                    // Fun lanes (HR bets, TDs) live on long odds — the average
-                    // price belongs next to the record.
-                    if selectedTab == 1, selectedSport == .mlbHR || selectedSport == .nflTDs,
+                    // The TD fun lane lives on long odds — the average price
+                    // belongs next to the record. (The home-run lane is not on
+                    // this page at all: founder, Sep 4 2026 — the long shot is
+                    // a card for the fun of it, tracked internally only.)
+                    if selectedTab == 1, selectedSport == .nflTDs,
                        let avg = funLaneAvgOdds {
                         Text("\u{00B7}").foregroundStyle(brass.opacity(0.5))
                         Text("avg +\(avg)")
@@ -1658,159 +1659,6 @@ struct BillfoldView: View {
         .padding(.horizontal, 16)
     }
 
-    // MARK: - HR Longshot Tracker (the fun lane — never in the books above)
-
-    private static let hrDayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "MMM d"
-        f.timeZone = TimeZone(identifier: "America/New_York")
-        return f
-    }()
-
-    private static func hrDayLabel(_ iso: String?) -> String {
-        guard let iso else { return "" }
-        guard let d = BillfoldCompute.dayFormatter.date(from: String(iso.prefix(10))) else { return "" }
-        return hrDayFormatter.string(from: d).uppercased()
-    }
-
-    /// Every settled HR call in the loaded window, newest first. HR results are
-    /// excluded from every official surface above — this section is their only
-    /// tally on the page (founder: "track it simply from a fun standpoint,
-    /// just to see"; it never accumulates to the total or the balance).
-    private var hrLaneResults: [PropResult] {
-        validPropResults
-            .filter { $0.isHRResult && ($0.result == "won" || $0.result == "lost") }
-            .sorted { billfoldDate(from: $0.game_date) > billfoldDate(from: $1.game_date) }
-    }
-
-    /// The "what if" figure: a flat stake tailing every HR call. Fun
-    /// bookkeeping only — it never joins the balance block above.
-    private var hrTailNetDollars: Double {
-        hrLaneResults.reduce(0) { $0 + units(for: $1.result, odds: $1.odds?.value) } * 100
-    }
-
-    /// Mean American price across the calls — HR bets are all plus-money.
-    private var hrAvgPrice: Int? {
-        let prices = hrLaneResults.compactMap { Double($0.odds?.value ?? "") }.filter { $0 > 0 }
-        guard !prices.isEmpty else { return nil }
-        return Int((prices.reduce(0, +) / Double(prices.count)).rounded())
-    }
-
-    @ViewBuilder
-    private var hrFunTracker: some View {
-        let calls = hrLaneResults
-        if !calls.isEmpty {
-            let hits = calls.filter { $0.result == "won" }.count
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 6) {
-                    Image(systemName: "flame.fill")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(brass)
-                    ledgerEyebrow("HR THREATS")
-                    Spacer()
-                    Text("LONGSHOT LANE")
-                        .font(GaryFonts.mono(9, bold: true)).tracking(1)
-                        .foregroundStyle(brass.opacity(0.8))
-                }
-                .padding(.horizontal, 12)
-                .padding(.top, 12)
-                .padding(.bottom, 10)
-
-                // The tally: connects, the tail-every-call swing, the going rate.
-                HStack(spacing: 0) {
-                    VStack(spacing: 2) {
-                        Text("\(hits) of \(calls.count)")
-                            .font(GaryFonts.mono(14, bold: true))
-                            .foregroundStyle(paper.opacity(0.9))
-                        Text("CONNECTED")
-                            .font(.system(size: 8, weight: .bold)).tracking(0.6)
-                            .foregroundStyle(ink.opacity(0.45))
-                    }
-                    .frame(maxWidth: .infinity)
-
-                    Rectangle().fill(cardStroke).frame(width: 0.5, height: 26)
-
-                    VStack(spacing: 2) {
-                        Text(signedDollars(hrTailNetDollars))
-                            .font(GaryFonts.mono(14, bold: true))
-                            .foregroundStyle(hrTailNetDollars >= 0 ? emerald : crimson)
-                        Text("TAILING EVERY CALL")
-                            .font(.system(size: 8, weight: .bold)).tracking(0.6)
-                            .foregroundStyle(ink.opacity(0.45))
-                    }
-                    .frame(maxWidth: .infinity)
-
-                    if let avg = hrAvgPrice {
-                        Rectangle().fill(cardStroke).frame(width: 0.5, height: 26)
-                        VStack(spacing: 2) {
-                            Text("+\(avg)")
-                                .font(GaryFonts.mono(14, bold: true))
-                                .foregroundStyle(brass)
-                            Text("AVG PRICE")
-                                .font(.system(size: 8, weight: .bold)).tracking(0.6)
-                                .foregroundStyle(ink.opacity(0.45))
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                }
-                .padding(.bottom, 10)
-
-                // Last-12 swing punches, oldest → newest (the wallet-dot idiom).
-                HStack(spacing: 5) {
-                    ForEach(Array(calls.prefix(12).reversed().enumerated()), id: \.offset) { _, c in
-                        Circle()
-                            .fill(c.result == "won" ? emerald : crimson.opacity(0.5))
-                            .frame(width: 6, height: 6)
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 10)
-
-                // The recent calls themselves — who, the price, the verdict.
-                ForEach(Array(calls.prefix(6).enumerated()), id: \.offset) { index, call in
-                    if index > 0 {
-                        Rectangle().fill(cardStroke).frame(height: 0.5).padding(.horizontal, 12)
-                    }
-                    HStack(spacing: 8) {
-                        Text(Self.hrDayLabel(call.game_date))
-                            .font(GaryFonts.mono(10))
-                            .foregroundStyle(ink.opacity(0.45))
-                            .frame(width: 48, alignment: .leading)
-                        Text((call.player_name ?? call.pick_text ?? "HR call").uppercased())
-                            .font(.system(size: 12, weight: .bold, design: .default))
-                            .foregroundStyle(ink.opacity(0.85))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                        Text("HR")
-                            .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
-                            .foregroundStyle(brass.opacity(0.8))
-                        Spacer(minLength: 6)
-                        if let o = call.odds?.value, !o.isEmpty {
-                            Text(o.hasPrefix("+") || o.hasPrefix("-") ? o : "+\(o)")
-                                .font(GaryFonts.mono(11))
-                                .foregroundStyle(ink.opacity(0.5))
-                        }
-                        Text(call.result == "won" ? "HIT" : "MISS")
-                            .font(GaryFonts.mono(11, bold: true))
-                            .foregroundStyle(call.result == "won" ? emerald : ink.opacity(0.4))
-                            .frame(width: 38, alignment: .trailing)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                }
-
-                Text("Home-run calls from the Hub's HR Threats lane, tracked for the fun of it \u{00B7} \(showDollarResults ? "flat $100 tails" : "flat 1u tails"), hypothetical \u{00B7} never counted in Gary's record or balance above")
-                    .font(GaryFonts.mono(9))
-                    .foregroundStyle(ink.opacity(0.35))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 12)
-                    .padding(.top, 8)
-            }
-            .padding(.bottom, 8)
-            .padding(.horizontal, 16)
-        }
-    }
 
     // MARK: - Recent Results Tape
 

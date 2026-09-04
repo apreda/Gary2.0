@@ -2,6 +2,7 @@ import {
   effectiveOdds,
   fetchAllGameResults,
   fetchAllPropResults,
+  isHrLaneResult,
   isLegitPropResult,
   unitsFor,
 } from '@/lib/gary/results';
@@ -62,8 +63,10 @@ export async function garyBoardRows(): Promise<GaryRows> {
     });
   }
   for (const p of props.filter(isLegitPropResult)) {
-    // HR = the fun lane, never part of the official props record.
-    if ((p.prop_type ?? '').toLowerCase().includes('home_run')) continue;
+    // The home run is the fun lane, never part of the official props record.
+    // isHrLaneResult reads the batter's market, so a pitcher's home runs
+    // ALLOWED stays the core prop it is.
+    if (isHrLaneResult(p)) continue;
     const result = (p.result ?? '').trim().toLowerCase();
     if (!['won', 'lost', 'push'].includes(result)) continue;
     settled.push({

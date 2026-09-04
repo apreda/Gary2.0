@@ -895,9 +895,10 @@ enum BillfoldCompute {
         case .nfl:
             filteredBySport = filteredByTime.filter { ($0.effectiveLeague ?? "") == "NFL" && !$0.isNFLTDResult }
         case .mlbHR:
-            // prop_type match, not the sport string — grader rows carry no
-            // sport column, so the old rawValue compare matched nothing.
-            filteredBySport = filteredByTime.filter { $0.isHRResult }
+            // The home-run lane has no chip any more (founder, Sep 4 2026:
+            // internal only). A selection persisted from an older build must
+            // still show nothing rather than resurrect the lane.
+            filteredBySport = []
         case .mlb:
             filteredBySport = filteredByTime.filter { ($0.effectiveLeague ?? "") == "MLB" && !$0.isHRResult }
         default:
@@ -918,11 +919,9 @@ enum BillfoldCompute {
         if propRows.contains(where: { $0.isNFLTDResult }) {
             leagues.insert("NFL TDs")
         }
-        // HR rows infer effectiveLeague "MLB" (no sport column on grader
-        // rows) — surface the fun-lane chip off the prop_type instead.
-        if propRows.contains(where: { $0.isHRResult }) {
-            leagues.insert("MLB HR")
-        }
+        // No home-run chip (founder, Sep 4 2026): the long shot is a card for
+        // the fun of it, and it is tracked internally only — it never appears
+        // on a public record surface, not even as its own lane.
         return leagues
     }
 
