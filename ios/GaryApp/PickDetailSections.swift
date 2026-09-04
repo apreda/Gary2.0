@@ -1108,6 +1108,10 @@ enum Formatters {
         let isCollege = leagueUpper == "NCAAB" || leagueUpper == "NCAAF"
 
         if isCollege {
+            // The provider's own school name wins — the word-stripping below is
+            // a heuristic and gets "Louisiana Ragin' Cajuns" wrong (founder,
+            // Sep 4 2026: school name, no mascot).
+            if let school = NCAAFTeams.school(team) { return school }
             // For college: return school name (remove mascot from end)
             return collegeSchoolName(words)
         } else if leagueUpper == "WC" {

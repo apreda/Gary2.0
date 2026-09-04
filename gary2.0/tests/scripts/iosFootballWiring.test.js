@@ -43,8 +43,13 @@ describe('iOS slate-only football page identity', () => {
   it('uses exact provider identities for NCAAF strip abbreviations and never invents mascot prefixes', () => {
     expect(views).toContain('liveCache.status(forGameId: gameId, league: league)');
     expect(views).toContain('$0.bdl_game_id == gameId && ($0.league ?? "").uppercased() == league');
-    expect(views).toContain('?? (lg == "NCAAF"');
-    expect(views).toContain('? g.matchup.uppercased()');
+    // Sep 4 2026: the college strip prints the PROVIDER's abbreviation
+    // (NCAAFTeams, generated from Ball Don't Lie) and falls back to the school
+    // without its mascot — it never derives a code from mascot words, and it
+    // no longer dumps the full matchup, which truncated mid-name.
+    expect(views).toContain('Self.ncaafStripName(parts[0])) @ \\(Self.ncaafStripName(parts[1])');
+    expect(views).toContain('if let abbr = NCAAFTeams.abbreviation(team) { return abbr }');
+    expect(views).toContain('Formatters.shortTeamName(team, league: "NCAAF").uppercased()');
   });
 
   it('shows provider date-only college games as TIME TBD throughout the Picks rail', () => {

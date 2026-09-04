@@ -1769,11 +1769,15 @@ struct PicksCarouselView: View {
         let lg = gameLeague(g)
         let parts = g.matchup.components(separatedBy: " @ ")
         let official = boardAbbreviations(for: g)
+        // College names are the long ones — "SAN JOSÉ STATE SPARTANS @ EASTERN
+        // MICHIGAN EAGLES" ran off the block (founder, Sep 4 2026). The
+        // provider's own scoreboard code leads (SJSU @ EMU); a school it does
+        // not carry falls back to its name without the mascot.
         let label = official.map { "\($0.away) @ \($0.home)" }
-            ?? (lg == "NCAAF"
-                ? g.matchup.uppercased()
-                : parts.count == 2
-                ? "\(teamAbbrev(parts[0], league: lg)) @ \(teamAbbrev(parts[1], league: lg))"
+            ?? (parts.count == 2
+                ? (lg == "NCAAF"
+                    ? "\(Self.ncaafStripName(parts[0])) @ \(Self.ncaafStripName(parts[1]))"
+                    : "\(teamAbbrev(parts[0], league: lg)) @ \(teamAbbrev(parts[1], league: lg))")
                 : g.matchup.uppercased())
         let timeLabel = g.time.replacingOccurrences(of: " ET", with: "")
         let total = totalFor(g)
@@ -1812,6 +1816,13 @@ struct PicksCarouselView: View {
         }
         .buttonStyle(.plain)
         .id(index)
+    }
+
+    /// One college side on the strip: the provider's abbreviation, else the
+    /// school without its mascot, else the raw name. Never the mascot.
+    static func ncaafStripName(_ team: String) -> String {
+        if let abbr = NCAAFTeams.abbreviation(team) { return abbr }
+        return Formatters.shortTeamName(team, league: "NCAAF").uppercased()
     }
 
     /// Board O/U for a strip block (today only — yesterday's blocks carry FINALs).
