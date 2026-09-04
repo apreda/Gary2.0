@@ -404,18 +404,27 @@ struct HubView: View {
             breakdownSignal = s
             return
         }
-        // 2. THE NAME (founder, Sep 4 2026: "if i click a players name the
+        // 2. A row the lanes stamped with a TEAM and no player is a team row —
+        // a bullpen, a head-to-head, a one-run record — and it opens the team
+        // card (the law, Aug 4 2026). This sits ahead of the name lookup so a
+        // club's own name can never be read as a player's.
+        if s.playerId == nil, s.teamId != nil || s.h2h != nil {
+            teamCardSignal = s
+            return
+        }
+        // 3. THE NAME (founder, Sep 4 2026: "if i click a players name the
         // player card should show up ... everywhere"). Football lanes carry no
         // player id at all, and some MLB lanes carry one the pack build missed,
-        // so the row's own name is resolved against the day's packs before any
-        // fallback. A resolved name opens the SAME card, prefetched.
+        // so the row's own name is resolved against the day's packs. A resolved
+        // name opens the SAME card, prefetched.
         if let row = intelCard(for: Self.signalPlayerName(s)) {
             namedCard = row
             return
         }
-        // 3. No pack anywhere: the team card when the row is about a team, else
-        // the edge overlay — which at least carries the row's own numbers. An
-        // empty player card is never the answer.
+        // 4. A player row whose pack is still building, or a row about neither:
+        // the team card if it names a team, else the edge overlay — which at
+        // least carries the row's own numbers. An empty player card is never
+        // the answer.
         if s.teamId != nil || s.h2h != nil { teamCardSignal = s }
         else { selectedSignal = s }
     }

@@ -25,6 +25,14 @@ describe('the player card reaches every named row', () => {
     expect(runner).toContain("String(row?.headline || '').split(/[:(,/·—]/)[0].trim()");
   });
 
+  it('sends a team row to the team card before any name lookup', () => {
+    const open = hub.slice(hub.indexOf('private func openSignal('), hub.indexOf('static func signalPlayerName('));
+    const teamFirst = open.indexOf('if s.playerId == nil, s.teamId != nil || s.h2h != nil {');
+    const nameLookup = open.indexOf('if let row = intelCard(for: Self.signalPlayerName(s))');
+    expect(teamFirst).toBeGreaterThan(-1);
+    expect(teamFirst).toBeLessThan(nameLookup);
+  });
+
   it('opens a card by NAME when the row carries no player id', () => {
     const open = hub.slice(hub.indexOf('private func openSignal('), hub.indexOf('static func signalPlayerName('));
     expect(open).toContain('if let row = intelCard(for: Self.signalPlayerName(s))');
