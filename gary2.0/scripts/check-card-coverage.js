@@ -77,8 +77,10 @@ for (const league of leagues) {
     + `${nameOnly.length ? ` (+${nameOnly.length} by name)` : ''}`
     + `  ·  ${thin} thin`);
 
-  if (leagueSignals.length && !leagueCards.length) {
-    failures.push(`${league}: ${leagueSignals.length} row(s) on the board and NO cards at all`);
+  // A league with no PLAYER rows has nothing to open — an off-day NFL board
+  // of team rows is not a failure, it is a Thursday in September.
+  if (namesOnRows && !leagueCards.length) {
+    failures.push(`${league}: ${namesOnRows} player row(s) on the board and NO cards at all`);
   } else if (namesOnRows && reachable.length < namesOnRows) {
     const gap = namesOnRows - reachable.length;
     const line = `${league}: ${gap} player row(s) open an empty card`;

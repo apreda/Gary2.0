@@ -616,9 +616,18 @@ async function buildAndStoreCards({ date, league, connections }) {
       // gate: one pass cannot pack a 28-game Saturday): the builder skips games
       // already packed today and the write deletes only the games it rewrites.
       const packedGames = league === 'NCAAF' ? await packedGameIdsToday(date, league) : new Set();
+      // The lanes name people the leaders list never reaches (an availability
+      // sheet's tackle, a backup quarterback): 16 of 20 college rows on Sep 4
+      // 2026 pointed at players nobody packed. Their names ride along.
+      const namedByRows = league === 'NCAAF'
+        ? (await storedConnectionPlayers(date, league))
+          .map((r) => String(r?.headline || '').split(/[:(,/·—]/)[0].trim())
+          .filter((n) => n.length >= 5 && /\s/.test(n))
+        : [];
       const packs = league === 'NCAAF'
         ? await buildNcaafPlayerInsightCards({
-          date, games, bdl: ballDontLieService, propEntries: await loadNcaafPropEntries(date), done: packedGames,
+          date, games, bdl: ballDontLieService, propEntries: await loadNcaafPropEntries(date),
+          done: packedGames, names: [...new Set(namedByRows)],
         })
         : await buildFootballPlayerInsightCards({
           date, league, games, bdl: ballDontLieService,

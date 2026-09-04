@@ -241,7 +241,18 @@ function groupByPlayer(rows, ids) {
 }
 
 /** QB1 above the floor, RB1, the top three receivers — by the summed rows. */
-function leaders(roster, grouped) {
+/**
+ * The players a card gets built for: this side's production leaders, plus
+ * ANYONE the day's rows named.
+ *
+ * The lanes name people the leaders list never reaches — an injured tackle on
+ * the availability sheet, a backup quarterback on the watch — and on Sep 4 2026
+ * that was 16 of the 20 college rows carrying a player id: every one of those
+ * taps found no card. The roster's rows are already in hand here, so a named
+ * player costs nothing extra to include, and a named player with no rows still
+ * gets his identity card rather than an empty sheet.
+ */
+function leaders(roster, grouped, named = new Set()) {
   const withTotals = roster
     .map((p) => ({ player: p, pos: position(p), rows: grouped.get(String(p.id)) || [] }))
     .filter((x) => x.rows.length)
@@ -250,11 +261,21 @@ function leaders(roster, grouped) {
     .filter((x) => x.totals[stat] >= floor)
     .sort((a, b) => b.totals[stat] - a.totals[stat])
     .slice(0, count);
-  return [
+  const picked = [
     ...top(withTotals.filter((x) => x.pos === 'QB'), 'passing_attempts', 1, MIN_PASS_ATTEMPTS),
     ...top(withTotals.filter((x) => x.pos === 'RB' || x.pos === 'FB'), 'rushing_yards', 1),
     ...top(withTotals.filter((x) => x.pos === 'WR' || x.pos === 'TE'), 'receiving_yards', RECEIVERS_PER_TEAM),
   ];
+  if (!named.size) return picked;
+
+  const already = new Set(picked.map((x) => String(x.player?.id)));
+  for (const p of roster) {
+    if (already.has(String(p?.id)) || !named.has(nameKey(playerName(p)))) continue;
+    const rows = grouped.get(String(p.id)) || [];
+    picked.push({ player: p, pos: position(p), rows, totals: sumRows(rows) });
+    already.add(String(p?.id));
+  }
+  return picked;
 }
 
 /** This season's rows for the roster's skill players, else last season's for the same players. */
@@ -279,7 +300,7 @@ async function pairIndex(bdl, awayTeam, homeTeam, season) {
   return index;
 }
 
-async function packsForGame({ game, date, currentSeason, bdl, propEntries }) {
+async function packsForGame({ game, date, currentSeason, bdl, propEntries, named }) {
   const awayTeam = game?.away_team ?? game?.visitor_team;
   const homeTeam = game?.home_team;
   if (!awayTeam?.id || !homeTeam?.id) return [];
@@ -306,7 +327,7 @@ async function packsForGame({ game, date, currentSeason, bdl, propEntries }) {
       continue;
     }
     const grouped = groupByPlayer(window.rows, roster.map((p) => p.id));
-    const picked = leaders(roster, grouped);
+    const picked = leaders(roster, grouped, named);
     if (!picked.length) continue;
 
     if (!indexBySeason.has(window.season)) {
@@ -359,12 +380,13 @@ async function packsForGame({ game, date, currentSeason, bdl, propEntries }) {
  * @param {object} args { date, games, bdl, propEntries, done }
  * @returns {Promise<Array<{date,league,player_id,player_name,team_abbr,game_id,payload}>>}
  */
-export async function buildNcaafPlayerInsightCards({ date, games, bdl, propEntries = [], done = new Set() } = {}) {
+export async function buildNcaafPlayerInsightCards({ date, games, bdl, propEntries = [], done = new Set(), names = [] } = {}) {
   if (!bdl || !Array.isArray(games) || !games.length) return [];
   const currentSeason = footballSeasonForDate(date);
+  const named = new Set((names || []).map(nameKey).filter((k) => k.length >= 5));
   const packs = await runWithinBudget({
     games, done, label: 'ncaafPlayerCards',
-    work: (game) => packsForGame({ game, date, currentSeason, bdl, propEntries }),
+    work: (game) => packsForGame({ game, date, currentSeason, bdl, propEntries, named }),
   });
   console.log(`[ncaafPlayerCards] NCAAF ${date}: ${packs.length} pack(s)`);
   return packs;
