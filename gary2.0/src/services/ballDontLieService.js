@@ -1314,12 +1314,24 @@ const ballDontLieService = {
       if (!teamId) return [];
       const cacheKey = `ncaaf_team_players_${teamId}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        const url = `${BALLDONTLIE_API_BASE_URL}/ncaaf/v1/players/active${buildQuery({ 
-          team_ids: [teamId],
-          per_page: 100
-        })}`;
-        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
-        return response.data?.data || [];
+        // A COLLEGE ROSTER IS BIGGER THAN ONE PAGE (Sep 4 2026). This read the
+        // first 100 and stopped, so the tail of every roster — the linemen and
+        // defensive backs an injury report is mostly about — did not exist as
+        // far as the app was concerned, and their Hub rows could never open a
+        // card. San José State returned exactly 100 with four named players
+        // missing.
+        const players = [];
+        let cursor = null;
+        for (let page = 0; page < 10; page++) {
+          const query = { team_ids: [teamId], per_page: 100 };
+          if (cursor != null) query.cursor = cursor;
+          const url = `${BALLDONTLIE_API_BASE_URL}/ncaaf/v1/players/active${buildQuery(query)}`;
+          const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
+          players.push(...(response.data?.data || []));
+          cursor = response.data?.meta?.next_cursor ?? null;
+          if (cursor == null) break;
+        }
+        return players;
       }, ttlMinutes);
     } catch (e) {
       console.error('[Ball Don\'t Lie] ncaaf getNcaafTeamPlayers error:', e.message);
