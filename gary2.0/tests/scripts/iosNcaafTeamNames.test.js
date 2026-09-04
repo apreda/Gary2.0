@@ -67,8 +67,8 @@ describe('the recap card, football edition', () => {
   const homeView = readFileSync(new URL('../../../ios/GaryApp/HomeView.swift', import.meta.url), 'utf8');
 
   it('counts touchdowns where baseball counts homers, in the same box line', () => {
-    expect(home).toContain('if let a = story.awayTD, let h = story.homeTD { return ("TOUCHDOWNS", a + h) }');
-    expect(home).toContain('if let a = story.awayHR, let h = story.homeHR { return ("HOMERS", a + h) }');
+    expect(home).toContain('if let a = story.awayTD, let h = story.homeTD { return ("TDs", a + h) }');
+    expect(home).toContain('if let a = story.awayHR, let h = story.homeHR { return ("HRs", a + h) }');
     expect(models).toContain('let td: Int?');
     expect(homeView).toContain('awayTD: r.box?.away?.td');
   });
