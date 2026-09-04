@@ -345,7 +345,12 @@ func teamAbbrevFromName(_ name: String, league: String? = nil) -> String {
     case "NBA": maps = [nbaTeamKeywords]
     case "NHL": maps = [nhlTeamKeywords]
     case "NFL", "NFL TDS": maps = [nflTeamKeywords]
-    case "NCAAF": return Formatters.shortTeamName(name, league: league).uppercased()
+    // The provider's scoreboard code first (MASS, SJSU, M-OH) so a college box
+    // row reads like MLB's and NFL's instead of running the school's full name
+    // through a scale factor (founder, Sep 4 2026).
+    case "NCAAF":
+        if let abbr = NCAAFTeams.abbreviation(name) { return abbr }
+        return Formatters.shortTeamName(name, league: league).uppercased()
     case "WC": maps = [wcTeamKeywords]
     default: maps = [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, nflTeamKeywords, wcTeamKeywords]
     }

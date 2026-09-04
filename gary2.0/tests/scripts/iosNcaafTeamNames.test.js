@@ -58,3 +58,25 @@ describe('college names on the game strip', () => {
     expect(project).toContain('path = NCAAFTeams.swift');
   });
 });
+
+// Founder, Sep 4 2026: the recap card "should match NFL and MLB to a tee
+// except HR are TD for football" — and it must never truncate a long school.
+describe('the recap card, football edition', () => {
+  const home = readFileSync(new URL('../../../ios/GaryApp/HomeFrontPage.swift', import.meta.url), 'utf8');
+  const models = readFileSync(new URL('../../../ios/GaryApp/Models.swift', import.meta.url), 'utf8');
+  const homeView = readFileSync(new URL('../../../ios/GaryApp/HomeView.swift', import.meta.url), 'utf8');
+
+  it('counts touchdowns where baseball counts homers, in the same box line', () => {
+    expect(home).toContain('if let a = story.awayTD, let h = story.homeTD { return ("TOUCHDOWNS", a + h) }');
+    expect(home).toContain('if let a = story.awayHR, let h = story.homeHR { return ("HOMERS", a + h) }');
+    expect(models).toContain('let td: Int?');
+    expect(homeView).toContain('awayTD: r.box?.away?.td');
+  });
+
+  it('shortens the school on the bottom line instead of cutting it off', () => {
+    expect(formatters).toContain('static func shortenCollegePick(_ pick: String) -> String {');
+    expect(home).toContain('? Formatters.shortenCollegePick(story.receiptPick)');
+    // The ellipsis law: the line scales, it never truncates.
+    expect(home).not.toContain('Text(story.receiptPick)');
+  });
+});

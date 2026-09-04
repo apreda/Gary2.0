@@ -335,6 +335,53 @@ export async function generateRecap({ pick, result, evidence }) {
  * Returns null unless BOTH sides resolve — a half-built box is worse than none,
  * and the card treats null as "runs only".
  */
+/**
+ * THE FOOTBALL BOX LINE (founder, Sep 4 2026: the football headline card is
+ * the MLB card "to a tee except HR are TD"). Baseball's box counts home runs;
+ * football's counts touchdowns, from the provider's own player lines.
+ *
+ * A touchdown is counted ONCE: a passing touchdown and its receiving
+ * touchdown are the same score, so only rushing + receiving are summed.
+ * Defensive and special-teams scores are not in the player box, so this is
+ * the game's OFFENSIVE touchdowns — a return score would leave the number one
+ * light rather than invent one.
+ *
+ * Returns null unless BOTH sides resolve, the same rule the baseball box
+ * follows: a half-built box is worse than none.
+ */
+export function buildFootballBoxLine({ playerStats, awayTeam, homeTeam, awayScore, homeScore }) {
+  if (!Array.isArray(playerStats) || !playerStats.length) return null;
+  const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  const awayName = norm(awayTeam), homeName = norm(homeTeam);
+  if (!awayName || !homeName || awayName === homeName) return null;
+
+  // The provider spells a team several ways across its football feeds
+  // ("Massachusetts", "Massachusetts Minutemen", "UMass"): match on either
+  // string containing the other, the same join the baseball box uses.
+  const matches = (team, side) => !!team && !!side && (team.includes(side) || side.includes(team));
+
+  let awayTd = null, homeTd = null;
+  for (const row of playerStats) {
+    const team = norm(row?.team?.college ?? row?.team?.full_name ?? row?.team?.name ?? row?.team_name);
+    const isAway = matches(team, awayName), isHome = matches(team, homeName);
+    if (isAway === isHome) continue;               // ambiguous or unrecognised
+    const td = (Number(row?.rushing_touchdowns) || 0) + (Number(row?.receiving_touchdowns) || 0);
+    if (isAway) awayTd = (awayTd ?? 0) + td;
+    else homeTd = (homeTd ?? 0) + td;
+  }
+  if (awayTd == null || homeTd == null) return null;
+
+  // Six points a touchdown cannot exceed what the side actually scored — a
+  // mis-joined roster would show up here rather than on the card.
+  if (Number.isFinite(awayScore) && awayTd * 6 > awayScore) return null;
+  if (Number.isFinite(homeScore) && homeTd * 6 > homeScore) return null;
+
+  return {
+    away: { runs: Number.isFinite(awayScore) ? awayScore : null, hits: null, hr: null, td: awayTd },
+    home: { runs: Number.isFinite(homeScore) ? homeScore : null, hits: null, hr: null, td: homeTd },
+  };
+}
+
 export function buildBoxLine({ mlbStats, awayTeam, homeTeam, awayScore, homeScore }) {
   if (!Array.isArray(mlbStats) || !mlbStats.length) return null;
   const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();

@@ -1065,6 +1065,23 @@ enum Formatters {
         "Golden Gophers", "Demon Deacons", "Black Bears", "Golden Eagles"
     ]
 
+    /// A college pick with its school replaced by the scoreboard code:
+    /// "Massachusetts Minutemen +28.5" → "MASS +28.5" (founder, Sep 4 2026 —
+    /// the card's bottom line was truncating to "MASSACHUSETTS +2…", and an
+    /// ellipsis is never acceptable). Longest school match wins, so "Miami
+    /// (OH)" never resolves as "Miami". Unknown schools are left alone.
+    static func shortenCollegePick(_ pick: String) -> String {
+        let words = pick.split(separator: " ").map(String.init)
+        guard words.count > 1 else { return pick }
+        for take in stride(from: min(5, words.count - 1), through: 1, by: -1) {
+            let candidate = words.prefix(take).joined(separator: " ")
+            if let abbr = NCAAFTeams.abbreviation(candidate) {
+                return ([abbr] + words.dropFirst(take)).joined(separator: " ")
+            }
+        }
+        return pick
+    }
+
     /// Card-display transform (founder, Jul 12): the words OVER/UNDER become
     /// simple arrows on pick displays — "H+R+RBI ▲ 1.5". Word-boundary safe
     /// (never touches names like "Overton"); logic paths keep the words.

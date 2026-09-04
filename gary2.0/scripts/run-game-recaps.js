@@ -28,7 +28,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import {
-  generateRecap, filterPropsForGame, buildBoxLine, gameOnlyHeadline, headlineNeedsRepair,
+  generateRecap, filterPropsForGame, buildBoxLine, buildFootballBoxLine, gameOnlyHeadline, headlineNeedsRepair,
 } from '../src/services/gameRecap.js';
 import { buildGameEvidence } from '../src/services/factCheck.js';
 // Load environment variables FIRST (centralized)
@@ -136,6 +136,50 @@ async function fetchMlbStatsForGames(gameIds) {
 
 
 /**
+ * The same prefetch for football, so the headline card's box can count
+ * touchdowns (founder, Sep 4 2026). NFL and college live on different paths
+ * and key their rows differently — the NFL box carries `game.id`, the college
+ * box carries a nested `game` object — so each side resolves its own key.
+ */
+async function fetchFootballStatsForGames(league, gameIds) {
+  const ids = [...new Set((gameIds || []).filter((id) => id != null).map(String))];
+  const byGame = new Map();
+  if (!BDL_API_KEY || !ids.length) return byGame;
+  const path = league === 'NFL' ? 'nfl/v1/stats' : 'ncaaf/v1/player_stats';
+
+  let cursor = null;
+  for (let page = 0; page < 20; page++) {
+    const params = new URLSearchParams({ per_page: '100' });
+    for (const id of ids) params.append('game_ids[]', id);
+    if (cursor != null) params.set('cursor', String(cursor));
+
+    try {
+      const res = await fetch(`https://api.balldontlie.io/${path}?${params}`, {
+        headers: { Authorization: BDL_API_KEY },
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!res.ok) {
+        console.warn(`  ⚠️ ${league} slate stats page ${page + 1} unavailable (${res.status})`);
+        break;
+      }
+      const payload = await res.json();
+      for (const row of payload?.data || []) {
+        const key = String(row?.game_id ?? row?.game?.id ?? '');
+        if (!key) continue;
+        if (!byGame.has(key)) byGame.set(key, []);
+        byGame.get(key).push(row);
+      }
+      cursor = payload?.meta?.next_cursor ?? null;
+      if (cursor == null) break;
+    } catch (error) {
+      console.warn(`  ⚠️ ${league} slate stats timed out: ${error.message}`);
+      break;
+    }
+  }
+  return byGame;
+}
+
+/**
  * THE MENU, BACK OUT (founder, Aug 5: "very few have odds"). propsBrain
  * snapshots every priced market at seal time; this hands those prices to the
  * recap writer so a bullet about a prop Gary never took can still say what it
@@ -201,6 +245,13 @@ async function main(targetDate) {
   const mlbStatsByGame = await fetchMlbStatsForGames(
     picks.filter((p) => p.league?.toUpperCase() === 'MLB').map((p) => p.game_id),
   );
+  const footballStatsByGame = new Map();
+  for (const lg of ['NFL', 'NCAAF']) {
+    const rows = await fetchFootballStatsForGames(
+      lg, picks.filter((p) => p.league?.toUpperCase() === lg).map((p) => p.game_id),
+    );
+    for (const [key, value] of rows) footballStatsByGame.set(`${lg}:${key}`, value);
+  }
 
   // The night's graded props (real betting prices) — same 2-day window. Each
   // game's subset goes into the evidence pack so bullets can carry the lens.
@@ -323,9 +374,12 @@ async function main(targetDate) {
         recap: recap.recap,
         bullets: recap.bullets || [],
       };
-      const box = buildBoxLine({
-        mlbStats, awayTeam: pick.awayTeam, homeTeam: pick.homeTeam, awayScore, homeScore,
-      });
+      const box = league === 'MLB'
+        ? buildBoxLine({ mlbStats, awayTeam: pick.awayTeam, homeTeam: pick.homeTeam, awayScore, homeScore })
+        : buildFootballBoxLine({
+            playerStats: footballStatsByGame.get(`${league}:${pick.game_id}`),
+            awayTeam: pick.awayTeam, homeTeam: pick.homeTeam, awayScore, homeScore,
+          });
       if (box) row.box = box;
 
       if (dryRun) {

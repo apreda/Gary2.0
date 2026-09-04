@@ -1372,7 +1372,9 @@ struct HomeView: View {
                 awayHits: r.box?.away?.hits,
                 homeHits: r.box?.home?.hits,
                 awayHR: r.box?.away?.hr,
-                homeHR: r.box?.home?.hr)
+                homeHR: r.box?.home?.hr,
+                awayTD: r.box?.away?.td,
+                homeTD: r.box?.home?.td)
         }
     }
 

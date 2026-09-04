@@ -716,6 +716,9 @@ struct BoxLine: Decodable {
         let hits: Int?
         /// Home runs. Null on rows written before HR joined the box.
         let hr: Int?
+        /// Touchdowns — football's line, where baseball keeps home runs
+        /// (founder, Sep 4 2026). Null on every baseball row.
+        let td: Int?
     }
     let away: Side?
     let home: Side?

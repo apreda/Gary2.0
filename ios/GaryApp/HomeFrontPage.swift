@@ -1117,18 +1117,19 @@ struct HeadlineFlipCard: View {
                     // HR sits UNDER the score, not beside it (founder, Aug 5) —
                     // its own line, away-home in the same order as the rows
                     // above. Hits came back off the card entirely.
-                    if let a = story.awayHR, let h = story.homeHR {
+                    if let line = boxStatLine {
                         boxRule
                         // Same weights, same sizes, same colours as the club
                         // rows above it (founder, Aug 5) — it IS a box line,
                         // so it shouldn't look like a caption stapled under one.
                         HStack(alignment: .firstTextBaseline, spacing: 0) {
-                            Text("HOMERS")
+                            Text(line.label)
                                 .font(GaryFonts.mono(11.5, bold: true)).tracking(0.6)
                                 .foregroundStyle(.white.opacity(0.55))
+                                .lineLimit(1).minimumScaleFactor(0.7)
                             Spacer(minLength: 4)
                             // The game's total, not a split (founder, Aug 5).
-                            Text("\(a + h)")
+                            Text("\(line.total)")
                                 .font(GaryFonts.mono(13.5, bold: true))
                                 .foregroundStyle(.white.opacity(0.62))
                         }
@@ -1138,10 +1139,10 @@ struct HeadlineFlipCard: View {
                 // Aug 20 (founder): the money and the odds came OFF the card —
                 // just the pick, sitting on the bottom line where they were.
                 // Scale, never truncate — an ellipsis is never acceptable.
-                Text(story.receiptPick)
+                Text(boxPick)
                     .font(GaryFonts.mono(10.5, bold: true)).tracking(0.6)
                     .foregroundStyle(GaryColors.gold)
-                    .lineLimit(1).minimumScaleFactor(0.65)
+                    .lineLimit(1).minimumScaleFactor(0.5)
             }
             // Narrower box column (Aug 19, with the smaller box type) — the
             // freed points go to the story column the founder wants leading.
@@ -1179,6 +1180,24 @@ struct HeadlineFlipCard: View {
                 .font(GaryFonts.mono(13.5, bold: true))
                 .foregroundStyle(winner ? GaryColors.warmGold : .white.opacity(0.62))
         }
+    }
+
+    /// The box's stat line: baseball counts homers, football counts
+    /// touchdowns (founder, Sep 4 2026 — the football card is the MLB card
+    /// "to a tee except HR are TD"). nil when the night's box carried neither.
+    private var boxStatLine: (label: String, total: Int)? {
+        if let a = story.awayTD, let h = story.homeTD { return ("TOUCHDOWNS", a + h) }
+        if let a = story.awayHR, let h = story.homeHR { return ("HOMERS", a + h) }
+        return nil
+    }
+
+    /// The bottom line's pick. A college school is replaced by its scoreboard
+    /// code so the line reads whole — "MASS +28.5", never "MASSACHUSETTS +2…"
+    /// (founder, Sep 4 2026; ellipsis is never acceptable).
+    private var boxPick: String {
+        story.league.uppercased() == "NCAAF"
+            ? Formatters.shortenCollegePick(story.receiptPick)
+            : story.receiptPick
     }
 
     /// "Angels @ Orioles" + "1-3" → the two box rows. nil when either half is
@@ -1739,6 +1758,11 @@ struct HomeMarqueeHero: View {
         var homeHits: Int? = nil
         var awayHR: Int? = nil
         var homeHR: Int? = nil
+        /// Touchdowns per side — football's box line, the exact analog of the
+        /// home runs above it (founder, Sep 4 2026: the football card is the
+        /// MLB card "to a tee except HR are TD").
+        var awayTD: Int? = nil
+        var homeTD: Int? = nil
         /// Profit on a flat $100 at `odds` — positive when the ticket cashed,
         /// −100 when it didn't, 0 on a push. nil when the price won't parse.
         var netOnFlat: Double? {

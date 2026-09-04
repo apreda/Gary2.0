@@ -63,7 +63,11 @@ describe('iOS slate-only football page identity', () => {
     expect(models).toContain('var awayTeamAbbreviation: String? = nil');
     expect(views).toContain('homeIsPicked ? pick.homeTeamAbbreviation : pick.awayTeamAbbreviation');
     expect(views).toContain('homePicked ? pick.homeTeamAbbreviation : pick.awayTeamAbbreviation');
-    expect(views).toContain('case "NCAAF": return Formatters.shortTeamName(name, league: league).uppercased()');
+    // Sep 4 2026: the box row asks the provider table first (MASS, SJSU) and
+    // keeps the mascot-free school as the fallback — the school's full name in
+    // a box column had to be scaled down to fit.
+    expect(views).toContain('if let abbr = NCAAFTeams.abbreviation(name) { return abbr }');
+    expect(views).toContain('return Formatters.shortTeamName(name, league: league).uppercased()');
   });
 
   it('keeps every football fantasy signal out of Picks edges', () => {
