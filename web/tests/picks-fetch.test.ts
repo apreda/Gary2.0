@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchTodayGamePicks } from '@/lib/gary/picks';
+import { fetchTodayGamePicks, parsePicksJson } from '@/lib/gary/picks';
 import { todayEST } from '@/lib/gary/dates';
 
 vi.mock('@/lib/gary/dates', async importOriginal => ({
@@ -14,6 +14,31 @@ afterEach(() => {
 });
 
 describe('fetchTodayGamePicks', () => {
+  it.each(['daily_picks', 'weekly_nfl_picks'])('rejects corrupt HTTP 200 %s payloads instead of hiding picks', async table => {
+    for (const malformed of ['{broken', '{}', 'null', '[null]', 42]) {
+      vi.stubGlobal('fetch', vi.fn(async (input: string) => Response.json(
+        new URL(input).pathname.endsWith(`/${table}`)
+          ? [{ date: '2026-09-04', week_start: '2026-09-01', picks: malformed }]
+          : [],
+      )));
+      await expect(fetchTodayGamePicks()).rejects.toThrow('Malformed stored game picks');
+    }
+  });
+
+  it.each([[], '[]', null, ''])('preserves legitimate empty game storage (%j)', async picks => {
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => Response.json(
+      new URL(input).pathname.endsWith('/daily_picks')
+        ? [{ date: '2026-09-04', picks }]
+        : [],
+    )));
+    expect(await fetchTodayGamePicks()).toEqual([]);
+  });
+
+  it('leaves the existing permissive parser used by props unchanged', () => {
+    expect(parsePicksJson('{broken')).toEqual([]);
+    expect(parsePicksJson('{}')).toEqual([]);
+  });
+
   it('starts both reads together and keeps daily picks before the current weekly picks', async () => {
     const dailyPick = { pick: 'Cubs ML -110', league: 'MLB' };
     const weeklyPick = { pick: 'Chiefs ML -120', league: 'NFL', commence_time: '2026-09-04T20:00:00Z' };

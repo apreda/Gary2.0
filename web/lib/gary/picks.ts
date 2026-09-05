@@ -21,6 +21,23 @@ export function parsePicksJson<T>(value: unknown): T[] {
   return [];
 }
 
+/** A corrupt successful response must not replace the cached game board. */
+function parseGamePicksJson(value: unknown): GaryPick[] {
+  if (value == null || (typeof value === 'string' && value.trim() === '')) return [];
+  let parsed = value;
+  if (typeof value === 'string') {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      throw new Error('Malformed stored game picks');
+    }
+  }
+  if (!Array.isArray(parsed) || parsed.some(pick => !pick || typeof pick !== 'object' || Array.isArray(pick))) {
+    throw new Error('Malformed stored game picks');
+  }
+  return parsed as GaryPick[];
+}
+
 /** Port of iOS topPickCandidates (Views.swift:318): manual flag wins, else max confidence. */
 export function selectTopPick(picks: GaryPick[]): GaryPick | null {
   const games = picks.filter(p => (p.type ?? 'game') !== 'prop');
@@ -55,7 +72,7 @@ export async function fetchTodayGamePicks(revalidate = 600): Promise<GaryPick[]>
       `weekly_nfl_picks?select=week_start,picks&week_start=lte.${date}&order=week_start.desc&limit=1`, { revalidate },
     ),
   ]);
-  const picks = rows.flatMap(r => parsePicksJson<GaryPick>(r.picks))
+  const picks = rows.flatMap(r => parseGamePicksJson(r.picks))
     .filter(p => normalizeLeague(p.league, p.sport) !== 'NFL');
 
   // NFL is weekly — include the latest started week's picks only if today falls
@@ -64,7 +81,7 @@ export async function fetchTodayGamePicks(revalidate = 600): Promise<GaryPick[]>
     const start = new Date(`${weekly[0].week_start}T12:00:00Z`).getTime();
     const today = new Date(`${date}T12:00:00Z`).getTime();
     if (today >= start && today < start + 7 * 86400000) {
-      picks.push(...filterWeeklyPicksForDate(parsePicksJson<GaryPick>(weekly[0].picks), date));
+      picks.push(...filterWeeklyPicksForDate(parseGamePicksJson(weekly[0].picks), date));
     }
   }
   return picks;
