@@ -113,7 +113,7 @@ export default async function PicksPage() {
       <PageMasthead
         title="Today's free sports picks"
         meta={etDateLabel(date)}
-        sub="The whole board, game by game. Gary posts each call about 90 minutes before first pitch — every game on this page tells you where its call stands."
+        sub="The whole board, game by game. Picks and reasoning appear as Gary finishes the analysis. Each game shows whether its call is published or still being prepared."
       />
 
       <div className="mt-4">

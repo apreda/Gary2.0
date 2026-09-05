@@ -35,7 +35,7 @@ September 9 kickoff is Patriots at Seattle at 8:20 PM ET. The September 13 marke
 
 ## The weekly operating rhythm
 
-Adam owns publication, support and account access until another person is assigned. Code automates the existing game feed. This plan does not create a new unattended posting schedule.
+Adam owns publication, support and account access until another person is assigned. Code automates the existing game feed. There is no new unattended posting schedule. A daily Codex follow-up at 10:00 AM Eastern is active for 28 runs from September 5 to revisit readiness, evidence and authorized improvements; it reports material changes only.
 
 | When | Action | Decision it supports |
 |---|---|---|

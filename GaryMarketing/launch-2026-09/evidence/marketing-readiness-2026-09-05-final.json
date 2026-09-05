@@ -1,0 +1,38 @@
+{
+  "checked_at": "2026-09-05T13:19:01.965763+00:00",
+  "status": "action_required",
+  "issues": [
+    {
+      "code": "ENGAGEMENT_DRAFTS_STALE",
+      "severity": "action_required",
+      "detail": "Daily engagement cron is active; latest draft day is 2026-08-20."
+    }
+  ],
+  "current_slate": {
+    "stored_picks": 6,
+    "logged_pick_threads": 0,
+    "pending_picks": 6,
+    "deadline_passed_without_log": 0,
+    "missing_or_invalid_start": 0
+  },
+  "slate_coverage": {
+    "scheduled_games": 45,
+    "games_with_stored_pick": 6,
+    "scheduled_start_passed_without_pick": 0,
+    "future_games_without_pick": 39,
+    "interrupted_games_without_pick": 0,
+    "unknown_start_without_pick": 0,
+    "stored_picks_without_matching_slate": 0
+  },
+  "latest_poster_response": {
+    "created": "2026-09-05T13:15:02.047677+00:00",
+    "health": {
+      "failed_posts": 0,
+      "issues": [],
+      "missed_picks": 0,
+      "posted_picks": 0,
+      "status": "ok"
+    },
+    "status_code": 200
+  }
+}
