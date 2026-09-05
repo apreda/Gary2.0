@@ -1,6 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { hasSheetAccess } from "./auth.js";
+import { collectEngagementDrafts, persistEngagementDrafts, findEngagementPick } from "./generation.js";
+import { mergeSocialPickSources } from "../social-auto-post/pickSources.js";
 
 // engagement-sheet — Engine 2 (Jul 5 2026). Every morning: 8-10 drafted Gary replies under big open-reply
 // sports accounts' fresh tweets, served as a token-gated mobile page the founder opens from his phone.
@@ -60,7 +62,7 @@ async function oauthHeader(method: string, url: string, params: Record<string, s
 async function xGet(baseUrl: string, params: Record<string, string>): Promise<any> {
   const header = await oauthHeader("GET", baseUrl, params);
   const qs = Object.keys(params).sort().map((k) => `${percentEncode(k)}=${percentEncode(params[k])}`).join("&");
-  const r = await fetch(qs ? `${baseUrl}?${qs}` : baseUrl, { headers: { Authorization: header } });
+  const r = await fetch(qs ? `${baseUrl}?${qs}` : baseUrl, { headers: { Authorization: header }, signal: AbortSignal.timeout(20_000) });
   const j = await r.json();
   if (!r.ok) throw new Error(`X GET ${baseUrl.split("/").slice(-1)[0]} ${r.status}: ${JSON.stringify(j).slice(0, 400)}`);
   return j;
@@ -70,6 +72,7 @@ async function xGet(baseUrl: string, params: Record<string, string>): Promise<an
 async function callLLM(system: string, user: string): Promise<string> {
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
+    signal: AbortSignal.timeout(30_000),
     headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({
       model: ANTHROPIC_MODEL,
@@ -102,7 +105,7 @@ function etDate(d = new Date()): string {
   return `${p.year}-${p.month}-${p.day}`;
 }
 
-// ---------- voice (verbatim from social-auto-post) ----------
+// ---------- voice ----------
 const VOICE_RULES = `You write posts for @BetwithGary as "Gary", a sharp, confident sports-betting handicapper who calls and sweats every game. Voice: the sharpest friend in the group chat. Sharp, honest, in it with you. ABSOLUTE RULE: the provided rationale/stats are GROUND TRUTH (it is 2026, past your training data). Never correct player-team assignments or import outside facts. Only ensure internal consistency (right stat to the right player to the right team).
 HARD RULES (breaking any one fails the post):
 (1) ZERO emojis. Not one, ever. No sport emojis, no symbols, no arrows, nothing.
@@ -114,7 +117,7 @@ HARD RULES (breaking any one fails the post):
 (7) Do not stack inflated adjectives (devastating, absolute, total, completely, massive, elite). State the number and let it land.
 (8) No corny capper or hype lines, and no motivational filler. Banned: "Who's riding?", "Lock it in", "Let's get it", "tail me", "free money", "that is how you build a bankroll", "that's how it's done", "trust the process", "the work pays off", "we're cooking", and anything like them.
 (9) No marketing or corporate voice. Do not narrate in third-person brand voice. Write in the FIRST PERSON as Gary.
-(10) Gary is a CHARACTER, never an AI. NEVER reveal or even hint that Gary is an AI, a model, an algorithm, automated, software, "trained", or running "simulations"/"data". Phrases like "I modeled this", "my model", "my simulations", "my data", "as an AI" are BANNED. Stay fully in character.
+(10) Gary is the character voice of an AI sports-analysis product. First-person sports opinions are fine. Never claim human credentials, attendance at a game, personal experiences, actual wagers, or a sportsbook relationship. If identity comes up, be truthful about Gary being AI.
 (11) Every sentence must carry a concrete fact: a number, a player or team name, a result, or a genuine thought. Dry and specific beats smooth and padded.
 STYLE: specific player names and real numbers. Use contractions. Sentence fragments are good. Vary sentence length. Sound like a text to a friend, not an article or a brand account. Always return ONLY valid JSON as instructed.`;
 
@@ -133,20 +136,21 @@ Return ONLY JSON: {"reply":"..."} or {"skip":true}.`;
 // ---------- generate ----------
 type Cand = { id: string; author: string; name: string; text: string; eng: number; createdMs: number; matched: any | null };
 
-function teamWords(team: string): string[] {
-  return String(team ?? "").toLowerCase().split(/\s+/).filter((w) => w.length > 3);
-}
-
 async function generate(dryRun: boolean) {
   const today = etDate();
 
-  const { data: dpRows } = await sb.from("daily_picks").select("picks").eq("date", today);
-  const picks: any[] = (dpRows?.[0]?.picks ?? []).filter((p: any) => p.awayTeam && p.homeTeam);
+  const [{ data: dpRows, error: dpErr }, { data: weeklyRows, error: weeklyErr }] = await Promise.all([
+    sb.from("daily_picks").select("picks").eq("date", today),
+    sb.from("weekly_nfl_picks").select("week_start,picks").lte("week_start", today).order("week_start", { ascending: false }).limit(1),
+  ]);
+  if (dpErr || weeklyErr) throw new Error("PICK_SOURCE_UNAVAILABLE");
+  const picks: any[] = mergeSocialPickSources((dpRows ?? []).flatMap((row) => row.picks ?? []), weeklyRows?.[0], today)
+    .filter((p: any) => p.awayTeam && p.homeTeam);
 
   const { data: targets, error: tErr } = await sb.from("engagement_targets").select("handle").eq("active", true);
   if (tErr) throw tErr;
   const handles = (targets ?? []).map((t: any) => String(t.handle));
-  if (!handles.length) return { generated: 0, reason: "no active engagement_targets" };
+  if (!handles.length) return { generated: 0, preserved_existing: true, reason: "no active engagement_targets", health: { status: "ok", issues: [] } };
 
   // Chunk handles into (from:a OR from:b ...) queries under X's 512-char query limit.
   const chunks: string[][] = [];
@@ -179,9 +183,7 @@ async function generate(dryRun: boolean) {
     const m = t.public_metrics ?? {};
     const eng = (m.like_count ?? 0) + 2 * (m.reply_count ?? 0) + 3 * (m.retweet_count ?? 0);
     if (eng < MIN_ENG) continue;
-    const lower = String(t.text ?? "").toLowerCase();
-    const matched = picks.find((p: any) =>
-      [...teamWords(p.awayTeam), ...teamWords(p.homeTeam)].some((w) => lower.includes(w))) ?? null;
+    const matched = findEngagementPick(t.text, picks);
     const u = users[t.author_id] ?? {};
     cands.push({
       id: String(t.id), author: String(u.username ?? ""), name: String(u.name ?? ""),
@@ -198,35 +200,31 @@ async function generate(dryRun: boolean) {
     if (picked.length >= DRAFT_CANDIDATES) break;
   }
 
-  const rows: any[] = [];
-  for (const c of picked) {
-    if (rows.length >= SHEET_MAX) break;
-    try {
+  const batch = await collectEngagementDrafts(picked, async (c: Cand) => {
       const user = `TARGET TWEET by @${c.author} (${c.name}):\n"${c.text.slice(0, 600)}"\n\n${c.matched
         ? `GARY PICK on this game (ground truth): ${c.matched.pick}${c.matched.odds ? ` (${c.matched.odds})` : ""} | ${c.matched.awayTeam} @ ${c.matched.homeTeam} | ${String(c.matched.league ?? "").toUpperCase()}\nRATIONALE (real, use at most ONE number from it):\n${String(c.matched.rationale ?? "").slice(0, 1500)}`
         : "NO GARY PICK relates to this tweet. React only to the tweet's own content."}`;
       const out = parseJsonBlock(await callLLM(VOICE_RULES + "\n" + SHEET_RULES, user));
-      if (out.skip) continue;
+      if (out.skip) return null;
       const draft = clean(out.reply);
-      if (!draft || draft.length > 255) continue;
-      rows.push({
+      if (!draft || draft.length > 240 || /https?:|www\.|[@#]/i.test(draft)) throw new Error("INVALID_DRAFT");
+      return {
         sheet_date: today, author: c.author, author_name: c.name, tweet_id: c.id,
         tweet_text: c.text.slice(0, 500), eng: c.eng, matched_pick: c.matched?.pick ?? null,
         draft, url: `https://x.com/${c.author}/status/${c.id}`,
-      });
-    } catch (e) {
-      console.error(`draft failed for @${c.author}: ${String(e)}`);
-    }
-  }
+      };
+  }, SHEET_MAX);
 
-  if (dryRun) return { dry_run: true, candidates: cands.length, sheet: rows };
+  const summary = { date: today, candidates: cands.length, attempted: batch.attempted,
+    skipped: batch.skipped, failed: batch.failed, health: batch.health };
+  if (dryRun) return { ...summary, dry_run: true, sheet: batch.rows };
 
-  await sb.from("engagement_sheet").delete().eq("sheet_date", today);
-  if (rows.length) {
-    const { error: insErr } = await sb.from("engagement_sheet").insert(rows);
-    if (insErr) throw insErr;
-  }
-  return { generated: rows.length, candidates: cands.length, date: today };
+  const stored = await persistEngagementDrafts(today, batch, async (date: string, rows: any[]) => {
+    const { data, error } = await sb.rpc("replace_engagement_sheet", { p_date: date, p_rows: rows });
+    if (error) throw new Error("DRAFT_STORAGE_FAILED");
+    return data;
+  });
+  return { ...summary, ...stored };
 }
 
 // ---------- view ----------
@@ -307,11 +305,12 @@ Deno.serve(async (req) => {
     }
     if (url.searchParams.get("generate") === "1") {
       const result = await generate(url.searchParams.get("dry_run") === "1");
-      if (url.searchParams.get("redirect") === "1") {
+      const degraded = result.health.status !== "ok";
+      console.log(JSON.stringify({ ...result, sheet: undefined }));
+      if (!degraded && url.searchParams.get("redirect") === "1") {
         return new Response(null, { status: 303, headers: { Location: `${url.pathname}?token=${encodeURIComponent(token)}` } });
       }
-      console.log(JSON.stringify(result).slice(0, 400));
-      return Response.json(result);
+      return Response.json(result, { status: degraded ? 503 : 200 });
     }
     return await view(token);
   } catch (e) {
