@@ -11,6 +11,7 @@
 import { mkdir, readFile, rename, rmdir, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 
 // The cloud live-score poll can consume two starts/minute when MLB and
 // football overlap. Keep local workers to the remaining three slots on the
@@ -23,8 +24,8 @@ const LOCK_STALE_MS = 20_000;
 const LOCK_TIMEOUT_MS = 30_000;
 const MAX_REASONABLE_BACKLOG_MS = 5 * 60_000;
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function sleep(ms, signal) {
+  return signal ? delay(ms, undefined, { signal }) : new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function gateDisabled() {
@@ -54,9 +55,10 @@ export function reserveBdlSlot(state, now = Date.now(), intervalMs = BDL_LOCAL_R
   };
 }
 
-async function acquireLock(lockPath) {
+async function acquireLock(lockPath, signal) {
   const started = Date.now();
   for (;;) {
+    signal?.throwIfAborted();
     try {
       await mkdir(lockPath);
       return;
@@ -74,7 +76,7 @@ async function acquireLock(lockPath) {
       if (Date.now() - started > LOCK_TIMEOUT_MS) {
         throw new Error('Timed out acquiring the shared BDL request gate');
       }
-      await sleep(40 + Math.floor(Math.random() * 40));
+      await sleep(40 + Math.floor(Math.random() * 40), signal);
     }
   }
 }
@@ -98,7 +100,8 @@ async function writeState(root, statePath, state) {
  * Reserve and wait for one account-wide local BDL request start.
  * Throws on coordination failure so callers fail closed instead of bursting.
  */
-export async function waitForBdlRequestSlot(label = 'request') {
+export async function waitForBdlRequestSlot(label = 'request', { signal } = {}) {
+  signal?.throwIfAborted();
   if (gateDisabled()) return 0;
 
   const gate = paths();
@@ -111,12 +114,15 @@ export async function waitForBdlRequestSlot(label = 'request') {
   // a caller is actually ready to start a transport. This avoids phantom
   // multi-minute backlogs after a cancelled desk.
   for (;;) {
-    await acquireLock(gate.lock);
+    signal?.throwIfAborted();
+    await acquireLock(gate.lock, signal);
     let waitMs = 0;
     let claimed = false;
     try {
+      signal?.throwIfAborted();
       const now = Date.now();
       const current = await readState(gate.state);
+      signal?.throwIfAborted();
       const recordedNext = Number(current?.nextAt);
       const validNext = Number.isFinite(recordedNext)
         && recordedNext >= now - BDL_LOCAL_REQUEST_INTERVAL_MS
@@ -137,12 +143,13 @@ export async function waitForBdlRequestSlot(label = 'request') {
       try { await rmdir(gate.lock); } catch {}
     }
 
+    signal?.throwIfAborted();
     if (claimed) return Date.now() - started;
     if (!announced && waitMs > 250) {
       console.log(`[Ball Don't Lie] Shared rate gate: ${label} waits ${(waitMs / 1000).toFixed(1)}s`);
       announced = true;
     }
-    await sleep(Math.max(50, waitMs + Math.floor(Math.random() * 50)));
+    await sleep(Math.max(50, waitMs + Math.floor(Math.random() * 50)), signal);
   }
 }
 

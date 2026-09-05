@@ -55,7 +55,8 @@ try {
     `${r.returns.length} return(s), ${r.form.length} form, ` +
     `${r.run_profile.length} run-profile, ${r.weather.length} weather, ` +
     `lines=${r.any_lines ? 'posted' : 'open soon'}, ` +
-    `countdown=${r.countdown_sport || 'none'}`,
+    `countdown=${r.countdown_sport || 'none'}, ` +
+    `arms=${r.arms?.status || 'unknown'} (${r.arms?.available ?? 0}/${r.arms?.eligible ?? 0} paired)`,
   );
   process.exit(0);
 } catch (e) {

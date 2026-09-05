@@ -4,22 +4,25 @@ const mocks = vi.hoisted(() => ({
   buildLeagueRows: vi.fn(),
   axios: vi.fn(),
   axiosGet: vi.fn(),
+  getMlbSchedule: vi.fn(),
+  getMlbTeams: vi.fn(),
+  createModelSession: vi.fn(),
+  sendToSessionWithRetry: vi.fn(),
+  sports: [],
 }));
 
 vi.mock('../../src/services/dailySlateService.js', () => ({
   buildLeagueRows: mocks.buildLeagueRows,
-  SLATE_SPORTS_LIST: [
-    { key: 'basketball_nba', league: 'NBA' },
-    { key: 'americanfootball_nfl', league: 'NFL' },
-  ],
+  SLATE_SPORTS_LIST: mocks.sports,
   getETDateStr: (date) => date.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }),
 }));
 
 vi.mock('../../src/services/mlbStatsApiService.js', () => ({
-  getMlbSchedule: vi.fn().mockResolvedValue([]),
+  getMlbSchedule: mocks.getMlbSchedule,
   getMlbStandings: vi.fn().mockResolvedValue({ records: [] }),
-  getMlbTeams: vi.fn().mockResolvedValue([]),
+  getMlbTeams: mocks.getMlbTeams,
   getPitcherLastStarts: vi.fn().mockResolvedValue([]),
+  getPitcherMilbSeasonRaw: vi.fn().mockResolvedValue({ stats: [] }),
   getTeamVsHandSplits: vi.fn().mockResolvedValue(null),
 }));
 
@@ -39,13 +42,13 @@ vi.mock('../../src/services/ballDontLieService.js', () => ({
 }));
 
 vi.mock('../../src/services/agentic/orchestrator/orchestratorConfig.js', () => ({
-  DESK_FALLBACK_MODELS: [],
-  PROPS_DESK_MODEL: 'test-model',
+  DESK_FALLBACK_MODELS: ['anthropic-claude-opus-5', 'anthropic-claude-sonnet-5'],
+  PROPS_DESK_MODEL: 'codex-gpt-5.6-sol',
 }));
 
 vi.mock('../../src/services/agentic/orchestrator/sessionManager.js', () => ({
-  createModelSession: vi.fn(),
-  sendToSessionWithRetry: vi.fn(),
+  createModelSession: mocks.createModelSession,
+  sendToSessionWithRetry: mocks.sendToSessionWithRetry,
 }));
 
 vi.mock('axios', () => ({
@@ -83,6 +86,12 @@ const priorNfl = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.sports.splice(0, mocks.sports.length,
+    { key: 'basketball_nba', league: 'NBA' },
+    { key: 'americanfootball_nfl', league: 'NFL' });
+  mocks.getMlbSchedule.mockResolvedValue([]);
+  mocks.getMlbTeams.mockResolvedValue([]);
+  mocks.createModelSession.mockImplementation(async ({ modelName }) => ({ modelName }));
   mocks.axios.mockResolvedValue({ data: null });
   mocks.axiosGet.mockImplementation(async (url) => {
     if (url.includes('/tomorrow_board')) return { data: [{ board: [priorNfl] }] };
@@ -97,6 +106,49 @@ beforeEach(() => {
 });
 
 describe('tomorrow board source health', () => {
+  it('publishes fresh factual MLB rows when every voice provider is exhausted', async () => {
+    mocks.sports.splice(0, mocks.sports.length, { key: 'baseball_mlb', league: 'MLB' });
+    const freshMlb = {
+      league: 'MLB', bdl_game_id: 101,
+      away_team: 'St. Louis Cardinals', home_team: 'Cincinnati Reds',
+      commence_time: '2099-10-05T23:00:00.000Z',
+      ml_away: 125, ml_home: -140, total: 8.5,
+    };
+    mocks.buildLeagueRows.mockResolvedValue([freshMlb]);
+    mocks.getMlbTeams.mockResolvedValue([
+      { id: 138, name: 'St. Louis Cardinals', abbreviation: 'STL' },
+      { id: 113, name: 'Cincinnati Reds', abbreviation: 'CIN' },
+    ]);
+    mocks.getMlbSchedule.mockResolvedValue([{
+      gamePk: 9001, gameDate: freshMlb.commence_time,
+      teams: {
+        away: { team: { id: 138, name: freshMlb.away_team }, probablePitcher: { id: 501, fullName: 'Away Starter' } },
+        home: { team: { id: 113, name: freshMlb.home_team }, probablePitcher: { id: 502, fullName: 'Home Starter' } },
+      },
+    }]);
+    mocks.sendToSessionWithRetry.mockImplementation(async ({ modelName }) => {
+      throw new Error(modelName.startsWith('codex-') ? "You've hit your usage limit" : 'Your credit balance is too low');
+    });
+    const startedAt = Date.now();
+    const result = await writeTomorrowBoard('2099-10-05');
+    expect(result).toMatchObject({
+      game_count: 1, source_health: 'healthy', failures: [],
+      arms: { status: 'degraded', eligible: 1, available: 0, missing_game_keys: ['bdl:101'] },
+    });
+    expect(mocks.axios).toHaveBeenCalledOnce();
+    const posted = mocks.axios.mock.calls[0][0].data;
+    expect(posted.date).toBe('2099-10-05');
+    expect(Date.parse(posted.updated_at)).toBeGreaterThanOrEqual(startedAt);
+    expect(posted.board).toEqual([expect.objectContaining({
+      league: 'MLB', bdl_game_id: 101, commence_time: freshMlb.commence_time,
+      ml_away: 125, ml_home: -140, total: 8.5,
+      arms_take: null, arms_take_status: 'unavailable',
+    })]);
+    expect(posted.starters.map((row) => row.full_name)).toEqual(['Away Starter', 'Home Starter']);
+    expect(mocks.createModelSession.mock.calls.map(([options]) => options.modelName))
+      .toEqual(['codex-gpt-5.6-sol', 'anthropic-claude-opus-5']);
+  });
+
   it('merges only failed leagues from last-good data', () => {
     const merged = mergeFailedTomorrowLeagues(
       [freshNba],

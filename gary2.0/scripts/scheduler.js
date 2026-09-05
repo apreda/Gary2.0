@@ -351,20 +351,33 @@ async function fetchGamesForETDate(sportKey, etDateStr, { gameIds = [] } = {}) {
           .map(String),
       )].sort()
     : [];
-  const params = exactFootballGameIds.length > 0
-    ? { game_ids: exactFootballGameIds, per_page: 100 }
-    : { dates, per_page: 100 };
+  // /games supports dates[], but not game_ids[]. An unsupported ID filter
+  // returns the historical catalog; NCAAF then follows 100 cursor pages.
+  // Refresh this bounded date window and match requested IDs locally. A
+  // missing ID stays in retryGameIds below, never becomes another matchup.
+  const params = {
+    dates,
+    per_page: 100,
+    ...(exactFootballGameIds.length > 0 ? { paginationMaxPages: 5 } : {}),
+  };
   // BDL's NFL games endpoint defaults away from preseason. August would then
   // look like a dark league even while real games are on the board.
-  if (sportKey === 'americanfootball_nfl' && exactFootballGameIds.length === 0) {
+  if (sportKey === 'americanfootball_nfl') {
     params.season_type = [1, 2, 3];
   }
   let games;
+  // Includes shared-gate waits, every cursor page and retry backoff. A page
+  // count alone cannot bound a waiter that repeatedly loses a request slot.
+  const lookupController = new AbortController();
+  const lookupTimer = setTimeout(() => lookupController.abort(
+    new DOMException('Schedule lookup exceeded its 120-second deadline', 'AbortError'),
+  ), 120_000);
   try {
     games = await ballDontLieService.getGames(
       sportKey,
       params,
       exactFootballGameIds.length > 0 ? 0 : 10,
+      { signal: lookupController.signal },
     );
   } catch (e) {
     const scope = exactFootballGameIds.length > 0
@@ -372,8 +385,14 @@ async function fetchGamesForETDate(sportKey, etDateStr, { gameIds = [] } = {}) {
       : dates.join(',');
     log(`  ❌ ${sportKey}: BDL fetch failed for ${scope}: ${e.message}`);
     return null; // null = transport failed; a result object may still carry exact pending IDs
+  } finally {
+    clearTimeout(lookupTimer);
   }
   if (!Array.isArray(games)) games = [];
+  if (supportsExactKickoffRetry && exactFootballGameIds.length > 0) {
+    const requestedIds = new Set(exactFootballGameIds);
+    games = games.filter((game) => game?.id != null && requestedIds.has(String(game.id)));
+  }
 
   const retryGameIds = [];
   let retryAll = false;

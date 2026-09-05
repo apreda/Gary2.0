@@ -36,6 +36,15 @@ describe('shared BDL request-gate scope', () => {
 
     expect(fetchFn).toHaveBeenCalledOnce();
     expect(mocks.waitForBdlRequestSlot).toHaveBeenCalledOnce();
-    expect(mocks.waitForBdlRequestSlot).toHaveBeenCalledWith(key);
+    expect(mocks.waitForBdlRequestSlot).toHaveBeenCalledWith(key, { signal: undefined });
+  });
+
+  it('forwards a bounded caller’s cancellation to the football gate', async () => {
+    const key = `americanfootball_ncaaf_games_bounded_scope_${Date.now()}`;
+    const controller = new AbortController();
+    const fetchFn = vi.fn(async () => [{ id: 2 }]);
+    await expect(getCachedOrFetch(key, fetchFn, 0, { signal: controller.signal })).resolves.toEqual([{ id: 2 }]);
+    expect(mocks.waitForBdlRequestSlot).toHaveBeenCalledWith(key, { signal: controller.signal });
+    expect(fetchFn).toHaveBeenCalledOnce();
   });
 });

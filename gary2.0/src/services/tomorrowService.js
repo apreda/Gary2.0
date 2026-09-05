@@ -15,8 +15,8 @@
  * single jsonb snapshot keyed on (date) keeps ranking logic out of Swift.
  *
  * Lanes are GROUNDED only — "—"/empty when source facts are genuinely
- * unposted, never fabricated. Data enrichments are best-effort; the generated
- * Arms read is the deliberate exception and must be complete before publish:
+ * unposted, never fabricated. Data and generated commentary enrichments are
+ * best-effort; unavailable commentary never blocks fresh factual board data:
  *   1. SLATE + LINES — reuses dailySlateService.buildLeagueRows for every slate
  *      sport at tomorrow's ET date, so the Tomorrow board never drifts from the
  *      Today slate. Lines null => board renders "—". any_lines=false when ZERO
@@ -63,6 +63,7 @@
  */
 
 import axios from 'axios';
+import { createHash } from 'node:crypto';
 import {
   buildLeagueRows,
   SLATE_SPORTS_LIST,
@@ -87,6 +88,7 @@ import {
 } from './agentic/orchestrator/orchestratorConfig.js';
 import { createModelSession, sendToSessionWithRetry } from './agentic/orchestrator/sessionManager.js';
 import { sourceFailure } from './sourceFailurePolicy.js';
+import { awaitWithSignal } from './agentic/orchestrator/requestCancellation.js';
 
 const supabaseUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -1647,9 +1649,8 @@ export function marqueeGameKeys(bigGames) {
 // THE ARMS, IN GARY'S VOICE (founder GO, Aug 4 2026): the scouting card opens
 // straight with the arms, and the arms SPEAK — two sentences from Gary on the
 // game's two starters, replacing the stat ladder. ONE batched call for the
-// whole slate on the props-lane model (bridge, $0 marginal). Publishing is
-// all-or-nothing for every game whose two probable starters are posted: an
-// incomplete response is retried per game and never overwrites a good board.
+// whole slate on the props-lane model (bridge, $0 marginal). Missing commentary
+// is explicit; it cannot prevent refreshed factual board data from publishing.
 // If only one probable is official, the page still gets an honest one-arm
 // read plus an explicit unannounced-starter sentence instead of losing the
 // entire section until a club makes its decision.
@@ -1705,12 +1706,32 @@ Your training data is old; the pitcher data provided is current — say nothing 
 
 For each game: TWO sentences on the game's two starting pitchers — whatever you'd actually say about these arms tonight. No emojis.`;
 
+function validArmsTake(take) {
+  return typeof take === 'string' && take.trim().length >= 40 && take.trim().length <= 420
+    && !take.includes('…') && !take.includes('...')
+    && !/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(take);
+}
+
+function armsProviderScope(modelName) {
+  if (modelName.startsWith('codex-')) return 'codex';
+  if (modelName.startsWith('anthropic-')) return 'anthropic-api';
+  return modelName;
+}
+
+function exhaustedArmsProvider(error) {
+  return /hit your usage limit|credit balance.{0,40}too low|insufficient[_ ]quota|insufficient credits|quota.{0,30}exhausted/i
+    .test(String(error?.message || ''));
+}
+
 /**
  * Attach `arms_take` to MLB board rows — one batched voice call, JSON out,
- * then focused retries for any missed game. Throws while any eligible game is
- * incomplete so the caller cannot silently publish an old/template treatment.
+ * then focused retries for missing games within one optional time budget.
+ * Cached voice requires the same exact game and complete input fingerprint.
  */
-export async function attachArmsTakes(board, starters) {
+export async function attachArmsTakes(board, starters, {
+  existingBoard = [],
+  timeoutMs = Number(process.env.GARY_BOARD_ARMS_TIMEOUT_MS) || 3 * 60 * 1000,
+} = {}) {
   const repeatedMatchups = repeatedMatchupKeys(board);
   const starterFor = (row, team) => {
     const matchup = rowMatchup(row);
@@ -1737,8 +1758,12 @@ export async function attachArmsTakes(board, starters) {
   };
   const jobs = [];
   let partialCount = 0;
+  let cachedCount = 0;
   for (const r of board) {
     if (r.league !== 'MLB') continue;
+    r.arms_take = null;
+    r.arms_take_status = 'unavailable';
+    delete r.arms_input_sha;
     const awayStarter = starterFor(r, r.away_abbr);
     const homeStarter = starterFor(r, r.home_abbr);
     const a = armsFactLine(awayStarter);
@@ -1751,21 +1776,51 @@ export async function attachArmsTakes(board, starters) {
       const known = awayStarter || homeStarter;
       const missingTeam = a ? (r.home_team || r.home_abbr) : (r.away_team || r.away_abbr);
       r.arms_take = partialArmsTake(known, missingTeam);
+      r.arms_take_status = 'partial';
       partialCount++;
       continue;
     }
     const matchup = rowMatchup(r);
-    jobs.push({
+    const job = {
       row: r,
       matchup,
       gameKey: rowGameIdentity(r),
       facts: [a, h].filter(Boolean).join('\n'),
-    });
+    };
+    job.inputSha = createHash('sha256').update(JSON.stringify([
+      ARMS_VOICE_CONTRACT, job.gameKey, r.commence_time,
+      awayStarter.person_id ?? null, homeStarter.person_id ?? null, job.facts,
+    ])).digest('hex');
+    r.arms_input_sha = job.inputSha;
+    const prior = existingBoard.find((row) => rowGameIdentity(row) === job.gameKey
+      && row.arms_input_sha === job.inputSha && validArmsTake(row.arms_take));
+    if (prior) {
+      r.arms_take = prior.arms_take;
+      r.arms_take_status = 'available';
+      cachedCount++;
+    }
+    jobs.push(job);
   }
-  if (!jobs.length) {
+  const summary = () => ({
+    status: jobs.some((job) => !job.row.arms_take) ? 'degraded' : 'complete',
+    eligible: jobs.length,
+    available: jobs.filter((job) => Boolean(job.row.arms_take)).length,
+    cached: cachedCount,
+    partial: partialCount,
+    missing_game_keys: jobs.filter((job) => !job.row.arms_take).map((job) => job.gameKey),
+  });
+  if (jobs.every((job) => job.row.arms_take)) {
     if (partialCount) console.log(`[TomorrowBoard] arms takes attached: 0 paired + ${partialCount} partial`);
-    return;
+    return summary();
   }
+
+  const models = [...new Set([PROPS_DESK_MODEL, ...DESK_FALLBACK_MODELS])];
+  const exhaustedScopes = new Set();
+  const availableModels = () => models.filter((model) => !exhaustedScopes.has(armsProviderScope(model)));
+  const controller = new AbortController();
+  const { signal } = controller;
+  const budgetMs = Math.min(5 * 60 * 1000, Math.max(1, Number(timeoutMs) || 3 * 60 * 1000));
+  const budgetTimer = setTimeout(() => controller.abort(new Error('optional arms commentary time budget exhausted')), budgetMs);
 
   const requestTakes = async (pending) => {
     const userMessage = `${pending.map((j) => `## GAME KEY: ${j.gameKey}\nMATCHUP: ${j.matchup}\n${j.facts}`).join('\n\n')}
@@ -1782,17 +1837,20 @@ One entry per game listed above. Copy each GAME KEY exactly into game_key.`;
     // subscription and its tank is empty, every retry hits the same wall and
     // the entire day stays blank. Use the same independent provider chain as
     // Gary's desks: codex GPT Pro bridge -> metered Anthropic API rungs.
-    const models = [...new Set([PROPS_DESK_MODEL, ...DESK_FALLBACK_MODELS])];
+    signal.throwIfAborted();
     const failures = [];
-    for (const modelName of models) {
+    for (const modelName of availableModels()) {
+      // A prior rung can establish that this shared account has no capacity.
+      if (exhaustedScopes.has(armsProviderScope(modelName))) continue;
       try {
         const session = await createModelSession({
           modelName,
           systemPrompt: ARMS_VOICE_CONTRACT,
           tools: [],
           thinkingLevel: 'low',
+          signal,
         });
-        const res = await sendToSessionWithRetry(session, userMessage, {});
+        const res = await awaitWithSignal(() => sendToSessionWithRetry(session, userMessage, { signal }), signal);
         const m = String(res.content || '').match(/```json\s*([\s\S]*?)```/i)
           || String(res.content || '').match(/(\[[\s\S]*\])/);
         if (!m) throw new Error('no JSON in response');
@@ -1803,6 +1861,8 @@ One entry per game listed above. Copy each GAME KEY exactly into game_key.`;
         }
         return entries;
       } catch (e) {
+        signal.throwIfAborted();
+        if (exhaustedArmsProvider(e)) exhaustedScopes.add(armsProviderScope(modelName));
         failures.push(`${modelName}: ${e.message}`);
         console.warn(`[TomorrowBoard] arms provider ${modelName} failed: ${e.message}`);
       }
@@ -1811,12 +1871,6 @@ One entry per game listed above. Copy each GAME KEY exactly into game_key.`;
   };
 
   const matchupKeyOf = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const validTake = (take) => typeof take === 'string'
-    && take.trim().length >= 40
-    && take.trim().length <= 420
-    && !take.includes('…')
-    && !take.includes('...')
-    && !/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(take);
   const attachEntries = (pending, entries) => {
     const takeByGameKey = new Map();
     const takeByMatchup = new Map();
@@ -1832,12 +1886,12 @@ One entry per game listed above. Copy each GAME KEY exactly into game_key.`;
           if (takeByGameKey.has(responseKey)) duplicateGameKeys.add(responseKey);
           else takeByGameKey.set(responseKey, e.take.trim());
         }
-        if (e.matchup) {
+        if (!responseKey && e.matchup) {
           const responseMatchup = matchupKeyOf(e.matchup);
           if (takeByMatchup.has(responseMatchup)) duplicateMatchups.add(responseMatchup);
           else takeByMatchup.set(responseMatchup, e.take.trim());
         }
-        inOrder.push(e.take.trim());
+        if (!responseKey && !e.matchup) inOrder.push(e.take.trim());
       }
     }
     const matchupCounts = new Map();
@@ -1852,36 +1906,45 @@ One entry per game listed above. Copy each GAME KEY exactly into game_key.`;
         ?? (matchupCounts.get(matchupKey) === 1 && !duplicateMatchups.has(matchupKey)
           ? takeByMatchup.get(matchupKey)
           : undefined)
-        // An isolated retry cannot cross-attach to another game.
+        // Accept a legacy identity-free singleton only on an isolated retry.
+        // An explicit different game key or matchup must never attach here.
         ?? (pending.length === 1 && inOrder.length === 1 ? inOrder[i] : undefined);
-      if (validTake(take)) j.row.arms_take = take.trim();
+      if (validArmsTake(take)) {
+        j.row.arms_take = take.trim();
+        j.row.arms_take_status = 'available';
+      }
     }
   };
 
   try {
-    attachEntries(jobs, await requestTakes(jobs));
-  } catch (e) {
-    console.warn(`[TomorrowBoard] batched arms write failed: ${e.message}; retrying per game`);
-  }
+    try {
+      const pending = jobs.filter((job) => !job.row.arms_take);
+      attachEntries(pending, await requestTakes(pending));
+    } catch (e) {
+      console.warn(`[TomorrowBoard] batched arms write failed: ${e.message}`);
+    }
 
-  // A malformed/missing entry in a large batch should not poison the slate.
-  // Retry each miss in isolation twice; the session send already performs its
-  // own network/server retry policy inside each attempt.
-  for (const job of jobs.filter((j) => !j.row.arms_take)) {
-    for (let attempt = 1; attempt <= 2 && !job.row.arms_take; attempt++) {
-      try {
-        attachEntries([job], await requestTakes([job]));
-      } catch (e) {
-        console.warn(`[TomorrowBoard] arms retry ${attempt}/2 failed for ${job.matchup}: ${e.message}`);
+    // Retry malformed/missing entries, but never re-request an exhausted
+    // account for every game or extend the single optional time budget.
+    for (const job of jobs.filter((j) => !j.row.arms_take)) {
+      for (let attempt = 1; attempt <= 2 && !job.row.arms_take && !signal.aborted && availableModels().length; attempt++) {
+        try {
+          attachEntries([job], await requestTakes([job]));
+        } catch (e) {
+          console.warn(`[TomorrowBoard] arms retry ${attempt}/2 failed for ${job.matchup}: ${e.message}`);
+        }
       }
     }
+  } finally {
+    clearTimeout(budgetTimer);
   }
 
-  const missed = jobs.filter((j) => !j.row.arms_take);
-  if (missed.length) {
-    throw new Error(`arms takes incomplete for ${missed.map((j) => `${j.matchup} (${j.gameKey})`).join(', ')}`);
+  const result = summary();
+  if (result.missing_game_keys.length) {
+    console.warn(`[TomorrowBoard] Optional arms commentary unavailable for ${result.missing_game_keys.length} game(s); factual board will publish with null takes`);
   }
-  console.log(`[TomorrowBoard] arms takes attached: ${jobs.length}/${jobs.length} paired + ${partialCount} partial`);
+  console.log(`[TomorrowBoard] arms takes attached: ${result.available}/${jobs.length} paired (${cachedCount} exact-input cached) + ${partialCount} partial`);
+  return result;
 }
 
 /**
@@ -2178,10 +2241,9 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
   } catch (e) {
     console.warn(`[TomorrowBoard] rail extras failed (honest-empty): ${e.message}`);
   }
-  // THE ARMS IN GARY'S VOICE (Aug 4) — two sentences per game on the two
-  // posted starters. This intentionally throws before the upsert if generation
-  // is incomplete, preserving the last good snapshot for the scheduler retry.
-  await attachArmsTakes(board, starters);
+  // Commentary is optional. Fresh schedules, lines and starters still publish
+  // when the model is unavailable; old takes require matching exact inputs.
+  const arms = await attachArmsTakes(board, starters, { existingBoard: existingBoard || [] });
   const any_lines = board.some(
     (r) => r.spread != null || r.ml_home != null || r.ml_away != null || r.total != null,
   );
@@ -2264,6 +2326,7 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
     failures,
     source_health: failures.length > 0 ? 'degraded' : 'healthy',
     preserved_leagues: preservedLeagues,
+    arms,
   };
   if (failures.length > 0) throw new TomorrowBoardSourceError(result);
   return result;

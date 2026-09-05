@@ -9,6 +9,7 @@ import {
   writeSharedBdlCache,
 } from './bdlSharedCache.js';
 import { decodeBdlRows, decodeBdlSdkItem, decodeBdlSdkRows } from './bdlResponse.js';
+import { setTimeout as retryDelay } from 'node:timers/promises';
 
 // Set cache TTL (5 minutes for playoff data)
 const TTL_MINUTES = 5;
@@ -289,7 +290,8 @@ function describeNetworkError(err) {
   return String(err?.cause?.code || err?.code || err?.cause?.message || err?.message || err);
 }
 
-export async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES) {
+export async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES, { signal } = {}) {
+  signal?.throwIfAborted();
   const now = Date.now();
 
   // Fresh cache hit
@@ -306,6 +308,7 @@ export async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES) {
   // football keys, plus MLB player splits/PvP (the Aug-24 429-storm families).
   if (isSharedBdlCacheKey(key)) {
     const shared = await readSharedBdlCache(key, now);
+    signal?.throwIfAborted();
     if (shared.hit) {
       cacheMap.set(key, { data: shared.data, expiry: shared.expiry });
       return shared.data;
@@ -314,7 +317,9 @@ export async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES) {
 
   // Single-flight: if another caller is already fetching the same key,
   // wait on their promise instead of issuing a duplicate request.
-  if (inflight.has(key)) {
+  // A caller with its own deadline must own its transport, rather than wait
+  // on another request whose gate/HTTP calls cannot be cancelled by it.
+  if (!signal && inflight.has(key)) {
     return inflight.get(key);
   }
 
@@ -334,20 +339,26 @@ export async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES) {
     let netAttempt = 0;
     for (;;) {
       try {
+        signal?.throwIfAborted();
         if (isFootballBdlCacheKey(key)) {
           // Football only: the 3/min pacing gate predates the paid tier and
           // MLB volume would starve behind it. MLB shared keys skip the gate
           // but still re-check the shared cache after any retry sleep below.
-          await waitForBdlRequestSlot(key);
+          await waitForBdlRequestSlot(key, { signal });
         }
         if (isSharedBdlCacheKey(key)) {
           // A sibling may have filled the shared cache while this process
           // waited or slept. Re-check immediately before the real transport.
           const shared = await readSharedBdlCache(key);
+          signal?.throwIfAborted();
           if (shared.hit) return shared.data;
         }
-        return await fetchFn();
+        signal?.throwIfAborted();
+        const data = await fetchFn();
+        signal?.throwIfAborted();
+        return data;
       } catch (err) {
+        signal?.throwIfAborted();
         const status = err?.response?.status ?? err?.status;
         const msg = (err?.message || err?.response?.data?.error || '').toString();
         const isRateLimit = status === 429 || /too many requests/i.test(msg);
@@ -355,14 +366,16 @@ export async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES) {
           const delay = RATE_LIMIT_BACKOFF_MS[rateLimitAttempt];
           rateLimitAttempt += 1;
           console.warn(`[Ball Don't Lie] 429 on ${key} — retry ${rateLimitAttempt}/${RATE_LIMIT_BACKOFF_MS.length} in ${delay}ms`);
-          await new Promise(r => setTimeout(r, delay));
+          if (signal) await retryDelay(delay, undefined, { signal });
+          else await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
         if (!isRateLimit && isTransientNetworkError(err) && netAttempt < NETWORK_BACKOFF_MS.length) {
           const delay = NETWORK_BACKOFF_MS[netAttempt];
           netAttempt += 1;
           console.warn(`[Ball Don't Lie] transient network error on ${key} (${describeNetworkError(err)}) — retry ${netAttempt}/${NETWORK_BACKOFF_MS.length} in ${delay}ms`);
-          await new Promise(r => setTimeout(r, delay));
+          if (signal) await retryDelay(delay, undefined, { signal });
+          else await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
         throw err;
@@ -372,16 +385,17 @@ export async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES) {
 
   const promise = fetchWithRetry()
     .then(async data => {
+      signal?.throwIfAborted();
       const expiry = Date.now() + (ttlMinutes * 60 * 1000);
       cacheMap.set(key, { data, expiry });
       await writeSharedBdlCache(key, data, ttlMinutes);
       return data;
     })
     .finally(() => {
-      inflight.delete(key);
+      if (inflight.get(key) === promise) inflight.delete(key);
     });
 
-  inflight.set(key, promise);
+  if (!signal) inflight.set(key, promise);
   return promise;
 }
 
@@ -3461,10 +3475,20 @@ const ballDontLieService = {
     }
   },
 
-  async getGames(sportKey, params = {}, ttlMinutes = 10) {
+  async getGames(sportKey, params = {}, ttlMinutes = 10, { signal } = {}) {
+    signal?.throwIfAborted();
     try {
       const cacheKey = `${sportKey}_games_${JSON.stringify(params)}`;
       const fetchGames = async (requestParams) => {
+        // A caller refreshing a bounded date window can fail closed earlier
+        // if a provider ignores its filters. This is transport policy, never
+        // a provider query parameter or permission to publish partial pages.
+        const maxPages = requestParams?.paginationMaxPages ?? 100;
+        if (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > 100) {
+          throw new Error('games paginationMaxPages must be an integer from 1 to 100');
+        }
+        requestParams = { ...requestParams };
+        delete requestParams.paginationMaxPages;
         const sport = this._getSportClient(sportKey);
         const endpointMap = {
           icehockey_nhl: 'nhl/v1/games',
@@ -3476,7 +3500,10 @@ const ballDontLieService = {
         };
 
         const fetchPage = async (pageParams) => {
-          if (sport?.getGames) {
+          signal?.throwIfAborted();
+          // The installed SDK has no cancellation argument. A bounded read
+          // uses the existing HTTP transport so its deadline reaches fetch.
+          if (sport?.getGames && !signal) {
             const resp = await sport.getGames(pageParams);
             const rows = decodeBdlSdkRows(resp, `${sportKey} games page`);
             return {
@@ -3489,12 +3516,15 @@ const ballDontLieService = {
           if (!path) throw new Error('getGames not supported');
           const qs = buildQuery(pageParams);
           const url = `https://api.balldontlie.io/${path}${qs}`;
-          const resp = await fetch(url, { headers: { Authorization: API_KEY }, signal: AbortSignal.timeout(BDL_TIMEOUT_MS) });
+          const httpTimeout = AbortSignal.timeout(BDL_TIMEOUT_MS);
+          const resp = await fetch(url, { headers: { Authorization: API_KEY }, signal: signal ? AbortSignal.any([signal, httpTimeout]) : httpTimeout });
+          signal?.throwIfAborted();
           if (!resp.ok) {
             const text = await resp.text().catch(() => '');
             throw new Error(`HTTP ${resp.status} ${text}`);
           }
           const json = await resp.json();
+          signal?.throwIfAborted();
           return {
             rows: decodeBdlRows(json, `${sportKey} games page`),
             nextCursor: json?.meta?.next_cursor ?? null,
@@ -3517,10 +3547,11 @@ const ballDontLieService = {
         let pageCount = 0;
 
         for (;;) {
+          signal?.throwIfAborted();
           if (pageCount > 0) {
             // getCachedOrFetch reserves the first transport. Each additional
             // page must reserve its own account-wide slot as well.
-            await waitForBdlRequestSlot(`${cacheKey}:page:${pageCount + 1}`);
+            await waitForBdlRequestSlot(`${cacheKey}:page:${pageCount + 1}`, { signal });
           }
           const pageParams = cursor == null
             ? { ...requestParams }
@@ -3536,8 +3567,8 @@ const ballDontLieService = {
           }
           seenCursors.add(cursorKey);
           cursor = page.nextCursor;
-          if (pageCount >= 100) {
-            throw new Error('NCAAF games pagination exceeded 100 pages');
+          if (pageCount >= maxPages) {
+            throw new Error(`${sportKey} games pagination exceeded ${maxPages} pages`);
           }
         }
 
@@ -3555,8 +3586,8 @@ const ballDontLieService = {
           });
       };
       return await getCachedOrFetch(cacheKey, async () => {
-        return fetchFootballGamesBatched(sportKey, params, fetchGames);
-      }, ttlMinutes);
+        return signal ? fetchGames(params) : fetchFootballGamesBatched(sportKey, params, fetchGames);
+      }, ttlMinutes, { signal });
     } catch (e) {
       console.error(`[Ball Don't Lie] ${sportKey} getGames error:`, e.message);
       throw e;
