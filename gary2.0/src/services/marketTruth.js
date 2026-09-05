@@ -29,3 +29,20 @@ export function americanImpliedProbability(value) {
     ? (-price) / ((-price) + 100)
     : 100 / (price + 100);
 }
+
+/** Football's game lane selects a spread ticket. A model cannot supply a
+ * missing sportsbook line or price; retry the data on the next scheduled run. */
+export function footballMarketUnavailable(game = {}, sport = '') {
+  if (!/^(?:americanfootball_)?(?:nfl|ncaaf)$/i.test(sport)) return null;
+  const pricedSide = ['home', 'away'].some(side => {
+    const price = finiteMarketNumber(game[`spread_${side}_odds`]);
+    return spreadForSide(game, side) !== null && Number.isInteger(price) && Math.abs(price) >= 100;
+  });
+  return pricedSide ? null : {
+    error: 'No verified priced football spread. Refresh sportsbook data on the next scheduled attempt.',
+    code: 'market_unavailable', retryModel: false,
+  };
+}
+
+export const shouldRetryPickWithModel = result => result?.code !== 'market_unavailable'
+  && Boolean(result?.error || !result?.pick);

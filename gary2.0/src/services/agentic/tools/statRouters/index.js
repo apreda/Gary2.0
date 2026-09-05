@@ -5,6 +5,7 @@ import { nbaFetchers } from './nbaFetchers.js';
 import { nflFetchers } from './nflFetchers.js';
 import { ncaafFetchers } from './ncaafFetchers.js';
 import { mlbFetchers } from './mlbFetchers.js';
+import { NCAAF_TOKEN_ALIASES } from '../ncaafTokenContract.js';
 
 // Merge all fetchers into one object — WITH OWNERSHIP (Jul 6 2026 audit).
 // Sports share structure, never each other's data paths: every token records
@@ -83,6 +84,7 @@ FETCHERS.DEFAULT = async (bdlSport, _home, _away) => ({
 // Aliases — maps alternate token names to real fetcher names.
 // Only kept where investigation prompts or investigation factors reference the alias name.
 const ALIASES = {
+  ...NCAAF_TOKEN_ALIASES,
   BACK_TO_BACK: 'REST_SITUATION',
   DIVISION_STANDING: 'STANDINGS',
   // NBA/shared

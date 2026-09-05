@@ -42,7 +42,7 @@ export function isInvestigationSufficient(toolCallHistory, iteration) {
  * @param {string} awayTeam - Away team name
  * @returns {string} Natural language summary
  */
-export function summarizeStatForContext(statResult, statToken, homeTeam, awayTeam) {
+export function summarizeStatForContext(statResult, statToken, homeTeam, awayTeam, sport = '') {
   if (!statResult) return `${statToken}: No data available`;
 
   // Check for error responses from fetchers — don't format empty objects as if they contain data
@@ -61,6 +61,21 @@ export function summarizeStatForContext(statResult, statToken, homeTeam, awayTea
         : `${label}: ${awayTeam} ${awayStr} | ${homeTeam} ${homeStr}`;
       return suffix ? `${line} ${suffix}` : line;
     };
+
+    // College adapters carry nested records, opponent results, ranks, samples
+    // and source limitations. The basketball-shaped formatter discarded those
+    // fields (including games_used/record and at_home/on_road). Preserve the
+    // complete college payload, including explicit unavailable values.
+    const collegeStats = (/ncaaf/i.test(sport) || statToken.startsWith('NCAAF_')) &&
+      !['INJURIES', 'NCAAF_INJURIES'].includes(statToken);
+    if (collegeStats ||
+        (statToken === 'RECENT_FORM' && (h.games_used != null || a.games_used != null)) ||
+        (statToken === 'HOME_AWAY_SPLITS' && ((typeof h === 'object' && 'at_home' in h) || (typeof a === 'object' && 'at_home' in a)))) {
+      const { home: homeData, away: awayData, ...context } = statResult;
+      return `${statToken}: ${JSON.stringify({ ...context,
+        ...(homeFirst ? { home: homeData, away: awayData } : { away: awayData, home: homeData })
+      }, null, 2)}`;
+    }
 
     switch (statToken) {
       case 'NET_RATING':
@@ -908,5 +923,3 @@ export function normalizeSportToLeague(sport) {
 
 // (RESEARCH_BRIEFING_FACTORS deleted Sep 1 2026 with the rest of the
 // researcher's corpse — nothing consumed it after the Aug 27 kill.)
-
-

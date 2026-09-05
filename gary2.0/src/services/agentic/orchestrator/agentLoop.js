@@ -15,6 +15,7 @@ import { getConstitution } from '../constitution/index.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, nflSeason, ncaafSeason } from '../../../utils/dateUtils.js';
 import { getTokensForSport, toolDefinitions } from '../tools/toolDefinitions.js';
+import { footballMarketUnavailable } from '../../marketTruth.js';
 
 function hasInvestigationCompleteMarker(text = '') {
   if (!text || typeof text !== 'string') return false;
@@ -55,18 +56,18 @@ export function validateBilateralCases(text = '', homeTeam = '', awayTeam = '', 
     }
 
     const genericCaseHeading = /(?:^|\n)\s*(?:#{1,6}\s*)?(?:\*\*)?CASE FOR [^\n:]+ COVERING THE SPREAD:(?:\*\*)?\s*(?=\n|$)/i;
-    const sectionLength = (heading) => {
+    const sectionText = (heading) => {
       const start = heading.index + heading[0].length;
       const remaining = input.slice(start);
       const nextHeading = genericCaseHeading.exec(remaining);
       const end = nextHeading ? start + nextHeading.index : input.length;
-      return input.slice(start, end).trim().length;
+      return input.slice(start, end).trim();
     };
-    const homeLen = sectionLength(homeHeading);
-    const awayLen = sectionLength(awayHeading);
+    const caseHome = sectionText(homeHeading), caseAway = sectionText(awayHeading);
+    const homeLen = caseHome.length, awayLen = caseAway.length;
 
     if (homeLen >= NBA_CASE_MIN_CHARS && awayLen >= NBA_CASE_MIN_CHARS) {
-      return { valid: true, reason: '', homeLen, awayLen };
+      return { valid: true, reason: '', homeLen, awayLen, caseHome, caseAway };
     }
 
     return {
@@ -166,6 +167,8 @@ function moneylinePastCap(pick, cap = GAME_ML_CAP) {
 }
 
 export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, options = {}) {
+  const marketError = footballMarketUnavailable(options.game, sport);
+  if (marketError) return { ...marketError, homeTeam, awayTeam, sport };
   // Internal branch tag for the session-based path (the name predates the
   // provider seam; every session now routes to a codex/claude/anthropic/gpt
   // adapter — Gemini itself is retired, Aug 24 2026).
@@ -249,6 +252,29 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
 
   let iteration = 0;
   const toolCallHistory = [];
+  // Durable source responses are independent of the working context. Capture
+  // before pruning, including failures and specialized player tools that don't
+  // carry a summary in toolCallHistory.
+  const originalToolResponses = [];
+  const recordedTools = new WeakSet();
+  let footballCases = null;
+  const captureTools = () => {
+    const captured = [];
+    for (const m of messages) if (m.role === 'tool' && !recordedTools.has(m)) {
+      originalToolResponses.push({ toolCallId: m.tool_call_id || null, name: m.name || 'tool_response',
+        content: m.content, observedAt: new Date().toISOString() });
+      recordedTools.add(m);
+      captured.push(m);
+    }
+    return captured;
+  };
+  const attachOriginalEvidence = pick => {
+    captureTools();
+    if (footballCases) Object.assign(pick, footballCases);
+    pick._originalToolResponses = originalToolResponses;
+    pick._evidenceObservedAt = new Date().toISOString();
+    return pick;
+  };
   // Models already exhausted by the provider-agnostic quota cascade below —
   // an exhausted brain must never be retried under another cascade slot.
 
@@ -295,6 +321,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       }
 
       console.log(`[Orchestrator] Bilateral cases verified (homeLen=${caseCheck.homeLen}, awayLen=${caseCheck.awayLen})`);
+      footballCases = { path_home: caseCheck.caseHome, path_away: caseCheck.caseAway };
     }
 
     // NBA: the Apr 8 2026 Pass 2.5 decision turn (prose draft, no JSON yet;
@@ -1348,7 +1375,7 @@ INVESTIGATION COMPLETE`;
           return 'NBA';
         };
 
-        const menuSport = resolveMenuSport(args.sport || sport);
+        const menuSport = resolveMenuSport(sport);
         const allowedTokens = getTokensForSport(menuSport);
         if (Array.isArray(allowedTokens) && allowedTokens.length > 0 && !allowedTokens.includes(token)) {
           const statResult = {
@@ -1372,7 +1399,9 @@ INVESTIGATION COMPLETE`;
             tool_call_id: toolCall.id,
             role: 'tool',
             name: functionName,
-            content: `${token}: Not available for ${sport}. Try: ${allowedTokens.slice(0, 5).join(', ')}...`
+            content: menuSport === 'NCAAF'
+              ? `${token}: No supported NCAAF tool under this name. Available NCAAF tokens: ${allowedTokens.join(', ')}. Do not substitute another league's data.`
+              : `${token}: Not available for ${sport}. Try: ${allowedTokens.slice(0, 5).join(', ')}...`
           });
           continue;
         }
@@ -1419,7 +1448,7 @@ INVESTIGATION COMPLETE`;
         const values = extractStatValues(statResult, token);
 
         // Summarize for context (used both in conversation and data recap for dedup nudges)
-        const statSummary = summarizeStatForContext(statResult, token, homeTeam, awayTeam);
+        const statSummary = summarizeStatForContext(statResult, token, homeTeam, awayTeam, sport);
 
         // Determine result quality for coverage tracking
         const hasRealData = statResult && !statResult.error &&
@@ -1449,6 +1478,7 @@ INVESTIGATION COMPLETE`;
       }
 
       // CONTEXT PRUNING: Prevent attention decay on long investigations
+      const batchToolResponses = captureTools();
       messages = pruneContextIfNeeded(messages, iteration);
 
       // INVESTIGATION TRACKING: Monitor tool-call breadth for logging/guidance
@@ -1538,8 +1568,7 @@ INVESTIGATION COMPLETE`;
       // Extract tool responses added to messages array during this iteration
       // Convert to format needed for sendToSession
       if (provider === 'session' && currentSession) {
-          const lastAssistantIdx = messages.findLastIndex(m => m.role === 'assistant');
-          const toolResponses = messages.slice(lastAssistantIdx + 1).filter(m => m.role === 'tool');
+          const toolResponses = batchToolResponses;
 
           if (toolResponses.length > 0) {
             // Convert to Gemini function response format
@@ -1781,7 +1810,7 @@ INVESTIGATION COMPLETE`
           } catch {
             // non-fatal — pick still ships
           }
-          return earlyPick;
+          return attachOriginalEvidence(earlyPick);
         }
         // No valid JSON in Pass 2 — fall through to Pass 3 injection as a
         // safety net. Gary still gets a chance to format properly.
@@ -1896,7 +1925,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
         // non-fatal — if we can't attach the narrative, the pick still ships
       }
 
-      return pick;
+      return attachOriginalEvidence(pick);
     } else {
       // If no valid JSON after retry, return the raw analysis
       return {

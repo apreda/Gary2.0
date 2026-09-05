@@ -3,10 +3,21 @@ import {
   americanImpliedProbability,
   homeSpreadReference,
   spreadForSide,
+  footballMarketUnavailable,
 } from '../../src/services/marketTruth.js';
 import { validateSpreadMLDirection } from '../../src/services/oddsService.js';
 
 describe('football market-side truth', () => {
+  it('requires an actual spread and valid price on at least one selectable side', () => {
+    for (const game of [{}, { spread_home: -3.5 }, { spread_home_odds: -110 },
+      { spread_home: 0, spread_home_odds: 0 }, { spread_home: 0, spread_home_odds: '' },
+      { spread_home: 0, spread_home_odds: -110.5 }]) {
+      expect(footballMarketUnavailable(game, 'NCAAF')?.code).toBe('market_unavailable');
+    }
+    expect(footballMarketUnavailable({ spread_home: 0, spread_home_odds: -110 }, 'NCAAF')).toBeNull();
+    expect(footballMarketUnavailable({ spread_away: 3.5, spread_away_odds: '-105' }, 'NFL')).toBeNull();
+    expect(footballMarketUnavailable({}, 'MLB')).toBeNull();
+  });
   it('derives the canonical home reference by negating an away-only line', () => {
     expect(homeSpreadReference({ spread_home: -2.5, spread_away: 2.5 })).toBe(-2.5);
     expect(homeSpreadReference({ spread_home: null, spread_away: 2.5 })).toBe(-2.5);

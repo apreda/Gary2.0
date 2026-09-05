@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { shouldRetryPickWithModel } from '../src/services/marketTruth.js';
+import { originalGameEvidence } from '../src/services/pickdesk/originalGameEvidence.js';
 /**
  * Agentic Pick Generation Script
  * 
@@ -401,25 +403,17 @@ function normalizeVendorForReceipt(value) {
 }
 const { supabase, supabaseAdmin: winnersAdmin } = await import('../src/supabaseClient.js');
 const { classOf, classWinRates, winnersScore } = await import('../src/services/pickdesk/winnersScore.js');
-const { enqueueWinnersCandidate, isProductionWinnersRun, confirmedPublishedGame, winnersPickIsHome } = await import('../src/services/pickdesk/winnersAdmissions.js');
+const { enqueueWinnersCandidate, isProductionWinnersRun, confirmedPublishedGame } = await import('../src/services/pickdesk/winnersAdmissions.js');
 const { buildShadowPick } = await import('../src/services/shadow/shadowPick.js');
 
 /** Queue the published ticket and original evidence; independent review never delays props. */
-async function routeToWinners({ league, game, result, cleanPick, deskText }) {
+async function routeToWinners({ league, game, cleanPick, evidence }) {
   try {
     const kickoff = cleanPick.commence_time || game?.commence_time;
     const gameDate = new Date(kickoff).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
     await enqueueWinnersCandidate(winnersAdmin, {
       date: gameDate, league, kind: 'game', pick: cleanPick,
-      evidence: {
-        deskText, caseHome: cleanPick.path_home ?? result?.path_home ?? null,
-        caseAway: cleanPick.path_away ?? result?.path_away ?? null,
-        researchBriefing: result?._context?.researchBriefing || result?._researchBriefing || null,
-        homeTeam: cleanPick.homeTeam, awayTeam: cleanPick.awayTeam,
-        pickIsHome: winnersPickIsHome(cleanPick), commenceTime: kickoff,
-        observedAt: new Date().toISOString(),
-        first: league === 'MLB' && mlbCaseHeadings(cleanPick.homeTeam, cleanPick.awayTeam, game).order === 'away-first' ? 'away' : 'home',
-      },
+      evidence,
     });
     console.log(`🏆 [Winners] Queued exact-ticket review: ${cleanPick.pick}`);
   } catch (e) {
@@ -1391,7 +1385,7 @@ async function main() {
             result = await analyzeGame(game, config.key, { ...runnerOptions, modelOverride: GAME_PICK_MODEL });
             let cascadeModel = GAME_PICK_MODEL;
             for (const fallbackModel of DESK_FALLBACK_MODELS) {
-              if (result?.pick && !result?.error) break;
+              if (!shouldRetryPickWithModel(result)) break;
               console.warn(`[Runner] ⚠️ ${cascadeModel} failed (${result?.error || 'no pick'}) — same game, whole re-run on ${fallbackModel}`);
               result = await analyzeGame(game, config.key, { ...runnerOptions, modelOverride: fallbackModel });
               cascadeModel = fallbackModel;
@@ -2245,6 +2239,9 @@ async function main() {
               // the desk as _context.scoutReport — the old `deskText` key
               // never existed, so no desk was stored from Jul 26 to Sep 2.)
               const deskText = result?._context?.scoutReport || null;
+              const evidence = publishedPick ? originalGameEvidence({ result, pick: publishedPick, deskText,
+                first: config.name === 'MLB' && mlbCaseHeadings(cleanPick.homeTeam, cleanPick.awayTeam, game).order === 'away-first' ? 'away' : 'home',
+              }) : null;
               if (deskText && publishedPick) {
                 await picksService.storeDeskSnapshot({
                   game_date: publishedDate,
@@ -2252,11 +2249,12 @@ async function main() {
                   pick: cleanPick.pick,
                   desk: deskText,
                   research_briefing: result?._context?.researchBriefing || null,
+                  decision_evidence: evidence,
                 });
               }
               // Every newly published ticket enters the same review queue;
               // feature status and underdog status do not admit it.
-              if(publishedPick)await routeToWinners({ league: config.name, game, result, cleanPick:publishedPick, deskText });
+              if(publishedPick)await routeToWinners({ league: config.name, game, cleanPick:publishedPick, evidence });
               // THE SHADOW MODEL (founder GO, Sep 3 2026): a second system's
               // bet for the same game, stored beside Gary's and never shown
               // to him or to fans; graded and read nightly against his.

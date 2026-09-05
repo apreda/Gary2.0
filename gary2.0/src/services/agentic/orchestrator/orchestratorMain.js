@@ -11,7 +11,7 @@ import { shouldReuseScoutReport } from '../statsSubstance.js';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from 'fs';
 import { join } from 'path';
 import { createHash } from 'crypto';
-import { homeSpreadReference } from '../../marketTruth.js';
+import { homeSpreadReference, footballMarketUnavailable } from '../../marketTruth.js';
 import { footballPromptSha } from './footballPromptSha.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -75,6 +75,8 @@ import { normalizeSportToLeague } from './orchestratorHelpers.js';
  * @param {Object} options - Optional settings
  */
 export async function analyzeGame(game, sport, options = {}) {
+  const marketError = footballMarketUnavailable(game, sport);
+  if (marketError) return { ...marketError, homeTeam: game.home_team, awayTeam: game.away_team, sport };
   // Clear stat router cache from previous game (prevents stale cross-game data)
   clearStatRouterCache();
   const startTime = Date.now();
@@ -83,9 +85,12 @@ export async function analyzeGame(game, sport, options = {}) {
   // Every downstream prompt expects the spread from the HOME perspective.
   // If a partial feed supplies only the away line, negate it instead of
   // silently reversing the board.
-  const canonicalHomeSpread = homeSpreadReference(game, 0);
   const isFootballGame = sport === 'americanfootball_nfl' || sport === 'NFL' ||
     sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
+  const canonicalHomeSpread = homeSpreadReference(game, isFootballGame ? null : 0);
+  // Freeze the era before asynchronous research. A source edit while Gary is
+  // thinking must not stamp an older running decision with the new code's era.
+  const originalFootballEra = isFootballGame ? footballPromptSha(sport) : null;
 
   console.log(`\n${'═'.repeat(70)}`);
   console.log(`🐻 GARY AGENTIC ANALYSIS: ${awayTeam} @ ${homeTeam}`);
@@ -295,7 +300,7 @@ export async function analyzeGame(game, sport, options = {}) {
     result.homeTeam = homeTeam;
     result.awayTeam = awayTeam;
     if (!result.error && isFootballGame) {
-      result._promptSha = footballPromptSha(sport);
+      result._promptSha = originalFootballEra;
     }
 
     // Attach investigation artifacts for downstream logging/debugging (the

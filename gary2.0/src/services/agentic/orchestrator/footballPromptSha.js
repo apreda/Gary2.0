@@ -10,6 +10,7 @@ const SHARED_SURFACE = [
   './evidenceQuality.js',
   './agentLoop.js',
   './orchestratorMain.js',
+  './orchestratorHelpers.js',
   // The system prompt file (extracted from orchestratorMain Sep 1 2026 —
   // without this line the extraction would have dropped the identity +
   // FACT-CHECKING + BASE_RULES surface out of the football era).
@@ -58,6 +59,7 @@ const SPORT_SURFACE = {
     '../tools/statRouters/nflFetchers.js',
   ],
   NCAAF: [
+    '../tools/ncaafTokenContract.js',
     '../constitution/ncaafConstitution.js',
     '../scoutReport/sports/ncaaf.js',
     '../scoutReport/sports/ncaafPlayerEvidence.js',

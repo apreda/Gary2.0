@@ -7,6 +7,7 @@ import { supabaseAdmin as supabase } from '../src/supabaseClient.js';
 import { reviewPick, reviewProp } from '../src/services/pickdesk/winnersReviewer.js';
 import { enqueueWinnersCandidate, coreProp, canonicalProp, winnersPickIsHome, WINNERS_CUTOVER_DATE } from '../src/services/pickdesk/winnersAdmissions.js';
 import { matchingDesk } from '../src/services/diary/evidence.js';
+import { originalEvidenceMatches, reviewSourceDesk } from '../src/services/pickdesk/originalGameEvidence.js';
 
 const todayET = () => new Date().toLocaleDateString('en-CA',{timeZone:'America/New_York'});
 const check = result => { if(result.error) throw result.error; return result.data; };
@@ -17,7 +18,7 @@ export async function reviewCandidate(c, { gameReview=reviewPick, propReview=rev
   if (!e.deskText) return {ok:false,status:'unavailable',error:'Original evidence snapshot unavailable; rationale alone cannot verify itself'};
   if (e.observedAt && (!Number.isFinite(Date.parse(e.observedAt)) || Date.parse(e.observedAt)>=kickoff)) return {ok:false,status:'unavailable',error:'Evidence was not recorded before kickoff'};
   const prop=canonicalProp(p);
-  const sourceDesk=e.researchBriefing ? `${e.deskText}\n\n## ORIGINAL RESEARCH BRIEFING — reported findings and interpretation, not independent verification\n${e.researchBriefing}` : e.deskText;
+  const sourceDesk=reviewSourceDesk(e);
   const input={...e, deskText:sourceDesk, pickIsHome:winnersPickIsHome({...p,homeTeam:p.homeTeam || e.homeTeam,awayTeam:p.awayTeam || e.awayTeam}), league:c.league, pickText:c.pick_text, odds:c.odds, rationale:p.rationale,
     gameDate:c.game_date, betType:p.type, betLine:p.spread ?? p.line, homeTeam:p.homeTeam || e.homeTeam, awayTeam:p.awayTeam || e.awayTeam,
     propType:prop.prop, line:prop.line, side:prop.side, playerName:p.player,
@@ -71,7 +72,7 @@ export async function reconcilePublished(client,date, {now=Date.now()}={}) {
   }
   // Recovery reads stored original inputs only. It never rebuilds a desk or
   // fetches new sports data. A past game cannot start a recovered review.
-  const deskResult=await client.from('pick_desks').select('matchup,pick,desk,research_briefing,created_at').eq('game_date',date);
+  const deskResult=await client.from('pick_desks').select('matchup,pick,desk,research_briefing,decision_evidence,created_at').eq('game_date',date);
   if(deskResult.error)console.warn('[Winners] original desk recovery unavailable:',deskResult.error.message);
   const desks=deskResult.data || [];
   for(const {kind,p} of sources) {
@@ -89,6 +90,14 @@ export async function reconcilePublished(client,date, {now=Date.now()}={}) {
           pickIsHome:winnersPickIsHome(p),
           provenance:'original_pick_desks_exact_ticket',
         };
+        if (originalEvidenceMatches(desk?.decision_evidence, p, date, league)) {
+          // Upserts retain the desk's original created_at. The envelope carries
+          // THIS decision's actual observation time, which must also be pregame.
+          const saved = desk.decision_evidence;
+          evidence = Date.parse(saved.observedAt) < kickoff ? saved : {};
+        } else if (desk?.decision_evidence) {
+          evidence = {}; // Same matchup can be another game or another decision.
+        }
       }
       await enqueueWinnersCandidate(client,{date,league,kind,pick:p,evidence});
   }

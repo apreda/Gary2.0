@@ -79,6 +79,25 @@ export async function enqueueWinnersCandidate(client, input) {
       .is('admitted_at',null).is('evidence_snapshot->>deskText',null);
     if (evidenceError) throw evidenceError;
   }
+  // Reconciliation can win the publication race with the original desk but
+  // without the later tool responses. Enrich only that same decision, before
+  // kickoff, while still unadmitted; never replace a complete envelope.
+  if (input.evidence?.snapshotVersion === 2 && Date.parse(input.evidence.observedAt) < Date.parse(row.commence_time)) {
+    const found = await client.from('winners_candidates').select('pick_snapshot,evidence_snapshot')
+      .eq('ticket_key', row.ticket_key).maybeSingle();
+    if (found.error) throw found.error;
+    const old = found.data?.evidence_snapshot;
+    const sameInputs = old && !old.snapshotVersion && old.deskText === input.evidence.deskText &&
+      ['caseHome','caseAway','researchBriefing'].every(key => !old[key] || old[key] === input.evidence[key]) &&
+      publishedDecisionMatches(input.pick, found.data.pick_snapshot, input);
+    if (sameInputs) {
+      const repaired = await client.from('winners_candidates').update({ evidence_snapshot: input.evidence })
+        .eq('ticket_key', row.ticket_key).in('status', ['pending', 'unavailable'])
+        .gt('commence_time', new Date().toISOString()).is('admitted_at', null)
+        .is('evidence_snapshot->>snapshotVersion', null);
+      if (repaired.error) throw repaired.error;
+    }
+  }
   return row;
 }
 

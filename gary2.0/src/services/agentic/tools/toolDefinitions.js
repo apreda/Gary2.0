@@ -1,3 +1,4 @@
+import { NCAAF_TOKENS } from './ncaafTokenContract.js';
 /**
  * LLM Function Calling Tool Definitions (Gemini)
  *
@@ -96,36 +97,6 @@ const NFL_TOKENS = [
   'STANDINGS',            // Full standings, conference/division records
   // Variance/Consistency Analysis (NEW - for underdog value)
   'VARIANCE_CONSISTENCY'  // Point differential variance, QB consistency, upset potential
-];
-
-// NCAAF Stat Tokens - BDL-based tokens that work
-// BDL NCAAF has: team_season_stats with passing/rushing yards, TDs, opponent yards
-const NCAAF_TOKENS = [
-  // ===== PRIMARY STATS (BDL team_season_stats - THESE WORK) =====
-  'NCAAF_PASSING_OFFENSE',    // BDL: passing_yards, passing_yards_per_game, passing_touchdowns
-  'NCAAF_RUSHING_OFFENSE',    // BDL: rushing_yards, rushing_yards_per_game, rushing_touchdowns
-  'NCAAF_TOTAL_OFFENSE',      // BDL: combined passing + rushing stats
-  'NCAAF_DEFENSE',            // BDL: opp_passing_yards, opp_rushing_yards
-  'NCAAF_SCORING',            // BDL: calculated from TDs and game data
-  'NCAAF_TURNOVER_MARGIN',    // BDL: passing_interceptions
-  
-  // ===== GAME DATA (BDL games endpoint - WORKS) =====
-  'RECENT_FORM',              // BDL: recent game results and scores
-  'SCORING',                  // BDL: points per game from game data
-  'TURNOVER_MARGIN',          // BDL: from game stats
-  
-  // ===== STANDARD TOKENS (work across sports) =====
-  'HOME_AWAY_SPLITS',         // BDL: home vs away performance
-  'H2H_HISTORY',              // BDL: head-to-head history
-  
-  // ===== PLAYER STATS (BDL player_season_stats - WORKS) =====
-  'TOP_PLAYERS',              // BDL: key players and their stats
-  'INJURIES',                 // BDL: injury report
-  
-  // Advanced analytics are deliberately not advertised here. Gary may cite a
-  // sourced, current figure found during organic research, but the tool router
-  // must not promise SP+/FPI/EPA/havoc fields that have no deterministic data
-  // adapter and then quietly return a generic unavailable result.
 ];
 
 // MLB Stat Tokens — BDL GOAT tier + MLB Stats API + grounded search
