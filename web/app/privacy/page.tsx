@@ -11,7 +11,7 @@ export const metadata: Metadata = pageMetadata({
 export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-3xl px-5 py-12">
-      <PageMasthead title="Privacy policy" meta="Last updated: September 4, 2026">
+      <PageMasthead title="Privacy policy" meta="Last updated: September 5, 2026">
         <p className="mt-2 font-mono text-[11px] text-low">Operated by Gary A.I. LLC</p>
       </PageMasthead>
 
@@ -109,8 +109,9 @@ export default function PrivacyPage() {
               When you choose Google sign-in or push notifications, the corresponding Google
               and Firebase services also process technical service information. Their SDK
               declarations include device or account identifiers, app/device metadata, diagnostic
-              and usage information, and Google sign-in may use approximate location or other
-              account information under the permissions you grant. Gary does not request precise
+              and usage information. Google sign-in may use your IP address to estimate your
+              general location for fraud prevention, even without a device-location permission.
+              Provider profile information depends on the sign-in permissions you grant. Gary does not request precise
               device location or additional phone-number access. The iOS product-analytics switch
               controls Gary&rsquo;s optional plan events; it does not suppress technical information
               required by a sign-in or notification service you choose. Starting with iOS version 2.25 (build 899), Firebase initialization waits for notification
