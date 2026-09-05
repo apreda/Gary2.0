@@ -52,8 +52,8 @@ and credentials must not be copied into incident documents.
   free slots without waiting for a static batch to finish.
 - Keep undispatched games in the live pending queue until a worker is free,
   preserving official delay, postponement and revised-start updates while they
-  wait. This final scheduler safeguard requires a second restart after the
-  healthy active runs finish; do not interrupt their current research.
+  wait. This final safeguard was loaded by the second restart after all healthy
+  active game and props runs finished.
 - Include the research lifecycle and configured research mode in the MLB era
   fingerprint so future operational profiles can be distinguished.
 
@@ -133,8 +133,32 @@ those missed pregame windows.
 
 A final fallback-API cancellation patch additionally covers direct HTTP
 requests if the bridge fails. It passed all 1,774 backend tests in 199 files
-(58.03 seconds). That patch and the final queue safeguard are being loaded
-after the healthy props jobs finish. New eras include the raw Anthropic search
+(58.03 seconds). That patch and the final queue safeguard were loaded
+after the healthy props jobs finished. New eras include the raw Anthropic search
 helper as well as the search facade; the three already-published repaired
 game picks correctly retain their preceding era. A misleading legacy startup
 log claiming the researcher was always OFF was also removed.
+
+The three late-game props jobs each stored three selections: Athletics at
+8:58:06 PM, Yankees at 8:58:37 PM, and Nationals at 8:59:22 PM. The later
+Yankees retry recognized the existing game pick and props without replacement.
+
+At 9:00:40 PM the final scheduler restarted cleanly as PID 2008, after verifying
+that no game/props child remained. Its startup logged game era `fbee57bc41bd`,
+props era `aa5fa0ab453b`, and the canonical backend directory. Code fixes are
+pushed to `origin/main` in `62745df1` and `e487b219`. The first repaired games
+retain era `2fdedd43241e`; this is expected because the final backup-search
+patch followed those runs. No published ticket was rewritten to a newer era.
+
+Separate observation for later investigation: NCAAF exact-ID schedule polling
+was repeatedly paging toward the 100-page limit and waiting on the shared
+provider rate gate. This was not established as the MLB outage's cause and was
+not changed as part of this repair.
+
+The final production audit confirmed PID 2008 in the canonical backend, Astra
+games/Sol props, nine of 16 MLB slate games published, seven missed, and zero
+pending publications. Every edge deployment timestamp passed and no code
+commits were unpushed. Its sole parity flag was the intentionally uncommitted
+local Firebase configuration; the command therefore returned exit 1 rather
+than a literal green result. Preserve that configuration exception. Audit
+output: `/tmp/gary-production-truth-final-2026-09-04.log`.
