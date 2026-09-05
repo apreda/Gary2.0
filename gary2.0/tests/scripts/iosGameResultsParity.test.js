@@ -22,7 +22,9 @@ describe('native canonical game results', () => {
       const script = `import Foundation
 ${numberModel}
 ${resultModels}
-final class APICache {
+// Fixture state is shared by the readers' async-let requests. Isolate it so
+// request counts and cache writes cannot race during the parallel test run.
+@MainActor final class APICache {
     static let shared = APICache()
     static let billfoldTTL: TimeInterval = 60
     static let recentResultsTTL: TimeInterval = 30
@@ -36,7 +38,7 @@ struct SourceReadFailure: Error {
     let transientExternal: Bool
     let underlying: [Error]
 }
-enum Reader {
+@MainActor enum Reader {
     static var requests = 0
     static var failGamePage = false
     static var snapshot: [String: [[String: Any]]]? = nil
