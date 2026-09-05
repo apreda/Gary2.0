@@ -1440,7 +1440,7 @@ struct HomeWinnersStub: View {
                         .font(GaryFonts.accent(12)).tracking(0.8)
                         .foregroundStyle(GaryColors.gold)
                     Spacer()
-                    Text("SEALED")
+                    Text("DAILY REVIEW")
                         .font(GaryFonts.accent(10)).tracking(1.2)
                         .foregroundStyle(GaryColors.gold.opacity(0.85))
                 }
@@ -1454,7 +1454,7 @@ struct HomeWinnersStub: View {
                         Text("The \(weekday) Card")
                             .font(GaryFonts.display(25))
                             .foregroundStyle(GaryColors.warmWhite)
-                        Text(valueLine ?? "Gary's best of the board · games + props")
+                        Text(valueLine ?? "Selections appear after review · games + props")
                             .font(GaryFonts.text(12, .semibold))
                             .foregroundStyle(GaryColors.sectionSub)
                         if valueLine != nil {
@@ -1465,7 +1465,7 @@ struct HomeWinnersStub: View {
                     }
                     Spacer()
                     HStack(spacing: 5) {
-                        Text("UNLOCK")
+                        Text("VIEW")
                             .font(GaryFonts.accent(12)).tracking(0.8)
                         Image(systemName: "chevron.right")
                             .font(.system(size: 11, weight: .black))

@@ -1493,13 +1493,7 @@ struct HomeView: View {
         // ── WINNERS — the sealed card, slip-styled (the one conversion door).
         HomeWinnersStub(onOpen: {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
-        },
-        plays: todayPicks.count,
-        leagues: {
-            let ls = Array(Set(todayPicks.compactMap { $0.league?.uppercased() })).sorted()
-            return ls.isEmpty ? nil : ls.joined(separator: " + ")
-        }(),
-        nextSeal: firstCallClock)
+        })
         .opacity(animateIn ? 1 : 0)
         .animation(.easeOut(duration: 0.6).delay(0.08), value: animateIn)
 
