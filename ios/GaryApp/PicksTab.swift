@@ -110,10 +110,8 @@ struct EdgesSection: View {
         }
     }
 
-    /// League-specific wording applies only when the WHOLE feed is one league.
-    /// The ALL scope mixes leagues in whatever order the desks flattened, so
-    /// keying slang off `edges.first` made the strip's identity depend on
-    /// Dictionary order — nil here means "mixed", which wears the defaults.
+    /// Use league-specific wording only when the entire supplied feed belongs
+    /// to that league; shared callers can also provide a mixed feed.
     private var uniformLeague: HubLeagueSel? {
         guard let first = edges.first?.league else { return nil }
         return edges.allSatisfy { $0.league == first } ? first : nil
@@ -566,10 +564,10 @@ struct PicksCarouselView: View {
     @State private var connLoaded = false
     @State private var connectionLoadInFlight = false
     @State private var connectionErrorLeagues: Set<HubLeagueSel> = []
-    @State private var sport = "ALL"
+    @State private var sport = "MLB"
     /// True while `sport` was set by the auto-snap rather than a user tap —
     /// the only state the snap is allowed to correct once real data lands.
-    @State private var sportAutoSelected = false
+    @State private var sportAutoSelected = true
     /// NCAAF CONFERENCE NAVIGATION (founder, Aug 25 2026): the college strip
     /// defaults to ranked matchups — backfilled with the biggest remaining
     /// games when the poll is thin — and filters by conference on demand. A
@@ -622,10 +620,11 @@ struct PicksCarouselView: View {
         // Today's slate leagues too — so a sport with games tonight but no picks
         // yet still gets a filter chip (matches the look-ahead matchups below).
         s.formUnion(store.slate.compactMap { ($0.league ?? "").uppercased() }.filter { !$0.isEmpty })
-        // Football is a first-class Picks desk, not an off-season overlay item.
-        // Keep both chips reachable before the first weekly pick lands; their
-        // empty state remains honest until the slate or card arrives.
-        s.formUnion(["NFL", "NCAAF"])
+        // Keep the active season's desks reachable before their first pick.
+        // MLB is also the initial desk while requests are loading or failing;
+        // each empty state remains honest until the slate or card arrives.
+        s.formUnion(["MLB", "NFL", "NCAAF"])
+        s.remove("ALL")
         // The MLB HR lane is retired — guarantee no HR chip even if a non-HR prop
         // arrives mislabeled "MLB HR" (its card already routes to MLB via propSportKey).
         s.remove("MLB HR")
@@ -648,9 +647,8 @@ struct PicksCarouselView: View {
         let priority: [String: Int] = nflRegularSeason
             ? ["NFL": 0, "NCAAF": 1, "MLB": 2, "WC": 3]
             : ["MLB": 0, "NFL": 1, "NCAAF": 2, "WC": 3]
-        // ALL is flag-gated (founder, Jul 13: league chips only) — the chip
-        // drops but every ALL code path below survives for an easy restore.
-        return (AppFlags.picksAllTab ? ["ALL"] : []) + s.sorted { a, b in
+        // Picks always belongs to one sport, including during partial loads.
+        return s.sorted { a, b in
             let pa = pickLeagues.contains(a), pb = pickLeagues.contains(b)
             if pa != pb { return pa }
             let ta = todayLeagues.contains(a), tb = todayLeagues.contains(b)
@@ -660,23 +658,17 @@ struct PicksCarouselView: View {
         }
     }
 
-    /// With ALL hidden, `sport` must always sit on a real league: snap the
-    /// "ALL" default (and any league that dropped off the board) to the day's
-    /// first chip once data lands. No-op while the flag shows ALL.
-    /// A snap is remembered as AUTO: if it ran before the slate/picks resolved
-    /// (or while the independent slate/picks/props requests are still landing),
-    /// the next data arrival follows the newly authoritative first desk. A chip
-    /// the user tapped is never moved.
-    private func snapSportIfAllHidden() {
-        guard !AppFlags.picksAllTab,
-              let first = sports.first(where: { $0 != "ALL" }) else { return }
+    /// Follow the first active sport until the user selects a league. Keep the
+    /// initial MLB desk valid during loading/errors; never render a mixed desk.
+    private func snapSportToAvailableLeague() {
+        guard let first = sports.first else { return }
         // A refresh that FAILED is not evidence a league left the board —
         // while any source is failing (or still loading), the chip list is
         // not authoritative and the user's page does not move (Aug 26: a
         // failed pull-to-refresh wiped the list and snapped MLB → NFL).
         guard store.gamePickSourceFailures.isEmpty, !store.propPickSourceFailed,
               !store.slateSourceFailed, !store.loading else { return }
-        if sport == "ALL" || !sports.contains(sport) {
+        if !sports.contains(sport) {
             sport = first
             sportAutoSelected = true
         } else if sportAutoSelected, sport != first {
@@ -699,7 +691,7 @@ struct PicksCarouselView: View {
     }
     private var filteredProps: [PropPick] {
         let base = store.slateProps
-        return sport == "ALL" ? base : base.filter { propSportKey($0) == sport }
+        return base.filter { propSportKey($0) == sport }
     }
     /// TODAY's matchup rail uses today's FRESH props only. store.allProps is
     /// already freshness-filtered to games at/after the start of today (EST);
@@ -713,13 +705,13 @@ struct PicksCarouselView: View {
         // own carousel under the MLB chip (propSportKey), stays last in that
         // carousel, and still never touches a record or the free showcase.
         let today = store.allProps   // NFL TDs stay under NFL
-        return sport == "ALL" ? today : today.filter { propSportKey($0) == sport }
+        return today.filter { propSportKey($0) == sport }
     }
     /// Yesterday's own props (sport-scoped, no TD picks) — the source for the
     /// Yesterday matchup row so every settled game shows, not just slate leftovers.
     private var filteredYesterdayProps: [PropPick] {
         let yp = store.yesterdayPropsAll   // ungated: all of yesterday; HR + NFL TDs ride their game
-        return sport == "ALL" ? yp : yp.filter { propSportKey($0) == sport }
+        return yp.filter { propSportKey($0) == sport }
     }
     /// PERF#1(b): the heavy grouping/merge/look-ahead, memoized into `gamesMemo`
     /// and recomputed ONLY when picks/props/slate/day/sport change (see rebuildMemo)
@@ -735,10 +727,14 @@ struct PicksCarouselView: View {
         // so a doubleheader's two games never share a page (Jul 22 2026).
         var out: [(matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])] = []
         var providerIndex: [String: Int] = [:]
-        var legacyIndex: [String: Int] = [:]
+        var legacyIndex: [String: [Int]] = [:]
+        var providerByIndex: [Int: String] = [:]
 
         func providerIdentity(league: String?, gameId: Int?) -> String? {
-            let scopedLeague = (league ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            let rawLeague = (league ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            // Home-run props belong to the same MLB game, not a second desk.
+            // Using MLB HR here duplicated the game when the regular pick landed.
+            let scopedLeague = rawLeague == "MLB HR" ? "MLB" : rawLeague
             guard !scopedLeague.isEmpty, let gameId else { return nil }
             return "\(scopedLeague)|\(gameId)"
         }
@@ -746,8 +742,13 @@ struct PicksCarouselView: View {
         func upsertGame(matchup: String, time: String, commence: Date?,
                         providerKey: String?, props: [PropPick]) {
             let fallbackKey = Self.gameIdentityKey(matchup, commence)
+            let compatibleFallback = (legacyIndex[fallbackKey] ?? []).filter { index in
+                providerKey == nil || providerByIndex[index] == nil || providerByIndex[index] == providerKey
+            }
+            // An id-less row can join one exact matchup/time, never guess
+            // between two known provider games with the same fallback label.
             let existingIndex = providerKey.flatMap { providerIndex[$0] }
-                ?? legacyIndex[fallbackKey]
+                ?? (compatibleFallback.count == 1 ? compatibleFallback.first : nil)
             if let index = existingIndex {
                 let existing = out[index]
                 let resolvedCommence = existing.commence ?? commence
@@ -759,14 +760,24 @@ struct PicksCarouselView: View {
                     dh: false,
                     props: existing.props + props
                 )
-                if let providerKey { providerIndex[providerKey] = index }
+                if let providerKey {
+                    providerIndex[providerKey] = index
+                    providerByIndex[index] = providerKey
+                }
+                let resolvedKey = Self.gameIdentityKey(existing.matchup, resolvedCommence)
+                for key in Set([fallbackKey, resolvedKey]) where !(legacyIndex[key] ?? []).contains(index) {
+                    legacyIndex[key, default: []].append(index)
+                }
                 return
             }
 
             out.append((matchup: matchup, time: time, commence: commence, dh: false, props: props))
             let index = out.count - 1
-            if let providerKey { providerIndex[providerKey] = index }
-            else { legacyIndex[fallbackKey] = index }
+            if let providerKey {
+                providerIndex[providerKey] = index
+                providerByIndex[index] = providerKey
+            }
+            legacyIndex[fallbackKey, default: []].append(index)
         }
 
         for g in store.groupByMatchup(dayProps) {
@@ -799,7 +810,7 @@ struct PicksCarouselView: View {
         func merge(_ picks: [GaryPick]) {
             for p in picks {
                 let lg = (p.league ?? "").uppercased()
-                guard !lg.isEmpty, sport == "ALL" || lg == sport else { continue }
+                guard !lg.isEmpty, lg == sport else { continue }
                 let mu = gameMatchup(p)
                 guard !mu.isEmpty else { continue }
                 let commence = p.commence_time.flatMap(parseISO8601)
@@ -820,7 +831,7 @@ struct PicksCarouselView: View {
         if pickDay == .today {
             for s in store.slate {
                 let lg = (s.league ?? "").uppercased()
-                guard sport == "ALL" || lg == sport else { continue }
+                guard lg == sport else { continue }
                 let a = (s.away_team ?? "").trimmingCharacters(in: .whitespaces)
                 let h = (s.home_team ?? "").trimmingCharacters(in: .whitespaces)
                 guard !a.isEmpty, !h.isEmpty else { continue }
@@ -1018,9 +1029,11 @@ struct PicksCarouselView: View {
         // genuinely new games. SwiftUI's page TabView is backed by
         // UIPageViewController; reordering its children while a finger is down is
         // what produced the two half-pages stuck together in the Aug 7 screenshot.
-        let oldOrder = Dictionary(uniqueKeysWithValues: gamesMemo.enumerated().map {
+        // Feed identities are not guaranteed unique. A collision must never
+        // trap the app; retain the earliest existing position deterministically.
+        let oldOrder = Dictionary(gamesMemo.enumerated().map {
             (Self.gameIdentityKey($0.element.matchup, $0.element.commence), $0.offset)
-        })
+        }, uniquingKeysWith: { first, _ in first })
         let ordered = built.sorted { lhs, rhs in
             let l = oldOrder[Self.gameIdentityKey(lhs.matchup, lhs.commence)]
             let r = oldOrder[Self.gameIdentityKey(rhs.matchup, rhs.commence)]
@@ -1092,19 +1105,19 @@ struct PicksCarouselView: View {
         if propIds.count == 1 { return propIds.first }
 
         let key = Self.gameIdentityKey(g.matchup, g.commence)
-        let scopedLeague = g.props.first?.effectiveLeague?.uppercased()
-            ?? (sport == "ALL" ? nil : sport.uppercased())
+        let scopedLeague = g.props.first.map { propSportKey($0) }
+            ?? sport.uppercased()
         let dayPicks = pickDay == .today ? store.gamePicks : store.yesterdayGamePicksAll
         if let id = dayPicks.first(where: {
             let rowLeague = ($0.league ?? "").uppercased()
-            return (scopedLeague == nil || rowLeague == scopedLeague)
+            return rowLeague == scopedLeague
                 && Self.gameIdentityKey("\($0.awayTeam ?? "") @ \($0.homeTeam ?? "")",
                                         $0.commence_time.flatMap(parseISO8601)) == key
         })?.game_id { return id }
 
         if let id = store.slate.first(where: {
             let rowLeague = ($0.league ?? "").uppercased()
-            return (scopedLeague == nil || rowLeague == scopedLeague)
+            return rowLeague == scopedLeague
                 && Self.gameIdentityKey("\($0.away_team ?? "") @ \($0.home_team ?? "")",
                                         $0.commence_time.flatMap(parseISO8601)) == key
         })?.bdl_game_id { return id }
@@ -1118,14 +1131,14 @@ struct PicksCarouselView: View {
             dayPicks.compactMap { pick -> Int? in
                 let rowLeague = (pick.league ?? "").uppercased()
                 let matchup = "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")"
-                guard (scopedLeague == nil || rowLeague == scopedLeague),
+                guard rowLeague == scopedLeague,
                       Self.matchupKey(matchup) == matchupKey else { return nil }
                 return pick.game_id
             }
             + store.slate.compactMap { row -> Int? in
                 let rowLeague = (row.league ?? "").uppercased()
                 let matchup = "\(row.away_team ?? "") @ \(row.home_team ?? "")"
-                guard (scopedLeague == nil || rowLeague == scopedLeague),
+                guard rowLeague == scopedLeague,
                       Self.matchupKey(matchup) == matchupKey else { return nil }
                 return row.bdl_game_id
             }
@@ -1138,16 +1151,16 @@ struct PicksCarouselView: View {
     /// this, football look-aheads briefly mounted the baseball sections and an
     /// untyped INCOMING card until a later payload happened to supply a league.
     private func league(for g: (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])) -> String? {
-        let activeLeague = sport == "ALL" ? nil : sport.uppercased()
+        let activeLeague = sport.uppercased()
         if let league = g.props.first?.effectiveLeague, !league.isEmpty,
-           activeLeague == nil || league.uppercased() == activeLeague {
+           league.uppercased() == activeLeague {
             return league.uppercased()
         }
 
         let key = Self.gameIdentityKey(g.matchup, g.commence)
         if let league = store.slate.first(where: {
             let rowLeague = ($0.league ?? "").uppercased()
-            return (activeLeague == nil || rowLeague == activeLeague)
+            return rowLeague == activeLeague
                 && Self.gameIdentityKey("\($0.away_team ?? "") @ \($0.home_team ?? "")",
                                         $0.commence_time.flatMap(parseISO8601)) == key
         })?.league, !league.isEmpty {
@@ -1158,7 +1171,7 @@ struct PicksCarouselView: View {
         if let league = dayPicks.first(where: {
             let matchup = "\($0.awayTeam ?? "") @ \($0.homeTeam ?? "")"
             let pickLeague = ($0.league ?? "").uppercased()
-            return (activeLeague == nil || pickLeague == activeLeague)
+            return pickLeague == activeLeague
                 && Self.gameIdentityKey(matchup, $0.commence_time.flatMap(parseISO8601)) == key
         })?.league, !league.isEmpty {
             return league.uppercased()
@@ -1211,9 +1224,7 @@ struct PicksCarouselView: View {
     private var topGamePick: (pick: GaryPick, isYesterday: Bool)? {
         let isYesterday = pickDay == .yesterday
         let rows = isYesterday ? store.yesterdayGamePicksAll : store.gamePicks
-        let source = sport == "ALL"
-            ? rows
-            : rows.filter { ($0.league ?? "").uppercased() == sport }
+        let source = rows.filter { ($0.league ?? "").uppercased() == sport }
         guard let pick = source.sorted(by: { ($0.confidence ?? 0) > ($1.confidence ?? 0) }).first else { return nil }
         return (pick, isYesterday)
     }
@@ -1222,9 +1233,7 @@ struct PicksCarouselView: View {
     /// card. Yesterday fallback cards are deliberately not locked: a real pick
     /// for the new board must still be able to replace that recap once it drops.
     private var freshShowcaseGame: GaryPick? {
-        let rows = sport == "ALL"
-            ? store.gamePicks
-            : store.gamePicks.filter { ($0.league ?? "").uppercased() == sport }
+        let rows = store.gamePicks.filter { ($0.league ?? "").uppercased() == sport }
         return rows.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
     }
     private var freshShowcaseProp: PropPick? {
@@ -1282,8 +1291,7 @@ struct PicksCarouselView: View {
     /// candidate the first time one exists. New games/props can continue loading;
     /// they simply cannot displace the card users already saw.
     private func lockShowcaseIfNeeded() {
-        guard pickDay == .today,
-              AppFlags.picksAllTab || sport != "ALL" else { return }
+        guard pickDay == .today else { return }
 
         let date = SupabaseAPI.todayEST()
         if let lock = activeShowcaseLock,
@@ -1360,7 +1368,7 @@ struct PicksCarouselView: View {
         .task {
             await store.loadIfNeeded()
             rebuildMemo()          // build the memo before consumeFocus reads `games`
-            snapSportIfAllHidden()
+            snapSportToAvailableLeague()
             lockShowcaseIfNeeded()
             consumeFocus()
             if !connLoaded { await loadConnections() }
@@ -1374,7 +1382,7 @@ struct PicksCarouselView: View {
             // Each league owns its record. Clear the previous desk immediately so
             // NFL/NCAAF can never flash MLB's L7 while their scoped fetch resolves.
             record7 = nil
-            let scopedLeague = sport == "ALL" ? nil : sport
+            let scopedLeague = sport
             record7 = await SupabaseAPI.fetchSevenDayPickRecord(league: scopedLeague)
         }
         .task {
@@ -1406,12 +1414,12 @@ struct PicksCarouselView: View {
         // so the memo tracks the data without recomputing on every live-score tick.
         .onChange(of: dataSignature) { _ in
             rebuildMemo()
-            snapSportIfAllHidden()
+            snapSportToAvailableLeague()
             lockShowcaseIfNeeded()
             consumeFocus()
         }
         .onChange(of: focusState.focusGame) { _ in consumeFocus() }
-        .onChange(of: store.loading) { loading in if !loading { consumeFocus() } }
+        .onChange(of: store.loading) { loading in if !loading { snapSportToAvailableLeague(); consumeFocus() } }
         .onChange(of: scenePhase) { phase in
             // Foreground → silently re-pull picks/props (the spinner is gated by
             // !hasContent, so existing data stays put while fresh rows load underneath).
@@ -1429,7 +1437,8 @@ struct PicksCarouselView: View {
             switch verb {
             case "picks": if let idx = Int(arg) { withAnimation { page = idx } }
             case "picksday": withAnimation { pickDay = arg == "yesterday" ? .yesterday : .today }
-            case "picksport": sport = arg.uppercased(); sportAutoSelected = false
+            case "picksport":
+                if sports.contains(arg.uppercased()) { sport = arg.uppercased(); sportAutoSelected = false }
             default: break
             }
         }
@@ -1498,11 +1507,7 @@ struct PicksCarouselView: View {
             pickDay = .today
             return
         }
-        if AppFlags.picksAllTab, sport != "ALL" {
-            sport = "ALL"
-            return
-        }
-        if !AppFlags.picksAllTab, let targetLeague {
+        if let targetLeague {
             // Do not consume a typed target against the wrong desk while its
             // league is still loading into the unscoped source set.
             guard sports.contains(targetLeague) else { return }
@@ -1554,7 +1559,6 @@ struct PicksCarouselView: View {
         if store.propPickSourceFailed || store.slateSourceFailed { return true }
         switch sport {
         case "NFL": return store.gamePickSourceFailures.contains("NFL")
-        case "ALL": return !store.gamePickSourceFailures.isEmpty
         default: return store.gamePickSourceFailures.contains("DAILY")
         }
     }
@@ -1969,7 +1973,7 @@ struct PicksCarouselView: View {
         let rows: [(matchup: String, eta: String?)] = store.slate
             .filter { r in
                 let lg = (r.league ?? "").uppercased()
-                return (sport == "ALL" || lg == sport)
+                return (lg == sport)
             }
             .sorted { ($0.commence_time ?? "") < ($1.commence_time ?? "") }
             .prefix(10)
@@ -2021,7 +2025,7 @@ struct PicksCarouselView: View {
                     // Honest fallback when the future provider window is also empty.
                     HStack(spacing: 8) {
                         BroadcastBar(height: 11)
-                        Text(sport == "ALL" ? "NO GAMES TODAY" : "NO \(sport) TODAY")
+                        Text("NO \(sport) TODAY")
                             .font(GaryFonts.accent(13)).tracking(0.6)
                             .foregroundStyle(GaryColors.gold)
                     }
@@ -2094,30 +2098,12 @@ struct PicksCarouselView: View {
         }
     }
 
-    /// The Today page's working scope: on a ONE-league day (an all-MLB July
-    /// night, the All-Star break) the ALL tab resolves to that league, so the
-    /// league-wide sections (LEAGUE PULSE) run instead of collapsing — the
-    /// normal system, pointed at the only sport playing. Multi-league days
-    /// keep ALL as ALL.
-    private var effectiveScope: String {
-        guard sport == "ALL" else { return sport }
-        let leagues = Set((store.gamePicks.map { ($0.league ?? "").uppercased() }
-                           + store.slate.map { ($0.league ?? "").uppercased() })
-            .filter { !$0.isEmpty })
-        return leagues.count == 1 ? leagues.first! : sport
-    }
+    private var effectiveScope: String { sport }
 
-    /// Today-page edges respect the sport filter — an NBA tab must never
-    /// show a Padres edge. Sports without a hub league (NHL) get none.
+    /// Edges always belong to the selected sport.
     private var sportConnections: [Signal] {
-        // WC lanes ride the Picks page only when the WC actually plays TODAY
-        // (founder, Jul 13: no WC games — no WC content on ALL). The Hub
-        // keeps the lookahead coverage on its own tab.
-        let wcPlaysToday = store.slate.contains { ($0.league ?? "").uppercased() == "WC" }
-        let base = wcPlaysToday ? connections : connections.filter { $0.league != .wc }
-        guard sport != "ALL" else { return base }
         guard let lg = HubLeagueSel.from(sport) else { return [] }
-        return base.filter { $0.league == lg }
+        return connections.filter { $0.league == lg }
     }
 
     private var nextSlateSignal: Signal? {
@@ -2195,7 +2181,7 @@ struct PicksTodayPage: View {
     let gamePickResult: (GaryPick) -> String?
     let resultForProp: (PropPick) -> String?
     let edges: [Signal]
-    /// The Picks page's current sport scope ("ALL"/"MLB"/"WC"/…) — the same
+    /// The Picks page's current individual sport scope ("MLB"/"NFL"/…) — the same
     /// scope that filters the edges. LEAGUE PULSE is league-wide, so it only
     /// lights up on an MLB or WC scope and collapses otherwise.
     let scopeLeague: String
@@ -2224,10 +2210,8 @@ struct PicksTodayPage: View {
                 // The season series belongs to its GAME, not the day's list
                 // (founder, Aug 6: "Head to Head should not be on the Today's
                 // page ONLY under the the matchup/game of the two teams").
-                // The football gate rides here too: the ALL scope mixes every
-                // league's signals, and without it football's structured proof
-                // rows (THE SWEAT factor lines, AFTER GARY receipts) leak into
-                // the mixed feed as gibberish prose. No-op for MLB kinds.
+                // Keep structured football proof rows out of this prose feed.
+                // The filter is a no-op for MLB kinds.
                 EdgesSection(title: "TODAY'S EDGES",
                              edges: FootballTodayFeed.rows(edges.filter { $0.kind != .h2h }),
                              tabbed: true)
@@ -2265,7 +2249,7 @@ struct PicksTodayPage: View {
         } else if isToday {
             // Nothing posted for this sport yet — tease it with the blurred lock card
             // (never an empty top). A fresh pick replaces it the moment Gary posts.
-            TeasedPickCard(league: scopeLeague == "ALL" ? nil : scopeLeague)
+            TeasedPickCard(league: scopeLeague)
                 .frame(maxWidth: .infinity)
                 .padding(.top, 10)
         }
@@ -2278,7 +2262,7 @@ struct PicksTodayPage: View {
 /// It is a real pick card in every way — eyebrow, Skyscraper hero, meta,
 /// footer — whose headline happens to be INCOMING.
 struct TeasedPickCard: View {
-    /// Sport label for the meta line; nil on ALL.
+    /// Sport label for the meta line, when the caller knows the league.
     var league: String? = nil
     /// Start time copy for the footer's left corner ("7:05 PM ET"), if known.
     var time: String? = nil
