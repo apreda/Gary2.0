@@ -619,6 +619,105 @@ export function clusterConcurrency(gameCount, {
   return Math.min(count, maximum, Math.max(minimum, Math.ceil(count / target)));
 }
 
+/** Shared game+props processes remain bounded independently of slate size. */
+export function sharedLaneConcurrency(env = process.env) {
+  const configured = Number(env.GARY_SCHEDULER_SHARED_CONCURRENCY);
+  return Number.isInteger(configured) && configured > 0 ? Math.min(4, configured) : 3;
+}
+
+/** Take only due, viable games, leaving active-game retries in the live queue. */
+export function takeReadySharedEntries(entries = [], {
+  now = Date.now(),
+  occupiedGameKeys = new Set(),
+  limit = Infinity,
+} = {}) {
+  const clock = asMillis(now);
+  const seen = new Set(occupiedGameKeys);
+  const selected = [];
+  const capacity = Math.max(0, Math.floor(Number(limit)) || 0);
+  const ordered = entries.filter((entry) => decisionLaneKey(entry) === 'shared'
+    && !isSportFetchRetryEntry(entry)
+    && !isScheduleEntryHeld(entry) && !isScheduleEntryRetired(entry)
+    && !gameHasStarted(entry, clock)
+    && asMillis(entry.triggerTime) <= clock)
+    .sort((a, b) => asMillis(a.startTime) - asMillis(b.startTime)
+      || asMillis(a.triggerTime) - asMillis(b.triggerTime));
+  for (const entry of ordered) {
+    if (selected.length >= capacity) break;
+    const key = scheduleEntryKey(entry);
+    if (!seen.has(key)) {
+      seen.add(key);
+      selected.push(entry);
+    }
+  }
+  const selectedSet = new Set(selected);
+  const remaining = entries.filter((entry) => !selectedSet.has(entry));
+  return { selected, remaining };
+}
+
+/**
+ * Keep slots available to newly due games while another game is still running.
+ * Due jobs use earliest first pitch, not the age of their lineup/trigger clock.
+ * A slot stays owned through that game's props, preventing overlapping retries.
+ * takeReadyEntries receives the number of free slots, so the caller can keep
+ * every undispatched game in its live, mutable schedule. We return when no
+ * queued or active jobs remain; the caller continues waiting on future tiers.
+ */
+export async function runRollingDecisionPipeline({
+  entries = [],
+  concurrency = 3,
+  takeReadyEntries = () => [],
+  runGame,
+  runProps,
+  now = Date.now,
+  pollIntervalMs = 1000,
+} = {}) {
+  if (typeof runGame !== 'function' || typeof runProps !== 'function') {
+    throw new TypeError('runRollingDecisionPipeline requires runGame and runProps functions');
+  }
+  const workerCount = Math.max(1, Math.min(4, Math.trunc(concurrency) || 1));
+  const queued = [...entries];
+  const active = new Map();
+  let failure;
+  try {
+    while (true) {
+      if (failure) throw failure;
+      const occupied = new Set([...active.keys(), ...queued.map(scheduleEntryKey)]);
+      const availableSlots = Math.max(0, workerCount - active.size - queued.length);
+      if (availableSlots > 0) queued.push(...takeReadyEntries(occupied, availableSlots));
+      const clock = asMillis(now());
+      // Started jobs reach the normal runner guard so coverage is still logged.
+      const due = queued.filter((entry) => asMillis(entry.triggerTime) <= clock)
+        .sort((a, b) => asMillis(a.startTime) - asMillis(b.startTime)
+          || asMillis(a.triggerTime) - asMillis(b.triggerTime));
+      for (const entry of due) {
+        if (active.size >= workerCount) break;
+        const key = scheduleEntryKey(entry);
+        if (active.has(key)) continue;
+        queued.splice(queued.indexOf(entry), 1);
+        const job = Promise.resolve().then(async () => {
+          await runGame(entry);
+          await runProps(entry);
+        }).catch((error) => { failure = error; }).finally(() => { active.delete(key); });
+        active.set(key, job);
+      }
+      if (active.size === 0 && queued.length === 0) return;
+      let timer;
+      const nextTrigger = queued.reduce((next, entry) => {
+        const trigger = asMillis(entry.triggerTime);
+        return trigger > clock ? Math.min(next, trigger - clock) : next;
+      }, Infinity);
+      const waitMs = Math.max(1, Math.min(pollIntervalMs, nextTrigger));
+      try {
+        await Promise.race([...active.values(), new Promise((resolve) => { timer = setTimeout(resolve, waitMs); })]);
+      } finally { clearTimeout(timer); }
+    }
+  } finally {
+    // Unexpected callback errors must never leave model processes unobserved.
+    await Promise.allSettled(active.values());
+  }
+}
+
 /**
  * Run a bounded per-game decision pipeline. Props for one game start only
  * after that exact game's game-pick decision completes; they do not wait for

@@ -87,7 +87,9 @@ describe('MLB game lane runs the restored June engine (Aug 18 restoration)', () 
     expect(loop).toContain('THE RESEARCHER RETURNS FOR MLB');
     expect(loop).toContain("(sport === 'baseball_mlb' || sport === 'MLB')");
     const sha = src('orchestrator/junePromptSha.js');
-    expect(sha).toContain('MLB_RESEARCHER=ON');
+    expect(sha).toContain('MLB_RESEARCHER=${');
+    expect(sha).toContain("String(process.env.GARY_RESEARCHER || 'on').toLowerCase() === 'off' ? 'OFF' : 'ON_BOUNDED'");
+    expect(sha).toContain("'./optionalResearch.js'");
     expect(sha).not.toContain('RESEARCHER=OFF, ALL SPORTS');
   });
 

@@ -24,11 +24,13 @@ describe('the researcher is back for MLB (Sep 3 2026, the Aug 18 version)', () =
     expect(loop).not.toContain('const _researchBriefing = null;');
   });
 
-  it('is gated to MLB and NBA (the April winning era, Sep 3) with one env switch, and hard-fails a game without its briefing', () => {
+  it('is gated to MLB and NBA with one env switch and continues from the original desk if optional research fails', () => {
     const loop = src('orchestrator/agentLoop.js');
     expect(loop).toContain("(sport === 'baseball_mlb' || sport === 'MLB')");
     expect(loop).toContain("process.env.GARY_RESEARCHER || 'on'");
-    expect(loop).toContain('[HARD FAIL] Research assistant failed');
+    expect(loop).toContain('const research = await runResearchOnce(');
+    expect(loop).toContain('Optional research unavailable; Gary proceeds with the original desk');
+    expect(loop).not.toContain('[HARD FAIL] Research assistant failed');
   });
 
   it('Gary can ask the researcher up to six questions mid-investigation', () => {
@@ -59,6 +61,8 @@ describe('the researcher is back for MLB (Sep 3 2026, the Aug 18 version)', () =
     expect(sha).toContain("'./researchBriefing.js'");
     expect(sha).toContain("'../flashInvestigationPrompts.js'");
     expect(sha).toContain("'./investigationFactors.js'");
-    expect(sha).toContain('MLB_RESEARCHER=ON');
+    expect(sha).toContain('MLB_RESEARCHER=${');
+    expect(sha).toContain("'OFF' : 'ON_BOUNDED'");
+    expect(sha).toContain("'./optionalResearch.js'");
   });
 });

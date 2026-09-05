@@ -93,6 +93,18 @@ try {
   const eras = [...new Set(picks.map(p => p?.prompt_sha).filter(Boolean))];
   const models = [...new Set(picks.map(p => p?.model).filter(Boolean))];
   line(`Stored (${etToday})`, picks.length === 0 ? 'no game picks yet' : `${picks.length} picks · eras [${eras.join(', ')}] · models [${models.join(', ')}]`);
+  // Source parity is not publication health. Preserve visibility of missed
+  // coverage even after the underlying generation outage is repaired.
+  const { data: mlbSlate, error: slateError } = await supabase.from('daily_slate')
+    .select('bdl_game_id,away_team,home_team,commence_time').eq('date', etToday).eq('league', 'MLB');
+  if (slateError) throw new Error(`MLB coverage unavailable: ${slateError.message}`);
+  const publishedIds = new Set(picks.filter(p => p?.league === 'MLB' && p.pick && p.pick !== 'PASS')
+    .map(p => String(p.game_id ?? p.bdl_game_id)));
+  const published = (mlbSlate || []).filter(g => publishedIds.has(String(g.bdl_game_id)));
+  const missing = (mlbSlate || []).filter(g => !publishedIds.has(String(g.bdl_game_id)));
+  const missed = missing.filter(g => Date.parse(g.commence_time) <= Date.now());
+  line('MLB publication', `${published.length}/${mlbSlate?.length || 0} slate games published · ${missed.length} started without a pick · ${missing.length - missed.length} pending`);
+  if (missed.length) line('Missed coverage', `⚠️ ${missed.map(g => `${g.away_team} @ ${g.home_team} (${g.bdl_game_id})`).join('; ')}`);
 } catch (e) { failed = true; line('Stored picks', `(unavailable: ${e.message})`); }
 
 // 6. DEPLOY PARITY (founder law, Aug 24 2026: "if we change something here I

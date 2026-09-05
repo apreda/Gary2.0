@@ -5,6 +5,7 @@ const checks = vi.hoisted(() => ({
   diskEras: vi.fn(),
   junePromptSha: vi.fn(),
   storedPicks: vi.fn(),
+  slate: vi.fn(),
   readFile: vi.fn(),
 }));
 
@@ -20,7 +21,11 @@ vi.mock('../../src/services/agentic/orchestrator/junePromptSha.js', () => ({
 }));
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({
-    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: checks.storedPicks }) }) }),
+    from: (table) => {
+      if (table === 'daily_picks') return { select: () => ({ eq: () => ({ maybeSingle: checks.storedPicks }) }) };
+      if (table === 'daily_slate') return { select: () => ({ eq: () => ({ eq: checks.slate }) }) };
+      throw new Error(`Unexpected table: ${table}`);
+    },
   }),
 }));
 vi.mock('fs', () => ({
@@ -57,6 +62,7 @@ beforeEach(() => {
   checks.diskEras.mockReset().mockReturnValue({ game: 'game-era', props: 'props-era' });
   checks.junePromptSha.mockReset().mockReturnValue('game-era');
   checks.storedPicks.mockReset().mockResolvedValue({ data: null, error: null });
+  checks.slate.mockReset().mockResolvedValue({ data: [], error: null });
   checks.readFile.mockReset().mockReturnValue('import "../_shared/example.ts";');
   vi.spyOn(console, 'log').mockImplementation(() => {});
   vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('test exit'); });
@@ -71,6 +77,8 @@ describe('production truth reports a failing exit status when evidence is missin
     expect(result.output).toContain('no game picks yet');
     expect(result.output).toMatch(/MLB model \(plist\)\s+mlb-model/);
     expect(result.output).toMatch(/Winners worker\s+PID 456 · running/);
+    expect(result.output).toContain('0/0 slate games published · 0 started without a pick · 0 pending');
+    expect(checks.slate).toHaveBeenCalledWith('league', 'MLB');
     expect(result.output).toContain('✅ Production is this repo.');
   });
 
@@ -120,6 +128,37 @@ describe('production truth reports a failing exit status when evidence is missin
     expect(result.exitCode).toBe(1);
     expect(result.output).toContain('database unavailable');
     expect(result.output).not.toContain('no game picks yet');
+  });
+
+  it('reports missed MLB publication separately from source parity, excluding PASS and other leagues', async () => {
+    const past = new Date(Date.now() - 60_000).toISOString();
+    const future = new Date(Date.now() + 3_600_000).toISOString();
+    checks.storedPicks.mockResolvedValue({ data: { picks: [
+      { league: 'MLB', game_id: '11', pick: 'Home -1.5' },
+      { league: 'MLB', game_id: '14', pick: 'PASS' },
+      { league: 'NFL', game_id: '12', pick: 'Home -3.5' },
+    ] }, error: null });
+    checks.slate.mockResolvedValue({ data: [
+      { bdl_game_id: 11, away_team: 'Published Away', home_team: 'Published Home', commence_time: past },
+      { bdl_game_id: 12, away_team: 'Missed Away', home_team: 'Missed Home', commence_time: past },
+      { bdl_game_id: 13, away_team: 'Future Away', home_team: 'Future Home', commence_time: future },
+      { bdl_game_id: 14, away_team: 'Pass Away', home_team: 'Pass Home', commence_time: past },
+    ], error: null });
+    const result = await runCheck();
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain('1/4 slate games published · 2 started without a pick · 1 pending');
+    expect(result.output).toContain('Missed Away @ Missed Home (12)');
+    expect(result.output).toContain('Pass Away @ Pass Home (14)');
+    expect(result.output).not.toContain('Future Away @ Future Home (13)');
+  });
+
+  it('fails when the MLB slate cannot be read instead of reporting zero missing picks', async () => {
+    checks.slate.mockResolvedValue({ data: null, error: { message: 'slate unavailable' } });
+    const result = await runCheck();
+    expect(result.exitCode).toBe(1);
+    expect(result.output).toContain('MLB coverage unavailable: slate unavailable');
+    expect(result.output).not.toContain('0 started without a pick');
+    expect(result.output).not.toContain('✅ Production is this repo.');
   });
 
   it('fails when a function source cannot be inspected for shared dependencies', async () => {

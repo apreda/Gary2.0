@@ -29,6 +29,8 @@
  *    already consumes: {id, type:'function', function:{name, arguments}}.
  */
 
+import { requestSignal } from '../requestCancellation.js';
+
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
 
 // gpt-5 family (reasoning models): thinking depth maps to reasoning.effort.
@@ -123,6 +125,8 @@ function drainUnansweredCalls(session) {
 }
 
 export async function sendToOpenAISession(session, message, options = {}) {
+  const signal = requestSignal(options.signal, session.signal);
+  signal?.throwIfAborted();
   const { isFunctionResponse = false } = options;
   const startTime = Date.now();
 
@@ -150,6 +154,7 @@ export async function sendToOpenAISession(session, message, options = {}) {
   }
 
   const res = await fetch(OPENAI_RESPONSES_URL, {
+    signal,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -171,6 +176,7 @@ export async function sendToOpenAISession(session, message, options = {}) {
   }
 
   const data = await res.json();
+  signal?.throwIfAborted();
 
   // Request accepted: the queued items are now part of the server-side chain.
   session._pendingInput = [];

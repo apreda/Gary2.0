@@ -1,6 +1,13 @@
 # CLAUDE.md
 
-Latest operational handoff: read `../HANDOFF_2026-09-04_WINNERS_EVIDENCE.md` before taking over. Earlier launch and App Store context remains in `../HANDOFF_2026-09-04_ASTRA.md` and `../CLAUDE_HANDOFF_2026-08-24.md`.
+Latest operational handoff: read `../HANDOFF_2026-09-04_MLB_RECOVERY.md` and `../HANDOFF_2026-09-04_WINNERS_EVIDENCE.md` before taking over. Earlier launch and App Store context remains in `../HANDOFF_2026-09-04_ASTRA.md` and `../CLAUDE_HANDOFF_2026-08-24.md`.
+
+MLB outage repair (Sep 4 evening): optional research has one cancellable budget,
+including follow-ups, and reserves decision time before the child deadline.
+Failed research permits an original-desk decision and does not restart across
+brain retries on the same desk. The shared MLB/NBA scheduler uses three rolling
+game-to-props workers, configurable from one to four. Production verification
+must inspect actual slate coverage as well as processes and deployment parity.
 
 Gary 2.0 is an AI sports betting platform (MLB, NFL, NCAAF live; NBA pinned for relaunch; NHL/NCAAB deleted Aug 27 2026). ONE brain per pick: the research assistant (Haiku, tools + search, briefing before Pass 1) is BACK for MLB and NBA (founder GO, Sep 3 2026 — `GARY_RESEARCHER=off` is the switch); football stays desk-only pending its review. NBA reads the Apr 8 2026 winning-era prompts verbatim (`orchestrator/nbaWinningEra.js`, Sep 3 2026 — do not touch). Gemini is retired everywhere. Gary evaluates and decides on `codex-gpt-6-astra` (founder GO, Sep 4 2026; codex bridge, zero tools; failures re-run the WHOLE game on the next model in the cascade Sol via codex → opus-5 → sonnet-5; truth in `orchestratorConfig.js` + the scheduler plist). Game primaries are Astra; props stay on Sol (founder correction, Sep 4 2026). Research, Winners review, and content retain their existing models. Core orchestration lives in `src/services/agentic/orchestrator/agentLoop.js`; the desk builders in `src/services/agentic/scoutReport/`; sport awareness in `src/services/agentic/constitution/`. Pick generation scripts in `scripts/` (`run-agentic-picks.js` is the entry; MLB runs the June engine unconditionally — founder, Aug 27 2026: ONE pick system; the separate pickdesk game brain is deleted, though the props desk still lives in `src/services/pickdesk/`). Database is Supabase. All project context, architecture details, and user preferences are in the auto-memory files at `/Users/adam.preda/.claude/projects/-Users-adam-preda/memory/`.
 

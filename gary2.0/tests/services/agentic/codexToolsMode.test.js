@@ -75,8 +75,8 @@ describe('the Codex bridge in tools mode', () => {
     expect(GAME_RESEARCH_FALLBACK_MODEL).toBe('codex-gpt-5.6-luna');
     const loop = src('orchestrator/agentLoop.js');
     expect(loop).toContain('const RESEARCH_MODELS = [GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL]');
-    expect(loop).toContain('for (const researchModel of RESEARCH_MODELS) {');
-    expect(loop).toContain('_costTracker: costTracker, researchModel }');
+    expect(loop).toContain('models: RESEARCH_MODELS,');
+    expect(loop).toContain('_costTracker: costTracker, researchModel, signal }');
     expect(loop).toContain("trying the next researcher");
     expect(loop).toContain('researchModel: _researchModelUsed,');
     const rb = src('orchestrator/researchBriefing.js');

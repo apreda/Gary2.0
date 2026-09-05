@@ -2,6 +2,8 @@ import { cleanNcaafPlayerRows, aggregateNcaafPlayerRows } from '../scoutReport/s
 import { CONFIG, GAME_PICK_MODEL, GAME_ML_CAP, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, validateSessionModel } from './orchestratorConfig.js';
 import { createModelSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
 import { buildResearchBriefing, extractResearcherQuestions, createResearcherFollowUpSession, askResearcher } from './researchBriefing.js';
+import { researchBudgetMs, runOptionalResearch, runResearchOnce } from './optionalResearch.js';
+import { createHash } from 'node:crypto';
 import { createCostTracker } from './costTracker.js';
 import { buildPass1Message, buildPass2Message, buildPass3Unified, buildMlCapRetryMessage } from './passBuilders.js';
 import { buildNbaBriefingBlock, buildNbaPass25Message, buildNbaPass3Message } from './nbaWinningEra.js';
@@ -330,13 +332,19 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // it up to six questions mid-investigation. Football stays desk-only
   // pending its own review (GARY_RESEARCHER=off disables it everywhere).
   let _researchBriefing = null;
+  let _researchState = null;
   let _researcherFollowUpSession = null;
   let _researcherQuestionsUsed = 0;
   const RESEARCHER_QUESTION_BUDGET = 6;
-  // 20 minutes: the bridge answers a tool turn in 15-25s and a game runs
-  // ~30 of them; Haiku finishes in 3-5 minutes either way.
-  const RESEARCH_BRIEFING_TIMEOUT_MS = Number(process.env.GARY_RESEARCH_TIMEOUT_MS) || 20 * 60 * 1000;
-  // The sub first, the metered Haiku researcher second (Sep 3 2026).
+  // One 20-minute budget across all researcher models and tool calls. A
+  // timed-out researcher must stop before Gary proceeds with the original desk.
+  const RESEARCH_BRIEFING_TIMEOUT_MS = researchBudgetMs({
+    configuredMs: Number(process.env.GARY_RESEARCH_TIMEOUT_MS) || 20 * 60 * 1000,
+    deadlineAt: process.env.GARY_CHILD_DEADLINE_AT,
+    decisionReserveMs: process.env.GARY_RESEARCH_DECISION_RESERVE_MS ?? 8 * 60 * 1000,
+  });
+  let _researchBudgetRemainingMs = RESEARCH_BRIEFING_TIMEOUT_MS;
+  // Keep the configured research model order; this does not change the brain.
   const RESEARCH_MODELS = [GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL].filter((m, i, a) => m && a.indexOf(m) === i);
   let _researchModelUsed = null;
   // MLB (the June engine) and NBA (the April winning era) run it; football
@@ -353,43 +361,38 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     _researchBriefing = handedBriefing;
     console.log(`[Research Briefing] ♻️ Re-using the main read's briefing (${_researchBriefing.length} chars) — the researcher is not run again`);
   } else if (researcherOn) {
-    const failures = [];
-    for (const researchModel of RESEARCH_MODELS) {
-      console.log(`[Research Briefing] 🔬 Running the research briefing (${researchModel} with tools) — Gary waits for completion`);
-      try {
-        const briefingResult = await Promise.race([
-          buildResearchBriefing(options.scoutReport, sport, homeTeam, awayTeam, { ...options, _costTracker: costTracker, researchModel }),
-          new Promise((_, reject) => setTimeout(() => reject(new Error(`research briefing timed out after ${RESEARCH_BRIEFING_TIMEOUT_MS / 1000}s`)), RESEARCH_BRIEFING_TIMEOUT_MS)),
-        ]);
-        if (briefingResult && typeof briefingResult === 'object') {
-          _researchBriefing = briefingResult.briefing;
-          if (briefingResult.calledTokens?.length > 0) {
-            for (const { token } of briefingResult.calledTokens) {
-              if (!token) continue;
-              _flashCalledTokens.add(token);
-              const base = token.split(':')[0];
-              if (base && base !== token) _flashCalledTokens.add(base);
-            }
-          }
-        } else if (briefingResult && typeof briefingResult === 'string') {
-          _researchBriefing = briefingResult;
-        }
-        if (!_researchBriefing) throw new Error('the research assistant returned an empty briefing');
-        _researchModelUsed = researchModel;
-        console.log(`[Research Briefing] ✅ Briefing ready (${_researchBriefing.length} chars, ${researchModel})`);
-        break;
-      } catch (err) {
-        failures.push(`${researchModel}: ${err.message}`);
-        console.warn(`[Research Briefing] ⚠️ ${researchModel} failed (${err.message})${RESEARCH_MODELS.indexOf(researchModel) < RESEARCH_MODELS.length - 1 ? ' — trying the next researcher' : ''}`);
+    const researchKey = createHash('sha256').update(JSON.stringify([sport, homeTeam, awayTeam, options.gameId, options.gameTime, options.scoutReport])).digest('hex');
+    const research = await runResearchOnce(researchKey, {
+      models: RESEARCH_MODELS,
+      timeoutMs: RESEARCH_BRIEFING_TIMEOUT_MS,
+      signal: options.signal,
+      build: (researchModel, signal) => buildResearchBriefing(options.scoutReport, sport, homeTeam, awayTeam, { ...options, _costTracker: costTracker, researchModel, signal }),
+      onAttempt: (researchModel) => console.log(`[Research Briefing] 🔬 Running the research briefing (${researchModel} with tools) — Gary waits within the shared research budget`),
+      onFailure: (researchModel, err, hasNext) => console.warn(`[Research Briefing] ⚠️ ${researchModel} failed (${err.message})${hasNext ? ' — trying the next researcher' : ''}`),
+    });
+    const briefingResult = research.result;
+    _researchState = research;
+    research.budgetSpentMs ??= research.elapsedMs;
+    _researchBudgetRemainingMs = Math.max(0, RESEARCH_BRIEFING_TIMEOUT_MS - research.budgetSpentMs);
+    if (briefingResult && typeof briefingResult === 'object') {
+      _researchBriefing = briefingResult.briefing;
+      for (const { token } of briefingResult.calledTokens || []) {
+        if (!token) continue;
+        _flashCalledTokens.add(token);
+        const base = token.split(':')[0];
+        if (base && base !== token) _flashCalledTokens.add(base);
       }
+    } else if (typeof briefingResult === 'string') {
+      _researchBriefing = briefingResult;
     }
-    if (!_researchBriefing) {
-      // The June engine hard-failed here (a game without its researcher is
-      // not the June system). Kept: the runner's cascade re-runs the game.
-      throw new Error(`[HARD FAIL] Research assistant failed for ${homeTeam} @ ${awayTeam} (${sport}): ${failures.join(' | ')}`);
+    _researchModelUsed = research.model;
+    if (_researchBriefing) {
+      console.log(`[Research Briefing] ✅ Briefing ready (${_researchBriefing.length} chars, ${research.model})`);
+    } else {
+      console.warn(`[Research Briefing] Optional research unavailable; Gary proceeds with the original desk (${research.failures.join(' | ')})`);
     }
   }
-  if (researcherOn && isNBASport) {
+  if (_researchBriefing && isNBASport) {
     // April 8 2026 hand-off, for NBA: the briefing, the spread line, the
     // two-case reminder, INVESTIGATION COMPLETE — no ask-the-researcher
     // channel (April had none).
@@ -399,7 +402,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     nextMessageToSend = userMessage;
     messages[1] = { role: 'user', content: userMessage };
     console.log(`[Orchestrator] 📋 Research briefing included before Pass 1 (${_researchBriefing.length} chars) — Gary tasked with spread investigation`);
-  } else if (researcherOn) {
+  } else if (_researchBriefing) {
     const brainHasTools = !['claude-cli', 'codex-cli'].includes(currentSession?.provider);
     const investigateAsk = brainHasTools
       ? `Investigate further with your own fetch_stats calls wherever your read wants more evidence — duplicates of already-fetched stats return nothing new, so only novel requests cost anything. You can also hand a question to your research assistant: write a line starting with ASK RESEARCHER: followed by the question (one per line, up to 6 per game) and the answer comes back with its supporting evidence when available.`
@@ -1591,17 +1594,43 @@ INVESTIGATION COMPLETE`;
           console.log(`[Orchestrator] 🙋 ${questions.length} researcher question(s) from Gary (${_researcherQuestionsUsed}/${RESEARCHER_QUESTION_BUDGET} used)`);
           let answersText;
           try {
-            if (!_researcherFollowUpSession) {
-              _researcherFollowUpSession = await createResearcherFollowUpSession({
-                researchModel: _researchModelUsed,
-                scoutReportContent: options.scoutReport || '',
-                briefing: _researchBriefing,
-                sport, homeTeam, awayTeam,
-                _costTracker: costTracker,
-              });
+            const timeoutMs = researchBudgetMs({
+              configuredMs: _researchBudgetRemainingMs,
+              deadlineAt: process.env.GARY_CHILD_DEADLINE_AT,
+              decisionReserveMs: process.env.GARY_RESEARCH_DECISION_RESERVE_MS ?? 8 * 60 * 1000,
+            });
+            const followUp = await runOptionalResearch({
+              models: [_researchModelUsed || GAME_RESEARCH_MODEL],
+              timeoutMs: Math.min(_researchBudgetRemainingMs, timeoutMs),
+              signal: options.signal,
+              build: async (_model, signal) => {
+                if (!_researcherFollowUpSession) {
+                  _researcherFollowUpSession = await createResearcherFollowUpSession({
+                    researchModel: _researchModelUsed,
+                    scoutReportContent: options.scoutReport || '',
+                    briefing: _researchBriefing,
+                    sport, homeTeam, awayTeam,
+                    _costTracker: costTracker,
+                    signal,
+                  });
+                }
+                _researcherFollowUpSession.signal = signal;
+                return askResearcher(_researcherFollowUpSession, questions, { sport, homeTeam, awayTeam, options, signal });
+              },
+            });
+            _researchBudgetRemainingMs = Math.max(0, _researchBudgetRemainingMs - followUp.elapsedMs);
+            // The cached state crosses whole-brain retries: follow-up time
+            // already spent cannot buy another research budget on the retry.
+            if (_researchState) _researchState.budgetSpentMs += followUp.elapsedMs;
+            if (!followUp.result) {
+              // A failed optional follow-up stays in this brain's conversation.
+              // No more calls can restart the exhausted researcher session.
+              _researcherQuestionsUsed = RESEARCHER_QUESTION_BUDGET;
+              throw new Error(followUp.failures.join(' | '));
             }
-            answersText = await askResearcher(_researcherFollowUpSession, questions, { sport, homeTeam, awayTeam, options });
+            answersText = followUp.result;
           } catch (err) {
+            options.signal?.throwIfAborted();
             console.warn(`[Orchestrator] ⚠️ researcher follow-up failed: ${err.message}`);
             answersText = `The researcher could not be reached (${err.message}). Work from the desk and the briefing.`;
           }

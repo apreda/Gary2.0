@@ -118,7 +118,7 @@ describe('NBA reads the Apr 8 2026 prompts (the winning era)', () => {
   it('the agent loop routes NBA to the April turns and the researcher, and keeps the stat-audit retry off it', () => {
     const loop = src('orchestrator/agentLoop.js');
     expect(loop).toContain("((sport === 'baseball_mlb' || sport === 'MLB') || isNBASport)");
-    expect(loop).toContain('if (researcherOn && isNBASport) {');
+    expect(loop).toContain('if (_researchBriefing && isNBASport) {');
     expect(loop).toContain('buildNbaBriefingBlock(_researchBriefing, homeTeam, awayTeam, options.spread ?? null, caseReminder)');
     expect(loop).toContain('? buildNbaPass25Message(homeTeam, awayTeam, options.spread ?? 0, options.pass25DecisionGuards || \'\')');
     expect(loop.match(/isNBASport \? buildNbaPass3Message\(homeTeam, awayTeam, options\) : buildPass3Unified\(homeTeam, awayTeam, options\)/g)?.length).toBe(2);

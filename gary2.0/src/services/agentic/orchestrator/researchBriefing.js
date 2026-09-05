@@ -114,10 +114,10 @@ function renderStructuredBriefing(payload) {
  * findings carry too. Per-field caps keep the carry-forward block small across all
  * factors; the FULL text still lives in _accumulatedFactors for the final briefing.
  */
-function renderFindingsSoFar(accumulated, evidenceAware = false) {
+export function renderFindingsSoFar(accumulated, evidenceAware = false) {
   if (!accumulated || accumulated.length === 0) return '';
   if (evidenceAware) {
-    return '## PRIOR RESEARCH (reported evidence and interpretations; repetition is not independent support)\n\n' + renderEvidenceBriefing(accumulated);
+    return '## PRIOR RESEARCH (compact excerpts; full findings retained for the final briefing; repetition is not independent support)\n\n' + renderEvidenceBriefing(accumulated,{compact:true});
   }
   const blocks = accumulated.map(f => {
     const name = f.factor || f.name || f.title || 'Unknown';
@@ -200,7 +200,10 @@ export function extractTextualSummaryForModelSwitch(messages, toolCallHistory = 
  */
 export async function buildResearchBriefing(scoutReportContent, sport, homeTeam, awayTeam, options = {}) {
   const startTime = Date.now();
+  const checkAbort=()=>options.signal?.throwIfAborted();
+  const awaitResearch=async(work)=>{checkAbort();const result=await work();checkAbort();return result;};
   try {
+    checkAbort();
     // Strip every league-family prefix BDL uses, otherwise sportLabel ends up as
     // "BASEBALL_MLB" which has no entry in ALL_TOKENS_BY_SPORT — getTokensForSport
     // returns [], and the token-allowlist check at line ~298 silently passes any
@@ -213,6 +216,7 @@ export async function buildResearchBriefing(scoutReportContent, sport, homeTeam,
       .toUpperCase();
 
     const { INVESTIGATION_FACTORS } = await import('./investigationFactors.js');
+    checkAbort();
     const sportFactors = INVESTIGATION_FACTORS[sport] || {};
     const researchFactorPlan = buildResearchFactorPlan(sport, sportFactors, options);
     const isNflAugustPreseasonScoutPlan = researchFactorPlan.mode === 'nfl_august_preseason_scout';
@@ -267,6 +271,7 @@ Current preseason personnel, announced starter rest, rotations, injuries and coa
     const flashMaxOutput = undefined; // use CONFIG.maxTokens default
 
     const briefingSession = await createModelSession({
+      signal: options.signal,
       _costTracker: options._costTracker || null,
       // EVERY game sport's research runs the Haiku tier (June engine, Aug 18
       // 2026 — the founder's one-system law: no Gemini in any pick lane).
@@ -308,6 +313,8 @@ ${scoutReportContent}`,
       enableCache: true,
       ...(flashMaxOutput ? { maxOutputTokens: flashMaxOutput } : {})
     });
+    briefingSession.signal=options.signal;
+    checkAbort();
 
     const hasSpread = Number.isFinite(options.spread);
     const briefingPrompt = `## RESEARCH BRIEFING REQUEST
@@ -376,6 +383,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
       researchFactorPlan.factors,
       researchConcurrency,
       async (factorPlan, fi) => {
+      checkAbort();
       const factorName = factorPlan.name;
       const factorTokens = factorPlan.tokens;
 
@@ -411,12 +419,13 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
       const MAX_FACTOR_ITERATIONS = 5; // All sports: 5 rounds per factor for full investigation
 
       for (let iter = 0; iter < MAX_FACTOR_ITERATIONS; iter++) {
-        const response = await sendToSessionWithRetry(factorSession, currentMessage, { isFunctionResponse });
+        const response = await awaitResearch(()=>sendToSessionWithRetry(factorSession, currentMessage, { isFunctionResponse, signal:options.signal }));
 
         // Process tool calls if Flash wants to fetch stats
         if (response.toolCalls && response.toolCalls.length > 0) {
           const functionResponses = [];
           for (const toolCall of response.toolCalls) {
+            checkAbort();
             const functionName = toolCall.function?.name || toolCall.type;
             const args = JSON.parse(toolCall.function?.arguments || '{}');
 
@@ -449,7 +458,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                 const statOptions = hasResearchSeason && shouldUseNflResearchBaseline(sport, token)
                   ? researchOptions
                   : options;
-                const statResult = await fetchStats(sport, token, homeTeam, awayTeam, statOptions);
+                const statResult = await awaitResearch(()=>fetchStats(sport, token, homeTeam, awayTeam, statOptions));
                 const hasError = statResult?.error;
                 const statSummary = summarizeStatForContext(statResult, token, homeTeam, awayTeam);
                 functionResponses.push({ name: functionName, content: statSummary });
@@ -457,6 +466,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                 console.log(`    [Tool Response] ${token}: ${statSummary.slice(0, 200)}${statSummary.length > 200 ? '...' : ''}`);
                 calledTokens.push({ token, quality: hasError ? 'unavailable' : 'available' });
               } catch (err) {
+                checkAbort();
                 functionResponses.push({ name: functionName, content: `Error fetching ${token}: ${err.message}` });
                 calledTokens.push({ token, quality: 'unavailable' });
               }
@@ -479,11 +489,12 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                   // one-system law; Gemini remains only as its internal quota
                   // fallback) — same return contract, unwrap is provider-blind.
                   const { openaiWebSearch } = await import('../../pickdesk/webSearch.js');
-                  const groundingResult = await openaiWebSearch(query, { freshnessHours: 48 });
+                  const groundingResult = await awaitResearch(()=>openaiWebSearch(query, { freshnessHours: 48, signal:options.signal }));
                   const groundingText = typeof groundingResult === 'string' ? groundingResult : (groundingResult?.data || groundingResult?.text || 'No results');
                   console.log(`    ✓ Grounding result (${groundingText.length} chars)`);
                   functionResponses.push({ name: functionName, content: groundingText });
                 } catch (err) {
+                  checkAbort();
                   functionResponses.push({ name: functionName, content: `Search error: ${err.message}` });
                 }
               }
@@ -507,10 +518,10 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                 const nameParts = (args.player_name || '').trim().split(' ');
                 const lastName = nameParts[nameParts.length - 1];
                 const searchTerm = nameParts.length > 1 ? args.player_name.trim() : lastName;
-                let playersResp = await ballDontLieService.getPlayersGeneric(sportKey, { search: searchTerm, per_page: 25 });
+                let playersResp = await awaitResearch(()=>ballDontLieService.getPlayersGeneric(sportKey, { search: searchTerm, per_page: 25 }));
                 let players = Array.isArray(playersResp) ? playersResp : (playersResp?.data || []);
                 if (players.length === 0 && searchTerm !== lastName) {
-                  playersResp = await ballDontLieService.getPlayersGeneric(sportKey, { search: lastName, per_page: 25 });
+                  playersResp = await awaitResearch(()=>ballDontLieService.getPlayersGeneric(sportKey, { search: lastName, per_page: 25 }));
                   players = Array.isArray(playersResp) ? playersResp : (playersResp?.data || []);
                 }
                 const fullNameLower = (args.player_name || '').toLowerCase();
@@ -521,13 +532,13 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                   let logs;
                   let logContent;
                   if (args.sport === 'NBA') {
-                    logs = await ballDontLieService.getNbaPlayerGameLogs(player.id, numGames);
+                    logs = await awaitResearch(()=>ballDontLieService.getNbaPlayerGameLogs(player.id, numGames));
                     logContent = JSON.stringify({ player: args.player_name, sport: 'NBA', logs: logs || [] });
                   } else if (args.sport === 'NCAAB') {
-                    logs = await ballDontLieService.getNcaabPlayerGameLogs(player.id, numGames);
+                    logs = await awaitResearch(()=>ballDontLieService.getNcaabPlayerGameLogs(player.id, numGames));
                     logContent = JSON.stringify({ player: args.player_name, sport: 'NCAAB', logs: logs || [] });
                   } else if (args.sport === 'NHL') {
-                    logs = await ballDontLieService.getNhlPlayerGameLogs(player.id, numGames);
+                    logs = await awaitResearch(()=>ballDontLieService.getNhlPlayerGameLogs(player.id, numGames));
                     logContent = JSON.stringify({ player: args.player_name, sport: 'NHL', logs: logs || [] });
                   } else if (args.sport === 'MLB') {
                     // MLB per-game stats use BDL's /mlb/v1/stats — flat shape
@@ -535,7 +546,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                     // Mirrors agentLoop.js MLB branch. Chrono helper joins
                     // real game dates + drops spring/in-progress rows.
                     const currentYear = new Date().getFullYear();
-                    logs = await ballDontLieService.getMlbPlayerGameRowsChrono(player.id, currentYear);
+                    logs = await awaitResearch(()=>ballDontLieService.getMlbPlayerGameRowsChrono(player.id, currentYear));
                     // Use the pitcher/batter-aware summarizer instead of raw JSON
                     // so the briefing gets the same compact format Gary's path does.
                     logContent = summarizeMlbPlayerGameLogs(args.player_name, logs);
@@ -543,7 +554,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                     const s = args.sport === 'NFL' && hasResearchSeason
                       ? Number(options.researchSeason)
                       : nflSeason();
-                    const all = await ballDontLieService.getNflPlayerGameLogsBatch([player.id], s, numGames);
+                    const all = await awaitResearch(()=>ballDontLieService.getNflPlayerGameLogsBatch([player.id], s, numGames));
                     logs = all[player.id];
                     logContent = JSON.stringify({
                       player: args.player_name,
@@ -562,12 +573,13 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                   calledTokens.push({ token: `PLAYER_GAME_LOGS:${args.player_name}`, quality: 'available' });
                 }
               } catch (err) {
+                checkAbort();
                 functionResponses.push({ name: functionName, content: `Error: ${err.message}` });
               }
             } else if (functionName === 'fetch_nba_player_stats') {
               totalToolCalls++;
               try {
-                const teams = await ballDontLieService.getTeams('basketball_nba');
+                const teams = await awaitResearch(()=>ballDontLieService.getTeams('basketball_nba'));
                 const team = teams.find(t => t.full_name?.toLowerCase().includes(args.team.toLowerCase()) || t.name?.toLowerCase().includes(args.team.toLowerCase()));
                 if (!team) {
                   functionResponses.push({ name: functionName, content: JSON.stringify({ error: `Team "${args.team}" not found` }) });
@@ -577,23 +589,24 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                   const categoryMap = { 'ADVANCED': 'general', 'USAGE': 'general', 'DEFENSIVE': 'defense', 'TRENDS': 'general' };
                   let playerIds = [];
                   if (args.player_name) {
-                    const pResp = await ballDontLieService.getPlayersGeneric('basketball_nba', { search: args.player_name, per_page: 5 });
+                    const pResp = await awaitResearch(()=>ballDontLieService.getPlayersGeneric('basketball_nba', { search: args.player_name, per_page: 5 }));
                     const pArr = Array.isArray(pResp) ? pResp : (pResp?.data || []);
                     const found = pArr.find(p => `${p.first_name} ${p.last_name}`.toLowerCase().includes(args.player_name.toLowerCase()));
                     if (found) playerIds = [found.id];
                   }
                   if (playerIds.length === 0) {
-                    const activeResp = await ballDontLieService.getPlayersGeneric('basketball_nba', { team_ids: [team.id], per_page: 20 });
+                    const activeResp = await awaitResearch(()=>ballDontLieService.getPlayersGeneric('basketball_nba', { team_ids: [team.id], per_page: 20 }));
                     const active = Array.isArray(activeResp) ? activeResp : (activeResp?.data || []);
                     playerIds = active.slice(0, 10).map(p => p.id);
                   }
-                  const stats = await ballDontLieService.getNbaSeasonAverages({ category: categoryMap[args.stat_type], type: typeMap[args.stat_type], season, player_ids: playerIds });
+                  const stats = await awaitResearch(()=>ballDontLieService.getNbaSeasonAverages({ category: categoryMap[args.stat_type], type: typeMap[args.stat_type], season, player_ids: playerIds }));
                   const nbaStatsSummary = summarizeNbaPlayerAdvancedStats(stats, args.stat_type, team.full_name);
                   functionResponses.push({ name: functionName, content: nbaStatsSummary });
                   console.log(`    [Tool Response] ${functionName}: ${nbaStatsSummary.slice(0, 200)}...`);
                   calledTokens.push({ token: `NBA_PLAYER_STATS:${args.stat_type}`, quality: 'available' });
                 }
               } catch (err) {
+                checkAbort();
                 functionResponses.push({ name: functionName, content: JSON.stringify({ error: `NBA player stats failed: ${err.message}` }) });
               }
             } else if (functionName === 'fetch_depth_chart') {
@@ -601,12 +614,13 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
               try {
                 const tank01 = (await import('../../tank01DfsService.js')).default;
                 const teamAbv = (args.team || '').toUpperCase().replace(/[^A-Z]/g, '');
-                const result = await tank01.fetchDepthChart(teamAbv);
+                const result = await awaitResearch(()=>tank01.fetchDepthChart(teamAbv));
                 const content = JSON.stringify(result);
                 functionResponses.push({ name: functionName, content });
                 console.log(`    [Tool Response] ${functionName}: ${teamAbv} depth chart — ${content.slice(0, 200)}...`);
                 calledTokens.push({ token: `DEPTH_CHART:${teamAbv}`, quality: 'available' });
               } catch (err) {
+                checkAbort();
                 functionResponses.push({ name: functionName, content: JSON.stringify({ error: `Depth chart failed: ${err.message}` }) });
               }
             } else if (functionName === 'fetch_team_recent_stats') {
@@ -616,12 +630,13 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                 const numGames = args.num_games || 5;
                 const teamAbv = (args.team || '').toUpperCase().replace(/[^A-Z]/g, '');
                 const dateStr = gameDate || getESTDate();
-                const result = await tank01.fetchTeamLStats(teamAbv, numGames, dateStr);
+                const result = await awaitResearch(()=>tank01.fetchTeamLStats(teamAbv, numGames, dateStr));
                 const content = JSON.stringify(result);
                 functionResponses.push({ name: functionName, content });
                 console.log(`    [Tool Response] ${functionName}: L${numGames} ${teamAbv} — ${content.slice(0, 200)}...`);
                 calledTokens.push({ token: `TEAM_L${numGames}_STATS:${teamAbv}`, quality: 'available' });
               } catch (err) {
+                checkAbort();
                 functionResponses.push({ name: functionName, content: JSON.stringify({ error: `Team recent stats failed: ${err.message}` }) });
               }
             } else {
@@ -666,6 +681,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
       }
     );
 
+    checkAbort();
     const missingRequiredFactors = findMissingRequiredResearchFactors(researchFactorPlan, factorResults);
     if (missingRequiredFactors.length > 0) {
       throw new Error(`[HARD FAIL] Required ${researchFactorPlan.mode} factors incomplete: ${missingRequiredFactors.join(', ')}`);
@@ -719,6 +735,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
     return { briefing, calledTokens };
 
   } catch (error) {
+    if(options.signal?.aborted || error?.name==='AbortError')throw error;
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     const isQuota = error.isQuotaError || error.status === 429 || error.message?.includes('429');
     console.error(`[Research Briefing] ❌ ${isQuota ? 'QUOTA ERROR' : 'Error'} after ${elapsed}s: ${error.message}`);
@@ -760,7 +777,8 @@ export function extractResearcherQuestions(text, maxQuestions = 6) {
 }
 
 /** One follow-up session per game, created lazily on Gary's first question. */
-export async function createResearcherFollowUpSession({ scoutReportContent, briefing, sport, homeTeam, awayTeam, _costTracker = null, researchModel = null }) {
+export async function createResearcherFollowUpSession({ scoutReportContent, briefing, sport, homeTeam, awayTeam, _costTracker = null, researchModel = null, signal }) {
+  signal?.throwIfAborted();
   const systemPrompt = `You are the research assistant for a sports bettor named Gary. He read your briefing and has follow-up questions. Answer them factually.
 
 ${sport === 'NBA' || sport === 'basketball_nba' ? '' : RESEARCH_EVIDENCE_RULES}RULES:
@@ -775,26 +793,41 @@ ${scoutReportContent}
 
 ## YOUR EARLIER BRIEFING
 ${briefing}`;
-  return createModelSession({
+  const session = await createModelSession({
     _costTracker,
     modelName: researchModel || GAME_RESEARCH_MODEL,
     systemPrompt,
     tools: toolDefinitions,
     thinkingLevel: 'high',
     enableCache: true,
+    signal,
   });
+  signal?.throwIfAborted();
+  session.signal = signal;
+  return session;
 }
 
 /** Answer a batch of Gary's questions, running the researcher's tool loop. */
-export async function askResearcher(session, questions, { sport, homeTeam, awayTeam, options = {} } = {}) {
+export async function askResearcher(session, questions, { sport, homeTeam, awayTeam, options = {}, signal = options.signal } = {}) {
+  const checkAbort = () => signal?.throwIfAborted();
+  const awaitResearch = async (work) => {
+    checkAbort();
+    const result = await work();
+    checkAbort();
+    return result;
+  };
+  checkAbort();
+  // The cached session can outlive one follow-up's cancellation scope.
+  session.signal = signal;
   const label = FOLLOW_UP_SPORT_LABELS[sport] || sport;
   let currentMessage = `Gary's follow-up question${questions.length > 1 ? 's' : ''}:\n\n${questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}\n\nAnswer each in order, numbered the same way.`;
   let isFunctionResponse = false;
   for (let iter = 0; iter < 6; iter++) {
-    const response = await sendToSessionWithRetry(session, currentMessage, { isFunctionResponse });
+    const response = await awaitResearch(() => sendToSessionWithRetry(session, currentMessage, { isFunctionResponse, signal }));
     if (response.toolCalls && response.toolCalls.length > 0) {
       const functionResponses = [];
       for (const toolCall of response.toolCalls) {
+        checkAbort();
         const functionName = toolCall.function?.name || toolCall.type;
         let args = {};
         try { args = JSON.parse(toolCall.function?.arguments || '{}'); } catch { /* malformed args → handled below */ }
@@ -807,17 +840,21 @@ export async function askResearcher(session, questions, { sport, homeTeam, awayT
             continue;
           }
           try {
-            const statResult = await fetchStats(sport, token, homeTeam, awayTeam, options);
+            const statResult = await awaitResearch(() => fetchStats(sport, token, homeTeam, awayTeam, { ...options, signal }));
             functionResponses.push({ name: functionName, content: summarizeStatForContext(statResult, token, homeTeam, awayTeam) });
           } catch (err) {
+            checkAbort();
+            if (err?.name === 'AbortError') throw err;
             functionResponses.push({ name: functionName, content: `Error fetching ${token}: ${err.message}` });
           }
         } else if (functionName === 'fetch_narrative_context') {
           try {
-            const { openaiWebSearch } = await import('../../pickdesk/webSearch.js');
-            const r = await openaiWebSearch(args.query || '', { freshnessHours: 48 });
+            const { openaiWebSearch } = await awaitResearch(() => import('../../pickdesk/webSearch.js'));
+            const r = await awaitResearch(() => openaiWebSearch(args.query || '', { freshnessHours: 48, signal }));
             functionResponses.push({ name: functionName, content: (typeof r === 'string' ? r : r?.data) || 'No results' });
           } catch (err) {
+            checkAbort();
+            if (err?.name === 'AbortError') throw err;
             functionResponses.push({ name: functionName, content: `Search error: ${err.message}` });
           }
         } else {

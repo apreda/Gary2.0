@@ -46,11 +46,14 @@ import {
   runIndependentDecisionLanes,
   runIndependentScheduleLanes,
   runPerGameDecisionPipeline,
+  runRollingDecisionPipeline,
   schedulerChildArgs,
   schedulerEntrySlateIdentity,
   scheduleEntryKey,
   setGameScheduleHold,
+  sharedLaneConcurrency,
   sportFetchRetryIsCurrent,
+  takeReadySharedEntries,
 } from './lib/schedulerPolicy.js';
 import { requireNonFootballStart } from './lib/schedulerSourcePolicy.js';
 import { parsePropRunOutcome } from './lib/propsRunReliability.js';
@@ -128,18 +131,6 @@ const SPORTS = [
   { key: 'baseball_mlb', flag: '--mlb', label: 'MLB', propsScript: 'run-agentic-mlb-props.js' },
 ];
 
-// Within a shared trigger window, process lightweight/time-sensitive slates
-// before MLB's full picks+props block. Lower number = runs earlier.
-// This orders the shared daily-ledger lane; NFL and NCAAF decisions use the
-// separate bounded per-game lanes defined below.
-const SPORT_RUN_PRIORITY = {
-  americanfootball_nfl: 1,
-  americanfootball_ncaaf: 2,
-  basketball_nba: 3,
-  icehockey_nhl: 4,
-  baseball_mlb: 5,
-};
-
 // Spaced retries for fixed-trigger sports, as minutes AFTER the fixed time
 // (10:00 → 10:45 → 11:30 ET). Like the lead-time tiers, every retry after a
 // successful pick hits run-agentic-picks.js's "already has pick" dedup and
@@ -158,19 +149,15 @@ const NFL_GAME_DECISION_CONCURRENCY = 3;
 const NCAAF_CLUSTER_MIN_CONCURRENCY = 3;
 const NCAAF_CLUSTER_MAX_CONCURRENCY = 12;
 const NCAAF_TARGET_GAMES_PER_WORKER = 4;
-// Shared MLB/NBA daily lane: serial on a normal night (≤4 games in a window),
-// TWO bounded workers on a fat start cluster. Aug 25 2026: six West-Coast MLB
-// picks at 11-22 min each vs a 95-min T-90 runway — serial missed Reds @
-// Giants in a way NO ordering could fix (98 min of work, 95 of runway). The
-// daily ledger's atomic date-lock path already absorbs concurrent writers
-// (NCAAF runs up to 12 through it); two keeps CLI-quota pressure modest.
-const SHARED_LANE_MAX_CONCURRENCY = 2;
-const SHARED_LANE_TARGET_GAMES_PER_WORKER = 4;
+// Shared MLB/NBA: a rolling pool lets newly due games use free slots while a
+// slow research/props job is still running. Atomic daily-ledger writes already
+// support independent games. Operators may choose 1–4 whole game+props slots.
+const SHARED_LANE_CONCURRENCY = sharedLaneConcurrency();
 
-// A child may research for a long time, but it may not own the scheduler past
-// the next queued trigger or its own kickoff/first pitch. Two minutes lets the
-// parent terminate and reap a slow child, record a retryable failure, and move
-// to the next batch before that batch's wall-clock window opens.
+// Children stop before their own kickoff/first pitch or the hard runtime cap.
+// Other lanes also honor their next queued trigger; MLB's rolling pool lets
+// independent games advance without cancelling healthy research at each tier.
+// Two minutes leaves time to terminate/reap and record a retryable failure.
 const CHILD_MAX_RUNTIME_MS = 45 * 60 * 1000;
 const CHILD_DEADLINE_SAFETY_MS = 2 * 60 * 1000;
 const CHILD_TERMINATION_GRACE_MS = 5 * 1000;
@@ -814,7 +801,13 @@ function runScript(scriptPath, args = [], options = {}) {
       cwd: PROJECT_DIR,
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: true,
-      env: { ...process.env, NODE_OPTIONS: '' }
+      env: {
+        ...process.env,
+        NODE_OPTIONS: '',
+        // Optional research must leave time for Gary's decision before the
+        // parent terminates this exact game's process tree.
+        GARY_CHILD_DEADLINE_AT: deadlineAt.toISOString(),
+      }
     });
 
     let output = '';
@@ -1267,11 +1260,13 @@ async function executeDecisionLaneSchedule(schedule, {
     const now = Date.now();
     const waitMs = triggerTime.getTime() - now;
 
-    if (waitMs > 60000) { // More than 1 min away
-      const waitMin = (waitMs / 1000 / 60).toFixed(0);
-      const triggerET = triggerTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
-      log(`\n⏳ Next batch: ${batch.length} game(s) at ${triggerET} ET (${waitMin} min)`);
-      log(`   Games: ${batch.map(e => e.matchup).join(', ')}`);
+    if (waitMs > 0) {
+      if (waitMs > 60000) {
+        const waitMin = (waitMs / 1000 / 60).toFixed(0);
+        const triggerET = triggerTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
+        log(`\n⏳ Next batch: ${batch.length} game(s) at ${triggerET} ET (${waitMin} min)`);
+        log(`   Games: ${batch.map(e => e.matchup).join(', ')}`);
+      }
       await sleepUntilWallClock(triggerTime);
     }
 
@@ -1361,8 +1356,12 @@ async function executeDecisionLaneSchedule(schedule, {
 
     // Laptop wake/catch-up safety: never replay a betting task after the game
     // has started. This applies equally to game picks and props.
-    const coverageBatch = batch;
+    // Shared entries enter coverage only when actually dispatched; their
+    // initial batch is returned to the live queue below. Stale entries still
+    // receive the ordinary terminal coverage check.
+    const coverageBatch = batch.filter((entry) => decisionLaneKey(entry) !== 'shared');
     const { runnable: runnableBatch, stale } = partitionStartedEntries(batch, Date.now());
+    coverageBatch.push(...stale.filter((entry) => decisionLaneKey(entry) === 'shared'));
     for (const entry of stale) {
       const key = scheduleEntryKey(entry);
       if (!skippedStartedGames.has(key)) {
@@ -1379,8 +1378,8 @@ async function executeDecisionLaneSchedule(schedule, {
     // themselves after their complete game+props work finishes.
     const activeBatchLaneKeys = new Set(batch.map(decisionLaneKey));
 
-    // Group this batch by sport so we run game picks for the same sport together
-    // (better for disk cache — all NHL picks, then all NHL props)
+    // Football keeps its separate sport pools; the shared daily-ledger pool
+    // chooses among MLB/NBA games by first pitch below.
     const bySport = new Map();
     for (const entry of batch) {
       const key = entry.sport.key;
@@ -1388,13 +1387,6 @@ async function executeDecisionLaneSchedule(schedule, {
       bySport.get(key).push(entry);
     }
 
-    // Process sports by SPORT_RUN_PRIORITY. NFL writes through its atomic
-    // weekly ledger; NCAAF and the shared daily lane write through the atomic
-    // daily ledger. That lets the two football slates use bounded research
-    // pools without losing a concurrently completed MLB/NBA decision.
-    const orderedSports = [...bySport.entries()].sort(
-      (a, b) => (SPORT_RUN_PRIORITY[a[0]] ?? 99) - (SPORT_RUN_PRIORITY[b[0]] ?? 99)
-    );
     // The three decision lanes start together. Inside each lane, game calls
     // lead props; there is deliberately no cross-lane barrier. A long shared
     // MLB/NBA decision therefore cannot delay NFL/NCAAF props, and a football
@@ -1446,27 +1438,35 @@ async function executeDecisionLaneSchedule(schedule, {
 
     const ncaafGames = bySport.get('americanfootball_ncaaf') || [];
 
-    // Shared MLB/NBA lane: the same per-game pipeline the football lanes use —
-    // each worker finishes one game's pick, then that same game's props, so a
-    // fat cluster's props stop expiring behind the full pick sweep. Batches
-    // arrive trigger-sorted from nextTriggerBatch (≈ deadline order within a
-    // tier), and clusterConcurrency stays at ONE worker on a normal night.
+    // A batch boundary must not keep free workers idle while later games are
+    // due. Pull from the live queue throughout this shared pool, retaining the
+    // same-game lock through props and selecting earliest viable starts first.
     const runSharedDailyDecisionLane = async () => {
-      for (const [sportKey, games] of orderedSports) {
-        if (sportKey === 'americanfootball_nfl' || sportKey === 'americanfootball_ncaaf') continue;
-        const sport = games[0].sport;
-        const workers = clusterConcurrency(games.length, {
-          maxWorkers: SHARED_LANE_MAX_CONCURRENCY,
-          targetGamesPerWorker: SHARED_LANE_TARGET_GAMES_PER_WORKER,
-        });
-        log(`\n── ${sport.label}: ${games.length} per-game decision pipeline(s), ${workers} bounded worker(s), atomic daily-ledger writes ──`);
-        await runPerGameDecisionPipeline({
-          entries: games,
-          concurrency: workers,
-          runGame: runGameDecision,
-          runProps: runPropDecision,
-        });
-      }
+      const games = batch.filter((entry) => decisionLaneKey(entry) === 'shared');
+      if (games.length === 0) return;
+      // Even the initial batch stays visible to official delay/time updates
+      // until a worker is free. Only dispatched entries leave pendingEntries.
+      pendingEntries.push(...games);
+      log(`\n── MLB/NBA: ${games.length} initial game(s), ${SHARED_LANE_CONCURRENCY} bounded rolling worker(s), earliest first pitch first ──`);
+      await runRollingDecisionPipeline({
+        concurrency: SHARED_LANE_CONCURRENCY,
+        takeReadyEntries: (occupiedGameKeys, availableSlots) => {
+          const overdue = coalesceOverdueTiers(pendingEntries, Date.now());
+          pendingEntries = overdue.entries;
+          for (const entry of overdue.skipped) {
+            log(`⏭️ SUPERSEDED WINDOW SKIPPED: ${entry.sport.label} ${entry.matchup} T-${entry.leadMin} — a newer tier remains (id ${entry.gameId})`);
+          }
+          const ready = takeReadySharedEntries(pendingEntries, { occupiedGameKeys, limit: availableSlots });
+          pendingEntries = ready.remaining;
+          coverageBatch.push(...ready.selected);
+          if (ready.selected.length > 0) {
+            log(`  ➕ Rolling queue: ${ready.selected.length} newly due game(s) admitted without waiting for the prior batch`);
+          }
+          return ready.selected;
+        },
+        runGame: runGameDecision,
+        runProps: runPropDecision,
+      });
     };
 
     // Each sport lane keeps its own game-before-props ordering. Football props

@@ -9,17 +9,24 @@ export const RESEARCH_EVIDENCE_RULES = `EVIDENCE HANDLING:
 
 const value = input => typeof input === 'string' ? input.trim() : Array.isArray(input) ? input.map(item => typeof item === 'string' ? item : JSON.stringify(item)).join('; ') : '';
 
+// Prior research gets 740 content characters per factor, the same total as
+// the former 260/260/220 carry-forward fields. Full findings remain intact
+// for the final briefing; source/context/uncertainty labels survive compaction.
+export const COMPACT_RESEARCH_LIMITS = Object.freeze({ finding:220,numbers:220,context:140,sources:100,uncertainty:60 });
+const excerpt=(text,limit)=>text.length>limit ? `${text.slice(0,limit-1)}…` : text;
+
 /** Research text is attributed, not automatically certified by its author. */
-export function renderEvidenceBriefing(factors) {
+export function renderEvidenceBriefing(factors,{compact=false}={}) {
   const seen = new Map();
   return factors.map((factor, index) => {
     const name = value(factor.factor || factor.factorName || factor.name || factor.title) || `Factor ${index + 1}`;
-    const finding = value(factor.keyFinding || factor.key_finding || factor.finding);
-    const numbers = value(factor.numbers || factor.stats);
-    const context = value(factor.context || factor.sampleContext || factor.sample_context);
-    const sources = value(factor.sources);
-    const uncertainty = value(factor.uncertainties || factor.conflicts);
-    const signature = JSON.stringify([finding, numbers, context, sources, uncertainty]);
+    const raw={finding:value(factor.keyFinding || factor.key_finding || factor.finding),numbers:value(factor.numbers || factor.stats),
+      context:value(factor.context || factor.sampleContext || factor.sample_context),sources:value(factor.sources),uncertainty:value(factor.uncertainties || factor.conflicts)};
+    const {finding,numbers,context,sources,uncertainty}=compact
+      ? Object.fromEntries(Object.entries(raw).map(([key,text])=>[key,excerpt(text,COMPACT_RESEARCH_LIMITS[key])])) : raw;
+    // Compare complete findings, not clipped excerpts: different facts may
+    // share an opening sentence and must not become false duplicates.
+    const signature = JSON.stringify(raw);
     const earlier = seen.get(signature);
     if (earlier) return `**${name}**\nRepeats the same research as ${earlier}; see that entry. This is not an independent source.`;
     seen.set(signature, name);

@@ -34,6 +34,8 @@
  */
 import { spawn } from 'child_process';
 import { isCliTripped, recordCliTimeout, recordCliSuccess, trippedError } from './cliCircuitBreaker.js';
+import { abortError, requestSignal } from '../requestCancellation.js';
+import { registerOwnedProcessGroup } from './ownedProcessGroups.js';
 
 const CODEX_BIN = process.env.CODEX_CLI_PATH || 'codex';
 // Measured Aug 25 2026 over 2,596 logged CLI responses: median 2.3m, p90 5.8m,
@@ -101,27 +103,67 @@ export function parseCodexToolCalls(text) {
 // concurrent lanes) must never count as evidence that the zero-tool pick
 // session is hanging. Two slow searches used to trip 'codex' for the whole
 // process and push every remaining pick onto the metered cascade.
-function runCodex(args, stdinText, timeoutMs = CALL_TIMEOUT_MS, breakerKey = 'codex') {
+function runCodex(args, stdinText, timeoutMs = CALL_TIMEOUT_MS, breakerKey = 'codex', explicitSignal) {
+  const signal = requestSignal(explicitSignal);
+  signal?.throwIfAborted();
   // A bridge that has already timed out repeatedly this run is not asked again.
   if (isCliTripped(breakerKey)) return Promise.reject(trippedError(breakerKey));
   return new Promise((resolve, reject) => {
-    const proc = spawn(CODEX_BIN, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    // The CLI wrapper starts a native child. Give this invocation its own
+    // process group so cancellation reaches both, without touching other games.
+    const processGroup = !!signal && process.platform !== 'win32';
+    const proc = spawn(CODEX_BIN, args, { stdio: ['pipe', 'pipe', 'pipe'], detached: processGroup });
+    const releaseGroup = processGroup ? registerOwnedProcessGroup(proc.pid) : () => {};
     let stdout = '';
     let stderr = '';
-    const timer = setTimeout(() => {
-      proc.kill('SIGTERM');
-      recordCliTimeout(breakerKey);
-      reject(new Error(`codex CLI timed out after ${Math.round(timeoutMs / 60000)}m`));
-    }, timeoutMs);
+    let settled = false;
+    let timer;
+    const killOwnedGroup = (killSignal) => {
+      if (!proc.pid) return;
+      try {
+        if (processGroup) process.kill(-proc.pid, killSignal);
+        else proc.kill(killSignal);
+      } catch (error) {
+        if (error.code !== 'ESRCH') console.warn(`[Codex CLI] Could not terminate request: ${error.message}`);
+      }
+    };
+    const cleanup = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+    };
+    const fail = (error, { terminate = false, timedOut = false } = {}) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (timedOut) recordCliTimeout(breakerKey);
+      if (terminate) {
+        killOwnedGroup('SIGTERM');
+        // The wrapper may close before a stubborn descendant. Keep the hard
+        // kill scheduled for the group even after the wrapper's close event.
+        setTimeout(() => { killOwnedGroup('SIGKILL'); releaseGroup(); }, 1000).unref();
+      } else {
+        releaseGroup();
+      }
+      reject(error);
+    };
+    const onAbort = () => fail(signal.reason || abortError('Codex request cancelled'), { terminate: true });
+    timer = setTimeout(() => fail(new Error(`codex CLI timed out after ${Math.round(timeoutMs / 60000)}m`), { terminate: true, timedOut: true }), timeoutMs);
+    signal?.addEventListener('abort', onAbort, { once: true });
     proc.stdout.on('data', (d) => { stdout += d.toString(); });
     proc.stderr.on('data', (d) => { stderr += d.toString(); });
-    proc.on('error', (e) => { clearTimeout(timer); recordCliSuccess(breakerKey); reject(e); });
+    proc.on('error', (e) => fail(e));
+    proc.stdin.on('error', (e) => fail(e, { terminate: true }));
     proc.on('close', (code) => {
-      clearTimeout(timer);
+      if (settled) return;
+      settled = true;
+      cleanup();
+      releaseGroup();
       // Any answer at all — even a non-zero exit — means the bridge is alive.
+      // A killed request closing is not an answer and cannot erase a timeout.
       recordCliSuccess(breakerKey);
       resolve({ code, stdout, stderr });
     });
+    if (signal?.aborted) { onAbort(); return; }
     proc.stdin.write(stdinText);
     proc.stdin.end();
   });
@@ -178,6 +220,7 @@ export async function createCodexCliSession(options = {}) {
     tools: toolList,
     codexThreadId: null, // set after the first send; `exec resume` continues it
     _costTracker,
+    signal: requestSignal(options.signal),
   };
 }
 
@@ -191,6 +234,8 @@ export function resetCodexCliSessionChat(session, seedHistory = []) {
 }
 
 export async function sendToCodexCliSession(session, message, options = {}) {
+  const signal = requestSignal(options.signal, session.signal);
+  signal?.throwIfAborted();
   const startTime = Date.now();
   // Tools mode: the caller's function responses ride as one TOOL RESULTS turn.
   const text = (session.tools && options.isFunctionResponse && Array.isArray(message))
@@ -215,7 +260,8 @@ export async function sendToCodexCliSession(session, message, options = {}) {
   }
 
   // A research (tools) session trips its own breaker lane, never the brain's.
-  const { code, stdout, stderr } = await runCodex(args, body, CALL_TIMEOUT_MS, session.tools ? 'codex-research' : 'codex');
+  const { code, stdout, stderr } = await runCodex(args, body, CALL_TIMEOUT_MS, session.tools ? 'codex-research' : 'codex', signal);
+  signal?.throwIfAborted();
   const duration = Date.now() - startTime;
   if (code !== 0) {
     const error = toError(stderr || stdout);
@@ -269,13 +315,14 @@ export async function codexCliWebSearch(prompt, options = {}) {
     // queries running past the old 5m cap (3 of 4 timed out) while completed
     // ones landed 6-17K chars — and with the metered fallback rung subject to
     // wallet balance, the $0 rung finishing is worth the extra headroom.
-    const { code, stdout, stderr } = await runCodex(args, prompt, options.timeoutMs || 8 * 60 * 1000, 'codex-search');
+    const { code, stdout, stderr } = await runCodex(args, prompt, options.timeoutMs || 8 * 60 * 1000, 'codex-search', options.signal);
     if (code !== 0) throw toError(stderr || stdout);
     const { text } = parseEvents(stdout);
     const clean = String(text || '').trim();
     console.log(`[Web Search] codex-cli (${model}) returned ${clean.length} chars (GPT Pro — $0 marginal)`);
     return { success: clean.length > 0, data: clean, raw: stdout };
   } catch (e) {
+    requestSignal(options.signal)?.throwIfAborted();
     console.warn(`[Web Search] codex-cli search failed: ${e.message}`);
     return { success: false, data: '', raw: null, error: e.message };
   }
@@ -301,13 +348,14 @@ export async function codexCliOneShot(prompt, options = {}) {
       '-',
     ];
     const stdinText = options.systemPrompt ? `${options.systemPrompt}\n\n${prompt}` : prompt;
-    const { code, stdout, stderr } = await runCodex(args, stdinText, options.timeoutMs || 6 * 60 * 1000, breakerKey);
+    const { code, stdout, stderr } = await runCodex(args, stdinText, options.timeoutMs || 6 * 60 * 1000, breakerKey, options.signal);
     if (code !== 0) throw toError(stderr || stdout);
     const { text, usage } = parseEvents(stdout);
     const clean = String(text || '').trim();
     console.log(`[Codex one-shot] ${breakerKey} (${model}, ${effort}${options.search ? ', search' : ''}) returned ${clean.length} chars (GPT Pro — $0 marginal)`);
     return { success: clean.length > 0, data: clean, raw: stdout, usage: usage || null };
   } catch (e) {
+    requestSignal(options.signal)?.throwIfAborted();
     console.warn(`[Codex one-shot] ${breakerKey} failed: ${e.message}`);
     return { success: false, data: '', raw: null, error: e.message };
   }

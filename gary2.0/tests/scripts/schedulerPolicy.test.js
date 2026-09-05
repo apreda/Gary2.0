@@ -685,21 +685,6 @@ describe('scheduler reliability policy', () => {
     expect(clusterConcurrency(120, ncaaf)).toBe(12);
   });
 
-  it('keeps the shared MLB/NBA lane serial on a normal night and opens a second worker on a fat cluster', () => {
-    const shared = { maxWorkers: 2, targetGamesPerWorker: 4 };
-    // A typical evening window: one to four games — exactly the old serial lane.
-    for (const count of [1, 2, 3, 4]) {
-      expect(clusterConcurrency(count, shared)).toBe(1);
-    }
-    // The Aug 25 2026 West-Coast cluster: six picks at 11-22 min each vs a
-    // 95-minute T-90 runway. Serial was 98 minutes of work — Reds @ Giants was
-    // unreachable in ANY order. Two workers cover it with the props windows
-    // still open.
-    expect(clusterConcurrency(6, shared)).toBe(2);
-    // The bound holds even on a full 15-game slate landing in one window.
-    expect(clusterConcurrency(15, shared)).toBe(2);
-  });
-
   it('runs each football game decision before its own props without a full-slate barrier', async () => {
     const events = [];
     let releaseFirstGame;

@@ -3,6 +3,8 @@ import { isOpenAiModel, createOpenAISession, sendToOpenAISession, resetOpenAISes
 import { isClaudeCliModel, createClaudeCliSession, sendToClaudeCliSession, resetClaudeCliSessionChat } from './providerAdapters/claudeCliSession.js';
 import { isCodexCliModel, createCodexCliSession, sendToCodexCliSession, resetCodexCliSessionChat } from './providerAdapters/codexCliSession.js';
 import { isAnthropicApiModel, createAnthropicApiSession, sendToAnthropicApiSession, resetAnthropicApiSessionChat } from './providerAdapters/anthropicApiSession.js';
+import { setTimeout as sleep } from 'node:timers/promises';
+import { requestSignal } from './requestCancellation.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PERSISTENT SESSION MANAGEMENT — the provider seam.
@@ -81,6 +83,9 @@ export function resetSessionChat(session, seedHistory = []) {
  * @returns {Object} - Parsed response with content, toolCalls, usage
  */
 export async function sendToSession(session, message, options = {}) {
+  const signal = requestSignal(options.signal, session?.signal);
+  signal?.throwIfAborted();
+  options = { ...options, signal };
   if (session?.provider === 'openai') {
     return sendToOpenAISession(session, message, options);
   }
@@ -105,6 +110,9 @@ export async function sendToSession(session, message, options = {}) {
  * @returns {Object} - Response from sendToSession
  */
 export async function sendToSessionWithRetry(session, message, options = {}, maxRetries = 3) {
+  const signal = requestSignal(options.signal, session?.signal);
+  signal?.throwIfAborted();
+  options = { ...options, signal };
   // Transient network failures get extra attempts beyond maxRetries: local
   // DNS blips (getaddrinfo ENOTFOUND) outlasted the original ~7s retry
   // window and killed a full analysis (June 3 2026 — Tigers @ Rays lost its
@@ -115,6 +123,8 @@ export async function sendToSessionWithRetry(session, message, options = {}, max
     try {
       return await sendToSession(session, message, options);
     } catch (error) {
+      signal?.throwIfAborted();
+      if (error.name === 'AbortError') throw error;
       // Don't retry quota errors - they need manual intervention or fallback
       // (the model cascade handles 429s).
       if (error.isQuotaError) {
@@ -159,7 +169,7 @@ export async function sendToSessionWithRetry(session, message, options = {}, max
       const delay = backoffDelays[attempt - 1] || 30000;
       console.log(`[Session] ⚠️ Retryable error (attempt ${attempt}/${maxAttempts}): ${error.message?.slice(0, 80)}...`);
       console.log(`[Session] 🔄 Waiting ${delay/1000}s before retry...`);
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await sleep(delay, undefined, { signal });
     }
   }
 }

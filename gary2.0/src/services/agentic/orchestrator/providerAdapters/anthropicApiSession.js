@@ -29,6 +29,8 @@
  *    research role doesn't need — the checklist is a diligence job.
  */
 
+import { requestSignal } from '../requestCancellation.js';
+
 const ANTHROPIC_MESSAGES_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
 const MODEL_PREFIX = 'anthropic-';
@@ -131,6 +133,8 @@ function drainUnansweredCalls(session) {
 }
 
 export async function sendToAnthropicApiSession(session, message, options = {}) {
+  const signal = requestSignal(options.signal, session.signal);
+  signal?.throwIfAborted();
   const { isFunctionResponse = false } = options;
   const startTime = Date.now();
 
@@ -166,6 +170,7 @@ export async function sendToAnthropicApiSession(session, message, options = {}) 
   }
 
   const res = await fetch(ANTHROPIC_MESSAGES_URL, {
+    signal,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -191,6 +196,7 @@ export async function sendToAnthropicApiSession(session, message, options = {}) 
   }
 
   const data = await res.json();
+  signal?.throwIfAborted();
 
   // Append the assistant turn VERBATIM — tool_use blocks must replay intact.
   session._messages.push({ role: 'assistant', content: data.content || [] });
