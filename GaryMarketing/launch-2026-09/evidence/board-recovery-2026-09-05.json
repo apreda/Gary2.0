@@ -1,0 +1,56 @@
+{
+  "verified_at_utc": "2026-09-05T15:43:31Z",
+  "commit": "df9de4d4f8b73535d76e4c4c698a433b4a1e3bdf",
+  "deployment": "dpl_BfSCSwuypPEGYV4NUnLF4ZzPrTNj",
+  "deployment_state": "READY",
+  "production_alias_verified": "www.betwithgary.ai",
+  "ci_run": 33975477145,
+  "ci_result": "success",
+  "bio_destination": "https://www.betwithgary.ai/picks?utm_source=x&utm_content=bio_v1",
+  "board_games": 45,
+  "posted_calls": 9,
+  "signed_out_reasoning_path": "/picks/ncaaf/2026-09-05/coastal-carolina-chanticleers-at-west-virginia-mountaineers",
+  "expanded_card_and_permanent_analysis_verified": true,
+  "home_counts_match": true,
+  "college_board_verified": true,
+  "local_browser_failure_retry": {
+    "simulated": "daily_slate HTTP 503",
+    "initial_http_status": 500,
+    "displayed": "Temporary interruption; Try again; historical archive link",
+    "restored_feed_retry_http_status": 200,
+    "board_restored_without_reload": true
+  },
+  "test_evidence": {
+    "initial_web_suite_passed": 322,
+    "final_focused_passed": 27,
+    "types_passed": true,
+    "credential_free_fixture_smoke_passed": true,
+    "final_ci_passed": true
+  },
+  "initial_failed_deployment": {
+    "id": "dpl_5L4ZoXpc7wU8poKWhX67hQ7k4jV8",
+    "cause": "ignoreCommand propagated git exit 128 for missing previous SHA",
+    "resolved_in_commit": "df9de4d4"
+  },
+  "early_runtime_error_scan": {
+    "levels": [
+      "error",
+      "fatal"
+    ],
+    "relative_window": "10m",
+    "group_by": "route",
+    "rows": [],
+    "long_term_uptime_claim": false
+  },
+  "production_truth_log": "/tmp/gary-launch-board-recovery-truth-20260905.log",
+  "production_truth_limit": "Nonzero for concurrent dirty backend and private Firebase configuration; scheduler, Winners and edge timestamps passed.",
+  "database_recovery_log": "/tmp/gary-launch-health-after-restart-20260905.log",
+  "remaining": [
+    "ASC processing and attachment",
+    "Conditional SDK privacy categories",
+    "Authenticated device/account flows",
+    "Protected obsolete host cron removal",
+    "Residual metrics exporter error owned by DB task",
+    "Real-user pilot, channel and partnership dependencies"
+  ]
+}

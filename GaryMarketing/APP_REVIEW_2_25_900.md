@@ -15,7 +15,7 @@ Prepared September 5, 2026 after verifying the final signed archive and successf
 
 At approximately 10:54–10:55 AM Eastern, the reliability and database tasks observed application REST/SQL timeouts. Task “Investigate Gary picks on Astra” owned recovery and performed one official project restart. SQL/REST recovered around 11:17 AM; the independent 11:19:31 health check verified the board, game cards, prior grades and recaps. Daily insights resumed. The metrics exporter remains a separate reported 500 error. The original incident cause is not established.
 
-The launch browser check after recovery found a remaining website entry problem: `/picks` still displayed an empty schedule while Today displayed 45 games and nine calls. A web-only failure/cache repair is under verification. The signed-out Book page and legitimate empty Winners state loaded. Verify the repaired game-reading journey and remaining authenticated Book/device paths before treating this submission as ready; a successful archive or provider health label does not complete these checks.
+The launch browser check after recovery found a remaining website entry problem: `/picks` still displayed an empty schedule while Today displayed 45 games and nine calls. The web-only prevention repair is now deployed at `df9de4d4`; live browser checks at 11:40–11:43 AM verify 45 games/nine published calls and a complete signed-out game read. The signed-out Book page and legitimate empty Winners state loaded. The remaining authenticated Book/device paths must be checked before treating this submission as ready; a successful archive or provider health label does not complete these checks.
 
 ## Copy for Notes for Review
 
