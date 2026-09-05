@@ -2072,7 +2072,7 @@ struct HomeView: View {
             guard let matchup = big.matchup, matchup.contains(" @ ") else { return nil }
             let sides = matchup.components(separatedBy: " @ ")
             let away = sides[0], home = sides.count > 1 ? sides[1] : ""
-            let title = "\(Self.shortTeam(away)) @ \(Self.shortTeam(home))"
+            let title = "\(Self.shortTeam(away, league: big.league)) @ \(Self.shortTeam(home, league: big.league))"
             let calls = todayPicks.filter {
                 Self.homeBoardPick($0, league: big.league, gameID: big.bdl_game_id,
                                    away: away, home: home)
@@ -2256,7 +2256,7 @@ struct HomeView: View {
                 rank: 99,
                 league: br.league,
                 matchupFull: matchup,
-                title: "\(Self.shortTeam(a)) @ \(Self.shortTeam(h))",
+                title: "\(Self.shortTeam(a, league: br.league)) @ \(Self.shortTeam(h, league: br.league))",
                 context: featuresUnderdog ? "GARY'S UNDERDOG PICK" : nil,
                 commence: br.commence_time,
                 pickLine: calls.isEmpty ? nil : calls.map { Self.homePickLabel($0.pick) }.joined(separator: "  ·  "),
@@ -2802,8 +2802,11 @@ struct HomeView: View {
    // and "Chicago White Sox" both collapsed to "Sox" — the exact "SOX / SOX"
    // bug on the Members Only seal card). Delegates to the one correct,
    // two-word-mascot-aware implementation instead of re-deriving it here.
-   static func shortTeam(_ name: String?) -> String {
+   static func shortTeam(_ name: String?, league: String? = nil) -> String {
         guard let name, !name.isEmpty else { return "—" }
+        if league?.uppercased() == "NCAAF" {
+            return Formatters.shortTeamName(name, league: "NCAAF")
+        }
         return Formatters.shortTeamName(name)
     }
 
