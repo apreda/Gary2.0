@@ -58,8 +58,20 @@ Logs: `/tmp/gary-crash-901-all-ios-tests.log`,
 
 ## Delivery
 
-Version 2.25, build 901. Final signed archive/upload status will be recorded here
-once verified. Intended archive: `/tmp/GaryApp-CrashFix-2.25-901.xcarchive`.
+Version **2.25 (901)** was signed, archived and uploaded successfully. The exact
+archive is `/tmp/GaryApp-CrashFix-2.25-901.xcarchive`; its bundled version and
+strict code signature were verified. Final archive log:
+`/tmp/gary-crash-901-archive-final.log`.
+
+At **2:23:44 PM Eastern**, Apple reported `Uploaded package is processing`, then
+`Upload succeeded`; Xcode completed `EXPORT SUCCEEDED` with exit 0. Upload log:
+`/tmp/gary-crash-901-upload.log`. This confirms Apple accepted the new binary;
+processing completion and TestFlight availability are not independently verified.
+
+Implementation commit **9a63c15c** is pushed to `origin/main`. Both GitHub CI jobs
+passed: https://github.com/apreda/Gary2.0/actions/runs/33983806186.
+Final production-parity output: `/tmp/gary-crash-901-production-final.log`.
+The local Firebase plist is the intentional configuration exception.
 Existing build 900 was already uploaded earlier today and does not contain this
 repair. Do not describe 900 as the crash fix or upload it again.
 
