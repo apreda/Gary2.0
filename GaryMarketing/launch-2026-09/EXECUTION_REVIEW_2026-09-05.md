@@ -22,6 +22,8 @@ The full six-part plan remains in scope. Implementation, verification, publicati
 
 ## Next decisions
 
+- Coordinated reliability update: commit `f97de41a` is deployed to production as `dpl_F7ssg3tEaJdanCpCn4ZA6CytZp7c`; CI run `33972340278` passed. The native task reports a successful internal-drive build 900 archive, with one final Hub game-ID patch still preceding the final archive/upload. Build 900 is not yet uploaded or submission-verified.
+- Host dependency: the reliability task confirmed an obsolete 9 AM cron restart. Removing it remains blocked by macOS protected crontab access; Computer Use denied Terminal control, and no Full Disk Access settings were changed. Preserve this dependency and coordinate with that task. Do not automate clock-based scheduler restarts or work around the denied access through another interface.
 - Before any promotion, read the actual publication-health report and visit its destination. At 12:19 UTC the 45 scheduled games were all still in the future, with no stored picks and no past-start misses. This was an early-day snapshot, not an all-day reliability verdict.
 - First product placement: the prepared “Find your game” piece and stable product pin, followed by reasoning/record/Book pieces in the content guide. Keep each creative's attribution stable. Review messages as actual drafts before authorizing publication.
 - Start the small manual-Book pilot once a recruitment message is authorized. Analyze volunteered feedback independently from optional analytics.

@@ -35,6 +35,10 @@ Campaign pieces and new pin remain drafts. No participant, vendor or partner mes
 
 ## Shared checkout
 
+Latest coordinated update: production deployment `dpl_F7ssg3tEaJdanCpCn4ZA6CytZp7c` is READY and owns the production domains at `f97de41a8af66828b477f51d8abc1e40b8e77ed3`; CI `33972340278` success independently checked. The native task reports build 900's internal-drive archive succeeded, but a final exact-game-ID Hub patch and final archive/upload remain. Do not label 900 uploaded, processed or attached yet.
+
+The native/reliability task also confirmed an obsolete 9 AM cron restart on the host. Crontab maintenance remains blocked by macOS protected access. That task reports Terminal already has Full Disk Access, but Computer Use explicitly denied Terminal control; no Full Disk Access settings were changed. The user was informed by that task. Keep this as an open launch reliability dependency. Do not automate clock-based scheduler restarts, change the production scheduler from this task, or use another interface to bypass the denied control.
+
 Canonical checkout /Users/adam.preda/Desktop/Gary2.0, main. My 29 launch paths were committed explicitly. Other task owns native files, web/lib/gary/archive.ts, web/lib/gary/picks.ts, web/tests/picks-fetch.test.ts and operations work; preserve them. Preserve uncommitted ios/GaryApp/GoogleService-Info.plist. No scheduler restart by this task. The running scheduler is owned by the reliability task.
 
 Local evidence: /tmp/gary-launch-iteration-verify.log, /tmp/gary-launch-iteration-smoke.log, /tmp/gary-launch-final-focused.log, /tmp/gary-launch-final-edge.log, /tmp/gary-launch-final-types.log, /tmp/gary-social-launch-final-source.json. Shareable aggregate evidence lives in the launch evidence directory. The content zip in the shared task workspace includes the updated plan and pilot alongside the existing eight exports; it contains no source credentials.
