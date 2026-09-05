@@ -18,6 +18,57 @@ function block(text, start) {
 }
 
 describe('native Hub team and ranking story routes', () => {
+  it.skipIf(!hasSwift)('finds college game edges with missing board abbreviations and keeps conflicting IDs separate', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'gary-hub-game-edges-'));
+    try {
+      const hub = source('HubView.swift');
+      const picks = source('PicksTab.swift');
+      const keywords = ['mlb', 'nba', 'nhl', 'nfl', 'wc'].map(league => {
+        const start = picks.indexOf(`let ${league}TeamKeywords:`);
+        return picks.slice(start, picks.indexOf('\n]', start) + 2);
+      }).join('\n');
+      const script = `${source('NCAAFTeams.swift')}\n${source('HubCardIdentity.swift')}
+${keywords}
+${block(picks, 'func abbrGameMatches(')}
+enum League { case mlb, ncaaf; var label: String { self == .mlb ? "MLB" : "NCAAF" } }
+struct Regression { var day: String }
+struct Signal {
+ var league: League = .ncaaf; var gameId: String?; var game: String
+ var confirmedXI: Bool?; var reg: Regression?
+}
+struct TomorrowBoardRow {
+ var league: String?; var bdl_game_id: Int?
+ var away_team: String?; var home_team: String?
+ var away_abbr: String?; var home_abbr: String?
+}
+struct Reader {
+ var leagueSignals: [Signal]
+ ${block(hub, '    private func edgesFor(')}
+ func read(_ row: TomorrowBoardRow) -> [Signal] { edgesFor(row) }
+}
+let row = TomorrowBoardRow(league: "NCAAF", bdl_game_id: 457178, away_team: "Oregon State Beavers", home_team: "Houston Cougars")
+let exact = Signal(gameId: "457178", game: "ORST @ HOU")
+let collision = Signal(league: .mlb, gameId: "457178", game: "ORST @ HOU")
+let otherGame = Signal(gameId: "999", game: "ORST @ HOU")
+let tomorrow = Signal(gameId: "457178", game: "ORST @ HOU", reg: Regression(day: "tomorrow"))
+let xi = Signal(gameId: "457178", game: "ORST @ HOU", confirmedXI: true)
+precondition(!abbrGameMatches(exact.game, matchup: "Oregon State Beavers @ Houston Cougars"))
+let result = Reader(leagueSignals: [exact, collision, otherGame, tomorrow, xi]).read(row)
+precondition(result.count == 1 && result[0].gameId == "457178")
+let legacyRow = TomorrowBoardRow(league: "MLB", bdl_game_id: 123, away_team: "Atlanta Braves", home_team: "Philadelphia Phillies", away_abbr: "ATL", home_abbr: "PHI")
+let legacy = Signal(league: .mlb, game: "ATL @ PHI")
+let conflicting = Signal(league: .mlb, gameId: "456", game: "ATL @ PHI")
+precondition(Reader(leagueSignals: [legacy, conflicting]).read(legacyRow).count == 1)
+print("Exact game edge regressions passed")
+`;
+      const path = join(directory, 'game-edges.swift');
+      writeFileSync(path, script);
+      expect(execFileSync('swift', [path], { encoding: 'utf8', timeout: 30_000 })).toContain('Exact game edge regressions passed');
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }, 40_000);
+
   it.skipIf(!hasSwift)('executes actual routing against stored headline forms, team metadata and exact ranked-matchup identity', () => {
     const directory = mkdtempSync(join(tmpdir(), 'gary-hub-team-routing-'));
     try {

@@ -855,14 +855,20 @@ struct HubView: View {
         }
     }
 
-    /// Every edge the Hub carries for one slate game (abbr-exact, then the
-    /// name-keyword fallback). Look-ahead regression rows are excluded — their
+    /// Every edge the Hub carries for one slate game (league + provider id,
+    /// then names only when an id is absent). Look-ahead regression rows are excluded — their
     /// `game` names TOMORROW's matchup, which collides on series nights.
     private func edgesFor(_ r: TomorrowBoardRow) -> [Signal] {
         let full = "\(r.away_team ?? "") @ \(r.home_team ?? "")"
         let abbr = "\(r.away_abbr ?? "") @ \(r.home_abbr ?? "")".uppercased()
         return leagueSignals.filter { s in
-            guard s.confirmedXI == nil, s.reg?.day != "tomorrow" else { return false }
+            guard HubCardIdentity.sameLeague(r.league, s.league.label),
+                  s.confirmedXI == nil, s.reg?.day != "tomorrow" else { return false }
+            // College board abbreviations may be null. The same provider id
+            // also keeps separate games of a doubleheader from sharing edges.
+            if let gameId = s.gameId, !gameId.isEmpty, let boardId = r.bdl_game_id {
+                return gameId == String(boardId)
+            }
             return s.game.uppercased() == abbr || abbrGameMatches(s.game, matchup: full)
         }
     }
