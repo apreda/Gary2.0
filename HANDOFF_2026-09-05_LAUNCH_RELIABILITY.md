@@ -70,3 +70,9 @@ Final archive `/tmp/GaryApp-Reliability-2.25-900.xcarchive` includes native comm
 Final simulator Home now displays “DAILY REVIEW” and “Selections appear after review · games + props”, without falsely counting free daily picks as Winners admissions. CI for final native source `42e17e1c` is green (`33973128559`).
 
 Current readiness is explicitly incomplete: Supabase normal requests last timed out and the DB recovery task temporarily unloaded `com.gary2.daily-insights`, retaining its installed plist for resumption after recovery. That task owns resuming it. Scheduler23440 and Winners11032 remain untouched. The obsolete9AMhostcron still requires the protected native removal. No OS privacy settings were changed; no cron update process is pending. Do not infer launch readiness from build delivery or earlier data snapshots.
+
+## Database recovery verified — 11:19:31 ET (supersedes outage status above)
+
+The DB task performed one official project restart, accepted HTTP200at11:11:39ET. SQL and exact-game REST reads recovered around11:17; all five detailed services were healthy at11:17:36. It restored `com.gary2.daily-insights` and started the delayed11AMrun. Root's independent bounded health completed successfully at11:19:31.428ET; the board had already republished45/45games at11:19:25.535. MLBinsights97with15/15cardgames; NCAAFinsights129with30/30completecardgames; Wire5MLB+3college;9collegepickspublished,0startedwithoutpick; all13previous-daygradesandrecaps. Fresh production browser Today independently loads45gamesand9calls. Log: `/tmp/gary-launch-health-after-restart-20260905.log`.
+
+Current application availability is recovered at that observation time. The metrics exporter still returns500and is tracked separately by the database task. The obsolete9AMhostcron remains the unresolved local reliability dependency; no OSprivacysettingschanged. Build900isuploadedandprocessing; AppStoreConnectprocessing/attachment still requires verification.
