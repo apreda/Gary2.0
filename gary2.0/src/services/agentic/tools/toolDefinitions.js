@@ -78,7 +78,7 @@ const NFL_TOKENS = [
   'KICKING',              // FG% and punting stats
   'FIELD_POSITION',       // Starting field position and returns
   // Players
-  'QB_STATS', 'RB_STATS', 'WR_TE_STATS', 'DEFENSIVE_PLAYMAKERS', 'INJURIES',
+  'QB_STATS', 'RB_STATS', 'WR_TE_STATS', 'DEFENSIVE_PLAYMAKERS', 'PLAYER_GAME_LOGS', 'INJURIES',
   // Context (ALL REAL FETCHERS!)
   'WEATHER', 'QB_WEATHER_HISTORY', 'REST_SITUATION',
   'DIVISION_RECORD',      // Division and conference record
@@ -204,13 +204,13 @@ export const toolDefinitions = [
       name: "fetch_player_game_logs",
       description: `Fetches raw game logs for a specific player (last 5-10 games).
 Use this to identify "Hot Streaks," "Slumps," or consistency issues that season-long stats might mask.
-Available for: NBA, NFL, NHL, NCAAB, NCAAF, MLB.`,
+Available for: NBA, NFL, NCAAF, MLB. The matchup league determines the data source.`,
       parameters: {
         type: "object",
         properties: {
           sport: {
             type: "string",
-            enum: ["NBA", "NFL", "NHL", "NCAAB", "NCAAF", "MLB"],
+            enum: ["NBA", "NFL", "NCAAF", "MLB"],
             description: "The sport league"
           },
           player_name: {
@@ -220,6 +220,8 @@ Available for: NBA, NFL, NHL, NCAAB, NCAAF, MLB.`,
           num_games: {
             type: "integer",
             description: "Number of games to fetch (default: 5, max: 15)",
+            minimum: 1,
+            maximum: 15,
             default: 5
           }
         },

@@ -1,3 +1,4 @@
+import { gameMarketUnavailable } from './mlbCaseMenu.js';
 import { toolDefinitions, getTokensForSport } from '../tools/toolDefinitions.js';
 import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js';
 import { getConstitution } from '../constitution/index.js';
@@ -11,7 +12,7 @@ import { shouldReuseScoutReport } from '../statsSubstance.js';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from 'fs';
 import { join } from 'path';
 import { createHash } from 'crypto';
-import { homeSpreadReference, footballMarketUnavailable } from '../../marketTruth.js';
+import { homeSpreadReference } from '../../marketTruth.js';
 import { footballPromptSha } from './footballPromptSha.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -75,7 +76,7 @@ import { normalizeSportToLeague } from './orchestratorHelpers.js';
  * @param {Object} options - Optional settings
  */
 export async function analyzeGame(game, sport, options = {}) {
-  const marketError = footballMarketUnavailable(game, sport);
+  const marketError = gameMarketUnavailable(game, sport);
   if (marketError) return { ...marketError, homeTeam: game.home_team, awayTeam: game.away_team, sport };
   // Clear stat router cache from previous game (prevents stale cross-game data)
   clearStatRouterCache();

@@ -62,13 +62,15 @@ export function summarizeStatForContext(statResult, statToken, homeTeam, awayTea
       return suffix ? `${line} ${suffix}` : line;
     };
 
-    // College adapters carry nested records, opponent results, ranks, samples
+    // Football adapters carry nested records, opponent results, ranks, samples
     // and source limitations. The basketball-shaped formatter discarded those
     // fields (including games_used/record and at_home/on_road). Preserve the
-    // complete college payload, including explicit unavailable values.
-    const collegeStats = (/ncaaf/i.test(sport) || statToken.startsWith('NCAAF_')) &&
-      !['INJURIES', 'NCAAF_INJURIES'].includes(statToken);
-    if (collegeStats ||
+    // complete football payload, including explicit unavailable values. NFL
+    // SPECIAL_TEAMS must never enter the old hockey PP/PK formatter below.
+    const footballStats = (/^(?:americanfootball_)?(?:nfl|ncaaf)$/i.test(sport) || /^(?:NFL|NCAAF)_/.test(statToken)) &&
+      !['INJURIES', 'NCAAF_INJURIES', 'NFL_INJURIES'].includes(statToken);
+    const scoringSplits = ['QUARTER_SCORING', 'FIRST_HALF_SCORING', 'SECOND_HALF_SCORING', 'FIRST_HALF_TRENDS', 'SECOND_HALF_TRENDS'].includes(statToken);
+    if (footballStats || scoringSplits ||
         (statToken === 'RECENT_FORM' && (h.games_used != null || a.games_used != null)) ||
         (statToken === 'HOME_AWAY_SPLITS' && ((typeof h === 'object' && 'at_home' in h) || (typeof a === 'object' && 'at_home' in a)))) {
       const { home: homeData, away: awayData, ...context } = statResult;
@@ -77,22 +79,34 @@ export function summarizeStatForContext(statResult, statToken, homeTeam, awayTea
       }, null, 2)}`;
     }
 
+    // Baseball adapters already render the game evidence as readable text.
+    // Keep it verbatim AND retain the source, season, coverage and uncertainty
+    // fields alongside it; a prior-season fallback cannot lose its label.
+    if ((/^(?:baseball_)?mlb$/i.test(sport) || statToken.startsWith('MLB_')) && !['INJURIES', 'MLB_INJURIES'].includes(statToken)) {
+      const { home: homeData, away: awayData, homeValue: hv, awayValue: av, ...context } = statResult;
+      const render = (value, team) => typeof value === 'string' ? value : value == null ? '' : `${team}: ${JSON.stringify(value, null, 2)}`;
+      const homeText = render(homeData ?? hv, homeTeam), awayText = render(awayData ?? av, awayTeam);
+      return `${statToken}:\n${[...(homeFirst ? [homeText, awayText] : [awayText, homeText]),
+        Object.keys(context).length ? `Source context: ${JSON.stringify(context, null, 2)}` : ''
+      ].filter(Boolean).join('\n')}`;
+    }
+
     switch (statToken) {
       case 'NET_RATING':
         return orderTeams('NET RATING',
-          formatNum(h.net_rating || h.netRating),
-          formatNum(a.net_rating || a.netRating));
+          formatNum(h.net_rating ?? h.netRating),
+          formatNum(a.net_rating ?? a.netRating));
 
       case 'OFFENSIVE_RATING':
         return orderTeams('OFFENSIVE RATING',
-          formatNum(h.offensive_rating || h.off_rating || h.offRating),
-          formatNum(a.offensive_rating || a.off_rating || a.offRating),
+          formatNum(h.offensive_rating ?? h.off_rating ?? h.offRating),
+          formatNum(a.offensive_rating ?? a.off_rating ?? a.offRating),
           '(points per 100 possessions)');
 
       case 'DEFENSIVE_RATING':
         return orderTeams('DEFENSIVE RATING',
-          formatNum(h.defensive_rating || h.def_rating || h.defRating),
-          formatNum(a.defensive_rating || a.def_rating || a.defRating));
+          formatNum(h.defensive_rating ?? h.def_rating ?? h.defRating),
+          formatNum(a.defensive_rating ?? a.def_rating ?? a.defRating));
 
       case 'RECENT_FORM': {
         // MLB fetchers return homeValue/awayValue as pre-formatted strings
@@ -112,8 +126,8 @@ export function summarizeStatForContext(statResult, statToken, homeTeam, awayTea
       case 'HOME_AWAY_SPLITS':
         // Standard contract: all sports return { home_record, away_record, home_margin?, away_margin? }
         return orderTeams('HOME/AWAY SPLITS',
-          `home ${h.home_record}${h.home_margin ? ` (${h.home_margin > 0 ? '+' : ''}${h.home_margin} margin)` : ''} | road ${h.away_record}`,
-          `home ${a.home_record} | road ${a.away_record}${a.away_margin ? ` (${a.away_margin > 0 ? '+' : ''}${a.away_margin} margin)` : ''}`);
+          `home ${h.home_record ?? 'N/A'}${h.home_margin ? ` (${h.home_margin > 0 ? '+' : ''}${h.home_margin} margin)` : ''} | road ${h.away_record ?? 'N/A'}`,
+          `home ${a.home_record ?? 'N/A'} | road ${a.away_record ?? 'N/A'}${a.away_margin ? ` (${a.away_margin > 0 ? '+' : ''}${a.away_margin} margin)` : ''}`);
 
       case 'PACE':
         return orderTeams('PACE',
@@ -123,32 +137,32 @@ export function summarizeStatForContext(statResult, statToken, homeTeam, awayTea
 
       case 'EFG_PCT':
         return orderTeams('EFFECTIVE FG%',
-          formatPct(h.efg_pct || h.eFG),
-          formatPct(a.efg_pct || a.eFG));
+          formatPct(h.efg_pct ?? h.eFG),
+          formatPct(a.efg_pct ?? a.eFG));
 
       case 'TURNOVER_RATE':
         return orderTeams('TURNOVER RATE',
-          formatPct(h.tov_rate || h.tovRate),
-          formatPct(a.tov_rate || a.tovRate));
+          formatPct(h.tov_rate ?? h.tovRate),
+          formatPct(a.tov_rate ?? a.tovRate));
 
       case 'OREB_RATE':
         return orderTeams('OFFENSIVE REBOUND RATE',
-          formatPct(h.oreb_pct || h.oreb_rate || h.orebRate),
-          formatPct(a.oreb_pct || a.oreb_rate || a.orebRate));
+          formatPct(h.oreb_pct ?? h.oreb_rate ?? h.orebRate),
+          formatPct(a.oreb_pct ?? a.oreb_rate ?? a.orebRate));
 
       case 'THREE_PT_SHOOTING':
         return orderTeams('3PT SHOOTING',
-          `${formatPct(h.three_pct || h.fg3_pct || h.threePct)} on ${formatNum(h.three_attempted_per_game || h.fg3a || h.threeAttempts)} attempts`,
-          `${formatPct(a.three_pct || a.fg3_pct || a.threePct)} on ${formatNum(a.three_attempted_per_game || a.fg3a || a.threeAttempts)} attempts`);
+          `${formatPct(h.three_pct ?? h.fg3_pct ?? h.threePct)} on ${formatNum(h.three_attempted_per_game ?? h.fg3a ?? h.threeAttempts)} attempts`,
+          `${formatPct(a.three_pct ?? a.fg3_pct ?? a.threePct)} on ${formatNum(a.three_attempted_per_game ?? a.fg3a ?? a.threeAttempts)} attempts`);
 
       case 'PAINT_SCORING':
         return orderTeams('PAINT SCORING',
-          `${formatPct(h.pct_paint || h.paint_ppg || h.value)} of scoring in paint`,
-          `${formatPct(a.pct_paint || a.paint_ppg || a.value)} of scoring in paint`);
+          `${formatPct(h.pct_paint ?? h.paint_ppg ?? h.value)} of scoring in paint`,
+          `${formatPct(a.pct_paint ?? a.paint_ppg ?? a.value)} of scoring in paint`);
       case 'PAINT_DEFENSE':
         return orderTeams('PAINT DEFENSE',
-          `${formatNum(h.opp_pts_paint || h.paint_ppg || h.value)} opp PPG in paint`,
-          `${formatNum(a.opp_pts_paint || a.paint_ppg || a.value)} opp PPG in paint`);
+          `${formatNum(h.opp_pts_paint ?? h.paint_ppg ?? h.value)} opp PPG in paint`,
+          `${formatNum(a.opp_pts_paint ?? a.paint_ppg ?? a.value)} opp PPG in paint`);
 
       // ===== NBA / GENERAL TOKENS =====
 
@@ -176,77 +190,77 @@ export function summarizeStatForContext(statResult, statToken, homeTeam, awayTea
       }
 
       case 'DREB_RATE': {
-        const hDrebPct = h.dreb_pct || h.dreb_rate;
-        const aDrebPct = a.dreb_pct || a.dreb_rate;
-        const hDreb = h.dreb_per_game || h.dreb;
-        const aDreb = a.dreb_per_game || a.dreb;
+        const hDrebPct = h.dreb_pct ?? h.dreb_rate;
+        const aDrebPct = a.dreb_pct ?? a.dreb_rate;
+        const hDreb = h.dreb_per_game ?? h.dreb;
+        const aDreb = a.dreb_per_game ?? a.dreb;
         // Show percentage if available (NBA), otherwise show per-game with rebounds breakdown
-        if (hDrebPct || aDrebPct) {
+        if (hDrebPct != null || aDrebPct != null) {
           return orderTeams('DEFENSIVE REBOUND RATE',
             `${formatPct(hDrebPct)} DREB% (${formatNum(hDreb)} DREB/g)`,
             `${formatPct(aDrebPct)} DREB% (${formatNum(aDreb)} DREB/g)`);
         }
         return orderTeams('DEFENSIVE REBOUNDING',
-          `${formatNum(hDreb)} DREB/g (${formatNum(h.oreb_per_game || h.oreb)} OREB | ${formatNum(h.reb_per_game || h.reb)} Total)`,
-          `${formatNum(aDreb)} DREB/g (${formatNum(a.oreb_per_game || a.oreb)} OREB | ${formatNum(a.reb_per_game || a.reb)} Total)`);
+          `${formatNum(hDreb)} DREB/g (${formatNum(h.oreb_per_game ?? h.oreb)} OREB | ${formatNum(h.reb_per_game ?? h.reb)} Total)`,
+          `${formatNum(aDreb)} DREB/g (${formatNum(a.oreb_per_game ?? a.oreb)} OREB | ${formatNum(a.reb_per_game ?? a.reb)} Total)`);
       }
 
       case 'OPP_EFG_PCT':
         return orderTeams('OPPONENT eFG%',
-          formatPct(h.opp_efg_pct || h.opp_fg_pct),
-          formatPct(a.opp_efg_pct || a.opp_fg_pct));
+          formatPct(h.opp_efg_pct ?? h.opp_fg_pct),
+          formatPct(a.opp_efg_pct ?? a.opp_fg_pct));
 
       case 'OPP_TOV_RATE':
         return orderTeams('FORCED TURNOVER RATE',
-          formatPct(h.opp_tov_rate || h.opp_tov_pct),
-          formatPct(a.opp_tov_rate || a.opp_tov_pct));
+          formatPct(h.opp_tov_rate ?? h.opp_tov_pct),
+          formatPct(a.opp_tov_rate ?? a.opp_tov_pct));
 
       case 'OPP_FT_RATE':
         return orderTeams('OPPONENT FT RATE',
-          formatNum(h.opp_ft_rate || h.opp_fta_rate),
-          formatNum(a.opp_ft_rate || a.opp_fta_rate));
+          formatNum(h.opp_ft_rate ?? h.opp_fta_rate),
+          formatNum(a.opp_ft_rate ?? a.opp_fta_rate));
 
       case 'THREE_PT_DEFENSE':
       case 'PERIMETER_DEFENSE':
         return orderTeams('OPPONENT 3PT%',
-          formatPct(h.opp_fg3_pct || h.opp_three_pct),
-          formatPct(a.opp_fg3_pct || a.opp_three_pct));
+          formatPct(h.opp_fg3_pct ?? h.opp_three_pct),
+          formatPct(a.opp_fg3_pct ?? a.opp_three_pct));
 
       case 'TRANSITION_DEFENSE':
         return orderTeams('TRANSITION DEFENSE',
-          `${formatNum(h.opp_pts_fb || h.fastbreak_pts_allowed)} fastbreak PPG allowed`,
-          `${formatNum(a.opp_pts_fb || a.fastbreak_pts_allowed)} fastbreak PPG allowed`);
+          `${formatNum(h.opp_pts_fb ?? h.fastbreak_pts_allowed)} fastbreak PPG allowed`,
+          `${formatNum(a.opp_pts_fb ?? a.fastbreak_pts_allowed)} fastbreak PPG allowed`);
 
       case 'EFFICIENCY_LAST_10': {
         if (statResult.context) return `EFFICIENCY LAST 10: ${statResult.context}`;
         if (statResult.comparison) return `EFFICIENCY LAST 10: ${statResult.comparison}`;
         return orderTeams('L10 EFFICIENCY',
-          `${formatNum(h.point_diff || h.net_rating || h.l10_net_rating)} net`,
-          `${formatNum(a.point_diff || a.net_rating || a.l10_net_rating)} net`);
+          `${formatNum(h.point_diff ?? h.net_rating ?? h.l10_net_rating)} net`,
+          `${formatNum(a.point_diff ?? a.net_rating ?? a.l10_net_rating)} net`);
       }
 
       case 'PACE_LAST_10': {
         if (statResult.context) return `PACE LAST 10: ${statResult.context}`;
         if (statResult.comparison) return `PACE LAST 10: ${statResult.comparison}`;
         return orderTeams('L10 PACE',
-          `${formatNum(h.recent_pace || h.l10_pace)} recent vs ${formatNum(h.season_pace || h.pace)} season`,
-          `${formatNum(a.recent_pace || a.l10_pace)} recent vs ${formatNum(a.season_pace || a.pace)} season`);
+          `${formatNum(h.recent_pace ?? h.l10_pace)} recent vs ${formatNum(h.season_pace ?? h.pace)} season`,
+          `${formatNum(a.recent_pace ?? a.l10_pace)} recent vs ${formatNum(a.season_pace ?? a.pace)} season`);
       }
 
       case 'SCHEDULE_STRENGTH': {
         if (statResult.context) return `SCHEDULE STRENGTH: ${statResult.context}`;
         if (statResult.comparison) return `SCHEDULE STRENGTH: ${statResult.comparison}`;
         return orderTeams('SOS',
-          `${formatNum(h.sos || h.strength_of_schedule || h.sos_rank)}`,
-          `${formatNum(a.sos || a.strength_of_schedule || a.sos_rank)}`);
+          `${formatNum(h.sos ?? h.strength_of_schedule ?? h.sos_rank)}`,
+          `${formatNum(a.sos ?? a.strength_of_schedule ?? a.sos_rank)}`);
       }
 
       case 'LINEUP_NET_RATINGS': {
         if (statResult.context) return `LINEUP NET RATINGS: ${statResult.context}`;
         if (statResult.comparison) return `LINEUP NET RATINGS: ${statResult.comparison}`;
         return orderTeams('LINEUP NET RATING',
-          `bench ${formatNum(h.bench_net_rating || h.bench_net)} | starter ${formatNum(h.starter_net_rating || h.starter_net)}`,
-          `bench ${formatNum(a.bench_net_rating || a.bench_net)} | starter ${formatNum(a.starter_net_rating || a.starter_net)}`);
+          `bench ${formatNum(h.bench_net_rating ?? h.bench_net)} | starter ${formatNum(h.starter_net_rating ?? h.starter_net)}`,
+          `bench ${formatNum(a.bench_net_rating ?? a.bench_net)} | starter ${formatNum(a.starter_net_rating ?? a.starter_net)}`);
       }
 
       case 'QUARTER_SCORING': {
@@ -262,16 +276,16 @@ export function summarizeStatForContext(statResult, statToken, homeTeam, awayTea
         if (statResult.context) return `FIRST HALF SCORING: ${statResult.context}`;
         if (statResult.comparison) return `FIRST HALF SCORING: ${statResult.comparison}`;
         return orderTeams('1H SCORING',
-          `${formatNum(h.first_half_ppg || h.h1_ppg || h.first_half)} PPG`,
-          `${formatNum(a.first_half_ppg || a.h1_ppg || a.first_half)} PPG`);
+          `${formatNum(h.first_half_ppg ?? h.h1_ppg ?? h.first_half)} PPG`,
+          `${formatNum(a.first_half_ppg ?? a.h1_ppg ?? a.first_half)} PPG`);
       }
 
       case 'SECOND_HALF_SCORING': {
         if (statResult.context) return `SECOND HALF SCORING: ${statResult.context}`;
         if (statResult.comparison) return `SECOND HALF SCORING: ${statResult.comparison}`;
         return orderTeams('2H SCORING',
-          `${formatNum(h.second_half_ppg || h.h2_ppg || h.second_half)} PPG`,
-          `${formatNum(a.second_half_ppg || a.h2_ppg || a.second_half)} PPG`);
+          `${formatNum(h.second_half_ppg ?? h.h2_ppg ?? h.second_half)} PPG`,
+          `${formatNum(a.second_half_ppg ?? a.h2_ppg ?? a.second_half)} PPG`);
       }
 
       // ===== NHL TOKENS =====
@@ -621,137 +635,6 @@ export function formatPct(val) {
 }
 
 /**
- * Summarize player game logs into natural language - preserving FULL game-by-game detail
- * @param {string} playerName - Player name
- * @param {Array|Object} logs - Game logs array or object
- * @returns {string} Natural language summary
- */
-export function summarizePlayerGameLogs(playerName, logs) {
-  if (!logs || (Array.isArray(logs) && logs.length === 0)) {
-    return `${playerName} GAME LOGS: No recent games found`;
-  }
-  
-  const gamesArray = Array.isArray(logs) ? logs : (logs.games || logs.data || [logs]);
-  if (gamesArray.length === 0) {
-    return `${playerName} GAME LOGS: No recent games found`;
-  }
-  
-  try {
-    // Game-by-game breakdown with opponent context
-    const gameByGame = gamesArray.slice(0, 20).map(g => {
-      const pts = g.pts || g.points || 0;
-      const reb = g.reb || g.rebounds || g.total_rebounds || 0;
-      const ast = g.ast || g.assists || 0;
-      const opp = g.opponent || g.vs || g.matchup || '';
-      const loc = g.isHome === false ? '@' : (g.isHome === true ? 'vs' : '');
-      return `${pts}/${reb}/${ast}${opp ? ` ${loc}${opp}` : ''}`;
-    });
-    
-    // Calculate averages
-    let totalPts = 0, totalReb = 0, totalAst = 0;
-    for (const game of gamesArray.slice(0, 20)) {
-      totalPts += game.pts || game.points || 0;
-      totalReb += game.reb || game.rebounds || game.total_rebounds || 0;
-      totalAst += game.ast || game.assists || 0;
-    }
-    const gamesCount = Math.min(gamesArray.length, 20);
-    const avgPts = (totalPts / gamesCount).toFixed(1);
-    const avgReb = (totalReb / gamesCount).toFixed(1);
-    const avgAst = (totalAst / gamesCount).toFixed(1);
-    
-    return `${playerName} GAME LOGS (Last ${gamesCount}): Avg ${avgPts}/${avgReb}/${avgAst} (PTS/REB/AST). Games: ${gameByGame.join(', ')}`;
-  } catch (e) {
-    return `${playerName} GAME LOGS: Data unavailable (parsing error)`;
-  }
-}
-
-/**
- * Summarize MLB player game stats into a natural language line. The basketball
- * shape (pts/reb/ast) doesn't fit MLB, so we detect pitcher vs batter by which
- * fields are populated and emit the appropriate stat line.
- *
- * @param {string} playerName
- * @param {Array} stats - Records from BDL getMlbGameStats (flat shape: ip, er,
- *   p_hits, p_k, p_bb, p_hr, games_started, at_bats, hits, hr, rbi, bb, k, ...)
- * @returns {string}
- */
-export function summarizeMlbPlayerGameLogs(playerName, stats) {
-  if (!stats || !Array.isArray(stats) || stats.length === 0) {
-    return `${playerName} GAME LOGS: No 2026 game data found`;
-  }
-
-  // Most-recent first. Rows from getMlbPlayerGameRowsChrono carry a joined
-  // `_game.date` — use it (game_id is NOT reliably chronological; June 3 2026
-  // audit caught stale rows jumping the order). Fall back to game_id only
-  // for legacy callers that didn't join dates.
-  const sorted = [...stats].sort((a, b) => {
-    if (a._game?.date && b._game?.date) {
-      return String(b._game.date).localeCompare(String(a._game.date));
-    }
-    return (b.game_id || 0) - (a.game_id || 0);
-  });
-
-  // Detect role: starts with games_started > 0 → starting pitcher
-  const startingOutings = sorted.filter(s => (s.games_started || 0) > 0);
-  const battingOutings = sorted.filter(s => (s.at_bats || 0) > 0);
-  const isPitcher = startingOutings.length >= battingOutings.length;
-
-  if (isPitcher) {
-    const recent = startingOutings.slice(0, 5);
-    if (recent.length === 0) {
-      return `${playerName} GAME LOGS: No 2026 starts yet`;
-    }
-    const lines = recent.map(s => {
-      const ip = s.ip != null ? Number(s.ip).toFixed(1) : '—';
-      const h = s.p_hits ?? '—';
-      const er = s.er ?? '—';
-      const k = s.p_k ?? '—';
-      const bb = s.p_bb ?? '—';
-      const hr = s.p_hr ?? '—';
-      return `${ip} IP, ${h} H, ${er} ER, ${k} K, ${bb} BB, ${hr} HR`;
-    });
-    // Totals. MLB innings-pitched uses baseball notation: 5.2 = 5⅔ innings
-    // (the digit after the point is OUTS, not tenths). Sum outs, not decimals,
-    // or a 5-start ERA drifts by several points (June 3 2026 audit).
-    const ipToOuts = (ip) => {
-      const n = Number(ip) || 0;
-      const whole = Math.trunc(n);
-      const outs = Math.round((n - whole) * 10);
-      return whole * 3 + Math.min(Math.max(outs, 0), 2);
-    };
-    const totalOuts = recent.reduce((acc, s) => acc + ipToOuts(s.ip), 0);
-    const totalEr = recent.reduce((acc, s) => acc + (s.er || 0), 0);
-    const totalK = recent.reduce((acc, s) => acc + (s.p_k || 0), 0);
-    const totalBb = recent.reduce((acc, s) => acc + (s.p_bb || 0), 0);
-    const era = totalOuts > 0 ? ((totalEr * 27) / totalOuts).toFixed(2) : '—';
-    const ipDisplay = `${Math.floor(totalOuts / 3)}.${totalOuts % 3}`;
-    return `${playerName} LAST ${recent.length} STARTS: ${era} ERA, ${totalK} K, ${totalBb} BB in ${ipDisplay} IP. Game-by-game: ${lines.join(' | ')}`;
-  }
-
-  // Batter
-  const recent = battingOutings.slice(0, 10);
-  if (recent.length === 0) {
-    return `${playerName} GAME LOGS: No 2026 plate appearances yet`;
-  }
-  const lines = recent.map(s => {
-    const ab = s.at_bats ?? '—';
-    const h = s.hits ?? '—';
-    const hr = s.hr ?? 0;
-    const rbi = s.rbi ?? 0;
-    const bb = s.bb ?? 0;
-    const k = s.k ?? 0;
-    const hrPart = hr > 0 ? `, ${hr} HR` : '';
-    return `${h}-for-${ab}${hrPart}${rbi > 0 ? `, ${rbi} RBI` : ''}${bb > 0 ? `, ${bb} BB` : ''}${k > 0 ? `, ${k} K` : ''}`;
-  });
-  const totalAb = recent.reduce((acc, s) => acc + (s.at_bats || 0), 0);
-  const totalH = recent.reduce((acc, s) => acc + (s.hits || 0), 0);
-  const totalHr = recent.reduce((acc, s) => acc + (s.hr || 0), 0);
-  const totalRbi = recent.reduce((acc, s) => acc + (s.rbi || 0), 0);
-  const avg = totalAb > 0 ? (totalH / totalAb).toFixed(3) : '—';
-  return `${playerName} LAST ${recent.length} GAMES: .${avg.replace(/^0\./, '')} (${totalH}-for-${totalAb}), ${totalHr} HR, ${totalRbi} RBI. Game-by-game: ${lines.join(' | ')}`;
-}
-
-/**
  * Summarize NBA player advanced stats into labeled text (prevents LLM misattribution)
  *
  * When Gary receives raw JSON with 10 players' stats, he misattributes numbers
@@ -801,54 +684,6 @@ export function summarizeNbaPlayerAdvancedStats(stats, statType, teamName) {
     return `${teamName} ${statType} STATS (${stats.length} players):\n${lines.join('\n')}`;
   } catch (e) {
     return `${teamName} ${statType} STATS: Data unavailable (parsing error: ${e.message})`;
-  }
-}
-
-/**
- * Summarize player stats into natural language
- * @param {Object} statResult - Raw stat result
- * @param {string} statType - Type of stat (e.g., 'RUSHING', 'PASSING')
- * @param {string} teamName - Team name
- * @returns {string} Natural language summary
- */
-export function summarizePlayerStats(statResult, statType, teamName) {
-  if (!statResult || !statResult.data || statResult.data.length === 0) {
-    return `${teamName} ${statType} STATS: No data available`;
-  }
-  
-  try {
-    const players = statResult.data.slice(0, 10); // Full rotation depth
-    const summaries = players.map(p => {
-      const name = p.player?.full_name || p.name || p.player_name || 'Unknown';
-      // Extract key stats based on stat type
-      const keyStats = [];
-      
-      if (statType.includes('RUSH') || statType.includes('rushing')) {
-        if (p.rushing_yards) keyStats.push(`${p.rushing_yards} yds`);
-        if (p.rushing_tds) keyStats.push(`${p.rushing_tds} TD`);
-        if (p.yards_per_carry) keyStats.push(`${p.yards_per_carry} YPC`);
-      } else if (statType.includes('PASS') || statType.includes('passing')) {
-        if (p.passing_yards) keyStats.push(`${p.passing_yards} yds`);
-        if (p.passing_tds) keyStats.push(`${p.passing_tds} TD`);
-        if (p.interceptions) keyStats.push(`${p.interceptions} INT`);
-      } else if (statType.includes('RECEIV') || statType.includes('receiving')) {
-        if (p.receiving_yards) keyStats.push(`${p.receiving_yards} yds`);
-        if (p.receptions) keyStats.push(`${p.receptions} rec`);
-        if (p.receiving_tds) keyStats.push(`${p.receiving_tds} TD`);
-      } else {
-        // Generic: just grab first few numeric values
-        const numericKeys = Object.keys(p).filter(k => typeof p[k] === 'number' && !k.includes('id'));
-        for (const k of numericKeys.slice(0, 3)) {
-          keyStats.push(`${k}: ${p[k]}`);
-        }
-      }
-      
-      return `${name}: ${keyStats.join(', ') || 'stats available'}`;
-    });
-    
-    return `${teamName} ${statType} (Top ${players.length}): ${summaries.join(' | ')}`;
-  } catch (e) {
-    return `${teamName} ${statType} STATS: Data unavailable (parsing error)`;
   }
 }
 

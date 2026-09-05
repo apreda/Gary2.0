@@ -1,3 +1,4 @@
+import { fetchPlayerGameLogEvidence } from '../tools/playerGameLogTool.js';
 import { cleanNcaafPlayerRows, aggregateNcaafPlayerRows } from '../scoutReport/sports/ncaafPlayerEvidence.js';
 import { CONFIG, GAME_PICK_MODEL, GAME_ML_CAP, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, validateSessionModel } from './orchestratorConfig.js';
 import { createModelSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
@@ -9,13 +10,13 @@ import { buildPass1Message, buildPass2Message, buildPass3Unified, buildMlCapRetr
 import { buildNbaBriefingBlock, buildNbaPass25Message, buildNbaPass3Message } from './nbaWinningEra.js';
 import { parseGaryResponse, normalizePickFormat } from './responseParser.js';
 import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from './statAudit.js';
-import { isInvestigationSufficient, summarizeStatForContext, formatNum, formatPct, summarizePlayerGameLogs, summarizeMlbPlayerGameLogs, summarizePlayerStats, summarizeNbaPlayerAdvancedStats, pruneContextIfNeeded, normalizeSportToLeague, MAX_CONTEXT_MESSAGES, PRUNE_AFTER_ITERATION } from './orchestratorHelpers.js';
+import { isInvestigationSufficient, summarizeStatForContext, formatNum, formatPct, summarizeNbaPlayerAdvancedStats, pruneContextIfNeeded, normalizeSportToLeague, MAX_CONTEXT_MESSAGES, PRUNE_AFTER_ITERATION } from './orchestratorHelpers.js';
 import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js';
 import { getConstitution } from '../constitution/index.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, nflSeason, ncaafSeason } from '../../../utils/dateUtils.js';
 import { getTokensForSport, toolDefinitions } from '../tools/toolDefinitions.js';
-import { footballMarketUnavailable } from '../../marketTruth.js';
+import { gameMarketUnavailable } from './mlbCaseMenu.js';
 
 function hasInvestigationCompleteMarker(text = '') {
   if (!text || typeof text !== 'string') return false;
@@ -167,7 +168,7 @@ function moneylinePastCap(pick, cap = GAME_ML_CAP) {
 }
 
 export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, options = {}) {
-  const marketError = footballMarketUnavailable(options.game, sport);
+  const marketError = gameMarketUnavailable(options.game, sport);
   if (marketError) return { ...marketError, homeTeam, awayTeam, sport };
   // Internal branch tag for the session-based path (the name predates the
   // provider seam; every session now routes to a codex/claude/anthropic/gpt
@@ -403,11 +404,9 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     _researchBudgetRemainingMs = Math.max(0, RESEARCH_BRIEFING_TIMEOUT_MS - research.budgetSpentMs);
     if (briefingResult && typeof briefingResult === 'object') {
       _researchBriefing = briefingResult.briefing;
-      for (const { token } of briefingResult.calledTokens || []) {
-        if (!token) continue;
+      for (const { token, quality } of briefingResult.calledTokens || []) {
+        if (!token || quality === 'unavailable') continue;
         _flashCalledTokens.add(token);
-        const base = token.split(':')[0];
-        if (base && base !== token) _flashCalledTokens.add(base);
       }
     } else if (typeof briefingResult === 'string') {
       _researchBriefing = briefingResult;
@@ -620,14 +619,9 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       const alreadyFetchedStats = new Set(_flashCalledTokens);
       for (const t of toolCallHistory) {
         const token = t.token || '';
-        if (token) {
+        if (token && t.quality !== 'unavailable') {
           // Add full token (e.g., "PLAYER_GAME_LOGS:Drake Maye")
           alreadyFetchedStats.add(token);
-          // Also add base token (e.g., "PLAYER_GAME_LOGS") for generic checks
-          const baseToken = token.split(':')[0];
-          if (baseToken && baseToken !== token) {
-            alreadyFetchedStats.add(baseToken);
-          }
         }
       }
       
@@ -652,15 +646,16 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           }
           if (!token) {
             // Non-fetch_stats tools (e.g. fetch_player_game_logs) — dedup by function:player_name
-            const altKey = `${tc.function.name}:${args.player_name || args.player || 'unknown'}`;
+            const altKey = `${tc.function.name}:${JSON.stringify(Object.fromEntries(Object.entries(args).sort(([a], [b]) => a.localeCompare(b))))}`;
             if (seenStats.has(altKey)) { skippedDuplicates.push(altKey); return false; }
             seenStats.add(altKey);
             return true;
           }
-          const key = `${tc.function.name}:${token}`;
+          const key = tc.function.name === 'fetch_stats' ? `${tc.function.name}:${token}`
+            : `${tc.function.name}:${JSON.stringify(Object.fromEntries(Object.entries(args).sort(([a], [b]) => a.localeCompare(b))))}`;
           
           // Check if already fetched in previous iterations
-          if (alreadyFetchedStats.has(token) || alreadyFetchedStats.has(key)) {
+          if (tc.function.name === 'fetch_stats' && (alreadyFetchedStats.has(token) || alreadyFetchedStats.has(key))) {
             skippedDuplicates.push(token);
             return false; // Skip - already have this data
           }
@@ -949,7 +944,7 @@ INVESTIGATION COMPLETE`;
             });
 
             // Summarize player stats for context efficiency
-            const playerSummary = summarizePlayerStats(statResult, args.stat_type, args.team || homeTeam);
+            const playerSummary = `${args.team || homeTeam} ${args.stat_type}: ${JSON.stringify(statResult, null, 2)}`;
             messages.push({
               tool_call_id: toolCall.id,
               role: 'tool',
@@ -969,124 +964,24 @@ INVESTIGATION COMPLETE`;
           continue; // Skip the regular fetch_stats handling
         }
 
-        // Handle fetch_player_game_logs tool (universal)
+        // The enclosing matchup determines the league, including after a model fallback.
         if (functionName === 'fetch_player_game_logs') {
-          console.log(`  → [PLAYER_GAME_LOGS] ${args.player_name} (${args.sport})`);
-
           try {
-            const { ballDontLieService } = await import('../../ballDontLieService.js');
-            const sportMap = {
-              'NBA': 'basketball_nba',
-              'NFL': 'americanfootball_nfl',
-              'NHL': 'icehockey_nhl',
-              'NCAAB': 'basketball_ncaab',
-              'NCAAF': 'americanfootball_ncaaf',
-              'MLB': 'baseball_mlb'
-            };
-            const sportKey = sportMap[args.sport];
-            const numGames = args.num_games || 5;
-
-            // Player search and matching logic for props tool calls
-            const nameParts = args.player_name.trim().split(' ');
-            const lastName = nameParts[nameParts.length - 1];
-            const firstName = nameParts.length > 1 ? nameParts[0] : '';
-            // Search by full name first for better precision, fallback to last name
-            const searchTerm = nameParts.length > 1 ? args.player_name.trim() : lastName;
-            const playersResponse = await ballDontLieService.getPlayersGeneric(sportKey, { search: searchTerm, per_page: 25 });
-            // Handle both array and {data: [...]} response formats
-            let players = Array.isArray(playersResponse) ? playersResponse : (playersResponse?.data || []);
-
-            // If full name search returned no results, retry with last name only
-            if (players.length === 0 && searchTerm !== lastName) {
-              const fallbackResponse = await ballDontLieService.getPlayersGeneric(sportKey, { search: lastName, per_page: 25 });
-              players = Array.isArray(fallbackResponse) ? fallbackResponse : (fallbackResponse?.data || []);
-            }
-
-            // Priority: 1) exact full name + same team, 2) exact full name, 3) last name + same team, 4) last name only
-            const fullNameLower = args.player_name.toLowerCase();
-            const homeFirst = homeTeam.split(' ')[0].toLowerCase();
-            const awayFirst = awayTeam.split(' ')[0].toLowerCase();
-            const isOnGameTeam = (p) => {
-              const pTeam = (p.team?.full_name || p.team?.name || '').toLowerCase();
-              return pTeam.includes(homeFirst) || pTeam.includes(awayFirst);
-            };
-            const player = players.find(p =>
-              `${p.first_name} ${p.last_name}`.toLowerCase() === fullNameLower && isOnGameTeam(p)
-            ) || players.find(p =>
-              `${p.first_name} ${p.last_name}`.toLowerCase() === fullNameLower
-            ) || players.find(p => {
-              if (p.last_name?.toLowerCase() !== lastName.toLowerCase()) return false;
-              return isOnGameTeam(p);
-            }) || players.find(p =>
-              p.last_name?.toLowerCase() === lastName.toLowerCase()
-            );
-
-            if (!player) {
-              messages.push({
-                tool_call_id: toolCall.id,
-                role: 'tool',
-                name: functionName,
-                content: JSON.stringify({ error: `Player "${args.player_name}" not found in ${args.sport}` })
-              });
-              continue;
-            }
-
-            let logs;
-            if (args.sport === 'NBA') {
-              logs = await ballDontLieService.getNbaPlayerGameLogs(player.id, numGames);
-            } else if (args.sport === 'MLB') {
-              // BDL exposes per-game stats via /mlb/v1/stats — flat shape
-              // (ip, er, p_k, p_bb, ... for pitchers; at_bats, hits, hr, rbi, ... for batters).
-              // Chrono helper joins real game dates + filters to completed
-              // regular/postseason games so "last N" is provably the last N.
-              const currentYear = new Date().getFullYear();
-              logs = await ballDontLieService.getMlbPlayerGameRowsChrono(player.id, currentYear);
-            } else if (args.sport === 'NFL') {
-              const season = nflSeason();
-              const allLogs = await ballDontLieService.getNflPlayerGameLogsBatch([player.id], season, numGames);
-              logs = allLogs[player.id];
-            } else {
-              // BDL does not expose the NFL game-log endpoint for NCAAF.
-              // Never relabel professional stats as college evidence.
-              logs = [];
-            }
-
-            // Summarize player game logs for context efficiency.
-            // MLB has a different stat shape than basketball, so it uses a
-            // dedicated summarizer that detects pitcher vs batter.
-            const logSummary = args.sport === 'MLB'
-              ? summarizeMlbPlayerGameLogs(args.player_name, logs)
-              : summarizePlayerGameLogs(args.player_name, logs);
-            messages.push({
-              tool_call_id: toolCall.id,
-              role: 'tool',
-              name: functionName,
-              content: logSummary
+            const evidence = await fetchPlayerGameLogEvidence({
+              sport, player: args.player_name, homeTeam, awayTeam,
+              numGames: args.num_games, season: options.season,
             });
-            console.log(`    [Tool Response] ${functionName}: ${logSummary.slice(0, 300)}${logSummary.length > 300 ? '...' : ''}`);
-
-            // FIX: Track player game logs in toolCallHistory for audit
+            messages.push({ tool_call_id: toolCall.id, role: 'tool', name: functionName, content: evidence.content });
             toolCallHistory.push({
-              token: `PLAYER_GAME_LOGS:${args.player_name}`,
-              timestamp: Date.now(),
-              homeValue: logs?.length || 0,
-              awayValue: 'N/A'
+              token: `PLAYER_GAME_LOGS:${args.player_name}`, timestamp: Date.now(),
+              quality: evidence.quality, homeValue: evidence.games_used, awayValue: 'N/A',
+              summary: evidence.content, rawResult: evidence,
             });
           } catch (error) {
-            console.error('[Orchestrator] Error fetching player game logs:', error.message);
-            messages.push({
-              tool_call_id: toolCall.id,
-              role: 'tool',
-              name: functionName,
-              content: `${args.player_name} GAME LOGS: Error fetching - ${error.message}`
-            });
-            // Still track failed calls for audit
-            toolCallHistory.push({
-              token: `PLAYER_GAME_LOGS:${args.player_name}:FAILED`,
-              timestamp: Date.now(),
-              homeValue: 'error',
-              awayValue: 'N/A'
-            });
+            const content = JSON.stringify({ error: error.message, quality: 'unavailable', player: args.player_name });
+            messages.push({ tool_call_id: toolCall.id, role: 'tool', name: functionName, content });
+            toolCallHistory.push({ token: `PLAYER_GAME_LOGS:${args.player_name}:FAILED`, timestamp: Date.now(),
+              quality: 'unavailable', homeValue: 'error', awayValue: 'N/A', summary: content });
           }
           continue;
         }
@@ -1273,8 +1168,7 @@ INVESTIGATION COMPLETE`;
 
                 if (args.player_name) {
                   offensePlayers = offensePlayers.filter(s =>
-                    s.player?.first_name?.toLowerCase().includes(args.player_name.toLowerCase()) ||
-                    s.player?.last_name?.toLowerCase().includes(args.player_name.toLowerCase())
+                    `${s.player?.first_name || ''} ${s.player?.last_name || ''}`.trim().toLowerCase() === args.player_name.trim().toLowerCase()
                   );
                 }
 
@@ -1303,8 +1197,7 @@ INVESTIGATION COMPLETE`;
 
                 if (args.player_name) {
                   defensePlayers = defensePlayers.filter(s =>
-                    s.player?.first_name?.toLowerCase().includes(args.player_name.toLowerCase()) ||
-                    s.player?.last_name?.toLowerCase().includes(args.player_name.toLowerCase())
+                    `${s.player?.first_name || ''} ${s.player?.last_name || ''}`.trim().toLowerCase() === args.player_name.trim().toLowerCase()
                   );
                 }
 
@@ -1337,7 +1230,7 @@ INVESTIGATION COMPLETE`;
             });
 
             // Summarize player stats for context efficiency
-            const playerSummary = summarizePlayerStats(statResult, args.stat_type, args.team || homeTeam);
+            const playerSummary = `${args.team || homeTeam} ${args.stat_type}: ${JSON.stringify(statResult, null, 2)}`;
             messages.push({
               tool_call_id: toolCall.id,
               role: 'tool',

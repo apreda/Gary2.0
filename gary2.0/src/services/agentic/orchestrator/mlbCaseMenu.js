@@ -13,10 +13,11 @@
  * one conversation.
  */
 import { GAME_ML_CAP } from './orchestratorConfig.js';
+import { finiteMarketNumber, isAmericanPrice, footballMarketUnavailable } from '../../marketTruth.js';
 
 const fmtPrice = (v) => (Number(v) > 0 ? `+${Number(v)}` : `${Number(v)}`);
 const fmtMl = fmtPrice;
-const priced = (v) => v != null && v !== '' && Number.isFinite(Number(v));
+const priced = isAmericanPrice;
 const fmtLine = (v) => `${Number(v) > 0 ? '+' : ''}${Number(v)}`;
 
 /**
@@ -37,9 +38,19 @@ export function ticketMenu(game, homeTeam, awayTeam, cap = GAME_ML_CAP, order = 
   const dropped = [];
   for (const s of sides) {
     if (priced(s.ml)) (Number(s.ml) < cap ? dropped : tickets).push(`${s.name} ${fmtMl(s.ml)}`);
-    if (priced(s.sp) && priced(s.spOdds)) tickets.push(`${s.name} ${fmtLine(s.sp)} (${fmtPrice(s.spOdds)})`);
+    if (finiteMarketNumber(s.sp) !== null && priced(s.spOdds)) tickets.push(`${s.name} ${fmtLine(s.sp)} (${fmtPrice(s.spOdds)})`);
   }
   return { tickets, dropped, cap };
+}
+
+/** Missing data cannot be repaired by switching models. Use the existing ticket
+ * menu and house limit, then let a later scheduled attempt refresh the market. */
+export function gameMarketUnavailable(game = {}, sport = '') {
+  const football = footballMarketUnavailable(game, sport);
+  if (football) return football;
+  if (!/^(?:baseball_)?mlb$/i.test(sport) || ticketMenu(game, 'Home', 'Away').tickets.length) return null;
+  return { error: 'No verified priced MLB ticket within the existing house limit. Refresh sportsbook data on the next scheduled attempt.',
+    code: 'market_unavailable', retryModel: false };
 }
 
 /** The desk's MENU TRUTH lines for a board: the capped price named, then the menu. */

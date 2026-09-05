@@ -17,7 +17,7 @@ afterEach(() => { vi.unstubAllEnvs(); vi.useRealTimers(); });
 describe('original-desk decision after optional research failure', () => {
   it('actually reaches Astra with the unchanged original desk and reuses unavailable research on retry', async () => {
     mocks.research.mockRejectedValue(new Error('research unavailable'));
-    const options = { scoutReport: 'exact original stats and data', gameId: 77, modelOverride: 'codex-gpt-6-astra' };
+    const options = { game: { moneyline_home: -110, moneyline_away: -110 }, scoutReport: 'exact original stats and data', gameId: 77, modelOverride: 'codex-gpt-6-astra' };
     for (let attempt = 0; attempt < 2; attempt++) {
       await expect(runAgentLoop('system', 'original desk decision input', 'baseball_mlb', 'Home', 'Away', { ...options })).rejects.toThrow('test stops at brain decision input');
     }
@@ -31,7 +31,7 @@ describe('original-desk decision after optional research failure', () => {
     vi.stubEnv('GARY_RESEARCH_TIMEOUT_MS', '100');
     let researchSignal;
     mocks.research.mockImplementation((...args) => { researchSignal = args.at(-1).signal; return new Promise(() => {}); });
-    const task = runAgentLoop('system', 'timed original desk', 'baseball_mlb', 'Home', 'Away', { scoutReport: 'other original desk', gameId: 78, modelOverride: 'codex-gpt-6-astra' });
+    const task = runAgentLoop('system', 'timed original desk', 'baseball_mlb', 'Home', 'Away', { game: { moneyline_home: -110, moneyline_away: -110 }, scoutReport: 'other original desk', gameId: 78, modelOverride: 'codex-gpt-6-astra' });
     const ended = expect(task).rejects.toThrow('test stops at brain decision input');
     await vi.advanceTimersByTimeAsync(100);
     await ended;
@@ -50,7 +50,7 @@ describe('original-desk decision after optional research failure', () => {
     mocks.send.mockResolvedValueOnce({ content: 'ASK RESEARCHER: Verify the weather', toolCalls: null, finishReason: 'stop' });
     let followUpSignal;
     mocks.ask.mockImplementation((_session, _questions, options) => { followUpSignal = options.signal; return new Promise(() => {}); });
-    const task = runAgentLoop('system', 'follow-up original desk', 'baseball_mlb', 'Home', 'Away', { scoutReport: 'follow-up desk', gameId: 79, modelOverride: 'codex-gpt-6-astra' });
+    const task = runAgentLoop('system', 'follow-up original desk', 'baseball_mlb', 'Home', 'Away', { game: { moneyline_home: -110, moneyline_away: -110 }, scoutReport: 'follow-up desk', gameId: 79, modelOverride: 'codex-gpt-6-astra' });
     const ended = expect(task).rejects.toThrow('test stops at brain decision input');
     await vi.advanceTimersByTimeAsync(100);
     await ended;

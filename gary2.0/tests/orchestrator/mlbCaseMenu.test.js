@@ -109,6 +109,13 @@ describe('Pass 1 and the bilateral prompt agree', () => {
 });
 
 describe('ticketMenu / menuTruthLines — one definition of a ticket', () => {
+  it('rejects malformed American odds while keeping a real zero-point spread', () => {
+    for (const odds of [0, true, ' ', -99, 1.91, -110.5, Infinity]) {
+      expect(ticketMenu({ moneyline_home: odds, spread_home: -1.5, spread_home_odds: odds }, 'A', 'B').tickets).toEqual([]);
+    }
+    expect(ticketMenu({ spread_home: 0, spread_home_odds: -110 }, 'A', 'B').tickets).toEqual(['A 0 (-110)']);
+    expect(ticketMenu({ spread_home: ' ', spread_home_odds: -110 }, 'A', 'B').tickets).toEqual([]);
+  });
   it('drops a capped moneyline and lists every priced ticket, home first by default', () => {
     const m = ticketMenu(capped, 'Braves', 'Rockies');
     expect(m.dropped).toEqual(['Braves -230']);

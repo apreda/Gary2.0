@@ -1,7 +1,12 @@
 export function finiteMarketNumber(value) {
-  if (value === null || value === undefined || value === '') return null;
+  if (!['number', 'string'].includes(typeof value) || (typeof value === 'string' && !value.trim())) return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+export function isAmericanPrice(value) {
+  const price = finiteMarketNumber(value);
+  return Number.isInteger(price) && Math.abs(price) >= 100;
 }
 
 /** Resolve a spread from the requested team's perspective.
@@ -35,8 +40,7 @@ export function americanImpliedProbability(value) {
 export function footballMarketUnavailable(game = {}, sport = '') {
   if (!/^(?:americanfootball_)?(?:nfl|ncaaf)$/i.test(sport)) return null;
   const pricedSide = ['home', 'away'].some(side => {
-    const price = finiteMarketNumber(game[`spread_${side}_odds`]);
-    return spreadForSide(game, side) !== null && Number.isInteger(price) && Math.abs(price) >= 100;
+    return spreadForSide(game, side) !== null && isAmericanPrice(game[`spread_${side}_odds`]);
   });
   return pricedSide ? null : {
     error: 'No verified priced football spread. Refresh sportsbook data on the next scheduled attempt.',

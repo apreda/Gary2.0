@@ -1,3 +1,4 @@
+import { fetchPlayerGameLogEvidence } from '../tools/playerGameLogTool.js';
 import { RESEARCH_EVIDENCE_RULES, renderEvidenceBriefing } from './evidenceQuality.js';
 import { createModelSession, sendToSessionWithRetry, resetSessionChat } from './sessionManager.js';
 import { getFlashInvestigationPrompt } from '../flashInvestigationPrompts.js';
@@ -5,10 +6,10 @@ import { getMlbSeasonAwareness } from './spreadEvaluationFactors.js';
 import { GAME_RESEARCH_MODEL } from './orchestratorConfig.js';
 import { NBA_RESEARCHER_RULES } from './nbaWinningEra.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
-import { nbaSeason, nflSeason, getESTDate, toESTDate } from '../../../utils/dateUtils.js';
+import { nbaSeason, getESTDate, toESTDate } from '../../../utils/dateUtils.js';
 import { toolDefinitions, getTokensForSport } from '../tools/toolDefinitions.js';
 import { fetchStats } from '../tools/statRouters/index.js';
-import { summarizeStatForContext, summarizeNbaPlayerAdvancedStats, summarizeMlbPlayerGameLogs } from './orchestratorHelpers.js';
+import { summarizeStatForContext, summarizeNbaPlayerAdvancedStats } from './orchestratorHelpers.js';
 import { groundedWebSearch } from '../scoutReport/scoutReportBuilder.js';
 import {
   buildResearchFactorPlan,
@@ -460,9 +461,9 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                   : options;
                 const statResult = await awaitResearch(()=>fetchStats(sport, token, homeTeam, awayTeam, statOptions));
                 const hasError = statResult?.error;
-                const statSummary = summarizeStatForContext(statResult, token, homeTeam, awayTeam);
+                const statSummary = summarizeStatForContext(statResult, token, homeTeam, awayTeam, sport);
                 functionResponses.push({ name: functionName, content: statSummary });
-                _flashTokenCache.set(token, statSummary);
+                if (!hasError) _flashTokenCache.set(token, statSummary);
                 console.log(`    [Tool Response] ${token}: ${statSummary.slice(0, 200)}${statSummary.length > 200 ? '...' : ''}`);
                 calledTokens.push({ token, quality: hasError ? 'unavailable' : 'available' });
               } catch (err) {
@@ -501,80 +502,17 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
             } else if (functionName === 'fetch_player_game_logs') {
               totalToolCalls++;
               try {
-                // Map LLM-facing sport label → BDL service sport key. MLB was
-                // missing here, so MLB player lookups silently fell into the
-                // NFL else-branch below and hit /nfl/v1/... with 401s for every
-                // pitcher and batter Flash investigated.
-                const sportKeyMap = {
-                  'NBA': 'basketball_nba',
-                  'NFL': 'americanfootball_nfl',
-                  'NHL': 'icehockey_nhl',
-                  'NCAAB': 'basketball_ncaab',
-                  'NCAAF': 'americanfootball_ncaaf',
-                  'MLB': 'baseball_mlb',
-                };
-                const sportKey = sportKeyMap[args.sport] || sport;
-                const numGames = args.num_games || 5;
-                const nameParts = (args.player_name || '').trim().split(' ');
-                const lastName = nameParts[nameParts.length - 1];
-                const searchTerm = nameParts.length > 1 ? args.player_name.trim() : lastName;
-                let playersResp = await awaitResearch(()=>ballDontLieService.getPlayersGeneric(sportKey, { search: searchTerm, per_page: 25 }));
-                let players = Array.isArray(playersResp) ? playersResp : (playersResp?.data || []);
-                if (players.length === 0 && searchTerm !== lastName) {
-                  playersResp = await awaitResearch(()=>ballDontLieService.getPlayersGeneric(sportKey, { search: lastName, per_page: 25 }));
-                  players = Array.isArray(playersResp) ? playersResp : (playersResp?.data || []);
-                }
-                const fullNameLower = (args.player_name || '').toLowerCase();
-                const player = players.find(p => `${p.first_name} ${p.last_name}`.toLowerCase() === fullNameLower) || players.find(p => p.last_name?.toLowerCase() === lastName.toLowerCase());
-                if (!player) {
-                  functionResponses.push({ name: functionName, content: JSON.stringify({ error: `Player "${args.player_name}" not found` }) });
-                } else {
-                  let logs;
-                  let logContent;
-                  if (args.sport === 'NBA') {
-                    logs = await awaitResearch(()=>ballDontLieService.getNbaPlayerGameLogs(player.id, numGames));
-                    logContent = JSON.stringify({ player: args.player_name, sport: 'NBA', logs: logs || [] });
-                  } else if (args.sport === 'NCAAB') {
-                    logs = await awaitResearch(()=>ballDontLieService.getNcaabPlayerGameLogs(player.id, numGames));
-                    logContent = JSON.stringify({ player: args.player_name, sport: 'NCAAB', logs: logs || [] });
-                  } else if (args.sport === 'NHL') {
-                    logs = await awaitResearch(()=>ballDontLieService.getNhlPlayerGameLogs(player.id, numGames));
-                    logContent = JSON.stringify({ player: args.player_name, sport: 'NHL', logs: logs || [] });
-                  } else if (args.sport === 'MLB') {
-                    // MLB per-game stats use BDL's /mlb/v1/stats — flat shape
-                    // (pitcher: ip/er/p_k/p_bb; batter: at_bats/hits/hr/rbi).
-                    // Mirrors agentLoop.js MLB branch. Chrono helper joins
-                    // real game dates + drops spring/in-progress rows.
-                    const currentYear = new Date().getFullYear();
-                    logs = await awaitResearch(()=>ballDontLieService.getMlbPlayerGameRowsChrono(player.id, currentYear));
-                    // Use the pitcher/batter-aware summarizer instead of raw JSON
-                    // so the briefing gets the same compact format Gary's path does.
-                    logContent = summarizeMlbPlayerGameLogs(args.player_name, logs);
-                  } else if (args.sport === 'NFL' || args.sport === 'NCAAF') {
-                    const s = args.sport === 'NFL' && hasResearchSeason
-                      ? Number(options.researchSeason)
-                      : nflSeason();
-                    const all = await awaitResearch(()=>ballDontLieService.getNflPlayerGameLogsBatch([player.id], s, numGames));
-                    logs = all[player.id];
-                    logContent = JSON.stringify({
-                      player: args.player_name,
-                      sport: args.sport,
-                      data_window: args.sport === 'NFL' ? (options.researchSeasonLabel || String(s)) : String(s),
-                      logs: logs || []
-                    });
-                  } else {
-                    // Unknown sport — return an explicit error instead of
-                    // silently hitting NFL endpoints (the prior bug).
-                    functionResponses.push({ name: functionName, content: JSON.stringify({ error: `Unknown sport "${args.sport}" — pass one of NBA, NHL, MLB, NFL, NCAAB, NCAAF.` }) });
-                    continue;
-                  }
-                  functionResponses.push({ name: functionName, content: logContent });
-                  console.log(`    [Tool Response] ${functionName}: ${logContent.slice(0, 200)}...`);
-                  calledTokens.push({ token: `PLAYER_GAME_LOGS:${args.player_name}`, quality: 'available' });
-                }
+                const evidence = await fetchPlayerGameLogEvidence({
+                  sport, player: args.player_name, homeTeam, awayTeam, numGames: args.num_games,
+                  season: hasResearchSeason ? Number(options.researchSeason) : options.season,
+                  dataWindow: options.researchSeasonLabel, request: awaitResearch,
+                });
+                functionResponses.push({ name: functionName, content: evidence.content });
+                calledTokens.push({ token: `PLAYER_GAME_LOGS:${args.player_name}`, quality: evidence.quality });
               } catch (err) {
                 checkAbort();
-                functionResponses.push({ name: functionName, content: `Error: ${err.message}` });
+                functionResponses.push({ name: functionName, content: JSON.stringify({ error: err.message, quality: 'unavailable' }) });
+                calledTokens.push({ token: `PLAYER_GAME_LOGS:${args.player_name}`, quality: 'unavailable' });
               }
             } else if (functionName === 'fetch_nba_player_stats') {
               totalToolCalls++;
@@ -841,7 +779,7 @@ export async function askResearcher(session, questions, { sport, homeTeam, awayT
           }
           try {
             const statResult = await awaitResearch(() => fetchStats(sport, token, homeTeam, awayTeam, { ...options, signal }));
-            functionResponses.push({ name: functionName, content: summarizeStatForContext(statResult, token, homeTeam, awayTeam) });
+            functionResponses.push({ name: functionName, content: summarizeStatForContext(statResult, token, homeTeam, awayTeam, sport) });
           } catch (err) {
             checkAbort();
             if (err?.name === 'AbortError') throw err;
