@@ -2,6 +2,8 @@
 
 Prepared September 5, 2026. Build 901 replaces the crash-affected 896 review submission. See the root crash handoff for the final submission receipt and test evidence.
 
+Submitted September 5 at **3:13 PM Eastern**, status **Waiting for Review**. [Apple submission receipt](https://appstoreconnect.apple.com/apps/6751238914/distribution/reviewsubmissions/details/df3e7f2c-8447-4cfb-988d-041905b3a220). The old 896 submission is Removed. The existing automatic release setting is preserved.
+
 ## Notes for Review
 
 Build 901 fixes a Picks crash during launch/refresh when MLB game picks, player props and home-run props refer to the same game. Picks now has individual sport tabs without an All section. This replaces our withdrawn build 896.
