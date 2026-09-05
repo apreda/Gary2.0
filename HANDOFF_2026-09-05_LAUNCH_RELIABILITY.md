@@ -88,3 +88,15 @@ A fresh production browser Today page independently loads 45 games and nine call
 Application availability is recovered at that observation time. The direct Prometheus endpoint also returned HTTP 200 with `pg_up=1` and no disk I/O in flight; the separate Management API metrics request still returns 500 and is tracked by the DB task.
 
 The obsolete 9 AM host cron remains the unresolved local reliability dependency. No OS privacy settings were changed. Build 900 is uploaded and processing; App Store Connect processing and attachment still require verification.
+
+## Final content run and web recovery — 11:43 ET
+
+The resumed daily-content run `2026-09-05T15:18:46.941Z-89077` finished at 11:35:58.280 ET with `status: ok` and no failed stages. This includes the post-insight college player-card completion, Card Watch, and final morning-health stage. Evidence is the existing journal at `~/Library/Logs/Gary2.0/daily-content-stages.jsonl`.
+
+The launch thread found that the website's Picks route converted required upstream read errors into successful empty arrays, allowing an outage response to remain cached after database recovery. The exact public bio destination recovered to 45 games and nine picks before the preventive deployment; this recovery alone did not prove the failure handling repaired.
+
+Web commits `f4ecce2a` and `df9de4d4` now propagate required game-pick/board failures to a retryable page error and reject malformed nonempty game-pick payloads. Legitimate empty storage and pending games remain valid, and the props parser is unchanged. The launch thread verified an outage → Try again → restored board browser exercise. A Vercel ignore-command failure caused by an unavailable previous Git revision was also corrected so an uncertain comparison triggers a build.
+
+Root independently verified CI `33975477145` succeeded and production deployment `dpl_BfSCSwuypPEGYV4NUnLF4ZzPrTNj` is READY at exact commit `df9de4d4f8b73535d76e4c4c698a433b4a1e3bdf`, with both public domains assigned. At 11:43 ET a fresh browser reload of `https://www.betwithgary.ai/picks?utm_source=x&utm_content=bio_v1` displayed 45 games, nine posted college picks, and pending MLB games with the first 14:40 ET publication window.
+
+No further native changes or upload were needed. The guarded obsolete-cron removal remains blocked by native macOS authorization and the tool's explicit restriction on Terminal control; founder authorization is already present. Build 900 delivery is verified, while Apple processing and attachment remain the launch thread's separate verification step. Concurrent uncommitted backend evidence work belongs to the pick thread and is outside this completed reliability patch.
