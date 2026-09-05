@@ -25,10 +25,11 @@ export const metadata: Metadata = pageMetadata({
 });
 
 export default async function Home() {
+  // Preserve the last good page when the feeds behind today's counts fail.
   const [gamePicks, propPicks, slate, results] = await Promise.all([
-    fetchTodayGamePicks().catch(() => null),
+    fetchTodayGamePicks(),
     fetchTodayPropPicks().catch(() => null),
-    fetchDailySlate(todayEST()).catch(() => []),
+    fetchDailySlate(todayEST()),
     fetchAllGameResults().catch(() => null),
   ]);
 

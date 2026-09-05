@@ -74,9 +74,11 @@ function TopCallBand({ pick }: { pick: GaryPick }) {
 export default async function PicksPage() {
   const date = todayEST();
   const graded = hubGradedDateEST();
+  // Required feeds must reject on failure: an empty fallback would replace
+  // the last good ISR board and falsely claim that no picks were published.
   const [picks, slate, gradedRows] = await Promise.all([
-    fetchTodayGamePicks().catch(() => [] as GaryPick[]),
-    fetchDailySlate(date).catch(() => []),
+    fetchTodayGamePicks(),
+    fetchDailySlate(date),
     fetchGameResultsForDate(graded).catch(() => []),
   ]);
 

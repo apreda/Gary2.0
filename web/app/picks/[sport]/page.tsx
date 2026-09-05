@@ -110,9 +110,11 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
 
   const date = todayEST();
   const now = nowMs();
+  // Active boards need both feeds. Let ISR preserve its last good render
+  // on failure; retired archives do not depend on today's feeds.
   const [allPicks, slate, results, leagueDates] = await Promise.all([
-    fetchTodayGamePicks().catch(() => null),
-    cfg.retired ? Promise.resolve([]) : fetchDailySlate(date).catch(() => []),
+    cfg.retired ? Promise.resolve([]) : fetchTodayGamePicks(),
+    cfg.retired ? Promise.resolve([]) : fetchDailySlate(date),
     fetchAllGameResults().catch(() => null),
     fetchLeagueDates(cfg.code).catch(() => [] as string[]),
   ]);

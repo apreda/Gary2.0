@@ -11,11 +11,11 @@ Prepared September 5, 2026 after verifying the final signed archive and successf
 - The 21 archived privacy manifests exactly match the 899 archive for **every plist key**, including collected types, linked/tracking flags, purposes and required-reason API declarations. The current extraction is [PRIVACY_INVENTORY_2_25_900.json](PRIVACY_INVENTORY_2_25_900.json); the comparison and binary hash are in [the verification evidence](launch-2026-09/evidence/privacy-900-archive-verification.json).
 - Matching manifests establish declaration parity, not proof of runtime SDK behavior. No new device/provider network trace or interactive account-deletion/sign-in test was performed in this verification.
 
-## Current launch blocker
+## Availability recovery and remaining checks
 
-At approximately 10:54–10:55 AM Eastern, the reliability and database tasks observed application REST/SQL timeouts. This supersedes the earlier healthy morning checks. Task “Investigate Gary picks on Astra” owns recovery; it reported pausing only the routine daily-insights agent. The scheduler and Winners agents remain owned by their existing task. The reported cause is not established.
+At approximately 10:54–10:55 AM Eastern, the reliability and database tasks observed application REST/SQL timeouts. Task “Investigate Gary picks on Astra” owned recovery and performed one official project restart. SQL/REST recovered around 11:17 AM; the independent 11:19:31 health check verified the board, game cards, prior grades and recaps. Daily insights resumed. The metrics exporter remains a separate reported 500 error. The original incident cause is not established.
 
-Do not advance review/release readiness from a successful archive or a provider control-panel health label. First verify the restored live signed-out game journey, account/Book access, Winners empty versus error behavior and publication-health coverage. This task does not add database load or change recovery controls while recovery is owned elsewhere.
+The launch browser check after recovery found a remaining website entry problem: `/picks` still displayed an empty schedule while Today displayed 45 games and nine calls. A web-only failure/cache repair is under verification. The signed-out Book page and legitimate empty Winners state loaded. Verify the repaired game-reading journey and remaining authenticated Book/device paths before treating this submission as ready; a successful archive or provider health label does not complete these checks.
 
 ## Copy for Notes for Review
 
