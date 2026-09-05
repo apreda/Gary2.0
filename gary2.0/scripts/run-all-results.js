@@ -15,7 +15,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { admittedGameKeys, isWinnersGame } from '../src/services/pickdesk/winnersBook.js';
 import { WINNERS_CUTOVER_DATE } from '../src/services/pickdesk/winnersAdmissions.js';
-import { pickSide, matchGame } from '../src/services/teamMatch.js';
+import { pickSide, matchGame, canGroundGameScore } from '../src/services/teamMatch.js';
 import { factCheckPick, buildGameEvidence } from '../src/services/factCheck.js';
 import { generateRecap, filterPropsForGame, headlineNeedsRepair } from '../src/services/gameRecap.js';
 import { runNightHighlights } from '../src/services/nightHighlights.js';
@@ -968,7 +968,7 @@ async function processGenericGames(table, date, leagueFilter = null, { settlemen
 
     // Since Sep 4, only an exact immutable Winners publication can stamp a
     // result. Never manufacture admission from confidence or a missing review.
-    const ids = [...new Set(picks.map(p => String(p?.game_id ?? p?.bdl_game_id ?? '')).filter(Boolean))];
+    const ids = [...new Set(picks.map(storedPickGameId).filter(Boolean))];
     let boardKeys = new Set();
     if (ids.length) {
       const { data: board, error: boardError } = await supabase.from('winners_board')
@@ -999,7 +999,7 @@ async function processGenericGames(table, date, leagueFilter = null, { settlemen
       for (const pick of picks) (byLeague[(pick.league || 'UNKNOWN').toUpperCase()] ||= []).push(pick);
       for (const [league, leaguePicks] of Object.entries(byLeague)) {
         if (leaguesReviewed.has(league)) {
-          for (const pick of leaguePicks) if (reviewByKey.get(`${league}|${String(pick.game_id ?? pick.bdl_game_id ?? '')}`)) winnerKeys.add(winnerKey(pick));
+          for (const pick of leaguePicks) if (reviewByKey.get(`${league}|${storedPickGameId(pick)}`)) winnerKeys.add(winnerKey(pick));
         } else {
           const ranked = leaguePicks.slice().sort((a, b) => Number(!!b.is_top_pick) - Number(!!a.is_top_pick) || (b.confidence ?? 0) - (a.confidence ?? 0));
           for (const pick of ranked.slice(0, 3)) winnerKeys.add(winnerKey(pick));
@@ -1022,6 +1022,7 @@ async function processGenericGames(table, date, leagueFilter = null, { settlemen
       // "final score" guess (Jul 9: a live Mariners @ Marlins game graded a 4-1 loss
       // while it was in the 4th inning, then went out as a result tweet).
       let gameFoundNotFinal = false;
+      let scoreGroundingAllowed = false;
 
       // Pick may store the BDL game id as `game_id` or `bdl_game_id` (we add this
       // at pick-generation time). Match by ID first to avoid grabbing a different
@@ -1069,6 +1070,7 @@ async function processGenericGames(table, date, leagueFilter = null, { settlemen
           ? await fetchMlbGamesForETDate(date)
           : league === 'NCAAF' ? await fetchNCAAFGames(date)
             : await fetchGames(league, date);
+        scoreGroundingAllowed = canGroundGameScore(games, pick.homeTeam, pick.awayTeam, pickGameId);
         const result = matchGame(games, pick.homeTeam, pick.awayTeam, pickGameId);
         if (result) {
           // FINALITY GATE — never grade a non-final game. A suspended or
@@ -1120,13 +1122,10 @@ async function processGenericGames(table, date, leagueFilter = null, { settlemen
         gameDate = typeof normalized === 'string' ? normalized.slice(0, 10) : normalized;
       }
 
-      // Grounding is a fallback for a game the PROVIDER LACKS entirely — never for a
-      // game the provider reports as still in progress. Without this guard, an
-      // in-progress game (box-score path skipped by the finality gate above) fell
-      // through here and got graded off an LLM "what was the final score?" answer,
-      // posting a premature/wrong result (Jul 9: Mariners ML graded a 4-1 loss while
-      // the game was in the 4th inning).
-      if (hs === null && !gameFoundNotFinal && league !== 'NCAAF' && !(settlementOnly && league === 'NFL')) {
+      // Only an ID-less legacy game absent from the provider may use team/date
+      // grounding. It must never reopen an exact-ID miss, ambiguous doubleheader,
+      // missing provider score, or a game known to be in progress.
+      if (hs === null && scoreGroundingAllowed && !gameFoundNotFinal && league !== 'NCAAF' && !(settlementOnly && league === 'NFL')) {
         const g = await getScoreGrounding(league, pick.homeTeam, pick.awayTeam, date);
         if (g) { hs = g.h; vs = g.v; }
       }

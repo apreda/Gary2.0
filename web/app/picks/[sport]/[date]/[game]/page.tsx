@@ -9,7 +9,7 @@ import { MeaningfulPickView } from '@/components/MeaningfulPickView';
 import { ShareActions } from '@/components/ShareActions';
 import { ResultLetter, StitchRule } from '@/components/Terminal';
 import { isArchiveDate } from '@/lib/gary/archive';
-import { etDateLabel, etTime, injuryLines, marketLine, oddsText, parseGameTime, propCall, propLabel, scoutSectionsExcluding } from '@/lib/gary/format';
+import { etDateLabel, etTime, injuryLines, marketLine, oddsText, parseGameTime, propCall, scoutSectionsExcluding } from '@/lib/gary/format';
 import {
   fetchGameDay,
   fetchGameProps,
@@ -331,7 +331,7 @@ export default async function GamePage({ params }: { params: Params }) {
                   <div className="flex flex-wrap items-baseline justify-between gap-3">
                     <p>
                       <span className="font-display text-[1.35rem] uppercase leading-none text-hi">{prop.player}</span>
-                      <span className="ml-3 font-mono text-[13px] font-bold text-silver">{propCall(prop)} {propLabel(prop.prop)}</span>
+                      <span className="ml-3 font-mono text-[13px] font-bold text-silver">{propCall(prop)}</span>
                       {odds && <span className="tnum ml-2 font-mono text-[12px] text-low">{odds}</span>}
                     </p>
                     <p className="tnum flex items-center gap-2 font-mono text-[12px] text-low">

@@ -41,6 +41,17 @@ const nflResult = {
   game_date: gradedDate, matchup: 'Chiefs at Bills', pick_text: 'Chiefs ML -120',
   result: 'lost', final_score: '17-21', confidence: 0.60, season_type: 2,
 };
+// The legacy market stores its line in the name. An alternate winning line
+// comes first in the results, but this published Over 5.5 call lost with 5.
+const prop = {
+  player: 'Local QA Pitcher', prop: 'pitcher_strikeouts 5.5', bet: 'Over',
+  league: 'MLB', matchup: 'Chicago Cubs @ Cincinnati Reds', odds: -110,
+  rationale: 'Local QA legacy prop: five strikeouts loses the published Over 5.5 call.',
+};
+const propResult = {
+  game_date: date, player_name: prop.player, prop_type: 'pitcher_strikeouts',
+  bet: prop.bet, matchup: prop.matchup, sport: 'MLB', odds: '-110', actual_value: 5,
+};
 const tables = {
   daily_picks: [{ id: 'local-qa', date, picks: [pick] }],
   weekly_nfl_picks: [],
@@ -48,15 +59,18 @@ const tables = {
     away_team: pick.awayTeam, home_team: pick.homeTeam }],
   pick_day_index: [{ date, league: 'MLB', sport: null }],
   archive_day_index: [{ date, published_at: `${date}T12:00:00Z`, game_count: 1,
-    prop_count: 0, research_count: 1 }],
+    prop_count: 1, research_count: 1 }],
   insight_connections: [{ id: 1, date, headline: 'Local QA archive research',
     detail: 'Local QA fixture research accompanies the stored Cubs pick for archive discovery verification.' }],
-  prop_picks: [],
+  prop_picks: [{ id: 'local-qa-prop', date, picks: [prop] }],
   daily_slate: [{ date, league: 'MLB', away_team: pick.awayTeam, home_team: pick.homeTeam,
     commence_time: pick.commence_time, venue: pick.venue, ml_away: '-110', ml_home: '+100' }],
   game_results: [mlbResult, { ...nflResult, league: 'NFL', result: 'won' }],
   nfl_results: [nflResult, { ...nflResult, matchup: 'Preseason QA game', season_type: 1, result: 'won' }],
-  prop_results: [],
+  prop_results: [
+    { ...propResult, line_value: 4.5, result: 'won', pick_text: 'Local QA Pitcher Over 4.5 Strikeouts -110' },
+    { ...propResult, line_value: 5.5, result: 'lost', pick_text: 'Local QA Pitcher Over 5.5 Strikeouts -110' },
+  ],
   live_scores: [{ date, league: 'MLB', game_id: 'local-qa', away_abbr: 'CHC', home_abbr: 'CIN',
     away_score: 2, home_score: 1, status: 'live', detail: 'TOP 5' }],
 };
@@ -133,7 +147,7 @@ async function close() {
   closing = true;
   if (child.exitCode === null && child.signalCode === null) {
     child.kill('SIGTERM');
-    await Promise.race([stopped, delay(3000)]);
+    await Promise.race([stopped, delay(3000, undefined, { ref: false })]);
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
   }
   api.closeAllConnections();
@@ -187,14 +201,26 @@ try {
     ]) {
       const response = await fetch(`${origin}${path}`, { signal: AbortSignal.timeout(90_000) });
       assert.equal(response.status, 200, `${path} status`);
-      assert((await response.text()).includes(expected), `${path} must include its published fixture content`);
+      const html = await response.text();
+      assert(html.includes(expected), `${path} must include its published fixture content`);
+      if (path === matchup) {
+        const receipt = [...html.matchAll(/<li\b[^>]*>[\s\S]*?<\/li>/g)]
+          .map(match => match[0]).find(item => item.includes(`>${prop.player}</span>`)) ?? '';
+        const text = receipt.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+        assert(text.includes('OVER 5.5 Strikeouts'), 'Legacy prop must display its encoded line');
+        assert.equal(text.match(/Strikeouts/g)?.length, 1, 'Prop market label must appear once');
+        assert.match(receipt, /class="[^"]*\btext-loss\b[^"]*">L<\/span>/,
+          'The published Over 5.5 receipt must show its loss, not the alternate Over 4.5 win');
+        assert.match(text, /Actual\s+5\b/, 'The receipt must show the recorded five strikeouts');
+        console.log('PASS prop receipt: encoded 5.5 line, one market label, correct losing grade');
+      }
       console.log(`PASS ${path}: permanent analysis discovery`);
     }
     const response = await fetch(`${origin}/results.json`, { signal: AbortSignal.timeout(30_000) });
     assert.equal(response.status, 200);
     const ledger = await response.json();
     assert.deepEqual(ledger.games.map(row => [row.league, row.result]), [['NFL', 'lost'], ['MLB', 'won']]);
-    assert.deepEqual(ledger.props, []);
+    assert.deepEqual(ledger.props.map(row => [row.line_value, row.result]), [[4.5, 'won'], [5.5, 'lost']]);
     const preflight = await fetch(`${apiUrl}/rest/v1/rpc/your_book_leaderboard_v3`, {
       method: 'OPTIONS', headers: { Origin: origin, 'Access-Control-Request-Method': 'POST',
         'Access-Control-Request-Headers': 'apikey,authorization,content-type,content-profile,x-client-info' },

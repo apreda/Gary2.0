@@ -469,10 +469,9 @@ export function propGameId(prop) {
   return value == null || String(value).trim() === '' ? null : String(value);
 }
 
-/** Game picks use the same two historical provider-id field names as props. */
+/** Explicit BDL identity wins over a generic (possibly other-provider) id. */
 export function pickGameId(pick) {
-  const value = pick?.game_id ?? pick?.bdl_game_id ?? null;
-  return value == null || String(value).trim() === '' ? null : String(value);
+  return cleanText(pick?.bdl_game_id) ?? cleanText(pick?.game_id);
 }
 
 function canonicalLine(line) {

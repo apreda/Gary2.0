@@ -148,10 +148,19 @@ export function propLabel(prop?: string | null): string {
     .join(' ');
 }
 
+/** Separate line wins; older stored markets can encode it as "total_bases 1.5". */
+export function propLine(prop: PropPick): string | number | null {
+  if (prop.line != null && String(prop.line).trim() !== '') {
+    return typeof prop.line === 'string' ? prop.line.trim() : prop.line;
+  }
+  return (prop.prop ?? '').trim().match(/\s+([+-]?\d+(?:\.\d+)?)$/)?.[1] ?? null;
+}
+
 /** "OVER 1.5 Total Bases" — the call as one readable line. */
 export function propCall(prop: PropPick): string {
   const side = (prop.bet ?? '').toUpperCase();
-  const line = prop.line != null && prop.line !== '' ? ` ${prop.line}` : '';
+  const value = propLine(prop);
+  const line = value != null ? ` ${value}` : '';
   const label = propLabel(prop.prop);
   return `${side}${line}${label ? ` ${label}` : ''}`.trim();
 }

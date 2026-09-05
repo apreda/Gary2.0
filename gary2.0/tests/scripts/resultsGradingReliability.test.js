@@ -348,6 +348,16 @@ describe('football game-pick attribution', () => {
     expect(pickGameId({ bdl_game_id: '202' })).toBe('202');
     expect(pickGameId({ game_id: '  ' })).toBeNull();
   });
+
+  it('prefers the explicit BDL namespace over an unrelated generic game id', () => {
+    expect(pickGameId({ game_id: 'odds-api-event', bdl_game_id: 202 })).toBe('202');
+    expect(pickGameId({ game_id: 401234567, bdl_game_id: ' 202 ' })).toBe('202');
+  });
+
+  it('falls back to the historical generic BDL id when the explicit field is blank', () => {
+    expect(pickGameId({ bdl_game_id: ' ', game_id: ' 101 ' })).toBe('101');
+    expect(pickGameId({ game_id: '', bdl_game_id: 202 })).toBe('202');
+  });
 });
 
 describe('prop result identity', () => {

@@ -8,6 +8,7 @@ import {
   isArchiveDate,
 } from './archive';
 import { fetchDailySlate, type SlateRow } from './board';
+import { propLine } from './format';
 import { normalizeLeague, sportByCode, sportBySlug } from './leagues';
 import { rest, restAll } from './supabase';
 import type { GameResultRow, GaryPick, PropPick, PropResultRow } from './types';
@@ -124,7 +125,7 @@ function normalizedPropType(value?: string | null): string {
 }
 
 function sameLine(a?: string | number | null, b?: string | number | null): boolean {
-  if (a == null || a === '' || b == null || b === '') return a == null || a === '';
+  if (a == null || b == null || String(a).trim() === '' || String(b).trim() === '') return false;
   const x = Number(a);
   const y = Number(b);
   if (Number.isFinite(x) && Number.isFinite(y)) return x === y;
@@ -135,19 +136,20 @@ function sameLine(a?: string | number | null, b?: string | number | null): boole
 export function matchPropResult(prop: PropPick, results: PropResultRow[]): PropResultRow | null {
   const player = (prop.player ?? '').trim().toLowerCase();
   const type = normalizedPropType(prop.prop);
-  if (!player || !type || !prop.matchup) return null;
+  const bet = (prop.bet ?? '').trim().toLowerCase();
+  const line = propLine(prop);
+  if (!player || !type || !prop.matchup || !bet || line == null) return null;
   const wantedMatchup = matchupTeams(prop.matchup);
   if (!wantedMatchup) return null;
-  const bet = (prop.bet ?? '').trim().toLowerCase();
-  return (
-    results.find(r => {
-      if ((r.player_name ?? '').trim().toLowerCase() !== player) return false;
-      if (!sameMatchup(wantedMatchup.away, wantedMatchup.home, r.matchup)) return false;
-      if (normalizedPropType(r.prop_type) !== type) return false;
-      if (bet && (r.bet ?? '').trim().toLowerCase() !== bet) return false;
-      return sameLine(prop.line, r.line_value);
-    }) ?? null
-  );
+  const matches = results.filter(r => {
+    if ((r.player_name ?? '').trim().toLowerCase() !== player) return false;
+    if (!sameMatchup(wantedMatchup.away, wantedMatchup.home, r.matchup)) return false;
+    if (normalizedPropType(r.prop_type) !== type) return false;
+    if ((r.bet ?? '').trim().toLowerCase() !== bet) return false;
+    return sameLine(line, r.line_value);
+  });
+  // Repeated tickets can belong to different games or conflicting grades.
+  return matches.length === 1 ? matches[0] : null;
 }
 
 /** The slate row for this matchup (opening lines), when the day's slate was written. */

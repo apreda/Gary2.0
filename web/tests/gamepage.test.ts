@@ -171,6 +171,33 @@ describe('props', () => {
     expect(matchPropResult(earnedRuns, splitResults)?.result).toBe('won');
     expect(matchPropResult(strikeouts, splitResults)?.result).toBe('lost');
   });
+
+  it('uses the stored market suffix when a legacy prop has no separate line', () => {
+    const alternatives = [
+      { ...propResults[0], line_value: 1.5, actual_value: 2, result: 'won' },
+      { ...propResults[0], line_value: 2.5, actual_value: 2, result: 'lost', pick_text: 'Kyle Tucker Over 2.5 Total Bases' },
+    ];
+    const legacy = { ...props[0], prop: 'total_bases 2.5', line: undefined };
+
+    expect(matchPropResult(legacy, alternatives)).toBe(alternatives[1]);
+    expect(matchPropResult({ ...legacy, line: 1.5 }, alternatives)).toBe(alternatives[0]);
+  });
+
+  it.each([undefined, '', '   '])('does not let an unknown line (%s) match a zero line', line => {
+    const zero = { ...propResults[0], line_value: 0, pick_text: 'Kyle Tucker Over 0 Total Bases' };
+    expect(matchPropResult({ ...props[0], line }, [zero])).toBeNull();
+    expect(matchPropResult({ ...props[0], line: 0 }, [zero])).toBe(zero);
+  });
+
+  it.each([undefined, '', '   '])('does not treat a missing side (%s) as Over or Under', bet => {
+    expect(matchPropResult({ ...props[0], bet }, propResults)).toBeNull();
+  });
+
+  it('does not select an arbitrary grade when multiple rows match the same ticket', () => {
+    const repeatedTicket = [propResults[0], { ...propResults[0], result: 'lost', actual_value: 0 }];
+    expect(matchPropResult(props[0], repeatedTicket)).toBeNull();
+    expect(matchPropResult(props[0], [...repeatedTicket].reverse())).toBeNull();
+  });
 });
 
 describe('page helpers', () => {

@@ -72,6 +72,16 @@ describe('propCall', () => {
   it('reads like a slip', () => {
     expect(propCall({ bet: 'over', line: '1.5', prop: 'total_bases 1.5' })).toBe('OVER 1.5 Total Bases');
   });
+
+  it('preserves a legacy line encoded in the market when its separate field is missing', () => {
+    expect(propCall({ bet: 'over', prop: 'total_bases 2.5' })).toBe('OVER 2.5 Total Bases');
+    expect(propCall({ bet: 'under', line: '   ', prop: 'total_bases 2.5' })).toBe('UNDER 2.5 Total Bases');
+  });
+
+  it('keeps the explicit line authoritative, including zero, without inventing absent lines', () => {
+    expect(propCall({ bet: 'over', line: 0, prop: 'total_bases 2.5' })).toBe('OVER 0 Total Bases');
+    expect(propCall({ bet: 'over', prop: 'total_bases' })).toBe('OVER Total Bases');
+  });
 });
 
 describe('marketLine', () => {

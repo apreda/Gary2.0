@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pickSide, matchGame } from '../src/services/teamMatch.js';
+import { pickSide, matchGame, canGroundGameScore } from '../src/services/teamMatch.js';
 
 describe('pickSide — shared-mascot collisions cannot flip the side', () => {
   it('Red Sox (away) vs White Sox (home), short stored names', () => {
@@ -29,6 +29,65 @@ describe('pickSide — shared-mascot collisions cannot flip the side', () => {
 
   it('returns null when the pick names no distinguishing token', () => {
     expect(pickSide('Sox ML', 'White Sox', 'Red Sox')).toBeNull();
+  });
+});
+
+describe('matchGame — provider identity and ambiguous legacy games', () => {
+  const first = { id: 101, home_team: { name: 'Chicago Cubs' }, away_team: { name: 'Cincinnati Reds' } };
+  const second = { ...first, id: 102 };
+
+  it('never substitutes the other half of a doubleheader for a missing explicit id', () => {
+    expect(matchGame([first], 'Cubs', 'Reds', 102)).toBeNull();
+    expect(matchGame([first, second], 'Cubs', 'Reds', '102')).toEqual({ game: second, swapped: false });
+  });
+
+  it('does not treat an alternate provider id field as the BDL id', () => {
+    expect(matchGame([{ ...first, gamePk: 102, espn_id: '102' }], 'Cubs', 'Reds', 102)).toBeNull();
+  });
+
+  it('rejects ambiguous legacy doubleheaders in either input order', () => {
+    expect(matchGame([first, second], 'Cubs', 'Reds', null)).toBeNull();
+    expect(matchGame([second, first], 'Cubs', 'Reds', null)).toBeNull();
+  });
+
+  it('does not choose between conflicting copies of an exact provider game', () => {
+    expect(matchGame([first, { ...first, home_team_score: 9 }], 'Cubs', 'Reds', 101)).toBeNull();
+  });
+
+  it('keeps a unique legacy name match, including blank historical ids', () => {
+    expect(matchGame([first], 'Cubs', 'Reds', null)).toEqual({ game: first, swapped: false });
+    expect(matchGame([first], 'Cubs', 'Reds', '  ')).toEqual({ game: first, swapped: false });
+  });
+
+  it('cannot guess a legacy game from missing or indistinguishable labels', () => {
+    expect(matchGame([first], '', '', null)).toBeNull();
+    const sox = { id: 103, home_team: { name: 'Chicago White Sox' }, visitor_team: { name: 'Boston Red Sox' } };
+    expect(matchGame([sox], 'Sox', 'Sox', null)).toBeNull();
+    expect(matchGame([sox], 'Red Sox', 'White Sox', null)).toEqual({ game: sox, swapped: true });
+  });
+
+  it('requires positive evidence of the away team before swapping an exact match', () => {
+    const unrelated = { ...first, home_team: { name: 'Unmapped exhibition team' } };
+    expect(matchGame([unrelated], 'Cubs', 'Reds', 101)).toEqual({ game: unrelated, swapped: false });
+    const sox = { id: 103, home_team: { name: 'Chicago White Sox' }, away_team: { name: 'Boston Red Sox' } };
+    expect(matchGame([sox], 'Red Sox', 'White Sox', 103)).toEqual({ game: sox, swapped: true });
+  });
+
+  it('normalizes whitespace around an exact id without weakening its match', () => {
+    expect(matchGame([first, second], 'Cubs', 'Reds', ' 102 ')).toEqual({ game: second, swapped: false });
+  });
+
+  it('keeps ambiguous or missing exact identities out of name/date-only grounding', () => {
+    expect(canGroundGameScore([first], 'Cubs', 'Reds', 102)).toBe(false);
+    expect(canGroundGameScore([], 'Cubs', 'Reds', 102)).toBe(false);
+    expect(canGroundGameScore([first, second], 'Cubs', 'Reds', null)).toBe(false);
+    expect(canGroundGameScore([first], 'Cubs', 'Reds', null)).toBe(false);
+    expect(canGroundGameScore([], '', '', null)).toBe(false);
+  });
+
+  it('preserves grounding for a named legacy game absent from the provider', () => {
+    expect(canGroundGameScore([], 'Dodgers', 'Giants', null)).toBe(true);
+    expect(canGroundGameScore([first], 'Dodgers', 'Giants', null)).toBe(true);
   });
 });
 
@@ -77,4 +136,3 @@ describe('matchGame — ID match is never second-guessed by an unreadable name',
     expect(result.swapped).toBe(true);
   });
 });
-
