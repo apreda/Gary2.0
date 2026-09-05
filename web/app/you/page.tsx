@@ -12,7 +12,7 @@ export const metadata: Metadata = pageMetadata({
   canonical: '/you',
   title: 'Your Book | Gary AI',
   description:
-    'Ride or fade Gary’s picks and keep an unfakeable record — plus your own logged bets, graded your way, on the web and in the app.',
+    'Keep a private record of your own bets, odds and results. Tail or fade Gary’s published picks in a separately labeled, automatically graded record.',
   robots: { index: false },
 });
 
@@ -26,7 +26,7 @@ export default async function YouPage() {
     <main className="mx-auto max-w-4xl px-5 pb-20 pt-12">
       <PageMasthead
         title="Your book"
-        sub="Tail or fade a published call and the system grades your Book after the final. The leaderboard combines settled game-pick and core-prop choices; Gary's Results headline reports game picks, with props separate."
+        sub="Your picks. Your odds. Your record. Log your own bets privately, or tail and fade Gary's published calls."
       />
 
       {user ? (
@@ -38,9 +38,14 @@ export default async function YouPage() {
               Your free web Book
             </p>
             <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-mid">
-              Join free and every posted board gives you a BET WITH GARY and a FADE THE BEAR choice.
-              Your predictions settle automatically after the final and stay separately labeled from Gary&apos;s record.
-              This tracks your call; it never places a real-money wager.
+              Log a bet, enter the odds and units you took, and add the result when you know it.
+              Keep notes, review your record and export it. Your manual entries are private and
+              self-graded; they never count toward public rankings.
+            </p>
+            <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-mid">
+              Want to make a call on Gary&apos;s board? Choose BET WITH GARY or FADE THE BEAR.
+              Those choices settle automatically and stay separately labeled from your manual bets
+              and Gary&apos;s record. Gary never places a real-money wager or connects to your sportsbook.
             </p>
             <Link
               href={accountHref('/you', 'signup')}

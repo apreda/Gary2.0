@@ -1,0 +1,8 @@
+{
+  "checked_at": "2026-09-05T13:08:47.302346Z",
+  "scope": "Retained user_bets rows placed in the preceding 30 days; internal accounts and deleted rows not separately identified; not return-visit analytics",
+  "retained_entries": 129,
+  "manual_entries": 0,
+  "manual_settled_entries": 0,
+  "accounts_with_manual_entries": 0
+}

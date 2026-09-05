@@ -189,7 +189,7 @@ export default async function PropsPage() {
         <div className="mt-8 flex flex-col items-center justify-center rounded-panel border border-line bg-card p-10 text-center">
           <Image src="/brand/gary-cooking.png" alt="" aria-hidden width={110} height={110} />
           <p className="mt-3 text-[15px] text-mid">
-            Today&apos;s props haven&apos;t dropped yet — they land with the morning slate.
+            No player props are published here yet today. Check back closer to game time as Gary finishes the analysis.
           </p>
         </div>
       )}

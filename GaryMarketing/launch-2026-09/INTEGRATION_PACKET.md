@@ -20,6 +20,10 @@ Before external outreach, attach dated seven-day and 30-day reports describing c
 
 Internal readiness threshold for a paid pilot: at least 10 willing adult users who already use Your Book and specifically request importing, plus a quote whose monthly cost fits a documented acquisition/retention hypothesis. This is a proposed spending gate, not a vendor minimum or a promise to those users.
 
+## September 5 validation update
+
+A read-only query at 12:23 UTC found 129 retained Book rows placed in the preceding 30 days, zero manual entries and zero accounts making manual entries on multiple Eastern dates. This aggregate is not a retention metric and does not exclude internal accounts or recover deleted rows. Manual import demand is unproven. The new [personal-tracking pilot](PERSONAL_TRACKING_PILOT.md) defines usability tasks, voluntary seven-day return and explicit import-request evidence. Do not attach the old X totals as proof of active Book demand or proceed to a paid import pilot from this baseline.
+
 ## Routes to investigate
 
 | Route | What it establishes | What it does not establish |

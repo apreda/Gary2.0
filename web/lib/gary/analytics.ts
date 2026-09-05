@@ -301,6 +301,18 @@ export function logMeaningfulPickView(pathname: string): void {
   trackWebEvent('meaningful_pick_view', { path, content_type: 'pick', measurement_version: 'reasoning_v2' });
 }
 
+/** Record a successful, visible Book action, only with optional analytics consent. */
+export function logBookMilestone(event: 'book_opened' | 'manual_bet_saved' | 'manual_bet_settled'): void {
+  if (typeof window === 'undefined' || !hasAnalyticsConsent() || document.visibilityState !== 'visible') return;
+  initializeGrowthAnalytics('/you');
+  // Once per session and milestone. No account, bet, odds, stake or result is
+  // accepted by this interface; successful saves are counts, not bet contents.
+  const key = `book:${event}:${memorySession!.id}`;
+  if (memoryViews.has(key)) return;
+  memoryViews.add(key);
+  trackWebEvent(event, { path: '/you' });
+}
+
 /** Reset ephemeral state too when consent is withdrawn. */
 export function resetGrowthAnalyticsMemory(): void {
   documentAttributionCaptured = false;

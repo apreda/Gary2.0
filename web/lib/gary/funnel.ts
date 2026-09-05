@@ -38,6 +38,22 @@ export function weeklyFunnel(rows: FunnelEvent[], weekStart: string, asOf: strin
   }
   const inWeek = (row: FunnelEvent) => Date.parse(row.created_at) >= start && Date.parse(row.created_at) < end;
   const weekSessions = [...sessions.values()].filter(inWeek);
+  const bookRows = ordered.filter(row =>
+    ['book_opened', 'manual_bet_saved', 'manual_bet_settled'].includes(row.event)
+    && sessions.has(sessionKey(row)));
+  const firstManualSave = new Map<string, FunnelEvent>();
+  for (const row of bookRows) {
+    if (row.event === 'manual_bet_saved' && !firstManualSave.has(row.identity)) firstManualSave.set(row.identity, row);
+  }
+  const manualCohort = [...firstManualSave.values()].filter(inWeek);
+  const matureManual = manualCohort.filter(row => Date.parse(row.created_at) + 7 * DAY <= now);
+  const returnedToBook = matureManual.filter(row => bookRows.some(later => {
+    const elapsed = Date.parse(later.created_at) - Date.parse(row.created_at);
+    return later.event === 'book_opened' && later.identity === row.identity
+      && sessionKey(later) !== sessionKey(row) && elapsed >= DAY && elapsed < 7 * DAY;
+  }));
+  const bookSessionCount = (event: string) => new Set(bookRows
+    .filter(row => row.event === event && inWeek(row)).map(sessionKey)).size;
   const cohort = [...first.values()].filter(inWeek);
   const matured = cohort.filter(row => Date.parse(row.created_at) + 7 * DAY <= now);
   const sessionsByBrowser = new Map<string, FunnelEvent[]>();
@@ -73,8 +89,20 @@ export function weeklyFunnel(rows: FunnelEvent[], weekStart: string, asOf: strin
       cohort: 'First observed session_started per browser in the selected week; not proof of a first-ever visit.',
       return: 'Another observed session at least 24 hours and less than seven days after cohort entry; only fully observed seven-day windows count.',
       missing: 'Declined consent, blocked requests/storage, other devices and legacy page-load events are outside this funnel. Fewer than 20 observations are flagged.',
+      personal_tracking: 'Consented web milestones only, from September 5 instrumentation onward; session counts, not bet counts. Activation is the first observed successful manual save. Return requires a successfully loaded Book in another session, 24 hours to less than seven days later. Automated refreshes do not log opens. No historical activity is backfilled.',
     },
     ...summarize(weekSessions),
+    personal_tracking: {
+      book_open_sessions: bookSessionCount('book_opened'),
+      manual_save_sessions: bookSessionCount('manual_bet_saved'),
+      manual_settlement_sessions: bookSessionCount('manual_bet_settled'),
+      observed_first_manual_save_browsers: manualCohort.length,
+      eligible_for_seven_day_return: matureManual.length,
+      awaiting_seven_day_window: manualCohort.length - matureManual.length,
+      returned_to_book_within_seven_days: returnedToBook.length,
+      seven_day_book_return_percent: rate(returnedToBook.length, matureManual.length),
+      small_sample: matureManual.length < 20,
+    },
     cohort: {
       observed_new_browsers: cohort.length,
       useful_first_sessions: cohort.filter(row => useful.has(sessionKey(row))).length,

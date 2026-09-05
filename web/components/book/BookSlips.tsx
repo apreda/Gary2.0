@@ -13,6 +13,7 @@ import {
   type UserBet,
 } from '@/lib/book/model';
 import { bookButton, bookField, LogBet } from './LogBet';
+import { logBookMilestone } from '@/lib/gary/analytics';
 
 function Slip({
   bet,
@@ -52,7 +53,10 @@ function Slip({
     }
   };
   const grade = (status: 'pending' | 'won' | 'lost' | 'push' | 'void') =>
-    run(() => gradeManual(bet.id, status, manualUnits(status, bet.stake_units, bet.odds_american)));
+    run(async () => {
+      await gradeManual(bet.id, status, manualUnits(status, bet.stake_units, bet.odds_american));
+      if (status !== 'pending') logBookMilestone('manual_bet_settled');
+    });
   return (
     <li className="px-5 py-4">
       <div className="flex items-start gap-3">

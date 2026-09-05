@@ -62,8 +62,10 @@ export default function PrivacyPage() {
               sent with an allowlisted event name and limited page, campaign, or call-to-action
               properties to a service-only Supabase table. Consented session and interaction
               measurements help us understand how visitors find Gary, read pick reasoning and
-              return. We do not include account email
-              addresses, full referring URLs, or URL query strings in those events.
+              return, and whether they open Your Book, save a manual entry or settle one.
+              Book measurement records those milestones only; it does not include your bet
+              selections, odds, stakes, sportsbook, notes or results. We do not include account
+              identifiers, email addresses, full referring URLs, or URL query strings in those events.
             </li>
             <li>
               Standard App Store handoffs are measured only after you allow analytics. Gary also

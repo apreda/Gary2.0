@@ -1,0 +1,41 @@
+{
+  "week_start_utc": "2026-08-31",
+  "week_end_exclusive_utc": "2026-09-07T00:00:00.000Z",
+  "as_of": "2026-09-05T12:19:26.861Z",
+  "partial_week": true,
+  "definitions": {
+    "scope": "Consented website browsers only; IDs can reset and do not identify people or app installs.",
+    "useful_session": "At least one pick reasoning block visible for five continuous foreground seconds; reasoning_v2 only.",
+    "cohort": "First observed session_started per browser in the selected week; not proof of a first-ever visit.",
+    "return": "Another observed session at least 24 hours and less than seven days after cohort entry; only fully observed seven-day windows count.",
+    "missing": "Declined consent, blocked requests/storage, other devices and legacy page-load events are outside this funnel. Fewer than 20 observations are flagged."
+  },
+  "sessions": 2,
+  "useful_sessions": 0,
+  "useful_session_percent": 0,
+  "small_sample": true,
+  "cohort": {
+    "observed_new_browsers": 1,
+    "useful_first_sessions": 0,
+    "eligible_for_seven_day_return": 0,
+    "awaiting_seven_day_window": 1,
+    "returned_within_seven_days": 0,
+    "seven_day_return_percent": null,
+    "useful_first_sessions_eligible_for_return": 0,
+    "useful_first_sessions_returned": 0,
+    "useful_first_session_return_percent": null,
+    "small_sample": true
+  },
+  "channels": [
+    {
+      "source": "direct",
+      "medium": "none",
+      "campaign": "(none)",
+      "content": "(none)",
+      "sessions": 2,
+      "useful_sessions": 0,
+      "useful_session_percent": 0,
+      "small_sample": true
+    }
+  ]
+}

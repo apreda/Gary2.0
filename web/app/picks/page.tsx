@@ -132,6 +132,18 @@ export default async function PicksPage() {
         </div>
       )}
 
+      {picks.length === 0 && (
+        <aside className="mt-6 rounded-card border border-gold/30 bg-card px-5 py-4">
+          <p className="text-[14px] leading-relaxed text-mid">
+            No picks are published here yet today. Want to see how Gary thinks?{' '}
+            <Link href="/archive" className="text-gold underline decoration-gold/40 underline-offset-4">
+              Read previous picks and reasoning
+            </Link>.
+            {' '}The archive is historical; today&apos;s calls appear on this board as they publish.
+          </p>
+        </aside>
+      )}
+
       <AccountCta
         nextPath="/picks"
         title="Call your side before the game"
@@ -200,7 +212,7 @@ export default async function PicksPage() {
         <div className="mt-8 flex flex-col items-center justify-center rounded-panel border border-line bg-card p-10 text-center">
           <Image src="/brand/gary-cooking.png" alt="" aria-hidden width={110} height={110} />
           <p className="mt-3 text-[15px] text-mid">
-            Today&apos;s board hasn&apos;t posted yet. It lands with the morning slate — the{' '}
+            Today&apos;s schedule is not available here yet. The{' '}
             <Link
               href="/results"
               className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold"

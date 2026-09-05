@@ -24,6 +24,7 @@ import { Leaderboard } from './Leaderboard';
 import { bookButton, bookField, LogBet } from './LogBet';
 import { ProfileEditor, profileAvatar } from './ProfileEditor';
 import { RideChart } from './RideChart';
+import { logBookMilestone } from '@/lib/gary/analytics';
 
 function RecordPanel({
   title,
@@ -83,7 +84,7 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
   const [unitDollars, setUnitDollars] = useUnitDollars();
   const [reloadKey, setReloadKey] = useState(0);
   const requestVersion = useRef(0);
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (recordOpen = false) => {
     const request = ++requestVersion.current;
     try {
       const [rows, s, p] = await Promise.all([fetchMyBets(), fetchMyStreak(), fetchMyProfile()]);
@@ -93,6 +94,9 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
       setProfile(p);
       setUnitDollars(Number(p.preferences?.unit_value ?? 0));
       setError(null);
+      // Opening/refocusing a usable Book counts; minute-by-minute background
+      // refreshes cannot manufacture new visits or retention.
+      if (recordOpen) logBookMilestone('book_opened');
     } catch (e) {
       if (request === requestVersion.current)
         setError(e instanceof Error ? e.message : 'Your book could not load. Please retry.');
@@ -102,14 +106,14 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
   }, [setUnitDollars]);
   useEffect(() => {
     let cancelled = false;
-    const load = () => {
-      if (!cancelled) void reload();
+    const load = (recordOpen = false) => {
+      if (!cancelled) void reload(recordOpen);
     };
-    const timer = window.setTimeout(load, 0);
+    const timer = window.setTimeout(() => load(true), 0);
     const interval = window.setInterval(() => {
       if (document.visibilityState === 'visible') load();
     }, 60000);
-    const onFocus = () => load();
+    const onFocus = () => load(true);
     window.addEventListener('focus', onFocus);
     const { data: auth } = supabaseBrowser().auth.onAuthStateChange((event: string) => {
       if (event === 'SIGNED_OUT') {
@@ -180,7 +184,7 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
           <p role="alert" className="text-[13px] text-loss">
             {error}
           </p>
-          <button onClick={reload} className={`${bookButton} mt-3`}>
+          <button onClick={() => reload(true)} className={`${bookButton} mt-3`}>
             Retry
           </button>
           <Link href="/account?next=%2Fyou" className="ml-4 text-[12px] text-gold">

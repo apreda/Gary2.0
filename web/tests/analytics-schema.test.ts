@@ -53,6 +53,18 @@ describe('website analytics schema', () => {
     expect(safeWebEventProperties('signup_started', { source: 'home' })).toBeNull();
   });
 
+  it('rejects private Book contents and requires a session and the fixed Book path', () => {
+    for (const event of ['book_opened', 'manual_bet_saved', 'manual_bet_settled'] as const) {
+      const props = { path: '/you', session_id: identity };
+      expect(parseWebEventPayload({ event, identity, props })).not.toBeNull();
+      expect(parseWebEventPayload({ event, identity, props: { path: '/you' } })).toBeNull();
+      expect(parseWebEventPayload({ event, identity, props: { ...props, path: '/you/private-id' } })).toBeNull();
+      for (const key of ['user_id', 'bet_id', 'item_id', 'pick_text', 'notes', 'odds', 'stake', 'bookmaker', 'result']) {
+        expect(parseWebEventPayload({ event, identity, props: { ...props, [key]: 'private' } })).toBeNull();
+      }
+    }
+  });
+
   it('accepts only marked same-origin JSON browser posts', () => {
     const request = (origin: string, fetchSite = 'same-origin', marker = '1') =>
       new Request('https://www.betwithgary.ai/api/analytics/event', {

@@ -4,6 +4,7 @@ import {
   fallbackReasonPair,
   fallbackVerbatimPair,
   isStandaloneSentence,
+  isReasonSentence,
   isSafeReasonPair,
   isVerbatimSnippet,
   reasonCandidates,
@@ -126,6 +127,41 @@ describe('reasonCandidates', () => {
       expect(/gary'?s take/i.test(long.opening)).toBe(false);
       expect(/gary'?s take/i.test(long.closing)).toBe(false);
     }
+  });
+
+  it('keeps a fitting thesis even when only two shorter statistics can pair', () => {
+    const thesis = 'I’m backing Pittsburgh because the starting-pitching advantage is substantial enough without asking for a run line.';
+    const card = ['Jobe has a 6.23 ERA.', 'Skenes has a .649 OPS allowed.', thesis].join('\n');
+    expect(fallbackReasonPair(card, thesis.length)).toEqual({ opening: thesis, closing: '' });
+  });
+
+  it('tries a later whole thesis when the first cannot fit, and ranks a lone fallback consistently', () => {
+    const thesis = 'My read favors Pittsburgh because Skenes controls the matchup.';
+    const tooLong = 'I’m backing Pittsburgh because ' + 'the pitching advantage is substantial '.repeat(8) + 'today.';
+    expect(fallbackReasonPair([tooLong, 'Jobe has a 6.23 ERA.', thesis].join('\n'), thesis.length))
+      .toEqual({ opening: thesis, closing: '' });
+    expect(fallbackReasonPair('A showdown awaits.\nJobe has a 6.23 ERA.', 25))
+      .toEqual({ opening: 'Jobe has a 6.23 ERA.', closing: '' });
+  });
+
+  it('recognizes a third-person argument and keeps its nearby evidence over unrelated dense stats', () => {
+    const thesis = 'Atlanta’s lineup has a more useful handedness advantage against Sánchez than Philadelphia’s has against Sale.';
+    const evidence = 'Sánchez has allowed a .737 OPS to right-handed hitters compared with .357 to lefties.';
+    const card = `${thesis} ${evidence}\n\nHarper has a 1.186 OPS, Turner a .630 OPS, and Schwarber an .899 OPS.`;
+    expect(fallbackReasonPair(card, 265)).toEqual({ opening: thesis, closing: evidence });
+  });
+
+  it('excludes an argument that needs missing pieces and does not promote an objection paragraph', () => {
+    for (const sentence of [
+      'My read is that those pieces will sustain the offense.',
+      'I expect that difference to matter repeatedly as possessions accumulate.',
+      'My judgment is that those returning pieces can support sustained possessions.',
+      'I expect that uneven batting order to give Drohan opportunities to contain damage.',
+      'The assumptions are consequential.',
+      'Alvarado and Tur offer alternatives.',
+    ]) expect(isReasonSentence(sentence)).toBe(false);
+    const card = 'The strongest argument against the bet is Pallante’s pitching. Feltner could give St. Louis an early advantage.\n\nColorado has the stronger finish available in Romano.';
+    expect(fallbackReasonPair(card, 100).opening).toBe('Colorado has the stronger finish available in Romano.');
   });
 
   it('the argument leads (founder, Aug 19): a stance sentence opens, the stat-dense reason closes', () => {

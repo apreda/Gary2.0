@@ -6,6 +6,9 @@ export const WEB_EVENTS = [
   'email_signup_completed',
   'book_action_started',
   'first_book_action',
+  'book_opened',
+  'manual_bet_saved',
+  'manual_bet_settled',
   'return_visit',
   'share_started',
   'share_completed',
@@ -56,6 +59,9 @@ const EVENT_KEYS: Record<WebEvent, readonly string[]> = {
   email_signup_completed: ['cadence', 'source'],
   book_action_started: ['action', 'content_type', 'item_id', 'path'],
   first_book_action: ['action', 'content_type', 'item_id', 'path'],
+  book_opened: ['path'],
+  manual_bet_saved: ['path'],
+  manual_bet_settled: ['path'],
   return_visit: ['path', 'days_since_last_visit'],
   share_started: ['method', 'surface', 'content_type', 'item_id', 'path'],
   share_completed: ['method', 'surface', 'content_type', 'item_id', 'path'],
@@ -72,6 +78,9 @@ const REQUIRED_KEYS: Record<WebEvent, readonly string[]> = {
   email_signup_completed: ['cadence'],
   book_action_started: ['action', 'content_type'],
   first_book_action: ['action', 'content_type'],
+  book_opened: ['path', 'session_id'],
+  manual_bet_saved: ['path', 'session_id'],
+  manual_bet_settled: ['path', 'session_id'],
   return_visit: ['path', 'days_since_last_visit'],
   share_started: ['method', 'surface', 'content_type', 'path'],
   share_completed: ['method', 'surface', 'content_type', 'path'],
@@ -91,6 +100,7 @@ function validPropertyValue(event: WebEvent, key: string, value: unknown): value
   if (typeof value !== 'string' || value.length === 0 || EMAIL_LIKE.test(value)) return false;
   if (value !== value.trim() || /[\u0000-\u001f\u007f]/.test(value)) return false;
 
+  if (key === 'path' && ['book_opened', 'manual_bet_saved', 'manual_bet_settled'].includes(event)) return value === '/you';
   if (key === 'path' || key === 'first_landing' || key === 'latest_landing') return PATH.test(value);
   if (key === 'first_referrer' || key === 'latest_referrer') return HOST.test(value);
   if (key === 'click_id' || key === 'session_id') return UUID_V4.test(value);

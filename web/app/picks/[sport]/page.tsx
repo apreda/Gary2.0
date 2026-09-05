@@ -42,7 +42,7 @@ function SportGuide({ cfg, lastBoard }: { cfg: NonNullable<ReturnType<typeof spo
   return (
     <section className="mt-16" aria-labelledby="sport-guide-heading">
       <h2 id="sport-guide-heading" className="font-display text-2xl uppercase text-hi">
-        How Gary covers {cfg.name}
+        How Gary {cfg.retired ? 'covered' : 'covers'} {cfg.name}
       </h2>
       <StitchRule tone="faint" className="mt-4" />
       <div className="mt-6 grid gap-4 md:grid-cols-3">
@@ -87,6 +87,13 @@ export async function generateMetadata({ params }: { params: Promise<{ sport: st
       title: 'World Cup 2026 Picks — The Complete Graded Record | Gary AI',
       description:
         'Gary picked every match of the 2026 FIFA World Cup with written reasoning, and every result is graded on the public record — through the final.',
+    });
+  }
+  if (cfg.retired) {
+    return pageMetadata({
+      canonical: `/picks/${cfg.slug}`,
+      title: `${cfg.name} Picks Archive — Gary's Graded Record | Gary AI`,
+      description: `Gary no longer publishes new ${cfg.name} picks. Explore the historical boards, original reasoning where available, and graded record.`,
     });
   }
   return pageMetadata({
@@ -157,7 +164,7 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
         ],
       }} />
       <PageMasthead
-        title={cfg.code === 'WC' ? 'World Cup 2026 — the graded record' : `Today's free ${cfg.name} picks`}
+        title={cfg.code === 'WC' ? 'World Cup 2026 — the graded record' : cfg.retired ? `${cfg.name} picks archive` : `Today's free ${cfg.name} picks`}
         meta={cfg.retired ? cfg.code : `${cfg.code} · ${todayEST()}`}
       >
         {allTime && l30 && (
@@ -200,8 +207,9 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
           <Image src="/brand/gary-cooking.png" alt="" aria-hidden width={110} height={110} />
           <p className="mt-3 text-[15px] text-mid">
             {cfg.retired ? (
-              <>The 2026 tournament is complete — Gary picked every match through the final, and{' '}
-              every result is graded on the{' '}
+              <>{cfg.code === 'WC'
+                ? 'The 2026 tournament is complete — Gary picked every match through the final. See the'
+                : `Gary no longer publishes new ${cfg.name} picks. Explore the historical boards above and the`}{' '}
               <Link href={`/results/${cfg.slug}`} className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold">{cfg.name} record</Link>
               {allTime && allTime.graded > 0 ? <> (<span className="tnum font-mono">{allTime.wins}-{allTime.losses}</span>)</> : null}.</>
             ) : (

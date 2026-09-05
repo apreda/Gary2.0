@@ -2,6 +2,10 @@
 
 September 4, updated September 5, 2026. Accountable owner: Adam. This replaces the offer, dates, channel assumptions and execution status in the September 1 launch plan. The implementation handoff records deployment and submission evidence; this document defines the operating decisions.
 
+## Execution and review
+
+The six workstreams have an explicit completion scorecard in [the September 5 execution review](EXECUTION_REVIEW_2026-09-05.md). Implementation is not audience validation. Codex handles authorized implementation, verification and analysis during active work; Adam supplies account access, founder footage and human contact decisions. The [personal-tracking pilot](PERSONAL_TRACKING_PILOT.md) must produce real observations before the integration spending gate is met.
+
 ## The promise
 
 **Find your game. See Gary’s pick.** Free game picks with written reasoning are the first useful experience. The public record lets people judge Gary. Your Book lets them track their own decisions. Winners is the selected board; its September 4 selection process has its own history and must earn its reputation.

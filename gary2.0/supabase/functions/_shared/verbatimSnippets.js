@@ -73,6 +73,7 @@ const ODDS = /[-+]\d{3,4}\b/;
 // compensates", "at that price", "the juice" — priced ARGUMENT is still
 // price talk (founder, Aug 26: the feed carries the read, never the number).
 const PRICE_TALK = /\b(?:plus|even)[- ]money\b|\bpric(?:e|es|ed|ing)\b|\bjuice\b/i;
+const META_FILLER = /^(?:the|my) (?:assumptions?|judgments?|counterarguments?|unresolved facts?) (?:are|is) \w+[.!?]$/i;
 
 // A sentence the FEED can carry must stand alone (founder, Aug 26: "he will
 // say he or refer to someone and nobody knows who he is talking about").
@@ -86,7 +87,7 @@ const TORN_OPENER = /^(?:but|and|so|yet|still|also|plus|though|however|meanwhile
 const THIRD_PERSON = /\b(?:he|his|him|she|her|they|their|them|it|its)\b/i;
 // References to a previous paragraph do not become self-contained just because
 // another player happens to be named later in the sentence (Sep 3–4 posts).
-const BACK_REFERENCE = /\b(?:that|those|these|this)\s+(?:uncertainty|opportunity|advantages?|edges?|risks?|matchup|split|splits|production|stretch|span|form|case|read|number|numbers)\b/i;
+const BACK_REFERENCE = /\b(?:that|those|these|this)\s+(?:(?:late[- ]inning|early|offensive|defensive|returning|uneven|surrounding|recent|batting)\s+){0,2}(?:uncertainty|opportunity|advantages?|edges?|risks?|matchup|split|splits|production|stretch|span|form|case|read|number|numbers|pieces|separation|route|judgment|difference|arms|order)\b/i;
 const STAT_ABBREVIATIONS = new Set(['ERA', 'WHIP', 'OPS', 'ER', 'K', 'BB', 'HR', 'RBI', 'AVG', 'OBP', 'SLG', 'MLB', 'NFL', 'NBA', 'NCAAF', 'AAA', 'AA']);
 // Sentence-initial capitalization is ambiguous, so word[0] only counts as a
 // name when it is not an ordinary sentence-starter ("Holmes has..." resolves
@@ -124,6 +125,7 @@ export function isReasonSentence(sentence) {
   const t = String(sentence ?? '');
   if (STAKE.test(t)) return false;
   if (ODDS.test(t) || PRICE_TALK.test(t)) return false;
+  if (META_FILLER.test(t.trim()) || /\boffers? alternatives[.!?]$/i.test(t.trim())) return false;
   if (!isStandaloneSentence(t)) return false;
   // HEADINGS ARE NOT SENTENCES (Aug 24 2026): stored rationales carry section
   // labels ("Gary's Take") as bare unpunctuated lines, and splitSentences
@@ -158,15 +160,20 @@ const digitGroups = (s) => (String(s).match(/\d[\d.,%]*/g) || []).length;
 /** Gary's stance/thesis sentence class — the first-person read that says WHY
  *  the bet exists ("I'm backing… because", "My read is…"). Priced wager
  *  declarations are already excluded upstream by isReasonSentence. */
-const STANCE = /\b(i(?:'|’)?m backing|i(?:'|’)?m taking|i(?:'|’)?ll take|my read|my ticket|i want|i trust|this sets up)\b/i;
+const STANCE = /\b(i(?:'|’)?m backing|i(?:'|’)?m taking|i(?:'|’)?ll take|my read|my judgment|my assumption|my ticket|i (?:also )?expect|i (?:still )?give|i want|i trust|this sets up)\b/i;
+// Gary's argument is not always first-person. These are ranking cues, never
+// permission to rewrite a sentence or add a claim. Explicit objections remain
+// available as evidence/risk, but do not displace the case for the pick.
+const ARGUMENT = /\b(?:because|advantage|stronger|weaker|opportunit(?:y|ies)|carries the most weight|is what|credible route|plausible route)\b/i;
+const OBJECTION = /\b(?:argument against|counterargument|counterweight|strongest counter|primary risk|obstacle)\b/i;
 
 /**
  * Deterministic reason pair — THE ARGUMENT LEADS (founder, Aug 19 2026: the
  * Skenes tweet led with a platoon fragment while the card's actual thesis
  * sat unquoted; stat density is not the argument). Opening = Gary's
- * stance/thesis sentence when one exists, else the first reason in card
- * order — always printed first. Closing = the most stat-dense OTHER reason
- * that fits: the evidence under the argument. Sentences are never cut;
+ * stance/thesis sentence when one exists, then an argument cue outside an
+ * objection paragraph, then stat-bearing reasons. Closing prefers evidence
+ * from the same paragraph, then stat density and card order. Sentences are never cut;
  * nothing fitting returns null.
  * @returns {{ opening: string, closing: string } | null}
  */
@@ -175,22 +182,30 @@ export function fallbackReasonPair(rationale, budget) {
   // No safe reason is a visible copy failure, never permission to reintroduce
   // headings, stakes, prices, or context-dependent prose through a fallback.
   if (!cands.length) return null;
-  const stanceIdx = cands.findIndex((s) => STANCE.test(s));
-  // Opening preference: the stance sentence, then digit-bearing reasons in
-  // card order (a digit-less non-stance sentence is usually atmosphere —
-  // the scene-setter must stay a last resort), then everything else.
-  const rest = cands.map((_, i) => i).filter((i) => i !== stanceIdx);
+  const paragraphs = String(rationale ?? '').split(/\n+/).map(normWs).filter(Boolean);
+  const paragraphOf = (sentence) => paragraphs.findIndex(p => p.includes(normWs(sentence)));
+  const isObjection = (sentence) => OBJECTION.test(sentence)
+    || OBJECTION.test(paragraphs[paragraphOf(sentence)] ?? '');
+  const stanceIndexes = cands.flatMap((s, i) => STANCE.test(s) && !isObjection(s) ? [i] : []);
+  const argumentIndexes = cands.flatMap((s, i) => !stanceIndexes.includes(i) && ARGUMENT.test(s) && !isObjection(s) ? [i] : []);
+  const thesisIndexes = [...stanceIndexes, ...argumentIndexes];
+  // Opening preference: first-person thesis, other argument cues, then
+  // digit-bearing reasons in card order. Scene-setting stays a last resort.
+  const rest = cands.map((_, i) => i).filter((i) => !thesisIndexes.includes(i));
   const withDigits = rest.filter((i) => digitGroups(cands[i]) > 0);
   const noDigits = rest.filter((i) => digitGroups(cands[i]) === 0);
-  const openingOrder = [...(stanceIdx >= 0 ? [stanceIdx] : []), ...withDigits, ...noDigits];
+  const openingOrder = [...thesisIndexes, ...withDigits, ...noDigits];
   for (const oi of openingOrder) {
     const opening = cands[oi];
     const evidence = cands
-      .map((s, i) => ({ s, i, d: digitGroups(s) }))
+      .map((s, i) => ({ s, i, d: digitGroups(s), sameParagraph: paragraphOf(s) === paragraphOf(opening) }))
       .filter((r) => r.i !== oi && opening.length + r.s.length <= budget)
-      .sort((a, b) => (b.d - a.d) || (a.i - b.i));
+      .sort((a, b) => Number(b.sameParagraph) - Number(a.sameParagraph) || (b.d - a.d) || (a.i - b.i));
     if (evidence.length) return { opening, closing: evidence[0].s };
+    // A whole argument that fits is more useful than two detached statistics.
+    // Do not demote it simply because a second sentence would exceed X's limit.
+    if (thesisIndexes.includes(oi) && opening.length <= budget) return { opening, closing: '' };
   }
-  const solo = cands.find((s) => s.length <= budget);
+  const solo = openingOrder.map(i => cands[i]).find(s => s.length <= budget);
   return solo ? { opening: solo, closing: '' } : null;
 }

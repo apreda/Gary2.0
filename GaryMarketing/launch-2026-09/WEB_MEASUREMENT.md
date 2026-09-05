@@ -45,3 +45,11 @@ Vercel project `gary2.0` is linked from `web/.vercel/project.json`. The main-bra
 ## Account deletion follow-up
 
 When successful deletion returns `apple_revocation_required=true`, the web signed-out confirmation now says Gary deletion is complete and shows Apple's separate sign-in-permission removal instructions. It links only to the fixed trusted Apple support URL, never to an arbitrary backend-provided URL. This mirrors the deployed backend success response and does not hold account deletion open.
+
+## September 5: personal Book milestones
+
+The consent-gated web events `book_opened`, `manual_bet_saved` and `manual_bet_settled` require a browser session and the fixed `/you` path. No bet/account identifiers, selections, odds, stakes, sportsbook, notes or outcomes are accepted. Saves fire after a new manual entry succeeds, not after edits or failed submissions. Settlements fire after a confirmed result save, not after reopening an entry. A Book open requires successful loading during an opening/refocus; automatic minute refreshes do not log opens.
+
+The database deduplicates each milestone per browser/session. Reports count sessions with activity, not the number of bets. Manual activation is a browser's first observed successful save. Return requires a different session with a successfully loaded Book at least 24 hours and less than 7 days later; only complete 7-day windows enter the percentage. Missing denominators yield null. The report reads all retained relevant event history to avoid labeling an already-observed manual user new. No historical activity is backfilled. Native activity and people declining consent are outside this measure.
+
+Migration `20260905125323_consented_book_milestones.sql` extends the existing service-only writer and adds a unique milestone index. Isolated PostgreSQL tests exercise privacy rejection, role permissions, duplicates, later sessions and compatibility. Browser-helper tests exercise consent, hidden pages and idle sessions; aggregation tests separate generic site returns from actual Book returns.

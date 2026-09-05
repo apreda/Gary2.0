@@ -1,0 +1,193 @@
+{
+  "source_date": "2026-09-04",
+  "scope": "All stored daily picks on this date; offline deterministic excerpt replay, not published tweets or an engagement experiment.",
+  "sample": 13,
+  "changed": 12,
+  "safe": 13,
+  "comparisons": [
+    {
+      "pick": "Blue Jays ML",
+      "budget": 262,
+      "before": {
+        "opening": "Guerrero’s .779 OPS against lefties and Okamoto’s .841 give this lineup credible threats against Lynch.",
+        "closing": "Kansas City’s strongest counterargument is substantial: Caglianone has an .866 OPS against righties, while Taillon has allowed left-handed hitters an .895 OPS."
+      },
+      "after": {
+        "opening": "Toronto has the stronger finish available in Rogers and Varland.",
+        "closing": "Fisher also had Thursday off."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "Braves ML",
+      "budget": 265,
+      "before": {
+        "opening": "Sánchez has allowed a .737 OPS to right-handed hitters compared with .357 to lefties.",
+        "closing": "Harper’s 1.186 OPS over his last 15 days meets a season split of .682 against left-handers, while Turner has a .630 OPS against lefties."
+      },
+      "after": {
+        "opening": "Atlanta’s lineup has a more useful handedness advantage against Sánchez than Philadelphia’s has against Sale.",
+        "closing": "Sánchez has allowed a .737 OPS to right-handed hitters compared with .357 to lefties."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "Brewers ML",
+      "budget": 264,
+      "before": {
+        "opening": "Stephenson and Suárez have .626 and .667 OPS figures against left-handed pitching.",
+        "closing": "Megill’s 2.19 ERA and Uribe’s 1.97 support the quality of that late-inning route."
+      },
+      "after": {
+        "opening": "Drohan has vulnerabilities, particularly against Cincinnati’s opening trio, but his four-seamer and slider give him a stronger way to stop rallies.",
+        "closing": "Stephenson and Suárez have .626 and .667 OPS figures against left-handed pitching."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "Diamondbacks ML",
+      "budget": 259,
+      "before": {
+        "opening": "Garcia, Loáisiga and Morillo last threw 14, 15 and 15 pitches, respectively, before Thursday’s off-day.",
+        "closing": "Javier’s last two conventional starts lasted four innings each, and his subsequent relief appearance required 78 pitches for 4⅓ innings."
+      },
+      "after": {
+        "opening": "I expect Houston to need meaningful outs from its middle relief earlier.",
+        "closing": "Javier’s last two conventional starts lasted four innings each, and his subsequent relief appearance required 78 pitches for 4⅓ innings."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "Fresno State Bulldogs +21.5",
+      "budget": 247,
+      "before": {
+        "opening": "The Bulldogs allowed 18.8 points per game in 2025 and return seven defensive starters.",
+        "closing": "The Trojans led 35–3 through three quarters, then finished with a 42–26 win after expanding their defensive rotation."
+      },
+      "after": {
+        "opening": "Fresno’s defensive continuity carries the most weight in my decision.",
+        "closing": "The Bulldogs allowed 18.8 points per game in 2025 and return seven defensive starters."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "Mariners -1.5",
+      "budget": 261,
+      "before": {
+        "opening": "Roycroft threw 39 pitches, Medina 34 and Blewett 27; Harris worked both of the last two days.",
+        "closing": "I also expect Seattle’s productive hitters to generate enough offense despite Rodríguez’s 11-for-61 stretch and Naylor’s 5-for-30 week."
+      },
+      "after": {
+        "opening": "I also expect Seattle’s productive hitters to generate enough offense despite Rodríguez’s 11-for-61 stretch and Naylor’s 5-for-30 week.",
+        "closing": "Gilbert has completed five innings in each of his last three starts, so Seattle may still need substantial relief work itself."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "Michigan State Spartans -10.5",
+      "budget": 245,
+      "before": {
+        "opening": "My read is that those pieces will work together well enough to keep the offense productive beyond an initial scoring burst.",
+        "closing": "The projected offensive-line starters bring 110 career starts."
+      },
+      "after": {
+        "opening": "I still give Michigan State’s combination of returning quarterback experience, a proven receiving connection and accumulated line experience the greater weight.",
+        "closing": "The projected offensive-line starters bring 110 career starts."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "Nationals +1.5",
+      "budget": 260,
+      "before": {
+        "opening": "Against the left-handed Kent, Smith carries a .422 OPS in 47 at-bats.",
+        "closing": "Tucker is 6-for-39 over the last 15 days, and Muncy is 1-for-15 over the last seven."
+      },
+      "after": {
+        "opening": "Edman and Teoscar Hernández are producing, but the surrounding lineup gives Washington a credible opportunity to keep this within the handicap.",
+        "closing": "Tucker is 6-for-39 over the last 15 days, and Muncy is 1-for-15 over the last seven."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "Rockies ML",
+      "budget": 264,
+      "before": {
+        "opening": "Pallante returns from right-elbow inflammation after throwing about 50 pitches in live batting practice, without a rehabilitation start.",
+        "closing": "Rumfield and Johnston bring respective .850 and .822 OPS figures against right-handed pitching."
+      },
+      "after": {
+        "opening": "Pallante returns from right-elbow inflammation after throwing about 50 pitches in live batting practice, without a rehabilitation start.",
+        "closing": "O’Brien and Stanek also pitched both days, while Graceffo threw 48 pitches Wednesday."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "Stanford Cardinal +24.5",
+      "budget": 251,
+      "before": {
+        "opening": "I’m taking the points because Stanford showed identifiable ways to sustain offense and answer a lead change.",
+        "closing": "The Cardinal allowed 20 unanswered fourth-quarter points, while Ford had accumulated 85 of his 99 rushing yards before halftime."
+      },
+      "after": {
+        "opening": "I’m taking the points because Stanford showed identifiable ways to sustain offense and answer a lead change.",
+        "closing": "Davis Warren completed 16 of 22 throws between the numbers against Hawai‘i, then completed all five passes on the winning drive."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "Tigers ML",
+      "budget": 265,
+      "before": {
+        "opening": "Keider Montero brings a 3.24 ERA and 0.99 WHIP through 139.0 innings, while Logan Allen has only 14.1 MLB innings and one start this season.",
+        "closing": "Cleveland owns the better bullpen, and that is the primary risk."
+      },
+      "after": {
+        "opening": "Montero has allowed 4 ER in 16.2 IP over his last three starts, and his splits are nearly even—.613 OPS against left-handed batters and .583 against right-handed batters—so Cleveland cannot create an obvious platoon advantage.",
+        "closing": ""
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "UTEP Miners +40.5",
+      "budget": 257,
+      "before": {
+        "opening": "I’m taking the points because Oklahoma’s offensive record gives me less reason to expect that separation to keep growing.",
+        "closing": "The Sooners recorded 45 sacks and allowed 77.3 rushing yards per game in 2025."
+      },
+      "after": {
+        "opening": "My read is that Oklahoma’s defensive control will be more consistent than its offensive execution.",
+        "closing": "UTEP’s cover depends on combining useful possessions with enough disruptive defensive plays to interrupt Oklahoma’s scoring through the fourth quarter."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "Yankees ML",
+      "budget": 264,
+      "before": {
+        "opening": "San Diego starts seven right-handed hitters, but Fried has held righties to a .574 OPS.",
+        "closing": "Warren allowed 1 earned run in 7 innings in his latest start, although his 4.62 ERA over his last five starts keeps me from treating that performance as his guaranteed level."
+      },
+      "after": {
+        "opening": "San Diego starts seven right-handed hitters, but Fried has held righties to a .574 OPS.",
+        "closing": "Warren allowed 1 earned run in 7 innings in his latest start, although his 4.62 ERA over his last five starts keeps me from treating that performance as his guaranteed level."
+      },
+      "changed": false,
+      "safe": true
+    }
+  ],
+  "first_iteration_changed": 0,
+  "review": "Reviewed each of the 13 resulting excerpts. Selection heuristics are not a semantic guarantee; quality and live exposure still require review. All text remains whole and verbatim."
+}

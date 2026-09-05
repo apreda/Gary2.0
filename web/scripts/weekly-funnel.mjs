@@ -25,7 +25,7 @@ try {
     const url = new URL('/rest/v1/web_events', origin);
     url.search = new URLSearchParams({
       select: 'id,event,identity,props,created_at',
-      event: 'in.(session_started,meaningful_pick_view)',
+      event: 'in.(session_started,meaningful_pick_view,book_opened,manual_bet_saved,manual_bet_settled)',
       created_at: `lte.${horizon}`, id: `gt.${lastId}`, order: 'id.asc', limit: '1000',
     }).toString();
     const response = await fetch(url, { headers: { apikey: key, Authorization: `Bearer ${key}` } });

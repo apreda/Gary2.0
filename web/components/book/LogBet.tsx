@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { logManual, updateBet } from '@/lib/book/api';
 import type { UserBet } from '@/lib/book/model';
 import { todayEST } from '@/lib/gary/dates';
+import { logBookMilestone } from '@/lib/gary/analytics';
 
 const LEAGUES = ['MLB', 'NFL', 'NBA', 'NCAAF', 'OTHER'];
 export const bookField =
@@ -70,6 +71,7 @@ export function LogBet({
             bookmaker,
             favorite,
           });
+      if (!existing) logBookMilestone('manual_bet_saved');
       onLogged(bet);
       onClose();
     } catch (err) {
