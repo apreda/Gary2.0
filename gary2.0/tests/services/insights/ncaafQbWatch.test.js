@@ -94,7 +94,7 @@ describe('computeNcaafQbWatch', () => {
     expect(home.category).toBe('quarterback');
     expect(home.headline).toBe("Ben Gulbranson leads STAN's passing this season");
     expect(home.headline).not.toMatch(/start/i);
-    expect(home.detail).toContain('His 2026 line so far: 560 passing yards, 62.9% completions, 8.00 yards per attempt, 3-3 TD-INT over 2 games.');
+    expect(home.detail).toContain('Ben Gulbranson (Stanford): 2026 line so far: 560 passing yards, 62.9% completions, 8.00 yards per attempt, 3-3 TD-INT over 2 games.');
     expect(home.value).toBe('8.00 Y/A');
     expect(home.player_id).toBe(501);
     expect(home.team_id).toBe(13);
@@ -133,8 +133,8 @@ describe('computeNcaafQbWatch', () => {
     const row = rows[0];
     expect(row.headline).toBe("Darian Mensah is MIA's returning passer on 2025 numbers");
     expect(row.headline).not.toMatch(/start/i);
-    expect(row.detail).toContain('His 2025 season line, thrown for DUKE: 510 passing yards, 66.2% completions, 7.85 yards per attempt, 4-1 TD-INT over 2 games.');
-    expect(row.detail).toContain("He is on MIA's active roster this season");
+    expect(row.detail).toContain('Darian Mensah (Miami): 2025 season line, thrown for DUKE: 510 passing yards, 66.2% completions, 7.85 yards per attempt, 4-1 TD-INT over 2 games.');
+    expect(row.detail).toContain("He is on Miami's active roster this season");
     expect(row.player_id).toBe(55826);
     expect(row.meta.stats_season).toBe(2025);
     expect(row.meta.prior_season_line).toBe(true);

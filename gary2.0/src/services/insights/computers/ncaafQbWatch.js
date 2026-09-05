@@ -131,6 +131,7 @@ async function gameRows({ game, season, bdl, helpers, date }) {
     const { qb, line } = found;
     const name = playerName(qb);
     const abbr = teamAbbr(side.team);
+    const school = side.team.college || side.team.full_name || abbr;
     const games = ` over ${line.games} game${line.games === 1 ? '' : 's'}`;
     const priorTeam = line.prior && line.team && line.team !== abbr ? line.team : null;
 
@@ -140,8 +141,8 @@ async function gameRows({ game, season, bdl, helpers, date }) {
         ? `${name} is ${abbr}'s returning passer on ${line.season} numbers`
         : `${name} leads ${abbr}'s passing this season`,
       detail: line.prior
-        ? `His ${line.season} season line${priorTeam ? `, thrown for ${priorTeam}` : ''}: ${line.text}${games}. He is on ${abbr}'s active roster this season; the current season has no passing line for him yet.`
-        : `His ${line.season} line so far: ${line.text}${games}.`,
+        ? `${name} (${school}): ${line.season} season line${priorTeam ? `, thrown for ${priorTeam}` : ''}: ${line.text}${games}. He is on ${school}'s active roster this season; the current season has no passing line for him yet.`
+        : `${name} (${school}): ${line.season} line so far: ${line.text}${games}.`,
       game: helpers.gameLabel(game),
       value: `${line.ypa.toFixed(2)} Y/A`,
       tone: TONES.NEUTRAL,
@@ -158,6 +159,7 @@ async function gameRows({ game, season, bdl, helpers, date }) {
         // THE QUARTERBACKS plates (the ARMS layout): the passer, his side,
         // and the line as numbers. The sentence above stays the prose form.
         qb: name,
+        school,
         abbr,
         side: side.key,
         team_id: side.team.id,

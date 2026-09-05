@@ -38,7 +38,9 @@ WITH clock AS (
     r.end_time AS last_finished_at, r.status AS last_sql_status
   FROM cron.job j LEFT JOIN LATERAL (
     SELECT start_time, end_time, status FROM cron.job_run_details
-    WHERE jobid = j.jobid ORDER BY start_time DESC LIMIT 1
+    -- pg_cron's monotonic runid is already indexed. Sorting all historical
+    -- start_time rows scanned ~237 MB twice per snapshot on the small host.
+    WHERE jobid = j.jobid ORDER BY runid DESC LIMIT 1
   ) r ON true
   WHERE j.jobname IN ('social-auto-post-hourly', 'engagement-sheet-daily')
 ), response_candidates AS MATERIALIZED (
