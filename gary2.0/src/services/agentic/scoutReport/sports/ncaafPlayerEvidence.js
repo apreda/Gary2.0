@@ -9,7 +9,7 @@ const COUNT_FIELDS = [
 ];
 
 function number(value) {
-  if (value === null || value === undefined || value === '') return null;
+  if (value === null || value === undefined || typeof value === 'boolean' || String(value).trim() === '') return null;
   return Number.isFinite(Number(value)) ? Number(value) : null;
 }
 
@@ -22,7 +22,7 @@ function easternGameDate(value) {
 export function cleanNcaafPlayerRows(rows, { season, playerIds, teamId = null, asOf = new Date() }) {
   const roster = new Set(playerIds.map(String));
   const groups = new Map();
-  const diagnostics = { wrongSeason: 0, wrongPlayerOrTeam: 0, invalidDate: 0, duplicates: 0, conflicts: 0 };
+  const diagnostics = { wrongSeason: 0, wrongPlayerOrTeam: 0, invalidDate: 0, unfinished: 0, duplicates: 0, conflicts: 0 };
   const cutoff = new Date(asOf).getTime();
   for (const row of rows || []) {
     const player = row?.player?.id;
@@ -42,6 +42,11 @@ export function cleanNcaafPlayerRows(rows, { season, playerIds, teamId = null, a
     const dateSeason = calendar ? Number(calendar.slice(0, 4)) - (Number(calendar.slice(5, 7)) < 8 ? 1 : 0) : null;
     if (game?.id == null || !Number.isFinite(cutoff) || !Number.isFinite(date) || date >= cutoff || dateSeason !== Number(season)) {
       diagnostics.invalidDate++;
+      continue;
+    }
+    const status = String(game.status || '').trim().toLowerCase();
+    if (status && !/^final(?:\b|\/)/.test(status) && !['post', 'complete', 'completed'].includes(status)) {
+      diagnostics.unfinished++;
       continue;
     }
     const key = `${player}:${game.id}`;

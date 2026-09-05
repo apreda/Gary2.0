@@ -54,13 +54,12 @@ function getCurrentEST() {
  * 
  * @returns {number} The NBA season year (e.g., 2024 for the 2024-2025 season)
  */
-export function nbaSeason() {
-  const now = getCurrentEST();
-  const month = now.getMonth();  // Jan=0 … Dec=11
-  const year = now.getFullYear();
-  
-  // NBA "2024" season = 2024-25; it begins in October (month 9)
-  return month >= 9 ? year : year - 1;
+export function nbaSeason(date = new Date()) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', year: 'numeric', month: 'numeric',
+  }).formatToParts(date).map(({ type, value }) => [type, value]));
+  const year = Number(parts.year);
+  return Number(parts.month) >= 10 ? year : year - 1;
 }
 
 /**
@@ -210,4 +209,3 @@ export const getESTHour = () => {
   const estTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
   return estTime.getHours();
 };
-

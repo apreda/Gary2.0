@@ -2,12 +2,14 @@ import { ballDontLieService } from '../../../ballDontLieService.js';
 import { getSpPlus, getFpi, rowFor,
          getAdvancedSeasonStats, rankBy, rankedFor } from '../../../cfbdService.js';
 import { loadTeamResults, formSummary, homeAwaySplit, marginProfile, closeGameRecord, footballWeekLabel } from './footballTeamGames.js';
+import { aggregateNcaafPlayerRows, cleanNcaafPlayerRows } from '../../scoutReport/sports/ncaafPlayerEvidence.js';
 
 const NCAAF_BDL_SPORT = 'americanfootball_ncaaf';
 
 /** CFBD rates arrive as long floats; round without inventing precision. */
 function cfbdNum(v) {
-  return Number.isFinite(Number(v)) ? Number(Number(v).toFixed(4)) : null;
+  const value = numberOrNull(v);
+  return value === null ? null : Number(value.toFixed(4));
 }
 
 
@@ -51,9 +53,22 @@ export function selectNcaafTeamStats(payload, requestedTeamId) {
 }
 
 function numberOrNull(value) {
-  if (value === null || value === undefined || value === '') return null;
+  if (value === null || value === undefined || typeof value === 'boolean' || String(value).trim() === '') return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+async function cleanTeamPlayerRows(team, season) {
+  const raw = await ballDontLieService.getNcaafPlayerGameStats({ teamId: team.id, season });
+  return cleanNcaafPlayerRows(raw, {
+    season, teamId: team.id,
+    playerIds: (raw || []).map(row => row?.player?.id).filter(id => id != null),
+  });
+}
+
+function returnedTotal(rows, field) {
+  const values = rows.map(row => numberOrNull(row[field])).filter(value => value !== null);
+  return values.length ? values.reduce((sum, value) => sum + value, 0) : null;
 }
 
 function displayValue(value, decimals = null) {
@@ -112,13 +127,17 @@ function unavailableResult(error, home, away) {
  * the rate is not, and the lane says so rather than inventing a denominator.
  */
 async function ncaafDisruption(team, season) {
-  const rows = await ballDontLieService.getNcaafPlayerGameStats({ teamId: team.id, season });
+  const { rows, diagnostics } = await cleanTeamPlayerRows(team, season);
   if (!rows || rows.length === 0) return null;
 
   const gameIds = new Set(rows.map((r) => r.game?.id).filter((id) => id != null));
   const games = gameIds.size || null;
-  const total = (field) => rows.reduce((sum, r) => sum + (Number(r[field]) || 0), 0);
-  const perGame = (n) => (games ? Number((n / games).toFixed(2)) : null);
+  // Offensive player rows legitimately omit every defensive field. Retain
+  // the counts that are returned, with explicit coverage; never interpret
+  // absent player fields as a recorded zero or claim a complete rate.
+  const total = (field) => returnedTotal(rows, field);
+  const perGame = (n, field) => (games && n !== null && rows.every(row => numberOrNull(row[field]) !== null)
+    ? Number((n / games).toFixed(2)) : null);
 
   const sacks = total('sacks');
   const tfl = total('tackles_for_loss');
@@ -131,28 +150,31 @@ async function ncaafDisruption(team, season) {
   for (const r of rows) {
     const id = r?.player?.id;
     if (!id) continue;
-    const disruption = (Number(r.sacks) || 0) + (Number(r.tackles_for_loss) || 0);
-    if (disruption <= 0) continue;
     const entry = byPlayer.get(id) || {
-      name: `${r.player.first_name || ''} ${r.player.last_name || ''}`.trim(),
-      sacks: 0, tfl: 0
+      name: r.player.full_name || `${r.player.first_name || ''} ${r.player.last_name || ''}`.trim(),
+      rows: []
     };
-    entry.sacks += Number(r.sacks) || 0;
-    entry.tfl += Number(r.tackles_for_loss) || 0;
+    entry.rows.push(r);
     byPlayer.set(id, entry);
   }
   const leaders = [...byPlayer.values()]
+    .map(p => ({ name: p.name, sacks: returnedTotal(p.rows, 'sacks'), tfl: returnedTotal(p.rows, 'tackles_for_loss') }))
+    .filter(p => p.sacks > 0 || p.tfl > 0)
     .sort((a, b) => (b.sacks * 2 + b.tfl) - (a.sacks * 2 + a.tfl))
     .slice(0, 3)
-    .map((p) => `${p.name} (${p.sacks} sacks, ${p.tfl} TFL)`);
+    .map((p) => `${p.name} (${displayValue(p.sacks)} recorded sacks, ${displayValue(p.tfl)} recorded TFL)`);
 
   const dates = rows.map((r) => String(r.game?.date || '').slice(0, 10)).filter(Boolean).sort();
 
   return {
+    season, diagnostics,
+    count_scope: 'Sums of returned defensive fields. Missing values are omitted, so counts may be incomplete; coverage is stated per field. Per-game rates require complete fields.',
+    stat_coverage: Object.fromEntries(['sacks', 'tackles_for_loss', 'interceptions', 'passes_defended']
+      .map(field => [field, { rows_with_value: rows.filter(row => numberOrNull(row[field]) !== null).length, rows_used: rows.length }])),
     games_used: games,
     span: dates.length ? `${dates[0]} → ${dates[dates.length - 1]}` : null,
-    sacks, sacks_per_game: perGame(sacks),
-    tackles_for_loss: tfl, tfl_per_game: perGame(tfl),
+    sacks, sacks_per_game: perGame(sacks, 'sacks'),
+    tackles_for_loss: tfl, tfl_per_game: perGame(tfl, 'tackles_for_loss'),
     interceptions: ints,
     passes_defended: pbu,
     top_disruptors: leaders
@@ -609,11 +631,11 @@ export const ncaafFetchers = {
         // it to the team's schedule by game id rather than printing a guess —
         // an unjoined line previously rendered "@ Unknown" for every game,
         // inventing a road venue as well as losing the opponent.
-        const [rows, schedule] = await Promise.all([
-          ballDontLieService.getNcaafPlayerGameStats({ teamId: team.id, season }),
+        const [{ rows, diagnostics }, schedule] = await Promise.all([
+          cleanTeamPlayerRows(team, season),
           loadTeamResults(NCAAF_BDL_SPORT, team.id, season)
         ]);
-        if (!rows || rows.length === 0) return [];
+        if (rows.length === 0) return { players: [], diagnostics };
         const byGameId = new Map();
         for (const g of (schedule || [])) {
           if (g.gameId != null) byGameId.set(String(g.gameId), g);
@@ -628,7 +650,7 @@ export const ncaafFetchers = {
           if (!byPlayer.has(id)) {
             byPlayer.set(id, {
               id,
-              name: `${row.player.first_name || ''} ${row.player.last_name || ''}`.trim(),
+              name: row.player.full_name || `${row.player.first_name || ''} ${row.player.last_name || ''}`.trim(),
               position: row.player.position_abbreviation || row.player.position || null,
               passing: 0, rushing: 0, receiving: 0, games: []
             });
@@ -641,8 +663,9 @@ export const ncaafFetchers = {
         }
 
         const players = [...byPlayer.values()];
+        const activityField = { passing: 'passing_attempts', rushing: 'rushing_attempts', receiving: 'receptions' };
         const leader = (field) => players
-          .filter((p) => p[field] > 0)
+          .filter((p) => p[field] > 0 || p.games.some(row => numberOrNull(row[activityField[field]]) > 0))
           .sort((a, b) => b[field] - a[field])[0] || null;
 
         const picked = [['passer', leader('passing')], ['rusher', leader('rushing')], ['receiver', leader('receiving')]]
@@ -650,7 +673,7 @@ export const ncaafFetchers = {
           // one player can lead two roles; show him once, under the first
           .filter(([, p], i, arr) => arr.findIndex(([, q]) => q.id === p.id) === i);
 
-        return picked.map(([role, p]) => ({
+        const playersWithLogs = picked.map(([role, p]) => ({
           player: p.name,
           role,
           position: p.position,
@@ -663,25 +686,27 @@ export const ncaafFetchers = {
               const isHome = joined?.home ?? null;
               const venue = isHome === null ? '' : (isHome ? 'vs ' : '@ ');
               const line = [];
-              if (Number(g.passing_yards)) line.push(`${g.passing_completions || 0}/${g.passing_attempts || 0}, ${g.passing_yards} pass yds, ${g.passing_touchdowns || 0} TD, ${g.passing_interceptions || 0} INT`);
-              if (Number(g.rushing_yards)) line.push(`${g.rushing_attempts || 0} car, ${g.rushing_yards} rush yds, ${g.rushing_touchdowns || 0} TD`);
-              if (Number(g.receiving_yards)) line.push(`${g.receptions || 0} rec, ${g.receiving_yards} rec yds, ${g.receiving_touchdowns || 0} TD`);
+              if (numberOrNull(g.passing_attempts) > 0 || numberOrNull(g.passing_yards) !== null) line.push(`${displayValue(g.passing_completions)}/${displayValue(g.passing_attempts)}, ${displayValue(g.passing_yards)} pass yds, ${displayValue(g.passing_touchdowns)} TD, ${displayValue(g.passing_interceptions)} INT`);
+              if (numberOrNull(g.rushing_attempts) > 0 || numberOrNull(g.rushing_yards) !== null) line.push(`${displayValue(g.rushing_attempts)} car, ${displayValue(g.rushing_yards)} rush yds, ${displayValue(g.rushing_touchdowns)} TD`);
+              if (numberOrNull(g.receptions) > 0 || numberOrNull(g.receiving_yards) !== null) line.push(`${displayValue(g.receptions)} rec, ${displayValue(g.receiving_yards)} rec yds, ${displayValue(g.receiving_touchdowns)} TD`);
               // No opponent joined = say so; never render a venue we do not have.
               const against = opponent
                 ? `${venue}${opponent}`
                 : '(opponent not carried by BDL for this game)';
-              return `${footballWeekLabel(g.game?.week)} ${against}: ${line.join('; ') || 'no offensive stats'}`;
+              return `${g.game.date} · ${footballWeekLabel(g.game?.week)} ${against}: ${line.join('; ') || 'no offensive stats returned'}`;
             })
         }));
+        return { players: playersWithLogs, diagnostics };
       };
 
       const [homePlayers, awayPlayers] = await Promise.all([teamLogs(home), teamLogs(away)]);
       return {
         category: 'Player Game Logs',
         source: 'Ball Don\'t Lie',
+        season,
         data_scope: 'Last 5 games for each side\'s leading passer, rusher and receiver',
-        home: { team: home.full_name || home.name, players: homePlayers },
-        away: { team: away.full_name || away.name, players: awayPlayers }
+        home: { team: home.full_name || home.name, ...homePlayers },
+        away: { team: away.full_name || away.name, ...awayPlayers }
       };
     } catch (error) {
       console.warn('[Stat Router] NCAAF Player Game Logs fetch failed:', error.message);
@@ -975,43 +1000,42 @@ export const ncaafFetchers = {
   NCAAF_QB_STATS: async (bdlSport, home, away, season) => {
     try {
       const forTeam = async (team) => {
-        const rows = await ballDontLieService.getNcaafPlayerGameStats({ teamId: team.id, season });
-        if (!rows || rows.length === 0) return { note: 'No player game rows returned.' };
+        const { rows, diagnostics } = await cleanTeamPlayerRows(team, season);
+        if (rows.length === 0) return { note: 'No eligible player game rows returned.', diagnostics };
         const byPlayer = new Map();
         for (const r of rows) {
           const id = r?.player?.id;
-          if (!id || !(Number(r.passing_attempts) > 0)) continue;
-          const e = byPlayer.get(id) || {
-            name: `${r.player.first_name || ''} ${r.player.last_name || ''}`.trim(),
-            att: 0, comp: 0, yds: 0, td: 0, int: 0, games: 0
-          };
-          e.att += Number(r.passing_attempts) || 0;
-          e.comp += Number(r.passing_completions) || 0;
-          e.yds += Number(r.passing_yards) || 0;
-          e.td += Number(r.passing_touchdowns) || 0;
-          e.int += Number(r.passing_interceptions) || 0;
-          e.games += 1;
+          if (!id) continue;
+          const e = byPlayer.get(id) || { name: r.player.full_name || `${r.player.first_name || ''} ${r.player.last_name || ''}`.trim(), rows: [] };
+          e.rows.push(r);
           byPlayer.set(id, e);
         }
-        const lead = [...byPlayer.values()].sort((a, b) => b.yds - a.yds)[0];
+        const passers = [...byPlayer.values()].map(p => ({ ...p,
+          returnedAttempts: p.rows.reduce((sum, row) => sum + (numberOrNull(row.passing_attempts) ?? 0), 0),
+          line: aggregateNcaafPlayerRows(p.rows, season).values().next().value,
+        })).filter(p => p.returnedAttempts > 0);
+        const lead = passers.sort((a, b) => b.returnedAttempts - a.returnedAttempts)[0];
         if (!lead) return { note: 'No passer with attempts on file.' };
+        const { line } = lead;
         return {
           quarterback: lead.name,
-          games: lead.games,
-          completions: lead.comp,
-          attempts: lead.att,
-          completion_pct: lead.att ? `${((lead.comp / lead.att) * 100).toFixed(1)}%` : 'N/A',
-          passing_yards: lead.yds,
-          yards_per_attempt: lead.att ? Number((lead.yds / lead.att).toFixed(2)) : 'N/A',
-          touchdowns: lead.td,
-          interceptions: lead.int
+          games: line.evidence.games,
+          completions: line.passing_completions,
+          attempts: line.passing_attempts,
+          completion_pct: line.passing_completions !== null && line.passing_attempts > 0 ? `${((line.passing_completions / line.passing_attempts) * 100).toFixed(1)}%` : 'N/A',
+          passing_yards: line.passing_yards,
+          yards_per_attempt: line.passing_yards !== null && line.passing_attempts > 0 ? Number((line.passing_yards / line.passing_attempts).toFixed(2)) : 'N/A',
+          touchdowns: line.passing_touchdowns,
+          interceptions: line.passing_interceptions,
+          evidence: line.evidence, diagnostics,
         };
       };
       const [h, a] = await Promise.all([forTeam(home), forTeam(away)]);
       return {
         category: 'Quarterback',
         source: 'Ball Don\'t Lie',
-        data_scope: 'Season totals for the leading passer, summed from his per-game rows — the number of games behind the line is stated so a two-start sample cannot read like a full season.',
+        season,
+        data_scope: 'Season totals for the passer with the most returned passing attempts, summed from eligible per-game rows. Missing sample fields remain unknown.',
         home: { team: home.full_name || home.name, ...h },
         away: { team: away.full_name || away.name, ...a }
       };
@@ -1046,11 +1070,14 @@ export const ncaafFetchers = {
           const own = rows.find((r) => Number(r?.team?.id) === Number(team.id));
           const opp = rows.find((r) => Number(r?.team?.id) !== Number(team.id));
           if (!own || !opp) continue;
-          committed += Number(own.turnovers) || 0;
-          forced += Number(opp.turnovers) || 0;
+          const ownTurnovers = numberOrNull(own.turnovers);
+          const opponentTurnovers = numberOrNull(opp.turnovers);
+          if (ownTurnovers === null || opponentTurnovers === null) continue;
+          committed += ownTurnovers;
+          forced += opponentTurnovers;
           games += 1;
         }
-        if (games === 0) return { note: 'No game had boxes for both teams.' };
+        if (games === 0) return { note: 'No game had turnover counts for both teams.', games_used: 0 };
         return {
           games_used: games,
           turnovers_committed: committed,

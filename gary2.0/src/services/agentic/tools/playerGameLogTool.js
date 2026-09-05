@@ -1,4 +1,5 @@
-import { nflSeason, ncaafSeason } from '../../../utils/dateUtils.js';
+import { nbaSeason, nflSeason, ncaafSeason } from '../../../utils/dateUtils.js';
+import { completedGameStatus } from '../../playerGameLogFacts.js';
 import { cleanNcaafPlayerRows } from '../scoutReport/sports/ncaafPlayerEvidence.js';
 
 const LEAGUES = {
@@ -13,8 +14,7 @@ const array = value => Array.isArray(value) ? value : (value?.data || []);
 const dateOf = row => row?._game?.date || row?.game?.date || row?.date;
 const gameId = row => row?._game?.id ?? row?.game?.id ?? row?.game_id ?? row?.gameId;
 const isCompletedOrUnspecified = row => {
-  const status = String(row?._game?.status ?? row?.game?.status ?? row?.status ?? '').toLowerCase();
-  return !status || status.includes('final') || ['post', 'complete', 'completed'].includes(status);
+  return completedGameStatus(row?._game?.status ?? row?.game?.status ?? row?.status);
 };
 
 /** One league-bound contract for Gary and the research assistant. Never substitute
@@ -56,7 +56,8 @@ export async function fetchPlayerGameLogEvidence({
   const player = matches[0];
   envelope.player = { id: player.id, name: playerName(player), team: player.team || null };
   const year = new Date(asOf).getUTCFullYear();
-  const defaultSeason = league === 'NFL' ? nflSeason(asOf) : league === 'NCAAF' ? ncaafSeason(asOf) : year;
+  const date = new Date(asOf);
+  const defaultSeason = league === 'NFL' ? nflSeason(date) : league === 'NCAAF' ? ncaafSeason(date) : league === 'NBA' ? nbaSeason(date) : year;
   const selectedSeason = season != null && season !== '' && Number.isInteger(Number(season)) ? Number(season) : defaultSeason;
   let rows, diagnostics;
   if (league === 'NCAAF') {
@@ -70,8 +71,9 @@ export async function fetchPlayerGameLogEvidence({
   } else if (league === 'MLB') {
     rows = await request(() => bdl.getMlbPlayerGameRowsChrono(player.id, selectedSeason));
   } else {
-    const logs = await request(() => bdl.getNbaPlayerGameLogs(player.id, count));
+    const logs = await request(() => bdl.getNbaPlayerGameLogs(player.id, count, {}, { season: selectedSeason, asOf, throwOnError: true }));
     rows = Array.isArray(logs) ? logs : (logs?.games || []);
+    diagnostics = logs?.diagnostics;
   }
   // Keep every stat row for a selected game: two-way players can have batting
   // and pitching rows. Relievers and walk-only batting appearances also count.
@@ -88,8 +90,8 @@ export async function fetchPlayerGameLogEvidence({
   });
   return finish(games.length ? 'available' : 'unavailable', {
     source: `Ball Don't Lie ${league} player game logs`,
-    data_window: dataWindow || (league === 'NBA' ? 'Recent dated games returned by the NBA endpoint' : String(selectedSeason)),
-    ...(league === 'NBA' ? {} : { season: selectedSeason }),
+    data_window: dataWindow || String(selectedSeason),
+    season: selectedSeason,
     games_used: selected.size, games, ...(diagnostics ? { diagnostics } : {}),
     note: games.length ? 'Only returned fields are evidence; missing fields are unknown. Dates and team identity belong to each game row.'
       : 'No eligible dated player-game rows returned; this is unavailable evidence, not zero production.',

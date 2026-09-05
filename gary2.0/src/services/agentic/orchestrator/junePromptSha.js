@@ -24,6 +24,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const DOSSIER_SURFACE_FILES = [
   './orchestratorHelpers.js',
   '../tools/playerGameLogTool.js',
+  '../../playerGameLogFacts.js',
   '../scoutReport/sports/mlb.js',
   // The four-bucket desk layout (Sep 1 2026) arranges what Gary reads —
   // its order and headers are desk content.

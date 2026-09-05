@@ -73,8 +73,19 @@ describe('shared league-bound player game logs', () => {
   it('retains NBA dates and zero values and marks empty evidence unavailable', async () => {
     const service = setup({ getNbaPlayerGameLogs: vi.fn().mockResolvedValueOnce({ games: [{ date: '2026-09-01', pts: 0, reb: 3, ast: 1 }] }) });
     const result = await fetchPlayerGameLogEvidence({ ...args, sport: 'NBA', service });
+    expect(service.getNbaPlayerGameLogs).toHaveBeenCalledWith(7, 5, {}, { season: 2025, asOf: args.asOf, throwOnError: true });
+    expect(result).toMatchObject({ season: 2025, data_window: '2025' });
     expect(result.games).toEqual([{ date: '2026-09-01', pts: 0, reb: 3, ast: 1 }]);
     expect((await fetchPlayerGameLogEvidence({ ...args, sport: 'NBA', service })).quality).toBe('unavailable');
+  });
+
+  it('passes an explicit historical NBA season to the provider and excludes unfinished MLB rows', async () => {
+    const service = setup({ getMlbPlayerGameRowsChrono: vi.fn().mockResolvedValue([
+      { _game: { id: 1, date: '2026-09-01', status: 'Not Final' }, ip: '0.2', er: 0 },
+    ]) });
+    await fetchPlayerGameLogEvidence({ ...args, sport: 'NBA', season: 2024, service });
+    expect(service.getNbaPlayerGameLogs).toHaveBeenCalledWith(7, 5, {}, { season: 2024, asOf: args.asOf, throwOnError: true });
+    expect((await fetchPlayerGameLogEvidence({ ...args, sport: 'MLB', service })).games_used).toBe(0);
   });
 
   it('keeps each provider call inside the research cancellation wrapper', async () => {

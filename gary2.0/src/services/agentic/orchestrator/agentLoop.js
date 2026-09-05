@@ -1021,7 +1021,7 @@ INVESTIGATION COMPLETE`;
             let categoryMap = {
               'ADVANCED': 'general',
               'USAGE': 'general',
-              'DEFENSIVE': 'defense',
+              'DEFENSIVE': 'general',
               'TRENDS': 'general'
             };
 

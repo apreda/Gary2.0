@@ -524,7 +524,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                 } else {
                   const season = nbaSeason();
                   const typeMap = { 'ADVANCED': 'advanced', 'USAGE': 'usage', 'DEFENSIVE': 'defense', 'TRENDS': 'base' };
-                  const categoryMap = { 'ADVANCED': 'general', 'USAGE': 'general', 'DEFENSIVE': 'defense', 'TRENDS': 'general' };
+                  const categoryMap = { 'ADVANCED': 'general', 'USAGE': 'general', 'DEFENSIVE': 'general', 'TRENDS': 'general' };
                   let playerIds = [];
                   if (args.player_name) {
                     const pResp = await awaitResearch(()=>ballDontLieService.getPlayersGeneric('basketball_nba', { search: args.player_name, per_page: 5 }));

@@ -33,6 +33,22 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 describe('original evidence through actual decision exits', () => {
+  it('requests the valid NBA general/defense endpoint and saves the returned player detail', async () => {
+    const team = { id: 1, full_name: home };
+    vi.spyOn(ballDontLieService, 'getTeams').mockResolvedValue([team]);
+    vi.spyOn(ballDontLieService, 'getPlayersGeneric').mockResolvedValue([{ id: 7, first_name: 'Test', last_name: 'Defender', team }]);
+    const stats = vi.spyOn(ballDontLieService, 'getNbaSeasonAverages').mockResolvedValue([
+      { player: { id: 7, first_name: 'Test', last_name: 'Defender' }, stats: { def_rating: 105, stl: 0, blk: 1 } },
+    ]);
+    mocks.send.mockResolvedValueOnce({ content: '', finishReason: 'tool_calls', toolCalls: [{ id: 'nba-defense', type: 'function',
+      function: { name: 'fetch_nba_player_stats', arguments: JSON.stringify({ team: home, stat_type: 'DEFENSIVE', player_name: 'Test Defender' }) } }] })
+      .mockResolvedValueOnce(response(cases)).mockResolvedValueOnce(response(card));
+    const result = await runAgentLoop('system', 'Original desk', 'basketball_nba', home, away, { game, spread: -3.5 });
+    expect(stats).toHaveBeenCalledWith({ category: 'general', type: 'defense', season: expect.any(Number), player_ids: [7] });
+    expect(result._originalToolResponses[0]).toMatchObject({ toolCallId: 'nba-defense' });
+    expect(result._originalToolResponses[0].content).toContain('Test Defender');
+  });
+
   it('delivers separate same-type college player requests for both teams, including full-name filters', async () => {
     const teams = [{ id: 1, full_name: home }, { id: 2, full_name: away }];
     vi.spyOn(ballDontLieService, 'getTeams').mockResolvedValue(teams);

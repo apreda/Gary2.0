@@ -1,6 +1,7 @@
 import { BalldontlieAPI } from '@balldontlie/sdk';
 import axios from 'axios';
-import { nhlSeason } from '../utils/dateUtils.js';
+import { nhlSeason, nbaSeason } from '../utils/dateUtils.js';
+import { numericStat, completedGameStatus, playerGameSide, completeAverage, summarizeNbaPlayerGameLogs } from './playerGameLogFacts.js';
 import { waitForBdlRequestSlot } from './bdlRequestGate.js';
 import {
   isFootballBdlCacheKey,
@@ -457,14 +458,13 @@ function normalizeName(value) {
 export function summarizeNflPlayerGameLogs(rawStats, numGames = 5) {
   const gameStats = (rawStats || [])
     .filter((g) => {
-      if (!g.game?.date) return false;
+      if (!Number.isFinite(Date.parse(g.game?.date || ''))) return false;
       const status = String(g.game?.status || '').trim().toLowerCase();
       // The NFL stats feed can expose an in-progress row. Never let a partial
       // box displace a completed game in the recent-results sample. Older
       // fixtures without a status remain compatible with the established
       // summary contract.
-      return !status || status.includes('final') || status === 'post' ||
-        status === 'complete' || status === 'completed';
+      return completedGameStatus(status);
     })
     .sort((a, b) => new Date(b.game.date) - new Date(a.game.date))
     .slice(0, numGames);
@@ -479,45 +479,43 @@ export function summarizeNflPlayerGameLogs(rawStats, numGames = 5) {
   };
 
   const gameByGame = gameStats.map(g => {
-    const playerTeamId = g.team?.id ?? g.player?.team?.id;
     const stats = {
       gameId: g.game?.id,
       date: g.game?.date || g.game?.datetime,
       status: g.game?.status ?? null,
-      opponent: g.game?.home_team?.id === playerTeamId
-        ? g.game?.visitor_team?.abbreviation
-        : g.game?.home_team?.abbreviation,
-      isHome: g.game?.home_team?.id === playerTeamId,
-      pass_yds: g.passing_yards || 0,
-      pass_tds: g.passing_touchdowns || 0,
-      pass_att: g.passing_attempts || 0,
-      pass_comp: g.passing_completions || 0,
-      ints: g.passing_interceptions || 0,
-      rush_yds: g.rushing_yards || 0,
-      rush_att: g.rushing_attempts || 0,
-      rush_tds: g.rushing_touchdowns || 0,
-      rec_yds: g.receiving_yards || 0,
-      receptions: g.receptions || 0,
-      targets: g.receiving_targets || 0,
-      rec_tds: g.receiving_touchdowns || 0
+      season: g.game?.season ?? g.season ?? null,
+      ...playerGameSide(g),
+      pass_yds: numericStat(g.passing_yards),
+      pass_tds: numericStat(g.passing_touchdowns),
+      pass_att: numericStat(g.passing_attempts),
+      pass_comp: numericStat(g.passing_completions),
+      ints: numericStat(g.passing_interceptions),
+      rush_yds: numericStat(g.rushing_yards),
+      rush_att: numericStat(g.rushing_attempts),
+      rush_tds: numericStat(g.rushing_touchdowns),
+      rec_yds: numericStat(g.receiving_yards),
+      receptions: numericStat(g.receptions),
+      targets: numericStat(g.receiving_targets),
+      rec_tds: numericStat(g.receiving_touchdowns)
     };
 
-    Object.keys(totals).forEach(k => { totals[k] += stats[k]; });
     return stats;
   });
 
   const averages = {};
   Object.keys(totals).forEach(k => {
-    averages[k] = gp > 0 ? (totals[k] / gp).toFixed(1) : '0.0';
+    const value = completeAverage(gameByGame, k);
+    averages[k] = value === null ? null : value.toFixed(1);
   });
 
   const calcConsistency = (statKey) => {
     const values = gameByGame.map(g => g[statKey]);
+    if (values.some(value => value === null)) return null;
     const mean = values.reduce((a, b) => a + b, 0) / values.length;
     if (mean === 0) return 1.0;
     const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length;
     const stdDev = Math.sqrt(variance);
-    const cv = stdDev / mean;
+    const cv = stdDev / Math.abs(mean);
     return Math.max(0, Math.min(1, 1 - cv)).toFixed(2);
   };
 
@@ -528,11 +526,11 @@ export function summarizeNflPlayerGameLogs(rawStats, numGames = 5) {
     receptions: calcConsistency('receptions')
   };
 
-  const homeGames = gameByGame.filter(g => g.isHome);
-  const awayGames = gameByGame.filter(g => !g.isHome);
+  const homeGames = gameByGame.filter(g => g.isHome === true);
+  const awayGames = gameByGame.filter(g => g.isHome === false);
   const calcSplitAvg = (games, statKey) => {
-    if (games.length === 0) return 'N/A';
-    return (games.reduce((sum, g) => sum + g[statKey], 0) / games.length).toFixed(1);
+    const value = completeAverage(games, statKey);
+    return value === null ? 'N/A' : value.toFixed(1);
   };
   const splitFor = (games) => ({
     games: games.length,
@@ -544,8 +542,8 @@ export function summarizeNflPlayerGameLogs(rawStats, numGames = 5) {
   const splits = { home: splitFor(homeGames), away: splitFor(awayGames) };
 
   let targetTrend = null;
-  const targetValues = gameByGame.map(g => g.targets || 0);
-  if (targetValues.some(t => t > 0)) {
+  const targetValues = gameByGame.map(g => g.targets);
+  if (targetValues.every(t => t !== null) && targetValues.some(t => t > 0)) {
     const l5TargetsAvg = targetValues.reduce((a, b) => a + b, 0) / gp;
     const l2TargetsAvg = gp >= 2
       ? targetValues.slice(0, 2).reduce((a, b) => a + b, 0) / 2
@@ -571,9 +569,10 @@ export function summarizeNflPlayerGameLogs(rawStats, numGames = 5) {
 
   let usageTrend = null;
   const usageValues = gameByGame.map(g =>
-    (g.targets || 0) + (g.rush_att || 0) + (g.receptions || 0)
+    [g.targets, g.rush_att, g.receptions].every(value => value !== null)
+      ? g.targets + g.rush_att + g.receptions : null
   );
-  if (usageValues.some(u => u > 0)) {
+  if (usageValues.every(u => u !== null) && usageValues.some(u => u > 0)) {
     const l5UsageAvg = usageValues.reduce((a, b) => a + b, 0) / gp;
     const l2UsageAvg = gp >= 2
       ? usageValues.slice(0, 2).reduce((a, b) => a + b, 0) / 2
@@ -4993,175 +4992,44 @@ const ballDontLieService = {
    * @param {Object} propLines - Optional prop lines to calculate hit rates { points: 24.5, rebounds: 8.5 }
    * @returns {Promise<Object>} - Enhanced game log data
    */
-  async getNbaPlayerGameLogs(playerId, numGames = 10, propLines = {}) {
+  async getNbaPlayerGameLogs(playerId, numGames = 10, propLines = {}, options = {}) {
     try {
       if (!playerId) return null;
-
-      const cacheKey = `nba_game_logs_${playerId}_${numGames}`;
-      return await getCachedOrFetch(cacheKey, async () => {
-        // Get stats for last 30 days to ensure we capture enough games
-        const endDate = new Date();
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - 30);
-
-        const url = `${BALLDONTLIE_API_BASE_URL}/v1/stats${buildQuery({
-          player_ids: [playerId],
-          start_date: startDate.toISOString().slice(0, 10),
-          end_date: endDate.toISOString().slice(0, 10),
-          per_page: 25
-        })}`;
-
-        const response = await bdlHttp.get(url, {
-          headers: { 'Authorization': API_KEY }
-        });
-
-        const allStats = response.data?.data || [];
-        if (allStats.length === 0) return null;
-
-        // Sort by date (most recent first) and take last N
-        const games = allStats
-          .filter(g => g.min && parseInt(g.min) > 0) // Only games where player played
-          .sort((a, b) => new Date(b.game?.date) - new Date(a.game?.date))
-          .slice(0, numGames);
-
-        if (games.length === 0) return null;
-
-        // Extract individual game stats
-        const gameStats = games.map(g => ({
-          date: g.game?.date,
-          opponent: g.game?.home_team?.id === g.team?.id 
-            ? g.game?.visitor_team?.abbreviation 
-            : g.game?.home_team?.abbreviation,
-          isHome: g.game?.home_team?.id === g.team?.id,
-          pts: g.pts || 0,
-          reb: g.reb || 0,
-          ast: g.ast || 0,
-          stl: g.stl || 0,
-          blk: g.blk || 0,
-          fg3m: g.fg3m || 0,
-          min: parseInt(g.min) || 0,
-          pra: (g.pts || 0) + (g.reb || 0) + (g.ast || 0)
-        }));
-
-        // Calculate averages
-        const totals = { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, fg3m: 0, min: 0, pra: 0 };
-        for (const g of gameStats) {
-          totals.pts += g.pts;
-          totals.reb += g.reb;
-          totals.ast += g.ast;
-          totals.stl += g.stl;
-          totals.blk += g.blk;
-          totals.fg3m += g.fg3m;
-          totals.min += g.min;
-          totals.pra += g.pra;
+      const asOf = new Date(options.asOf ?? Date.now());
+      if (!Number.isFinite(asOf.getTime())) return null;
+      const season = options.season == null ? nbaSeason(asOf) : Number(options.season);
+      if (!Number.isInteger(season)) return null;
+      const endDate = asOf.toISOString().slice(0, 10);
+      // Cache transport rows, not a summary tied to a sample size, cutoff or
+      // prop line. Recompute those per request, including on a cache hit.
+      const cacheKey = `nba_player_game_rows_${playerId}_${season}_${endDate}`;
+      const rows = await getCachedOrFetch(cacheKey, async () => {
+        const all = [];
+        let cursor;
+        const seenCursors = new Set();
+        // One player's full season fits comfortably in five 100-row pages.
+        // A malformed/repeated cursor must not publish a truncated sample.
+        for (let page = 0; page < 5; page++) {
+          const url = `${BALLDONTLIE_API_BASE_URL}/v1/stats${buildQuery({
+            player_ids: [playerId], seasons: [season], end_date: endDate,
+            per_page: 100, ...(cursor != null ? { cursor } : {}),
+          })}`;
+          const response = await bdlHttp.get(url, { headers: { Authorization: API_KEY } });
+          all.push(...decodeBdlRows(response.data, 'NBA player game logs'));
+          const next = response.data?.meta?.next_cursor;
+          if (next == null) return all;
+          if (seenCursors.has(String(next))) throw new Error('NBA player game logs: repeated cursor');
+          seenCursors.add(String(next));
+          cursor = next;
         }
-        const gp = gameStats.length;
-        const avgs = {
-          pts: totals.pts / gp,
-          reb: totals.reb / gp,
-          ast: totals.ast / gp,
-          stl: totals.stl / gp,
-          blk: totals.blk / gp,
-          fg3m: totals.fg3m / gp,
-          min: totals.min / gp,
-          pra: totals.pra / gp
-        };
-
-        // Calculate standard deviations for consistency
-        const calcStdDev = (values, mean) => {
-          const sqDiffs = values.map(v => Math.pow(v - mean, 2));
-          return Math.sqrt(sqDiffs.reduce((a, b) => a + b, 0) / values.length);
-        };
-
-        const stdDevs = {
-          pts: calcStdDev(gameStats.map(g => g.pts), avgs.pts),
-          reb: calcStdDev(gameStats.map(g => g.reb), avgs.reb),
-          ast: calcStdDev(gameStats.map(g => g.ast), avgs.ast),
-          fg3m: calcStdDev(gameStats.map(g => g.fg3m), avgs.fg3m),
-          pra: calcStdDev(gameStats.map(g => g.pra), avgs.pra)
-        };
-
-        // Calculate consistency scores (1 - CV, where CV = stdDev/mean)
-        const consistency = {
-          pts: avgs.pts > 0 ? Math.max(0, 1 - (stdDevs.pts / avgs.pts)).toFixed(2) : '0.00',
-          reb: avgs.reb > 0 ? Math.max(0, 1 - (stdDevs.reb / avgs.reb)).toFixed(2) : '0.00',
-          ast: avgs.ast > 0 ? Math.max(0, 1 - (stdDevs.ast / avgs.ast)).toFixed(2) : '0.00',
-          fg3m: avgs.fg3m > 0 ? Math.max(0, 1 - (stdDevs.fg3m / avgs.fg3m)).toFixed(2) : '0.00',
-          pra: avgs.pra > 0 ? Math.max(0, 1 - (stdDevs.pra / avgs.pra)).toFixed(2) : '0.00'
-        };
-
-        // Calculate home/away splits
-        const homeGames = gameStats.filter(g => g.isHome);
-        const awayGames = gameStats.filter(g => !g.isHome);
-        const splits = {
-          home: homeGames.length > 0 ? {
-            games: homeGames.length,
-            pts: (homeGames.reduce((s, g) => s + g.pts, 0) / homeGames.length).toFixed(1),
-            reb: (homeGames.reduce((s, g) => s + g.reb, 0) / homeGames.length).toFixed(1),
-            ast: (homeGames.reduce((s, g) => s + g.ast, 0) / homeGames.length).toFixed(1)
-          } : null,
-          away: awayGames.length > 0 ? {
-            games: awayGames.length,
-            pts: (awayGames.reduce((s, g) => s + g.pts, 0) / awayGames.length).toFixed(1),
-            reb: (awayGames.reduce((s, g) => s + g.reb, 0) / awayGames.length).toFixed(1),
-            ast: (awayGames.reduce((s, g) => s + g.ast, 0) / awayGames.length).toFixed(1)
-          } : null
-        };
-
-        // Calculate hit rates for prop lines if provided
-        const hitRates = {};
-        if (propLines.points !== undefined) {
-          const hits = gameStats.filter(g => g.pts > propLines.points).length;
-          hitRates.points = { line: propLines.points, hits, total: gp, rate: (hits / gp * 100).toFixed(0) + '%' };
-        }
-        if (propLines.rebounds !== undefined) {
-          const hits = gameStats.filter(g => g.reb > propLines.rebounds).length;
-          hitRates.rebounds = { line: propLines.rebounds, hits, total: gp, rate: (hits / gp * 100).toFixed(0) + '%' };
-        }
-        if (propLines.assists !== undefined) {
-          const hits = gameStats.filter(g => g.ast > propLines.assists).length;
-          hitRates.assists = { line: propLines.assists, hits, total: gp, rate: (hits / gp * 100).toFixed(0) + '%' };
-        }
-        if (propLines.threes !== undefined) {
-          const hits = gameStats.filter(g => g.fg3m > propLines.threes).length;
-          hitRates.threes = { line: propLines.threes, hits, total: gp, rate: (hits / gp * 100).toFixed(0) + '%' };
-        }
-        if (propLines.pra !== undefined) {
-          const hits = gameStats.filter(g => g.pra > propLines.pra).length;
-          hitRates.pra = { line: propLines.pra, hits, total: gp, rate: (hits / gp * 100).toFixed(0) + '%' };
-        }
-
-        console.log(`[Ball Don't Lie] Got ${gp} NBA game logs for player ${playerId}`);
-
-        return {
-          playerId,
-          gamesAnalyzed: gp,
-          games: gameStats,
-          averages: {
-            pts: avgs.pts.toFixed(1),
-            reb: avgs.reb.toFixed(1),
-            ast: avgs.ast.toFixed(1),
-            stl: avgs.stl.toFixed(1),
-            blk: avgs.blk.toFixed(1),
-            fg3m: avgs.fg3m.toFixed(1),
-            min: avgs.min.toFixed(1),
-            pra: avgs.pra.toFixed(1)
-          },
-          stdDevs: {
-            pts: stdDevs.pts.toFixed(1),
-            reb: stdDevs.reb.toFixed(1),
-            ast: stdDevs.ast.toFixed(1),
-            fg3m: stdDevs.fg3m.toFixed(1),
-            pra: stdDevs.pra.toFixed(1)
-          },
-          consistency,
-          splits,
-          hitRates,
-          lastGame: gameStats[0] || null
-        };
-      }, 15); // Cache for 15 minutes
+        throw new Error('NBA player game logs: incomplete pagination');
+      }, 15);
+      return summarizeNbaPlayerGameLogs(rows, { playerId, season, asOf, numGames, propLines });
     } catch (e) {
-      console.error('[Ball Don\'t Lie] getNbaPlayerGameLogs error:', e.message);
+      console.error("[Ball Don't Lie] getNbaPlayerGameLogs error:", e.message);
+      // Research must receive the provider failure (including 401), rather
+      // than misreporting an access problem as a player with no game logs.
+      if (options.throwOnError) throw e;
       return null;
     }
   },

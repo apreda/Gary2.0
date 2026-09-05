@@ -1,12 +1,12 @@
 import {describe,it,expect,vi,beforeEach} from 'vitest';
-const mocks=vi.hoisted(()=>({create:vi.fn(),send:vi.fn(),reset:vi.fn(),fetch:vi.fn(),search:vi.fn()}));
+const mocks=vi.hoisted(()=>({create:vi.fn(),send:vi.fn(),reset:vi.fn(),fetch:vi.fn(),search:vi.fn(),teams:vi.fn(),players:vi.fn(),averages:vi.fn()}));
 vi.mock('../../../src/services/agentic/orchestrator/sessionManager.js',()=>({createModelSession:mocks.create,sendToSessionWithRetry:mocks.send,resetSessionChat:mocks.reset}));
 vi.mock('../../../src/services/agentic/flashInvestigationPrompts.js',()=>({getFlashInvestigationPrompt:()=>''}));
 vi.mock('../../../src/services/agentic/orchestrator/spreadEvaluationFactors.js',()=>({getMlbSeasonAwareness:()=>''}));
-vi.mock('../../../src/services/agentic/orchestrator/investigationFactors.js',()=>({INVESTIGATION_FACTORS:{baseball_mlb:{FIRST:['MLB_WEATHER'],SECOND:['MLB_WEATHER']}}}));
+vi.mock('../../../src/services/agentic/orchestrator/investigationFactors.js',()=>({INVESTIGATION_FACTORS:{baseball_mlb:{FIRST:['MLB_WEATHER'],SECOND:['MLB_WEATHER']},basketball_nba:{DEFENSE:['DEFENSIVE_RATING']}}}));
 vi.mock('../../../src/services/agentic/tools/statRouters/index.js',()=>({fetchStats:mocks.fetch}));
 vi.mock('../../../src/services/pickdesk/webSearch.js',()=>({openaiWebSearch:mocks.search}));
-vi.mock('../../../src/services/ballDontLieService.js',()=>({ballDontLieService:{}}));
+vi.mock('../../../src/services/ballDontLieService.js',()=>({ballDontLieService:{getTeams:mocks.teams,getPlayersGeneric:mocks.players,getNbaSeasonAverages:mocks.averages}}));
 vi.mock('../../../src/services/agentic/scoutReport/scoutReportBuilder.js',()=>({groundedWebSearch:vi.fn()}));
 const {buildResearchBriefing,renderFindingsSoFar,createResearcherFollowUpSession,askResearcher}=await import('../../../src/services/agentic/orchestrator/researchBriefing.js');
 const {renderEvidenceBriefing,COMPACT_RESEARCH_LIMITS}=await import('../../../src/services/agentic/orchestrator/evidenceQuality.js');
@@ -15,6 +15,20 @@ const tool={toolCalls:[{function:{name:'fetch_stats',arguments:JSON.stringify({t
 const options=(signal)=>({signal,gameTime:'2026-09-05T02:00:00Z',researchModel:'codex-gpt-5.6-luna'});
 beforeEach(()=>{vi.resetAllMocks();mocks.create.mockResolvedValue({provider:'codex-cli',tools:[]});});
 describe('compact research carry-forward',()=>{
+  it('uses the valid NBA defensive endpoint in the researcher and returns its named zero stats',async()=>{
+    const team={id:1,full_name:'Home Team'};
+    mocks.teams.mockResolvedValue([team]);
+    mocks.players.mockResolvedValue([{id:7,first_name:'Test',last_name:'Defender',team}]);
+    mocks.averages.mockResolvedValue([{player:{id:7,first_name:'Test',last_name:'Defender'},stats:{def_rating:105,stl:0,blk:1}}]);
+    mocks.send.mockResolvedValueOnce({toolCalls:[{function:{name:'fetch_nba_player_stats',arguments:JSON.stringify({team:'Home Team',player_name:'Test Defender',stat_type:'DEFENSIVE'})}}]})
+      .mockResolvedValueOnce({content:JSON.stringify({factor:'Defense',keyFinding:'Named defender stats',numbers:'0 steals',sources:'BDL'})});
+    const output=await buildResearchBriefing('original desk','basketball_nba','Home Team','Away Team',options());
+    expect(mocks.averages).toHaveBeenCalledWith({category:'general',type:'defense',season:expect.any(Number),player_ids:[7]});
+    const delivered=JSON.stringify(mocks.send.mock.calls[1][1]);
+    expect(delivered).toContain('Test Defender'); expect(delivered).toContain('STL 0.0');
+    expect(output.calledTokens).toContainEqual({token:'NBA_PLAYER_STATS:DEFENSIVE',quality:'available'});
+  });
+
   it('bounds prior-factor content to the old 740-character budget while retaining provenance labels',()=>{
     expect(Object.values(COMPACT_RESEARCH_LIMITS).reduce((a,b)=>a+b,0)).toBe(740);
     const carry=renderFindingsSoFar([huge],true);
