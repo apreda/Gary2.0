@@ -1,0 +1,18 @@
+{
+  "build": "2.25 / 900",
+  "archive": "/tmp/GaryApp-Reliability-2.25-900.xcarchive",
+  "application": "GaryApp.app",
+  "manifest_count": 21,
+  "collected_inventory_equal_to_899": true,
+  "all_manifest_keys_equal_to_899": true,
+  "manifest_differences": [],
+  "executable_sha256": "3b53b6f06afa3d6565a18443c834a3c130ef937d18bb9d8d64e6f771323098e2",
+  "verified_at_utc": "2026-09-05T15:04:26Z",
+  "codesign_deep_strict": "passed",
+  "upload_log": "/tmp/gary-reliability-900-upload.log",
+  "upload_finished_at_et": "2026-09-05T11:03:46-04:00",
+  "upload_result": "Upload succeeded; EXPORT SUCCEEDED; uploaded package is processing",
+  "app_store_processing_complete": null,
+  "app_store_processing_status": "unverified",
+  "attached_for_review": "unverified"
+}
