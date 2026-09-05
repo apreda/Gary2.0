@@ -86,3 +86,30 @@ changes in this checkout. Repository-wide production truth consequently flags
 their uncommitted work (including a concurrent social-auto-post edit). This
 repair does not stage or deploy those changes. The real local Firebase plist
 is the documented private configuration exception and remains untouched.
+
+## Confirmed live publication and push
+
+The repair is committed and pushed to `origin/main` as **28767e63**.
+The final focused run passed 15/15 tests at 08:50:44 ET. The migration is
+already deployed; the new column retains the existing service-only access.
+
+At **08:51:42.450 ET**, the real Coastal Carolina–West Virginia decision
+(game **457179**) saved a version-2 envelope with **15 original tool responses**
+and both accepted cases (**1,408 / 1,392 characters**). The same envelope reached
+Winners: a direct JSON equality query returned **true** between the candidate
+snapshot and the saved desk snapshot. The candidate was `reviewing` when read,
+well before its noon kickoff. Its stored football era is **67a3545737b3**,
+matching the final NCAAF era on disk (NFL: **629f62de4323**).
+
+The post-push production-truth read confirms commit 28767e63, canonical
+scheduler/Winners folders and processes, and no unpushed commits. It sees two
+real college publications, including the new era. The repository-wide parity
+warning remains attributable to concurrent active tasks' uncommitted work,
+including their social-auto-post edit. Their owners were informed of this
+repair's exact paths, deployed schema, stable source and live publication.
+
+This confirms the live evidence handoff. MLB's next ordinary runs use the same
+response-preservation path; no new live MLB publication exists yet this morning.
+The missing-market path was verified through the actual orchestrator with an
+unpriced fixture and zero scouting/model invocations. No production test picks
+or historical rewrites were used to demonstrate the fix.
