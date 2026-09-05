@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Latest operational handoff: read `../HANDOFF_2026-09-04_MLB_RECOVERY.md` and `../HANDOFF_2026-09-04_WINNERS_EVIDENCE.md` before taking over. Earlier launch and App Store context remains in `../HANDOFF_2026-09-04_ASTRA.md` and `../CLAUDE_HANDOFF_2026-08-24.md`.
+Latest operational handoff: read `../HANDOFF_2026-09-05_BOARD_RECOVERY.md`, `../HANDOFF_2026-09-04_MLB_RECOVERY.md`, and `../HANDOFF_2026-09-04_WINNERS_EVIDENCE.md` before taking over. Earlier launch and App Store context remains in `../HANDOFF_2026-09-04_ASTRA.md` and `../CLAUDE_HANDOFF_2026-08-24.md`.
 
 MLB outage repair (Sep 4 evening): optional research has one cancellable budget,
 including follow-ups, and reserves decision time before the child deadline.
