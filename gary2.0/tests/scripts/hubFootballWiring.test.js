@@ -70,11 +70,16 @@ describe('college player packs (NCAAF Picks page parity, Sep 4 2026)', () => {
     expect(runner).toContain("league === 'NCAAF'\n        ? await buildNcaafPlayerInsightCards({");
   });
 
-  it('writes college packs additively — only the games it rewrites are deleted, and the ledger feeds the builder', () => {
+  it('checkpoints college packs additively and feeds the complete-game ledger into the builder', () => {
     expect(runner).toContain('done: packedGames');
-    expect(runner).toContain("await packedGameIdsToday(date, league)");
-    expect(runner).toContain("await deleteGameCards(date, league, [...new Set(rows.map((r) => r.game_id).filter(Boolean))]);");
-    expect(runner).toContain("game_id: `in.(${gameIds.join(',')})`");
+    expect(runner).toContain("await packedGameIdsToday(date, league, namedSubjects)");
+    expect(runner).toContain('completedPlayerCardGameIds(Array.isArray(data) ? data : [], { requiredPlayers })');
+    expect(runner).toContain('subjects: namedSubjects');
+    expect(runner).toContain("select: 'player_id,game_id,headline'");
+    expect(runner).toContain('const onGameBuilt = dryRun ? undefined');
+    expect(runner).toContain('await insertCards(cardStorageRows(gamePacks))');
+    expect(runner).not.toContain('await deleteGameCards');
+    expect(runner).not.toContain('await deleteDayCards');
   });
 
   it('keeps the NFL pack builder NFL-only — no college branch inside it', () => {

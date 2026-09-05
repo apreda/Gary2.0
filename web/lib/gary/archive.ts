@@ -1,5 +1,6 @@
 import { estDateStr, todayEST } from './dates';
-import { parsePicksJson } from './picks';
+import { filterWeeklyPicksForDate, parsePicksJson } from './picks';
+export { filterWeeklyPicksForDate } from './picks';
 import { mergeGameResults } from './results';
 import { rest } from './supabase';
 import type {
@@ -107,15 +108,6 @@ export function archiveMonthLabel(value: string): string {
 
 function assertQueryDate(value: string) {
   if (!isArchiveDate(value)) throw new Error('Invalid archive date');
-}
-
-/** Weekly cards belong only on the ET calendar date of each game. */
-export function filterWeeklyPicksForDate(picks: GaryPick[], date: string): GaryPick[] {
-  return picks.filter(pick => {
-    if (!pick.commence_time) return false;
-    const start = new Date(pick.commence_time);
-    return Number.isFinite(start.getTime()) && estDateStr(start) === date;
-  });
 }
 
 function archivePickKey(pick: GaryPick): string {

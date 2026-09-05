@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A905BCA4B53041AB98CD0001 /* HubCardIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A905BCA4B53041AB98CD0002 /* HubCardIdentity.swift */; };
 		C04E9001AABBCCDD11223301 /* PrivacyPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = C04E9001AABBCCDD11223302 /* PrivacyPreferences.swift */; };
 		050FAB3C2FBD1312014A6102 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 921968E9FC0E6DE90F6EAD89 /* GoogleSignIn */; };
 		0984340298B6C347AF6F4588 /* BebasNeue-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C20455738476664B4F69306C /* BebasNeue-Regular.ttf */; };
@@ -82,6 +83,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		A905BCA4B53041AB98CD0002 /* HubCardIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubCardIdentity.swift; sourceTree = "<group>"; };
 		C04E9001AABBCCDD11223302 /* PrivacyPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyPreferences.swift; sourceTree = "<group>"; };
 		008FA1BAD0680B6769DD9D2A /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
 		00BBC4AB067AFFD32ED58FB1 /* GoogleService-Info.plist.example */ = {isa = PBXFileReference; path = "GoogleService-Info.plist.example"; sourceTree = "<group>"; };
@@ -202,6 +204,7 @@
 				F04B411A8C0D4A2B9E711002 /* FootballGameIntelView.swift */,
 				F04B411A8C0D4A2B9E711004 /* FootballProofContract.swift */,
 				F04B411A8C0D4A2B9E711A02 /* NCAAFTeams.swift */,
+				A905BCA4B53041AB98CD0002 /* HubCardIdentity.swift */,
 				F04B411A8C0D4A2B9E7110A2 /* GaryMock.swift */,
 				F04B411A8C0D4A2B9E7110A4 /* GaryMockFixture.swift */,
 				089A2D29640F62FFCD6A4769 /* GaryApp.entitlements */,
@@ -412,6 +415,7 @@
 				F04B411A8C0D4A2B9E711001 /* FootballGameIntelView.swift in Sources */,
 				F04B411A8C0D4A2B9E711003 /* FootballProofContract.swift in Sources */,
 				F04B411A8C0D4A2B9E711A01 /* NCAAFTeams.swift in Sources */,
+				A905BCA4B53041AB98CD0001 /* HubCardIdentity.swift in Sources */,
 				F04B411A8C0D4A2B9E7110A1 /* GaryMock.swift in Sources */,
 				F04B411A8C0D4A2B9E7110A3 /* GaryMockFixture.swift in Sources */,
 				40771064325B4E728A735AEA /* GaryApp.swift in Sources */,
@@ -493,7 +497,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 899;
+				CURRENT_PROJECT_VERSION = 900;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -580,7 +584,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 899;
+				CURRENT_PROJECT_VERSION = 900;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_NS_ASSERTIONS = NO;

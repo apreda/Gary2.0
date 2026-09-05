@@ -902,7 +902,7 @@ struct PicksGamePage: View {
             ScoutBigNumbersSection(d: trio)
             // The season series lives HERE and only here (founder, Aug 6).
             GameH2HSection(edges: edges)
-            PlayerIntelSection(matchup: group.matchup)
+            PlayerIntelSection(matchup: group.matchup, league: "MLB")
             }
             if isMLB {
                 // MLB: the flat GAME INTEL list becomes the modular dashboard —
@@ -934,6 +934,7 @@ struct PicksGamePage: View {
 /// build now), scoped by exact game id.
 struct PlayerIntelSection: View {
     let matchup: String
+    let league: String
     /// Exact-id scope (football pages, Aug 27 2026): football packs carry the
     /// BDL game id, and college abbreviations have no keyword table for the
     /// matchup-string join — when the caller knows the game id, packs attach
@@ -944,6 +945,17 @@ struct PlayerIntelSection: View {
 
     /// Keeps the page scannable — the slate page is a stack, not a roster dump.
     private static let maxRows = 8
+
+    /// Provider game ids and abbreviation pairs can repeat across sports.
+    /// Resolve a game's cards only after restricting them to its own league.
+    static func cardsForGame(_ all: [PlayerInsightCardRow], league: String, gameId: String?, matchup: String) -> [PlayerInsightCardRow] {
+        all.filter { row in
+            guard HubCardIdentity.sameLeague(row.league, league) else { return false }
+            if let gameId { return row.game_id == gameId }
+            guard let game = row.payload?.game, !game.isEmpty else { return false }
+            return abbrGameMatches(game, matchup: matchup)
+        }
+    }
 
     var body: some View {
         Group {
@@ -967,13 +979,9 @@ struct PlayerIntelSection: View {
                 }
             }
         }
-        .task(id: matchup + (gameId ?? "")) {
+        .task(id: [league, matchup, gameId ?? ""].joined(separator: "|")) {
             let all = await SupabaseAPI.fetchPlayerIntelRows(date: SupabaseAPI.todayEST())
-            let mine = all.filter { r in
-                if let gameId { return r.game_id == gameId }
-                guard let g = r.payload?.game, !g.isEmpty else { return false }
-                return abbrGameMatches(g, matchup: matchup)
-            }
+            let mine = Self.cardsForGame(all, league: league, gameId: gameId, matchup: matchup)
             // Pitchers lead (they drive the matchup) — quarterbacks are the
             // football counterpart — then everyone else by name.
             rows = Array(mine.sorted { a, b in

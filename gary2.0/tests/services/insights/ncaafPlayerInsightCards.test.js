@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { completedPlayerCardGameIds } from '../../../scripts/lib/playerCardStorage.js';
 
 // PLAYER INTEL, for college (NCAAF Picks page parity, founder Sep 3-4 2026):
 // the NFL pack's contents — season line, LAST N log with the opponent and the
@@ -63,6 +64,50 @@ beforeEach(() => {
 });
 
 describe('buildNcaafPlayerInsightCards', () => {
+  it('resumes only a completed game with new named subjects, keeps verified identity without invented stats, and skips it once stored', async () => {
+    const other = { ...game, id: 457164 };
+    const existing = [game, other].flatMap((g) => [8, 13].map((team) => ({
+      date: '2026-10-10', league: 'NCAAF', game_id: String(g.id), player_id: `${g.id}-${team}`,
+      payload: { card_build: { version: 1, built_at: '2026-09-05T12:00:00Z', game_complete: true, team_id: String(team) } },
+    })));
+    const subjects = [{ game_id: '457163', player_id: '508', headline: 'Unchanged availability read' }];
+    bdl.getNcaafTeamPlayers.mockImplementation(async (teamId) => teamId === 13
+      ? stanfordRoster : [player(801, 'Miami', 'Quarterback', 'QB', miami)]);
+    bdl.getNcaafPlayerGameStats.mockImplementation(async ({ playerIds }) => [
+      gameRow(playerIds.includes(501) ? 501 : 801, 1, '2026-09-05T20:00:00Z', { passing_attempts: 30, passing_yards: 250 }),
+    ]);
+    const done = completedPlayerCardGameIds(existing, { requiredPlayers: subjects });
+    const checkpoint = vi.fn();
+    const packs = await buildNcaafPlayerInsightCards({ date: '2026-10-10', games: [other, game], bdl, done, subjects, onGameBuilt: checkpoint });
+    expect(packs.every((p) => p.game_id === '457163')).toBe(true);
+    const named = packs.find((p) => p.player_id === '508');
+    expect(named).toMatchObject({ player_name: 'David Bailey', team_abbr: 'STAN', payload: {
+      position: 'LB', season: null, formRows: null, splits: null, props: null,
+      card_build: { game_complete: true },
+    } });
+    expect(subjects[0].headline).toBe('Unchanged availability read');
+    expect(checkpoint).toHaveBeenCalledTimes(1);
+    expect(bdl.getNcaafTeamPlayers).toHaveBeenCalledTimes(2);
+    const nextDone = completedPlayerCardGameIds([...existing, ...packs], { requiredPlayers: subjects });
+    expect([...nextDone].sort()).toEqual(['457163', '457164']);
+    expect(await buildNcaafPlayerInsightCards({ date: '2026-10-10', games: [game, other], bdl, done: nextDone, subjects })).toEqual([]);
+    expect(bdl.getNcaafTeamPlayers).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not invent an unrostered subject, borrow a subject from another game, or count identity alone as base-game completion', async () => {
+    bdl.getNcaafTeamPlayers.mockImplementation(async (teamId) => teamId === 13 ? stanfordRoster : []);
+    const subjects = [
+      { game_id: '457163', player_id: '508' },
+      { game_id: '457163', player_id: '999999' },
+      { game_id: '457164', player_id: '502' },
+    ];
+    const packs = await buildNcaafPlayerInsightCards({ date: '2026-10-10', games: [game], bdl, subjects });
+    expect(packs.map((p) => p.player_id)).toEqual(['508']);
+    expect(packs[0].payload.card_build.game_complete).toBe(false);
+    expect(packs[0].payload.season).toBeNull();
+    expect(completedPlayerCardGameIds(packs).size).toBe(0);
+  });
+
   it('packs the leaders by role from the per-game rows: summed season line, dated log off the pair\'s game index, splits, props', async () => {
     bdl.getNcaafPlayerGameStats.mockImplementation(async ({ playerIds, season }) => {
       expect(season).toBe(2026);
@@ -189,6 +234,10 @@ describe('buildNcaafPlayerInsightCards', () => {
     expect(qb.payload.splits).toBeNull();
     const rb = packs.find((p) => p.player_id === '603');
     expect(rb.payload.season.line2).toBe('2025 season, 1 game — prior season; he is on the 2026 MIA roster');
+    expect(bdl.getNcaafPlayerGameStats).toHaveBeenCalledWith({ playerIds: [55826, 603], season: 2025 }, 360);
+    expect(bdl.getGames).toHaveBeenCalledWith('americanfootball_ncaaf', {
+      team_ids: [8, 13], seasons: [2025], per_page: 100,
+    }, 360);
     expect(rb.payload.formRows[1]).toEqual({ label: 'vs Iowa Hawkeyes', value: '15 car 88 yds 1 TD', detail: null });
   });
 
@@ -226,5 +275,43 @@ describe('buildNcaafPlayerInsightCards', () => {
 
     expect(rosters).toEqual([8, 13]);
     delete process.env.GARY_NCAAF_LANE_BUDGET_MS;
+  });
+
+  it('checkpoints completed games before another game starts and marks both grounded sides', async () => {
+    const written = [];
+    const later = { ...game, id: 457164, date: '2026-10-11T00:00:00Z' };
+    let rosterCalls = 0;
+    bdl.getNcaafTeamPlayers.mockImplementation(async (teamId) => {
+      rosterCalls += 1;
+      if (rosterCalls === 3) expect(written.map((rows) => rows[0].game_id)).toEqual(['457163']);
+      const team = teamId === 8 ? miami : stanford;
+      return [player(teamId * 100, 'Starting', 'Quarterback', 'QB', team)];
+    });
+    bdl.getNcaafPlayerGameStats.mockImplementation(async ({ playerIds }) => [
+      gameRow(playerIds[0], 1, '2026-09-05T20:00:00Z', { passing_attempts: 30, passing_yards: 250 }),
+    ]);
+    const packs = await buildNcaafPlayerInsightCards({
+      date: '2026-10-10', games: [later, game], bdl,
+      onGameBuilt: async (rows) => { written.push(rows); },
+    });
+    expect(written).toHaveLength(2);
+    expect(packs).toHaveLength(4);
+    expect(packs.every((pack) => pack.payload.card_build.game_complete)).toBe(true);
+    expect(written[0].map((pack) => pack.payload.card_build.team_id).sort()).toEqual(['13', '8']);
+  });
+
+  it('stores a successful side but keeps the game retryable after the other roster fails', async () => {
+    bdl.getNcaafTeamPlayers.mockImplementation(async (teamId) => {
+      if (teamId === 8) throw new Error('roster unavailable');
+      return [stanfordRoster[0]];
+    });
+    bdl.getNcaafPlayerGameStats.mockResolvedValue([
+      gameRow(501, 1, '2026-09-05T20:00:00Z', { passing_attempts: 30, passing_yards: 250 }),
+    ]);
+    const checkpoint = vi.fn();
+    const packs = await buildNcaafPlayerInsightCards({ date: '2026-10-10', games: [game], bdl, onGameBuilt: checkpoint });
+    expect(packs).toHaveLength(1);
+    expect(checkpoint).toHaveBeenCalledTimes(1);
+    expect(packs[0].payload.card_build).toMatchObject({ version: 1, team_id: '13', game_complete: false });
   });
 });

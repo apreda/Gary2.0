@@ -35,7 +35,7 @@ export async function gamesWithRowsToday({ date, category, ...options }) {
       method: 'GET',
       url: `${supabaseUrl}/rest/v1/insight_connections`,
       headers: { apikey: key, Authorization: `Bearer ${key}` },
-      params: { date: `eq.${date}`, league: 'eq.ncaaf', category: `eq.${category}`, select: 'game_id' },
+      params: { date: `eq.${date}`, league: 'eq.NCAAF', category: `eq.${category}`, select: 'game_id' },
     });
     return new Set((Array.isArray(data) ? data : [])
       .map((r) => r?.game_id)

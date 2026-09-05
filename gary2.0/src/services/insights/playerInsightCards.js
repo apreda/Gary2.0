@@ -257,7 +257,7 @@ async function buildOnePack(args) {
 
 // ─── OFF-SLATE (identity/season/form only — no tonight sections) ────────────
 
-async function buildOffSlatePack({ playerId, season, bdl, playersById, seasonById, batterX, pitcherX }) {
+export async function buildOffSlatePack({ playerId, season, bdl, playersById, seasonById, batterX, pitcherX }) {
   const header = playersById[playerId] || playersById[String(playerId)] || {};
   const seasonRec = seasonById.get(String(playerId)) || null;
   const name = header.name || seasonRec?.player?.full_name || null;
@@ -276,15 +276,19 @@ async function buildOffSlatePack({ playerId, season, bdl, playersById, seasonByI
   };
   if (isPitcher) {
     if (throws) payload.throws = throws;
-    const sd = pitcherSeasonDisplay ? pitcherSeasonDisplay(seasonRec) : null;
-    if (sd) payload.seasonDisplay = sd;
+    const sd = pitcherSeasonDisplay(seasonRec);
+    if (sd) payload.season = sd;
     const x = pitcherX.get?.(nameKey(name));
     const xs = x ? pitcherXStats(x) : null;
     if (xs) payload.xstats = xs;
+    const chrono = await safeCall(() => bdl.getMlbPlayerGameRowsChrono(playerId, season), []);
+    const pitched = asArray(chrono).filter((r) => ipOuts(r.ip) > 0);
+    const formRows = pitcherFormRows(pitched);
+    if (formRows.length) payload.formRows = formRows;
   } else {
     if (bats) payload.bats = bats;
     const sd = hitterSeasonDisplay(seasonRec);
-    if (sd) payload.seasonDisplay = sd;
+    if (sd) payload.season = sd;
     const x = batterX.get?.(nameKey(name));
     const xs = x ? hitterXStats(x) : null;
     if (xs) payload.xstats = xs;

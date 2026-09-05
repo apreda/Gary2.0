@@ -6,11 +6,11 @@
  * the league TODAY — notable in-game moments (multi-HR nights, no-hitters,
  * milestone lines, wild finals), injury news with its consequence, line moves
  * on tonight's slate, and totals-relevant environment notes. ONE grounded
- * call per league (Claude bridge WebSearch first, Anthropic server web
+ * call per league (Codex bridge web search first, Anthropic server web
  * search fallback — Gemini retired Aug 24 2026) returns a strict
  * JSON array; the runner normalizes those to flat `wire_items` rows and writes
- * them with the same service-role DELETE-then-INSERT idempotency as
- * run-insight-connections.js. iOS reads via the anon SELECT policy.
+ * them by inserting first, then deleting only the previously captured row IDs.
+ * A failed insert preserves the feed. iOS reads via the anon SELECT policy.
  *
  * REDESIGNED Aug 5 2026 (founder): the old feed led with "result" items —
  * yesterday's games recapped against the closing number. Those duplicated the
@@ -35,6 +35,7 @@ import './src/loadEnv.js';
 
 import axios from 'axios';
 import { getESTDate } from './src/utils/dateUtils.js';
+import { callWireModel, supportedWireSources, verifiedWireMovement } from './src/services/insights/wireModel.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Config
@@ -138,8 +139,8 @@ if (!dryRun) {
 }
 
 // GEMINI RETIRED (founder, Aug 24 2026: "no more gemini for anything"). The
-// Wire's grounded call runs on the Claude subscription bridge
-// (claudeCliWebSearch, WebSearch tool, $0 marginal) with the Anthropic server
+// Wire's grounded call runs on the existing Codex subscription bridge
+// (codexCliWebSearch, native web search, $0 marginal) with the Anthropic server
 // web-search API as the metered fallback. The Aug 20-23 blackout — four days
 // of an empty Wire while the Gemini project 403-dunned — is why single-vendor
 // lanes are banned.
@@ -277,7 +278,7 @@ async function fetchFinalsWithNotes(date, league) {
       url: RECAPS_REST_URL,
       headers: restHeaders,
       params: {
-        select: 'matchup,box,bullets',
+        select: 'id,matchup,box,bullets',
         league: `eq.${league}`,
         game_date: `eq.${date}`,
         limit: 25,
@@ -296,7 +297,7 @@ async function fetchFinalsWithNotes(date, league) {
     const away = side(rec?.box?.away), home = side(rec?.box?.home);
     if (away && home) bits.push(`box: away ${away} — home ${home}`);
     if (Array.isArray(rec?.bullets) && rec.bullets.length) bits.push(`notes: ${rec.bullets.join('; ')}`);
-    return { ...r, note: bits.length ? bits.join(' | ') : null };
+    return { ...r, note: bits.length ? bits.join(' | ') : null, input_recap_id: rec?.id ?? null };
   });
 }
 
@@ -476,7 +477,7 @@ function buildPrompt({ date, league, todayFinals, ydayFinals, allowNames, recent
     `NEVER re-report a stint from that list, and NEVER report the ORIGINAL move of a player whose ` +
     `story has since advanced — search results are often days or weeks old and do not say so. ` +
     `An injury story you cannot date to today does not run.\n\n` +
-    `Use Google Search to find REAL, current information about these teams: tonight's standout ` +
+    `Use web search to find REAL, current information about these teams: tonight's standout ` +
     `individual performances and game stories, today's injury news, line moves on the upcoming slate, ` +
     `and scoring-environment notes.\n\n` +
     `Return a STRICT JSON array (no prose, no markdown fences, no commentary) of 4 to 8 items. ` +
@@ -487,9 +488,12 @@ function buildPrompt({ date, league, todayFinals, ydayFinals, allowNames, recent
     `  "body": 2-3 further sentences for readers who tap to expand. No repetition of the ` +
     `headline/subline. (or null)\n` +
     `  "source_handle": always null\n` +
+    `  "sources": exact public URLs returned by web search that support this item's facts; [] for a moment drawn only from the supplied notes. Never invent a URL.\n` +
     `  "game": the matchup this is about ("Away @ Home"), or null if league-wide\n` +
     `  "relevance_score": integer 0-100 (higher = more lead-worthy / front-page)\n\n` +
     `EDITORIAL RULES:\n` +
+    `- No verified same-book timestamped market-movement receipts were supplied for this run. Do not generate line_move items from a web table's claimed opener/current values.\n` +
+    `- Preserve uncertainty in headlines as well as body text: expected, likely, and forecast are not confirmed facts. A likely closed roof must not become a confirmed closed roof.\n` +
     `- moment (the feed's LEAD kind): a thing that HAPPENED in a game worth telling a friend about — ` +
     `${momentExamples}. Name the player/team and the real number when the notes provide it. This is fan-interest copy, ` +
     `NOT a betting recap — never frame a moment against a spread or closing number.\n` +
@@ -521,23 +525,12 @@ function buildPrompt({ date, league, todayFinals, ydayFinals, allowNames, recent
 /**
  * One grounded call per league. Returns raw model text (or null on error).
  *
- * Two transports, tried in order (Aug 24 2026, Gemini retired): the Claude
- * subscription bridge (WebSearch tool, $0 marginal — the same bridge the
+ * Two transports, tried in order (Aug 24 2026, Gemini retired): the Codex
+ * subscription bridge (native web search, $0 marginal — the same bridge the
  * pick desks ride), then the Anthropic server web-search API. The prompt,
  * the strict-JSON contract, and every downstream validation gate are
  * identical either way; only the transport changes.
  */
-async function callWireModel(prompt, { bridgeTimeoutMs = 5 * 60 * 1000 } = {}) {
-  const { claudeCliWebSearch } = await import('./src/services/agentic/orchestrator/providerAdapters/claudeCliSession.js');
-  const viaBridge = await claudeCliWebSearch(prompt, { timeoutMs: bridgeTimeoutMs });
-  if (viaBridge.success && viaBridge.data) return viaBridge.data;
-  console.warn(`   ⚠️ [Wire] claude bridge failed — trying Anthropic server web search: ${String(viaBridge.error || 'empty output').slice(0, 200)}`);
-  const { anthropicWebSearchRaw } = await import('./src/services/agentic/scoutReport/shared/anthropicWebSearch.js');
-  const viaApi = await anthropicWebSearchRaw(prompt, { maxTokens: 6000 });
-  if (viaApi.success && viaApi.data) return viaApi.data;
-  throw new Error(viaApi.error || 'both grounded transports failed');
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Run-level time budget — the whole run must FIT its launchd stage cap.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -653,7 +646,7 @@ function toRow(item, league, date) {
       item.body != null && String(item.body).trim()
         ? { body: String(item.body).trim() }
         : null,
-    generated_by: 'run-wire-items.js@claude-grounded',
+    generated_by: 'run-wire-items.js@grounded-v2',
   };
 }
 
@@ -762,11 +755,30 @@ async function run() {
         WIRE_BRIDGE_MAX_MS,
         Math.max(WIRE_LEAGUE_FLOOR_MS, WIRE_TIME_BUDGET_MS - (Date.now() - runStart) - 10_000)
       );
-      const text = await callWireModel(prompt, { bridgeTimeoutMs });
+      const { text, provider, sourceUrls } = await callWireModel(prompt, {
+        bridgeTimeoutMs, timeoutMs: Math.max(1, WIRE_TIME_BUDGET_MS - (Date.now() - runStart)),
+      });
       const parsed = parseWireItems(text);
 
       const allRows = parsed
-        .map((item) => toRow(item, league, targetDate))
+        .map((item) => {
+          const row = toRow(item, league, targetDate);
+          if (!row) return null;
+          if (row.kind === 'line_move' && !verifiedWireMovement(item, { date: targetDate })) {
+            console.warn('   [Wire] Dropped line_move: verified same-book timestamped receipts were not supplied.');
+            return null;
+          }
+          const sources = supportedWireSources(item, sourceUrls);
+          if (row.kind !== 'moment' && !sources.length) {
+            console.warn(`   [Wire] Dropped ${row.kind}: no captured public source supports its source list.`);
+            return null;
+          }
+          row.meta = { ...row.meta, sources, generation: {
+            provider, generated_at: new Date().toISOString(), slate_date: targetDate,
+            input_recap_ids: [...new Set([...todayFinals, ...ydayFinals].map(final => final.input_recap_id).filter(id => id != null))],
+          } };
+          return row;
+        })
         .filter(Boolean);
 
       // Drop items naming a team that isn't really in play (caught fabrications).
@@ -845,7 +857,7 @@ async function run() {
   }
 
   console.log(
-    `\n${dryRun ? '🧪 DRY RUN complete' : '✅ Done'} — ${totalRows} item(s) ` +
+    `\n${failures ? '❌ Completed with failures' : dryRun ? '🧪 DRY RUN complete' : '✅ Done'} — ${totalRows} item(s) ` +
       `${dryRun ? 'computed' : 'processed'} for ${targetDate}.`
   );
 

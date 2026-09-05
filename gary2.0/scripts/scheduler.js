@@ -31,7 +31,6 @@ import {
   isScheduleEntryRetired,
   isSportFetchRetryEntry,
   makeSportFetchRetryEntry,
-  clusterConcurrency,
   nextTriggerBatch,
   laneOwnsMlbDriftGuard,
   newScheduleEntries,
@@ -54,6 +53,7 @@ import {
   sharedLaneConcurrency,
   sportFetchRetryIsCurrent,
   takeReadySharedEntries,
+  takeReadyDecisionLaneEntries,
 } from './lib/schedulerPolicy.js';
 import { requireNonFootballStart } from './lib/schedulerSourcePolicy.js';
 import { parsePropRunOutcome } from './lib/propsRunReliability.js';
@@ -142,21 +142,17 @@ const FIXED_TRIGGER_RETRY_OFFSETS_MINUTES = [0, 45, 90];
 // decision. Keep the complete per-game pipeline capped at three workers.
 const NFL_GAME_DECISION_CONCURRENCY = 3;
 
-// NCAAF Saturdays routinely put dozens of games into the same kickoff
-// cluster. Scale the bounded model/context pool with the cluster rather than
-// leaving every large slate behind three workers. The cross-process BDL gate
-// remains authoritative and serializes provider transports independently.
-const NCAAF_CLUSTER_MIN_CONCURRENCY = 3;
-const NCAAF_CLUSTER_MAX_CONCURRENCY = 12;
-const NCAAF_TARGET_GAMES_PER_WORKER = 4;
+// College uses three complete rolling pipelines; newly due games enter free
+// slots without stopping healthy work for a different kickoff cluster.
+const NCAAF_GAME_DECISION_CONCURRENCY = 3;
 // Shared MLB/NBA: a rolling pool lets newly due games use free slots while a
 // slow research/props job is still running. Atomic daily-ledger writes already
 // support independent games. Operators may choose 1–4 whole game+props slots.
 const SHARED_LANE_CONCURRENCY = sharedLaneConcurrency();
 
 // Children stop before their own kickoff/first pitch or the hard runtime cap.
-// Other lanes also honor their next queued trigger; MLB's rolling pool lets
-// independent games advance without cancelling healthy research at each tier.
+// NFL honors its next queued trigger; college honors its own next retry.
+// Rolling MLB/college pools let unrelated games advance in free slots.
 // Two minutes leaves time to terminate/reap and record a retryable failure.
 const CHILD_MAX_RUNTIME_MS = 45 * 60 * 1000;
 const CHILD_DEADLINE_SAFETY_MS = 2 * 60 * 1000;
@@ -1375,12 +1371,14 @@ async function executeDecisionLaneSchedule(schedule, {
 
     // Laptop wake/catch-up safety: never replay a betting task after the game
     // has started. This applies equally to game picks and props.
-    // Shared entries enter coverage only when actually dispatched; their
+    // Rolling entries enter coverage only when actually dispatched; their
     // initial batch is returned to the live queue below. Stale entries still
     // receive the ordinary terminal coverage check.
-    const coverageBatch = batch.filter((entry) => decisionLaneKey(entry) !== 'shared');
+    const usesRollingPool = (entry) => decisionLaneKey(entry) === 'shared'
+      || entry.sport.key === 'americanfootball_ncaaf';
+    const coverageBatch = batch.filter((entry) => !usesRollingPool(entry));
     const { runnable: runnableBatch, stale } = partitionStartedEntries(batch, Date.now());
-    coverageBatch.push(...stale.filter((entry) => decisionLaneKey(entry) === 'shared'));
+    coverageBatch.push(...stale.filter(usesRollingPool));
     for (const entry of stale) {
       const key = scheduleEntryKey(entry);
       if (!skippedStartedGames.has(key)) {
@@ -1548,15 +1546,28 @@ async function executeDecisionLaneSchedule(schedule, {
 
     const runNCAAFDecisionLane = async () => {
       if (ncaafGames.length === 0) return;
-      const workers = clusterConcurrency(ncaafGames.length, {
-        minWorkers: NCAAF_CLUSTER_MIN_CONCURRENCY,
-        maxWorkers: NCAAF_CLUSTER_MAX_CONCURRENCY,
-        targetGamesPerWorker: NCAAF_TARGET_GAMES_PER_WORKER,
-      });
-      log(`\n── NCAAF: ${ncaafGames.length} per-game decision pipeline(s), ${workers} bounded worker(s) ──`);
-      await runPerGameDecisionPipeline({
-        entries: ncaafGames,
-        concurrency: workers,
+      // Keep waiting games in the mutable queue for kickoff corrections and
+      // newly due tiers. A worker removes only the exact entry it dispatches.
+      pendingEntries.push(...ncaafGames);
+      log(`\n── NCAAF: ${ncaafGames.length} initial game(s), ${NCAAF_GAME_DECISION_CONCURRENCY} bounded rolling worker(s), earliest kickoff first ──`);
+      await runRollingDecisionPipeline({
+        concurrency: NCAAF_GAME_DECISION_CONCURRENCY,
+        takeReadyEntries: (occupiedGameKeys, availableSlots) => {
+          const overdue = coalesceOverdueTiers(pendingEntries, Date.now());
+          pendingEntries = overdue.entries;
+          for (const entry of overdue.skipped) {
+            log(`⏭️ SUPERSEDED WINDOW SKIPPED: ${entry.sport.label} ${entry.matchup} T-${entry.leadMin} — a newer tier remains (id ${entry.gameId})`);
+          }
+          const ready = takeReadyDecisionLaneEntries(pendingEntries, {
+            laneKey: 'americanfootball_ncaaf', occupiedGameKeys, limit: availableSlots,
+          });
+          pendingEntries = ready.remaining;
+          coverageBatch.push(...ready.selected);
+          if (ready.selected.length > 0) {
+            log(`  ➕ College rolling queue: ${ready.selected.length} newly due game(s) admitted without waiting for the prior batch`);
+          }
+          return ready.selected;
+        },
         runGame: runGameDecision,
         runProps: runPropDecision,
       });

@@ -760,13 +760,14 @@ struct FactCheckRow: Decodable {
 }
 
 struct PlayerInsightCardRow: Decodable, Identifiable {
+    let league: String?
     let player_id: String?
     let player_name: String?
     let team_abbr: String?
     let game_id: String?
     let payload: PlayerInsightPack?
 
-    var id: String { player_id ?? player_name ?? "" }
+    var id: String { [league ?? "", game_id ?? "", player_id ?? player_name ?? ""].joined(separator: "|") }
 }
 
 // MARK: - Sportsbook Odds (multi-book comparison)
@@ -1923,6 +1924,21 @@ struct GameResult: Decodable {
         case game_id, game_date, league, matchup, pick_text, result, odds, final_score, season_type
     }
 
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            game_id: try container.decodeIfPresent(String.self, forKey: .game_id),
+            game_date: try container.decodeIfPresent(String.self, forKey: .game_date),
+            league: try container.decodeIfPresent(String.self, forKey: .league),
+            matchup: try container.decodeIfPresent(String.self, forKey: .matchup),
+            pick_text: try container.decodeIfPresent(String.self, forKey: .pick_text),
+            result: try container.decodeIfPresent(String.self, forKey: .result),
+            odds: try container.decodeIfPresent(StringOrNumber.self, forKey: .odds),
+            final_score: try container.decodeIfPresent(String.self, forKey: .final_score),
+            season_type: try container.decodeIfPresent(Int.self, forKey: .season_type)
+        )
+    }
+
     /// Memberwise initializer for creating from NFLResult
     init(game_id: String? = nil, game_date: String?, league: String?, matchup: String?, pick_text: String?, result: String?, odds: StringOrNumber?, final_score: String?, season_type: Int? = nil) {
         self.game_id = game_id
@@ -1930,7 +1946,9 @@ struct GameResult: Decodable {
         self.league = league
         self.matchup = matchup
         self.pick_text = pick_text
-        self.result = result
+        // Historical graders have used both "Lost" and "lost". Every native
+        // record, payout and streak consumer receives the same canonical case.
+        self.result = result?.lowercased()
         self.odds = odds
         self.final_score = final_score
         self.season_type = season_type
@@ -2429,4 +2447,3 @@ struct TomorrowWeather: Decodable {
     let note: String?               // "82° — ball carries" / "40% rain" / nil
     let commence_time: String?
 }
-

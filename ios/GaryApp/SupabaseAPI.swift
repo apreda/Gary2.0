@@ -855,35 +855,39 @@ enum SupabaseAPI {
     /// Fetch a player's full insight pack for a date (the Hub breakdown view).
     /// Returns nil when no pack exists or on any failure — the card back
     /// simply hides the breakdown affordance gracefully.
-    static func fetchPlayerInsightCard(date: String, playerId: String) async -> PlayerInsightPack? {
+    static func fetchPlayerInsightCard(date: String, playerId: String, league: String) async -> PlayerInsightPack? {
         let url = buildURL(table: "player_insight_cards", query: [
-            URLQueryItem(name: "select", value: "player_id,player_name,payload"),
+            URLQueryItem(name: "select", value: "league,player_id,player_name,payload"),
             URLQueryItem(name: "date", value: "eq.\(date)"),
+            URLQueryItem(name: "league", value: "eq.\(league.uppercased())"),
             URLQueryItem(name: "player_id", value: "eq.\(playerId)")
         ])
         guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let rows = try? JSONDecoder().decode([PlayerInsightCardRow].self, from: data) else { return nil }
-        return rows.first?.payload
+        return rows.count == 1 ? rows.first?.payload : nil
     }
 
     /// All of a date's player insight packs (one fetch, shared across the
     /// Picks carousel) — each game page filters to its own matchup via the
     /// pack's `game` label. 30-min in-memory cache, same idiom as DFS lineups.
     private static var _playerIntelCache: (date: String, rows: [PlayerInsightCardRow], at: Date)?
-    static func fetchPlayerIntelRows(date: String) async -> [PlayerInsightCardRow] {
-        if let c = _playerIntelCache, c.date == date, Date().timeIntervalSince(c.at) < 1800 {
+    static func fetchPlayerIntelRows(date: String, forceRefresh: Bool = false) async -> [PlayerInsightCardRow] {
+        if !forceRefresh, let c = _playerIntelCache, c.date == date, Date().timeIntervalSince(c.at) < 1800 {
             return c.rows
         }
         let url = buildURL(table: "player_insight_cards", query: [
-            URLQueryItem(name: "select", value: "player_id,player_name,team_abbr,game_id,payload"),
+            URLQueryItem(name: "select", value: "league,player_id,player_name,team_abbr,game_id,payload"),
             URLQueryItem(name: "date", value: "eq.\(date)"),
             URLQueryItem(name: "order", value: "player_name.asc")
         ])
         guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let rows = try? JSONDecoder().decode([PlayerInsightCardRow].self, from: data) else { return [] }
-        _playerIntelCache = (date, rows, Date())
+              let rows = try? JSONDecoder().decode([PlayerInsightCardRow].self, from: data) else {
+            return _playerIntelCache?.date == date ? (_playerIntelCache?.rows ?? []) : []
+        }
+        // A successful empty early pass must not hide cards arriving moments later.
+        _playerIntelCache = rows.isEmpty ? nil : (date, rows, Date())
         return rows
     }
 
@@ -1602,21 +1606,23 @@ enum SupabaseAPI {
     static func fetchGameResults(since dateFilter: String?) async throws -> [GameResult] {
         var query = [
             URLQueryItem(name: "select", value: "game_id,game_date,league,matchup,pick_text,result,final_score"),
-            URLQueryItem(name: "order", value: "game_date.desc")
+            URLQueryItem(name: "order", value: "game_date.desc,id.asc")
         ]
         
         if let since = dateFilter, !since.isEmpty {
             query.insert(URLQueryItem(name: "game_date", value: "gte.\(since)"), at: 1)
         }
 
-        return try await fetchAllPages(table: "game_results", baseQuery: query)
+        let rows: [GameResult] = try await fetchAllPages(table: "game_results", baseQuery: query)
+        // NFL moved to nfl_results; older copies here must not enter records twice.
+        return rows.filter { $0.effectiveLeague != "NFL" }
     }
     
     /// Fetch NFL results from nfl_results table
     static func fetchNFLResults(since dateFilter: String?) async throws -> [GameResult] {
         var query = [
             URLQueryItem(name: "select", value: "*"),
-            URLQueryItem(name: "order", value: "game_date.desc")
+            URLQueryItem(name: "order", value: "game_date.desc,id.asc")
         ]
         
         if let since = dateFilter, !since.isEmpty {
@@ -1631,7 +1637,8 @@ enum SupabaseAPI {
     /// - Parameter forceRefresh: Set to true for pull-to-refresh to bypass cache
     static func fetchAllGameResults(since dateFilter: String?, forceRefresh: Bool = false, billfold: Bool = false) async throws -> [GameResult] {
         let cacheScope = billfold ? "_billfold_\(billfoldSnapshotWindowKey())" : ""
-        let cacheKey = "gameResults_\(dateFilter ?? "all")\(cacheScope)"
+        // Invalidate histories that counted legacy NFL copies or mixed-case grades.
+        let cacheKey = "gameResultsV2_\(dateFilter ?? "all")\(cacheScope)"
         let cacheTTL: TimeInterval? = billfold ? APICache.billfoldTTL : APICache.recentResultsTTL
 
         // Check cache first (unless forcing refresh)
@@ -1680,26 +1687,20 @@ enum SupabaseAPI {
         since dateFilter: String,
         forceRefresh: Bool = false
     ) async throws -> [BillfoldPickMetadata] {
-        // v3: the summary-view payload invalidates the old projection caches.
-        let cacheKey = "billfoldPickMetadataV3_\(dateFilter)_\(billfoldSnapshotWindowKey())"
+        // v4 invalidates earlier caches that held only the first 1,000 rows.
+        let cacheKey = "billfoldPickMetadataV4_\(dateFilter)_\(billfoldSnapshotWindowKey())"
         if !forceRefresh,
            let cached: [BillfoldPickMetadata] = await APICache.shared.get(cacheKey, ttl: APICache.billfoldTTL) {
             return cached
         }
 
-        let url = buildURL(table: "pick_history_summary", query: [
+        let query = [
             URLQueryItem(name: "select", value: "game_date,pick,confidence,is_top_pick"),
             URLQueryItem(name: "game_date", value: "gte.\(dateFilter)"),
-            URLQueryItem(name: "order", value: "game_date.desc")
-        ])
-
-        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-            print("[SupabaseAPI] fetchBillfoldPickMetadata failed: HTTP \(status)")
-            throw NSError(domain: "SupabaseAPI.fetchBillfoldPickMetadata", code: status,
-                          userInfo: [NSLocalizedDescriptionKey: "Pick history returned HTTP \(status)"])
-        }
+            // The materialized view's source row + slot make same-day ordering
+            // deterministic across page boundaries, including doubleheaders.
+            URLQueryItem(name: "order", value: "game_date.desc,source.asc,src_key.asc,slot.asc")
+        ]
 
         struct SummaryRow: Decodable {
             let game_date: String
@@ -1707,7 +1708,7 @@ enum SupabaseAPI {
             let confidence: Double?
             let is_top_pick: Bool?
         }
-        let rows = try JSONDecoder().decode([SummaryRow].self, from: data)
+        let rows: [SummaryRow] = try await fetchAllPages(table: "pick_history_summary", baseQuery: query)
         let result = rows.map {
             BillfoldPickMetadata(
                 date: $0.game_date,
@@ -1760,12 +1761,15 @@ enum SupabaseAPI {
     static func fetchRecentGameResults(limit: Int = 30, since dateFilter: String? = nil) async throws -> [GameResult] {
         var gameQuery = [
             URLQueryItem(name: "select", value: "*"),
-            URLQueryItem(name: "order", value: "game_date.desc"),
+            // Filter before LIMIT so legacy NFL copies cannot crowd out recent games.
+            // Keep null leagues, matching the full-history reader's behavior.
+            URLQueryItem(name: "or", value: "(league.is.null,league.not.ilike.*nfl*)"),
+            URLQueryItem(name: "order", value: "game_date.desc,id.asc"),
             URLQueryItem(name: "limit", value: "\(limit)")
         ]
         var nflQuery = [
             URLQueryItem(name: "select", value: "*"),
-            URLQueryItem(name: "order", value: "game_date.desc"),
+            URLQueryItem(name: "order", value: "game_date.desc,id.asc"),
             URLQueryItem(name: "limit", value: "\(limit)")
         ]
 
@@ -1780,7 +1784,7 @@ enum SupabaseAPI {
         async let gameResults: [GameResult] = fetchDecodablePage(table: "game_results", query: finalGameQuery)
         async let nflResultsRaw: [NFLResult] = fetchDecodablePage(table: "nfl_results", query: finalNFLQuery)
 
-        let combined = try await gameResults + nflResultsRaw.map { $0.toGameResult() }
+        let combined = try await gameResults.filter { $0.effectiveLeague != "NFL" } + nflResultsRaw.map { $0.toGameResult() }
         return Array(combined.sorted { ($0.game_date ?? "") > ($1.game_date ?? "") }.prefix(limit))
     }
 

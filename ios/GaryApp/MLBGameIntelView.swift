@@ -743,7 +743,7 @@ private struct CarouselCard: View {
         PlayerCardV4(name: player.name, heat: player.heat, game: player.game, pack: pack, loading: loading, edge: player.edge)
             .task(id: player.id) {
                 loading = true
-                pack = await SupabaseAPI.fetchPlayerInsightCard(date: SupabaseAPI.todayEST(), playerId: player.id)
+                pack = await SupabaseAPI.fetchPlayerInsightCard(date: SupabaseAPI.todayEST(), playerId: player.id, league: "MLB")
                 loading = false
             }
     }

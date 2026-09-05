@@ -4,9 +4,9 @@
  * Gary's scheduler launches one Node child per game. An in-memory limiter in
  * ballDontLieService therefore cannot protect a five-requests/minute API key:
  * three simultaneous NFL children each believe they own the full allowance.
- * This tiny file-backed clock is shared by every local child PID and spaces
- * request starts evenly. Four local starts/minute deliberately reserve the
- * fifth account slot for the deployed live-score function.
+ * This file-backed clock is shared by every local football child PID and
+ * spaces starts evenly. The fallback remains suitable for a trial key;
+ * production can explicitly configure a bounded paid-tier rate.
  */
 import { mkdir, readFile, rename, rmdir, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -18,6 +18,21 @@ import { setTimeout as delay } from 'node:timers/promises';
 // five-request trial instead of racing the cloud function for the fifth.
 export const BDL_LOCAL_REQUESTS_PER_MINUTE = 3;
 export const BDL_LOCAL_REQUEST_INTERVAL_MS = Math.ceil(60_000 / BDL_LOCAL_REQUESTS_PER_MINUTE) + 100;
+const MAX_CONFIGURED_REQUESTS_PER_MINUTE = 120;
+
+// Read at call time: loadEnv may run after another module imports this one.
+// Sep 5 authenticated NFL/NCAAF responses both reported limit=600/min;
+// production selects120/min (600ms spacing including the100ms safety margin).
+export function bdlLocalRequestsPerMinute(env = process.env) {
+  const configured = Number(env.GARY_BDL_LOCAL_REQUESTS_PER_MINUTE);
+  return Number.isInteger(configured) && configured > 0
+    ? Math.min(configured, MAX_CONFIGURED_REQUESTS_PER_MINUTE)
+    : BDL_LOCAL_REQUESTS_PER_MINUTE;
+}
+
+export function bdlLocalRequestIntervalMs(env = process.env) {
+  return Math.ceil(60_000 / bdlLocalRequestsPerMinute(env)) + 100;
+}
 
 const DEFAULT_GATE_DIR = join(tmpdir(), 'gary-bdl-request-gate');
 const LOCK_STALE_MS = 20_000;
@@ -43,7 +58,7 @@ function paths() {
   };
 }
 
-export function reserveBdlSlot(state, now = Date.now(), intervalMs = BDL_LOCAL_REQUEST_INTERVAL_MS) {
+export function reserveBdlSlot(state, now = Date.now(), intervalMs = bdlLocalRequestIntervalMs()) {
   const recordedNext = Number(state?.nextAt);
   const validRecordedNext = Number.isFinite(recordedNext) &&
     recordedNext >= now - intervalMs &&
@@ -103,6 +118,7 @@ async function writeState(root, statePath, state) {
 export async function waitForBdlRequestSlot(label = 'request', { signal } = {}) {
   signal?.throwIfAborted();
   if (gateDisabled()) return 0;
+  const intervalMs = bdlLocalRequestIntervalMs();
 
   const gate = paths();
   await mkdir(gate.root, { recursive: true });
@@ -124,15 +140,18 @@ export async function waitForBdlRequestSlot(label = 'request', { signal } = {}) 
       const current = await readState(gate.state);
       signal?.throwIfAborted();
       const recordedNext = Number(current?.nextAt);
+      // Respect a previously reserved slower slot during rolling restarts.
+      // A120/min worker must not treat an old3/min worker's nextAt as corrupt
+      // just because it is farther away than its own600ms interval.
       const validNext = Number.isFinite(recordedNext)
-        && recordedNext >= now - BDL_LOCAL_REQUEST_INTERVAL_MS
-        && recordedNext <= now + BDL_LOCAL_REQUEST_INTERVAL_MS * 2;
+        && recordedNext >= now - Math.max(intervalMs, BDL_LOCAL_REQUEST_INTERVAL_MS)
+        && recordedNext <= now + MAX_REASONABLE_BACKLOG_MS;
       const nextAt = validNext ? recordedNext : now;
 
       if (nextAt <= now) {
         await writeState(gate.root, gate.state, {
           version: 2,
-          nextAt: now + BDL_LOCAL_REQUEST_INTERVAL_MS,
+          nextAt: now + intervalMs,
           updatedAt: now,
         });
         claimed = true;

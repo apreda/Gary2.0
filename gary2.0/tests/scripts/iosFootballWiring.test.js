@@ -193,8 +193,8 @@ describe('Football Fantasy density', () => {
     // row's NAME against today's packs, then the overlay. The invariant is
     // unchanged and now covers every league: a tap with no pack behind it
     // lands on the edge overlay, never on an empty player card.
-    expect(hubView).toContain('if let pid = s.playerId, intelCards.contains(where: { $0.player_id == pid }) {');
-    expect(hubView).toContain('if let row = intelCard(for: Self.signalPlayerName(s)) {');
+    expect(hubView).toContain('if let pid = s.playerId, intelCards.contains(where: { $0.player_id == pid && HubCardIdentity.sameLeague($0.league, s.league.label) }) {');
+    expect(hubView).toContain('if let row = intelCard(for: Self.signalPlayerName(s), league: s.league) {');
     expect(hubView).toMatch(/if s\.teamId != nil \|\| s\.h2h != nil \{ teamCardSignal = s \}\s*\n\s*else \{ selectedSignal = s \}/);
     expect(hubView).not.toContain('(sel == .nfl || sel == .ncaaf), Self.fantasyKinds.contains(s.kind)');
   });
@@ -597,14 +597,15 @@ describe('Billfold canonical NFL metadata', () => {
   // concurrent jsonb projection (which these pins used to assert) died by
   // statement timeout under load and is deleted.
   it('reads the flattened pick_history_summary view, not per-phone jsonb projections', () => {
-    expect(supabaseApi).toContain('buildURL(table: "pick_history_summary"');
+    expect(supabaseApi).toContain('fetchAllPages(table: "pick_history_summary", baseQuery: query)');
     expect(supabaseApi).toContain('"game_date,pick,confidence,is_top_pick"');
     expect(supabaseApi).not.toContain('fetchBillfoldMetadataPayload');
     expect(supabaseApi).not.toContain('p\\(index)_commence:picks->\\(index)->>commence_time');
   });
 
-  it('caches under the v3 summary key so stale projection caches never serve', () => {
-    expect(supabaseApi).toContain('billfoldPickMetadataV3_');
+  it('caches under the v4 summary key so truncated single-page caches never serve', () => {
+    expect(supabaseApi).toContain('billfoldPickMetadataV4_');
+    expect(supabaseApi).not.toContain('billfoldPickMetadataV3_');
     expect(supabaseApi).not.toContain('billfoldPickMetadataV2_');
     expect(supabaseApi).toContain('"game_date", value: "gte.\\(dateFilter)"');
   });

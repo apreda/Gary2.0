@@ -447,6 +447,14 @@ export function pendingEntriesForDecisionLane(entry, pendingEntries = [], active
  */
 export function pendingEntriesForChildBudget(entry, pendingEntries = [], activeBatchLaneKeys = new Set()) {
   if (entry?.sport?.key === 'baseball_mlb') return [];
+  // College has its own rolling pool. Another game's trigger can use a free
+  // slot without terminating this game's work; only its own retry clocks
+  // still bound the current tier, alongside kickoff and the hard cap below.
+  if (entry?.sport?.key === 'americanfootball_ncaaf') {
+    const key = scheduleEntryKey(entry);
+    return (pendingEntries || []).filter((candidate) => !isSportFetchRetryEntry(candidate)
+      && scheduleEntryKey(candidate) === key);
+  }
   return pendingEntriesForDecisionLane(entry, pendingEntries, activeBatchLaneKeys);
 }
 
@@ -626,7 +634,13 @@ export function sharedLaneConcurrency(env = process.env) {
 }
 
 /** Take only due, viable games, leaving active-game retries in the live queue. */
-export function takeReadySharedEntries(entries = [], {
+export function takeReadySharedEntries(entries = [], options = {}) {
+  return takeReadyDecisionLaneEntries(entries, { ...options, laneKey: 'shared' });
+}
+
+/** Select one lane's due games without taking ownership of queued retry tiers. */
+export function takeReadyDecisionLaneEntries(entries = [], {
+  laneKey = 'shared',
   now = Date.now(),
   occupiedGameKeys = new Set(),
   limit = Infinity,
@@ -635,7 +649,7 @@ export function takeReadySharedEntries(entries = [], {
   const seen = new Set(occupiedGameKeys);
   const selected = [];
   const capacity = Math.max(0, Math.floor(Number(limit)) || 0);
-  const ordered = entries.filter((entry) => decisionLaneKey(entry) === 'shared'
+  const ordered = entries.filter((entry) => decisionLaneKey(entry) === laneKey
     && !isSportFetchRetryEntry(entry)
     && !isScheduleEntryHeld(entry) && !isScheduleEntryRetired(entry)
     && !gameHasStarted(entry, clock)

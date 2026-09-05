@@ -13,8 +13,10 @@ describe('the player card reaches every named row', () => {
   it('writes packs that survive a repeated player id', () => {
     // One duplicate used to fail the WHOLE batch, which is why college cards
     // never once reached the table.
-    expect(runner).toContain('const key = `${row.date}|${row.league}|${row.player_id}`;');
-    expect(runner).toContain('resolution=merge-duplicates');
+    // The storage helper's behavioral suite verifies deduplication, conflict
+    // identity and failed writes; this checks the runner uses that helper.
+    expect(runner).toContain('return upsertPlayerCards({');
+    expect(runner).toContain('rows, client: axios, url: CARDS_REST_URL, headers: restHeaders');
   });
 
   it('builds from the whole day, not just the pass that happens to run', () => {
@@ -28,14 +30,14 @@ describe('the player card reaches every named row', () => {
   it('sends a team row to the team card before any name lookup', () => {
     const open = hub.slice(hub.indexOf('private func openSignal('), hub.indexOf('static func signalPlayerName('));
     const teamFirst = open.indexOf('if s.playerId == nil, s.teamId != nil || s.h2h != nil {');
-    const nameLookup = open.indexOf('if let row = intelCard(for: Self.signalPlayerName(s))');
+    const nameLookup = open.indexOf('if let row = intelCard(for: Self.signalPlayerName(s), league: s.league)');
     expect(teamFirst).toBeGreaterThan(-1);
     expect(teamFirst).toBeLessThan(nameLookup);
   });
 
   it('opens a card by NAME when the row carries no player id', () => {
     const open = hub.slice(hub.indexOf('private func openSignal('), hub.indexOf('static func signalPlayerName('));
-    expect(open).toContain('if let row = intelCard(for: Self.signalPlayerName(s))');
+    expect(open).toContain('if let row = intelCard(for: Self.signalPlayerName(s), league: s.league)');
     expect(open).toContain('namedCard = row');
     // The old football gate — a tap with no pack fell straight to the overlay
     // and could never reach a card — is gone.

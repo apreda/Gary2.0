@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Comment</key>
+	<string>Existing six daily content runs. Tracked Node runner owns each bounded stage and its process group, prioritizes Home output and card coverage, and records timestamped outcomes. Install only after the prior daily-insights run ends; never restart the active pick scheduler for content failures.</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>CLAUDE_CLI_PATH</key>
+		<string>/Users/adam.preda/.local/bin/claude</string>
+		<key>GARY_CONTENT_MODEL_OVERRIDE</key>
+		<string>codex-gpt-5.6-sol</string>
+		<key>GARY_PROPS_MODEL_OVERRIDE</key>
+		<string>codex-gpt-5.6-sol</string>
+	</dict>
+	<key>Label</key>
+	<string>com.gary2.daily-insights</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/bash</string>
+		<string>-c</string>
+		<string>export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"; cd /Users/adam.preda/Desktop/Gary2.0/gary2.0 || exit $?; gary_phase=daily; [ "$(TZ=America/New_York date +%H)" -lt 6 ] &amp;&amp; gary_phase=college-cards; gary_try=0; while :; do gary_try=$((gary_try+1)); gary_t0=$(date +%s); /opt/homebrew/bin/node scripts/run-daily-content.js --phase "$gary_phase"; gary_rc=$?; gary_dt=$(( $(date +%s) - gary_t0 )); if [ "$gary_rc" -ne 0 ] &amp;&amp; [ "$gary_dt" -le 15 ] &amp;&amp; [ "$gary_try" -lt 3 ]; then echo "daily content runner startup failed (rc=$gary_rc) — retry $gary_try/2" &gt;&amp;2; sleep 5; continue; fi; exit "$gary_rc"; done</string>
+	</array>
+	<key>RunAtLoad</key>
+	<false/>
+	<key>StandardErrorPath</key>
+	<string>/Users/adam.preda/Library/Logs/Gary2.0/insights-launchd-stderr.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/adam.preda/Library/Logs/Gary2.0/insights-launchd-stdout.log</string>
+	<key>StartCalendarInterval</key>
+	<array>
+		<dict>
+			<key>Hour</key>
+			<integer>2</integer>
+			<key>Minute</key>
+			<integer>30</integer>
+		</dict>
+		<dict>
+			<key>Hour</key>
+			<integer>6</integer>
+			<key>Minute</key>
+			<integer>0</integer>
+		</dict>
+		<dict>
+			<key>Hour</key>
+			<integer>7</integer>
+			<key>Minute</key>
+			<integer>15</integer>
+		</dict>
+		<dict>
+			<key>Hour</key>
+			<integer>8</integer>
+			<key>Minute</key>
+			<integer>0</integer>
+		</dict>
+		<dict>
+			<key>Hour</key>
+			<integer>11</integer>
+			<key>Minute</key>
+			<integer>0</integer>
+		</dict>
+		<dict>
+			<key>Hour</key>
+			<integer>16</integer>
+			<key>Minute</key>
+			<integer>30</integer>
+		</dict>
+		<dict>
+			<key>Hour</key>
+			<integer>19</integer>
+			<key>Minute</key>
+			<integer>30</integer>
+		</dict>
+	</array>
+</dict>
+</plist>

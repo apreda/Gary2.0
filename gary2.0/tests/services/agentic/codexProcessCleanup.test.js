@@ -20,9 +20,13 @@ describe.skipIf(process.platform === 'win32')('actual local subprocess cleanup (
     const workerFile = join(dir, 'worker.mjs');
     writeFileSync(fixture, `#!/usr/bin/env node
 const {spawn}=require('node:child_process');
-const {writeFileSync}=require('node:fs');
+const {writeFileSync,renameSync}=require('node:fs');
 const child=spawn(process.execPath,['-e',"process.on('SIGTERM',()=>{}); process.stdout.write('READY'); setInterval(()=>{},1000)"],{stdio:['ignore','pipe','ignore']});
-child.stdout.once('data',()=>writeFileSync(process.env.GARY_CANCEL_TEST_PID_FILE,JSON.stringify([process.pid,child.pid])));
+child.stdout.once('data',()=>{
+  const path=process.env.GARY_CANCEL_TEST_PID_FILE;
+  writeFileSync(path+'.tmp',JSON.stringify([process.pid,child.pid]));
+  renameSync(path+'.tmp',path);
+});
 setInterval(()=>{},1000);
 `, { mode: 0o755 });
     writeFileSync(workerFile, `

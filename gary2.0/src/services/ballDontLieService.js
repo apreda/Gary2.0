@@ -5804,18 +5804,33 @@ const ballDontLieService = {
   async getMlbPlayerSeasonStats({ season, playerIds, teamId, postseason = false, perPage = 100 } = {}, ttlMinutes = 30) {
     try {
       if (!season) return [];
-      const cacheKey = `mlb_season_stats_${season}_${playerIds?.join(',') || ''}_${teamId || ''}_${postseason}_${perPage}`;
+      // v2 invalidates only the old first-page-only MLB season-stat entries.
+      const cacheKey = `mlb_season_stats_v2_${season}_${playerIds?.join(',') || ''}_${teamId || ''}_${postseason}_${perPage}`;
       return await getCachedOrFetch(cacheKey, async () => {
         const params = { season, per_page: perPage };
         if (playerIds?.length) params.player_ids = playerIds;
         if (teamId) params.team_id = teamId;
         if (postseason) params.postseason = postseason;
-        const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/season_stats${buildQuery(params)}`;
         console.log(`[BDL] Fetching MLB season stats: season=${season}, players=${playerIds?.length || 'all'}, team=${teamId || 'all'}, per_page=${perPage}`);
-        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
-        const stats = response.data?.data || [];
-        console.log(`[BDL] Retrieved ${stats.length} MLB season stat records`);
-        return stats;
+        const stats = [];
+        const seenCursors = new Set();
+        for (let page = 0; page < 100; page++) {
+          const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/season_stats${buildQuery(params)}`;
+          const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
+          if (!Array.isArray(response.data?.data)) throw new Error('Invalid MLB season stats page');
+          stats.push(...response.data.data);
+          const nextCursor = response.data?.meta?.next_cursor;
+          if (nextCursor == null) {
+            console.log(`[BDL] Retrieved ${stats.length} MLB season stat records across ${page + 1} page(s)`);
+            return stats;
+          }
+          const cursorKey = String(nextCursor);
+          if (seenCursors.has(cursorKey)) throw new Error('Repeated MLB season stats cursor');
+          seenCursors.add(cursorKey);
+          params.cursor = nextCursor;
+        }
+        // Never cache partial season data after a failed page or pagination cap.
+        throw new Error('MLB season stats pagination exceeded 100 pages');
       }, ttlMinutes);
     } catch (error) {
       console.error(`[BDL] MLB season stats error:`, error?.response?.data || error.message);

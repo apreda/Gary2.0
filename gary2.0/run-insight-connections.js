@@ -22,9 +22,11 @@
 
 // MUST load env vars FIRST before any other imports
 import './src/loadEnv.js';
+import { insightRefreshOldIds } from './scripts/lib/insightRefreshScope.js';
 
 import axios from 'axios';
 import { getESTDate } from './src/utils/dateUtils.js';
+import { completedPlayerCardGameIds, upsertPlayerCards } from './scripts/lib/playerCardStorage.js';
 
 // Import after env is loaded (services read env at module init time)
 const { generateInsightConnections } = await import('./src/services/insights/generateInsightConnections.js');
@@ -133,6 +135,9 @@ const dryRun = args.includes('--dry-run');
  * can hold its own stage in the daily job with its own budget.
  */
 const cardsOnly = args.includes('--cards-only');
+// The daily pipeline gives cards their own stage so a long insights pass
+// cannot swallow their budget or build the same packs twice.
+const skipCards = args.includes('--skip-cards');
 // Manual force-refresh: wipe the day's rows first, then regenerate from scratch.
 // The scheduled runs are additive-freeze (no churn); --reset is the escape hatch
 // for rebuilding a lane by hand. NOT used by the cron path.
@@ -345,7 +350,7 @@ async function replaceVolatileRows(date, league, rows) {
         date: `eq.${date}`,
         league: `eq.${league}`,
         category: `eq.${category}`,
-        select: 'id,category,meta',
+        select: 'id,category,game_id,meta',
       },
     });
     if (shouldPreserveCurrentFootballFantasySnapshot(existing, fresh)) {
@@ -355,7 +360,7 @@ async function replaceVolatileRows(date, league, rows) {
     // Insert first: a failed write leaves the prior snapshot intact. Once the
     // replacement is durable, remove only the exact ids observed above.
     await insertRows(fresh);
-    const oldIds = (existing || []).map((row) => row.id).filter((id) => id != null);
+    const oldIds = insightRefreshOldIds({ league, category, existing: existing || [], fresh });
     if (oldIds.length) {
       await axios({
         method: 'DELETE',
@@ -468,44 +473,20 @@ async function existingState(date, league) {
 // Player Insight Cards write path (same idempotency as the connections write)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** DELETE the day's existing packs for a league (idempotent re-run). */
-async function deleteDayCards(date, league) {
-  await axios({
-    method: 'DELETE',
-    url: CARDS_REST_URL,
-    headers: { ...restHeaders, Prefer: 'return=minimal' },
-    params: {
-      date: `eq.${date}`,
-      league: `eq.${league}`,
-    },
-  });
-}
-
-/** Game ids (strings) that already carry packs today — the additive college write's ledger. */
-async function packedGameIdsToday(date, league) {
+/** Only a successful two-sided build completes a college game for this pass. */
+async function packedGameIdsToday(date, league, requiredPlayers = []) {
   try {
     const { data } = await axios({
       method: 'GET',
       url: CARDS_REST_URL,
       headers: restHeaders,
-      params: { date: `eq.${date}`, league: `eq.${league}`, select: 'game_id' },
+      params: { date: `eq.${date}`, league: `eq.${league}`, select: 'game_id,player_id,payload' },
     });
-    return new Set((Array.isArray(data) ? data : []).map((r) => r?.game_id).filter(Boolean).map(String));
+    return completedPlayerCardGameIds(Array.isArray(data) ? data : [], { requiredPlayers });
   } catch (err) {
     console.warn(`   ⚠️  [${league}] packed-games ledger unavailable: ${err.message} — packing the whole slate`);
     return new Set();
   }
-}
-
-/** DELETE only the named games' packs (the additive college write). */
-async function deleteGameCards(date, league, gameIds) {
-  if (!gameIds.length) return;
-  await axios({
-    method: 'DELETE',
-    url: CARDS_REST_URL,
-    headers: { ...restHeaders, Prefer: 'return=minimal' },
-    params: { date: `eq.${date}`, league: `eq.${league}`, game_id: `in.(${gameIds.join(',')})` },
-  });
 }
 
 /**
@@ -531,19 +512,6 @@ async function loadNcaafPropEntries(date) {
   }
 }
 
-/** INSERT freshly-built packs (idempotency comes from deleteDayCards first). */
-/**
- * Write the day's packs. Two guards, both learned the hard way on Sep 4 2026,
- * when college cards had never once reached the table:
- *
- * 1. DEDUPE. The table is unique on (date, league, player_id), and one batch
- *    carrying the same player twice — a transfer listed on two rosters, a
- *    reused provider id — failed the WHOLE insert. Thirty good packs were lost
- *    to one repeat, every pass, silently (the caller only warns).
- * 2. UPSERT. A pack that already exists is now overwritten instead of
- *    conflicting, so a second pass of the day updates rather than aborts and
- *    the additive college build can run as often as it needs to.
- */
 /**
  * Every player the DAY has surfaced, not just the ones this pass built.
  *
@@ -561,7 +529,7 @@ async function storedConnectionPlayers(date, league) {
       params: {
         date: `eq.${date}`,
         league: `eq.${league}`,
-        select: 'player_id,headline',
+        select: 'player_id,game_id,headline',
         player_id: 'not.is.null',
         limit: 500,
       },
@@ -574,36 +542,29 @@ async function storedConnectionPlayers(date, league) {
 }
 
 async function insertCards(rows) {
-  const byKey = new Map();
-  for (const row of rows) {
-    const key = `${row.date}|${row.league}|${row.player_id}`;
-    if (!byKey.has(key)) byKey.set(key, row);
-  }
-  const deduped = [...byKey.values()];
-  if (deduped.length !== rows.length) {
-    console.log(`   ℹ️  ${rows.length - deduped.length} duplicate player id(s) collapsed before write.`);
-  }
-  const sanitized = JSON.parse(JSON.stringify(deduped));
-  await axios({
-    method: 'POST',
-    url: CARDS_REST_URL,
-    data: sanitized,
-    headers: {
-      ...restHeaders,
-      Prefer: 'return=minimal,resolution=merge-duplicates',
-    },
+  return upsertPlayerCards({
+    rows, client: axios, url: CARDS_REST_URL, headers: restHeaders,
   });
+}
+
+function cardStorageRows(packs) {
+  return packs.map((p) => ({
+    date: p.date, league: p.league, player_id: String(p.player_id),
+    player_name: p.player_name ?? null, team_abbr: p.team_abbr ?? null,
+    game_id: p.game_id != null ? String(p.game_id) : null,
+    payload: p.payload, generated_by: 'insights-cli',
+  }));
 }
 
 /**
  * Build the day's per-player breakdown packs (MLB + NFL/NCAAF) and write them with the
- * same DELETE-then-INSERT idempotency. NON-FATAL: any failure here is caught and
- * warned so it never sinks the connections run. Respects --dry-run (prints the
+ * natural-key upsert. Returns false on failure so a cards-only stage reports
+ * it without taking away previously published connections. Respects --dry-run (prints the
  * pack count + one sample payload instead of writing).
  */
 async function buildAndStoreCards({ date, league, connections }) {
   // Football packs (Aug 27 2026 parity build): the same table, the same
-  // DELETE-then-INSERT idempotency, a football payload on the shared
+  // natural-key upsert, a football payload on the shared
   // PlayerInsightPack contract. Leagues without a pack builder still no-op.
   if (league === 'NFL' || league === 'NCAAF') {
     try {
@@ -614,53 +575,51 @@ async function buildAndStoreCards({ date, league, connections }) {
       // 2026 — league isolation law): the NFL builder is NFL-only.
       // College packs are ADDITIVE across the day's passes (BDL's three-a-minute
       // gate: one pass cannot pack a 28-game Saturday): the builder skips games
-      // already packed today and the write deletes only the games it rewrites.
-      const packedGames = league === 'NCAAF' ? await packedGameIdsToday(date, league) : new Set();
+      // completed today and checkpoints each finished game immediately.
       // The lanes name people the leaders list never reaches (an availability
       // sheet's tackle, a backup quarterback): 16 of 20 college rows on Sep 4
       // 2026 pointed at players nobody packed. Their names ride along.
-      const namedByRows = league === 'NCAAF'
-        ? (await storedConnectionPlayers(date, league))
-          .map((r) => String(r?.headline || '').split(/[:(,/·—]/)[0].trim())
-          .filter((n) => n.length >= 5 && /\s/.test(n))
+      const namedSubjects = league === 'NCAAF'
+        ? await storedConnectionPlayers(date, league)
         : [];
+      const packedGames = league === 'NCAAF' ? await packedGameIdsToday(date, league, namedSubjects) : new Set();
+      const checkpointErrors = [];
+      const onGameBuilt = dryRun ? undefined : async (gamePacks, game) => {
+        try {
+          const stored = await insertCards(cardStorageRows(gamePacks));
+          console.log(`   ✅ Checkpointed ${stored} ${league} player card(s) for game ${game.id}.`);
+        } catch (err) {
+          checkpointErrors.push(err);
+          throw err;
+        }
+      };
       const packs = league === 'NCAAF'
         ? await buildNcaafPlayerInsightCards({
           date, games, bdl: ballDontLieService, propEntries: await loadNcaafPropEntries(date),
-          done: packedGames, names: [...new Set(namedByRows)],
+          done: packedGames, subjects: namedSubjects,
+          onGameBuilt,
         })
         : await buildFootballPlayerInsightCards({
-          date, league, games, bdl: ballDontLieService,
+          date, league, games, bdl: ballDontLieService, onGameBuilt,
         });
+      if (checkpointErrors.length) {
+        throw new Error(`${checkpointErrors.length} player-card checkpoint(s) failed: ${checkpointErrors[0].message}`);
+      }
       if (!Array.isArray(packs) || packs.length === 0) {
         console.log(`   ℹ️  No player insight cards built for ${league} (${date}).`);
         return;
       }
-      const rows = packs.map((p) => ({
-        date: p.date,
-        league: p.league,
-        player_id: String(p.player_id),
-        player_name: p.player_name ?? null,
-        team_abbr: p.team_abbr ?? null,
-        game_id: p.game_id != null ? String(p.game_id) : null,
-        payload: p.payload,
-        generated_by: 'insights-cli',
-      }));
+      const rows = cardStorageRows(packs);
       if (dryRun) {
         console.log(`   🧪 Would write ${rows.length} ${league} player insight card(s). Sample payload:`);
         console.log(JSON.stringify(rows[0]?.payload, null, 2));
         return;
       }
-      if (league === 'NCAAF') {
-        await deleteGameCards(date, league, [...new Set(rows.map((r) => r.game_id).filter(Boolean))]);
-      } else {
-        await deleteDayCards(date, league);
-      }
-      await insertCards(rows);
       console.log(`   ✅ Stored ${rows.length} player insight card(s) for ${league} (${date}).`);
     } catch (err) {
       const detail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
       console.warn(`   ⚠️  [${league}] player insight cards skipped: ${detail}`);
+      return false;
     }
     return;
   }
@@ -731,13 +690,13 @@ async function buildAndStoreCards({ date, league, connections }) {
       return;
     }
 
-    await deleteDayCards(date, league);
     await insertCards(rows);
     console.log(`   ✅ Stored ${rows.length} player insight card(s) for ${league} (${date}).`);
   } catch (err) {
     // NON-FATAL — a pack build/write failure must not fail the connections run.
     const detail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
     console.warn(`   ⚠️  [${league}] player insight cards skipped: ${detail}`);
+    return false;
   }
 }
 
@@ -822,7 +781,7 @@ async function run() {
     if (cardsOnly) {
       // The card build reads the day's stored connections itself, so it needs
       // nothing this run would have computed.
-      await buildAndStoreCards({ date: targetDate, league, connections: [] });
+      if (await buildAndStoreCards({ date: targetDate, league, connections: [] }) === false) hadError = true;
       continue;
     }
 
@@ -956,7 +915,7 @@ async function run() {
       console.log(JSON.stringify(rows, null, 2));
       // Player insight cards (MLB rides connections; football rides the slate); in dry-run
       // this prints the pack count + one sample payload instead of writing.
-      await buildAndStoreCards({ date: targetDate, league, connections });
+      if (!skipCards) await buildAndStoreCards({ date: targetDate, league, connections });
       continue;
     }
 
@@ -1097,7 +1056,7 @@ async function run() {
       console.log(`   ✅ ${fresh.length} new / ${rows.length} computed for ${league} (${targetDate}); ${Math.max(0, rows.length - fresh.length - upgraded - volatileKeys.size)} already posted (frozen); ${volatileKeys.size} volatile row(s) refreshed; ${upgraded} confirmedXI situational row(s) upgraded-in-place; ${patched} content-patched (voice/ids/fantasy evidence).`);
       // After the connections insert succeeds, build + store this league's
       // per-player breakdown packs (MLB + NFL/NCAAF). NON-FATAL — guarded internally.
-      await buildAndStoreCards({ date: targetDate, league, connections });
+      if (!skipCards) await buildAndStoreCards({ date: targetDate, league, connections });
       // League Pulse REFRESH — the board was already written at the top of
       // this pass; this second upsert picks up anything that landed during
       // the run (moved odds, a new injury). A hard-cap kill now costs the

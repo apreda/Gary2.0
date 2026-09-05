@@ -23,12 +23,21 @@ describe('gamesWithRowsToday', () => {
     expect(done).toEqual(new Set(['457163', '457170']));
     const call = axios.default.mock.calls[0][0];
     expect(call.url).toBe('https://x.test/rest/v1/insight_connections');
-    expect(call.params).toMatchObject({ date: 'eq.2026-09-05', league: 'eq.ncaaf', category: 'eq.quarterback', select: 'game_id' });
+    expect(call.params).toMatchObject({ date: 'eq.2026-09-05', league: 'eq.NCAAF', category: 'eq.quarterback', select: 'game_id' });
   });
 
   it('treats a failed read as nothing done, so the lane still works the slate', async () => {
     axios.default.mockRejectedValue(new Error('503'));
     expect(await gamesWithRowsToday({ date: '2026-09-05', category: 'injury', supabaseUrl: 'https://x.test', key: 'k' })).toEqual(new Set());
+  });
+
+  it('continues a capped pass using the actual uppercase league stored by the writer', async () => {
+    const stored = [{ league: 'NCAAF', game_id: 1 }];
+    const client = async ({ params }) => ({ data: stored.filter(row => `eq.${row.league}` === params.league) });
+    const done = await gamesWithRowsToday({ date: '2026-09-05', category: 'quarterback', supabaseUrl: 'https://x.test', key: 'k', client });
+    const worked = [];
+    await runWithinBudget({ games: [{ id: 1 }, { id: 2 }], done, work: async game => { worked.push(game.id); return []; } });
+    expect(worked).toEqual([2]);
   });
 });
 

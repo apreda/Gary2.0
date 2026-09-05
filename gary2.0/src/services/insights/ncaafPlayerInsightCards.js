@@ -43,6 +43,9 @@ const RECEIVERS_PER_TEAM = 3;
 const MIN_PASS_ATTEMPTS = 15;
 /** Rosters do not change inside a day; share them across the day's passes. */
 const ROSTER_TTL_MINUTES = 360;
+// Completed prior-season rows do not change between morning passes. Retain
+// them for six hours rather than refetching every historical page every 15m.
+const PRIOR_SEASON_TTL_MINUTES = 360;
 const SKILL = new Set(['QB', 'RB', 'FB', 'WR', 'TE']);
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -252,7 +255,7 @@ function groupByPlayer(rows, ids) {
  * player costs nothing extra to include, and a named player with no rows still
  * gets his identity card rather than an empty sheet.
  */
-function leaders(roster, grouped, named = new Set(), wholeRoster = null) {
+function leaders(roster, grouped, named = new Set(), wholeRoster = null, namedIds = new Set()) {
   const withTotals = roster
     .map((p) => ({ player: p, pos: position(p), rows: grouped.get(String(p.id)) || [] }))
     .filter((x) => x.rows.length)
@@ -266,7 +269,7 @@ function leaders(roster, grouped, named = new Set(), wholeRoster = null) {
     ...top(withTotals.filter((x) => x.pos === 'RB' || x.pos === 'FB'), 'rushing_yards', 1),
     ...top(withTotals.filter((x) => x.pos === 'WR' || x.pos === 'TE'), 'receiving_yards', RECEIVERS_PER_TEAM),
   ];
-  if (!named.size) return picked;
+  if (!named.size && !namedIds.size) return picked;
 
   const already = new Set(picked.map((x) => String(x.player?.id)));
   // The stats call covers the skill players, so anyone named off THAT list
@@ -276,7 +279,7 @@ function leaders(roster, grouped, named = new Set(), wholeRoster = null) {
   // rows left uncovered on Sep 4 2026 was an injury row about exactly them.
   for (const pool of [roster, wholeRoster].filter(Boolean)) {
     for (const p of pool) {
-      if (already.has(String(p?.id)) || !named.has(nameKey(playerName(p)))) continue;
+      if (already.has(String(p?.id)) || (!namedIds.has(String(p?.id)) && !named.has(nameKey(playerName(p))))) continue;
       const rows = grouped.get(String(p.id)) || [];
       picked.push({ player: p, pos: position(p), rows, totals: sumRows(rows) });
       already.add(String(p?.id));
@@ -289,14 +292,14 @@ function leaders(roster, grouped, named = new Set(), wholeRoster = null) {
 async function rowsFor(bdl, ids, season) {
   const current = await bdl.getNcaafPlayerGameStats({ playerIds: ids, season });
   if (Array.isArray(current) && current.length) return { rows: current, season, prior: false };
-  const prior = await bdl.getNcaafPlayerGameStats({ playerIds: ids, season: season - 1 });
+  const prior = await bdl.getNcaafPlayerGameStats({ playerIds: ids, season: season - 1 }, PRIOR_SEASON_TTL_MINUTES);
   return { rows: Array.isArray(prior) ? prior : [], season: season - 1, prior: true };
 }
 
 /** The pair's game index for a season, one call: game id -> opponent, site, date. */
-async function pairIndex(bdl, awayTeam, homeTeam, season) {
+async function pairIndex(bdl, awayTeam, homeTeam, season, prior = false) {
   const games = await safeCall(
-    () => bdl.getGames(SPORT_KEY, { team_ids: [awayTeam.id, homeTeam.id], seasons: [season], per_page: 100 }), [],
+    () => bdl.getGames(SPORT_KEY, { team_ids: [awayTeam.id, homeTeam.id], seasons: [season], per_page: 100 }, prior ? PRIOR_SEASON_TTL_MINUTES : 10), [],
   );
   const index = new Map();
   for (const team of [awayTeam, homeTeam]) {
@@ -307,12 +310,13 @@ async function pairIndex(bdl, awayTeam, homeTeam, season) {
   return index;
 }
 
-async function packsForGame({ game, date, currentSeason, bdl, propEntries, named }) {
+async function packsForGame({ game, date, currentSeason, bdl, propEntries, named, namedIds }) {
   const awayTeam = game?.away_team ?? game?.visitor_team;
   const homeTeam = game?.home_team;
   if (!awayTeam?.id || !homeTeam?.id) return [];
   const gameLabelText = `${sideName(awayTeam)} @ ${sideName(homeTeam)}`;
   const packs = [];
+  const coveredTeams = new Set();
   const indexBySeason = new Map();
 
   for (const [team, opponent] of [[awayTeam, homeTeam], [homeTeam, awayTeam]]) {
@@ -335,11 +339,11 @@ async function packsForGame({ game, date, currentSeason, bdl, propEntries, named
       continue;
     }
     const grouped = groupByPlayer(window.rows, roster.map((p) => p.id));
-    const picked = leaders(roster, grouped, named, wholeRoster);
+    const picked = leaders(roster, grouped, named, wholeRoster, namedIds);
     if (!picked.length) continue;
 
     if (!indexBySeason.has(window.season)) {
-      indexBySeason.set(window.season, await pairIndex(bdl, awayTeam, homeTeam, window.season));
+      indexBySeason.set(window.season, await pairIndex(bdl, awayTeam, homeTeam, window.season, window.prior));
     }
     const index = indexBySeason.get(window.season);
     const teamIndex = new Map([...index].filter(([k]) => k.startsWith(`${team.id}:`)).map(([k, v]) => [k.split(':')[1], v]));
@@ -353,8 +357,13 @@ async function packsForGame({ game, date, currentSeason, bdl, propEntries, named
       const form = formRows(log, role, { season: window.season, prior: window.prior });
       const split = splits(log, role);
       const props = propsFor(propEntries, name, game.id);
-      // A pack with no grounded section is not a pack.
-      if (!season && !form && !split && !props) continue;
+      const hasStats = Boolean(season || form || split || props);
+      const isNamed = namedIds.has(String(player.id)) || named.has(nameKey(name));
+      // A named player verified on this roster can still open his existing
+      // insight with identity/context when no offensive stats are supplied.
+      // Never infer numbers or let identity alone complete the base game.
+      if (!hasStats && !isNamed) continue;
+      if (hasStats) coveredTeams.add(String(team.id));
 
       packs.push({
         date,
@@ -375,9 +384,17 @@ async function packsForGame({ game, date, currentSeason, bdl, propEntries, named
           splits: split,
           props,
           statsSectionTitle: 'THE SHEET',
+          card_build: { team_id: String(team.id) },
         },
       });
     }
+  }
+  const builtAt = new Date().toISOString();
+  const complete = coveredTeams.has(String(awayTeam.id)) && coveredTeams.has(String(homeTeam.id));
+  for (const pack of packs) {
+    pack.payload.card_build = {
+      ...pack.payload.card_build, version: 1, built_at: builtAt, game_complete: complete,
+    };
   }
   return packs;
 }
@@ -388,13 +405,22 @@ async function packsForGame({ game, date, currentSeason, bdl, propEntries, named
  * @param {object} args { date, games, bdl, propEntries, done }
  * @returns {Promise<Array<{date,league,player_id,player_name,team_abbr,game_id,payload}>>}
  */
-export async function buildNcaafPlayerInsightCards({ date, games, bdl, propEntries = [], done = new Set(), names = [] } = {}) {
+export async function buildNcaafPlayerInsightCards({ date, games, bdl, propEntries = [], done = new Set(), names = [], subjects = [], onGameBuilt } = {}) {
   if (!bdl || !Array.isArray(games) || !games.length) return [];
   const currentSeason = footballSeasonForDate(date);
   const named = new Set((names || []).map(nameKey).filter((k) => k.length >= 5));
   const packs = await runWithinBudget({
     games, done, label: 'ncaafPlayerCards',
-    work: (game) => packsForGame({ game, date, currentSeason, bdl, propEntries, named }),
+    work: async (game) => {
+      const namedIds = new Set(subjects
+        .filter((subject) => String(subject?.game_id) === String(game.id) && subject?.player_id != null)
+        .map((subject) => String(subject.player_id)));
+      const rows = await packsForGame({ game, date, currentSeason, bdl, propEntries, named, namedIds });
+      // Checkpoint before starting the next game. A later hard cap can then
+      // cost only the in-flight game; partial sides are stored but retryable.
+      if (rows.length && onGameBuilt) await onGameBuilt(rows, game);
+      return rows;
+    },
   });
   console.log(`[ncaafPlayerCards] NCAAF ${date}: ${packs.length} pack(s)`);
   return packs;

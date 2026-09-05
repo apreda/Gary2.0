@@ -109,6 +109,27 @@ function nflSeasonLine(playerId, { passing, rushing, receiving }) {
   return { line1: bits[0], line2: bits.slice(1).join(' — ') || null };
 }
 
+function hasSeasonProduction(playerId, { passing, rushing, receiving }) {
+  const pid = String(playerId);
+  return [...passing, ...rushing, ...receiving].some((row) => {
+    if (String(row?.player?.id ?? row?.player_id) !== pid) return false;
+    return ['attempts', 'passing_attempts', 'pass_yards', 'passing_yards',
+      'rush_attempts', 'rushing_attempts', 'rush_yards', 'rushing_yards',
+      'receptions', 'targets', 'rec_yards', 'receiving_yards']
+      .some((key) => (finite(row[key]) ?? 0) > 0);
+  });
+}
+
+async function seasonStats(bdl, season) {
+  const [passing, rushing, receiving] = await Promise.all([
+    safeCall(() => bdl.getNflAdvancedPassingStats({ season }), []),
+    safeCall(() => bdl.getNflAdvancedRushingStats({ season }), []),
+    safeCall(() => bdl.getNflAdvancedReceivingStats({ season }), []),
+  ]);
+  return Object.fromEntries(Object.entries({ passing, rushing, receiving })
+    .map(([key, rows]) => [key, Array.isArray(rows) ? rows : []]));
+}
+
 function statLineForGame(g, role) {
   if (role === 'quarterback') {
     return `${g.pass_comp}/${g.pass_att}, ${g.pass_yds} yds, ${g.pass_tds} TD, ${g.ints} INT`
@@ -189,7 +210,7 @@ function nflProps(propRows, playerId) {
   return out.length ? out : null;
 }
 
-async function buildNflPacks({ date, bdl, games }) {
+async function buildNflPacks({ date, bdl, games, onGameBuilt }) {
   const season = footballSeasonForDate(date);
   const pre = isPreseasonDate(date);
   // August: last real football is the prior regular season, and the window is
@@ -200,11 +221,11 @@ async function buildNflPacks({ date, bdl, games }) {
   // August the current season has no regular-season rows yet; the prior
   // season's ledger is the season line and the pack labels the form window.
   const statSeason = pre ? season - 1 : season;
-  const [passing, rushing, receiving] = [
-    await safeCall(() => bdl.getNflAdvancedPassingStats({ season: statSeason }), []),
-    await safeCall(() => bdl.getNflAdvancedRushingStats({ season: statSeason }), []),
-    await safeCall(() => bdl.getNflAdvancedReceivingStats({ season: statSeason }), []),
-  ].map((rows) => (Array.isArray(rows) ? rows : []));
+  const primaryStats = await seasonStats(bdl, statSeason);
+  // September Week 1 can be just as empty as August. Reuse one prior-season
+  // fetch across the slate, only for rostered players with no current sample.
+  let priorStatsPromise;
+  const priorStats = () => (priorStatsPromise ??= seasonStats(bdl, season - 1));
 
   const teamIds = [...new Set(games.flatMap((g) => [
     (g.away_team ?? g.visitor_team)?.id, g.home_team?.id,
@@ -218,6 +239,7 @@ async function buildNflPacks({ date, bdl, games }) {
 
   const packs = [];
   for (const game of games) {
+    const firstPack = packs.length;
     const awayTeam = game.away_team ?? game.visitor_team;
     const homeTeam = game.home_team;
     if (!awayTeam?.id || !homeTeam?.id || game?.id == null) continue;
@@ -235,6 +257,15 @@ async function buildNflPacks({ date, bdl, games }) {
     const logs = await safeCall(
       () => bdl.getNflPlayerGameLogsBatch(allIds, logSeason, 5, 15, { seasonType: 2 }), {},
     );
+    const needsPrior = pre ? [] : allIds.filter((id) => {
+      const current = logs?.[id] ?? logs?.[String(id)];
+      return !current?.games?.length && !hasSeasonProduction(id, primaryStats);
+    });
+    const priorIds = new Set(needsPrior.map(String));
+    const [fallbackStats, fallbackLogs] = needsPrior.length ? await Promise.all([
+      priorStats(),
+      safeCall(() => bdl.getNflPlayerGameLogsBatch(needsPrior, season - 1, 5, 15, { seasonType: 2 }), {}),
+    ]) : [null, null];
     const propRows = await safeCall(() => bdl.getNflPlayerProps(game.id), []);
     // Bare "AWY @ HOM" — the same join key MLB packs use (iOS matches every
     // token against team keywords, so a kick-time suffix would break the join).
@@ -244,9 +275,16 @@ async function buildNflPacks({ date, bdl, games }) {
       for (const p of side.players) {
         if (p?.id == null || !p?.name) continue;
         const role = roleFor(p.position);
-        const playerLogs = logs?.[p.id] ?? logs?.[String(p.id)] ?? null;
-        const seasonLine = nflSeasonLine(p.id, { passing, rushing, receiving });
-        const formRows = nflFormRows(playerLogs, role, logSeason, logSeason !== season);
+        const usePrior = priorIds.has(String(p.id));
+        const windowSeason = usePrior ? season - 1 : logSeason;
+        const selectedLogs = usePrior ? fallbackLogs : logs;
+        const playerLogs = selectedLogs?.[p.id] ?? selectedLogs?.[String(p.id)] ?? null;
+        const seasonLine = nflSeasonLine(p.id, usePrior ? fallbackStats : primaryStats);
+        if (seasonLine) {
+          const label = `${windowSeason} season${windowSeason !== season ? ' — prior season' : ''}`;
+          seasonLine.line2 = [seasonLine.line2, label].filter(Boolean).join(' — ');
+        }
+        const formRows = nflFormRows(playerLogs, role, windowSeason, windowSeason !== season);
         const splits = nflSplits(playerLogs, role, injuryByPlayer.get(String(p.id)) || null);
         const props = nflProps(propRows, p.id);
         // A pack with no grounded section is not a pack.
@@ -275,6 +313,8 @@ async function buildNflPacks({ date, bdl, games }) {
         });
       }
     }
+    const gamePacks = packs.slice(firstPack);
+    if (gamePacks.length && onGameBuilt) await onGameBuilt(gamePacks, game);
   }
   return packs;
 }
@@ -287,12 +327,12 @@ async function buildNflPacks({ date, bdl, games }) {
  * Build the NFL player insight card packs for a day's slate.
  * @returns {Promise<Array<{date,league,player_id,player_name,team_abbr,game_id,payload}>>}
  */
-export async function buildFootballPlayerInsightCards({ date, league, games, bdl } = {}) {
+export async function buildFootballPlayerInsightCards({ date, league, games, bdl, onGameBuilt } = {}) {
   const lg = String(league || '').toUpperCase();
   if (lg !== 'NFL') return [];
   if (!bdl || !Array.isArray(games) || !games.length) return [];
 
-  const packs = await safeCall(() => buildNflPacks({ date, bdl, games }), []);
+  const packs = await safeCall(() => buildNflPacks({ date, bdl, games, onGameBuilt }), []);
 
   console.log(`[footballPlayerCards] ${lg} ${date}: built ${packs.length} pack(s) across ${games.length} game(s).`);
   return packs;

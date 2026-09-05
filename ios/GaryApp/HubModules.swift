@@ -708,7 +708,7 @@ struct PlayerInsightSheet: View {
             } else {
                 let resolved: String? = signal?.playerId ?? directPlayerId.map(String.init)
                 if let pid = resolved {
-                    pack = await SupabaseAPI.fetchPlayerInsightCard(date: SupabaseAPI.todayEST(), playerId: pid)
+                    pack = await SupabaseAPI.fetchPlayerInsightCard(date: SupabaseAPI.todayEST(), playerId: pid, league: signal?.league.label ?? "MLB")
                 }
             }
             loading = false

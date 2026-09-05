@@ -390,7 +390,7 @@ struct FootballGameIntelView: View {
             ScoutBigNumbersRail(rows: bigNumberRows)
             // The series lives HERE and only here — the same section as MLB.
             GameH2HSection(edges: edges.filter { matchesThisGame($0) })
-            PlayerIntelSection(matchup: matchup, gameId: exactGameID)
+            PlayerIntelSection(matchup: matchup, league: normalizedLeague, gameId: exactGameID)
             FootballAvailabilityCard(awayLabel: sides.away, homeLabel: sides.home,
                                      confirmed: availability,
                                      wireAway: wireRows(home: false), wireHome: wireRows(home: true),

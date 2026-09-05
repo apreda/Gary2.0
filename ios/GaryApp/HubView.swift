@@ -400,8 +400,20 @@ struct HubView: View {
     /// the team card, with the compact signal overlay as the safe fallback.
     private func openSignal(_ s: Signal) {
         // 1. The row's own id, when today's pack exists for it — the direct hit.
-        if let pid = s.playerId, intelCards.contains(where: { $0.player_id == pid }) {
+        if let pid = s.playerId, intelCards.contains(where: { $0.player_id == pid && HubCardIdentity.sameLeague($0.league, s.league.label) }) {
             breakdownSignal = s
+            return
+        }
+        // The college poll lane describes both sides of a matchup. Its
+        // provider game id opens that game's existing sheet; the writer's
+        // home-team bookkeeping id must not turn the story into a team card.
+        if s.league == .ncaaf, s.lane?.source == "balldontlie_ncaaf_rankings" {
+            let matches = slateRows.filter { row in
+                HubCardIdentity.sameLeague(row.league, s.league.label)
+                    && s.gameId != nil && row.bdl_game_id.map(String.init) == s.gameId
+            }
+            if matches.count == 1 { gameSheet = HubGameSel(row: matches[0]) }
+            else { selectedSignal = s }
             return
         }
         // 2. A row the lanes stamped with a TEAM and no player is a team row —
@@ -417,7 +429,7 @@ struct HubView: View {
         // player id at all, and some MLB lanes carry one the pack build missed,
         // so the row's own name is resolved against the day's packs. A resolved
         // name opens the SAME card, prefetched.
-        if let row = intelCard(for: Self.signalPlayerName(s)) {
+        if let row = intelCard(for: Self.signalPlayerName(s), league: s.league) {
             namedCard = row
             return
         }
@@ -443,6 +455,23 @@ struct HubView: View {
         if let h = s.h2h, let d = h.dominant_name, !d.isEmpty { return d }
         if let t = s.fantasy?.team, !t.isEmpty { return t }
         if let t = s.swap?.team, !t.isEmpty { return t }
+        if let t = s.lane?.team, !t.isEmpty { return t }
+        if let t = s.lane?.team_abbr, !t.isEmpty { return t }
+        if s.kind == .bullpenFatigue, let range = s.headline.range(of: " pen: ") {
+            return String(s.headline[..<range.lowerBound])
+        }
+        if s.kind == .teamRecord, let range = s.headline.range(of: #" \d+-\d+ in "#, options: .regularExpression) {
+            return String(s.headline[..<range.lowerBound])
+        }
+        if s.kind == .regression, s.playerId == nil,
+           let range = s.headline.range(of: #" are \d+-\d+ in one-run games"#, options: .regularExpression) {
+            return String(s.headline[..<range.lowerBound])
+        }
+        if s.league == .mlb, s.kind == .streak, s.teamId != nil,
+           let code = s.headline.split(separator: " ").first.map(String.init),
+           mlbTeamKeywords[code] != nil {
+            return code
+        }
         return s.headline
     }
 
@@ -452,22 +481,22 @@ struct HubView: View {
         if let tid = s.teamId {
             return leagueSignals.filter { $0.id != s.id && $0.teamId == tid }
         }
-        let name = Self.teamCardName(for: s).lowercased()
-        guard let nick = name.split(separator: " ").last.map(String.init), nick.count > 2 else { return [] }
+        let name = Self.teamCardName(for: s)
         return leagueSignals.filter { r in
-            r.id != s.id && (r.headline.lowercased().contains(nick) || r.detail.lowercased().contains(nick))
+            r.id != s.id && r.league == s.league
+                && HubCardIdentity.matchesTeam(Self.teamCardName(for: r), name: name, abbr: nil, league: s.league.label)
         }
     }
 
-    /// Tonight's board row for a team name (nickname or abbr, either side).
+    /// Only a unique team within the selected league can own a slate row.
     private func slateRowForTeamName(_ name: String) -> TomorrowBoardRow? {
-        let n = name.lowercased()
-        guard n.count > 2 else { return nil }
-        return slateRows.first { r in
-            let names = [r.home_team, r.away_team].compactMap { $0?.lowercased() }
-            let abbrs = [r.home_abbr, r.away_abbr].compactMap { $0?.uppercased() }
-            return names.contains { $0.contains(n) || n.contains($0) } || abbrs.contains(name.uppercased())
+        let candidates = slateRows.filter { r in
+            guard HubCardIdentity.sameLeague(r.league, sel.label) else { return false }
+            let away = HubCardIdentity.matchesTeam(name, name: r.away_team, abbr: r.away_abbr, league: sel.label)
+            let home = HubCardIdentity.matchesTeam(name, name: r.home_team, abbr: r.home_abbr, league: sel.label)
+            return away != home
         }
+        return candidates.count == 1 ? candidates[0] : nil
     }
 
     /// Streak rows carry no team id — synthesize the seed signal so a team tap
@@ -576,29 +605,11 @@ struct HubView: View {
 
     /// Name → today's player card, punctuation/case-tolerant. Only names that
     /// resolve become tappable (founder, Jul 22: click a name, get the card).
-    private func intelCard(for name: String?) -> PlayerInsightCardRow? {
+    private func intelCard(for name: String?, league: HubLeagueSel? = nil) -> PlayerInsightCardRow? {
         guard let name, !name.isEmpty else { return nil }
-        func key(_ s: String) -> String { s.lowercased().filter { $0.isLetter || $0.isNumber } }
-        let k = key(name)
-        guard k.count >= 5 else { return nil }   // tiny keys collide across players
-        if let hit = intelCards.first(where: {
-            let n = key($0.player_name ?? $0.payload?.name ?? "")
-            return !n.isEmpty && (n == k || n.contains(k) || k.contains(n))
-        }) { return hit }
-        // Short-form fallback (Aug 4): the agate tables send "J. Caminero" —
-        // an initialed first token + surname. Match surname exactly and the
-        // initial against the card's first name; full-name queries never take
-        // this path (the containment scan above owns those).
-        let tokens = name.split(separator: " ").map(String.init)
-        guard tokens.count >= 2,
-              let sur = tokens.last.map(key), sur.count >= 3 else { return nil }
-        let first = tokens[0].filter { $0.isLetter }
-        guard first.count == 1 else { return nil }
-        return intelCards.first {
-            let cn = ($0.player_name ?? $0.payload?.name ?? "").split(separator: " ").map(String.init)
-            guard cn.count >= 2, let cSur = cn.last.map(key) else { return false }
-            return cSur == sur && cn[0].lowercased().hasPrefix(first.lowercased())
-        }
+        let candidates = intelCards.filter { HubCardIdentity.sameLeague($0.league, (league ?? sel).label) }
+        guard let index = HubCardIdentity.uniquePlayerIndex(name, names: candidates.map { $0.player_name ?? $0.payload?.name ?? "" }) else { return nil }
+        return candidates[index]
     }
 
     private var selStreakRows: [StreakRow] {
@@ -643,7 +654,7 @@ struct HubView: View {
         async let nightF = SupabaseAPI.fetchNightHighlights(date: gradedDate0)
         async let streaksF = SupabaseAPI.fetchStreaks()
         async let tbF = SupabaseAPI.fetchTodayBoard(date: date)
-        async let intelF = SupabaseAPI.fetchPlayerIntelRows(date: date)
+        async let intelF = SupabaseAPI.fetchPlayerIntelRows(date: date, forceRefresh: didLoad)
         // Force past the 30-min pulse cache on refresh/rollover, not first paint.
         async let pulseMlbF = SupabaseAPI.fetchLeaguePulse(date: date, league: "MLB", forceRefresh: didLoad)
         async let pulseNflF = SupabaseAPI.fetchLeaguePulse(date: date, league: "NFL", forceRefresh: didLoad)
@@ -1502,8 +1513,8 @@ struct HubView: View {
                 tonight: slateRowForTeamName(Self.teamCardName(for: s)),
                 board: todayBoard,
                 streaks: selStreakRows,
-                intel: intelCards,
-                cardFor: { intelCard(for: $0) },
+                intel: intelCards.filter { HubCardIdentity.sameLeague($0.league, s.league.label) },
+                cardFor: { intelCard(for: $0, league: s.league) },
                 onPlayer: { row in
                     // Card-to-card handoff: close the team card, then the
                     // player card (two sheets can't stack from one anchor).
@@ -3556,18 +3567,12 @@ fileprivate struct HubTeamCardSheet: View {
 
     // ── identity: the tapped string (name OR abbr) → full name + abbr ──
 
-    /// Loose team match: abbreviation equality, name containment either way,
-    /// or nickname hit — the taps arrive as anything from "NYY" to
-    /// "New York Yankees" depending on the surface.
-    private static func matches(_ raw: String, team: String?, abbr: String?) -> Bool {
-        let n = raw.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !n.isEmpty else { return false }
-        if let a = abbr?.lowercased(), !a.isEmpty, a == n { return true }
-        if let t = team?.lowercased(), !t.isEmpty {
-            if t == n || t.contains(n) || n.contains(t) { return true }
-            if let nick = t.split(separator: " ").last.map(String.init), nick.count > 2, n.contains(nick) { return true }
-        }
-        return false
+    private func matches(_ raw: String, team: String?, abbr: String?) -> Bool {
+        HubCardIdentity.matchesTeam(raw, name: team, abbr: abbr, league: signal.league.label)
+    }
+
+    private func abbreviation(_ stored: String?, name: String) -> String? {
+        HubCardIdentity.abbreviation(stored, name: name, league: signal.league.label)
     }
 
     private var rawName: String { HubView.teamCardName(for: signal) }
@@ -3575,46 +3580,47 @@ fileprivate struct HubTeamCardSheet: View {
     /// Which side of tonight's row this card is about (nil = not on the slate).
     private var isAway: Bool? {
         guard let t = tonight else { return nil }
-        if Self.matches(rawName, team: t.away_team, abbr: t.away_abbr) { return true }
-        if Self.matches(rawName, team: t.home_team, abbr: t.home_abbr) { return false }
-        return nil
+        guard HubCardIdentity.sameLeague(t.league, signal.league.label) else { return nil }
+        let away = matches(rawName, team: t.away_team, abbr: t.away_abbr)
+        let home = matches(rawName, team: t.home_team, abbr: t.home_abbr)
+        return away == home ? nil : away
     }
 
     /// The best identity the board can vouch for. Never fabricated — when no
     /// source knows this team, the tapped string renders as-is.
     private var resolved: (name: String, abbr: String?) {
         if let away = isAway, let t = tonight {
-            return away ? (t.away_team ?? rawName, t.away_abbr)
-                        : (t.home_team ?? rawName, t.home_abbr)
+            return away ? (t.away_team ?? rawName, abbreviation(t.away_abbr, name: t.away_team ?? rawName))
+                        : (t.home_team ?? rawName, abbreviation(t.home_abbr, name: t.home_team ?? rawName))
         }
-        if let f = (board?.form ?? []).first(where: { Self.matches(rawName, team: $0.team, abbr: $0.abbr) }) {
-            return (f.team ?? rawName, f.abbr)
+        if let f = (board?.form ?? []).first(where: { HubCardIdentity.sameLeague($0.league, signal.league.label) && matches(rawName, team: $0.team, abbr: $0.abbr) }) {
+            return (f.team ?? rawName, abbreviation(f.abbr, name: f.team ?? rawName))
         }
-        if let rp = (board?.run_profile ?? []).first(where: { Self.matches(rawName, team: $0.team, abbr: $0.abbr) }) {
-            return (rp.team ?? rawName, rp.abbr)
+        if let rp = (board?.run_profile ?? []).first(where: { HubCardIdentity.sameLeague($0.league, signal.league.label) && matches(rawName, team: $0.team, abbr: $0.abbr) }) {
+            return (rp.team ?? rawName, abbreviation(rp.abbr, name: rp.team ?? rawName))
         }
-        return (rawName, nil)
+        return (rawName, abbreviation(nil, name: rawName))
     }
 
     // ── the stored facts, each nil when its source has nothing ──
 
     private var formStat: TomorrowForm? {
-        (board?.form ?? []).first { Self.matches(resolved.name, team: $0.team, abbr: $0.abbr) }
+        (board?.form ?? []).first { HubCardIdentity.sameLeague($0.league, signal.league.label) && matches(resolved.name, team: $0.team, abbr: $0.abbr) }
     }
     private var runProfile: TomorrowRunProfile? {
-        (board?.run_profile ?? []).first { Self.matches(resolved.name, team: $0.team, abbr: $0.abbr) }
+        (board?.run_profile ?? []).first { HubCardIdentity.sameLeague($0.league, signal.league.label) && matches(resolved.name, team: $0.team, abbr: $0.abbr) }
     }
     /// Tonight's probable arm for THIS team, from the board's starters lane.
     private var starter: TomorrowPerson? {
         (board?.starters ?? []).first { p in
-            Self.matches(resolved.name, team: p.team, abbr: p.abbr)
+            HubCardIdentity.sameLeague(p.league, signal.league.label) && matches(resolved.name, team: p.team, abbr: p.abbr)
         }
     }
     /// First-pitch weather for tonight's park (outdoor games only).
     private var weather: TomorrowWeather? {
         guard let t = tonight else { return nil }
         return (board?.weather ?? []).first { w in
-            (w.away_abbr != nil && w.away_abbr == t.away_abbr && w.home_abbr == t.home_abbr)
+            HubCardIdentity.sameLeague(w.league, signal.league.label) && (w.away_abbr != nil && w.away_abbr == t.away_abbr && w.home_abbr == t.home_abbr)
         }
     }
     /// The board's divisional-standing sentence, when this team made Big Games.
@@ -3622,18 +3628,21 @@ fileprivate struct HubTeamCardSheet: View {
         let nick = resolved.name.split(separator: " ").last.map(String.init) ?? resolved.name
         guard nick.count > 2 else { return nil }
         return (board?.big_games ?? [])
+            .filter { HubCardIdentity.sameLeague($0.league, signal.league.label) }
             .compactMap { $0.standing }
             .first { $0.localizedCaseInsensitiveContains(nick) }
     }
     /// This club's live runs (team-typed streak rows only).
     private var teamStreaks: [StreakRow] {
-        streaks.filter { $0.subject_type == "team" && Self.matches(resolved.name, team: $0.subject ?? $0.team, abbr: nil) }
+        streaks.filter { HubCardIdentity.sameLeague($0.league, signal.league.label) && $0.subject_type == "team" && matches(resolved.name, team: $0.subject ?? $0.team, abbr: nil) }
     }
     /// The day's player cards wearing this team's abbreviation — the bats and
     /// arms with a full breakdown behind them. Tap one, get the player card.
     private var teamIntel: [PlayerInsightCardRow] {
-        guard let a = resolved.abbr?.uppercased(), !a.isEmpty else { return [] }
-        return intel.filter { ($0.team_abbr ?? "").uppercased() == a }
+        intel.filter {
+            HubCardIdentity.cardBelongsToTeam(cardLeague: $0.league, cardAbbr: $0.team_abbr,
+                league: signal.league.label, team: resolved.name, abbr: resolved.abbr)
+        }
     }
     private var ls: LiveScore? {
         guard let t = tonight else { return nil }

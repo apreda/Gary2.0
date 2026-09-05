@@ -446,6 +446,7 @@ async function main(targetDate) {
   console.log(`\n════════════════════════════════════════`);
   console.log(`BETTING RECAPS FOR ${targetDate}: ${done} written, ${skipped} skipped, ${failed} failed`);
   console.log(`════════════════════════════════════════\n`);
+  return { done, skipped, failed };
 }
 
 // Run each target date through the (idempotent) recap pass. Today first so the
@@ -455,7 +456,8 @@ async function main(targetDate) {
 // a no-op / $0 when nothing new has finished.
 async function run() {
   for (const d of targetDates) {
-    await main(d);
+    const result = await main(d);
+    if (result?.failed > 0) process.exitCode = 1;
   }
 }
 

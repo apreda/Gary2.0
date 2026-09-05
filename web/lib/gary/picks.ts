@@ -1,6 +1,7 @@
 export { isLongShot } from './prop-lanes';
 import { rest } from './supabase';
-import { todayEST } from './dates';
+import { estDateStr, todayEST } from './dates';
+import { normalizeLeague } from './leagues';
 import type { DailyPicksRow, GaryPick, PropPick, PropPicksRow, WeeklyNflPicksRow } from './types';
 
 /**
@@ -34,7 +35,16 @@ export function selectTopProps(props: PropPick[], n: number): PropPick[] {
   return [...props].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0)).slice(0, n);
 }
 
-/** All of today's game picks (daily_picks + current weekly_nfl_picks when in week). */
+/** Weekly cards belong only on the ET calendar date of each game. */
+export function filterWeeklyPicksForDate(picks: GaryPick[], date: string): GaryPick[] {
+  return picks.filter(pick => {
+    if (!pick.commence_time) return false;
+    const start = new Date(pick.commence_time);
+    return Number.isFinite(start.getTime()) && estDateStr(start) === date;
+  });
+}
+
+/** Today's non-NFL daily picks plus today's games from canonical weekly NFL storage. */
 export async function fetchTodayGamePicks(revalidate = 600): Promise<GaryPick[]> {
   const date = todayEST();
   const [rows, weekly] = await Promise.all([
@@ -45,7 +55,8 @@ export async function fetchTodayGamePicks(revalidate = 600): Promise<GaryPick[]>
       `weekly_nfl_picks?select=week_start,picks&week_start=lte.${date}&order=week_start.desc&limit=1`, { revalidate },
     ),
   ]);
-  const picks = rows.flatMap(r => parsePicksJson<GaryPick>(r.picks));
+  const picks = rows.flatMap(r => parsePicksJson<GaryPick>(r.picks))
+    .filter(p => normalizeLeague(p.league, p.sport) !== 'NFL');
 
   // NFL is weekly — include the latest started week's picks only if today falls
   // inside that week (week_start .. week_start+6).
@@ -53,7 +64,7 @@ export async function fetchTodayGamePicks(revalidate = 600): Promise<GaryPick[]>
     const start = new Date(`${weekly[0].week_start}T12:00:00Z`).getTime();
     const today = new Date(`${date}T12:00:00Z`).getTime();
     if (today >= start && today < start + 7 * 86400000) {
-      picks.push(...parsePicksJson<GaryPick>(weekly[0].picks));
+      picks.push(...filterWeeklyPicksForDate(parsePicksJson<GaryPick>(weekly[0].picks), date));
     }
   }
   return picks;

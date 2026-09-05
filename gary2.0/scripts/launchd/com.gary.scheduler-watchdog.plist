@@ -24,7 +24,7 @@
     <array>
         <string>/bin/bash</string>
         <string>-c</string>
-        <string>HB=/Users/adam.preda/Library/Logs/Gary2.0/scheduler/heartbeat; WLOG=/Users/adam.preda/Library/Logs/Gary2.0/scheduler/watchdog.log; U=$(/usr/bin/id -u); PLIST=/Users/adam.preda/Library/LaunchAgents/com.gary.scheduler.plist; NOW=$(/bin/date +%s); MT=$([ -f "$HB" ] &amp;&amp; /usr/bin/stat -f %m "$HB" || echo 0); AGE=$((NOW - MT)); if [ $AGE -gt 300 ]; then echo "$(/bin/date '+%Y-%m-%d %H:%M:%S') scheduler heartbeat STALE (age ${AGE}s) — reloading com.gary.scheduler" >> "$WLOG"; /bin/launchctl bootout "gui/$U/com.gary.scheduler" 2>/dev/null; /bin/sleep 2; /bin/launchctl bootstrap "gui/$U" "$PLIST" 2>>"$WLOG"; /bin/launchctl kickstart -k "gui/$U/com.gary.scheduler" 2>>"$WLOG"; fi</string>
+        <string>HB=/Users/adam.preda/Library/Logs/Gary2.0/scheduler/heartbeat; WLOG=/Users/adam.preda/Library/Logs/Gary2.0/scheduler/watchdog.log; U=$(/usr/bin/id -u); PLIST=/Users/adam.preda/Library/LaunchAgents/com.gary.scheduler.plist; NOW=$(/bin/date +%s); MT=$([ -f "$HB" ] &amp;&amp; /usr/bin/stat -f %m "$HB" || echo 0); AGE=$((NOW - MT)); if [ $AGE -gt 300 ]; then echo "$(/bin/date '+%Y-%m-%d %H:%M:%S') scheduler heartbeat STALE (age ${AGE}s) — reloading com.gary.scheduler" >> "$WLOG"; /bin/launchctl bootout "gui/$U/com.gary.scheduler" 2>/dev/null; /bin/sleep 2; /bin/launchctl bootstrap "gui/$U" "$PLIST" 2>>"$WLOG"; /bin/launchctl kickstart -k "gui/$U/com.gary.scheduler" 2>>"$WLOG"; fi; if [ "$(TZ=America/New_York /bin/date +%H)" -eq 7 ]; then /opt/homebrew/bin/node /Users/adam.preda/Desktop/Gary2.0/gary2.0/scripts/run-morning-watch.js &gt;&gt; /Users/adam.preda/Library/Logs/Gary2.0/morning-health.log 2&gt;&amp;1; fi</string>
     </array>
 
     <key>StartInterval</key>
