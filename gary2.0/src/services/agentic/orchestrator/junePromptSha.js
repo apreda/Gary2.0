@@ -42,6 +42,7 @@ const DOSSIER_SURFACE_FILES = [
   // lanes) — retriever changes are era changes (added Sep 1 2026 with the
   // codex-first grounding cutover).
   '../scoutReport/shared/grounding.js',
+  '../scoutReport/shared/anthropicWebSearch.js',
   '../../pickdesk/webSearch.js',
   // The parser/normalizer decides how a pick's ticket is read and repriced —
   // mechanics changes there are era changes (added Sep 1 2026 when the

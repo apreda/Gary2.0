@@ -25,6 +25,8 @@ const SHARED_SURFACE = [
   // Grounded-search facades (Sep 1 2026 codex-first cutover) — the
   // retriever shapes desk content, so it rides the era.
   '../scoutReport/shared/grounding.js',
+  '../scoutReport/shared/anthropicWebSearch.js',
+  './requestCancellation.js',
   '../../pickdesk/webSearch.js',
   // The stat routers ARE the evidence surface: what a factor returns decides
   // what Gary reads. Before Aug 24 2026 they were unhashed, so ten fetchers

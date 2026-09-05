@@ -12,6 +12,8 @@
  * Anthropic through the API or ChatGPT through the API."
  */
 
+import { requestSignal } from '../../orchestrator/requestCancellation.js';
+
 const ANTHROPIC_MESSAGES_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
 const DEFAULT_MODEL = 'claude-haiku-4-5';
@@ -53,6 +55,8 @@ function searchResultStatus(blocks) {
  * @param {string} [options.model]          overrides ANTHROPIC_GROUNDING_MODEL
  */
 export async function anthropicWebSearchRaw(prompt, options = {}) {
+  const signal = requestSignal(options.signal);
+  signal?.throwIfAborted();
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     console.warn('[Anthropic Search] unavailable (ANTHROPIC_API_KEY missing)');
@@ -73,6 +77,7 @@ export async function anthropicWebSearchRaw(prompt, options = {}) {
   };
   const messages = [{ role: 'user', content: String(prompt) }];
   const controller = new AbortController();
+  const fetchSignal = requestSignal(signal, controller.signal);
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const textParts = [];
   let successfulSearches = 0;
@@ -80,6 +85,7 @@ export async function anthropicWebSearchRaw(prompt, options = {}) {
 
   try {
     for (let continuation = 0; continuation <= MAX_PAUSE_CONTINUATIONS; continuation += 1) {
+      fetchSignal.throwIfAborted();
       const response = await fetch(ANTHROPIC_MESSAGES_URL, {
         method: 'POST',
         headers: {
@@ -93,8 +99,9 @@ export async function anthropicWebSearchRaw(prompt, options = {}) {
           messages,
           tools: [tool],
         }),
-        signal: controller.signal,
+        signal: fetchSignal,
       });
+      fetchSignal.throwIfAborted();
 
       if (!response.ok) {
         console.warn(`[Anthropic Search] HTTP ${response.status}`);
@@ -102,6 +109,7 @@ export async function anthropicWebSearchRaw(prompt, options = {}) {
       }
 
       const data = await response.json();
+      fetchSignal.throwIfAborted();
       const blocks = Array.isArray(data?.content) ? data.content : [];
       textParts.push(...blocks
         .filter((block) => block?.type === 'text' && block.text)
@@ -139,6 +147,7 @@ export async function anthropicWebSearchRaw(prompt, options = {}) {
       return { success: true, data: text, searchCount: successfulSearches };
     }
   } catch (error) {
+    signal?.throwIfAborted();
     const reason = error?.name === 'AbortError' ? 'timeout' : (error?.message || 'request failed');
     console.warn(`[Anthropic Search] request failed: ${reason}`);
     return { success: false, data: null, error: reason };

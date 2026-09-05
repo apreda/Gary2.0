@@ -16,6 +16,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { describeSportsCalendar } from '../../utils/dateUtils.js';
 import { codexCliWebSearch } from '../agentic/orchestrator/providerAdapters/codexCliSession.js';
+import { requestSignal } from '../agentic/orchestrator/requestCancellation.js';
 
 // SEARCH CACHE (founder GO, Aug 10): the props tiers re-build the desk per
 // window, so the same four questions about the same game were re-searched
@@ -96,25 +97,34 @@ CRITICAL REMINDER: Today is ${todayStr}. Use ONLY fresh search results. Your tra
  */
 /**
  * The funded last rung (Aug 26): Anthropic server web search catches EVERY
- * OpenAI failure mode — quota, timeout, abort, missing key — not just 429s.
+ * OpenAI provider failure — quota, timeout, missing key — not just 429s.
+ * Cancellation of the enclosing research request stops the entire chain.
  * The observed failure was "This operation was aborted" returning EMPTY with
  * no third rung, which made the pitcher-press lane silently absent for weeks.
  */
 async function anthropicSearchFallback(query, options, reason) {
+  const signal = requestSignal(options.signal);
+  signal?.throwIfAborted();
   console.warn(`[Web Search] falling back to Anthropic server web search (${reason})`);
   try {
     const { anthropicWebSearchRaw } = await import('../agentic/scoutReport/shared/anthropicWebSearch.js');
-    const viaApi = await anthropicWebSearchRaw(freshnessPrompt(query, options.freshnessHours), { maxTokens: options.maxTokens || 2000 });
+    signal?.throwIfAborted();
+    const viaApi = await anthropicWebSearchRaw(freshnessPrompt(query, options.freshnessHours), { maxTokens: options.maxTokens || 2000, signal });
+    signal?.throwIfAborted();
     return viaApi.success
       ? { success: true, data: viaApi.data, raw: null }
       : { success: false, data: '', raw: null, error: viaApi.error || reason };
   } catch (g) {
+    signal?.throwIfAborted();
     console.warn(`[Web Search] Anthropic fallback also failed: ${g.message}`);
     return { success: false, data: '', raw: null, error: g.message };
   }
 }
 
 export async function openaiWebSearch(query, options = {}) {
+  const signal = requestSignal(options.signal);
+  signal?.throwIfAborted();
+  options = { ...options, signal };
   const cacheKey = createHash('sha256')
     .update(`${query}|${options.freshnessHours || 48}`)
     .digest('hex')
@@ -122,6 +132,7 @@ export async function openaiWebSearch(query, options = {}) {
   const cached = searchCacheGet(cacheKey);
   if (cached) return cached;
   const cachePut = (result) => {
+    signal?.throwIfAborted();
     if (result?.success && String(result?.data || '').trim()) searchCachePut(cacheKey, result);
     return result;
   };
@@ -132,6 +143,7 @@ export async function openaiWebSearch(query, options = {}) {
   // GARY_GROUNDING_VIA_CLAUDE flag is retired — the scheduler plist still
   // carries it harmlessly until its next planned edit.)
   const viaCodex = await codexCliWebSearch(freshnessPrompt(query, options.freshnessHours), options);
+  signal?.throwIfAborted();
   if (viaCodex.success) return cachePut(viaCodex);
   console.warn('[Web Search] codex-cli grounding empty/failed — trying API providers');
 
@@ -147,20 +159,25 @@ export async function openaiWebSearch(query, options = {}) {
   };
 
   const attempt = async () => {
+    signal?.throwIfAborted();
     const controller = new AbortController();
+    const fetchSignal = requestSignal(signal, controller.signal);
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
       const res = await fetch('https://api.openai.com/v1/responses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify(body),
-        signal: controller.signal,
+        signal: fetchSignal,
       });
+      fetchSignal.throwIfAborted();
       if (!res.ok) {
         const errText = await res.text().catch(() => '');
         throw new Error(`HTTP ${res.status}: ${errText.slice(0, 200)}`);
       }
-      return await res.json();
+      const data = await res.json();
+      fetchSignal.throwIfAborted();
+      return data;
     } finally {
       clearTimeout(timer);
     }
@@ -171,6 +188,7 @@ export async function openaiWebSearch(query, options = {}) {
     try {
       data = await attempt();
     } catch (first) {
+      signal?.throwIfAborted();
       console.warn(`[Web Search] first attempt failed (${first.message}) — one retry`);
       data = await attempt();
     }
@@ -189,6 +207,7 @@ export async function openaiWebSearch(query, options = {}) {
     if (text.length > 0) return cachePut({ success: true, data: text, raw: data });
     return cachePut(await anthropicSearchFallback(query, options, 'OpenAI returned empty output'));
   } catch (e) {
+    signal?.throwIfAborted();
     const msg = String(e.message || '');
     // Aug 24 2026: the old third rung here was Gemini grounding — retired with
     // the vendor. Aug 26: the Anthropic rung now catches EVERY failure mode,

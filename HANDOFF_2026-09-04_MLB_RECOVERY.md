@@ -41,6 +41,8 @@ and credentials must not be copied into incident documents.
   context and uncertainty labels. The final complete briefing remains available.
 - Give the entire optional researcher cascade one cancellable time budget.
   Stop further work on abort; do not turn cancellation into another retry.
+- Carry cancellation through backup OpenAI/Anthropic web-search API calls as
+  well as the bridge, without changing ordinary provider-timeout fallback.
 - Reserve decision time against the scheduler's actual child deadline. Research
   unavailability allows Gary to decide from the original source desk.
 - Reuse the exact desk's research result, including an unavailable result,
@@ -80,7 +82,7 @@ also expired before recovery could complete, making seven missed game picks.
 Deployment checks must be supplemented by actual publication checks; a live
 scheduler PID and matching source hashes do not establish successful generation.
 
-## Live verification in progress
+## Live verification
 
 The repaired scheduler restarted at 8:25 PM ET as PID 79782, running from
 `/Users/adam.preda/Desktop/Gary2.0/gary2.0`. The old Yankees runner and its
@@ -102,8 +104,37 @@ passed. The incident changes were still uncommitted at this intermediate check.
 The real local Firebase plist remains an intentional uncommitted configuration
 exception; preserve it and never commit or redact the working credential.
 
-The final full backend run passed all 1,767 tests in 198 files (48.35 seconds).
+The initial full backend run passed all 1,767 tests in 198 files (48.35 seconds).
 Three stale expectations were updated for bounded optional research and the
 new slate-coverage read. Coverage tests distinguish missed starts from pending
 games and fail when the slate cannot be read. Scheduler tests cover waiting
 games receiving official hold, retirement, and revised-start updates.
+
+All three later games then published through the normal scheduler, each using
+Astra and the repaired era `2fdedd43241e`:
+
+- Yankees–Padres (5059894): Yankees ML -116; scheduler verified storage at
+  8:54:31 PM, before the 9:40 PM first pitch.
+- Athletics–Mariners (5059895): Mariners -1.5 +104; scheduler verified storage
+  at 8:56:24 PM, before the 10:10 PM first pitch.
+- Nationals–Dodgers (5059896): Nationals +1.5 +105; present in the database
+  by 8:57 PM, before the 10:10 PM first pitch.
+
+The child logs confirm the repaired behavior: optional research exhausted its
+single 1,200-second budget, stopped, and Astra continued from the original desk
+to a stored decision. The observed old Yankees research process group had no
+survivors. This establishes actual publication after timeout, beyond source
+parity or process existence alone.
+
+Tonight therefore reached nine MLB game picks: the original three, three
+urgent recoveries, and three normal scheduled publications after the repair.
+Seven earlier games remain missed. Later game/props activity must not rewrite
+those missed pregame windows.
+
+A final fallback-API cancellation patch additionally covers direct HTTP
+requests if the bridge fails. It passed all 1,774 backend tests in 199 files
+(58.03 seconds). That patch and the final queue safeguard are being loaded
+after the healthy props jobs finish. New eras include the raw Anthropic search
+helper as well as the search facade; the three already-published repaired
+game picks correctly retain their preceding era. A misleading legacy startup
+log claiming the researcher was always OFF was also removed.

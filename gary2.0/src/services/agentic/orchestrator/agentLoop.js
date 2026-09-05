@@ -218,7 +218,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   const modelLabel = modelOverride
     ? `OVERRIDE: ${modelOverride}`
     : primaryModel;
-  console.log(`[Orchestrator] Starting ${sport} — brain: ${modelLabel} (desk-only, researcher OFF)`);
+  console.log(`[Orchestrator] Starting ${sport} — brain: ${modelLabel}`);
 
   // Cost tracking — accumulates tokens across all sessions (including 429 cascades)
   const costTracker = createCostTracker(`Game Picks: ${awayTeam} @ ${homeTeam} (${sport})`);
