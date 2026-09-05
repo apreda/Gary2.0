@@ -1,6 +1,6 @@
 # Gary launch operating plan
 
-September 4, 2026. Accountable owner: Adam. This replaces the offer, dates, channel assumptions and execution status in the September 1 launch plan. The implementation handoff records deployment and submission evidence; this document defines the operating decisions.
+September 4, updated September 5, 2026. Accountable owner: Adam. This replaces the offer, dates, channel assumptions and execution status in the September 1 launch plan. The implementation handoff records deployment and submission evidence; this document defines the operating decisions.
 
 ## The promise
 
@@ -52,14 +52,22 @@ Initial learning target: 25–50 useful sessions over a month and 5–10 convers
 | Surface | Current operating decision |
 |---|---|
 | Gary website and first-party organic X | Prepared content is suitable for editorial review here. Preserve current game-paced publishing; do not add mass replies or automatically post the new content package. |
-| Instagram | Profile copy, introductory pieces and highlights are prepared. Current category applicability still needs an account/policy determination before betting promotion. A Business Account alone does not resolve that question. |
+| Instagram | Existing @betwithgary.ai is a Business Account; bio corrected September 5. Current organic rules support a cautious adult editorial rollout, but Account Status still says under-18s can see the profile. Set the mobile minimum-age control to the 21+ house standard before publishing betting content. Prepared portraits/captions are ready. |
 | TikTok | Founder video scripts are prepared. Organic gambling-related business eligibility remains unresolved; the official licensed-business route requires permission and uses 25+ in the U.S. This is not a normal unrestricted launch channel for Gary. |
 | Paid creators | No TikTok gambling-related branded content. Other platforms need their own eligibility determination and clear sponsorship disclosure. |
 | Platform ads | No launch spend assumed. Evaluate approved Apple search-results inventory first after listing and measurement are ready; Meta, X and TikTok have separate approval requirements. |
 
-The old brand guide's blanket X paid ban and old age-rating assertion are not current policy conclusions. Current primary sources: [X gambling ads](https://business.x.com/en/help/ads-policies/ads-content-policies/gambling-content), [X Paid Partnerships](https://help.x.com/en/rules-and-policies/paid-partnerships-policy), [TikTok business verification](https://ads.tiktok.com/resources/help/article/about-business-registration?lang=en), [TikTok branded content](https://www.tiktok.com/legal/page/global/bc-policy/en), [Apple Ads](https://ads.apple.com/policies). Instagram's indexed legacy guidance points to successor rules; current applicability to Gary remains unverified behind access barriers. [Legacy Instagram guidance](https://www.facebook.com/help/477434105621119?locale=en_GB), [Meta policy endpoint](https://transparency.meta.com/policies/ad-standards/restricted-goods-services/gambling-games)
+The old brand guide's blanket X paid ban and old age-rating assertion are not current policy conclusions. Current primary sources: [X gambling ads](https://business.x.com/en/help/ads-policies/ads-content-policies/gambling-content), [X Paid Partnerships](https://help.x.com/en/rules-and-policies/paid-partnerships-policy), [TikTok business verification](https://ads.tiktok.com/resources/help/article/about-business-registration?lang=en), [TikTok branded content](https://www.tiktok.com/legal/page/global/bc-policy/en), [Apple Ads](https://ads.apple.com/policies). On September 5 the current Meta pages were readable directly. Its organic Community Standards restrict online-gambling promotion to adults; the separate advertising policy requires ad-account authorization, including gambling-promoting landing pages. Gary provides information and manual tracking without wagering entry/prizes. Treat a 21+ editorial company rollout as an operating inference from these rules, not platform certification; keep boosts, affiliates and gambling offers out until their separate requirements are resolved. [Meta organic regulated goods](https://transparency.meta.com/policies/community-standards/regulated-goods/), [Meta gambling ads](https://transparency.meta.com/policies/ad-standards/restricted-goods-services/gambling-games), [Instagram Terms](https://www.instagram.com/legal/terms/)
 
 Our prepared creative uses a 21+ house audience standard. Higher platform requirements take precedence; the artwork is not evidence of permission. Do not change age labels to disguise the category.
+
+## September 5 account and draft status
+
+- Instagram: 33 posts and 70 followers observed; most recent grid post March 19. Business account, category Arts & entertainment, linked Facebook page Gary A.I. Account Status reported no reach limits and recommendation eligibility. Bio saved and independently reloaded: “AI sports picks with reasoning. Wins and losses on the record. Track your own Book. Built by a sports fan. 21+”. A bio age label is not the platform age control.
+- Set Instagram minimum age in the mobile app: Profile → menu → Account type and tools → Other → Minimum age → default 21 → Done. Also verify the website field points to the instrumented board; the desktop editor explicitly limits link editing to mobile. [Official age instructions](https://help.instagram.com/853772598370828/)
+- Instagram's current Terms require prior written consent for a domain/URL in a username. The existing `betwithgary.ai` handle needs that consent checked or a coordinated handle change with existing links updated. No username was changed or consent claimed in this pass.
+- Private X draft generation v7 is deployed. It preserves prior drafts on provider errors, empty batches and failed database inserts; reports degraded generation as HTTP 503; bounds provider requests; and only attaches a uniquely matched full-team pick as context. Weekly NFL picks are included. It does not publish replies.
+- Live September 5 smoke: invalid token 401, valid private page 200; 11 candidates, one attempted draft, `MODEL_CREDITS_UNAVAILABLE`, generated 0, prior sheet preserved. Restore the existing Anthropic account's credit before expecting fresh private drafts. The scheduled game poster is a separate workflow. No model, billing balance or posting schedule was changed.
 
 ## Company habits that users can see
 

@@ -2,7 +2,7 @@
 
 Four finished concepts, each exported as **1080×1350 portrait** and **1600×900 landscape** JPEG. The editable source is `index.html`; assets are local and no external rendering service is required. The graphics were inspected in the browser at export size. They use original layouts, existing Gary art/fonts and a dated real app screenshot. No audience figures, testimonials or winning results were invented.
 
-**Publication status:** prepared, not posted or scheduled. First-party organic X and the Gary website are the initial destinations. Portrait versions are candidates for Instagram after the channel eligibility question in the launch runbook is resolved. TikTok video scripts require founder footage and a permitted publishing route. Do not boost these assets or book a creator from this package alone.
+**Publication status:** prepared, not posted or scheduled. First-party organic X and the Gary website are the initial destinations. Portrait versions are ready for the adult Instagram editorial rollout described in the runbook once the mobile minimum-age setting is saved and verified. TikTok video scripts require founder footage and a permitted publishing route. Do not boost these assets or book a creator from this package alone.
 
 ## Copy ready for review
 
@@ -32,19 +32,19 @@ The screenshot in concept 02 shows an actual September 4 Winners game card, used
 
 ## Profile and introductory copy
 
-**X bio replacement draft:**
+**X bio saved September 5:**
 
-> Picks before the game. The reasoning behind them. Wins and losses on the record. Free game picks at betwithgary.ai. 21+.
+> AI sports picks with reasoning. Wins and losses on the record. Track your own Book. Free game picks. Built by a sports fan. 21+
 
-**Company bio for an eligible new profile:**
+**Instagram bio saved September 5 to @betwithgary.ai:**
 
-> Sports picks with the reasoning. A public record. Your own Book. Built by a sports fan. 21+ | betwithgary.ai
+> AI sports picks with reasoning. Wins and losses on the record. Track your own Book. Built by a sports fan. 21+
 
 **Pinned product post draft:**
 
 > Find your game. See my pick and the reasoning. The full game board is free. You can check my record and keep your own Book. Start with the game you’re watching.
 
-Reply with the website board and the exact launch offer from `../LAUNCH_RUNBOOK.md` if discussing Winners. The existing September 1 pin promises a season-based installation offer; replace its explanatory copy deliberately when publishing this new pin. Do not silently rewrite a historical post or treat these drafts as already applied.
+Reply with the website board and the exact launch offer from `../LAUNCH_RUNBOOK.md` if discussing Winners. The September 1 season-offer post was unpinned on September 5 and retained as a historical post. The new product pin is still a draft. The X profile website was changed to `https://www.betwithgary.ai/picks?utm_source=x&utm_content=bio_v1`; no App Store install attribution is claimed.
 
 For a permitted Instagram company profile, start with concepts 01, 02 and 03 as the introductory trio, then concept 04. Suggested highlights: Start Here, The Record, Your Book, Help. One useful caption per asset is enough; do not paste an automated game thread into every channel.
 

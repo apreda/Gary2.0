@@ -1,6 +1,6 @@
 # App Review package — Gary AI 2.25 / build 899
 
-Prepared September 4, 2026. Working source and review instructions, not evidence of App Store Connect changes. No review submission, withdrawal, release-setting change or reviewer message is authorized by this file.
+Prepared September 4; updated September 5, 2026. Working source and review instructions, not evidence of App Store Connect changes. Adam authorized completing the launch fixes in the current task. This file does not establish that a review submission, withdrawal, release-setting change or reviewer message occurred.
 
 ## Submission state to reconcile
 
@@ -52,6 +52,16 @@ Gary's application manifest declares the following collected types. All are mark
 No full card number, sportsbook credentials, advertising identifier or precise location is requested by Gary. Stripe checkout processes payment details; review webview disclosure requirements and provider data separately. The manifest does not replace ASC answers.
 
 The signed archive's actual bundled declarations are extracted in `PRIVACY_INVENTORY_2_25_899.json`. GoogleDataTransport and Firebase declare Other Diagnostic Data; Firebase Messaging also declares Other Data Types. GoogleSignIn declares Name, Email, Phone Number, Coarse Location, User ID, Device ID, Other Data Types and Other Usage Data. These are SDK declarations, which can include conditional behavior; they are not evidence Gary requests phone or location permissions. Gary uses basic Google sign-in without extra phone/location scopes. Reconcile these categories against the exact SDK usage before final ASC certification rather than treating the eight app-owned rows as the entire inventory. Gary initializes Firebase only after notification permission, disables its optional default collection, and does not link Firebase Analytics. Google sign-in is invoked when the user selects that provider; the first-party analytics toggle does not claim to stop required provider service diagnostics.
+
+### September 5 SDK reconciliation
+
+The absence of a device-location permission does **not** justify omitting Coarse Location. Google documents IP-based general-location estimation for sign-in fraud prevention. Add **Coarse Location → App Functionality → linked → not tracking** to the ASC draft, consistent with the signed GoogleSignIn manifest. The public privacy page now explicitly describes this IP-based use. [Google's sign-in disclosure guidance](https://developers.google.com/identity/sign-in/ios/app-privacy)
+
+For Firebase, GoogleDataTransport always collects SDK-quality diagnostics; retain **Other Diagnostic Data**, not linked, with the manifest's Analytics and App Functionality purposes as applicable. Messaging retains its push/install identifiers and subscription metadata despite disabling optional default collection. The optional Firebase user-agent collection is disabled in 899, and notification-interaction analytics is not linked. [Firebase collection guidance](https://firebase.google.com/docs/ios/app-store-data-collection)
+
+The remaining GoogleSignIn declarations for Phone Number, Other Usage Data, Other Data Types and identifier Analytics purposes still require exact SDK-use reconciliation before final certification. Do not silently omit them or assert that the first-party analytics toggle disables Google's service processing. The archive inventory supplies the declared linked/tracking/purpose values. A native device/provider trace or explicit provider clarification can resolve conditional behavior; no such trace was performed here.
+
+On September 5, Chrome initially displayed a cached organization Apps page, but opening Gary and reloading confirmed the Apple session had expired. Build 899 upload success is recorded; processing, build attachment, live privacy answers, age questionnaire and release mode remain unverified until sign-in is restored.
 
 The updated public policy includes iOS consent, account-owned preferences, opt-in leaderboard, billing and deletion. Anonymous/legacy installation events are not falsely claimed to be removed through an account-only request. Account-linked `app_events` are explicitly removed by the deletion handler; pseudonymous legacy installations need their matching identifier to resolve a separate deletion request.
 
