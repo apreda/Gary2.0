@@ -56,6 +56,7 @@ import {
   takeReadyDecisionLaneEntries,
 } from './lib/schedulerPolicy.js';
 import { requireNonFootballStart } from './lib/schedulerSourcePolicy.js';
+import { publishSchedulerSnapshot } from './lib/schedulerSnapshots.js';
 import { parsePropRunOutcome } from './lib/propsRunReliability.js';
 import { parsePickRunOutcome } from './lib/pickRunReliability.js';
 import {
@@ -613,22 +614,7 @@ async function buildPlan(etDateStr) {
 // picks overlaying later. NON-FATAL by design — a slate-write failure must
 // never block pick generation.
 async function writeDailySlateNonFatal(dateStr) {
-  try {
-    const { writeDailySlate } = await import('../src/services/dailySlateService.js');
-    const res = await writeDailySlate(dateStr);
-    const summary = Object.entries(res.byLeague).map(([l, n]) => `${l}=${n}`).join(', ');
-    log(`📋 Daily slate published: ${res.total} game(s)${summary ? ` (${summary})` : ''}`);
-    return { ok: true, result: res };
-  } catch (e) {
-    const partial = e?.result;
-    if (partial) {
-      const failed = (partial.failures || []).map((f) => `${f.league}: ${f.error}`).join(' | ');
-      log(`⚠️ Daily slate PARTIAL (non-fatal, healthy leagues persisted; failed leagues remain retryable): ${partial.total} game(s); ${failed || e.message}`);
-    } else {
-      log(`⚠️ Daily slate write failed (non-fatal, picks unaffected): ${e.message}`);
-    }
-    return { ok: false, error: e, result: partial || null };
-  }
+  return publishSchedulerSnapshot('slate', dateStr, { cwd: PROJECT_DIR, log });
 }
 
 // Pre-assemble TOMORROW's board (slate + line snapshot, ranked big games,
@@ -638,21 +624,7 @@ async function writeDailySlateNonFatal(dateStr) {
 // by design — never blocks the daily build. Idempotent upsert on (date); the
 // evening re-run refreshes overnight-posted lines.
 async function writeTomorrowBoardNonFatal(tomorrowDateStr) {
-  try {
-    const { writeTomorrowBoard } = await import('../src/services/tomorrowService.js');
-    const r = await writeTomorrowBoard(tomorrowDateStr);
-    log(`🗓️ Tomorrow board published: ${r.game_count} game(s), ${r.big_games.length} big game(s), ${r.starters.length} starter(s) (lines ${r.any_lines ? 'posted' : 'open soon'})`);
-    return { ok: true, result: r };
-  } catch (e) {
-    const partial = e?.result;
-    if (partial) {
-      const failed = (partial.failures || []).map((f) => `${f.league}: ${f.error}`).join(' | ');
-      log(`⚠️ Tomorrow board PARTIAL (non-fatal, healthy leagues refreshed; same-date last-good rows retained where available): ${failed || e.message}`);
-    } else {
-      log(`⚠️ Tomorrow board write failed (non-fatal): ${e.message}`);
-    }
-    return { ok: false, error: e, result: partial || null };
-  }
+  return publishSchedulerSnapshot('board', tomorrowDateStr, { cwd: PROJECT_DIR, log });
 }
 
 // Build the plan, but ride out transient fetch outages. A wifi/API failure at

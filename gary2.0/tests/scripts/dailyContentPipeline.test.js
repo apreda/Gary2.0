@@ -29,7 +29,7 @@ describe('daily content orchestration', () => {
   });
   it('gives independent Home stages and college packs their turn before long football insights', () => {
     const stages = dailyContentStages('2026-09-05', {});
-    expect(stages.slice(0, 2).map(s => s.id)).toEqual(['board', 'wire']);
+    expect(stages.slice(0, 3).map(s => s.id)).toEqual(['slate', 'board', 'wire']);
     expect(stages.findIndex(s => s.id === 'ncaaf-cards')).toBeLessThan(stages.findIndex(s => s.id === 'ncaaf-insights'));
     expect(stages.filter(s => s.args.includes('--skip-cards'))).toHaveLength(3);
     expect(stages.filter(s => s.id === 'ncaaf-cards')).toHaveLength(1);

@@ -19,6 +19,43 @@ export function dateBefore(date, days = 1) {
   return value.toISOString().slice(0, 10);
 }
 
+/** Keep failed attempts visible, but let later successful equivalent work and
+ * verified current output establish recovery. The overnight combined stage
+ * is replaced by the daytime NFL and NCAAF card stages, not its old stage ID.
+ */
+export function applyContentStageHistory(report, rows) {
+  const latest = new Map();
+  const checked = Date.parse(report.checked_at);
+  for (const row of rows) {
+    if (row.date !== report.date || row.event !== 'stage-end' || row.stage === 'morning-health') continue;
+    const at = Date.parse(row.at);
+    if (!Number.isFinite(at) || at > checked) continue;
+    if (!latest.has(row.stage) || at >= Date.parse(latest.get(row.stage).at)) latest.set(row.stage, row);
+  }
+  const replacements = {
+    'overnight-football-cards': ['nfl-cards', 'ncaaf-cards'],
+    'ncaaf-cards': ['ncaaf-card-subjects'],
+    'ncaaf-card-subjects': ['ncaaf-cards'],
+  };
+  report.stages = [...latest.values()].map(stage => {
+    if (stage.status === 'ok' || !replacements[stage.stage]) return stage;
+    const next = replacements[stage.stage].map(id => latest.get(id));
+    const footballCardsVerified = !report.checks.some(check => ['read:cards', 'read:slate', 'read:board'].includes(check.id))
+      && report.checks.filter(check => /^cards:(NFL|NCAAF)$/.test(check.id)).every(check => check.status === 'ok');
+    return footballCardsVerified && next.every(row => row?.status === 'ok' && Date.parse(row.at) > Date.parse(stage.at))
+      ? { ...stage, recovered_by: next.map(row => ({ stage: row.stage, at: row.at })) }
+      : stage;
+  });
+  const failed = report.stages.filter(stage => stage.status !== 'ok' && !stage.recovered_by);
+  const recovered = report.stages.filter(stage => stage.recovered_by);
+  if (failed.length) {
+    report.status = 'fail';
+    report.checks.push({ id: 'content-stages', status: 'fail', evidence: failed.map(stage => `${stage.stage}: ${stage.status} at ${stage.at}`).join('; ') });
+  }
+  if (recovered.length) report.checks.push({ id: 'content-recovered', status: 'ok', evidence: recovered.map(stage => `${stage.stage} failed at ${stage.at}; recovered by ${stage.recovered_by.map(row => `${row.stage} at ${row.at}`).join(', ')}`).join('; ') });
+  return report;
+}
+
 /** Read-only, paginated snapshots. Each failed table remains an explicit error;
  * a permission failure or a truncated read must never become an empty day.
  */

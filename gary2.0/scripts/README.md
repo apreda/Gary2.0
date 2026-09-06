@@ -4,6 +4,29 @@ This directory contains scripts for generating, storing, and grading betting pic
 
 ## Scripts
 
+### Morning publication and recovery
+
+The existing `com.gary2.daily-insights` LaunchAgent runs `run-daily-content.js`.
+It now checks the actual database REST path before each stage and waits up to
+45 minutes total per run through transient outages. A failed stage is retried
+once only after storage was observed unavailable and then recovered; completed
+stages are not replayed. Invalid credentials fail immediately. Waiting,
+recovery, and stage outcomes are recorded in
+`~/Library/Logs/Gary2.0/daily-content-stages.jsonl`.
+
+The daily pipeline repairs `daily_slate` before BOARD, Wire, insights, and
+player cards. The 5 AM scheduler also publishes slate and board snapshots,
+each in a fresh process capped at eight minutes. This prevents yesterday's
+cached module exports from breaking today's snapshot imports after code updates.
+The scheduler still needs a restart after edits to its own scheduling code.
+
+Run `node scripts/morning-health.js` to check current output. It retains failed
+overnight attempts but recognizes later successful equivalent card stages only
+when current card coverage also verifies. The existing 7 AM watchdog rechecks
+failed health after five minutes; a verified successful check completes the day.
+An outage that outlasts the recovery budget remains a failure. Neither component
+restarts Supabase or treats a live scheduler PID as proof of fresh content.
+
 ### `marketing-readiness.js` — read-only daily launch and social check
 
 Run from `gary2.0` using the existing Supabase CLI login and linked project:

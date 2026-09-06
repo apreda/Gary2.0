@@ -9,14 +9,19 @@ function marker() { const dir = mkdtempSync(join(tmpdir(), 'gary-health-watch-')
 afterEach(() => dirs.splice(0).forEach(dir => rmSync(dir, { recursive: true, force: true })));
 const now = new Date('2026-09-05T11:02:00Z');
 describe('existing watchdog morning check', () => {
-  it('runs once in the ET window and retains a failed check rather than recording health as OK', async () => {
+  it('retains a failed check, rechecks after cooldown, and stops only after verified recovery', async () => {
     const markerPath = marker();
     const runStage = vi.fn(async () => ({ status: 'failed', exit_code: 1 }));
     const result = await runMorningWatch({ now, markerPath, runStage });
     expect(result.status).toBe('failed');
     expect(JSON.parse(readFileSync(markerPath, 'utf8')).exit_code).toBe(1);
-    expect((await runMorningWatch({ now, markerPath, runStage })).skipped).toBe('already checked');
+    expect((await runMorningWatch({ now, markerPath, runStage })).skipped).toBe('failed check cooling down');
     expect(runStage).toHaveBeenCalledTimes(1);
+    runStage.mockResolvedValue({ status: 'ok', exit_code: 0 });
+    const later = new Date('2026-09-05T11:08:00Z');
+    expect((await runMorningWatch({ now: later, markerPath, runStage })).status).toBe('ok');
+    expect((await runMorningWatch({ now: later, markerPath, runStage })).skipped).toBe('already healthy');
+    expect(runStage).toHaveBeenCalledTimes(2);
   });
   it('does no database/process work outside the window and retries a crashed wrapper after its deadline', async () => {
     const markerPath = marker(); const runStage = vi.fn(async () => ({ status: 'ok', exit_code: 0 }));

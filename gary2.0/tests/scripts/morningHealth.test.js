@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dateBefore, etDate, evaluateMorningHealth, loadMorningHealth } from '../../scripts/lib/morningHealth.js';
+import { dateBefore, etDate, evaluateMorningHealth, loadMorningHealth, applyContentStageHistory } from '../../scripts/lib/morningHealth.js';
 
 const date = '2026-09-05';
 const now = '2026-09-05T11:00:00Z';
@@ -78,6 +78,44 @@ describe('morning output health', () => {
   it('does not diagnose provider failure from a legitimate empty news feed', () => {
     const data = snapshot(); data.wire = [];
     expect(check(evaluateMorningHealth({ date, now, data }), 'wire:MLB').status).toBe('warn');
+  });
+});
+
+describe('recovered stage history', () => {
+  const end = (stage, status, at = '2026-09-05T10:30:00Z', day = date) => ({ date: day, event: 'stage-end', stage, status, at });
+  const overnight = end('overnight-football-cards', 'failed', '2026-09-05T06:30:00Z');
+  const recovery = [end('nfl-cards', 'ok'), end('ncaaf-cards', 'ok')];
+  const report = () => evaluateMorningHealth({ date, now, data: snapshot() });
+  it('records an overnight failure as recovered only after both daytime stages succeed', () => {
+    const output = applyContentStageHistory(report(), [overnight, ...recovery]);
+    expect(output.status).toBe('ok');
+    expect(output.stages[0]).toMatchObject({ status: 'failed', recovered_by: [{ stage: 'nfl-cards' }, { stage: 'ncaaf-cards' }] });
+    expect(check(output, 'content-recovered').evidence).toContain('failed at');
+    expect(applyContentStageHistory(report(), [overnight, recovery[0]]).status).toBe('fail');
+  });
+  it('does not hide an active card failure or an unreadable table behind stage exit codes', () => {
+    for (const issue of [{ id: 'cards:NCAAF', status: 'fail' }, { id: 'cards:NFL', status: 'warn' }, { id: 'read:cards', status: 'fail' }]) {
+      const output = report(); output.checks.push(issue);
+      applyContentStageHistory(output, [overnight, ...recovery]);
+      expect(output.status).toBe('fail');
+      expect(output.stages[0].recovered_by).toBeUndefined();
+    }
+  });
+  it('ignores old-day and future successes and uses event timestamps when writes arrive out of order', () => {
+    const rows = [overnight, ...recovery,
+      end('ncaaf-cards', 'failed', '2026-09-05T10:45:00Z'),
+      end('ncaaf-cards', 'ok', '2026-09-05T10:40:00Z'),
+      end('ncaaf-cards', 'ok', '2026-09-05T12:00:00Z'),
+      end('ncaaf-cards', 'ok', '2026-09-05T10:59:00Z', '2026-09-04')];
+    expect(applyContentStageHistory(report(), rows).status).toBe('fail');
+  });
+  it('allows a later subject-card completion to recover the same college card build', () => {
+    const output = applyContentStageHistory(report(), [end('ncaaf-cards', 'timeout', '2026-09-05T10:00:00Z'), end('ncaaf-card-subjects', 'ok')]);
+    expect(output.status).toBe('ok');
+    expect(output.stages[0].recovered_by[0].stage).toBe('ncaaf-card-subjects');
+  });
+  it('never lets a successful health-check stage clear a failed writer', () => {
+    expect(applyContentStageHistory(report(), [end('board', 'failed'), end('morning-health', 'ok')]).status).toBe('fail');
   });
 });
 

@@ -12,6 +12,7 @@ export function dailyContentStages(date, env = process.env) {
   const stage = (id, variable, seconds, args) => ({ id, timeoutMs: cap(env, variable, seconds) * 1000, args });
   const insight = (league, mode) => ['run-insight-connections.js', '--date', date, '--league', league, mode];
   return [
+    stage('slate', 'GARY_CAP_SLATE', 480, ['scripts/run-daily-slate.js', '--date', date]),
     stage('board', 'GARY_CAP_BOARD', 480, ['scripts/run-tomorrow-board.js', '--date', date, '--table', 'tomorrow_board']),
     stage('wire', 'GARY_CAP_WIRE', 180, ['run-wire-items.js', '--date', date]),
     stage('mlb-insights', 'GARY_CAP_INSIGHTS', 900, insight('MLB,NBA', '--skip-cards')),
@@ -131,7 +132,18 @@ export async function runDailyContent(stages, options = {}) {
   const runStage = options.runStage || runContentStage;
   for (const stage of stages) {
     options.signal?.throwIfAborted();
-    results.push(await runStage(stage, options));
+    await options.databaseReady?.(stage);
+    let result = await runStage(stage, options);
+    // Retry only after an observed storage outage and verified recovery. A
+    // provider/quota failure with working storage gets no speculative retry.
+    if (result.status === 'failed' && options.databaseReady) {
+      const recovery = await options.databaseReady(stage);
+      if (recovery.waited) {
+        options.onEvent?.({ event: 'stage-recovery', stage: stage.id, at: new Date().toISOString(), reason: 'database recovered' });
+        result = await runStage(stage, options);
+      }
+    }
+    results.push(result);
   }
   return results;
 }

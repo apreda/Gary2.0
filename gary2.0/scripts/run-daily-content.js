@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 // Existing com.gary2.daily-insights job; no pick generation or scheduler restart.
+import '../src/loadEnv.js';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 import { dailyContentStages, collegeCardStages, runDailyContent, selectContentStages } from './lib/dailyContentPipeline.js';
+import { createContentDatabaseGate } from './lib/contentDatabaseGate.js';
 
 const cwd = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -33,7 +35,8 @@ if (args.includes('--plan')) {
   process.once('SIGINT', stop);
   onEvent({ event: 'run-start', at: new Date().toISOString(), stages: stages.map(stage => stage.id) });
   try {
-    const results = await runDailyContent(stages, { cwd, signal: controller.signal, onEvent });
+    const databaseReady = createContentDatabaseGate({ signal: controller.signal, onEvent });
+    const results = await runDailyContent(stages, { cwd, signal: controller.signal, onEvent, databaseReady });
     const failed = results.filter(r => r.status !== 'ok');
     onEvent({ event: 'run-end', at: new Date().toISOString(), status: failed.length ? 'failed' : 'ok', failed_stages: failed.map(r => r.stage) });
     process.exitCode = failed.length ? 1 : 0;
