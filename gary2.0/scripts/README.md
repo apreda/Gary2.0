@@ -13,6 +13,9 @@ once only after storage was observed unavailable and then recovered; completed
 stages are not replayed. Invalid credentials fail immediately. Waiting,
 recovery, and stage outcomes are recorded in
 `~/Library/Logs/Gary2.0/daily-content-stages.jsonl`.
+The scheduled overnight card phase has a 05:45 Eastern cutoff covering work,
+waits, and retries so it releases the LaunchAgent before the 6 AM daily run.
+Explicit dated card backfills retain their individual stage caps.
 
 The daily pipeline repairs `daily_slate` before BOARD, Wire, insights, and
 player cards. The 5 AM scheduler also publishes slate and board snapshots,

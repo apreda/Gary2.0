@@ -54,6 +54,19 @@ export function collegeCardStages(date, env = process.env) {
   }];
 }
 
+/** launchd does not queue the 6AM event while the overnight job still owns its
+ * slot. Storage recovery and any retry must fit before that next publication.
+ * 02:30 occurs after the fall clock change; a delayed spring run uses its actual
+ * Eastern clock time, leaving the same 05:45 cutoff on either DST date.
+ */
+export function collegeCardRunBudgetMs(now = new Date()) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', hour: 'numeric', minute: 'numeric', second: 'numeric', hourCycle: 'h23',
+  }).formatToParts(now).map(part => [part.type, part.value]));
+  const seconds = Number(parts.hour) * 3600 + Number(parts.minute) * 60 + Number(parts.second);
+  return Math.max(0, Math.min(195 * 60_000, (5 * 3600 + 45 * 60 - seconds) * 1000));
+}
+
 /** A cap owns the whole subprocess group, including ordinary bridge children.
  * SIGTERM lets explicitly cancellable bridge groups run their shutdown hooks;
  * SIGKILL then clears descendants even when their direct parent has exited.

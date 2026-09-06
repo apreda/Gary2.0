@@ -5,7 +5,7 @@ import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
-import { dailyContentStages, collegeCardStages, runDailyContent, selectContentStages } from './lib/dailyContentPipeline.js';
+import { dailyContentStages, collegeCardStages, collegeCardRunBudgetMs, runDailyContent, selectContentStages } from './lib/dailyContentPipeline.js';
 import { createContentDatabaseGate } from './lib/contentDatabaseGate.js';
 
 const cwd = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -33,6 +33,11 @@ if (args.includes('--plan')) {
   const stop = () => controller.abort(new Error('Daily content job stopped'));
   process.once('SIGTERM', stop);
   process.once('SIGINT', stop);
+  // Explicit dated backfills keep their per-stage caps. The scheduled overnight
+  // phase must release this LaunchAgent before its 6AM daily publication.
+  const overnightTimer = phase === 'college-cards' && !args.includes('--date')
+    ? setTimeout(() => controller.abort(new Error('Overnight cards reached the 05:45 ET cutoff before daily publication')), collegeCardRunBudgetMs())
+    : undefined;
   onEvent({ event: 'run-start', at: new Date().toISOString(), stages: stages.map(stage => stage.id) });
   try {
     const databaseReady = createContentDatabaseGate({ signal: controller.signal, onEvent });
@@ -44,6 +49,7 @@ if (args.includes('--plan')) {
     onEvent({ event: 'run-end', at: new Date().toISOString(), status: controller.signal.aborted ? 'cancelled' : 'failed', error: error.message });
     process.exitCode = controller.signal.aborted ? 130 : 1;
   } finally {
+    clearTimeout(overnightTimer);
     process.removeListener('SIGTERM', stop);
     process.removeListener('SIGINT', stop);
   }

@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { collegeCardStages, dailyContentStages, runContentStage, runDailyContent, selectContentStages } from '../../scripts/lib/dailyContentPipeline.js';
+import { collegeCardStages, collegeCardRunBudgetMs, dailyContentStages, runContentStage, runDailyContent, selectContentStages } from '../../scripts/lib/dailyContentPipeline.js';
 
 const dirs = [];
 const temp = () => { const path = mkdtempSync(join(tmpdir(), 'gary-content-test-')); dirs.push(path); return path; };
@@ -15,6 +15,15 @@ async function until(predicate, timeoutMs = 10_000) {
 function alive(pid) { try { process.kill(pid, 0); return true; } catch { return false; } }
 
 describe('daily content orchestration', () => {
+  it('leaves the 6AM launch slot free even when overnight storage recovery or a late start consumes time', () => {
+    expect(collegeCardRunBudgetMs(new Date('2026-09-06T06:30:00Z'))).toBe(195 * 60_000);
+    expect(collegeCardRunBudgetMs(new Date('2026-09-06T09:15:00Z'))).toBe(30 * 60_000);
+    expect(collegeCardRunBudgetMs(new Date('2026-09-06T09:45:00Z'))).toBe(0);
+  });
+  it('preserves the overnight cutoff through the spring and fall Eastern clock changes', () => {
+    expect(collegeCardRunBudgetMs(new Date('2026-03-08T07:30:00Z'))).toBe(135 * 60_000);
+    expect(collegeCardRunBudgetMs(new Date('2026-11-01T07:30:00Z'))).toBe(195 * 60_000);
+  });
   it('selects only explicitly requested recovery stages in normal order and rejects typos or duplicates', () => {
     const all = dailyContentStages('2026-09-05', {});
     expect(selectContentStages(all, 'morning-health,ncaaf-insights,card-watch').map(stage => stage.id)).toEqual(['ncaaf-insights', 'card-watch', 'morning-health']);
