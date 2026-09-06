@@ -28,6 +28,12 @@ const RATIONALE = [
 ].join('\n\n');
 
 describe('splitSentences', () => {
+  it('keeps a morning or evening start abbreviation inside the whole sentence', () => {
+    const morning = 'Across the field, Oregon State begins a new coaching era at an 11 a.m. local start.';
+    const evening = 'Houston plays at 7 p.m. local time.';
+    expect(splitSentences(`${morning} ${evening}`)).toEqual([morning, evening]);
+    expect(reasonCandidates(`${morning} ${evening}`)).not.toContain('Across the field, Oregon State begins a new coaching era at an 11 a.m.');
+  });
   it('never splits on St., decimals, or other abbreviation periods', () => {
     const s = splitSentences(RATIONALE);
     expect(s).toHaveLength(3);
@@ -38,6 +44,28 @@ describe('splitSentences', () => {
     expect(splitSentences('One here. Two there! Three?')).toEqual(['One here.', 'Two there!', 'Three?']);
     expect(splitSentences('')).toEqual([]);
     expect(splitSentences(null)).toEqual([]);
+  });
+});
+
+describe('September 5 natural-post context regression', () => {
+  it.each([
+    'I expect that continuity to produce enough unsuccessful Alabama possessions to make sustained separation difficult.',
+    'I expect Cook to test whether that reconstruction has immediately corrected the run-defense problems.',
+    'My judgment is that those connections help Auburn sustain possessions against Baylor’s reconstructed defense.',
+    'I expect that familiarity to matter immediately.',
+    'I expect those options to help the Bobcats keep answering across four quarters.',
+    'I expect that front to make establishing JMU’s running game difficult enough to prevent comfortable, repeated scoring possessions.',
+    'I expect this particular lineup to struggle to generate sustained offense against Messick.',
+    'The unresolved fact is how those new blocking combinations handle Indiana’s front.',
+  ])('rejects unresolved context even when another team or player is named: %s', sentence => {
+    expect(isStandaloneSentence(sentence)).toBe(false);
+    expect(isSafeReasonPair(sentence, { opening: sentence, closing: '' }, 280)).toBe(false);
+  });
+
+  it('keeps an explicit named argument and supporting fact whole', () => {
+    const opening = 'I’m taking Tulane’s points because its quarterback running threat targets a documented Duke problem.';
+    const closing = 'Zeon Chriss-Gremillion brings 992 career rushing yards and 10 rushing touchdowns.';
+    expect(isSafeReasonPair(`${opening} ${closing}`, { opening, closing }, 280)).toBe(true);
   });
 });
 

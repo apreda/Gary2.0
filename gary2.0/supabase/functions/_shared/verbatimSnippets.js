@@ -6,7 +6,7 @@
  * Gary, word for word.
  */
 
-const ABBREVIATION = /^(?:St|Jr|Sr|Mr|Mrs|Ms|Dr|vs|No)\.$/i;
+const ABBREVIATION = /^(?:St|Jr|Sr|Mr|Mrs|Ms|Dr|vs|No|[ap]\.m)\.$/i;
 
 /** Whole sentences of a rationale, abbreviation- and decimal-safe. */
 export function splitSentences(text) {
@@ -87,7 +87,7 @@ const TORN_OPENER = /^(?:but|and|so|yet|still|also|plus|though|however|meanwhile
 const THIRD_PERSON = /\b(?:he|his|him|she|her|they|their|them|it|its)\b/i;
 // References to a previous paragraph do not become self-contained just because
 // another player happens to be named later in the sentence (Sep 3–4 posts).
-const BACK_REFERENCE = /\b(?:that|those|these|this)\s+(?:(?:late[- ]inning|early|offensive|defensive|returning|uneven|surrounding|recent|batting)\s+){0,2}(?:uncertainty|opportunity|advantages?|edges?|risks?|matchup|split|splits|production|stretch|span|form|case|read|number|numbers|pieces|separation|route|judgment|difference|arms|order)\b/i;
+const BACK_REFERENCE = /\b(?:that|those|these|this)\s+(?:(?:late[- ]inning|early|offensive|defensive|returning|uneven|surrounding|recent|batting|particular|new|blocking|drive-sustaining)\s+){0,2}(?:uncertainty|opportunity|advantages?|edges?|risks?|matchup|split|splits|production|stretch|span|form|case|read|number|numbers|pieces|separation|route|judgment|difference|arms|order|continuity|reconstruction|front|combinations?|connections?|familiarity|options?|position|vulnerabilities|relationships?|lineup|problems?)\b/i;
 const STAT_ABBREVIATIONS = new Set(['ERA', 'WHIP', 'OPS', 'ER', 'K', 'BB', 'HR', 'RBI', 'AVG', 'OBP', 'SLG', 'MLB', 'NFL', 'NBA', 'NCAAF', 'AAA', 'AA']);
 // Sentence-initial capitalization is ambiguous, so word[0] only counts as a
 // name when it is not an ordinary sentence-starter ("Holmes has..." resolves
