@@ -56,6 +56,10 @@ returned zero messages. No mail was sent and no alert subscription was muted.
 
 ## Still open: database infrastructure incident
 
+**Later update:** the underlying capacity defect was identified and repaired
+in `HANDOFF_2026-09-06_DATABASE_CAPACITY.md`. The following records what was
+known before that investigation; it is not the latest database status.
+
 The 08:27 ET morning-health check was OK: today's board covered 18/18 games,
 MLB had 90 insights across 15 games, NCAAF had 23 across three, all game cards
 were present, and all 45 yesterday results had recaps. Picks were correctly
