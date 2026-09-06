@@ -22,15 +22,20 @@
  *    that (unbeknownst to us) DID land is harmless.
  */
 
-import { mkdirSync, readdirSync, readFileSync, writeFileSync, unlinkSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
+import * as nodeFs from 'node:fs';
+import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const OUTBOX_DIR = join(here, '..', '..', 'logs', 'pick-outbox');
 
 export const OUTBOX_LANES = new Set(['daily', 'nfl_weekly']);
+
+// Tests use a private temporary directory and fault-injected filesystem, never
+// the production pending decisions. The exported production functions below
+// retain their existing signatures and directory.
+export function createPickOutbox({ directory = OUTBOX_DIR, fs = nodeFs } = {}) {
 
 function spoolFileName(lane, dateStr, gameIds) {
   const idHash = createHash('sha256').update([...gameIds].sort().join(',')).digest('hex').slice(0, 12);
@@ -51,48 +56,86 @@ function pickGameIds(picks) {
  * Returns the spool path (or null when spooling itself failed — the spool is
  * defense-in-depth and must never block the live storage attempt).
  */
-export function writeSpool(lane, dateStr, picks) {
+function writeSpool(lane, dateStr, picks) {
   if (!OUTBOX_LANES.has(lane)) throw new Error(`Unknown outbox lane: ${lane}`);
+  let temporary;
+  let descriptor;
   try {
-    mkdirSync(OUTBOX_DIR, { recursive: true });
+    fs.mkdirSync(directory, { recursive: true });
     const gameIds = pickGameIds(picks);
-    const file = join(OUTBOX_DIR, spoolFileName(lane, dateStr, gameIds));
+    const file = join(directory, spoolFileName(lane, dateStr, gameIds));
     // JSON round-trip = the exact sanitization the RPC path applies.
-    writeFileSync(file, JSON.stringify({
+    const payload = JSON.stringify({
       spooled_at: new Date().toISOString(),
       lane,
       date: dateStr,
       game_ids: gameIds,
       picks: JSON.parse(JSON.stringify(picks)),
-    }, null, 2));
+    }, null, 2);
+    // Never open the committed decision with O_TRUNC. An interrupted write
+    // leaves either the prior complete spool or a new complete spool visible.
+    temporary = join(directory, `.${basename(file)}.${randomUUID()}.tmp`);
+    descriptor = fs.openSync(temporary, 'wx', 0o600);
+    fs.writeFileSync(descriptor, payload, 'utf8');
+    fs.fsyncSync(descriptor);
+    fs.closeSync(descriptor);
+    descriptor = undefined;
+    fs.renameSync(temporary, file);
+    temporary = undefined;
+    // Persist the renamed directory entry as well as the file contents.
+    const directoryDescriptor = fs.openSync(directory, 'r');
+    try { fs.fsyncSync(directoryDescriptor); }
+    finally { fs.closeSync(directoryDescriptor); }
     return file;
   } catch (e) {
-    console.warn(`⚠️ [Outbox] spool write failed (non-fatal): ${e.message}`);
+    console.warn(`⚠️ [Outbox] spool write failed (non-fatal): ${e.message}${temporary ? ` — unpublished file retained at ${temporary}` : ''}`);
     return null;
+  } finally {
+    if (descriptor !== undefined) {
+      try { fs.closeSync(descriptor); } catch { /* retain the unpublished bytes for diagnosis */ }
+    }
   }
 }
 
 /** Delete a spool after its picks are confirmed stored. Missing file is fine. */
-export function removeSpool(file) {
+function removeSpool(file) {
   if (!file) return;
-  try { unlinkSync(file); } catch { /* already gone — fine */ }
+  try { fs.unlinkSync(file); } catch { /* already gone — fine */ }
 }
 
 /** All spool files for one ET date (defaults to every pending file). */
-export function listSpools(dateStr = null) {
-  if (!existsSync(OUTBOX_DIR)) return [];
-  return readdirSync(OUTBOX_DIR)
+function listSpools(dateStr = null) {
+  if (!fs.existsSync(directory)) return [];
+  return fs.readdirSync(directory)
     .filter((name) => name.endsWith('.json'))
     .filter((name) => (dateStr ? name.startsWith(`${dateStr}__`) : true))
-    .map((name) => join(OUTBOX_DIR, name));
+    .map((name) => join(directory, name));
 }
 
-export function readSpool(file) {
-  const data = JSON.parse(readFileSync(file, 'utf8'));
-  if (!OUTBOX_LANES.has(data?.lane) || !Array.isArray(data?.picks)) {
-    throw new Error('malformed spool payload');
+function readSpool(file) {
+  const raw = fs.readFileSync(file, 'utf8');
+  let data;
+  try {
+    data = JSON.parse(raw);
+    if (!OUTBOX_LANES.has(data?.lane) || typeof data.date !== 'string' || !data.date
+      || !Array.isArray(data.game_ids) || data.game_ids.some((id) => typeof id !== 'string')
+      || !Array.isArray(data.picks) || !data.picks.length
+      || data.picks.some((pick) => !pick || typeof pick !== 'object' || Array.isArray(pick))) {
+      throw new Error('malformed spool payload');
+    }
+  } catch (e) {
+    e.code = 'MALFORMED_PICK_SPOOL';
+    throw e;
   }
   return data;
+}
+
+function quarantineSpool(file) {
+  const quarantine = join(directory, 'quarantine');
+  fs.mkdirSync(quarantine, { recursive: true });
+  const target = join(quarantine, `${basename(file)}.${randomUUID()}.bad`);
+  fs.renameSync(file, target);
+  return target;
 }
 
 /**
@@ -106,10 +149,10 @@ export function readSpool(file) {
  * @param {(picks: object[]) => void} args.assertStillPregame throws when any pick's game started
  * @param {(picks: object[], dateStr: string) => Promise<{success: boolean, error?: string}>} args.storeDaily
  * @param {(picks: object[]) => Promise<{success: boolean, error?: string}>} args.storeNflWeekly
- * @returns {Promise<{flushed: string[], dropped: string[], failed: string[]}>} stored / expired-or-bad / still-pending game-id groups
+ * @returns {Promise<{flushed: string[], dropped: string[], failed: string[], quarantined: string[]}>} stored / expired / still-pending groups and retained malformed-file paths
  */
-export async function flushOutbox({ dateStr, assertStillPregame, storeDaily, storeNflWeekly }) {
-  const outcome = { flushed: [], dropped: [], failed: [] };
+async function flushOutbox({ dateStr, assertStillPregame, storeDaily, storeNflWeekly }) {
+  const outcome = { flushed: [], dropped: [], failed: [], quarantined: [] };
   const files = listSpools(dateStr);
   if (files.length === 0) return outcome;
   console.log(`📬 [Outbox] ${files.length} spooled pick batch(es) pending for ${dateStr} — flushing before new work`);
@@ -119,9 +162,20 @@ export async function flushOutbox({ dateStr, assertStillPregame, storeDaily, sto
     try {
       spool = readSpool(file);
     } catch (e) {
-      console.warn(`⚠️ [Outbox] dropping unreadable spool ${file}: ${e.message}`);
-      removeSpool(file);
-      outcome.dropped.push(file);
+      if (e.code === 'ENOENT') continue; // another flusher already handled it
+      if (e.code === 'MALFORMED_PICK_SPOOL') {
+        try {
+          const retained = quarantineSpool(file);
+          console.warn(`⚠️ [Outbox] malformed spool retained at ${retained}: ${e.message}`);
+          outcome.quarantined.push(retained);
+          continue;
+        } catch (quarantineError) {
+          console.warn(`⚠️ [Outbox] quarantine failed; spool kept at ${file}: ${quarantineError.message}`);
+        }
+      } else {
+        console.warn(`⚠️ [Outbox] unreadable spool kept at ${file}: ${e.message}`);
+      }
+      outcome.failed.push(file);
       continue;
     }
     const label = `${spool.lane} ${spool.game_ids.join(',') || '(no ids)'}`;
@@ -150,5 +204,10 @@ export async function flushOutbox({ dateStr, assertStillPregame, storeDaily, sto
   }
   return outcome;
 }
+
+return { writeSpool, removeSpool, listSpools, readSpool, flushOutbox };
+}
+
+export const { writeSpool, removeSpool, listSpools, readSpool, flushOutbox } = createPickOutbox();
 
 export default { writeSpool, removeSpool, listSpools, readSpool, flushOutbox, OUTBOX_DIR };

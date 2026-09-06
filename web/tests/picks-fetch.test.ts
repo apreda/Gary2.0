@@ -15,7 +15,12 @@ afterEach(() => {
 
 describe('fetchTodayGamePicks', () => {
   it.each(['daily_picks', 'weekly_nfl_picks'])('rejects corrupt HTTP 200 %s payloads instead of hiding picks', async table => {
-    for (const malformed of ['{broken', '{}', 'null', '[null]', 42]) {
+    for (const malformed of [
+      '{broken', '{}', 'null', '[null]', 42, [{}], [{ pick: '' }], [{ pick: '  ' }],
+      [{ pick: 42 }], [{ pick: {} }], [{ pick: ' pending ' }], [{ pick: 'PASS' }],
+      [{ pick: 'No pick' }], [{ pick: 'PENDING: research' }], [{ pick: 'TBD' }],
+      [{ pick: 'Cubs ML -110', type: 'pass' }],
+    ]) {
       vi.stubGlobal('fetch', vi.fn(async (input: string) => Response.json(
         new URL(input).pathname.endsWith(`/${table}`)
           ? [{ date: '2026-09-04', week_start: '2026-09-01', picks: malformed }]

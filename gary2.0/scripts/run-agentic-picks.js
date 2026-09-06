@@ -740,7 +740,9 @@ async function main() {
           spoolDate || null,
           { beforeRetry: () => assertPicksStillPregame(spooledPicks) },
         ),
-        storeNflWeekly: (spooledPicks) => picksService.storeWeeklyNFLPicks(spooledPicks),
+        storeNflWeekly: (spooledPicks) => picksService.storeWeeklyNFLPicks(spooledPicks, {
+          beforeRetry: () => assertPicksStillPregame(spooledPicks),
+        }),
       });
       for (const flushedId of flushed.flushed) existingPickGameIds.add(String(flushedId));
     } catch (e) {
@@ -2640,7 +2642,9 @@ async function storePicks(picks) {
   if (nflPicks.length > 0) {
     const nflSpool = writeSpool('nfl_weekly', etToday, nflPicks);
     console.log(`🏈 Storing ${nflPicks.length} NFL picks in weekly table...`);
-    const nflResult = await picksService.storeWeeklyNFLPicks(nflPicks);
+    const nflResult = await picksService.storeWeeklyNFLPicks(nflPicks, {
+      beforeRetry: () => assertPicksStillPregame(nflPicks),
+    });
     if (!nflResult.success) {
       throw new Error(`NFL storage failed: ${nflResult.error || nflResult.message || 'unknown error'}`);
     }

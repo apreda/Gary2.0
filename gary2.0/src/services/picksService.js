@@ -6,6 +6,7 @@ import { supabase, supabaseAdmin } from '../supabaseClient.js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { getESTDate, toESTDate } from '../utils/dateUtils.js';
 import { withTransientRetry, isTransientDbError } from '../utils/transientRetry.js';
+import { assertGamePickPublication, assertAtomicPickReceipt, assertExistingGamePublications, isPublishedGamePick, gamePickId, gamePickIdValue } from './gamePickPublication.js';
 
 // Storage lock to prevent concurrent writes
 let isStoringPicks = false;
@@ -118,7 +119,7 @@ async function gameAlreadyHasPick(league, homeTeam, awayTeam, gameDate = null, g
   // When a BDL game id is supplied, we require it to match — this lets MLB
   // doubleheaders coexist (same teams + date but different game IDs).
   const existingGamePick = allPicks.find(p => {
-    if (p?.type === 'prop' || p?.pickType === 'prop') return false;
+    if (!isPublishedGamePick(p)) return false;
     const pickLeague = normalize(p?.league);
     const pickHome = normalize(p?.homeTeam);
     const pickAway = normalize(p?.awayTeam);
@@ -219,7 +220,7 @@ async function pickAlreadyStoredByGameId(league, gameDate, gameId) {
       ? rawPicks
       : (() => { try { return JSON.parse(rawPicks || '[]'); } catch { return []; } })();
     const existing = picks.find((pick) => {
-      if (pick?.type === 'prop' || pick?.pickType === 'prop') return false;
+      if (!isPublishedGamePick(pick)) return false;
       const pickLeague = String(pick?.league || pick?.sport || '').trim().toUpperCase();
       if (pickLeague !== normalizedLeague) return false;
       const storedId = pick?.bdl_game_id ?? pick?.game_id;
@@ -243,6 +244,8 @@ async function pickAlreadyStoredByGameId(league, gameDate, gameId) {
 async function storeDailyPicksInDatabase(picks, overrideDate = null, options = {}) {
   if (!picks || !Array.isArray(picks) || picks.length === 0)
     return { success: false, message: 'No picks provided' };
+  try { picks.forEach(pick => assertGamePickPublication(pick)); }
+  catch (error) { return { success: false, error: error.message }; }
 
   // Prevent multiple simultaneous storage operations
   if (isStoringPicks) {
@@ -251,6 +254,7 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null, options = {
   }
 
   isStoringPicks = true;
+  try {
   console.log(`🗄️ Starting storage operation for ${picks.length} picks`);
 
   // Use override date if provided (e.g., --date 2026-03-19 for advance picks), otherwise today EST
@@ -325,7 +329,7 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null, options = {
       ...(pick.homeTeamAbbreviation ? { homeTeamAbbreviation: pick.homeTeamAbbreviation } : {}),
       ...(pick.awayTeamAbbreviation ? { awayTeamAbbreviation: pick.awayTeamAbbreviation } : {}),
       // BDL game id — disambiguates doubleheaders for dedupe
-      game_id: pick.bdl_game_id ?? pick.game_id ?? null,
+      game_id: gamePickIdValue(pick),
       // Venue/tournament context (for NBA Cup, neutral site games, CFP games, etc.)
       venue: pick.venue || null,
       isNeutralSite: pick.isNeutralSite || false,
@@ -419,7 +423,6 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null, options = {
   // row. Every daily sport uses the same Postgres transaction instead. This
   // keeps MLB/NBA behavior intact while allowing NCAAF games to finish in
   // parallel without replacing each other (or a simultaneous MLB pick).
-  try {
     const sanitizedPicks = JSON.parse(JSON.stringify(validPicks));
     const missingNcaafGameId = sanitizedPicks.find((pick) => {
       const league = String(pick?.league || pick?.sport || '').trim().toUpperCase();
@@ -455,6 +458,14 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null, options = {
       return rpcData;
     }, { label: 'daily-picks atomic RPC', beforeRetry: options.beforeRetry || null });
 
+    assertAtomicPickReceipt(data, sanitizedPicks);
+    if (data.skipped > 0) {
+      const reader = supabaseAdmin || supabase;
+      const { data: row, error } = await reader.from('daily_picks').select('picks')
+        .eq('date', currentDateString).maybeSingle().abortSignal(AbortSignal.timeout(15_000));
+      if (error) throw new Error(`Publication readback failed: ${error.message}`);
+      assertExistingGamePublications(row?.picks, sanitizedPicks);
+    }
     const added = Number(data?.added ?? 0);
     const skipped = Number(data?.skipped ?? 0);
     const total = Number(data?.total ?? added);
@@ -540,10 +551,12 @@ function getNFLWeekNumber(date = new Date()) {
 /**
  * Store NFL picks in the weekly table (persists all week)
  */
-async function storeWeeklyNFLPicks(picks) {
+async function storeWeeklyNFLPicks(picks, options = {}) {
   if (!picks || !Array.isArray(picks) || picks.length === 0) {
     return { success: false, message: 'No NFL picks provided' };
   }
+  try { picks.forEach(pick => assertGamePickPublication(pick, 'NFL')); }
+  catch (error) { return { success: false, error: error.message }; }
   
   const writer = supabaseAdmin || supabase;
   const anchorDate = new Date(picks[0]?.commence_time || Date.now());
@@ -558,11 +571,11 @@ async function storeWeeklyNFLPicks(picks) {
     // mutex cannot protect this shared JSON row. Let Postgres serialize the
     // append in one transaction; the RPC is service-role-only and implements
     // the same first-writer-wins publication rule by exact provider game id.
-    const sanitizedPicks = JSON.parse(JSON.stringify(picks));
-    const missingGameId = sanitizedPicks.find((pick) => {
-      const gameId = pick?.bdl_game_id ?? pick?.game_id;
-      return gameId == null || String(gameId).trim() === '';
-    });
+    const sanitizedPicks = JSON.parse(JSON.stringify(picks.map(pick => ({
+      ...pick,
+      bdl_game_id: gamePickIdValue(pick),
+    }))));
+    const missingGameId = sanitizedPicks.find(pick => !gamePickId(pick));
     if (missingGameId) {
       return {
         success: false,
@@ -581,8 +594,15 @@ async function storeWeeklyNFLPicks(picks) {
       });
       if (error) throw new Error(error.message || 'Atomic weekly-NFL RPC failed');
       return rpcData;
-    }, { label: 'weekly-NFL atomic RPC' });
+    }, { label: 'weekly-NFL atomic RPC', beforeRetry: options.beforeRetry || null });
 
+    assertAtomicPickReceipt(data, sanitizedPicks);
+    if (data.skipped > 0) {
+      const { data: row, error } = await writer.from('weekly_nfl_picks').select('picks')
+        .eq('week_start', weekStart).eq('season', season).maybeSingle().abortSignal(AbortSignal.timeout(15_000));
+      if (error) throw new Error(`Publication readback failed: ${error.message}`);
+      assertExistingGamePublications(row?.picks, sanitizedPicks, { ledger: 'nfl_weekly' });
+    }
     const added = Number(data?.added ?? 0);
     const skipped = Number(data?.skipped ?? 0);
     const total = Number(data?.total ?? added);
@@ -649,6 +669,7 @@ async function nflGameAlreadyHasPick(homeTeam, awayTeam, gameDate = null, gameId
   const targetId = gameId != null ? String(gameId) : null;
   
   const existing = picks.find(p => {
+    if (!isPublishedGamePick(p)) return false;
     const rawId = p?.bdl_game_id ?? p?.game_id;
     if (targetId != null && rawId != null) return String(rawId) === targetId;
     const pKey = `${p.homeTeam || ''}|${p.awayTeam || ''}`.toLowerCase();

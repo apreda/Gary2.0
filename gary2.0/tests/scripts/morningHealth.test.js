@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { dateBefore, etDate, evaluateMorningHealth, loadMorningHealth, applyContentStageHistory } from '../../scripts/lib/morningHealth.js';
+import { readFileSync } from 'node:fs';
+import { dateBefore, etDate, evaluateMorningHealth, loadMorningHealth, applyContentStageHistory, finalPickRetryMinutes } from '../../scripts/lib/morningHealth.js';
 
 const date = '2026-09-05';
 const now = '2026-09-05T11:00:00Z';
@@ -78,6 +79,69 @@ describe('morning output health', () => {
   it('does not diagnose provider failure from a legitimate empty news feed', () => {
     const data = snapshot(); data.wire = [];
     expect(check(evaluateMorningHealth({ date, now, data }), 'wire:MLB').status).toBe('warn');
+  });
+  it.each([null, undefined, '', '  ', [], '[]'])('keeps a genuine absent payload pending before the final retry window: %j', picks => {
+    const data = snapshot(); data.picks = [{ date, picks }];
+    const report = evaluateMorningHealth({ date, now, data });
+    expect(check(report, 'picks:MLB').status).toBe('pending');
+    expect(report.status).toBe('ok');
+  });
+  it.each(['[broken', '{}', 'null', 42, [null], [[]], [{}], [{ pick: '' }], [{ pick: '  ' }], [{ pick: {} }], [{ pick: 42 }], [{ pick: 'PENDING' }], [{ pick: 'PASS' }]])('fails corrupt stored game data before kickoff instead of reporting a pending empty board: %j', picks => {
+    const data = snapshot(); data.picks = [{ date, picks }];
+    const report = evaluateMorningHealth({ date, now, data });
+    expect(report.status).toBe('fail');
+    expect(check(report, 'integrity:picks').status).toBe('fail');
+    expect(check(report, 'picks:MLB')).toBeUndefined();
+    expect(check(report, 'results')).toBeUndefined();
+  });
+  it('accepts serialized arrays for both daily and weekly storage and preserves exact game/date checks', () => {
+    const data = snapshot([game(1, 'MLB', '2026-09-05T10:00:00Z'), game(2, 'NFL', '2026-09-05T10:00:00Z')]);
+    data.picks = [{ date, picks: JSON.stringify([{ league: 'MLB', game_id: 1, pick: 'A ML +110' }]) }];
+    data.weekly = [{ picks: JSON.stringify([{ game_id: 2, pick: 'B -3', commence_time: '2026-09-05T10:00:00Z' }]) }];
+    const report = evaluateMorningHealth({ date, now, data });
+    expect(check(report, 'picks:MLB').status).toBe('ok');
+    expect(check(report, 'picks:NFL').status).toBe('ok');
+    data.weekly[0].picks = JSON.stringify([{ game_id: 2, pick: 'B -3', commence_time: '2026-09-06T10:00:00Z' }]);
+    expect(check(evaluateMorningHealth({ date, now, data }), 'picks:NFL').status).toBe('fail');
+  });
+  it('never counts props as a published game or as an expected game-result grade', () => {
+    const data = snapshot([game(1, 'MLB', '2026-09-05T10:00:00Z')]);
+    const picks = [{ league: 'MLB', game_id: 1, pick: 'Player over 1.5', type: 'prop' }, { league: 'MLB', game_id: 1, pick: 'Player under 2.5', pickType: 'PROP' }];
+    data.picks = [{ date, picks }, { date: '2026-09-04', picks }];
+    const report = evaluateMorningHealth({ date, now, data });
+    expect(check(report, 'picks:MLB')).toMatchObject({ status: 'fail', missing_started_game_ids: [1] });
+    expect(check(report, 'results')).toMatchObject({ status: 'ok', missing_game_ids: [] });
+    expect(check(report, 'integrity:picks')).toBeUndefined();
+  });
+  it('cannot hide malformed yesterday or weekly data behind zero missing grades', () => {
+    for (const source of ['picks', 'weekly']) {
+      const data = snapshot([game(2, 'NFL', '2026-09-05T10:00:00Z')]);
+      data[source] = [{ date: '2026-09-04', picks: '[broken' }];
+      const report = evaluateMorningHealth({ date, now, data });
+      expect(report.status).toBe('fail');
+      expect(check(report, `integrity:${source}`).status).toBe('fail');
+      expect(check(report, 'picks:NFL')).toBeUndefined();
+      expect(check(report, 'results')).toBeUndefined();
+    }
+  });
+  it.each([['MLB', 15], ['NBA', 15], ['NFL', 30], ['NCAAF', 30]])('warns for a missing %s pick only when its final retry window begins', (league, minutes) => {
+    const kickoff = '2026-09-05T12:00:00Z';
+    const data = snapshot([game(1, league, kickoff)]);
+    const start = Date.parse(kickoff);
+    const before = evaluateMorningHealth({ date, now: start - minutes * 60_000 - 1, data });
+    expect(check(before, `picks:${league}`).status).toBe('pending');
+    const finalWindow = evaluateMorningHealth({ date, now: start - minutes * 60_000, data });
+    expect(check(finalWindow, `picks:${league}`)).toMatchObject({ status: 'warn', missing_final_window_game_ids: [1], missing_started_game_ids: [] });
+    const started = evaluateMorningHealth({ date, now: start, data });
+    expect(check(started, `picks:${league}`)).toMatchObject({ status: 'fail', missing_started_game_ids: [1], missing_final_window_game_ids: [] });
+  });
+  it('keeps the health warning aligned with the scheduler final retry constants', () => {
+    const scheduler = readFileSync(new URL('../../scripts/scheduler.js', import.meta.url), 'utf8');
+    for (const [name, league] of [['RETRY_LEAD_TIMES_MINUTES', 'MLB'], ['FOOTBALL_RETRY_LEAD_TIMES_MINUTES', 'NFL']]) {
+      const values = scheduler.match(new RegExp(`const ${name} = (\\[[^\\]]+\\]);`));
+      expect(values, `${name} must remain visible to the health deadline contract`).not.toBeNull();
+      expect(finalPickRetryMinutes(league)).toBe(JSON.parse(values[1]).at(-1));
+    }
   });
 });
 

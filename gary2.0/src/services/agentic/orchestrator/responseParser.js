@@ -298,11 +298,15 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   }
   
   // EXTRACT CONFIDENCE from parsed data if available
-  if (!parsed.confidence && parsed.confidence_score) {
+  if (parsed.confidence === undefined && parsed.confidence_score !== undefined) {
     parsed.confidence = parsed.confidence_score;
     console.log(`[Orchestrator] Using confidence_score: ${parsed.confidence}`);
   }
-  if (!parsed.confidence && !parsed.confidence_score) {
+  if (parsed.confidence != null && (typeof parsed.confidence !== 'number' || !Number.isFinite(parsed.confidence))) {
+    console.error('[Orchestrator] REJECTED: confidence must be a stated number or null');
+    return null;
+  }
+  if (parsed.confidence == null) {
     console.warn(`[Orchestrator] WARNING: Gary did not output a confidence score — storing as null`);
   }
   
@@ -525,8 +529,8 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     odds: odds,
     // CONFIDENCE - Gary's organic conviction in the bet (no fallback — must come from Gary)
     confidence: parsed.confidence ?? null,
-    homeTeam: parsed.homeTeam || homeTeam,
-    awayTeam: parsed.awayTeam || awayTeam,
+    homeTeam,
+    awayTeam,
     league: normalizeSportToLeague(sport),
     sport: sport,
     rationale: rationale,

@@ -13,7 +13,7 @@ vi.mock('../../src/supabaseClient.js', () => ({
     },
     from: mocks.from,
   },
-  supabaseAdmin: { rpc: mocks.rpc },
+  supabaseAdmin: { rpc: mocks.rpc, from: mocks.from },
 }));
 
 const { picksService } = await import('../../src/services/picksService.js');
@@ -83,6 +83,46 @@ describe('atomic daily-picks storage', () => {
       mode: 'append',
     });
     expect(mocks.from).not.toHaveBeenCalled();
+  });
+
+  it.each([null, {}, { added: 0, skipped: 0, total: 0, game_ids: [], mode: 'append' },
+    { added: 1, skipped: 0, total: 1, game_ids: ['unrelated'], mode: 'append' }])('does not acknowledge malformed RPC receipt %j', async receipt => {
+    mocks.rpc.mockResolvedValue({ data: receipt, error: null });
+    expect(await picksService.storeDailyPicksInDatabase([ncaafPick()], '2026-08-29')).toMatchObject({ success: false, error: expect.stringContaining('Invalid atomic pick publication receipt') });
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['', '   '])('stores the validated fallback game ID when the primary ID is %j', async bdl_game_id => {
+    mocks.rpc.mockResolvedValue({ data: { added: 1, skipped: 0, total: 1, game_ids: ['42'], mode: 'insert' }, error: null });
+    const result = await picksService.storeDailyPicksInDatabase([
+      ncaafPick({ league: 'MLB', sport: 'MLB', bdl_game_id, game_id: 42 }),
+    ], '2026-08-29');
+    expect(result.success).toBe(true);
+    expect(mocks.rpc.mock.calls[0][1].p_new_picks[0].game_id).toBe(42);
+  });
+
+  it('rejects malformed inputs without poisoning the next storage operation or changing confidence', async () => {
+    for (const bad of [null, { league: 'NCAAF', game_id: '123' }, ncaafPick({ confidence: 'very confident' })]) {
+      expect((await picksService.storeDailyPicksInDatabase([bad], '2026-08-29')).success).toBe(false);
+    }
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    mocks.rpc.mockResolvedValue({ data: { added: 1, skipped: 0, total: 1, game_ids: ['820001'], mode: 'insert' }, error: null });
+    expect((await picksService.storeDailyPicksInDatabase([ncaafPick({ confidence: 0.738 })], '2026-08-29')).success).toBe(true);
+    expect(mocks.rpc.mock.calls[0][1].p_new_picks[0].confidence).toBe(0.738);
+  });
+
+  it.each(['original', 'malformed', 'missing', 'error'])('verifies a guard-skipped %s record before acknowledging publication', async kind => {
+    mocks.rpc.mockResolvedValue({ data: { added: 0, skipped: 1, total: 1, game_ids: [], mode: 'append' }, error: null });
+    const original = ncaafPick({ pick: kind === 'malformed' ? 'PENDING' : 'Notre Dame +2.5 -105', odds: -105 });
+    const query = { select: vi.fn(() => query), eq: vi.fn(() => query), maybeSingle: vi.fn(() => query), abortSignal: vi.fn(async () => ({
+      data: { picks: kind === 'missing' ? [] : [original] }, error: kind === 'error' ? { message: 'read failed' } : null,
+    })) };
+    mocks.from.mockReturnValue(query);
+    const result = await picksService.storeDailyPicksInDatabase([ncaafPick()], '2026-08-29');
+    expect(result.success).toBe(kind === 'original');
+    expect(original.pick).toBe(kind === 'malformed' ? 'PENDING' : 'Notre Dame +2.5 -105');
+    expect(query.eq).toHaveBeenCalledWith('date', '2026-08-29');
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
   });
 
   it('preserves the football-only immutable publication receipt', async () => {

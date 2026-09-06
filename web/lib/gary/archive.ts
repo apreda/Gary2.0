@@ -1,5 +1,5 @@
 import { estDateStr, todayEST } from './dates';
-import { filterWeeklyPicksForDate, parsePicksJson } from './picks';
+import { filterWeeklyPicksForDate, parseGamePicksJson, parsePicksJson } from './picks';
 export { filterWeeklyPicksForDate } from './picks';
 import { mergeGameResults } from './results';
 import { rest } from './supabase';
@@ -243,9 +243,9 @@ export async function fetchArchiveGamePicks(date: string, revalidate = date === 
     ),
   ]);
 
-  const daily = dailyRows.flatMap(row => parsePicksJson<GaryPick>(row.picks));
+  const daily = dailyRows.flatMap(row => parseGamePicksJson(row.picks));
   const weekly = weeklyRows.flatMap(row =>
-    filterWeeklyPicksForDate(parsePicksJson<GaryPick>(row.picks), date),
+    filterWeeklyPicksForDate(parseGamePicksJson(row.picks), date),
   );
   return dedupeArchivePicks([...daily, ...weekly]);
 }

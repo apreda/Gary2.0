@@ -16,12 +16,13 @@ vi.mock('../../src/supabaseClient.js', () => ({
   supabaseAdmin: { rpc: vi.fn(), from: mocks.from },
 }));
 
-const { pickAlreadyStoredByGameId } = await import('../../src/services/picksService.js');
+const { pickAlreadyStoredByGameId, gameAlreadyHasPick, nflGameAlreadyHasPick } = await import('../../src/services/picksService.js');
 
 function makeQuery() {
   const query = {
     select: vi.fn(() => query),
     eq: vi.fn(() => query),
+    or: vi.fn(() => query),
     limit: vi.fn(async () => mocks.response),
   };
   return query;
@@ -59,6 +60,23 @@ describe('exact provider-id pick preflight', () => {
     });
     expect(mocks.from).toHaveBeenCalledWith('daily_picks');
     expect(query.eq).toHaveBeenCalledWith('date', '2026-08-29');
+  });
+
+  it.each([undefined, '', '  ', 'PENDING', 'PASS', 'NO PICK', {}])('does not count an exact ID with invalid ticket %j as publication', async pick => {
+    mocks.response = { data: [{ picks: [{ league: 'MLB', game_id: 42, pick }] }], error: null };
+    expect(await pickAlreadyStoredByGameId('MLB', '2026-09-06', 42)).toMatchObject({ exists: false });
+  });
+
+  it.each(['daily', 'NFL'])('legacy %s matchup guards ignore placeholders and props but retain an original ticket', async lane => {
+    const league = lane === 'NFL' ? 'NFL' : 'MLB';
+    const base = { league, game_id: 42, homeTeam: 'Home Team', awayTeam: 'Away Team' };
+    const read = () => lane === 'NFL'
+      ? nflGameAlreadyHasPick('Home Team', 'Away Team', '2026-09-06T12:00:00Z', 42)
+      : gameAlreadyHasPick('MLB', 'Home Team', 'Away Team', '2026-09-06', 42);
+    mocks.response = { data: [{ picks: [{ ...base, pick: 'PENDING' }, { ...base, pick: 'Player over 2.5', type: 'prop' }] }], error: null };
+    expect((await read()).exists).toBe(false);
+    mocks.response.data[0].picks.push({ ...base, pick: 'Home Team ML -120' });
+    expect(await read()).toMatchObject({ exists: true, existingPick: 'Home Team ML -120' });
   });
 
   it('does not use matchup fallback for an id-less legacy row', async () => {

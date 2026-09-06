@@ -21,8 +21,8 @@ export function parsePicksJson<T>(value: unknown): T[] {
   return [];
 }
 
-/** A corrupt successful response must not replace the cached game board. */
-function parseGamePicksJson(value: unknown): GaryPick[] {
+/** Reject corrupt game feeds instead of presenting them as an empty board. */
+export function parseGamePicksJson(value: unknown): GaryPick[] {
   if (value == null || (typeof value === 'string' && value.trim() === '')) return [];
   let parsed = value;
   if (typeof value === 'string') {
@@ -32,7 +32,12 @@ function parseGamePicksJson(value: unknown): GaryPick[] {
       throw new Error('Malformed stored game picks');
     }
   }
-  if (!Array.isArray(parsed) || parsed.some(pick => !pick || typeof pick !== 'object' || Array.isArray(pick))) {
+  if (!Array.isArray(parsed) || parsed.some(pick =>
+    !pick || typeof pick !== 'object' || Array.isArray(pick)
+    || typeof pick.pick !== 'string' || !pick.pick.trim()
+    || String(pick.type || '').trim().toLowerCase() === 'pass'
+    || /^(?:pass|pending|no[\s_-]*pick|tbd|unknown)(?:$|\s|:)/i.test(pick.pick.trim()),
+  )) {
     throw new Error('Malformed stored game picks');
   }
   return parsed as GaryPick[];

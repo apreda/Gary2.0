@@ -1,4 +1,5 @@
 import { completedPlayerCardGameIds } from './playerCardStorage.js';
+import { isPublishedGamePick } from '../../src/services/gamePickPublication.js';
 
 const HOUR = 3_600_000;
 const leagueOf = row => String(row?.league || ({ baseball_mlb: 'MLB', americanfootball_nfl: 'NFL', americanfootball_ncaaf: 'NCAAF', basketball_nba: 'NBA' })[row?.sport] || '').toUpperCase();
@@ -7,8 +8,34 @@ const keyOf = row => `${leagueOf(row)}|${idOf(row)}`;
 const rowsOf = value => Array.isArray(value) ? value : [];
 const timestamp = row => Date.parse(row?.updated_at || row?.created_at || '');
 const hasGrade = row => ['WON', 'LOST', 'WIN', 'LOSS', 'PUSH', 'PUSHED', 'W', 'L', 'P', 'VOID', 'CANCELLED'].includes(String(row?.result || '').toUpperCase());
-const hasPick = row => row?.pick && !['PASS', 'PENDING', 'NO PICK'].includes(String(row.pick).trim().toUpperCase());
+const isProp = row => ['type', 'pickType'].some(field => String(row?.[field] || '').trim().toLowerCase() === 'prop');
 const recapKey = row => `${leagueOf(row)}|${row.game_date}|${row.matchup}|${row.pick_text}`;
+
+// Mirrors the final scheduler retry tier without importing the live daemon.
+// The focused contract test checks both values against scheduler.js.
+export const finalPickRetryMinutes = league => ['NFL', 'NCAAF'].includes(league) ? 30 : 15;
+
+function storedGamePicks(value) {
+  // Null/blank is the legacy absent-column representation; a stored JSON
+  // value that decodes to anything except an array is corrupt, not absent.
+  if (value == null || (typeof value === 'string' && !value.trim())) return [];
+  let parsed = value;
+  if (typeof value === 'string') {
+    try { parsed = JSON.parse(value); }
+    catch { throw new Error('malformed JSON in picks'); }
+  }
+  if (!Array.isArray(parsed)) throw new Error('picks must contain an array');
+  const games = [];
+  for (const [index, pick] of parsed.entries()) {
+    if (!pick || typeof pick !== 'object' || Array.isArray(pick)) throw new Error(`picks[${index}] is not a ticket object`);
+    // Older daily rows can also contain props; they cannot establish that a
+    // game side was published or create a missing game-result expectation.
+    if (isProp(pick)) continue;
+    if (!isPublishedGamePick(pick)) throw new Error(`picks[${index}] has no usable game ticket`);
+    games.push(pick);
+  }
+  return games;
+}
 
 export function etDate(value = new Date()) {
   return new Date(value).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
@@ -120,9 +147,20 @@ export function evaluateMorningHealth({ date, now = new Date(), data = {}, error
     const missing = slate.filter(row => !boardGames.some(game => keyOf(game) === keyOf(row)));
     add('board', board && fresh(board) && !missing.length ? 'ok' : 'fail', `${boardGames.length}/${slate.length} slate games on today's board; updated ${board?.updated_at || 'never'}`, { missing_game_ids: missing.map(idOf) });
   }
-  const daily = rowsOf(data.picks).flatMap(row => rowsOf(row.picks).map(pick => ({ ...pick, saved_date: row.date })));
-  const weekly = rowsOf(data.weekly).flatMap(row => rowsOf(row.picks).map(pick => ({ ...pick, league: 'NFL' })));
-  const allPicks = [...daily, ...weekly].filter(hasPick);
+  const invalidPickSources = new Set();
+  const readPicks = (source, transform) => rowsOf(data[source]).flatMap((row, index) => {
+    try {
+      if (!row || typeof row !== 'object' || Array.isArray(row)) throw new Error('row is not an object');
+      return storedGamePicks(row.picks).map(pick => transform(pick, row));
+    } catch (error) {
+      invalidPickSources.add(source);
+      add(`integrity:${source}`, 'fail', `Stored ${source} row ${index + 1} (${row?.date || row?.week_start || 'undated'}): ${error.message}; publication and settlement coverage are unverified.`);
+      return [];
+    }
+  });
+  const daily = readPicks('picks', (pick, row) => ({ ...pick, saved_date: row.date }));
+  const weekly = readPicks('weekly', pick => ({ ...pick, league: 'NFL' }));
+  const allPicks = [...daily, ...weekly];
   for (const league of leagues) {
     const games = slate.filter(row => leagueOf(row) === league);
     const insights = rowsOf(data.insights).filter(row => leagueOf(row) === league);
@@ -146,17 +184,19 @@ export function evaluateMorningHealth({ date, now = new Date(), data = {}, error
       // legitimate outcome from a failed generation; never fabricate content.
       add(`wire:${league}`, wire.some(fresh) ? 'ok' : 'warn', `${wire.length} current-date items; ${wire.length ? 'check freshness' : 'empty feed: inspect Wire stage status before diagnosing provider failure'}`);
     }
-    if (!errors.picks && (league !== 'NFL' || !errors.weekly)) {
+    if (!errors.picks && !invalidPickSources.has('picks') && (league !== 'NFL' || (!errors.weekly && !invalidPickSources.has('weekly')))) {
       const picked = games.filter(game => allPicks.some(pick => keyOf(pick) === keyOf(game) && (pick.saved_date === date || (pick.commence_time && etDate(pick.commence_time) === date))));
       const missing = games.filter(game => !picked.includes(game));
       const started = missing.filter(game => Date.parse(game.commence_time) <= nowMs);
-      add(`picks:${league}`, started.length ? 'fail' : missing.length ? 'pending' : 'ok', `${picked.length}/${games.length} published; ${started.length} started without a saved pick; ${missing.length - started.length} still pregame.`, { missing_started_game_ids: started.map(idOf) });
+      const finalWindow = finalPickRetryMinutes(league);
+      const urgent = missing.filter(game => Date.parse(game.commence_time) > nowMs && Date.parse(game.commence_time) <= nowMs + finalWindow * 60_000);
+      add(`picks:${league}`, started.length ? 'fail' : urgent.length ? 'warn' : missing.length ? 'pending' : 'ok', `${picked.length}/${games.length} published; ${started.length} started without a saved pick; ${missing.length - started.length} still pregame (${urgent.length} within the final ${finalWindow}-minute retry window).`, { missing_started_game_ids: started.map(idOf), missing_final_window_game_ids: urgent.map(idOf) });
     }
   }
   const results = [...new Map([...rowsOf(data.results), ...rowsOf(data.nflResults).map(row => ({ ...row, league: 'NFL' }))]
     .filter(hasGrade).map(row => [`${row.game_date}|${keyOf(row)}|${row.pick_text}`, row])).values()];
   const ydayPicks = allPicks.filter(pick => pick.saved_date === yesterday || (pick.commence_time && etDate(pick.commence_time) === yesterday));
-  if (!errors.results && !errors.nflResults && !errors.picks && !errors.weekly) {
+  if (!errors.results && !errors.nflResults && !errors.picks && !errors.weekly && !invalidPickSources.size) {
     const missing = ydayPicks.filter(pick => !results.some(row => row.game_date === yesterday && idOf(row) != null && idOf(pick) != null && keyOf(row) === keyOf(pick) && row.pick_text === pick.pick));
     add('results', missing.length ? 'warn' : 'ok', `${results.length} settled rows for ${yesterday}; ${missing.length} saved tickets without an exact-game grade (pending/postponed status needs inspection).`, { missing_game_ids: [...new Set(missing.map(idOf))] });
   }

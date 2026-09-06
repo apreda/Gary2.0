@@ -17,6 +17,27 @@ function response(overrides = {}) {
 }
 
 describe('game-pick market truth', () => {
+  it.each(['very confident', '0.73', {}, []])('retries malformed confidence %j through the existing parser failure path', confidence => {
+    expect(parseGaryResponse(response({ confidence }), 'Buffalo Bills', 'Carolina Panthers', 'americanfootball_nfl',
+      { spread_home: -3.5, spread_away: 3.5, spread_home_odds: -108, spread_away_odds: -112 })).toBeNull();
+  });
+  it.each([null, 0, 0.738, 1])('keeps stated confidence %j unchanged', confidence => {
+    expect(parseGaryResponse(response({ confidence }), 'Buffalo Bills', 'Carolina Panthers', 'americanfootball_nfl',
+      { spread_home: -3.5, spread_away: 3.5, spread_home_odds: -108, spread_away_odds: -112 })?.confidence).toBe(confidence);
+  });
+  it('does not replace an explicit zero/null with the alias and preserves an alias-only zero', () => {
+    const parse = fields => parseGaryResponse(response(fields), 'Buffalo Bills', 'Carolina Panthers', 'americanfootball_nfl',
+      { spread_home: -3.5, spread_away: 3.5, spread_home_odds: -108, spread_away_odds: -112 });
+    expect(parse({ confidence: 0, confidence_score: 0.8 })?.confidence).toBe(0);
+    expect(parse({ confidence: null, confidence_score: 0.8 })?.confidence).toBeNull();
+    expect(parse({ confidence: undefined, confidence_score: 0 })?.confidence).toBe(0);
+  });
+  it('binds stored matchup metadata to the source game rather than model-authored names', () => {
+    const parsed = parseGaryResponse(response({ homeTeam: 'Wrong Home Team', awayTeam: 'Wrong Away Team' }),
+      'Buffalo Bills', 'Carolina Panthers', 'americanfootball_nfl',
+      { spread_home: -3.5, spread_away: 3.5, spread_home_odds: -108, spread_away_odds: -112 });
+    expect(parsed).toMatchObject({ homeTeam: 'Buffalo Bills', awayTeam: 'Carolina Panthers', confidence: 0.61 });
+  });
   it('replaces a model-authored spread and price with the picked side verified market', () => {
     const parsed = parseGaryResponse(
       response(),
