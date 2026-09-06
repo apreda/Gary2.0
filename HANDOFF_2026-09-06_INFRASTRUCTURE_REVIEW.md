@@ -94,3 +94,50 @@ The detailed private infrastructure review is at
 It includes the remaining recovery, monitoring and cloud configuration work.
 The next overnight run has not yet happened and is not verified by current
 passing health checks.
+
+## Second review — September 6, 10:19–10:31 ET
+
+The publication repair described in `HANDOFF_2026-09-06_PICK_PUBLICATION.md`
+is released at `3173b93c` with passing Verify and a Ready Vercel deployment.
+The earlier paragraph describing concurrent uncommitted publication work is
+historical. All 14 public page/XML checks passed against that deployment.
+
+The post-resize database sample contains 178 successful cron runs, no new
+failures, and 153 retained downstream HTTP responses, all 200 without detected
+transport errors or explicit failure flags. There are no blocked sessions or
+ungranted locks. At 10:21 ET, available database memory was 471 MiB; the Mac
+had 4.9 GiB free disk. The 750 retained failed cron attempts are historical.
+
+Current coverage passes: 18/18 board games, MLB insights for 15 games,
+college insights for three, complete cards, and 45/45 yesterday grades and
+recaps. Picks remain pending before MLB's first 10:40 ET window. Scheduler
+86368 and Winners 11032 run in the canonical checkout; all nine installed
+LaunchAgents exactly match their versioned definitions. AC power and sleep
+prevention are active. No observation attributes the database incident to
+the Mac going offline; the measured capacity defect is documented separately.
+
+A pure reproduction found one additional parser/publication mismatch. A valid
+ticket with optional model metadata such as `total: "44.5"` passed decision
+validation, then failed the strict writer after the model retry loop ended.
+Storage retried the same invalid object. This was a code-path reproduction,
+not an observed failure of today's scheduled picks.
+
+The parser now resolves authoritative market precedence first, normalizes
+finite numeric strings in the five published market metadata fields, and
+returns malformed values to the existing decision retry path. Missing values
+remain null; confidence, market selection, prompts and unrelated `totalOdds`
+behavior are unchanged. The 61 focused parser/publication tests and all 2,139
+backend tests across 234 suites passed with isolated PostgreSQL 17 enabled.
+Full backend receipt: `/tmp/gary-second-review-backend-20260906.log`.
+
+No daemon restart is needed for this parser-only change: neither scheduler
+nor Winners imports it, and every pick run starts a fresh Node child in the
+canonical checkout. Fresh children compute the changed game era themselves;
+the scheduler's startup era banner is a historical value. Release/CI and
+final production-truth receipts are recorded in the private review.
+
+One non-blocking logging issue remains: scheduler lines 1798, 1817 and 1840
+label queued attempts as games (72 attempts for 18 games at four tiers).
+There are not 72 distinct games or duplicate schedule owners. No cosmetic
+scheduler edit or restart was made for that wording. The next overnight
+cycle and the first new ticket remain unobserved at this review snapshot.

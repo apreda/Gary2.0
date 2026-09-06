@@ -1,5 +1,5 @@
 import { normalizeSportToLeague } from './orchestratorHelpers.js';
-import { spreadForSide } from '../../marketTruth.js';
+import { finiteMarketNumber, spreadForSide } from '../../marketTruth.js';
 
 /**
  * Parse Gary's response to extract the pick JSON
@@ -523,6 +523,26 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
       ? gameOdds.spread_away_odds
       : null;
 
+  // Resolve the source first so model metadata cannot replace a supplied
+  // market. Numeric strings are allowed at this boundary; malformed values
+  // must retry the decision before it reaches the strict publication writer.
+  const marketMetadata = {
+    spread: marketSpread ?? parsed.spread ?? null,
+    spreadOdds: marketSpreadOdds ?? parsed.spreadOdds ?? null,
+    moneylineHome: gameOdds.moneyline_home ?? parsed.moneylineHome ?? null,
+    moneylineAway: gameOdds.moneyline_away ?? parsed.moneylineAway ?? null,
+    total: gameOdds.total ?? parsed.total ?? null,
+  };
+  for (const [key, value] of Object.entries(marketMetadata)) {
+    if (value == null) continue;
+    const number = finiteMarketNumber(value);
+    if (number === null) {
+      console.error(`[Orchestrator] REJECTED: ${key} must be a finite market number or null`);
+      return null;
+    }
+    marketMetadata[key] = number;
+  }
+
   return {
     pick: pickText,
     type: parsed.type || 'spread',
@@ -534,12 +554,7 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     league: normalizeSportToLeague(sport),
     sport: sport,
     rationale: rationale,
-    // Include odds from Gary's output — fall back to game data, NEVER to -110
-    spread: marketSpread ?? parsed.spread ?? null,
-    spreadOdds: marketSpreadOdds ?? parsed.spreadOdds ?? null,
-    moneylineHome: gameOdds.moneyline_home ?? parsed.moneylineHome ?? null,
-    moneylineAway: gameOdds.moneyline_away ?? parsed.moneylineAway ?? null,
-    total: gameOdds.total ?? parsed.total ?? null,
+    ...marketMetadata,
     totalOdds: gameOdds.total_over_odds ?? parsed.totalOdds ?? null,
     // Additional judge fields
     momentum: parsed.momentum || null,

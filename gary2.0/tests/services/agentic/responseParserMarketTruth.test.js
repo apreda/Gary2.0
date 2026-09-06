@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseGaryResponse } from '../../../src/services/agentic/orchestrator/responseParser.js';
+import { assertGamePickPublication } from '../../../src/services/gamePickPublication.js';
 
 const rationale = `${'Verified matchup evidence supports this side at the posted market price. '.repeat(18)}Final sentence.`;
 
@@ -171,6 +172,62 @@ describe('game-pick market truth', () => {
       },
     );
     expect(noLine).toBeNull();
+  });
+});
+
+describe('optional market metadata publication compatibility', () => {
+  const spreadMarket = { spread_home: -3.5, spread_away: 3.5, spread_home_odds: -108, spread_away_odds: -112 };
+  const parse = (fields = {}, market = {}) => parseGaryResponse(response(fields),
+    'Buffalo Bills', 'Carolina Panthers', 'americanfootball_nfl', { ...spreadMarket, ...market });
+
+  it('normalizes numeric-string optional metadata into a publication-ready decision', () => {
+    const parsed = parse({ moneylineHome: ' -166 ', moneylineAway: '+140', total: '44.5' });
+    expect(parsed).toMatchObject({ moneylineHome: -166, moneylineAway: 140, total: 44.5,
+      pick: 'Buffalo Bills -3.5 -108', spread: -3.5, odds: -108, confidence: 0.61 });
+    expect(() => assertGamePickPublication({ ...parsed, game_id: 42, commence_time: '2026-09-06T23:00:00Z' }, 'NFL')).not.toThrow();
+  });
+
+  it('normalizes source numeric strings while retaining their precedence over model metadata', () => {
+    const parsed = parse({ moneylineHome: -999, moneylineAway: 999, total: 999 },
+      { moneyline_home: '-166', moneyline_away: '+140', total: '44.5' });
+    expect(parsed).toMatchObject({ moneylineHome: -166, moneylineAway: 140, total: 44.5 });
+  });
+
+  it.each(['moneylineHome', 'moneylineAway', 'total'])('retries malformed optional %s during parsing', key => {
+    for (const value of ['', ' ', '44.5 points', 'NaN', 'Infinity', {}, [], true]) {
+      expect(parse({ [key]: value }), `${key}: ${JSON.stringify(value)}`).toBeNull();
+    }
+  });
+
+  it('normalizes spread metadata on a moneyline ticket and rejects malformed values', () => {
+    const parseMoneyline = fields => parseGaryResponse(response({ pick: 'Boston Red Sox ML -120', type: 'moneyline', ...fields }),
+      'Boston Red Sox', 'New York Yankees', 'baseball_mlb', { moneyline_home: -120 });
+    expect(parseMoneyline({ spread: '-1.5', spreadOdds: '+140' })).toMatchObject({ spread: -1.5, spreadOdds: 140, odds: -120 });
+    expect(parseMoneyline({ spread: '-1.5 runs', spreadOdds: 140 })).toBeNull();
+    expect(parseMoneyline({ spread: -1.5, spreadOdds: {} })).toBeNull();
+  });
+
+  it('preserves missing and explicit null optional metadata without inventing values', () => {
+    for (const fields of [{}, { moneylineHome: null, moneylineAway: null, total: null }]) {
+      expect(parse(fields)).toMatchObject({ moneylineHome: null, moneylineAway: null, total: null });
+    }
+  });
+
+  it('keeps authoritative numeric metadata, including zero, ahead of malformed model fallbacks', () => {
+    expect(parse({ moneylineHome: {}, moneylineAway: 'bad', total: [] },
+      { moneyline_home: -166, moneyline_away: 140, total: 0 }))
+      .toMatchObject({ moneylineHome: -166, moneylineAway: 140, total: 0 });
+  });
+
+  it('preserves existing totalOdds passthrough outside the publication metadata contract', () => {
+    expect(parse({ totalOdds: 'unavailable' })).toMatchObject({ totalOdds: 'unavailable' });
+    expect(parse({ totalOdds: 'unavailable' }, { total_over_odds: '-110' })).toMatchObject({ totalOdds: '-110' });
+  });
+
+  it('retries malformed source metadata without replacing it with a model-authored value', () => {
+    for (const total of ['unavailable', NaN, Infinity, -Infinity]) {
+      expect(parse({ total: 44.5 }, { total })).toBeNull();
+    }
   });
 });
 
