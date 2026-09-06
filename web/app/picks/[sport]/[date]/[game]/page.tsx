@@ -28,10 +28,7 @@ import { SITE_URL, pageMetadata } from '@/lib/seo/metadata';
 
 export const revalidate = 3600;
 
-// Generate permanent matchup pages on first request, then retain them in ISR.
-export function generateStaticParams() {
-  return [];
-}
+// Request rendering is required by the shared database reader's connection().
 
 type Params = Promise<{ sport: string; date: string; game: string }>;
 

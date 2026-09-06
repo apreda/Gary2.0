@@ -14,10 +14,7 @@ import { SITE_URL, pageMetadata } from '@/lib/seo/metadata';
 
 export const revalidate = 3600;
 
-// Empty means every real month is generated on demand and then kept in ISR.
-export function generateStaticParams() {
-  return [];
-}
+// Request rendering is required by the shared database reader's connection().
 
 type Params = Promise<{ month: string }>;
 

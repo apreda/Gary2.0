@@ -192,8 +192,10 @@ try {
     const matchup = `/picks/mlb/${date}/chicago-cubs-at-cincinnati-reds`;
     for (const [path, expected] of [
       ['/picks/mlb', `href="${matchup}"`],
+      [`/picks/mlb/${date}`, `href="${matchup}"`],
       [matchup, 'Local QA fixture.'],
       [`/archive/${date}`, `href="${matchup}"`],
+      [`/archive/month/${date.slice(0, 7)}`, `href="/archive/${date}"`],
       ['/archive/sitemap.xml', `<loc>https://www.betwithgary.ai/archive/${date}</loc>`],
       ['/picks/sitemap/0.xml', `<loc>https://www.betwithgary.ai${matchup}</loc>`],
       ['/sitemap-index.xml', '<loc>https://www.betwithgary.ai/archive/sitemap.xml</loc>'],

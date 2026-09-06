@@ -21,10 +21,8 @@ import { SITE_URL, pageMetadata } from '@/lib/seo/metadata';
 
 export const revalidate = 3600;
 
-// Empty means every valid date is generated on demand and then kept in ISR.
-export function generateStaticParams() {
-  return [];
-}
+// Render dated pages on request. Their database reads retain the fetch cache;
+// an empty generateStaticParams would incorrectly opt these pages into ISR.
 
 function archiveDescription(
   label: string,

@@ -96,7 +96,17 @@ try {
   assert(manifest.dynamicRoutes['/sitemap-data/[inventory]'], 'Inventories must retain runtime ISR');
   assert.equal(Object.keys(manifest.routes).filter(path => path.startsWith('/sitemap-data/')).length, 0,
     'No database inventory may be generated at build time');
+  // next start can recover from static-to-dynamic rendering even when Vercel's
+  // ISR function cannot. Check the build contract consumed by that adapter.
+  for (const path of [
+    '/archive/[date]', '/archive/month/[month]',
+    '/picks/[sport]/[date]', '/picks/[sport]/[date]/[game]',
+  ]) {
+    assert.equal(manifest.dynamicRoutes[path], undefined,
+      `${path}: request-time connection() is incompatible with an ISR function`);
+  }
   console.log('PASS production build during database outage; inventories deferred to runtime');
+  console.log('PASS dated archive and game pages are request rendered, never emitted as ISR functions');
   const server = run(['start', '--hostname', '127.0.0.1', '--port', String(port)], env);
   for (let attempt = 0; ; attempt++) {
     assert(attempt < 100 && server.child.exitCode === null, 'Next server did not start');
