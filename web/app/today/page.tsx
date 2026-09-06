@@ -7,6 +7,7 @@ import { ReceiptLine } from '@/components/ReceiptLine';
 import { LiveScoreStrip } from '@/components/LiveChip';
 import { PageMasthead, StatTile, StitchRule } from '@/components/Terminal';
 import { TodayBoardStatus } from '@/components/today/TodayBoardStatus';
+import { BoardDateNotice } from '@/components/BoardDateNotice';
 import { TodayBookSummary } from '@/components/today/TodayBookSummary';
 import { TodayHubHighlights } from '@/components/today/TodayHubHighlights';
 import { buildBoard, fetchDailySlate } from '@/lib/gary/board';
@@ -77,6 +78,7 @@ export default async function TodayPage() {
 
   return (
     <main className="mx-auto max-w-6xl px-5 pb-20 pt-12">
+      <BoardDateNotice date={date} />
       <PageMasthead
         title="Today"
         meta={date}

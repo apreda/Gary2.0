@@ -6,6 +6,8 @@ import SportPicksPage from '@/app/picks/[sport]/page';
 import PicksError from '@/app/picks/error';
 import Home from '@/app/page';
 import PageError from '@/app/error';
+import { BoardDateNotice } from '@/components/BoardDateNotice';
+import { todayEST } from '@/lib/gary/dates';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -49,6 +51,16 @@ describe('pick board recovery', () => {
     serveEmptyExcept();
     expect(isValidElement(await PicksPage())).toBe(true);
     expect(isValidElement(await Home())).toBe(true);
+  });
+
+  it('carries the rendered board date into the cached-page notice', async () => {
+    serveEmptyExcept();
+    const pages = [await PicksPage(), await Home(), await SportPicksPage({ params: Promise.resolve({ sport: 'ncaaf' }) })];
+    for (const page of pages) {
+      expect(elements(page).find(element => element.type === BoardDateNotice)?.props.date).toBe(todayEST());
+    }
+    const archive = await SportPicksPage({ params: Promise.resolve({ sport: 'nhl' }) });
+    expect(elements(archive).some(element => element.type === BoardDateNotice)).toBe(false);
   });
 
   it('keeps optional results failures from hiding the current board', async () => {

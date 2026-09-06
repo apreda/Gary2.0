@@ -5,6 +5,7 @@ import { Eyebrow } from '@/components/Eyebrow';
 import { GameRow, Slab } from '@/components/board/GameRow';
 import { GameTile } from '@/components/board/GameTile';
 import { BoardGrid } from '@/components/board/BoardGrid';
+import { BoardDateNotice } from '@/components/BoardDateNotice';
 import { BookDayProvider } from '@/components/book/BookDay';
 import { AccountCta } from '@/components/AccountCta';
 import { ReceiptLine } from '@/components/ReceiptLine';
@@ -111,6 +112,7 @@ export default async function PicksPage() {
 
   return (
     <main className="mx-auto max-w-6xl px-5 pb-20 pt-12">
+      <BoardDateNotice date={date} />
       {picks.length > 0 && <JsonLd data={itemList} />}
       <PageMasthead
         title="Today's free sports picks"

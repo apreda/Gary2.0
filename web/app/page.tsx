@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import { LaunchOffer } from '@/components/LaunchOffer';
+import { BoardDateNotice } from '@/components/BoardDateNotice';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { AppStoreButton } from '@/components/AppStoreButton';
@@ -19,17 +20,18 @@ export const revalidate = 600;
 
 export const metadata: Metadata = pageMetadata({
   canonical: '/',
-  title: 'Gary AI — Free Sports Picks for Every Game, Every Day',
+  title: 'Gary AI — Free Sports Picks With Written Reasoning',
   description:
     'Find your game. See Gary’s pick. Free MLB, NFL and NCAAF picks with written reasoning, a public record, and a private bet tracker.',
 });
 
 export default async function Home() {
+  const date = todayEST();
   // Preserve the last good page when the feeds behind today's counts fail.
   const [gamePicks, propPicks, slate, results] = await Promise.all([
     fetchTodayGamePicks(),
     fetchTodayPropPicks().catch(() => null),
-    fetchDailySlate(todayEST()),
+    fetchDailySlate(date),
     fetchAllGameResults().catch(() => null),
   ]);
 
@@ -49,6 +51,7 @@ export default async function Home() {
 
   return (
     <main>
+      <BoardDateNotice date={date} className="mx-5 mt-6 lg:mx-auto lg:max-w-6xl" />
       {/* ── 01 · Hero — the bear hosts, the data hangs on his wall ── */}
       <section className="relative overflow-hidden">
         {/* Ghost record numeral — the product as backdrop texture, flat */}

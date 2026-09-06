@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { GameRow } from '@/components/board/GameRow';
 import { GameTile } from '@/components/board/GameTile';
 import { BoardGrid } from '@/components/board/BoardGrid';
+import { BoardDateNotice } from '@/components/BoardDateNotice';
 import { BookDayProvider } from '@/components/book/BookDay';
 import { ambiguousGamePickReceiptKeys } from '@/lib/book/model';
 import { UnderlineTabs } from '@/components/UnderlineTabs';
@@ -147,6 +148,7 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
 
   return (
     <main className="mx-auto max-w-6xl px-5 pb-20 pt-12">
+      {!cfg.retired && <BoardDateNotice date={date} />}
       {picks && picks.length > 0 && (
         <JsonLd data={{
           '@context': 'https://schema.org', '@type': 'ItemList',
