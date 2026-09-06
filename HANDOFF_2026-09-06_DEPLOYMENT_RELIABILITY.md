@@ -68,5 +68,23 @@ open Supabase tab still showed the sign-in form during this turn. Do not infer
 a root cause from the current healthy state or suppress a future real outage.
 The prepared support note has not been sent.
 
-The real local Firebase plist remains intentionally uncommitted. Production
-deployment and exact-commit CI receipts will be appended after publication.
+## Published verification
+
+- Source `4a30cbe6c6772d03a946c81dbb71db06620457ee` is deployed as
+  `dpl_WLgCtxNGZDUHuvV5XuFJpfLpfL5i`, READY at **08:37:30 ET**, with
+  betwithgary.ai and betwithgary.com plus their www aliases assigned.
+- GitHub Verify **34033627942** passed that exact source, including backend,
+  edge helpers, web unit/types, fixture-page smoke and the new outage test.
+- Live Home, Picks, Results, Archive and all three sitemap URLs returned 200
+  without the application error boundary. Archive XML contained **325 URLs**
+  including September 6; game-shard XML contained **4,140 URLs**. Repeat
+  sitemap requests returned Vercel cache **HIT**, with ages increasing past
+  45 seconds, confirming that the adapter retains generated XML.
+- The .com Picks domain returned 200. The browser displayed today's full
+  18-game board, zero prematurely published picks, and the first MLB expected
+  publication at 10:40 AM. New-deployment error/fatal log search was empty
+  during verification.
+- Production truth found scheduler **39624** in the canonical backend and
+  Winners **11032** running, all 20 edge timestamp checks passing, and no
+  unpushed code. Its exit 1 is solely the intentionally preserved, uncommitted
+  real Firebase plist difference from the tracked redacted template.
