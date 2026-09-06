@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { unstable_rethrow } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { PickCard } from '@/components/PickCard';
@@ -38,6 +39,7 @@ async function readForToday<T>(label: string, request: Promise<T>, fallback: T):
   try {
     return { data: await request, unavailable: false };
   } catch (error) {
+    unstable_rethrow(error);
     console.error(`[Today] ${label} unavailable`, error);
     return { data: fallback, unavailable: true };
   }

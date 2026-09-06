@@ -1,13 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { fetchPickIndex } from '@/lib/gary/gamepage';
-import { GAME_SITEMAP_SIZE, gameSitemapEntries, sitemapIdsForCount } from '@/lib/seo/sitemap';
-
-export const revalidate = 3600;
-
-export async function generateSitemaps() {
-  const rows = await fetchPickIndex();
-  return sitemapIdsForCount(gameSitemapEntries(rows).length);
-}
+import { GAME_SITEMAP_SIZE, gameSitemapEntries } from '@/lib/seo/sitemap';
 
 export default async function gameSitemap({
   id,

@@ -75,13 +75,10 @@ function FormPips({ results }: { results: string[] }) {
 
 export default async function ResultsPage() {
   const [games, props, receipt] = await Promise.all([
-    fetchAllGameResults().catch(() => null),
-    fetchAllPropResults().catch(() => null),
+    fetchAllGameResults(),
+    fetchAllPropResults(),
     fetchYesterdayReceipt(),
   ]);
-
-  // Results page is the record — null data is worse than an error page.
-  if (!games || !props) throw new Error('results data unavailable');
 
   const allTime = computeRecord(games);
   const l30 = computeRecord(sinceDate(games, daysAgoEST(30)));

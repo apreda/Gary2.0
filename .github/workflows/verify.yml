@@ -82,3 +82,6 @@ jobs:
       - name: Check fixture-backed web pages and results export
         working-directory: .
         run: npm run smoke:web
+      - name: Build and verify sitemap recovery during database outages
+        working-directory: .
+        run: npm run smoke:sitemaps

@@ -6,6 +6,24 @@ export const BASE_URL = 'https://www.betwithgary.ai';
 export const GAME_SITEMAP_SIZE = 40_000;
 export const SITEMAP_INDEX_PATH = '/sitemap-index.xml';
 
+function escapeXml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
+/** Serialize the URL, cadence and priority shared by our stored inventories. */
+export function sitemapXml(entries: MetadataRoute.Sitemap): string {
+  const urls = entries.map(entry => `  <url>
+    <loc>${escapeXml(entry.url)}</loc>${entry.changeFrequency === undefined ? '' : `
+    <changefreq>${entry.changeFrequency}</changefreq>`}${entry.priority === undefined ? '' : `
+    <priority>${entry.priority}</priority>`}
+  </url>`).join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls}
+</urlset>`;
+}
+
 export function gameSitemapEntries(
   rows: PickIndexRow[],
   today = todayEST(),

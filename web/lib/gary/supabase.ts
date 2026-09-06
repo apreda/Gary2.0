@@ -1,3 +1,5 @@
+import { connection } from 'next/server';
+
 function requiredEnv(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`${name} is not set`);
@@ -12,6 +14,10 @@ const ANON_KEY = requiredEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
  * Callers must use a consistent revalidate value per path — mixed values on the same URL conflict in the Next.js fetch cache.
  */
 export async function rest<T>(path: string, opts: { revalidate?: number } = {}): Promise<T> {
+  // Live data belongs to requests, not deployment builds. This leaves the
+  // explicit fetch cache below intact, including its last-good data on errors.
+  // The sitemap's force-static route opts into ISR after its first request.
+  await connection();
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
     next: { revalidate: opts.revalidate ?? 600 },

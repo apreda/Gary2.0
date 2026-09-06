@@ -1,4 +1,26 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Gary's web app uses Next.js. Follow the repository's `AGENTS.md` and the installed Next docs before changing rendering or deployment behavior.
+
+## Database outages and deployment builds
+
+Public database reads in `lib/gary/supabase.ts` wait for a request through
+`connection()`. Their explicit Next fetch cache remains enabled, including
+last-good responses during failed background refreshes. Data-backed pages
+render at request time; builds do not require a healthy production database.
+
+Database-backed sitemaps use `app/sitemap-data/[inventory]/route.ts` with an
+empty `generateStaticParams()` list and ten-minute ISR. The public archive,
+index, and game-shard URLs rewrite to this route. They generate on first
+request and keep their last successful XML if regeneration fails. A cold
+outage must return an error, never a successful empty inventory. Do not move
+these back into build-time metadata generators: Next 16.3 can also classify
+prerendered `.xml` outputs as static files and discard their ISR interval.
+
+Run `npm run smoke:sitemaps` from the repository root. It builds a disposable
+copy with a local database returning HTTP 503, verifies cold failures, primes
+real XML, checks last-good data during a second outage, and confirms new dates
+appear after recovery. The test shortens cache intervals only in that copy,
+uses dummy credentials and Next's font fixture hook, and cleans up its servers.
+CI runs it alongside the normal web unit, type, and fixture-page checks.
 
 ## Getting Started
 

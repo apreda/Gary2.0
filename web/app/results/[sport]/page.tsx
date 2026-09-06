@@ -45,10 +45,8 @@ export default async function SportResultsPage({ params }: { params: Promise<{ s
   const cfg = sportBySlug(sport);
   if (!cfg) notFound();
 
-  const allResults = await fetchAllGameResults().catch(() => null);
-
-  // Results page is the record — null data is worse than an error page.
-  if (!allResults) throw new Error('results data unavailable');
+  // Preserve both provider failures and Next's request-time rendering signal.
+  const allResults = await fetchAllGameResults();
 
   const results = allResults.filter(r => (r.league ?? '').toUpperCase() === cfg.code);
   const allTime = computeRecord(results);

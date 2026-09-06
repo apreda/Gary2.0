@@ -57,7 +57,7 @@ describe('fetchTodayGamePicks', () => {
     const pending = fetchTodayGamePicks(0);
     try {
       // Neither request has resolved: serial reads cannot pass this assertion.
-      expect(fetchMock).toHaveBeenCalledTimes(2);
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
       expect(fetchMock.mock.calls.map(([input]) => new URL(input).pathname)).toEqual([
         '/rest/v1/daily_picks',
         '/rest/v1/weekly_nfl_picks',

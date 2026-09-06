@@ -4,6 +4,7 @@ import path from 'node:path';
 export default defineConfig({
   resolve: { alias: { '@': path.resolve(__dirname) } },
   test: {
+    setupFiles: ['tests/request-context.ts'],
     include: ['tests/**/*.test.ts'],
     env: {
       NEXT_PUBLIC_SUPABASE_URL: 'https://test.supabase.co',

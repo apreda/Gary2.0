@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import sitemap from '@/app/sitemap';
 import archiveSitemap from '@/lib/seo/archive-sitemap';
-import { GET as archiveXml } from '@/app/archive/inventory.xml/route';
-import gameSitemap, { generateSitemaps } from '@/app/picks/sitemap';
+import { GET as inventoryXml } from '@/app/sitemap-data/[inventory]/route';
+import gameSitemap from '@/lib/seo/game-sitemap';
 import robots from '@/app/robots';
-import { GET as sitemapIndex } from '@/app/sitemap-index.xml/route';
 import {
   sitemapIdsForCount,
   sitemapIndexXml,
   sitemapUrlsForCount,
+  sitemapXml,
 } from '@/lib/seo/sitemap';
 import type { ArchiveDateSummary } from '@/lib/gary/archive';
 import { SPORTS } from '@/lib/gary/leagues';
@@ -16,6 +16,11 @@ import type { PickIndexRow } from '@/lib/gary/gamepage';
 
 const BASE_URL = 'https://www.betwithgary.ai';
 const pathOf = (url: string) => new URL(url).pathname;
+const readInventory = (inventory: string) => inventoryXml(new Request(`${BASE_URL}/sitemap-data/${inventory}`), {
+  params: Promise.resolve({ inventory }),
+});
+const archiveXml = () => readInventory('archive');
+const sitemapIndex = () => readInventory('index');
 
 const clock = vi.hoisted(() => ({ today: '2026-09-01' }));
 const failures = vi.hoisted(() => ({ picks: false, archive: false }));
@@ -190,14 +195,12 @@ describe('sitemap', () => {
   it('fails game regeneration and shard discovery when the pick index is unavailable', async () => {
     failures.picks = true;
     await expect(gameSitemap({ id: Promise.resolve('0') })).rejects.toThrow('Pick index unavailable');
-    await expect(generateSitemaps()).rejects.toThrow('Pick index unavailable');
     await expect(sitemapIndex()).rejects.toThrow('Pick index unavailable');
   });
 
   it('still supports a successfully read empty source', async () => {
     expect(await archiveSitemap()).toEqual([]);
     expect(await gameSitemap({ id: Promise.resolve('0') })).toEqual([]);
-    expect(await generateSitemaps()).toEqual([{ id: 0 }]);
   });
 
   it('serves today’s archive as XML from the regenerating route', async () => {
@@ -205,5 +208,28 @@ describe('sitemap', () => {
     const response = await archiveXml();
     expect(response.headers.get('content-type')).toBe('application/xml; charset=utf-8');
     expect(await response.text()).toContain(`<loc>${BASE_URL}/archive/${clock.today}</loc>`);
+  });
+
+  it('serves a game shard through the same regenerating route and propagates outages', async () => {
+    index.push({ date: clock.today, league: 'MLB', sport: null, away_team: 'Cubs', home_team: 'Reds' });
+    const response = await readInventory('games-0');
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain(`/picks/mlb/${clock.today}/cubs-at-reds</loc>`);
+    failures.picks = true;
+    await expect(readInventory('games-0')).rejects.toThrow('Pick index unavailable');
+  });
+
+  it('rejects unknown and malformed inventories before reading the database', async () => {
+    failures.archive = true;
+    failures.picks = true;
+    for (const inventory of ['unknown', 'games--1', 'games-1.5', 'games-01', 'games-1e3', 'games-9007199254740992']) {
+      expect((await readInventory(inventory)).status).toBe(404);
+    }
+  });
+
+  it('escapes XML URLs without inventing modification dates', () => {
+    const xml = sitemapXml([{ url: `${BASE_URL}/?a=1&b=<test>`, changeFrequency: 'daily', priority: 0.5 }]);
+    expect(xml).toContain('?a=1&amp;b=&lt;test&gt;</loc>');
+    expect(xml).not.toContain('<lastmod>');
   });
 });
