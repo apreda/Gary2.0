@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Comment</key>
+	<string>Gary 2.0 - Process daily pick results and prior-day football proof 5x/day, first at 2:00am local so the overnight slate grades before morning. Steps inlined because launchd's bash is TCC-blocked from READING script files in ~/Desktop — it can still cd there and exec node, which holds the grant.</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>CLAUDE_CLI_PATH</key>
+		<string>/Users/adam.preda/.local/bin/claude</string>
+		<key>GARY_CONTENT_MODEL_OVERRIDE</key>
+		<string>codex-gpt-5.6-sol</string>
+		<key>GARY_PROPS_MODEL_OVERRIDE</key>
+		<string>codex-gpt-5.6-sol</string>
+	</dict>
+	<key>Label</key>
+	<string>com.gary2.daily-results</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/bash</string>
+		<string>-c</string>
+		<string>export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] &amp;&amp; . "$NVM_DIR/nvm.sh"; export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"; cd /Users/adam.preda/Desktop/Gary2.0/gary2.0 || exit $?; gary_status=0; run_stage() { gary_label=$1; gary_cap=$2; shift 2; gary_try=0; while :; do gary_try=$((gary_try+1)); gary_t0=$(date +%s); perl -e 'alarm shift @ARGV; exec @ARGV or exit 127' "$gary_cap" "$@"; gary_rc=$?; gary_dt=$(( $(date +%s) - gary_t0 )); if [ "$gary_rc" -ne 0 ] &amp;&amp; [ "$gary_rc" -ne 142 ] &amp;&amp; [ "$gary_dt" -le 15 ] &amp;&amp; [ "$gary_try" -lt 3 ]; then echo "$gary_label died within ${gary_dt}s (rc=$gary_rc) — startup retry $gary_try/2 after 5s (Sep 2 2026: launchd node EINTR uv_cwd)" &gt;&amp;2; sleep 5; continue; fi; break; done; if [ "$gary_rc" -eq 142 ]; then echo "$gary_label HARD-CAPPED at ${gary_cap}s — killed so it cannot hold the next run's slot" &gt;&amp;2; fi; if [ "$gary_rc" -ne 0 ]; then echo "$gary_label failed (rc=$gary_rc)" &gt;&amp;2; [ "$gary_status" -ne 0 ] || gary_status=$gary_rc; fi; }; run_stage "all results" "${GARY_CAP_RESULTS:-1800}" node scripts/run-all-results.js; run_stage "football proof" "${GARY_CAP_PROOF:-900}" /usr/bin/lockf -t 0 -k /tmp/gary-live-maintenance.lock node scripts/run-live-football-proof.js --date "$(TZ=America/New_York date -v-1d +%F)" --league NFL,NCAAF; run_stage "insight grading" "${GARY_CAP_GRADING:-600}" node run-grade-insights.js; run_stage "market pulse" "${GARY_CAP_PULSE:-600}" node run-market-pulse.js; exit "$gary_status"</string>
+	</array>
+	<key>RunAtLoad</key>
+	<false/>
+	<key>StandardErrorPath</key>
+	<string>/Users/adam.preda/Library/Logs/Gary2.0/daily-results-launchd-stderr.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/adam.preda/Library/Logs/Gary2.0/daily-results-launchd-stdout.log</string>
+	<key>StartCalendarInterval</key>
+	<array>
+		<dict>
+			<key>Hour</key>
+			<integer>2</integer>
+			<key>Minute</key>
+			<integer>0</integer>
+		</dict>
+		<dict>
+			<key>Hour</key>
+			<integer>6</integer>
+			<key>Minute</key>
+			<integer>45</integer>
+		</dict>
+		<dict>
+			<key>Hour</key>
+			<integer>11</integer>
+			<key>Minute</key>
+			<integer>30</integer>
+		</dict>
+		<dict>
+			<key>Hour</key>
+			<integer>16</integer>
+			<key>Minute</key>
+			<integer>45</integer>
+		</dict>
+		<dict>
+			<key>Hour</key>
+			<integer>20</integer>
+			<key>Minute</key>
+			<integer>0</integer>
+		</dict>
+	</array>
+</dict>
+</plist>

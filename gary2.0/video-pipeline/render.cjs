@@ -24,7 +24,7 @@ async function main() {
 
   const browser = await puppeteer.launch({
     executablePath: CHROME,
-    headless: 'new',
+    headless: true,
     args: ['--force-device-scale-factor=1', '--hide-scrollbars'],
     defaultViewport: { width: 1080, height: 1920 },
   });

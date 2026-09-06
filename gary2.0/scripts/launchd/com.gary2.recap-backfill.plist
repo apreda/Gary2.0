@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Comment</key>
+	<string>Gary 2.0 - Write/backfill game_recaps (the Home marquee headline TEXT) for TODAY + YESTERDAY (ET), idempotent; $0 when nothing new. scripts/run-game-recaps.js now defaults to estDate(0)+estDate(-1) like the cloud grader, so today's finished games get recapped same-day and the headline rolls (the cloud grader settles game_results as games finish, but recap TEXT is written only here). Two morning passes (8:30/10:30) catch the June-24-style overnight gap; two afternoon/evening passes (17:00/20:15 local) fire just after the daily-results grader's 16:45/20:00 runs settle today's slate so today's recaps land before the 2am yesterday pass. Steps inlined because launchd's bash is TCC-blocked from READING scripts in ~/Desktop but can cd there and exec node.</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>CLAUDE_CLI_PATH</key>
+		<string>/Users/adam.preda/.local/bin/claude</string>
+		<key>GARY_CONTENT_MODEL_OVERRIDE</key>
+		<string>codex-gpt-5.6-sol</string>
+		<key>GARY_PROPS_MODEL_OVERRIDE</key>
+		<string>codex-gpt-5.6-sol</string>
+	</dict>
+	<key>Label</key>
+	<string>com.gary2.recap-backfill</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/bash</string>
+		<string>-c</string>
+		<string>export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] &amp;&amp; . "$NVM_DIR/nvm.sh"; export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"; cd /Users/adam.preda/Desktop/Gary2.0/gary2.0 || exit $?; gary_try=0; while :; do gary_try=$((gary_try+1)); gary_t0=$(date +%s); node scripts/run-game-recaps.js; gary_rc=$?; gary_dt=$(( $(date +%s) - gary_t0 )); if [ "$gary_rc" -ne 0 ] &amp;&amp; [ "$gary_dt" -le 15 ] &amp;&amp; [ "$gary_try" -lt 3 ]; then echo "scripts/run-game-recaps.js died within ${gary_dt}s (rc=$gary_rc) — startup retry $gary_try/2 after 5s (Sep 2 2026: launchd node EINTR uv_cwd)" &gt;&amp;2; sleep 5; continue; fi; break; done; exit "$gary_rc"</string>
+	</array>
+	<key>RunAtLoad</key>
+	<false/>
+	<key>StandardErrorPath</key>
+	<string>/Users/adam.preda/Library/Logs/Gary2.0/recap-backfill-launchd.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/adam.preda/Library/Logs/Gary2.0/recap-backfill-launchd.log</string>
+	<key>StartCalendarInterval</key>
+	<array>
+		<dict>
+			<key>Hour</key>
+			<integer>8</integer>
+			<key>Minute</key>
+			<integer>30</integer>
+		</dict>
+		<dict>
+			<key>Hour</key>
+			<integer>10</integer>
+			<key>Minute</key>
+			<integer>30</integer>
+		</dict>
+		<dict>
+			<key>Hour</key>
+			<integer>17</integer>
+			<key>Minute</key>
+			<integer>0</integer>
+		</dict>
+		<dict>
+			<key>Hour</key>
+			<integer>20</integer>
+			<key>Minute</key>
+			<integer>15</integer>
+		</dict>
+	</array>
+</dict>
+</plist>
