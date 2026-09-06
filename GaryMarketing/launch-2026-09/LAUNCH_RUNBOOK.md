@@ -1,10 +1,10 @@
 # Gary launch operating plan
 
-September 4, updated September 5, 2026. Accountable owner: Adam. This replaces the offer, dates, channel assumptions and execution status in the September 1 launch plan. The implementation handoff records deployment and submission evidence; this document defines the operating decisions.
+September 4, updated September 6, 2026. Accountable owner: Adam. This replaces the offer, dates, channel assumptions and execution status in the September 1 launch plan. The implementation handoff records deployment and submission evidence; this document defines the operating decisions.
 
 ## Execution and review
 
-The six workstreams have an explicit completion scorecard in [the September 5 execution review](EXECUTION_REVIEW_2026-09-05.md). Implementation is not audience validation. Codex handles authorized implementation, verification and analysis during active work; Adam supplies account access, founder footage and human contact decisions. The [personal-tracking pilot](PERSONAL_TRACKING_PILOT.md) must produce real observations before the integration spending gate is met.
+The six workstreams have an explicit completion scorecard in [the September 6 execution review](EXECUTION_REVIEW_2026-09-06.md). Implementation is not audience validation. Codex handles authorized implementation, verification and analysis during active work; Adam supplies account access, founder footage and human contact decisions. The [personal-tracking pilot](PERSONAL_TRACKING_PILOT.md) must produce real observations before the integration spending gate is met.
 
 ## The promise
 
@@ -16,7 +16,7 @@ Use the account-based offer consistently:
 
 > Winners is open for the launch preview until October 1, 2026 at midnight Eastern. Accounts created before that cutoff retain founding access to Winners. No purchase is needed for included access.
 
-This matches the deployed access rules. Founding access currently has no expiry. Do not replace this with “install before October,” “free this season,” a lifetime marketing promise, or an invented season-end date. Existing free game reasoning, available props, Hub, record and private Book remain free. New purchases after preview use the current pricing page; prices and billing details must agree with checkout. The iOS external purchase link is available only for the U.S. storefront after the new build ships.
+This matches the deployed access rules. Founding access currently has no expiry. Do not replace this with “install before October,” “free this season,” a lifetime marketing promise, or an invented season-end date. Existing free game reasoning, available props, Hub, record and private Book remain free. New purchases after preview use the current pricing page; prices and billing details must agree with checkout. The iOS external purchase link is available only for the U.S. storefront after build 901 ships. Its submission has automatic release after approval, with United States and Canada distribution; this does not make external purchase available in the Canadian storefront.
 
 Winners and Insights can become a clearer combined experience later. Do not announce that integration or superior results before it exists and is substantiated. Confidence is Gary’s judgment, not a calibrated probability.
 
@@ -35,7 +35,7 @@ September 9 kickoff is Patriots at Seattle at 8:20 PM ET. The September 13 marke
 
 ## The weekly operating rhythm
 
-Adam owns publication, support and account access until another person is assigned. Code automates the existing game feed. There is no new unattended posting schedule. A daily Codex follow-up at 10:00 AM Eastern is active for 28 runs from September 5 to revisit readiness, evidence and authorized improvements; it reports material changes only.
+Adam owns publication, support and account access until another person is assigned. Code automates the existing game feed. There is no new unattended posting schedule. A daily Codex follow-up is active for 28 runs from September 5 to revisit readiness, evidence and authorized improvements; it reports material changes only.
 
 | When | Action | Decision it supports |
 |---|---|---|
@@ -90,4 +90,4 @@ Do not delete losing picks or blend the new Winners history with the whole slate
 - `content/VIDEO_SCRIPTS.md`: three founder-led recording scripts and shot lists; no footage has been recorded.
 - `INTEGRATION_PACKET.md`: accurate company/product brief, audience limitations, vendor questions and an unsent inquiry.
 - `evidence/`: aggregate operational snapshots. Refresh before making external audience claims.
-- `../APP_REVIEW_2_25_899.md`: exact-build review instructions and remaining App Store actions.
+- `../APP_REVIEW_2_25_901.md`: current submitted-build review instructions and privacy disclosures. Build 901 entered Waiting for Review September 5 at 3:13 PM Eastern; Apple approval remains pending in the latest receipt.

@@ -1,0 +1,21 @@
+{
+  "version": "2.25",
+  "build": "901",
+  "executable_sha256": "f71cb609efb7f9cf99659c6ad04b83d648e42fd0f1a88a53d408977838d567e7",
+  "manifest_count": 21,
+  "data_types": [
+    "NSPrivacyCollectedDataTypeCoarseLocation",
+    "NSPrivacyCollectedDataTypeDeviceID",
+    "NSPrivacyCollectedDataTypeEmailAddress",
+    "NSPrivacyCollectedDataTypeName",
+    "NSPrivacyCollectedDataTypeOtherDataTypes",
+    "NSPrivacyCollectedDataTypeOtherDiagnosticData",
+    "NSPrivacyCollectedDataTypeOtherFinancialInfo",
+    "NSPrivacyCollectedDataTypeOtherUsageData",
+    "NSPrivacyCollectedDataTypeOtherUserContent",
+    "NSPrivacyCollectedDataTypePhoneNumber",
+    "NSPrivacyCollectedDataTypeProductInteraction",
+    "NSPrivacyCollectedDataTypePurchaseHistory",
+    "NSPrivacyCollectedDataTypeUserID"
+  ]
+}

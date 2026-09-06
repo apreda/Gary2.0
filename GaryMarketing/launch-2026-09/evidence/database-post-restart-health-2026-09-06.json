@@ -1,0 +1,39 @@
+{
+  "checked_at": "2026-09-06T10:24:04.948936+00:00",
+  "status": 200,
+  "body": [
+    {
+      "name": "db",
+      "healthy": true,
+      "status": "ACTIVE_HEALTHY"
+    },
+    {
+      "name": "db_postgres_user",
+      "healthy": true,
+      "status": "ACTIVE_HEALTHY"
+    },
+    {
+      "name": "rest",
+      "healthy": true,
+      "status": "ACTIVE_HEALTHY",
+      "info": {
+        "db_schema": "public,graphql_public"
+      }
+    },
+    {
+      "name": "auth",
+      "healthy": true,
+      "status": "ACTIVE_HEALTHY",
+      "info": {
+        "name": "GoTrue",
+        "version": "v2.196.0",
+        "description": "GoTrue is a user registration and authentication API"
+      }
+    },
+    {
+      "name": "pooler",
+      "healthy": true,
+      "status": "ACTIVE_HEALTHY"
+    }
+  ]
+}

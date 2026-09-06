@@ -1,0 +1,595 @@
+{
+  "checked_at": "2026-09-06T10:27:33.964Z",
+  "source_date": "2026-09-05",
+  "picks": 45,
+  "safe": 45,
+  "changed": 16,
+  "results": [
+    {
+      "pick": "East Carolina Pirates +28.5 -122",
+      "before": {
+        "opening": "I expect that continuity to produce enough unsuccessful Alabama possessions to make sustained separation difficult.",
+        "closing": "Alabama replaced all five starters after finishing last season with 48 combined rushing yards against Georgia, Oklahoma and Indiana."
+      },
+      "after": {
+        "opening": "Alabama replaced all five starters after finishing last season with 48 combined rushing yards against Georgia, Oklahoma and Indiana.",
+        "closing": "The deciding matchup for me is ECU’s established defensive front against Alabama’s new offensive line."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "West Virginia Mountaineers -20.5 -115",
+      "before": {
+        "opening": "I expect Cook to test whether that reconstruction has immediately corrected the run-defense problems.",
+        "closing": "Cam Cook is the central reason I’m laying the points."
+      },
+      "after": {
+        "opening": "WVU still has to make its combination work, but I give its running game the better chance of establishing repeatable drives.",
+        "closing": "The offensive-line comparison matters more to me than the conference labels."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "Oregon State Beavers +20.5 -104",
+      "before": {
+        "opening": "Across the field, Oregon State begins a new coaching era at an 11 a.m.",
+        "closing": "Houston opens at home with a preseason ranking and an established quarterback."
+      },
+      "after": {
+        "opening": "Across the field, Oregon State begins a new coaching era at an 11 a.m. Central kickoff, with Braden Atkinson taking over the offense.",
+        "closing": "Houston opens at home with a preseason ranking and an established quarterback."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "North Texas Mean Green +40.5 -110",
+      "before": {
+        "opening": "I’m taking the points because I expect its experienced offensive pieces to keep that from becoming the game’s constant pattern.",
+        "closing": "The unresolved fact that could change my decision is how those new blocking combinations handle Indiana’s front."
+      },
+      "after": {
+        "opening": "I’m taking the points because I expect its experienced offensive pieces to keep that from becoming the game’s constant pattern.",
+        "closing": "Consistent disruption would undermine both North Texas’s scoring chances and its ability to consume clock."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "Liberty Flames +6.5 -114",
+      "before": {
+        "opening": "I expect that front to make establishing JMU’s running game difficult enough to prevent comfortable, repeated scoring possessions.",
+        "closing": "The other line matchup supports taking the points, too."
+      },
+      "after": {
+        "opening": "My assumption is that Liberty’s familiar blocking responsibilities translate into sustained drives, and that its returning defensive front supplies enough resistance for those drives to matter.",
+        "closing": "The other line matchup supports taking the points, too."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "Nebraska Cornhuskers -23.5 -115",
+      "before": {
+        "opening": "I’m laying the points because Ohio’s offensive changes overlap in the places that determine whether a team can sustain possessions.",
+        "closing": "Nick Poulos completed 4 of 8 passes for 19 yards in 2025."
+      },
+      "after": {
+        "opening": "I’m laying the points because Ohio’s offensive changes overlap in the places that determine whether a team can sustain possessions.",
+        "closing": "Nick Poulos completed 4 of 8 passes for 19 yards in 2025."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "Ohio State Buckeyes -49.5 -115",
+      "before": {
+        "opening": "The assumption carrying my ticket is that the quarterback change and roster additions will not immediately resolve those drive-sustaining problems against Ohio State.",
+        "closing": "Against Toledo, they generated only 56 yards before halftime."
+      },
+      "after": {
+        "opening": "I expect Ohio State’s returning offensive personnel to turn repeated opportunities into touchdowns often enough to cover; that is my matchup judgment, rather than a conclusion supplied by its ranking.",
+        "closing": ""
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "Pittsburgh Panthers -16.5 -112",
+      "before": {
+        "opening": "My judgment is that Pitt still wins enough early downs to push McComb beyond the supporting assignment Miami wants for his debut.",
+        "closing": "The matchup I keep coming back to is Miami’s intended reliance on its running backs against Pitt’s run defense."
+      },
+      "after": {
+        "opening": "My judgment is that Pitt still wins enough early downs to push McComb beyond the supporting assignment Miami wants for his debut.",
+        "closing": "The matchup I keep coming back to is Miami’s intended reliance on its running backs against Pitt’s run defense."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "Kent State Golden Flashes +36.5 -115",
+      "before": {
+        "opening": "My judgment is that DeShields can generate enough offense while limiting interception-driven short fields to make this spread difficult to clear.",
+        "closing": "Dru DeShields gives the underdog a credible way to contribute to its own cover."
+      },
+      "after": {
+        "opening": "My judgment is that DeShields can generate enough offense while limiting interception-driven short fields to make this spread difficult to clear.",
+        "closing": "Dru DeShields gives the underdog a credible way to contribute to its own cover."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "Cincinnati Bearcats -7.5 -105",
+      "before": {
+        "opening": "I’m backing Cincinnati’s returning blocking core and French’s FBS experience.",
+        "closing": "The unresolved matchup that could change my decision is BC’s rebuilt defensive front against that returning line."
+      },
+      "after": {
+        "opening": "I’m backing Cincinnati’s returning blocking core and French’s FBS experience.",
+        "closing": "The unresolved matchup that could change my decision is BC’s rebuilt defensive front against that returning line."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "Tulane Green Wave +7.5 -110",
+      "before": {
+        "opening": "I’m taking Tulane’s points because its quarterback running threat targets a documented Duke problem.",
+        "closing": "Zeon Chriss-Gremillion brings 992 career rushing yards and 10 rushing touchdowns."
+      },
+      "after": {
+        "opening": "I’m taking Tulane’s points because its quarterback running threat targets a documented Duke problem.",
+        "closing": "Zeon Chriss-Gremillion brings 992 career rushing yards and 10 rushing touchdowns."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "Auburn Tigers -7.5 -105",
+      "before": {
+        "opening": "My judgment is that those connections help Auburn sustain possessions against Baylor’s reconstructed defense.",
+        "closing": "I’m laying the points with Auburn because its offensive transition carries an important piece of continuity: Byrum Brown already knows the system."
+      },
+      "after": {
+        "opening": "I’m laying the points with Auburn because its offensive transition carries an important piece of continuity: Byrum Brown already knows the system.",
+        "closing": "The quarterback running threat gives that defense another assignment beyond stopping the backs."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "Oregon Ducks -24.5 -110",
+      "before": {
+        "opening": "My judgment is that Oregon can repeatedly create difficult passing situations here.",
+        "closing": "Oregon allowed 4.40 yards per play last season, and Teitum Tuioti returns after recording 9.5 sacks."
+      },
+      "after": {
+        "opening": "My judgment is that Oregon can repeatedly create difficult passing situations here.",
+        "closing": "Oregon allowed 4.40 yards per play last season, and Teitum Tuioti returns after recording 9.5 sacks."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "Texas State Bobcats +29.5 -110",
+      "before": {
+        "opening": "I expect those options to help the Bobcats keep answering across four quarters.",
+        "closing": "Brad Jackson returns with Beau Sparks and Chris Dawn Jr., who combined for 149 receptions and 2,207 yards last season."
+      },
+      "after": {
+        "opening": "My judgment is that Jackson’s experience, returning receiving connections and rushing contribution will keep Texas State productive often enough to stay inside +29.5.",
+        "closing": "Protection is the unresolved matchup that could change my view."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "Marshall Thundering Herd +23.5 -112",
+      "before": {
+        "opening": "I’m taking the points because Marshall has a credible way to keep answering offensively.",
+        "closing": "Carlos Del Rio-Wilson threw 17 touchdowns against five interceptions in 2025 and led the team with 661 rushing yards."
+      },
+      "after": {
+        "opening": "I’m taking the points because Marshall has a credible way to keep answering offensively.",
+        "closing": "Carlos Del Rio-Wilson threw 17 touchdowns against five interceptions in 2025 and led the team with 661 rushing yards."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "Oklahoma State Cowboys -13.5 -110",
+      "before": {
+        "opening": "I expect that familiarity to matter immediately.",
+        "closing": "I’m laying the points because the Cowboys’ most important offensive relationships arrive together."
+      },
+      "after": {
+        "opening": "My judgment is that Oklahoma State’s established offensive connections will generate enough sustained scoring to separate over four quarters.",
+        "closing": "Mestemaker’s 4,379 passing yards and 34 touchdowns describe the passing component."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "Iowa Hawkeyes -31.5 -110",
+      "before": {
+        "opening": "My judgment is that Iowa’s backfield can sustain scoring opportunities across the quarterback rotation.",
+        "closing": "Kamari Moulton returns after rushing for 878 yards at 5.2 per carry."
+      },
+      "after": {
+        "opening": "My judgment is that Iowa’s backfield can sustain scoring opportunities across the quarterback rotation.",
+        "closing": "Kamari Moulton returns after rushing for 878 yards at 5.2 per carry."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "Marlins ML +108",
+      "before": {
+        "opening": "Six left-handed starters do not guarantee sustained offense, and Miami could lose its advantage if Gusto leaves too much work for the middle relievers.",
+        "closing": "Gusto’s recent work supports that position: a 1.88 ERA in August and one earned run across his last 14 innings."
+      },
+      "after": {
+        "opening": "Six left-handed starters do not guarantee sustained offense, and Miami could lose its advantage if Gusto leaves too much work for the middle relievers.",
+        "closing": "Petersen and Faucher last pitched September 2, throwing nine and six pitches, respectively."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "Mets ML -168",
+      "before": {
+        "opening": "The opportunity extends into relief if New York reaches Foley or Seymour, who have allowed left-handed hitters an .873 and .860 OPS, respectively.",
+        "closing": "Molina presents a different challenge from yesterday’s pitching, so I am not projecting another home-run outburst."
+      },
+      "after": {
+        "opening": "The opportunity extends into relief if New York reaches Foley or Seymour, who have allowed left-handed hitters an .873 and .860 OPS, respectively.",
+        "closing": "Molina presents a different challenge from yesterday’s pitching, so I am not projecting another home-run outburst."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "Wyoming Cowboys +3.5 -122",
+      "before": {
+        "opening": "I’m backing Wyoming’s combination of quarterback familiarity and an established rushing option to keep this competitive over four quarters.",
+        "closing": "Samuel Harris returns after gaining 558 rushing yards on 100 carries."
+      },
+      "after": {
+        "opening": "I’m backing Wyoming’s combination of quarterback familiarity and an established rushing option to keep this competitive over four quarters.",
+        "closing": "Samuel Harris returns after gaining 558 rushing yards on 100 carries."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "Florida International Panthers +14.5 -108",
+      "before": {
+        "opening": "I expect that combination to sustain enough possessions to keep FIU involved through the fourth quarter.",
+        "closing": "JJ Kohl threw 12 touchdowns against 2 interceptions across 8 appearances at Appalachian State in 2025."
+      },
+      "after": {
+        "opening": "I expect some of that disruption to carry forward and interrupt USF’s scoring drives.",
+        "closing": "FIU averaged 2.39 sacks per game in 2025; USF opens with four new starting linemen."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "Memphis Tigers -10.5 -112",
+      "before": {
+        "opening": "I’m backing that run-pass combination to keep creating favorable situations against Arkansas State’s rebuilt front, giving Memphis opportunities to build separation.",
+        "closing": "Marcus Stokes contributed 223 passing yards, two touchdowns and no interceptions."
+      },
+      "after": {
+        "opening": "I’m backing that run-pass combination to keep creating favorable situations against Arkansas State’s rebuilt front, giving Memphis opportunities to build separation.",
+        "closing": "Marcus Stokes contributed 223 passing yards, two touchdowns and no interceptions."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "Missouri State Bears +40.5 -110",
+      "before": {
+        "opening": "Missouri State’s returning targets are the strongest reason I’m taking the points.",
+        "closing": "Jmariyae Robinson produced 632 receiving yards and seven touchdowns in 2025, Ramone Green Jr. added 446 receiving yards, and Jeron Askren caught five touchdowns."
+      },
+      "after": {
+        "opening": "Missouri State’s returning targets are the strongest reason I’m taking the points.",
+        "closing": "Jmariyae Robinson produced 632 receiving yards and seven touchdowns in 2025, Ramone Green Jr. added 446 receiving yards, and Jeron Askren caught five touchdowns."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "Braves ML +136",
+      "before": {
+        "opening": "My assumption is that Pérez gets enough from his changeup to keep those vulnerabilities from deciding the game.",
+        "closing": "There are real threats on the other side: Schwarber owns a .899 OPS against lefties, and Pérez’s cutter has allowed a .445 xwOBA."
+      },
+      "after": {
+        "opening": "I expect Iglesias to be usable after 12 pitches yesterday, and Dodd last pitched September 2.",
+        "closing": "I’m allowing less room for another extended Fuentes appearance after his two innings and 21 pitches yesterday."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "Sam Houston Bearkats +16.5 -105",
+      "before": {
+        "opening": "I’m taking the points because I expect Sam Houston’s returning passing connections to produce enough scoring possessions to keep Troy from sustaining separation.",
+        "closing": "Landyn Locke has demonstrated connections with those receivers."
+      },
+      "after": {
+        "opening": "I’m taking the points because I expect Sam Houston’s returning passing connections to produce enough scoring possessions to keep Troy from sustaining separation.",
+        "closing": "Landyn Locke has demonstrated connections with those receivers."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "Reds ML +136",
+      "before": {
+        "opening": "Tyler Stephenson has hit .375 against sinkers across 83 plate appearances, giving him a specific opportunity against part of May’s repertoire.",
+        "closing": "Cincinnati has hitters positioned to challenge him."
+      },
+      "after": {
+        "opening": "Tyler Stephenson has hit .375 against sinkers across 83 plate appearances, giving him a specific opportunity against part of May’s repertoire.",
+        "closing": "Cincinnati has hitters positioned to challenge him."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "UL Monroe Warhawks +28.5 -115",
+      "before": {
+        "opening": "I’m taking the points because Mississippi State’s ability to sustain separation remains the central matchup problem.",
+        "closing": "ULM returns Noah Flemmings and Marcus Ross, giving it experienced defenders with a plausible route to disrupting possessions."
+      },
+      "after": {
+        "opening": "I’m taking the points because Mississippi State’s ability to sustain separation remains the central matchup problem.",
+        "closing": "ULM returns Noah Flemmings and Marcus Ross, giving it experienced defenders with a plausible route to disrupting possessions."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "Western Michigan Broncos +27.5 -105",
+      "before": {
+        "opening": "I expect that continuity to produce enough sustained scoring drives to interrupt Michigan’s attempts to build separation.",
+        "closing": "Lowry rushed for 963 yards; Buckley added 1,003."
+      },
+      "after": {
+        "opening": "I give Western’s established offensive combination enough weight to take +27.5 despite that defensive rebuilding.",
+        "closing": "The unresolved personnel question that could change my choice is how effectively Western’s replacement front has come together."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "Clemson Tigers +10.5 -118",
+      "before": {
+        "opening": "I’m taking the points because Clemson has a credible way to keep answering.",
+        "closing": "Moore returns after 52 receptions for 837 yards in 2025, giving Vizzina an established receiving threat."
+      },
+      "after": {
+        "opening": "I’m taking the points because Clemson has a credible way to keep answering.",
+        "closing": "Moore returns after 52 receptions for 837 yards in 2025, giving Vizzina an established receiving threat."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "Guardians ML -156",
+      "before": {
+        "opening": "I expect this particular lineup to struggle to generate sustained offense against Messick.",
+        "closing": "Dingler and Lee have produced .619 and .649 OPS marks against lefties."
+      },
+      "after": {
+        "opening": "I expect Cleveland to create enough opportunities against Valdez to turn its starting-pitching advantage into a lead.",
+        "closing": "Cleveland retains a credible scoring route through Ramírez and Adell, who have .937 and .961 OPS marks against left-handed pitching."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "Florida Atlantic Owls +24.5 -105",
+      "before": {
+        "opening": "The matchup I’m backing is FAU’s established passing connection against Florida’s reconstructed secondary.",
+        "closing": "Easton Messer caught 104 passes for 1,052 yards in 2025, and his partnership with Veltkamp carries into tonight."
+      },
+      "after": {
+        "opening": "The matchup I’m backing is FAU’s established passing connection against Florida’s reconstructed secondary.",
+        "closing": "Easton Messer caught 104 passes for 1,052 yards in 2025, and his partnership with Veltkamp carries into tonight."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "Red Sox ML -132",
+      "before": {
+        "opening": "I expect that combination of recent effectiveness and tonight’s opposing lineup to give Boston an advantage before the relief decisions begin.",
+        "closing": "Gray faces six left-handed hitters in Baltimore’s listed order and has allowed lefties a .663 OPS."
+      },
+      "after": {
+        "opening": "Anthony, Gasper and Abreu can all bat left-handed against Bassitt, who has allowed a .917 OPS to left-handed hitters over 190 at-bats.",
+        "closing": "Anthony owns an .860 OPS against right-handed pitching, and Gasper has .959."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "Pirates -1.5 +125",
+      "before": {
+        "opening": "I expect Pittsburgh to have the better opportunity to build offense through its order tonight.",
+        "closing": "Further down the lineup, Christian Moore has a .540 OPS against righties and Denzer Guzman a .593."
+      },
+      "after": {
+        "opening": "I expect Pittsburgh to have the better opportunity to build offense through its order tonight.",
+        "closing": "Further down the lineup, Christian Moore has a .540 OPS against righties and Denzer Guzman a .593."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "Blue Jays ML -106",
+      "before": {
+        "opening": "Toronto preserved the late relievers I want behind this ticket.",
+        "closing": "Tyler Rogers and Louis Varland both sat yesterday after throwing 9 and 18 pitches Thursday."
+      },
+      "after": {
+        "opening": "Toronto preserved the late relievers I want behind this ticket.",
+        "closing": "Tyler Rogers and Louis Varland both sat yesterday after throwing 9 and 18 pitches Thursday."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "Diamondbacks ML -108",
+      "before": {
+        "opening": "I expect Arizona to get deeper into the game with its starter and reach a better-rested group of late relievers.",
+        "closing": "Houston starts six right-handed hitters, and Pfaadt has allowed righties a .534 OPS with one homer in 182 at-bats."
+      },
+      "after": {
+        "opening": "I expect Arizona to get deeper into the game with its starter and reach a better-rested group of late relievers.",
+        "closing": "Houston starts six right-handed hitters, and Pfaadt has allowed righties a .534 OPS with one homer in 182 at-bats."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "Twins ML +106",
+      "before": {
+        "opening": "Bradley gives Minnesota the stronger recent starting-pitcher case: 27 strikeouts against 7 walks over his last three starts.",
+        "closing": "Chicago still has Murakami batting third while hitting .100 over the last 15 days."
+      },
+      "after": {
+        "opening": "Bradley gives Minnesota the stronger recent starting-pitcher case: 27 strikeouts against 7 walks over his last three starts.",
+        "closing": "Chicago still has Murakami batting third while hitting .100 over the last 15 days."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "Yankees ML +110",
+      "before": {
+        "opening": "A confirmed declaration that Bednar cannot pitch would make me reconsider the ticket, because Rodón’s recent length makes that closing option especially important.",
+        "closing": "Headrick last pitched September 1 and has a 1.93 ERA over 70.0 innings."
+      },
+      "after": {
+        "opening": "A confirmed declaration that Bednar cannot pitch would make me reconsider the ticket, because Rodón’s recent length makes that closing option especially important.",
+        "closing": "Headrick last pitched September 1 and has a 1.93 ERA over 70.0 innings."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "Rays ML -108",
+      "before": {
+        "opening": "I expect Rasmussen to contain those spots often enough for Tampa Bay’s stronger offensive options to make the difference.",
+        "closing": "Carter, Freeman and Jansen occupy the bottom of tonight’s order with respective OPS marks of .668, .570 and .593 against right-handers."
+      },
+      "after": {
+        "opening": "I expect Rasmussen to contain those spots often enough for Tampa Bay’s stronger offensive options to make the difference.",
+        "closing": "Carter, Freeman and Jansen occupy the bottom of tonight’s order with respective OPS marks of .668, .570 and .593 against right-handers."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "Central Michigan Chippewas +10.5 -110",
+      "before": {
+        "opening": "I’m taking the points because CMU brings back an offensive foundation I expect to keep it competitive: 10 returning offensive starters, including four starting linemen.",
+        "closing": "The staff’s planned passing expansion matters here."
+      },
+      "after": {
+        "opening": "I’m taking the points because CMU brings back an offensive foundation I expect to keep it competitive: 10 returning offensive starters, including four starting linemen.",
+        "closing": "The staff’s planned passing expansion matters here."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "Nationals +1.5 -134",
+      "before": {
+        "opening": "I expect a regular rotation outing.",
+        "closing": "Cavalli gives those choices a chance to matter."
+      },
+      "after": {
+        "opening": "I expect a regular rotation outing.",
+        "closing": "Cavalli gives those choices a chance to matter."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "UNLV Rebels ML -154",
+      "before": {
+        "opening": "My assumption is that UNLV keeps that combination working throughout the game.",
+        "closing": "UNLV’s success rate was 47.7% on standard downs but 16.2% on passing downs."
+      },
+      "after": {
+        "opening": "I trust UNLV’s route to sustained production more, while respecting Hawai‘i’s ability to answer late.",
+        "closing": "Hawai‘i’s strongest answer is Alejado’s short passing game."
+      },
+      "changed": true,
+      "safe": true
+    },
+    {
+      "pick": "Nevada Wolf Pack +1.5 -115",
+      "before": {
+        "opening": "My judgment is that LaBarbera gives Nevada a credible way to interrupt possessions throughout the game, and Tisdale’s finish makes that disruption especially relevant.",
+        "closing": "WKU’s bowl comeback accelerated after he was replaced."
+      },
+      "after": {
+        "opening": "My judgment is that LaBarbera gives Nevada a credible way to interrupt possessions throughout the game, and Tisdale’s finish makes that disruption especially relevant.",
+        "closing": "WKU’s bowl comeback accelerated after he was replaced."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "Mariners -1.5 -106",
+      "before": {
+        "opening": "I expect Harris to be rested and Basso to contribute little or nothing tonight.",
+        "closing": "Hogan Harris has thrown 47 pitches over three consecutive days, and Brady Basso threw 38 pitches across three innings Friday."
+      },
+      "after": {
+        "opening": "I expect Harris to be rested and Basso to contribute little or nothing tonight.",
+        "closing": "Hogan Harris has thrown 47 pitches over three consecutive days, and Brady Basso threw 38 pitches across three innings Friday."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "California Golden Bears +2.5 -105",
+      "before": {
+        "opening": "I’m backing Cal’s ability to keep answering offensively through the fourth quarter.",
+        "closing": "Jaron-Keawe Sagapolutele threw four touchdowns against SMU and completed all five attempts on the decisive drive."
+      },
+      "after": {
+        "opening": "I’m backing Cal’s ability to keep answering offensively through the fourth quarter.",
+        "closing": "Jaron-Keawe Sagapolutele threw four touchdowns against SMU and completed all five attempts on the decisive drive."
+      },
+      "changed": false,
+      "safe": true
+    },
+    {
+      "pick": "Rockies ML +102",
+      "before": {
+        "opening": "McCarthy has also slugged .636 against four-seamers across 159 plate appearances, giving him a plausible route against Liberatore’s most-used pitch.",
+        "closing": "McCarthy has an .871 OPS against left-handed pitching, Goodman .873, and Beck .781."
+      },
+      "after": {
+        "opening": "McCarthy has also slugged .636 against four-seamers across 159 plate appearances, giving him a plausible route against Liberatore’s most-used pitch.",
+        "closing": "McCarthy has an .871 OPS against left-handed pitching, Goodman .873, and Beck .781."
+      },
+      "changed": false,
+      "safe": true
+    }
+  ],
+  "limitation": "Offline deterministic replay; not new posts, human review certification or engagement lift."
+}

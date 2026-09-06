@@ -1,0 +1,9 @@
+{
+  "checked_at": "2026-09-06T10:23:01.347629Z",
+  "window": "Retained rows placed in the preceding 30 days",
+  "recent_retained_rows": 120,
+  "manual_rows": 0,
+  "manual_accounts": 0,
+  "manually_settled_rows": 0,
+  "limitations": "Excludes deleted entries; internal users not separately excluded. Not a retention or first-use measure."
+}
