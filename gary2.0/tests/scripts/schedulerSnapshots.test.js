@@ -3,10 +3,39 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { spawn } from 'node:child_process';
+import { setTimeout as delay } from 'node:timers/promises';
+import { existsSync } from 'node:fs';
 import { publishSchedulerSnapshot } from '../../scripts/lib/schedulerSnapshots.js';
 import { runContentStage } from '../../scripts/lib/dailyContentPipeline.js';
 
 describe('scheduler publication process isolation', () => {
+  it('reaps a detached snapshot before the scheduler exits on SIGTERM', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gary-snapshot-stop-'));
+    let parent; let childPid;
+    try {
+      mkdirSync(join(dir, 'scripts'));
+      writeFileSync(join(dir, 'scripts/run-tomorrow-board.js'), `const fs=require('fs');fs.writeFileSync('ready',String(process.pid));process.on('SIGTERM',()=>{});setInterval(()=>{},1000);`);
+      const helper = pathToFileURL(resolve('scripts/lib/schedulerSnapshots.js')).href;
+      writeFileSync(join(dir, 'parent.mjs'), `import {publishSchedulerSnapshot} from ${JSON.stringify(helper)};await publishSchedulerSnapshot('board','2026-09-06',{cwd:process.cwd()});`);
+      parent = spawn(process.execPath, ['parent.mjs'], { cwd: dir, stdio: 'ignore', detached: true });
+      const exited = new Promise(resolve => parent.once('exit', code => resolve(code)));
+      const deadline = Date.now() + 10_000;
+      while (!existsSync(join(dir, 'ready')) && Date.now() < deadline) await delay(20);
+      childPid = Number(readFileSync(join(dir, 'ready'), 'utf8'));
+      parent.kill('SIGTERM');
+      expect(await exited).toBe(143);
+      let alive = true;
+      while (alive && Date.now() < deadline) {
+        try { process.kill(childPid, 0); await delay(20); } catch { alive = false; }
+      }
+      expect(alive).toBe(false);
+    } finally {
+      if (parent?.pid) try { process.kill(-parent.pid, 'SIGKILL'); } catch { /* exited */ }
+      if (childPid) try { process.kill(-childPid, 'SIGKILL'); } catch { /* reaped */ }
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 15_000);
   it('survives exactly the missing-export failure in a stale parent module graph', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'gary-snapshot-'));
     try {
