@@ -8,10 +8,13 @@ file; inherited font/layout comments are not requirements.
 
 ## Release state
 
-Version 2.25 build 906 passes final Debug, signed Release and six post-fix
-fresh launches. Upload is in progress; Apple processing is pending. Do not infer App Store availability from an
-archive or upload. The App Store submission remains build 901, version 2.25,
-Waiting for Review; the existing submission has not been withdrawn or replaced.
+Version 2.25 build 906 passed final Debug, signed Release, six post-fix
+fresh Debug launches and an optimized Release simulator launch. Upload succeeded
+at 23:34:07Z. App Store Connect showed processing Complete at 23:41:12Z, with
+build 906 assigned to the internal TestFlight Beta group (one invite, 90 days).
+Apple build ID: `15199f46-1003-4c1d-8417-f54d491025cc`. This is an internal
+TestFlight release, not public App Store availability. The App Store submission
+remains build 901, version 2.25, Waiting for Review; the existing submission has not been withdrawn or replaced.
 
 ## Product behavior
 
@@ -99,7 +102,9 @@ failed refresh only when a current slate game, latest successful NCAAF stage,
 and rankings snapshot refreshed during that same attempt provide evidence.
 Stale/failed stages, wrong dates/leagues, absent rows and read failures still fail.
 Story timestamps remain unchanged. The actual seven-row frozen case was
-verified at 23:11:15Z; later fresh content also passed normally.
+verified at 23:11:15Z; later fresh content also passed normally. The normal
+7:30 PM scheduled run subsequently completed all 12 stages at 23:41:10Z,
+including card-watch and morning-health, without intervention.
 
 The existing daily pipeline ran exactly card-watch and morning-health at
 23:13:03Z. Both exited 0; the journal records recovery without erasing the older
@@ -117,7 +122,10 @@ fixtures ran with PostgreSQL 17. Debug build and signed Release archive passed;
 the archive reports version 2.25/build906. Six fresh post-fix launches loaded the
 real game strip and lead with no new crash report. The pulse fixture executes
 300 overlapping detached requests and 61 coalesced refresh waiters with actor
-runtime checks enabled. Diff checks passed. Structured results are in
+runtime checks enabled. The additional optimized Release simulator build
+(`-O`, whole-module optimization) launched successfully and opened the live
+MLB lead, full team read, populated Devers card and exact TOR@ATH game with no
+new crash report. View Game on Picks selected that same 10:05 PM game. Diff checks passed. Structured results are in
 `audit-evidence/hub-2026-09-07/verification.json`.
 
 Native simulator checks covered the live MLB/NFL/NCAAF desks, refreshed Devers
@@ -140,3 +148,10 @@ Canonical checkout `/Users/adam.preda/Gary2.0`, main. Keep the local private
 No push notification, pick prompt, injury-policy or hosting changes. New
 content workers read the canonical checkout. Run production-truth after push
 and distinguish its known private-plist exception from actual runtime failures.
+
+Implementation commit `9c82830e` was pushed to main. Post-push production
+checks passed for the canonical scheduler/Winners processes, deployment
+timestamps, git remote parity and zero started MLB games missing picks. The
+production-truth command reports its existing private-plist exception; that
+file remains the sole intentional local source difference. Final release
+receipts are committed separately from the implementation.

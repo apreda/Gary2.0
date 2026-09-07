@@ -42,9 +42,13 @@
     ],
     "accessibility": "Large text; complete names/headlines/numbers; original reads; bounded modal; close targets; section navigation",
     "direct_synthetic_drag_wheel": "Tool actions produced no observable movement; gesture feel not claimed as verified",
-    "upload": "in_progress",
-    "apple_processing": "pending",
-    "app_store_submission": "Existing 2.25 build901 Waiting for Review; not withdrawn/replaced"
+    "upload": "succeeded 2026-09-07T23:34:07Z",
+    "apple_processing": "Complete; verified 2026-09-07T23:41:12Z in authenticated App Store Connect",
+    "app_store_submission": "Existing 2.25 build901 Waiting for Review; not withdrawn/replaced",
+    "testflight": "Build 906 assigned to internal Beta group; one invite; 90-day availability",
+    "apple_build_id": "15199f46-1003-4c1d-8417-f54d491025cc",
+    "optimized_simulator_build": "passed (Release, -O whole-module optimization)",
+    "optimized_simulator_launch": "passed; PID 26034; live MLB lead, team read, populated Devers card and exact TOR@ATH game opened; View Game on Picks selected the correct 10:05 PM TOR@ATH game"
   },
   "database": {
     "migration": "20260907225151_player_card_game_identity",
@@ -72,7 +76,15 @@
       "3 NCAAF packs without rendered statistics",
       "Aging complete college cards",
       "Empty NCAAF Wire"
-    ]
+    ],
+    "subsequent_scheduled_run": {
+      "run_id": "2026-09-07T23:30:01.339Z-11437",
+      "finished_at": "2026-09-07T23:41:10Z",
+      "stages_passed": 12,
+      "stages_failed": 0,
+      "scheduler_heartbeat_age_seconds": 1.6,
+      "mlb_started_missing_pick": 0
+    }
   },
   "runtime_before_push": {
     "scheduler_pid": 79083,
@@ -83,5 +95,22 @@
     "mlb_games": 11,
     "started_missing_pick": 0
   },
-  "private_local_exception": "ios/GaryApp/GoogleService-Info.plist \u2014 preserved, not read/staged/committed"
+  "private_local_exception": "ios/GaryApp/GoogleService-Info.plist \u2014 preserved, not read/staged/committed",
+  "git": {
+    "implementation_commit": "9c82830e",
+    "branch": "main",
+    "pushed": true
+  },
+  "runtime_after_push": {
+    "scheduler_pid": 79083,
+    "winners_pid": 89023,
+    "canonical_checkout": true,
+    "edge_deployment_timestamps": "all_pass",
+    "uncommitted_changes": 1,
+    "private_plist_exception_only": true,
+    "unpushed_commits": 0,
+    "mlb_published": 10,
+    "mlb_games": 11,
+    "started_missing_pick": 0
+  }
 }

@@ -2,8 +2,10 @@
 
 Latest Hub completion: read `../HANDOFF_2026-09-07_HUB_PRODUCTION.md`.
 The main Hub, shared player cards, data identity and content checks have been
-hardened. Build 906 is in final release verification; its handoff is the source
-of truth for upload/processing state. Older build-905 Mac-lock notes are
+hardened. Build 906 passed final release verification, uploaded successfully
+and finished Apple processing; it is assigned to the internal TestFlight Beta
+group. Its handoff records verification and the unchanged build-901 App Store
+review state. Older build-905 Mac-lock notes are
 superseded. The preceding Fantasy/Winners build was 904.
 
 Latest app/stats audit: read `../HANDOFF_2026-09-07_PERFORMANCE_AUDIT.md` for
