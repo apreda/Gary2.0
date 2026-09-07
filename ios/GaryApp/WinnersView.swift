@@ -280,22 +280,9 @@ struct PremiumPicksView: View {
         selectedDate == nil && !todayHasFreshPicks && !boardDataFailed
     }
 
-    /// The board is a mixed shelf list, so college football claims the floor
-    /// whenever it is ON the board (founder, Sep 4 2026: the background is for
-    /// NCAAF only). Off a college day, the page keeps the flat house ink.
-    private var boardHasNCAAF: Bool {
-        gameShelves.contains { $0.league.uppercased() == "NCAAF" }
-            || propShelves.contains { $0.league.uppercased() == "NCAAF" }
-            || lockedBoardSummaries.contains { $0.league.uppercased() == "NCAAF" }
-    }
-
     var body: some View {
         ZStack {
-            if boardHasNCAAF {
-                BorrowedHomeBackground()
-            } else {
-                LiquidGlassBackground(grainDensity: 0)
-            }
+            WinnersDepthBackground()
 
             GeometryReader { viewport in
                 ScrollViewReader { proxy in
@@ -336,6 +323,7 @@ struct PremiumPicksView: View {
             }
             StatusBarScrim()
         }
+        .environment(\.solidPanels, true)
         .task { await reload() }
         .onChange(of: selectedTab) { tab in
             // Hidden tabs are prewarmed at launch. If that background task was
@@ -632,12 +620,7 @@ struct PremiumPicksView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(GaryColors.panelFill)
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(GaryColors.gold.opacity(0.25), lineWidth: 1))
-        )
+        .quantPanel(radius: GaryLayout.Radius.card)
     }
 
     /// Yesterday's EST slate day — the date-browser key for the results door.
@@ -1422,14 +1405,7 @@ struct PremiumPicksView: View {
             .foregroundStyle(.white.opacity(0.62))
             .frame(maxWidth: .infinity, alignment: .leading)
             .pageGutter().padding(.vertical, 18)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.white.opacity(0.03))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.1), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
-                    )
-            )
+            .quantPanel(radius: GaryLayout.Radius.card)
             .pageGutter()
     }
 
@@ -1448,14 +1424,7 @@ struct PremiumPicksView: View {
             .foregroundStyle(.white.opacity(0.62))
             .frame(maxWidth: .infinity, alignment: .leading)
             .pageGutter().padding(.vertical, 18)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.white.opacity(0.03))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.1), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
-                    )
-            )
+            .quantPanel(radius: GaryLayout.Radius.card)
             .pageGutter()
     }
 

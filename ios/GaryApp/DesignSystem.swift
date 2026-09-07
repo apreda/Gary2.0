@@ -124,7 +124,7 @@ enum GaryColors {
     // THE FLOOR pairing (founder, Aug 19): over a patterned ground the 3% wash
     // is see-through — this is the SAME color that wash reads as over the plain
     // ink, locked opaque, so cards sit ON the world instead of dissolving into
-    // it. Applied wherever the `solidPanels` environment is set (Home).
+    // it. Applied on Home, Winners and the Fantasy player panels.
     static let panelFillOpaque = Color(hex: "#141210")
 }
 
@@ -317,8 +317,7 @@ extension View {
 }
 
 /// Whether panels in this subtree draw the opaque fill instead of the wash.
-/// Set by Home (THE FLOOR ground, Aug 19); false everywhere else, so the
-/// rest of the app keeps the translucent surface language untouched.
+/// Used by Home, Winners and Fantasy. Other pages retain the warm wash.
 private struct SolidPanelsKey: EnvironmentKey {
     static let defaultValue = false
 }

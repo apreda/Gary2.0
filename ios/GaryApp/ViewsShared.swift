@@ -1758,6 +1758,92 @@ struct LiquidGlassBackground: View {
     }
 }
 
+// MARK: - Winners backdrop
+
+/// A recessed, warm-black stage. Elliptical bands spread farther apart toward
+/// the viewer, leaving the solid cards in front of a distant pool of light.
+/// The decoration has no clock or scroll state and cannot intercept gestures.
+struct WinnersDepthBackground: View {
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                LinearGradient(
+                    colors: [Color(hex: "#100E0B"), Color(hex: "#17130F"), Color(hex: "#0B0A09")],
+                    startPoint: .top, endPoint: .bottom
+                )
+
+                RadialGradient(
+                    stops: [
+                        .init(color: Color(hex: "#514330").opacity(0.62), location: 0),
+                        .init(color: Color(hex: "#30271D").opacity(0.28), location: 0.42),
+                        .init(color: .clear, location: 1),
+                    ],
+                    center: UnitPoint(x: 0.48, y: 0.20),
+                    startRadius: 0,
+                    endRadius: geo.size.width * 1.16
+                )
+
+                RadialGradient(
+                    colors: [Color(hex: "#796448").opacity(0.12), .clear],
+                    center: UnitPoint(x: 1.08, y: 0.62),
+                    startRadius: 0, endRadius: geo.size.width * 1.15
+                )
+
+                Canvas { context, size in
+                    let horizon = CGPoint(x: size.width * 0.48, y: size.height * 0.18)
+                    for band in 1...8 {
+                        let depth = CGFloat(band) / 8
+                        let spread = pow(depth, 1.85)
+                        let radiusX = size.width * (0.48 + spread * 2.6)
+                        let radiusY = size.height * (0.025 + spread * 0.91)
+                        let path = Path(ellipseIn: CGRect(
+                            x: horizon.x - radiusX, y: horizon.y - radiusY,
+                            width: radiusX * 2, height: radiusY * 2
+                        ))
+
+                        // A broad shadow below each lip separates the planes;
+                        // the thin warm reflection gives the eye a depth cue.
+                        var shadow = context
+                        shadow.addFilter(.blur(radius: 4 + depth * 6))
+                        shadow.translateBy(x: 0, y: 5 + depth * 7)
+                        shadow.stroke(path, with: .color(.black.opacity(0.48)), lineWidth: 7 + depth * 8)
+                        context.stroke(path, with: .linearGradient(
+                            Gradient(colors: [
+                                Color(hex: "#B8A17C").opacity(0.04),
+                                Color(hex: "#B8A17C").opacity(0.10 + Double(depth) * 0.09),
+                            ]),
+                            startPoint: CGPoint(x: 0, y: horizon.y),
+                            endPoint: CGPoint(x: 0, y: size.height)
+                        ), lineWidth: 1 + depth * 1.1)
+                    }
+                }
+                .mask(LinearGradient(stops: [
+                    .init(color: .clear, location: 0.14),
+                    .init(color: .black.opacity(0.4), location: 0.26),
+                    .init(color: .black, location: 0.55),
+                    .init(color: .black.opacity(0.65), location: 1),
+                ], startPoint: .top, endPoint: .bottom))
+
+                LinearGradient(
+                    colors: [.black.opacity(0.35), .clear, .clear, .black.opacity(0.4)],
+                    startPoint: .leading, endPoint: .trailing
+                )
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: 0.72),
+                        .init(color: Color(hex: "#090808"), location: 1),
+                    ], startPoint: .top, endPoint: .bottom
+                )
+            }
+            .drawingGroup()
+            .clipped()
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
 // MARK: - Home Floor Ground (Home only)
 
 /// THE FLOOR · STILL — the official Home ground (founder, Aug 19: "I like the
@@ -1809,11 +1895,9 @@ struct HomeScrollOffsetKey: PreferenceKey {
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
-/// Home's background, borrowed by another page (founder, Sep 4 2026: "put in
-/// the same background the home page has for the Picks and Winners pages ...
-/// just for NCAAF only"). The living obsidian layer plus the floor, exactly
-/// as Home mixes them; the parallax is owned here and sits still, since only
-/// Home drives the ground from its own scroll.
+/// Home's background, borrowed by Picks on college slates. Winners uses its
+/// own recessed backdrop. The warm ink and floor match Home; the parallax
+/// stays still here because only Home drives it from its own scroll.
 struct BorrowedHomeBackground: View {
     @StateObject private var parallax = GroundParallax()
 

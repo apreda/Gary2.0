@@ -1,5 +1,9 @@
 # CLAUDE.md
 
+Latest native visual preview: read
+`../HANDOFF_2026-09-07_WINNERS_VISUAL_PREVIEW.md` for the Winners background and
+solid Fantasy panels. These are simulator previews, not part of uploaded 903.
+
 Latest app/stats audit: read `../HANDOFF_2026-09-07_PERFORMANCE_AUDIT.md` for
 player-log, pagination, token-accounting and native MLB prop fixes, live provider
 checks, the repaired bullpen table and uploaded build 903.
@@ -59,6 +63,11 @@ Examples:
 Gary WILL follow explicit if/then rules — he takes instructions literally. If we write "Fast pace helps underdogs stay close," Gary will pick underdogs in fast-paced games without investigating whether it's true for THIS matchup. Never tell Gary what a factor means for the pick. Never assign point values to factors. Never label something as "edge." Gary investigates and concludes on his own.
 
 ## Design Authority (rewritten July 7, 2026 — founder's call)
+
+September 7 exception: the founder explicitly requested
+`/Users/adam.preda/Desktop/anti-ai-slop-design.md` for the Fantasy/Winners visual
+work. Follow that supplied guide for this work; the older rule below does not
+override a new explicit design request.
 
 **No stored design rules, no templates — ever.** The founder has fully delegated
 design: the bar is "production-level, award-winning," and every part is designed from

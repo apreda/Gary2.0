@@ -3245,13 +3245,10 @@ fileprivate struct HubMatchupsSection: View {
     }
 }
 
-// MARK: - Fantasy Corner
-
 // MARK: - Fantasy Corner (the dedicated page behind the header toggle)
 
-/// One player on the Fantasy desk: the name, the numbers strip, and — the
-/// whole point — Gary's full case with his verdict pulled out, so a manager
-/// reads the argument and just decides whether they agree (founder, Jul 26).
+/// One solid panel per player. Gary's call leads, the complete case follows,
+/// and the stored measurements sit below it as supporting evidence.
 fileprivate struct FantasyCard: View {
     let s: Signal
     var accent: Color = GaryColors.gold
@@ -3340,58 +3337,63 @@ fileprivate struct FantasyCard: View {
 
     var body: some View {
         Button { onTap(s) } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                // No stat anchors the card (founder, Jul 26): the TAKE is the
-                // anchor — the tier word rides the right edge, the numbers
-                // live quietly in the strip, and the read carries the case.
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 7) {
                     Text(s.headline)
-                        .font(HubFont.body(14.5, .bold)).foregroundStyle(.white.opacity(0.95))
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                    if let pos = m?.position, !pos.isEmpty, pos != "SP" {
-                        Text(pos)
-                            .font(HubFont.data(9.5, .semibold)).foregroundStyle(.white.opacity(0.62))
-                    }
-                    if let t = m?.team, !t.isEmpty {
-                        Text(t)
-                            .font(HubFont.data(9.5, .semibold)).foregroundStyle(.white.opacity(0.55))
-                    }
-                    Spacer(minLength: 8)
-                    if let tier = tierWord {
-                        Text(tier.0)
-                            .font(HubFont.data(10, .bold)).tracking(0.9)
-                            .foregroundStyle(tier.1)
+                        .font(HubFont.body(18, .bold))
+                        .foregroundStyle(GaryColors.warmWhite)
+                        .fixedSize(horizontal: false, vertical: true)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 8) { identityLine; Spacer(minLength: 8); tierLabel }
+                        VStack(alignment: .leading, spacing: 6) { identityLine; tierLabel }
                     }
                 }
 
-                if let strip = statStrip {
-                    Text(strip)
-                        .font(HubFont.data(10.5, .semibold)).foregroundStyle(.white.opacity(0.72))
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
+                if let verdict = m?.verdict, !verdict.isEmpty {
+                    Text(verdict)
+                        .font(HubFont.body(14.5, .semibold))
+                        .foregroundStyle(accent)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                // Gary's case in full — the product, at reading brightness
-                // (founder, Jul 27: no more grey words on black). Verdict on
-                // its own line so the call lands.
                 Text(m?.read ?? s.detail)
-                    .font(HubFont.body(13.5)).foregroundStyle(.white.opacity(0.9))
+                    .font(HubFont.body(14)).foregroundStyle(GaryColors.warmWhite.opacity(0.9))
                     .lineSpacing(3)
-                    .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
-                if let v = m?.verdict, !v.isEmpty {
-                    Text(v)
-                        .font(HubFont.body(13, .bold)).foregroundStyle(accent)
-                        .multilineTextAlignment(.leading)
+
+                if let strip = statStrip {
+                    Rectangle().fill(GaryColors.warmWhite.opacity(0.08)).frame(height: 1)
+                    Text(strip)
+                        .font(HubFont.data(10.5, .medium))
+                        .foregroundStyle(GaryColors.warmWhite.opacity(0.68))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(.vertical, 11)
+            .multilineTextAlignment(.leading)
+            .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .quantPanel(radius: GaryLayout.Radius.card)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private var identityLine: some View {
+        Text([m?.position, m?.team].compactMap { value in
+            guard let value, !value.isEmpty else { return nil as String? }
+            return value
+        }.joined(separator: " · "))
+            .font(HubFont.data(10, .medium))
+            .foregroundStyle(GaryColors.warmWhite.opacity(0.68))
+    }
+
+    @ViewBuilder private var tierLabel: some View {
+        if let tier = tierWord {
+            Text(tier.0)
+                .font(HubFont.data(10, .semibold)).tracking(0.8)
+                .foregroundStyle(tier.1)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 
@@ -3405,10 +3407,9 @@ fileprivate struct FantasyCardList: View {
 
     var body: some View {
         if !items.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(items.enumerated()), id: \.element.id) { i, s in
+            LazyVStack(alignment: .leading, spacing: 12) {
+                ForEach(items) { s in
                     FantasyCard(s: s, accent: accent, onTap: onTap)
-                    if i < items.count - 1 { HubRule() }
                 }
             }
             .padding(.horizontal, 18)
@@ -3531,6 +3532,7 @@ fileprivate struct FantasyCornerPage: View {
                 }
             }
         }
+        .environment(\.solidPanels, true)
     }
 }
 
