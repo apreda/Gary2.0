@@ -27,7 +27,6 @@ export const metadata: Metadata = pageMetadata({
   canonical: '/today',
   title: "Today — Gary's Morning Sports Desk | Gary AI",
   description: "Today's Gary briefing: the top call, slate status, recent record, live games, Hub reads, and your Book in one place.",
-  robots: { index: false },
 });
 
 interface ReadState<T> {

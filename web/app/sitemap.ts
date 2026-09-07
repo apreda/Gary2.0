@@ -28,6 +28,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const today = todayEST();
   return [
     entry('/', 1, 'daily'),
+    entry('/today', 0.8, 'daily'),
     entry('/picks', 0.9, 'daily'),
     ...SPORTS
       .filter(s => s.slug !== 'world-cup')

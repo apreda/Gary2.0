@@ -189,6 +189,47 @@ try {
       }
       console.log(`PASS ${path}: real server-rendered page contains expected content`);
     }
+    // Search Console discovered all three routes. The public briefing belongs
+    // in search; account and personal Book pages must retain their exclusion.
+    for (const [path, indexable, expected] of [
+      ['/today', true, 'Local QA fixture.'],
+      ['/account', false, 'Sign in'],
+      ['/you', false, 'Your book'],
+    ]) {
+      const response = await fetch(`${origin}${path}`, {
+        headers: { 'User-Agent': 'Googlebot' },
+        signal: AbortSignal.timeout(90_000),
+      });
+      assert.equal(response.status, 200, `${path} crawler status`);
+      const html = await response.text();
+      // The loading boundary can stream a skeleton <main> before the page.
+      const main = [...html.matchAll(/<main\b[\s\S]*?<\/main>/g)]
+        .map(match => match[0]).join(' ');
+      assert(main.includes(expected), `${path} must render its expected content for crawlers`);
+      const robotTags = [...html.matchAll(/<meta\b[^>]*>/gi)]
+        .map(match => match[0])
+        .filter(tag => /\bname=["'](?:robots|googlebot)["']/i.test(tag))
+        .join(' ');
+      const directives = `${response.headers.get('x-robots-tag') ?? ''} ${robotTags}`;
+      if (indexable) {
+        assert.doesNotMatch(directives, /\bnoindex\b/i, `${path} must allow indexing`);
+        assert(html.includes('<link rel="canonical" href="https://www.betwithgary.ai/today"'),
+          'The public Today briefing must retain its own canonical URL');
+      } else {
+        assert.match(directives, /\bnoindex\b/i, `${path} must remain excluded from indexing`);
+      }
+      console.log(`PASS ${path}: crawler receives ${indexable ? 'indexable public' : 'noindex private'} page`);
+    }
+    const sitemapResponse = await fetch(`${origin}/sitemap.xml`, { signal: AbortSignal.timeout(90_000) });
+    assert.equal(sitemapResponse.status, 200, 'Stable sitemap status');
+    const sitemap = await sitemapResponse.text();
+    assert(sitemap.includes('<loc>https://www.betwithgary.ai/today</loc>'),
+      'The sitemap must advertise the public Today briefing');
+    for (const path of ['/account', '/you']) {
+      assert(!sitemap.includes(`<loc>https://www.betwithgary.ai${path}</loc>`),
+        `The sitemap must not advertise private ${path}`);
+    }
+    console.log('PASS /sitemap.xml: public Today included; private account and Book excluded');
     const matchup = `/picks/mlb/${date}/chicago-cubs-at-cincinnati-reds`;
     for (const [path, expected] of [
       ['/picks/mlb', `href="${matchup}"`],

@@ -50,6 +50,7 @@ vi.mock('@/lib/gary/archive', async importOriginal => {
 
 const FIXED = [
   '/',
+  '/today',
   '/picks',
   ...SPORTS.filter(sport => sport.slug !== 'world-cup').map(sport => `/picks/${sport.slug}`),
   '/props',
@@ -87,6 +88,7 @@ describe('sitemap', () => {
     const paths = items.map(item => pathOf(item.url));
     expect(paths).toEqual(FIXED);
     expect(new Set(paths).size).toBe(paths.length);
+    expect(paths).toContain('/today');
     expect(paths).not.toContain('/account');
     expect(paths).not.toContain('/you');
     expect(paths).not.toContain('/picks/world-cup');
