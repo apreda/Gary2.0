@@ -934,8 +934,7 @@ struct BillfoldView: View {
     private var chartHeader: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                // Quant Terminal labels (mono, never .system) — one line each,
-                // scale before EVER wrapping ("HYPOTHETICA/L" was wrapping mid-word).
+                // Compact chart labels use the existing shared type helper.
                 Text(chartMode == .sports ? "BY SPORT \u{00B7} NET" : "EQUITY CURVE")
                     .font(GaryFonts.mono(9.5, bold: true))
                     .tracking(1)

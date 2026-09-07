@@ -155,3 +155,18 @@ timestamps, git remote parity and zero started MLB games missing picks. The
 production-truth command reports its existing private-plist exception; that
 file remains the sole intentional local source difference. Final release
 receipts are committed separately from the implementation.
+
+## Follow-up: old design rules removed
+
+Adam clarified that he is fine with the current Hub fonts. This follow-up
+changes documentation and comments only; build 906's UI and font values stay
+unchanged. The root agent instructions and backend guide now record that
+clarification. The retired designer brief redirects to the anti-slop file;
+old Hub/font and marketing palette/type prescriptions were removed or marked
+historical. Stale font mandates in live source comments were removed.
+
+The local Claude memory index and creative-autonomy note were updated too;
+obsolete Gary layout-rule notes now redirect to the current guide. Historical
+project memories cannot override current feedback, even if they call an old
+visual choice a founder law. No new named-font ban was inferred from the
+screenshot. `docs/design/anti-ai-slop-design.md` remains unchanged.

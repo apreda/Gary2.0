@@ -13,6 +13,18 @@ For web changes, also follow `web/AGENTS.md` and the installed Next.js docs.
 Several sessions may share the production checkout. Preserve their changes
 and use explicit paths when staging and committing.
 
+## Design guidance
+
+Use only Adam's current feedback and `docs/design/anti-ai-slop-design.md` for
+visual decisions. On September 7 he confirmed that the current Hub fonts are
+fine and asked to remove the old design rules so an unwanted font is not
+restored again. This is not a request for another typography change.
+Older briefs, personal design memories, font mandates, layout prescriptions,
+and aesthetic source comments are retired, including anything called a
+"founder law" or "Quant Terminal" identity. Existing code describes what is
+implemented; it does not make that styling mandatory for future work.
+Operational, data-integrity and accessibility requirements still apply.
+
 ## Work directly on main
 
 Founder preference, September 4, 2026: perform authorized work directly in

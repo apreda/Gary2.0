@@ -221,28 +221,16 @@ enum TeamColors {
 }
 
 // MARK: - Gary Typography
-// Bundled brand faces (Fonts/ + Info.plist UIAppFonts). Inlined here (not a
-// separate file) so it compiles without a project.pbxproj change.
-//   display – hero titles   mono – "Quant Terminal" labels   text – body/UI (Inter)
-// Retune the brand voice by changing the single `displayFace` value.
-// ONE RAMP (Aug 4 2026). Before this, the app ran two parallel type systems
-// (GaryFonts + HubFont) with three different scale factors, two floors, and
-// 236 bare `.system(size:)` calls bypassing both — so writing `12` produced
-// four different rendered sizes depending on which helper you reached for.
-// That is why nothing lined up optically and why tuning by number was guesswork.
-//
-// Every size transform in the app now happens HERE and nowhere else. HubFont
-// is a thin alias (HubView.swift). Rendered sizes are UNCHANGED from Aug 3 —
-// this was a consolidation, not a retune, so the pick/prop cards did not move.
+// Shared typography helpers for existing call sites. Bundled faces are
+// registered through Info.plist UIAppFonts; system roles use the scales below.
+// The Hub and shared player cards also have native scalable type modifiers.
+// These helpers describe current rendering, not mandatory design choices.
+// Design guidance: current feedback and docs/design/anti-ai-slop-design.md.
 enum GaryFonts {
-    /// Bundled options: "BebasNeue-Regular" (default — founder-picked Jul 5 off
-    /// the W17 seal mock), "SairaCondensed-Bold", "Anton-Regular", "Rajdhani-Bold",
-    /// "Oswald-Bold", "ChakraPetch-Bold", "BarlowCondensed-Bold".
-    /// NOTE: Bebas has no lowercase — everything through display() renders CAPS.
+    /// Current bundled display face. Its glyphs render capitals only.
     static let displayFace = "BebasNeue-Regular"
 
-    // The ramp's constants, Jul 12 2026 (founder: "everything ~20% closer").
-    // Kept to the pt — retuning the app means changing these five numbers.
+    // Scale and minimum-size constants used by the helpers below.
     private static let displayScale: CGFloat = 1.08
     private static let dataScale:    CGFloat = 1.18
     private static let dataFloor:    CGFloat = 12
@@ -254,36 +242,29 @@ enum GaryFonts {
     /// Hero titles + wordmarks — bundled Bebas. Renders CAPS (no lowercase).
     static func display(_ size: CGFloat) -> Font { .custom(displayFace, size: size * displayScale) }
 
-    /// Numbers, labels, meta — SF at REAL weight with TABULAR digits, so digit
-    /// columns stay aligned and 0/8 read apart. (Was JetBrains Mono in the
-    /// "Quant Terminal" era; retired Jul 12 2026 — hard to read at label sizes.
-    /// Never `.regular`: that read "like the default font on Microsoft Word".)
+    /// System text with tabular digits, a minimum size and configurable weight.
     static func data(_ size: CGFloat, _ weight: Font.Weight = .semibold) -> Font {
         .system(size: max(dataFloor, size * dataScale), weight: weight).monospacedDigit()
     }
 
-    /// Body copy + UI prose — SF Pro per the June 2026 type decision (native
-    /// rendering + the Dynamic Type path). Inter stays bundled but unused.
+    /// System body text using the shared scale and minimum size.
     static func text(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
         .system(size: max(textFloor, size * textScale), weight: weight)
     }
 
     // ── RAW ROLES (exact size, no scaling — already tuned at the call site) ──
 
-    /// Tight uppercase labels. Pair with `.tracking()` at the call site.
+    /// System labels at the requested size with tabular digits.
     static func kicker(_ size: CGFloat = 10.5, _ weight: Font.Weight = .semibold) -> Font {
         .system(size: size, weight: weight).monospacedDigit()
     }
 
-    /// BROADCAST accent — the scorebug voice (founder-picked Jul 12 off the
-    /// "02 Broadcast" mock): black-weight italic caps for section kickers and
-    /// state moments. Bebas keeps the hero titles; this is the energy layer.
+    /// System text with black weight and italic styling.
     static func accent(_ size: CGFloat) -> Font {
         .system(size: size, weight: .black).italic()
     }
 
-    /// System-native UI text at an exact size — the escape hatch that replaces
-    /// bare `.system(size:)`, so every size in the app still reads as a role.
+    /// System UI text at the requested size and weight.
     static func ui(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
         .system(size: size, weight: weight)
     }

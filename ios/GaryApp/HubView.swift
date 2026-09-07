@@ -22,12 +22,9 @@ import SwiftUI
 
 // MARK: - Type + chrome system
 
-/// DEPRECATED NAMESPACE (Aug 4 2026). HubFont was a second, parallel type ramp
-/// — same intent as GaryFonts, subtly different math, so the Hub and Picks
-/// pages rendered a "12" differently from Home's "12" and no size could be
-/// reasoned about across pages. Every role now forwards to the one ramp in
-/// DesignSystem.swift, byte-identical output. New code calls GaryFonts directly;
-/// these aliases stay only so the ~140 existing call sites keep working.
+/// Compatibility aliases for existing call sites, including Picks. These
+/// forward to GaryFonts; the Hub's current scalable type modifiers follow below.
+/// This namespace does not prescribe typography for future work.
 enum HubFont {
     /// → GaryFonts.display. The weight arg was already ignored (Bebas has one).
     static func display(_ size: CGFloat, _ weight: Font.Weight = .heavy) -> Font {

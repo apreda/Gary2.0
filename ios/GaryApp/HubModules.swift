@@ -224,7 +224,7 @@ struct PulseTable: View {
 /// The Prop Slip — one silver card, one two-line row per prop (name + team,
 /// then the gold pick + odds), with a W/L letter rail that fills in as props
 /// settle. Replaces stacked prop cards anywhere a game carries 1–5 props.
-/// Locked-card language throughout: same frame, fonts, and gold-only-pick rule.
+/// Shares the current prop-card presentation helpers.
 extension PropPick {
     /// "TOTAL BASES OVER 1.5" — the locked card's pick composition, shared by
     /// the slip rows and the condensed Take sheet.

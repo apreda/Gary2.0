@@ -72,7 +72,11 @@ The founder explicitly said to ignore all previous design notes and
 preferences, including fonts. The only standing design guide is
 `../docs/design/anti-ai-slop-design.md` (an exact copy of his Desktop file),
 together with his current
-conversation feedback. Older font choices, layout prescriptions, historical
+conversation feedback. In his follow-up he confirmed that the current Hub
+fonts are fine: remove the old mandates, without treating this as a request
+to change the approved typography again. Do not restore a retired font based
+on an old brief or memory, or infer a new font ban from his screenshot.
+Older font choices, layout prescriptions, historical
 handoffs, and aesthetic comments in source are not requirements. Reassess
 inherited visuals against the current guide. Operational and data-integrity
 instructions remain in force.

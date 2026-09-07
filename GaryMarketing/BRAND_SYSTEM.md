@@ -1,12 +1,13 @@
 > **September 4 update:** Use [the current launch runbook](launch-2026-09/LAUNCH_RUNBOOK.md) for the account-based founding offer, execution order and current channel-policy decisions. Use [the 2.25/899 review pack](APP_REVIEW_2_25_899.md) for submission facts. Earlier offer, release-state and policy statements below are historical.
 
 # GARY — BRAND SYSTEM
-## The one-page truth for every external surface
+## Brand and operational reference
 
 > Jul 24 2026. Owner: Claude (marketing). **Scope: marketing/external surfaces only** — X, web,
 > ads, creator briefs, press, App Store. The app's UI is founder-delegated live design and this
 > file never binds it (Design Authority rule, Jul 7 2026). Voice canonical: `POSITIONING.md` (v5).
-> This file supersedes the root `Gary_AI_Brand_Guide.pdf` and the old Notion Brand Assets content.
+> This file is not a visual design guide. The old brand PDF, Notion design notes
+> and historical visual prescriptions are retired.
 
 ---
 
@@ -32,34 +33,14 @@
 - The bear is a character with a record, not a mascot for hype: he appears with the tape, a card,
   or a take — never with money-flash or lifestyle props.
 
-## 3. Color (per-surface truth)
+## 3–4. Visual instructions retired
 
-**Brand constants (all surfaces):**
-- Gold `#C9A227` (the signature — Gary's voice, primary CTA, branded labels)
-- Gold light `#E8D48B` · gold warm `#F4E4BA`
-- Win `#3FB950` · Loss `#E5484D` (colored letters/text, never filled bubbles)
-
-**Web (warm "ink" system, R≥B on every surface):** ink `#0A0908`, card `#16140E`, chip `#211D12`,
-elev `#1B1812`; text roles = white at 0.92 / 0.62 / 0.50 / 0.35; hairlines white 0.08.
-**Share/OG cards:** canvas `#151311→#0B0A09` radial, card `#121110`.
-**iOS scene values** (`DesignSystem.swift` — the app owns these; listed for reference only):
-darkBg `#08080A`, cardBg `#121214`, elevated `#1E1A1A`, field `#131110`.
-
-**Sport accents (web tokens):** MLB `#7BC267` (share-card grass `#63D17E`), NFL `#22C55E`,
-NBA `#3B82F6`, NHL `#00A3E0`, NCAAB `#F97316`, NCAAF `#DC2626`.
-
-## 4. Type (per-surface truth — do NOT cross-apply)
-
-- **Web:** display = Barlow Condensed (poster headlines; uppercase only for short phrases ≤3
-  words/line, sentence-length headlines are mixed-case), body = Inter, data/labels = JetBrains
-  Mono (the web's Quant Terminal voice).
-- **iOS (reference only):** display = Bebas Neue (CAPS-only face, founder-picked Jul 5), data =
-  SF semibold/bold with tabular numerals (**JetBrains retired in-app Jul 12** — zeros read as
-  eights at label sizes), accent kickers = SF black italic caps.
-- **Marketing images:** share-card hero = Barlow Condensed Bold (`/api/share-card`); results card
-  = Anton + Inter. Fonts live in `web/assets/og/`.
-- Law (recurred): **never present a mock in mono/JetBrains by default** — check the target
-  surface's real faces first.
+The previous palette and font prescriptions were removed on September 7, 2026.
+Use [anti-ai-slop-design.md](../docs/design/anti-ai-slop-design.md) and current
+conversation feedback. Existing assets and renderer code describe what is
+implemented; they do not mandate fonts or a visual identity for future work.
+Adam is happy with the current Hub typography. No font restoration or change
+is requested by this cleanup.
 
 ## 5. Voice — the hard laws (canonical: POSITIONING.md v5)
 

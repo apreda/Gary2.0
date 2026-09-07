@@ -79,27 +79,13 @@ sections; 3-6 rows each renders sparse), and a second ranked board for starter f
   not the league's whole day. Dropped-row count logged.
 - `.debut` SignalKind deleted (no producer exists; enum stays honest).
 
-## 5. Design-language conformance (Quant Terminal)
+## 5. Retired visual instructions
 
-Baseline finding: the locked font rule passes (zero outlawed `.system(design:)` uses);
-everything below is drift, not rule breaks.
-
-- Selector grammar: lane tabs, league toggle, and the new Conditions tabs move to
-  GaryFonts.mono labels (Billfold sport-chip pattern — mono text in the capsule fill).
-- Stat numerals (card values, board values/ranks, sheet hero stat) move from SF bold to
-  GaryFonts.mono — the terminal numeral voice. Names/headlines stay SF.
-- Card chrome: FeatureEdgeCard/MiniEdgeCard/EdgeCardBack pure-white fills rebased on
-  QuantPanel's warm `#F6F1E7` (the cool cast its comment outlaws).
-- Panel gutters 14pt → 16pt (aligns with HubSectionHeader and every sibling page).
-- One search per page: the top field adopts the mono/warm-fill treatment, spans
-  everything the page shows (edges across leagues + streaks + night rows + receipts),
-  and NightBoard's embedded field is removed (NightBoard is Hub-only — verified).
-- Affordances: quiet chevrons on tappable rows; "tap to flip back ↺" on EdgeCardBack
-  (three of three sibling card backs carry it).
-- hubEmptyState restyled to the page's own NO MATCHES grammar (mono uppercase headline).
-- `GaryColors.win`/`.loss` hoisted (#3FB950/#E5484D); Hub call sites use them.
-- HubSectionHeader doc comment corrected (says "serif" — the outlawed word — but renders
-  display-face gold).
+The former font, "Quant Terminal," color and layout prescriptions were removed
+at Adam's request on September 7, 2026. Use
+[anti-ai-slop-design.md](../../design/anti-ai-slop-design.md) and his current
+feedback. The current Hub typography is acceptable; this historical plan must
+not trigger a font restoration.
 
 ## Out of scope (backend / other tabs — noted for Adam, not touched)
 

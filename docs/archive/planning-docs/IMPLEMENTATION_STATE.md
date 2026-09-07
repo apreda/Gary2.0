@@ -1,3 +1,7 @@
+> Historical implementation record. Its aesthetic choices and type descriptions
+> are not current design instructions. Adam retired all older design rules on
+> September 7, 2026; use `docs/design/anti-ai-slop-design.md` and current feedback.
+
 # Gary — Implementation State & Reference
 
 > Reference + tech-debt, not a creative brief. This is **how it's built right now** (for lookup) and **the accessibility bar** (run after designing). The thing you read *before* designing is the anti-slop card in `DESIGNER_BRIEFING.md`. Don't mine this file for ideas — it describes the current state, which is allowed to change.

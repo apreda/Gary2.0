@@ -1,3 +1,7 @@
+> Historical implementation record. Its aesthetic choices and type descriptions
+> are not current design instructions. Adam retired all older design rules on
+> September 7, 2026; use `docs/design/anti-ai-slop-design.md` and current feedback.
+
 # The Hub — Front-Page Redesign (July 4, 2026)
 
 Founder brief: full redesign, 100% delegated ("I want to see how you do a feature/page on your
