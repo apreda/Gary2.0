@@ -45,6 +45,10 @@ deleted. There is no evidence here establishing the cause of follower loss.
   exactly match the tested local files. The final live dry run returned HTTP
   200 and health `ok`, with no posts or metric writes. All seven September 7
   publication intents were completed; none held an old prepared draft.
+- Implementation commit `07267137` was pushed to `origin/main`. The required
+  production audit passed every edge deployment check and found no unpushed
+  commits. It exited 1 only for the known private Firebase configuration file
+  below; no source deployment mismatch was flagged.
 
 The production checkout is `/Users/adam.preda/Gary2.0` on main. Preserve the
 machine's real `ios/GaryApp/GoogleService-Info.plist` as the known uncommitted

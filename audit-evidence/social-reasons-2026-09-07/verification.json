@@ -124,5 +124,14 @@
       "posted_picks": 0
     }
   },
+  "production_audit": {
+    "command": "node scripts/production-truth.js",
+    "implementation_commit": "07267137",
+    "pushed_to": "origin/main",
+    "exit_code": 1,
+    "edge_deployment_checks": "all passed, including social-auto-post v104",
+    "unpushed_commits": 0,
+    "only_flag": "Known uncommitted private ios/GaryApp/GoogleService-Info.plist configuration; preserved per AGENTS.md"
+  },
   "published_for_verification": false
 }
