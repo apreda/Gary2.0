@@ -16,6 +16,77 @@ const composerSrc = readFileSync(
   'utf8',
 );
 
+const september7Picks = JSON.parse(readFileSync(
+  new URL('../fixtures/social-rationales-2026-09-07.json', import.meta.url), 'utf8',
+));
+
+describe('September 7 published assumption-copy regressions', () => {
+  it.each(september7Picks)('uses the actual case and supporting evidence for $pick', ({ pick, rationale }) => {
+    const expected = pick.startsWith('Royals') ? {
+      opening: 'The Royals have a more favorable route through their pitching staff today.',
+      closing: 'Pearson and Cruz last pitched September 3, while Kimbrel sat Sunday after working Saturday.',
+    } : {
+      opening: 'Minnesota’s rested late-inning group tips this close matchup for me.',
+      closing: 'Gómez, Hoffman and Minter all sat Sunday after throwing seven, 17 and 18 pitches Saturday.',
+    };
+    const pickLine = pick.replace(/ [-+]\d+$/, '');
+    const budget = 278 - pickLine.length - 4;
+    const pair = fallbackReasonPair(rationale, budget);
+    expect(pair).toEqual(expected);
+    expect(isSafeReasonPair(rationale, pair, budget)).toBe(true);
+    expect([pair.opening, pickLine, pair.closing].join('\n\n').length).toBeLessThanOrEqual(278);
+    for (const sentence of Object.values(pair)) expect(isVerbatimSnippet(rationale, sentence)).toBe(true);
+  });
+
+  it.each(september7Picks)('rejects the old assumption selection even when copied exactly for $pick', ({ rationale }) => {
+    const assumption = splitSentences(rationale).find(s => s.startsWith('My assumption'));
+    expect(isVerbatimSnippet(rationale, assumption)).toBe(true);
+    expect(reasonCandidates(rationale)).not.toContain(assumption);
+    expect(isSafeReasonPair(rationale, { opening: assumption, closing: '' }, 278)).toBe(false);
+  });
+
+  it.each([
+    'A confirmed restrictive workload limit without an available bulk option would change my assessment.',
+    'The workload is established; its effect on today’s deployment is my judgment.',
+    'The unresolved detail most capable of changing this bet is Arizona’s pitching plan behind Law.',
+    'Loáisiga threw 36 pitches across those games, Morillo 32 and Ginkel 26.',
+    'I expect those location problems to give New York opportunities to reach base and push Miami into its bullpen.',
+    'Mayo and Encarnacion-Strand make those opportunities dangerous.',
+    'Boston’s recent pitching success came with different starters; I expect this assignment to give Los Angeles more offensive opportunities.',
+    'The relief assignments carry the most weight.',
+    'The opportunity extends into the middle innings.',
+    'Soto and Benge have specific ways to capitalize.',
+    'The working assumptions are that Holmes delivers a competitive normal start and Atlanta can use its principal late-inning options.',
+    'A restrictive pitch limit for Tong would change my decision: an early handoff would put more pressure on New York’s relief options.',
+    'Encarnacion-Strand’s platoon result covers only 52 at-bats, so it deserves less weight than Mayo’s 127-at-bat sample.',
+  ])('keeps assessment language and missing context out of both selection paths: %s', sentence => {
+    expect(reasonCandidates(sentence)).toEqual([]);
+    expect(fallbackReasonPair(sentence, 278)).toBeNull();
+    expect(isSafeReasonPair(sentence, { opening: sentence, closing: '' }, 278)).toBe(false);
+  });
+
+  it('does not let a later first-person line displace the clear opening argument', () => {
+    const opening = 'Minnesota’s rested late-inning group tips this close matchup for me.';
+    const closing = 'Gómez, Hoffman and Minter all sat Sunday after throwing seven, 17 and 18 pitches Saturday.';
+    const rationale = `${opening} ${closing}\n\nI trust Ryan to get Minnesota into the sixth inning.`;
+    expect(fallbackReasonPair(rationale, 266)).toEqual({ opening, closing });
+  });
+
+  it('does not promote a denied advantage over an actual matchup reason', () => {
+    const fact = 'Soto has slugged .619 against four-seam fastballs, while Benge has hit .325 against both four-seamers and sinkers.';
+    const caveat = 'Miami still has Petersen and Faucher coming off an unused Sunday, so I’m assigning New York no automatic advantage simply because other Marlins relievers worked yesterday.';
+    expect(fallbackReasonPair(`${fact}\n\n${caveat}`, 266)).toEqual({ opening: fact, closing: '' });
+  });
+
+  it('rejects a model pairing the pick argument with a different paragraph’s counter-case', () => {
+    const opening = 'I’m taking the spread because I expect SMU’s passing advantage to generate sustained scoring opportunities across four quarters.';
+    const closing = 'The late 90-yard touchdown drive also showed Florida State could respond when its opponent closed the gap.';
+    const rationale = `${opening}\n\n${closing}`;
+    expect(isSafeReasonPair(rationale, { opening, closing }, 266)).toBe(false);
+    expect(fallbackReasonPair(rationale, 266)).toEqual({ opening, closing: '' });
+  });
+});
+
 // Founder directive (Aug 17 2026): pick tweets use ONLY Gary's own words —
 // whole sentences copied verbatim from the stored pick rationale. The model
 // SELECTS sentences; it never writes, edits, shortens, or paraphrases. The
@@ -123,8 +194,8 @@ describe('reasonCandidates', () => {
     // editing Gary's sentences, so a priced sentence is excluded, never scrubbed.
     const kept = reasonCandidates(R);
     expect(kept.some((s) => /[-+]\d{3,4}\b/.test(s))).toBe(false);
-    expect(reasonCandidates('He cashes at plus money more often than not. The lineup is the reason tonight.'))
-      .toEqual(['The lineup is the reason tonight.']);
+    expect(reasonCandidates('He cashes at plus money more often than not. Minnesota’s lineup is the reason tonight.'))
+      .toEqual(['Minnesota’s lineup is the reason tonight.']);
   });
 
   it('fallbackReasonPair prefers stat-bearing reasons over the scene-setting opener', () => {
@@ -192,7 +263,7 @@ describe('reasonCandidates', () => {
     expect(fallbackReasonPair(card, 100).opening).toBe('Colorado has the stronger finish available in Romano.');
   });
 
-  it('the argument leads (founder, Aug 19): a stance sentence opens, the stat-dense reason closes', () => {
+  it('keeps the argument without padding from a different paragraph', () => {
     const card = [
       'The rubber match is set at PNC Park, with two arms carrying very different certainty.',
       'Skenes has held left-handed hitters to a .649 OPS, an important matchup against a lineup with five left-handed bats.',
@@ -201,7 +272,7 @@ describe('reasonCandidates', () => {
     ].join('\n\n');
     const pair = fallbackReasonPair(card, 400);
     expect(pair.opening.startsWith('I’m backing Pittsburgh')).toBe(true);
-    expect(pair.closing.includes('8.2 innings') || pair.closing.includes('.649 OPS')).toBe(true);
+    expect(pair.closing).toBe('');
     expect(pair.opening.includes('PNC Park')).toBe(false);
   });
 });

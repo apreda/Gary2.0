@@ -74,6 +74,12 @@ const ODDS = /[-+]\d{3,4}\b/;
 // price talk (founder, Aug 26: the feed carries the read, never the number).
 const PRICE_TALK = /\b(?:plus|even)[- ]money\b|\bpric(?:e|es|ed|ing)\b|\bjuice\b/i;
 const META_FILLER = /^(?:the|my) (?:assumptions?|judgments?|counterarguments?|unresolved facts?) (?:are|is) \w+[.!?]$/i;
+// The rationale also records uncertainty and the analyst's decision process.
+// Those are useful on the full card, but are not the reasons to quote in a
+// pick tweet (founder, Sep 7). Exclude the whole sentence; never remove a
+// qualifier to make an assumption sound like an established fact.
+const META_ANALYSIS = /\b(?:my|our|the)(?: working| primary| key)? (?:assumptions?|assessments?|judgments?)\b|\bmy decision\b|\b(?:unresolved|unverified) (?:facts?|details?)\b|\bI(?:['’]m| am)?\s+assum(?:e|ing)\b|\bdeserves? (?:less|more) weight\b/i;
+const EMPTY_REASON = /\b(?:specific|several|multiple) ways to\b/i;
 
 // A sentence the FEED can carry must stand alone (founder, Aug 26: "he will
 // say he or refer to someone and nobody knows who he is talking about").
@@ -87,7 +93,11 @@ const TORN_OPENER = /^(?:but|and|so|yet|still|also|plus|though|however|meanwhile
 const THIRD_PERSON = /\b(?:he|his|him|she|her|they|their|them|it|its)\b/i;
 // References to a previous paragraph do not become self-contained just because
 // another player happens to be named later in the sentence (Sep 3–4 posts).
-const BACK_REFERENCE = /\b(?:that|those|these|this)\s+(?:(?:late[- ]inning|early|offensive|defensive|returning|uneven|surrounding|recent|batting|particular|new|blocking|drive-sustaining)\s+){0,2}(?:uncertainty|opportunity|advantages?|edges?|risks?|matchup|split|splits|production|stretch|span|form|case|read|number|numbers|pieces|separation|route|judgment|difference|arms|order|continuity|reconstruction|front|combinations?|connections?|familiarity|options?|position|vulnerabilities|relationships?|lineup|problems?)\b/i;
+const BACK_REFERENCE = /\b(?:that|those|these|this)\s+(?:(?:late[- ]inning|early|offensive|defensive|returning|uneven|surrounding|recent|batting|particular|new|blocking|drive-sustaining)\s+){0,2}(?:uncertainty|opportunity|advantages?|edges?|risks?|matchup|split|splits|production|stretch|span|form|case|read|number|numbers|pieces|separation|route|judgment|difference|arms|order|continuity|reconstruction|front|combinations?|connections?|familiarity|options?|position|vulnerabilities|relationships?|lineup|problems?|games|wins|losses|outings|appearances|starts|group|pitcher)\b/i;
+// "Those location problems" and "those opportunities" still point to missing
+// text. Allow ordinary lowercase modifiers without treating "that New York
+// has ..." (a named proposition) as a reference to an earlier paragraph.
+const MODIFIED_BACK_REFERENCE = /\b(?:[Tt]hose|[Tt]hese|[Tt]hat|[Tt]his)\s+(?:[a-z][a-z-]*\s+){0,2}(?:problems|opportunities|assignments?|games|wins|losses|outings|appearances|starts|group|pitcher)\b/;
 const STAT_ABBREVIATIONS = new Set(['ERA', 'WHIP', 'OPS', 'ER', 'K', 'BB', 'HR', 'RBI', 'AVG', 'OBP', 'SLG', 'MLB', 'NFL', 'NBA', 'NCAAF', 'AAA', 'AA']);
 // Sentence-initial capitalization is ambiguous, so word[0] only counts as a
 // name when it is not an ordinary sentence-starter ("Holmes has..." resolves
@@ -108,7 +118,7 @@ function hasResolvingProperNoun(t) {
 export function isStandaloneSentence(sentence) {
   const t = String(sentence ?? '').trim();
   if (TORN_OPENER.test(t)) return false;
-  if (BACK_REFERENCE.test(t)) return false;
+  if (BACK_REFERENCE.test(t) || MODIFIED_BACK_REFERENCE.test(t)) return false;
   // A name after "his/he" cannot resolve the opening subject. Statistical
   // abbreviations never count as names: ER/K/BB let the Sep 3 Rangers post pass.
   const pronoun = THIRD_PERSON.exec(t);
@@ -125,8 +135,12 @@ export function isReasonSentence(sentence) {
   const t = String(sentence ?? '');
   if (STAKE.test(t)) return false;
   if (ODDS.test(t) || PRICE_TALK.test(t)) return false;
-  if (META_FILLER.test(t.trim()) || /\boffers? alternatives[.!?]$/i.test(t.trim())) return false;
+  if (META_ANALYSIS.test(t) || META_FILLER.test(t.trim()) || EMPTY_REASON.test(t) || /\boffers? alternatives[.!?]$/i.test(t.trim())) return false;
   if (!isStandaloneSentence(t)) return false;
+  // A free-floating signpost ("The relief assignments carry the most weight")
+  // does not explain a pick. Keep a named team/player in every quoted reason;
+  // the reader cannot infer which side a generic "the bullpen" belongs to.
+  if (!hasResolvingProperNoun(t)) return false;
   // HEADINGS ARE NOT SENTENCES (Aug 24 2026): stored rationales carry section
   // labels ("Gary's Take") as bare unpunctuated lines, and splitSentences
   // keeps paragraph tails whole. During the Aug 21+ Gemini outage the
@@ -151,29 +165,29 @@ export function isSafeReasonPair(rationale, pair, budget) {
   const candidates = reasonCandidates(rationale).map(normWs);
   const safe = (sentence) => sentence.trim().length > 0
     && isReasonSentence(sentence) && candidates.includes(normWs(sentence));
+  const sameParagraph = closing === '' || String(rationale ?? '').split(/\n+/)
+    .some(p => normWs(p).includes(normWs(opening)) && normWs(p).includes(normWs(closing)));
   return safe(opening) && (closing === '' || (safe(closing) && normWs(opening) !== normWs(closing)))
-    && opening.length + closing.length <= budget;
+    && sameParagraph && opening.length + closing.length <= budget;
 }
 
 const digitGroups = (s) => (String(s).match(/\d[\d.,%]*/g) || []).length;
 
-/** Gary's stance/thesis sentence class — the first-person read that says WHY
- *  the bet exists ("I'm backing… because", "My read is…"). Priced wager
- *  declarations are already excluded upstream by isReasonSentence. */
-const STANCE = /\b(i(?:'|’)?m backing|i(?:'|’)?m taking|i(?:'|’)?ll take|my read|my judgment|my assumption|my ticket|i (?:also )?expect|i (?:still )?give|i want|i trust|this sets up)\b/i;
-// Gary's argument is not always first-person. These are ranking cues, never
+// First-person phrasing does not establish a reason. These are ranking cues, never
 // permission to rewrite a sentence or add a claim. Explicit objections remain
 // available as evidence/risk, but do not displace the case for the pick.
-const ARGUMENT = /\b(?:because|advantage|stronger|weaker|opportunit(?:y|ies)|carries the most weight|is what|credible route|plausible route)\b/i;
-const OBJECTION = /\b(?:argument against|counterargument|counterweight|strongest counter|primary risk|obstacle)\b/i;
+const ARGUMENT = /\b(?:because|advantage|stronger|weaker|opportunit(?:y|ies)|carries the most weight|is what|credible route|plausible route|more (?:favorable|useful|dependable)|tips? (?:this|the|a) (?:close )?(?:matchup|game|balance))\b/i;
+const OBJECTION = /\b(?:argument against|counterargument|counterweight|strongest counter|strongest answer|primary risk|obstacle|objections?)\b/i;
+const NEGATED_ARGUMENT = /\bno (?:automatic |clear |meaningful )?advantage\b|\bdoes not (?:depend on|require)\b/i;
 
 /**
  * Deterministic reason pair — THE ARGUMENT LEADS (founder, Aug 19 2026: the
  * Skenes tweet led with a platoon fragment while the card's actual thesis
  * sat unquoted; stat density is not the argument). Opening = Gary's
- * stance/thesis sentence when one exists, then an argument cue outside an
- * objection paragraph, then stat-bearing reasons. Closing prefers evidence
- * from the same paragraph, then stat density and card order. Sentences are never cut;
+ * argument in card order, whether first- or third-person, outside an
+ * objection paragraph, then stat-bearing reasons. Closing must come from the
+ * same paragraph; nearby concrete evidence wins over extra statistics.
+ * Sentences are never cut;
  * nothing fitting returns null.
  * @returns {{ opening: string, closing: string } | null}
  */
@@ -186,10 +200,10 @@ export function fallbackReasonPair(rationale, budget) {
   const paragraphOf = (sentence) => paragraphs.findIndex(p => p.includes(normWs(sentence)));
   const isObjection = (sentence) => OBJECTION.test(sentence)
     || OBJECTION.test(paragraphs[paragraphOf(sentence)] ?? '');
-  const stanceIndexes = cands.flatMap((s, i) => STANCE.test(s) && !isObjection(s) ? [i] : []);
-  const argumentIndexes = cands.flatMap((s, i) => !stanceIndexes.includes(i) && ARGUMENT.test(s) && !isObjection(s) ? [i] : []);
-  const thesisIndexes = [...stanceIndexes, ...argumentIndexes];
-  // Opening preference: first-person thesis, other argument cues, then
+  // A later "I expect" must not displace Gary's clear opening case simply
+  // because it is first-person. The original explanation supplies the order.
+  const thesisIndexes = cands.flatMap((s, i) => ARGUMENT.test(s) && !NEGATED_ARGUMENT.test(s) && !isObjection(s) ? [i] : []);
+  // Opening preference: the card's argument, then
   // digit-bearing reasons in card order. Scene-setting stays a last resort.
   const rest = cands.map((_, i) => i).filter((i) => !thesisIndexes.includes(i));
   const withDigits = rest.filter((i) => digitGroups(cands[i]) > 0);
@@ -198,13 +212,13 @@ export function fallbackReasonPair(rationale, budget) {
   for (const oi of openingOrder) {
     const opening = cands[oi];
     const evidence = cands
-      .map((s, i) => ({ s, i, d: digitGroups(s), sameParagraph: paragraphOf(s) === paragraphOf(opening) }))
-      .filter((r) => r.i !== oi && opening.length + r.s.length <= budget)
-      .sort((a, b) => Number(b.sameParagraph) - Number(a.sameParagraph) || (b.d - a.d) || (a.i - b.i));
+      .map((s, i) => ({ s, i, d: digitGroups(s), distance: Math.abs(i - oi), sameParagraph: paragraphOf(s) === paragraphOf(opening) }))
+      .filter((r) => r.i !== oi && r.sameParagraph && !isObjection(r.s) && !NEGATED_ARGUMENT.test(r.s) && opening.length + r.s.length <= budget)
+      .sort((a, b) => Number(b.d > 0) - Number(a.d > 0) || a.distance - b.distance || b.d - a.d || a.i - b.i);
     if (evidence.length) return { opening, closing: evidence[0].s };
-    // A whole argument that fits is more useful than two detached statistics.
-    // Do not demote it simply because a second sentence would exceed X's limit.
-    if (thesisIndexes.includes(oi) && opening.length <= budget) return { opening, closing: '' };
+    // A complete reason can carry the post by itself. Do not pad it with a
+    // statistic or an opponent's case from an unrelated part of the card.
+    if (opening.length <= budget) return { opening, closing: '' };
   }
   const solo = openingOrder.map(i => cands[i]).find(s => s.length <= budget);
   return solo ? { opening: solo, closing: '' } : null;

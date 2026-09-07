@@ -525,12 +525,13 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
     if (!list.length) throw new Error(`NO_SAFE_COPY: no standalone reason for "${chosen.pick}", refusing to post`);
     // Two newline-pairs join the three segments; keep the whole post ≤ 278.
     const budget = 278 - pickLine.length - 4;
-    const numbered = list.map((s, i) => `${i + 1}. ${s}`).join("\n");
+    const reasonParagraphs = rationaleText.split(/\n+/).map(p => p.replace(/\s+/g, " ").trim());
+    const numbered = list.map((s, i) => `P${reasonParagraphs.findIndex(p => p.includes(s.replace(/\s+/g, " ").trim())) + 1} / ${i + 1}. ${s}`).join("\n");
     const user = `Choose up to two sentences for a single bet's post. Return ONLY JSON: {"opening": "...", "closing": "..."}.
-Both nonempty values MUST be sentences copied character-for-character from the numbered list below — different sentences, and their combined length must be at most ${budget} characters. If only one safe sentence fits, use it as opening and return an empty closing.
+Both nonempty values MUST be sentences copied character-for-character from the numbered list below, without the P/number label — different sentences from the SAME source paragraph (same P label), and their combined length must be at most ${budget} characters. If only one safe sentence fits, use it as opening and return an empty closing.
 Both must be REASONS for the pick — Gary's argument and analysis. NEVER the scene-setting opener (weather, park, time of day, atmosphere) and NEVER a sentence that merely restates the bet or its odds.
 Each chosen sentence must STAND ALONE for a reader who has seen nothing else: every person it mentions is named IN the sentence, and it never opens mid-argument ("But…", "Those advantages…", "He…").
-opening: the sentence that carries Gary's ARGUMENT — his read of the game, WHY the bet exists (often first-person: "I'm backing… because", "My read is…"); never a bare stat fragment. closing: the single strongest supporting reason — concrete numbers belong here, under the argument, not in place of it.
+opening: the clearest actual reason Gary gives for this pick. Prefer his plain explanation of the matchup; first-person wording gets no preference. Never select assumption declarations, assessment language, hypothetical conditions that would change his mind, or research-process commentary. A simple named fact explaining the pick is better than an abstract thesis. closing: a concrete supporting reason from the SAME paragraph that supports the same pick; never an objection or the opponent's case. Use one good sentence instead of padding with a detached statistic or caveat. Preserve every qualifier and Gary's exact wording; never rewrite a stiff sentence to make it sound conversational — choose a different original sentence.
 ${isTopPick ? "This is Gary's highest-conviction play on the whole board today — prefer the sentences that carry that certainty.\n" : ""}PICK: ${chosen.pick} | ${chosen.awayTeam} @ ${chosen.homeTeam} | league ${league}
 
 SENTENCES:
@@ -552,7 +553,7 @@ ${numbered}`;
     if (!selectionOk(opening, closing)) {
       // One retry with the violation named, then the deterministic fallback.
       out = await selectHookSentences(
-        `${user}\n\nYour previous selection was rejected: use only complete standalone sentences COPIED EXACTLY from the numbered list, fitting ${budget} characters combined. Use one sentence with an empty closing if a pair cannot fit.`,
+        `${user}\n\nYour previous selection was rejected: use only complete standalone sentences COPIED EXACTLY from the numbered list, from the same P paragraph, fitting ${budget} characters combined. Use one sentence with an empty closing if a pair cannot fit.`,
       );
       opening = String(out.opening ?? "").trim();
       closing = String(out.closing ?? "").trim();

@@ -1,0 +1,790 @@
+{
+  "checked_at": "2026-09-07T19:57:26.296Z",
+  "mode": "read-only replay; no publication",
+  "checked": 71,
+  "safe": 71,
+  "withheld": [],
+  "previews": [
+    {
+      "date": "2026-09-05",
+      "pick": "East Carolina Pirates +28.5 -122",
+      "game_id": 457191,
+      "pair": {
+        "opening": "Alabama replaced all five starters after finishing last season with 48 combined rushing yards against Georgia, Oklahoma and Indiana.",
+        "closing": "The deciding matchup for me is ECU’s established defensive front against Alabama’s new offensive line."
+      },
+      "safe": true,
+      "hook": "Alabama replaced all five starters after finishing last season with 48 combined rushing yards against Georgia, Oklahoma and Indiana.\n\nEast Carolina Pirates +28.5\n\nThe deciding matchup for me is ECU’s established defensive front against Alabama’s new offensive line."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "West Virginia Mountaineers -20.5 -115",
+      "game_id": 457179,
+      "pair": {
+        "opening": "Coastal surrendered 286 rushing yards against James Madison last season and has since rebuilt its defensive front with 12 newcomers among 16 linemen.",
+        "closing": "Cam Cook is the central reason I’m laying the points."
+      },
+      "safe": true,
+      "hook": "Coastal surrendered 286 rushing yards against James Madison last season and has since rebuilt its defensive front with 12 newcomers among 16 linemen.\n\nWest Virginia Mountaineers -20.5\n\nCam Cook is the central reason I’m laying the points."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Oregon State Beavers +20.5 -104",
+      "game_id": 457178,
+      "pair": {
+        "opening": "Across the field, Oregon State begins a new coaching era at an 11 a.m. Central kickoff, with Braden Atkinson taking over the offense.",
+        "closing": "Houston opens at home with a preseason ranking and an established quarterback."
+      },
+      "safe": true,
+      "hook": "Across the field, Oregon State begins a new coaching era at an 11 a.m. Central kickoff, with Braden Atkinson taking over the offense.\n\nOregon State Beavers +20.5\n\nHouston opens at home with a preseason ranking and an established quarterback."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "North Texas Mean Green +40.5 -110",
+      "game_id": 457192,
+      "pair": {
+        "opening": "If that mismatch repeatedly produces quick North Texas possessions, Indiana can accumulate opportunities to extend its lead throughout the game.",
+        "closing": "Four of Indiana’s five projected offensive linemen have at least three years of starting experience."
+      },
+      "safe": true,
+      "hook": "If that mismatch repeatedly produces quick North Texas possessions, Indiana can accumulate opportunities to extend its lead throughout the game.\n\nNorth Texas Mean Green +40.5\n\nFour of Indiana’s five projected offensive linemen have at least three years of starting experience."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Liberty Flames +6.5 -114",
+      "game_id": 457604,
+      "pair": {
+        "opening": "Across from them, JMU must replace 15 of its top 18 tacklers and every starting defensive back.",
+        "closing": "Four starters return to operate under the same head coach in an offense built around option decisions."
+      },
+      "safe": true,
+      "hook": "Across from them, JMU must replace 15 of its top 18 tacklers and every starting defensive back.\n\nLiberty Flames +6.5\n\nFour starters return to operate under the same head coach in an offense built around option decisions."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Nebraska Cornhuskers -23.5 -115",
+      "game_id": 457620,
+      "pair": {
+        "opening": "I’m laying the points because Ohio’s offensive changes overlap in the places that determine whether a team can sustain possessions.",
+        "closing": "Nick Poulos completed 4 of 8 passes for 19 yards in 2025."
+      },
+      "safe": true,
+      "hook": "I’m laying the points because Ohio’s offensive changes overlap in the places that determine whether a team can sustain possessions.\n\nNebraska Cornhuskers -23.5\n\nNick Poulos completed 4 of 8 passes for 19 yards in 2025."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Ohio State Buckeyes -49.5 -115",
+      "game_id": 457621,
+      "pair": {
+        "opening": "Covering -49.5 requires that possession advantage to keep producing points throughout the game.",
+        "closing": "Ohio State also returns Isaiah West, who recorded 310 rushing yards at 5.3 per carry last season."
+      },
+      "safe": true,
+      "hook": "Covering -49.5 requires that possession advantage to keep producing points throughout the game.\n\nOhio State Buckeyes -49.5\n\nOhio State also returns Isaiah West, who recorded 310 rushing yards at 5.3 per carry last season."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Pittsburgh Panthers -16.5 -112",
+      "game_id": 457165,
+      "pair": {
+        "opening": "Pittsburgh’s five giveaways in the bowl also show how quickly offensive opportunities can disappear.",
+        "closing": "Miami recorded 40 sacks last season, while Pitt allowed four against both Miami (FL) and East Carolina."
+      },
+      "safe": true,
+      "hook": "Pittsburgh’s five giveaways in the bowl also show how quickly offensive opportunities can disappear.\n\nPittsburgh Panthers -16.5\n\nMiami recorded 40 sacks last season, while Pitt allowed four against both Miami (FL) and East Carolina."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Kent State Golden Flashes +36.5 -115",
+      "game_id": 457934,
+      "pair": {
+        "opening": "Against Clemson, 381 passing yards produced only 14 points, with five sacks and a 2-for-14 combined third-/fourth-down performance.",
+        "closing": "Against Texas A&M, the Gamecocks generated only 76 second-half yards after building a 30–3 halftime lead."
+      },
+      "safe": true,
+      "hook": "Against Clemson, 381 passing yards produced only 14 points, with five sacks and a 2-for-14 combined third-/fourth-down performance.\n\nKent State Golden Flashes +36.5\n\nAgainst Texas A&M, the Gamecocks generated only 76 second-half yards after building a 30–3 halftime lead."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Cincinnati Bearcats -7.5 -105",
+      "game_id": 457166,
+      "pair": {
+        "opening": "If BC can disrupt French consistently, Cincinnati loses the central advantage behind this ticket.",
+        "closing": "I’m backing Cincinnati’s returning blocking core and French’s FBS experience."
+      },
+      "safe": true,
+      "hook": "If BC can disrupt French consistently, Cincinnati loses the central advantage behind this ticket.\n\nCincinnati Bearcats -7.5\n\nI’m backing Cincinnati’s returning blocking core and French’s FBS experience."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Tulane Green Wave +7.5 -110",
+      "game_id": 457167,
+      "pair": {
+        "opening": "I’m taking Tulane’s points because its quarterback running threat targets a documented Duke problem.",
+        "closing": "Zeon Chriss-Gremillion brings 992 career rushing yards and 10 rushing touchdowns."
+      },
+      "safe": true,
+      "hook": "I’m taking Tulane’s points because its quarterback running threat targets a documented Duke problem.\n\nTulane Green Wave +7.5\n\nZeon Chriss-Gremillion brings 992 career rushing yards and 10 rushing touchdowns."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Auburn Tigers -7.5 -105",
+      "game_id": 457181,
+      "pair": {
+        "opening": "I’m laying the points with Auburn because its offensive transition carries an important piece of continuity: Byrum Brown already knows the system.",
+        "closing": ""
+      },
+      "safe": true,
+      "hook": "I’m laying the points with Auburn because its offensive transition carries an important piece of continuity: Byrum Brown already knows the system.\n\nAuburn Tigers -7.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Oregon Ducks -24.5 -110",
+      "game_id": 457622,
+      "pair": {
+        "opening": "Against a Boise defense whose late-season reporting documented explosive rushing damage and coverage breakdowns, I expect Oregon to create scoring opportunities through both the run and the pass.",
+        "closing": ""
+      },
+      "safe": true,
+      "hook": "Against a Boise defense whose late-season reporting documented explosive rushing damage and coverage breakdowns, I expect Oregon to create scoring opportunities through both the run and the pass.\n\nOregon Ducks -24.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Texas State Bobcats +29.5 -110",
+      "game_id": 457918,
+      "pair": {
+        "opening": "An afternoon opener in Austin puts No. 5 Texas against a Texas State program beginning its Pac-12 era.",
+        "closing": ""
+      },
+      "safe": true,
+      "hook": "An afternoon opener in Austin puts No. 5 Texas against a Texas State program beginning its Pac-12 era.\n\nTexas State Bobcats +29.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Marshall Thundering Herd +23.5 -112",
+      "game_id": 457623,
+      "pair": {
+        "opening": "I’m taking the points because Marshall has a credible way to keep answering offensively.",
+        "closing": "Carlos Del Rio-Wilson threw 17 touchdowns against five interceptions in 2025 and led the team with 661 rushing yards."
+      },
+      "safe": true,
+      "hook": "I’m taking the points because Marshall has a credible way to keep answering offensively.\n\nMarshall Thundering Herd +23.5\n\nCarlos Del Rio-Wilson threw 17 touchdowns against five interceptions in 2025 and led the team with 661 rushing yards."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Oklahoma State Cowboys -13.5 -110",
+      "game_id": 457183,
+      "pair": {
+        "opening": "I’m laying the points because the Cowboys’ most important offensive relationships arrive together.",
+        "closing": "Drew Mestemaker, Caleb Hawkins and Wyatt Young played in Morris’ North Texas offense last season."
+      },
+      "safe": true,
+      "hook": "I’m laying the points because the Cowboys’ most important offensive relationships arrive together.\n\nOklahoma State Cowboys -13.5\n\nDrew Mestemaker, Caleb Hawkins and Wyatt Young played in Morris’ North Texas offense last season."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Iowa Hawkeyes -31.5 -110",
+      "game_id": 457624,
+      "pair": {
+        "opening": "I’m laying the points because Iowa’s strongest returning offensive pieces match Northern Illinois’s clearest defensive vulnerability.",
+        "closing": "Kamari Moulton returns after rushing for 878 yards at 5.2 per carry."
+      },
+      "safe": true,
+      "hook": "I’m laying the points because Iowa’s strongest returning offensive pieces match Northern Illinois’s clearest defensive vulnerability.\n\nIowa Hawkeyes -31.5\n\nKamari Moulton returns after rushing for 878 yards at 5.2 per carry."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Marlins ML +108",
+      "game_id": 5059897,
+      "pair": {
+        "opening": "Assad has allowed an .835 OPS and 12 homers to left-handed hitters in 160 at-bats, compared with a .533 OPS against right-handers.",
+        "closing": "Miami starts six left-handed bats, with Stowers and Conine carrying .859 and .942 OPS marks against right-handed pitching."
+      },
+      "safe": true,
+      "hook": "Assad has allowed an .835 OPS and 12 homers to left-handed hitters in 160 at-bats, compared with a .533 OPS against right-handers.\n\nMarlins ML\n\nMiami starts six left-handed bats, with Stowers and Conine carrying .859 and .942 OPS marks against right-handed pitching."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Mets ML -168",
+      "game_id": 5059898,
+      "pair": {
+        "opening": "New York gets a more favorable assignment for two consequential bats: Soto owns a 1.029 OPS against right-handers, and Young sits at .799.",
+        "closing": "Molina presents a different challenge from yesterday’s pitching, so I am not projecting another home-run outburst."
+      },
+      "safe": true,
+      "hook": "New York gets a more favorable assignment for two consequential bats: Soto owns a 1.029 OPS against right-handers, and Young sits at .799.\n\nMets ML\n\nMolina presents a different challenge from yesterday’s pitching, so I am not projecting another home-run outburst."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Wyoming Cowboys +3.5 -122",
+      "game_id": 457912,
+      "pair": {
+        "opening": "Consistent protection and running room would give its offensive weapons a stronger route to separation.",
+        "closing": "On the evidence available, I favor Wyoming staying close enough to make the points valuable."
+      },
+      "safe": true,
+      "hook": "Consistent protection and running room would give its offensive weapons a stronger route to separation.\n\nWyoming Cowboys +3.5\n\nOn the evidence available, I favor Wyoming staying close enough to make the points valuable."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Florida International Panthers +14.5 -108",
+      "game_id": 457202,
+      "pair": {
+        "opening": "I land on FIU because I expect its controlled quarterback play and defensive continuity to keep that sustained separation from developing.",
+        "closing": ""
+      },
+      "safe": true,
+      "hook": "I land on FIU because I expect its controlled quarterback play and defensive continuity to keep that sustained separation from developing.\n\nFlorida International Panthers +14.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Memphis Tigers -10.5 -112",
+      "game_id": 457200,
+      "pair": {
+        "opening": "I’m backing that run-pass combination to keep creating favorable situations against Arkansas State’s rebuilt front, giving Memphis opportunities to build separation.",
+        "closing": "Marcus Stokes contributed 223 passing yards, two touchdowns and no interceptions."
+      },
+      "safe": true,
+      "hook": "I’m backing that run-pass combination to keep creating favorable situations against Arkansas State’s rebuilt front, giving Memphis opportunities to build separation.\n\nMemphis Tigers -10.5\n\nMarcus Stokes contributed 223 passing yards, two touchdowns and no interceptions."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Missouri State Bears +40.5 -110",
+      "game_id": 457605,
+      "pair": {
+        "opening": "Jmariyae Robinson produced 632 receiving yards and seven touchdowns in 2025, Ramone Green Jr. added 446 receiving yards, and Jeron Askren caught five touchdowns.",
+        "closing": "Missouri State’s returning targets are the strongest reason I’m taking the points."
+      },
+      "safe": true,
+      "hook": "Jmariyae Robinson produced 632 receiving yards and seven touchdowns in 2025, Ramone Green Jr. added 446 receiving yards, and Jeron Askren caught five touchdowns.\n\nMissouri State Bears +40.5\n\nMissouri State’s returning targets are the strongest reason I’m taking the points."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Braves ML +136",
+      "game_id": 5059899,
+      "pair": {
+        "opening": "Philadelphia has a strong answer in Duran, whose last appearance was August 31; that limits how much bullpen advantage I assign Atlanta.",
+        "closing": "I’m allowing less room for another extended Fuentes appearance after his two innings and 21 pitches yesterday."
+      },
+      "safe": true,
+      "hook": "Philadelphia has a strong answer in Duran, whose last appearance was August 31; that limits how much bullpen advantage I assign Atlanta.\n\nBraves ML\n\nI’m allowing less room for another extended Fuentes appearance after his two innings and 21 pitches yesterday."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Sam Houston Bearkats +16.5 -105",
+      "game_id": 457609,
+      "pair": {
+        "opening": "I’m taking the points because I expect Sam Houston’s returning passing connections to produce enough scoring possessions to keep Troy from sustaining separation.",
+        "closing": "Landyn Locke has demonstrated connections with those receivers."
+      },
+      "safe": true,
+      "hook": "I’m taking the points because I expect Sam Houston’s returning passing connections to produce enough scoring possessions to keep Troy from sustaining separation.\n\nSam Houston Bearkats +16.5\n\nLandyn Locke has demonstrated connections with those receivers."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Reds ML +136",
+      "game_id": 5059901,
+      "pair": {
+        "opening": "Tyler Stephenson has hit .375 against sinkers across 83 plate appearances, giving him a specific opportunity against part of May’s repertoire.",
+        "closing": "Cincinnati has hitters positioned to challenge him."
+      },
+      "safe": true,
+      "hook": "Tyler Stephenson has hit .375 against sinkers across 83 plate appearances, giving him a specific opportunity against part of May’s repertoire.\n\nReds ML\n\nCincinnati has hitters positioned to challenge him."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "UL Monroe Warhawks +28.5 -115",
+      "game_id": 458251,
+      "pair": {
+        "opening": "I’m taking the points because Mississippi State’s ability to sustain separation remains the central matchup problem.",
+        "closing": "ULM returns Noah Flemmings and Marcus Ross, giving it experienced defenders with a plausible route to disrupting possessions."
+      },
+      "safe": true,
+      "hook": "I’m taking the points because Mississippi State’s ability to sustain separation remains the central matchup problem.\n\nUL Monroe Warhawks +28.5\n\nULM returns Noah Flemmings and Marcus Ross, giving it experienced defenders with a plausible route to disrupting possessions."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Western Michigan Broncos +27.5 -105",
+      "game_id": 457625,
+      "pair": {
+        "opening": "The Broncos retain players responsible for 85.4% of their offensive touchdowns from 2025, including Broc Lowry and Jalen Buckley.",
+        "closing": "Lowry rushed for 963 yards; Buckley added 1,003."
+      },
+      "safe": true,
+      "hook": "The Broncos retain players responsible for 85.4% of their offensive touchdowns from 2025, including Broc Lowry and Jalen Buckley.\n\nWestern Michigan Broncos +27.5\n\nLowry rushed for 963 yards; Buckley added 1,003."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Clemson Tigers +10.5 -118",
+      "game_id": 457168,
+      "pair": {
+        "opening": "I’m taking the points because Clemson has a credible way to keep answering.",
+        "closing": "Vizzina’s previous start against SMU produced 317 passing yards, three touchdowns and no interceptions in a game that included four sacks."
+      },
+      "safe": true,
+      "hook": "I’m taking the points because Clemson has a credible way to keep answering.\n\nClemson Tigers +10.5\n\nVizzina’s previous start against SMU produced 317 passing yards, three touchdowns and no interceptions in a game that included four sacks."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Guardians ML -156",
+      "game_id": 5059906,
+      "pair": {
+        "opening": "Tonight’s batting orders make Cleveland’s pitching advantage worth paying for.",
+        "closing": "Detroit starts seven right-handed hitters, and Messick has allowed righties a .571 OPS."
+      },
+      "safe": true,
+      "hook": "Tonight’s batting orders make Cleveland’s pitching advantage worth paying for.\n\nGuardians ML\n\nDetroit starts seven right-handed hitters, and Messick has allowed righties a .571 OPS."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Florida Atlantic Owls +24.5 -105",
+      "game_id": 457203,
+      "pair": {
+        "opening": "Easton Messer caught 104 passes for 1,052 yards in 2025, and his partnership with Veltkamp carries into tonight.",
+        "closing": "FAU operated at approximately 21.4 seconds per play last season."
+      },
+      "safe": true,
+      "hook": "Easton Messer caught 104 passes for 1,052 yards in 2025, and his partnership with Veltkamp carries into tonight.\n\nFlorida Atlantic Owls +24.5\n\nFAU operated at approximately 21.4 seconds per play last season."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Red Sox ML -132",
+      "game_id": 5059905,
+      "pair": {
+        "opening": "Anthony, Gasper and Abreu can all bat left-handed against Bassitt, who has allowed a .917 OPS to left-handed hitters over 190 at-bats.",
+        "closing": "Anthony owns an .860 OPS against right-handed pitching, and Gasper has .959."
+      },
+      "safe": true,
+      "hook": "Anthony, Gasper and Abreu can all bat left-handed against Bassitt, who has allowed a .917 OPS to left-handed hitters over 190 at-bats.\n\nRed Sox ML\n\nAnthony owns an .860 OPS against right-handed pitching, and Gasper has .959."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Pirates -1.5 +125",
+      "game_id": 5059900,
+      "pair": {
+        "opening": "I expect Pittsburgh to have the better opportunity to build offense through its order tonight.",
+        "closing": "Further down the lineup, Christian Moore has a .540 OPS against righties and Denzer Guzman a .593."
+      },
+      "safe": true,
+      "hook": "I expect Pittsburgh to have the better opportunity to build offense through its order tonight.\n\nPirates -1.5\n\nFurther down the lineup, Christian Moore has a .540 OPS against righties and Denzer Guzman a .593."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Blue Jays ML -106",
+      "game_id": 5059904,
+      "pair": {
+        "opening": "Confirmation that either Rogers or Varland is restricted would make me reconsider this bet because their availability carries a meaningful part of the decision.",
+        "closing": ""
+      },
+      "safe": true,
+      "hook": "Confirmation that either Rogers or Varland is restricted would make me reconsider this bet because their availability carries a meaningful part of the decision.\n\nBlue Jays ML"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Diamondbacks ML -108",
+      "game_id": 5059907,
+      "pair": {
+        "opening": "Arizona has a credible opportunity to enter the middle innings with more flexibility.",
+        "closing": "Brandyn Garcia, Jonathan Loáisiga and Juan Morillo last pitched September 2."
+      },
+      "safe": true,
+      "hook": "Arizona has a credible opportunity to enter the middle innings with more flexibility.\n\nDiamondbacks ML\n\nBrandyn Garcia, Jonathan Loáisiga and Juan Morillo last pitched September 2."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Twins ML +106",
+      "game_id": 5059903,
+      "pair": {
+        "opening": "Bradley gives Minnesota the stronger recent starting-pitcher case: 27 strikeouts against 7 walks over his last three starts.",
+        "closing": "Chicago still has Murakami batting third while hitting .100 over the last 15 days."
+      },
+      "safe": true,
+      "hook": "Bradley gives Minnesota the stronger recent starting-pitcher case: 27 strikeouts against 7 walks over his last three starts.\n\nTwins ML\n\nChicago still has Murakami batting third while hitting .100 over the last 15 days."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Yankees ML +110",
+      "game_id": 5059909,
+      "pair": {
+        "opening": "A confirmed declaration that Bednar cannot pitch would make me reconsider the ticket, because Rodón’s recent length makes that closing option especially important.",
+        "closing": ""
+      },
+      "safe": true,
+      "hook": "A confirmed declaration that Bednar cannot pitch would make me reconsider the ticket, because Rodón’s recent length makes that closing option especially important.\n\nYankees ML"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Rays ML -108",
+      "game_id": 5059902,
+      "pair": {
+        "opening": "There are specific opportunities against deGrom’s primary pitches: Díaz has slugged .630 against sliders, while Caminero has slugged .594 against four-seamers.",
+        "closing": "Díaz, Aranda, Caminero and Hicks each carry an OPS of .828 or better against right-handed pitching."
+      },
+      "safe": true,
+      "hook": "There are specific opportunities against deGrom’s primary pitches: Díaz has slugged .630 against sliders, while Caminero has slugged .594 against four-seamers.\n\nRays ML\n\nDíaz, Aranda, Caminero and Hicks each carry an OPS of .828 or better against right-handed pitching."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Central Michigan Chippewas +10.5 -110",
+      "game_id": 457914,
+      "pair": {
+        "opening": "I’m taking the points because CMU brings back an offensive foundation I expect to keep it competitive: 10 returning offensive starters, including four starting linemen.",
+        "closing": ""
+      },
+      "safe": true,
+      "hook": "I’m taking the points because CMU brings back an offensive foundation I expect to keep it competitive: 10 returning offensive starters, including four starting linemen.\n\nCentral Michigan Chippewas +10.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Nationals +1.5 -134",
+      "game_id": 5059910,
+      "pair": {
+        "opening": "Beeter, Ribalta and Simpson last pitched September 1; Tolman last pitched August 31.",
+        "closing": "Washington’s available bullpen gives me more reason to back this run line than its recent relief results suggest."
+      },
+      "safe": true,
+      "hook": "Beeter, Ribalta and Simpson last pitched September 1; Tolman last pitched August 31.\n\nNationals +1.5\n\nWashington’s available bullpen gives me more reason to back this run line than its recent relief results suggest."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "UNLV Rebels ML -154",
+      "game_id": 457913,
+      "pair": {
+        "opening": "Hawai‘i allowed eight completions of at least 15 yards totaling 221 yards against Stanford.",
+        "closing": "Arnold’s downfield production is the deciding matchup for me."
+      },
+      "safe": true,
+      "hook": "Hawai‘i allowed eight completions of at least 15 yards totaling 221 yards against Stanford.\n\nUNLV Rebels ML\n\nArnold’s downfield production is the deciding matchup for me."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Nevada Wolf Pack +1.5 -115",
+      "game_id": 457611,
+      "pair": {
+        "opening": "Nevada also has a plausible route to sustained possessions on the ground.",
+        "closing": "WKU surrendered 293 rushing yards against Jacksonville State in its regular-season finale, while Herschel Turner returns after averaging 5.1 yards per carry in 2025."
+      },
+      "safe": true,
+      "hook": "Nevada also has a plausible route to sustained possessions on the ground.\n\nNevada Wolf Pack +1.5\n\nWKU surrendered 293 rushing yards against Jacksonville State in its regular-season finale, while Herschel Turner returns after averaging 5.1 yards per carry in 2025."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Mariners -1.5 -106",
+      "game_id": 5059911,
+      "pair": {
+        "opening": "There are specific opportunities against Springs before that bullpen decision arrives.",
+        "closing": "Canzone owns an .831 OPS against lefties and a .330 average against four-seamers across his season pitch-type sample."
+      },
+      "safe": true,
+      "hook": "There are specific opportunities against Springs before that bullpen decision arrives.\n\nMariners -1.5\n\nCanzone owns an .831 OPS against lefties and a .330 average against four-seamers across his season pitch-type sample."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "California Golden Bears +2.5 -105",
+      "game_id": 457170,
+      "pair": {
+        "opening": "Wayne Knight produced 1,373 rushing yards at James Madison, while Nico Iamaleava supplied 505 for UCLA last season.",
+        "closing": ""
+      },
+      "safe": true,
+      "hook": "Wayne Knight produced 1,373 rushing yards at James Madison, while Nico Iamaleava supplied 505 for UCLA last season.\n\nCalifornia Golden Bears +2.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Rockies ML +102",
+      "game_id": 5059908,
+      "pair": {
+        "opening": "McCarthy has also slugged .636 against four-seamers across 159 plate appearances, giving him a plausible route against Liberatore’s most-used pitch.",
+        "closing": "McCarthy has an .871 OPS against left-handed pitching, Goodman .873, and Beck .781."
+      },
+      "safe": true,
+      "hook": "McCarthy has also slugged .636 against four-seamers across 159 plate appearances, giving him a plausible route against Liberatore’s most-used pitch.\n\nRockies ML\n\nMcCarthy has an .871 OPS against left-handed pitching, Goodman .873, and Beck .781."
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Reds ML +122",
+      "game_id": 5059912,
+      "pair": {
+        "opening": "Milwaukee’s pitching advantage also depends on getting through the innings between Harrison and its closing options.",
+        "closing": "Hall threw 34 pitches yesterday, while Ashby threw 42 across consecutive days."
+      },
+      "safe": true,
+      "hook": "Milwaukee’s pitching advantage also depends on getting through the innings between Harrison and its closing options.\n\nReds ML\n\nHall threw 34 pitches yesterday, while Ashby threw 42 across consecutive days."
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Guardians ML -158",
+      "game_id": 5059916,
+      "pair": {
+        "opening": "Cleveland’s advantage depends on getting Williams into that closing stretch with enough offensive support.",
+        "closing": "Smith, Gaddis and Sabrowski threw 18, 24 and 17 pitches Friday, respectively, and all avoided Saturday."
+      },
+      "safe": true,
+      "hook": "Cleveland’s advantage depends on getting Williams into that closing stretch with enough offensive support.\n\nGuardians ML\n\nSmith, Gaddis and Sabrowski threw 18, 24 and 17 pitches Friday, respectively, and all avoided Saturday."
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Braves ML -106",
+      "game_id": 5059921,
+      "pair": {
+        "opening": "Philadelphia's 7 left-handed hitters make Mahle's matchup the deciding piece for me.",
+        "closing": ""
+      },
+      "safe": true,
+      "hook": "Philadelphia's 7 left-handed hitters make Mahle's matchup the deciding piece for me.\n\nBraves ML"
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Red Sox ML -134",
+      "game_id": 5059914,
+      "pair": {
+        "opening": "Boston still needs to earn its advantage through the actual matchups.",
+        "closing": "Whitlock and Chapman rested Saturday after throwing 10 and 11 pitches Friday; Miller last worked Thursday."
+      },
+      "safe": true,
+      "hook": "Boston still needs to earn its advantage through the actual matchups.\n\nRed Sox ML\n\nWhitlock and Chapman rested Saturday after throwing 10 and 11 pitches Friday; Miller last worked Thursday."
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Cubs ML -146",
+      "game_id": 5059915,
+      "pair": {
+        "opening": "I expect Chicago to get more innings from its starter and more opportunities against Miami’s middle relief.",
+        "closing": "Holmes has allowed one run over his past four starts and 25 innings."
+      },
+      "safe": true,
+      "hook": "I expect Chicago to get more innings from its starter and more opportunities against Miami’s middle relief.\n\nCubs ML\n\nHolmes has allowed one run over his past four starts and 25 innings."
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Angels +1.5 -140",
+      "game_id": 5059913,
+      "pair": {
+        "opening": "Ureña’s changeup is a specific reason: he uses it 33.4% of the time, with a .238 xwOBA allowed.",
+        "closing": "Reynolds has a .251 xwOBA against changeups across 93 plate appearances."
+      },
+      "safe": true,
+      "hook": "Ureña’s changeup is a specific reason: he uses it 33.4% of the time, with a .238 xwOBA allowed.\n\nAngels +1.5\n\nReynolds has a .251 xwOBA against changeups across 93 plate appearances."
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Giants ML +140",
+      "game_id": 5059917,
+      "pair": {
+        "opening": "Soto has a .767 OPS against lefties compared with 1.022 against righties; Lindor has .689 compared with .776.",
+        "closing": "Perdomo’s left-handedness also changes the matchup for the Mets."
+      },
+      "safe": true,
+      "hook": "Soto has a .767 OPS against lefties compared with 1.022 against righties; Lindor has .689 compared with .776.\n\nGiants ML\n\nPerdomo’s left-handedness also changes the matchup for the Mets."
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Washington Huskies -23.5 -110",
+      "game_id": 457629,
+      "pair": {
+        "opening": "I’m laying the points because Washington’s returning strengths match up with demanding transitions for Washington State.",
+        "closing": "WSU’s projected interior offensive line includes players preparing for some of their first college snaps."
+      },
+      "safe": true,
+      "hook": "I’m laying the points because Washington’s returning strengths match up with demanding transitions for Washington State.\n\nWashington Huskies -23.5\n\nWSU’s projected interior offensive line includes players preparing for some of their first college snaps."
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Diamondbacks ML -106",
+      "game_id": 5059918,
+      "pair": {
+        "opening": "A pregame decision to rest Garcia and Morillo would make me reconsider, because the ability to cover those later innings is central to this pick.",
+        "closing": ""
+      },
+      "safe": true,
+      "hook": "A pregame decision to rest Garcia and Morillo would make me reconsider, because the ability to cover those later innings is central to this pick.\n\nDiamondbacks ML"
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Blue Jays ML -122",
+      "game_id": 5059925,
+      "pair": {
+        "opening": "Arrighetti has allowed an .803 OPS to left-handed hitters versus .582 to right-handers.",
+        "closing": "Caglianone’s .861 OPS against right-handed pitching makes his absence particularly relevant here."
+      },
+      "safe": true,
+      "hook": "Arrighetti has allowed an .803 OPS to left-handed hitters versus .582 to right-handers.\n\nBlue Jays ML\n\nCaglianone’s .861 OPS against right-handed pitching makes his absence particularly relevant here."
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Rangers ML -108",
+      "game_id": 5059920,
+      "pair": {
+        "opening": "Nimmo’s .865 OPS against lefties also matters because Seymour has allowed an .836 OPS to left-handed hitters.",
+        "closing": "Duran brings an .868 OPS against lefties."
+      },
+      "safe": true,
+      "hook": "Nimmo’s .865 OPS against lefties also matters because Seymour has allowed an .836 OPS to left-handed hitters.\n\nRangers ML\n\nDuran brings an .868 OPS against lefties."
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Rockies ML +118",
+      "game_id": 5059922,
+      "pair": {
+        "opening": "Johnston and Moniak have substantially weaker supplied splits against left-handers, so that potential change matters directly to the case.",
+        "closing": ""
+      },
+      "safe": true,
+      "hook": "Johnston and Moniak have substantially weaker supplied splits against left-handers, so that potential change matters directly to the case.\n\nRockies ML"
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Padres ML -106",
+      "game_id": 5059924,
+      "pair": {
+        "opening": "The advantage I’m buying is San Diego’s ability to turn from King to its preferred relievers.",
+        "closing": "Mason Miller, Adrian Morejon, Bradgley Rodriguez and Yuki Matsui all sat yesterday after throwing 22, 14, 9 and 12 pitches Friday."
+      },
+      "safe": true,
+      "hook": "The advantage I’m buying is San Diego’s ability to turn from King to its preferred relievers.\n\nPadres ML\n\nMason Miller, Adrian Morejon, Bradgley Rodriguez and Yuki Matsui all sat yesterday after throwing 22, 14, 9 and 12 pitches Friday."
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Mariners -1.5 +114",
+      "game_id": 5059923,
+      "pair": {
+        "opening": "Seattle also has to convert opportunities; walks alone do not cover a run line.",
+        "closing": "Woo has allowed a .720 OPS to left-handed hitters, and Walton’s .845 OPS against righties gives the Athletics a relevant threat."
+      },
+      "safe": true,
+      "hook": "Seattle also has to convert opportunities; walks alone do not cover a run line.\n\nMariners -1.5\n\nWoo has allowed a .720 OPS to left-handed hitters, and Walton’s .845 OPS against righties gives the Athletics a relevant threat."
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Louisville Cardinals +6.5 -104",
+      "game_id": 457171,
+      "pair": {
+        "opening": "Isaac Brown averaged 8.8 yards per carry last season, and Keyjuan Brown averaged 7.3.",
+        "closing": "Louisville’s returning backfield is the foundation of this bet."
+      },
+      "safe": true,
+      "hook": "Isaac Brown averaged 8.8 yards per carry last season, and Keyjuan Brown averaged 7.3.\n\nLouisville Cardinals +6.5\n\nLouisville’s returning backfield is the foundation of this bet."
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Wisconsin Badgers +21.5 -120",
+      "game_id": 457599,
+      "pair": {
+        "opening": "Wisconsin’s defensive changes leave a credible route for Notre Dame to sustain scoring throughout the game.",
+        "closing": "CJ Carr threw 24 touchdown passes against six interceptions in 2025 and retains his connection with Jordan Faison."
+      },
+      "safe": true,
+      "hook": "Wisconsin’s defensive changes leave a credible route for Notre Dame to sustain scoring throughout the game.\n\nWisconsin Badgers +21.5\n\nCJ Carr threw 24 touchdown passes against six interceptions in 2025 and retains his connection with Jordan Faison."
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Twins ML +124",
+      "game_id": 5059919,
+      "pair": {
+        "opening": "Tonight’s White Sox nine is 11-for-58 this series.",
+        "closing": "Ober gives Minnesota a credible way to keep Chicago’s power damage contained."
+      },
+      "safe": true,
+      "hook": "Tonight’s White Sox nine is 11-for-58 this series.\n\nTwins ML\n\nOber gives Minnesota a credible way to keep Chicago’s power damage contained."
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Nationals +1.5 -122",
+      "game_id": 5059926,
+      "pair": {
+        "opening": "Alvarez gives Washington a credible route to keeping this game close against tonight’s particular Dodgers lineup.",
+        "closing": "Teoscar Hernández remains a substantial threat, with an .841 OPS against lefties and strong recent hitting."
+      },
+      "safe": true,
+      "hook": "Alvarez gives Washington a credible route to keeping this game close against tonight’s particular Dodgers lineup.\n\nNationals +1.5\n\nTeoscar Hernández remains a substantial threat, with an .841 OPS against lefties and strong recent hitting."
+    },
+    {
+      "date": "2026-09-07",
+      "pick": "Mets ML +108",
+      "game_id": 5059929,
+      "pair": {
+        "opening": "Soto has slugged .619 against four-seam fastballs, while Benge has hit .325 against both four-seamers and sinkers.",
+        "closing": ""
+      },
+      "safe": true,
+      "hook": "Soto has slugged .619 against four-seam fastballs, while Benge has hit .325 against both four-seamers and sinkers.\n\nMets ML"
+    },
+    {
+      "date": "2026-09-07",
+      "pick": "Orioles ML -136",
+      "game_id": 5059931,
+      "pair": {
+        "opening": "Cantillo’s recent walks are the deciding factor for me because of who can capitalize on them today.",
+        "closing": ""
+      },
+      "safe": true,
+      "hook": "Cantillo’s recent walks are the deciding factor for me because of who can capitalize on them today.\n\nOrioles ML"
+    },
+    {
+      "date": "2026-09-07",
+      "pick": "Braves ML +146",
+      "game_id": 5059927,
+      "pair": {
+        "opening": "Fuentes pitched two innings on 21 pitches Friday and sat Saturday and Sunday.",
+        "closing": "Lee and Iglesias each threw 13 pitches Sunday after sitting Saturday."
+      },
+      "safe": true,
+      "hook": "Fuentes pitched two innings on 21 pitches Friday and sat Saturday and Sunday.\n\nBraves ML\n\nLee and Iglesias each threw 13 pitches Sunday after sitting Saturday."
+    },
+    {
+      "date": "2026-09-07",
+      "pick": "Royals ML -116",
+      "game_id": 5059932,
+      "pair": {
+        "opening": "The Royals have a more favorable route through their pitching staff today.",
+        "closing": "Pearson and Cruz last pitched September 3, while Kimbrel sat Sunday after working Saturday."
+      },
+      "safe": true,
+      "hook": "The Royals have a more favorable route through their pitching staff today.\n\nRoyals ML\n\nPearson and Cruz last pitched September 3, while Kimbrel sat Sunday after working Saturday."
+    },
+    {
+      "date": "2026-09-07",
+      "pick": "Angels +1.5 -142",
+      "game_id": 5059930,
+      "pair": {
+        "opening": "Rodriguez has delivered a 2.41 ERA across his last three starts, covering 18.2 innings.",
+        "closing": "Every Angels reliever had yesterday off, which gives Los Angeles flexibility after his departure."
+      },
+      "safe": true,
+      "hook": "Rodriguez has delivered a 2.41 ERA across his last three starts, covering 18.2 innings.\n\nAngels +1.5\n\nEvery Angels reliever had yesterday off, which gives Los Angeles flexibility after his departure."
+    },
+    {
+      "date": "2026-09-07",
+      "pick": "Twins ML +102",
+      "game_id": 5059928,
+      "pair": {
+        "opening": "Minnesota’s rested late-inning group tips this close matchup for me.",
+        "closing": "Gómez, Hoffman and Minter all sat Sunday after throwing seven, 17 and 18 pitches Saturday."
+      },
+      "safe": true,
+      "hook": "Minnesota’s rested late-inning group tips this close matchup for me.\n\nTwins ML\n\nGómez, Hoffman and Minter all sat Sunday after throwing seven, 17 and 18 pitches Saturday."
+    },
+    {
+      "date": "2026-09-07",
+      "pick": "Cubs ML +106",
+      "game_id": 5059933,
+      "pair": {
+        "opening": "Gasser has allowed an .829 OPS to right-handed hitters, compared with .572 to lefties.",
+        "closing": ""
+      },
+      "safe": true,
+      "hook": "Gasser has allowed an .829 OPS to right-handed hitters, compared with .572 to lefties.\n\nCubs ML"
+    },
+    {
+      "date": "2026-09-07",
+      "pick": "SMU Mustangs -2.5 -115",
+      "game_id": 457172,
+      "pair": {
+        "opening": "I’m taking the spread because I expect SMU’s passing advantage to generate sustained scoring opportunities across four quarters.",
+        "closing": ""
+      },
+      "safe": true,
+      "hook": "I’m taking the spread because I expect SMU’s passing advantage to generate sustained scoring opportunities across four quarters.\n\nSMU Mustangs -2.5"
+    }
+  ]
+}
