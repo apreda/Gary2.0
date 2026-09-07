@@ -1,0 +1,25 @@
+{
+  "checked_at": "2026-09-07T10:19:22.130453+00:00",
+  "manual_book": {
+    "manual_rows": 0,
+    "manual_settled": 0,
+    "manual_accounts": 0,
+    "retained_30_day_rows": 111
+  },
+  "overnight_cron": [
+    {
+      "count": 1348,
+      "status": "succeeded"
+    }
+  ],
+  "yesterday_posts": {
+    "threads": 18,
+    "impressions": 9607,
+    "profile_clicks": 54,
+    "max_lead_minutes": 119.90884093333334,
+    "min_lead_minutes": 54.941478616666664,
+    "max_metric_age_hours": 18.250239088055555,
+    "min_metric_age_hours": 8.750066195
+  },
+  "postgres_started_at": "2026-09-06T12:57:05.409696+00:00"
+}

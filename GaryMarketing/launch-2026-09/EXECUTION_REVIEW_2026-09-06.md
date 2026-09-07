@@ -1,6 +1,6 @@
 # Launch execution review — September 6
 
-All six workstreams remain active. This review supersedes the September 5 current-state table; its dated measurements and test receipts remain historical evidence. Completion includes implementation, verification, live delivery and the relevant human or third-party outcome.
+Historical September 6 snapshot; the [September 7 review](EXECUTION_REVIEW_2026-09-07.md) is the current scorecard. All six workstreams remain active. This review supersedes the September 5 current-state table; its dated measurements and test receipts remain historical evidence. Completion includes implementation, verification, live delivery and the relevant human or third-party outcome.
 
 | Workstream | Verified progress | Open completion condition |
 |---|---|---|

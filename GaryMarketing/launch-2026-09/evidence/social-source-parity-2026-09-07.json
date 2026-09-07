@@ -1,0 +1,69 @@
+{
+  "checked_at": "2026-09-07T10:20:03.332Z",
+  "version": 102,
+  "verify_jwt": true,
+  "files": [
+    {
+      "file": "functions/social-auto-post/index.ts",
+      "matches": true,
+      "sha256": "7945461d7b78bbac7ef4d91c0ff1fc0c68c6b19238a90ca74833d8b2b58df05d"
+    },
+    {
+      "file": "functions/social-auto-post/verdicts.ts",
+      "matches": true,
+      "sha256": "a97a2fb4af72a824cced3ef64ab92bcff4396dc94e7f200588321d8130b703dc"
+    },
+    {
+      "file": "functions/social-auto-post/weektape.ts",
+      "matches": true,
+      "sha256": "2f8c343eeaa64181a20fad458e95b6759cbfae849f03395e4b953b46f3d3d6fa"
+    },
+    {
+      "file": "functions/social-auto-post/recap.ts",
+      "matches": true,
+      "sha256": "fdba4b899f79e963aab145fffd864041d4080669b4dc0980ab29de81e285f03d"
+    },
+    {
+      "file": "functions/_shared/verbatimSnippets.js",
+      "matches": true,
+      "sha256": "07a32d5f13b77389409f0ce50ff1517b6fef899e1204922cd9e4d6d768100f8d"
+    },
+    {
+      "file": "functions/social-auto-post/health.js",
+      "matches": true,
+      "sha256": "a4553dd7176654f41b501e4db5a2ddffea9fdf68d5a3621e5ea4340aa2df28b1"
+    },
+    {
+      "file": "functions/social-auto-post/pickSources.js",
+      "matches": true,
+      "sha256": "82ae2d8671a439b62afa6201d82c722f96bc2c7f90281dd1fc324c8cfd86e24a"
+    },
+    {
+      "file": "functions/social-auto-post/publication.js",
+      "matches": true,
+      "sha256": "150c3779c50cdb84f1fd5411ee01627ac71e221b2cd010d37f06f8de043e1e2b"
+    },
+    {
+      "file": "functions/social-auto-post/barepick.ts",
+      "matches": true,
+      "sha256": "7a2a0fc0f5eeae48c28347a8c1829cac555480ee405d05cf44d08a9da20b78b0"
+    },
+    {
+      "file": "functions/social-auto-post/pl.ts",
+      "matches": true,
+      "sha256": "e30db19f3675892991a8d2fe1a2eed74d10594e1b76d8f280654e7ab1911422a"
+    },
+    {
+      "file": "functions/social-auto-post/window.ts",
+      "matches": true,
+      "sha256": "a567c6aa0af28cb9549a59fa30c54e3e086f6b1d5de4202fd73b6a3b3545a3bd"
+    },
+    {
+      "file": "functions/social-auto-post/marquee.ts",
+      "matches": true,
+      "sha256": "bbb29c895dfcae205b2514f7e38d3746d7b6d21b4bff4cd0acaa6b8daf06ff25"
+    }
+  ],
+  "all_match": true,
+  "final_version_verification": "v102 file contents exactly match the independently verified v101 bundle; JWT remains enabled"
+}

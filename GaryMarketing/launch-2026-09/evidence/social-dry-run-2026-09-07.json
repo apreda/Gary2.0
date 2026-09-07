@@ -1,0 +1,24 @@
+{
+  "checked_at": "2026-09-07T10:20:03.931Z",
+  "status": 200,
+  "body": {
+    "posted": false,
+    "reason": "ET hour 6 is outside the posting window",
+    "metrics": {
+      "updated": 0,
+      "checked": 0
+    },
+    "service": "social-auto-post",
+    "checked_at": "2026-09-07T10:20:03.911Z",
+    "dry_run": true,
+    "run_kind": "manual",
+    "publication_recovery": [],
+    "health": {
+      "status": "ok",
+      "issues": [],
+      "failed_posts": 0,
+      "missed_picks": 0,
+      "posted_picks": 0
+    }
+  }
+}

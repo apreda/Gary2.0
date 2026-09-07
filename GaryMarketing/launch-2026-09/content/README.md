@@ -6,11 +6,11 @@ Four finished concepts, each exported as **1080×1350 portrait** and **1600×900
 
 ## Copy ready for review
 
-Gary-account copy below uses his voice. Put the destination in a single reply to preserve the existing publishing format. The new captions are product posts, separate from the automated verbatim game-pick pipeline. Review that day's slate and available features before publishing. Suggested dates are editorial slots, not a new automation.
+Gary-account copy below uses his voice. Put the destination in a single reply to preserve the existing publishing format. The new captions are product posts, separate from the automated verbatim game-pick pipeline. Review that day's slate and available features before publishing. Suggested dates are editorial slots, not a new automation. September 5 passed without publication; the introductory piece moves to the first ready slot before September 13. If approval or channel setup is still pending, move the remaining pieces forward from the actual first publication rather than stacking missed posts.
 
 | Suggested slot | Main post | Asset |
 |---|---|---|
-| September 5 · Start here | You’re already watching the game. I’ve got a pick and the reasoning behind it. Find your game, read my take, make your own decision. | `01-find-your-game-1600x900.jpg` |
+| First ready slot before September 13 · Start here | You’re already watching the game. I’ve got a pick and the reasoning behind it. Find your game, read my take, make your own decision. | `01-find-your-game-1600x900.jpg` |
 | September 8 · Reasoning | Don’t stop at the team name. Open the pick and read why I chose it. You might agree with the matchup and still disagree with me. That’s fine. | `02-read-the-reasoning-1600x900.jpg` |
 | September 11 · Your Book | You remember the winner. Your Book remembers the rest. Save your picks, odds, units and notes, then record how they finished. Private by default. | `04-your-book-1600x900.jpg` |
 | September 13 · The record | The good days are on the record. So are the ones I’d rather forget. Check the dates, original picks and results before you decide what to make of me. | `03-check-the-record-1600x900.jpg` |
