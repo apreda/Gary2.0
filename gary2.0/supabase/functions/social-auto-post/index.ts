@@ -27,7 +27,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { matchVerdicts, plainVerdict, buildVerdictPrompt, trimTweet, isValidVerdict } from "./verdicts.ts";
 import { composeWeekTape } from "./weektape.ts";
 import { composeRecaps, type RecapRow } from "./recap.ts";
-import { fallbackReasonPair, formatReasonForTweet, isSafeReasonPair, reasonCandidates } from "../_shared/verbatimSnippets.js";
+import { fallbackReasonPair, isSafeReasonPair, reasonCandidates } from "../_shared/verbatimSnippets.js";
 import { socialRunHealth } from "./health.js";
 import { mergeSocialPickSources, hasLoggedTicket, publicationKey } from "./pickSources.js";
 import { publishIntent, publicationStore } from "./publication.js";
@@ -509,16 +509,15 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
     // total is part of the bet; the price is just today's number at one book).
     const pickLine = barePick(String(chosen.pick)); // clean machine-readable shorthand, no odds, no emoji
 
-    // WITHHOLD POLICY, VERBATIM EDITION (founder, Aug 17 2026): the hook is
-    // two of Gary's OWN rationale sentences around the injected pick line —
+    // FACTS ONLY, VERBATIM (founder, Sep 7): the hook is up to two of Gary's
+    // own concrete evidence sentences around the injected pick line —
     // the feed says exactly what the app says, word for word. The model only
     // selects which sentences; code verifies every selection is a verbatim
     // substring of the stored rationale and falls back to deterministic
-    // sentence choice when it is not. Sentences are never trimmed (no
-    // ellipsis, ever). Sep 7 follow-up: after validation, the formatter may
-    // remove redundant "for me" attribution; the model still copies exactly.
+    // sentence choice when it is not. Select the facts themselves, without a
+    // thesis or commentary sentence. Sentences are never rewritten or cut.
     const rationaleText = String(chosen.rationale ?? "");
-    // REASONS ONLY (founder, Aug 17): the two lines carry Gary's analysis.
+    // The lines carry the concrete facts from Gary's published analysis.
     // Stake/odds-restatement sentences never reach the candidate list — the
     // injected pick line between them already says the bet.
     const candidates = reasonCandidates(rationaleText);
@@ -528,12 +527,12 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
     const budget = 278 - pickLine.length - 4;
     const reasonParagraphs = rationaleText.split(/\n+/).map(p => p.replace(/\s+/g, " ").trim());
     const numbered = list.map((s, i) => `P${reasonParagraphs.findIndex(p => p.includes(s.replace(/\s+/g, " ").trim())) + 1} / ${i + 1}. ${s}`).join("\n");
-    const user = `Choose up to two sentences for a single bet's post. Return ONLY JSON: {"opening": "...", "closing": "..."}.
+    const user = `Choose up to two factual evidence sentences for a single bet's post. Return ONLY JSON: {"opening": "...", "closing": "..."}.
 Both nonempty values MUST be sentences copied character-for-character from the numbered list below, without the P/number label — different sentences from the SAME source paragraph (same P label), and their combined length must be at most ${budget} characters. If only one safe sentence fits, use it as opening and return an empty closing.
-Both must be REASONS for the pick — Gary's argument and analysis. NEVER the scene-setting opener (weather, park, time of day, atmosphere) and NEVER a sentence that merely restates the bet or its odds.
+Both must report concrete facts from the real pick: pitching workload, recent appearances, batting/pitching results, matchup statistics or lineup/personnel facts. NEVER a thesis, abstract conclusion, forecast, personal opinion, scene-setting opener or bet restatement.
 Each chosen sentence must STAND ALONE for a reader who has seen nothing else: every person it mentions is named IN the sentence, and it never opens mid-argument ("But…", "Those advantages…", "He…").
-opening: the clearest actual reason Gary gives for this pick. Prefer a direct statement about the matchup over "I think", "I like", "my read" or similar self-reference when an equally useful original sentence is available. Never select assumption declarations, assessment language, hypothetical conditions that would change his mind, or research-process commentary. A simple named fact explaining the pick is better than an abstract thesis. closing: a concrete supporting reason from the SAME paragraph that supports the same pick; never an objection or the opponent's case. Use one good sentence instead of padding with a detached statistic or caveat. Preserve every qualifier and Gary's exact wording; never rewrite a stiff sentence to make it sound conversational — choose a different original sentence. Copy even redundant "for me" exactly; code handles that attribution after source validation.
-${isTopPick ? "This is Gary's highest-conviction play on the whole board today — prefer the sentences that carry that certainty.\n" : ""}PICK: ${chosen.pick} | ${chosen.awayTeam} @ ${chosen.homeTeam} | league ${league}
+opening: the most useful concrete fact supporting this pick. A sentence saying who pitched, rested, hit or allowed what is complete on its own. Do not introduce it with commentary about why it "tips the matchup", creates an "advantage" or supplies a "credible route". closing: optional additional factual evidence from the SAME paragraph supporting the same pick; never an objection or the opponent's case. One useful fact is enough. Preserve the source's exact words and qualifiers; reject an unsuitable sentence whole, never turn a prediction into a fact by deleting its uncertainty.
+PICK: ${chosen.pick} | ${chosen.awayTeam} @ ${chosen.homeTeam} | league ${league}
 
 SENTENCES:
 ${numbered}`;
@@ -569,7 +568,7 @@ ${numbered}`;
     }
     // Every path crosses the same safety boundary, including vendor outages.
     if (!selectionOk(opening, closing)) throw new Error(`NO_SAFE_COPY: final reason validation failed for "${chosen.pick}"`);
-    const hook = [formatReasonForTweet(opening), pickLine, formatReasonForTweet(closing)].filter(Boolean).join("\n\n");
+    const hook = [opening, pickLine, closing].filter(Boolean).join("\n\n");
     if (hook.length > 280) {
       throw new Error(`Hook exceeds X limit for "${chosen.pick}" — ${hook.length} characters, refusing to post`);
     }
@@ -583,7 +582,7 @@ ${numbered}`;
     const handoff = propsReply ?? (threadsSoFar === 0 ? handoffLine : null);
 
     // Jul 7 (founder): the top-pick CARD tweet is retired — all 5 daily picks post as the standard text
-    // thread. isTopPick still shapes the language (conviction carries in the words, never a badge).
+    // thread. isTopPick is retained in publication metadata; the copy carries facts.
     if (dryRun) {
       threadsSoFar++;
       results.push({ posted: false, dry_run: true, pick: chosen.pick, is_top_pick: isTopPick, lead_min: Math.round((new Date(chosen.commence_time).getTime() - nowMs) / MIN), hook, props_reply: propsReply, handoff: propsReply ? null : handoff });

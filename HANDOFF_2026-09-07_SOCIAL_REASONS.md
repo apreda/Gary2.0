@@ -1,5 +1,54 @@
 # Pick tweets quote the actual reasons — September 7, 2026
 
+## Current policy: present the facts
+
+Adam's latest correction supersedes the thesis-first behavior and the narrow
+`for me` cleanup below. Pick tweets select concrete performance, workload and
+personnel facts directly from the saved rationale. No narrator introduction,
+abstract conclusion or commentary sentence is required. The formatter that
+removed `for me` has been retired: unsuitable sentences are now excluded whole,
+and every published sentence is once again an exact original source sentence.
+
+`isConcreteFactSentence` is shared by candidate selection and final validation.
+Both the model and deterministic fallback use the same factual candidates.
+The fallback selects in source order, with an optional following fact from the
+same paragraph. Explicit counterargument paragraphs cannot supply an opener or
+a closing fact. Model instructions no longer ask for a thesis or a stronger
+expression of conviction. No pick-generation prompts or decisions changed.
+
+The 72-pick replay produced 70 valid factual previews, including all nine
+September 7 picks. Two historical cards (North Texas September 5 and Wisconsin
+September 6) have no suitable complete, named supporting fact that fits; they
+are withheld instead of falling back to commentary, unnamed context or the
+opposing case. This is a copy eligibility check against saved sources, not an
+independent verification of their sports data. Exact outputs are preserved in
+`audit-evidence/social-reasons-2026-09-07/facts-only-previews.json`.
+
+Production runs `social-auto-post` version 106, active with JWT verification.
+All 12 deployed source files exactly match the tested source. The final checks
+passed 100 focused copy/claim tests, 180 edge helper tests and Deno checking.
+An isolated checkout of committed `a3dcf9c8` plus only the three social source/
+test changes passed all 2,397 backend tests across 252 files. The initial shared
+checkout run encountered five failures in native Hub tests while another
+session edited those files; its work was preserved and excluded from the
+isolated verification. The temporary verification worktree was removed.
+
+The live dry run returned HTTP 200 and health `ok` with no metric or tweet
+writes. All nine publication intents were already completed, leaving no
+unposted pick for a live copy preview; the copy itself was verified with the
+saved-source replay and tests. Full receipt:
+`audit-evidence/social-reasons-2026-09-07/facts-only-verification.json`.
+
+The updated Twins preview is:
+
+> Gómez, Hoffman and Minter all sat Sunday after throwing seven, 17 and 18 pitches Saturday.
+>
+> Twins ML
+>
+> Detroit’s relief work improved in Cleveland, but Jansen, Holton, Kinley and Sommers pitched Sunday, and Finnegan worked consecutive days.
+
+## Earlier implementation history
+
 Adam supplied the Royals and Twins tweets and asked for the actual reasons
 from Gary's published rationale / Gary Take, using Gary's literal words.
 Both screenshot openers already existed verbatim in the saved September 7
@@ -56,7 +105,7 @@ The production checkout is `/Users/adam.preda/Gary2.0` on main. Preserve the
 machine's real `ios/GaryApp/GoogleService-Info.plist` as the known uncommitted
 configuration exception. Other sessions' completed work remains intact.
 
-## Follow-up: matter-of-fact wording
+## Earlier follow-up: matter-of-fact wording (superseded)
 
 Adam pointed out that `for me` is redundant on Gary's own account. The sentence
 selector now prefers a direct matchup statement over unnecessary self-reference

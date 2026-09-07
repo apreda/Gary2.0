@@ -1,0 +1,950 @@
+{
+  "checked_at": "2026-09-07T21:58:22.566Z",
+  "mode": "read-only source replay; no publication",
+  "checked": 72,
+  "valid_fact_copy": 70,
+  "withheld": [
+    {
+      "pick": "North Texas Mean Green +40.5 -110",
+      "date": "2026-09-05",
+      "reason": "No complete standalone factual source sentence passed the copy gate."
+    },
+    {
+      "pick": "Wisconsin Badgers +21.5 -120",
+      "date": "2026-09-06",
+      "reason": "No complete standalone factual source sentence passed the copy gate."
+    }
+  ],
+  "previews": [
+    {
+      "date": "2026-09-05",
+      "pick": "East Carolina Pirates +28.5 -122",
+      "game_id": "457191",
+      "pair": {
+        "opening": "Alabama replaced all five starters after finishing last season with 48 combined rushing yards against Georgia, Oklahoma and Indiana.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 3,
+      "hook": "Alabama replaced all five starters after finishing last season with 48 combined rushing yards against Georgia, Oklahoma and Indiana.\n\nEast Carolina Pirates +28.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "West Virginia Mountaineers -20.5 -115",
+      "game_id": "457179",
+      "pair": {
+        "opening": "Coastal surrendered 286 rushing yards against James Madison last season and has since rebuilt its defensive front with 12 newcomers among 16 linemen.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 4,
+      "hook": "Coastal surrendered 286 rushing yards against James Madison last season and has since rebuilt its defensive front with 12 newcomers among 16 linemen.\n\nWest Virginia Mountaineers -20.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Oregon State Beavers +20.5 -104",
+      "game_id": "457178",
+      "pair": {
+        "opening": "Against TCU, Houston forced four turnovers and still lost after missing two fourth-quarter field goals.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 1,
+      "hook": "Against TCU, Houston forced four turnovers and still lost after missing two fourth-quarter field goals.\n\nOregon State Beavers +20.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "North Texas Mean Green +40.5 -110",
+      "game_id": "457192",
+      "pair": null,
+      "valid_fact_copy": false,
+      "exact_source": false,
+      "candidate_count": 0,
+      "hook": null
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Liberty Flames +6.5 -114",
+      "game_id": "457604",
+      "pair": {
+        "opening": "JMU returns only five starters overall and is reconstructing its offensive line, while Liberty brings back an experienced defensive front.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 1,
+      "hook": "JMU returns only five starters overall and is reconstructing its offensive line, while Liberty brings back an experienced defensive front.\n\nLiberty Flames +6.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Nebraska Cornhuskers -23.5 -115",
+      "game_id": "457620",
+      "pair": {
+        "opening": "The Bobcats return only one offensive starter and replace all five starting offensive linemen.",
+        "closing": "Nick Poulos completed 4 of 8 passes for 19 yards in 2025."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 3,
+      "hook": "The Bobcats return only one offensive starter and replace all five starting offensive linemen.\n\nNebraska Cornhuskers -23.5\n\nNick Poulos completed 4 of 8 passes for 19 yards in 2025."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Ohio State Buckeyes -49.5 -115",
+      "game_id": "457621",
+      "pair": {
+        "opening": "Julian Sayin, Bo Jackson and Jeremiah Smith return together, and the offensive line has only one new starter, although assignments have changed.",
+        "closing": "Sayin completed 77% of his passes last season; Jackson averaged 6.1 yards per carry."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 5,
+      "hook": "Julian Sayin, Bo Jackson and Jeremiah Smith return together, and the offensive line has only one new starter, although assignments have changed.\n\nOhio State Buckeyes -49.5\n\nSayin completed 77% of his passes last season; Jackson averaged 6.1 yards per carry."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Pittsburgh Panthers -16.5 -112",
+      "game_id": "457165",
+      "pair": {
+        "opening": "Pittsburgh allowed 2.7 yards per carry in 2025, and its defensive staff has explicitly retained stopping the run as its first priority.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 3,
+      "hook": "Pittsburgh allowed 2.7 yards per carry in 2025, and its defensive staff has explicitly retained stopping the run as its first priority.\n\nPittsburgh Panthers -16.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Kent State Golden Flashes +36.5 -115",
+      "game_id": "457934",
+      "pair": {
+        "opening": "Against Clemson, 381 passing yards produced only 14 points, with five sacks and a 2-for-14 combined third-/fourth-down performance.",
+        "closing": "Against Texas A&M, the Gamecocks generated only 76 second-half yards after building a 30–3 halftime lead."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 3,
+      "hook": "Against Clemson, 381 passing yards produced only 14 points, with five sacks and a 2-for-14 combined third-/fourth-down performance.\n\nKent State Golden Flashes +36.5\n\nAgainst Texas A&M, the Gamecocks generated only 76 second-half yards after building a 30–3 halftime lead."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Cincinnati Bearcats -7.5 -105",
+      "game_id": "457166",
+      "pair": {
+        "opening": "The Bearcats return three linemen from a unit that allowed eight sacks last season, while Boston College substantially rebuilt a group that allowed 35.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 1,
+      "hook": "The Bearcats return three linemen from a unit that allowed eight sacks last season, while Boston College substantially rebuilt a group that allowed 35.\n\nCincinnati Bearcats -7.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Tulane Green Wave +7.5 -110",
+      "game_id": "457167",
+      "pair": {
+        "opening": "Zeon Chriss-Gremillion brings 992 career rushing yards and 10 rushing touchdowns.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 1,
+      "hook": "Zeon Chriss-Gremillion brings 992 career rushing yards and 10 rushing touchdowns.\n\nTulane Green Wave +7.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Auburn Tigers -7.5 -105",
+      "game_id": "457181",
+      "pair": {
+        "opening": "Jeremiah Cobb brings 969 rushing yards from Auburn’s previous season, while Keshaun Singleton and Jeremiah Koger have experience catching Brown’s passes.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 2,
+      "hook": "Jeremiah Cobb brings 969 rushing yards from Auburn’s previous season, while Keshaun Singleton and Jeremiah Koger have experience catching Brown’s passes.\n\nAuburn Tigers -7.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Oregon Ducks -24.5 -110",
+      "game_id": "457622",
+      "pair": {
+        "opening": "Oregon allowed 4.40 yards per play last season, and Teitum Tuioti returns after recording 9.5 sacks.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 3,
+      "hook": "Oregon allowed 4.40 yards per play last season, and Teitum Tuioti returns after recording 9.5 sacks.\n\nOregon Ducks -24.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Texas State Bobcats +29.5 -110",
+      "game_id": "457918",
+      "pair": {
+        "opening": "Brad Jackson returns with Beau Sparks and Chris Dawn Jr., who combined for 149 receptions and 2,207 yards last season.",
+        "closing": "Jackson also contributed 744 rushing yards and 17 rushing touchdowns."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 4,
+      "hook": "Brad Jackson returns with Beau Sparks and Chris Dawn Jr., who combined for 149 receptions and 2,207 yards last season.\n\nTexas State Bobcats +29.5\n\nJackson also contributed 744 rushing yards and 17 rushing touchdowns."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Marshall Thundering Herd +23.5 -112",
+      "game_id": "457623",
+      "pair": {
+        "opening": "Carlos Del Rio-Wilson threw 17 touchdowns against five interceptions in 2025 and led the team with 661 rushing yards.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 1,
+      "hook": "Carlos Del Rio-Wilson threw 17 touchdowns against five interceptions in 2025 and led the team with 661 rushing yards.\n\nMarshall Thundering Herd +23.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Oklahoma State Cowboys -13.5 -110",
+      "game_id": "457183",
+      "pair": {
+        "opening": "Drew Mestemaker, Caleb Hawkins and Wyatt Young played in Morris’ North Texas offense last season.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 3,
+      "hook": "Drew Mestemaker, Caleb Hawkins and Wyatt Young played in Morris’ North Texas offense last season.\n\nOklahoma State Cowboys -13.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Iowa Hawkeyes -31.5 -110",
+      "game_id": "457624",
+      "pair": {
+        "opening": "Kamari Moulton returns after rushing for 878 yards at 5.2 per carry.",
+        "closing": "NIU allowed 183.3 rushing yards per game last season and now rebuilds much of that defense."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 2,
+      "hook": "Kamari Moulton returns after rushing for 878 yards at 5.2 per carry.\n\nIowa Hawkeyes -31.5\n\nNIU allowed 183.3 rushing yards per game last season and now rebuilds much of that defense."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Marlins ML +108",
+      "game_id": "5059897",
+      "pair": {
+        "opening": "Assad has allowed an .835 OPS and 12 homers to left-handed hitters in 160 at-bats, compared with a .533 OPS against right-handers.",
+        "closing": "Miami starts six left-handed bats, with Stowers and Conine carrying .859 and .942 OPS marks against right-handed pitching."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 4,
+      "hook": "Assad has allowed an .835 OPS and 12 homers to left-handed hitters in 160 at-bats, compared with a .533 OPS against right-handers.\n\nMarlins ML\n\nMiami starts six left-handed bats, with Stowers and Conine carrying .859 and .942 OPS marks against right-handed pitching."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Mets ML -168",
+      "game_id": "5059898",
+      "pair": {
+        "opening": "Devers supplied five RBI yesterday, but his season OPS against left-handed pitching is .538 across 187 AB.",
+        "closing": "Thornton has held left-handed hitters to a .446 OPS across 72 AB."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 3,
+      "hook": "Devers supplied five RBI yesterday, but his season OPS against left-handed pitching is .538 across 187 AB.\n\nMets ML\n\nThornton has held left-handed hitters to a .446 OPS across 72 AB."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Wyoming Cowboys +3.5 -122",
+      "game_id": "457912",
+      "pair": {
+        "opening": "Tyler Hughes reunites with offensive coordinator Christian Taylor after throwing for 2,330 yards, 20 touchdowns and three interceptions at William & Mary last season.",
+        "closing": "Samuel Harris returns after gaining 558 rushing yards on 100 carries."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 2,
+      "hook": "Tyler Hughes reunites with offensive coordinator Christian Taylor after throwing for 2,330 yards, 20 touchdowns and three interceptions at William & Mary last season.\n\nWyoming Cowboys +3.5\n\nSamuel Harris returns after gaining 558 rushing yards on 100 carries."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Florida International Panthers +14.5 -108",
+      "game_id": "457202",
+      "pair": {
+        "opening": "JJ Kohl threw 12 touchdowns against 2 interceptions across 8 appearances at Appalachian State in 2025.",
+        "closing": "Anthony Carrie returns after 469 rushing yards at 4.6 per carry."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 3,
+      "hook": "JJ Kohl threw 12 touchdowns against 2 interceptions across 8 appearances at Appalachian State in 2025.\n\nFlorida International Panthers +14.5\n\nAnthony Carrie returns after 469 rushing yards at 4.6 per carry."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Memphis Tigers -10.5 -112",
+      "game_id": "457200",
+      "pair": {
+        "opening": "Jaylin Carter ran for 97 yards on 15 carries against UNLV, and the Tigers posted a 58.5% success rate on standard downs.",
+        "closing": "Marcus Stokes contributed 223 passing yards, two touchdowns and no interceptions."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 3,
+      "hook": "Jaylin Carter ran for 97 yards on 15 carries against UNLV, and the Tigers posted a 58.5% success rate on standard downs.\n\nMemphis Tigers -10.5\n\nMarcus Stokes contributed 223 passing yards, two touchdowns and no interceptions."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Missouri State Bears +40.5 -110",
+      "game_id": "457605",
+      "pair": {
+        "opening": "Jmariyae Robinson produced 632 receiving yards and seven touchdowns in 2025, Ramone Green Jr. added 446 receiving yards, and Jeron Askren caught five touchdowns.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 4,
+      "hook": "Jmariyae Robinson produced 632 receiving yards and seven touchdowns in 2025, Ramone Green Jr. added 446 receiving yards, and Jeron Askren caught five touchdowns.\n\nMissouri State Bears +40.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Braves ML +136",
+      "game_id": "5059899",
+      "pair": {
+        "opening": "Wheeler has allowed a .733 OPS to left-handed hitters versus .550 to right-handers.",
+        "closing": "Baldwin and Harris have produced .867 and .855 OPS against right-handed pitching, respectively, and Harris’s last-15-day OPS is 1.007."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 2,
+      "hook": "Wheeler has allowed a .733 OPS to left-handed hitters versus .550 to right-handers.\n\nBraves ML\n\nBaldwin and Harris have produced .867 and .855 OPS against right-handed pitching, respectively, and Harris’s last-15-day OPS is 1.007."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Sam Houston Bearkats +16.5 -105",
+      "game_id": "457609",
+      "pair": {
+        "opening": "Grady O’Neill caught eight passes in each of the final two games of 2025, and Chris Reed scored both Bearkats touchdowns against Middle Tennessee.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 3,
+      "hook": "Grady O’Neill caught eight passes in each of the final two games of 2025, and Chris Reed scored both Bearkats touchdowns against Middle Tennessee.\n\nSam Houston Bearkats +16.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Reds ML +136",
+      "game_id": "5059901",
+      "pair": {
+        "opening": "May allowed 7 earned runs in 2.0 innings against Seattle and 4 in 4.1 against Texas.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 4,
+      "hook": "May allowed 7 earned runs in 2.0 innings against Seattle and 4 in 4.1 against Texas.\n\nReds ML"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "UL Monroe Warhawks +28.5 -115",
+      "game_id": "458251",
+      "pair": {
+        "opening": "In last season’s bowl, the Bulldogs produced more than 400 yards but repeatedly settled for field goals, with third-down and short-yardage failures interrupting their offense.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 3,
+      "hook": "In last season’s bowl, the Bulldogs produced more than 400 yards but repeatedly settled for field goals, with third-down and short-yardage failures interrupting their offense.\n\nUL Monroe Warhawks +28.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Western Michigan Broncos +27.5 -105",
+      "game_id": "457625",
+      "pair": {
+        "opening": "The Broncos retain players responsible for 85.4% of their offensive touchdowns from 2025, including Broc Lowry and Jalen Buckley.",
+        "closing": "Lowry rushed for 963 yards; Buckley added 1,003."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 3,
+      "hook": "The Broncos retain players responsible for 85.4% of their offensive touchdowns from 2025, including Broc Lowry and Jalen Buckley.\n\nWestern Michigan Broncos +27.5\n\nLowry rushed for 963 yards; Buckley added 1,003."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Clemson Tigers +10.5 -118",
+      "game_id": "457168",
+      "pair": {
+        "opening": "Vizzina’s previous start against SMU produced 317 passing yards, three touchdowns and no interceptions in a game that included four sacks.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 2,
+      "hook": "Vizzina’s previous start against SMU produced 317 passing yards, three touchdowns and no interceptions in a game that included four sacks.\n\nClemson Tigers +10.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Guardians ML -156",
+      "game_id": "5059906",
+      "pair": {
+        "opening": "Detroit starts seven right-handed hitters, and Messick has allowed righties a .571 OPS.",
+        "closing": "Dingler and Lee have produced .619 and .649 OPS marks against lefties."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 4,
+      "hook": "Detroit starts seven right-handed hitters, and Messick has allowed righties a .571 OPS.\n\nGuardians ML\n\nDingler and Lee have produced .619 and .649 OPS marks against lefties."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Florida Atlantic Owls +24.5 -105",
+      "game_id": "457203",
+      "pair": {
+        "opening": "Easton Messer caught 104 passes for 1,052 yards in 2025, and his partnership with Veltkamp carries into tonight.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 2,
+      "hook": "Easton Messer caught 104 passes for 1,052 yards in 2025, and his partnership with Veltkamp carries into tonight.\n\nFlorida Atlantic Owls +24.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Red Sox ML -132",
+      "game_id": "5059905",
+      "pair": {
+        "opening": "Anthony, Gasper and Abreu can all bat left-handed against Bassitt, who has allowed a .917 OPS to left-handed hitters over 190 at-bats.",
+        "closing": "Anthony owns an .860 OPS against right-handed pitching, and Gasper has .959."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 3,
+      "hook": "Anthony, Gasper and Abreu can all bat left-handed against Bassitt, who has allowed a .917 OPS to left-handed hitters over 190 at-bats.\n\nRed Sox ML\n\nAnthony owns an .860 OPS against right-handed pitching, and Gasper has .959."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Pirates -1.5 +125",
+      "game_id": "5059900",
+      "pair": {
+        "opening": "Reynolds has an .810 OPS against lefties, and Cruz has an .848.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 5,
+      "hook": "Reynolds has an .810 OPS against lefties, and Cruz has an .848.\n\nPirates -1.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Blue Jays ML -106",
+      "game_id": "5059904",
+      "pair": {
+        "opening": "Tyler Rogers and Louis Varland both sat yesterday after throwing 9 and 18 pitches Thursday.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 3,
+      "hook": "Tyler Rogers and Louis Varland both sat yesterday after throwing 9 and 18 pitches Thursday.\n\nBlue Jays ML"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Diamondbacks ML -108",
+      "game_id": "5059907",
+      "pair": {
+        "opening": "Houston starts six right-handed hitters, and Pfaadt has allowed righties a .534 OPS with one homer in 182 at-bats.",
+        "closing": "Pecko has yet to pitch beyond five innings in his three starts."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 5,
+      "hook": "Houston starts six right-handed hitters, and Pfaadt has allowed righties a .534 OPS with one homer in 182 at-bats.\n\nDiamondbacks ML\n\nPecko has yet to pitch beyond five innings in his three starts."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Twins ML +106",
+      "game_id": "5059903",
+      "pair": {
+        "opening": "Minnesota starts six right-handed hitters and two switch hitters, with Jeffers carrying an .877 OPS against lefties, Bell .753 and Lewis .760.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 2,
+      "hook": "Minnesota starts six right-handed hitters and two switch hitters, with Jeffers carrying an .877 OPS against lefties, Bell .753 and Lewis .760.\n\nTwins ML"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Yankees ML +110",
+      "game_id": "5059909",
+      "pair": {
+        "opening": "San Diego starts seven right-handed hitters, and Rodón has allowed righties a .553 OPS in 159 at-bats.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 6,
+      "hook": "San Diego starts seven right-handed hitters, and Rodón has allowed righties a .553 OPS in 159 at-bats.\n\nYankees ML"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Rays ML -108",
+      "game_id": "5059902",
+      "pair": {
+        "opening": "Díaz, Aranda, Caminero and Hicks each carry an OPS of .828 or better against right-handed pitching.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 4,
+      "hook": "Díaz, Aranda, Caminero and Hicks each carry an OPS of .828 or better against right-handed pitching.\n\nRays ML"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Central Michigan Chippewas +10.5 -110",
+      "game_id": "457914",
+      "pair": {
+        "opening": "CMU’s four giveaways produced 27 Northwestern points, with three turnovers coming on consecutive offensive snaps.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 1,
+      "hook": "CMU’s four giveaways produced 27 Northwestern points, with three turnovers coming on consecutive offensive snaps.\n\nCentral Michigan Chippewas +10.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Nationals +1.5 -134",
+      "game_id": "5059910",
+      "pair": {
+        "opening": "Beeter, Ribalta and Simpson last pitched September 1; Tolman last pitched August 31.",
+        "closing": "Only Perales and Sinclair worked Friday."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 5,
+      "hook": "Beeter, Ribalta and Simpson last pitched September 1; Tolman last pitched August 31.\n\nNationals +1.5\n\nOnly Perales and Sinclair worked Friday."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "UNLV Rebels ML -154",
+      "game_id": "457913",
+      "pair": {
+        "opening": "Hawai‘i allowed eight completions of at least 15 yards totaling 221 yards against Stanford.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 1,
+      "hook": "Hawai‘i allowed eight completions of at least 15 yards totaling 221 yards against Stanford.\n\nUNLV Rebels ML"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Nevada Wolf Pack +1.5 -115",
+      "game_id": "457611",
+      "pair": {
+        "opening": "Rodney Tisdale Jr. closed his season with passing outputs of 128, 180 and 65 yards, throwing an interception in each appearance.",
+        "closing": "WKU’s bowl comeback accelerated after he was replaced."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 3,
+      "hook": "Rodney Tisdale Jr. closed his season with passing outputs of 128, 180 and 65 yards, throwing an interception in each appearance.\n\nNevada Wolf Pack +1.5\n\nWKU’s bowl comeback accelerated after he was replaced."
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Mariners -1.5 -106",
+      "game_id": "5059911",
+      "pair": {
+        "opening": "Hogan Harris has thrown 47 pitches over three consecutive days, and Brady Basso threw 38 pitches across three innings Friday.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 4,
+      "hook": "Hogan Harris has thrown 47 pitches over three consecutive days, and Brady Basso threw 38 pitches across three innings Friday.\n\nMariners -1.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "California Golden Bears +2.5 -105",
+      "game_id": "457170",
+      "pair": {
+        "opening": "Jaron-Keawe Sagapolutele threw four touchdowns against SMU and completed all five attempts on the decisive drive.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 1,
+      "hook": "Jaron-Keawe Sagapolutele threw four touchdowns against SMU and completed all five attempts on the decisive drive.\n\nCalifornia Golden Bears +2.5"
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "Rockies ML +102",
+      "game_id": "5059908",
+      "pair": {
+        "opening": "O’Brien threw 46 pitches across three consecutive days, and his manager had planned to rest him Friday before he volunteered.",
+        "closing": "Winquest also worked the last two days."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 4,
+      "hook": "O’Brien threw 46 pitches across three consecutive days, and his manager had planned to rest him Friday before he volunteered.\n\nRockies ML\n\nWinquest also worked the last two days."
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Reds ML +122",
+      "game_id": "5059912",
+      "pair": {
+        "opening": "Dane Myers, Elly De La Cruz and Sal Stewart have respective OPS figures of .851, 1.039 and .888 against left-handed pitching.",
+        "closing": "Harrison has allowed 18 homers to right-handed hitters across 293 AB, and right-handers hit all five homers against him in his last start."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 5,
+      "hook": "Dane Myers, Elly De La Cruz and Sal Stewart have respective OPS figures of .851, 1.039 and .888 against left-handed pitching.\n\nReds ML\n\nHarrison has allowed 18 homers to right-handed hitters across 293 AB, and right-handers hit all five homers against him in his last start."
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Guardians ML -158",
+      "game_id": "5059916",
+      "pair": {
+        "opening": "Williams has held lefties to a .188 average and .597 OPS over 361 at-bats.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 4,
+      "hook": "Williams has held lefties to a .188 average and .597 OPS over 361 at-bats.\n\nGuardians ML"
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Braves ML -106",
+      "game_id": "5059921",
+      "pair": {
+        "opening": "Fuentes threw 21 pitches Friday and Iglesias threw 12; neither pitched Saturday.",
+        "closing": "Dodd has not worked since September 2."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 2,
+      "hook": "Fuentes threw 21 pitches Friday and Iglesias threw 12; neither pitched Saturday.\n\nBraves ML\n\nDodd has not worked since September 2."
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Red Sox ML -134",
+      "game_id": "5059914",
+      "pair": {
+        "opening": "Gasper has a .986 OPS against righties and is 13-for-35 with five homers over the last 15 days.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 3,
+      "hook": "Gasper has a .986 OPS against righties and is 13-for-35 with five homers over the last 15 days.\n\nRed Sox ML"
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Cubs ML -146",
+      "game_id": "5059915",
+      "pair": {
+        "opening": "Holmes has allowed one run over his past four starts and 25 innings.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 3,
+      "hook": "Holmes has allowed one run over his past four starts and 25 innings.\n\nCubs ML"
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Angels +1.5 -140",
+      "game_id": "5059913",
+      "pair": {
+        "opening": "Reynolds has a .251 xwOBA against changeups across 93 plate appearances.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 3,
+      "hook": "Reynolds has a .251 xwOBA against changeups across 93 plate appearances.\n\nAngels +1.5"
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Giants ML +140",
+      "game_id": "5059917",
+      "pair": {
+        "opening": "Soto has a .767 OPS against lefties compared with 1.022 against righties; Lindor has .689 compared with .776.",
+        "closing": "Perdomo supplied four innings with one earned run, four strikeouts and one walk in his relief debut."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 2,
+      "hook": "Soto has a .767 OPS against lefties compared with 1.022 against righties; Lindor has .689 compared with .776.\n\nGiants ML\n\nPerdomo supplied four innings with one earned run, four strikeouts and one walk in his relief debut."
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Washington Huskies -23.5 -110",
+      "game_id": "457629",
+      "pair": {
+        "opening": "Washington brings back 11 defenders who started at least one game in 2025, when its defense finished the regular season No. 11 nationally against the run.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 1,
+      "hook": "Washington brings back 11 defenders who started at least one game in 2025, when its defense finished the regular season No. 11 nationally against the run.\n\nWashington Huskies -23.5"
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Diamondbacks ML -106",
+      "game_id": "5059918",
+      "pair": {
+        "opening": "Lambert has issued 10 walks in his last 14.0 innings and needed 104 pitches without finishing the fifth inning in his latest start.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 6,
+      "hook": "Lambert has issued 10 walks in his last 14.0 innings and needed 104 pitches without finishing the fifth inning in his latest start.\n\nDiamondbacks ML"
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Blue Jays ML -122",
+      "game_id": "5059925",
+      "pair": {
+        "opening": "Arrighetti has allowed an .803 OPS to left-handed hitters versus .582 to right-handers.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 2,
+      "hook": "Arrighetti has allowed an .803 OPS to left-handed hitters versus .582 to right-handers.\n\nBlue Jays ML"
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Rangers ML -108",
+      "game_id": "5059920",
+      "pair": {
+        "opening": "Foscue has a 1.013 OPS against lefties and a .980 OPS over his last 15 days.",
+        "closing": "Duran brings an .868 OPS against lefties."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 6,
+      "hook": "Foscue has a 1.013 OPS against lefties and a .980 OPS over his last 15 days.\n\nRangers ML\n\nDuran brings an .868 OPS against lefties."
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Rockies ML +118",
+      "game_id": "5059922",
+      "pair": {
+        "opening": "Herget and Manfredi did not pitch Saturday, while Hill and Frasso needed 15 and 12 pitches for their scoreless innings.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 1,
+      "hook": "Herget and Manfredi did not pitch Saturday, while Hill and Frasso needed 15 and 12 pitches for their scoreless innings.\n\nRockies ML"
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Padres ML -106",
+      "game_id": "5059924",
+      "pair": {
+        "opening": "Mason Miller, Adrian Morejon, Bradgley Rodriguez and Yuki Matsui all sat yesterday after throwing 22, 14, 9 and 12 pitches Friday.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 5,
+      "hook": "Mason Miller, Adrian Morejon, Bradgley Rodriguez and Yuki Matsui all sat yesterday after throwing 22, 14, 9 and 12 pitches Friday.\n\nPadres ML"
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Mariners -1.5 +114",
+      "game_id": "5059923",
+      "pair": {
+        "opening": "Muñoz last threw 9 pitches Friday and Domínguez 13 Friday; both rested Saturday.",
+        "closing": "The Athletics used Alvarado on consecutive days for 48 pitches, while Hartlieb also worked both days."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 3,
+      "hook": "Muñoz last threw 9 pitches Friday and Domínguez 13 Friday; both rested Saturday.\n\nMariners -1.5\n\nThe Athletics used Alvarado on consecutive days for 48 pitches, while Hartlieb also worked both days."
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Louisville Cardinals +6.5 -104",
+      "game_id": "457171",
+      "pair": {
+        "opening": "Isaac Brown averaged 8.8 yards per carry last season, and Keyjuan Brown averaged 7.3.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 1,
+      "hook": "Isaac Brown averaged 8.8 yards per carry last season, and Keyjuan Brown averaged 7.3.\n\nLouisville Cardinals +6.5"
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Wisconsin Badgers +21.5 -120",
+      "game_id": "457599",
+      "pair": null,
+      "valid_fact_copy": false,
+      "exact_source": false,
+      "candidate_count": 0,
+      "hook": null
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Twins ML +124",
+      "game_id": "5059919",
+      "pair": {
+        "opening": "Bell is 4-for-7 this series, Keaschall singled against both the starter and Newcomb yesterday, and Jeffers supplied the decisive homer.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 2,
+      "hook": "Bell is 4-for-7 this series, Keaschall singled against both the starter and Newcomb yesterday, and Jeffers supplied the decisive homer.\n\nTwins ML"
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Nationals +1.5 -122",
+      "game_id": "5059926",
+      "pair": {
+        "opening": "House owns a .961 OPS against lefties in 82 at-bats, Crews .829 in 103, and Wood .841 in 165.",
+        "closing": "Wrobleski’s recent starts have repeatedly featured home-run damage, and his September 1 relief appearance produced two earned runs over two innings on 36 pitches."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 2,
+      "hook": "House owns a .961 OPS against lefties in 82 at-bats, Crews .829 in 103, and Wood .841 in 165.\n\nNationals +1.5\n\nWrobleski’s recent starts have repeatedly featured home-run damage, and his September 1 relief appearance produced two earned runs over two innings on 36 pitches."
+    },
+    {
+      "date": "2026-09-07",
+      "pick": "Mets ML +108",
+      "game_id": "5059929",
+      "pair": {
+        "opening": "Soto has slugged .619 against four-seam fastballs, while Benge has hit .325 against both four-seamers and sinkers.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 2,
+      "hook": "Soto has slugged .619 against four-seam fastballs, while Benge has hit .325 against both four-seamers and sinkers.\n\nMets ML"
+    },
+    {
+      "date": "2026-09-07",
+      "pick": "Orioles ML -136",
+      "game_id": "5059931",
+      "pair": {
+        "opening": "Smith threw 27 pitches across two innings yesterday, and he has not pitched the following day after any of his 11 outings of at least 25 pitches.",
+        "closing": "Baltimore has Kittredge and Cano unused over the last three days, while Garcia threw nine pitches Saturday."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 2,
+      "hook": "Smith threw 27 pitches across two innings yesterday, and he has not pitched the following day after any of his 11 outings of at least 25 pitches.\n\nOrioles ML\n\nBaltimore has Kittredge and Cano unused over the last three days, while Garcia threw nine pitches Saturday."
+    },
+    {
+      "date": "2026-09-07",
+      "pick": "Braves ML +146",
+      "game_id": "5059927",
+      "pair": {
+        "opening": "Fuentes pitched two innings on 21 pitches Friday and sat Saturday and Sunday.",
+        "closing": "Lee and Iglesias each threw 13 pitches Sunday after sitting Saturday."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 5,
+      "hook": "Fuentes pitched two innings on 21 pitches Friday and sat Saturday and Sunday.\n\nBraves ML\n\nLee and Iglesias each threw 13 pitches Sunday after sitting Saturday."
+    },
+    {
+      "date": "2026-09-07",
+      "pick": "Royals ML -116",
+      "game_id": "5059932",
+      "pair": {
+        "opening": "Law opens today after Garcia, Morillo, Ginkel and Loáisiga all pitched Saturday and Sunday.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 5,
+      "hook": "Law opens today after Garcia, Morillo, Ginkel and Loáisiga all pitched Saturday and Sunday.\n\nRoyals ML"
+    },
+    {
+      "date": "2026-09-07",
+      "pick": "Angels +1.5 -142",
+      "game_id": "5059930",
+      "pair": {
+        "opening": "Rodriguez has delivered a 2.41 ERA across his last three starts, covering 18.2 innings.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 1,
+      "hook": "Rodriguez has delivered a 2.41 ERA across his last three starts, covering 18.2 innings.\n\nAngels +1.5"
+    },
+    {
+      "date": "2026-09-07",
+      "pick": "Twins ML +102",
+      "game_id": "5059928",
+      "pair": {
+        "opening": "Gómez, Hoffman and Minter all sat Sunday after throwing seven, 17 and 18 pitches Saturday.",
+        "closing": "Detroit’s relief work improved in Cleveland, but Jansen, Holton, Kinley and Sommers pitched Sunday, and Finnegan worked consecutive days."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 3,
+      "hook": "Gómez, Hoffman and Minter all sat Sunday after throwing seven, 17 and 18 pitches Saturday.\n\nTwins ML\n\nDetroit’s relief work improved in Cleveland, but Jansen, Holton, Kinley and Sommers pitched Sunday, and Finnegan worked consecutive days."
+    },
+    {
+      "date": "2026-09-07",
+      "pick": "Cubs ML +106",
+      "game_id": "5059933",
+      "pair": {
+        "opening": "Gasser has allowed an .829 OPS to right-handed hitters, compared with .572 to lefties.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 2,
+      "hook": "Gasser has allowed an .829 OPS to right-handed hitters, compared with .572 to lefties.\n\nCubs ML"
+    },
+    {
+      "date": "2026-09-07",
+      "pick": "SMU Mustangs -2.5 -115",
+      "game_id": "457172",
+      "pair": {
+        "opening": "Jennings returns alongside three offensive-line starters to an offense that already features quick passes and misdirection.",
+        "closing": ""
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 1,
+      "hook": "Jennings returns alongside three offensive-line starters to an offense that already features quick passes and misdirection.\n\nSMU Mustangs -2.5"
+    },
+    {
+      "date": "2026-09-07",
+      "pick": "Padres -1.5 +108",
+      "game_id": "5059934",
+      "pair": {
+        "opening": "Lord threw 39 pitches yesterday and has never worked consecutive days this season.",
+        "closing": "Beeter had yesterday off, but his last two appearances produced six earned runs."
+      },
+      "valid_fact_copy": true,
+      "exact_source": true,
+      "candidate_count": 3,
+      "hook": "Lord threw 39 pitches yesterday and has never worked consecutive days this season.\n\nPadres -1.5\n\nBeeter had yesterday off, but his last two appearances produced six earned runs."
+    }
+  ]
+}

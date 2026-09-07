@@ -2,9 +2,9 @@
  * Verbatim rationale snippets (founder directive, Aug 17 2026): pick tweets
  * carry ONLY Gary's own words — whole sentences copied character-for-character
  * from the stored pick rationale. The model may SELECT sentences; nothing may
- * write, edit, shorten, or paraphrase them. September 7 follow-up: after exact
- * source validation, tweet formatting may drop redundant "for me" attribution.
- * The reason, evidence and uncertainty remain Gary's original words.
+ * write, edit, shorten, or paraphrase them. September 7 follow-up: select the
+ * concrete facts themselves, without a thesis or narrator commentary. Exclude
+ * unsuitable sentences whole; never strip qualifiers to manufacture a fact.
  */
 
 const ABBREVIATION = /^(?:St|Jr|Sr|Mr|Mrs|Ms|Dr|vs|No|[ap]\.m)\.$/i;
@@ -41,19 +41,6 @@ const normWs = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
 export function isVerbatimSnippet(rationale, snippet) {
   const s = normWs(snippet);
   return s.length > 0 && normWs(rationale).includes(s);
-}
-
-/** Founder, Sep 7: Gary's authorship is implicit. Apply only AFTER validating
- *  the whole original sentence. Remove the narrow attribution shapes found
- *  in the cards, not first-person predictions or substantive qualifiers. */
-export function formatReasonForTweet(sentence) {
-  const t = String(sentence ?? '').trim();
-  // Attribution inside a quotation may belong to somebody other than Gary.
-  if (/["“”]/.test(t)) return t;
-  return t
-    .replace(/^For me,\s+(\p{L})/iu, (_, first) => first.toUpperCase())
-    .replace(/,\s+for me,\s+/gi, ' ')
-    .replace(/,?\s+for me(?=[.!?]$|\s+(?:is|are|was|were|because)\b)/gi, '');
 }
 
 /**
@@ -111,7 +98,7 @@ const BACK_REFERENCE = /\b(?:that|those|these|this)\s+(?:(?:late[- ]inning|early
 // "Those location problems" and "those opportunities" still point to missing
 // text. Allow ordinary lowercase modifiers without treating "that New York
 // has ..." (a named proposition) as a reference to an earlier paragraph.
-const MODIFIED_BACK_REFERENCE = /\b(?:[Tt]hose|[Tt]hese|[Tt]hat|[Tt]his)\s+(?:[a-z][a-z-]*\s+){0,2}(?:problems|opportunities|assignments?|games|wins|losses|outings|appearances|starts|group|pitcher)\b/;
+const MODIFIED_BACK_REFERENCE = /\b(?:[Tt]hose|[Tt]hese|[Tt]hat|[Tt]his)\s+(?:[a-z][a-z-]*\s+){0,2}(?:problems|opportunities|assignments?|games|wins|losses|outings|appearances|starts|group|pitcher|inefficiency|disruptions)\b/;
 const STAT_ABBREVIATIONS = new Set(['ERA', 'WHIP', 'OPS', 'ER', 'K', 'BB', 'HR', 'RBI', 'AVG', 'OBP', 'SLG', 'MLB', 'NFL', 'NBA', 'NCAAF', 'AAA', 'AA']);
 // Sentence-initial capitalization is ambiguous, so word[0] only counts as a
 // name when it is not an ordinary sentence-starter ("Holmes has..." resolves
@@ -120,6 +107,8 @@ const STARTER_STOPWORDS = new Set([
   'the', 'a', 'an', 'in', 'on', 'at', 'over', 'with', 'without', 'if', 'when',
   'while', 'after', 'before', 'neither', 'both', 'nothing', 'there', 'what',
   'even', 'only', 'now', 'one', 'two', 'no', 'not', 'my', 'i',
+  'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven',
+  'twelve', 'every', 'lefties', 'righties', 'left-handers', 'right-handers',
 ]);
 function hasResolvingProperNoun(t) {
   const words = String(t).split(/\s+/).map((w) => w.replace(/^["'\u201C\u2018(]+/, ''));
@@ -166,9 +155,32 @@ export function isReasonSentence(sentence) {
   return true;
 }
 
-/** The rationale's reason-bearing sentences, whole and in order. */
+// Facts, not a second commentary layer (founder, Sep 7). Numbers alone are
+// insufficient: kickoff times, rankings and projected outcomes are not the
+// bullpen/performance/personnel evidence the reader came for.
+const NARRATOR = /\b(?:I['’](?:m|ll|d|ve)|I (?:am|see|think|expect|like|trust|want|give|have|believe|prefer|still|also)|my|me|our)\b|\b(?:this|the) (?:bet|ticket|decision)\b|\bsupplied (?:dated-game |game )?(?:sample|accounts)\b/i;
+const INTERPRETATION = /\b(?:advantage|edge|reason|argument|counterarguments?|deciding|assessment|assumption|judgment|opportunit(?:y|ies)|threats?|credible|plausible|favorable|important|matters?|warning|concern)\b|\btips? (?:this|the|a) (?:close )?(?:matchup|game|balance)\b|\b(?:more dependable foundation|particularly relevant|specific opening|generous cushions|cover(?:ing)? path|need(?:s)? context)\b|\b(?:gives?|giving|makes?|making)\b[^.!?]{0,90}\b(?:case|matchup|flexibility|options?|costly|dangerous)\b|\bso\b[^.!?]{0,50}\b(?:options|flexibility)\b/i;
+const HYPOTHETICAL = /\b(?:would|could|should|might|will|likely|unlikely|expected|projected|needs?|requires?)\b|\bcan (?:make|give|help|produce|create|generate|capitalize|exploit)\b|^(?:if|unless|assuming)\b/i;
+const SCENE_SETTING = /\b(?:kickoff|local start|start time|weather|forecast|temperature|wind|preseason ranking|coaching era|roster turnover|conference champions open)\b|\b[ap]\.m\./i;
+const QUANTITY = /\d|\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\b/i;
+const STAT_METRIC = /\b(?:ERA|WHIP|OPS|OBP|SLG|AVG|FIP|wRC|RBI|xwOBA)\b/;
+const PERFORMANCE_METRIC = /\b(?:runs?|innings?|pitches|pitch count|at-bats?|hits?|homers?|home runs?|strikeouts?|walks?|barrels?|hard-hit|yards?|touchdowns?|sacks?|interceptions?|completions?|attempts?|carries|snaps?|turnovers?|points?|wins?|losses|starters?|starts?|rebounds?|assists?|possessions?|third downs?|fourth downs?)\b/i;
+const OBSERVED_EVENT = /\b(?:pitched|threw|sat|rested|worked|played|replaced|returned|joined|lost|won|scored|allowed|held|hit|slugged|batted|struck out|walked|surrendered|completed|converted|rushed|caught|took over)\b|\b(?:starts? on the bench|lineup consists of|gets? [^.!?]{0,50} back|had (?:yesterday|Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|the day) off)\b/i;
+const OBJECTION = /\b(?:argument against|case against|counterarguments?|counterweight|strongest counter|strongest answer|primary risk|obstacle|objections?)\b|\b(?:strongest|strong|primary) (?:covering|competing|opposing) (?:path|case)\b/i;
+
+/** Reported performance, workload or personnel evidence, in Gary's own words. */
+export function isConcreteFactSentence(sentence) {
+  const t = String(sentence ?? '').trim();
+  if (!isReasonSentence(t)) return false;
+  if (NARRATOR.test(t) || INTERPRETATION.test(t) || HYPOTHETICAL.test(t) || SCENE_SETTING.test(t)) return false;
+  return (QUANTITY.test(t) && (STAT_METRIC.test(t) || PERFORMANCE_METRIC.test(t))) || OBSERVED_EVENT.test(t);
+}
+
+/** Concrete evidence in source order, outside the explicitly opposing case. */
 export function reasonCandidates(rationale) {
-  return splitSentences(rationale).filter(isReasonSentence);
+  return String(rationale ?? '').split(/\n+/)
+    .filter(paragraph => !OBJECTION.test(paragraph))
+    .flatMap(splitSentences).filter(isConcreteFactSentence);
 }
 
 /** The final boundary shared by model selection and deterministic fallback. */
@@ -178,31 +190,18 @@ export function isSafeReasonPair(rationale, pair, budget) {
   const { opening, closing } = pair;
   const candidates = reasonCandidates(rationale).map(normWs);
   const safe = (sentence) => sentence.trim().length > 0
-    && isReasonSentence(sentence) && candidates.includes(normWs(sentence));
+    && isConcreteFactSentence(sentence) && candidates.includes(normWs(sentence));
   const sameParagraph = closing === '' || String(rationale ?? '').split(/\n+/)
     .some(p => normWs(p).includes(normWs(opening)) && normWs(p).includes(normWs(closing)));
   return safe(opening) && (closing === '' || (safe(closing) && normWs(opening) !== normWs(closing)))
     && sameParagraph && opening.length + closing.length <= budget;
 }
 
-const digitGroups = (s) => (String(s).match(/\d[\d.,%]*/g) || []).length;
-
-// First-person phrasing does not establish a reason. These are ranking cues, never
-// permission to rewrite a sentence or add a claim. Explicit objections remain
-// available as evidence/risk, but do not displace the case for the pick.
-const ARGUMENT = /\b(?:because|advantage|stronger|weaker|opportunit(?:y|ies)|carries the most weight|is what|credible route|plausible route|more (?:favorable|useful|dependable)|tips? (?:this|the|a) (?:close )?(?:matchup|game|balance))\b/i;
-const OBJECTION = /\b(?:argument against|counterargument|counterweight|strongest counter|strongest answer|primary risk|obstacle|objections?)\b/i;
-const NEGATED_ARGUMENT = /\bno (?:automatic |clear |meaningful )?advantage\b|\bdoes not (?:depend on|require)\b/i;
-
 /**
- * Deterministic reason pair — THE ARGUMENT LEADS (founder, Aug 19 2026: the
- * Skenes tweet led with a platoon fragment while the card's actual thesis
- * sat unquoted; stat density is not the argument). Opening = Gary's
- * argument in card order, whether first- or third-person, outside an
- * objection paragraph, then stat-bearing reasons. Closing must come from the
- * same paragraph; nearby concrete evidence wins over extra statistics.
- * Sentences are never cut;
- * nothing fitting returns null.
+ * Facts lead (founder, Sep 7, supersedes thesis-first selection). Keep the
+ * original evidence order and optionally the next fitting fact in the same
+ * paragraph. One fact is complete; no commentary or unrelated padding is
+ * required. Nothing fitting returns null, never permission to invent copy.
  * @returns {{ opening: string, closing: string } | null}
  */
 export function fallbackReasonPair(rationale, budget) {
@@ -212,28 +211,12 @@ export function fallbackReasonPair(rationale, budget) {
   if (!cands.length) return null;
   const paragraphs = String(rationale ?? '').split(/\n+/).map(normWs).filter(Boolean);
   const paragraphOf = (sentence) => paragraphs.findIndex(p => p.includes(normWs(sentence)));
-  const isObjection = (sentence) => OBJECTION.test(sentence)
-    || OBJECTION.test(paragraphs[paragraphOf(sentence)] ?? '');
-  // A later "I expect" must not displace Gary's clear opening case simply
-  // because it is first-person. The original explanation supplies the order.
-  const thesisIndexes = cands.flatMap((s, i) => ARGUMENT.test(s) && !NEGATED_ARGUMENT.test(s) && !isObjection(s) ? [i] : []);
-  // Opening preference: the card's argument, then
-  // digit-bearing reasons in card order. Scene-setting stays a last resort.
-  const rest = cands.map((_, i) => i).filter((i) => !thesisIndexes.includes(i));
-  const withDigits = rest.filter((i) => digitGroups(cands[i]) > 0);
-  const noDigits = rest.filter((i) => digitGroups(cands[i]) === 0);
-  const openingOrder = [...thesisIndexes, ...withDigits, ...noDigits];
-  for (const oi of openingOrder) {
+  for (let oi = 0; oi < cands.length; oi++) {
     const opening = cands[oi];
-    const evidence = cands
-      .map((s, i) => ({ s, i, d: digitGroups(s), distance: Math.abs(i - oi), sameParagraph: paragraphOf(s) === paragraphOf(opening) }))
-      .filter((r) => r.i !== oi && r.sameParagraph && !isObjection(r.s) && !NEGATED_ARGUMENT.test(r.s) && opening.length + r.s.length <= budget)
-      .sort((a, b) => Number(b.d > 0) - Number(a.d > 0) || a.distance - b.distance || b.d - a.d || a.i - b.i);
-    if (evidence.length) return { opening, closing: evidence[0].s };
-    // A complete reason can carry the post by itself. Do not pad it with a
-    // statistic or an opponent's case from an unrelated part of the card.
-    if (opening.length <= budget) return { opening, closing: '' };
+    if (opening.length > budget) continue;
+    const closing = cands.slice(oi + 1).find(s => paragraphOf(s) === paragraphOf(opening)
+      && opening.length + s.length <= budget) ?? '';
+    return { opening, closing };
   }
-  const solo = openingOrder.map(i => cands[i]).find(s => s.length <= budget);
-  return solo ? { opening: solo, closing: '' } : null;
+  return null;
 }
