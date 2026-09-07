@@ -58,9 +58,14 @@ Node 22 subsequently rebuilt its real schedule, synchronized exact MLB slate
 identities and stamped era `b6b70fc3d097` from the new folder. Live-score polling
 and the watchdog completed under launchd with exit zero. A forced launchd health
 check also completed on Node 22 with only the internal-disk margin warning.
-Winners temporarily ran under the current session during recovery; its active
-reviews are allowed to finish before returning ownership to launchd. Verify
-the final restoration receipt before ending this handoff.
+Winners temporarily ran under the current session during recovery. Its active
+reviews finished before it returned to launchd at **11:34:21 ET**, on Node 22,
+PID 89023. The temporary process was stopped first; the restoration receipt is
+`winners-restored-to-launchd.json`. All nine installed plists match the repo.
+The 11:30 results job and local score polling subsequently completed with exit
+zero. The 11:29 forced launchd health read found no started MLB/NCAAF games
+without saved picks. Postgres remained up since September 6 at 12:57:05 UTC;
+the 11:32 read counted 2,029 successful cron runs today and no recorded failures.
 
 The concurrent remote Supabase dependency update was merged. Installed packages
 match 2.115.0; the `@supabase` directory was exchanged atomically, retaining the
@@ -80,6 +85,7 @@ saved data, exports and private configuration were preserved. The only IndyCar
 payload deleted was a verified tar of disposable Syncd DerivedData.
 
 Root verification covers 2,154 backend, 180 edge and 349 web tests plus types.
+All passed again from the new physical folder on Node 22 and Supabase 2.115.0.
 Native measurements used the actual board row and direction-lock helper with
 fixture fonts/data: 32 baseline/fixed cases, four phone widths, MLB SWEATING,
 WINNING, LOSING and NCAAF. Every fixed case had zero horizontal overflow, a
