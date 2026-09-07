@@ -34,7 +34,17 @@ export function hasPostedSourcePick(pick, logs) {
   return logs.some((log) => (log.pick_text ?? log.pick) === pick.pick && sameStart(log.commence_time, pick.commence_time));
 }
 
-/** Matches the production UNIQUE(post_date,pick_text) constraint; no repost on drift. */
+/** Stable across ticket/start corrections when a provider game ID exists. */
+export function publicationKey(pick) {
+  const league = String(pick.league ?? '').toUpperCase();
+  const id = gameId(pick);
+  if (!league) throw new Error('Missing publication league');
+  if (id != null && String(id)) return JSON.stringify([league, 'id', String(id)]);
+  if (!teamKey(away(pick)) || !teamKey(home(pick)) || !Number.isFinite(Date.parse(pick.commence_time))) throw new Error('Missing publication game identity');
+  return JSON.stringify([league, 'matchup', teamKey(away(pick)), teamKey(home(pick)), new Date(pick.commence_time).toISOString()]);
+}
+
+/** New receipts use game identity; legacy receipts keep conservative ticket dedup. */
 export function hasLoggedTicket(pick, logs) {
-  return logs.some((log) => (log.pick_text ?? log.pick) === pick.pick);
+  return logs.some((log) => log.publication_key ? log.publication_key === publicationKey(pick) : (log.pick_text ?? log.pick) === pick.pick);
 }

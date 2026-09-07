@@ -103,6 +103,11 @@ SELECT json_build_object(
   'retained_poster_responses', (SELECT count(*) FROM scheduled_responses),
   'retained_degraded_responses', (SELECT count(*) FROM scheduled_responses WHERE status_code >= 400 OR health->>'status' <> 'ok'),
   'engagement', (SELECT json_build_object('draft_rows', count(*), 'latest_sheet_date', max(sheet_date)) FROM public.engagement_sheet),
+  'publication_recovery', (SELECT json_build_object(
+    'unresolved', count(*) FILTER (WHERE state NOT IN ('completed','expired')),
+    'stale_unresolved', count(*) FILTER (WHERE state NOT IN ('completed','expired') AND updated_at < c.checked_at - interval '5 minutes'),
+    'uncertain_sends', count(*) FILTER (WHERE state IN ('root_sending','reply_sending') AND updated_at < c.checked_at - interval '5 minutes')
+  ) FROM public.social_publication_intents),
   'reply_queue', coalesce((SELECT json_agg(x) FROM (SELECT status, count(*) AS rows FROM public.reply_queue GROUP BY status) x), '[]'::json),
   'redirects_separate_sources', coalesce((SELECT json_agg(x) FROM redirects x), '[]'::json),
   'waitlist_rows', (SELECT count(*) FROM public.launch_waitlist),

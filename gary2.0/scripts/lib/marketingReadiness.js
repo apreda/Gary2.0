@@ -15,6 +15,8 @@ export function evaluateMarketingReadiness(snapshot) {
   }
   const ageMinutes = (stamp) => (now - Date.parse(stamp)) / 60000;
   const issue = (code, severity, detail) => issues.push({ code, severity, detail });
+  if (!snapshot.publication_recovery) issue('PUBLICATION_RECOVERY_UNVERIFIED', 'unverified', 'No durable-publication readout is available.');
+  else if (snapshot.publication_recovery.stale_unresolved > 0) issue('PUBLICATION_RECOVERY_REQUIRED', 'action_required', `${snapshot.publication_recovery.stale_unresolved} publication reservations need reconciliation; ${snapshot.publication_recovery.uncertain_sends} have uncertain X outcomes. Never blindly retry those sends.`);
   const poster = snapshot.jobs.find((j) => j.jobname === 'social-auto-post-hourly');
   if (!poster) issue('POSTER_CRON_MISSING', 'action_required', 'The expected posting cron is absent.');
   else if (!poster.active) issue('POSTER_CRON_INACTIVE', 'action_required', 'The posting cron is inactive.');
@@ -85,7 +87,7 @@ export function evaluateMarketingReadiness(snapshot) {
       'Current stored-pick posting coverage is separate from full daily_slate coverage. Game IDs take precedence; fallback matching requires league, both exact normalized teams and exact start, so one doubleheader pick cannot cover both games.',
       'Both publication and posting coverage use the poster\'s shared daily_picks + latest active weekly_nfl_picks merge, restricted to the weekly game\'s ET date and deduplicated by game identity; daily picks take precedence.',
       'Stored schedule times/statuses may lag real events; interrupted games are separate and future games are not declared missed.',
-      'Publisher dedup remains conservative by exact ticket text per date, matching its existing unique database index. Readiness requires exact start for logged coverage; identical-ticket doubleheaders and corrected start times can therefore produce an honest unverified coverage gap. Full game-identity logging and cross-run recovery after a tweet succeeds but logging fails remain separate work.',
+      'New X publications reserve a game identity before sending and preserve confirmed root/reply receipts for log repair. Unknown send outcomes require reconciliation, never automatic re-sending. Legacy receipts retain conservative ticket-text dedup. Readiness still requires exact ticket/start coverage; corrected schedules can produce an honest unverified gap.',
       'Mature observed = published at least 6 days ago with a metric snapshot at least 5 days after publication; all other rows are separate.',
       'Every metric reports its non-null denominator. Null is unavailable, never zero.',
       'Impressions and clicks sum thread components, not unique people; reply totals include own replies and are not an audience conversation count.',

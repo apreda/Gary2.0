@@ -8,6 +8,7 @@ const snapshot = () => ({
     { jobname: 'engagement-sheet-daily', active: true }],
   latest_poster_response: { created: '2026-09-04T18:30:20Z', status_code: 200, health: { status: 'ok', issues: [] } },
   engagement: { draft_rows: 8, latest_sheet_date: '2026-09-04' },
+  publication_recovery: { unresolved: 0, stale_unresolved: 0, uncertain_sends: 0 },
   today_picks: [], today_slate: [], today_post_logs: [], cohorts: [], daily: [], redirects_separate_sources: [], reply_queue: [],
   waitlist_rows: 0, email_subscriptions: [], retained_poster_responses: 20, retained_degraded_responses: 0,
 });
@@ -35,6 +36,7 @@ describe('read-only marketing readiness decisions', () => {
     ['response stale', (s) => { s.latest_poster_response.created = '2026-09-04T17:59:00Z'; }, 'POSTER_RESPONSE_STALE'],
     ['depleted credits', (s) => { s.latest_poster_response.health = { status: 'degraded', issues: ['X_CREDITS_UNAVAILABLE'] }; }, 'POSTER_DEGRADED'],
     ['stale drafts', (s) => { s.engagement.latest_sheet_date = '2026-08-20'; }, 'ENGAGEMENT_DRAFTS_STALE'],
+    ['uncertain publication', (s) => { s.publication_recovery = { unresolved: 1, stale_unresolved: 1, uncertain_sends: 1 }; }, 'PUBLICATION_RECOVERY_REQUIRED'],
   ])('%s produces an actionable nonzero result', (_name, change, expected) => {
     const state = snapshot(); change(state);
     const report = evaluateMarketingReadiness(state);

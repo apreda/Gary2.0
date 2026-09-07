@@ -29,7 +29,8 @@ import { composeWeekTape } from "./weektape.ts";
 import { composeRecaps, type RecapRow } from "./recap.ts";
 import { fallbackReasonPair, isSafeReasonPair, reasonCandidates } from "../_shared/verbatimSnippets.js";
 import { socialRunHealth } from "./health.js";
-import { mergeSocialPickSources, hasLoggedTicket } from "./pickSources.js";
+import { mergeSocialPickSources, hasLoggedTicket, publicationKey } from "./pickSources.js";
+import { publishIntent, publicationStore } from "./publication.js";
 import { barePick } from "./barepick.ts";
 import { computeStanding } from "./pl.ts";
 import { selectPicks, type Slot } from "./window.ts";
@@ -375,6 +376,26 @@ function buildPropsReply(gameProps: any[], handoff: string): string | null {
   return `${header}\n\n${lines.join("\n")}${footer}`;
 }
 
+async function reconcilePublications(today: string, allowReplies: boolean) {
+  const { data, error } = await sb.from("social_publication_intents").select("*")
+    .neq("state", "completed").neq("state", "expired")
+    .gte("post_date", new Date(Date.parse(today + "T12:00:00Z") - 7 * 86400000).toISOString().slice(0, 10))
+    .order("created_at").limit(210);
+  if (error) return [{ error: "PUBLICATION_READ_FAILED" }];
+  const results = [];
+  for (const row of data ?? []) {
+    if (row.state === "prepared") {
+      // Only regular selection may start a root; abandoned expired claims can close.
+      if (Date.parse(row.log_payload.commence_time) - Date.now() >= LEAD_MIN_MIN * 60000) continue;
+      results.push(await publishIntent(row, { store: publicationStore(sb), send: postTweet, allowSend: false }));
+      continue;
+    }
+    try { results.push(await publishIntent(row, { store: publicationStore(sb), send: postTweet, allowSend: allowReplies })); }
+    catch { results.push({ error: "PUBLICATION_RECOVERY_FAILED" }); }
+  }
+  return results;
+}
+
 async function runPickMode(today: string, nowMs: number, dryRun: boolean, preview = false) {
   const [{ data: dpRows, error: dpErr }, { data: weeklyRows, error: weeklyErr }] = await Promise.all([
     sb.from("daily_picks").select("picks").eq("date", today),
@@ -394,19 +415,20 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
     dayProps = ppRows?.[0]?.picks ?? [];
   } catch (e) { console.error("props fetch for replies failed (pick tweets unaffected): " + String(e)); }
 
-  const { data: logRows, error: logErr } = await sb.from("social_post_log").select("pick_text, thread_format").eq("post_date", today);
+  const { data: logRows, error: logErr } = await sb.from("social_post_log").select("pick_text, thread_format, publication_key").eq("post_date", today);
   if (logErr) throw logErr;
+  const { data: intentRows, error: intentErr } = await sb.from("social_publication_intents").select("*").eq("post_date", today);
+  if (intentErr) throw new Error("PUBLICATION_READ_FAILED");
+  const existingIntents = new Map((intentRows ?? []).map((row) => [row.publication_key, row]));
   // Whitelist the ACTUAL pick-thread formats: with verdict/arc/wc rows in the same log, a blacklist would let
   // them eat the 3/day cap (three verdicts would silently block the day's real picks) and suppress the handoff.
   const pickThreads = (logRows ?? []).filter((r) => ["standard", "top_pick"].includes(r.thread_format ?? ""));
   if (pickThreads.length >= PICKS_PER_DAY && !preview) return { posted: false, reason: `daily cap of ${PICKS_PER_DAY} reached`, source_errors };
-  // Existing UNIQUE(post_date,pick_text) is the publication contract. Keep
-  // conservative text dedup through schedule corrections. Identical-ticket
-  // doubleheaders require a separate log-identity migration; readiness reports
-  // their exact-start coverage gap rather than allowing an unloggable tweet.
+  // Durable reservations serialize overlapping runs and protect each exact game.
 
   const MIN = 60_000;
-  const unposted = picks.filter((p) => !hasLoggedTicket(p, pickThreads));
+  const unposted = picks.filter((p) => !hasLoggedTicket(p, pickThreads) &&
+    (!existingIntents.has(publicationKey(p)) || existingIntents.get(publicationKey(p))?.state === "prepared"));
 
   // HARD DEADLINE (Aug 5 2026, founder's law): a pick is postable ONLY while first pitch is still at least
   // LEAD_MIN_MIN ahead of us. The deleted code did the opposite on two paths — `postable` kept any game that
@@ -471,6 +493,14 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
   // and the pick was gone for good. Now a bad hook costs that one pick on this run, never the rest of the slate.
   for (const chosen of queue) {
    try {
+    const prepared = existingIntents.get(publicationKey(chosen));
+    if (prepared && !dryRun) {
+      // A pre-send crash resumes its frozen copy without another model request.
+      const publication = await publishIntent(prepared, { store: publicationStore(sb), send: postTweet });
+      if (publication.posted) threadsSoFar++;
+      results.push({ ...publication, pick: chosen.pick });
+      continue;
+    }
     const conf = parseFloat(chosen.confidence ?? 0);
     const isTopPick = conf >= 0.8 && conf === maxConf;
     const league = (chosen.league ?? "MLB").toUpperCase();
@@ -558,22 +588,18 @@ ${numbered}`;
       continue;
     }
 
-    const hookId = await postTweet(hook);
-    const handoffId = handoff ? await postTweet(handoff, hookId) : null;
     const startEt = new Date(chosen.commence_time).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour12: false, hour: "2-digit" });
     const slot = parseInt(startEt) < 14 ? "morning" : parseInt(startEt) < 17 ? "afternoon" : parseInt(startEt) < 21 ? "evening" : "late";
-    const { error: postLogError } = await sb.from("social_post_log").insert({
-      post_date: today, slot, league, pick_text: chosen.pick, confidence: conf || null,
-      commence_time: chosen.commence_time, thread_format: isTopPick ? "top_pick" : "standard",
-      hook_tweet_id: hookId, reasoning_tweet_id: handoffId, cta_tweet_id: null,
-      thread_url: `https://x.com/BetwithGary/status/${hookId}`, post_text: hook,
+    const { data: claims, error: claimError } = await sb.rpc("claim_social_publication", {
+      p_date: today, p_key: publicationKey(chosen), p_reply: handoff,
+      p_payload: { slot, league, pick_text: chosen.pick, confidence: conf || null,
+        commence_time: chosen.commence_time, thread_format: isTopPick ? "top_pick" : "standard", post_text: hook },
     });
-    threadsSoFar++;
-    // The tweet already exists. Surface failed persistence without publishing
-    // another tweet in this run. Cross-run crash recovery needs durable intent.
-    if (postLogError) console.error(`POST_LOG_WRITE_FAILED: tweet ${hookId} exists but its log could not be stored`);
-    results.push({ posted: true, pick: chosen.pick, lead_min: Math.round((new Date(chosen.commence_time).getTime() - nowMs) / MIN), thread_url: `https://x.com/BetwithGary/status/${hookId}`,
-      ...(postLogError ? { error: "POST_LOG_WRITE_FAILED" } : {}) });
+    if (claimError) throw new Error("PUBLICATION_CLAIM_FAILED");
+    if (!claims?.length) { results.push({ posted: false, pick: chosen.pick, reason: "game already reserved or daily cap reached" }); continue; }
+    const publication = await publishIntent(claims[0], { store: publicationStore(sb), send: postTweet });
+    if (publication.posted) threadsSoFar++;
+    results.push({ ...publication, pick: chosen.pick, lead_min: Math.round((new Date(chosen.commence_time).getTime() - Date.now()) / MIN) });
    } catch (e) {
     console.error(`pick post failed for ${chosen.pick}: ` + String(e));
     results.push({ posted: false, pick: chosen.pick, error: String(e) });
@@ -878,12 +904,13 @@ Write something real: a confession, a reflection, a sharp aside about sweating e
 Deno.serve(async (req) => {
   let dryRun = false;
   let runKind = "scheduled";
+  let publicationRecovery: any[] = [];
   // pg_cron success means the HTTP request was enqueued, not that X accepted
   // it. The retained pg_net response provides the real result to the read-only
   // marketing-readiness command. No additional cron, posts, or alerts.
   const respond = (body: any, init?: ResponseInit) => Response.json({
     ...body, service: "social-auto-post", checked_at: new Date().toISOString(),
-    dry_run: dryRun, run_kind: runKind, health: socialRunHealth(body),
+    dry_run: dryRun, run_kind: runKind, publication_recovery: publicationRecovery, health: socialRunHealth({ ...body, publication_recovery: publicationRecovery }),
   }, init);
   try {
     const url = new URL(req.url);
@@ -895,6 +922,8 @@ Deno.serve(async (req) => {
 
     const { date: today, hour, weekday } = etParts();
     const nowMs = Date.now();
+
+    if (!dryRun) publicationRecovery = await reconcilePublications(today, !metricsOnly);
 
     // Refresh KPI metrics (keeps impressions/likes live 24/7). Never let it block posting.
     // Aug 5 2026: throttled to roughly once an hour instead of once per run. Picks now want a much faster

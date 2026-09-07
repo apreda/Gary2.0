@@ -2,11 +2,13 @@
 export function socialRunHealth(body) {
   const failures = [body?.error, body?.metrics?.error, body?.recap?.error,
     body?.weekTape?.error, body?.verdict?.error, body?.arc?.error,
+    ...(body?.publication_recovery ?? []).map((result) => result?.error),
     ...(body?.results ?? []).map((result) => result?.error)].filter(Boolean).map(String);
   const issues = new Set();
   if (body?.source_errors?.length) issues.add('PICK_SOURCE_UNAVAILABLE');
   for (const failure of failures) {
-    if (/POST_LOG_WRITE_FAILED/.test(failure)) issues.add('POST_LOG_WRITE_FAILED');
+    if (/PUBLICATION_/.test(failure)) issues.add('PUBLICATION_RECOVERY_REQUIRED');
+    else if (/POST_LOG_WRITE_FAILED/.test(failure)) issues.add('POST_LOG_WRITE_FAILED');
     else if (/NO_SAFE_COPY/.test(failure)) issues.add('NO_SAFE_COPY');
     else if (/402|credits?\s*(?:depleted|exhausted)|insufficient.*credit|payment.required/i.test(failure)) issues.add('X_CREDITS_UNAVAILABLE');
     else if (/429|rate.?limit/i.test(failure)) issues.add('PROVIDER_RATE_LIMIT');

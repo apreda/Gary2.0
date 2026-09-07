@@ -2,6 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { socialRunHealth } from './health.js';
 
+test('unresolved publication recovery stays visible even outside pick hours', () => {
+  assert.deepEqual(socialRunHealth({ publication_recovery: [{ error: 'PUBLICATION_SEND_UNCERTAIN' }] }).issues, ['PUBLICATION_RECOVERY_REQUIRED']);
+});
+
 test('HTTP-200 poster body still exposes the real depleted-credit failure', () => {
   const health = socialRunHealth({ results: [{ error: 'post-single-tweet failed: {"status":402,"details":"credits depleted"}' }] });
   assert.equal(health.status, 'degraded');
