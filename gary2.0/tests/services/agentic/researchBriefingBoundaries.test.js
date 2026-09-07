@@ -53,6 +53,7 @@ describe('compact research carry-forward',()=>{
     expect(text.length).toBeLessThan(1000);
   });
   it('actually seeds the next factor compactly while returning every complete original finding',async()=>{
+    mocks.create.mockResolvedValue({provider:'anthropic',tools:[]});
     mocks.send.mockResolvedValueOnce({content:JSON.stringify(huge)}).mockResolvedValueOnce({content:JSON.stringify({...huge,factor:'Second factor',numbers:huge.numbers+' different'})});
     const output=await buildResearchBriefing('original desk','baseball_mlb','H','A',options());
     const firstSeed=mocks.reset.mock.calls[0][1][0].parts[0].text;
@@ -62,6 +63,30 @@ describe('compact research carry-forward',()=>{
     expect(output.briefing).toContain(huge.uncertainties);
     expect(output.briefing).toContain(huge.numbers+' different');
     expect(output.briefing.length).toBeGreaterThan(90000);
+  });
+  it('isolates concurrent subscription chats, shares overlapping stat reads, and preserves ordered findings',async()=>{
+    const sessions = new Set();
+    mocks.create.mockImplementation(async config => ({provider:'codex-cli',tools:[],_systemPrompt:config.systemPrompt}));
+    mocks.reset.mockImplementation((session, history) => { session.seed = history[0].parts[0].text; });
+    mocks.fetch.mockImplementation(async()=>{
+      await new Promise(resolve=>setTimeout(resolve,15));
+      return {data:'2026-09-05: verified weather for both teams'};
+    });
+    mocks.send.mockImplementation(async(session,message,callOptions)=>{
+      sessions.add(session);
+      expect(session._systemPrompt).toContain('complete original stats and data desk');
+      if (!callOptions.isFunctionResponse) {
+        session.factor = message.match(/Investigate factor: (\w+) now/)[1];
+        return tool;
+      }
+      if (session.factor === 'FIRST') await new Promise(resolve=>setTimeout(resolve,10));
+      return {content:JSON.stringify({factor:session.factor,keyFinding:session.factor+' verified finding',numbers:session.factor+' 2026 dated weather',sources:'MLB_WEATHER'})};
+    });
+    const output=await buildResearchBriefing('complete original stats and data desk','baseball_mlb','H','A',options());
+    expect(sessions.size).toBe(2);
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    expect(output.briefing.indexOf('**FIRST**')).toBeLessThan(output.briefing.indexOf('**SECOND**'));
+    expect(output.briefing).toContain('SECOND verified finding');
   });
 });
 describe('research cancellation boundaries',()=>{
@@ -81,7 +106,8 @@ describe('research cancellation boundaries',()=>{
     mocks.send.mockResolvedValue(tool);
     mocks.fetch.mockImplementation(async()=>{controller.abort();return {data:'too late'};});
     await expect(buildResearchBriefing('original desk','baseball_mlb','H','A',options(controller.signal))).rejects.toMatchObject({name:'AbortError'});
-    expect(mocks.send).toHaveBeenCalledTimes(1);expect(mocks.fetch).toHaveBeenCalledTimes(1);expect(mocks.reset).toHaveBeenCalledTimes(1);
+    expect(mocks.send).toHaveBeenCalledTimes(2);expect(mocks.fetch).toHaveBeenCalledTimes(1);expect(mocks.reset).toHaveBeenCalledTimes(2);
+    expect(mocks.send.mock.calls.every(call => !call[2].isFunctionResponse)).toBe(true);
   });
 });
 

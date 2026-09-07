@@ -18,7 +18,7 @@ describe('iOS Home cold-launch lifecycle', () => {
 
   it('preserves the existing pull, foreground, and rollover refresh entry points', () => {
     expect(homeView.match(/homeNonce &\+= 1/g)).toHaveLength(3);
-    expect(homeView).toContain('.refreshable {\n                homeNonce &+= 1');
+    expect(homeView).toMatch(/\.refreshable \{\s+homeNonce &\+= 1/);
     expect(homeView).toContain('guard phase == .active, hasCompletedInitialHomeLoad else { return }');
     expect(homeView).toContain('loadedSlateDate != SupabaseAPI.todayEST() else { return }');
   });

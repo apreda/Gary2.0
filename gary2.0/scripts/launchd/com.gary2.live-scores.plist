@@ -15,7 +15,7 @@
 	<array>
 		<string>/bin/bash</string>
 		<string>-c</string>
-		<string>export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] &amp;&amp; . "$NVM_DIR/nvm.sh"; export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"; cd /Users/adam.preda/Desktop/Gary2.0/gary2.0 || exit $?; gary_try=0; while :; do gary_try=$((gary_try+1)); gary_t0=$(date +%s); node scripts/poll-live-scores.js; gary_rc=$?; gary_dt=$(( $(date +%s) - gary_t0 )); if [ "$gary_rc" -ne 0 ] &amp;&amp; [ "$gary_dt" -le 15 ] &amp;&amp; [ "$gary_try" -lt 3 ]; then echo "scripts/poll-live-scores.js died within ${gary_dt}s (rc=$gary_rc) — startup retry $gary_try/2 after 5s (Sep 2 2026: launchd node EINTR uv_cwd)" &gt;&amp;2; sleep 5; continue; fi; break; done; exit "$gary_rc"</string>
+		<string>export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] &amp;&amp; . "$NVM_DIR/nvm.sh"; export PATH="/Users/adam.preda/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; cd /Users/adam.preda/Desktop/Gary2.0/gary2.0 || exit $?; gary_try=0; while :; do gary_try=$((gary_try+1)); gary_t0=$(date +%s); node scripts/poll-live-scores.js; gary_rc=$?; gary_dt=$(( $(date +%s) - gary_t0 )); if [ "$gary_rc" -ne 0 ] &amp;&amp; [ "$gary_dt" -le 15 ] &amp;&amp; [ "$gary_try" -lt 3 ]; then echo "scripts/poll-live-scores.js died within ${gary_dt}s (rc=$gary_rc) — startup retry $gary_try/2 after 5s (Sep 2 2026: launchd node EINTR uv_cwd)" &gt;&amp;2; sleep 5; continue; fi; break; done; exit "$gary_rc"</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>

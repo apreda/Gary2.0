@@ -165,6 +165,36 @@ describe('recovered stage history', () => {
       expect(output.stages[0].recovered_by).toBeUndefined();
     }
   });
+  it('keeps an overnight failure recovered when complete cards age later that day', () => {
+    const lateNow = '2026-09-05T20:00:00Z';
+    const data = snapshot([game(2, 'NCAAF', '2026-09-05T23:00:00Z')]);
+    data.board[0].updated_at = lateNow;
+    data.insights[0].created_at = lateNow;
+    data.wire[0].created_at = lateNow;
+    data.pulse = [{ league: 'NCAAF', created_at: lateNow }];
+    data.cards = [1, 2].map(team => ({ ...data.cards[0], payload: { card_build: {
+      version: 1, built_at: fresh.created_at, team_id: String(team), game_complete: true,
+    } } }));
+
+    const output = evaluateMorningHealth({ date, now: lateNow, data });
+    expect(check(output, 'cards:NCAAF')).toMatchObject({ status: 'warn', coverage_complete: true });
+    applyContentStageHistory(output, [overnight, ...recovery]);
+    expect(output.status).toBe('warn');
+    expect(output.stages[0].recovered_by).toHaveLength(2);
+    expect(check(output, 'content-stages')).toBeUndefined();
+    expect(check(output, 'cards:NCAAF').evidence).toContain('No card updated within 8h');
+
+    // A subsequent partial build is a real coverage regression, even before
+    // the game's final card deadline; stage exits cannot establish recovery.
+    data.cards.push({ ...data.cards[0], created_at: lateNow, payload: { card_build: {
+      version: 1, built_at: lateNow, team_id: '1', game_complete: false,
+    } } });
+    const incomplete = evaluateMorningHealth({ date, now: lateNow, data });
+    expect(check(incomplete, 'cards:NCAAF')).toMatchObject({ status: 'warn', coverage_complete: false, incomplete_game_ids: [2] });
+    applyContentStageHistory(incomplete, [overnight, ...recovery]);
+    expect(incomplete.status).toBe('fail');
+    expect(incomplete.stages[0].recovered_by).toBeUndefined();
+  });
   it('ignores old-day and future successes and uses event timestamps when writes arrive out of order', () => {
     const rows = [overnight, ...recovery,
       end('ncaaf-cards', 'failed', '2026-09-05T10:45:00Z'),

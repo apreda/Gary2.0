@@ -12,11 +12,32 @@ import {
 import { INVESTIGATION_FACTORS } from '../../../src/services/agentic/orchestrator/investigationFactors.js';
 
 describe('football research policy', () => {
-  it('bounds only NFL factor research at three workers', () => {
+  it('bounds NFL and MLB subscription research while preserving other providers and sports', () => {
     expect(researchConcurrencyForSport('americanfootball_nfl')).toBe(3);
     expect(researchConcurrencyForSport('NFL')).toBe(3);
     expect(researchConcurrencyForSport('americanfootball_ncaaf')).toBe(1);
     expect(researchConcurrencyForSport('baseball_mlb')).toBe(1);
+    expect(researchConcurrencyForSport('baseball_mlb', 'codex-cli')).toBe(3);
+    expect(researchConcurrencyForSport('MLB', 'codex-cli')).toBe(3);
+    expect(researchConcurrencyForSport('baseball_mlb', 'anthropic')).toBe(1);
+    expect(researchConcurrencyForSport('basketball_nba', 'codex-cli')).toBe(1);
+  });
+
+  it('finishes all eight MLB factors in ordered results using at most three simultaneous workers', async () => {
+    const factors = Object.keys(INVESTIGATION_FACTORS.baseball_mlb);
+    let active = 0, peak = 0;
+    const seen = [];
+    const results = await mapResearchFactors(factors, researchConcurrencyForSport('baseball_mlb', 'codex-cli'), async (factor, i) => {
+      peak = Math.max(peak, ++active);
+      seen.push(factor);
+      await new Promise(resolve => setTimeout(resolve, 8 - i));
+      active--;
+      return factor;
+    });
+    expect(factors).toHaveLength(8);
+    expect(peak).toBe(3);
+    expect(new Set(seen).size).toBe(8);
+    expect(results).toEqual(factors);
   });
 
   it('still dispatches every NFL evidence factor exactly once', async () => {

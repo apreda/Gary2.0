@@ -94,8 +94,15 @@ export function findMissingRequiredResearchFactors(plan, results = []) {
 }
 
 export const NFL_RESEARCH_CONCURRENCY = 3;
+export const MLB_CODEX_RESEARCH_CONCURRENCY = 3;
 
-export function researchConcurrencyForSport(sport) {
+export function researchConcurrencyForSport(sport, provider) {
+  // The subscription researcher otherwise spends its entire game budget on
+  // the first two or three of eight factors. Each worker has its own chat and
+  // the complete original desk; bound the pool without dropping any factors.
+  if (provider === 'codex-cli' && ['baseball_mlb', 'MLB'].includes(sport)) {
+    return MLB_CODEX_RESEARCH_CONCURRENCY;
+  }
   return NFL_KEYS.has(sport) ? NFL_RESEARCH_CONCURRENCY : 1;
 }
 

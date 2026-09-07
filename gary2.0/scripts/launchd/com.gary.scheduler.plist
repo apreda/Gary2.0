@@ -17,7 +17,7 @@
 		<key>GARY_PROPS_MODEL_OVERRIDE</key>
 		<string>codex-gpt-5.6-sol</string>
 		<key>PATH</key>
-		<string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:/Users/adam.preda/.local/bin</string>
+		<string>/Users/adam.preda/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin:/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:/Users/adam.preda/.local/bin</string>
 	</dict>
 	<key>KeepAlive</key>
 	<true/>
@@ -30,7 +30,7 @@
 		<string>/usr/bin/caffeinate</string>
 		<string>-i</string>
         <string>-s</string>
-		<string>/opt/homebrew/bin/node</string>
+		<string>/Users/adam.preda/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin/node</string>
 		<string>/Users/adam.preda/Desktop/Gary2.0/gary2.0/scripts/scheduler.js</string>
 	</array>
 	<key>RunAtLoad</key>

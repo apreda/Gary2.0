@@ -61,6 +61,7 @@ const DOSSIER_SURFACE_FILES = [
   // Pass 1 — an edit there is an era.
   '../flashInvestigationPrompts.js',
   './researchBriefing.js',
+  './footballResearchPolicy.js',
   './evidenceQuality.js',
   './optionalResearch.js',
   './requestCancellation.js',

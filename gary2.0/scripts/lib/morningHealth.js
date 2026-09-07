@@ -68,7 +68,8 @@ export function applyContentStageHistory(report, rows) {
     if (stage.status === 'ok' || !replacements[stage.stage]) return stage;
     const next = replacements[stage.stage].map(id => latest.get(id));
     const footballCardsVerified = !report.checks.some(check => ['read:cards', 'read:slate', 'read:board'].includes(check.id))
-      && report.checks.filter(check => /^cards:(NFL|NCAAF)$/.test(check.id)).every(check => check.status === 'ok');
+      && report.checks.filter(check => /^cards:(NFL|NCAAF)$/.test(check.id)).every(check =>
+        check.status === 'ok' || (check.status === 'warn' && check.coverage_complete === true));
     return footballCardsVerified && next.every(row => row?.status === 'ok' && Date.parse(row.at) > Date.parse(stage.at))
       ? { ...stage, recovered_by: next.map(row => ({ stage: row.stage, at: row.at })) }
       : stage;
@@ -171,9 +172,18 @@ export function evaluateMorningHealth({ date, now = new Date(), data = {}, error
     const missingDue = due.filter(row => !cardIds.has(String(idOf(row))));
     const marked = cards.filter(row => row.payload?.card_build?.version === 1);
     const complete = completedPlayerCardGameIds(cards);
-    const incompleteDue = due.filter(row => marked.some(card => String(card.game_id) === String(idOf(row))) && !complete.has(String(idOf(row))));
+    const incomplete = games.filter(row => marked.some(card => String(card.game_id) === String(idOf(row))) && !complete.has(String(idOf(row))));
+    const incompleteDue = due.filter(row => incomplete.includes(row));
+    const coverageComplete = covered.length === games.length && !incomplete.length;
+    const staleCards = cards.length > 0 && !cards.some(fresh);
     if (!errors.insights) add(`insights:${league}`, insights.some(fresh) ? 'ok' : games.length ? 'fail' : 'warn', `${insights.length} rows across ${new Set(insights.map(row => row.game_id).filter(Boolean)).size}/${games.length} games; signal categories are conditional, so every game need not produce a row.`);
-    if (!errors.cards) add(`cards:${league}`, missingDue.length || incompleteDue.length ? 'fail' : covered.length < games.length || (cards.length && !cards.some(fresh)) ? 'warn' : 'ok', `${covered.length}/${games.length} games have cards; ${league === 'NCAAF' ? `${complete.size} games verified complete; ` : ''}${missingDue.length} due games missing and ${incompleteDue.length} due games partial (due = kickoff within ${cardsLeadHours}h).`, { missing_game_ids: games.filter(row => !cardIds.has(String(idOf(row)))).map(idOf) });
+    // Coverage and freshness are different observations. Aging a complete
+    // card set must not resurrect a recovered overnight writer failure.
+    if (!errors.cards) add(`cards:${league}`, missingDue.length || incompleteDue.length ? 'fail' : !coverageComplete || staleCards ? 'warn' : 'ok', `${covered.length}/${games.length} games have cards; ${league === 'NCAAF' ? `${complete.size} games verified complete; ` : ''}${missingDue.length} due games missing and ${incompleteDue.length} due games partial (due = kickoff within ${cardsLeadHours}h).${staleCards ? ` No card updated within ${maxAgeHours}h.` : ''}`, {
+      missing_game_ids: games.filter(row => !cardIds.has(String(idOf(row)))).map(idOf),
+      incomplete_game_ids: incomplete.map(idOf),
+      coverage_complete: coverageComplete,
+    });
     if (!errors.pulse && ['NFL', 'NCAAF'].includes(league) && games.length) {
       const pulse = rowsOf(data.pulse).filter(row => leagueOf(row) === league);
       add(`pulse:${league}`, pulse.some(fresh) ? 'ok' : 'fail', `${pulse.length} current-date league tabs; newest ${pulse.map(row => row.updated_at || row.created_at).sort().at(-1) || 'never'}`);

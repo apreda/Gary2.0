@@ -3,6 +3,7 @@
 // no behavior change. Section boundaries follow the original MARK headers.
 
 import SwiftUI
+import UIKit
 import Combine
 import Charts
 import WebKit
@@ -454,66 +455,73 @@ struct HomeView: View {
             LiquidGlassBackground(grainDensity: 0.0009, grainOpacityRange: 0.008...0.018)
             HomeFloorGround(parallax: groundParallax)
 
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 18) {
+            GeometryReader { viewport in
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 18) {
 
-                    // ONE-LINE masthead (founder, Aug 6 night, second ruling:
-                    // "all apps have headers — bring them back, but all in one
-                    // line, horizontal not vertical"). Brand left, the
-                    // TODAY/TOMORROW switcher rides the same line; no date
-                    // accent — the tabs get the room.
-                    GaryPageHeader(title: "Gary", goldPart: "A.I.", trailing: { phaseSwitcher })
+                        // ONE-LINE masthead (founder, Aug 6 night, second ruling:
+                        // "all apps have headers — bring them back, but all in one
+                        // line, horizontal not vertical"). Brand left, the
+                        // TODAY/TOMORROW switcher rides the same line; no date
+                        // accent — the tabs get the room.
+                        GaryPageHeader(title: "Gary", goldPart: "A.I.", trailing: { phaseSwitcher })
 
-                    // TODAY is one full merged page that evolves through the day —
-                    // results-first in the morning, the slate + board + World Cup
-                    // always present, the live tape + full live experience leading
-                    // once games tip off. NOTHING is dropped across the day. LIVE
-                    // is no longer its own tab (founder call): Today absorbs the
-                    // live state, so `.live` routes to `todaySections` too — which
-                    // leads with the live tape/takeover/board/in-game Wire when
-                    // games are on. TOMORROW is the only separate body.
-                    switch effectivePhase {
-                    case .morning, .pregame, .live:
-                        // Fresh account / no-network: never leave a blank scroll
-                        // area under the header (App Review runs empty states).
-                        // Show a loading state on first load, a friendly empty
-                        // message once the fetch resolves with nothing.
-                        if !hasHomeContent {
-                            HomeContentPlaceholder(loading: loading)
-                        } else {
-                            todaySections
+                        // TODAY is one full merged page that evolves through the day —
+                        // results-first in the morning, the slate + board + World Cup
+                        // always present, the live tape + full live experience leading
+                        // once games tip off. NOTHING is dropped across the day. LIVE
+                        // is no longer its own tab (founder call): Today absorbs the
+                        // live state, so `.live` routes to `todaySections` too — which
+                        // leads with the live tape/takeover/board/in-game Wire when
+                        // games are on. TOMORROW is the only separate body.
+                        switch effectivePhase {
+                        case .morning, .pregame, .live:
+                            // Fresh account / no-network: never leave a blank scroll
+                            // area under the header (App Review runs empty states).
+                            // Show a loading state on first load, a friendly empty
+                            // message once the fetch resolves with nothing.
+                            if !hasHomeContent {
+                                HomeContentPlaceholder(loading: loading)
+                            } else {
+                                todaySections
+                            }
+                        case .tomorrow:
+                            TomorrowView.Body(board: tomorrowBoard)
                         }
-                    case .tomorrow:
-                        TomorrowView.Body(board: tomorrowBoard)
-                    }
 
-                    // ── ⑥ Footer — quiet ──
-                    footer
-                        .opacity(animateIn ? 1 : 0)
-                        .animation(.easeOut(duration: 0.6).delay(0.3), value: animateIn)
+                        // ── ⑥ Footer — quiet ──
+                        footer
+                            .opacity(animateIn ? 1 : 0)
+                            .animation(.easeOut(duration: 0.6).delay(0.3), value: animateIn)
+                    }
+                    // Live MLB rows must never enlarge the page's horizontal
+                    // content area as scores and verdict labels change.
+                    .frame(width: viewport.size.width, alignment: .leading)
+                    .padding(.bottom, 110)
+                    .background(HomeScrollDirectionLock())
+                    // Parallax probe — a background measurement, never a layout
+                    // row (a zero-height VStack child still costs one 18pt
+                    // spacing gap above the masthead).
+                    .background(GeometryReader { g in
+                        Color.clear.preference(key: HomeScrollOffsetKey.self,
+                                               value: g.frame(in: .named("homeScroll")).minY)
+                    })
                 }
-                .padding(.bottom, 110)
-                // Parallax probe — a background measurement, never a layout
-                // row (a zero-height VStack child still costs one 18pt
-                // spacing gap above the masthead).
-                .background(GeometryReader { g in
-                    Color.clear.preference(key: HomeScrollOffsetKey.self,
-                                           value: g.frame(in: .named("homeScroll")).minY)
-                })
-            }
-            .refreshable {
-                homeNonce &+= 1
-                try? await Task.sleep(nanoseconds: 800_000_000)   // let the pull spinner show while the keyed .task reloads
-            }
-            .coordinateSpace(name: "homeScroll")
-            // NOTE: the page scroll keeps its clip — unclipping it let rows
-            // bleed through the status bar. The Jul 7 unclippedRail law is
-            // for horizontal card rails only; shadows clipping at the SCREEN
-            // edge are invisible anyway.
-            .onPreferenceChange(HomeScrollOffsetKey.self) { minY in
-                // A tenth of the scroll, clamped so the horizon stays on the
-                // page. Writes go to the model — only the ground re-renders.
-                groundParallax.offsetY = max(-48, min(0, minY) * 0.10)
+                .modifier(HomeHorizontalBounceBehavior())
+                .refreshable {
+                    homeNonce &+= 1
+                    try? await Task.sleep(nanoseconds: 800_000_000)   // let the pull spinner show while the keyed .task reloads
+                }
+                .coordinateSpace(name: "homeScroll")
+                // NOTE: the page scroll keeps its clip — unclipping it let rows
+                // bleed through the status bar. The Jul 7 unclippedRail law is
+                // for horizontal card rails only; shadows clipping at the SCREEN
+                // edge are invisible anyway.
+                .onPreferenceChange(HomeScrollOffsetKey.self) { minY in
+                    // A tenth of the scroll, clamped so the horizon stays on the
+                    // page. Writes go to the model — only the ground re-renders.
+                    groundParallax.offsetY = max(-48, min(0, minY) * 0.10)
+                }
             }
 
             StatusBarScrim()
@@ -3362,5 +3370,50 @@ struct HomeView: View {
             return (a.hits + a.misses) > (b.hits + b.misses)
         }
         return Array(lanes.prefix(4))
+    }
+}
+
+/// Scope the direction lock to Home's containing vertical scroll view. Card
+/// rails are descendants/siblings of this probe, so their gestures stay intact.
+private struct HomeScrollDirectionLock: UIViewRepresentable {
+    final class Probe: UIView {
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            applyWhenAttached()
+        }
+
+        func applyWhenAttached() {
+            DispatchQueue.main.async { [weak self] in
+                var ancestor = self?.superview
+                while let view = ancestor {
+                    if let scroll = view as? UIScrollView {
+                        scroll.isDirectionalLockEnabled = true
+                        scroll.alwaysBounceHorizontal = false
+                        return
+                    }
+                    ancestor = view.superview
+                }
+            }
+        }
+    }
+
+    func makeUIView(context: Context) -> Probe {
+        let view = Probe()
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ view: Probe, context: Context) {
+        view.applyWhenAttached()
+    }
+}
+
+private struct HomeHorizontalBounceBehavior: ViewModifier {
+    @ViewBuilder func body(content: Content) -> some View {
+        if #available(iOS 16.4, *) {
+            content.scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+        } else {
+            content
+        }
     }
 }

@@ -224,6 +224,7 @@ export async function buildResearchBriefing(scoutReportContent, sport, homeTeam,
 
     // Flash token dedup cache — prevents re-fetching the same stat within a single game analysis
     const _flashTokenCache = new Map();
+    const pendingStatReads = new Map();
     // Accumulated factor findings — Flash writes each factor incrementally
     const _accumulatedFactors = [];
     // Game date (YYYY-MM-DD, ET calendar day — a 9 PM ET first pitch is the
@@ -349,7 +350,7 @@ Investigate using fetch_stats for tokens that ADD information beyond the scout r
 
 Use fetch_narrative_context ONLY for breaking news or game-thread context that no token covers.)` : ''}${isNHLSport ? ' (NHL: The scout report already includes confirmed starting goalies, lineups, power play units, and injuries from RotoWire. Do NOT use fetch_narrative_context to re-search for goalies, lineups, injuries, or PP/PK stats — all of this is in the scout report. Use grounding ONLY for context not in the scout report like recent player performance narrative or trade news.)' : ''}`;
 
-    console.log(`[Research Briefing] Sending scout report to Gemini Flash (factor-by-factor investigation)`);
+    console.log(`[Research Briefing] Sending scout report to ${briefingSession.modelName || options.researchModel || GAME_RESEARCH_MODEL} (factor-by-factor investigation)`);
 
     // ═══════════════════════════════════════════════════════════════════════
     // FACTOR-BY-FACTOR RESEARCH LOOP
@@ -372,10 +373,10 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
 
     console.log(`[Research Briefing] ${allFactorNames.length} factors to investigate (${factorNames.length} with tokens, mode=${researchFactorPlan.mode})`);
 
-    // Step 3: Investigate every factor. NFL factors are independent homework
-    // lanes, so run a small bounded pool against separate chats created from
-    // the same cached model. Other sports retain the exact serial behavior.
-    const researchConcurrency = researchConcurrencyForSport(sport);
+    // Step 3: Every factor receives the complete original desk in its own chat.
+    // NFL and the MLB subscription researcher use a bounded pool; completed
+    // findings remain in the configured factor order in the final briefing.
+    const researchConcurrency = researchConcurrencyForSport(sport, briefingSession.provider);
     const completedFactorFindings = new Array(allFactorNames.length);
     let completedFactorCount = 0;
     console.log(`[Research Briefing] Factor worker concurrency: ${researchConcurrency}`);
@@ -459,7 +460,17 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                 const statOptions = hasResearchSeason && shouldUseNflResearchBaseline(sport, token)
                   ? researchOptions
                   : options;
-                const statResult = await awaitResearch(()=>fetchStats(sport, token, homeTeam, awayTeam, statOptions));
+                // Overlapping factors share a pending read as well as its
+                // successful cache entry. Failed reads remain retryable.
+                let pending = pendingStatReads.get(token);
+                if (!pending) {
+                  pending = awaitResearch(() => fetchStats(sport, token, homeTeam, awayTeam, statOptions));
+                  pendingStatReads.set(token, pending);
+                }
+                let statResult;
+                try { statResult = await pending; }
+                finally { if (pendingStatReads.get(token) === pending) pendingStatReads.delete(token); }
+                checkAbort();
                 const hasError = statResult?.error;
                 const statSummary = summarizeStatForContext(statResult, token, homeTeam, awayTeam, sport);
                 functionResponses.push({ name: functionName, content: statSummary });
