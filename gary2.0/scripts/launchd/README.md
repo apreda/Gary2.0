@@ -38,6 +38,16 @@ notifications, and never restarts a healthy process because a data lane is
 late. Coverage reads time out after 60 seconds. Disk below 15 GiB warns and
 below 5 GiB fails; cache removal remains an explicit maintenance operation.
 
+`run-watchdog.js` recovers the scheduler after a heartbeat older than five
+minutes and the live-score job after a log older than eight minutes. Before
+scheduler recovery it checks descendants and detached pick writers, deferring
+while those processes are active. Failed process/job inspection also withholds
+recovery. An idle stale job is unloaded once, then bootstrap is retried up to
+three times, two seconds apart. Both jobs use RunAtLoad; there is no subsequent
+force-kickstart that would kill their new process. Watchdog failures remain
+nonzero even when the following health observation succeeds. This protects
+observed active work; it is not a transaction lock on future process launches.
+
 For recovery, first restore the canonical checkout and install locked
 dependencies. Restore credentials from the operator's secure source, verify
 the clock/time zone and each executable path, and validate the database and

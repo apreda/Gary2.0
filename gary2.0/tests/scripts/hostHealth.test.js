@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { diskHealth, healthSignature } from '../../scripts/lib/hostHealth.js';
+import { diskHealth, healthSignature, coverageReport, validHealthChecks } from '../../scripts/lib/hostHealth.js';
 
 describe('host outcome health', () => {
   it('distinguishes dangerously low disk from recovery margin and sufficient space', () => {
@@ -10,5 +10,20 @@ describe('host outcome health', () => {
     expect(healthSignature(report('fail', [1, 2]))).toBe(healthSignature(report('fail', [2, 1], 'later timestamp')));
     expect(healthSignature(report('fail', [1]))).not.toBe(healthSignature(report('fail', [2])));
     expect(healthSignature(report('warn', []))).not.toBe(healthSignature(report('ok', [])));
+  });
+  it('accepts a completed failing coverage report so its missing games remain visible', () => {
+    const report = { status: 'fail', checks: [{ id: 'picks', status: 'fail', missing_game_ids: [42] }] };
+    expect(coverageReport({ stdout: JSON.stringify(report), error: { code: 1 } })).toEqual(report);
+  });
+  it('rejects truncated reports, unexpected exits and terminated reads even with valid JSON', () => {
+    const stdout = JSON.stringify({ status: 'ok', checks: [{ id: 'picks', status: 'pending' }] });
+    expect(coverageReport({ stdout }).status).toBe('ok');
+    for (const error of [{ code: 2 }, { code: 1 }, { killed: true }, { signal: 'SIGTERM' }]) {
+      expect(() => coverageReport({ stdout, error })).toThrow();
+    }
+    for (const checks of [undefined, [], [null], [{ id: 'picks', status: 'unknown' }]]) {
+      expect(validHealthChecks(checks)).toBe(false);
+      expect(() => coverageReport({ stdout: JSON.stringify({ checks }) })).toThrow();
+    }
   });
 });

@@ -6,14 +6,14 @@ import { execFile } from 'node:child_process';
 import { homedir } from 'node:os';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { diskHealth, healthSignature, HOST_CHECK_INTERVAL_MS } from './lib/hostHealth.js';
+import { diskHealth, healthSignature, coverageReport, validHealthChecks, HOST_CHECK_INTERVAL_MS } from './lib/hostHealth.js';
 
 const cwd = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const destination = resolve(homedir(), 'Library/Logs/Gary2.0/host-health-latest.json');
 let previous;
 try {
   previous = JSON.parse(readFileSync(destination, 'utf8'));
-  if (!Array.isArray(previous?.checks)) throw new Error('Missing health checks');
+  if (!validHealthChecks(previous?.checks)) throw new Error('Missing or malformed health checks');
 } catch (error) {
   previous = undefined;
   if (error.code !== 'ENOENT') console.error(`[host-health] Previous report unreadable: ${error.message}`);
@@ -28,16 +28,15 @@ try {
 } catch (error) { checks.push({ id: 'host:internal-disk', status: 'fail', evidence: `Cannot verify disk: ${error.message}` }); }
 const read = await new Promise(resolve => {
   execFile(process.execPath, ['scripts/morning-health.js', '--json'], {
-    cwd, timeout: 60_000, maxBuffer: 2 * 1024 * 1024,
+    cwd, timeout: 60_000, killSignal: 'SIGKILL', maxBuffer: 2 * 1024 * 1024,
   }, (error, stdout) => resolve({ error, stdout }));
 });
 let coverage;
 try {
-  coverage = JSON.parse(read.stdout);
-  if (!Array.isArray(coverage.checks) || read.error?.killed) throw new Error('Incomplete or timed-out coverage read');
+  coverage = coverageReport(read);
   checks.push(...coverage.checks);
 } catch {
-  checks.push({ id: 'host:coverage-read', status: 'fail', evidence: read.error?.killed ? 'Coverage read exceeded 60 seconds' : 'Coverage check did not return a valid report' });
+  checks.push({ id: 'host:coverage-read', status: 'fail', evidence: 'Coverage check did not complete with a valid report (60-second limit)' });
 }
 const report = {
   checked_at: now.toISOString(), runtime: process.version,
