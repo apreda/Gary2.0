@@ -3149,23 +3149,9 @@ struct HomeView: View {
         return Double(Formatters.splitPickAndOdds(pickText).1) ?? -110
     }
 
-    /// Standard abbreviation for a team name via the league keyword maps.
+    /// Use the shared league-aware formatter, including college school codes.
     private static func teamAbbrev(_ name: String, league: String?) -> String {
-        let lower = name.lowercased()
-        let maps: [[String: [String]]]
-        switch (league ?? "").uppercased() {
-        case "MLB": maps = [mlbTeamKeywords]
-        case "NBA": maps = [nbaTeamKeywords]
-        case "NHL": maps = [nhlTeamKeywords]
-        case "NFL", "NFL TDS": maps = [nflTeamKeywords]
-        case "WC": maps = [wcTeamKeywords]
-        default: maps = [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, nflTeamKeywords, wcTeamKeywords]
-        }
-        for map in maps {
-            for (ab, kws) in map where kws.contains(where: { lower.contains($0) }) { return ab }
-        }
-        let last = lower.split(separator: " ").last.map(String.init) ?? lower
-        return String(last.prefix(3)).uppercased()
+        teamAbbrevFromName(name, league: league)
     }
 
     /// One pass over the latest settled night: the marquee story (biggest
