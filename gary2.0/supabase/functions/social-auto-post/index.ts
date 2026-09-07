@@ -27,7 +27,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { matchVerdicts, plainVerdict, buildVerdictPrompt, trimTweet, isValidVerdict } from "./verdicts.ts";
 import { composeWeekTape } from "./weektape.ts";
 import { composeRecaps, type RecapRow } from "./recap.ts";
-import { fallbackReasonPair, isSafeReasonPair, reasonCandidates } from "../_shared/verbatimSnippets.js";
+import { fallbackReasonPair, formatReasonForTweet, isSafeReasonPair, reasonCandidates } from "../_shared/verbatimSnippets.js";
 import { socialRunHealth } from "./health.js";
 import { mergeSocialPickSources, hasLoggedTicket, publicationKey } from "./pickSources.js";
 import { publishIntent, publicationStore } from "./publication.js";
@@ -515,7 +515,8 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
     // selects which sentences; code verifies every selection is a verbatim
     // substring of the stored rationale and falls back to deterministic
     // sentence choice when it is not. Sentences are never trimmed (no
-    // ellipsis, ever) and never restyled — Gary's punctuation is Gary's.
+    // ellipsis, ever). Sep 7 follow-up: after validation, the formatter may
+    // remove redundant "for me" attribution; the model still copies exactly.
     const rationaleText = String(chosen.rationale ?? "");
     // REASONS ONLY (founder, Aug 17): the two lines carry Gary's analysis.
     // Stake/odds-restatement sentences never reach the candidate list — the
@@ -531,7 +532,7 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
 Both nonempty values MUST be sentences copied character-for-character from the numbered list below, without the P/number label — different sentences from the SAME source paragraph (same P label), and their combined length must be at most ${budget} characters. If only one safe sentence fits, use it as opening and return an empty closing.
 Both must be REASONS for the pick — Gary's argument and analysis. NEVER the scene-setting opener (weather, park, time of day, atmosphere) and NEVER a sentence that merely restates the bet or its odds.
 Each chosen sentence must STAND ALONE for a reader who has seen nothing else: every person it mentions is named IN the sentence, and it never opens mid-argument ("But…", "Those advantages…", "He…").
-opening: the clearest actual reason Gary gives for this pick. Prefer his plain explanation of the matchup; first-person wording gets no preference. Never select assumption declarations, assessment language, hypothetical conditions that would change his mind, or research-process commentary. A simple named fact explaining the pick is better than an abstract thesis. closing: a concrete supporting reason from the SAME paragraph that supports the same pick; never an objection or the opponent's case. Use one good sentence instead of padding with a detached statistic or caveat. Preserve every qualifier and Gary's exact wording; never rewrite a stiff sentence to make it sound conversational — choose a different original sentence.
+opening: the clearest actual reason Gary gives for this pick. Prefer a direct statement about the matchup over "I think", "I like", "my read" or similar self-reference when an equally useful original sentence is available. Never select assumption declarations, assessment language, hypothetical conditions that would change his mind, or research-process commentary. A simple named fact explaining the pick is better than an abstract thesis. closing: a concrete supporting reason from the SAME paragraph that supports the same pick; never an objection or the opponent's case. Use one good sentence instead of padding with a detached statistic or caveat. Preserve every qualifier and Gary's exact wording; never rewrite a stiff sentence to make it sound conversational — choose a different original sentence. Copy even redundant "for me" exactly; code handles that attribution after source validation.
 ${isTopPick ? "This is Gary's highest-conviction play on the whole board today — prefer the sentences that carry that certainty.\n" : ""}PICK: ${chosen.pick} | ${chosen.awayTeam} @ ${chosen.homeTeam} | league ${league}
 
 SENTENCES:
@@ -568,7 +569,7 @@ ${numbered}`;
     }
     // Every path crosses the same safety boundary, including vendor outages.
     if (!selectionOk(opening, closing)) throw new Error(`NO_SAFE_COPY: final reason validation failed for "${chosen.pick}"`);
-    const hook = [opening, pickLine, closing].filter(Boolean).join("\n\n");
+    const hook = [formatReasonForTweet(opening), pickLine, formatReasonForTweet(closing)].filter(Boolean).join("\n\n");
     if (hook.length > 280) {
       throw new Error(`Hook exceeds X limit for "${chosen.pick}" — ${hook.length} characters, refusing to post`);
     }

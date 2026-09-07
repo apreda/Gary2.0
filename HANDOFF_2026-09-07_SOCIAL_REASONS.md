@@ -15,8 +15,10 @@ must come from the same original paragraph; otherwise one whole reason is
 enough. The model receives paragraph labels and the final code gate enforces
 the same rule for model selections and deterministic fallback.
 
-The original rationale, qualifiers, wording, punctuation and tickets are
-unchanged. Sentences are selected, never rewritten or cut. An unsuitable
+The original rationale, qualifiers and tickets are unchanged. The model selects
+whole original sentences. Adam's follow-up permits one narrow formatting
+exception after source validation: drop redundant `for me` attribution, with
+the corresponding comma or opening capitalization when needed. An unsuitable
 sentence is excluded whole rather than having its uncertainty stripped out.
 No model/pick-generation prompts, injury handling, posting schedule, daily
 cap, publication reservations, prop replies or X account settings changed.
@@ -53,3 +55,28 @@ deleted. There is no evidence here establishing the cause of follower loss.
 The production checkout is `/Users/adam.preda/Gary2.0` on main. Preserve the
 machine's real `ios/GaryApp/GoogleService-Info.plist` as the known uncommitted
 configuration exception. Other sessions' completed work remains intact.
+
+## Follow-up: matter-of-fact wording
+
+Adam pointed out that `for me` is redundant on Gary's own account. The sentence
+selector now prefers a direct matchup statement over unnecessary self-reference
+when an equally useful original sentence exists. It still returns the exact
+original text. `formatReasonForTweet` then removes narrow `for me` attribution
+shapes from validated opening and closing sentences. It leaves predictions,
+conditions, integral `for me to ...` constructions and quoted speech intact.
+
+The Twins preview now starts:
+
+> Minnesota’s rested late-inning group tips this close matchup.
+
+Replaying the 71 previously verified sentence selections changed only the five
+previews containing redundant attribution. All 71 stay within the character
+budget, with no remaining `for me` in that sample. The actual before/after
+outputs are in `audit-evidence/social-reasons-2026-09-07/matter-of-fact-previews.json`.
+
+The follow-up passed 73 focused tests, all 2,370 backend tests across 252 files,
+all 180 edge-helper tests and the real entrypoint's Deno check. Production runs
+`social-auto-post` version 105 with JWT checking enabled. All 12 deployed source
+files match the tested local files exactly; the live dry run returned HTTP 200
+and health `ok` without publishing a tweet. The complete receipt is
+`audit-evidence/social-reasons-2026-09-07/matter-of-fact-verification.json`.

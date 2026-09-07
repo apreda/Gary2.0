@@ -2,8 +2,9 @@
  * Verbatim rationale snippets (founder directive, Aug 17 2026): pick tweets
  * carry ONLY Gary's own words — whole sentences copied character-for-character
  * from the stored pick rationale. The model may SELECT sentences; nothing may
- * write, edit, shorten, or paraphrase them. The app and the feed are the same
- * Gary, word for word.
+ * write, edit, shorten, or paraphrase them. September 7 follow-up: after exact
+ * source validation, tweet formatting may drop redundant "for me" attribution.
+ * The reason, evidence and uncertainty remain Gary's original words.
  */
 
 const ABBREVIATION = /^(?:St|Jr|Sr|Mr|Mrs|Ms|Dr|vs|No|[ap]\.m)\.$/i;
@@ -40,6 +41,19 @@ const normWs = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
 export function isVerbatimSnippet(rationale, snippet) {
   const s = normWs(snippet);
   return s.length > 0 && normWs(rationale).includes(s);
+}
+
+/** Founder, Sep 7: Gary's authorship is implicit. Apply only AFTER validating
+ *  the whole original sentence. Remove the narrow attribution shapes found
+ *  in the cards, not first-person predictions or substantive qualifiers. */
+export function formatReasonForTweet(sentence) {
+  const t = String(sentence ?? '').trim();
+  // Attribution inside a quotation may belong to somebody other than Gary.
+  if (/["“”]/.test(t)) return t;
+  return t
+    .replace(/^For me,\s+(\p{L})/iu, (_, first) => first.toUpperCase())
+    .replace(/,\s+for me,\s+/gi, ' ')
+    .replace(/,?\s+for me(?=[.!?]$|\s+(?:is|are|was|were|because)\b)/gi, '');
 }
 
 /**

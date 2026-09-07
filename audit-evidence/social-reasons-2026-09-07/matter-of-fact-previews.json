@@ -1,0 +1,44 @@
+{
+  "checked_at": "2026-09-07T20:10:48.506Z",
+  "source": "previews.json: previously verified original sentence selections",
+  "checked": 71,
+  "within_budget": 71,
+  "remaining_for_me": 0,
+  "changed": [
+    {
+      "date": "2026-09-05",
+      "pick": "East Carolina Pirates +28.5 -122",
+      "before": "Alabama replaced all five starters after finishing last season with 48 combined rushing yards against Georgia, Oklahoma and Indiana.\n\nEast Carolina Pirates +28.5\n\nThe deciding matchup for me is ECU’s established defensive front against Alabama’s new offensive line.",
+      "after": "Alabama replaced all five starters after finishing last season with 48 combined rushing yards against Georgia, Oklahoma and Indiana.\n\nEast Carolina Pirates +28.5\n\nThe deciding matchup is ECU’s established defensive front against Alabama’s new offensive line.",
+      "within_budget": true
+    },
+    {
+      "date": "2026-09-05",
+      "pick": "UNLV Rebels ML -154",
+      "before": "Hawai‘i allowed eight completions of at least 15 yards totaling 221 yards against Stanford.\n\nUNLV Rebels ML\n\nArnold’s downfield production is the deciding matchup for me.",
+      "after": "Hawai‘i allowed eight completions of at least 15 yards totaling 221 yards against Stanford.\n\nUNLV Rebels ML\n\nArnold’s downfield production is the deciding matchup.",
+      "within_budget": true
+    },
+    {
+      "date": "2026-09-06",
+      "pick": "Braves ML -106",
+      "before": "Philadelphia's 7 left-handed hitters make Mahle's matchup the deciding piece for me.\n\nBraves ML",
+      "after": "Philadelphia's 7 left-handed hitters make Mahle's matchup the deciding piece.\n\nBraves ML",
+      "within_budget": true
+    },
+    {
+      "date": "2026-09-07",
+      "pick": "Orioles ML -136",
+      "before": "Cantillo’s recent walks are the deciding factor for me because of who can capitalize on them today.\n\nOrioles ML",
+      "after": "Cantillo’s recent walks are the deciding factor because of who can capitalize on them today.\n\nOrioles ML",
+      "within_budget": true
+    },
+    {
+      "date": "2026-09-07",
+      "pick": "Twins ML +102",
+      "before": "Minnesota’s rested late-inning group tips this close matchup for me.\n\nTwins ML\n\nGómez, Hoffman and Minter all sat Sunday after throwing seven, 17 and 18 pitches Saturday.",
+      "after": "Minnesota’s rested late-inning group tips this close matchup.\n\nTwins ML\n\nGómez, Hoffman and Minter all sat Sunday after throwing seven, 17 and 18 pitches Saturday.",
+      "within_budget": true
+    }
+  ]
+}

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import {
   fallbackReasonPair,
   fallbackVerbatimPair,
+  formatReasonForTweet,
   isStandaloneSentence,
   isReasonSentence,
   isSafeReasonPair,
@@ -19,6 +20,42 @@ const composerSrc = readFileSync(
 const september7Picks = JSON.parse(readFileSync(
   new URL('../fixtures/social-rationales-2026-09-07.json', import.meta.url), 'utf8',
 ));
+
+describe('September 7 matter-of-fact tweet wording', () => {
+  it('keeps the verified Twins reason and evidence, dropping only redundant attribution', () => {
+    const { rationale } = september7Picks.find(p => p.pick.startsWith('Twins'));
+    const pair = fallbackReasonPair(rationale, 266);
+    expect(isSafeReasonPair(rationale, pair, 266)).toBe(true);
+    const opening = formatReasonForTweet(pair.opening);
+    expect(opening).toBe('Minnesota’s rested late-inning group tips this close matchup.');
+    // The model is still required to return the original sentence; only the
+    // deterministic formatter has permission for this narrow cleanup.
+    expect(isSafeReasonPair(rationale, { ...pair, opening }, 266)).toBe(false);
+    expect([opening, 'Twins ML', formatReasonForTweet(pair.closing)].join('\n\n')).toBe(
+      'Minnesota’s rested late-inning group tips this close matchup.\n\nTwins ML\n\nGómez, Hoffman and Minter all sat Sunday after throwing seven, 17 and 18 pitches Saturday.',
+    );
+  });
+
+  it.each([
+    ['The deciding matchup for me is ECU’s established defensive front against Alabama’s new offensive line.', 'The deciding matchup is ECU’s established defensive front against Alabama’s new offensive line.'],
+    ['Cantillo’s recent walks are the deciding factor for me because of who can capitalize on them today.', 'Cantillo’s recent walks are the deciding factor because of who can capitalize on them today.'],
+    ['For me, Minnesota has the more rested bullpen.', 'Minnesota has the more rested bullpen.'],
+    ['Minnesota, for me, has the more rested bullpen.', 'Minnesota has the more rested bullpen.'],
+    ['Minnesota has the more rested bullpen, for me.', 'Minnesota has the more rested bullpen.'],
+  ])('removes attribution without adding a claim: %s', (source, expected) => {
+    expect(formatReasonForTweet(source)).toBe(expected);
+  });
+
+  it.each([
+    'I expect SMU’s passing advantage to generate sustained scoring opportunities across four quarters.',
+    'Minnesota could have the more rested bullpen, but Detroit still has available relievers.',
+    'Ryan’s status is uncertain and a limited workload would put more pressure on Minnesota’s relievers.',
+    'Ryan has not shown enough for me to dismiss the workload risk.',
+    'Minnesota’s manager said, “The workload is the deciding factor for me.”',
+  ])('preserves predictions, conditions and somebody else’s quoted words: %s', sentence => {
+    expect(formatReasonForTweet(sentence)).toBe(sentence);
+  });
+});
 
 describe('September 7 published assumption-copy regressions', () => {
   it.each(september7Picks)('uses the actual case and supporting evidence for $pick', ({ pick, rationale }) => {
@@ -90,7 +127,8 @@ describe('September 7 published assumption-copy regressions', () => {
 // Founder directive (Aug 17 2026): pick tweets use ONLY Gary's own words —
 // whole sentences copied verbatim from the stored pick rationale. The model
 // SELECTS sentences; it never writes, edits, shortens, or paraphrases. The
-// app and the feed are literally the same Gary.
+// Sep 7: formatReasonForTweet separately permits redundant "for me" cleanup
+// after the original selection passes validation.
 
 const RATIONALE = [
   'Saturday night in Anaheim, the marine layer settling over the outfield and two last-place clubs playing loose.',
