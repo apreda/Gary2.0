@@ -46,7 +46,9 @@ against its versioned counterpart. Load only one instance of each owner;
 do not run an unvalidated cloud backstop alongside it. Restarting the
 scheduler during an active pick requires coordination with that run.
 
-After recovery, run `node scripts/production-truth.js` and
+Install the native `supabase` CLI on PATH for the deployment audit; the audit
+does not download an npm wrapper at runtime. After recovery, run
+`node scripts/production-truth.js` and
 `node scripts/morning-health.js --json` from the backend. Confirm the actual
 process folder, eras, deployed edges, scheduled publication windows and stored
 coverage. An idle calendar job with exit code zero is normal between runs.

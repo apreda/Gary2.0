@@ -12,7 +12,7 @@
  */
 
 import '../src/loadEnv.js';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { createClient } from '@supabase/supabase-js';
 import { diskEras, gitStamp, PROJECT_DIR } from './lib/eraTruth.js';
 import { edgeSharedDependencies } from './lib/edgeSharedDependencies.js';
@@ -120,9 +120,11 @@ try {
   const { readdirSync, existsSync, statSync } = await import('fs');
   const { join } = await import('path');
   const fnRoot = join(PROJECT_DIR, 'supabase', 'functions');
-  const deployed = JSON.parse(execSync(
-    'npx supabase functions list --project-ref xuttubsfgdcjfgmskcol -o json',
-    { shell: '/bin/bash', cwd: PROJECT_DIR, timeout: 60_000 },
+  // Use the installed native CLI directly. An npm wrapper can leave its
+  // descendant holding stdio open after the shell's timeout, hanging the audit.
+  const deployed = JSON.parse(execFileSync(
+    'supabase', ['functions', 'list', '--project-ref', 'xuttubsfgdcjfgmskcol', '-o', 'json'],
+    { cwd: PROJECT_DIR, timeout: 60_000, killSignal: 'SIGKILL' },
   ).toString());
   const deployedBySlug = new Map(deployed.map((f) => [f.slug, f]));
 

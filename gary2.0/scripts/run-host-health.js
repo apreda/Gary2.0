@@ -11,8 +11,13 @@ import { diskHealth, healthSignature, HOST_CHECK_INTERVAL_MS } from './lib/hostH
 const cwd = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const destination = resolve(homedir(), 'Library/Logs/Gary2.0/host-health-latest.json');
 let previous;
-try { previous = JSON.parse(readFileSync(destination, 'utf8')); }
-catch (error) { if (error.code !== 'ENOENT') console.error(`[host-health] Previous report unreadable: ${error.message}`); }
+try {
+  previous = JSON.parse(readFileSync(destination, 'utf8'));
+  if (!Array.isArray(previous?.checks)) throw new Error('Missing health checks');
+} catch (error) {
+  previous = undefined;
+  if (error.code !== 'ENOENT') console.error(`[host-health] Previous report unreadable: ${error.message}`);
+}
 const now = new Date();
 const elapsed = now - Date.parse(previous?.checked_at);
 if (!process.argv.includes('--force') && elapsed >= 0 && elapsed < HOST_CHECK_INTERVAL_MS) process.exit(0);
