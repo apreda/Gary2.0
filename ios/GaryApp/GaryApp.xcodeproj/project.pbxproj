@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		BFE709072026B00000000001 /* FantasyBriefingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE709072026B00000000002 /* FantasyBriefingView.swift */; };
+		BFE709072026A00000000001 /* FantasyBriefing.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE709072026A00000000002 /* FantasyBriefing.swift */; };
 		A905BCA4B53041AB98CD0001 /* HubCardIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A905BCA4B53041AB98CD0002 /* HubCardIdentity.swift */; };
 		C04E9001AABBCCDD11223301 /* PrivacyPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = C04E9001AABBCCDD11223302 /* PrivacyPreferences.swift */; };
 		050FAB3C2FBD1312014A6102 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 921968E9FC0E6DE90F6EAD89 /* GoogleSignIn */; };
@@ -83,6 +85,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		BFE709072026B00000000002 /* FantasyBriefingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FantasyBriefingView.swift; sourceTree = "<group>"; };
+		BFE709072026A00000000002 /* FantasyBriefing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FantasyBriefing.swift; sourceTree = "<group>"; };
 		A905BCA4B53041AB98CD0002 /* HubCardIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubCardIdentity.swift; sourceTree = "<group>"; };
 		C04E9001AABBCCDD11223302 /* PrivacyPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyPreferences.swift; sourceTree = "<group>"; };
 		008FA1BAD0680B6769DD9D2A /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
@@ -214,6 +218,8 @@
 				00BBC4AB067AFFD32ED58FB1 /* GoogleService-Info.plist.example */,
 				8C13DC9C410DA7F379D05F31 /* HomeAdditions.swift */,
 				5B069FA2D1F2F173C8F4EB9F /* HubView.swift */,
+				BFE709072026B00000000002 /* FantasyBriefingView.swift */,
+				BFE709072026A00000000002 /* FantasyBriefing.swift */,
 				A6B153703E9F452BFFC5A392 /* Info.plist */,
 				A78F90C47A654E2EB7800002 /* LaunchScreen.storyboard */,
 				C98E3F91D643EAE8E4199E0A /* KeychainStorage.swift */,
@@ -422,6 +428,8 @@
 				AD40BD1C591C0853AB20200A /* GaryTour.swift in Sources */,
 				0BE6FB14629F5618AA09EDD3 /* HomeAdditions.swift in Sources */,
 				2508CFF6E864FC968DD3FFC7 /* HubView.swift in Sources */,
+				BFE709072026B00000000001 /* FantasyBriefingView.swift in Sources */,
+				BFE709072026A00000000001 /* FantasyBriefing.swift in Sources */,
 				848433E84732600F7F27F78B /* KeychainStorage.swift in Sources */,
 				C436839CACCB30E27770C425 /* MLBBallparks.swift in Sources */,
 				0B397BC2A4AF390C22016E57 /* MLBGameIntelView.swift in Sources */,
@@ -497,7 +505,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 903;
+				CURRENT_PROJECT_VERSION = 904;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -584,7 +592,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 903;
+				CURRENT_PROJECT_VERSION = 904;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_NS_ASSERTIONS = NO;

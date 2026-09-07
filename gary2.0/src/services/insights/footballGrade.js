@@ -15,8 +15,18 @@ function teamId(team) {
   return value == null ? null : String(value);
 }
 
+const FANTASY_CONTEXT_CATEGORIES = new Set(['fantasy_usage', 'fantasy_red_zone', 'fantasy_matchup', 'fantasy_trend']);
+
 /** Grade one final football insight without inventing an outcome rule. */
 export function gradeFootballInsightRow(row, game) {
+  // A roster or lineup decision is not a prediction that its NFL team wins.
+  // The projection retains real team/game IDs for navigation, not grading.
+  if (FANTASY_CONTEXT_CATEGORIES.has(row?.category)
+      || row?.generated_by === 'fantasy_briefing_v1'
+      || row?.fantasy_source === 'fantasy_briefing_v1'
+      || row?.meta?.source === 'fantasy_briefing_v1') {
+    return { result: null, note: 'Fantasy roster/lineup decision; context only' };
+  }
   // AFTER GARY is a same-book market receipt, not a prediction about either
   // team. Keep it out of hit/miss grading even if a future UI/storage change
   // happens to attach a team id.

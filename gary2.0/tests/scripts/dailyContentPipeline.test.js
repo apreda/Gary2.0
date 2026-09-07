@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { collegeCardStages, collegeCardRunBudgetMs, dailyContentStages, runContentStage, runDailyContent, selectContentStages } from '../../scripts/lib/dailyContentPipeline.js';
+import { collegeCardStages, collegeCardRunBudgetMs, dailyContentStages, fantasyContentStages, fantasyContentRunBudgetMs, fantasyRunIsInWindow, runContentStage, runDailyContent, selectContentStages } from '../../scripts/lib/dailyContentPipeline.js';
 
 const dirs = [];
 const temp = () => { const path = mkdtempSync(join(tmpdir(), 'gary-content-test-')); dirs.push(path); return path; };
@@ -42,6 +42,35 @@ describe('daily content orchestration', () => {
     expect(stages.findIndex(s => s.id === 'ncaaf-cards')).toBeLessThan(stages.findIndex(s => s.id === 'ncaaf-insights'));
     expect(stages.filter(s => s.args.includes('--skip-cards'))).toHaveLength(3);
     expect(stages.filter(s => s.id === 'ncaaf-cards')).toHaveLength(1);
+  });
+  it('gives MLB then NFL one bounded serial owner without duplicating daily writers', () => {
+    const now = new Date('2026-09-07T10:00:00Z');
+    const stages = fantasyContentStages('2026-09-07', {}, now);
+    expect(stages).toEqual([
+      { id: 'mlb-fantasy', timeoutMs: 600_000, args: ['scripts/run-fantasy-briefing.js', '--date', '2026-09-07', '--league', 'MLB'] },
+      { id: 'nfl-fantasy', timeoutMs: 600_000, args: ['scripts/run-fantasy-briefing.js', '--date', '2026-09-07', '--league', 'NFL'] },
+    ]);
+    expect(dailyContentStages('2026-09-07', {}).some(stage => stage.id.includes('fantasy'))).toBe(false);
+    expect(fantasyContentStages('2026-09-07', { GARY_CAP_FANTASY_MLB: '45' }, now)[0].timeoutMs).toBe(45_000);
+    expect(fantasyContentStages('2026-09-07', { GARY_CAP_FANTASY_MLB: '99999', GARY_CAP_FANTASY_NFL: '99999' }, now).map(stage => stage.timeoutMs)).toEqual([600_000, 600_000]);
+    expect(fantasyContentRunBudgetMs(stages)).toBe(25 * 60_000);
+  });
+  it('refreshes NFL at 00/05 ET for waivers and adds MLB only from 06 through 23 ET', () => {
+    for (const [iso, expected] of [
+      ['2026-09-08T04:00:00Z', ['nfl-fantasy']],
+      ['2026-09-08T09:00:00Z', ['nfl-fantasy']],
+      ['2026-09-08T10:00:00Z', ['mlb-fantasy', 'nfl-fantasy']],
+      ['2026-09-09T03:00:00Z', ['mlb-fantasy', 'nfl-fantasy']],
+      ['2026-12-08T10:00:00Z', ['nfl-fantasy']],
+      ['2026-12-08T11:00:00Z', ['mlb-fantasy', 'nfl-fantasy']],
+    ]) {
+      expect(fantasyContentStages('2026-09-08', {}, new Date(iso)).map(stage => stage.id)).toEqual(expected);
+    }
+    expect(fantasyContentRunBudgetMs(fantasyContentStages('2026-09-08', {}, new Date('2026-09-08T04:00:00Z')))).toBe(12 * 60_000);
+    expect(fantasyRunIsInWindow(new Date('2026-09-07T10:00:00Z'))).toBe(true);
+    expect(fantasyRunIsInWindow(new Date('2026-09-08T03:00:00Z'))).toBe(true);
+    expect(fantasyRunIsInWindow(new Date('2026-09-07T09:59:59Z'))).toBe(false);
+    expect(fantasyRunIsInWindow(new Date('2026-09-08T04:00:00Z'))).toBe(false);
   });
   it('fills subjects introduced by the later college insight stage before checking card coverage', async () => {
     const subjects = new Set(['base-leader']);

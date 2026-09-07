@@ -28,9 +28,10 @@ import { DESK_FALLBACK_MODELS } from '../agentic/orchestrator/orchestratorConfig
 export const contentModel = () => process.env.GARY_CONTENT_MODEL_OVERRIDE || 'codex-gpt-5.6-sol';
 export const contentModelCascade = () => [...new Set([contentModel(), ...DESK_FALLBACK_MODELS])];
 
-export async function generateSolText(prompt, { maxTokens = 4000, effort = 'high' } = {}) {
+export async function generateSolText(prompt, { maxTokens = 4000, effort = 'high', signal } = {}) {
   const failures = [];
   for (const modelName of contentModelCascade()) {
+    signal?.throwIfAborted();
     try {
       const session = await createModelSession({
         modelName,
@@ -38,13 +39,15 @@ export async function generateSolText(prompt, { maxTokens = 4000, effort = 'high
         tools: [],
         thinkingLevel: effort,
         maxOutputTokens: maxTokens,
+        signal,
       });
-      const res = await sendToSessionWithRetry(session, prompt, {});
+      const res = await sendToSessionWithRetry(session, prompt, { signal });
       const text = res?.content || '';
       if (!text.trim()) throw new Error('empty content response');
       if (modelName !== contentModel()) console.warn(`[Content] provider recovered on ${modelName}`);
       return text;
     } catch (error) {
+      signal?.throwIfAborted();
       failures.push(`${modelName}: ${error?.message || error}`);
       console.warn(`[Content] ${modelName} failed — trying the next provider: ${error?.message || error}`);
     }

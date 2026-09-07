@@ -22,7 +22,7 @@
 
 // MUST load env vars FIRST before any other imports
 import './src/loadEnv.js';
-import { insightRefreshOldIds } from './scripts/lib/insightRefreshScope.js';
+import { insightRefreshOldIds, insightResetScopeParams } from './scripts/lib/insightRefreshScope.js';
 
 import axios from 'axios';
 import { getESTDate } from './src/utils/dateUtils.js';
@@ -138,7 +138,8 @@ const cardsOnly = args.includes('--cards-only');
 // The daily pipeline gives cards their own stage so a long insights pass
 // cannot swallow their budget or build the same packs twice.
 const skipCards = args.includes('--skip-cards');
-// Manual force-refresh: wipe the day's rows first, then regenerate from scratch.
+// Manual force-refresh: rebuild this writer's day, preserving the independent
+// Fantasy projection that only its own atomic publisher can regenerate.
 // The scheduled runs are additive-freeze (no churn); --reset is the escape hatch
 // for rebuilding a lane by hand. NOT used by the cron path.
 const resetDay = args.includes('--reset');
@@ -232,18 +233,15 @@ const restHeaders = {
 };
 
 /**
- * Delete the day's existing rows for a league. ONLY used by --reset (manual
- * force-refresh) — the scheduled write is additive-freeze and never deletes.
+ * Delete the day's general insight rows for a league. ONLY used by --reset;
+ * the independent Fantasy projection retains its owning publisher's snapshot.
  */
 async function deleteDayRows(date, league) {
   await axios({
     method: 'DELETE',
     url: REST_URL,
     headers: { ...restHeaders, Prefer: 'return=minimal' },
-    params: {
-      date: `eq.${date}`,
-      league: `eq.${league}`,
-    },
+    params: insightResetScopeParams({ date, league }),
   });
 }
 

@@ -394,6 +394,7 @@ struct HubView: View {
     @State private var selectedSignal: Signal? = nil
     @State private var breakdownSignal: Signal? = nil
     @State private var teamCardSignal: Signal? = nil
+    @State private var fantasyRefreshToken = UUID()
 
     /// Player-backed signals open their populated player card — MLB always,
     /// football when today's pack exists for the id. Team-backed rows use
@@ -1311,6 +1312,26 @@ struct HubView: View {
     }
 
     private var hubScopeContent: AnyView {
+        if hubScope == "fantasy", sel == .mlb || sel == .nfl {
+            return AnyView(VStack(alignment: .leading, spacing: 26) {
+                FantasyBriefingPage(league: sel.label, refreshToken: fantasyRefreshToken, isVisible: isVisible) { decision in
+                    if let card = intelCards.first(where: {
+                        decision.matchesPlayerCard(playerID: $0.player_id, gameID: $0.game_id, loadedDate: loadedDate)
+                            && $0.payload != nil && HubCardIdentity.sameLeague($0.league, sel.label)
+                    }) {
+                        namedCard = card
+                        return true
+                    }
+                    return false
+                }.id(sel.label)
+                if sel == .mlb, !items(.returnWatch).isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HubHead(title: "Back Soon", count: items(.returnWatch).count)
+                        FantasyCardList(items: items(.returnWatch), accent: .white.opacity(0.75)) { signal in openSignal(signal) }
+                    }
+                }
+            }.environment(\.solidPanels, true))
+        }
         if didLoad, fetchErrorLeagues.contains(sel), leagueSignals.isEmpty {
             return AnyView(hubError)
         }
@@ -1439,14 +1460,19 @@ struct HubView: View {
             }
         }
         .scrollDismissesKeyboard(.immediately)
-        .refreshable { await load() }
+        .refreshable {
+            if hubScope == "fantasy", sel == .mlb || sel == .nfl { fantasyRefreshToken = UUID() }
+            else { await load() }
+        }
         .onChange(of: isVisible) { vis in
             guard vis else { return }
             consumeFocus()
+            fantasyRefreshToken = UUID()
             Task { await reloadIfStale() }
         }
         .onChange(of: scenePhase) { phase in
             guard phase == .active, isVisible else { return }
+            fantasyRefreshToken = UUID()
             Task { await reloadIfStale() }
         }
         .onGaryTour { verb, arg in

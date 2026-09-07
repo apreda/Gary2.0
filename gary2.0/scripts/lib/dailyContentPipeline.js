@@ -29,6 +29,32 @@ export function dailyContentStages(date, env = process.env) {
   ];
 }
 
+// Fantasy has its own hourly owner because confirmed lineups arrive between
+// general content runs. NFL stays current through overnight waivers; MLB runs
+// 06:00–23:00 ET. Neither league is gated on today's game count here.
+export function fantasyContentStages(date, env = process.env, now = new Date()) {
+  const mlb = {
+    id: 'mlb-fantasy', timeoutMs: Math.min(600, cap(env, 'GARY_CAP_FANTASY_MLB', 600)) * 1000,
+    args: ['scripts/run-fantasy-briefing.js', '--date', date, '--league', 'MLB'],
+  };
+  const nfl = {
+    id: 'nfl-fantasy', timeoutMs: Math.min(600, cap(env, 'GARY_CAP_FANTASY_NFL', 600)) * 1000,
+    args: ['scripts/run-fantasy-briefing.js', '--date', date, '--league', 'NFL'],
+  };
+  return fantasyRunIsInWindow(now) ? [mlb, nfl] : [nfl];
+}
+
+// This window belongs only to MLB. Evaluate the IANA zone explicitly rather
+// than inheriting the Mac's current timezone or a fixed daylight-saving offset.
+export function fantasyRunIsInWindow(now = new Date()) {
+  const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23' }).format(now));
+  return hour >= 6 && hour <= 23;
+}
+
+export function fantasyContentRunBudgetMs(stages) {
+  return (stages.length > 1 ? 25 : 12) * 60_000;
+}
+
 /** A recovery runs an explicit subset in the normal dependency order. */
 export function selectContentStages(stages, requested) {
   if (requested == null) return stages;

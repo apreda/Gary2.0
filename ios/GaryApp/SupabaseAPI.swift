@@ -1322,6 +1322,36 @@ enum SupabaseAPI {
         return rows
     }
 
+    static func fetchFantasyBriefing(date: String, league: String) async throws -> FantasyBriefing? {
+        var query = [
+            URLQueryItem(name: "select", value: "payload"),
+            URLQueryItem(name: "league", value: "eq.\(league)"),
+            URLQueryItem(name: "limit", value: "1")
+        ]
+        if league == "NFL" {
+            query.append(URLQueryItem(name: "and", value: "(date.gte.\(FantasyBriefing.previousDay()),date.lte.\(date))"))
+            query.append(URLQueryItem(name: "order", value: "date.desc,generated_at.desc"))
+        } else {
+            query.append(URLQueryItem(name: "date", value: "eq.\(date)"))
+        }
+        let url = buildURL(table: "fantasy_briefings", query: query)
+        var request = makeRequest(url: url)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw NSError(domain: "SupabaseAPI.fetchFantasyBriefing", code: (response as? HTTPURLResponse)?.statusCode ?? -1,
+                          userInfo: [NSLocalizedDescriptionKey: "The Fantasy briefing could not be loaded."])
+        }
+        struct Row: Decodable { let payload: FantasyBriefing }
+        let rows = try JSONDecoder().decode([Row].self, from: data)
+        guard rows.count <= 1 else {
+            throw NSError(domain: "SupabaseAPI.fetchFantasyBriefing", code: -2)
+        }
+        let briefing = rows.first?.payload
+        try briefing?.validate(date: league == "NFL" ? briefing?.date ?? date : date, league: league)
+        return briefing
+    }
+
     /// Fetch hub connections for a specific date + league (e.g. "MLB" / "NBA").
     /// Returns [] only for a successful, genuinely empty league. Transport,
     /// HTTP, and top-level schema failures throw so callers can preserve the

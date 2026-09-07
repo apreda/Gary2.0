@@ -5507,15 +5507,18 @@ const ballDontLieService = {
     }, 24 * 60);
   },
 
-  async getMlbLineups(gameId) {
+  async getMlbLineups(gameId, { throwOnError = false } = {}) {
     if (!gameId) return null;
     try {
-      const cacheKey = `mlb_lineups_${gameId}`;
+      const cacheKey = `mlb_lineups_v2_${gameId}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/lineups${buildQuery({ game_ids: [gameId], per_page: 100 })}`;
         console.log(`[BDL] Fetching MLB lineups for game ${gameId}`);
-        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
-        const entries = response.data?.data || [];
+        const entries = await fetchBdlPages(async cursor => {
+          const params = { game_ids: [gameId], per_page: 100 };
+          if (cursor != null) params.cursor = cursor;
+          const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/lineups${buildQuery(params)}`;
+          return (await bdlHttp.get(url, { headers: { Authorization: API_KEY } })).data;
+        }, { label: 'MLB pregame lineup', maxPages: 5 });
         if (entries.length === 0) {
           console.log(`[BDL] No lineup data for game ${gameId} (lineups may not be posted yet)`);
           return null;
@@ -5574,6 +5577,7 @@ const ballDontLieService = {
       }, 10); // 10 min cache
     } catch (error) {
       console.error(`[BDL] MLB lineups error for game ${gameId}:`, error?.response?.data || error.message);
+      if (throwOnError) throw error;
       return null;
     }
   },
@@ -5581,39 +5585,38 @@ const ballDontLieService = {
   /**
    * Get MLB players by IDs to resolve player names + positions
    */
-  async getMlbPlayersByIds(playerIds) {
+  async getMlbPlayersByIds(playerIds, { throwOnError = false } = {}) {
     try {
       if (!playerIds || playerIds.length === 0) return {};
-      const cacheKey = `mlb_players_by_ids_${playerIds.sort().join(',')}`;
+      const requestedIds = [...new Set(playerIds.map(String))].sort();
+      const cacheKey = `mlb_players_by_ids_v2_${requestedIds.join(',')}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        // ONE PAGE IS NOT THE ANSWER (Sep 4 2026). This asked for per_page 100
-        // and read the first page only, so a 327-id request resolved 100 names
-        // and silently dropped 227 — the Hub's player cards for off-slate arms
-        // (Scherzer, Giolito) had nothing to hang a card on and were skipped
-        // every single day. Ids go out in chunks of 100 and every chunk pages
-        // to its end.
+        // Chunk IDs and require complete pages. A failed later page cannot
+        // become a cached partial identity map, including in strict callers.
         const CHUNK = 100;
         const playerMap = {};
-        for (let i = 0; i < playerIds.length; i += CHUNK) {
-          const chunk = playerIds.slice(i, i + CHUNK);
-          let cursor = null;
-          for (let page = 0; page < 10; page++) {
+        for (let i = 0; i < requestedIds.length; i += CHUNK) {
+          const chunk = requestedIds.slice(i, i + CHUNK);
+          const players = await fetchBdlPages(async cursor => {
             const query = { player_ids: chunk, per_page: 100 };
             if (cursor != null) query.cursor = cursor;
             const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/players${buildQuery(query)}`;
-            const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
-            for (const player of response.data?.data || []) {
-              playerMap[player.id] = {
-                name: player.full_name || `${player.first_name} ${player.last_name}`,
-                position: player.position,
-                batsThrows: player.bats_throws,
-                team: player.team?.display_name || player.team?.name || 'Unknown',
-                teamAbbr: player.team?.abbreviation || '',
-                teamId: player.team?.id
-              };
+            return (await bdlHttp.get(url, { headers: { Authorization: API_KEY } })).data;
+          }, { label: 'MLB player identities', maxPages: 10 });
+          for (const player of players) {
+            if (!chunk.includes(String(player.id))) continue;
+            const identity = {
+              name: player.full_name || `${player.first_name} ${player.last_name}`,
+              position: player.position,
+              batsThrows: player.bats_throws,
+              team: player.team?.display_name || player.team?.name || 'Unknown',
+              teamAbbr: player.team?.abbreviation || '',
+              teamId: player.team?.id
+            };
+            if (playerMap[player.id] && JSON.stringify(playerMap[player.id]) !== JSON.stringify(identity)) {
+              throw new Error(`Conflicting MLB player identity ${player.id}`);
             }
-            cursor = response.data?.meta?.next_cursor ?? null;
-            if (cursor == null) break;
+            playerMap[player.id] = identity;
           }
         }
         console.log(`[BDL] Resolved ${Object.keys(playerMap).length} of ${playerIds.length} MLB player name(s)`);
@@ -5621,6 +5624,7 @@ const ballDontLieService = {
       }, 60);
     } catch (error) {
       console.error(`[BDL] MLB players error:`, error?.response?.data || error.message);
+      if (throwOnError) throw error;
       return {};
     }
   },
@@ -5630,39 +5634,28 @@ const ballDontLieService = {
    * Returns full season: batting_avg, batting_hr, batting_rbi, batting_ops, batting_war,
    *                       pitching_era, pitching_whip, pitching_k, pitching_k_per_9, pitching_war, etc.
    */
-  async getMlbPlayerSeasonStats({ season, playerIds, teamId, postseason = false, perPage = 100 } = {}, ttlMinutes = 30) {
+  async getMlbPlayerSeasonStats({ season, playerIds, teamId, postseason = false, perPage = 100, throwOnError = false } = {}, ttlMinutes = 30) {
     try {
       if (!season) return [];
-      // v2 invalidates only the old first-page-only MLB season-stat entries.
-      const cacheKey = `mlb_season_stats_v2_${season}_${playerIds?.join(',') || ''}_${teamId || ''}_${postseason}_${perPage}`;
+      // v3 also excludes malformed or nonterminal-empty collections from cache.
+      const cacheKey = `mlb_season_stats_v3_${season}_${playerIds?.join(',') || ''}_${teamId || ''}_${postseason}_${perPage}`;
       return await getCachedOrFetch(cacheKey, async () => {
         const params = { season, per_page: perPage };
         if (playerIds?.length) params.player_ids = playerIds;
         if (teamId) params.team_id = teamId;
         if (postseason) params.postseason = postseason;
         console.log(`[BDL] Fetching MLB season stats: season=${season}, players=${playerIds?.length || 'all'}, team=${teamId || 'all'}, per_page=${perPage}`);
-        const stats = [];
-        const seenCursors = new Set();
-        for (let page = 0; page < 100; page++) {
-          const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/season_stats${buildQuery(params)}`;
-          const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
-          if (!Array.isArray(response.data?.data)) throw new Error('Invalid MLB season stats page');
-          stats.push(...response.data.data);
-          const nextCursor = response.data?.meta?.next_cursor;
-          if (nextCursor == null) {
-            console.log(`[BDL] Retrieved ${stats.length} MLB season stat records across ${page + 1} page(s)`);
-            return stats;
-          }
-          const cursorKey = String(nextCursor);
-          if (seenCursors.has(cursorKey)) throw new Error('Repeated MLB season stats cursor');
-          seenCursors.add(cursorKey);
-          params.cursor = nextCursor;
-        }
-        // Never cache partial season data after a failed page or pagination cap.
-        throw new Error('MLB season stats pagination exceeded 100 pages');
+        const stats = await fetchBdlPages(async cursor => {
+          const pageParams = cursor != null ? { ...params, cursor } : params;
+          const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/season_stats${buildQuery(pageParams)}`;
+          return (await bdlHttp.get(url, { headers: { Authorization: API_KEY } })).data;
+        }, { label: 'MLB season stats' });
+        console.log(`[BDL] Retrieved ${stats.length} MLB season stat records`);
+        return stats;
       }, ttlMinutes);
     } catch (error) {
       console.error(`[BDL] MLB season stats error:`, error?.response?.data || error.message);
+      if (throwOnError) throw error;
       return [];
     }
   },

@@ -312,7 +312,7 @@ async function fetchRows(date, league) {
     params: {
       date: `eq.${date}`,
       league: `eq.${league}`,
-      select: 'id,league,category,tone,player_id,team_id,game_id,headline,value,line_val,result,result_note,graded_at',
+      select: 'id,league,category,tone,player_id,team_id,game_id,headline,value,line_val,result,result_note,graded_at,generated_by,fantasy_source:meta->>source',
     },
   });
   return Array.isArray(res.data) ? res.data : [];

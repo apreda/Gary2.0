@@ -78,12 +78,15 @@ async function getGamePlayByPlay(gamePk) {
 // MLB REGULAR SEASON SCHEDULE
 // ═══════════════════════════════════════════════════════════════════════════
 
-export async function getMlbSchedule(date) {
-  const key = `mlb_schedule_${date}`;
+export async function getMlbSchedule(date, { throwOnError = false } = {}) {
+  const key = `${throwOnError ? 'mlb_schedule_strict' : 'mlb_schedule'}_${date}`;
   const cached = getCached(key);
   if (cached) return cached;
 
   const data = await apiFetch(`/schedule?sportId=${MLB_SPORT_ID}&date=${date}&hydrate=probablePitcher,linescore`);
+  if (throwOnError && (!Array.isArray(data?.dates) || data.dates.some(entry => !Array.isArray(entry?.games) || entry.games.some(game => !game || typeof game !== 'object' || !game.gamePk)))) {
+    throw new Error('MLB Stats API schedule returned an invalid collection');
+  }
   const games = [];
   for (const dateEntry of (data.dates || [])) {
     for (const game of (dateEntry.games || [])) {

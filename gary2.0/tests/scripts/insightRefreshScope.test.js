@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { insightRefreshOldIds } from '../../scripts/lib/insightRefreshScope.js';
+import { insightRefreshOldIds, insightResetScopeParams } from '../../scripts/lib/insightRefreshScope.js';
 
 describe('college lane continuation storage', () => {
   const existing = [{ id: 1, game_id: '10' }, { id: 2, game_id: '10' }, { id: 3, game_id: '20' }];
@@ -25,5 +25,22 @@ describe('college lane continuation storage', () => {
     expect(block).toContain("select: 'id,category,game_id,meta'");
     expect(block).toContain('insightRefreshOldIds({ league, category, existing: existing || [], fresh })');
     expect(block.indexOf('await insertRows(fresh)')).toBeLessThan(block.indexOf("method: 'DELETE'"));
+  });
+});
+
+describe('general insight reset ownership', () => {
+  it('keeps the exact partition and protects either Fantasy marker, including NULL-safe legacy behavior', () => {
+    expect(insightResetScopeParams({ date: '2026-09-07', league: 'MLB' })).toEqual({
+      date: 'eq.2026-09-07', league: 'eq.MLB',
+      and: '(or(generated_by.is.null,generated_by.neq.fantasy_briefing_v1),or(meta->>source.is.null,meta->>source.neq.fantasy_briefing_v1))',
+    });
+  });
+
+  it('uses the protected predicate on the actual DELETE without broadening normal refresh ownership', () => {
+    const source = readFileSync(new URL('../../run-insight-connections.js', import.meta.url), 'utf8');
+    const block = source.slice(source.indexOf('async function deleteDayRows'), source.indexOf('async function deleteSituationalRowForGame'));
+    expect(block).toContain("method: 'DELETE'");
+    expect(block).toContain('params: insightResetScopeParams({ date, league })');
+    expect(source).toContain('if (resetDay) await deleteDayRows(targetDate, league)');
   });
 });

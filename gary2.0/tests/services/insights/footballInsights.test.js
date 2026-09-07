@@ -418,7 +418,7 @@ describe('football team data grounding', () => {
 });
 
 describe('football generator registration and row contract', () => {
-  it('builds NFL fantasy usage, recent trend, and market context only from current grounded data', async () => {
+  it('leaves NFL Fantasy decisions to the independent writer even when the old inputs exist', async () => {
     bdl.getGames.mockResolvedValue([nflSlateGame]);
     bdl.getNflAdvancedRushingStats.mockResolvedValue([
       {
@@ -474,23 +474,10 @@ describe('football generator registration and row contract', () => {
     const result = await generateInsightConnections({ date: '2026-09-10', league: 'NFL' });
     const fantasy = result.connections.filter((row) => row.category.startsWith('fantasy_'));
 
-    expect(new Set(fantasy.map((row) => row.category))).toEqual(new Set([
-      'fantasy_usage', 'fantasy_trend', 'fantasy_matchup',
-    ]));
-    expect(bdl.getPlayersActive).toHaveBeenCalledWith(
-      'americanfootball_nfl',
-      { player_ids: ['101', '202', '303'], per_page: 100 },
-      10,
-    );
-    expect(fantasy.every((row) => row.game_id === 900)).toBe(true);
-    expect(fantasy.every((row) => ['101', '202'].includes(String(row.player_id)))).toBe(true);
-    expect(fantasy.every((row) => row.meta?.season === 2026)).toBe(true);
-    expect(fantasy.find((row) => row.player_id === 101 && row.category === 'fantasy_usage')?.detail)
-      .not.toContain('99');
-    expect(fantasy.every((row) => ['1', '2'].includes(String(row.team_id)))).toBe(true);
-    expect(fantasy.every((row) => row.meta?.kind === row.category)).toBe(true);
-    expect(fantasy.find((row) => row.category === 'fantasy_usage')?.detail).toMatch(/not a projection|snap-share/);
-    expect(fantasy.find((row) => row.category === 'fantasy_matchup')?.detail).toContain('not a coverage grade or projection');
+    expect(fantasy).toEqual([]);
+    expect(bdl.getNflAdvancedRushingStats).not.toHaveBeenCalled();
+    expect(bdl.getNflAdvancedReceivingStats).not.toHaveBeenCalled();
+    expect(bdl.getNflPlayerGameLogsBatch).not.toHaveBeenCalled();
   });
 
   it('keeps the NFL fantasy desk empty before current regular-season opportunity exists', async () => {
@@ -507,7 +494,7 @@ describe('football generator registration and row contract', () => {
     expect(result.connections.filter((row) => row.category.startsWith('fantasy_'))).toEqual([]);
   });
 
-  it('uses a roster-verified, visibly labeled prior-season NFL baseline during preseason', async () => {
+  it('does not reactivate the old NFL Fantasy generator when preseason baselines exist', async () => {
     bdl.getGames.mockResolvedValue([{
       ...nflSlateGame,
       date: '2026-08-16T00:00:00.000Z',
@@ -536,19 +523,10 @@ describe('football generator registration and row contract', () => {
     const result = await generateInsightConnections({ date: '2026-08-15', league: 'NFL' });
     const fantasy = result.connections.filter((row) => row.category.startsWith('fantasy_'));
 
-    expect(fantasy.map((row) => row.category)).toEqual(['fantasy_usage']);
-    expect(fantasy[0]).toMatchObject({ player_id: 101, team_id: 1, game_id: 900 });
-    // MLB's card contract: the headline is the player. The baseline label the
-    // user reads is built from meta (evidence_scope + season) by the card.
-    expect(fantasy[0].headline).toBe('Feature Back');
-    expect(fantasy[0].detail).toContain('prior-season baseline, not current form');
-    expect(fantasy[0].meta).toMatchObject({
-      kind: 'fantasy_usage',
-      team: 'BUF',
-      season: 2025,
-      evidence_scope: 'prior_season_baseline',
-    });
-    expect(bdl.getNflPlayerGameLogsBatch).toHaveBeenCalledWith([101], 2025, 5);
+    expect(fantasy).toEqual([]);
+    expect(bdl.getNflAdvancedRushingStats).not.toHaveBeenCalled();
+    expect(bdl.getNflAdvancedReceivingStats).not.toHaveBeenCalled();
+    expect(bdl.getNflPlayerGameLogsBatch).not.toHaveBeenCalled();
   });
 
   it('emits exact-game NFL rows in only the supported grounded categories', async () => {

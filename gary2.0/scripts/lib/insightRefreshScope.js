@@ -7,3 +7,14 @@ export function insightRefreshOldIds({ league, category, existing = [], fresh = 
   return existing.filter(row => !incremental || (row.game_id != null && freshGames.has(String(row.game_id))))
     .map(row => row.id).filter(id => id != null);
 }
+
+/** General insight resets cannot rebuild the independent Fantasy writer's
+ * projection. Preserve either provenance marker; explicit NULL branches keep
+ * the reset's existing behavior for older rows without those fields. */
+export function insightResetScopeParams({ date, league }) {
+  return {
+    date: `eq.${date}`,
+    league: `eq.${league}`,
+    and: '(or(generated_by.is.null,generated_by.neq.fantasy_briefing_v1),or(meta->>source.is.null,meta->>source.neq.fantasy_briefing_v1))',
+  };
+}

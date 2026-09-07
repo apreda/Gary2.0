@@ -1,0 +1,3041 @@
+{
+  "schema_version": 1,
+  "writer_version": "fantasy-briefing-v1-2026-09-07",
+  "date": "2026-09-07",
+  "league": "MLB",
+  "generated_at": "2026-09-07T19:41:31.076Z",
+  "fetched_as_of": "2026-09-07T19:23:18.036Z",
+  "expires_at": "2026-09-07T22:23:18.036Z",
+  "window_start": "2026-09-07",
+  "window_end": "2026-09-13",
+  "week": null,
+  "input_fingerprint": "7fed0c8d4d3083e99852d74174658ef425010d30b0fd38324e269fe4c24a7182",
+  "decisions": [
+    {
+      "id": "bdl:5161",
+      "player_id": "5161",
+      "player_name": "Nick Pivetta",
+      "team_id": "23",
+      "team": "SD",
+      "position": "SP",
+      "role": "pitcher",
+      "action": "WATCH",
+      "horizon": "next_game",
+      "valid_until": "2026-09-07T21:10:00.000Z",
+      "headline": "Do not activate Pivetta until the IL-versus-probable conflict is resolved",
+      "why_now": "A stored report at 10:05 UTC lists Pivetta on the 60-day IL with a forearm injury, while the 19:23 UTC game feed and schedule list him probable against Washington. With no observed outing in the prior 45 days and no planned workload supplied, his availability and usable innings remain unresolved.",
+      "fit": "Managers with Pivetta in an IL slot or considering him for today's pitching slot.",
+      "risk": "If the probable listing reflects a real activation, his 24 strikeouts in 16 innings and 1.87 contact-based xERA show the potential cost of missing the start.",
+      "watch_for": "An official activation or corrected injury status, followed by confirmed starter and workload information.",
+      "formats": [
+        "categories",
+        "points"
+      ],
+      "categories": [
+        "strikeouts",
+        "era",
+        "whip"
+      ],
+      "evidence": [
+        {
+          "id": "published_status_1",
+          "label": "Published player status for 2026-09-07",
+          "source": "Gary return_watch (stored report)",
+          "observed_at": "2026-09-07T10:05:24.283Z",
+          "summary": "2026-09-07: 60-Day-IL; reported issue: forearm. Report updated 2026-09-07T10:05:24.283Z. Current availability is unconfirmed.",
+          "facts": {
+            "player_id": "5161",
+            "status": "60-Day-IL",
+            "source": "Gary return_watch (stored report)",
+            "date": "2026-09-07",
+            "injury": "forearm",
+            "updated_at": "2026-09-07T10:05:24.283444+00:00",
+            "created_at": "2026-09-07T10:05:24.283444+00:00"
+          }
+        },
+        {
+          "id": "today",
+          "label": "Schedule and lineup for 2026-09-07",
+          "source": "BALLDONTLIE pregame lineups",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "2026-09-07 vs WSH: posted lineup, probable starter; opposing probable Jake Irvin (R).",
+          "facts": {
+            "date": "2026-09-07",
+            "opportunities": [
+              {
+                "game_id": "5059934",
+                "date": "2026-09-07",
+                "start_at": "2026-09-07T21:10:00.000Z",
+                "home": true,
+                "opponent": "WSH",
+                "opponent_team_id": "30",
+                "venue": "Petco Park",
+                "lineup_status": "confirmed",
+                "batting_order": null,
+                "bats": "R",
+                "throws": "R",
+                "starting_pitcher_status": "probable",
+                "opponent_pitcher": {
+                  "player_id": "926",
+                  "name": "Jake Irvin",
+                  "status": "probable",
+                  "bats": "R",
+                  "throws": "R"
+                },
+                "planned_innings": null,
+                "opener_or_bulk_role": "unconfirmed"
+              }
+            ]
+          }
+        },
+        {
+          "id": "recent_pitcher",
+          "label": "Last 0 observed pitching outings before 2026-09-07",
+          "source": "BALLDONTLIE final game stats",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "No completed appearances returned from 2026-07-24 through the day before 2026-09-07.",
+          "facts": {
+            "window_start": "2026-07-24",
+            "cutoff_exclusive": "2026-09-07",
+            "sample_games": 0,
+            "requested_games": 5,
+            "latest_game_at": null,
+            "days_since_latest_game": null,
+            "rows": [],
+            "totals": {},
+            "measured_games_by_stat": {
+              "pitching_outs": 0,
+              "pitch_count": 0,
+              "p_hits": 0,
+              "er": 0,
+              "p_bb": 0,
+              "p_k": 0,
+              "p_hr": 0,
+              "batters_faced": 0,
+              "games_started": 0,
+              "wins": 0,
+              "saves": 0,
+              "holds": 0
+            },
+            "excluded_conflicting_games": 0
+          }
+        },
+        {
+          "id": "season",
+          "label": "2026 regular season",
+          "source": "BALLDONTLIE season stats",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "2026: 4 outings, 4 starts, 16 IP, 24 K, 4.50 ERA, 1.13 WHIP, 0 saves.",
+          "facts": {
+            "season": 2026,
+            "season_type": "regular",
+            "pitching_gp": 4,
+            "pitching_gs": 4,
+            "pitching_qs": 0,
+            "pitching_w": 1,
+            "pitching_sv": 0,
+            "pitching_hld": 0,
+            "pitching_ip": 16,
+            "pitching_h": 12,
+            "pitching_er": 8,
+            "pitching_bb": 6,
+            "pitching_k": 24,
+            "pitching_k_per_9": 13.5,
+            "pitching_era": 4.5,
+            "pitching_whip": 1.125
+          }
+        },
+        {
+          "id": "expected_pitcher",
+          "label": "2026 contact-based expected stats",
+          "source": "Baseball Savant",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "2026, 66 PA: 4.50 ERA, 1.87 xERA, 0.200 AVG, 0.154 xBA, 0.248 wOBA, 0.212 xwOBA. Season measurements.",
+          "facts": {
+            "season": 2026,
+            "mlbam_player_id": "601713",
+            "match_method": "unique_exact_full_name",
+            "sample_pa": 66,
+            "era": 4.5,
+            "xera": 1.87,
+            "ba": 0.2,
+            "est_ba": 0.154,
+            "woba": 0.248,
+            "est_woba": 0.212,
+            "scope": "Season contact outcomes; not a forecast for today."
+          }
+        }
+      ],
+      "opportunities": [
+        {
+          "game_id": "5059934",
+          "date": "2026-09-07",
+          "start_at": "2026-09-07T21:10:00.000Z",
+          "home": true,
+          "opponent": "WSH",
+          "opponent_team_id": "30",
+          "venue": "Petco Park",
+          "lineup_status": "confirmed",
+          "batting_order": null,
+          "bats": "R",
+          "throws": "R",
+          "starting_pitcher_status": "probable",
+          "opponent_pitcher": {
+            "player_id": "926",
+            "name": "Jake Irvin",
+            "status": "probable",
+            "bats": "R",
+            "throws": "R"
+          },
+          "planned_innings": null,
+          "opener_or_bulk_role": "unconfirmed"
+        }
+      ],
+      "availability": {
+        "rostered_percent": null,
+        "league_available": null
+      },
+      "limitations": [
+        "League roster availability and scoring settings are not supplied.",
+        "Times show when Gary checked the data; the stat and lineup feeds do not provide their last update time.",
+        "Published status and current probable listing may disagree; availability is unconfirmed.",
+        "No completed pitcher appearances returned in the prior 45 days."
+      ]
+    },
+    {
+      "id": "bdl:926",
+      "player_id": "926",
+      "player_name": "Jake Irvin",
+      "team_id": "30",
+      "team": "WSH",
+      "position": "SP",
+      "role": "pitcher",
+      "action": "SIT",
+      "horizon": "next_game",
+      "valid_until": "2026-09-07T21:10:00.000Z",
+      "headline": "Protect ratios from Irvin against San Diego's confirmed lineup",
+      "why_now": "Irvin is only probable, but San Diego's order is confirmed and includes several productive season-long bats. He has a 6.08 ERA and 1.69 WHIP over his last five starts, consistent with a 5.57 season ERA and 5.29 xERA rather than a short unlucky stretch.",
+      "fit": "Shallow category leagues and teams protecting ERA or WHIP; strikeout-desperate managers have more reason to accept the risk.",
+      "risk": "He still recorded 25 strikeouts in 23.2 innings across those five starts, so sitting him can sacrifice useful volume.",
+      "watch_for": "Final confirmation that Irvin starts and any announced restriction on his currently unspecified workload.",
+      "formats": [
+        "categories",
+        "points"
+      ],
+      "categories": [
+        "strikeouts",
+        "era",
+        "whip",
+        "wins",
+        "quality_starts"
+      ],
+      "evidence": [
+        {
+          "id": "today",
+          "label": "Schedule and lineup for 2026-09-07",
+          "source": "BALLDONTLIE pregame lineups",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "2026-09-07 at SD: lineup not posted, probable starter; opposing probable Nick Pivetta (R).",
+          "facts": {
+            "date": "2026-09-07",
+            "opportunities": [
+              {
+                "game_id": "5059934",
+                "date": "2026-09-07",
+                "start_at": "2026-09-07T21:10:00.000Z",
+                "home": false,
+                "opponent": "SD",
+                "opponent_team_id": "23",
+                "venue": "Petco Park",
+                "lineup_status": "not_posted",
+                "batting_order": null,
+                "bats": "R",
+                "throws": "R",
+                "starting_pitcher_status": "probable",
+                "opponent_pitcher": {
+                  "player_id": "5161",
+                  "name": "Nick Pivetta",
+                  "status": "probable",
+                  "bats": "R",
+                  "throws": "R"
+                },
+                "planned_innings": null,
+                "opener_or_bulk_role": "unconfirmed"
+              }
+            ]
+          }
+        },
+        {
+          "id": "opponent_order_5059934",
+          "label": "Opposing batting order: SD",
+          "source": "BALLDONTLIE dated lineups and season batting stats",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "SD: Posted 2026-09-07 order. 1. Fernando Tatis Jr. (R); 2. Jake Cronenworth (L); 3. Manny Machado (R); 4. Ty France (R); 5. Jackson Merrill (L); 6. Luis Campusano (R); 7. Dustin Harris (L); 8. Xander Bogaerts (R); 9. Ethan Salas (L). 2026 samples for those nine: 2997 AB, 712 K. PA unavailable; no lineup strikeout rate inferred.",
+          "facts": {
+            "game_id": "5059934",
+            "game_date": "2026-09-07",
+            "opponent_team_id": "23",
+            "opponent": "SD",
+            "lineup_status_today": "confirmed",
+            "lineup_source": "today",
+            "lineup_date": "2026-09-07",
+            "lineup_game_id": "5059934",
+            "confirmed_for_today": true,
+            "complete_source_order": true,
+            "season": 2026,
+            "rows": [
+              {
+                "player_id": "492",
+                "name": "Fernando Tatis Jr.",
+                "batting_order": 1,
+                "bats": "R",
+                "current_team_status": "same_team",
+                "season_games": 141,
+                "plate_appearances": null,
+                "at_bats": 554,
+                "strikeouts": 114,
+                "walks": 55,
+                "home_runs": 20,
+                "ops": 0.7944275
+              },
+              {
+                "player_id": "403",
+                "name": "Jake Cronenworth",
+                "batting_order": 2,
+                "bats": "L",
+                "current_team_status": "same_team",
+                "season_games": 91,
+                "plate_appearances": null,
+                "at_bats": 311,
+                "strikeouts": 81,
+                "walks": 33,
+                "home_runs": 5,
+                "ops": 0.5938141
+              },
+              {
+                "player_id": "412",
+                "name": "Manny Machado",
+                "batting_order": 3,
+                "bats": "R",
+                "current_team_status": "same_team",
+                "season_games": 139,
+                "plate_appearances": null,
+                "at_bats": 515,
+                "strikeouts": 127,
+                "walks": 69,
+                "home_runs": 26,
+                "ops": 0.7238788
+              },
+              {
+                "player_id": "1471",
+                "name": "Ty France",
+                "batting_order": 4,
+                "bats": "R",
+                "current_team_status": "same_team",
+                "season_games": 117,
+                "plate_appearances": null,
+                "at_bats": 376,
+                "strikeouts": 94,
+                "walks": 33,
+                "home_runs": 20,
+                "ops": 0.8704512
+              },
+              {
+                "player_id": "480",
+                "name": "Jackson Merrill",
+                "batting_order": 5,
+                "bats": "L",
+                "current_team_status": "same_team",
+                "season_games": 140,
+                "plate_appearances": null,
+                "at_bats": 540,
+                "strikeouts": 142,
+                "walks": 38,
+                "home_runs": 22,
+                "ops": 0.700991
+              },
+              {
+                "player_id": "370",
+                "name": "Luis Campusano",
+                "batting_order": 6,
+                "bats": "R",
+                "current_team_status": "same_team",
+                "season_games": 58,
+                "plate_appearances": null,
+                "at_bats": 165,
+                "strikeouts": 43,
+                "walks": 25,
+                "home_runs": 7,
+                "ops": 0.8642044
+              },
+              {
+                "player_id": "254",
+                "name": "Dustin Harris",
+                "batting_order": 7,
+                "bats": "L",
+                "current_team_status": "same_team",
+                "season_games": 27,
+                "plate_appearances": null,
+                "at_bats": 65,
+                "strikeouts": 11,
+                "walks": 7,
+                "home_runs": 0,
+                "ops": 0.7187109
+              },
+              {
+                "player_id": "388",
+                "name": "Xander Bogaerts",
+                "batting_order": 8,
+                "bats": "R",
+                "current_team_status": "same_team",
+                "season_games": 136,
+                "plate_appearances": null,
+                "at_bats": 463,
+                "strikeouts": 96,
+                "walks": 66,
+                "home_runs": 11,
+                "ops": 0.6374982
+              },
+              {
+                "player_id": "4838709",
+                "name": "Ethan Salas",
+                "batting_order": 9,
+                "bats": "L",
+                "current_team_status": "same_team",
+                "season_games": 3,
+                "plate_appearances": null,
+                "at_bats": 8,
+                "strikeouts": 4,
+                "walks": 0,
+                "home_runs": 0,
+                "ops": 0
+              }
+            ],
+            "totals": {
+              "plate_appearances": null,
+              "at_bats": 2997,
+              "strikeouts": 712
+            },
+            "measured_players_by_stat": {
+              "plate_appearances": 0,
+              "at_bats": 9,
+              "strikeouts": 9
+            },
+            "scope": "Season batting samples for the named order. Totals are not a forecast of this pitcher's result.",
+            "plate_appearances_derived_from_at_bats": false
+          }
+        },
+        {
+          "id": "recent_pitcher",
+          "label": "Last 5 observed pitching outings before 2026-09-07",
+          "source": "BALLDONTLIE final game stats",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "5 observed appearances, 2026-08-11 to 2026-09-01: 470 pitches, 16 ER, 14 BB, 25 K, 0 saves, 0 holds, 23.2 IP, 6.08 ERA, 1.69 WHIP, 9.51 K/9. Latest appearance 6 days before this slate.",
+          "facts": {
+            "window_start": "2026-07-24",
+            "cutoff_exclusive": "2026-09-07",
+            "sample_games": 5,
+            "requested_games": 5,
+            "latest_game_at": "2026-09-01T22:45:00.000Z",
+            "days_since_latest_game": 6,
+            "rows": [
+              {
+                "game_id": "5059847",
+                "date": "2026-09-01",
+                "start_at": "2026-09-01T22:45:00.000Z",
+                "team_id": "30",
+                "pitching_outs": 12,
+                "pitch_count": 86,
+                "p_hits": 5,
+                "er": 2,
+                "p_bb": 1,
+                "p_k": 5,
+                "p_hr": 1,
+                "batters_faced": 18,
+                "games_started": 1,
+                "wins": 0,
+                "saves": 0,
+                "holds": 0
+              },
+              {
+                "game_id": "5059780",
+                "date": "2026-08-27",
+                "start_at": "2026-08-27T17:05:00.000Z",
+                "team_id": "30",
+                "pitching_outs": 13,
+                "pitch_count": 94,
+                "p_hits": 3,
+                "er": 1,
+                "p_bb": 6,
+                "p_k": 6,
+                "p_hr": 0,
+                "batters_faced": 23,
+                "games_started": 1,
+                "wins": 0,
+                "saves": 0,
+                "holds": 0
+              },
+              {
+                "game_id": "5059712",
+                "date": "2026-08-22",
+                "start_at": "2026-08-22T20:10:00.000Z",
+                "team_id": "30",
+                "pitching_outs": 18,
+                "pitch_count": 104,
+                "p_hits": 6,
+                "er": 4,
+                "p_bb": 2,
+                "p_k": 4,
+                "p_hr": 2,
+                "batters_faced": 26,
+                "games_started": 1,
+                "wins": 0,
+                "saves": 0,
+                "holds": 0
+              },
+              {
+                "game_id": "5059639",
+                "date": "2026-08-16",
+                "start_at": "2026-08-16T17:40:00.000Z",
+                "team_id": "30",
+                "pitching_outs": 18,
+                "pitch_count": 98,
+                "p_hits": 8,
+                "er": 4,
+                "p_bb": 3,
+                "p_k": 6,
+                "p_hr": 1,
+                "batters_faced": 27,
+                "games_started": 1,
+                "wins": 0,
+                "saves": 0,
+                "holds": 0
+              },
+              {
+                "game_id": "5059566",
+                "date": "2026-08-11",
+                "start_at": "2026-08-11T22:45:00.000Z",
+                "team_id": "30",
+                "pitching_outs": 10,
+                "pitch_count": 88,
+                "p_hits": 4,
+                "er": 5,
+                "p_bb": 2,
+                "p_k": 4,
+                "p_hr": 1,
+                "batters_faced": 18,
+                "games_started": 1,
+                "wins": 0,
+                "saves": 0,
+                "holds": 0
+              }
+            ],
+            "totals": {
+              "pitching_outs": 71,
+              "pitch_count": 470,
+              "p_hits": 26,
+              "er": 16,
+              "p_bb": 14,
+              "p_k": 25,
+              "p_hr": 5,
+              "batters_faced": 112,
+              "games_started": 5,
+              "wins": 0,
+              "saves": 0,
+              "holds": 0,
+              "innings_pitched": "23.2",
+              "era": 6.08,
+              "whip": 1.69,
+              "k_per_9": 9.51
+            },
+            "measured_games_by_stat": {
+              "pitching_outs": 5,
+              "pitch_count": 5,
+              "p_hits": 5,
+              "er": 5,
+              "p_bb": 5,
+              "p_k": 5,
+              "p_hr": 5,
+              "batters_faced": 5,
+              "games_started": 5,
+              "wins": 5,
+              "saves": 5,
+              "holds": 5
+            },
+            "excluded_conflicting_games": 0
+          }
+        },
+        {
+          "id": "season",
+          "label": "2026 regular season",
+          "source": "BALLDONTLIE season stats",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "2026: 18 outings, 18 starts, 85.2 IP, 87 K, 5.57 ERA, 1.40 WHIP, 0 saves.",
+          "facts": {
+            "season": 2026,
+            "season_type": "regular",
+            "pitching_gp": 18,
+            "pitching_gs": 18,
+            "pitching_qs": 0,
+            "pitching_w": 2,
+            "pitching_sv": 0,
+            "pitching_hld": 0,
+            "pitching_ip": 85.2,
+            "pitching_h": 80,
+            "pitching_er": 53,
+            "pitching_bb": 40,
+            "pitching_k": 87,
+            "pitching_k_per_9": 9.140078,
+            "pitching_era": 5.568,
+            "pitching_whip": 1.4007
+          }
+        },
+        {
+          "id": "expected_pitcher",
+          "label": "2026 contact-based expected stats",
+          "source": "Baseball Savant",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "2026, 380 PA: 5.57 ERA, 5.29 xERA, 0.245 AVG, 0.248 xBA, 0.339 wOBA, 0.350 xwOBA. Season measurements.",
+          "facts": {
+            "season": 2026,
+            "mlbam_player_id": "663623",
+            "match_method": "unique_exact_full_name",
+            "sample_pa": 380,
+            "era": 5.57,
+            "xera": 5.29,
+            "ba": 0.245,
+            "est_ba": 0.248,
+            "woba": 0.339,
+            "est_woba": 0.35,
+            "scope": "Season contact outcomes; not a forecast for today."
+          }
+        }
+      ],
+      "opportunities": [
+        {
+          "game_id": "5059934",
+          "date": "2026-09-07",
+          "start_at": "2026-09-07T21:10:00.000Z",
+          "home": false,
+          "opponent": "SD",
+          "opponent_team_id": "23",
+          "venue": "Petco Park",
+          "lineup_status": "not_posted",
+          "batting_order": null,
+          "bats": "R",
+          "throws": "R",
+          "starting_pitcher_status": "probable",
+          "opponent_pitcher": {
+            "player_id": "5161",
+            "name": "Nick Pivetta",
+            "status": "probable",
+            "bats": "R",
+            "throws": "R"
+          },
+          "planned_innings": null,
+          "opener_or_bulk_role": "unconfirmed"
+        }
+      ],
+      "availability": {
+        "rostered_percent": null,
+        "league_available": null
+      },
+      "limitations": [
+        "League roster availability and scoring settings are not supplied.",
+        "Times show when Gary checked the data; the stat and lineup feeds do not provide their last update time."
+      ]
+    },
+    {
+      "id": "bdl:1471",
+      "player_id": "1471",
+      "player_name": "Ty France",
+      "team_id": "23",
+      "team": "SD",
+      "position": "1B",
+      "role": "hitter",
+      "action": "START",
+      "horizon": "next_game",
+      "valid_until": "2026-09-07T21:10:00.000Z",
+      "headline": "Use France's confirmed cleanup assignment against Irvin",
+      "why_now": "France is confirmed batting fourth and the probable opposing starter, Jake Irvin, owns a 5.57 ERA and 1.40 WHIP. France has produced 11 hits, six runs and six RBI over his last 10 games, giving the premium lineup spot current support.",
+      "fit": "Managers seeking average, RBI or a dependable active bat in either categories or points formats.",
+      "risk": "His contact estimates trail his actual production: .251 expected average and .427 expected slugging versus .290 and .511 observed.",
+      "watch_for": "Final confirmation that Irvin remains Washington's starter.",
+      "formats": [
+        "categories",
+        "points"
+      ],
+      "categories": [
+        "runs",
+        "home_runs",
+        "rbi",
+        "average",
+        "points"
+      ],
+      "evidence": [
+        {
+          "id": "today",
+          "label": "Schedule and lineup for 2026-09-07",
+          "source": "BALLDONTLIE pregame lineups",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "2026-09-07 vs WSH: posted lineup, batting 4; opposing probable Jake Irvin (R); 2026-09-06 order 4.",
+          "facts": {
+            "date": "2026-09-07",
+            "opportunities": [
+              {
+                "game_id": "5059934",
+                "date": "2026-09-07",
+                "start_at": "2026-09-07T21:10:00.000Z",
+                "home": true,
+                "opponent": "WSH",
+                "opponent_team_id": "30",
+                "venue": "Petco Park",
+                "lineup_status": "confirmed",
+                "batting_order": 4,
+                "bats": "R",
+                "throws": "R",
+                "starting_pitcher_status": null,
+                "opponent_pitcher": {
+                  "player_id": "926",
+                  "name": "Jake Irvin",
+                  "status": "probable",
+                  "bats": "R",
+                  "throws": "R"
+                },
+                "prior_lineup": {
+                  "date": "2026-09-06",
+                  "game_id": "5059924",
+                  "batting_order": 4,
+                  "was_listed": true
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "opponent_pitchers",
+          "label": "Opposing probable pitchers for 2026-09-07",
+          "source": "BALLDONTLIE lineups and season stats",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "Jake Irvin (R), probable: 18 starts, 85.2 IP, 40 BB, 9.14 K/9, 5.57 ERA, 1.40 WHIP. Planned innings and opener/bulk roles are unconfirmed.",
+          "facts": {
+            "season": 2026,
+            "pitchers": [
+              {
+                "player_id": "926",
+                "name": "Jake Irvin",
+                "status": "probable",
+                "bats": "R",
+                "throws": "R",
+                "season_stats": {
+                  "pitching_gp": 18,
+                  "pitching_gs": 18,
+                  "pitching_qs": 0,
+                  "pitching_w": 2,
+                  "pitching_sv": 0,
+                  "pitching_hld": 0,
+                  "pitching_ip": 85.2,
+                  "pitching_h": 80,
+                  "pitching_er": 53,
+                  "pitching_bb": 40,
+                  "pitching_k": 87,
+                  "pitching_k_per_9": 9.140078,
+                  "pitching_era": 5.568,
+                  "pitching_whip": 1.4007
+                },
+                "planned_innings": null,
+                "opener_or_bulk_role": "unconfirmed"
+              }
+            ]
+          }
+        },
+        {
+          "id": "recent_hitter",
+          "label": "Last 10 observed batting games before 2026-09-07",
+          "source": "BALLDONTLIE final game stats",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "10 observed appearances, 2026-08-26 to 2026-09-06: 35 AB, 42 PA, 6 runs, 11 hits, 2 HR, 6 RBI, 0 SB. Latest appearance 1 day before this slate.",
+          "facts": {
+            "window_start": "2026-07-24",
+            "cutoff_exclusive": "2026-09-07",
+            "sample_games": 10,
+            "requested_games": 10,
+            "latest_game_at": "2026-09-06T20:10:00.000Z",
+            "days_since_latest_game": 1,
+            "rows": [
+              {
+                "game_id": "5059924",
+                "date": "2026-09-06",
+                "start_at": "2026-09-06T20:10:00.000Z",
+                "team_id": "23",
+                "at_bats": 3,
+                "plate_appearances": 3,
+                "runs": 0,
+                "hits": 0,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 0,
+                "k": 1,
+                "stolen_bases": 0,
+                "total_bases": 0
+              },
+              {
+                "game_id": "5059909",
+                "date": "2026-09-05",
+                "start_at": "2026-09-05T23:15:00.000Z",
+                "team_id": "23",
+                "at_bats": 3,
+                "plate_appearances": 4,
+                "runs": 0,
+                "hits": 0,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 1,
+                "k": 2,
+                "stolen_bases": 0,
+                "total_bases": 0
+              },
+              {
+                "game_id": "5059894",
+                "date": "2026-09-04",
+                "start_at": "2026-09-05T01:40:00.000Z",
+                "team_id": "23",
+                "at_bats": 3,
+                "plate_appearances": 4,
+                "runs": 1,
+                "hits": 2,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 1,
+                "k": 1,
+                "stolen_bases": 0,
+                "total_bases": 4
+              },
+              {
+                "game_id": "5059858",
+                "date": "2026-09-02",
+                "start_at": "2026-09-02T16:40:00.000Z",
+                "team_id": "23",
+                "at_bats": 3,
+                "plate_appearances": 4,
+                "runs": 1,
+                "hits": 2,
+                "hr": 1,
+                "rbi": 2,
+                "bb": 1,
+                "k": 0,
+                "stolen_bases": 0,
+                "total_bases": 5
+              },
+              {
+                "game_id": "5059844",
+                "date": "2026-09-01",
+                "start_at": "2026-09-01T22:40:00.000Z",
+                "team_id": "23",
+                "at_bats": 4,
+                "plate_appearances": 4,
+                "runs": 0,
+                "hits": 0,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 0,
+                "k": 1,
+                "stolen_bases": 0,
+                "total_bases": 0
+              },
+              {
+                "game_id": "5059833",
+                "date": "2026-08-31",
+                "start_at": "2026-08-31T22:40:00.000Z",
+                "team_id": "23",
+                "at_bats": 5,
+                "plate_appearances": 5,
+                "runs": 1,
+                "hits": 3,
+                "hr": 0,
+                "rbi": 1,
+                "bb": 0,
+                "k": 0,
+                "stolen_bases": 0,
+                "total_bases": 3
+              },
+              {
+                "game_id": "5059823",
+                "date": "2026-08-30",
+                "start_at": "2026-08-30T17:40:00.000Z",
+                "team_id": "23",
+                "at_bats": 3,
+                "plate_appearances": 5,
+                "runs": 1,
+                "hits": 1,
+                "hr": 0,
+                "rbi": 1,
+                "bb": 1,
+                "k": 1,
+                "stolen_bases": 0,
+                "total_bases": 1
+              },
+              {
+                "game_id": "5059811",
+                "date": "2026-08-29",
+                "start_at": "2026-08-29T20:10:00.000Z",
+                "team_id": "23",
+                "at_bats": 5,
+                "plate_appearances": 5,
+                "runs": 1,
+                "hits": 2,
+                "hr": 1,
+                "rbi": 2,
+                "bb": 0,
+                "k": 2,
+                "stolen_bases": 0,
+                "total_bases": 5
+              },
+              {
+                "game_id": "5059794",
+                "date": "2026-08-28",
+                "start_at": "2026-08-28T23:10:00.000Z",
+                "team_id": "23",
+                "at_bats": 3,
+                "plate_appearances": 4,
+                "runs": 1,
+                "hits": 0,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 1,
+                "k": 2,
+                "stolen_bases": 0,
+                "total_bases": 0
+              },
+              {
+                "game_id": "5059770",
+                "date": "2026-08-26",
+                "start_at": "2026-08-26T20:10:00.000Z",
+                "team_id": "23",
+                "at_bats": 3,
+                "plate_appearances": 4,
+                "runs": 0,
+                "hits": 1,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 1,
+                "k": 0,
+                "stolen_bases": 0,
+                "total_bases": 1
+              }
+            ],
+            "totals": {
+              "at_bats": 35,
+              "plate_appearances": 42,
+              "runs": 6,
+              "hits": 11,
+              "hr": 2,
+              "rbi": 6,
+              "bb": 6,
+              "k": 10,
+              "stolen_bases": 0,
+              "total_bases": 19
+            },
+            "measured_games_by_stat": {
+              "at_bats": 10,
+              "plate_appearances": 10,
+              "runs": 10,
+              "hits": 10,
+              "hr": 10,
+              "rbi": 10,
+              "bb": 10,
+              "k": 10,
+              "stolen_bases": 10,
+              "total_bases": 10
+            },
+            "excluded_conflicting_games": 0
+          }
+        },
+        {
+          "id": "expected_hitter",
+          "label": "2026 contact-based expected stats",
+          "source": "Baseball Savant",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "2026, 429 PA: 0.290 AVG, 0.251 xBA, 0.511 SLG, 0.427 xSLG, 0.374 wOBA, 0.332 xwOBA. Season measurements.",
+          "facts": {
+            "season": 2026,
+            "mlbam_player_id": "664034",
+            "match_method": "unique_exact_full_name",
+            "sample_pa": 429,
+            "ba": 0.29,
+            "est_ba": 0.251,
+            "slg": 0.511,
+            "est_slg": 0.427,
+            "woba": 0.374,
+            "est_woba": 0.332,
+            "scope": "Season contact outcomes; not a forecast for today."
+          }
+        }
+      ],
+      "opportunities": [
+        {
+          "game_id": "5059934",
+          "date": "2026-09-07",
+          "start_at": "2026-09-07T21:10:00.000Z",
+          "home": true,
+          "opponent": "WSH",
+          "opponent_team_id": "30",
+          "venue": "Petco Park",
+          "lineup_status": "confirmed",
+          "batting_order": 4,
+          "bats": "R",
+          "throws": "R",
+          "starting_pitcher_status": null,
+          "opponent_pitcher": {
+            "player_id": "926",
+            "name": "Jake Irvin",
+            "status": "probable",
+            "bats": "R",
+            "throws": "R"
+          },
+          "prior_lineup": {
+            "date": "2026-09-06",
+            "game_id": "5059924",
+            "batting_order": 4,
+            "was_listed": true
+          }
+        }
+      ],
+      "availability": {
+        "rostered_percent": null,
+        "league_available": null
+      },
+      "limitations": [
+        "League roster availability and scoring settings are not supplied.",
+        "Times show when Gary checked the data; the stat and lineup feeds do not provide their last update time."
+      ]
+    },
+    {
+      "id": "bdl:370",
+      "player_id": "370",
+      "player_name": "Luis Campusano",
+      "team_id": "23",
+      "team": "SD",
+      "position": "DH",
+      "role": "hitter",
+      "action": "START",
+      "horizon": "next_game",
+      "valid_until": "2026-09-07T21:10:00.000Z",
+      "headline": "Campusano is a strong lower-order play against Irvin",
+      "why_now": "Campusano is confirmed sixth against probable starter Jake Irvin, whose season line is a 5.57 ERA and 1.40 WHIP. Campusano has an .864 OPS over 192 plate appearances and has homered twice in his last 10 games.",
+      "fit": "Managers needing power or RBI from a catcher-eligible or utility slot, where eligible.",
+      "risk": "His .247 expected average and .421 expected slugging are below his observed .285 and .479, and batting sixth offers less volume than France's cleanup spot.",
+      "watch_for": "Final confirmation of Irvin as the opposing starter.",
+      "formats": [
+        "categories",
+        "points"
+      ],
+      "categories": [
+        "home_runs",
+        "rbi",
+        "average",
+        "points"
+      ],
+      "evidence": [
+        {
+          "id": "today",
+          "label": "Schedule and lineup for 2026-09-07",
+          "source": "BALLDONTLIE pregame lineups",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "2026-09-07 vs WSH: posted lineup, batting 6; opposing probable Jake Irvin (R); 2026-09-06 order 6.",
+          "facts": {
+            "date": "2026-09-07",
+            "opportunities": [
+              {
+                "game_id": "5059934",
+                "date": "2026-09-07",
+                "start_at": "2026-09-07T21:10:00.000Z",
+                "home": true,
+                "opponent": "WSH",
+                "opponent_team_id": "30",
+                "venue": "Petco Park",
+                "lineup_status": "confirmed",
+                "batting_order": 6,
+                "bats": "R",
+                "throws": "R",
+                "starting_pitcher_status": null,
+                "opponent_pitcher": {
+                  "player_id": "926",
+                  "name": "Jake Irvin",
+                  "status": "probable",
+                  "bats": "R",
+                  "throws": "R"
+                },
+                "prior_lineup": {
+                  "date": "2026-09-06",
+                  "game_id": "5059924",
+                  "batting_order": 6,
+                  "was_listed": true
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "opponent_pitchers",
+          "label": "Opposing probable pitchers for 2026-09-07",
+          "source": "BALLDONTLIE lineups and season stats",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "Jake Irvin (R), probable: 18 starts, 85.2 IP, 40 BB, 9.14 K/9, 5.57 ERA, 1.40 WHIP. Planned innings and opener/bulk roles are unconfirmed.",
+          "facts": {
+            "season": 2026,
+            "pitchers": [
+              {
+                "player_id": "926",
+                "name": "Jake Irvin",
+                "status": "probable",
+                "bats": "R",
+                "throws": "R",
+                "season_stats": {
+                  "pitching_gp": 18,
+                  "pitching_gs": 18,
+                  "pitching_qs": 0,
+                  "pitching_w": 2,
+                  "pitching_sv": 0,
+                  "pitching_hld": 0,
+                  "pitching_ip": 85.2,
+                  "pitching_h": 80,
+                  "pitching_er": 53,
+                  "pitching_bb": 40,
+                  "pitching_k": 87,
+                  "pitching_k_per_9": 9.140078,
+                  "pitching_era": 5.568,
+                  "pitching_whip": 1.4007
+                },
+                "planned_innings": null,
+                "opener_or_bulk_role": "unconfirmed"
+              }
+            ]
+          }
+        },
+        {
+          "id": "season",
+          "label": "2026 regular season",
+          "source": "BALLDONTLIE season stats",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "2026: 58 batting games, 165 AB, 20 R, 7 HR, 26 RBI, 0 SB, 0.864 OPS.",
+          "facts": {
+            "season": 2026,
+            "season_type": "regular",
+            "batting_gp": 58,
+            "batting_ab": 165,
+            "batting_r": 20,
+            "batting_h": 47,
+            "batting_hr": 7,
+            "batting_rbi": 26,
+            "batting_bb": 25,
+            "batting_so": 43,
+            "batting_sb": 0,
+            "batting_avg": 0.2848484,
+            "batting_obp": 0.3854166,
+            "batting_slg": 0.4787878,
+            "batting_ops": 0.8642044
+          }
+        },
+        {
+          "id": "recent_hitter",
+          "label": "Last 10 observed batting games before 2026-09-07",
+          "source": "BALLDONTLIE final game stats",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "10 observed appearances, 2026-08-23 to 2026-09-06: 30 AB, 33 PA, 3 runs, 6 hits, 2 HR, 3 RBI, 0 SB. Latest appearance 1 day before this slate.",
+          "facts": {
+            "window_start": "2026-07-24",
+            "cutoff_exclusive": "2026-09-07",
+            "sample_games": 10,
+            "requested_games": 10,
+            "latest_game_at": "2026-09-06T20:10:00.000Z",
+            "days_since_latest_game": 1,
+            "rows": [
+              {
+                "game_id": "5059924",
+                "date": "2026-09-06",
+                "start_at": "2026-09-06T20:10:00.000Z",
+                "team_id": "23",
+                "at_bats": 3,
+                "plate_appearances": 3,
+                "runs": 1,
+                "hits": 2,
+                "hr": 1,
+                "rbi": 1,
+                "bb": 0,
+                "k": 0,
+                "stolen_bases": 0,
+                "total_bases": 5
+              },
+              {
+                "game_id": "5059909",
+                "date": "2026-09-05",
+                "start_at": "2026-09-05T23:15:00.000Z",
+                "team_id": "23",
+                "at_bats": 3,
+                "plate_appearances": 4,
+                "runs": 0,
+                "hits": 0,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 1,
+                "k": 1,
+                "stolen_bases": 0,
+                "total_bases": 0
+              },
+              {
+                "game_id": "5059894",
+                "date": "2026-09-04",
+                "start_at": "2026-09-05T01:40:00.000Z",
+                "team_id": "23",
+                "at_bats": 4,
+                "plate_appearances": 4,
+                "runs": 1,
+                "hits": 2,
+                "hr": 1,
+                "rbi": 2,
+                "bb": 0,
+                "k": 0,
+                "stolen_bases": 0,
+                "total_bases": 5
+              },
+              {
+                "game_id": "5059858",
+                "date": "2026-09-02",
+                "start_at": "2026-09-02T16:40:00.000Z",
+                "team_id": "23",
+                "at_bats": 4,
+                "plate_appearances": 4,
+                "runs": 0,
+                "hits": 0,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 0,
+                "k": 2,
+                "stolen_bases": 0,
+                "total_bases": 0
+              },
+              {
+                "game_id": "5059844",
+                "date": "2026-09-01",
+                "start_at": "2026-09-01T22:40:00.000Z",
+                "team_id": "23",
+                "at_bats": 1,
+                "plate_appearances": 1,
+                "runs": 0,
+                "hits": 0,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 0,
+                "k": 1,
+                "stolen_bases": 0,
+                "total_bases": 0
+              },
+              {
+                "game_id": "5059833",
+                "date": "2026-08-31",
+                "start_at": "2026-08-31T22:40:00.000Z",
+                "team_id": "23",
+                "at_bats": 4,
+                "plate_appearances": 4,
+                "runs": 0,
+                "hits": 2,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 0,
+                "k": 1,
+                "stolen_bases": 0,
+                "total_bases": 2
+              },
+              {
+                "game_id": "5059811",
+                "date": "2026-08-29",
+                "start_at": "2026-08-29T20:10:00.000Z",
+                "team_id": "23",
+                "at_bats": 3,
+                "plate_appearances": 4,
+                "runs": 0,
+                "hits": 0,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 1,
+                "k": 1,
+                "stolen_bases": 0,
+                "total_bases": 0
+              },
+              {
+                "game_id": "5059763",
+                "date": "2026-08-25",
+                "start_at": "2026-08-26T01:40:00.000Z",
+                "team_id": "23",
+                "at_bats": 3,
+                "plate_appearances": 3,
+                "runs": 0,
+                "hits": 0,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 0,
+                "k": 2,
+                "stolen_bases": 0,
+                "total_bases": 0
+              },
+              {
+                "game_id": "11378825",
+                "date": "2026-08-24",
+                "start_at": "2026-08-25T01:40:00.000Z",
+                "team_id": "23",
+                "at_bats": 2,
+                "plate_appearances": 2,
+                "runs": 0,
+                "hits": 0,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 0,
+                "k": 1,
+                "stolen_bases": 0,
+                "total_bases": 0
+              },
+              {
+                "game_id": "5059737",
+                "date": "2026-08-23",
+                "start_at": "2026-08-23T20:10:00.000Z",
+                "team_id": "23",
+                "at_bats": 3,
+                "plate_appearances": 4,
+                "runs": 1,
+                "hits": 0,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 1,
+                "k": 1,
+                "stolen_bases": 0,
+                "total_bases": 0
+              }
+            ],
+            "totals": {
+              "at_bats": 30,
+              "plate_appearances": 33,
+              "runs": 3,
+              "hits": 6,
+              "hr": 2,
+              "rbi": 3,
+              "bb": 3,
+              "k": 10,
+              "stolen_bases": 0,
+              "total_bases": 12
+            },
+            "measured_games_by_stat": {
+              "at_bats": 10,
+              "plate_appearances": 10,
+              "runs": 10,
+              "hits": 10,
+              "hr": 10,
+              "rbi": 10,
+              "bb": 10,
+              "k": 10,
+              "stolen_bases": 10,
+              "total_bases": 10
+            },
+            "excluded_conflicting_games": 0
+          }
+        },
+        {
+          "id": "expected_hitter",
+          "label": "2026 contact-based expected stats",
+          "source": "Baseball Savant",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "2026, 192 PA: 0.285 AVG, 0.247 xBA, 0.479 SLG, 0.421 xSLG, 0.380 wOBA, 0.344 xwOBA. Season measurements.",
+          "facts": {
+            "season": 2026,
+            "mlbam_player_id": "669134",
+            "match_method": "unique_exact_full_name",
+            "sample_pa": 192,
+            "ba": 0.285,
+            "est_ba": 0.247,
+            "slg": 0.479,
+            "est_slg": 0.421,
+            "woba": 0.38,
+            "est_woba": 0.344,
+            "scope": "Season contact outcomes; not a forecast for today."
+          }
+        }
+      ],
+      "opportunities": [
+        {
+          "game_id": "5059934",
+          "date": "2026-09-07",
+          "start_at": "2026-09-07T21:10:00.000Z",
+          "home": true,
+          "opponent": "WSH",
+          "opponent_team_id": "30",
+          "venue": "Petco Park",
+          "lineup_status": "confirmed",
+          "batting_order": 6,
+          "bats": "R",
+          "throws": "R",
+          "starting_pitcher_status": null,
+          "opponent_pitcher": {
+            "player_id": "926",
+            "name": "Jake Irvin",
+            "status": "probable",
+            "bats": "R",
+            "throws": "R"
+          },
+          "prior_lineup": {
+            "date": "2026-09-06",
+            "game_id": "5059924",
+            "batting_order": 6,
+            "was_listed": true
+          }
+        }
+      ],
+      "availability": {
+        "rostered_percent": null,
+        "league_available": null
+      },
+      "limitations": [
+        "League roster availability and scoring settings are not supplied.",
+        "Times show when Gary checked the data; the stat and lineup feeds do not provide their last update time."
+      ]
+    },
+    {
+      "id": "bdl:254",
+      "player_id": "254",
+      "player_name": "Dustin Harris",
+      "team_id": "23",
+      "team": "SD",
+      "position": "LF",
+      "role": "hitter",
+      "action": "CONSIDER_ADD",
+      "horizon": "next_game",
+      "valid_until": "2026-09-07T21:10:00.000Z",
+      "headline": "Harris offers a one-game speed-and-average stream, not a power add",
+      "why_now": "Harris is confirmed batting seventh against probable starter Jake Irvin, who has a 5.57 ERA and 1.40 WHIP. Harris has nine hits and two steals in his last eight observed games, while his .292 average exactly matches his contact-based expected average.",
+      "fit": "Categories managers who find him available and need a short-term chance at steals or average before today's game.",
+      "risk": "The evidence covers only 76 plate appearances, and he has no home runs, so this is not yet a justified longer hold or power play.",
+      "watch_for": "Final confirmation that Irvin starts and whether Harris remains in the seventh spot.",
+      "formats": [
+        "categories"
+      ],
+      "categories": [
+        "runs",
+        "steals",
+        "average"
+      ],
+      "evidence": [
+        {
+          "id": "today",
+          "label": "Schedule and lineup for 2026-09-07",
+          "source": "BALLDONTLIE pregame lineups",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "2026-09-07 vs WSH: posted lineup, batting 7; opposing probable Jake Irvin (R); 2026-09-06 order 7.",
+          "facts": {
+            "date": "2026-09-07",
+            "opportunities": [
+              {
+                "game_id": "5059934",
+                "date": "2026-09-07",
+                "start_at": "2026-09-07T21:10:00.000Z",
+                "home": true,
+                "opponent": "WSH",
+                "opponent_team_id": "30",
+                "venue": "Petco Park",
+                "lineup_status": "confirmed",
+                "batting_order": 7,
+                "bats": "L",
+                "throws": "R",
+                "starting_pitcher_status": null,
+                "opponent_pitcher": {
+                  "player_id": "926",
+                  "name": "Jake Irvin",
+                  "status": "probable",
+                  "bats": "R",
+                  "throws": "R"
+                },
+                "prior_lineup": {
+                  "date": "2026-09-06",
+                  "game_id": "5059924",
+                  "batting_order": 7,
+                  "was_listed": true
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "opponent_pitchers",
+          "label": "Opposing probable pitchers for 2026-09-07",
+          "source": "BALLDONTLIE lineups and season stats",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "Jake Irvin (R), probable: 18 starts, 85.2 IP, 40 BB, 9.14 K/9, 5.57 ERA, 1.40 WHIP. Planned innings and opener/bulk roles are unconfirmed.",
+          "facts": {
+            "season": 2026,
+            "pitchers": [
+              {
+                "player_id": "926",
+                "name": "Jake Irvin",
+                "status": "probable",
+                "bats": "R",
+                "throws": "R",
+                "season_stats": {
+                  "pitching_gp": 18,
+                  "pitching_gs": 18,
+                  "pitching_qs": 0,
+                  "pitching_w": 2,
+                  "pitching_sv": 0,
+                  "pitching_hld": 0,
+                  "pitching_ip": 85.2,
+                  "pitching_h": 80,
+                  "pitching_er": 53,
+                  "pitching_bb": 40,
+                  "pitching_k": 87,
+                  "pitching_k_per_9": 9.140078,
+                  "pitching_era": 5.568,
+                  "pitching_whip": 1.4007
+                },
+                "planned_innings": null,
+                "opener_or_bulk_role": "unconfirmed"
+              }
+            ]
+          }
+        },
+        {
+          "id": "recent_hitter",
+          "label": "Last 8 observed batting games before 2026-09-07",
+          "source": "BALLDONTLIE final game stats",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "8 observed appearances, 2026-08-24 to 2026-09-06: 22 AB, 24 PA, 3 runs, 9 hits, 0 HR, 1 RBI, 2 SB. Latest appearance 1 day before this slate.",
+          "facts": {
+            "window_start": "2026-07-24",
+            "cutoff_exclusive": "2026-09-07",
+            "sample_games": 8,
+            "requested_games": 10,
+            "latest_game_at": "2026-09-06T20:10:00.000Z",
+            "days_since_latest_game": 1,
+            "rows": [
+              {
+                "game_id": "5059924",
+                "date": "2026-09-06",
+                "start_at": "2026-09-06T20:10:00.000Z",
+                "team_id": "23",
+                "at_bats": 3,
+                "plate_appearances": 3,
+                "runs": 0,
+                "hits": 1,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 0,
+                "k": 1,
+                "stolen_bases": 0,
+                "total_bases": 1
+              },
+              {
+                "game_id": "5059858",
+                "date": "2026-09-02",
+                "start_at": "2026-09-02T16:40:00.000Z",
+                "team_id": "23",
+                "at_bats": 2,
+                "plate_appearances": 2,
+                "runs": 0,
+                "hits": 0,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 0,
+                "k": 1,
+                "stolen_bases": 0,
+                "total_bases": 0
+              },
+              {
+                "game_id": "5059844",
+                "date": "2026-09-01",
+                "start_at": "2026-09-01T22:40:00.000Z",
+                "team_id": "23",
+                "at_bats": 0,
+                "plate_appearances": 1,
+                "runs": 0,
+                "hits": 0,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 1,
+                "k": 0,
+                "stolen_bases": 1,
+                "total_bases": 0
+              },
+              {
+                "game_id": "5059833",
+                "date": "2026-08-31",
+                "start_at": "2026-08-31T22:40:00.000Z",
+                "team_id": "23",
+                "at_bats": 5,
+                "plate_appearances": 5,
+                "runs": 0,
+                "hits": 2,
+                "hr": 0,
+                "rbi": 1,
+                "bb": 0,
+                "k": 1,
+                "stolen_bases": 0,
+                "total_bases": 2
+              },
+              {
+                "game_id": "5059823",
+                "date": "2026-08-30",
+                "start_at": "2026-08-30T17:40:00.000Z",
+                "team_id": "23",
+                "at_bats": 2,
+                "plate_appearances": 2,
+                "runs": 0,
+                "hits": 1,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 0,
+                "k": 0,
+                "stolen_bases": 0,
+                "total_bases": 1
+              },
+              {
+                "game_id": "5059811",
+                "date": "2026-08-29",
+                "start_at": "2026-08-29T20:10:00.000Z",
+                "team_id": "23",
+                "at_bats": 4,
+                "plate_appearances": 4,
+                "runs": 2,
+                "hits": 3,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 0,
+                "k": 0,
+                "stolen_bases": 1,
+                "total_bases": 3
+              },
+              {
+                "game_id": "5059763",
+                "date": "2026-08-25",
+                "start_at": "2026-08-26T01:40:00.000Z",
+                "team_id": "23",
+                "at_bats": 1,
+                "plate_appearances": 2,
+                "runs": 0,
+                "hits": 1,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 0,
+                "k": 0,
+                "stolen_bases": 0,
+                "total_bases": 1
+              },
+              {
+                "game_id": "11378825",
+                "date": "2026-08-24",
+                "start_at": "2026-08-25T01:40:00.000Z",
+                "team_id": "23",
+                "at_bats": 5,
+                "plate_appearances": 5,
+                "runs": 1,
+                "hits": 1,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 0,
+                "k": 1,
+                "stolen_bases": 0,
+                "total_bases": 2
+              }
+            ],
+            "totals": {
+              "at_bats": 22,
+              "plate_appearances": 24,
+              "runs": 3,
+              "hits": 9,
+              "hr": 0,
+              "rbi": 1,
+              "bb": 1,
+              "k": 4,
+              "stolen_bases": 2,
+              "total_bases": 10
+            },
+            "measured_games_by_stat": {
+              "at_bats": 8,
+              "plate_appearances": 8,
+              "runs": 8,
+              "hits": 8,
+              "hr": 8,
+              "rbi": 8,
+              "bb": 8,
+              "k": 8,
+              "stolen_bases": 8,
+              "total_bases": 8
+            },
+            "excluded_conflicting_games": 0
+          }
+        },
+        {
+          "id": "season",
+          "label": "2026 regular season",
+          "source": "BALLDONTLIE season stats",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "2026: 27 batting games, 65 AB, 10 R, 0 HR, 6 RBI, 6 SB, 0.719 OPS.",
+          "facts": {
+            "season": 2026,
+            "season_type": "regular",
+            "batting_gp": 27,
+            "batting_ab": 65,
+            "batting_r": 10,
+            "batting_h": 19,
+            "batting_hr": 0,
+            "batting_rbi": 6,
+            "batting_bb": 7,
+            "batting_so": 11,
+            "batting_sb": 6,
+            "batting_avg": 0.2923076,
+            "batting_obp": 0.3648648,
+            "batting_slg": 0.3538461,
+            "batting_ops": 0.7187109
+          }
+        },
+        {
+          "id": "expected_hitter",
+          "label": "2026 contact-based expected stats",
+          "source": "Baseball Savant",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "2026, 76 PA: 0.292 AVG, 0.292 xBA, 0.354 SLG, 0.364 xSLG, 0.324 wOBA, 0.328 xwOBA. Season measurements.",
+          "facts": {
+            "season": 2026,
+            "mlbam_player_id": "687957",
+            "match_method": "unique_exact_full_name",
+            "sample_pa": 76,
+            "ba": 0.292,
+            "est_ba": 0.292,
+            "slg": 0.354,
+            "est_slg": 0.364,
+            "woba": 0.324,
+            "est_woba": 0.328,
+            "scope": "Season contact outcomes; not a forecast for today."
+          }
+        }
+      ],
+      "opportunities": [
+        {
+          "game_id": "5059934",
+          "date": "2026-09-07",
+          "start_at": "2026-09-07T21:10:00.000Z",
+          "home": true,
+          "opponent": "WSH",
+          "opponent_team_id": "30",
+          "venue": "Petco Park",
+          "lineup_status": "confirmed",
+          "batting_order": 7,
+          "bats": "L",
+          "throws": "R",
+          "starting_pitcher_status": null,
+          "opponent_pitcher": {
+            "player_id": "926",
+            "name": "Jake Irvin",
+            "status": "probable",
+            "bats": "R",
+            "throws": "R"
+          },
+          "prior_lineup": {
+            "date": "2026-09-06",
+            "game_id": "5059924",
+            "batting_order": 7,
+            "was_listed": true
+          }
+        }
+      ],
+      "availability": {
+        "rostered_percent": null,
+        "league_available": null
+      },
+      "limitations": [
+        "League roster availability and scoring settings are not supplied.",
+        "Times show when Gary checked the data; the stat and lineup feeds do not provide their last update time."
+      ]
+    },
+    {
+      "id": "bdl:971",
+      "player_id": "971",
+      "player_name": "Logan Webb",
+      "team_id": "24",
+      "team": "SF",
+      "position": "SP",
+      "role": "pitcher",
+      "action": "SIT",
+      "horizon": "next_game",
+      "valid_until": "2026-09-08T00:10:00.000Z",
+      "headline": "Bench Webb if protecting ratios matters more than chasing a quality start",
+      "why_now": "Webb is probable against St. Louis but has a 6.57 ERA and 1.42 WHIP over his last five starts, including nine earned runs in two innings in his latest outing. The opposing order is not confirmed, so there is no lineup-based reason to override the recent ratio risk.",
+      "fit": "Shallow category teams protecting ERA and WHIP with a credible replacement; points and quality-start formats can be more patient.",
+      "risk": "His season baseline remains materially stronger: a 1.16 WHIP, 16 quality starts in 25 starts and a 4.06 xERA.",
+      "watch_for": "The confirmed St. Louis lineup and final confirmation that Webb starts without a workload limitation.",
+      "formats": [
+        "categories"
+      ],
+      "categories": [
+        "era",
+        "whip",
+        "quality_starts"
+      ],
+      "evidence": [
+        {
+          "id": "today",
+          "label": "Schedule and lineup for 2026-09-07",
+          "source": "BALLDONTLIE pregame lineups",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "2026-09-07 vs STL: lineup not posted, probable starter; opposing probable Michael McGreevy (R).",
+          "facts": {
+            "date": "2026-09-07",
+            "opportunities": [
+              {
+                "game_id": "5059935",
+                "date": "2026-09-07",
+                "start_at": "2026-09-08T00:10:00.000Z",
+                "home": true,
+                "opponent": "STL",
+                "opponent_team_id": "26",
+                "venue": "Oracle Park",
+                "lineup_status": "not_posted",
+                "batting_order": null,
+                "bats": "R",
+                "throws": "R",
+                "starting_pitcher_status": "probable",
+                "opponent_pitcher": {
+                  "player_id": "275",
+                  "name": "Michael McGreevy",
+                  "status": "probable",
+                  "bats": "L",
+                  "throws": "R"
+                },
+                "planned_innings": null,
+                "opener_or_bulk_role": "unconfirmed"
+              }
+            ]
+          }
+        },
+        {
+          "id": "recent_pitcher",
+          "label": "Last 5 observed pitching outings before 2026-09-07",
+          "source": "BALLDONTLIE final game stats",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "5 observed appearances, 2026-08-09 to 2026-09-01: 412 pitches, 18 ER, 7 BB, 18 K, 0 saves, 0 holds, 24.2 IP, 6.57 ERA, 1.42 WHIP, 6.57 K/9. Latest appearance 6 days before this slate.",
+          "facts": {
+            "window_start": "2026-07-24",
+            "cutoff_exclusive": "2026-09-07",
+            "sample_games": 5,
+            "requested_games": 5,
+            "latest_game_at": "2026-09-01T22:40:00.000Z",
+            "days_since_latest_game": 6,
+            "rows": [
+              {
+                "game_id": "5059845",
+                "date": "2026-09-01",
+                "start_at": "2026-09-01T22:40:00.000Z",
+                "team_id": "24",
+                "pitching_outs": 6,
+                "pitch_count": 65,
+                "p_hits": 9,
+                "er": 9,
+                "p_bb": 2,
+                "p_k": 1,
+                "p_hr": 0,
+                "batters_faced": 18,
+                "games_started": 1,
+                "wins": 0,
+                "saves": 0,
+                "holds": 0
+              },
+              {
+                "game_id": "5059767",
+                "date": "2026-08-26",
+                "start_at": "2026-08-26T19:45:00.000Z",
+                "team_id": "24",
+                "pitching_outs": 18,
+                "pitch_count": 97,
+                "p_hits": 5,
+                "er": 2,
+                "p_bb": 1,
+                "p_k": 6,
+                "p_hr": 1,
+                "batters_faced": 25,
+                "games_started": 1,
+                "wins": 0,
+                "saves": 0,
+                "holds": 0
+              },
+              {
+                "game_id": "5059699",
+                "date": "2026-08-21",
+                "start_at": "2026-08-21T23:10:00.000Z",
+                "team_id": "24",
+                "pitching_outs": 8,
+                "pitch_count": 70,
+                "p_hits": 6,
+                "er": 5,
+                "p_bb": 3,
+                "p_k": 2,
+                "p_hr": 1,
+                "batters_faced": 18,
+                "games_started": 1,
+                "wins": 0,
+                "saves": 0,
+                "holds": 0
+              },
+              {
+                "game_id": "5059620",
+                "date": "2026-08-15",
+                "start_at": "2026-08-15T20:05:00.000Z",
+                "team_id": "24",
+                "pitching_outs": 18,
+                "pitch_count": 80,
+                "p_hits": 4,
+                "er": 1,
+                "p_bb": 0,
+                "p_k": 7,
+                "p_hr": 0,
+                "batters_faced": 22,
+                "games_started": 1,
+                "wins": 1,
+                "saves": 0,
+                "holds": 0
+              },
+              {
+                "game_id": "5059550",
+                "date": "2026-08-09",
+                "start_at": "2026-08-09T20:05:00.000Z",
+                "team_id": "24",
+                "pitching_outs": 24,
+                "pitch_count": 100,
+                "p_hits": 4,
+                "er": 1,
+                "p_bb": 1,
+                "p_k": 2,
+                "p_hr": 0,
+                "batters_faced": 28,
+                "games_started": 1,
+                "wins": 0,
+                "saves": 0,
+                "holds": 0
+              }
+            ],
+            "totals": {
+              "pitching_outs": 74,
+              "pitch_count": 412,
+              "p_hits": 28,
+              "er": 18,
+              "p_bb": 7,
+              "p_k": 18,
+              "p_hr": 2,
+              "batters_faced": 111,
+              "games_started": 5,
+              "wins": 1,
+              "saves": 0,
+              "holds": 0,
+              "innings_pitched": "24.2",
+              "era": 6.57,
+              "whip": 1.42,
+              "k_per_9": 6.57
+            },
+            "measured_games_by_stat": {
+              "pitching_outs": 5,
+              "pitch_count": 5,
+              "p_hits": 5,
+              "er": 5,
+              "p_bb": 5,
+              "p_k": 5,
+              "p_hr": 5,
+              "batters_faced": 5,
+              "games_started": 5,
+              "wins": 5,
+              "saves": 5,
+              "holds": 5
+            },
+            "excluded_conflicting_games": 0
+          }
+        },
+        {
+          "id": "opponent_order_5059935",
+          "label": "Opposing batting order: STL",
+          "source": "BALLDONTLIE dated lineups and season batting stats",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "STL: 2026-09-06 prior order; today's lineup unconfirmed. 1. Bryan Torres (L); 2. Ivan Herrera (R); 3. Alec Burleson (L); 4. Jordan Walker (R); 5. Leo Bernal; 6. Joshua Baez (R); 7. Nolan Gorman (L); 8. Thomas Saggese (R); 9. Nathan Church (L). 2026 samples for those nine: 2580 AB, 625 K. PA unavailable; no lineup strikeout rate inferred.",
+          "facts": {
+            "game_id": "5059935",
+            "game_date": "2026-09-07",
+            "opponent_team_id": "26",
+            "opponent": "STL",
+            "lineup_status_today": "not_posted",
+            "lineup_source": "prior_completed_game",
+            "lineup_date": "2026-09-06",
+            "lineup_game_id": "5059922",
+            "confirmed_for_today": false,
+            "complete_source_order": true,
+            "season": 2026,
+            "rows": [
+              {
+                "player_id": "4667243",
+                "name": "Bryan Torres",
+                "batting_order": 1,
+                "bats": "L",
+                "current_team_status": "same_team",
+                "season_games": 63,
+                "plate_appearances": null,
+                "at_bats": 135,
+                "strikeouts": 31,
+                "walks": 13,
+                "home_runs": 4,
+                "ops": 0.7096884
+              },
+              {
+                "player_id": "385",
+                "name": "Ivan Herrera",
+                "batting_order": 2,
+                "bats": "R",
+                "current_team_status": "same_team",
+                "season_games": 143,
+                "plate_appearances": null,
+                "at_bats": 542,
+                "strikeouts": 117,
+                "walks": 69,
+                "home_runs": 16,
+                "ops": 0.7506695
+              },
+              {
+                "player_id": "478",
+                "name": "Alec Burleson",
+                "batting_order": 3,
+                "bats": "L",
+                "current_team_status": "same_team",
+                "season_games": 143,
+                "plate_appearances": null,
+                "at_bats": 547,
+                "strikeouts": 103,
+                "walks": 48,
+                "home_runs": 21,
+                "ops": 0.8098055
+              },
+              {
+                "player_id": "539",
+                "name": "Jordan Walker",
+                "batting_order": 4,
+                "bats": "R",
+                "current_team_status": "same_team",
+                "season_games": 140,
+                "plate_appearances": null,
+                "at_bats": 549,
+                "strikeouts": 152,
+                "walks": 44,
+                "home_runs": 28,
+                "ops": 0.8348804
+              },
+              {
+                "player_id": "4667196",
+                "name": "Leo Bernal",
+                "batting_order": 5,
+                "bats": null,
+                "current_team_status": "same_team",
+                "season_games": 6,
+                "plate_appearances": null,
+                "at_bats": 24,
+                "strikeouts": 5,
+                "walks": 3,
+                "home_runs": 1,
+                "ops": 0.9074074
+              },
+              {
+                "player_id": "4667230",
+                "name": "Joshua Baez",
+                "batting_order": 6,
+                "bats": "R",
+                "current_team_status": "same_team",
+                "season_games": 22,
+                "plate_appearances": null,
+                "at_bats": 73,
+                "strikeouts": 27,
+                "walks": 4,
+                "home_runs": 7,
+                "ops": 0.8976829
+              },
+              {
+                "player_id": "436",
+                "name": "Nolan Gorman",
+                "batting_order": 7,
+                "bats": "L",
+                "current_team_status": "same_team",
+                "season_games": 73,
+                "plate_appearances": null,
+                "at_bats": 236,
+                "strikeouts": 86,
+                "walks": 26,
+                "home_runs": 9,
+                "ops": 0.590422
+              },
+              {
+                "player_id": "451",
+                "name": "Thomas Saggese",
+                "batting_order": 8,
+                "bats": "R",
+                "current_team_status": "same_team",
+                "season_games": 40,
+                "plate_appearances": null,
+                "at_bats": 100,
+                "strikeouts": 31,
+                "walks": 10,
+                "home_runs": 4,
+                "ops": 0.7903571
+              },
+              {
+                "player_id": "2917341",
+                "name": "Nathan Church",
+                "batting_order": 9,
+                "bats": "L",
+                "current_team_status": "same_team",
+                "season_games": 124,
+                "plate_appearances": null,
+                "at_bats": 374,
+                "strikeouts": 73,
+                "walks": 21,
+                "home_runs": 10,
+                "ops": 0.6482897
+              }
+            ],
+            "totals": {
+              "plate_appearances": null,
+              "at_bats": 2580,
+              "strikeouts": 625
+            },
+            "measured_players_by_stat": {
+              "plate_appearances": 0,
+              "at_bats": 9,
+              "strikeouts": 9
+            },
+            "scope": "Season batting samples for the named order. Totals are not a forecast of this pitcher's result.",
+            "plate_appearances_derived_from_at_bats": false
+          }
+        },
+        {
+          "id": "season",
+          "label": "2026 regular season",
+          "source": "BALLDONTLIE season stats",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "2026: 25 outings, 25 starts, 149.2 IP, 119 K, 4.21 ERA, 1.16 WHIP, 0 saves.",
+          "facts": {
+            "season": 2026,
+            "season_type": "regular",
+            "pitching_gp": 25,
+            "pitching_gs": 25,
+            "pitching_qs": 16,
+            "pitching_w": 8,
+            "pitching_sv": 0,
+            "pitching_hld": 0,
+            "pitching_ip": 149.2,
+            "pitching_h": 136,
+            "pitching_er": 70,
+            "pitching_bb": 38,
+            "pitching_k": 119,
+            "pitching_k_per_9": 7.1559024,
+            "pitching_era": 4.2093,
+            "pitching_whip": 1.1625
+          }
+        },
+        {
+          "id": "expected_pitcher",
+          "label": "2026 contact-based expected stats",
+          "source": "Baseball Savant",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "2026, 621 PA: 4.21 ERA, 4.06 xERA, 0.239 AVG, 0.260 xBA, 0.290 wOBA, 0.311 xwOBA. Season measurements.",
+          "facts": {
+            "season": 2026,
+            "mlbam_player_id": "657277",
+            "match_method": "unique_exact_full_name",
+            "sample_pa": 621,
+            "era": 4.21,
+            "xera": 4.06,
+            "ba": 0.239,
+            "est_ba": 0.26,
+            "woba": 0.29,
+            "est_woba": 0.311,
+            "scope": "Season contact outcomes; not a forecast for today."
+          }
+        }
+      ],
+      "opportunities": [
+        {
+          "game_id": "5059935",
+          "date": "2026-09-07",
+          "start_at": "2026-09-08T00:10:00.000Z",
+          "home": true,
+          "opponent": "STL",
+          "opponent_team_id": "26",
+          "venue": "Oracle Park",
+          "lineup_status": "not_posted",
+          "batting_order": null,
+          "bats": "R",
+          "throws": "R",
+          "starting_pitcher_status": "probable",
+          "opponent_pitcher": {
+            "player_id": "275",
+            "name": "Michael McGreevy",
+            "status": "probable",
+            "bats": "L",
+            "throws": "R"
+          },
+          "planned_innings": null,
+          "opener_or_bulk_role": "unconfirmed"
+        }
+      ],
+      "availability": {
+        "rostered_percent": null,
+        "league_available": null
+      },
+      "limitations": [
+        "League roster availability and scoring settings are not supplied.",
+        "Times show when Gary checked the data; the stat and lineup feeds do not provide their last update time."
+      ]
+    },
+    {
+      "id": "bdl:949",
+      "player_id": "949",
+      "player_name": "Jacob Lopez",
+      "team_id": "20",
+      "team": "OAK",
+      "position": "SP",
+      "role": "pitcher",
+      "action": "CONSIDER_ADD",
+      "horizon": "next_game",
+      "valid_until": "2026-09-08T02:05:00.000Z",
+      "headline": "Lopez is the best conditional ratio stream in this pool",
+      "why_now": "Lopez is probable against Toronto after posting a 2.40 ERA, 1.03 WHIP and 33 strikeouts across his last five starts. His 3.40 xERA is also substantially better than his 4.71 observed season ERA, supporting more than a results-only hot streak.",
+      "fit": "Managers who find him available and need a one-start source of strikeouts with recent ratio form; treat it as a stream, not a proven hold.",
+      "risk": "His full-season WHIP is 1.46, and Toronto's supplied order is from its previous game rather than a confirmed lineup for today.",
+      "watch_for": "Toronto's confirmed batting order and final confirmation that Lopez starts.",
+      "formats": [
+        "categories",
+        "points"
+      ],
+      "categories": [
+        "strikeouts",
+        "era",
+        "whip",
+        "wins"
+      ],
+      "evidence": [
+        {
+          "id": "today",
+          "label": "Schedule and lineup for 2026-09-07",
+          "source": "BALLDONTLIE pregame lineups",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "2026-09-07 vs TOR: lineup not posted, probable starter; opposing probable Dylan Cease (R).",
+          "facts": {
+            "date": "2026-09-07",
+            "opportunities": [
+              {
+                "game_id": "5059937",
+                "date": "2026-09-07",
+                "start_at": "2026-09-08T02:05:00.000Z",
+                "home": true,
+                "opponent": "TOR",
+                "opponent_team_id": "29",
+                "venue": "Sutter Health Park",
+                "lineup_status": "not_posted",
+                "batting_order": null,
+                "bats": "L",
+                "throws": "L",
+                "starting_pitcher_status": "probable",
+                "opponent_pitcher": {
+                  "player_id": "224",
+                  "name": "Dylan Cease",
+                  "status": "probable",
+                  "bats": "R",
+                  "throws": "R"
+                },
+                "planned_innings": null,
+                "opener_or_bulk_role": "unconfirmed"
+              }
+            ]
+          }
+        },
+        {
+          "id": "recent_pitcher",
+          "label": "Last 5 observed pitching outings before 2026-09-07",
+          "source": "BALLDONTLIE final game stats",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "5 observed appearances, 2026-08-10 to 2026-09-02: 479 pitches, 8 ER, 9 BB, 33 K, 0 saves, 0 holds, 30.0 IP, 2.4 ERA, 1.03 WHIP, 9.9 K/9. Latest appearance 5 days before this slate.",
+          "facts": {
+            "window_start": "2026-07-24",
+            "cutoff_exclusive": "2026-09-07",
+            "sample_games": 5,
+            "requested_games": 5,
+            "latest_game_at": "2026-09-02T18:35:00.000Z",
+            "days_since_latest_game": 5,
+            "rows": [
+              {
+                "game_id": "5059860",
+                "date": "2026-09-02",
+                "start_at": "2026-09-02T18:35:00.000Z",
+                "team_id": "20",
+                "pitching_outs": 18,
+                "pitch_count": 102,
+                "p_hits": 6,
+                "er": 2,
+                "p_bb": 2,
+                "p_k": 7,
+                "p_hr": 2,
+                "batters_faced": 25,
+                "games_started": 1,
+                "wins": 1,
+                "saves": 0,
+                "holds": 0
+              },
+              {
+                "game_id": "5059800",
+                "date": "2026-08-28",
+                "start_at": "2026-08-29T01:40:00.000Z",
+                "team_id": "20",
+                "pitching_outs": 15,
+                "pitch_count": 100,
+                "p_hits": 3,
+                "er": 1,
+                "p_bb": 3,
+                "p_k": 6,
+                "p_hr": 0,
+                "batters_faced": 22,
+                "games_started": 1,
+                "wins": 0,
+                "saves": 0,
+                "holds": 0
+              },
+              {
+                "game_id": "5059716",
+                "date": "2026-08-22",
+                "start_at": "2026-08-22T23:10:00.000Z",
+                "team_id": "20",
+                "pitching_outs": 18,
+                "pitch_count": 91,
+                "p_hits": 3,
+                "er": 1,
+                "p_bb": 1,
+                "p_k": 9,
+                "p_hr": 0,
+                "batters_faced": 23,
+                "games_started": 1,
+                "wins": 0,
+                "saves": 0,
+                "holds": 0
+              },
+              {
+                "game_id": "5059643",
+                "date": "2026-08-16",
+                "start_at": "2026-08-16T20:05:00.000Z",
+                "team_id": "20",
+                "pitching_outs": 18,
+                "pitch_count": 93,
+                "p_hits": 5,
+                "er": 2,
+                "p_bb": 2,
+                "p_k": 6,
+                "p_hr": 1,
+                "batters_faced": 24,
+                "games_started": 1,
+                "wins": 0,
+                "saves": 0,
+                "holds": 0
+              },
+              {
+                "game_id": "5059561",
+                "date": "2026-08-10",
+                "start_at": "2026-08-11T01:40:00.000Z",
+                "team_id": "20",
+                "pitching_outs": 21,
+                "pitch_count": 93,
+                "p_hits": 5,
+                "er": 2,
+                "p_bb": 1,
+                "p_k": 5,
+                "p_hr": 1,
+                "batters_faced": 27,
+                "games_started": 1,
+                "wins": 0,
+                "saves": 0,
+                "holds": 0
+              }
+            ],
+            "totals": {
+              "pitching_outs": 90,
+              "pitch_count": 479,
+              "p_hits": 22,
+              "er": 8,
+              "p_bb": 9,
+              "p_k": 33,
+              "p_hr": 4,
+              "batters_faced": 121,
+              "games_started": 5,
+              "wins": 1,
+              "saves": 0,
+              "holds": 0,
+              "innings_pitched": "30.0",
+              "era": 2.4,
+              "whip": 1.03,
+              "k_per_9": 9.9
+            },
+            "measured_games_by_stat": {
+              "pitching_outs": 5,
+              "pitch_count": 5,
+              "p_hits": 5,
+              "er": 5,
+              "p_bb": 5,
+              "p_k": 5,
+              "p_hr": 5,
+              "batters_faced": 5,
+              "games_started": 5,
+              "wins": 5,
+              "saves": 5,
+              "holds": 5
+            },
+            "excluded_conflicting_games": 0
+          }
+        },
+        {
+          "id": "expected_pitcher",
+          "label": "2026 contact-based expected stats",
+          "source": "Baseball Savant",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "2026, 466 PA: 4.71 ERA, 3.40 xERA, 0.251 AVG, 0.206 xBA, 0.334 wOBA, 0.286 xwOBA. Season measurements.",
+          "facts": {
+            "season": 2026,
+            "mlbam_player_id": "682052",
+            "match_method": "unique_exact_full_name",
+            "sample_pa": 466,
+            "era": 4.71,
+            "xera": 3.4,
+            "ba": 0.251,
+            "est_ba": 0.206,
+            "woba": 0.334,
+            "est_woba": 0.286,
+            "scope": "Season contact outcomes; not a forecast for today."
+          }
+        },
+        {
+          "id": "season",
+          "label": "2026 regular season",
+          "source": "BALLDONTLIE season stats",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "2026: 23 outings, 20 starts, 105 IP, 103 K, 4.71 ERA, 1.46 WHIP, 0 saves.",
+          "facts": {
+            "season": 2026,
+            "season_type": "regular",
+            "pitching_gp": 23,
+            "pitching_gs": 20,
+            "pitching_qs": 4,
+            "pitching_w": 6,
+            "pitching_sv": 0,
+            "pitching_hld": 1,
+            "pitching_ip": 105,
+            "pitching_h": 101,
+            "pitching_er": 55,
+            "pitching_bb": 52,
+            "pitching_k": 103,
+            "pitching_k_per_9": 8.828571,
+            "pitching_era": 4.7142,
+            "pitching_whip": 1.4571
+          }
+        },
+        {
+          "id": "opponent_order_5059937",
+          "label": "Opposing batting order: TOR",
+          "source": "BALLDONTLIE dated lineups and season batting stats",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "TOR: 2026-09-06 prior order; today's lineup unconfirmed. 1. Brett Bateman (L); 2. Nathan Lukes (L); 3. Vladimir Guerrero Jr. (R); 4. Jesus Sanchez (L); 5. Kazuma Okamoto (R); 6. Sean Keys (L); 7. Josh Smith (L); 8. Andres Gimenez (L); 9. Brandon Valenzuela. 2026 samples for those nine: 2568 AB, 597 K. PA unavailable; no lineup strikeout rate inferred.",
+          "facts": {
+            "game_id": "5059937",
+            "game_date": "2026-09-07",
+            "opponent_team_id": "29",
+            "opponent": "TOR",
+            "lineup_status_today": "not_posted",
+            "lineup_source": "prior_completed_game",
+            "lineup_date": "2026-09-06",
+            "lineup_game_id": "5059925",
+            "confirmed_for_today": false,
+            "complete_source_order": true,
+            "season": 2026,
+            "rows": [
+              {
+                "player_id": "4840225",
+                "name": "Brett Bateman",
+                "batting_order": 1,
+                "bats": "L",
+                "current_team_status": "same_team",
+                "season_games": 25,
+                "plate_appearances": null,
+                "at_bats": 101,
+                "strikeouts": 23,
+                "walks": 10,
+                "home_runs": 0,
+                "ops": 0.8182212
+              },
+              {
+                "player_id": "1024",
+                "name": "Nathan Lukes",
+                "batting_order": 2,
+                "bats": "L",
+                "current_team_status": "same_team",
+                "season_games": 108,
+                "plate_appearances": null,
+                "at_bats": 356,
+                "strikeouts": 58,
+                "walks": 21,
+                "home_runs": 10,
+                "ops": 0.7099299
+              },
+              {
+                "player_id": "939",
+                "name": "Vladimir Guerrero Jr.",
+                "batting_order": 3,
+                "bats": "R",
+                "current_team_status": "same_team",
+                "season_games": 129,
+                "plate_appearances": null,
+                "at_bats": 486,
+                "strikeouts": 69,
+                "walks": 50,
+                "home_runs": 8,
+                "ops": 0.6835797
+              },
+              {
+                "player_id": "601",
+                "name": "Jesus Sanchez",
+                "batting_order": 4,
+                "bats": "L",
+                "current_team_status": "same_team",
+                "season_games": 97,
+                "plate_appearances": null,
+                "at_bats": 265,
+                "strikeouts": 68,
+                "walks": 17,
+                "home_runs": 8,
+                "ops": 0.7375119
+              },
+              {
+                "player_id": "4668445",
+                "name": "Kazuma Okamoto",
+                "batting_order": 5,
+                "bats": "R",
+                "current_team_status": "same_team",
+                "season_games": 138,
+                "plate_appearances": null,
+                "at_bats": 507,
+                "strikeouts": 168,
+                "walks": 48,
+                "home_runs": 28,
+                "ops": 0.7450059
+              },
+              {
+                "player_id": "4933664",
+                "name": "Sean Keys",
+                "batting_order": 6,
+                "bats": "L",
+                "current_team_status": "same_team",
+                "season_games": 16,
+                "plate_appearances": null,
+                "at_bats": 44,
+                "strikeouts": 17,
+                "walks": 2,
+                "home_runs": 2,
+                "ops": 0.6027667
+              },
+              {
+                "player_id": "225",
+                "name": "Josh Smith",
+                "batting_order": 7,
+                "bats": "L",
+                "current_team_status": "same_team",
+                "season_games": 63,
+                "plate_appearances": null,
+                "at_bats": 171,
+                "strikeouts": 43,
+                "walks": 23,
+                "home_runs": 5,
+                "ops": 0.6555077
+              },
+              {
+                "player_id": "944",
+                "name": "Andres Gimenez",
+                "batting_order": 8,
+                "bats": "L",
+                "current_team_status": "same_team",
+                "season_games": 133,
+                "plate_appearances": null,
+                "at_bats": 418,
+                "strikeouts": 87,
+                "walks": 15,
+                "home_runs": 8,
+                "ops": 0.6392852
+              },
+              {
+                "player_id": "4668439",
+                "name": "Brandon Valenzuela",
+                "batting_order": 9,
+                "bats": null,
+                "current_team_status": "same_team",
+                "season_games": 82,
+                "plate_appearances": null,
+                "at_bats": 220,
+                "strikeouts": 64,
+                "walks": 26,
+                "home_runs": 8,
+                "ops": 0.6706011
+              }
+            ],
+            "totals": {
+              "plate_appearances": null,
+              "at_bats": 2568,
+              "strikeouts": 597
+            },
+            "measured_players_by_stat": {
+              "plate_appearances": 0,
+              "at_bats": 9,
+              "strikeouts": 9
+            },
+            "scope": "Season batting samples for the named order. Totals are not a forecast of this pitcher's result.",
+            "plate_appearances_derived_from_at_bats": false
+          }
+        }
+      ],
+      "opportunities": [
+        {
+          "game_id": "5059937",
+          "date": "2026-09-07",
+          "start_at": "2026-09-08T02:05:00.000Z",
+          "home": true,
+          "opponent": "TOR",
+          "opponent_team_id": "29",
+          "venue": "Sutter Health Park",
+          "lineup_status": "not_posted",
+          "batting_order": null,
+          "bats": "L",
+          "throws": "L",
+          "starting_pitcher_status": "probable",
+          "opponent_pitcher": {
+            "player_id": "224",
+            "name": "Dylan Cease",
+            "status": "probable",
+            "bats": "R",
+            "throws": "R"
+          },
+          "planned_innings": null,
+          "opener_or_bulk_role": "unconfirmed"
+        }
+      ],
+      "availability": {
+        "rostered_percent": null,
+        "league_available": null
+      },
+      "limitations": [
+        "League roster availability and scoring settings are not supplied.",
+        "Times show when Gary checked the data; the stat and lineup feeds do not provide their last update time."
+      ]
+    },
+    {
+      "id": "bdl:241414",
+      "player_id": "241414",
+      "player_name": "Max Muncy",
+      "team_id": "20",
+      "team": "OAK",
+      "position": "DH",
+      "role": "hitter",
+      "action": "SIT",
+      "horizon": "next_game",
+      "valid_until": "2026-09-08T02:05:00.000Z",
+      "headline": "Muncy's recent power does not justify forcing the Cease matchup",
+      "why_now": "Oakland's lineup is not posted, and Muncy would face probable starter Dylan Cease, who has a 2.25 ERA, 1.04 WHIP and 12.72 K/9. Muncy's .226 average with 84 strikeouts in 239 at-bats makes this a poor spot for managers with alternatives.",
+      "fit": "Managers with a replacement bat who want to protect average or avoid a low-contact matchup.",
+      "risk": "Muncy has 10 hits and two home runs in his last 10 games, so home-run chasers may reasonably accept the downside.",
+      "watch_for": "Oakland's confirmed lineup and final confirmation that Cease starts.",
+      "formats": [
+        "categories",
+        "points"
+      ],
+      "categories": [
+        "home_runs",
+        "rbi",
+        "average",
+        "points"
+      ],
+      "evidence": [
+        {
+          "id": "today",
+          "label": "Schedule and lineup for 2026-09-07",
+          "source": "BALLDONTLIE pregame lineups",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "2026-09-07 vs TOR: lineup not posted; opposing probable Dylan Cease (R); 2026-09-06 order 6.",
+          "facts": {
+            "date": "2026-09-07",
+            "opportunities": [
+              {
+                "game_id": "5059937",
+                "date": "2026-09-07",
+                "start_at": "2026-09-08T02:05:00.000Z",
+                "home": true,
+                "opponent": "TOR",
+                "opponent_team_id": "29",
+                "venue": "Sutter Health Park",
+                "lineup_status": "not_posted",
+                "batting_order": null,
+                "bats": "R",
+                "throws": "R",
+                "starting_pitcher_status": null,
+                "opponent_pitcher": {
+                  "player_id": "224",
+                  "name": "Dylan Cease",
+                  "status": "probable",
+                  "bats": "R",
+                  "throws": "R"
+                },
+                "prior_lineup": {
+                  "date": "2026-09-06",
+                  "game_id": "5059923",
+                  "batting_order": 6,
+                  "was_listed": true
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "opponent_pitchers",
+          "label": "Opposing probable pitchers for 2026-09-07",
+          "source": "BALLDONTLIE lineups and season stats",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "Dylan Cease (R), probable: 26 starts, 156.1 IP, 65 BB, 12.72 K/9, 2.25 ERA, 1.04 WHIP. Planned innings and opener/bulk roles are unconfirmed.",
+          "facts": {
+            "season": 2026,
+            "pitchers": [
+              {
+                "player_id": "224",
+                "name": "Dylan Cease",
+                "status": "probable",
+                "bats": "R",
+                "throws": "R",
+                "season_stats": {
+                  "pitching_gp": 26,
+                  "pitching_gs": 26,
+                  "pitching_qs": 15,
+                  "pitching_w": 10,
+                  "pitching_sv": 0,
+                  "pitching_hld": 0,
+                  "pitching_ip": 156.1,
+                  "pitching_h": 97,
+                  "pitching_er": 39,
+                  "pitching_bb": 65,
+                  "pitching_k": 221,
+                  "pitching_k_per_9": 12.722815,
+                  "pitching_era": 2.2452,
+                  "pitching_whip": 1.0362
+                },
+                "planned_innings": null,
+                "opener_or_bulk_role": "unconfirmed"
+              }
+            ]
+          }
+        },
+        {
+          "id": "season",
+          "label": "2026 regular season",
+          "source": "BALLDONTLIE season stats",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "2026: 75 batting games, 239 AB, 31 R, 9 HR, 29 RBI, 3 SB, 0.687 OPS.",
+          "facts": {
+            "season": 2026,
+            "season_type": "regular",
+            "batting_gp": 75,
+            "batting_ab": 239,
+            "batting_r": 31,
+            "batting_h": 54,
+            "batting_hr": 9,
+            "batting_rbi": 29,
+            "batting_bb": 20,
+            "batting_so": 84,
+            "batting_sb": 3,
+            "batting_avg": 0.2259414,
+            "batting_obp": 0.293233,
+            "batting_slg": 0.3933054,
+            "batting_ops": 0.6865384
+          }
+        },
+        {
+          "id": "recent_hitter",
+          "label": "Last 10 observed batting games before 2026-09-07",
+          "source": "BALLDONTLIE final game stats",
+          "observed_at": "2026-09-07T19:23:18.036Z",
+          "summary": "10 observed appearances, 2026-08-24 to 2026-09-06: 34 AB, 36 PA, 3 runs, 10 hits, 2 HR, 4 RBI, 0 SB. Latest appearance 1 day before this slate.",
+          "facts": {
+            "window_start": "2026-07-24",
+            "cutoff_exclusive": "2026-09-07",
+            "sample_games": 10,
+            "requested_games": 10,
+            "latest_game_at": "2026-09-06T20:10:00.000Z",
+            "days_since_latest_game": 1,
+            "rows": [
+              {
+                "game_id": "5059923",
+                "date": "2026-09-06",
+                "start_at": "2026-09-06T20:10:00.000Z",
+                "team_id": "20",
+                "at_bats": 3,
+                "plate_appearances": 3,
+                "runs": 0,
+                "hits": 0,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 0,
+                "k": 0,
+                "stolen_bases": 0,
+                "total_bases": 0
+              },
+              {
+                "game_id": "5059911",
+                "date": "2026-09-05",
+                "start_at": "2026-09-06T01:40:00.000Z",
+                "team_id": "20",
+                "at_bats": 4,
+                "plate_appearances": 4,
+                "runs": 2,
+                "hits": 2,
+                "hr": 1,
+                "rbi": 2,
+                "bb": 0,
+                "k": 1,
+                "stolen_bases": 0,
+                "total_bases": 5
+              },
+              {
+                "game_id": "5059895",
+                "date": "2026-09-04",
+                "start_at": "2026-09-05T02:10:00.000Z",
+                "team_id": "20",
+                "at_bats": 4,
+                "plate_appearances": 4,
+                "runs": 1,
+                "hits": 3,
+                "hr": 1,
+                "rbi": 1,
+                "bb": 0,
+                "k": 1,
+                "stolen_bases": 0,
+                "total_bases": 6
+              },
+              {
+                "game_id": "5059880",
+                "date": "2026-09-03",
+                "start_at": "2026-09-04T01:40:00.000Z",
+                "team_id": "20",
+                "at_bats": 4,
+                "plate_appearances": 4,
+                "runs": 0,
+                "hits": 1,
+                "hr": 0,
+                "rbi": 1,
+                "bb": 0,
+                "k": 1,
+                "stolen_bases": 0,
+                "total_bases": 1
+              },
+              {
+                "game_id": "5059852",
+                "date": "2026-09-01",
+                "start_at": "2026-09-02T00:05:00.000Z",
+                "team_id": "20",
+                "at_bats": 4,
+                "plate_appearances": 5,
+                "runs": 0,
+                "hits": 0,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 1,
+                "k": 0,
+                "stolen_bases": 0,
+                "total_bases": 0
+              },
+              {
+                "game_id": "5059838",
+                "date": "2026-08-31",
+                "start_at": "2026-09-01T00:05:00.000Z",
+                "team_id": "20",
+                "at_bats": 3,
+                "plate_appearances": 3,
+                "runs": 0,
+                "hits": 0,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 0,
+                "k": 2,
+                "stolen_bases": 0,
+                "total_bases": 0
+              },
+              {
+                "game_id": "5059829",
+                "date": "2026-08-30",
+                "start_at": "2026-08-30T20:05:00.000Z",
+                "team_id": "20",
+                "at_bats": 1,
+                "plate_appearances": 1,
+                "runs": 0,
+                "hits": 1,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 0,
+                "k": 0,
+                "stolen_bases": 0,
+                "total_bases": 1
+              },
+              {
+                "game_id": "5059815",
+                "date": "2026-08-29",
+                "start_at": "2026-08-30T02:05:00.000Z",
+                "team_id": "20",
+                "at_bats": 3,
+                "plate_appearances": 4,
+                "runs": 0,
+                "hits": 0,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 1,
+                "k": 1,
+                "stolen_bases": 0,
+                "total_bases": 0
+              },
+              {
+                "game_id": "5059800",
+                "date": "2026-08-28",
+                "start_at": "2026-08-29T01:40:00.000Z",
+                "team_id": "20",
+                "at_bats": 4,
+                "plate_appearances": 4,
+                "runs": 0,
+                "hits": 2,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 0,
+                "k": 0,
+                "stolen_bases": 0,
+                "total_bases": 2
+              },
+              {
+                "game_id": "11378823",
+                "date": "2026-08-24",
+                "start_at": "2026-08-25T01:40:00.000Z",
+                "team_id": "20",
+                "at_bats": 4,
+                "plate_appearances": 4,
+                "runs": 0,
+                "hits": 1,
+                "hr": 0,
+                "rbi": 0,
+                "bb": 0,
+                "k": 1,
+                "stolen_bases": 0,
+                "total_bases": 1
+              }
+            ],
+            "totals": {
+              "at_bats": 34,
+              "plate_appearances": 36,
+              "runs": 3,
+              "hits": 10,
+              "hr": 2,
+              "rbi": 4,
+              "bb": 2,
+              "k": 7,
+              "stolen_bases": 0,
+              "total_bases": 16
+            },
+            "measured_games_by_stat": {
+              "at_bats": 10,
+              "plate_appearances": 10,
+              "runs": 10,
+              "hits": 10,
+              "hr": 10,
+              "rbi": 10,
+              "bb": 10,
+              "k": 10,
+              "stolen_bases": 10,
+              "total_bases": 10
+            },
+            "excluded_conflicting_games": 0
+          }
+        }
+      ],
+      "opportunities": [
+        {
+          "game_id": "5059937",
+          "date": "2026-09-07",
+          "start_at": "2026-09-08T02:05:00.000Z",
+          "home": true,
+          "opponent": "TOR",
+          "opponent_team_id": "29",
+          "venue": "Sutter Health Park",
+          "lineup_status": "not_posted",
+          "batting_order": null,
+          "bats": "R",
+          "throws": "R",
+          "starting_pitcher_status": null,
+          "opponent_pitcher": {
+            "player_id": "224",
+            "name": "Dylan Cease",
+            "status": "probable",
+            "bats": "R",
+            "throws": "R"
+          },
+          "prior_lineup": {
+            "date": "2026-09-06",
+            "game_id": "5059923",
+            "batting_order": 6,
+            "was_listed": true
+          }
+        }
+      ],
+      "availability": {
+        "rostered_percent": null,
+        "league_available": null
+      },
+      "limitations": [
+        "League roster availability and scoring settings are not supplied.",
+        "Times show when Gary checked the data; the stat and lineup feeds do not provide their last update time.",
+        "Today's batting lineup is not posted. Prior lineup membership does not confirm today's start or batting order."
+      ]
+    }
+  ],
+  "coverage": {
+    "complete": true,
+    "candidate_limit": 30,
+    "slate_games": 4,
+    "excluded_games": 7,
+    "lineup_sides_confirmed": 1,
+    "lineup_sides_partial": 0,
+    "lineup_sides_not_posted": 7,
+    "candidates_available": 79,
+    "candidates_selected": 30,
+    "requests_attempted": 71,
+    "requests_succeeded": 71,
+    "mandatory_requests_failed": 0,
+    "sources_failed": [],
+    "provider_updated_at": null,
+    "selection": "lineup_changes_then_roles_and_teams",
+    "status_snapshots_provided": true,
+    "status_rows_usable": 6,
+    "status_rows_excluded": 0,
+    "status_rows_attached": 1,
+    "status_coverage": "Dated app return-watch reports only; not comprehensive. Missing reports do not establish clearance.",
+    "recent_game_ids_requested": 614,
+    "recent_stat_rows_returned": 764
+  },
+  "generation": {
+    "attempts": 1,
+    "elapsed_ms": 163501,
+    "prompt_bytes": 190691,
+    "total_prompt_bytes": 190691,
+    "candidate_count": 30,
+    "decision_count": 8,
+    "model_finished_at": "2026-09-07T19:26:14.312Z",
+    "reviewed_at": "2026-09-07T19:41:31.076Z"
+  }
+}

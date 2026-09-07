@@ -46,11 +46,7 @@ import { computeFirstInning } from './computers/firstInning.js';
 import { computeHeadToHead } from './computers/headToHead.js';
 import { computeRunningGame } from './computers/runningGame.js';
 import { computeParkWeather } from './computers/parkWeather.js';
-import { computeFantasyPickups } from './computers/fantasyPickups.js';
-import { computeTwoStartWeek } from './computers/twoStartWeek.js';
-import { computeCloserWatch } from './computers/closerWatch.js';
 import { computeReturnWatch } from './computers/returnWatch.js';
-import { computeCutList } from './computers/cutList.js';
 
 // NBA connection computers.
 import { computeNbaRestFatigue } from './computers/nbaRestFatigue.js';
@@ -72,7 +68,6 @@ import { computeFootballHeadToHead } from './computers/footballHeadToHead.js';
 import { computeFootballRestSpacing } from './computers/footballRestSpacing.js';
 import { computeFootballStandings } from './computers/footballStandings.js';
 import { computeFootballPracticeReport } from './computers/footballPracticeReport.js';
-import { computeNflFantasyEdges } from './computers/nflFantasyEdges.js';
 import { computeNcaafQbWatch } from './computers/ncaafQbWatch.js';
 import { computeNcaafAvailability } from './computers/ncaafAvailability.js';
 import { computeNcaafStandings } from './computers/ncaafStandings.js';
@@ -104,11 +99,9 @@ const MLB_COMPUTERS = [
   computeHeadToHead,
   computeRunningGame,
   computeParkWeather,
-  computeFantasyPickups,
-  computeTwoStartWeek,
-  computeCloserWatch,
+  // The independent Fantasy briefing owns noninjury roster/lineup calls and
+  // projects them atomically for older clients. Preserve the injury lane.
   computeReturnWatch,
-  computeCutList,
 ];
 
 const NBA_COMPUTERS = [
@@ -142,7 +135,7 @@ const FOOTBALL_COMPUTERS = [
 
 const NFL_COMPUTERS = [
   ...FOOTBALL_COMPUTERS,
-  computeNflFantasyEdges,
+  // Fantasy roster/lineup calls use the independent, dated briefing writer.
   // The league's official injury report — the Wed/Thu/Fri practice grid on
   // the game page (founder, Sep 3 2026). NFL-only: no college league ledger.
   computeFootballPracticeReport,

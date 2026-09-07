@@ -1,0 +1,3856 @@
+{
+  "schema_version": 1,
+  "writer_version": "fantasy-briefing-v1-2026-09-07",
+  "date": "2026-09-07",
+  "league": "NFL",
+  "generated_at": "2026-09-07T19:41:31.080Z",
+  "fetched_as_of": "2026-09-07T19:02:17.423Z",
+  "expires_at": "2026-09-08T00:15:01.106Z",
+  "window_start": "2026-09-09",
+  "window_end": "2026-09-14",
+  "week": 1,
+  "input_fingerprint": "851987a136dcea378b911905496ea6ae12700dbe78c2e20f2e24e8dfe25b8ff5",
+  "decisions": [
+    {
+      "id": "bdl:33934144",
+      "player_id": "33934144",
+      "player_name": "Jadarian Price",
+      "team_id": "31",
+      "team": "SEA",
+      "position": "RB",
+      "role": "running_back",
+      "action": "START",
+      "horizon": "next_game",
+      "valid_until": "2026-09-10T00:20:00.000Z",
+      "headline": "Use Price as an RB2 or flex, but confirm his status before Wednesday's kickoff",
+      "why_now": "The provider projects 16.3 carries, 66 rushing yards, 12.2 receiving yards and 12.0 Standard points or 13.6 PPR points against New England. That estimated workload supports an RB2/flex start, but it is a projection rather than an observed NFL role.",
+      "fit": "Managers needing an RB2 or flex across standard, half-PPR or PPR leagues, especially without an established alternative.",
+      "risk": "Price is a rookie with no completed 2026 regular-season sample, and the scheduled game does not confirm that he will start.",
+      "watch_for": "Check Seattle's final injury report and inactive list before kickoff on September 9.",
+      "formats": [
+        "standard",
+        "half_ppr",
+        "ppr"
+      ],
+      "categories": [
+        "running_back",
+        "flex",
+        "rushing"
+      ],
+      "evidence": [
+        {
+          "id": "weekly_projection",
+          "label": "Week 1 forecast by scoring format",
+          "source": "BALLDONTLIE weekly fantasy projections and season scoring definitions",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "Week 1 forecast: 12 Standard, 12.8 Half PPR, 13.6 PPR points. Projected 16.3 carries, 1.6 receptions. Collected 2026-09-07T18:15:01.106Z. These are provider estimates, not Gary's point prediction.",
+          "facts": {
+            "season": 2026,
+            "week": 1,
+            "game_id": "1392216",
+            "game_date": "2026-09-09",
+            "opponent": "NE",
+            "projected_games": 1,
+            "collected_at": "2026-09-07T18:15:01.106Z",
+            "source_age_hours": 0.8,
+            "stats": {
+              "passing_attempts": null,
+              "passing_completions": null,
+              "passing_yards": null,
+              "passing_touchdowns": null,
+              "passing_interceptions": null,
+              "rushing_attempts": 16.3,
+              "rushing_yards": 66,
+              "rushing_touchdowns": 0.65,
+              "receptions": 1.6,
+              "receiving_targets": 2.1,
+              "receiving_yards": 12.2,
+              "receiving_touchdowns": 0.07,
+              "fumbles_lost": 0.07
+            },
+            "format_points": {
+              "half_ppr": 12.8,
+              "ppr": 13.6,
+              "standard": 12
+            },
+            "ppr_difference_from_standard": 1.6,
+            "half_ppr_difference_from_standard": 0.8,
+            "formats": [
+              {
+                "format": "standard",
+                "projected_points": 12,
+                "reception_points_per_catch": null,
+                "reception_rule_present": false
+              },
+              {
+                "format": "half_ppr",
+                "projected_points": 12.8,
+                "reception_points_per_catch": 0.5,
+                "reception_rule_present": true
+              },
+              {
+                "format": "ppr",
+                "projected_points": 13.6,
+                "reception_points_per_catch": 1,
+                "reception_rule_present": true
+              }
+            ],
+            "scope": "Provider estimates for the linked upcoming game, not observed performance."
+          }
+        },
+        {
+          "id": "scheduled_matchup",
+          "label": "Week 1 scheduled game",
+          "source": "BALLDONTLIE regular-season schedule and weekly game identity",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "SEA hosts NE on 2026-09-09, kickoff 2026-09-10T00:20:00.000Z. This is a team schedule, not confirmation of this player's starting role.",
+          "facts": {
+            "season": 2026,
+            "week": 1,
+            "opportunities": [
+              {
+                "game_id": "1392216",
+                "date": "2026-09-09",
+                "start_at": "2026-09-10T00:20:00.000Z",
+                "season": 2026,
+                "week": 1,
+                "home": true,
+                "opponent": "NE",
+                "opponent_team_id": "1"
+              }
+            ],
+            "current_team_verified": true,
+            "listed_experience": "Rookie",
+            "confirmed_player_start": false,
+            "league_lineup_lock_known": false
+          }
+        },
+        {
+          "id": "current_regular_games",
+          "label": "2026 observed regular-season games",
+          "source": "BALLDONTLIE dated final player game stats",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "2026 regular season: no completed player game rows returned before this briefing. Missing observations are not zero production.",
+          "facts": {
+            "season": 2026,
+            "season_type": "regular",
+            "cutoff_exclusive": "2026-09-07T19:02:17.423Z",
+            "sample_games": 0,
+            "requested_games": 5,
+            "latest_game_date": null,
+            "latest_game_at": null,
+            "days_since_latest_game": null,
+            "same_team_entire_sample": false,
+            "rows": [],
+            "latest_two_vs_preceding_games": [],
+            "excluded_conflicting_games": 0,
+            "excluded_rows": 0,
+            "measurements": [],
+            "evidence_scope": "current_season"
+          }
+        }
+      ],
+      "opportunities": [
+        {
+          "game_id": "1392216",
+          "date": "2026-09-09",
+          "start_at": "2026-09-10T00:20:00.000Z",
+          "season": 2026,
+          "week": 1,
+          "home": true,
+          "opponent": "NE",
+          "opponent_team_id": "1"
+        }
+      ],
+      "availability": {
+        "rostered_percent": 94,
+        "league_available": null
+      },
+      "limitations": [
+        "Your roster, league availability, lineup slots and custom scoring bonuses are not supplied.",
+        "Provider forecasts are estimates; a scheduled team game does not confirm this player's starting role or playing time.",
+        "No completed 2026 regular-season player observations were returned; the current-week information is a projection."
+      ]
+    },
+    {
+      "id": "bdl:63",
+      "player_id": "63",
+      "player_name": "Matthew Stafford",
+      "team_id": "32",
+      "team": "LAR",
+      "position": "QB",
+      "role": "quarterback",
+      "action": "START",
+      "horizon": "next_game",
+      "valid_until": "2026-09-11T00:35:00.000Z",
+      "headline": "Start Stafford over the supplied fringe-QB alternatives for Thursday",
+      "why_now": "The provider projects Stafford for 17.5 points, ahead of Stroud's 16.2 and Young's 15.7. Stafford also averaged 326.8 passing yards and 2.8 touchdowns in his final five 2025 games, although that older sample is only a baseline.",
+      "fit": "One-QB managers choosing among Stafford, C.J. Stroud and Bryce Young.",
+      "risk": "The strong 2025 finish is 246 days old, and Los Angeles has a scheduled game rather than a confirmed Stafford start.",
+      "watch_for": "Verify Stafford's game status and the Rams' starter designation before Thursday's kickoff.",
+      "formats": [
+        "standard",
+        "half_ppr",
+        "ppr"
+      ],
+      "categories": [
+        "quarterback"
+      ],
+      "evidence": [
+        {
+          "id": "weekly_projection",
+          "label": "Week 1 forecast by scoring format",
+          "source": "BALLDONTLIE weekly fantasy projections and season scoring definitions",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "Week 1 forecast: 17.5 Standard, 17.5 Half PPR, 17.5 PPR points. Projected 254.3 passing yards, 1.6 carries. Collected 2026-09-07T18:15:01.106Z. These are provider estimates, not Gary's point prediction.",
+          "facts": {
+            "season": 2026,
+            "week": 1,
+            "game_id": "1392217",
+            "game_date": "2026-09-10",
+            "opponent": "SF",
+            "projected_games": 1,
+            "collected_at": "2026-09-07T18:15:01.106Z",
+            "source_age_hours": 0.8,
+            "stats": {
+              "passing_attempts": 33.2,
+              "passing_completions": 21.3,
+              "passing_yards": 254.3,
+              "passing_touchdowns": 2.07,
+              "passing_interceptions": 0.53,
+              "rushing_attempts": 1.6,
+              "rushing_yards": 2.3,
+              "rushing_touchdowns": 0.04,
+              "receptions": null,
+              "receiving_targets": null,
+              "receiving_yards": null,
+              "receiving_touchdowns": null,
+              "fumbles_lost": 0.21
+            },
+            "format_points": {
+              "half_ppr": 17.5,
+              "ppr": 17.5,
+              "standard": 17.5
+            },
+            "ppr_difference_from_standard": 0,
+            "half_ppr_difference_from_standard": 0,
+            "formats": [
+              {
+                "format": "standard",
+                "projected_points": 17.5,
+                "reception_points_per_catch": null,
+                "reception_rule_present": false
+              },
+              {
+                "format": "half_ppr",
+                "projected_points": 17.5,
+                "reception_points_per_catch": 0.5,
+                "reception_rule_present": true
+              },
+              {
+                "format": "ppr",
+                "projected_points": 17.5,
+                "reception_points_per_catch": 1,
+                "reception_rule_present": true
+              }
+            ],
+            "scope": "Provider estimates for the linked upcoming game, not observed performance."
+          }
+        },
+        {
+          "id": "prior_regular_baseline",
+          "label": "2025 regular-season baseline",
+          "source": "BALLDONTLIE dated final player game stats",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "2025 regular-season baseline: 5 observed games, 2025-12-07 through 2026-01-04. 326.8 passing yards per observed game, 39.2 pass attempts per observed game. Latest observation 246 days before this briefing. This is not current role or current form.",
+          "facts": {
+            "season": 2025,
+            "season_type": "regular",
+            "cutoff_exclusive": "2026-09-07T19:02:17.423Z",
+            "sample_games": 5,
+            "requested_games": 5,
+            "latest_game_date": "2026-01-04",
+            "latest_game_at": "2026-01-04T21:25:00.000Z",
+            "days_since_latest_game": 246,
+            "same_team_entire_sample": true,
+            "rows": [
+              {
+                "game_id": "424207",
+                "season": 2025,
+                "week": 18,
+                "date": "2026-01-04",
+                "start_at": "2026-01-04T21:25:00.000Z",
+                "team_id": "32",
+                "team": "LAR",
+                "opponent_team_id": "33",
+                "opponent": "ARI",
+                "home": true,
+                "passing_attempts": 40,
+                "passing_completions": 25,
+                "passing_yards": 259,
+                "passing_touchdowns": 4,
+                "passing_interceptions": 0,
+                "rushing_attempts": 1,
+                "rushing_yards": 3,
+                "rushing_touchdowns": 0,
+                "receptions": null,
+                "receiving_targets": null,
+                "receiving_yards": null,
+                "receiving_touchdowns": null,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424200",
+                "season": 2025,
+                "week": 17,
+                "date": "2025-12-29",
+                "start_at": "2025-12-30T01:15:00.000Z",
+                "team_id": "32",
+                "team": "LAR",
+                "opponent_team_id": "27",
+                "opponent": "ATL",
+                "home": false,
+                "passing_attempts": 38,
+                "passing_completions": 22,
+                "passing_yards": 269,
+                "passing_touchdowns": 2,
+                "passing_interceptions": 3,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": null,
+                "receiving_targets": null,
+                "receiving_yards": null,
+                "receiving_touchdowns": null,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424169",
+                "season": 2025,
+                "week": 16,
+                "date": "2025-12-18",
+                "start_at": "2025-12-19T01:15:00.000Z",
+                "team_id": "32",
+                "team": "LAR",
+                "opponent_team_id": "31",
+                "opponent": "SEA",
+                "home": false,
+                "passing_attempts": 49,
+                "passing_completions": 29,
+                "passing_yards": 457,
+                "passing_touchdowns": 3,
+                "passing_interceptions": 0,
+                "rushing_attempts": 2,
+                "rushing_yards": 6,
+                "rushing_touchdowns": 0,
+                "receptions": null,
+                "receiving_targets": null,
+                "receiving_yards": null,
+                "receiving_touchdowns": null,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424163",
+                "season": 2025,
+                "week": 15,
+                "date": "2025-12-14",
+                "start_at": "2025-12-14T21:25:00.000Z",
+                "team_id": "32",
+                "team": "LAR",
+                "opponent_team_id": "25",
+                "opponent": "DET",
+                "home": true,
+                "passing_attempts": 38,
+                "passing_completions": 24,
+                "passing_yards": 368,
+                "passing_touchdowns": 2,
+                "passing_interceptions": 1,
+                "rushing_attempts": 1,
+                "rushing_yards": 2,
+                "rushing_touchdowns": 0,
+                "receptions": null,
+                "receiving_targets": null,
+                "receiving_yards": null,
+                "receiving_touchdowns": null,
+                "fumbles_lost": 0
+              },
+              {
+                "game_id": "424150",
+                "season": 2025,
+                "week": 14,
+                "date": "2025-12-07",
+                "start_at": "2025-12-07T21:25:00.000Z",
+                "team_id": "32",
+                "team": "LAR",
+                "opponent_team_id": "33",
+                "opponent": "ARI",
+                "home": false,
+                "passing_attempts": 31,
+                "passing_completions": 22,
+                "passing_yards": 281,
+                "passing_touchdowns": 3,
+                "passing_interceptions": 0,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": null,
+                "receiving_targets": null,
+                "receiving_yards": null,
+                "receiving_touchdowns": null,
+                "fumbles_lost": null
+              }
+            ],
+            "latest_two_vs_preceding_games": [
+              {
+                "stat": "passing_attempts",
+                "latest_games": 2,
+                "previous_games": 3,
+                "latest_average": 39,
+                "previous_average": 39.3,
+                "change": -0.3
+              }
+            ],
+            "excluded_conflicting_games": 0,
+            "excluded_rows": 0,
+            "measurements": [
+              {
+                "stat": "passing_attempts",
+                "measured_games": 5,
+                "total": 196,
+                "average": 39.2
+              },
+              {
+                "stat": "passing_completions",
+                "measured_games": 5,
+                "total": 122,
+                "average": 24.4
+              },
+              {
+                "stat": "passing_yards",
+                "measured_games": 5,
+                "total": 1634,
+                "average": 326.8
+              },
+              {
+                "stat": "passing_touchdowns",
+                "measured_games": 5,
+                "total": 14,
+                "average": 2.8
+              },
+              {
+                "stat": "passing_interceptions",
+                "measured_games": 5,
+                "total": 4,
+                "average": 0.8
+              },
+              {
+                "stat": "rushing_attempts",
+                "measured_games": 3,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_yards",
+                "measured_games": 3,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_touchdowns",
+                "measured_games": 3,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "receptions",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "receiving_targets",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "receiving_yards",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "receiving_touchdowns",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "fumbles_lost",
+                "measured_games": 1,
+                "total": null,
+                "average": null
+              }
+            ],
+            "evidence_scope": "prior_season_baseline",
+            "scope": "Historical performance only; does not establish current role, team usage or form."
+          }
+        },
+        {
+          "id": "scheduled_matchup",
+          "label": "Week 1 scheduled game",
+          "source": "BALLDONTLIE regular-season schedule and weekly game identity",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "LAR hosts SF on 2026-09-10, kickoff 2026-09-11T00:35:00.000Z. This is a team schedule, not confirmation of this player's starting role.",
+          "facts": {
+            "season": 2026,
+            "week": 1,
+            "opportunities": [
+              {
+                "game_id": "1392217",
+                "date": "2026-09-10",
+                "start_at": "2026-09-11T00:35:00.000Z",
+                "season": 2026,
+                "week": 1,
+                "home": true,
+                "opponent": "SF",
+                "opponent_team_id": "30"
+              }
+            ],
+            "current_team_verified": true,
+            "listed_experience": "18th Season",
+            "confirmed_player_start": false,
+            "league_lineup_lock_known": false
+          }
+        },
+        {
+          "id": "bdl:57/weekly_projection",
+          "label": "C.J. Stroud · Week 1 forecast by scoring format",
+          "source": "BALLDONTLIE weekly fantasy projections and season scoring definitions",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "Week 1 forecast: 16.2 Standard, 16.2 Half PPR, 16.2 PPR points. Projected 242.7 passing yards, 3.4 carries. Collected 2026-09-07T18:15:01.106Z. These are provider estimates, not Gary's point prediction.",
+          "facts": {
+            "season": 2026,
+            "week": 1,
+            "game_id": "1392225",
+            "game_date": "2026-09-13",
+            "opponent": "BUF",
+            "projected_games": 1,
+            "collected_at": "2026-09-07T18:15:01.106Z",
+            "source_age_hours": 0.8,
+            "stats": {
+              "passing_attempts": 32.8,
+              "passing_completions": 21.4,
+              "passing_yards": 242.7,
+              "passing_touchdowns": 1.54,
+              "passing_interceptions": 0.69,
+              "rushing_attempts": 3.4,
+              "rushing_yards": 15.2,
+              "rushing_touchdowns": 0.08,
+              "receptions": null,
+              "receiving_targets": null,
+              "receiving_yards": null,
+              "receiving_touchdowns": null,
+              "fumbles_lost": 0.23
+            },
+            "format_points": {
+              "half_ppr": 16.2,
+              "ppr": 16.2,
+              "standard": 16.2
+            },
+            "ppr_difference_from_standard": 0,
+            "half_ppr_difference_from_standard": 0,
+            "formats": [
+              {
+                "format": "standard",
+                "projected_points": 16.2,
+                "reception_points_per_catch": null,
+                "reception_rule_present": false
+              },
+              {
+                "format": "half_ppr",
+                "projected_points": 16.2,
+                "reception_points_per_catch": 0.5,
+                "reception_rule_present": true
+              },
+              {
+                "format": "ppr",
+                "projected_points": 16.2,
+                "reception_points_per_catch": 1,
+                "reception_rule_present": true
+              }
+            ],
+            "scope": "Provider estimates for the linked upcoming game, not observed performance."
+          },
+          "player_id": "57"
+        },
+        {
+          "id": "bdl:75/weekly_projection",
+          "label": "Bryce Young · Week 1 forecast by scoring format",
+          "source": "BALLDONTLIE weekly fantasy projections and season scoring definitions",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "Week 1 forecast: 15.7 Standard, 15.7 Half PPR, 15.7 PPR points. Projected 222.6 passing yards, 3.4 carries. Collected 2026-09-07T18:15:01.106Z. These are provider estimates, not Gary's point prediction.",
+          "facts": {
+            "season": 2026,
+            "week": 1,
+            "game_id": "1392223",
+            "game_date": "2026-09-13",
+            "opponent": "CHI",
+            "projected_games": 1,
+            "collected_at": "2026-09-07T18:15:01.106Z",
+            "source_age_hours": 0.8,
+            "stats": {
+              "passing_attempts": 31.4,
+              "passing_completions": 20,
+              "passing_yards": 222.6,
+              "passing_touchdowns": 1.49,
+              "passing_interceptions": 0.75,
+              "rushing_attempts": 3.4,
+              "rushing_yards": 16.6,
+              "rushing_touchdowns": 0.15,
+              "receptions": null,
+              "receiving_targets": null,
+              "receiving_yards": null,
+              "receiving_touchdowns": null,
+              "fumbles_lost": 0.23
+            },
+            "format_points": {
+              "half_ppr": 15.7,
+              "ppr": 15.7,
+              "standard": 15.7
+            },
+            "ppr_difference_from_standard": 0,
+            "half_ppr_difference_from_standard": 0,
+            "formats": [
+              {
+                "format": "standard",
+                "projected_points": 15.7,
+                "reception_points_per_catch": null,
+                "reception_rule_present": false
+              },
+              {
+                "format": "half_ppr",
+                "projected_points": 15.7,
+                "reception_points_per_catch": 0.5,
+                "reception_rule_present": true
+              },
+              {
+                "format": "ppr",
+                "projected_points": 15.7,
+                "reception_points_per_catch": 1,
+                "reception_rule_present": true
+              }
+            ],
+            "scope": "Provider estimates for the linked upcoming game, not observed performance."
+          },
+          "player_id": "75"
+        }
+      ],
+      "opportunities": [
+        {
+          "game_id": "1392217",
+          "date": "2026-09-10",
+          "start_at": "2026-09-11T00:35:00.000Z",
+          "season": 2026,
+          "week": 1,
+          "home": true,
+          "opponent": "SF",
+          "opponent_team_id": "30"
+        }
+      ],
+      "availability": {
+        "rostered_percent": 92.9,
+        "league_available": null
+      },
+      "limitations": [
+        "Your roster, league availability, lineup slots and custom scoring bonuses are not supplied.",
+        "Provider forecasts are estimates; a scheduled team game does not confirm this player's starting role or playing time.",
+        "No completed 2026 regular-season player observations were returned; the current-week information is a projection."
+      ]
+    },
+    {
+      "id": "bdl:762",
+      "player_id": "762",
+      "player_name": "Dallas Goedert",
+      "team_id": "18",
+      "team": "PHI",
+      "position": "TE",
+      "role": "tight_end",
+      "action": "START",
+      "horizon": "next_game",
+      "valid_until": "2026-09-13T17:00:00.000Z",
+      "headline": "Lean Goedert over Andrews when choosing between the veteran tight ends",
+      "why_now": "The provider gives Goedert a small Week 1 edge over Andrews in every format: 6.8 versus 6.6 standard, 8.8 versus 8.4 half-PPR and 10.9 versus 10.1 PPR. Goedert's final five-game 2025 sample also produced 4.4 catches and 43 yards per game, compared with Andrews' 2.2 catches and 18 yards.",
+      "fit": "Managers deciding specifically between Goedert and Mark Andrews at tight end.",
+      "risk": "Goedert scored four touchdowns in that five-game baseline, so the historical fantasy production was unusually touchdown-dependent.",
+      "watch_for": "Check both players' final game statuses; otherwise, use the projected reception and yardage edge as the tiebreaker.",
+      "formats": [
+        "standard",
+        "half_ppr",
+        "ppr"
+      ],
+      "categories": [
+        "tight_end",
+        "receptions",
+        "touchdowns"
+      ],
+      "evidence": [
+        {
+          "id": "weekly_projection",
+          "label": "Week 1 forecast by scoring format",
+          "source": "BALLDONTLIE weekly fantasy projections and season scoring definitions",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "Week 1 forecast: 6.8 Standard, 8.8 Half PPR, 10.9 PPR points. Projected 4.1 receptions, 44.2 receiving yards. Collected 2026-09-07T18:15:01.106Z. These are provider estimates, not Gary's point prediction.",
+          "facts": {
+            "season": 2026,
+            "week": 1,
+            "game_id": "1392228",
+            "game_date": "2026-09-13",
+            "opponent": "WSH",
+            "projected_games": 1,
+            "collected_at": "2026-09-07T18:15:01.106Z",
+            "source_age_hours": 0.8,
+            "stats": {
+              "passing_attempts": null,
+              "passing_completions": null,
+              "passing_yards": null,
+              "passing_touchdowns": null,
+              "passing_interceptions": null,
+              "rushing_attempts": null,
+              "rushing_yards": null,
+              "rushing_touchdowns": null,
+              "receptions": 4.1,
+              "receiving_targets": 5.3,
+              "receiving_yards": 44.2,
+              "receiving_touchdowns": 0.39,
+              "fumbles_lost": 0.02
+            },
+            "format_points": {
+              "half_ppr": 8.8,
+              "ppr": 10.9,
+              "standard": 6.8
+            },
+            "ppr_difference_from_standard": 4.1,
+            "half_ppr_difference_from_standard": 2,
+            "formats": [
+              {
+                "format": "standard",
+                "projected_points": 6.8,
+                "reception_points_per_catch": null,
+                "reception_rule_present": false
+              },
+              {
+                "format": "half_ppr",
+                "projected_points": 8.8,
+                "reception_points_per_catch": 0.5,
+                "reception_rule_present": true
+              },
+              {
+                "format": "ppr",
+                "projected_points": 10.9,
+                "reception_points_per_catch": 1,
+                "reception_rule_present": true
+              }
+            ],
+            "scope": "Provider estimates for the linked upcoming game, not observed performance."
+          }
+        },
+        {
+          "id": "prior_regular_baseline",
+          "label": "2025 regular-season baseline",
+          "source": "BALLDONTLIE dated final player game stats",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "2025 regular-season baseline: 5 observed games, 2025-11-28 through 2025-12-28. 6 targets per observed game, 4.4 receptions per observed game, 43 receiving yards per observed game. Latest observation 253 days before this briefing. This is not current role or current form.",
+          "facts": {
+            "season": 2025,
+            "season_type": "regular",
+            "cutoff_exclusive": "2026-09-07T19:02:17.423Z",
+            "sample_games": 5,
+            "requested_games": 5,
+            "latest_game_date": "2025-12-28",
+            "latest_game_at": "2025-12-28T21:25:00.000Z",
+            "days_since_latest_game": 253,
+            "same_team_entire_sample": true,
+            "rows": [
+              {
+                "game_id": "424198",
+                "season": 2025,
+                "week": 17,
+                "date": "2025-12-28",
+                "start_at": "2025-12-28T21:25:00.000Z",
+                "team_id": "18",
+                "team": "PHI",
+                "opponent_team_id": "3",
+                "opponent": "BUF",
+                "home": false,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 3,
+                "receiving_targets": 6,
+                "receiving_yards": 8,
+                "receiving_touchdowns": 1,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424171",
+                "season": 2025,
+                "week": 16,
+                "date": "2025-12-20",
+                "start_at": "2025-12-20T22:00:00.000Z",
+                "team_id": "18",
+                "team": "PHI",
+                "opponent_team_id": "21",
+                "opponent": "WSH",
+                "home": false,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 3,
+                "receiving_targets": 3,
+                "receiving_yards": 32,
+                "receiving_touchdowns": 1,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424159",
+                "season": 2025,
+                "week": 15,
+                "date": "2025-12-14",
+                "start_at": "2025-12-14T18:00:00.000Z",
+                "team_id": "18",
+                "team": "PHI",
+                "opponent_team_id": "16",
+                "opponent": "LV",
+                "home": true,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 6,
+                "receiving_targets": 7,
+                "receiving_yards": 70,
+                "receiving_touchdowns": 2,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424152",
+                "season": 2025,
+                "week": 14,
+                "date": "2025-12-08",
+                "start_at": "2025-12-09T01:15:00.000Z",
+                "team_id": "18",
+                "team": "PHI",
+                "opponent_team_id": "17",
+                "opponent": "LAC",
+                "home": false,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 8,
+                "receiving_targets": 10,
+                "receiving_yards": 78,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424126",
+                "season": 2025,
+                "week": 13,
+                "date": "2025-11-28",
+                "start_at": "2025-11-28T20:00:00.000Z",
+                "team_id": "18",
+                "team": "PHI",
+                "opponent_team_id": "24",
+                "opponent": "CHI",
+                "home": true,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 2,
+                "receiving_targets": 4,
+                "receiving_yards": 27,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              }
+            ],
+            "latest_two_vs_preceding_games": [
+              {
+                "stat": "receiving_targets",
+                "latest_games": 2,
+                "previous_games": 3,
+                "latest_average": 4.5,
+                "previous_average": 7,
+                "change": -2.5
+              },
+              {
+                "stat": "receptions",
+                "latest_games": 2,
+                "previous_games": 3,
+                "latest_average": 3,
+                "previous_average": 5.3,
+                "change": -2.3
+              }
+            ],
+            "excluded_conflicting_games": 0,
+            "excluded_rows": 0,
+            "measurements": [
+              {
+                "stat": "passing_attempts",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_completions",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_yards",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_touchdowns",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_interceptions",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_attempts",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_yards",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_touchdowns",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "receptions",
+                "measured_games": 5,
+                "total": 22,
+                "average": 4.4
+              },
+              {
+                "stat": "receiving_targets",
+                "measured_games": 5,
+                "total": 30,
+                "average": 6
+              },
+              {
+                "stat": "receiving_yards",
+                "measured_games": 5,
+                "total": 215,
+                "average": 43
+              },
+              {
+                "stat": "receiving_touchdowns",
+                "measured_games": 5,
+                "total": 4,
+                "average": 0.8
+              },
+              {
+                "stat": "fumbles_lost",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              }
+            ],
+            "evidence_scope": "prior_season_baseline",
+            "scope": "Historical performance only; does not establish current role, team usage or form."
+          }
+        },
+        {
+          "id": "scheduled_matchup",
+          "label": "Week 1 scheduled game",
+          "source": "BALLDONTLIE regular-season schedule and weekly game identity",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "PHI hosts WSH on 2026-09-13, kickoff 2026-09-13T20:25:00.000Z. This is a team schedule, not confirmation of this player's starting role.",
+          "facts": {
+            "season": 2026,
+            "week": 1,
+            "opportunities": [
+              {
+                "game_id": "1392228",
+                "date": "2026-09-13",
+                "start_at": "2026-09-13T20:25:00.000Z",
+                "season": 2026,
+                "week": 1,
+                "home": true,
+                "opponent": "WSH",
+                "opponent_team_id": "21"
+              }
+            ],
+            "current_team_verified": true,
+            "listed_experience": "9th Season",
+            "confirmed_player_start": false,
+            "league_lineup_lock_known": false
+          }
+        },
+        {
+          "id": "bdl:773/weekly_projection",
+          "label": "Mark Andrews · Week 1 forecast by scoring format",
+          "source": "BALLDONTLIE weekly fantasy projections and season scoring definitions",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "Week 1 forecast: 6.6 Standard, 8.4 Half PPR, 10.1 PPR points. Projected 3.5 receptions, 36.9 receiving yards. Collected 2026-09-07T18:15:01.106Z. These are provider estimates, not Gary's point prediction.",
+          "facts": {
+            "season": 2026,
+            "week": 1,
+            "game_id": "1392221",
+            "game_date": "2026-09-13",
+            "opponent": "IND",
+            "projected_games": 1,
+            "collected_at": "2026-09-07T18:15:01.106Z",
+            "source_age_hours": 0.8,
+            "stats": {
+              "passing_attempts": null,
+              "passing_completions": null,
+              "passing_yards": null,
+              "passing_touchdowns": null,
+              "passing_interceptions": null,
+              "rushing_attempts": 0.6,
+              "rushing_yards": 2,
+              "rushing_touchdowns": 0.04,
+              "receptions": 3.5,
+              "receiving_targets": 5,
+              "receiving_yards": 36.9,
+              "receiving_touchdowns": 0.42,
+              "fumbles_lost": 0.03
+            },
+            "format_points": {
+              "half_ppr": 8.4,
+              "ppr": 10.1,
+              "standard": 6.6
+            },
+            "ppr_difference_from_standard": 3.5,
+            "half_ppr_difference_from_standard": 1.8,
+            "formats": [
+              {
+                "format": "standard",
+                "projected_points": 6.6,
+                "reception_points_per_catch": null,
+                "reception_rule_present": false
+              },
+              {
+                "format": "half_ppr",
+                "projected_points": 8.4,
+                "reception_points_per_catch": 0.5,
+                "reception_rule_present": true
+              },
+              {
+                "format": "ppr",
+                "projected_points": 10.1,
+                "reception_points_per_catch": 1,
+                "reception_rule_present": true
+              }
+            ],
+            "scope": "Provider estimates for the linked upcoming game, not observed performance."
+          },
+          "player_id": "773"
+        },
+        {
+          "id": "bdl:773/prior_regular_baseline",
+          "label": "Mark Andrews · 2025 regular-season baseline",
+          "source": "BALLDONTLIE dated final player game stats",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "2025 regular-season baseline: 5 observed games, 2025-12-07 through 2026-01-04. 3.6 targets per observed game, 2.2 receptions per observed game, 18 receiving yards per observed game. Latest observation 246 days before this briefing. This is not current role or current form.",
+          "facts": {
+            "season": 2025,
+            "season_type": "regular",
+            "cutoff_exclusive": "2026-09-07T19:02:17.423Z",
+            "sample_games": 5,
+            "requested_games": 5,
+            "latest_game_date": "2026-01-04",
+            "latest_game_at": "2026-01-05T01:20:00.000Z",
+            "days_since_latest_game": 246,
+            "same_team_entire_sample": true,
+            "rows": [
+              {
+                "game_id": "424212",
+                "season": 2025,
+                "week": 18,
+                "date": "2026-01-04",
+                "start_at": "2026-01-05T01:20:00.000Z",
+                "team_id": "6",
+                "team": "BAL",
+                "opponent_team_id": "7",
+                "opponent": "PIT",
+                "home": false,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 2,
+                "receiving_targets": 3,
+                "receiving_yards": 14,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424189",
+                "season": 2025,
+                "week": 17,
+                "date": "2025-12-27",
+                "start_at": "2025-12-28T01:00:00.000Z",
+                "team_id": "6",
+                "team": "BAL",
+                "opponent_team_id": "22",
+                "opponent": "GB",
+                "home": false,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 4,
+                "receiving_targets": 4,
+                "receiving_yards": 28,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424178",
+                "season": 2025,
+                "week": 16,
+                "date": "2025-12-21",
+                "start_at": "2025-12-22T01:20:00.000Z",
+                "team_id": "6",
+                "team": "BAL",
+                "opponent_team_id": "1",
+                "opponent": "NE",
+                "home": true,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": 1,
+                "rushing_yards": 3,
+                "rushing_touchdowns": 0,
+                "receptions": 2,
+                "receiving_targets": 3,
+                "receiving_yards": 21,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424155",
+                "season": 2025,
+                "week": 15,
+                "date": "2025-12-14",
+                "start_at": "2025-12-14T18:00:00.000Z",
+                "team_id": "6",
+                "team": "BAL",
+                "opponent_team_id": "9",
+                "opponent": "CIN",
+                "home": false,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 2,
+                "receiving_targets": 3,
+                "receiving_yards": 18,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424147",
+                "season": 2025,
+                "week": 14,
+                "date": "2025-12-07",
+                "start_at": "2025-12-07T18:00:00.000Z",
+                "team_id": "6",
+                "team": "BAL",
+                "opponent_team_id": "7",
+                "opponent": "PIT",
+                "home": true,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 1,
+                "receiving_targets": 5,
+                "receiving_yards": 9,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              }
+            ],
+            "latest_two_vs_preceding_games": [
+              {
+                "stat": "receiving_targets",
+                "latest_games": 2,
+                "previous_games": 3,
+                "latest_average": 3.5,
+                "previous_average": 3.7,
+                "change": -0.2
+              },
+              {
+                "stat": "receptions",
+                "latest_games": 2,
+                "previous_games": 3,
+                "latest_average": 3,
+                "previous_average": 1.7,
+                "change": 1.3
+              }
+            ],
+            "excluded_conflicting_games": 0,
+            "excluded_rows": 0,
+            "measurements": [
+              {
+                "stat": "passing_attempts",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_completions",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_yards",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_touchdowns",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_interceptions",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_attempts",
+                "measured_games": 1,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_yards",
+                "measured_games": 1,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_touchdowns",
+                "measured_games": 1,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "receptions",
+                "measured_games": 5,
+                "total": 11,
+                "average": 2.2
+              },
+              {
+                "stat": "receiving_targets",
+                "measured_games": 5,
+                "total": 18,
+                "average": 3.6
+              },
+              {
+                "stat": "receiving_yards",
+                "measured_games": 5,
+                "total": 90,
+                "average": 18
+              },
+              {
+                "stat": "receiving_touchdowns",
+                "measured_games": 5,
+                "total": 0,
+                "average": 0
+              },
+              {
+                "stat": "fumbles_lost",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              }
+            ],
+            "evidence_scope": "prior_season_baseline",
+            "scope": "Historical performance only; does not establish current role, team usage or form."
+          },
+          "player_id": "773"
+        }
+      ],
+      "opportunities": [
+        {
+          "game_id": "1392228",
+          "date": "2026-09-13",
+          "start_at": "2026-09-13T20:25:00.000Z",
+          "season": 2026,
+          "week": 1,
+          "home": true,
+          "opponent": "WSH",
+          "opponent_team_id": "21"
+        }
+      ],
+      "availability": {
+        "rostered_percent": 90.3,
+        "league_available": null
+      },
+      "limitations": [
+        "Your roster, league availability, lineup slots and custom scoring bonuses are not supplied.",
+        "Provider forecasts are estimates; a scheduled team game does not confirm this player's starting role or playing time.",
+        "No completed 2026 regular-season player observations were returned; the current-week information is a projection."
+      ]
+    },
+    {
+      "id": "bdl:820",
+      "player_id": "820",
+      "player_name": "Michael Pittman Jr.",
+      "team_id": "7",
+      "team": "PIT",
+      "position": "WR",
+      "role": "receiver",
+      "action": "START",
+      "horizon": "next_game",
+      "valid_until": "2026-09-13T17:00:00.000Z",
+      "headline": "Pittman is a PPR flex, but his new-team projection carries more weight than his old baseline",
+      "why_now": "The provider projects 5.2 catches on 7.4 targets and 12.3 PPR points against Atlanta, creating a reception-based flex case. His final five 2025 games with Indianapolis produced only 4.0 catches and 32.8 yards per game with no touchdowns, so the call depends on the forecasted Pittsburgh opportunity rather than demonstrated current usage.",
+      "fit": "PPR managers who need a flex and can absorb uncertainty surrounding a player changing teams.",
+      "risk": "There is no completed 2026 sample, and the supplied schedule does not confirm his starting role with Pittsburgh.",
+      "watch_for": "Check Pittsburgh's final game status and any official starter update before Sunday.",
+      "formats": [
+        "ppr"
+      ],
+      "categories": [
+        "receiver",
+        "flex",
+        "receptions"
+      ],
+      "evidence": [
+        {
+          "id": "weekly_projection",
+          "label": "Week 1 forecast by scoring format",
+          "source": "BALLDONTLIE weekly fantasy projections and season scoring definitions",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "Week 1 forecast: 7.2 Standard, 9.7 Half PPR, 12.3 PPR points. Projected 5.2 receptions, 52.5 receiving yards. Collected 2026-09-07T18:15:01.106Z. These are provider estimates, not Gary's point prediction.",
+          "facts": {
+            "season": 2026,
+            "week": 1,
+            "game_id": "1392222",
+            "game_date": "2026-09-13",
+            "opponent": "ATL",
+            "projected_games": 1,
+            "collected_at": "2026-09-07T18:15:01.106Z",
+            "source_age_hours": 0.8,
+            "stats": {
+              "passing_attempts": null,
+              "passing_completions": null,
+              "passing_yards": null,
+              "passing_touchdowns": null,
+              "passing_interceptions": null,
+              "rushing_attempts": null,
+              "rushing_yards": null,
+              "rushing_touchdowns": null,
+              "receptions": 5.2,
+              "receiving_targets": 7.4,
+              "receiving_yards": 52.5,
+              "receiving_touchdowns": 0.33,
+              "fumbles_lost": 0.04
+            },
+            "format_points": {
+              "half_ppr": 9.7,
+              "ppr": 12.3,
+              "standard": 7.2
+            },
+            "ppr_difference_from_standard": 5.1,
+            "half_ppr_difference_from_standard": 2.5,
+            "formats": [
+              {
+                "format": "standard",
+                "projected_points": 7.2,
+                "reception_points_per_catch": null,
+                "reception_rule_present": false
+              },
+              {
+                "format": "half_ppr",
+                "projected_points": 9.7,
+                "reception_points_per_catch": 0.5,
+                "reception_rule_present": true
+              },
+              {
+                "format": "ppr",
+                "projected_points": 12.3,
+                "reception_points_per_catch": 1,
+                "reception_rule_present": true
+              }
+            ],
+            "scope": "Provider estimates for the linked upcoming game, not observed performance."
+          }
+        },
+        {
+          "id": "prior_regular_baseline",
+          "label": "2025 regular-season baseline",
+          "source": "BALLDONTLIE dated final player game stats",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "2025 regular-season baseline: 5 observed games, 2025-12-07 through 2026-01-04. 5.8 targets per observed game, 4 receptions per observed game, 32.8 receiving yards per observed game. Latest observation 246 days before this briefing. This is not current role or current form. The sample does not all belong to the current team.",
+          "facts": {
+            "season": 2025,
+            "season_type": "regular",
+            "cutoff_exclusive": "2026-09-07T19:02:17.423Z",
+            "sample_games": 5,
+            "requested_games": 5,
+            "latest_game_date": "2026-01-04",
+            "latest_game_at": "2026-01-04T18:00:00.000Z",
+            "days_since_latest_game": 246,
+            "same_team_entire_sample": false,
+            "rows": [
+              {
+                "game_id": "424216",
+                "season": 2025,
+                "week": 18,
+                "date": "2026-01-04",
+                "start_at": "2026-01-04T18:00:00.000Z",
+                "team_id": "12",
+                "team": "IND",
+                "opponent_team_id": "10",
+                "opponent": "HOU",
+                "home": false,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 2,
+                "receiving_targets": 4,
+                "receiving_yards": 11,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424195",
+                "season": 2025,
+                "week": 17,
+                "date": "2025-12-28",
+                "start_at": "2025-12-28T18:00:00.000Z",
+                "team_id": "12",
+                "team": "IND",
+                "opponent_team_id": "13",
+                "opponent": "JAX",
+                "home": true,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 2,
+                "receiving_targets": 3,
+                "receiving_yards": 16,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424184",
+                "season": 2025,
+                "week": 16,
+                "date": "2025-12-22",
+                "start_at": "2025-12-23T01:15:00.000Z",
+                "team_id": "12",
+                "team": "IND",
+                "opponent_team_id": "30",
+                "opponent": "SF",
+                "home": true,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 4,
+                "receiving_targets": 5,
+                "receiving_yards": 32,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424166",
+                "season": 2025,
+                "week": 15,
+                "date": "2025-12-14",
+                "start_at": "2025-12-14T21:25:00.000Z",
+                "team_id": "12",
+                "team": "IND",
+                "opponent_team_id": "31",
+                "opponent": "SEA",
+                "home": false,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 3,
+                "receiving_targets": 5,
+                "receiving_yards": 26,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424146",
+                "season": 2025,
+                "week": 14,
+                "date": "2025-12-07",
+                "start_at": "2025-12-07T18:00:00.000Z",
+                "team_id": "12",
+                "team": "IND",
+                "opponent_team_id": "13",
+                "opponent": "JAX",
+                "home": false,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 9,
+                "receiving_targets": 12,
+                "receiving_yards": 79,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              }
+            ],
+            "latest_two_vs_preceding_games": [],
+            "excluded_conflicting_games": 0,
+            "excluded_rows": 0,
+            "measurements": [
+              {
+                "stat": "passing_attempts",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_completions",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_yards",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_touchdowns",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_interceptions",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_attempts",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_yards",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_touchdowns",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "receptions",
+                "measured_games": 5,
+                "total": 20,
+                "average": 4
+              },
+              {
+                "stat": "receiving_targets",
+                "measured_games": 5,
+                "total": 29,
+                "average": 5.8
+              },
+              {
+                "stat": "receiving_yards",
+                "measured_games": 5,
+                "total": 164,
+                "average": 32.8
+              },
+              {
+                "stat": "receiving_touchdowns",
+                "measured_games": 5,
+                "total": 0,
+                "average": 0
+              },
+              {
+                "stat": "fumbles_lost",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              }
+            ],
+            "evidence_scope": "prior_season_baseline",
+            "scope": "Historical performance only; does not establish current role, team usage or form."
+          }
+        },
+        {
+          "id": "scheduled_matchup",
+          "label": "Week 1 scheduled game",
+          "source": "BALLDONTLIE regular-season schedule and weekly game identity",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "PIT hosts ATL on 2026-09-13, kickoff 2026-09-13T17:00:00.000Z. This is a team schedule, not confirmation of this player's starting role.",
+          "facts": {
+            "season": 2026,
+            "week": 1,
+            "opportunities": [
+              {
+                "game_id": "1392222",
+                "date": "2026-09-13",
+                "start_at": "2026-09-13T17:00:00.000Z",
+                "season": 2026,
+                "week": 1,
+                "home": true,
+                "opponent": "ATL",
+                "opponent_team_id": "27"
+              }
+            ],
+            "current_team_verified": true,
+            "listed_experience": "7th Season",
+            "confirmed_player_start": false,
+            "league_lineup_lock_known": false
+          }
+        },
+        {
+          "id": "current_regular_games",
+          "label": "2026 observed regular-season games",
+          "source": "BALLDONTLIE dated final player game stats",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "2026 regular season: no completed player game rows returned before this briefing. Missing observations are not zero production.",
+          "facts": {
+            "season": 2026,
+            "season_type": "regular",
+            "cutoff_exclusive": "2026-09-07T19:02:17.423Z",
+            "sample_games": 0,
+            "requested_games": 5,
+            "latest_game_date": null,
+            "latest_game_at": null,
+            "days_since_latest_game": null,
+            "same_team_entire_sample": false,
+            "rows": [],
+            "latest_two_vs_preceding_games": [],
+            "excluded_conflicting_games": 0,
+            "excluded_rows": 0,
+            "measurements": [],
+            "evidence_scope": "current_season"
+          }
+        }
+      ],
+      "opportunities": [
+        {
+          "game_id": "1392222",
+          "date": "2026-09-13",
+          "start_at": "2026-09-13T17:00:00.000Z",
+          "season": 2026,
+          "week": 1,
+          "home": true,
+          "opponent": "ATL",
+          "opponent_team_id": "27"
+        }
+      ],
+      "availability": {
+        "rostered_percent": 90.3,
+        "league_available": null
+      },
+      "limitations": [
+        "Your roster, league availability, lineup slots and custom scoring bonuses are not supplied.",
+        "Provider forecasts are estimates; a scheduled team game does not confirm this player's starting role or playing time.",
+        "No completed 2026 regular-season player observations were returned; the current-week information is a projection."
+      ]
+    },
+    {
+      "id": "bdl:930",
+      "player_id": "930",
+      "player_name": "Juwan Johnson",
+      "team_id": "26",
+      "team": "NO",
+      "position": "TE",
+      "role": "tight_end",
+      "action": "CONSIDER_ADD",
+      "horizon": "week",
+      "valid_until": null,
+      "headline": "If available, Johnson is the stronger reception-oriented tight-end pickup than Schultz",
+      "why_now": "The provider projects Johnson for 4.1 catches, 40.1 yards and 8.8 PPR points, narrowly above Schultz's 3.6 catches, 33.9 yards and 8.4 points. Johnson's final five-game 2025 baseline was also stronger at 4.6 catches and 62.6 yards per game; I would prioritize him when both are actually available.",
+      "fit": "Half-PPR or PPR managers streaming tight end or seeking a bench alternative; availability must be checked in the user's league.",
+      "risk": "The historical sample is 246 days old, and neither a current-season role nor a Week 1 start is confirmed.",
+      "watch_for": "Verify availability and game status, then watch Johnson's Week 1 targets and receptions for evidence that the projected role materialized.",
+      "formats": [
+        "half_ppr",
+        "ppr"
+      ],
+      "categories": [
+        "tight_end",
+        "receptions"
+      ],
+      "evidence": [
+        {
+          "id": "weekly_projection",
+          "label": "Week 1 forecast by scoring format",
+          "source": "BALLDONTLIE weekly fantasy projections and season scoring definitions",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "Week 1 forecast: 4.8 Standard, 6.8 Half PPR, 8.8 PPR points. Projected 4.1 receptions, 40.1 receiving yards. Collected 2026-09-07T18:15:01.106Z. These are provider estimates, not Gary's point prediction.",
+          "facts": {
+            "season": 2026,
+            "week": 1,
+            "game_id": "1392219",
+            "game_date": "2026-09-13",
+            "opponent": "DET",
+            "projected_games": 1,
+            "collected_at": "2026-09-07T18:15:01.106Z",
+            "source_age_hours": 0.8,
+            "stats": {
+              "passing_attempts": null,
+              "passing_completions": null,
+              "passing_yards": null,
+              "passing_touchdowns": null,
+              "passing_interceptions": null,
+              "rushing_attempts": null,
+              "rushing_yards": null,
+              "rushing_touchdowns": null,
+              "receptions": 4.1,
+              "receiving_targets": 5.7,
+              "receiving_yards": 40.1,
+              "receiving_touchdowns": 0.14,
+              "fumbles_lost": 0.04
+            },
+            "format_points": {
+              "half_ppr": 6.8,
+              "ppr": 8.8,
+              "standard": 4.8
+            },
+            "ppr_difference_from_standard": 4,
+            "half_ppr_difference_from_standard": 2,
+            "formats": [
+              {
+                "format": "standard",
+                "projected_points": 4.8,
+                "reception_points_per_catch": null,
+                "reception_rule_present": false
+              },
+              {
+                "format": "half_ppr",
+                "projected_points": 6.8,
+                "reception_points_per_catch": 0.5,
+                "reception_rule_present": true
+              },
+              {
+                "format": "ppr",
+                "projected_points": 8.8,
+                "reception_points_per_catch": 1,
+                "reception_rule_present": true
+              }
+            ],
+            "scope": "Provider estimates for the linked upcoming game, not observed performance."
+          }
+        },
+        {
+          "id": "prior_regular_baseline",
+          "label": "2025 regular-season baseline",
+          "source": "BALLDONTLIE dated final player game stats",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "2025 regular-season baseline: 5 observed games, 2025-12-07 through 2026-01-04. 5.2 targets per observed game, 4.6 receptions per observed game, 62.6 receiving yards per observed game. Latest observation 246 days before this briefing. This is not current role or current form.",
+          "facts": {
+            "season": 2025,
+            "season_type": "regular",
+            "cutoff_exclusive": "2026-09-07T19:02:17.423Z",
+            "sample_games": 5,
+            "requested_games": 5,
+            "latest_game_date": "2026-01-04",
+            "latest_game_at": "2026-01-04T18:00:00.000Z",
+            "days_since_latest_game": 246,
+            "same_team_entire_sample": true,
+            "rows": [
+              {
+                "game_id": "424201",
+                "season": 2025,
+                "week": 18,
+                "date": "2026-01-04",
+                "start_at": "2026-01-04T18:00:00.000Z",
+                "team_id": "26",
+                "team": "NO",
+                "opponent_team_id": "27",
+                "opponent": "ATL",
+                "home": false,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 3,
+                "receiving_targets": 5,
+                "receiving_yards": 61,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": 1
+              },
+              {
+                "game_id": "424194",
+                "season": 2025,
+                "week": 17,
+                "date": "2025-12-28",
+                "start_at": "2025-12-28T18:00:00.000Z",
+                "team_id": "26",
+                "team": "NO",
+                "opponent_team_id": "11",
+                "opponent": "TEN",
+                "home": false,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 4,
+                "receiving_targets": 4,
+                "receiving_yards": 95,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424175",
+                "season": 2025,
+                "week": 16,
+                "date": "2025-12-21",
+                "start_at": "2025-12-21T18:00:00.000Z",
+                "team_id": "26",
+                "team": "NO",
+                "opponent_team_id": "4",
+                "opponent": "NYJ",
+                "home": true,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 8,
+                "receiving_targets": 9,
+                "receiving_yards": 89,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424164",
+                "season": 2025,
+                "week": 15,
+                "date": "2025-12-14",
+                "start_at": "2025-12-14T21:25:00.000Z",
+                "team_id": "26",
+                "team": "NO",
+                "opponent_team_id": "29",
+                "opponent": "CAR",
+                "home": true,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 4,
+                "receiving_targets": 4,
+                "receiving_yards": 30,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424145",
+                "season": 2025,
+                "week": 14,
+                "date": "2025-12-07",
+                "start_at": "2025-12-07T18:00:00.000Z",
+                "team_id": "26",
+                "team": "NO",
+                "opponent_team_id": "28",
+                "opponent": "TB",
+                "home": false,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 4,
+                "receiving_targets": 4,
+                "receiving_yards": 38,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              }
+            ],
+            "latest_two_vs_preceding_games": [
+              {
+                "stat": "receiving_targets",
+                "latest_games": 2,
+                "previous_games": 3,
+                "latest_average": 4.5,
+                "previous_average": 5.7,
+                "change": -1.2
+              },
+              {
+                "stat": "receptions",
+                "latest_games": 2,
+                "previous_games": 3,
+                "latest_average": 3.5,
+                "previous_average": 5.3,
+                "change": -1.8
+              }
+            ],
+            "excluded_conflicting_games": 0,
+            "excluded_rows": 0,
+            "measurements": [
+              {
+                "stat": "passing_attempts",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_completions",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_yards",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_touchdowns",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_interceptions",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_attempts",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_yards",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_touchdowns",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "receptions",
+                "measured_games": 5,
+                "total": 23,
+                "average": 4.6
+              },
+              {
+                "stat": "receiving_targets",
+                "measured_games": 5,
+                "total": 26,
+                "average": 5.2
+              },
+              {
+                "stat": "receiving_yards",
+                "measured_games": 5,
+                "total": 313,
+                "average": 62.6
+              },
+              {
+                "stat": "receiving_touchdowns",
+                "measured_games": 5,
+                "total": 0,
+                "average": 0
+              },
+              {
+                "stat": "fumbles_lost",
+                "measured_games": 1,
+                "total": null,
+                "average": null
+              }
+            ],
+            "evidence_scope": "prior_season_baseline",
+            "scope": "Historical performance only; does not establish current role, team usage or form."
+          }
+        },
+        {
+          "id": "scheduled_matchup",
+          "label": "Week 1 scheduled game",
+          "source": "BALLDONTLIE regular-season schedule and weekly game identity",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "NO visits DET on 2026-09-13, kickoff 2026-09-13T17:00:00.000Z. This is a team schedule, not confirmation of this player's starting role.",
+          "facts": {
+            "season": 2026,
+            "week": 1,
+            "opportunities": [
+              {
+                "game_id": "1392219",
+                "date": "2026-09-13",
+                "start_at": "2026-09-13T17:00:00.000Z",
+                "season": 2026,
+                "week": 1,
+                "home": false,
+                "opponent": "DET",
+                "opponent_team_id": "25"
+              }
+            ],
+            "current_team_verified": true,
+            "listed_experience": "7th Season",
+            "confirmed_player_start": false,
+            "league_lineup_lock_known": false
+          }
+        },
+        {
+          "id": "current_regular_games",
+          "label": "2026 observed regular-season games",
+          "source": "BALLDONTLIE dated final player game stats",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "2026 regular season: no completed player game rows returned before this briefing. Missing observations are not zero production.",
+          "facts": {
+            "season": 2026,
+            "season_type": "regular",
+            "cutoff_exclusive": "2026-09-07T19:02:17.423Z",
+            "sample_games": 0,
+            "requested_games": 5,
+            "latest_game_date": null,
+            "latest_game_at": null,
+            "days_since_latest_game": null,
+            "same_team_entire_sample": false,
+            "rows": [],
+            "latest_two_vs_preceding_games": [],
+            "excluded_conflicting_games": 0,
+            "excluded_rows": 0,
+            "measurements": [],
+            "evidence_scope": "current_season"
+          }
+        },
+        {
+          "id": "bdl:868/weekly_projection",
+          "label": "Dalton Schultz · Week 1 forecast by scoring format",
+          "source": "BALLDONTLIE weekly fantasy projections and season scoring definitions",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "Week 1 forecast: 4.7 Standard, 6.5 Half PPR, 8.4 PPR points. Projected 3.6 receptions, 33.9 receiving yards. Collected 2026-09-07T18:15:01.106Z. These are provider estimates, not Gary's point prediction.",
+          "facts": {
+            "season": 2026,
+            "week": 1,
+            "game_id": "1392225",
+            "game_date": "2026-09-13",
+            "opponent": "BUF",
+            "projected_games": 1,
+            "collected_at": "2026-09-07T18:15:01.106Z",
+            "source_age_hours": 0.8,
+            "stats": {
+              "passing_attempts": null,
+              "passing_completions": null,
+              "passing_yards": null,
+              "passing_touchdowns": null,
+              "passing_interceptions": null,
+              "rushing_attempts": null,
+              "rushing_yards": null,
+              "rushing_touchdowns": null,
+              "receptions": 3.6,
+              "receiving_targets": 4.9,
+              "receiving_yards": 33.9,
+              "receiving_touchdowns": 0.22,
+              "fumbles_lost": 0.02
+            },
+            "format_points": {
+              "half_ppr": 6.5,
+              "ppr": 8.4,
+              "standard": 4.7
+            },
+            "ppr_difference_from_standard": 3.7,
+            "half_ppr_difference_from_standard": 1.8,
+            "formats": [
+              {
+                "format": "standard",
+                "projected_points": 4.7,
+                "reception_points_per_catch": null,
+                "reception_rule_present": false
+              },
+              {
+                "format": "half_ppr",
+                "projected_points": 6.5,
+                "reception_points_per_catch": 0.5,
+                "reception_rule_present": true
+              },
+              {
+                "format": "ppr",
+                "projected_points": 8.4,
+                "reception_points_per_catch": 1,
+                "reception_rule_present": true
+              }
+            ],
+            "scope": "Provider estimates for the linked upcoming game, not observed performance."
+          },
+          "player_id": "868"
+        },
+        {
+          "id": "bdl:868/prior_regular_baseline",
+          "label": "Dalton Schultz · 2025 regular-season baseline",
+          "source": "BALLDONTLIE dated final player game stats",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "2025 regular-season baseline: 5 observed games, 2025-12-07 through 2026-01-04. 5.2 targets per observed game, 4.6 receptions per observed game, 45 receiving yards per observed game. Latest observation 246 days before this briefing. This is not current role or current form.",
+          "facts": {
+            "season": 2025,
+            "season_type": "regular",
+            "cutoff_exclusive": "2026-09-07T19:02:17.423Z",
+            "sample_games": 5,
+            "requested_games": 5,
+            "latest_game_date": "2026-01-04",
+            "latest_game_at": "2026-01-04T18:00:00.000Z",
+            "days_since_latest_game": 246,
+            "same_team_entire_sample": true,
+            "rows": [
+              {
+                "game_id": "424216",
+                "season": 2025,
+                "week": 18,
+                "date": "2026-01-04",
+                "start_at": "2026-01-04T18:00:00.000Z",
+                "team_id": "10",
+                "team": "HOU",
+                "opponent_team_id": "12",
+                "opponent": "IND",
+                "home": true,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 4,
+                "receiving_targets": 4,
+                "receiving_yards": 73,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424191",
+                "season": 2025,
+                "week": 17,
+                "date": "2025-12-27",
+                "start_at": "2025-12-27T21:30:00.000Z",
+                "team_id": "10",
+                "team": "HOU",
+                "opponent_team_id": "17",
+                "opponent": "LAC",
+                "home": false,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 3,
+                "receiving_targets": 4,
+                "receiving_yards": 19,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": 0
+              },
+              {
+                "game_id": "424182",
+                "season": 2025,
+                "week": 16,
+                "date": "2025-12-21",
+                "start_at": "2025-12-21T21:25:00.000Z",
+                "team_id": "10",
+                "team": "HOU",
+                "opponent_team_id": "16",
+                "opponent": "LV",
+                "home": true,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 5,
+                "receiving_targets": 5,
+                "receiving_yards": 35,
+                "receiving_touchdowns": 1,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424161",
+                "season": 2025,
+                "week": 15,
+                "date": "2025-12-14",
+                "start_at": "2025-12-14T18:00:00.000Z",
+                "team_id": "10",
+                "team": "HOU",
+                "opponent_team_id": "33",
+                "opponent": "ARI",
+                "home": true,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 8,
+                "receiving_targets": 9,
+                "receiving_yards": 76,
+                "receiving_touchdowns": 1,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424151",
+                "season": 2025,
+                "week": 14,
+                "date": "2025-12-07",
+                "start_at": "2025-12-08T01:20:00.000Z",
+                "team_id": "10",
+                "team": "HOU",
+                "opponent_team_id": "14",
+                "opponent": "KC",
+                "home": false,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 3,
+                "receiving_targets": 4,
+                "receiving_yards": 22,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              }
+            ],
+            "latest_two_vs_preceding_games": [
+              {
+                "stat": "receiving_targets",
+                "latest_games": 2,
+                "previous_games": 3,
+                "latest_average": 4,
+                "previous_average": 6,
+                "change": -2
+              },
+              {
+                "stat": "receptions",
+                "latest_games": 2,
+                "previous_games": 3,
+                "latest_average": 3.5,
+                "previous_average": 5.3,
+                "change": -1.8
+              }
+            ],
+            "excluded_conflicting_games": 0,
+            "excluded_rows": 0,
+            "measurements": [
+              {
+                "stat": "passing_attempts",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_completions",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_yards",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_touchdowns",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_interceptions",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_attempts",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_yards",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_touchdowns",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "receptions",
+                "measured_games": 5,
+                "total": 23,
+                "average": 4.6
+              },
+              {
+                "stat": "receiving_targets",
+                "measured_games": 5,
+                "total": 26,
+                "average": 5.2
+              },
+              {
+                "stat": "receiving_yards",
+                "measured_games": 5,
+                "total": 225,
+                "average": 45
+              },
+              {
+                "stat": "receiving_touchdowns",
+                "measured_games": 5,
+                "total": 2,
+                "average": 0.4
+              },
+              {
+                "stat": "fumbles_lost",
+                "measured_games": 1,
+                "total": null,
+                "average": null
+              }
+            ],
+            "evidence_scope": "prior_season_baseline",
+            "scope": "Historical performance only; does not establish current role, team usage or form."
+          },
+          "player_id": "868"
+        }
+      ],
+      "opportunities": [
+        {
+          "game_id": "1392219",
+          "date": "2026-09-13",
+          "start_at": "2026-09-13T17:00:00.000Z",
+          "season": 2026,
+          "week": 1,
+          "home": false,
+          "opponent": "DET",
+          "opponent_team_id": "25"
+        }
+      ],
+      "availability": {
+        "rostered_percent": 45.1,
+        "league_available": null
+      },
+      "limitations": [
+        "Your roster, league availability, lineup slots and custom scoring bonuses are not supplied.",
+        "Provider forecasts are estimates; a scheduled team game does not confirm this player's starting role or playing time.",
+        "No completed 2026 regular-season player observations were returned; the current-week information is a projection."
+      ]
+    },
+    {
+      "id": "bdl:277738",
+      "player_id": "277738",
+      "player_name": "Devaughn Vele",
+      "team_id": "26",
+      "team": "NO",
+      "position": "WR",
+      "role": "receiver",
+      "action": "CONSIDER_ADD",
+      "horizon": "week",
+      "valid_until": null,
+      "headline": "Prioritize Vele over Tucker as a deeper PPR receiver add if both are on the wire",
+      "why_now": "Vele's provider forecast calls for 6.0 targets and 9.3 PPR points, slightly ahead of Tucker's 4.7 targets and 9.1 points. Vele also averaged 4.0 catches and 50.8 yards in his final five 2025 games, while Tucker averaged 2.6 catches and 29.2 yards; that gives Vele the better reception-floor case.",
+      "fit": "Managers in deeper PPR leagues seeking receiver depth; the recommendation is conditional on actual league availability.",
+      "risk": "Vele has no observed 2026 game, and the old five-game sample does not establish his current New Orleans role.",
+      "watch_for": "Check his final game status, then evaluate Week 1 targets and receptions before treating him as a lineup option.",
+      "formats": [
+        "ppr"
+      ],
+      "categories": [
+        "receiver",
+        "flex",
+        "receptions"
+      ],
+      "evidence": [
+        {
+          "id": "weekly_projection",
+          "label": "Week 1 forecast by scoring format",
+          "source": "BALLDONTLIE weekly fantasy projections and season scoring definitions",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "Week 1 forecast: 5.4 Standard, 7.4 Half PPR, 9.3 PPR points. Projected 3.9 receptions, 42.1 receiving yards. Collected 2026-09-07T18:15:01.106Z. These are provider estimates, not Gary's point prediction.",
+          "facts": {
+            "season": 2026,
+            "week": 1,
+            "game_id": "1392219",
+            "game_date": "2026-09-13",
+            "opponent": "DET",
+            "projected_games": 1,
+            "collected_at": "2026-09-07T18:15:01.106Z",
+            "source_age_hours": 0.8,
+            "stats": {
+              "passing_attempts": null,
+              "passing_completions": null,
+              "passing_yards": null,
+              "passing_touchdowns": null,
+              "passing_interceptions": null,
+              "rushing_attempts": null,
+              "rushing_yards": null,
+              "rushing_touchdowns": null,
+              "receptions": 3.9,
+              "receiving_targets": 6,
+              "receiving_yards": 42.1,
+              "receiving_touchdowns": 0.21,
+              "fumbles_lost": 0.03
+            },
+            "format_points": {
+              "half_ppr": 7.4,
+              "ppr": 9.3,
+              "standard": 5.4
+            },
+            "ppr_difference_from_standard": 3.9,
+            "half_ppr_difference_from_standard": 2,
+            "formats": [
+              {
+                "format": "standard",
+                "projected_points": 5.4,
+                "reception_points_per_catch": null,
+                "reception_rule_present": false
+              },
+              {
+                "format": "half_ppr",
+                "projected_points": 7.4,
+                "reception_points_per_catch": 0.5,
+                "reception_rule_present": true
+              },
+              {
+                "format": "ppr",
+                "projected_points": 9.3,
+                "reception_points_per_catch": 1,
+                "reception_rule_present": true
+              }
+            ],
+            "scope": "Provider estimates for the linked upcoming game, not observed performance."
+          }
+        },
+        {
+          "id": "prior_regular_baseline",
+          "label": "2025 regular-season baseline",
+          "source": "BALLDONTLIE dated final player game stats",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "2025 regular-season baseline: 5 observed games, 2025-11-09 through 2025-12-14. 5.8 targets per observed game, 4 receptions per observed game, 50.8 receiving yards per observed game. Latest observation 267 days before this briefing. This is not current role or current form.",
+          "facts": {
+            "season": 2025,
+            "season_type": "regular",
+            "cutoff_exclusive": "2026-09-07T19:02:17.423Z",
+            "sample_games": 5,
+            "requested_games": 5,
+            "latest_game_date": "2025-12-14",
+            "latest_game_at": "2025-12-14T21:25:00.000Z",
+            "days_since_latest_game": 267,
+            "same_team_entire_sample": true,
+            "rows": [
+              {
+                "game_id": "424164",
+                "season": 2025,
+                "week": 15,
+                "date": "2025-12-14",
+                "start_at": "2025-12-14T21:25:00.000Z",
+                "team_id": "26",
+                "team": "NO",
+                "opponent_team_id": "29",
+                "opponent": "CAR",
+                "home": true,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 5,
+                "receiving_targets": 6,
+                "receiving_yards": 69,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424145",
+                "season": 2025,
+                "week": 14,
+                "date": "2025-12-07",
+                "start_at": "2025-12-07T18:00:00.000Z",
+                "team_id": "26",
+                "team": "NO",
+                "opponent_team_id": "28",
+                "opponent": "TB",
+                "home": false,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 3,
+                "receiving_targets": 5,
+                "receiving_yards": 40,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424130",
+                "season": 2025,
+                "week": 13,
+                "date": "2025-11-30",
+                "start_at": "2025-11-30T18:00:00.000Z",
+                "team_id": "26",
+                "team": "NO",
+                "opponent_team_id": "5",
+                "opponent": "MIA",
+                "home": false,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 8,
+                "receiving_targets": 8,
+                "receiving_yards": 93,
+                "receiving_touchdowns": 1,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424120",
+                "season": 2025,
+                "week": 12,
+                "date": "2025-11-23",
+                "start_at": "2025-11-23T21:25:00.000Z",
+                "team_id": "26",
+                "team": "NO",
+                "opponent_team_id": "27",
+                "opponent": "ATL",
+                "home": true,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 3,
+                "receiving_targets": 7,
+                "receiving_yards": 37,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424087",
+                "season": 2025,
+                "week": 10,
+                "date": "2025-11-09",
+                "start_at": "2025-11-09T18:00:00.000Z",
+                "team_id": "26",
+                "team": "NO",
+                "opponent_team_id": "29",
+                "opponent": "CAR",
+                "home": false,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 1,
+                "receiving_targets": 3,
+                "receiving_yards": 15,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              }
+            ],
+            "latest_two_vs_preceding_games": [
+              {
+                "stat": "receiving_targets",
+                "latest_games": 2,
+                "previous_games": 3,
+                "latest_average": 5.5,
+                "previous_average": 6,
+                "change": -0.5
+              },
+              {
+                "stat": "receptions",
+                "latest_games": 2,
+                "previous_games": 3,
+                "latest_average": 4,
+                "previous_average": 4,
+                "change": 0
+              }
+            ],
+            "excluded_conflicting_games": 0,
+            "excluded_rows": 0,
+            "measurements": [
+              {
+                "stat": "passing_attempts",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_completions",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_yards",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_touchdowns",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_interceptions",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_attempts",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_yards",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_touchdowns",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "receptions",
+                "measured_games": 5,
+                "total": 20,
+                "average": 4
+              },
+              {
+                "stat": "receiving_targets",
+                "measured_games": 5,
+                "total": 29,
+                "average": 5.8
+              },
+              {
+                "stat": "receiving_yards",
+                "measured_games": 5,
+                "total": 254,
+                "average": 50.8
+              },
+              {
+                "stat": "receiving_touchdowns",
+                "measured_games": 5,
+                "total": 1,
+                "average": 0.2
+              },
+              {
+                "stat": "fumbles_lost",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              }
+            ],
+            "evidence_scope": "prior_season_baseline",
+            "scope": "Historical performance only; does not establish current role, team usage or form."
+          }
+        },
+        {
+          "id": "scheduled_matchup",
+          "label": "Week 1 scheduled game",
+          "source": "BALLDONTLIE regular-season schedule and weekly game identity",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "NO visits DET on 2026-09-13, kickoff 2026-09-13T17:00:00.000Z. This is a team schedule, not confirmation of this player's starting role.",
+          "facts": {
+            "season": 2026,
+            "week": 1,
+            "opportunities": [
+              {
+                "game_id": "1392219",
+                "date": "2026-09-13",
+                "start_at": "2026-09-13T17:00:00.000Z",
+                "season": 2026,
+                "week": 1,
+                "home": false,
+                "opponent": "DET",
+                "opponent_team_id": "25"
+              }
+            ],
+            "current_team_verified": true,
+            "listed_experience": "3rd Season",
+            "confirmed_player_start": false,
+            "league_lineup_lock_known": false
+          }
+        },
+        {
+          "id": "current_regular_games",
+          "label": "2026 observed regular-season games",
+          "source": "BALLDONTLIE dated final player game stats",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "2026 regular season: no completed player game rows returned before this briefing. Missing observations are not zero production.",
+          "facts": {
+            "season": 2026,
+            "season_type": "regular",
+            "cutoff_exclusive": "2026-09-07T19:02:17.423Z",
+            "sample_games": 0,
+            "requested_games": 5,
+            "latest_game_date": null,
+            "latest_game_at": null,
+            "days_since_latest_game": null,
+            "same_team_entire_sample": false,
+            "rows": [],
+            "latest_two_vs_preceding_games": [],
+            "excluded_conflicting_games": 0,
+            "excluded_rows": 0,
+            "measurements": [],
+            "evidence_scope": "current_season"
+          }
+        },
+        {
+          "id": "bdl:597/weekly_projection",
+          "label": "Tre Tucker · Week 1 forecast by scoring format",
+          "source": "BALLDONTLIE weekly fantasy projections and season scoring definitions",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "Week 1 forecast: 6.2 Standard, 7.7 Half PPR, 9.1 PPR points. Projected 3 receptions, 41.2 receiving yards. Collected 2026-09-07T18:15:01.106Z. These are provider estimates, not Gary's point prediction.",
+          "facts": {
+            "season": 2026,
+            "week": 1,
+            "game_id": "1392226",
+            "game_date": "2026-09-13",
+            "opponent": "MIA",
+            "projected_games": 1,
+            "collected_at": "2026-09-07T18:15:01.106Z",
+            "source_age_hours": 0.8,
+            "stats": {
+              "passing_attempts": null,
+              "passing_completions": null,
+              "passing_yards": null,
+              "passing_touchdowns": null,
+              "passing_interceptions": null,
+              "rushing_attempts": 0.7,
+              "rushing_yards": 4,
+              "rushing_touchdowns": 0.03,
+              "receptions": 3,
+              "receiving_targets": 4.7,
+              "receiving_yards": 41.2,
+              "receiving_touchdowns": 0.23,
+              "fumbles_lost": 0.02
+            },
+            "format_points": {
+              "half_ppr": 7.7,
+              "ppr": 9.1,
+              "standard": 6.2
+            },
+            "ppr_difference_from_standard": 2.9,
+            "half_ppr_difference_from_standard": 1.5,
+            "formats": [
+              {
+                "format": "standard",
+                "projected_points": 6.2,
+                "reception_points_per_catch": null,
+                "reception_rule_present": false
+              },
+              {
+                "format": "half_ppr",
+                "projected_points": 7.7,
+                "reception_points_per_catch": 0.5,
+                "reception_rule_present": true
+              },
+              {
+                "format": "ppr",
+                "projected_points": 9.1,
+                "reception_points_per_catch": 1,
+                "reception_rule_present": true
+              }
+            ],
+            "scope": "Provider estimates for the linked upcoming game, not observed performance."
+          },
+          "player_id": "597"
+        },
+        {
+          "id": "bdl:597/prior_regular_baseline",
+          "label": "Tre Tucker · 2025 regular-season baseline",
+          "source": "BALLDONTLIE dated final player game stats",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "2025 regular-season baseline: 5 observed games, 2025-12-07 through 2026-01-04. 5 targets per observed game, 2.6 receptions per observed game, 29.2 receiving yards per observed game. Latest observation 246 days before this briefing. This is not current role or current form.",
+          "facts": {
+            "season": 2025,
+            "season_type": "regular",
+            "cutoff_exclusive": "2026-09-07T19:02:17.423Z",
+            "sample_games": 5,
+            "requested_games": 5,
+            "latest_game_date": "2026-01-04",
+            "latest_game_at": "2026-01-04T21:25:00.000Z",
+            "days_since_latest_game": 246,
+            "same_team_entire_sample": true,
+            "rows": [
+              {
+                "game_id": "424206",
+                "season": 2025,
+                "week": 18,
+                "date": "2026-01-04",
+                "start_at": "2026-01-04T21:25:00.000Z",
+                "team_id": "16",
+                "team": "LV",
+                "opponent_team_id": "14",
+                "opponent": "KC",
+                "home": true,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": 1,
+                "rushing_yards": 4,
+                "rushing_touchdowns": 0,
+                "receptions": 2,
+                "receiving_targets": 6,
+                "receiving_yards": 30,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424190",
+                "season": 2025,
+                "week": 17,
+                "date": "2025-12-28",
+                "start_at": "2025-12-28T21:05:00.000Z",
+                "team_id": "16",
+                "team": "LV",
+                "opponent_team_id": "20",
+                "opponent": "NYG",
+                "home": true,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": 2,
+                "rushing_yards": 0,
+                "rushing_touchdowns": 0,
+                "receptions": 5,
+                "receiving_targets": 6,
+                "receiving_yards": 49,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424182",
+                "season": 2025,
+                "week": 16,
+                "date": "2025-12-21",
+                "start_at": "2025-12-21T21:25:00.000Z",
+                "team_id": "16",
+                "team": "LV",
+                "opponent_team_id": "10",
+                "opponent": "HOU",
+                "home": false,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": 2,
+                "rushing_yards": 11,
+                "rushing_touchdowns": 0,
+                "receptions": 4,
+                "receiving_targets": 5,
+                "receiving_yards": 43,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424159",
+                "season": 2025,
+                "week": 15,
+                "date": "2025-12-14",
+                "start_at": "2025-12-14T18:00:00.000Z",
+                "team_id": "16",
+                "team": "LV",
+                "opponent_team_id": "18",
+                "opponent": "PHI",
+                "home": false,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 0,
+                "receiving_targets": 3,
+                "receiving_yards": 0,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424148",
+                "season": 2025,
+                "week": 14,
+                "date": "2025-12-07",
+                "start_at": "2025-12-07T21:05:00.000Z",
+                "team_id": "16",
+                "team": "LV",
+                "opponent_team_id": "15",
+                "opponent": "DEN",
+                "home": true,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 2,
+                "receiving_targets": 5,
+                "receiving_yards": 24,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              }
+            ],
+            "latest_two_vs_preceding_games": [
+              {
+                "stat": "receiving_targets",
+                "latest_games": 2,
+                "previous_games": 3,
+                "latest_average": 6,
+                "previous_average": 4.3,
+                "change": 1.7
+              },
+              {
+                "stat": "receptions",
+                "latest_games": 2,
+                "previous_games": 3,
+                "latest_average": 3.5,
+                "previous_average": 2,
+                "change": 1.5
+              }
+            ],
+            "excluded_conflicting_games": 0,
+            "excluded_rows": 0,
+            "measurements": [
+              {
+                "stat": "passing_attempts",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_completions",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_yards",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_touchdowns",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_interceptions",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_attempts",
+                "measured_games": 3,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_yards",
+                "measured_games": 3,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_touchdowns",
+                "measured_games": 3,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "receptions",
+                "measured_games": 5,
+                "total": 13,
+                "average": 2.6
+              },
+              {
+                "stat": "receiving_targets",
+                "measured_games": 5,
+                "total": 25,
+                "average": 5
+              },
+              {
+                "stat": "receiving_yards",
+                "measured_games": 5,
+                "total": 146,
+                "average": 29.2
+              },
+              {
+                "stat": "receiving_touchdowns",
+                "measured_games": 5,
+                "total": 0,
+                "average": 0
+              },
+              {
+                "stat": "fumbles_lost",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              }
+            ],
+            "evidence_scope": "prior_season_baseline",
+            "scope": "Historical performance only; does not establish current role, team usage or form."
+          },
+          "player_id": "597"
+        }
+      ],
+      "opportunities": [
+        {
+          "game_id": "1392219",
+          "date": "2026-09-13",
+          "start_at": "2026-09-13T17:00:00.000Z",
+          "season": 2026,
+          "week": 1,
+          "home": false,
+          "opponent": "DET",
+          "opponent_team_id": "25"
+        }
+      ],
+      "availability": {
+        "rostered_percent": 10.7,
+        "league_available": null
+      },
+      "limitations": [
+        "Your roster, league availability, lineup slots and custom scoring bonuses are not supplied.",
+        "Provider forecasts are estimates; a scheduled team game does not confirm this player's starting role or playing time.",
+        "No completed 2026 regular-season player observations were returned; the current-week information is a projection."
+      ]
+    },
+    {
+      "id": "bdl:580",
+      "player_id": "580",
+      "player_name": "Chris Brooks",
+      "team_id": "22",
+      "team": "GB",
+      "position": "RB",
+      "role": "running_back",
+      "action": "CONSIDER_ADD",
+      "horizon": "week",
+      "valid_until": null,
+      "headline": "Brooks is a deep-league PPR bench add, not a Week 1 flex",
+      "why_now": "The provider projects 6.4 carries, 2.5 targets and 7.7 PPR points, modestly above Justice Hill's 7.2-point forecast. Brooks recorded 13 carries for 61 yards in his final 2025 game, but the surrounding four-game sample was sparse, so this is a speculative role bet rather than evidence of an established workload.",
+      "fit": "Deep PPR leagues with enough bench space to wait for backfield usage; only act if Brooks is available.",
+      "risk": "There is no completed 2026 sample, and neither his start nor his projected workload is confirmed.",
+      "watch_for": "Use Week 1 carries, targets and receptions to determine whether the projected mixed rushing-receiving role exists.",
+      "formats": [
+        "ppr"
+      ],
+      "categories": [
+        "running_back",
+        "receptions"
+      ],
+      "evidence": [
+        {
+          "id": "weekly_projection",
+          "label": "Week 1 forecast by scoring format",
+          "source": "BALLDONTLIE weekly fantasy projections and season scoring definitions",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "Week 1 forecast: 5.8 Standard, 6.8 Half PPR, 7.7 PPR points. Projected 6.4 carries, 1.9 receptions. Collected 2026-09-07T18:15:01.106Z. These are provider estimates, not Gary's point prediction.",
+          "facts": {
+            "season": 2026,
+            "week": 1,
+            "game_id": "1392227",
+            "game_date": "2026-09-13",
+            "opponent": "MIN",
+            "projected_games": 1,
+            "collected_at": "2026-09-07T18:15:01.106Z",
+            "source_age_hours": 0.8,
+            "stats": {
+              "passing_attempts": null,
+              "passing_completions": null,
+              "passing_yards": null,
+              "passing_touchdowns": null,
+              "passing_interceptions": null,
+              "rushing_attempts": 6.4,
+              "rushing_yards": 28.3,
+              "rushing_touchdowns": 0.21,
+              "receptions": 1.9,
+              "receiving_targets": 2.5,
+              "receiving_yards": 13.6,
+              "receiving_touchdowns": 0.07,
+              "fumbles_lost": 0.02
+            },
+            "format_points": {
+              "half_ppr": 6.8,
+              "ppr": 7.7,
+              "standard": 5.8
+            },
+            "ppr_difference_from_standard": 1.9,
+            "half_ppr_difference_from_standard": 1,
+            "formats": [
+              {
+                "format": "standard",
+                "projected_points": 5.8,
+                "reception_points_per_catch": null,
+                "reception_rule_present": false
+              },
+              {
+                "format": "half_ppr",
+                "projected_points": 6.8,
+                "reception_points_per_catch": 0.5,
+                "reception_rule_present": true
+              },
+              {
+                "format": "ppr",
+                "projected_points": 7.7,
+                "reception_points_per_catch": 1,
+                "reception_rule_present": true
+              }
+            ],
+            "scope": "Provider estimates for the linked upcoming game, not observed performance."
+          }
+        },
+        {
+          "id": "prior_regular_baseline",
+          "label": "2025 regular-season baseline",
+          "source": "BALLDONTLIE dated final player game stats",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "2025 regular-season baseline: 5 observed games, 2025-12-07 through 2026-01-04. Complete usage measurements are unavailable. Latest observation 246 days before this briefing. This is not current role or current form.",
+          "facts": {
+            "season": 2025,
+            "season_type": "regular",
+            "cutoff_exclusive": "2026-09-07T19:02:17.423Z",
+            "sample_games": 5,
+            "requested_games": 5,
+            "latest_game_date": "2026-01-04",
+            "latest_game_at": "2026-01-04T18:00:00.000Z",
+            "days_since_latest_game": 246,
+            "same_team_entire_sample": true,
+            "rows": [
+              {
+                "game_id": "424208",
+                "season": 2025,
+                "week": 18,
+                "date": "2026-01-04",
+                "start_at": "2026-01-04T18:00:00.000Z",
+                "team_id": "22",
+                "team": "GB",
+                "opponent_team_id": "23",
+                "opponent": "MIN",
+                "home": false,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": 13,
+                "rushing_yards": 61,
+                "rushing_touchdowns": 0,
+                "receptions": null,
+                "receiving_targets": null,
+                "receiving_yards": null,
+                "receiving_touchdowns": null,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424189",
+                "season": 2025,
+                "week": 17,
+                "date": "2025-12-27",
+                "start_at": "2025-12-28T01:00:00.000Z",
+                "team_id": "22",
+                "team": "GB",
+                "opponent_team_id": "6",
+                "opponent": "BAL",
+                "home": true,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 1,
+                "receiving_targets": 2,
+                "receiving_yards": 11,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424170",
+                "season": 2025,
+                "week": 16,
+                "date": "2025-12-20",
+                "start_at": "2025-12-21T01:20:00.000Z",
+                "team_id": "22",
+                "team": "GB",
+                "opponent_team_id": "24",
+                "opponent": "CHI",
+                "home": false,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": 1,
+                "rushing_yards": 4,
+                "rushing_touchdowns": 0,
+                "receptions": null,
+                "receiving_targets": null,
+                "receiving_yards": null,
+                "receiving_touchdowns": null,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424162",
+                "season": 2025,
+                "week": 15,
+                "date": "2025-12-14",
+                "start_at": "2025-12-14T21:25:00.000Z",
+                "team_id": "22",
+                "team": "GB",
+                "opponent_team_id": "15",
+                "opponent": "DEN",
+                "home": false,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": 2,
+                "rushing_yards": 10,
+                "rushing_touchdowns": 0,
+                "receptions": 1,
+                "receiving_targets": 2,
+                "receiving_yards": 6,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              },
+              {
+                "game_id": "424142",
+                "season": 2025,
+                "week": 14,
+                "date": "2025-12-07",
+                "start_at": "2025-12-07T21:25:00.000Z",
+                "team_id": "22",
+                "team": "GB",
+                "opponent_team_id": "24",
+                "opponent": "CHI",
+                "home": true,
+                "passing_attempts": null,
+                "passing_completions": null,
+                "passing_yards": null,
+                "passing_touchdowns": null,
+                "passing_interceptions": null,
+                "rushing_attempts": null,
+                "rushing_yards": null,
+                "rushing_touchdowns": null,
+                "receptions": 1,
+                "receiving_targets": 1,
+                "receiving_yards": 6,
+                "receiving_touchdowns": 0,
+                "fumbles_lost": null
+              }
+            ],
+            "latest_two_vs_preceding_games": [],
+            "excluded_conflicting_games": 0,
+            "excluded_rows": 2,
+            "measurements": [
+              {
+                "stat": "passing_attempts",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_completions",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_yards",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_touchdowns",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "passing_interceptions",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_attempts",
+                "measured_games": 3,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_yards",
+                "measured_games": 3,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "rushing_touchdowns",
+                "measured_games": 3,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "receptions",
+                "measured_games": 3,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "receiving_targets",
+                "measured_games": 3,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "receiving_yards",
+                "measured_games": 3,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "receiving_touchdowns",
+                "measured_games": 3,
+                "total": null,
+                "average": null
+              },
+              {
+                "stat": "fumbles_lost",
+                "measured_games": 0,
+                "total": null,
+                "average": null
+              }
+            ],
+            "evidence_scope": "prior_season_baseline",
+            "scope": "Historical performance only; does not establish current role, team usage or form."
+          }
+        },
+        {
+          "id": "scheduled_matchup",
+          "label": "Week 1 scheduled game",
+          "source": "BALLDONTLIE regular-season schedule and weekly game identity",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "GB visits MIN on 2026-09-13, kickoff 2026-09-13T20:25:00.000Z. This is a team schedule, not confirmation of this player's starting role.",
+          "facts": {
+            "season": 2026,
+            "week": 1,
+            "opportunities": [
+              {
+                "game_id": "1392227",
+                "date": "2026-09-13",
+                "start_at": "2026-09-13T20:25:00.000Z",
+                "season": 2026,
+                "week": 1,
+                "home": false,
+                "opponent": "MIN",
+                "opponent_team_id": "23"
+              }
+            ],
+            "current_team_verified": true,
+            "listed_experience": "4th Season",
+            "confirmed_player_start": false,
+            "league_lineup_lock_known": false
+          }
+        },
+        {
+          "id": "current_regular_games",
+          "label": "2026 observed regular-season games",
+          "source": "BALLDONTLIE dated final player game stats",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "2026 regular season: no completed player game rows returned before this briefing. Missing observations are not zero production.",
+          "facts": {
+            "season": 2026,
+            "season_type": "regular",
+            "cutoff_exclusive": "2026-09-07T19:02:17.423Z",
+            "sample_games": 0,
+            "requested_games": 5,
+            "latest_game_date": null,
+            "latest_game_at": null,
+            "days_since_latest_game": null,
+            "same_team_entire_sample": false,
+            "rows": [],
+            "latest_two_vs_preceding_games": [],
+            "excluded_conflicting_games": 0,
+            "excluded_rows": 0,
+            "measurements": [],
+            "evidence_scope": "current_season"
+          }
+        },
+        {
+          "id": "bdl:518/weekly_projection",
+          "label": "Justice Hill · Week 1 forecast by scoring format",
+          "source": "BALLDONTLIE weekly fantasy projections and season scoring definitions",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "Week 1 forecast: 4.8 Standard, 6 Half PPR, 7.2 PPR points. Projected 3.4 carries, 2.4 receptions. Collected 2026-09-07T18:15:01.106Z. These are provider estimates, not Gary's point prediction.",
+          "facts": {
+            "season": 2026,
+            "week": 1,
+            "game_id": "1392221",
+            "game_date": "2026-09-13",
+            "opponent": "IND",
+            "projected_games": 1,
+            "collected_at": "2026-09-07T18:15:01.106Z",
+            "source_age_hours": 0.8,
+            "stats": {
+              "passing_attempts": null,
+              "passing_completions": null,
+              "passing_yards": null,
+              "passing_touchdowns": null,
+              "passing_interceptions": null,
+              "rushing_attempts": 3.4,
+              "rushing_yards": 15.7,
+              "rushing_touchdowns": 0.1,
+              "receptions": 2.4,
+              "receiving_targets": 3.1,
+              "receiving_yards": 20.9,
+              "receiving_touchdowns": 0.1,
+              "fumbles_lost": 0.03
+            },
+            "format_points": {
+              "half_ppr": 6,
+              "ppr": 7.2,
+              "standard": 4.8
+            },
+            "ppr_difference_from_standard": 2.4,
+            "half_ppr_difference_from_standard": 1.2,
+            "formats": [
+              {
+                "format": "standard",
+                "projected_points": 4.8,
+                "reception_points_per_catch": null,
+                "reception_rule_present": false
+              },
+              {
+                "format": "half_ppr",
+                "projected_points": 6,
+                "reception_points_per_catch": 0.5,
+                "reception_rule_present": true
+              },
+              {
+                "format": "ppr",
+                "projected_points": 7.2,
+                "reception_points_per_catch": 1,
+                "reception_rule_present": true
+              }
+            ],
+            "scope": "Provider estimates for the linked upcoming game, not observed performance."
+          },
+          "player_id": "518"
+        }
+      ],
+      "opportunities": [
+        {
+          "game_id": "1392227",
+          "date": "2026-09-13",
+          "start_at": "2026-09-13T20:25:00.000Z",
+          "season": 2026,
+          "week": 1,
+          "home": false,
+          "opponent": "MIN",
+          "opponent_team_id": "23"
+        }
+      ],
+      "availability": {
+        "rostered_percent": 7.3,
+        "league_available": null
+      },
+      "limitations": [
+        "Your roster, league availability, lineup slots and custom scoring bonuses are not supplied.",
+        "Provider forecasts are estimates; a scheduled team game does not confirm this player's starting role or playing time.",
+        "No completed 2026 regular-season player observations were returned; the current-week information is a projection."
+      ]
+    },
+    {
+      "id": "bdl:33934695",
+      "player_id": "33934695",
+      "player_name": "Kenyon Sadiq",
+      "team_id": "4",
+      "team": "NYJ",
+      "position": "TE",
+      "role": "tight_end",
+      "action": "SIT",
+      "horizon": "next_game",
+      "valid_until": "2026-09-13T17:00:00.000Z",
+      "headline": "Keep Sadiq out of Week 1 lineups until an NFL receiving role is visible",
+      "why_now": "The provider projects only 2.8 targets, 21.4 yards and 5.1 projected PPR points. With no completed 2026 regular-season evidence, that is too little projected opportunity for a Week 1 tight-end start.",
+      "fit": "Managers with any established tight-end alternative in standard, half-PPR or PPR leagues.",
+      "risk": "As a rookie without an NFL sample, Sadiq could earn a larger debut role than the projection anticipates.",
+      "watch_for": "Check his final game status, then track Week 1 targets and receptions before reconsidering him for future lineups.",
+      "formats": [
+        "standard",
+        "half_ppr",
+        "ppr"
+      ],
+      "categories": [
+        "tight_end"
+      ],
+      "evidence": [
+        {
+          "id": "weekly_projection",
+          "label": "Week 1 forecast by scoring format",
+          "source": "BALLDONTLIE weekly fantasy projections and season scoring definitions",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "Week 1 forecast: 3 Standard, 4 Half PPR, 5.1 PPR points. Projected 2.1 receptions, 21.4 receiving yards. Collected 2026-09-07T18:15:01.106Z. These are provider estimates, not Gary's point prediction.",
+          "facts": {
+            "season": 2026,
+            "week": 1,
+            "game_id": "1392220",
+            "game_date": "2026-09-13",
+            "opponent": "TEN",
+            "projected_games": 1,
+            "collected_at": "2026-09-07T18:15:01.106Z",
+            "source_age_hours": 0.8,
+            "stats": {
+              "passing_attempts": null,
+              "passing_completions": null,
+              "passing_yards": null,
+              "passing_touchdowns": null,
+              "passing_interceptions": null,
+              "rushing_attempts": null,
+              "rushing_yards": null,
+              "rushing_touchdowns": null,
+              "receptions": 2.1,
+              "receiving_targets": 2.8,
+              "receiving_yards": 21.4,
+              "receiving_touchdowns": 0.14,
+              "fumbles_lost": 0.01
+            },
+            "format_points": {
+              "half_ppr": 4,
+              "ppr": 5.1,
+              "standard": 3
+            },
+            "ppr_difference_from_standard": 2.1,
+            "half_ppr_difference_from_standard": 1,
+            "formats": [
+              {
+                "format": "standard",
+                "projected_points": 3,
+                "reception_points_per_catch": null,
+                "reception_rule_present": false
+              },
+              {
+                "format": "half_ppr",
+                "projected_points": 4,
+                "reception_points_per_catch": 0.5,
+                "reception_rule_present": true
+              },
+              {
+                "format": "ppr",
+                "projected_points": 5.1,
+                "reception_points_per_catch": 1,
+                "reception_rule_present": true
+              }
+            ],
+            "scope": "Provider estimates for the linked upcoming game, not observed performance."
+          }
+        },
+        {
+          "id": "current_regular_games",
+          "label": "2026 observed regular-season games",
+          "source": "BALLDONTLIE dated final player game stats",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "2026 regular season: no completed player game rows returned before this briefing. Missing observations are not zero production.",
+          "facts": {
+            "season": 2026,
+            "season_type": "regular",
+            "cutoff_exclusive": "2026-09-07T19:02:17.423Z",
+            "sample_games": 0,
+            "requested_games": 5,
+            "latest_game_date": null,
+            "latest_game_at": null,
+            "days_since_latest_game": null,
+            "same_team_entire_sample": false,
+            "rows": [],
+            "latest_two_vs_preceding_games": [],
+            "excluded_conflicting_games": 0,
+            "excluded_rows": 0,
+            "measurements": [],
+            "evidence_scope": "current_season"
+          }
+        },
+        {
+          "id": "scheduled_matchup",
+          "label": "Week 1 scheduled game",
+          "source": "BALLDONTLIE regular-season schedule and weekly game identity",
+          "observed_at": "2026-09-07T19:02:17.423Z",
+          "summary": "NYJ visits TEN on 2026-09-13, kickoff 2026-09-13T17:00:00.000Z. This is a team schedule, not confirmation of this player's starting role.",
+          "facts": {
+            "season": 2026,
+            "week": 1,
+            "opportunities": [
+              {
+                "game_id": "1392220",
+                "date": "2026-09-13",
+                "start_at": "2026-09-13T17:00:00.000Z",
+                "season": 2026,
+                "week": 1,
+                "home": false,
+                "opponent": "TEN",
+                "opponent_team_id": "11"
+              }
+            ],
+            "current_team_verified": true,
+            "listed_experience": "Rookie",
+            "confirmed_player_start": false,
+            "league_lineup_lock_known": false
+          }
+        }
+      ],
+      "opportunities": [
+        {
+          "game_id": "1392220",
+          "date": "2026-09-13",
+          "start_at": "2026-09-13T17:00:00.000Z",
+          "season": 2026,
+          "week": 1,
+          "home": false,
+          "opponent": "TEN",
+          "opponent_team_id": "11"
+        }
+      ],
+      "availability": {
+        "rostered_percent": 41.3,
+        "league_available": null
+      },
+      "limitations": [
+        "Your roster, league availability, lineup slots and custom scoring bonuses are not supplied.",
+        "Provider forecasts are estimates; a scheduled team game does not confirm this player's starting role or playing time.",
+        "No completed 2026 regular-season player observations were returned; the current-week information is a projection."
+      ]
+    }
+  ],
+  "coverage": {
+    "complete": true,
+    "candidate_limit": 32,
+    "season": 2026,
+    "week": 1,
+    "schedule_games": 272,
+    "week_games": 16,
+    "candidates_available": 422,
+    "candidates_selected": 32,
+    "candidates_by_position": {
+      "QB": 8,
+      "RB": 8,
+      "WR": 8,
+      "TE": 8
+    },
+    "first_season_listings": 9,
+    "projections_returned": 427,
+    "ownership_returned": 944,
+    "excluded_projection_conflicts": 0,
+    "excluded_stale_projections": 0,
+    "excluded_closed_games": 0,
+    "excluded_no_projected_opportunity": 5,
+    "excluded_identity_conflicts": 0,
+    "stale_or_missing_ownership": 0,
+    "current_sample_players": 0,
+    "prior_baseline_players": 23,
+    "requests_attempted": 7,
+    "requests_succeeded": 7,
+    "mandatory_requests_failed": 0,
+    "sources_failed": [],
+    "selection": "balanced_positions_with_rostered_context_and_first_season_coverage",
+    "projection_freshness_hours": 6,
+    "ownership_freshness_hours": 24,
+    "state": "current_week_evidence",
+    "transport": {
+      "requests_attempted": 25,
+      "requests_succeeded": 25,
+      "response_bytes": 8274076,
+      "normalized_bytes": 1369650,
+      "pages_by_source": {
+        "schedule": 3,
+        "projections": 5,
+        "ownership": 10,
+        "scoring": 1,
+        "players": 1,
+        "stats": 5
+      }
+    }
+  },
+  "generation": {
+    "attempts": 2,
+    "elapsed_ms": 250002,
+    "prompt_bytes": 186515,
+    "total_prompt_bytes": 285926,
+    "candidate_count": 32,
+    "decision_count": 8,
+    "reviewed_at": "2026-09-07T19:41:31.080Z",
+    "editorial_clarifications": [
+      "Price: label scoring formats and use the supplied kickoff, not an assumed league lock.",
+      "Stafford: refer to kickoff, not an assumed league lock.",
+      "Sadiq: describe the forecast as a projection, not a scoring ceiling."
+    ],
+    "model_finished_at": "2026-09-07T19:31:13.947Z"
+  }
+}

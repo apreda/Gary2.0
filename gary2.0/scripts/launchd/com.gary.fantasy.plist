@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.gary.fantasy</string>
+  <key>Comment</key><string>Hourly Fantasy evidence refresh on the existing Mac. NFL every hour for weekly planning and overnight waivers; MLB 06:00–23:00 America/New_York, filtered in code. One bounded serial owner, shared manual-run kernel lock, unchanged-input reuse. Load after database and both league verifications complete.</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/adam.preda/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin/node</string>
+    <string>/Users/adam.preda/Gary2.0/gary2.0/scripts/run-fantasy-content.js</string>
+    <string>--scheduled</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/adam.preda/Gary2.0/gary2.0</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/Users/adam.preda/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>TZ</key><string>America/New_York</string>
+    <key>GARY_CONTENT_MODEL_OVERRIDE</key><string>codex-gpt-5.6-sol</string>
+  </dict>
+  <key>RunAtLoad</key><false/>
+  <key>KeepAlive</key><false/>
+  <key>StartCalendarInterval</key>
+  <dict><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>/Users/adam.preda/Library/Logs/Gary2.0/fantasy-stdout.log</string>
+  <key>StandardErrorPath</key><string>/Users/adam.preda/Library/Logs/Gary2.0/fantasy-stderr.log</string>
+</dict>
+</plist>

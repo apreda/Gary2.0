@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { gradeFootballInsightRow } from '../../../src/services/insights/footballGrade.js';
 
@@ -45,5 +46,30 @@ describe('football insight grading', () => {
       result: null,
       note: 'Future schedule preview; context only',
     });
+  });
+
+  it.each(['fantasy_usage', 'fantasy_red_zone', 'fantasy_matchup', 'fantasy_trend'])('keeps %s as context regardless of the player\'s team result or the call', category => {
+    for (const team_id of [10, 20]) {
+      for (const value of ['START', 'SIT', 'HOLD', 'WATCH', 'CONSIDER ADD']) {
+        expect(gradeFootballInsightRow({ category, value, player_id: '123', team_id, game_id: '456' }, game)).toEqual({
+          result: null, note: 'Fantasy roster/lineup decision; context only',
+        });
+      }
+    }
+  });
+
+  it.each([
+    { generated_by: 'fantasy_briefing_v1' },
+    { fantasy_source: 'fantasy_briefing_v1' },
+    { meta: { source: 'fantasy_briefing_v1' } },
+  ])('preserves Fantasy provenance as context if a category changes: %j', source => {
+    expect(gradeFootballInsightRow({ ...source, category: 'new_fantasy_projection', team_id: 20 }, game).result).toBeNull();
+    expect(gradeFootballInsightRow({ ...source, category: 'new_fantasy_projection', team_id: 10 }, null).result).toBeNull();
+  });
+
+  it('loads only the required provenance fields in the scheduled grader', () => {
+    const source = readFileSync(new URL('../../../run-grade-insights.js', import.meta.url), 'utf8');
+    const block = source.slice(source.indexOf('async function fetchRows'), source.indexOf('async function writeGrade'));
+    expect(block).toContain('graded_at,generated_by,fantasy_source:meta->>source');
   });
 });
