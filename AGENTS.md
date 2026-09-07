@@ -1,6 +1,9 @@
 # Working on Gary
 
-The production checkout on Adam's Mac is `/Users/adam.preda/Desktop/Gary2.0`.
+The production checkout on Adam's Mac is `/Users/adam.preda/Gary2.0`.
+The Desktop path is a compatibility symlink. The real directory lives outside
+Desktop because macOS blocked freshly restarted launchd workers from reading
+protected Desktop files (September 7, 2026).
 `/Users/adam.preda/Documents/ChatGPT/Gary/repo` is retired. Start by checking
 `git status --short --branch` and `git worktree list` so an audit does not
 mistake an old clone or an isolated worktree for the running system.
@@ -13,7 +16,7 @@ and use explicit paths when staging and committing.
 ## Work directly on main
 
 Founder preference, September 4, 2026: perform authorized work directly in
-`/Users/adam.preda/Desktop/Gary2.0` on `main`, verify it, and push completed
+`/Users/adam.preda/Gary2.0` on `main`, verify it, and push completed
 changes to `origin/main`. A separate PR and another merge approval are not
 required. Check the resulting production deployment before reporting it live.
 Temporary checkouts remain useful for credential-free fixture previews.

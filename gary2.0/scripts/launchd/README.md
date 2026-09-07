@@ -16,7 +16,7 @@ Backup `.bak` files are not additional jobs.
 | `com.gary2.live-scores-watchdog` | Recover stalled score polling | Every 120 seconds |
 | `com.gary2.recap-backfill` | Fill missing game recaps | 08:30, 10:30, 17:00, 20:15 |
 
-The canonical checkout is `/Users/adam.preda/Desktop/Gary2.0`. These are exact
+The canonical checkout is `/Users/adam.preda/Gary2.0`. These are exact
 machine configurations with absolute paths, not portable cloud templates.
 They require the configured user session, Node, provider CLIs, the backend
 environment, and provider authentication. Secrets are not contained here.

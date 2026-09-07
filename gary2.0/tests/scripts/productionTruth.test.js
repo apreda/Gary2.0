@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const checks = vi.hoisted(() => ({
   exec: vi.fn(),
+  execFile: vi.fn(),
   diskEras: vi.fn(),
   junePromptSha: vi.fn(),
   storedPicks: vi.fn(),
@@ -10,7 +11,7 @@ const checks = vi.hoisted(() => ({
 }));
 
 vi.mock('../../src/loadEnv.js', () => ({}));
-vi.mock('child_process', () => ({ execSync: checks.exec }));
+vi.mock('child_process', () => ({ execSync: checks.exec, execFileSync: checks.execFile }));
 vi.mock('../../scripts/lib/eraTruth.js', () => ({
   PROJECT_DIR: '/gary/gary2.0',
   gitStamp: () => 'abc123',
@@ -39,9 +40,6 @@ function healthyCommand(command) {
   if (command.startsWith('pgrep')) return '123 /gary/gary2.0/scripts/scheduler.js';
   if (command.startsWith('plutil')) return '"GARY_MODEL_OVERRIDE" => "model"\n"GARY_MLB_BRAIN_MODEL" => "mlb-model"';
   if (command.startsWith('launchctl print')) return 'state = running\npid = 456';
-  if (command.startsWith('npx supabase')) {
-    return JSON.stringify([{ slug: 'grade-results', updated_at: 2_000_000_000_000, version: 1 }]);
-  }
   if (command.startsWith('git log')) return '1000000000';
   if (command.startsWith('git status')) return '';
   if (command.startsWith('git rev-list')) return '0';
@@ -59,6 +57,7 @@ async function runCheck() {
 beforeEach(() => {
   vi.resetModules();
   checks.exec.mockReset().mockImplementation(healthyCommand);
+  checks.execFile.mockReset().mockReturnValue(JSON.stringify([{ slug: 'grade-results', updated_at: 2_000_000_000_000, version: 1 }]));
   checks.diskEras.mockReset().mockReturnValue({ game: 'game-era', props: 'props-era' });
   checks.junePromptSha.mockReset().mockReturnValue('game-era');
   checks.storedPicks.mockReset().mockResolvedValue({ data: null, error: null });
@@ -80,6 +79,17 @@ describe('production truth reports a failing exit status when evidence is missin
     expect(result.output).toContain('0/0 slate games published · 0 started without a pick · 0 pending');
     expect(checks.slate).toHaveBeenCalledWith('league', 'MLB');
     expect(result.output).toContain('✅ Production is this repo.');
+    expect(checks.execFile).toHaveBeenCalledWith('supabase',
+      ['functions', 'list', '--project-ref', 'xuttubsfgdcjfgmskcol', '-o', 'json'],
+      { cwd: '/gary/gary2.0', timeout: 60_000, killSignal: 'SIGKILL' });
+  });
+
+  it('fails when the installed deployment CLI cannot complete', async () => {
+    checks.execFile.mockImplementation(() => { throw new Error('deployment command timed out'); });
+    const result = await runCheck();
+    expect(result.exitCode).toBe(1);
+    expect(result.output).toContain('Edge parity');
+    expect(result.output).toContain('UNVERIFIED');
   });
 
   it.each([
@@ -102,7 +112,6 @@ describe('production truth reports a failing exit status when evidence is missin
   it.each([
     ['scheduler inspection', 'pgrep'],
     ['launchd configuration', 'plutil'],
-    ['deployment API', 'npx supabase'],
     ['deployment git history', 'git log'],
     ['deployment dirty-file inspection', 'git status --porcelain --'],
     ['working tree inspection', 'git status --porcelain'],

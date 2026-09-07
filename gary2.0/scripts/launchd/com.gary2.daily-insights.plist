@@ -19,7 +19,7 @@
 	<array>
 		<string>/bin/bash</string>
 		<string>-c</string>
-		<string>export PATH="/Users/adam.preda/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; cd /Users/adam.preda/Desktop/Gary2.0/gary2.0 || exit $?; gary_phase=daily; [ "$(TZ=America/New_York date +%H)" -lt 6 ] &amp;&amp; gary_phase=college-cards; gary_try=0; while :; do gary_try=$((gary_try+1)); gary_t0=$(date +%s); /Users/adam.preda/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin/node scripts/run-daily-content.js --phase "$gary_phase"; gary_rc=$?; gary_dt=$(( $(date +%s) - gary_t0 )); if [ "$gary_rc" -ne 0 ] &amp;&amp; [ "$gary_dt" -le 15 ] &amp;&amp; [ "$gary_try" -lt 3 ]; then echo "daily content runner startup failed (rc=$gary_rc) — retry $gary_try/2" &gt;&amp;2; sleep 5; continue; fi; exit "$gary_rc"; done</string>
+		<string>export PATH="/Users/adam.preda/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; cd /Users/adam.preda/Gary2.0/gary2.0 || exit $?; gary_phase=daily; [ "$(TZ=America/New_York date +%H)" -lt 6 ] &amp;&amp; gary_phase=college-cards; gary_try=0; while :; do gary_try=$((gary_try+1)); gary_t0=$(date +%s); /Users/adam.preda/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin/node scripts/run-daily-content.js --phase "$gary_phase"; gary_rc=$?; gary_dt=$(( $(date +%s) - gary_t0 )); if [ "$gary_rc" -ne 0 ] &amp;&amp; [ "$gary_dt" -le 15 ] &amp;&amp; [ "$gary_try" -lt 3 ]; then echo "daily content runner startup failed (rc=$gary_rc) — retry $gary_try/2" &gt;&amp;2; sleep 5; continue; fi; exit "$gary_rc"; done</string>
 	</array>
 	<key>RunAtLoad</key>
 	<false/>
