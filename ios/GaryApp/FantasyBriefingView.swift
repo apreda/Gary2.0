@@ -66,8 +66,8 @@ struct FantasyBriefingPage: View {
     private var masthead: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("GARY’S FANTASY BRIEFING")
-                    .font(GaryFonts.display(29)).foregroundStyle(GaryColors.warmWhite)
+                Text("Gary’s fantasy briefing")
+                    .font(.title2.weight(.bold)).foregroundStyle(GaryColors.warmWhite)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(league == "NFL" ? "Your next move, before the next kickoff." : "The call. The case. What matters today.")
                     .font(GaryFonts.ui(14)).foregroundStyle(GaryColors.sectionSub)

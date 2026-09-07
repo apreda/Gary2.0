@@ -3,7 +3,7 @@
 // Builds "Player Insight Cards" — per-player betting breakdown packs that power
 // the iOS Hub's full-breakdown view (tap a player card -> this payload renders).
 //
-// ONE pack per distinct player_id surfaced in the day's stored insight rows
+// ONE pack per exact player/game location surfaced in the day's slate
 // (player-backed MLB rows only). A player is classified hitter-vs-pitcher by how
 // he appears in getMlbLineups(gameId): a batting-order entry -> HITTER pack; a
 // side's probable pitcher -> PITCHER pack. Packs are assembled entirely from the
@@ -99,15 +99,25 @@ const RATE_MIN_ROWS_PITCHER = 3;
  * @param {string} args.league       e.g. 'MLB'
  * @param {Array}  args.connections  the day's stored insight rows (player_id/game_id/category)
  * @param {Array}  args.games        the BDL slate (getMlbGamesForDate shape)
+ * @param {Array}  [args.onlyPlayerIds] exact BDL IDs for a bounded repair; omitted builds the full candidate set
  * @returns {Promise<Array<{date,league,player_id,player_name,team_abbr,game_id,payload}>>}
  */
-export async function buildPlayerInsightCards({ date, league, connections, games, extraPlayerNames = [] } = {}) {
+export async function buildPlayerInsightCards({ date, league, connections, games, extraPlayerNames = [], onlyPlayerIds, bdl: suppliedBdl } = {}) {
   // MLB only for now — every other league returns an empty pack list.
   if (String(league || '').toUpperCase() !== 'MLB') return [];
 
+  // An explicitly empty/invalid repair scope must never widen into a full
+  // slate build. Keep every lineup intact for the selected players' matchup.
+  const requestedIds = onlyPlayerIds === undefined ? null
+    : new Set((Array.isArray(onlyPlayerIds) ? onlyPlayerIds : [])
+      .filter(id => typeof id === 'string' || typeof id === 'number')
+      .map(id => String(id).trim()).filter(Boolean));
+  if (requestedIds?.size === 0) return [];
+
   const season = seasonForDate(date);
-  const bdl = await loadBdl();
-  if (!bdl) return [];
+  const provider = suppliedBdl || await loadBdl();
+  if (!provider) return [];
+  const bdl = memoizedPlayerReads(provider);
 
   const slate = Array.isArray(games) ? games.map(normalizeGame) : [];
   if (!slate.length) {
@@ -163,7 +173,8 @@ export async function buildPlayerInsightCards({ date, league, connections, games
     }
   }
 
-  const playerIds = [...new Set([...distinctPlayerIds(connections).map(String), ...lineupIds, ...extraIds])];
+  const playerIds = [...new Set([...distinctPlayerIds(connections).map(String), ...lineupIds, ...extraIds])]
+    .filter(id => requestedIds == null || requestedIds.has(id));
   if (!playerIds.length) {
     console.log('[playerInsightCards] no players in connections or lineups — nothing to build.');
     return [];
@@ -182,33 +193,32 @@ export async function buildPlayerInsightCards({ date, league, connections, games
   const stats = { examined: 0, hitter: 0, pitcher: 0, skipped: 0 };
 
   for (const playerId of playerIds) {
-    stats.examined += 1;
-    try {
-      let pack = await buildOnePack({
-        playerId, season, slate, bdl,
-        playersById, seasonById, batterX, pitcherX,
-        getLineups, getProps,
-      });
-      // Off-slate fallback (Jul 27): a named subject who isn't in tonight's
-      // lineups (streak-watch player on an idle team, tomorrow's projected
-      // starter) still gets an identity/season/form card — never a dead tap.
-      if (!pack) {
-        pack = await buildOffSlatePack({ playerId, season, bdl, playersById, seasonById, batterX, pitcherX });
+    const locations = await locatePlayerGames(playerId, slate, getLineups);
+    // Keep both doubleheader games. A player absent from every observed
+    // lineup retains an unassigned season/form pack; never infer a game.
+    for (const location of locations.length ? locations : [null]) {
+      stats.examined += 1;
+      try {
+        const pack = location ? await buildOnePack({
+          playerId, season, location, bdl,
+          playersById, seasonById, batterX, pitcherX,
+          getProps,
+        }) : await buildOffSlatePack({ playerId, season, bdl, playersById, seasonById, batterX, pitcherX });
+        if (!pack) { stats.skipped += 1; continue; }
+        if (pack.payload.type === 'pitcher') stats.pitcher += 1; else stats.hitter += 1;
+        packs.push({
+          date,
+          league: 'MLB',
+          player_id: String(playerId),
+          player_name: pack.payload.name || null,
+          team_abbr: pack.payload.team || null,
+          game_id: pack.gameId != null ? String(pack.gameId) : null,
+          payload: pack.payload,
+        });
+      } catch (err) {
+        stats.skipped += 1;
+        console.error(`[playerInsightCards] player ${playerId}, game ${location?.gameId ?? 'unassigned'} error:`, err?.message || err);
       }
-      if (!pack) { stats.skipped += 1; continue; }
-      if (pack.payload.type === 'pitcher') stats.pitcher += 1; else stats.hitter += 1;
-      packs.push({
-        date,
-        league: 'MLB',
-        player_id: String(playerId),
-        player_name: pack.payload.name || null,
-        team_abbr: pack.payload.team || null,
-        game_id: pack.gameId != null ? String(pack.gameId) : null,
-        payload: pack.payload,
-      });
-    } catch (err) {
-      stats.skipped += 1;
-      console.error(`[playerInsightCards] player ${playerId} error:`, err?.message || err);
     }
   }
 
@@ -225,15 +235,11 @@ export async function buildPlayerInsightCards({ date, league, connections, games
 
 async function buildOnePack(args) {
   const {
-    playerId, season, slate, bdl,
-    playersById, seasonById, batterX, pitcherX, getLineups, getProps,
+    playerId, season, location, bdl,
+    playersById, seasonById, batterX, pitcherX, getProps,
   } = args;
 
-  // 1. Locate the player in a slate game's lineup -> classify hitter vs pitcher.
-  const loc = await locatePlayer(playerId, slate, getLineups);
-  if (!loc) return null; // not in any posted lineup -> cannot classify, skip
-
-  const { game, gameId, sideAbbr, oppAbbr, role, lineupEntry, lineups } = loc;
+  const { game, gameId, sideAbbr, oppAbbr, role, lineupEntry, lineups } = location;
   const header = playersById[playerId] || playersById[String(playerId)] || {};
   const seasonRec = seasonById.get(String(playerId)) || null;
   const gameLabel = gameAbbrLabel(game);
@@ -463,41 +469,63 @@ async function buildPitcherPack(a) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Find the slate game + side this player appears in, and whether he is a batter
- * (hitter pack) or a probable pitcher (pitcher pack). Returns null when the
- * player is in no posted lineup on the slate.
+ * Find every exact slate game/side this player appears in. A repeated game
+ * ID cannot duplicate the card; conflicting sides cannot assign a matchup.
  */
-async function locatePlayer(playerId, slate, getLineups) {
+async function locatePlayerGames(playerId, slate, getLineups) {
   const pid = String(playerId);
+  const locations = [];
+  const seenGames = new Set();
   for (const game of slate) {
     const gameId = game?.id;
-    if (gameId == null) continue;
+    if (gameId == null || seenGames.has(String(gameId))) continue;
+    seenGames.add(String(gameId));
     const lineups = await getLineups(gameId);
     if (!lineups || typeof lineups !== 'object') continue;
-
+    const matches = [];
     for (const abbr of Object.keys(lineups)) {
       const side = lineups[abbr];
       if (!side || typeof side !== 'object') continue;
 
       // Probable pitcher?
       if (side.pitcher && String(side.pitcher.playerId) === pid) {
-        return {
+        matches.push({
           game, gameId, sideAbbr: abbr, oppAbbr: otherAbbr(lineups, abbr),
           role: 'pitcher', lineupEntry: side.pitcher, lineups,
-        };
+        });
+        continue;
       }
       // Batter?
       const batters = Array.isArray(side.batters) ? side.batters : [];
       const b = batters.find((x) => String(x?.playerId) === pid);
       if (b) {
-        return {
+        matches.push({
           game, gameId, sideAbbr: abbr, oppAbbr: otherAbbr(lineups, abbr),
           role: 'batter', lineupEntry: b, lineups,
-        };
+        });
       }
     }
+    if (matches.length === 1) locations.push(matches[0]);
   }
-  return null;
+  return locations;
+}
+
+// Doubleheader locations reuse season/form/split reads. Matchup requests keep
+// their actual player/team arguments, so different opposing arms stay separate.
+function memoizedPlayerReads(provider) {
+  const methods = new Set(['getMlbPlayerSplits', 'getMlbPlayerVsPlayer', 'getMlbHitterPitchTypeStats',
+    'getMlbPitcherPitchTypeStats', 'getMlbPlayerGameRowsChrono']);
+  const memo = new Map();
+  return new Proxy(provider, { get(target, key) {
+    const value = Reflect.get(target, key);
+    if (typeof value !== 'function') return value;
+    if (!methods.has(key)) return value.bind(target);
+    return (...args) => {
+      const cacheKey = JSON.stringify([key, args]);
+      if (!memo.has(cacheKey)) memo.set(cacheKey, Promise.resolve().then(() => value.apply(target, args)));
+      return memo.get(cacheKey);
+    };
+  } });
 }
 
 function otherAbbr(lineups, abbr) {

@@ -1,0 +1,35 @@
+[daily-content] {"run_id":"2026-09-07T23:13:03.147Z-110","date":"2026-09-07","phase":"daily","event":"run-start","at":"2026-09-07T23:13:03.148Z","stages":["card-watch","morning-health"]}
+[daily-content] {"run_id":"2026-09-07T23:13:03.147Z-110","date":"2026-09-07","phase":"daily","event":"stage-start","stage":"card-watch","attempt":1,"at":"2026-09-07T23:13:03.419Z","timeout_ms":180000}
+THE CARD WATCH — 2026-09-07
+  MLB     278 card(s) · 69/74 player row(s) reach a unique populated card · 0 thin
+         8 dedicated Fantasy decision(s) outside main Hub card coverage
+         player_game_not_found: Corbin Carroll: .486 OPS in Last 15 Days [player 23; game 5059932]
+         player_game_not_found: Sean Murphy: 1.308 OPS in Last 15 Days [player 809; game 5059927]
+         player_game_not_found: Michael Conforto: 1.500 OPS in Last 15 Days [player 2716; game 5059933]
+         player_game_not_found: Nathaniel Lowe: .497 OPS in Last 15 Days [player 195; game 5059931]
+         player_game_not_found: Nasim Nunez: .219 OPS in Last 15 Days [player 164; game 5059934]
+  NFL       0 card(s) · 0/0 player row(s) reach a unique populated card · 0 thin
+         8 dedicated Fantasy decision(s) outside main Hub card coverage
+  NCAAF    14 card(s) · 6/6 player row(s) reach a unique populated card · 3 thin
+  ⚠️  MLB: 5 of 74 player row(s) use the full-story fallback
+  ⚠️  NCAAF: 3 of 14 card(s) have no rendered stats and data
+
+Card watch completed with the coverage limitations shown above.
+[daily-content] {"run_id":"2026-09-07T23:13:03.147Z-110","date":"2026-09-07","phase":"daily","event":"stage-end","stage":"card-watch","attempt":1,"at":"2026-09-07T23:13:03.941Z","duration_ms":522,"status":"ok","exit_code":0}
+[daily-content] {"run_id":"2026-09-07T23:13:03.147Z-110","date":"2026-09-07","phase":"daily","event":"stage-start","stage":"morning-health","attempt":1,"at":"2026-09-07T23:13:04.015Z","timeout_ms":90000}
+MORNING HEALTH 2026-09-07 — WARN — 2026-09-07T23:13:04.512Z
+OK      board: 12/12 slate games on today's board; updated 2026-09-07T20:30:56.762+00:00
+OK      insights:MLB: 110 rows across 11/11 games; signal categories are conditional, so every game need not produce a row.
+OK      cards:MLB: 11/11 games have cards; 0 due games missing and 0 due games partial (due = kickoff within 2h).
+OK      wire:MLB: 3 current-date items; check freshness
+PENDING picks:MLB: 10/11 published; 0 started without a saved pick; 1 still pregame (0 within the final 15-minute retry window).
+OK      insights:NCAAF: 10 rows across 1/1 games; signal categories are conditional, so every game need not produce a row.
+WARN    cards:NCAAF: 1/1 games have cards; 1 games verified complete; 0 due games missing and 0 due games partial (due = kickoff within 2h). No card updated within 8h.
+OK      pulse:NCAAF: 2 current-date league tabs; newest 2026-09-07T20:39:47.243055+00:00
+WARN    wire:NCAAF: 0 current-date items; empty feed: inspect Wire stage status before diagnosing provider failure
+OK      picks:NCAAF: 1/1 published; 0 started without a saved pick; 0 still pregame (0 within the final 30-minute retry window).
+OK      results: 18 settled rows for 2026-09-06; 0 saved tickets without an exact-game grade (pending/postponed status needs inspection).
+OK      recaps: 18/18 settled game rows have matching recaps; optional narrative availability is separate from grading.
+A stale lane does not prove the scheduler stopped. Inspect the owning stage and provider error before any restart.
+[daily-content] {"run_id":"2026-09-07T23:13:03.147Z-110","date":"2026-09-07","phase":"daily","event":"stage-end","stage":"morning-health","attempt":1,"at":"2026-09-07T23:13:04.534Z","duration_ms":519,"status":"ok","exit_code":0}
+[daily-content] {"run_id":"2026-09-07T23:13:03.147Z-110","date":"2026-09-07","phase":"daily","event":"run-end","at":"2026-09-07T23:13:04.535Z","status":"ok","failed_stages":[]}

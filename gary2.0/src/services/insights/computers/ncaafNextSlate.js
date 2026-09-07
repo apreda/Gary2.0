@@ -13,6 +13,7 @@ import {
   resolveNcaafKickoff,
 } from '../../ncaafGamePolicy.js';
 import { makeRow, shiftDateStr, TONES } from '../shared.js';
+import { nextSlateSchedule } from '../nextSlateSchedule.js';
 
 const SPORT_KEY = 'americanfootball_ncaaf';
 export const NCAAF_NEXT_SLATE_WINDOW_DAYS = 21;
@@ -59,7 +60,7 @@ function detailForCounts(gameCount, confirmedCount, timeTbdCount) {
 }
 
 /** Build the single persisted context row after provider validation. */
-export function buildNcaafNextSlateRow({ date, scheduledDate, games }) {
+export function buildNcaafNextSlateRow({ date, scheduledDate, games, checkedAt }) {
   const kickoffRows = (Array.isArray(games) ? games : []).map((game) => ({
     game,
     kickoff: resolveNcaafKickoff(game),
@@ -88,6 +89,7 @@ export function buildNcaafNextSlateRow({ date, scheduledDate, games }) {
     discovery_window_days: NCAAF_NEXT_SLATE_WINDOW_DAYS,
     team_policy: 'verified_fbs_vs_fbs',
     grade: 'context',
+    ...nextSlateSchedule(kickoffRows, checkedAt),
   };
   if (confirmed[0]) meta.first_confirmed_kickoff = confirmed[0];
 
@@ -190,7 +192,7 @@ export async function computeNcaafNextSlate(ctx) {
   }
   if (!scheduledDate || games.length === 0) return [];
 
-  const row = buildNcaafNextSlateRow({ date: ctx.date, scheduledDate, games });
+  const row = buildNcaafNextSlateRow({ date: ctx.date, scheduledDate, games, checkedAt: ctx.as_of });
   if (!row) throw new Error('NCAAF next-slate could not build a truthful slate row');
   return [row];
 }

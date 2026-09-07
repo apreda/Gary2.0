@@ -868,52 +868,184 @@ enum SupabaseAPI {
         return rows.count == 1 ? rows.first?.payload : nil
     }
 
-    /// All of a date's player insight packs (one fetch, shared across the
-    /// Picks carousel) — each game page filters to its own matchup via the
-    /// pack's `game` label. 30-min in-memory cache, same idiom as DFS lineups.
-    private static var _playerIntelCache: (date: String, rows: [PlayerInsightCardRow], at: Date)?
-    static func fetchPlayerIntelRows(date: String, forceRefresh: Bool = false) async -> [PlayerInsightCardRow] {
-        if !forceRefresh, let c = _playerIntelCache, c.date == date, Date().timeIntervalSince(c.at) < 1800 {
+    private struct PlayerIntelCacheKey: Hashable {
+        let date: String
+        let session: ObjectIdentifier
+    }
+    @MainActor private static var _playerIntelCache: [PlayerIntelCacheKey: (rows: [PlayerInsightCardRow], at: Date)] = [:]
+    @MainActor private static var _playerIntelFlights: [PlayerIntelCacheKey: Task<[PlayerInsightCardRow], Never>] = [:]
+
+    /// Complete date-scoped player packs, shared by the Hub and game carousel.
+    /// Only a fully read snapshot enters the 30-minute cache; a later-page
+    /// failure cannot replace it with a partial Saturday college/MLB slate.
+    @MainActor static func fetchPlayerIntelRows(date: String, forceRefresh: Bool = false, session: URLSession = .shared) async -> [PlayerInsightCardRow] {
+        let key = PlayerIntelCacheKey(date: date, session: ObjectIdentifier(session))
+        if !forceRefresh, let c = _playerIntelCache[key], Date().timeIntervalSince(c.at) < 1800 {
             return c.rows
         }
-        let url = buildURL(table: "player_insight_cards", query: [
-            URLQueryItem(name: "select", value: "league,player_id,player_name,team_abbr,game_id,payload"),
-            URLQueryItem(name: "date", value: "eq.\(date)"),
-            URLQueryItem(name: "order", value: "player_name.asc")
-        ])
-        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
-              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let rows = try? JSONDecoder().decode([PlayerInsightCardRow].self, from: data) else {
-            return _playerIntelCache?.date == date ? (_playerIntelCache?.rows ?? []) : []
+        let lastGood = _playerIntelCache[key]?.rows ?? []
+        guard !Task.isCancelled else { return lastGood }
+        if let flight = _playerIntelFlights[key] { return await flight.value }
+        let task = Task { () -> [PlayerInsightCardRow] in
+            defer { _playerIntelFlights[key] = nil }
+            do {
+                let rows = try await fetchCompletePlayerIntelRows(date: date, session: session)
+                // Empty early passes must not hide cards arriving moments later.
+                if rows.isEmpty { _playerIntelCache[key] = nil }
+                else { _playerIntelCache[key] = (rows, Date()) }
+                // Keep two dates at most; crossing midnight must neither borrow
+                // yesterday's packs nor let its slower request evict today's.
+                while _playerIntelCache.count > 2,
+                      let oldest = _playerIntelCache.min(by: {
+                          $0.key.date == $1.key.date ? $0.value.at < $1.value.at : $0.key.date < $1.key.date
+                      })?.key {
+                    _playerIntelCache[oldest] = nil
+                }
+                return rows
+            } catch {
+                print("[fetchPlayerIntelRows] incomplete \(date): \(error.localizedDescription)")
+                return _playerIntelCache[key]?.rows ?? lastGood
+            }
         }
-        // A successful empty early pass must not hide cards arriving moments later.
-        _playerIntelCache = rows.isEmpty ? nil : (date, rows, Date())
-        return rows
+        _playerIntelFlights[key] = task
+        return await task.value
+    }
+
+    /// The database primary key is separate from the card's public identity,
+    /// which includes league, game and player so doubleheaders stay separate.
+    private struct PlayerIntelPageRow: Decodable {
+        let databaseID: Int64
+        let date: String
+        let row: PlayerInsightCardRow
+        private enum CodingKeys: String, CodingKey { case id, date }
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            databaseID = try container.decode(Int64.self, forKey: .id)
+            date = try container.decode(String.self, forKey: .date)
+            row = try PlayerInsightCardRow(from: decoder)
+        }
+    }
+
+    private static func fetchCompletePlayerIntelRows(date: String, session: URLSession) async throws -> [PlayerInsightCardRow] {
+        let pageSize = 250
+        let maxPages = 40
+        let deadline = Date().addingTimeInterval(30)
+        var all: [PlayerIntelPageRow] = []
+        var expectedTotal: Int?
+        var previousID: Int64?
+        func invalid(_ reason: String) -> NSError {
+            NSError(domain: "SupabaseAPI.playerIntelPagination", code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: reason])
+        }
+        for _ in 0..<maxPages {
+            try Task.checkCancellation()
+            let remaining = deadline.timeIntervalSinceNow
+            guard remaining > 0 else { throw URLError(.timedOut) }
+            let offset = all.count
+            let url = buildURL(table: "player_insight_cards", query: [
+                URLQueryItem(name: "select", value: "id,date,league,player_id,player_name,team_abbr,game_id,payload"),
+                URLQueryItem(name: "date", value: "eq.\(date)"),
+                URLQueryItem(name: "order", value: "id.asc"),
+                URLQueryItem(name: "limit", value: "\(pageSize)"),
+                URLQueryItem(name: "offset", value: "\(offset)")
+            ])
+            var request = makeRequest(url: url)
+            // Memory-cache misses and explicit refreshes both require a fresh
+            // transport response. A concurrent refresh can share this task.
+            request.cachePolicy = .reloadIgnoringLocalCacheData
+            request.timeoutInterval = min(15, remaining)
+            request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+            request.setValue("count=exact", forHTTPHeaderField: "Prefer")
+            let (data, response) = try await session.data(for: request)
+            guard Date() < deadline else { throw URLError(.timedOut) }
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                throw URLError(.badServerResponse)
+            }
+            let page = try JSONDecoder().decode([PlayerIntelPageRow].self, from: data)
+            let range = (http.value(forHTTPHeaderField: "Content-Range") ?? "").split(separator: "/", omittingEmptySubsequences: false)
+            guard range.count == 2, let total = Int(range[1]), total >= 0,
+                  total <= pageSize * maxPages, page.count <= pageSize else {
+                throw invalid("Missing exact count or player-card row limit exceeded")
+            }
+            if let expectedTotal, total != expectedTotal { throw invalid("Player-card count changed during pagination") }
+            expectedTotal = total
+            if page.isEmpty {
+                guard offset == 0, total == 0, range[0] == "*" else { throw invalid("Player-card page ended before the exact count") }
+                return []
+            }
+            let bounds = range[0].split(separator: "-")
+            guard bounds.count == 2, Int(bounds[0]) == offset,
+                  Int(bounds[1]) == offset + page.count - 1,
+                  offset + page.count <= total else { throw invalid("Player-card response range does not match the request") }
+            for item in page {
+                guard item.date == date, item.databaseID > 0,
+                      previousID.map({ item.databaseID > $0 }) ?? true else {
+                    throw invalid("Player-card IDs repeated, reordered or belonged to another date")
+                }
+                previousID = item.databaseID
+            }
+            all.append(contentsOf: page)
+            if all.count == total {
+                // Stable database order is for pagination; the carousel keeps
+                // its familiar alphabetical presentation after the full read.
+                return all.sorted {
+                    let first = $0.row.player_name ?? $0.row.payload?.name ?? ""
+                    let second = $1.row.player_name ?? $1.row.payload?.name ?? ""
+                    let order = first.localizedCaseInsensitiveCompare(second)
+                    return order == .orderedSame ? $0.databaseID < $1.databaseID : order == .orderedAscending
+                }.map(\.row)
+            }
+            // Some servers return fewer rows than requested. Advance by the
+            // actual count and keep going until the exact total is accounted for.
+        }
+        throw invalid("Player-card page limit exceeded")
     }
 
     /// League-wide "League Pulse" tables for a date+league (one row per tab).
     /// Generic schema: each row carries its own columns[] + rows[] so the UI
     /// renders every tab with no per-tab code. 30-min in-memory cache (keyed by
     /// date+league), [] on any failure — the section then collapses.
-    private static var _leaguePulseCache: [String: (rows: [LeaguePulseRow], at: Date)] = [:]
+    private struct LeaguePulseCacheKey: Hashable {
+        let date: String
+        let league: String
+        let session: ObjectIdentifier
+    }
+    // Hub fetches MLB, NFL and NCAAF concurrently. Every dictionary read and
+    // write must share an actor; URLSession awaits still overlap across sports.
+    @MainActor private static var _leaguePulseCache: [LeaguePulseCacheKey: (rows: [LeaguePulseRow], at: Date)] = [:]
+    @MainActor private static var _leaguePulseFlights: [LeaguePulseCacheKey: Task<[LeaguePulseRow], Never>] = [:]
     /// - Parameter forceRefresh: bypass the 30-min cache (pull-to-refresh / EST
     ///   day rollover) so a manual refresh and the 6am slate flip always refetch.
-    static func fetchLeaguePulse(date: String, league: String, forceRefresh: Bool = false) async -> [LeaguePulseRow] {
-        let cacheKey = "\(date)|\(league)"
+    @MainActor static func fetchLeaguePulse(date: String, league: String, forceRefresh: Bool = false, session: URLSession = .shared) async -> [LeaguePulseRow] {
+        let cacheKey = LeaguePulseCacheKey(date: date, league: league, session: ObjectIdentifier(session))
         if !forceRefresh, let c = _leaguePulseCache[cacheKey], Date().timeIntervalSince(c.at) < 1800 {
             return c.rows
         }
-        let url = buildURL(table: "league_pulse", query: [
-            URLQueryItem(name: "select", value: "date,league,tab,title,subtitle,sort_note,columns,rows"),
-            URLQueryItem(name: "date", value: "eq.\(date)"),
-            URLQueryItem(name: "league", value: "eq.\(league)"),
-            URLQueryItem(name: "order", value: "tab.asc")
-        ])
-        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
-              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let rows = try? JSONDecoder().decode([LeaguePulseRow].self, from: data) else { return [] }
-        _leaguePulseCache[cacheKey] = (rows, Date())
-        return rows
+        guard !Task.isCancelled else { return [] }
+        if let flight = _leaguePulseFlights[cacheKey] { return await flight.value }
+        let task = Task { () -> [LeaguePulseRow] in
+            defer { _leaguePulseFlights[cacheKey] = nil }
+            let url = buildURL(table: "league_pulse", query: [
+                URLQueryItem(name: "select", value: "date,league,tab,title,subtitle,sort_note,columns,rows"),
+                URLQueryItem(name: "date", value: "eq.\(date)"),
+                URLQueryItem(name: "league", value: "eq.\(league)"),
+                URLQueryItem(name: "order", value: "tab.asc")
+            ])
+            var request = makeRequest(url: url)
+            if forceRefresh {
+                request.cachePolicy = .reloadIgnoringLocalCacheData
+                request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+            }
+            guard let (data, response) = try? await session.data(for: request),
+                  let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+                  let rows = try? JSONDecoder().decode([LeaguePulseRow].self, from: data) else { return [] }
+            // A verified empty is authoritative; a failure never overwrites
+            // or renews a previous successful snapshot.
+            _leaguePulseCache[cacheKey] = (rows, Date())
+            return rows
+        }
+        _leaguePulseFlights[cacheKey] = task
+        return await task.value
     }
 
     /// The full day's slate — every game + opening lines (daily_slate,
@@ -1037,6 +1169,15 @@ enum SupabaseAPI {
     /// scoreboard, big-games-to-watch, and by-sport starters/returns. The app does
     /// no slate-min math; everything is display-formatted server-side.
     static func fetchTomorrowBoard(date: String) async -> TomorrowBoard? {
+        switch await fetchTodayBoardResult(date: date) {
+        case .success(let board): return board
+        case .failure: return nil
+        }
+    }
+
+    /// A valid empty schedule and a failed read have different UI behavior.
+    /// The Hub preserves a same-date snapshot only after an actual failure.
+    static func fetchTodayBoardResult(date: String) async -> Result<TomorrowBoard?, Error> {
         let url = buildURL(table: "tomorrow_board", query: [
             URLQueryItem(name: "select", value: "date,countdown_iso,countdown_sport,countdown_matchup,game_count,any_lines,board,big_games,starters,returns,form,run_profile,weather,league_avg_era,league_avg_xera"),
             URLQueryItem(name: "date", value: "eq.\(date)"),
@@ -1048,12 +1189,12 @@ enum SupabaseAPI {
                 // A 400 here usually means a select column was dropped from the table —
                 // log it so the empty board is debuggable, not silent.
                 print("[fetchTomorrowBoard] HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1) \(date): \(String(data: data, encoding: .utf8)?.prefix(180) ?? "")")
-                return nil
+                return .failure(URLError(.badServerResponse))
             }
-            return try JSONDecoder().decode([TomorrowBoard].self, from: data).first
+            return .success(try JSONDecoder().decode([TomorrowBoard].self, from: data).first)
         } catch {
             print("[fetchTomorrowBoard] error \(date): \(error.localizedDescription)")
-            return nil
+            return .failure(error)
         }
     }
 

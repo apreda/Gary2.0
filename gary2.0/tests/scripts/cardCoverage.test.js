@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
 const watch = readFileSync(new URL('../../scripts/check-card-coverage.js', import.meta.url), 'utf8');
+const coverage = readFileSync(new URL('../../scripts/lib/cardCoverage.js', import.meta.url), 'utf8');
 const runner = readFileSync(new URL('../../run-insight-connections.js', import.meta.url), 'utf8');
 const hub = readFileSync(new URL('../../../ios/GaryApp/HubView.swift', import.meta.url), 'utf8');
 
@@ -31,7 +32,8 @@ describe('the player card reaches every named row', () => {
     const open = hub.slice(hub.indexOf('private func openSignal('), hub.indexOf('static func signalPlayerName('));
     // The executable openSignal suite covers name collisions with team and
     // head-to-head metadata. This guard must surround the card lookup itself.
-    expect(open).toContain('if s.playerId != nil || (s.teamId == nil && s.h2h == nil),');
+    expect(open).toContain('s.reg?.day != "tomorrow"');
+    expect(open).toContain('s.playerId != nil || (s.teamId == nil && s.h2h == nil),');
     expect(open).toContain('if s.playerId == nil, s.teamId != nil || s.h2h != nil {');
     expect(open).toContain('teamCardSignal = s');
   });
@@ -57,14 +59,11 @@ describe('the player card reaches every named row', () => {
   });
 
   it('the watch fails loudly when a league has rows and no cards', () => {
-    expect(watch).toContain('row(s) on the board and NO cards at all');
-    expect(watch).toContain('every card is thin (identity only, no numbers)');
-    expect(watch).toContain('process.exit(1)');
-    // It counts the name path too, because that is the one football rides,
-    // and it uses the APP's resolver so it never reports a miss the app opens.
-    expect(watch).toContain('function resolvesByName(name, cards)');
-    expect(watch).toContain('n.includes(k) || k.includes(n)');
-    // Team rows are not player rows and must not inflate the denominator.
-    expect(watch).toContain('const withPlayer = leagueSignals.filter((s) => s.player_id != null);');
+    // Behavior and executable Swift parity live in cardCoverageMonitor.test.
+    expect(coverage).toContain('row(s) on the board and NO cards at all');
+    expect(coverage).toContain('every card is thin (no rendered stats and data)');
+    expect(watch).toContain('process.exitCode = await runCardWatch()');
+    expect(watch).toContain('auditCardCoverage(');
+    expect(watch).toContain("readCoverageRows(sb, 'player_insight_cards', CARD_COLUMNS, date)");
   });
 });

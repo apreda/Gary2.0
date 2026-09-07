@@ -1,32 +1,87 @@
 {
   "date": "2026-09-07",
-  "scope": "Native main Hub daily briefing",
   "version": "2.25",
-  "build": "905",
-  "focusedTests": { "files": 7, "passed": 67, "failed": 0 },
-  "storyIdentitySwiftChecks": 42,
-  "fantasySwiftHarness": "passed",
-  "debugBuild": "passed",
-  "releaseArchive": "passed",
-  "archivePath": "/Volumes/KINGSTON/Gary-2.25-905-Hub.xcarchive",
-  "simulatorInstall": "passed",
-  "simulatorVisualQA": "blocked: Mac locked; user asked to unlock",
-  "appStoreConnectUpload": "pending visual QA; not uploaded",
-  "testFlightAvailability": "not verified",
-  "implementationCommit": "f5fee408",
-  "implementationPush": "confirmed origin/main",
-  "productionTruth": {
-    "auditedCommit": "f5fee408",
-    "scheduler": "running in canonical checkout, PID 79083",
-    "winnersWorker": "running, PID 89023",
-    "edgeDeploymentTimestamps": "all passed",
-    "mlbPublication": { "published": 8, "slateGames": 11, "pending": 3, "startedWithoutPick": 0 },
-    "exitCode": 1,
-    "soleFlag": "preserved private GoogleService-Info.plist local configuration",
-    "unpushedCommits": 0,
-    "log": "/tmp/gary-hub-905-production-truth.log"
+  "build": 906,
+  "design_authority": [
+    "current conversation feedback",
+    "docs/design/anti-ai-slop-design.md"
+  ],
+  "tests": {
+    "backend": {
+      "files": 262,
+      "passed": 2486,
+      "failed": 0,
+      "duration_seconds": 38.41,
+      "postgres_binary": "/opt/homebrew/opt/postgresql@17/bin"
+    },
+    "edge": {
+      "passed": 180,
+      "failed": 0,
+      "skipped": 0
+    },
+    "web": {
+      "files": 48,
+      "passed": 349,
+      "failed": 0
+    },
+    "web_typecheck": "passed",
+    "swift_concurrent_cache_fixture": "300 overlapping detached requests; 61 refresh waiters coalesced to 3 requests; actor runtime checks enabled"
   },
-  "backendCodeChanged": false,
-  "newProviderRequestsOrModelGeneration": false,
-  "knownLocalConfigurationException": "ios/GaryApp/GoogleService-Info.plist"
+  "native": {
+    "debug_build": "passed",
+    "signed_archive": "passed",
+    "archive": "/Volumes/KINGSTON/Gary-2.25-906-Hub.xcarchive",
+    "cold_launches_after_cache_fix": 6,
+    "new_app_crash_reports_after_fix": 0,
+    "latest_report_is_pre_fix": "GaryApp-2026-09-07-192334.ips",
+    "verified_sports": [
+      "MLB live provider data",
+      "NFL quiet-day and Fantasy",
+      "NCAAF live provider data",
+      "NBA executable category/scope fixtures"
+    ],
+    "accessibility": "Large text; complete names/headlines/numbers; original reads; bounded modal; close targets; section navigation",
+    "direct_synthetic_drag_wheel": "Tool actions produced no observable movement; gesture feel not claimed as verified",
+    "upload": "in_progress",
+    "apple_processing": "pending",
+    "app_store_submission": "Existing 2.25 build901 Waiting for Review; not withdrawn/replaced"
+  },
+  "database": {
+    "migration": "20260907225151_player_card_game_identity",
+    "applied": true,
+    "existing_rows_preserved": 21906,
+    "null_game_rows_preserved": 409,
+    "primary_key_and_rls_preserved": true,
+    "postgrest_schema_probe_status": 200,
+    "targeted_mlb_repair_rows": [
+      178176,
+      178177
+    ],
+    "other_current_mlb_rows_preserved": 276,
+    "repair_model_calls": 0,
+    "nfl_schedule_metadata_row": 30158
+  },
+  "monitor": {
+    "recovery_run_id": "2026-09-07T23:13:03.147Z-110",
+    "card_watch_exit": 0,
+    "morning_health_exit": 0,
+    "status": "warn",
+    "failure_count": 0,
+    "known_limits": [
+      "5 MLB original-story fallbacks for players absent from posted orders",
+      "3 NCAAF packs without rendered statistics",
+      "Aging complete college cards",
+      "Empty NCAAF Wire"
+    ]
+  },
+  "runtime_before_push": {
+    "scheduler_pid": 79083,
+    "winners_pid": 89023,
+    "canonical_checkout": true,
+    "edge_deployment_timestamps": "all_pass",
+    "mlb_published": 10,
+    "mlb_games": 11,
+    "started_missing_pick": 0
+  },
+  "private_local_exception": "ios/GaryApp/GoogleService-Info.plist \u2014 preserved, not read/staged/committed"
 }

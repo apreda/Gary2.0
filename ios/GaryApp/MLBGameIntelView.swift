@@ -671,7 +671,7 @@ struct MLBGameIntelView: View {
 // card's twin ("same quality, same finish" — founder), so both read this one
 // palette. Retune here and every breakdown card moves together.
 enum PCV4 {
-    static let bg   = Color(hex: "#121214")   // matte black — matches the game pick cards (GaryColors.cardBg)
+    static let bg   = Color(hex: "#161412")   // warm solid surface shared by Hub detail cards
     static let ink  = Color(hex: "#F7F2E8")   // primary — bright cream
     static let mut  = Color(hex: "#CFC6B2")   // secondary — readable warm cream (no cold grey)
     static let mut2 = Color(hex: "#A99E89")   // small labels
@@ -703,12 +703,16 @@ struct PlayerCardCarousel: View {
             VStack(spacing: 10) {
                 HStack {
                     Text("\(index + 1) / \(players.count)")
-                        .font(GaryFonts.mono(11, bold: true)).foregroundStyle(PCV4.mut2)
+                        .font(.caption.monospaced().weight(.medium)).foregroundStyle(PCV4.mut2)
                     Spacer()
                     Button { onClose() } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 28)).foregroundStyle(.white.opacity(0.55))
-                    }.buttonStyle(.plain)
+                            .font(.title2).foregroundStyle(PCV4.mut)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close player details")
                 }
                 .padding(.horizontal, 26)
 
@@ -762,6 +766,7 @@ struct PlayerCardV4: View {
     var loading: Bool = false
     var edge: PlayerCardV4Edge? = nil
     @State private var recentExpanded = false   // "Recent" expand toggle (advanced + game stats)
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -775,9 +780,9 @@ struct PlayerCardV4: View {
                 } else {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("BUILDING THE BREAKDOWN")
-                            .font(GaryFonts.mono(10.5, bold: true)).tracking(1.4).foregroundStyle(PCV4.gold).opacity(0.92)
+                            .font(.caption.monospaced().weight(.medium)).tracking(1).foregroundStyle(PCV4.gold).opacity(0.92)
                         Text("\(name)'s full stat profile fills in as the lineup firms up — check back closer to kickoff.")
-                            .font(GaryFonts.text(13)).foregroundStyle(PCV4.mut).lineSpacing(2)
+                            .font(.subheadline).foregroundStyle(PCV4.mut).lineSpacing(3)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -796,16 +801,17 @@ struct PlayerCardV4: View {
     // THE EDGE — the Hub's "why this player surfaced" lane verdict, in v4 style.
     @ViewBuilder private func edgeHero(_ e: PlayerCardV4Edge) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text(e.eyebrow.uppercased()).font(GaryFonts.mono(9.5, bold: true)).tracking(1.4).foregroundStyle(PCV4.gold)
-            Text(e.title).font(GaryFonts.display(18)).foregroundStyle(PCV4.ink).fixedSize(horizontal: false, vertical: true)
+            Text("ORIGINAL READ · \(e.eyebrow.uppercased())")
+                .font(.caption.monospaced().weight(.medium)).tracking(1).foregroundStyle(PCV4.gold)
+            Text(e.title).font(.title3.weight(.semibold)).foregroundStyle(PCV4.ink)
+                .fixedSize(horizontal: false, vertical: true)
             if !e.body.isEmpty {
-                Text(e.body).font(GaryFonts.text(13)).foregroundStyle(PCV4.mut).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+                Text(e.body).font(.subheadline).foregroundStyle(PCV4.mut).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(PCV4.gold.opacity(0.07))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(PCV4.line, lineWidth: 1)))
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(PCV4.gold.opacity(0.07)))
         .padding(.horizontal, 18).padding(.bottom, 4)
     }
 
@@ -814,12 +820,17 @@ struct PlayerCardV4: View {
         VStack(alignment: .leading, spacing: 8) {
             if !game.isEmpty {
                 Text(game.uppercased())
-                    .font(GaryFonts.mono(11, bold: true)).foregroundStyle(PCV4.mut2)
+                    .font(.caption.monospaced().weight(.medium)).foregroundStyle(PCV4.mut2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            HStack(alignment: .top) {
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+                : AnyLayout(HStackLayout(alignment: .top, spacing: 12))
+            layout {
                 Text(pack?.name ?? name)
-                    .font(GaryFonts.display(38)).foregroundStyle(PCV4.ink).lineLimit(2).minimumScaleFactor(0.7)
-                Spacer()
+                    .font(.title.weight(.bold)).foregroundStyle(PCV4.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 if heat == "hot" {
                     chip("▲ HOT")
                 } else if heat == "cold" {
@@ -827,13 +838,15 @@ struct PlayerCardV4: View {
                 }
             }
             if let id = identityLine {
-                Text(id).font(GaryFonts.text(13, .medium)).foregroundStyle(PCV4.mut)
+                Text(id).font(.subheadline).foregroundStyle(PCV4.mut)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.horizontal, 26).padding(.top, 24).padding(.bottom, 18)
     }
     private func chip(_ t: String) -> some View {
-        Text(t).font(GaryFonts.mono(10.5, bold: true))
+        Text(t).font(.caption.monospaced().weight(.semibold))
+            .fixedSize(horizontal: false, vertical: true)
             .foregroundStyle(Color(hex: "#1B1407"))
             .padding(.horizontal, 10).padding(.vertical, 5)
             .background(Capsule().fill(PCV4.gold))
@@ -868,11 +881,10 @@ struct PlayerCardV4: View {
                         if recentExpanded {
                             VStack(alignment: .leading, spacing: 10) {
                                 ForEach(extra.indices, id: \.self) { i in
-                                    HStack(alignment: .firstTextBaseline) {
-                                        Text(extra[i].0).font(GaryFonts.mono(10, bold: true)).foregroundStyle(PCV4.mut2).lineLimit(1)
-                                        Spacer(minLength: 12)
-                                        Text(extra[i].1).font(GaryFonts.text(12, .medium)).foregroundStyle(PCV4.mut)
-                                            .lineLimit(1).minimumScaleFactor(0.7).multilineTextAlignment(.trailing)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(extra[i].0).font(.caption.monospaced().weight(.medium)).foregroundStyle(PCV4.mut2)
+                                        Text(extra[i].1).font(.subheadline).foregroundStyle(PCV4.mut)
+                                            .fixedSize(horizontal: false, vertical: true)
                                     }
                                 }
                             }
@@ -881,10 +893,12 @@ struct PlayerCardV4: View {
                         }
                         Button { withAnimation(.easeInOut(duration: 0.2)) { recentExpanded.toggle() } } label: {
                             HStack(spacing: 5) {
-                                Text(recentExpanded ? "LESS" : "MORE STATS").font(GaryFonts.mono(10, bold: true)).tracking(1.4)
-                                Image(systemName: recentExpanded ? "chevron.up" : "chevron.down").font(.system(size: 8, weight: .bold))
+                                Text(recentExpanded ? "LESS" : "MORE STATS").font(.caption.monospaced().weight(.medium)).tracking(1)
+                                Image(systemName: recentExpanded ? "chevron.up" : "chevron.down").font(.caption.weight(.semibold))
                             }
                             .foregroundStyle(PCV4.gold)
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .padding(.top, 12)
@@ -906,7 +920,7 @@ struct PlayerCardV4: View {
 
     private func section<C: View>(_ cap: String, @ViewBuilder _ content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 13) {
-            Text(cap.uppercased()).font(GaryFonts.mono(11, bold: true)).tracking(1.6)
+            Text(cap.uppercased()).font(.caption.monospaced().weight(.medium)).tracking(1)
                 .foregroundStyle(PCV4.gold).opacity(0.92)
             content()
         }
@@ -924,9 +938,9 @@ struct PlayerCardV4: View {
     }
     private func readRow(_ row: (Bool, String)) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Text(row.0 ? "+" : "–").font(GaryFonts.mono(13, bold: true))
-                .foregroundStyle(row.0 ? PCV4.gold : PCV4.mut2).frame(width: 14)
-            Text(row.1).font(GaryFonts.text(13)).foregroundStyle(PCV4.mut).lineSpacing(2)
+            Text(row.0 ? "+" : "–").font(.subheadline.monospaced().weight(.semibold))
+                .foregroundStyle(row.0 ? PCV4.gold : PCV4.mut2)
+            Text(row.1).font(.subheadline).foregroundStyle(PCV4.mut).lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -934,27 +948,48 @@ struct PlayerCardV4: View {
     // pitch matchup table: PITCH | MIX | HE HITS
     private func matchupTable(_ rows: [PlayerInsightPack.PitchRow]) -> some View {
         VStack(spacing: 0) {
-            HStack {
-                Text("PITCH").font(GaryFonts.mono(10, bold: true)).foregroundStyle(PCV4.mut2)
-                Spacer()
-                Text("MIX").font(GaryFonts.mono(10, bold: true)).foregroundStyle(PCV4.mut2).frame(width: 54, alignment: .trailing)
-                Text("HE HITS").font(GaryFonts.mono(10, bold: true)).foregroundStyle(PCV4.mut2).frame(width: 64, alignment: .trailing)
+            if !dynamicTypeSize.isAccessibilitySize {
+                HStack {
+                    Text("PITCH")
+                    Spacer()
+                    Text("MIX").frame(width: 54, alignment: .trailing)
+                    Text("HE HITS").frame(width: 64, alignment: .trailing)
+                }
+                .font(.caption.monospaced().weight(.medium)).foregroundStyle(PCV4.mut2)
+                .padding(.bottom, 6)
             }
-            .padding(.bottom, 6)
             ForEach(rows.indices, id: \.self) { i in
                 let r = rows[i]
-                HStack {
-                    Text(r.pitch ?? "—").font(GaryFonts.display(16)).foregroundStyle(PCV4.ink)
-                    Spacer()
-                    Text(r.usagePct != nil ? "\(Int(r.usagePct!.rounded()))%" : "—")
-                        .font(GaryFonts.mono(13)).foregroundStyle(PCV4.mut).frame(width: 54, alignment: .trailing)
-                    Text(hits(r)).font(GaryFonts.display(r.grade == "thin" ? 13 : 19))
-                        .foregroundStyle(hitsColor(r.grade)).frame(width: 64, alignment: .trailing)
+                Group {
+                    if dynamicTypeSize.isAccessibilitySize {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(r.pitch ?? "—").font(.headline).foregroundStyle(PCV4.ink)
+                            Text("MIX  \(pitchUsage(r))")
+                                .font(.subheadline.monospacedDigit()).foregroundStyle(PCV4.mut)
+                            Text("HE HITS  \(hits(r))")
+                                .font(.subheadline.monospacedDigit()).foregroundStyle(hitsColor(r.grade))
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        HStack {
+                            Text(r.pitch ?? "—").font(.subheadline.weight(.semibold)).foregroundStyle(PCV4.ink)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer()
+                            Text(pitchUsage(r))
+                                .font(.subheadline.monospacedDigit()).foregroundStyle(PCV4.mut).frame(width: 54, alignment: .trailing)
+                            Text(hits(r)).font(r.grade == "thin" ? .subheadline : .headline.monospacedDigit())
+                                .foregroundStyle(hitsColor(r.grade)).frame(width: 64, alignment: .trailing)
+                        }
+                    }
                 }
                 .padding(.vertical, 12)
                 .overlay(i == 0 ? nil : Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1), alignment: .top)
             }
         }
+    }
+    private func pitchUsage(_ r: PlayerInsightPack.PitchRow) -> String {
+        r.usagePct.map { "\(Int($0.rounded()))%" } ?? "—"
     }
     private func hits(_ r: PlayerInsightPack.PitchRow) -> String {
         if r.grade == "thin" { return "thin" }
@@ -971,18 +1006,22 @@ struct PlayerCardV4: View {
     // split row — a stat-sheet line: label left, the VALUE prominent on the right
     // with its context beneath it (so a "Dribbles · 3 · 67% of 12" reads at a glance).
     private func splitRow(_ s: PlayerInsightPack.LabeledStat) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(s.label ?? "").font(GaryFonts.text(13, .semibold)).foregroundStyle(PCV4.ink)
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 12))
+        return layout {
+            Text(s.label ?? "").font(.subheadline.weight(.semibold)).foregroundStyle(PCV4.ink)
                 .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 8)
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(s.value ?? "—").font(GaryFonts.display(16)).foregroundStyle(PCV4.ink)
-                    .lineLimit(1).minimumScaleFactor(0.65)
+            if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 8) }
+            VStack(alignment: dynamicTypeSize.isAccessibilitySize ? .leading : .trailing, spacing: 3) {
+                Text(s.value ?? "—").font(.headline.monospacedDigit()).foregroundStyle(PCV4.ink)
+                    .fixedSize(horizontal: false, vertical: true)
                 if let d = s.detail {
-                    Text(d).font(GaryFonts.mono(10)).foregroundStyle(PCV4.mut2)
-                        .lineLimit(1).minimumScaleFactor(0.8)
+                    Text(d).font(.caption.monospacedDigit()).foregroundStyle(PCV4.mut2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            .multilineTextAlignment(dynamicTypeSize.isAccessibilitySize ? .leading : .trailing)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -990,24 +1029,31 @@ struct PlayerCardV4: View {
     // recent: 3-up grid + headline
     private func formGrid(_ rows: [PlayerInsightPack.LabeledStat], headline: PlayerInsightPack.LabeledStat?) -> some View {
         VStack(spacing: 14) {
-            HStack(spacing: 12) {
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 14))
+                : AnyLayout(HStackLayout(alignment: .top, spacing: 12))
+            layout {
                 ForEach(rows.prefix(3).indices, id: \.self) { i in
                     let r = rows[i]
-                    VStack(spacing: 6) {
-                        Text((r.label ?? "").uppercased()).font(GaryFonts.mono(9, bold: true)).foregroundStyle(PCV4.mut2)
-                        Text((r.value ?? "—").components(separatedBy: " (").first ?? "—").font(GaryFonts.display(18)).foregroundStyle(PCV4.ink)
-                            .lineLimit(1).minimumScaleFactor(0.6)
-                        if let d = r.detail { Text(d).font(GaryFonts.mono(10)).foregroundStyle(PCV4.mut).lineLimit(1).minimumScaleFactor(0.7) }
-                    }.frame(maxWidth: .infinity).frame(minHeight: 56, alignment: .top)
+                    VStack(alignment: dynamicTypeSize.isAccessibilitySize ? .leading : .center, spacing: 6) {
+                        Text((r.label ?? "").uppercased()).font(.caption.monospaced().weight(.medium)).foregroundStyle(PCV4.mut2)
+                        Text((r.value ?? "—").components(separatedBy: " (").first ?? "—").font(.headline.monospacedDigit()).foregroundStyle(PCV4.ink)
+                        if let d = r.detail { Text(d).font(.caption.monospacedDigit()).foregroundStyle(PCV4.mut) }
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(dynamicTypeSize.isAccessibilitySize ? .leading : .center)
+                    .frame(maxWidth: .infinity, alignment: dynamicTypeSize.isAccessibilitySize ? .leading : .center)
+                    .frame(minHeight: 56, alignment: .top)
                 }
             }
             if let h = headline, let v = h.value {
-                HStack {
-                    Text((h.label ?? "FORM").uppercased()).font(GaryFonts.mono(9, bold: true)).foregroundStyle(PCV4.mut2)
-                    Text(v).font(GaryFonts.text(12, .medium)).foregroundStyle(PCV4.gold)
-                    Spacer()
-                    if let d = h.detail { Text(d).font(GaryFonts.mono(10)).foregroundStyle(PCV4.mut2) }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text((h.label ?? "FORM").uppercased()).font(.caption.monospaced().weight(.medium)).foregroundStyle(PCV4.mut2)
+                    Text(v).font(.subheadline.weight(.medium)).foregroundStyle(PCV4.gold)
+                    if let d = h.detail { Text(d).font(.caption.monospacedDigit()).foregroundStyle(PCV4.mut2) }
                 }
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 12).overlay(Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1), alignment: .top)
             }
         }
@@ -1033,17 +1079,21 @@ struct PlayerCardV4: View {
 
     // prop row: label / line — rate
     private func propRow(_ p: PlayerInsightPack.PropLine) -> some View {
-        HStack {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 12))
+        return layout {
             VStack(alignment: .leading, spacing: 2) {
-                Text(p.label ?? "").font(GaryFonts.text(13, .medium)).foregroundStyle(PCV4.ink)
+                Text(p.label ?? "").font(.subheadline.weight(.medium)).foregroundStyle(PCV4.ink)
                 Text([p.line, p.odds].compactMap { $0 }.joined(separator: "  ·  "))
-                    .font(GaryFonts.mono(11)).foregroundStyle(PCV4.mut2)
+                    .font(.caption.monospacedDigit()).foregroundStyle(PCV4.mut2)
             }
-            Spacer()
+            if !dynamicTypeSize.isAccessibilitySize { Spacer() }
             if let rate = p.rate {
-                Text(rate).font(GaryFonts.display(16)).foregroundStyle(PCV4.mut)
+                Text(rate).font(.headline.monospacedDigit()).foregroundStyle(PCV4.mut)
             }
         }
+        .fixedSize(horizontal: false, vertical: true)
         .padding(.vertical, 11)
     }
 }

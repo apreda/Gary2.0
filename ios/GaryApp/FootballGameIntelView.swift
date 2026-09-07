@@ -1224,8 +1224,29 @@ private extension View {
 struct FootballNextSlatePreview: View {
     let signal: Signal
     let accent: Color
+    @State private var showAllMatchups = false
 
     private var meta: SwapMeta? { signal.nextSlate }
+    private var matchups: [FootballNextSlateGame] {
+        let rows = (meta?.next_slate_games ?? []).filter {
+            !$0.game_id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && $0.scheduled_date == meta?.scheduled_date
+        }
+        // Conflicting provider IDs are not two separate matchup rows.
+        guard Set(rows.map(\.game_id)).count == rows.count else { return [] }
+        return rows
+    }
+    private var visibleMatchups: [FootballNextSlateGame] {
+        showAllMatchups ? matchups : Array(matchups.prefix(3))
+    }
+    private var checkedLabel: String? {
+        guard let raw = meta?.next_slate_checked_at, let date = parseISO8601(raw) else { return nil }
+        let display = DateFormatter()
+        display.locale = Locale(identifier: "en_US_POSIX")
+        display.timeZone = TimeZone(identifier: "America/New_York")
+        display.dateFormat = "MMM d, h:mm a"
+        return "Schedule checked \(display.string(from: date)) ET"
+    }
 
     /// "NEXT NFL SLATE" / "NEXT NCAAF SLATE" — the card follows its signal's
     /// league (founder parity order, Aug 24: both football pages share one
@@ -1263,7 +1284,7 @@ struct FootballNextSlatePreview: View {
     }
 
     private var countLabel: String {
-        let count = meta?.game_count ?? 0
+        guard let count = meta?.game_count, count > 0 else { return "DETAILS PENDING" }
         return "\(count) \(count == 1 ? "GAME" : "GAMES")"
     }
 
@@ -1278,27 +1299,76 @@ struct FootballNextSlatePreview: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 Text(titleLabel)
-                    .font(GaryFonts.mono(9, bold: true))
-                    .tracking(1)
+                    .font(.caption.weight(.semibold))
+                    .tracking(0.8)
                     .foregroundStyle(accent)
                 Spacer(minLength: 8)
                 Text(countLabel)
-                    .font(GaryFonts.data(10.5, .bold))
+                    .font(.caption.weight(.semibold).monospacedDigit())
                     .foregroundStyle(.white.opacity(0.48))
             }
             Text(dateLabel)
-                .font(GaryFonts.display(29))
+                .font(matchups.isEmpty ? .title2.weight(.bold) : .subheadline.weight(.semibold))
                 .foregroundStyle(GaryColors.warmWhite)
-            HStack(spacing: 8) {
-                Text(kickoffLabel)
-                    .font(GaryFonts.mono(9, bold: true))
-                    .tracking(0.6)
-                    .foregroundStyle(.white.opacity(0.68))
-                if let precisionLabel {
-                    Text("· \(precisionLabel)")
-                        .font(GaryFonts.mono(8.5, bold: true))
-                        .foregroundStyle(GaryColors.gold.opacity(0.8))
+            if matchups.isEmpty {
+                // Older published rows have counts/clocks only. Keep those
+                // grounded labels until the next scheduled refresh adds teams.
+                HStack(spacing: 8) {
+                    Text(kickoffLabel)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.68))
+                    if let precisionLabel {
+                        Text("· \(precisionLabel)")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(GaryColors.gold.opacity(0.8))
+                    }
                 }
+            } else {
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(visibleMatchups) { game in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(game.matchupLabel)
+                                .font(matchups.count == 1 ? .title2.weight(.bold) : .headline)
+                                .foregroundStyle(GaryColors.warmWhite)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text(game.kickoffLabel)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.white.opacity(0.62))
+                        }
+                    }
+                    if matchups.count > 3 {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) { showAllMatchups.toggle() }
+                        } label: {
+                            Text(showAllMatchups ? "Show fewer matchups" : "Show \(matchups.count - 3) more matchups")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(accent)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    if let count = meta?.game_count, count > matchups.count {
+                        Text("\(count - matchups.count) matchup details pending")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.55))
+                    }
+                }
+            }
+            if !signal.detail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                DisclosureGroup("Schedule details") {
+                    Text(signal.detail)
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.55))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 4)
+                }
+                .font(.caption.weight(.medium))
+                .tint(accent)
+            }
+            if let checkedLabel {
+                Text(checkedLabel)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.42))
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(15)

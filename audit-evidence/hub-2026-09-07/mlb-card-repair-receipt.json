@@ -1,0 +1,346 @@
+{
+  "written_at": "2026-09-07T23:08:41.865Z",
+  "count": 2,
+  "current_mlb_cards_before": 276,
+  "current_mlb_cards_after": 278,
+  "unchanged_other_and_null_rows": 276,
+  "written": [
+    {
+      "id": 178176,
+      "player_id": "410",
+      "player_name": "Rafael Devers",
+      "game_id": "5059935",
+      "created_at": "2026-09-07T23:08:41.865+00:00",
+      "season": {
+        "line1": ".258 AVG \u00b7 .856 OPS",
+        "line2": "35 HR \u00b7 91 RBI"
+      },
+      "opponent": {
+        "hand": "R",
+        "name": "Michael McGreevy"
+      },
+      "form_rows": 3
+    },
+    {
+      "id": 178177,
+      "player_id": "4841",
+      "player_name": "Jung Hoo Lee",
+      "game_id": "5059935",
+      "created_at": "2026-09-07T23:08:41.865+00:00",
+      "season": {
+        "line1": ".280 AVG \u00b7 .730 OPS",
+        "line2": "9 HR \u00b7 53 RBI"
+      },
+      "opponent": {
+        "hand": "R",
+        "name": "Michael McGreevy"
+      },
+      "form_rows": 3
+    }
+  ],
+  "build_calls": [
+    {
+      "method": "GET",
+      "host": "xuttubsfgdcjfgmskcol.supabase.co",
+      "path": "/rest/v1/player_insight_cards",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/lineups",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games/5059935",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/players",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/season_stats",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "xuttubsfgdcjfgmskcol.supabase.co",
+      "path": "/rest/v1/mlb_field_lineups",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "baseballsavant.mlb.com",
+      "path": "/leaderboard/expected_statistics",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "baseballsavant.mlb.com",
+      "path": "/leaderboard/expected_statistics",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/pitcher_pitch_type_season_stats",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/hitter_pitch_type_season_stats",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/odds/player_props",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/stats",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/stats",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/games",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/hitter_pitch_type_season_stats",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/stats",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/stats",
+      "status": 200
+    }
+  ],
+  "write_calls": [
+    {
+      "method": "GET",
+      "host": "api.balldontlie.io",
+      "path": "/mlb/v1/lineups",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "host": "xuttubsfgdcjfgmskcol.supabase.co",
+      "path": "/rest/v1/player_insight_cards",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "host": "xuttubsfgdcjfgmskcol.supabase.co",
+      "path": "/rest/v1/player_insight_cards",
+      "status": 201
+    },
+    {
+      "method": "GET",
+      "host": "xuttubsfgdcjfgmskcol.supabase.co",
+      "path": "/rest/v1/player_insight_cards",
+      "status": 200
+    }
+  ],
+  "models_called": 0
+}

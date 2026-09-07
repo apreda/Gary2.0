@@ -13,7 +13,7 @@ describe('player card publication', () => {
     const existing = new Map([['1', makeCard(1, 1)], ['2', makeCard(2, 2)]]);
     const client = vi.fn(async ({ method, params, data }) => {
       expect(method).toBe('POST');
-      expect(params.on_conflict).toBe('date,league,player_id');
+      expect(params.on_conflict).toBe('date,league,player_id,game_id');
       for (const row of data) existing.set(row.player_id, row);
     });
     const fresh = { ...makeCard(1, 1), player_name: 'Updated player' };
@@ -35,6 +35,19 @@ describe('player card publication', () => {
     await expect(upsertPlayerCards({ rows: [makeCard(2, 2)], client, url: 'fixture', headers: {} })).rejects.toThrow('write unavailable');
     expect(existing).toEqual([makeCard(1, 1)]);
     expect(client.mock.calls.map(([call]) => call.method)).toEqual(['POST']);
+  });
+
+  it('keeps both exact games and an unassigned pack while deduping only the same player/game', async () => {
+    const first = makeCard(1, 1);
+    const second = { ...first, game_id: '20', player_name: 'Second-game opponent' };
+    const offSlate = { ...first, game_id: null, player_name: 'Season context' };
+    const client = vi.fn().mockResolvedValue(undefined);
+    expect(await upsertPlayerCards({ rows: [first, second, offSlate, first, { ...offSlate, game_id: '' }], client })).toBe(3);
+    const [{ data, params }] = client.mock.calls[0];
+    expect(params.on_conflict).toBe('date,league,player_id,game_id');
+    expect(data.map(row => [row.player_id, row.game_id])).toEqual([['1', '10'], ['1', '20'], ['1', null]]);
+    expect(data[1].player_name).toBe('Second-game opponent');
+    expect(offSlate.game_id).toBeNull();
   });
 
   it('rejects invalid card identity before any write and performs no empty write', async () => {

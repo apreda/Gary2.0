@@ -18,11 +18,18 @@ import StoreKit
 // top. Edges come from the real insight_connections — NO mock fallback; honest
 // empty / "90-min" states instead.
 
-/// One chip label per (kind, league). MLB's names stay exactly as locked; the
-/// two league-specific renames both existed as founder calls: WC venue intel
-/// rides .ballpark, and football availability reports ride .injury, where
-/// "REPLACEMENT" (MLB's who-fills-in lane) would misname a status report.
+/// One chip label per (kind, league). Shared storage kinds describe different
+/// evidence by sport: NBA's `owned` lane is a team season series, and its
+/// status reports name availability without identifying a replacement.
 func signalChipLabel(kind: SignalKind, league: HubLeagueSel?) -> String {
+    if league == .nba {
+        switch kind {
+        case .batterVsArm: return "SEASON SERIES"
+        case .situational: return "REST & SCHEDULE"
+        case .injury: return "AVAILABILITY"
+        default: break
+        }
+    }
     if kind == .ballpark && league == .wc { return "VENUE" }
     if kind == .injury && (league == .nfl || league == .ncaaf) { return "AVAILABILITY" }
     return kind.chip

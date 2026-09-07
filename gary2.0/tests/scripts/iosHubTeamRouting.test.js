@@ -85,12 +85,15 @@ enum HubLeagueSel {
 enum SupabaseAPI { static func todayEST() -> String { "2026-09-07" } }
 enum Kind { case bullpenFatigue, teamRecord, regression, streak, other }
 struct Meta { var team: String?; var team_abbr: String?; var dominant_name: String?; var source: String? }
+struct Regression { var day: String }
 struct Signal {
  let id = UUID()
  var league: HubLeagueSel = .mlb; var kind: Kind = .other; var headline: String
+ var game: String = "CHC @ STL"
  var playerId: String?; var teamId: String?; var gameId: String?
  var slateDate: String? = "2026-09-07"; var detail: String = "The original full story remains available."
  var h2h: Meta?; var fantasy: Meta?; var swap: Meta?; var lane: Meta?
+ var reg: Regression?
 }
 struct Row { let league: String?; let bdl_game_id: Int? }
 struct HubGameSel { let row: Row }
@@ -114,6 +117,12 @@ final class Router {
  ${block(hub, '    private func openSignal(')}
  func open(_ s: Signal) { openSignal(s) }
 }
+struct GameRoute {
+ let signal: Signal
+ ${block(hub, '    private var isMatchup:')}
+ var canShowGame: Bool { isMatchup }
+}
+precondition(GameRoute(signal: Signal(headline: "Today's read")).canShowGame)
 let h = HubCardIdentity.self
 for (headline, team) in [
  ("San Francisco Giants are 12-25 in one-run games (.324 win%)", "San Francisco Giants"),
@@ -179,6 +188,16 @@ for oldStory in [nil, "2026-09-06", "2026-09-08"] as [String?] {
 }
 let staleCache = Router(); staleCache.loadedDate = "2026-09-06"; staleCache.intelCards = [secondGame]; staleCache.open(player)
 precondition(staleCache.openedPlayer == nil && staleCache.selectedSignal?.id == player.id)
+for playerID in ["700", nil] as [String?] {
+ let future = Signal(kind: .regression, headline: "Pete Crow-Armstrong: tomorrow's matchup", playerId: playerID,
+                     gameId: "2002", detail: "The full future read is preserved.", reg: Regression(day: "tomorrow"))
+ let r = Router(); r.intelCards = [secondGame]; r.open(future)
+ precondition(r.openedPlayer == nil && r.selectedSignal?.id == future.id,
+              "A tomorrow watch cannot borrow today's pack through either exact player ID or name fallback")
+ precondition(r.selectedSignal?.detail == future.detail)
+ let futureGame = Signal(headline: future.headline, gameId: "2002", reg: Regression(day: "tomorrow"))
+ precondition(!GameRoute(signal: futureGame).canShowGame, "A future read cannot navigate to a current-day game")
+}
 for named in ["Pete Crow-Armstrong: splits", "P. Crow-Armstrong / another player"] {
  let signal = Signal(headline: named, gameId: "2002")
  let r = Router(); r.intelCards = [firstGame, card("700", "2002", rowName: false)]; r.open(signal)

@@ -7,8 +7,9 @@ export async function upsertPlayerCards({ rows, client, url, headers, now = () =
     if (!row?.date || !row?.league || row.player_id == null || !row.payload) {
       throw new Error('Refusing a player card without date, league, player identity or payload');
     }
-    const key = `${row.date}|${row.league}|${row.player_id}`;
-    if (!byKey.has(key)) byKey.set(key, row);
+    const gameId = row.game_id == null || String(row.game_id).trim() === '' ? null : String(row.game_id).trim();
+    const key = JSON.stringify([row.date, row.league, String(row.player_id), gameId]);
+    if (!byKey.has(key)) byKey.set(key, { ...row, game_id: gameId });
   }
   if (!byKey.size) return 0;
   const writtenAt = now().toISOString();
@@ -20,7 +21,7 @@ export async function upsertPlayerCards({ rows, client, url, headers, now = () =
   }))));
   await client({
     method: 'POST', url, data,
-    params: { on_conflict: 'date,league,player_id' },
+    params: { on_conflict: 'date,league,player_id,game_id' },
     headers: { ...headers, Prefer: 'return=minimal,resolution=merge-duplicates' },
   });
   return data.length;

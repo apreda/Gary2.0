@@ -213,6 +213,123 @@ describe('recovered stage history', () => {
   });
 });
 
+describe('frozen current-day college rankings', () => {
+  const lateNow = '2026-09-05T21:00:00Z';
+  const oldPublication = '2026-09-05T10:07:00Z';
+  function frozenSnapshot() {
+    const data = snapshot([game(2, 'NCAAF', '2026-09-05T23:00:00Z')]);
+    data.board[0].updated_at = lateNow;
+    data.cards[0].created_at = lateNow;
+    data.wire[0].created_at = lateNow;
+    data.insights = [{ date, league: 'NCAAF', game_id: '2', category: 'situational',
+      source: 'balldontlie_ncaaf_rankings', created_at: oldPublication, updated_at: oldPublication }];
+    data.pulse = [{ date, league: 'NCAAF', tab: 'rankings', updated_at: '2026-09-05T20:39:46Z' }];
+    const attempt = { date, stage: 'ncaaf-insights', run_id: 'daily-1630', attempt: 1 };
+    const stageHistory = [
+      { ...attempt, event: 'stage-start', at: '2026-09-05T20:39:34Z' },
+      { ...attempt, event: 'stage-end', at: '2026-09-05T20:39:47Z', status: 'ok', exit_code: 0 },
+    ];
+    return { date, now: lateNow, data, stageHistory };
+  }
+
+  it('accepts the preserved AP row only with a recent completed owner and its refreshed rankings snapshot', () => {
+    const input = frozenSnapshot();
+    const originalData = structuredClone(input.data);
+    const report = applyContentStageHistory(evaluateMorningHealth(input), input.stageHistory);
+    expect(report.status).toBe('ok');
+    expect(check(report, 'insights:NCAAF')).toMatchObject({ status: 'ok',
+      freshness_basis: 'frozen_ranking_revalidated', revalidated_by: {
+        stage: 'ncaaf-insights', run_id: 'daily-1630', completed_at: '2026-09-05T20:39:47Z',
+        rankings_updated_at: '2026-09-05T20:39:46.000Z',
+      } });
+    expect(check(report, 'insights:NCAAF').evidence).toContain('Original story timestamps are unchanged');
+    expect(input.data).toEqual(originalData);
+    expect(check(evaluateMorningHealth({ ...input, stageHistory: [] }), 'insights:NCAAF').status).toBe('fail');
+  });
+
+  it.each([
+    ['missing publication', input => { input.data.insights = []; }],
+    ['volatile-only publication', input => { input.data.insights[0].category = 'quarterback'; }],
+    ['a different situational source', input => { input.data.insights[0].source = 'other'; }],
+    ['an undated publication', input => { delete input.data.insights[0].date; }],
+    ['a previous-day publication', input => { input.data.insights[0].date = '2026-09-04'; }],
+    ['a different slate game', input => { input.data.insights[0].game_id = '99'; }],
+    ['an invalid publication timestamp', input => { input.data.insights[0].updated_at = 'invalid'; }],
+    ['missing rankings', input => { input.data.pulse = []; }],
+    ['another league pulse', input => { input.data.pulse[0].league = 'NFL'; }],
+    ['another pulse tab', input => { input.data.pulse[0].tab = 'board'; }],
+    ['a previous-day pulse', input => { input.data.pulse[0].date = '2026-09-04'; }],
+    ['a stale rankings refresh', input => { input.data.pulse[0].updated_at = oldPublication; }],
+    ['a fresh pulse predating the completed attempt', input => { input.data.pulse[0].updated_at = '2026-09-05T20:30:00Z'; }],
+    ['a future rankings refresh', input => { input.data.pulse[0].updated_at = '2026-09-05T22:00:00Z'; }],
+    ['an unsuccessful owner', input => { input.stageHistory[1].status = 'failed'; }],
+    ['a nonzero owner exit', input => { input.stageHistory[1].exit_code = 1; }],
+    ['a missing attempt start', input => { input.stageHistory.shift(); }],
+    ['a different attempt start', input => { input.stageHistory[0].attempt = 2; }],
+    ['a different run start', input => { input.stageHistory[0].run_id = 'another-run'; }],
+    ['another owning stage', input => { input.stageHistory.forEach(row => { row.stage = 'nfl-insights'; }); }],
+    ['previous-day stage history', input => { input.stageHistory.forEach(row => { row.date = '2026-09-04'; }); }],
+    ['a future completion', input => { input.stageHistory[1].at = '2026-09-05T22:00:00Z'; }],
+    ['a stale owner', input => {
+      input.stageHistory[0].at = '2026-09-05T10:20:00Z';
+      input.stageHistory[1].at = '2026-09-05T10:20:30Z';
+      input.data.pulse[0].updated_at = '2026-09-05T10:20:20Z';
+    }],
+  ])('retains the freshness failure for %s', (_label, change) => {
+    const input = frozenSnapshot(); change(input);
+    const report = evaluateMorningHealth(input);
+    expect(check(report, 'insights:NCAAF').status).toBe('fail');
+    expect(check(report, 'insights:NCAAF').freshness_basis).toBeUndefined();
+    expect(report.status).toBe('fail');
+  });
+
+  it('keeps the latest failed writer visible even when earlier success is logged later', () => {
+    const input = frozenSnapshot();
+    input.stageHistory.unshift({ ...input.stageHistory[1], run_id: 'later-attempt',
+      at: '2026-09-05T20:50:00Z', status: 'timeout', exit_code: 124 });
+    // Neither a future event nor another date can recover that latest failure.
+    input.stageHistory.push({ ...input.stageHistory[2], at: '2026-09-05T22:00:00Z' });
+    input.stageHistory.push({ ...input.stageHistory[2], date: '2026-09-04', at: '2026-09-05T20:59:00Z' });
+    const report = applyContentStageHistory(evaluateMorningHealth(input), input.stageHistory);
+    expect(check(report, 'insights:NCAAF').status).toBe('fail');
+    expect(check(report, 'content-stages').evidence).toContain('ncaaf-insights: timeout');
+  });
+
+  it.each(['MLB', 'NFL'])('does not bypass %s insight freshness', league => {
+    const input = frozenSnapshot();
+    for (const rows of [input.data.slate, input.data.board[0].board, input.data.insights, input.data.cards, input.data.pulse]) {
+      rows.forEach(row => { row.league = league; });
+    }
+    expect(check(evaluateMorningHealth(input), `insights:${league}`).status).toBe('fail');
+  });
+
+  it.each(['insights', 'pulse', 'slate'])('does not revalidate through an unreadable %s table', table => {
+    const input = frozenSnapshot(); input.errors = { [table]: 'HTTP 503' };
+    const report = evaluateMorningHealth(input);
+    expect(report.status).toBe('fail');
+    expect(check(report, `read:${table}`).status).toBe('fail');
+    expect(check(report, 'insights:NCAAF')?.freshness_basis).toBeUndefined();
+  });
+
+  it('does not conceal an independent board failure or extend the configured freshness horizon', () => {
+    const input = frozenSnapshot();
+    input.data.board[0].updated_at = oldPublication;
+    const report = evaluateMorningHealth(input);
+    expect(check(report, 'insights:NCAAF').status).toBe('ok');
+    expect(check(report, 'board').status).toBe('fail');
+    expect(report.status).toBe('fail');
+    expect(check(evaluateMorningHealth({ ...input, maxAgeHours: 0.1 }), 'insights:NCAAF').status).toBe('fail');
+  });
+
+  it('does not carry the frozen-publication exception across Eastern midnight', () => {
+    const input = frozenSnapshot();
+    input.now = '2026-09-06T04:01:00Z';
+    // The owner and pulse are still less than eight hours old, but this is
+    // yesterday's publication now, not a verified current-day Hub snapshot.
+    expect(check(evaluateMorningHealth(input), 'insights:NCAAF').status).toBe('fail');
+  });
+});
+
 describe('bounded health reads', () => {
   it('paginates beyond 500 cards and does not silently report partial coverage', async () => {
     const calls = [];
@@ -226,6 +343,7 @@ describe('bounded health reads', () => {
     expect(result.data.cards).toHaveLength(501);
     expect(result.errors).toEqual({});
     expect(calls.every(url => url.searchParams.get('order')?.endsWith('.asc'))).toBe(true);
+    expect(calls.find(url => url.pathname.endsWith('/insight_connections')).searchParams.get('select')).toContain('source:meta->>source');
   });
   it('discards a partial table on a later failed page', async () => {
     const fetchImpl = async endpoint => {

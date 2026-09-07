@@ -13,6 +13,7 @@ import {
   resolveNflKickoff,
 } from '../../nflGamePolicy.js';
 import { makeRow, shiftDateStr, TONES } from '../shared.js';
+import { nextSlateSchedule } from '../nextSlateSchedule.js';
 
 const SPORT_KEY = 'americanfootball_nfl';
 export const NFL_NEXT_SLATE_WINDOW_DAYS = 21;
@@ -59,7 +60,7 @@ function detailForCounts(gameCount, confirmedCount, timeTbdCount) {
 }
 
 /** Build the single persisted context row after provider validation. */
-export function buildNflNextSlateRow({ date, scheduledDate, games }) {
+export function buildNflNextSlateRow({ date, scheduledDate, games, checkedAt }) {
   const kickoffRows = (Array.isArray(games) ? games : []).map((game) => ({
     game,
     kickoff: resolveNflKickoff(game),
@@ -87,6 +88,7 @@ export function buildNflNextSlateRow({ date, scheduledDate, games }) {
     time_tbd_count: timeTbdCount,
     discovery_window_days: NFL_NEXT_SLATE_WINDOW_DAYS,
     grade: 'context',
+    ...nextSlateSchedule(kickoffRows, checkedAt),
   };
   if (confirmed[0]) meta.first_confirmed_kickoff = confirmed[0];
 
@@ -162,7 +164,7 @@ export async function computeNflNextSlate(ctx) {
     .map(({ game }) => game);
   if (!scheduledDate || games.length === 0) return [];
 
-  const row = buildNflNextSlateRow({ date: ctx.date, scheduledDate, games });
+  const row = buildNflNextSlateRow({ date: ctx.date, scheduledDate, games, checkedAt: ctx.as_of });
   if (!row) throw new Error('NFL next-slate could not build a truthful slate row');
   return [row];
 }

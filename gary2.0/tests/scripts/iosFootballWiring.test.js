@@ -172,21 +172,18 @@ describe('Football Field density', () => {
 });
 
 describe('Football Fantasy density', () => {
-  it("renders football fantasy through MLB's own card, never a bespoke football page", () => {
-    // Founder, Sep 3 2026: "MLB is the template, the ONLY differences should be
-    // that NFL is NFL content". The football fantasy page, its row and its
-    // evidence helper are gone; every league routes through FantasyCornerPage.
+  it('shares the dated Fantasy briefing between its supported MLB and NFL desks', () => {
+    // MLB and NFL share the current briefing renderer. An unsupported sport
+    // must not inherit the generic baseball Fantasy page through saved scope.
     expect(footballIntel).not.toContain('struct FootballFantasyPage');
     expect(footballIntel).not.toContain('struct FootballFantasyRow');
     expect(footballIntel).not.toContain('enum FootballFantasyEvidence');
-    expect(hubView).toContain('FantasyCornerPage(');
-    for (const lane of [
-      'usage: items(.fantasyUsage)',
-      'scoring: items(.fantasyRedZone) + items(.fantasyMatchup)',
-      'trending: items(.fantasyTrend)',
-    ]) {
-      expect(hubView).toContain(lane);
-    }
+    expect(hubView).not.toContain('FantasyCornerPage');
+    expect(swiftBlock(hubView, 'fileprivate extension HubLeagueSel')).toContain('self == .mlb || self == .nfl');
+    const scope = swiftBlock(hubView, 'private var hubScopeContent:');
+    expect(scope).toContain('if showsFantasy {');
+    expect(scope).toContain('FantasyBriefingPage(league: sel.label');
+    expect(scope).toContain('return AnyView(hubEditorialContent)');
   });
 
   it('keeps roster-verified prior-season provenance visible on the shared fantasy card', () => {
@@ -240,12 +237,16 @@ describe('Football Hub runs MLB\'s page', () => {
   });
 
   it('applies the fail-closed proof gate once, at the page-wide row funnel', () => {
-    const signals = sliceStruct(hubView, 'private var leagueSignals: [Signal] {');
-    expect(signals).toContain('FootballProofContract.isRenderableAfterGary(signal)');
-    expect(signals).toContain('FootballProofContract.isRenderableSweat(signal, includeWatch: false)');
-    expect(signals).toContain('FootballProofContract.isRenderableMarketRange(');
+    const signals = swiftBlock(hubView, 'private var leagueSignals: [Signal]');
+    const eligible = swiftBlock(hubView, 'private func isEligibleHubSignal(');
+    expect(signals).toContain('$0.league == sel && isEligibleHubSignal($0)');
+    expect(eligible).toContain('FootballProofContract.isRenderableAfterGary(signal)');
+    expect(eligible).toContain('FootballProofContract.isRenderableSweat(signal, includeWatch: false)');
+    expect(eligible).toContain('FootballProofContract.isRenderableMarketRange(');
     // NCAAF-only market ranges, and only against a confirmed slate row.
-    expect(signals).toContain('guard sel == .ncaaf');
+    expect(eligible).toContain('guard signal.league == .ncaaf');
+    expect(eligible).toContain('HubCardIdentity.sameLeague($0.league, signal.league.label)');
+    expect(swiftBlock(hubView, 'private var searchResultsView:')).toContain('receipts: selYdaySignals.filter(isEligibleHubSignal)');
   });
 
   it('names every football lane in exactly one beat so none falls through unnamed', () => {
@@ -272,7 +273,7 @@ describe('Football Hub runs MLB\'s page', () => {
     expect(swiftBlock(hubView, 'private var showsNextSlateCard: Bool')).toContain('slateRows.isEmpty && leagueSignals.contains { $0.kind == .nextSlate }');
     // The actual selected front page determines emptiness. A schedule card,
     // regression board or streak board must not also show a morning notice.
-    expect(loaded).toMatch(/if frontPageSelection\.lead == nil, items\(\.regression\)\.isEmpty,\s*!showsNextSlateCard, selStreakRows\.isEmpty \{\s*hubMorningNotice\s*\}/);
+    expect(loaded).toMatch(/if frontPageSelection\.lead == nil, items\(\.regression\)\.isEmpty,\s*!showsNextSlateCard, selStreakRows\.isEmpty, !fetchErrorLeagues\.contains\(sel\) \{\s*hubMorningNotice\s*\}/);
   });
 
   it('labels football lanes through the shared renamer, not a bespoke map', () => {
@@ -761,8 +762,9 @@ describe('Billfold canonical NFL metadata', () => {
 
 describe('college Hub has no fantasy desk (founder, Sep 4 2026)', () => {
   it('hides the FANTASY scope word on the NCAAF desk and never routes NCAAF to the fantasy page', () => {
-    expect(hubView).toMatch(/if sel != \.ncaaf \{\s*\n\s*scopeWord\("FANTASY", on: hubScope == "fantasy"\)/);
-    expect(hubView).toContain('scopeWord("THE HUB", on: hubScope != "fantasy" || sel == .ncaaf)');
-    expect(hubView).toContain('if hubScope == "fantasy", sel != .ncaaf {');
+    expect(hubView).toMatch(/if sel\.supportsFantasy \{\s*\n\s*scopeWord\("FANTASY", on: hubScope == "fantasy"\)/);
+    expect(hubView).toContain('scopeWord("THE HUB", on: hubScope != "fantasy" || !sel.supportsFantasy)');
+    expect(swiftBlock(hubView, 'private var showsFantasy: Bool')).toContain('hubScope == "fantasy" && sel.supportsFantasy');
+    expect(swiftBlock(hubView, 'private var hubScopeContent:')).toContain('if showsFantasy {');
   });
 });

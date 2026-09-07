@@ -15,16 +15,19 @@ const url = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_UR
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 if (!url || !key) throw new Error('Supabase read credentials unavailable; health unverified');
 const snapshot = await loadMorningHealth({ url, key, date });
-const report = evaluateMorningHealth({ date, ...snapshot });
+let stageHistory = [];
+let stageHistoryIssue;
 // These are observations of completed attempts, not instructions to restart.
 // Bound the log read to the most recent records; older history remains on disk.
 try {
   const path = process.env.GARY_CONTENT_JOURNAL || resolve(homedir(), 'Library/Logs/Gary2.0/daily-content-stages.jsonl');
-  const rows = readFileSync(path, 'utf8').trim().split('\n').slice(-500).map(line => JSON.parse(line));
-  applyContentStageHistory(report, rows);
+  stageHistory = readFileSync(path, 'utf8').trim().split('\n').slice(-500).map(line => JSON.parse(line));
 } catch (error) {
-  report.stage_history = error.code === 'ENOENT' ? 'No timestamped stage journal yet; historical launchd logs are separate.' : `Stage history unavailable: ${error.message}`;
+  stageHistoryIssue = error.code === 'ENOENT' ? 'No timestamped stage journal yet; historical launchd logs are separate.' : `Stage history unavailable: ${error.message}`;
 }
+const report = evaluateMorningHealth({ date, ...snapshot, stageHistory });
+if (stageHistoryIssue) report.stage_history = stageHistoryIssue;
+else applyContentStageHistory(report, stageHistory);
 if (args.includes('--json')) console.log(JSON.stringify(report, null, 2));
 else {
   console.log(`MORNING HEALTH ${date} — ${report.status.toUpperCase()} — ${report.checked_at}`);

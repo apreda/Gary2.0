@@ -46,19 +46,56 @@ export function dateBefore(date, days = 1) {
   return value.toISOString().slice(0, 10);
 }
 
+function latestCompletedStages(rows, date, checked) {
+  const latest = new Map();
+  for (const row of rowsOf(rows)) {
+    if (row?.date !== date || row.event !== 'stage-end' || row.stage === 'morning-health') continue;
+    const at = Date.parse(row.at);
+    if (!Number.isFinite(at) || at > checked) continue;
+    if (!latest.has(row.stage) || at >= Date.parse(latest.get(row.stage).at)) latest.set(row.stage, row);
+  }
+  return latest;
+}
+
+// NCAAF's AP-poll story is first-write-wins for the date. Its publication
+// timestamp is not a writer heartbeat. Only accept an aging story when the
+// same scheduled attempt finished successfully and refreshed the rankings
+// snapshot; unrelated successes and volatile-only rows cannot establish this.
+function frozenNcaafRankingEvidence({ date, nowMs, insights, games, pulse, errors, stageHistory, fresh }) {
+  if (date !== etDate(nowMs) || ['insights', 'pulse', 'slate'].some(name => errors[name])) return null;
+  const end = latestCompletedStages(stageHistory, date, nowMs).get('ncaaf-insights');
+  if (end?.status !== 'ok' || end.exit_code !== 0 || !end.run_id || !fresh({ updated_at: end.at })) return null;
+  const endedAt = Date.parse(end.at);
+  const start = rowsOf(stageHistory).find(row => row?.date === date && row.event === 'stage-start'
+    && row.stage === end.stage && row.run_id === end.run_id && row.attempt === end.attempt
+    && Number.isFinite(Date.parse(row.at)) && Date.parse(row.at) <= endedAt);
+  if (!start) return null;
+  const startedAt = Date.parse(start.at);
+  const gameIds = new Set(games.map(idOf).filter(id => id != null).map(String));
+  const ranking = insights.find(row => row.date === date && leagueOf(row) === 'NCAAF'
+    && row.category === 'situational' && row.source === 'balldontlie_ncaaf_rankings'
+    && row.game_id != null && gameIds.has(String(row.game_id))
+    && Number.isFinite(timestamp(row)) && timestamp(row) <= startedAt);
+  if (!ranking) return null;
+  // The DB and local journal clocks can differ slightly. Keep the tolerance
+  // to the same one minute allowed by the normal source freshness check.
+  const refreshed = rowsOf(pulse).find(row => row.date === date && leagueOf(row) === 'NCAAF'
+    && row.tab === 'rankings' && fresh(row)
+    && timestamp(row) >= startedAt - 60_000 && timestamp(row) <= endedAt + 60_000);
+  if (!refreshed) return null;
+  return {
+    freshness_basis: 'frozen_ranking_revalidated',
+    revalidated_by: { stage: end.stage, run_id: end.run_id, completed_at: end.at,
+      rankings_updated_at: new Date(timestamp(refreshed)).toISOString() },
+  };
+}
+
 /** Keep failed attempts visible, but let later successful equivalent work and
  * verified current output establish recovery. The overnight combined stage
  * is replaced by the daytime NFL and NCAAF card stages, not its old stage ID.
  */
 export function applyContentStageHistory(report, rows) {
-  const latest = new Map();
-  const checked = Date.parse(report.checked_at);
-  for (const row of rows) {
-    if (row.date !== report.date || row.event !== 'stage-end' || row.stage === 'morning-health') continue;
-    const at = Date.parse(row.at);
-    if (!Number.isFinite(at) || at > checked) continue;
-    if (!latest.has(row.stage) || at >= Date.parse(latest.get(row.stage).at)) latest.set(row.stage, row);
-  }
+  const latest = latestCompletedStages(rows, report.date, Date.parse(report.checked_at));
   const replacements = {
     'overnight-football-cards': ['nfl-cards', 'ncaaf-cards'],
     'ncaaf-cards': ['ncaaf-card-subjects'],
@@ -93,7 +130,7 @@ export async function loadMorningHealth({ url, key, date, fetchImpl = fetch, sig
   const specs = {
     slate: ['daily_slate', { select: 'date,league,bdl_game_id,commence_time,created_at,game_status,kickoff_status', date: `eq.${date}` }],
     board: ['tomorrow_board', { select: 'date,game_count,board,updated_at', date: `eq.${date}` }, 'date'],
-    insights: ['insight_connections', { select: 'date,league,game_id,player_id,category,created_at,updated_at', date: `eq.${date}` }],
+    insights: ['insight_connections', { select: 'date,league,game_id,player_id,category,source:meta->>source,created_at,updated_at', date: `eq.${date}` }],
     cards: ['player_insight_cards', { select: 'date,league,game_id,player_id,payload,created_at', date: `eq.${date}` }],
     wire: ['wire_items', { select: 'date,league,created_at', date: `eq.${date}` }],
     pulse: ['league_pulse', { select: 'date,league,tab,updated_at,created_at', date: `eq.${date}` }],
@@ -132,7 +169,7 @@ export async function loadMorningHealth({ url, key, date, fetchImpl = fetch, sig
 /** Output health, not betting quality. Frozen valid results remain valid even
  * when graded before 2AM; absence is assessed against the actual saved picks.
  */
-export function evaluateMorningHealth({ date, now = new Date(), data = {}, errors = {}, maxAgeHours = 8, cardsLeadHours = 2 }) {
+export function evaluateMorningHealth({ date, now = new Date(), data = {}, errors = {}, maxAgeHours = 8, cardsLeadHours = 2, stageHistory = [] }) {
   const nowMs = new Date(now).getTime();
   const yesterday = dateBefore(date);
   const checks = [];
@@ -176,7 +213,14 @@ export function evaluateMorningHealth({ date, now = new Date(), data = {}, error
     const incompleteDue = due.filter(row => incomplete.includes(row));
     const coverageComplete = covered.length === games.length && !incomplete.length;
     const staleCards = cards.length > 0 && !cards.some(fresh);
-    if (!errors.insights) add(`insights:${league}`, insights.some(fresh) ? 'ok' : games.length ? 'fail' : 'warn', `${insights.length} rows across ${new Set(insights.map(row => row.game_id).filter(Boolean)).size}/${games.length} games; signal categories are conditional, so every game need not produce a row.`);
+    if (!errors.insights) {
+      const recentlyPublished = insights.some(fresh);
+      const revalidated = !recentlyPublished && league === 'NCAAF'
+        ? frozenNcaafRankingEvidence({ date, nowMs, insights, games, pulse: data.pulse, errors, stageHistory, fresh }) : null;
+      const evidence = `${insights.length} rows across ${new Set(insights.map(row => row.game_id).filter(Boolean)).size}/${games.length} games; signal categories are conditional, so every game need not produce a row.`
+        + (revalidated ? ` Frozen AP ranking publication retained; ncaaf-insights succeeded at ${revalidated.revalidated_by.completed_at} and its rankings snapshot refreshed at ${revalidated.revalidated_by.rankings_updated_at}. Original story timestamps are unchanged.` : '');
+      add(`insights:${league}`, recentlyPublished || revalidated ? 'ok' : games.length ? 'fail' : 'warn', evidence, revalidated || {});
+    }
     // Coverage and freshness are different observations. Aging a complete
     // card set must not resurrect a recovered overnight writer failure.
     if (!errors.cards) add(`cards:${league}`, missingDue.length || incompleteDue.length ? 'fail' : !coverageComplete || staleCards ? 'warn' : 'ok', `${covered.length}/${games.length} games have cards; ${league === 'NCAAF' ? `${complete.size} games verified complete; ` : ''}${missingDue.length} due games missing and ${incompleteDue.length} due games partial (due = kickoff within ${cardsLeadHours}h).${staleCards ? ` No card updated within ${maxAgeHours}h.` : ''}`, {

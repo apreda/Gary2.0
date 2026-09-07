@@ -135,6 +135,67 @@ enum InsightMetaValue: Decodable {
     }
 }
 
+/// One provider-identified game on a verified next football slate. Calendar
+/// dates and exact kickoffs stay separate so a date-only fixture never gains
+/// a fabricated clock, including college games after midnight Eastern.
+struct FootballNextSlateGame: Decodable, Identifiable {
+    let game_id: String
+    let away_team_id: String?
+    let home_team_id: String?
+    let away_team: String?
+    let home_team: String?
+    let away_abbr: String?
+    let home_abbr: String?
+    let scheduled_date: String
+    let kickoff_status: String?
+    let commence_time: String?
+    let game_status: String?
+
+    var id: String { game_id }
+    var matchupLabel: String {
+        let away = Self.label(away_team) ?? Self.label(away_abbr) ?? "Away team unavailable"
+        let home = Self.label(home_team) ?? Self.label(home_abbr) ?? "Home team unavailable"
+        return "\(away) at \(home)"
+    }
+    var kickoffLabel: String {
+        let status = (game_status ?? "").lowercased().replacingOccurrences(of: "status_", with: "")
+        if status.contains("postponed") { return "POSTPONED" }
+        if status.contains("cancel") { return "CANCELLED" }
+        if status.contains("suspended") { return "SUSPENDED" }
+        if status.contains("delayed") { return "DELAYED" }
+        if status.contains("final") || ["post", "complete", "completed"].contains(status) { return "FINAL" }
+        if ["live", "in progress", "in_progress", "halftime"].contains(status) { return "LIVE" }
+        guard kickoff_status == "confirmed", let raw = commence_time,
+              raw.contains("T"),
+              let date = Self.fractionalISO.date(from: raw) ?? Self.plainISO.date(from: raw) else {
+            return "TIME TBD"
+        }
+        let formatter = Self.calendarDate.string(from: date) == scheduled_date ? Self.time : Self.dayTime
+        return "\(formatter.string(from: date).uppercased()) ET"
+    }
+
+    private static func label(_ value: String?) -> String? {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+        return value
+    }
+    private static let plainISO = ISO8601DateFormatter()
+    private static let fractionalISO: ISO8601DateFormatter = {
+        let value = ISO8601DateFormatter()
+        value.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return value
+    }()
+    private static func formatter(_ format: String) -> DateFormatter {
+        let value = DateFormatter()
+        value.locale = Locale(identifier: "en_US_POSIX")
+        value.timeZone = TimeZone(identifier: "America/New_York")
+        value.dateFormat = format
+        return value
+    }
+    private static let calendarDate = formatter("yyyy-MM-dd")
+    private static let time = formatter("h:mm a")
+    private static let dayTime = formatter("EEE h:mm a")
+}
+
 /// Structured player-swap payload on beneficiary rows (kind == "swap"):
 /// the OUT player, why, and tonight's replacement with his slot + line.
 /// Immutable, reference-backed because a `Signal` exposes this same payload
@@ -208,6 +269,8 @@ final class SwapMeta: Decodable {
     let confirmed_count: Int?
     let time_tbd_count: Int?
     let first_confirmed_kickoff: String?
+    let next_slate_games: [FootballNextSlateGame]?
+    let next_slate_checked_at: String?
     let discovery_window_days: Int?
     let team_policy: String?
     let team: String?

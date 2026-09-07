@@ -1,0 +1,16 @@
+{
+  "observed_at": "2026-09-07T23:23:14Z",
+  "build": "2.25 (906), pre-cache-isolation candidate",
+  "exception": "EXC_CRASH / SIGABRT",
+  "faulting_queue": "com.apple.root.user-initiated-qos.cooperative",
+  "source": "SupabaseAPI.swift:1025",
+  "operation": "fetchLeaguePulse writes _leaguePulseCache",
+  "frames": [
+    "Dictionary._Variant.setValue(_:forKey:)",
+    "Dictionary.subscript.setter",
+    "SupabaseAPI.fetchLeaguePulse(date:league:forceRefresh:)",
+    "HubView.performLoad() implicit closure"
+  ],
+  "diagnosis": "Unsynchronized shared Dictionary writes from concurrent sport requests",
+  "status": "Fixed before upload: cache/accessor/in-flight state isolated to MainActor; 3 executable concurrency cases pass; 6 fresh launches loaded; no new crash report."
+}

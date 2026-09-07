@@ -695,10 +695,20 @@ struct PlayerInsightSheet: View {
         )
         .padding(16)
         .background(GaryColors.darkBg.ignoresSafeArea())
-        .overlay(alignment: .topTrailing) {
-            Button { dismiss() } label: {
-                Image(systemName: "xmark.circle.fill").font(.system(size: 26)).foregroundStyle(.white.opacity(0.62))
-            }.buttonStyle(.plain).padding(.top, 14).padding(.trailing, 16)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            HStack {
+                Spacer()
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title2).foregroundStyle(PCV4.mut)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close player details")
+            }
+            .padding(.horizontal, 16).padding(.top, 6)
+            .background(GaryColors.darkBg)
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
@@ -719,7 +729,7 @@ struct PlayerInsightSheet: View {
     private var hubEdge: PlayerCardV4Edge? {
         guard let s = signal else { return nil }
         let body = (s.reg?.verdict ?? s.detail).trimmingCharacters(in: .whitespaces)
-        return PlayerCardV4Edge(eyebrow: s.kind.chip, title: s.headline, body: body)
+        return PlayerCardV4Edge(eyebrow: signalChipLabel(kind: s.kind, league: s.league), title: s.headline, body: body)
     }
 
 

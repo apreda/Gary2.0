@@ -1,10 +1,10 @@
 # CLAUDE.md
 
-Latest main Hub redesign: read `../HANDOFF_2026-09-07_HUB_BRIEFING.md`.
-Native build 905 passes automated checks and a signed archive, but final
-simulator QA and upload are pending because the Mac is locked. Do not report
-the main Hub redesign live yet. The preceding Fantasy/Winners changes shipped
-in uploaded build 904; see `../HANDOFF_2026-09-07_FANTASY_BRIEFING.md`.
+Latest Hub completion: read `../HANDOFF_2026-09-07_HUB_PRODUCTION.md`.
+The main Hub, shared player cards, data identity and content checks have been
+hardened. Build 906 is in final release verification; its handoff is the source
+of truth for upload/processing state. Older build-905 Mac-lock notes are
+superseded. The preceding Fantasy/Winners build was 904.
 
 Latest app/stats audit: read `../HANDOFF_2026-09-07_PERFORMANCE_AUDIT.md` for
 player-log, pagination, token-accounting and native MLB prop fixes, live provider
@@ -64,18 +64,16 @@ Examples:
 
 Gary WILL follow explicit if/then rules — he takes instructions literally. If we write "Fast pace helps underdogs stay close," Gary will pick underdogs in fast-paced games without investigating whether it's true for THIS matchup. Never tell Gary what a factor means for the pick. Never assign point values to factors. Never label something as "edge." Gary investigates and concludes on his own.
 
-## Design Authority (rewritten July 7, 2026 — founder's call)
+## Design Authority (founder correction, September 7, 2026)
 
-September 7 exception: the founder explicitly requested
-`/Users/adam.preda/Desktop/anti-ai-slop-design.md` for the Fantasy/Winners/Hub visual
-work. Follow that supplied guide for this work; the older rule below does not
-override a new explicit design request.
-
-**No stored design rules, no templates — ever.** The founder has fully delegated
-design: the bar is "production-level, award-winning," and every part is designed from
-scratch to fit the app and its page. Do not keep, consult, or create design-spec
-files/rules (all prior ones were deleted on his order, July 7 2026); his reactions in
-the live conversation are the only design input.
+The founder explicitly said to ignore all previous design notes and
+preferences, including fonts. The only standing design guide is
+`../docs/design/anti-ai-slop-design.md` (an exact copy of his Desktop file),
+together with his current
+conversation feedback. Older font choices, layout prescriptions, historical
+handoffs, and aesthetic comments in source are not requirements. Reassess
+inherited visuals against the current guide. Operational and data-integrity
+instructions remain in force.
 
 Behavior vs. visuals: prop-slip grouping remains intact. Winners admission now comes only from the immutable server board (founder GO, Sep 4 2026), not local confidence/start-time selection. Home retains its featured games. Do not reintroduce automatic first-underdog or marquee admission.
 
