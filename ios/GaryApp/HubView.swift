@@ -1861,19 +1861,9 @@ fileprivate struct HubGameSel: Identifiable {
 
 /// WC board rows carry no abbreviations — fall back to the first three
 /// letters of the team name ("France" → FRA) so labels never read "—".
-/// Provider abbreviation when the row carries one; otherwise the league's own
-/// abbreviation map. The old fallback took the first three LETTERS of the team
-/// name, which is wrong far more often than it looks: "Green Bay Packers" came
-/// out "GRE" instead of GB, and both Chicago clubs collapsed to "CHI" — two
-/// different games showing the same side. `teamAbbrevFromName` already owns the
-/// per-league keyword maps every other surface uses; the strip now shares them,
-/// and only falls back to the blind prefix when the league is unknown.
+/// Shared display formatting keeps ESPN college codes consistent across Hub rows.
 fileprivate func hubSideLabel(_ abbr: String?, _ team: String?, league: String? = nil) -> String {
-    if let a = abbr, !a.isEmpty { return a }
-    guard let t = team, !t.isEmpty else { return "—" }
-    let mapped = teamAbbrevFromName(t, league: league)
-    if !mapped.isEmpty { return mapped.uppercased() }
-    return String(t.uppercased().filter { $0.isLetter }.prefix(3))
+    scoreboardTeamAbbreviation(team, stored: abbr, league: league)
 }
 
 fileprivate struct HubSlateStrip: View {

@@ -206,31 +206,10 @@ let wcTeamColors: [String: String] = [
     "TUN": "#E70013", "URU": "#4E84B5", "USA": "#0A3161",
 ]
 
-/// Abbrev for any team name via the league keyword maps (share-card sibling
-/// of CompactPickRow.teamAbbrev — keep the two in sync).
-func shareTeamAbbrev(_ name: String, league: String?) -> String {
-    let lower = name.lowercased()
-    let lg = (league ?? "").uppercased()
-    if lg == "NCAAF" { return Formatters.shortTeamName(name, league: league).uppercased() }
-    let maps: [[String: [String]]] = lg == "NBA" || lg == "WNBA" ? [nbaTeamKeywords]
-        : lg == "MLB" || lg == "MLB HR" ? [mlbTeamKeywords]
-        : lg == "NHL" ? [nhlTeamKeywords]
-        : lg == "NFL" || lg == "NFL TDS" ? [nflTeamKeywords]
-        : lg == "WC" ? [wcTeamKeywords]
-        : [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, nflTeamKeywords, wcTeamKeywords]
-    for map in maps {
-        for (abbr, kws) in map where kws.contains(where: { lower.contains($0) }) { return abbr }
-    }
-    let last = lower.split(separator: " ").last.map(String.init) ?? lower
-    return String(last.prefix(3)).uppercased()
-}
-
-/// Chip styling for a team: brand color + the initials worn on the puck.
-/// WC keeps the full 3-letter country code; clubs wear 1–2 characters.
+/// Chip styling preserves each league's full scoreboard code.
 func teamChipStyle(team: String, league: String?, abbreviation: String? = nil) -> (color: Color, label: String) {
     let lg = (league ?? "").uppercased()
-    let stored = abbreviation?.trimmingCharacters(in: .whitespacesAndNewlines)
-    let abbr = stored?.isEmpty == false ? stored!.uppercased() : shareTeamAbbrev(team, league: league)
+    let abbr = scoreboardTeamAbbreviation(team, stored: abbreviation, league: league)
     let map: [String: String]? =
         lg == "MLB" || lg == "MLB HR" ? mlbTeamColors
         : lg == "NBA" || lg == "WNBA" ? nbaTeamColors
@@ -239,7 +218,7 @@ func teamChipStyle(team: String, league: String?, abbreviation: String? = nil) -
         : nil
     let color = (map?[abbr]).map { Color(hex: $0) } ?? Sport.from(league: league).accentColor
     // Official abbreviation, always — "NYK", not "N" (user call, Jun 11).
-    let label = String(abbr.prefix(3))
+    let label = abbr
     return (color, label)
 }
 
@@ -254,12 +233,14 @@ struct TeamColorChip: View {
 
     var body: some View {
         let style = teamChipStyle(team: team, league: league, abbreviation: abbreviation)
-        let fontScale: CGFloat = style.label.count >= 3 ? 0.30 : (style.label.count == 2 ? 0.36 : 0.44)
+        let fontScale: CGFloat = style.label.count > 3 ? 0.23 : (style.label.count == 3 ? 0.30 : (style.label.count == 2 ? 0.36 : 0.44))
         ZStack {
             Circle().fill(style.color)
             Circle().strokeBorder(.white.opacity(dimmed ? 0.28 : 0.42), lineWidth: max(1.5, size * 0.045))
             Text(style.label)
                 .font(GaryFonts.mono(size * fontScale, bold: true))
+                .lineLimit(1).minimumScaleFactor(0.5)
+                .frame(maxWidth: size * 0.85)
                 .foregroundStyle(.white)
         }
         .frame(width: size, height: size)
@@ -290,10 +271,8 @@ func compactSharePick(pick: GaryPick, awayPicked: Bool, homePicked: Bool,
     let pickedFull = homePicked ? (pick.homeTeam ?? "") : (pick.awayTeam ?? "")
     let pickedShort = homePicked ? homeShort : awayShort
     let stored = homePicked ? pick.homeTeamAbbreviation : pick.awayTeamAbbreviation
-    let cleanedStored = stored?.trimmingCharacters(in: .whitespacesAndNewlines)
-    let abbrev = cleanedStored?.isEmpty == false
-        ? cleanedStored!.uppercased()
-        : shareTeamAbbrev(pickedShort.isEmpty ? pickedFull : pickedShort, league: pick.league)
+    let abbrev = scoreboardTeamAbbreviation(pickedFull.isEmpty ? pickedShort : pickedFull,
+                                           stored: stored, league: pick.league)
     var teamWords = Set(pickedFull.lowercased().split(separator: " ").map(String.init))
     teamWords.formUnion(pickedShort.lowercased().split(separator: " ").map(String.init))
     var words = raw.split(separator: " ").map(String.init)

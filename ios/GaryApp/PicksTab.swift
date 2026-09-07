@@ -339,16 +339,15 @@ func teamAbbrevFromName(_ name: String, league: String? = nil) -> String {
     let lower = name.lowercased()
     let maps: [[String: [String]]]
     switch (league ?? "").uppercased() {
-    case "MLB": maps = [mlbTeamKeywords]
-    case "NBA": maps = [nbaTeamKeywords]
+    case "MLB", "MLB HR": maps = [mlbTeamKeywords]
+    case "NBA", "WNBA": maps = [nbaTeamKeywords]
     case "NHL": maps = [nhlTeamKeywords]
     case "NFL", "NFL TDS": maps = [nflTeamKeywords]
-    // The provider's scoreboard code first (MASS, SJSU, M-OH) so a college box
-    // row reads like MLB's and NFL's instead of running the school's full name
-    // through a scale factor (founder, Sep 4 2026).
+    // ESPN scoreboard codes; unknown schools keep their name. Never search
+    // professional mascots for a college (Florida State once became NHL FLA).
     case "NCAAF":
         if let abbr = NCAAFTeams.abbreviation(name) { return abbr }
-        return Formatters.shortTeamName(name, league: league).uppercased()
+        return (NCAAFTeams.school(name) ?? name).uppercased()
     case "WC": maps = [wcTeamKeywords]
     default: maps = [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, nflTeamKeywords, wcTeamKeywords]
     }
@@ -357,6 +356,18 @@ func teamAbbrevFromName(_ name: String, league: String? = nil) -> String {
     }
     let last = lower.split(separator: " ").last.map(String.init) ?? lower
     return String(last.prefix(3)).uppercased()
+}
+
+/// Display labels are separate from provider identity and stored pick snapshots.
+/// College names resolve through ESPN even when an older row has a stale code.
+func scoreboardTeamAbbreviation(_ name: String?, stored: String? = nil, league: String?) -> String {
+    let team = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    let supplied = stored?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    if league?.uppercased() == "NCAAF", !team.isEmpty {
+        return teamAbbrevFromName(team, league: league)
+    }
+    if !supplied.isEmpty { return supplied.uppercased() }
+    return team.isEmpty ? "—" : teamAbbrevFromName(team, league: league)
 }
 
 /// A settled score WITH team labels ("CHC 10 · NYM 3") from a matchup + a raw "10-3".
@@ -1865,7 +1876,9 @@ struct PicksCarouselView: View {
            let away = live.away_abbr?.trimmingCharacters(in: .whitespacesAndNewlines),
            let home = live.home_abbr?.trimmingCharacters(in: .whitespacesAndNewlines),
            !away.isEmpty, !home.isEmpty {
-            return (away.uppercased(), home.uppercased())
+            let sides = g.matchup.components(separatedBy: " @ ")
+            return (scoreboardTeamAbbreviation(sides.first, stored: away, league: league),
+                    scoreboardTeamAbbreviation(sides.count > 1 ? sides[1] : nil, stored: home, league: league))
         }
 
         guard let rows = stripBoard?.board else { return nil }
@@ -1888,7 +1901,8 @@ struct PicksCarouselView: View {
         let away = row.away_abbr?.trimmingCharacters(in: .whitespacesAndNewlines),
         let home = row.home_abbr?.trimmingCharacters(in: .whitespacesAndNewlines),
         !away.isEmpty, !home.isEmpty else { return nil }
-        return (away.uppercased(), home.uppercased())
+        return (scoreboardTeamAbbreviation(row.away_team, stored: away, league: league),
+                scoreboardTeamAbbreviation(row.home_team, stored: home, league: league))
     }
 
     /// LIVE / FINAL second line for a strip block; nil pre-game (the block
@@ -1937,25 +1951,9 @@ struct PicksCarouselView: View {
         }?.interruptionLabel
     }
 
-    /// Three-letter team abbreviation from the league keyword maps (sibling of the
-    /// Home view's teamAbbrev) — renders yesterday's final as "COL 6 · CHC 8",
-    /// matching the live-score line format.
+    /// Shared scoreboard formatter for every league and date.
     private func teamAbbrev(_ name: String, league: String) -> String {
-        let lower = name.lowercased()
-        let maps: [[String: [String]]]
-        switch league.uppercased() {
-        case "MLB", "MLB HR": maps = [mlbTeamKeywords]
-        case "NBA": maps = [nbaTeamKeywords]
-        case "NHL": maps = [nhlTeamKeywords]
-        case "NFL", "NFL TDS": maps = [nflTeamKeywords]
-        case "WC": maps = [wcTeamKeywords]
-        default: maps = [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, nflTeamKeywords, wcTeamKeywords]
-        }
-        for map in maps {
-            for (ab, kws) in map where kws.contains(where: { lower.contains($0) }) { return ab }
-        }
-        let last = lower.split(separator: " ").last.map(String.init) ?? lower
-        return String(last.prefix(3)).uppercased()
+        teamAbbrevFromName(name, league: league)
     }
 
     /// "6-8" + "Rockies @ Cubs" -> "COL 6 · CHC 8". final_score is away-home,
@@ -2481,9 +2479,7 @@ struct GameScoutSection: View {
         return s == b || s.hasSuffix(b) || b.hasSuffix(s)
     }
     private func abbr(_ side: String, fallback: String?) -> String {
-        if let fallback, !fallback.isEmpty { return fallback }
-        let a = teamAbbrevFromName(side, league: row?.league)
-        return a.isEmpty ? side.uppercased() : a
+        scoreboardTeamAbbreviation(side, stored: fallback, league: row?.league)
     }
     private static func odds(_ v: Double?) -> String? {
         guard let v else { return nil }

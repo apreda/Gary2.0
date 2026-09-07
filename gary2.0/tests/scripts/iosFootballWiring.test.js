@@ -44,7 +44,7 @@ describe('iOS slate-only football page identity', () => {
     expect(views).toContain('liveCache.status(forGameId: gameId, league: league)');
     expect(views).toContain('$0.bdl_game_id == gameId && ($0.league ?? "").uppercased() == league');
     // Sep 4 2026: the college strip prints the PROVIDER's abbreviation
-    // (NCAAFTeams, generated from Ball Don't Lie) and falls back to the school
+    // (NCAAFTeams, verified against ESPN) and falls back to the school
     // without its mascot — it never derives a code from mascot words, and it
     // no longer dumps the full matchup, which truncated mid-name.
     expect(views).toContain('Self.ncaafStripName(parts[0])) @ \\(Self.ncaafStripName(parts[1])');
@@ -67,7 +67,7 @@ describe('iOS slate-only football page identity', () => {
     // keeps the mascot-free school as the fallback — the school's full name in
     // a box column had to be scaled down to fit.
     expect(views).toContain('if let abbr = NCAAFTeams.abbreviation(name) { return abbr }');
-    expect(views).toContain('return Formatters.shortTeamName(name, league: league).uppercased()');
+    expect(views).toContain('return (NCAAFTeams.school(name) ?? name).uppercased()');
   });
 
   it('keeps every football fantasy signal out of Picks edges', () => {

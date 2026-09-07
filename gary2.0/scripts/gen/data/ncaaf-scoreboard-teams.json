@@ -1,0 +1,8695 @@
+{
+  "checkedOn": "2026-09-07",
+  "sources": {
+    "espn": "https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams?limit=1000",
+    "fbs": "https://www.espn.com/college-football/teams",
+    "provider": "https://api.balldontlie.io/ncaaf/v1/teams?per_page=100"
+  },
+  "fbsIds": [
+    "103",
+    "25",
+    "228",
+    "150",
+    "52",
+    "59",
+    "97",
+    "2390",
+    "152",
+    "153",
+    "221",
+    "2567",
+    "24",
+    "183",
+    "258",
+    "259",
+    "154",
+    "349",
+    "2429",
+    "151",
+    "2226",
+    "235",
+    "2426",
+    "249",
+    "242",
+    "58",
+    "218",
+    "2655",
+    "202",
+    "5",
+    "2636",
+    "9",
+    "12",
+    "252",
+    "239",
+    "2132",
+    "38",
+    "248",
+    "66",
+    "2305",
+    "2306",
+    "197",
+    "2628",
+    "2641",
+    "2116",
+    "254",
+    "277",
+    "356",
+    "84",
+    "2294",
+    "120",
+    "127",
+    "130",
+    "135",
+    "158",
+    "77",
+    "194",
+    "2483",
+    "213",
+    "2509",
+    "164",
+    "26",
+    "30",
+    "264",
+    "275",
+    "48",
+    "2229",
+    "55",
+    "338",
+    "2335",
+    "2393",
+    "2623",
+    "166",
+    "2534",
+    "98",
+    "87",
+    "41",
+    "2006",
+    "2050",
+    "189",
+    "2084",
+    "2117",
+    "2199",
+    "2309",
+    "113",
+    "193",
+    "195",
+    "16",
+    "2649",
+    "2711",
+    "2005",
+    "62",
+    "2440",
+    "167",
+    "2449",
+    "2459",
+    "23",
+    "2439",
+    "2638",
+    "2751",
+    "68",
+    "36",
+    "278",
+    "204",
+    "21",
+    "326",
+    "328",
+    "265",
+    "333",
+    "8",
+    "2",
+    "57",
+    "61",
+    "96",
+    "99",
+    "344",
+    "142",
+    "201",
+    "145",
+    "2579",
+    "2633",
+    "245",
+    "251",
+    "238",
+    "2026",
+    "2032",
+    "324",
+    "290",
+    "2247",
+    "256",
+    "309",
+    "2348",
+    "276",
+    "295",
+    "6",
+    "2572",
+    "2653",
+    "2433"
+  ],
+  "espn": [
+    {
+      "id": "2000",
+      "school": "Abilene Christian",
+      "name": "Abilene Christian Wildcats",
+      "shortName": "Abilene Chrstn",
+      "abbr": "ACU"
+    },
+    {
+      "id": "2001",
+      "school": "Adams State",
+      "name": "Adams State Grizzlies",
+      "shortName": "Adams St",
+      "abbr": "ADSU"
+    },
+    {
+      "id": "2003",
+      "school": "Adrian",
+      "name": "Adrian Bulldogs",
+      "shortName": "Adrian",
+      "abbr": "ADR"
+    },
+    {
+      "id": "2005",
+      "school": "Air Force",
+      "name": "Air Force Falcons",
+      "shortName": "Air Force",
+      "abbr": "AF"
+    },
+    {
+      "id": "2006",
+      "school": "Akron",
+      "name": "Akron Zips",
+      "shortName": "Akron",
+      "abbr": "AKR"
+    },
+    {
+      "id": "2010",
+      "school": "Alabama A&M",
+      "name": "Alabama A&M Bulldogs",
+      "shortName": "Alabama A&M",
+      "abbr": "AAMU"
+    },
+    {
+      "id": "333",
+      "school": "Alabama",
+      "name": "Alabama Crimson Tide",
+      "shortName": "Alabama",
+      "abbr": "ALA"
+    },
+    {
+      "id": "2011",
+      "school": "Alabama State",
+      "name": "Alabama State Hornets",
+      "shortName": "Alabama St",
+      "abbr": "ALST"
+    },
+    {
+      "id": "2013",
+      "school": "Albany State",
+      "name": "Albany State Golden Rams",
+      "shortName": "Albany St",
+      "abbr": "ABSU"
+    },
+    {
+      "id": "2790",
+      "school": "Albion",
+      "name": "Albion Britons",
+      "shortName": "Albion",
+      "abbr": "ALBI"
+    },
+    {
+      "id": "2015",
+      "school": "Albright",
+      "name": "Albright Lions",
+      "shortName": "Albright",
+      "abbr": "ALBR"
+    },
+    {
+      "id": "2016",
+      "school": "Alcorn State",
+      "name": "Alcorn State Braves",
+      "shortName": "Alcorn St",
+      "abbr": "ALCN"
+    },
+    {
+      "id": "365",
+      "school": "Alfred",
+      "name": "Alfred Saxons",
+      "shortName": "Alfred",
+      "abbr": "ALFR"
+    },
+    {
+      "id": "3162",
+      "school": "Alfred State",
+      "name": "Alfred State Pioneers",
+      "shortName": "Alfred St",
+      "abbr": "AFST"
+    },
+    {
+      "id": "2018",
+      "school": "Allegheny",
+      "name": "Allegheny Gators",
+      "shortName": "Allegheny",
+      "abbr": "ALLG"
+    },
+    {
+      "id": "2019",
+      "school": "Allen",
+      "name": "Allen Yellow Jackets",
+      "shortName": "Allen",
+      "abbr": "ALNU"
+    },
+    {
+      "id": "2800",
+      "school": "Alma",
+      "name": "Alma Scots",
+      "shortName": "Alma",
+      "abbr": "ALMA"
+    },
+    {
+      "id": "111674",
+      "school": "Alvernia",
+      "name": "Alvernia Golden Wolves",
+      "shortName": "Alvernia",
+      "abbr": "ALVR"
+    },
+    {
+      "id": "2022",
+      "school": "American International",
+      "name": "American International Yellow Jackets",
+      "shortName": "American Int'l",
+      "abbr": "AIC"
+    },
+    {
+      "id": "7",
+      "school": "Amherst",
+      "name": "Amherst Mammoths",
+      "shortName": "Amherst",
+      "abbr": "AMH"
+    },
+    {
+      "id": "2023",
+      "school": "Anderson (IN)",
+      "name": "Anderson (IN) Ravens",
+      "shortName": "Anderson (IN)",
+      "abbr": "ANIN"
+    },
+    {
+      "id": "129469",
+      "school": "Anderson (SC)",
+      "name": "Anderson (SC) Trojans",
+      "shortName": "Anderson (SC)",
+      "abbr": "ANSC"
+    },
+    {
+      "id": "134002",
+      "school": "Andrew",
+      "name": "Andrew Fighting Tigers",
+      "shortName": "Andrew",
+      "abbr": "AND"
+    },
+    {
+      "id": "2025",
+      "school": "Angelo State",
+      "name": "Angelo State Rams",
+      "shortName": "Angelo St",
+      "abbr": "AGSU"
+    },
+    {
+      "id": "2026",
+      "school": "App State",
+      "name": "App State Mountaineers",
+      "shortName": "App State",
+      "abbr": "APP"
+    },
+    {
+      "id": "3111",
+      "school": "Apprentice School",
+      "name": "Apprentice School Builders",
+      "shortName": "Apprentice",
+      "abbr": "APPRE"
+    },
+    {
+      "id": "108358",
+      "school": "Arizona Christian",
+      "name": "Arizona Christian Firestorm",
+      "shortName": "AZ Christian",
+      "abbr": "AZCH"
+    },
+    {
+      "id": "9",
+      "school": "Arizona State",
+      "name": "Arizona State Sun Devils",
+      "shortName": "Arizona St",
+      "abbr": "ASU"
+    },
+    {
+      "id": "12",
+      "school": "Arizona",
+      "name": "Arizona Wildcats",
+      "shortName": "Arizona",
+      "abbr": "ARIZ"
+    },
+    {
+      "id": "124386",
+      "school": "Arkansas Baptist",
+      "name": "Arkansas Baptist Buffaloes",
+      "shortName": "Ark Baptist",
+      "abbr": "ARBA"
+    },
+    {
+      "id": "2028",
+      "school": "Arkansas Monticello",
+      "name": "Arkansas Monticello Boll Weevils",
+      "shortName": "UA Monticello",
+      "abbr": "UAM"
+    },
+    {
+      "id": "8",
+      "school": "Arkansas",
+      "name": "Arkansas Razorbacks",
+      "shortName": "Arkansas",
+      "abbr": "ARK"
+    },
+    {
+      "id": "2032",
+      "school": "Arkansas State",
+      "name": "Arkansas State Red Wolves",
+      "shortName": "Arkansas St",
+      "abbr": "ARST"
+    },
+    {
+      "id": "2033",
+      "school": "Arkansas Tech",
+      "name": "Arkansas Tech Wonder Boys",
+      "shortName": "Arkansas Tech",
+      "abbr": "ARTE"
+    },
+    {
+      "id": "2029",
+      "school": "Arkansas-Pine Bluff",
+      "name": "Arkansas-Pine Bluff Golden Lions",
+      "shortName": "AR-Pine Bluff",
+      "abbr": "UAPB"
+    },
+    {
+      "id": "349",
+      "school": "Army",
+      "name": "Army Black Knights",
+      "shortName": "Army",
+      "abbr": "ARMY"
+    },
+    {
+      "id": "308",
+      "school": "Ashland",
+      "name": "Ashland Eagles",
+      "shortName": "Ashland",
+      "abbr": "ASH"
+    },
+    {
+      "id": "2038",
+      "school": "Assumption",
+      "name": "Assumption Greyhounds",
+      "shortName": "Assumption",
+      "abbr": "ASP"
+    },
+    {
+      "id": "2",
+      "school": "Auburn",
+      "name": "Auburn Tigers",
+      "shortName": "Auburn",
+      "abbr": "AUB"
+    },
+    {
+      "id": "124",
+      "school": "Augsburg",
+      "name": "Augsburg Auggies",
+      "shortName": "Augsburg",
+      "abbr": "AUGS"
+    },
+    {
+      "id": "2042",
+      "school": "Augustana (IL)",
+      "name": "Augustana (IL) Vikings",
+      "shortName": "Augustana (IL)",
+      "abbr": "AUGC"
+    },
+    {
+      "id": "2043",
+      "school": "Augustana (SD)",
+      "name": "Augustana (SD) Vikings",
+      "shortName": "Augustana (SD)",
+      "abbr": "AUSD"
+    },
+    {
+      "id": "2044",
+      "school": "Aurora",
+      "name": "Aurora Spartans",
+      "shortName": "Aurora",
+      "abbr": "AUR"
+    },
+    {
+      "id": "2045",
+      "school": "Austin",
+      "name": "Austin 'Roos",
+      "shortName": "Austin",
+      "abbr": "AUS"
+    },
+    {
+      "id": "2046",
+      "school": "Austin Peay",
+      "name": "Austin Peay Governors",
+      "shortName": "Austin Peay",
+      "abbr": "APSU"
+    },
+    {
+      "id": "3178",
+      "school": "Ave Maria University",
+      "name": "Ave Maria University Gyrenes",
+      "shortName": "Ave Maria",
+      "abbr": "AVE M"
+    },
+    {
+      "id": "2047",
+      "school": "Averett",
+      "name": "Averett Cougars",
+      "shortName": "Averett",
+      "abbr": "AVER"
+    },
+    {
+      "id": "2048",
+      "school": "Avila University",
+      "name": "Avila University Eagles",
+      "shortName": "Avila",
+      "abbr": "AVILA"
+    },
+    {
+      "id": "2049",
+      "school": "Azusa Pacific",
+      "name": "Azusa Pacific Cougars",
+      "shortName": "Azusa Pacific",
+      "abbr": "APU"
+    },
+    {
+      "id": "495",
+      "school": "BLUEFIELD",
+      "name": "BLUEFIELD Ramblin' Rams",
+      "shortName": "Bluefield",
+      "abbr": "BLU"
+    },
+    {
+      "id": "252",
+      "school": "BYU",
+      "name": "BYU Cougars",
+      "shortName": "BYU",
+      "abbr": "BYU"
+    },
+    {
+      "id": "488",
+      "school": "Baker University",
+      "name": "Baker University Baker",
+      "shortName": "Baker",
+      "abbr": "BAK"
+    },
+    {
+      "id": "188",
+      "school": "Baldwin Wallace",
+      "name": "Baldwin Wallace Yellow Jackets",
+      "shortName": "Baldwin Wall",
+      "abbr": "BW"
+    },
+    {
+      "id": "2050",
+      "school": "Ball State",
+      "name": "Ball State Cardinals",
+      "shortName": "Ball State",
+      "abbr": "BALL"
+    },
+    {
+      "id": "122666",
+      "school": "Barton",
+      "name": "Barton Bulldogs",
+      "shortName": "Barton",
+      "abbr": "BART"
+    },
+    {
+      "id": "121",
+      "school": "Bates",
+      "name": "Bates Bobcats",
+      "shortName": "Bates",
+      "abbr": "BATE"
+    },
+    {
+      "id": "239",
+      "school": "Baylor",
+      "name": "Baylor Bears",
+      "shortName": "Baylor",
+      "abbr": "BAY"
+    },
+    {
+      "id": "2056",
+      "school": "Belhaven",
+      "name": "Belhaven Blazers",
+      "shortName": "Belhaven",
+      "abbr": "BELH"
+    },
+    {
+      "id": "266",
+      "school": "Beloit",
+      "name": "Beloit Buccaneers",
+      "shortName": "Beloit",
+      "abbr": "BELO"
+    },
+    {
+      "id": "132",
+      "school": "Bemidji State",
+      "name": "Bemidji State Beavers",
+      "shortName": "Bemidji St",
+      "abbr": "BST"
+    },
+    {
+      "id": "490",
+      "school": "Benedict",
+      "name": "Benedict Tigers",
+      "shortName": "Benedict",
+      "abbr": "BEN"
+    },
+    {
+      "id": "2283",
+      "school": "Benedictine (IL)",
+      "name": "Benedictine (IL) Eagles",
+      "shortName": "Benedictine IL",
+      "abbr": "BNIL"
+    },
+    {
+      "id": "16111",
+      "school": "Benedictine College",
+      "name": "Benedictine College Ravens",
+      "shortName": "Bndctn Col",
+      "abbr": "BENC"
+    },
+    {
+      "id": "2060",
+      "school": "Bentley",
+      "name": "Bentley Falcons",
+      "shortName": "Bentley",
+      "abbr": "BENT"
+    },
+    {
+      "id": "2757",
+      "school": "Berry",
+      "name": "Berry Vikings",
+      "shortName": "Berry",
+      "abbr": "BERR"
+    },
+    {
+      "id": "492",
+      "school": "Bethany (KS)",
+      "name": "Bethany (Ks)",
+      "shortName": "Bethany KS",
+      "abbr": "BETHA"
+    },
+    {
+      "id": "2062",
+      "school": "Bethany (WV)",
+      "name": "Bethany (WV) Bison",
+      "shortName": "Bethany (WV)",
+      "abbr": "BCWV"
+    },
+    {
+      "id": "2802",
+      "school": "Bethel (MN)",
+      "name": "Bethel (MN) Royals",
+      "shortName": "Bethel (MN)",
+      "abbr": "BUMN"
+    },
+    {
+      "id": "2064",
+      "school": "Bethel University Tennessee",
+      "name": "Bethel University Tennessee Wildcats",
+      "shortName": "Bethel TN",
+      "abbr": "BETHTN"
+    },
+    {
+      "id": "2065",
+      "school": "Bethune-Cookman",
+      "name": "Bethune-Cookman Wildcats",
+      "shortName": "Bethune",
+      "abbr": "BCU"
+    },
+    {
+      "id": "2069",
+      "school": "Black Hills State",
+      "name": "Black Hills State Yellow Jackets",
+      "shortName": "Black Hills St",
+      "abbr": "BHSU"
+    },
+    {
+      "id": "2071",
+      "school": "Bloomsburg",
+      "name": "Bloomsburg Huskies",
+      "shortName": "Bloomsburg",
+      "abbr": "BBU"
+    },
+    {
+      "id": "124180",
+      "school": "Bluefield State",
+      "name": "Bluefield State Big Blue",
+      "shortName": "Bluefield St",
+      "abbr": "BLUS"
+    },
+    {
+      "id": "2074",
+      "school": "Bluffton",
+      "name": "Bluffton Beavers",
+      "shortName": "Bluffton",
+      "abbr": "BLF"
+    },
+    {
+      "id": "68",
+      "school": "Boise State",
+      "name": "Boise State Broncos",
+      "shortName": "Boise St",
+      "abbr": "BOIS"
+    },
+    {
+      "id": "103",
+      "school": "Boston College",
+      "name": "Boston College Eagles",
+      "shortName": "Boston College",
+      "abbr": "BC"
+    },
+    {
+      "id": "340",
+      "school": "Bowdoin",
+      "name": "Bowdoin Polar Bears",
+      "shortName": "Bowdoin",
+      "abbr": "BOW"
+    },
+    {
+      "id": "2075",
+      "school": "Bowie State",
+      "name": "Bowie State Bulldogs",
+      "shortName": "Bowie St",
+      "abbr": "BOWE"
+    },
+    {
+      "id": "189",
+      "school": "Bowling Green",
+      "name": "Bowling Green Falcons",
+      "shortName": "Bowling Green",
+      "abbr": "BGSU"
+    },
+    {
+      "id": "2913",
+      "school": "Brevard",
+      "name": "Brevard Tornados",
+      "shortName": "Brevard",
+      "abbr": "BRE"
+    },
+    {
+      "id": "2079",
+      "school": "Bridgewater",
+      "name": "Bridgewater Eagles",
+      "shortName": "Bridgewater",
+      "abbr": "BRI"
+    },
+    {
+      "id": "18",
+      "school": "Bridgewater State",
+      "name": "Bridgewater State Bears",
+      "shortName": "Bridgewater St",
+      "abbr": "BRIS"
+    },
+    {
+      "id": "2080",
+      "school": "British Columbia",
+      "name": "British Columbia British Col",
+      "shortName": "Britsh Col",
+      "abbr": "BBM"
+    },
+    {
+      "id": "2781",
+      "school": "Brockport",
+      "name": "Brockport Golden Eagles",
+      "shortName": "Brockport",
+      "abbr": "BRO"
+    },
+    {
+      "id": "225",
+      "school": "Brown",
+      "name": "Brown Bears",
+      "shortName": "Brown",
+      "abbr": "BRWN"
+    },
+    {
+      "id": "2803",
+      "school": "Bryant",
+      "name": "Bryant Bulldogs",
+      "shortName": "Bryant",
+      "abbr": "BRY"
+    },
+    {
+      "id": "2083",
+      "school": "Bucknell",
+      "name": "Bucknell Bison",
+      "shortName": "Bucknell",
+      "abbr": "BUCK"
+    },
+    {
+      "id": "63",
+      "school": "Buena Vista",
+      "name": "Buena Vista Beavers",
+      "shortName": "Buena Vista",
+      "abbr": "BVU"
+    },
+    {
+      "id": "2084",
+      "school": "Buffalo",
+      "name": "Buffalo Bulls",
+      "shortName": "Buffalo",
+      "abbr": "BUF"
+    },
+    {
+      "id": "2085",
+      "school": "Buffalo State",
+      "name": "Buffalo State Bengals",
+      "shortName": "Buffalo St",
+      "abbr": "BSU"
+    },
+    {
+      "id": "2086",
+      "school": "Butler",
+      "name": "Butler Bulldogs",
+      "shortName": "Butler",
+      "abbr": "BTLR"
+    },
+    {
+      "id": "2570",
+      "school": "CSU Pueblo",
+      "name": "CSU Pueblo ThunderWolves",
+      "shortName": "CSU Pueblo",
+      "abbr": "CSUP"
+    },
+    {
+      "id": "2094",
+      "school": "Cal Lutheran",
+      "name": "Cal Lutheran Kingsmen",
+      "shortName": "Cal Lutheran",
+      "abbr": "CLU"
+    },
+    {
+      "id": "13",
+      "school": "Cal Poly",
+      "name": "Cal Poly Mustangs",
+      "shortName": "Cal Poly",
+      "abbr": "CP"
+    },
+    {
+      "id": "2858",
+      "school": "California (PA)",
+      "name": "California (PA) Vulcans",
+      "shortName": "Cal (PA)",
+      "abbr": "CAPA"
+    },
+    {
+      "id": "25",
+      "school": "California",
+      "name": "California Golden Bears",
+      "shortName": "California",
+      "abbr": "CAL"
+    },
+    {
+      "id": "129738",
+      "school": "Calvin",
+      "name": "Calvin Knights",
+      "shortName": "Calvin",
+      "abbr": "CALU"
+    },
+    {
+      "id": "2097",
+      "school": "Campbell",
+      "name": "Campbell Fighting Camels",
+      "shortName": "Campbell",
+      "abbr": "CAM"
+    },
+    {
+      "id": "2098",
+      "school": "Campbellsville University",
+      "name": "Campbellsville University Tigers",
+      "shortName": "Camplville",
+      "abbr": "CMPBVIL"
+    },
+    {
+      "id": "424",
+      "school": "Capital",
+      "name": "Capital Comets",
+      "shortName": "Capital",
+      "abbr": "CAPU"
+    },
+    {
+      "id": "2101",
+      "school": "Carleton",
+      "name": "Carleton Knights",
+      "shortName": "Carleton",
+      "abbr": "CAR"
+    },
+    {
+      "id": "2102",
+      "school": "Carnegie Mellon",
+      "name": "Carnegie Mellon Tartans",
+      "shortName": "Carn Mellon",
+      "abbr": "CGMU"
+    },
+    {
+      "id": "32",
+      "school": "Carroll (WI)",
+      "name": "Carroll (WI) Pioneers",
+      "shortName": "Carroll (WI)",
+      "abbr": "CRU"
+    },
+    {
+      "id": "2105",
+      "school": "Carson Newman",
+      "name": "Carson Newman Eagles",
+      "shortName": "Carson Newman",
+      "abbr": "CN"
+    },
+    {
+      "id": "2106",
+      "school": "Carthage",
+      "name": "Carthage Firebirds",
+      "shortName": "Carthage",
+      "abbr": "CCW"
+    },
+    {
+      "id": "2963",
+      "school": "Case Western Reserve",
+      "name": "Case Western Reserve Spartans",
+      "shortName": "Case Western",
+      "abbr": "CWRU"
+    },
+    {
+      "id": "2107",
+      "school": "Catawba",
+      "name": "Catawba Indians",
+      "shortName": "Catawba",
+      "abbr": "CAT"
+    },
+    {
+      "id": "2108",
+      "school": "Catholic",
+      "name": "Catholic Cardinals",
+      "shortName": "Catholic",
+      "abbr": "CATH"
+    },
+    {
+      "id": "101442",
+      "school": "Centenary (LA)",
+      "name": "Centenary (LA) Gentlemen",
+      "shortName": "Centenary (LA)",
+      "abbr": "CTLA"
+    },
+    {
+      "id": "2110",
+      "school": "Central Arkansas",
+      "name": "Central Arkansas Bears",
+      "shortName": "C Arkansas",
+      "abbr": "CARK"
+    },
+    {
+      "id": "2964",
+      "school": "Central College",
+      "name": "Central College Dutch",
+      "shortName": "Central Col",
+      "abbr": "CNTC"
+    },
+    {
+      "id": "2115",
+      "school": "Central Connecticut",
+      "name": "Central Connecticut Blue Devils",
+      "shortName": "C Connecticut",
+      "abbr": "CCSU"
+    },
+    {
+      "id": "2860",
+      "school": "Central Methodist",
+      "name": "Central Methodist Eagles",
+      "shortName": "C Methodst",
+      "abbr": "CDF"
+    },
+    {
+      "id": "2117",
+      "school": "Central Michigan",
+      "name": "Central Michigan Chippewas",
+      "shortName": "C Michigan",
+      "abbr": "CMU"
+    },
+    {
+      "id": "2118",
+      "school": "Central Missouri",
+      "name": "Central Missouri Mules",
+      "shortName": "C Missouri",
+      "abbr": "UCM"
+    },
+    {
+      "id": "2122",
+      "school": "Central Oklahoma",
+      "name": "Central Oklahoma Bronchos",
+      "shortName": "C Oklahoma",
+      "abbr": "UCO"
+    },
+    {
+      "id": "2119",
+      "school": "Central State",
+      "name": "Central State Marauders",
+      "shortName": "Central St",
+      "abbr": "CNSU"
+    },
+    {
+      "id": "2120",
+      "school": "Central Washington",
+      "name": "Central Washington Wildcats",
+      "shortName": "C Washington",
+      "abbr": "CWAU"
+    },
+    {
+      "id": "2121",
+      "school": "Centre",
+      "name": "Centre Colonels",
+      "shortName": "Centre",
+      "abbr": "CCO"
+    },
+    {
+      "id": "2123",
+      "school": "Chadron State",
+      "name": "Chadron State Eagles",
+      "shortName": "Chadron St",
+      "abbr": "CHAD"
+    },
+    {
+      "id": "411",
+      "school": "Chapman",
+      "name": "Chapman Panthers",
+      "shortName": "Chapman",
+      "abbr": "CHAP"
+    },
+    {
+      "id": "2128",
+      "school": "Charleston (WV)",
+      "name": "Charleston (WV) Golden Eagles",
+      "shortName": "Charleston WV",
+      "abbr": "UCWV"
+    },
+    {
+      "id": "2127",
+      "school": "Charleston Southern",
+      "name": "Charleston Southern Buccaneers",
+      "shortName": "Charleston So",
+      "abbr": "CHSO"
+    },
+    {
+      "id": "2429",
+      "school": "Charlotte",
+      "name": "Charlotte 49ers",
+      "shortName": "Charlotte",
+      "abbr": "CLT"
+    },
+    {
+      "id": "3253",
+      "school": "Charlotte",
+      "name": "Charlotte Saints",
+      "shortName": "Faith NC",
+      "abbr": "COLLE"
+    },
+    {
+      "id": "236",
+      "school": "Chattanooga",
+      "name": "Chattanooga Mocs",
+      "shortName": "Chattanooga",
+      "abbr": "UTC"
+    },
+    {
+      "id": "80",
+      "school": "Chicago",
+      "name": "Chicago Maroons",
+      "shortName": "Chicago",
+      "abbr": "CHI"
+    },
+    {
+      "id": "2804",
+      "school": "Chowan",
+      "name": "Chowan Hawks",
+      "shortName": "Chowan",
+      "abbr": "CWAN"
+    },
+    {
+      "id": "3112",
+      "school": "Christopher Newport",
+      "name": "Christopher Newport Captains",
+      "shortName": "Chris Newport",
+      "abbr": "CNU"
+    },
+    {
+      "id": "2132",
+      "school": "Cincinnati",
+      "name": "Cincinnati Bearcats",
+      "shortName": "Cincinnati",
+      "abbr": "CIN"
+    },
+    {
+      "id": "17",
+      "school": "Claremont Mudd Scripps",
+      "name": "Claremont Mudd Scripps Stags",
+      "shortName": "Claremont-M-S",
+      "abbr": "CMS"
+    },
+    {
+      "id": "2134",
+      "school": "Clarion",
+      "name": "Clarion Golden Eagles",
+      "shortName": "Clarion",
+      "abbr": "CLRN"
+    },
+    {
+      "id": "2805",
+      "school": "Clark Atlanta",
+      "name": "Clark Atlanta Panthers",
+      "shortName": "Clark (GA)",
+      "abbr": "CKGA"
+    },
+    {
+      "id": "228",
+      "school": "Clemson",
+      "name": "Clemson Tigers",
+      "shortName": "Clemson",
+      "abbr": "CLEM"
+    },
+    {
+      "id": "2557",
+      "school": "Coast Guard",
+      "name": "Coast Guard Bears",
+      "shortName": "Coast Guard",
+      "abbr": "USCG"
+    },
+    {
+      "id": "324",
+      "school": "Coastal Carolina",
+      "name": "Coastal Carolina Chanticleers",
+      "shortName": "Coastal",
+      "abbr": "CCU"
+    },
+    {
+      "id": "2141",
+      "school": "Coe",
+      "name": "Coe Kohawks",
+      "shortName": "Coe",
+      "abbr": "COE"
+    },
+    {
+      "id": "33",
+      "school": "Colby",
+      "name": "Colby White Mules",
+      "shortName": "Colby",
+      "abbr": "CLBY"
+    },
+    {
+      "id": "3210",
+      "school": "Cole College",
+      "name": "Cole College Jaguars",
+      "shortName": "Cole",
+      "abbr": "COLE"
+    },
+    {
+      "id": "2142",
+      "school": "Colgate",
+      "name": "Colgate Raiders",
+      "shortName": "Colgate",
+      "abbr": "COLG"
+    },
+    {
+      "id": "108382",
+      "school": "College of Idaho",
+      "name": "College of Idaho Yotes",
+      "shortName": "Coll. of Idaho",
+      "abbr": "COI"
+    },
+    {
+      "id": "38",
+      "school": "Colorado",
+      "name": "Colorado Buffaloes",
+      "shortName": "Colorado",
+      "abbr": "COLO"
+    },
+    {
+      "id": "11",
+      "school": "Colorado Mesa",
+      "name": "Colorado Mesa Mavericks",
+      "shortName": "Colorado Mesa",
+      "abbr": "COMU"
+    },
+    {
+      "id": "2146",
+      "school": "Colorado School of Mines",
+      "name": "Colorado School of Mines Orediggers",
+      "shortName": "Colorado Mines",
+      "abbr": "CMIN"
+    },
+    {
+      "id": "36",
+      "school": "Colorado State",
+      "name": "Colorado State Rams",
+      "shortName": "Colorado St",
+      "abbr": "CSU"
+    },
+    {
+      "id": "171",
+      "school": "Columbia",
+      "name": "Columbia Lions",
+      "shortName": "Columbia",
+      "abbr": "COLU"
+    },
+    {
+      "id": "2148",
+      "school": "Concord",
+      "name": "Concord Mountain Lions",
+      "shortName": "Concord",
+      "abbr": "CONC"
+    },
+    {
+      "id": "2152",
+      "school": "Concordia (MN)",
+      "name": "Concordia (MN) Cobbers",
+      "shortName": "Concordia (MN)",
+      "abbr": "CCMN"
+    },
+    {
+      "id": "409",
+      "school": "Concordia (WI)",
+      "name": "Concordia (WI) Falcons",
+      "shortName": "Concordia (WI)",
+      "abbr": "CUW"
+    },
+    {
+      "id": "2151",
+      "school": "Concordia Chicago",
+      "name": "Concordia Chicago Cougars",
+      "shortName": "Concordia Chi",
+      "abbr": "CUC"
+    },
+    {
+      "id": "3066",
+      "school": "Concordia St. Paul",
+      "name": "Concordia St. Paul Golden Bears",
+      "shortName": "Concordia St P",
+      "abbr": "CSP"
+    },
+    {
+      "id": "507",
+      "school": "Concordia University Nebraska",
+      "name": "Concordia University Nebraska Clippers",
+      "shortName": "Cncrdia NE",
+      "abbr": "CONCONE"
+    },
+    {
+      "id": "2985",
+      "school": "Concordia-Michigan",
+      "name": "Concordia-Michigan Cardinals",
+      "shortName": "Cncrdia MI",
+      "abbr": "CONCMI"
+    },
+    {
+      "id": "2155",
+      "school": "Cornell (IA)",
+      "name": "Cornell (IA) Rams",
+      "shortName": "Cornell (IA)",
+      "abbr": "CNIA"
+    },
+    {
+      "id": "172",
+      "school": "Cornell",
+      "name": "Cornell Big Red",
+      "shortName": "Cornell",
+      "abbr": "COR"
+    },
+    {
+      "id": "509",
+      "school": "Crown",
+      "name": "Crown Polars",
+      "shortName": "Crown",
+      "abbr": "CRWN"
+    },
+    {
+      "id": "510",
+      "school": "Culver-Stockton College",
+      "name": "Culver-Stockton College Wildcats",
+      "shortName": "Culvr-Stck",
+      "abbr": "CULVE"
+    },
+    {
+      "id": "2161",
+      "school": "Cumberland (TN)",
+      "name": "Cumberland (TN) Bulldogs",
+      "shortName": "Cmbrlnd TN",
+      "abbr": "CUMBTN"
+    },
+    {
+      "id": "511",
+      "school": "Cumberlands",
+      "name": "Cumberlands Indians",
+      "shortName": "Cumberlands",
+      "abbr": "CMBS"
+    },
+    {
+      "id": "40",
+      "school": "Curry",
+      "name": "Curry Colonels",
+      "shortName": "Curry",
+      "abbr": "CC"
+    },
+    {
+      "id": "512",
+      "school": "Dakota State University",
+      "name": "Dakota State University Trojans",
+      "shortName": "Dakota St",
+      "abbr": "DAKOT"
+    },
+    {
+      "id": "513",
+      "school": "Dakota Wesleyan",
+      "name": "Dakota Wesleyan Tigers",
+      "shortName": "Dakota Wes",
+      "abbr": "DWU"
+    },
+    {
+      "id": "159",
+      "school": "Dartmouth",
+      "name": "Dartmouth Big Green",
+      "shortName": "Dartmouth",
+      "abbr": "DART"
+    },
+    {
+      "id": "2166",
+      "school": "Davidson",
+      "name": "Davidson Wildcats",
+      "shortName": "Davidson",
+      "abbr": "DAV"
+    },
+    {
+      "id": "2168",
+      "school": "Dayton",
+      "name": "Dayton Flyers",
+      "shortName": "Dayton",
+      "abbr": "DAY"
+    },
+    {
+      "id": "83",
+      "school": "DePauw",
+      "name": "DePauw Tigers",
+      "shortName": "DePauw",
+      "abbr": "DPU"
+    },
+    {
+      "id": "110438",
+      "school": "Dean",
+      "name": "Dean Bulldogs",
+      "shortName": "Dean",
+      "abbr": "DEAN"
+    },
+    {
+      "id": "190",
+      "school": "Defiance College",
+      "name": "Defiance College Yellow Jackets",
+      "shortName": "Defiance",
+      "abbr": "DEF"
+    },
+    {
+      "id": "48",
+      "school": "Delaware",
+      "name": "Delaware Blue Hens",
+      "shortName": "Delaware",
+      "abbr": "DEL"
+    },
+    {
+      "id": "2169",
+      "school": "Delaware State",
+      "name": "Delaware State Hornets",
+      "shortName": "Delaware St",
+      "abbr": "DSU"
+    },
+    {
+      "id": "2808",
+      "school": "Delaware Valley",
+      "name": "Delaware Valley Aggies",
+      "shortName": "Del Val",
+      "abbr": "DVU"
+    },
+    {
+      "id": "2170",
+      "school": "Delta State",
+      "name": "Delta State Statesmen",
+      "shortName": "Delta St",
+      "abbr": "DLST"
+    },
+    {
+      "id": "2171",
+      "school": "Denison",
+      "name": "Denison Big Red",
+      "shortName": "Denison",
+      "abbr": "DSN"
+    },
+    {
+      "id": "2254",
+      "school": "Des Moines",
+      "name": "Des Moines Vikings",
+      "shortName": "Grand View",
+      "abbr": "GRANDVIEW"
+    },
+    {
+      "id": "2175",
+      "school": "Dickinson",
+      "name": "Dickinson Red Devils",
+      "shortName": "Dickinson",
+      "abbr": "DKSN"
+    },
+    {
+      "id": "316",
+      "school": "Dickinson State University",
+      "name": "Dickinson State University Blue Hawks",
+      "shortName": "Dicknsn St",
+      "abbr": "DIC"
+    },
+    {
+      "id": "2181",
+      "school": "Drake",
+      "name": "Drake Bulldogs",
+      "shortName": "Drake",
+      "abbr": "DRKE"
+    },
+    {
+      "id": "49",
+      "school": "Dubuque",
+      "name": "Dubuque Spartans",
+      "shortName": "Dubuque",
+      "abbr": "DBQ"
+    },
+    {
+      "id": "150",
+      "school": "Duke",
+      "name": "Duke Blue Devils",
+      "shortName": "Duke",
+      "abbr": "DUKE"
+    },
+    {
+      "id": "2184",
+      "school": "Duquesne",
+      "name": "Duquesne Dukes",
+      "shortName": "Duquesne",
+      "abbr": "DUQ"
+    },
+    {
+      "id": "151",
+      "school": "East Carolina",
+      "name": "East Carolina Pirates",
+      "shortName": "East Carolina",
+      "abbr": "ECU"
+    },
+    {
+      "id": "2191",
+      "school": "East Central",
+      "name": "East Central Tigers",
+      "shortName": "East Central",
+      "abbr": "ECNU"
+    },
+    {
+      "id": "2188",
+      "school": "East Stroudsburg",
+      "name": "East Stroudsburg Warriors",
+      "shortName": "E Stroudsburg",
+      "abbr": "ESU"
+    },
+    {
+      "id": "2193",
+      "school": "East Tennessee State",
+      "name": "East Tennessee State Buccaneers",
+      "shortName": "ETSU",
+      "abbr": "ETSU"
+    },
+    {
+      "id": "2837",
+      "school": "East Texas A&M",
+      "name": "East Texas A&M Lions",
+      "shortName": "East Texas A&M",
+      "abbr": "ETAM"
+    },
+    {
+      "id": "2194",
+      "school": "East Texas Baptist",
+      "name": "East Texas Baptist Tigers",
+      "shortName": "E TX Baptist",
+      "abbr": "ETBU"
+    },
+    {
+      "id": "127954",
+      "school": "Eastern",
+      "name": "Eastern Eagles",
+      "shortName": "Eastern",
+      "abbr": "EU"
+    },
+    {
+      "id": "2197",
+      "school": "Eastern Illinois",
+      "name": "Eastern Illinois Panthers",
+      "shortName": "E Illinois",
+      "abbr": "EIU"
+    },
+    {
+      "id": "2198",
+      "school": "Eastern Kentucky",
+      "name": "Eastern Kentucky Colonels",
+      "shortName": "E Kentucky",
+      "abbr": "EKU"
+    },
+    {
+      "id": "2199",
+      "school": "Eastern Michigan",
+      "name": "Eastern Michigan Eagles",
+      "shortName": "E Michigan",
+      "abbr": "EMU"
+    },
+    {
+      "id": "2201",
+      "school": "Eastern New Mexico",
+      "name": "Eastern New Mexico Greyhounds",
+      "shortName": "Eastern NM",
+      "abbr": "ENMU"
+    },
+    {
+      "id": "2202",
+      "school": "Eastern Oregon",
+      "name": "Eastern Oregon",
+      "shortName": "E Oregon",
+      "abbr": "EORE"
+    },
+    {
+      "id": "331",
+      "school": "Eastern Washington",
+      "name": "Eastern Washington Eagles",
+      "shortName": "E Washington",
+      "abbr": "EWU"
+    },
+    {
+      "id": "2205",
+      "school": "Edinboro",
+      "name": "Edinboro Fighting Scots",
+      "shortName": "Edinboro",
+      "abbr": "EDBR"
+    },
+    {
+      "id": "2206",
+      "school": "Edward Waters",
+      "name": "Edward Waters Tigers",
+      "shortName": "Edward Waters",
+      "abbr": "EDW"
+    },
+    {
+      "id": "122775",
+      "school": "Elgin",
+      "name": "Elgin Eagles",
+      "shortName": "JUDSON",
+      "abbr": "JUDSO"
+    },
+    {
+      "id": "2207",
+      "school": "Elizabeth City State",
+      "name": "Elizabeth City State Vikings",
+      "shortName": "Elizabeth City",
+      "abbr": "ECSU"
+    },
+    {
+      "id": "72",
+      "school": "Elmhurst",
+      "name": "Elmhurst Bluejays",
+      "shortName": "Elmhurst",
+      "abbr": "ELMH"
+    },
+    {
+      "id": "2210",
+      "school": "Elon",
+      "name": "Elon Phoenix",
+      "shortName": "Elon",
+      "abbr": "ELON"
+    },
+    {
+      "id": "2213",
+      "school": "Emory & Henry",
+      "name": "Emory & Henry Wasps",
+      "shortName": "Emory & Henry",
+      "abbr": "EHC"
+    },
+    {
+      "id": "2214",
+      "school": "Emporia State",
+      "name": "Emporia State Hornets",
+      "shortName": "Emporia St",
+      "abbr": "EMSU"
+    },
+    {
+      "id": "452",
+      "school": "Endicott",
+      "name": "Endicott Gulls",
+      "shortName": "Endicott",
+      "abbr": "ENDC"
+    },
+    {
+      "id": "101784",
+      "school": "Erskine",
+      "name": "Erskine Flying Fleet",
+      "shortName": "Erskine",
+      "abbr": "ERSK"
+    },
+    {
+      "id": "101",
+      "school": "Eureka",
+      "name": "Eureka Red Devils",
+      "shortName": "Eureka",
+      "abbr": "ERKA"
+    },
+    {
+      "id": "2865",
+      "school": "Evangel University",
+      "name": "Evangel University Crusaders",
+      "shortName": "Evangel",
+      "abbr": "EVA"
+    },
+    {
+      "id": "2221",
+      "school": "FDU Florham",
+      "name": "FDU Florham Devils",
+      "shortName": "FDU Florham",
+      "abbr": "FDUF"
+    },
+    {
+      "id": "2986",
+      "school": "Fairmont State",
+      "name": "Fairmont State Falcons",
+      "shortName": "Fairmont St",
+      "abbr": "FMSU"
+    },
+    {
+      "id": "2219",
+      "school": "Faulkner University",
+      "name": "Faulkner University Eagles",
+      "shortName": "Faulkner",
+      "abbr": "FAULKNER"
+    },
+    {
+      "id": "2220",
+      "school": "Fayetteville State",
+      "name": "Fayetteville State Broncos",
+      "shortName": "Fay'ville St",
+      "abbr": "FAYU"
+    },
+    {
+      "id": "2222",
+      "school": "Ferris State",
+      "name": "Ferris State Bulldogs",
+      "shortName": "Ferris St",
+      "abbr": "FRST"
+    },
+    {
+      "id": "366",
+      "school": "Ferrum",
+      "name": "Ferrum Panthers",
+      "shortName": "Ferrum",
+      "abbr": "FC"
+    },
+    {
+      "id": "2224",
+      "school": "Findlay",
+      "name": "Findlay Oilers",
+      "shortName": "Findlay",
+      "abbr": "UF"
+    },
+    {
+      "id": "114",
+      "school": "Fitchburg State",
+      "name": "Fitchburg State Falcons",
+      "shortName": "Fitchburg St",
+      "abbr": "FBSU"
+    },
+    {
+      "id": "50",
+      "school": "Florida A&M",
+      "name": "Florida A&M Rattlers",
+      "shortName": "Florida A&M",
+      "abbr": "FAMU"
+    },
+    {
+      "id": "2226",
+      "school": "Florida Atlantic",
+      "name": "Florida Atlantic Owls",
+      "shortName": "FAU",
+      "abbr": "FAU"
+    },
+    {
+      "id": "57",
+      "school": "Florida",
+      "name": "Florida Gators",
+      "shortName": "Florida",
+      "abbr": "FLA"
+    },
+    {
+      "id": "2229",
+      "school": "Florida International",
+      "name": "Florida International Panthers",
+      "shortName": "FIU",
+      "abbr": "FIU"
+    },
+    {
+      "id": "125762",
+      "school": "Florida Memorial",
+      "name": "Florida Memorial Lions",
+      "shortName": "FL Memorial",
+      "abbr": "FMU"
+    },
+    {
+      "id": "52",
+      "school": "Florida State",
+      "name": "Florida State Seminoles",
+      "shortName": "Florida St",
+      "abbr": "FSU"
+    },
+    {
+      "id": "2230",
+      "school": "Fordham",
+      "name": "Fordham Rams",
+      "shortName": "Fordham",
+      "abbr": "FOR"
+    },
+    {
+      "id": "2231",
+      "school": "Fort Hays",
+      "name": "Fort Hays Tigers",
+      "shortName": "Fort Hays",
+      "abbr": "FHSU"
+    },
+    {
+      "id": "2237",
+      "school": "Fort Lewis",
+      "name": "Fort Lewis Skyhawks",
+      "shortName": "Fort Lewis",
+      "abbr": "FLWC"
+    },
+    {
+      "id": "2232",
+      "school": "Fort Valley State",
+      "name": "Fort Valley State Wildcats",
+      "shortName": "Fort Valley St",
+      "abbr": "FVSU"
+    },
+    {
+      "id": "2967",
+      "school": "Framingham State",
+      "name": "Framingham State Rams",
+      "shortName": "Framingham St",
+      "abbr": "FRSU"
+    },
+    {
+      "id": "2234",
+      "school": "Franklin & Marshall",
+      "name": "Franklin & Marshall Diplomats",
+      "shortName": "Franklin Marsh",
+      "abbr": "FMC"
+    },
+    {
+      "id": "2233",
+      "school": "Franklin",
+      "name": "Franklin Grizzlies",
+      "shortName": "Franklin",
+      "abbr": "FRKL"
+    },
+    {
+      "id": "112334",
+      "school": "Franklin Pierce",
+      "name": "Franklin Pierce Ravens",
+      "shortName": "Franklin Pierce",
+      "abbr": "FP"
+    },
+    {
+      "id": "278",
+      "school": "Fresno State",
+      "name": "Fresno State Bulldogs",
+      "shortName": "Fresno St",
+      "abbr": "FRES"
+    },
+    {
+      "id": "527",
+      "school": "Friends University",
+      "name": "Friends University Friends",
+      "shortName": "Friends",
+      "abbr": "FRIE"
+    },
+    {
+      "id": "341",
+      "school": "Frostburg State",
+      "name": "Frostburg State Bobcats",
+      "shortName": "Frostburg St",
+      "abbr": "FSTU"
+    },
+    {
+      "id": "231",
+      "school": "Furman",
+      "name": "Furman Paladins",
+      "shortName": "Furman",
+      "abbr": "FUR"
+    },
+    {
+      "id": "417",
+      "school": "Gallaudet",
+      "name": "Gallaudet Bison",
+      "shortName": "Gallaudet",
+      "abbr": "GLDT"
+    },
+    {
+      "id": "367",
+      "school": "Gannon",
+      "name": "Gannon Golden Knights",
+      "shortName": "Gannon",
+      "abbr": "GANN"
+    },
+    {
+      "id": "2241",
+      "school": "Gardner-Webb",
+      "name": "Gardner-Webb Runnin' Bulldogs",
+      "shortName": "Gardner-Webb",
+      "abbr": "GWEB"
+    },
+    {
+      "id": "2242",
+      "school": "Geneva",
+      "name": "Geneva Golden Tornadoes",
+      "shortName": "Geneva",
+      "abbr": "GEN"
+    },
+    {
+      "id": "415",
+      "school": "George Fox",
+      "name": "George Fox Bruins",
+      "shortName": "George Fox",
+      "abbr": "GFU"
+    },
+    {
+      "id": "2244",
+      "school": "George Mason University",
+      "name": "George Mason University Patriots",
+      "shortName": "George Mason",
+      "abbr": "GMU"
+    },
+    {
+      "id": "2245",
+      "school": "Georgetown (KY)",
+      "name": "Georgetown (KY) Tigers",
+      "shortName": "Georgetown KY",
+      "abbr": "GTKY"
+    },
+    {
+      "id": "46",
+      "school": "Georgetown",
+      "name": "Georgetown Hoyas",
+      "shortName": "Georgetown",
+      "abbr": "GTWN"
+    },
+    {
+      "id": "61",
+      "school": "Georgia",
+      "name": "Georgia Bulldogs",
+      "shortName": "Georgia",
+      "abbr": "UGA"
+    },
+    {
+      "id": "290",
+      "school": "Georgia Southern",
+      "name": "Georgia Southern Eagles",
+      "shortName": "GA Southern",
+      "abbr": "GASO"
+    },
+    {
+      "id": "2247",
+      "school": "Georgia State",
+      "name": "Georgia State Panthers",
+      "shortName": "Georgia St",
+      "abbr": "GAST"
+    },
+    {
+      "id": "59",
+      "school": "Georgia Tech",
+      "name": "Georgia Tech Yellow Jackets",
+      "shortName": "Georgia Tech",
+      "abbr": "GT"
+    },
+    {
+      "id": "2248",
+      "school": "Gettysburg",
+      "name": "Gettysburg Bullets",
+      "shortName": "Gettysburg",
+      "abbr": "GTYB"
+    },
+    {
+      "id": "2249",
+      "school": "Glenville State",
+      "name": "Glenville State Pioneers",
+      "shortName": "Glenville St",
+      "abbr": "GVLS"
+    },
+    {
+      "id": "530",
+      "school": "Graceland University",
+      "name": "Graceland University Graceland",
+      "shortName": "Graceland",
+      "abbr": "GRC"
+    },
+    {
+      "id": "2755",
+      "school": "Grambling",
+      "name": "Grambling Tigers",
+      "shortName": "Grambling",
+      "abbr": "GRAM"
+    },
+    {
+      "id": "125",
+      "school": "Grand Valley State",
+      "name": "Grand Valley State Lakers",
+      "shortName": "Grand Val St",
+      "abbr": "GVSU"
+    },
+    {
+      "id": "2256",
+      "school": "Greensboro",
+      "name": "Greensboro Pride",
+      "shortName": "Greensboro",
+      "abbr": "GRNB"
+    },
+    {
+      "id": "2257",
+      "school": "Greenville",
+      "name": "Greenville Panthers",
+      "shortName": "Greenville",
+      "abbr": "GRNV"
+    },
+    {
+      "id": "65",
+      "school": "Grinnell",
+      "name": "Grinnell Pioneers",
+      "shortName": "Grinnell",
+      "abbr": "GRNL"
+    },
+    {
+      "id": "146",
+      "school": "Grove City",
+      "name": "Grove City Wolverines",
+      "shortName": "Grove City",
+      "abbr": "GRO"
+    },
+    {
+      "id": "2258",
+      "school": "Guilford",
+      "name": "Guilford Quakers",
+      "shortName": "Guilford",
+      "abbr": "GLFD"
+    },
+    {
+      "id": "2968",
+      "school": "Gustavus Adolphus",
+      "name": "Gustavus Adolphus Golden Gusties",
+      "shortName": "Gustavus",
+      "abbr": "GAC"
+    },
+    {
+      "id": "348",
+      "school": "Hamilton",
+      "name": "Hamilton Continentals",
+      "shortName": "Hamilton",
+      "abbr": "HAM"
+    },
+    {
+      "id": "162",
+      "school": "Hamline",
+      "name": "Hamline Pipers",
+      "shortName": "Hamline",
+      "abbr": "HMLN"
+    },
+    {
+      "id": "297",
+      "school": "Hampden Sydney",
+      "name": "Hampden Sydney Tigers",
+      "shortName": "Hampden Sydney",
+      "abbr": "HSC"
+    },
+    {
+      "id": "2261",
+      "school": "Hampton",
+      "name": "Hampton Pirates",
+      "shortName": "Hampton",
+      "abbr": "HAMP"
+    },
+    {
+      "id": "2262",
+      "school": "Hanover",
+      "name": "Hanover Panthers",
+      "shortName": "Hanover",
+      "abbr": "HNVR"
+    },
+    {
+      "id": "2810",
+      "school": "Hardin Simmons",
+      "name": "Hardin Simmons Cowboys",
+      "shortName": "Hardin Simmons",
+      "abbr": "HSU"
+    },
+    {
+      "id": "2264",
+      "school": "Harding",
+      "name": "Harding Bisons",
+      "shortName": "Harding",
+      "abbr": "HARD"
+    },
+    {
+      "id": "173",
+      "school": "Hartwick",
+      "name": "Hartwick Hawks",
+      "shortName": "Hartwick",
+      "abbr": "HRTW"
+    },
+    {
+      "id": "108",
+      "school": "Harvard",
+      "name": "Harvard Crimson",
+      "shortName": "Harvard",
+      "abbr": "HARV"
+    },
+    {
+      "id": "535",
+      "school": "Haskell Indian Nations Univ",
+      "name": "Haskell Indian Nations Univ Jayhawks",
+      "shortName": "Haskell",
+      "abbr": "HASKELL"
+    },
+    {
+      "id": "62",
+      "school": "Hawai'i",
+      "name": "Hawai'i Rainbow Warriors",
+      "shortName": "Hawai'i",
+      "abbr": "HAW"
+    },
+    {
+      "id": "191",
+      "school": "Heidelberg",
+      "name": "Heidelberg Student Princes",
+      "shortName": "Heidelberg",
+      "abbr": "HDBG"
+    },
+    {
+      "id": "2271",
+      "school": "Henderson State",
+      "name": "Henderson State Reddies",
+      "shortName": "Henderson St",
+      "abbr": "HSTU"
+    },
+    {
+      "id": "418",
+      "school": "Hendrix",
+      "name": "Hendrix Warriors",
+      "shortName": "Hendrix",
+      "abbr": "HDX"
+    },
+    {
+      "id": "125974",
+      "school": "Hilbert",
+      "name": "Hilbert Hawks",
+      "shortName": "Hilbert",
+      "abbr": "HLBT"
+    },
+    {
+      "id": "2273",
+      "school": "Hillsdale",
+      "name": "Hillsdale Chargers",
+      "shortName": "Hillsdale",
+      "abbr": "HLDL"
+    },
+    {
+      "id": "2274",
+      "school": "Hiram",
+      "name": "Hiram Terriers",
+      "shortName": "Hiram",
+      "abbr": "HIRM"
+    },
+    {
+      "id": "174",
+      "school": "Hobart",
+      "name": "Hobart Statesmen",
+      "shortName": "Hobart",
+      "abbr": "HBRT"
+    },
+    {
+      "id": "108354",
+      "school": "Holland College",
+      "name": "Holland College Hurricanes",
+      "shortName": "Holland College",
+      "abbr": "HOL"
+    },
+    {
+      "id": "107",
+      "school": "Holy Cross",
+      "name": "Holy Cross Crusaders",
+      "shortName": "Holy Cross",
+      "abbr": "HC"
+    },
+    {
+      "id": "2812",
+      "school": "Hope",
+      "name": "Hope Flying Dutchmen",
+      "shortName": "Hope",
+      "abbr": "HOPE"
+    },
+    {
+      "id": "2277",
+      "school": "Houston Christian",
+      "name": "Houston Christian Huskies",
+      "shortName": "Hou Christian",
+      "abbr": "HCU"
+    },
+    {
+      "id": "248",
+      "school": "Houston",
+      "name": "Houston Cougars",
+      "shortName": "Houston",
+      "abbr": "HOU"
+    },
+    {
+      "id": "47",
+      "school": "Howard",
+      "name": "Howard Bison",
+      "shortName": "Howard",
+      "abbr": "HOW"
+    },
+    {
+      "id": "2758",
+      "school": "Howard Payne",
+      "name": "Howard Payne Yellow Jackets",
+      "shortName": "Howard Payne",
+      "abbr": "HWPU"
+    },
+    {
+      "id": "2938",
+      "school": "Huntingdon",
+      "name": "Huntingdon Hawks",
+      "shortName": "Huntingdon",
+      "abbr": "HNTC"
+    },
+    {
+      "id": "2280",
+      "school": "Husson",
+      "name": "Husson Eagles",
+      "shortName": "Husson",
+      "abbr": "HUSS"
+    },
+    {
+      "id": "2291",
+      "school": "IU Pennsylvania",
+      "name": "IU Pennsylvania Crimson Hawks",
+      "shortName": "IU Penn",
+      "abbr": "IUP"
+    },
+    {
+      "id": "304",
+      "school": "Idaho State",
+      "name": "Idaho State Bengals",
+      "shortName": "Idaho St",
+      "abbr": "IDST"
+    },
+    {
+      "id": "70",
+      "school": "Idaho",
+      "name": "Idaho Vandals",
+      "shortName": "Idaho",
+      "abbr": "IDHO"
+    },
+    {
+      "id": "2286",
+      "school": "Illinois College",
+      "name": "Illinois College Blueboys",
+      "shortName": "Illinois Col",
+      "abbr": "ILLC"
+    },
+    {
+      "id": "356",
+      "school": "Illinois",
+      "name": "Illinois Fighting Illini",
+      "shortName": "Illinois",
+      "abbr": "ILL"
+    },
+    {
+      "id": "2287",
+      "school": "Illinois State",
+      "name": "Illinois State Redbirds",
+      "shortName": "Illinois St",
+      "abbr": "ILST"
+    },
+    {
+      "id": "306",
+      "school": "Illinois Wesleyan",
+      "name": "Illinois Wesleyan Titans",
+      "shortName": "IL Wesleyan",
+      "abbr": "ILWU"
+    },
+    {
+      "id": "2916",
+      "school": "Incarnate Word",
+      "name": "Incarnate Word Cardinals",
+      "shortName": "Incarnate Word",
+      "abbr": "UIW"
+    },
+    {
+      "id": "84",
+      "school": "Indiana",
+      "name": "Indiana Hoosiers",
+      "shortName": "Indiana",
+      "abbr": "IU"
+    },
+    {
+      "id": "282",
+      "school": "Indiana State",
+      "name": "Indiana State Sycamores",
+      "shortName": "Indiana St",
+      "abbr": "INST"
+    },
+    {
+      "id": "111756",
+      "school": "Indiana Wesleyan",
+      "name": "Indiana Wesleyan Wildcats",
+      "shortName": "INDWESLYAN",
+      "abbr": "INWESL"
+    },
+    {
+      "id": "2292",
+      "school": "Indianapolis",
+      "name": "Indianapolis Greyhounds",
+      "shortName": "Indianapolis",
+      "abbr": "INDY"
+    },
+    {
+      "id": "2294",
+      "school": "Iowa",
+      "name": "Iowa Hawkeyes",
+      "shortName": "Iowa",
+      "abbr": "IOWA"
+    },
+    {
+      "id": "66",
+      "school": "Iowa State",
+      "name": "Iowa State Cyclones",
+      "shortName": "Iowa State",
+      "abbr": "ISU"
+    },
+    {
+      "id": "175",
+      "school": "Ithaca",
+      "name": "Ithaca Bombers",
+      "shortName": "Ithaca",
+      "abbr": "ITH"
+    },
+    {
+      "id": "2296",
+      "school": "Jackson State",
+      "name": "Jackson State Tigers",
+      "shortName": "Jackson St",
+      "abbr": "JKST"
+    },
+    {
+      "id": "55",
+      "school": "Jacksonville State",
+      "name": "Jacksonville State Gamecocks",
+      "shortName": "Jax State",
+      "abbr": "JXST"
+    },
+    {
+      "id": "256",
+      "school": "James Madison",
+      "name": "James Madison Dukes",
+      "shortName": "James Madison",
+      "abbr": "JMU"
+    },
+    {
+      "id": "2939",
+      "school": "Jamestown",
+      "name": "Jamestown Jimmies",
+      "shortName": "Jamestown",
+      "abbr": "UJ"
+    },
+    {
+      "id": "2302",
+      "school": "John Carroll",
+      "name": "John Carroll Blue Streaks",
+      "shortName": "John Carroll",
+      "abbr": "JCU"
+    },
+    {
+      "id": "118",
+      "school": "Johns Hopkins",
+      "name": "Johns Hopkins Blue Jays",
+      "shortName": "Johns Hopkins",
+      "abbr": "JHU"
+    },
+    {
+      "id": "2304",
+      "school": "Johnson C. Smith",
+      "name": "Johnson C. Smith Golden Bulls",
+      "shortName": "Johnson C Smth",
+      "abbr": "JCSU"
+    },
+    {
+      "id": "246",
+      "school": "Juniata",
+      "name": "Juniata Eagles",
+      "shortName": "Juniata",
+      "abbr": "JUN"
+    },
+    {
+      "id": "126",
+      "school": "Kalamazoo",
+      "name": "Kalamazoo Hornets",
+      "shortName": "Kalamazoo",
+      "abbr": "KALC"
+    },
+    {
+      "id": "2305",
+      "school": "Kansas",
+      "name": "Kansas Jayhawks",
+      "shortName": "Kansas",
+      "abbr": "KU"
+    },
+    {
+      "id": "2306",
+      "school": "Kansas State",
+      "name": "Kansas State Wildcats",
+      "shortName": "Kansas St",
+      "abbr": "KSU"
+    },
+    {
+      "id": "547",
+      "school": "Kansas Wesleyan",
+      "name": "Kansas Wesleyan Ks Wesleyan",
+      "shortName": "KS Weslyan",
+      "abbr": "KANSA"
+    },
+    {
+      "id": "2871",
+      "school": "Kean",
+      "name": "Kean Cougars",
+      "shortName": "Kean",
+      "abbr": "KEAN"
+    },
+    {
+      "id": "126110",
+      "school": "Keiser University",
+      "name": "Keiser University Keiser",
+      "shortName": "Keiser Univers",
+      "abbr": "KEISER"
+    },
+    {
+      "id": "338",
+      "school": "Kennesaw State",
+      "name": "Kennesaw State Owls",
+      "shortName": "Kennesaw St",
+      "abbr": "KENN"
+    },
+    {
+      "id": "2309",
+      "school": "Kent State",
+      "name": "Kent State Golden Flashes",
+      "shortName": "Kent State",
+      "abbr": "KENT"
+    },
+    {
+      "id": "3077",
+      "school": "Kentucky Christian",
+      "name": "Kentucky Christian Knights",
+      "shortName": "KCU",
+      "abbr": "KYCHR"
+    },
+    {
+      "id": "2310",
+      "school": "Kentucky State",
+      "name": "Kentucky State Thorobreds",
+      "shortName": "Kentucky St",
+      "abbr": "KYSU"
+    },
+    {
+      "id": "2316",
+      "school": "Kentucky Wesleyan",
+      "name": "Kentucky Wesleyan Panthers",
+      "shortName": "KY Wesleyan",
+      "abbr": "KWC"
+    },
+    {
+      "id": "96",
+      "school": "Kentucky",
+      "name": "Kentucky Wildcats",
+      "shortName": "Kentucky",
+      "abbr": "UK"
+    },
+    {
+      "id": "352",
+      "school": "Kenyon",
+      "name": "Kenyon Owls",
+      "shortName": "Kenyon",
+      "abbr": "KNY"
+    },
+    {
+      "id": "122774",
+      "school": "Keystone",
+      "name": "Keystone Giants",
+      "shortName": "Keystone",
+      "abbr": "KYSN"
+    },
+    {
+      "id": "247",
+      "school": "King's",
+      "name": "King's Monarchs",
+      "shortName": "King's",
+      "abbr": "KNGS"
+    },
+    {
+      "id": "255",
+      "school": "Knox",
+      "name": "Knox Prairie Fire",
+      "shortName": "Knox",
+      "abbr": "KNOX"
+    },
+    {
+      "id": "2315",
+      "school": "Kutztown",
+      "name": "Kutztown Golden Bears",
+      "shortName": "Kutztown",
+      "abbr": "KUTZ"
+    },
+    {
+      "id": "99",
+      "school": "LSU",
+      "name": "LSU Tigers",
+      "shortName": "LSU",
+      "abbr": "LSU"
+    },
+    {
+      "id": "2318",
+      "school": "La Verne",
+      "name": "La Verne Leopards",
+      "shortName": "La Verne",
+      "abbr": "ULV"
+    },
+    {
+      "id": "548",
+      "school": "LaGrange",
+      "name": "LaGrange Panthers",
+      "shortName": "LaGrange",
+      "abbr": "LGC"
+    },
+    {
+      "id": "322",
+      "school": "Lafayette",
+      "name": "Lafayette Leopards",
+      "shortName": "Lafayette",
+      "abbr": "LAF"
+    },
+    {
+      "id": "437",
+      "school": "Lake Erie",
+      "name": "Lake Erie Storm",
+      "shortName": "Lake Erie",
+      "abbr": "LKER"
+    },
+    {
+      "id": "262",
+      "school": "Lake Forest",
+      "name": "Lake Forest Foresters",
+      "shortName": "Lake Forest",
+      "abbr": "LFC"
+    },
+    {
+      "id": "6353",
+      "school": "Lakeland",
+      "name": "Lakeland Muskies",
+      "shortName": "Lakeland",
+      "abbr": "LKLD"
+    },
+    {
+      "id": "2320",
+      "school": "Lamar",
+      "name": "Lamar Cardinals",
+      "shortName": "Lamar",
+      "abbr": "LAM"
+    },
+    {
+      "id": "2323",
+      "school": "Lane College",
+      "name": "Lane College Dragons",
+      "shortName": "Lane College",
+      "abbr": "LANE"
+    },
+    {
+      "id": "2324",
+      "school": "Langston",
+      "name": "Langston Lions",
+      "shortName": "Langston",
+      "abbr": "LNGT"
+    },
+    {
+      "id": "268",
+      "school": "Lawrence",
+      "name": "Lawrence Vikings",
+      "shortName": "Lawrence",
+      "abbr": "LAW"
+    },
+    {
+      "id": "388",
+      "school": "Lebanon Valley",
+      "name": "Lebanon Valley Flying Dutchmen",
+      "shortName": "Lebanon Valley",
+      "abbr": "LVC"
+    },
+    {
+      "id": "2329",
+      "school": "Lehigh",
+      "name": "Lehigh Mountain Hawks",
+      "shortName": "Lehigh",
+      "abbr": "LEH"
+    },
+    {
+      "id": "2331",
+      "school": "Lenoir Rhyne",
+      "name": "Lenoir Rhyne Bears",
+      "shortName": "Lenoir Rhyne",
+      "abbr": "LENR"
+    },
+    {
+      "id": "2333",
+      "school": "Lewis & Clark",
+      "name": "Lewis & Clark River Otters",
+      "shortName": "Lewis & Clark",
+      "abbr": "LC"
+    },
+    {
+      "id": "2335",
+      "school": "Liberty",
+      "name": "Liberty Flames",
+      "shortName": "Liberty",
+      "abbr": "LIB"
+    },
+    {
+      "id": "124179",
+      "school": "Lincoln (CA)",
+      "name": "Lincoln (CA) Oaklanders",
+      "shortName": "Lincoln (CA)",
+      "abbr": "LNCA"
+    },
+    {
+      "id": "2876",
+      "school": "Lincoln (MO)",
+      "name": "Lincoln (MO) Blue Tigers",
+      "shortName": "Lincoln (MO)",
+      "abbr": "LNMO"
+    },
+    {
+      "id": "2339",
+      "school": "Lincoln (PA)",
+      "name": "Lincoln (PA) Lions",
+      "shortName": "Lincoln (PA)",
+      "abbr": "LNPA"
+    },
+    {
+      "id": "3209",
+      "school": "Lindenwood Belleville",
+      "name": "Lindenwood Belleville Lynx",
+      "shortName": "Lind Bellv",
+      "abbr": "LINB"
+    },
+    {
+      "id": "2815",
+      "school": "Lindenwood",
+      "name": "Lindenwood Lions",
+      "shortName": "Lindenwood",
+      "abbr": "LIN"
+    },
+    {
+      "id": "2877",
+      "school": "Lindsey Wilson",
+      "name": "Lindsey Wilson LINDSEY",
+      "shortName": "Lindsey Wilson",
+      "abbr": "LWU"
+    },
+    {
+      "id": "203",
+      "school": "Linfield",
+      "name": "Linfield Wildcats",
+      "shortName": "Linfield",
+      "abbr": "LINF"
+    },
+    {
+      "id": "2940",
+      "school": "Livingstone",
+      "name": "Livingstone Blue Bears",
+      "shortName": "Livingstone",
+      "abbr": "LIV"
+    },
+    {
+      "id": "209",
+      "school": "Lock Haven",
+      "name": "Lock Haven Bald Eagles",
+      "shortName": "Lock Haven",
+      "abbr": "LHU"
+    },
+    {
+      "id": "2341",
+      "school": "Long Island University",
+      "name": "Long Island University Sharks",
+      "shortName": "Long Island",
+      "abbr": "LIU"
+    },
+    {
+      "id": "263",
+      "school": "Loras",
+      "name": "Loras Duhawks",
+      "shortName": "Loras",
+      "abbr": "LOR"
+    },
+    {
+      "id": "2347",
+      "school": "Louisiana Christian",
+      "name": "Louisiana Christian Wildcats",
+      "shortName": "LA Christian",
+      "abbr": "LCHR"
+    },
+    {
+      "id": "309",
+      "school": "Louisiana",
+      "name": "Louisiana Ragin' Cajuns",
+      "shortName": "Louisiana",
+      "abbr": "UL"
+    },
+    {
+      "id": "2348",
+      "school": "Louisiana Tech",
+      "name": "Louisiana Tech Bulldogs",
+      "shortName": "Louisiana Tech",
+      "abbr": "LT"
+    },
+    {
+      "id": "97",
+      "school": "Louisville",
+      "name": "Louisville Cardinals",
+      "shortName": "Louisville",
+      "abbr": "LOU"
+    },
+    {
+      "id": "67",
+      "school": "Luther",
+      "name": "Luther Norse",
+      "shortName": "Luther",
+      "abbr": "LUTH"
+    },
+    {
+      "id": "2354",
+      "school": "Lycoming",
+      "name": "Lycoming Warriors",
+      "shortName": "Lycoming",
+      "abbr": "LYCO"
+    },
+    {
+      "id": "101161",
+      "school": "Lyon",
+      "name": "Lyon Scots",
+      "shortName": "Lyon",
+      "abbr": "LYON"
+    },
+    {
+      "id": "126146",
+      "school": "Madonna",
+      "name": "MADONNA",
+      "shortName": "Madonna",
+      "abbr": "MDNN"
+    },
+    {
+      "id": "2770",
+      "school": "Manitoba",
+      "name": "MANITOBA",
+      "shortName": "Manitoba",
+      "abbr": "MB"
+    },
+    {
+      "id": "109",
+      "school": "MIT",
+      "name": "MIT Engineers",
+      "shortName": "MIT",
+      "abbr": "MIT"
+    },
+    {
+      "id": "2359",
+      "school": "Macalester",
+      "name": "Macalester Scots",
+      "shortName": "Macalester",
+      "abbr": "MAC"
+    },
+    {
+      "id": "311",
+      "school": "Maine",
+      "name": "Maine Black Bears",
+      "shortName": "Maine",
+      "abbr": "ME"
+    },
+    {
+      "id": "274",
+      "school": "Maine Maritime",
+      "name": "Maine Maritime Mariners",
+      "shortName": "Maine Maritime",
+      "abbr": "UMMA"
+    },
+    {
+      "id": "2362",
+      "school": "Manchester",
+      "name": "Manchester Spartans",
+      "shortName": "Manchester",
+      "abbr": "MNCH"
+    },
+    {
+      "id": "2365",
+      "school": "Mansfield",
+      "name": "Mansfield Mountaineers",
+      "shortName": "Mansfield",
+      "abbr": "MNFD"
+    },
+    {
+      "id": "2366",
+      "school": "Marian (IN)",
+      "name": "Marian (IN) MARIAN",
+      "shortName": "Marian (IN)",
+      "abbr": "MUIN"
+    },
+    {
+      "id": "317",
+      "school": "Marietta",
+      "name": "Marietta Pioneers",
+      "shortName": "Marietta",
+      "abbr": "MRTT"
+    },
+    {
+      "id": "2368",
+      "school": "Marist",
+      "name": "Marist Red Foxes",
+      "shortName": "Marist",
+      "abbr": "MRST"
+    },
+    {
+      "id": "2369",
+      "school": "Mars Hill",
+      "name": "Mars Hill Lions",
+      "shortName": "Mars Hill",
+      "abbr": "MHU"
+    },
+    {
+      "id": "276",
+      "school": "Marshall",
+      "name": "Marshall Thundering Herd",
+      "shortName": "Marshall",
+      "abbr": "MRSH"
+    },
+    {
+      "id": "446",
+      "school": "Martin Luther",
+      "name": "Martin Luther Knights",
+      "shortName": "Martin Luther",
+      "abbr": "MLC"
+    },
+    {
+      "id": "2371",
+      "school": "Mary Hardin Baylor",
+      "name": "Mary Hardin Baylor Crusaders",
+      "shortName": "Mary Hardin",
+      "abbr": "MHB"
+    },
+    {
+      "id": "120",
+      "school": "Maryland",
+      "name": "Maryland Terrapins",
+      "shortName": "Maryland",
+      "abbr": "MD"
+    },
+    {
+      "id": "2373",
+      "school": "Maryville (TN)",
+      "name": "Maryville (TN) Scots",
+      "shortName": "Maryville (TN)",
+      "abbr": "MCTN"
+    },
+    {
+      "id": "110",
+      "school": "Mass Maritime",
+      "name": "Mass Maritime Buccaneers",
+      "shortName": "Mass Maritime",
+      "abbr": "MMT"
+    },
+    {
+      "id": "113",
+      "school": "Massachusetts",
+      "name": "Massachusetts Minutemen",
+      "shortName": "UMass",
+      "abbr": "MASS"
+    },
+    {
+      "id": "561",
+      "school": "Mayville State",
+      "name": "Mayville State Comets",
+      "shortName": "Mayville St",
+      "abbr": "MYSU"
+    },
+    {
+      "id": "2700",
+      "school": "McDaniel",
+      "name": "McDaniel Green Terror",
+      "shortName": "McDaniel",
+      "abbr": "MCD"
+    },
+    {
+      "id": "2816",
+      "school": "McKendree",
+      "name": "McKendree Bearcats",
+      "shortName": "McKendree",
+      "abbr": "MCK"
+    },
+    {
+      "id": "241",
+      "school": "McMurry",
+      "name": "McMurry War Hawks",
+      "shortName": "McMurry",
+      "abbr": "MCM"
+    },
+    {
+      "id": "2377",
+      "school": "McNeese",
+      "name": "McNeese Cowboys",
+      "shortName": "McNeese",
+      "abbr": "MCN"
+    },
+    {
+      "id": "235",
+      "school": "Memphis",
+      "name": "Memphis Tigers",
+      "shortName": "Memphis",
+      "abbr": "MEM"
+    },
+    {
+      "id": "2382",
+      "school": "Mercer",
+      "name": "Mercer Bears",
+      "shortName": "Mercer",
+      "abbr": "MER"
+    },
+    {
+      "id": "2383",
+      "school": "Merchant Marine",
+      "name": "Merchant Marine Mariners",
+      "shortName": "Merch Marine",
+      "abbr": "MMA"
+    },
+    {
+      "id": "2385",
+      "school": "Mercyhurst",
+      "name": "Mercyhurst Lakers",
+      "shortName": "Mercyhurst",
+      "abbr": "MERC"
+    },
+    {
+      "id": "2771",
+      "school": "Merrimack",
+      "name": "Merrimack Warriors",
+      "shortName": "Merrimack",
+      "abbr": "MRMK"
+    },
+    {
+      "id": "291",
+      "school": "Methodist",
+      "name": "Methodist Monarchs",
+      "shortName": "Methodist",
+      "abbr": "MU"
+    },
+    {
+      "id": "193",
+      "school": "Miami (OH)",
+      "name": "Miami (OH) RedHawks",
+      "shortName": "Miami OH",
+      "abbr": "M-OH"
+    },
+    {
+      "id": "2390",
+      "school": "Miami",
+      "name": "Miami Hurricanes",
+      "shortName": "Miami",
+      "abbr": "MIA"
+    },
+    {
+      "id": "127",
+      "school": "Michigan State",
+      "name": "Michigan State Spartans",
+      "shortName": "Michigan St",
+      "abbr": "MSU"
+    },
+    {
+      "id": "2392",
+      "school": "Michigan Tech",
+      "name": "Michigan Tech Huskies",
+      "shortName": "Michigan Tech",
+      "abbr": "MTU"
+    },
+    {
+      "id": "130",
+      "school": "Michigan",
+      "name": "Michigan Wolverines",
+      "shortName": "Michigan",
+      "abbr": "MICH"
+    },
+    {
+      "id": "2393",
+      "school": "Middle Tennessee",
+      "name": "Middle Tennessee Blue Raiders",
+      "shortName": "MTSU",
+      "abbr": "MTSU"
+    },
+    {
+      "id": "2394",
+      "school": "Middlebury",
+      "name": "Middlebury Panthers",
+      "shortName": "Middlebury",
+      "abbr": "MIDB"
+    },
+    {
+      "id": "565",
+      "school": "Midland",
+      "name": "Midland MIDLAND LUTHERAN",
+      "shortName": "Midland",
+      "abbr": "MIDL"
+    },
+    {
+      "id": "2395",
+      "school": "Midwestern State",
+      "name": "Midwestern State Mustangs",
+      "shortName": "Midwestern St",
+      "abbr": "MWSU"
+    },
+    {
+      "id": "2396",
+      "school": "Miles",
+      "name": "Miles Golden Bears",
+      "shortName": "Miles",
+      "abbr": "MILE"
+    },
+    {
+      "id": "210",
+      "school": "Millersville",
+      "name": "Millersville Marauders",
+      "shortName": "Millersville",
+      "abbr": "MILL"
+    },
+    {
+      "id": "74",
+      "school": "Millikin",
+      "name": "Millikin Big Blue",
+      "shortName": "Millikin",
+      "abbr": "MILK"
+    },
+    {
+      "id": "2398",
+      "school": "Millsaps",
+      "name": "Millsaps Majors",
+      "shortName": "Millsaps",
+      "abbr": "MLSP"
+    },
+    {
+      "id": "134",
+      "school": "Minnesota Duluth",
+      "name": "Minnesota Duluth Bulldogs",
+      "shortName": "Minn Duluth",
+      "abbr": "UMD"
+    },
+    {
+      "id": "135",
+      "school": "Minnesota",
+      "name": "Minnesota Golden Gophers",
+      "shortName": "Minnesota",
+      "abbr": "MINN"
+    },
+    {
+      "id": "2399",
+      "school": "Minnesota Morris",
+      "name": "Minnesota Morris Cougars",
+      "shortName": "Minn Morris",
+      "abbr": "MNMO"
+    },
+    {
+      "id": "2817",
+      "school": "Minnesota St Moorhead",
+      "name": "Minnesota St Moorhead Dragons",
+      "shortName": "Minn Moorhead",
+      "abbr": "MSUM"
+    },
+    {
+      "id": "2364",
+      "school": "Minnesota State",
+      "name": "Minnesota State Mavericks",
+      "shortName": "Minnesota St",
+      "abbr": "MNST"
+    },
+    {
+      "id": "568",
+      "school": "Minot State",
+      "name": "Minot State Beavers",
+      "shortName": "Minot St",
+      "abbr": "MINS"
+    },
+    {
+      "id": "2969",
+      "school": "Misericordia",
+      "name": "Misericordia Cougars",
+      "shortName": "Misericordia",
+      "abbr": "MISE"
+    },
+    {
+      "id": "344",
+      "school": "Mississippi State",
+      "name": "Mississippi State Bulldogs",
+      "shortName": "Mississippi St",
+      "abbr": "MSST"
+    },
+    {
+      "id": "2400",
+      "school": "Mississippi Valley State",
+      "name": "Mississippi Valley State Delta Devils",
+      "shortName": "Miss Valley St",
+      "abbr": "MVSU"
+    },
+    {
+      "id": "2880",
+      "school": "Missouri Baptist",
+      "name": "Missouri Baptist Spartans",
+      "shortName": "Missouri Bapt",
+      "abbr": "MOBU"
+    },
+    {
+      "id": "2402",
+      "school": "Missouri S&T",
+      "name": "Missouri S&T Miners",
+      "shortName": "Missouri S&T",
+      "abbr": "MS&T"
+    },
+    {
+      "id": "2403",
+      "school": "Missouri Southern State",
+      "name": "Missouri Southern State Lions",
+      "shortName": "Missouri So St",
+      "abbr": "MSSU"
+    },
+    {
+      "id": "2623",
+      "school": "Missouri State",
+      "name": "Missouri State Bears",
+      "shortName": "Missouri St",
+      "abbr": "MOST"
+    },
+    {
+      "id": "142",
+      "school": "Missouri",
+      "name": "Missouri Tigers",
+      "shortName": "Missouri",
+      "abbr": "MIZ"
+    },
+    {
+      "id": "137",
+      "school": "Missouri Western",
+      "name": "Missouri Western Griffons",
+      "shortName": "MO Western",
+      "abbr": "MOWE"
+    },
+    {
+      "id": "2919",
+      "school": "Monmouth (IL)",
+      "name": "Monmouth (IL) Fighting Scots",
+      "shortName": "Monmouth (IL)",
+      "abbr": "MNIL"
+    },
+    {
+      "id": "2405",
+      "school": "Monmouth",
+      "name": "Monmouth Hawks",
+      "shortName": "Monmouth",
+      "abbr": "MONM"
+    },
+    {
+      "id": "134001",
+      "school": "Monroe",
+      "name": "Monroe Mustangs",
+      "shortName": "Monroe",
+      "abbr": "MON"
+    },
+    {
+      "id": "149",
+      "school": "Montana",
+      "name": "Montana Grizzlies",
+      "shortName": "Montana",
+      "abbr": "MONT"
+    },
+    {
+      "id": "147",
+      "school": "Montana State",
+      "name": "Montana State Bobcats",
+      "shortName": "Montana St",
+      "abbr": "MTST"
+    },
+    {
+      "id": "2701",
+      "school": "Montana Western",
+      "name": "Montana Western Bulldogs",
+      "shortName": "MT Western",
+      "abbr": "UMW"
+    },
+    {
+      "id": "2818",
+      "school": "Montclair State",
+      "name": "Montclair State Red Hawks",
+      "shortName": "Montclair",
+      "abbr": "MCST"
+    },
+    {
+      "id": "3100",
+      "school": "Monterrey Tech",
+      "name": "Monterrey Tech Borregos",
+      "shortName": "Monterrey Tech",
+      "abbr": "MITE"
+    },
+    {
+      "id": "323",
+      "school": "Moravian",
+      "name": "Moravian Greyhounds",
+      "shortName": "Moravian",
+      "abbr": "MOR"
+    },
+    {
+      "id": "2413",
+      "school": "Morehead State",
+      "name": "Morehead State Eagles",
+      "shortName": "Morehead St",
+      "abbr": "MORE"
+    },
+    {
+      "id": "60",
+      "school": "Morehouse",
+      "name": "Morehouse Maroon Tigers",
+      "shortName": "Morehouse",
+      "abbr": "MRHO"
+    },
+    {
+      "id": "2415",
+      "school": "Morgan State",
+      "name": "Morgan State Bears",
+      "shortName": "Morgan St",
+      "abbr": "MORG"
+    },
+    {
+      "id": "2416",
+      "school": "Morningside",
+      "name": "Morningside Chiefs",
+      "shortName": "Morningside",
+      "abbr": "MNGS"
+    },
+    {
+      "id": "2419",
+      "school": "Mount St Joseph",
+      "name": "Mount St Joseph Lions",
+      "shortName": "Mt St Joseph",
+      "abbr": "MSJ"
+    },
+    {
+      "id": "426",
+      "school": "Mount Union",
+      "name": "Mount Union Purple Raiders",
+      "shortName": "Mt Union",
+      "abbr": "UMU"
+    },
+    {
+      "id": "2422",
+      "school": "Muhlenberg",
+      "name": "Muhlenberg Mules",
+      "shortName": "Muhlenberg",
+      "abbr": "MUHL"
+    },
+    {
+      "id": "93",
+      "school": "Murray State",
+      "name": "Murray State Racers",
+      "shortName": "Murray St",
+      "abbr": "MUR"
+    },
+    {
+      "id": "332",
+      "school": "Muskingum",
+      "name": "Muskingum Fighting Muskies",
+      "shortName": "Muskingum",
+      "abbr": "MSK"
+    },
+    {
+      "id": "152",
+      "school": "NC State",
+      "name": "NC State Wolfpack",
+      "shortName": "NC State",
+      "abbr": "NCSU"
+    },
+    {
+      "id": "2426",
+      "school": "Navy",
+      "name": "Navy Midshipmen",
+      "shortName": "Navy",
+      "abbr": "NAVY"
+    },
+    {
+      "id": "158",
+      "school": "Nebraska",
+      "name": "Nebraska Cornhuskers",
+      "shortName": "Nebraska",
+      "abbr": "NEB"
+    },
+    {
+      "id": "2438",
+      "school": "Nebraska Kearney",
+      "name": "Nebraska Kearney Lopers",
+      "shortName": "NE Kearney",
+      "abbr": "NEBK"
+    },
+    {
+      "id": "6845",
+      "school": "Nebraska Wesleyan",
+      "name": "Nebraska Wesleyan Prairie Wolves",
+      "shortName": "NE Wesleyan",
+      "abbr": "NWU"
+    },
+    {
+      "id": "2904",
+      "school": "Nelson (TX)",
+      "name": "Nelson (TX) Lions",
+      "shortName": "Nelson",
+      "abbr": "NEL"
+    },
+    {
+      "id": "2440",
+      "school": "Nevada",
+      "name": "Nevada Wolf Pack",
+      "shortName": "Nevada",
+      "abbr": "NEV"
+    },
+    {
+      "id": "111675",
+      "school": "New England",
+      "name": "New England Nor'easters",
+      "shortName": "New England",
+      "abbr": "UNE"
+    },
+    {
+      "id": "160",
+      "school": "New Hampshire",
+      "name": "New Hampshire Wildcats",
+      "shortName": "New Hampshire",
+      "abbr": "UNH"
+    },
+    {
+      "id": "2441",
+      "school": "New Haven",
+      "name": "New Haven Chargers",
+      "shortName": "New Haven",
+      "abbr": "NHVN"
+    },
+    {
+      "id": "2424",
+      "school": "New Mexico Highlands",
+      "name": "New Mexico Highlands Cowboys",
+      "shortName": "NM Highlands",
+      "abbr": "NMHU"
+    },
+    {
+      "id": "167",
+      "school": "New Mexico",
+      "name": "New Mexico Lobos",
+      "shortName": "New Mexico",
+      "abbr": "UNM"
+    },
+    {
+      "id": "166",
+      "school": "New Mexico State",
+      "name": "New Mexico State Aggies",
+      "shortName": "New Mexico St",
+      "abbr": "NMSU"
+    },
+    {
+      "id": "2444",
+      "school": "Newberry",
+      "name": "Newberry Wolves",
+      "shortName": "Newberry",
+      "abbr": "NBRY"
+    },
+    {
+      "id": "2447",
+      "school": "Nicholls",
+      "name": "Nicholls Colonels",
+      "shortName": "Nicholls",
+      "abbr": "NICH"
+    },
+    {
+      "id": "2884",
+      "school": "Nichols",
+      "name": "Nichols Bison",
+      "shortName": "Nichols",
+      "abbr": "NICC"
+    },
+    {
+      "id": "2450",
+      "school": "Norfolk State",
+      "name": "Norfolk State Spartans",
+      "shortName": "Norfolk St",
+      "abbr": "NORF"
+    },
+    {
+      "id": "2453",
+      "school": "North Alabama",
+      "name": "North Alabama Lions",
+      "shortName": "North Alabama",
+      "abbr": "UNA"
+    },
+    {
+      "id": "123086",
+      "school": "North American",
+      "name": "North American Stallions",
+      "shortName": "N American",
+      "abbr": "NAMU"
+    },
+    {
+      "id": "2448",
+      "school": "North Carolina A&T",
+      "name": "North Carolina A&T Aggies",
+      "shortName": "NC A&T",
+      "abbr": "NCAT"
+    },
+    {
+      "id": "2428",
+      "school": "North Carolina Central",
+      "name": "North Carolina Central Eagles",
+      "shortName": "NC Central",
+      "abbr": "NCCU"
+    },
+    {
+      "id": "153",
+      "school": "North Carolina",
+      "name": "North Carolina Tar Heels",
+      "shortName": "North Carolina",
+      "abbr": "UNC"
+    },
+    {
+      "id": "286",
+      "school": "North Carolina Wesleyan",
+      "name": "North Carolina Wesleyan Battling Bishops",
+      "shortName": "NC Wesleyan",
+      "abbr": "NCW"
+    },
+    {
+      "id": "3071",
+      "school": "North Central College",
+      "name": "North Central College Cardinals",
+      "shortName": "N Central (IL)",
+      "abbr": "NCC"
+    },
+    {
+      "id": "155",
+      "school": "North Dakota",
+      "name": "North Dakota Fighting Hawks",
+      "shortName": "North Dakota",
+      "abbr": "UND"
+    },
+    {
+      "id": "2449",
+      "school": "North Dakota State",
+      "name": "North Dakota State Bison",
+      "shortName": "N Dakota St",
+      "abbr": "NDSU"
+    },
+    {
+      "id": "2822",
+      "school": "North Greenville",
+      "name": "North Greenville Trailblazers",
+      "shortName": "N Greenville",
+      "abbr": "NGU"
+    },
+    {
+      "id": "75",
+      "school": "North Park",
+      "name": "North Park Vikings",
+      "shortName": "North Park",
+      "abbr": "NPU"
+    },
+    {
+      "id": "249",
+      "school": "North Texas",
+      "name": "North Texas Mean Green",
+      "shortName": "North Texas",
+      "abbr": "UNT"
+    },
+    {
+      "id": "196",
+      "school": "Northeastern State",
+      "name": "Northeastern State RiverHawks",
+      "shortName": "NE State",
+      "abbr": "NESU"
+    },
+    {
+      "id": "2464",
+      "school": "Northern Arizona",
+      "name": "Northern Arizona Lumberjacks",
+      "shortName": "N Arizona",
+      "abbr": "NAU"
+    },
+    {
+      "id": "2458",
+      "school": "Northern Colorado",
+      "name": "Northern Colorado Bears",
+      "shortName": "N Colorado",
+      "abbr": "UNCO"
+    },
+    {
+      "id": "2459",
+      "school": "Northern Illinois",
+      "name": "Northern Illinois Huskies",
+      "shortName": "N Illinois",
+      "abbr": "NIU"
+    },
+    {
+      "id": "2460",
+      "school": "Northern Iowa",
+      "name": "Northern Iowa Panthers",
+      "shortName": "Northern Iowa",
+      "abbr": "UNI"
+    },
+    {
+      "id": "128",
+      "school": "Northern Michigan",
+      "name": "Northern Michigan Wildcats",
+      "shortName": "N Michigan",
+      "abbr": "NMI"
+    },
+    {
+      "id": "425",
+      "school": "Northern State",
+      "name": "Northern State Wolves",
+      "shortName": "Northern St",
+      "abbr": "NSU"
+    },
+    {
+      "id": "138",
+      "school": "Northwest Missouri State",
+      "name": "Northwest Missouri State Bearcats",
+      "shortName": "NW Missouri St",
+      "abbr": "MWMO"
+    },
+    {
+      "id": "583",
+      "school": "Northwestern (MN)",
+      "name": "Northwestern (MN) Eagles",
+      "shortName": "N'Western (MN)",
+      "abbr": "UNW"
+    },
+    {
+      "id": "2823",
+      "school": "Northwestern (OK)",
+      "name": "Northwestern (OK) Rangers",
+      "shortName": "N'Western (OK)",
+      "abbr": "NWOK"
+    },
+    {
+      "id": "2466",
+      "school": "Northwestern State",
+      "name": "Northwestern State Demons",
+      "shortName": "N'Western St",
+      "abbr": "NWST"
+    },
+    {
+      "id": "77",
+      "school": "Northwestern",
+      "name": "Northwestern Wildcats",
+      "shortName": "Northwestern",
+      "abbr": "NU"
+    },
+    {
+      "id": "2886",
+      "school": "Northwood",
+      "name": "Northwood Timberwolves",
+      "shortName": "Northwood",
+      "abbr": "NWD"
+    },
+    {
+      "id": "2467",
+      "school": "Norwich",
+      "name": "Norwich Cadets",
+      "shortName": "Norwich",
+      "abbr": "NWCH"
+    },
+    {
+      "id": "87",
+      "school": "Notre Dame",
+      "name": "Notre Dame Fighting Irish",
+      "shortName": "Notre Dame",
+      "abbr": "ND"
+    },
+    {
+      "id": "391",
+      "school": "Oberlin",
+      "name": "Oberlin Yeomen",
+      "shortName": "Oberlin",
+      "abbr": "OBE"
+    },
+    {
+      "id": "195",
+      "school": "Ohio",
+      "name": "Ohio Bobcats",
+      "shortName": "Ohio",
+      "abbr": "OHIO"
+    },
+    {
+      "id": "2477",
+      "school": "Ohio Dominican",
+      "name": "Ohio Dominican Panthers",
+      "shortName": "Ohio Dominican",
+      "abbr": "OHDU"
+    },
+    {
+      "id": "427",
+      "school": "Ohio Northern",
+      "name": "Ohio Northern Polar Bears",
+      "shortName": "Ohio Northern",
+      "abbr": "OHNU"
+    },
+    {
+      "id": "194",
+      "school": "Ohio State",
+      "name": "Ohio State Buckeyes",
+      "shortName": "Ohio State",
+      "abbr": "OSU"
+    },
+    {
+      "id": "3161",
+      "school": "Ohio State Newark",
+      "name": "Ohio State Newark Titans",
+      "shortName": "Osunewark",
+      "abbr": "OSU"
+    },
+    {
+      "id": "2980",
+      "school": "Ohio Wesleyan",
+      "name": "Ohio Wesleyan Battling Bishops",
+      "shortName": "Ohio Wesleyan",
+      "abbr": "OWU"
+    },
+    {
+      "id": "319",
+      "school": "Oklahoma Baptist",
+      "name": "Oklahoma Baptist Bison",
+      "shortName": "OK Baptist",
+      "abbr": "OKBU"
+    },
+    {
+      "id": "2824",
+      "school": "Oklahoma Panhandle",
+      "name": "Oklahoma Panhandle OK PANHANDLE ST",
+      "shortName": "OK Panhandle",
+      "abbr": "OPSU"
+    },
+    {
+      "id": "201",
+      "school": "Oklahoma",
+      "name": "Oklahoma Sooners",
+      "shortName": "Oklahoma",
+      "abbr": "OU"
+    },
+    {
+      "id": "197",
+      "school": "Oklahoma State",
+      "name": "Oklahoma State Cowboys",
+      "shortName": "Oklahoma St",
+      "abbr": "OKST"
+    },
+    {
+      "id": "295",
+      "school": "Old Dominion",
+      "name": "Old Dominion Monarchs",
+      "shortName": "Old Dominion",
+      "abbr": "ODU"
+    },
+    {
+      "id": "145",
+      "school": "Ole Miss",
+      "name": "Ole Miss Rebels",
+      "shortName": "Ole Miss",
+      "abbr": "MISS"
+    },
+    {
+      "id": "354",
+      "school": "Olivet",
+      "name": "Olivet Comets",
+      "shortName": "Olivet",
+      "abbr": "UOO"
+    },
+    {
+      "id": "2483",
+      "school": "Oregon",
+      "name": "Oregon Ducks",
+      "shortName": "Oregon",
+      "abbr": "ORE"
+    },
+    {
+      "id": "204",
+      "school": "Oregon State",
+      "name": "Oregon State Beavers",
+      "shortName": "Oregon St",
+      "abbr": "ORST"
+    },
+    {
+      "id": "359",
+      "school": "Otterbein",
+      "name": "Otterbein Cardinals",
+      "shortName": "Otterbein",
+      "abbr": "OTTB"
+    },
+    {
+      "id": "2888",
+      "school": "Ouachita Baptist",
+      "name": "Ouachita Baptist Tigers",
+      "shortName": "Ouachita Bapt",
+      "abbr": "OBU"
+    },
+    {
+      "id": "2487",
+      "school": "Pace",
+      "name": "Pace Setters",
+      "shortName": "Pace",
+      "abbr": "PACE"
+    },
+    {
+      "id": "205",
+      "school": "Pacific (OR)",
+      "name": "Pacific (OR) Boxers",
+      "shortName": "Pacific (OR)",
+      "abbr": "PCOR"
+    },
+    {
+      "id": "2486",
+      "school": "Pacific Lutheran",
+      "name": "Pacific Lutheran Lutes",
+      "shortName": "Pac Lutheran",
+      "abbr": "PCLT"
+    },
+    {
+      "id": "213",
+      "school": "Penn State",
+      "name": "Penn State Nittany Lions",
+      "shortName": "Penn State",
+      "abbr": "PSU"
+    },
+    {
+      "id": "219",
+      "school": "Pennsylvania",
+      "name": "Pennsylvania Quakers",
+      "shortName": "Penn",
+      "abbr": "PENN"
+    },
+    {
+      "id": "95",
+      "school": "Pikeville",
+      "name": "Pikeville Bears",
+      "shortName": "Pikeville",
+      "abbr": "PIKEV"
+    },
+    {
+      "id": "90",
+      "school": "Pittsburg State",
+      "name": "Pittsburg State Gorillas",
+      "shortName": "Pittsburg St",
+      "abbr": "PTSU"
+    },
+    {
+      "id": "221",
+      "school": "Pittsburgh",
+      "name": "Pittsburgh Panthers",
+      "shortName": "Pitt",
+      "abbr": "PITT"
+    },
+    {
+      "id": "2972",
+      "school": "Plymouth State",
+      "name": "Plymouth State Panthers",
+      "shortName": "Plymouth St",
+      "abbr": "PLYM"
+    },
+    {
+      "id": "3179",
+      "school": "Point University",
+      "name": "Point University Skyhawks",
+      "shortName": "Point",
+      "abbr": "POINT"
+    },
+    {
+      "id": "2923",
+      "school": "Pomona Pitzer",
+      "name": "Pomona Pitzer Sagehens",
+      "shortName": "Pomona Pitzer",
+      "abbr": "POPI"
+    },
+    {
+      "id": "2502",
+      "school": "Portland State",
+      "name": "Portland State Vikings",
+      "shortName": "Portland St",
+      "abbr": "PRST"
+    },
+    {
+      "id": "126086",
+      "school": "Post",
+      "name": "Post Eagles",
+      "shortName": "Post",
+      "abbr": "POST"
+    },
+    {
+      "id": "2504",
+      "school": "Prairie View A&M",
+      "name": "Prairie View A&M Panthers",
+      "shortName": "Prairie View",
+      "abbr": "PV"
+    },
+    {
+      "id": "2506",
+      "school": "Presbyterian",
+      "name": "Presbyterian Blue Hose",
+      "shortName": "Presbyterian",
+      "abbr": "PRES"
+    },
+    {
+      "id": "163",
+      "school": "Princeton",
+      "name": "Princeton Tigers",
+      "shortName": "Princeton",
+      "abbr": "PRIN"
+    },
+    {
+      "id": "2508",
+      "school": "Puget Sound",
+      "name": "Puget Sound Loggers",
+      "shortName": "Puget Sound",
+      "abbr": "PUG"
+    },
+    {
+      "id": "2509",
+      "school": "Purdue",
+      "name": "Purdue Boilermakers",
+      "shortName": "Purdue",
+      "abbr": "PUR"
+    },
+    {
+      "id": "2825",
+      "school": "Quincy",
+      "name": "Quincy Hawks",
+      "shortName": "Quincy",
+      "abbr": "QUI"
+    },
+    {
+      "id": "2516",
+      "school": "Randolph Macon",
+      "name": "Randolph Macon Yellow Jackets",
+      "shortName": "Randolph Macon",
+      "abbr": "RMC"
+    },
+    {
+      "id": "29",
+      "school": "Redlands",
+      "name": "Redlands Bulldogs",
+      "shortName": "Redlands",
+      "abbr": "REDL"
+    },
+    {
+      "id": "2890",
+      "school": "Reinhardt",
+      "name": "Reinhardt Eagles",
+      "shortName": "Reinhardt",
+      "abbr": "RHDT"
+    },
+    {
+      "id": "2528",
+      "school": "Rensselaer",
+      "name": "Rensselaer Engineers",
+      "shortName": "Rensselaer",
+      "abbr": "RPI"
+    },
+    {
+      "id": "227",
+      "school": "Rhode Island",
+      "name": "Rhode Island Rams",
+      "shortName": "Rhode Island",
+      "abbr": "URI"
+    },
+    {
+      "id": "2519",
+      "school": "Rhodes",
+      "name": "Rhodes Lynx",
+      "shortName": "Rhodes",
+      "abbr": "RHDS"
+    },
+    {
+      "id": "242",
+      "school": "Rice",
+      "name": "Rice Owls",
+      "shortName": "Rice",
+      "abbr": "RICE"
+    },
+    {
+      "id": "257",
+      "school": "Richmond",
+      "name": "Richmond Spiders",
+      "shortName": "Richmond",
+      "abbr": "RICH"
+    },
+    {
+      "id": "2891",
+      "school": "Ripon",
+      "name": "Ripon Red Hawks",
+      "shortName": "Ripon",
+      "abbr": "RIP"
+    },
+    {
+      "id": "2523",
+      "school": "Robert Morris",
+      "name": "Robert Morris Colonials",
+      "shortName": "Robert Morris",
+      "abbr": "RMU"
+    },
+    {
+      "id": "184",
+      "school": "Rochester (NY)",
+      "name": "Rochester (NY) Yellow Jackets",
+      "shortName": "Rochester (NY)",
+      "abbr": "URNY"
+    },
+    {
+      "id": "2524",
+      "school": "Rockford",
+      "name": "Rockford Regents",
+      "shortName": "Rockford",
+      "abbr": "RFU"
+    },
+    {
+      "id": "599",
+      "school": "Roosevelt",
+      "name": "Roosevelt Lakers",
+      "shortName": "Roosevelt",
+      "abbr": "RSVT"
+    },
+    {
+      "id": "127991",
+      "school": "Roosevelt",
+      "name": "Roosevelt Lakers",
+      "shortName": "Roosevelt",
+      "abbr": "RSVT"
+    },
+    {
+      "id": "86",
+      "school": "Rose Hulman",
+      "name": "Rose Hulman Fightin' Engineers",
+      "shortName": "Rose Hulman",
+      "abbr": "RHIT"
+    },
+    {
+      "id": "2827",
+      "school": "Rowan",
+      "name": "Rowan Profs",
+      "shortName": "Rowan",
+      "abbr": "ROW"
+    },
+    {
+      "id": "164",
+      "school": "Rutgers",
+      "name": "Rutgers Scarlet Knights",
+      "shortName": "Rutgers",
+      "abbr": "RUTG"
+    },
+    {
+      "id": "2545",
+      "school": "SE Louisiana",
+      "name": "SE Louisiana Lions",
+      "shortName": "SE Louisiana",
+      "abbr": "SELA"
+    },
+    {
+      "id": "2567",
+      "school": "SMU",
+      "name": "SMU Mustangs",
+      "shortName": "SMU",
+      "abbr": "SMU"
+    },
+    {
+      "id": "2782",
+      "school": "SUNY Cortland",
+      "name": "SUNY Cortland Red Dragons",
+      "shortName": "SUNY Cortland",
+      "abbr": "NYCL"
+    },
+    {
+      "id": "3236",
+      "school": "SUNY Erie",
+      "name": "SUNY Erie Kats",
+      "shortName": "SUNY Erie",
+      "abbr": "NYER"
+    },
+    {
+      "id": "2951",
+      "school": "SUNY Maritime",
+      "name": "SUNY Maritime Privateers",
+      "shortName": "SUNY Maritime",
+      "abbr": "NYMT"
+    },
+    {
+      "id": "3110",
+      "school": "SUNY Morrisville",
+      "name": "SUNY Morrisville Mustangs",
+      "shortName": "SUNY Morrisvle",
+      "abbr": "NYMS"
+    },
+    {
+      "id": "16",
+      "school": "Sacramento State",
+      "name": "Sacramento State Hornets",
+      "shortName": "Sacramento St",
+      "abbr": "SAC"
+    },
+    {
+      "id": "2529",
+      "school": "Sacred Heart",
+      "name": "Sacred Heart Pioneers",
+      "shortName": "Sacred Heart",
+      "abbr": "SHU"
+    },
+    {
+      "id": "129",
+      "school": "Saginaw Valley State",
+      "name": "Saginaw Valley State Cardinals",
+      "shortName": "Saginaw Valley",
+      "abbr": "SVSU"
+    },
+    {
+      "id": "2830",
+      "school": "Saint Anselm",
+      "name": "Saint Anselm Hawks",
+      "shortName": "Saint Anselm",
+      "abbr": "SANS"
+    },
+    {
+      "id": "2831",
+      "school": "Saint Francis (IN)",
+      "name": "Saint Francis (IN) Cougars",
+      "shortName": "St Francis IN",
+      "abbr": "SFIN"
+    },
+    {
+      "id": "2598",
+      "school": "Saint Francis",
+      "name": "Saint Francis Red Flash",
+      "shortName": "Saint Francis",
+      "abbr": "SFPA"
+    },
+    {
+      "id": "2600",
+      "school": "Saint John's (MN)",
+      "name": "Saint John's (MN) Johnnies",
+      "shortName": "St Johns (MN)",
+      "abbr": "STJM"
+    },
+    {
+      "id": "2614",
+      "school": "Saint Vincent",
+      "name": "Saint Vincent Bearcats",
+      "shortName": "Saint Vincent",
+      "abbr": "SVC"
+    },
+    {
+      "id": "2615",
+      "school": "Saint Xavier",
+      "name": "Saint Xavier Cougars",
+      "shortName": "Saint Xavier",
+      "abbr": "STX"
+    },
+    {
+      "id": "2532",
+      "school": "Salisbury",
+      "name": "Salisbury Sea Gulls",
+      "shortName": "Salisbury",
+      "abbr": "SAL"
+    },
+    {
+      "id": "2776",
+      "school": "Salve Regina",
+      "name": "Salve Regina Seahawks",
+      "shortName": "Salve Regina",
+      "abbr": "SALV"
+    },
+    {
+      "id": "2534",
+      "school": "Sam Houston",
+      "name": "Sam Houston Bearkats",
+      "shortName": "Sam Houston",
+      "abbr": "SHSU"
+    },
+    {
+      "id": "2535",
+      "school": "Samford",
+      "name": "Samford Bulldogs",
+      "shortName": "Samford",
+      "abbr": "SAM"
+    },
+    {
+      "id": "21",
+      "school": "San Diego State",
+      "name": "San Diego State Aztecs",
+      "shortName": "San Diego St",
+      "abbr": "SDSU"
+    },
+    {
+      "id": "301",
+      "school": "San Diego",
+      "name": "San Diego Toreros",
+      "shortName": "San Diego",
+      "abbr": "USD"
+    },
+    {
+      "id": "23",
+      "school": "San José State",
+      "name": "San José State Spartans",
+      "shortName": "San José St",
+      "abbr": "SJSU"
+    },
+    {
+      "id": "2542",
+      "school": "Savannah State",
+      "name": "Savannah State Tigers",
+      "shortName": "Savannah St",
+      "abbr": "SAV"
+    },
+    {
+      "id": "611",
+      "school": "Seton Hill",
+      "name": "Seton Hill Griffins",
+      "shortName": "Seton Hill",
+      "abbr": "SEHI"
+    },
+    {
+      "id": "2553",
+      "school": "Sewanee",
+      "name": "Sewanee Tigers",
+      "shortName": "Sewanee",
+      "abbr": "SEWA"
+    },
+    {
+      "id": "2551",
+      "school": "Shaw",
+      "name": "Shaw Bears",
+      "shortName": "Shaw",
+      "abbr": "SHAW"
+    },
+    {
+      "id": "2828",
+      "school": "Shenandoah",
+      "name": "Shenandoah Hornets",
+      "shortName": "Shenandoah",
+      "abbr": "SHEN"
+    },
+    {
+      "id": "2974",
+      "school": "Shepherd",
+      "name": "Shepherd Rams",
+      "shortName": "Shepherd",
+      "abbr": "SHEP"
+    },
+    {
+      "id": "2559",
+      "school": "Shippensburg",
+      "name": "Shippensburg Raiders",
+      "shortName": "Shippensburg",
+      "abbr": "SHIP"
+    },
+    {
+      "id": "2560",
+      "school": "Shorter",
+      "name": "Shorter Hawks",
+      "shortName": "Shorter",
+      "abbr": "SHOU"
+    },
+    {
+      "id": "2562",
+      "school": "Siena Heights",
+      "name": "Siena Heights Saints",
+      "shortName": "Siena Heights",
+      "abbr": "SHTU"
+    },
+    {
+      "id": "129758",
+      "school": "Simpson (CA)",
+      "name": "Simpson (CA) Red Hawks",
+      "shortName": "Simpson (CA)",
+      "abbr": "SUCA"
+    },
+    {
+      "id": "2564",
+      "school": "Simpson (IA)",
+      "name": "Simpson (IA) Storm",
+      "shortName": "Simpson (IA)",
+      "abbr": "SCIA"
+    },
+    {
+      "id": "2894",
+      "school": "Sioux Falls",
+      "name": "Sioux Falls Cougars",
+      "shortName": "Sioux Falls",
+      "abbr": "SFU"
+    },
+    {
+      "id": "215",
+      "school": "Slippery Rock",
+      "name": "Slippery Rock The Rock",
+      "shortName": "Slippery Rock",
+      "abbr": "SRU"
+    },
+    {
+      "id": "6",
+      "school": "South Alabama",
+      "name": "South Alabama Jaguars",
+      "shortName": "South Alabama",
+      "abbr": "USA"
+    },
+    {
+      "id": "2579",
+      "school": "South Carolina",
+      "name": "South Carolina Gamecocks",
+      "shortName": "South Carolina",
+      "abbr": "SC"
+    },
+    {
+      "id": "2569",
+      "school": "South Carolina State",
+      "name": "South Carolina State Bulldogs",
+      "shortName": "SC State",
+      "abbr": "SCST"
+    },
+    {
+      "id": "233",
+      "school": "South Dakota",
+      "name": "South Dakota Coyotes",
+      "shortName": "South Dakota",
+      "abbr": "SDAK"
+    },
+    {
+      "id": "613",
+      "school": "South Dakota Mines",
+      "name": "South Dakota Mines Hardrockers",
+      "shortName": "SD Mines",
+      "abbr": "SDMT"
+    },
+    {
+      "id": "2571",
+      "school": "South Dakota State",
+      "name": "South Dakota State Jackrabbits",
+      "shortName": "S Dakota St",
+      "abbr": "SDST"
+    },
+    {
+      "id": "58",
+      "school": "South Florida",
+      "name": "South Florida Bulls",
+      "shortName": "South Florida",
+      "abbr": "USF"
+    },
+    {
+      "id": "2546",
+      "school": "Southeast Missouri State",
+      "name": "Southeast Missouri State Redhawks",
+      "shortName": "SE Missouri",
+      "abbr": "SEMO"
+    },
+    {
+      "id": "267",
+      "school": "Southeastern",
+      "name": "Southeastern Fires",
+      "shortName": "Southeastern",
+      "abbr": "SEU"
+    },
+    {
+      "id": "199",
+      "school": "Southeastern Oklahoma State",
+      "name": "Southeastern Oklahoma State Savage Storm",
+      "shortName": "SE Oklahoma St",
+      "abbr": "SEOK"
+    },
+    {
+      "id": "2568",
+      "school": "Southern Arkansas",
+      "name": "Southern Arkansas Muleriders",
+      "shortName": "S Arkansas",
+      "abbr": "SAR"
+    },
+    {
+      "id": "2583",
+      "school": "Southern Connecticut State",
+      "name": "Southern Connecticut State Owls",
+      "shortName": "S Conn St",
+      "abbr": "SCTS"
+    },
+    {
+      "id": "79",
+      "school": "Southern Illinois",
+      "name": "Southern Illinois Salukis",
+      "shortName": "S Illinois",
+      "abbr": "SIU"
+    },
+    {
+      "id": "2582",
+      "school": "Southern",
+      "name": "Southern Jaguars",
+      "shortName": "Southern",
+      "abbr": "SOU"
+    },
+    {
+      "id": "2572",
+      "school": "Southern Miss",
+      "name": "Southern Miss Golden Eagles",
+      "shortName": "Southern Miss",
+      "abbr": "USM"
+    },
+    {
+      "id": "200",
+      "school": "Southern Nazarene",
+      "name": "Southern Nazarene Crimson Storm",
+      "shortName": "S Nazarene",
+      "abbr": "SNU"
+    },
+    {
+      "id": "2584",
+      "school": "Southern Oregon",
+      "name": "Southern Oregon Raiders",
+      "shortName": "S Oregon",
+      "abbr": "SOR"
+    },
+    {
+      "id": "253",
+      "school": "Southern Utah",
+      "name": "Southern Utah Thunderbirds",
+      "shortName": "Southern Utah",
+      "abbr": "SUU"
+    },
+    {
+      "id": "2896",
+      "school": "Southern Virginia",
+      "name": "Southern Virginia Knights",
+      "shortName": "S Virginia",
+      "abbr": "SOVA"
+    },
+    {
+      "id": "2586",
+      "school": "Southwest Baptist",
+      "name": "Southwest Baptist Bearcats",
+      "shortName": "SW Baptist",
+      "abbr": "SWBU"
+    },
+    {
+      "id": "2587",
+      "school": "Southwest Minnesota State",
+      "name": "Southwest Minnesota State Mustangs",
+      "shortName": "SW Minn St",
+      "abbr": "SWMS"
+    },
+    {
+      "id": "616",
+      "school": "Southwestern (KS)",
+      "name": "Southwestern (KS) Moundbuilders",
+      "shortName": "SW Col (KS)",
+      "abbr": "SWKS"
+    },
+    {
+      "id": "2927",
+      "school": "Southwestern Oklahoma State",
+      "name": "Southwestern Oklahoma State Bulldogs",
+      "shortName": "SW Oklahoma St",
+      "abbr": "SOSU"
+    },
+    {
+      "id": "2588",
+      "school": "Southwestern U",
+      "name": "Southwestern U Pirates",
+      "shortName": "Southwestern",
+      "abbr": "SWU"
+    },
+    {
+      "id": "81",
+      "school": "Springfield",
+      "name": "Springfield Pride",
+      "shortName": "Springfield",
+      "abbr": "SPR"
+    },
+    {
+      "id": "2591",
+      "school": "St. Ambrose",
+      "name": "St. Ambrose Fighting Bees",
+      "shortName": "St Ambrose",
+      "abbr": "STAM"
+    },
+    {
+      "id": "111610",
+      "school": "St. Andrews",
+      "name": "St. Andrews Knights",
+      "shortName": "St Andrews",
+      "abbr": "STAU"
+    },
+    {
+      "id": "2595",
+      "school": "St. Francis (IL)",
+      "name": "St. Francis (IL) Fighting Saints",
+      "shortName": "St Francis IL",
+      "abbr": "SFIL"
+    },
+    {
+      "id": "374",
+      "school": "St. John Fisher",
+      "name": "St. John Fisher Cardinals",
+      "shortName": "St John Fisher",
+      "abbr": "STJF"
+    },
+    {
+      "id": "2779",
+      "school": "St. Lawrence",
+      "name": "St. Lawrence Saints",
+      "shortName": "St Lawrence",
+      "abbr": "USL"
+    },
+    {
+      "id": "2832",
+      "school": "St. Norbert",
+      "name": "St. Norbert Green Knights",
+      "shortName": "St Norbert",
+      "abbr": "STNC"
+    },
+    {
+      "id": "133",
+      "school": "St. Olaf",
+      "name": "St. Olaf Oles",
+      "shortName": "St Olaf",
+      "abbr": "OLAF"
+    },
+    {
+      "id": "3254",
+      "school": "St. Petersburg",
+      "name": "St. Petersburg Glory Eagles",
+      "shortName": "U of Faith",
+      "abbr": "UFFL"
+    },
+    {
+      "id": "375",
+      "school": "St. Scholastica",
+      "name": "St. Scholastica Saints",
+      "shortName": "St Scholastica",
+      "abbr": "CSS"
+    },
+    {
+      "id": "2900",
+      "school": "St. Thomas",
+      "name": "St. Thomas Tommies",
+      "shortName": "St Thomas",
+      "abbr": "STMN"
+    },
+    {
+      "id": "24",
+      "school": "Stanford",
+      "name": "Stanford Cardinal",
+      "shortName": "Stanford",
+      "abbr": "STAN"
+    },
+    {
+      "id": "2617",
+      "school": "Stephen F. Austin",
+      "name": "Stephen F. Austin Lumberjacks",
+      "shortName": "SF Austin",
+      "abbr": "SFA"
+    },
+    {
+      "id": "618",
+      "school": "Sterling",
+      "name": "Sterling STERLING KS",
+      "shortName": "Sterling",
+      "abbr": "STLG"
+    },
+    {
+      "id": "56",
+      "school": "Stetson",
+      "name": "Stetson Hatters",
+      "shortName": "Stetson",
+      "abbr": "STET"
+    },
+    {
+      "id": "471",
+      "school": "Stevenson",
+      "name": "Stevenson Mustangs",
+      "shortName": "Stevenson",
+      "abbr": "STVS"
+    },
+    {
+      "id": "284",
+      "school": "Stonehill",
+      "name": "Stonehill Skyhawks",
+      "shortName": "Stonehill",
+      "abbr": "STO"
+    },
+    {
+      "id": "2619",
+      "school": "Stony Brook",
+      "name": "Stony Brook Seawolves",
+      "shortName": "Stony Brook",
+      "abbr": "STBK"
+    },
+    {
+      "id": "2834",
+      "school": "Sul Ross State",
+      "name": "Sul Ross State Lobos",
+      "shortName": "Sul Ross St",
+      "abbr": "SRST"
+    },
+    {
+      "id": "216",
+      "school": "Susquehanna",
+      "name": "Susquehanna River Hawks",
+      "shortName": "Susquehanna",
+      "abbr": "SUSQ"
+    },
+    {
+      "id": "183",
+      "school": "Syracuse",
+      "name": "Syracuse Orange",
+      "shortName": "Syracuse",
+      "abbr": "SYR"
+    },
+    {
+      "id": "2628",
+      "school": "TCU",
+      "name": "TCU Horned Frogs",
+      "shortName": "TCU",
+      "abbr": "TCU"
+    },
+    {
+      "id": "2627",
+      "school": "Tarleton State",
+      "name": "Tarleton State Texans",
+      "shortName": "Tarleton St",
+      "abbr": "TAR"
+    },
+    {
+      "id": "620",
+      "school": "Taylor",
+      "name": "Taylor Trojans",
+      "shortName": "Taylor",
+      "abbr": "TLRU"
+    },
+    {
+      "id": "218",
+      "school": "Temple",
+      "name": "Temple Owls",
+      "shortName": "Temple",
+      "abbr": "TEM"
+    },
+    {
+      "id": "2634",
+      "school": "Tennessee State",
+      "name": "Tennessee State Tigers",
+      "shortName": "Tennessee St",
+      "abbr": "TNST"
+    },
+    {
+      "id": "2635",
+      "school": "Tennessee Tech",
+      "name": "Tennessee Tech Golden Eagles",
+      "shortName": "Tennessee Tech",
+      "abbr": "TNTC"
+    },
+    {
+      "id": "2633",
+      "school": "Tennessee",
+      "name": "Tennessee Volunteers",
+      "shortName": "Tennessee",
+      "abbr": "TENN"
+    },
+    {
+      "id": "245",
+      "school": "Texas A&M",
+      "name": "Texas A&M Aggies",
+      "shortName": "Texas A&M",
+      "abbr": "TA&M"
+    },
+    {
+      "id": "2658",
+      "school": "Texas A&M-Kingsville",
+      "name": "Texas A&M-Kingsville Javelinas",
+      "shortName": "TAMU-Kingsvlle",
+      "abbr": "TAMK"
+    },
+    {
+      "id": "2637",
+      "school": "Texas College",
+      "name": "Texas College Steers",
+      "shortName": "Texas College",
+      "abbr": "TXCL"
+    },
+    {
+      "id": "251",
+      "school": "Texas",
+      "name": "Texas Longhorns",
+      "shortName": "Texas",
+      "abbr": "TEX"
+    },
+    {
+      "id": "2639",
+      "school": "Texas Lutheran",
+      "name": "Texas Lutheran Bulldogs",
+      "shortName": "Texas Lutheran",
+      "abbr": "TXLU"
+    },
+    {
+      "id": "2640",
+      "school": "Texas Southern",
+      "name": "Texas Southern Tigers",
+      "shortName": "Texas Southern",
+      "abbr": "TXSO"
+    },
+    {
+      "id": "326",
+      "school": "Texas State",
+      "name": "Texas State Bobcats",
+      "shortName": "Texas St",
+      "abbr": "TXST"
+    },
+    {
+      "id": "2641",
+      "school": "Texas Tech",
+      "name": "Texas Tech Red Raiders",
+      "shortName": "Texas Tech",
+      "abbr": "TTU"
+    },
+    {
+      "id": "2643",
+      "school": "The Citadel",
+      "name": "The Citadel Bulldogs",
+      "shortName": "The Citadel",
+      "abbr": "CIT"
+    },
+    {
+      "id": "2442",
+      "school": "The College of New Jersey",
+      "name": "The College of New Jersey Lions",
+      "shortName": "College of NJ",
+      "abbr": "TCNJ"
+    },
+    {
+      "id": "2644",
+      "school": "Thiel",
+      "name": "Thiel Tomcats",
+      "shortName": "Thiel",
+      "abbr": "THI"
+    },
+    {
+      "id": "2646",
+      "school": "Thomas More",
+      "name": "Thomas More Saints",
+      "shortName": "Thomas More",
+      "abbr": "TMOR"
+    },
+    {
+      "id": "134000",
+      "school": "Thomas",
+      "name": "Thomas Night Hawks",
+      "shortName": "Thomas",
+      "abbr": "THO"
+    },
+    {
+      "id": "2838",
+      "school": "Tiffin",
+      "name": "Tiffin Dragons",
+      "shortName": "Tiffin",
+      "abbr": "TIFF"
+    },
+    {
+      "id": "2649",
+      "school": "Toledo",
+      "name": "Toledo Rockets",
+      "shortName": "Toledo",
+      "abbr": "TOL"
+    },
+    {
+      "id": "119",
+      "school": "Towson",
+      "name": "Towson Tigers",
+      "shortName": "Towson",
+      "abbr": "TOW"
+    },
+    {
+      "id": "2651",
+      "school": "Trine",
+      "name": "Trine Thunder",
+      "shortName": "Trine",
+      "abbr": "TRNE"
+    },
+    {
+      "id": "2977",
+      "school": "Trinity (CT)",
+      "name": "Trinity (CT) Bantams",
+      "shortName": "Trinity (CT)",
+      "abbr": "TCCT"
+    },
+    {
+      "id": "386",
+      "school": "Trinity (TX)",
+      "name": "Trinity (TX) Tigers",
+      "shortName": "Trinity (TX)",
+      "abbr": "TUTX"
+    },
+    {
+      "id": "3214",
+      "school": "Trinity Bible",
+      "name": "Trinity Bible Lions",
+      "shortName": "Trinity Bible",
+      "abbr": "TBIB"
+    },
+    {
+      "id": "2653",
+      "school": "Troy",
+      "name": "Troy Trojans",
+      "shortName": "Troy",
+      "abbr": "TROY"
+    },
+    {
+      "id": "3237",
+      "school": "Troy",
+      "name": "Troy Vikings",
+      "shortName": "Hudson",
+      "abbr": "HVCC"
+    },
+    {
+      "id": "2654",
+      "school": "Truman State",
+      "name": "Truman State Bulldogs",
+      "shortName": "Truman St",
+      "abbr": "TRST"
+    },
+    {
+      "id": "112",
+      "school": "Tufts",
+      "name": "Tufts Jumbos",
+      "shortName": "Tufts",
+      "abbr": "TUFT"
+    },
+    {
+      "id": "2655",
+      "school": "Tulane",
+      "name": "Tulane Green Wave",
+      "shortName": "Tulane",
+      "abbr": "TULN"
+    },
+    {
+      "id": "202",
+      "school": "Tulsa",
+      "name": "Tulsa Golden Hurricane",
+      "shortName": "Tulsa",
+      "abbr": "TLSA"
+    },
+    {
+      "id": "2839",
+      "school": "Tusculum",
+      "name": "Tusculum Pioneers",
+      "shortName": "Tusculum",
+      "abbr": "TUSC"
+    },
+    {
+      "id": "2657",
+      "school": "Tuskegee",
+      "name": "Tuskegee Golden Tigers",
+      "shortName": "Tuskegee",
+      "abbr": "TUSK"
+    },
+    {
+      "id": "5",
+      "school": "UAB",
+      "name": "UAB Blazers",
+      "shortName": "UAB",
+      "abbr": "UAB"
+    },
+    {
+      "id": "399",
+      "school": "UAlbany",
+      "name": "UAlbany Great Danes",
+      "shortName": "UAlbany",
+      "abbr": "UALB"
+    },
+    {
+      "id": "302",
+      "school": "UC Davis",
+      "name": "UC Davis Aggies",
+      "shortName": "UC Davis",
+      "abbr": "UCD"
+    },
+    {
+      "id": "2116",
+      "school": "UCF",
+      "name": "UCF Knights",
+      "shortName": "UCF",
+      "abbr": "UCF"
+    },
+    {
+      "id": "26",
+      "school": "UCLA",
+      "name": "UCLA Bruins",
+      "shortName": "UCLA",
+      "abbr": "UCLA"
+    },
+    {
+      "id": "41",
+      "school": "UConn",
+      "name": "UConn Huskies",
+      "shortName": "UConn",
+      "abbr": "CONN"
+    },
+    {
+      "id": "2433",
+      "school": "UL Monroe",
+      "name": "UL Monroe Warhawks",
+      "shortName": "UL Monroe",
+      "abbr": "ULM"
+    },
+    {
+      "id": "379",
+      "school": "UMass Dartmouth",
+      "name": "UMass Dartmouth Corsairs",
+      "shortName": "UMass Dartmth",
+      "abbr": "MDAR"
+    },
+    {
+      "id": "2882",
+      "school": "UNC Pembroke",
+      "name": "UNC Pembroke Braves",
+      "shortName": "UNC Pembroke",
+      "abbr": "UNCP"
+    },
+    {
+      "id": "2439",
+      "school": "UNLV",
+      "name": "UNLV Rebels",
+      "shortName": "UNLV",
+      "abbr": "UNLV"
+    },
+    {
+      "id": "30",
+      "school": "USC",
+      "name": "USC Trojans",
+      "shortName": "USC",
+      "abbr": "USC"
+    },
+    {
+      "id": "2630",
+      "school": "UT Martin",
+      "name": "UT Martin Skyhawks",
+      "shortName": "UT Martin",
+      "abbr": "UTM"
+    },
+    {
+      "id": "110243",
+      "school": "UT Permian Basin",
+      "name": "UT Permian Basin Falcons",
+      "shortName": "UT Prmian Basn",
+      "abbr": "UTPB"
+    },
+    {
+      "id": "2638",
+      "school": "UTEP",
+      "name": "UTEP Miners",
+      "shortName": "UTEP",
+      "abbr": "UTEP"
+    },
+    {
+      "id": "2636",
+      "school": "UTSA",
+      "name": "UTSA Roadrunners",
+      "shortName": "UTSA",
+      "abbr": "UTSA"
+    },
+    {
+      "id": "2842",
+      "school": "UVA Wise",
+      "name": "UVA Wise Cavaliers",
+      "shortName": "UVA Wise",
+      "abbr": "UVAW"
+    },
+    {
+      "id": "237",
+      "school": "Union",
+      "name": "Union Garnet Chargers",
+      "shortName": "Union",
+      "abbr": "UNNY"
+    },
+    {
+      "id": "559",
+      "school": "University of Mary",
+      "name": "University of Mary Marauders",
+      "shortName": "UMary",
+      "abbr": "MARY"
+    },
+    {
+      "id": "3212",
+      "school": "University of Mexico",
+      "name": "University of Mexico MEXICO U",
+      "shortName": "U of Mexico",
+      "abbr": "UNAM"
+    },
+    {
+      "id": "389",
+      "school": "Upper Iowa",
+      "name": "Upper Iowa Peacocks",
+      "shortName": "Upper Iowa",
+      "abbr": "UIU"
+    },
+    {
+      "id": "2667",
+      "school": "Ursinus",
+      "name": "Ursinus Bears",
+      "shortName": "Ursinus",
+      "abbr": "URSN"
+    },
+    {
+      "id": "328",
+      "school": "Utah State",
+      "name": "Utah State Aggies",
+      "shortName": "Utah State",
+      "abbr": "USU"
+    },
+    {
+      "id": "3101",
+      "school": "Utah Tech",
+      "name": "Utah Tech Trailblazers",
+      "shortName": "Utah Tech",
+      "abbr": "UTU"
+    },
+    {
+      "id": "254",
+      "school": "Utah",
+      "name": "Utah Utes",
+      "shortName": "Utah",
+      "abbr": "UTAH"
+    },
+    {
+      "id": "390",
+      "school": "Utica",
+      "name": "Utica Pioneers",
+      "shortName": "Utica",
+      "abbr": "UTIC"
+    },
+    {
+      "id": "2678",
+      "school": "VMI",
+      "name": "VMI Keydets",
+      "shortName": "VMI",
+      "abbr": "VMI"
+    },
+    {
+      "id": "2673",
+      "school": "Valdosta State",
+      "name": "Valdosta State Blazers",
+      "shortName": "Valdosta St",
+      "abbr": "VALD"
+    },
+    {
+      "id": "628",
+      "school": "Valley City State",
+      "name": "Valley City State Vikings",
+      "shortName": "Valley City St",
+      "abbr": "VCSU"
+    },
+    {
+      "id": "2674",
+      "school": "Valparaiso",
+      "name": "Valparaiso Beacons",
+      "shortName": "Valparaiso",
+      "abbr": "VAL"
+    },
+    {
+      "id": "238",
+      "school": "Vanderbilt",
+      "name": "Vanderbilt Commodores",
+      "shortName": "Vanderbilt",
+      "abbr": "VAN"
+    },
+    {
+      "id": "293",
+      "school": "Vermont State Castleton",
+      "name": "Vermont State Castleton Spartans",
+      "shortName": "VTSU Castleton",
+      "abbr": "VTSC"
+    },
+    {
+      "id": "222",
+      "school": "Villanova",
+      "name": "Villanova Wildcats",
+      "shortName": "Villanova",
+      "abbr": "VILL"
+    },
+    {
+      "id": "258",
+      "school": "Virginia",
+      "name": "Virginia Cavaliers",
+      "shortName": "Virginia",
+      "abbr": "UVA"
+    },
+    {
+      "id": "2355",
+      "school": "Virginia Lynchburg",
+      "name": "Virginia Lynchburg Dragons",
+      "shortName": "VA Lynchburg",
+      "abbr": "VUL"
+    },
+    {
+      "id": "330",
+      "school": "Virginia State",
+      "name": "Virginia State Trojans",
+      "shortName": "Virginia St",
+      "abbr": "VSU"
+    },
+    {
+      "id": "259",
+      "school": "Virginia Tech",
+      "name": "Virginia Tech Hokies",
+      "shortName": "Virginia Tech",
+      "abbr": "VT"
+    },
+    {
+      "id": "2676",
+      "school": "Virginia Union",
+      "name": "Virginia Union Panthers",
+      "shortName": "Virginia Union",
+      "abbr": "VUU"
+    },
+    {
+      "id": "2749",
+      "school": "WPI",
+      "name": "WPI Engineers",
+      "shortName": "WPI",
+      "abbr": "WPI"
+    },
+    {
+      "id": "2706",
+      "school": "WVU Tech",
+      "name": "WVU Tech Golden Bears",
+      "shortName": "WVU Tech",
+      "abbr": "WVUT"
+    },
+    {
+      "id": "89",
+      "school": "Wabash",
+      "name": "Wabash Little Giants",
+      "shortName": "Wabash",
+      "abbr": "WAB"
+    },
+    {
+      "id": "2681",
+      "school": "Wagner",
+      "name": "Wagner Seahawks",
+      "shortName": "Wagner",
+      "abbr": "WAG"
+    },
+    {
+      "id": "154",
+      "school": "Wake Forest",
+      "name": "Wake Forest Demon Deacons",
+      "shortName": "Wake Forest",
+      "abbr": "WAKE"
+    },
+    {
+      "id": "3080",
+      "school": "Waldorf",
+      "name": "Waldorf Warriors",
+      "shortName": "Waldorf",
+      "abbr": "WLDF"
+    },
+    {
+      "id": "2682",
+      "school": "Walsh",
+      "name": "Walsh Cavaliers",
+      "shortName": "Walsh",
+      "abbr": "WLSH"
+    },
+    {
+      "id": "2683",
+      "school": "Warner",
+      "name": "Warner Royals",
+      "shortName": "Warner",
+      "abbr": "WRNR"
+    },
+    {
+      "id": "2685",
+      "school": "Wartburg",
+      "name": "Wartburg Knights",
+      "shortName": "Wartburg",
+      "abbr": "WTBG"
+    },
+    {
+      "id": "2687",
+      "school": "Washburn",
+      "name": "Washburn Ichabods",
+      "shortName": "Washburn",
+      "abbr": "WSBN"
+    },
+    {
+      "id": "2686",
+      "school": "Washington & Jefferson",
+      "name": "Washington & Jefferson Presidents",
+      "shortName": "Wash & Jeff",
+      "abbr": "W&J"
+    },
+    {
+      "id": "264",
+      "school": "Washington",
+      "name": "Washington Huskies",
+      "shortName": "Washington",
+      "abbr": "WASH"
+    },
+    {
+      "id": "143",
+      "school": "Washington St. Louis",
+      "name": "Washington St. Louis Bears",
+      "shortName": "Wash St Louis",
+      "abbr": "WUMO"
+    },
+    {
+      "id": "265",
+      "school": "Washington State",
+      "name": "Washington State Cougars",
+      "shortName": "Washington St",
+      "abbr": "WSU"
+    },
+    {
+      "id": "2688",
+      "school": "Washington and Lee",
+      "name": "Washington and Lee Generals",
+      "shortName": "Wash and Lee",
+      "abbr": "W&L"
+    },
+    {
+      "id": "630",
+      "school": "Wayland Baptist",
+      "name": "Wayland Baptist Pioneers",
+      "shortName": "Wylnd Baptist",
+      "abbr": "WYBU"
+    },
+    {
+      "id": "131",
+      "school": "Wayne State (MI)",
+      "name": "Wayne State (MI) Warriors",
+      "shortName": "Wayne St (MI)",
+      "abbr": "WSMI"
+    },
+    {
+      "id": "2844",
+      "school": "Wayne State (NE)",
+      "name": "Wayne State (NE) Wildcats",
+      "shortName": "Wayne St (NE)",
+      "abbr": "WSNE"
+    },
+    {
+      "id": "2845",
+      "school": "Waynesburg",
+      "name": "Waynesburg Yellow Jackets",
+      "shortName": "Waynesburg",
+      "abbr": "WAYN"
+    },
+    {
+      "id": "2691",
+      "school": "Webber International",
+      "name": "Webber International Warriors",
+      "shortName": "Webber Int'l",
+      "abbr": "WINT"
+    },
+    {
+      "id": "2692",
+      "school": "Weber State",
+      "name": "Weber State Wildcats",
+      "shortName": "Weber St",
+      "abbr": "WEB"
+    },
+    {
+      "id": "336",
+      "school": "Wesleyan (CT)",
+      "name": "Wesleyan (CT) Cardinals",
+      "shortName": "Wesleyan (CT)",
+      "abbr": "WSCT"
+    },
+    {
+      "id": "2695",
+      "school": "West Alabama",
+      "name": "West Alabama Tigers",
+      "shortName": "West Alabama",
+      "abbr": "UWA"
+    },
+    {
+      "id": "223",
+      "school": "West Chester",
+      "name": "West Chester Golden Rams",
+      "shortName": "West Chester",
+      "abbr": "WCHT"
+    },
+    {
+      "id": "110242",
+      "school": "West Florida",
+      "name": "West Florida Argonauts",
+      "shortName": "West Florida",
+      "abbr": "UWF"
+    },
+    {
+      "id": "2698",
+      "school": "West Georgia",
+      "name": "West Georgia Wolves",
+      "shortName": "West Georgia",
+      "abbr": "WGA"
+    },
+    {
+      "id": "2699",
+      "school": "West Liberty",
+      "name": "West Liberty Hilltoppers",
+      "shortName": "West Liberty",
+      "abbr": "WLU"
+    },
+    {
+      "id": "3211",
+      "school": "West Memphis",
+      "name": "West Memphis Crusaders",
+      "shortName": "C of Faith",
+      "abbr": "FAI"
+    },
+    {
+      "id": "2704",
+      "school": "West Texas",
+      "name": "West Texas Buffaloes",
+      "shortName": "West Texas",
+      "abbr": "WTAM"
+    },
+    {
+      "id": "277",
+      "school": "West Virginia",
+      "name": "West Virginia Mountaineers",
+      "shortName": "West Virginia",
+      "abbr": "WVU"
+    },
+    {
+      "id": "2707",
+      "school": "West Virginia State",
+      "name": "West Virginia State Yellow Jackets",
+      "shortName": "W Virginia St",
+      "abbr": "WVSU"
+    },
+    {
+      "id": "455",
+      "school": "West Virginia Wesleyan",
+      "name": "West Virginia Wesleyan Bobcats",
+      "shortName": "WV Wesleyan",
+      "abbr": "WVWC"
+    },
+    {
+      "id": "2717",
+      "school": "Western Carolina",
+      "name": "Western Carolina Catamounts",
+      "shortName": "W Carolina",
+      "abbr": "WCU"
+    },
+    {
+      "id": "2714",
+      "school": "Western Colorado",
+      "name": "Western Colorado Mountaineers",
+      "shortName": "W Colorado",
+      "abbr": "WCOL"
+    },
+    {
+      "id": "2843",
+      "school": "Western Connecticut State",
+      "name": "Western Connecticut State Wolves",
+      "shortName": "WestConn",
+      "abbr": "WCSU"
+    },
+    {
+      "id": "2710",
+      "school": "Western Illinois",
+      "name": "Western Illinois Leathernecks",
+      "shortName": "W Illinois",
+      "abbr": "WIU"
+    },
+    {
+      "id": "98",
+      "school": "Western Kentucky",
+      "name": "Western Kentucky Hilltoppers",
+      "shortName": "Western KY",
+      "abbr": "WKU"
+    },
+    {
+      "id": "2711",
+      "school": "Western Michigan",
+      "name": "Western Michigan Broncos",
+      "shortName": "W Michigan",
+      "abbr": "WMU"
+    },
+    {
+      "id": "2702",
+      "school": "Western New England",
+      "name": "Western New England Golden Bears",
+      "shortName": "W New England",
+      "abbr": "WNE"
+    },
+    {
+      "id": "2703",
+      "school": "Western New Mexico",
+      "name": "Western New Mexico Mustangs",
+      "shortName": "Western NM",
+      "abbr": "WNMU"
+    },
+    {
+      "id": "2848",
+      "school": "Western Oregon",
+      "name": "Western Oregon Wolves",
+      "shortName": "West Oregon",
+      "abbr": "WORU"
+    },
+    {
+      "id": "2909",
+      "school": "Westfield State",
+      "name": "Westfield State Owls",
+      "shortName": "Westfield St",
+      "abbr": "WFST"
+    },
+    {
+      "id": "134087",
+      "school": "Westgate Christian University",
+      "name": "Westgate Christian University Ravens",
+      "shortName": "Westgate Chris",
+      "abbr": "WES"
+    },
+    {
+      "id": "433",
+      "school": "Westminster (MO)",
+      "name": "Westminster (MO) Blue Jays",
+      "shortName": "Westminster MO",
+      "abbr": "WCMO"
+    },
+    {
+      "id": "2849",
+      "school": "Westminster (PA)",
+      "name": "Westminster (PA) Titans",
+      "shortName": "Westminster PA",
+      "abbr": "WCPA"
+    },
+    {
+      "id": "396",
+      "school": "Wheaton (IL)",
+      "name": "Wheaton (IL) Thunder",
+      "shortName": "Wheaton (IL)",
+      "abbr": "WCIL"
+    },
+    {
+      "id": "112335",
+      "school": "Wheeling",
+      "name": "Wheeling Cardinals",
+      "shortName": "Wheeling",
+      "abbr": "WHLG"
+    },
+    {
+      "id": "2850",
+      "school": "Whittier",
+      "name": "Whittier Poets",
+      "shortName": "Whittier",
+      "abbr": "WHTR"
+    },
+    {
+      "id": "2721",
+      "school": "Whitworth",
+      "name": "Whitworth Pirates",
+      "shortName": "Whitworth",
+      "abbr": "WHIW"
+    },
+    {
+      "id": "2725",
+      "school": "Widener",
+      "name": "Widener Pride",
+      "shortName": "Widener",
+      "abbr": "WIDE"
+    },
+    {
+      "id": "398",
+      "school": "Wilkes",
+      "name": "Wilkes Colonels",
+      "shortName": "Wilkes",
+      "abbr": "WILK"
+    },
+    {
+      "id": "2930",
+      "school": "Willamette",
+      "name": "Willamette Bearcats",
+      "shortName": "Willamette",
+      "abbr": "WLMT"
+    },
+    {
+      "id": "2729",
+      "school": "William & Mary",
+      "name": "William & Mary Tribe",
+      "shortName": "William & Mary",
+      "abbr": "W&M"
+    },
+    {
+      "id": "2911",
+      "school": "William Jewell",
+      "name": "William Jewell Cardinals",
+      "shortName": "William Jewell",
+      "abbr": "WJC"
+    },
+    {
+      "id": "2970",
+      "school": "William Paterson",
+      "name": "William Paterson Pioneers",
+      "shortName": "Wm Paterson",
+      "abbr": "WPU"
+    },
+    {
+      "id": "2912",
+      "school": "William Penn",
+      "name": "William Penn Statesmen",
+      "shortName": "William Penn",
+      "abbr": "WPEN"
+    },
+    {
+      "id": "129741",
+      "school": "William Woods",
+      "name": "William Woods Owls",
+      "shortName": "William Woods",
+      "abbr": "WLWD"
+    },
+    {
+      "id": "2731",
+      "school": "Williams",
+      "name": "Williams Ephs",
+      "shortName": "Williams",
+      "abbr": "WLM"
+    },
+    {
+      "id": "3130",
+      "school": "Williamson",
+      "name": "Williamson Mechanics",
+      "shortName": "Williamson",
+      "abbr": "WMSN"
+    },
+    {
+      "id": "2733",
+      "school": "Wilmington (OH)",
+      "name": "Wilmington (OH) Fightin' Quakers",
+      "shortName": "Wilmington OH",
+      "abbr": "WCOH"
+    },
+    {
+      "id": "351",
+      "school": "Wingate",
+      "name": "Wingate Bulldogs",
+      "shortName": "Wingate",
+      "abbr": "WINU"
+    },
+    {
+      "id": "2851",
+      "school": "Winona State",
+      "name": "Winona State Warriors",
+      "shortName": "Winona St",
+      "abbr": "WNST"
+    },
+    {
+      "id": "2736",
+      "school": "Winston-Salem State",
+      "name": "Winston-Salem State Rams",
+      "shortName": "Winston-Salem",
+      "abbr": "WSSU"
+    },
+    {
+      "id": "275",
+      "school": "Wisconsin",
+      "name": "Wisconsin Badgers",
+      "shortName": "Wisconsin",
+      "abbr": "WIS"
+    },
+    {
+      "id": "2738",
+      "school": "Wisconsin Eau Claire",
+      "name": "Wisconsin Eau Claire Blugolds",
+      "shortName": "UW-Eau Claire",
+      "abbr": "UWEC"
+    },
+    {
+      "id": "2740",
+      "school": "Wisconsin La Crosse",
+      "name": "Wisconsin La Crosse Eagles",
+      "shortName": "UW-La Crosse",
+      "abbr": "UWL"
+    },
+    {
+      "id": "2741",
+      "school": "Wisconsin Lutheran",
+      "name": "Wisconsin Lutheran Warriors",
+      "shortName": "Wisc Lutheran",
+      "abbr": "WLC"
+    },
+    {
+      "id": "271",
+      "school": "Wisconsin Oshkosh",
+      "name": "Wisconsin Oshkosh Titans",
+      "shortName": "UW-Oshkosh",
+      "abbr": "UWO"
+    },
+    {
+      "id": "272",
+      "school": "Wisconsin Platteville",
+      "name": "Wisconsin Platteville Pioneers",
+      "shortName": "UW-Platteville",
+      "abbr": "UWP"
+    },
+    {
+      "id": "2723",
+      "school": "Wisconsin River Falls",
+      "name": "Wisconsin River Falls Falcons",
+      "shortName": "UW-River Falls",
+      "abbr": "UWRF"
+    },
+    {
+      "id": "2743",
+      "school": "Wisconsin Stevens Point",
+      "name": "Wisconsin Stevens Point Pointers",
+      "shortName": "UW-Stevens Pt",
+      "abbr": "UWSP"
+    },
+    {
+      "id": "2744",
+      "school": "Wisconsin Stout",
+      "name": "Wisconsin Stout Blue Devils",
+      "shortName": "UW-Stout",
+      "abbr": "UWST"
+    },
+    {
+      "id": "2745",
+      "school": "Wisconsin Whitewater",
+      "name": "Wisconsin Whitewater Warhawks",
+      "shortName": "UW-Whitewater",
+      "abbr": "UWW"
+    },
+    {
+      "id": "2746",
+      "school": "Wittenberg",
+      "name": "Wittenberg Tigers",
+      "shortName": "Wittenberg",
+      "abbr": "WITT"
+    },
+    {
+      "id": "2747",
+      "school": "Wofford",
+      "name": "Wofford Terriers",
+      "shortName": "Wofford",
+      "abbr": "WOF"
+    },
+    {
+      "id": "2748",
+      "school": "Wooster",
+      "name": "Wooster Fighting Scots",
+      "shortName": "Wooster",
+      "abbr": "WOO"
+    },
+    {
+      "id": "402",
+      "school": "Worcester State",
+      "name": "Worcester State Lancers",
+      "shortName": "Worcester St",
+      "abbr": "WORC"
+    },
+    {
+      "id": "2751",
+      "school": "Wyoming",
+      "name": "Wyoming Cowboys",
+      "shortName": "Wyoming",
+      "abbr": "WYO"
+    },
+    {
+      "id": "43",
+      "school": "Yale",
+      "name": "Yale Bulldogs",
+      "shortName": "Yale",
+      "abbr": "YALE"
+    },
+    {
+      "id": "2754",
+      "school": "Youngstown State",
+      "name": "Youngstown State Penguins",
+      "shortName": "Youngstown St",
+      "abbr": "YSU"
+    }
+  ],
+  "provider": [
+    {
+      "id": 1,
+      "school": "Boston College",
+      "name": "Boston College Eagles",
+      "abbr": "BC"
+    },
+    {
+      "id": 2,
+      "school": "California",
+      "name": "California Golden Bears",
+      "abbr": "CAL"
+    },
+    {
+      "id": 3,
+      "school": "Clemson",
+      "name": "Clemson Tigers",
+      "abbr": "CLEM"
+    },
+    {
+      "id": 4,
+      "school": "Duke",
+      "name": "Duke Blue Devils",
+      "abbr": "DUKE"
+    },
+    {
+      "id": 5,
+      "school": "Florida State",
+      "name": "Florida State Seminoles",
+      "abbr": "FSU"
+    },
+    {
+      "id": 6,
+      "school": "Georgia Tech",
+      "name": "Georgia Tech Yellow Jackets",
+      "abbr": "GT"
+    },
+    {
+      "id": 7,
+      "school": "Louisville",
+      "name": "Louisville Cardinals",
+      "abbr": "LOU"
+    },
+    {
+      "id": 8,
+      "school": "Miami",
+      "name": "Miami Hurricanes",
+      "abbr": "MIA"
+    },
+    {
+      "id": 9,
+      "school": "NC State",
+      "name": "NC State Wolfpack",
+      "abbr": "NCSU"
+    },
+    {
+      "id": 10,
+      "school": "North Carolina",
+      "name": "North Carolina Tar Heels",
+      "abbr": "UNC"
+    },
+    {
+      "id": 11,
+      "school": "Pittsburgh",
+      "name": "Pittsburgh Panthers",
+      "abbr": "PITT"
+    },
+    {
+      "id": 12,
+      "school": "SMU",
+      "name": "SMU Mustangs",
+      "abbr": "SMU"
+    },
+    {
+      "id": 13,
+      "school": "Stanford",
+      "name": "Stanford Cardinal",
+      "abbr": "STAN"
+    },
+    {
+      "id": 14,
+      "school": "Syracuse",
+      "name": "Syracuse Orange",
+      "abbr": "SYR"
+    },
+    {
+      "id": 15,
+      "school": "Virginia",
+      "name": "Virginia Cavaliers",
+      "abbr": "UVA"
+    },
+    {
+      "id": 16,
+      "school": "Virginia Tech",
+      "name": "Virginia Tech Hokies",
+      "abbr": "VT"
+    },
+    {
+      "id": 17,
+      "school": "Wake Forest",
+      "name": "Wake Forest Demon Deacons",
+      "abbr": "WAKE"
+    },
+    {
+      "id": 18,
+      "school": "Army",
+      "name": "Army Black Knights",
+      "abbr": "ARMY"
+    },
+    {
+      "id": 19,
+      "school": "Charlotte",
+      "name": "Charlotte 49ers",
+      "abbr": "CLT"
+    },
+    {
+      "id": 20,
+      "school": "East Carolina",
+      "name": "East Carolina Pirates",
+      "abbr": "ECU"
+    },
+    {
+      "id": 21,
+      "school": "Florida Atlantic",
+      "name": "Florida Atlantic Owls",
+      "abbr": "FAU"
+    },
+    {
+      "id": 22,
+      "school": "Memphis",
+      "name": "Memphis Tigers",
+      "abbr": "MEM"
+    },
+    {
+      "id": 23,
+      "school": "Navy",
+      "name": "Navy Midshipmen",
+      "abbr": "NAVY"
+    },
+    {
+      "id": 24,
+      "school": "North Texas",
+      "name": "North Texas Mean Green",
+      "abbr": "UNT"
+    },
+    {
+      "id": 25,
+      "school": "Rice",
+      "name": "Rice Owls",
+      "abbr": "RICE"
+    },
+    {
+      "id": 26,
+      "school": "South Florida",
+      "name": "South Florida Bulls",
+      "abbr": "USF"
+    },
+    {
+      "id": 27,
+      "school": "Temple",
+      "name": "Temple Owls",
+      "abbr": "TEM"
+    },
+    {
+      "id": 28,
+      "school": "Tulane",
+      "name": "Tulane Green Wave",
+      "abbr": "TULN"
+    },
+    {
+      "id": 29,
+      "school": "Tulsa",
+      "name": "Tulsa Golden Hurricane",
+      "abbr": "TLSA"
+    },
+    {
+      "id": 30,
+      "school": "UAB",
+      "name": "UAB Blazers",
+      "abbr": "UAB"
+    },
+    {
+      "id": 31,
+      "school": "UTSA",
+      "name": "UTSA Roadrunners",
+      "abbr": "UTSA"
+    },
+    {
+      "id": 32,
+      "school": "Arizona State",
+      "name": "Arizona State Sun Devils",
+      "abbr": "ASU"
+    },
+    {
+      "id": 33,
+      "school": "Arizona",
+      "name": "Arizona Wildcats",
+      "abbr": "ARIZ"
+    },
+    {
+      "id": 34,
+      "school": "BYU",
+      "name": "BYU Cougars",
+      "abbr": "BYU"
+    },
+    {
+      "id": 35,
+      "school": "Baylor",
+      "name": "Baylor Bears",
+      "abbr": "BAY"
+    },
+    {
+      "id": 36,
+      "school": "Cincinnati",
+      "name": "Cincinnati Bearcats",
+      "abbr": "CIN"
+    },
+    {
+      "id": 37,
+      "school": "Colorado",
+      "name": "Colorado Buffaloes",
+      "abbr": "COLO"
+    },
+    {
+      "id": 38,
+      "school": "Houston",
+      "name": "Houston Cougars",
+      "abbr": "HOU"
+    },
+    {
+      "id": 39,
+      "school": "Iowa State",
+      "name": "Iowa State Cyclones",
+      "abbr": "ISU"
+    },
+    {
+      "id": 40,
+      "school": "Kansas",
+      "name": "Kansas Jayhawks",
+      "abbr": "KU"
+    },
+    {
+      "id": 41,
+      "school": "Kansas State",
+      "name": "Kansas State Wildcats",
+      "abbr": "KSU"
+    },
+    {
+      "id": 42,
+      "school": "Oklahoma State",
+      "name": "Oklahoma State Cowboys",
+      "abbr": "OKST"
+    },
+    {
+      "id": 43,
+      "school": "TCU",
+      "name": "TCU Horned Frogs",
+      "abbr": "TCU"
+    },
+    {
+      "id": 44,
+      "school": "Texas Tech",
+      "name": "Texas Tech Red Raiders",
+      "abbr": "TTU"
+    },
+    {
+      "id": 45,
+      "school": "UCF",
+      "name": "UCF Knights",
+      "abbr": "UCF"
+    },
+    {
+      "id": 46,
+      "school": "Utah",
+      "name": "Utah Utes",
+      "abbr": "UTAH"
+    },
+    {
+      "id": 47,
+      "school": "West Virginia",
+      "name": "West Virginia Mountaineers",
+      "abbr": "WVU"
+    },
+    {
+      "id": 48,
+      "school": "Illinois",
+      "name": "Illinois Fighting Illini",
+      "abbr": "ILL"
+    },
+    {
+      "id": 49,
+      "school": "Indiana",
+      "name": "Indiana Hoosiers",
+      "abbr": "IU"
+    },
+    {
+      "id": 50,
+      "school": "Iowa",
+      "name": "Iowa Hawkeyes",
+      "abbr": "IOWA"
+    },
+    {
+      "id": 51,
+      "school": "Maryland",
+      "name": "Maryland Terrapins",
+      "abbr": "MD"
+    },
+    {
+      "id": 52,
+      "school": "Michigan State",
+      "name": "Michigan State Spartans",
+      "abbr": "MSU"
+    },
+    {
+      "id": 53,
+      "school": "Michigan",
+      "name": "Michigan Wolverines",
+      "abbr": "MICH"
+    },
+    {
+      "id": 54,
+      "school": "Minnesota",
+      "name": "Minnesota Golden Gophers",
+      "abbr": "MINN"
+    },
+    {
+      "id": 55,
+      "school": "Nebraska",
+      "name": "Nebraska Cornhuskers",
+      "abbr": "NEB"
+    },
+    {
+      "id": 56,
+      "school": "Northwestern",
+      "name": "Northwestern Wildcats",
+      "abbr": "NU"
+    },
+    {
+      "id": 57,
+      "school": "Ohio State",
+      "name": "Ohio State Buckeyes",
+      "abbr": "OSU"
+    },
+    {
+      "id": 58,
+      "school": "Oregon",
+      "name": "Oregon Ducks",
+      "abbr": "ORE"
+    },
+    {
+      "id": 529,
+      "school": "Rio Grande",
+      "name": "Rio Grande Red Storm",
+      "abbr": "RIO"
+    },
+    {
+      "id": 59,
+      "school": "Penn State",
+      "name": "Penn State Nittany Lions",
+      "abbr": "PSU"
+    },
+    {
+      "id": 60,
+      "school": "Purdue",
+      "name": "Purdue Boilermakers",
+      "abbr": "PUR"
+    },
+    {
+      "id": 61,
+      "school": "Rutgers",
+      "name": "Rutgers Scarlet Knights",
+      "abbr": "RUTG"
+    },
+    {
+      "id": 62,
+      "school": "UCLA",
+      "name": "UCLA Bruins",
+      "abbr": "UCLA"
+    },
+    {
+      "id": 63,
+      "school": "USC",
+      "name": "USC Trojans",
+      "abbr": "USC"
+    },
+    {
+      "id": 64,
+      "school": "Washington",
+      "name": "Washington Huskies",
+      "abbr": "WASH"
+    },
+    {
+      "id": 65,
+      "school": "Wisconsin",
+      "name": "Wisconsin Badgers",
+      "abbr": "WIS"
+    },
+    {
+      "id": 66,
+      "school": "Delaware",
+      "name": "Delaware Blue Hens",
+      "abbr": "DEL"
+    },
+    {
+      "id": 67,
+      "school": "Florida International",
+      "name": "Florida International Panthers",
+      "abbr": "FIU"
+    },
+    {
+      "id": 68,
+      "school": "Jacksonville State",
+      "name": "Jacksonville State Gamecocks",
+      "abbr": "JXST"
+    },
+    {
+      "id": 69,
+      "school": "Kennesaw State",
+      "name": "Kennesaw State Owls",
+      "abbr": "KENN"
+    },
+    {
+      "id": 70,
+      "school": "Liberty",
+      "name": "Liberty Flames",
+      "abbr": "LIB"
+    },
+    {
+      "id": 71,
+      "school": "Louisiana Tech",
+      "name": "Louisiana Tech Bulldogs",
+      "abbr": "LT"
+    },
+    {
+      "id": 72,
+      "school": "Middle Tennessee",
+      "name": "Middle Tennessee Blue Raiders",
+      "abbr": "MTSU"
+    },
+    {
+      "id": 73,
+      "school": "Missouri State",
+      "name": "Missouri State Bears",
+      "abbr": "MOST"
+    },
+    {
+      "id": 74,
+      "school": "New Mexico State",
+      "name": "New Mexico State Aggies",
+      "abbr": "NMSU"
+    },
+    {
+      "id": 75,
+      "school": "Sam Houston",
+      "name": "Sam Houston Bearkats",
+      "abbr": "SHSU"
+    },
+    {
+      "id": 76,
+      "school": "UTEP",
+      "name": "UTEP Miners",
+      "abbr": "UTEP"
+    },
+    {
+      "id": 77,
+      "school": "Western Kentucky",
+      "name": "Western Kentucky Hilltoppers",
+      "abbr": "WKU"
+    },
+    {
+      "id": 78,
+      "school": "Notre Dame",
+      "name": "Notre Dame Fighting Irish",
+      "abbr": "ND"
+    },
+    {
+      "id": 79,
+      "school": "UConn",
+      "name": "UConn Huskies",
+      "abbr": "CONN"
+    },
+    {
+      "id": 80,
+      "school": "Akron",
+      "name": "Akron Zips",
+      "abbr": "AKR"
+    },
+    {
+      "id": 81,
+      "school": "Ball State",
+      "name": "Ball State Cardinals",
+      "abbr": "BALL"
+    },
+    {
+      "id": 82,
+      "school": "Bowling Green",
+      "name": "Bowling Green Falcons",
+      "abbr": "BGSU"
+    },
+    {
+      "id": 83,
+      "school": "Buffalo",
+      "name": "Buffalo Bulls",
+      "abbr": "BUF"
+    },
+    {
+      "id": 84,
+      "school": "Central Michigan",
+      "name": "Central Michigan Chippewas",
+      "abbr": "CMU"
+    },
+    {
+      "id": 85,
+      "school": "Eastern Michigan",
+      "name": "Eastern Michigan Eagles",
+      "abbr": "EMU"
+    },
+    {
+      "id": 86,
+      "school": "Kent State",
+      "name": "Kent State Golden Flashes",
+      "abbr": "KENT"
+    },
+    {
+      "id": 87,
+      "school": "Massachusetts",
+      "name": "Massachusetts Minutemen",
+      "abbr": "MASS"
+    },
+    {
+      "id": 88,
+      "school": "Miami (OH)",
+      "name": "Miami (OH) RedHawks",
+      "abbr": "M-OH"
+    },
+    {
+      "id": 89,
+      "school": "Northern Illinois",
+      "name": "Northern Illinois Huskies",
+      "abbr": "NIU"
+    },
+    {
+      "id": 90,
+      "school": "Ohio",
+      "name": "Ohio Bobcats",
+      "abbr": "OHIO"
+    },
+    {
+      "id": 91,
+      "school": "Toledo",
+      "name": "Toledo Rockets",
+      "abbr": "TOL"
+    },
+    {
+      "id": 92,
+      "school": "Western Michigan",
+      "name": "Western Michigan Broncos",
+      "abbr": "WMU"
+    },
+    {
+      "id": 93,
+      "school": "Air Force",
+      "name": "Air Force Falcons",
+      "abbr": "AF"
+    },
+    {
+      "id": 94,
+      "school": "Boise State",
+      "name": "Boise State Broncos",
+      "abbr": "BOIS"
+    },
+    {
+      "id": 95,
+      "school": "Colorado State",
+      "name": "Colorado State Rams",
+      "abbr": "CSU"
+    },
+    {
+      "id": 96,
+      "school": "Fresno State",
+      "name": "Fresno State Bulldogs",
+      "abbr": "FRES"
+    },
+    {
+      "id": 97,
+      "school": "Hawai'i",
+      "name": "Hawai'i Rainbow Warriors",
+      "abbr": "HAW"
+    },
+    {
+      "id": 98,
+      "school": "Nevada",
+      "name": "Nevada Wolf Pack",
+      "abbr": "NEV"
+    },
+    {
+      "id": 99,
+      "school": "New Mexico",
+      "name": "New Mexico Lobos",
+      "abbr": "UNM"
+    },
+    {
+      "id": 100,
+      "school": "San Diego State",
+      "name": "San Diego State Aztecs",
+      "abbr": "SDSU"
+    },
+    {
+      "id": 101,
+      "school": "San José State",
+      "name": "San José State Spartans",
+      "abbr": "SJSU"
+    },
+    {
+      "id": 102,
+      "school": "UNLV",
+      "name": "UNLV Rebels",
+      "abbr": "UNLV"
+    },
+    {
+      "id": 103,
+      "school": "Utah State",
+      "name": "Utah State Aggies",
+      "abbr": "USU"
+    },
+    {
+      "id": 104,
+      "school": "Wyoming",
+      "name": "Wyoming Cowboys",
+      "abbr": "WYO"
+    },
+    {
+      "id": 105,
+      "school": "Oregon State",
+      "name": "Oregon State Beavers",
+      "abbr": "ORST"
+    },
+    {
+      "id": 106,
+      "school": "Washington State",
+      "name": "Washington State Cougars",
+      "abbr": "WSU"
+    },
+    {
+      "id": 107,
+      "school": "Alabama",
+      "name": "Alabama Crimson Tide",
+      "abbr": "ALA"
+    },
+    {
+      "id": 108,
+      "school": "Arkansas",
+      "name": "Arkansas Razorbacks",
+      "abbr": "ARK"
+    },
+    {
+      "id": 109,
+      "school": "Auburn",
+      "name": "Auburn Tigers",
+      "abbr": "AUB"
+    },
+    {
+      "id": 110,
+      "school": "Florida",
+      "name": "Florida Gators",
+      "abbr": "FLA"
+    },
+    {
+      "id": 111,
+      "school": "Georgia",
+      "name": "Georgia Bulldogs",
+      "abbr": "UGA"
+    },
+    {
+      "id": 112,
+      "school": "Kentucky",
+      "name": "Kentucky Wildcats",
+      "abbr": "UK"
+    },
+    {
+      "id": 113,
+      "school": "LSU",
+      "name": "LSU Tigers",
+      "abbr": "LSU"
+    },
+    {
+      "id": 114,
+      "school": "Mississippi State",
+      "name": "Mississippi State Bulldogs",
+      "abbr": "MSST"
+    },
+    {
+      "id": 115,
+      "school": "Missouri",
+      "name": "Missouri Tigers",
+      "abbr": "MIZ"
+    },
+    {
+      "id": 116,
+      "school": "Oklahoma",
+      "name": "Oklahoma Sooners",
+      "abbr": "OU"
+    },
+    {
+      "id": 117,
+      "school": "Ole Miss",
+      "name": "Ole Miss Rebels",
+      "abbr": "MISS"
+    },
+    {
+      "id": 118,
+      "school": "South Carolina",
+      "name": "South Carolina Gamecocks",
+      "abbr": "SC"
+    },
+    {
+      "id": 119,
+      "school": "Tennessee",
+      "name": "Tennessee Volunteers",
+      "abbr": "TENN"
+    },
+    {
+      "id": 120,
+      "school": "Texas A&M",
+      "name": "Texas A&M Aggies",
+      "abbr": "TA&M"
+    },
+    {
+      "id": 121,
+      "school": "Texas",
+      "name": "Texas Longhorns",
+      "abbr": "TEX"
+    },
+    {
+      "id": 122,
+      "school": "Vanderbilt",
+      "name": "Vanderbilt Commodores",
+      "abbr": "VAN"
+    },
+    {
+      "id": 123,
+      "school": "App State",
+      "name": "App State Mountaineers",
+      "abbr": "APP"
+    },
+    {
+      "id": 124,
+      "school": "Arkansas State",
+      "name": "Arkansas State Red Wolves",
+      "abbr": "ARST"
+    },
+    {
+      "id": 125,
+      "school": "Coastal Carolina",
+      "name": "Coastal Carolina Chanticleers",
+      "abbr": "CCU"
+    },
+    {
+      "id": 126,
+      "school": "Georgia Southern",
+      "name": "Georgia Southern Eagles",
+      "abbr": "GASO"
+    },
+    {
+      "id": 127,
+      "school": "Georgia State",
+      "name": "Georgia State Panthers",
+      "abbr": "GAST"
+    },
+    {
+      "id": 128,
+      "school": "James Madison",
+      "name": "James Madison Dukes",
+      "abbr": "JMU"
+    },
+    {
+      "id": 129,
+      "school": "Louisiana",
+      "name": "Louisiana Ragin' Cajuns",
+      "abbr": "UL"
+    },
+    {
+      "id": 130,
+      "school": "Marshall",
+      "name": "Marshall Thundering Herd",
+      "abbr": "MRSH"
+    },
+    {
+      "id": 131,
+      "school": "Old Dominion",
+      "name": "Old Dominion Monarchs",
+      "abbr": "ODU"
+    },
+    {
+      "id": 132,
+      "school": "South Alabama",
+      "name": "South Alabama Jaguars",
+      "abbr": "USA"
+    },
+    {
+      "id": 133,
+      "school": "Southern Miss",
+      "name": "Southern Miss Golden Eagles",
+      "abbr": "USM"
+    },
+    {
+      "id": 134,
+      "school": "Texas State",
+      "name": "Texas State Bobcats",
+      "abbr": "TXST"
+    },
+    {
+      "id": 135,
+      "school": "Troy",
+      "name": "Troy Trojans",
+      "abbr": "TROY"
+    },
+    {
+      "id": 136,
+      "school": "UL Monroe",
+      "name": "UL Monroe Warhawks",
+      "abbr": "ULM"
+    },
+    {
+      "id": 137,
+      "school": "Cal Poly",
+      "name": "Cal Poly Mustangs",
+      "abbr": "CP"
+    },
+    {
+      "id": 138,
+      "school": "Eastern Washington",
+      "name": "Eastern Washington Eagles",
+      "abbr": "EWU"
+    },
+    {
+      "id": 139,
+      "school": "Idaho State",
+      "name": "Idaho State Bengals",
+      "abbr": "IDST"
+    },
+    {
+      "id": 140,
+      "school": "Idaho",
+      "name": "Idaho Vandals",
+      "abbr": "IDHO"
+    },
+    {
+      "id": 141,
+      "school": "Montana",
+      "name": "Montana Grizzlies",
+      "abbr": "MONT"
+    },
+    {
+      "id": 142,
+      "school": "Montana State",
+      "name": "Montana State Bobcats",
+      "abbr": "MTST"
+    },
+    {
+      "id": 143,
+      "school": "Northern Arizona",
+      "name": "Northern Arizona Lumberjacks",
+      "abbr": "NAU"
+    },
+    {
+      "id": 144,
+      "school": "Northern Colorado",
+      "name": "Northern Colorado Bears",
+      "abbr": "UNCO"
+    },
+    {
+      "id": 145,
+      "school": "Portland State",
+      "name": "Portland State Vikings",
+      "abbr": "PRST"
+    },
+    {
+      "id": 146,
+      "school": "Sacramento State",
+      "name": "Sacramento State Hornets",
+      "abbr": "SAC"
+    },
+    {
+      "id": 147,
+      "school": "UC Davis",
+      "name": "UC Davis Aggies",
+      "abbr": "UCD"
+    },
+    {
+      "id": 148,
+      "school": "Weber State",
+      "name": "Weber State Wildcats",
+      "abbr": "WEB"
+    },
+    {
+      "id": 149,
+      "school": "Bryant",
+      "name": "Bryant Bulldogs",
+      "abbr": "BRY"
+    },
+    {
+      "id": 150,
+      "school": "Campbell",
+      "name": "Campbell Fighting Camels",
+      "abbr": "CAM"
+    },
+    {
+      "id": 151,
+      "school": "Elon",
+      "name": "Elon Phoenix",
+      "abbr": "ELON"
+    },
+    {
+      "id": 152,
+      "school": "Hampton",
+      "name": "Hampton Pirates",
+      "abbr": "HAMP"
+    },
+    {
+      "id": 153,
+      "school": "Maine",
+      "name": "Maine Black Bears",
+      "abbr": "ME"
+    },
+    {
+      "id": 154,
+      "school": "Monmouth",
+      "name": "Monmouth Hawks",
+      "abbr": "MONM"
+    },
+    {
+      "id": 155,
+      "school": "New Hampshire",
+      "name": "New Hampshire Wildcats",
+      "abbr": "UNH"
+    },
+    {
+      "id": 156,
+      "school": "North Carolina A&T",
+      "name": "North Carolina A&T Aggies",
+      "abbr": "NCAT"
+    },
+    {
+      "id": 157,
+      "school": "Rhode Island",
+      "name": "Rhode Island Rams",
+      "abbr": "URI"
+    },
+    {
+      "id": 158,
+      "school": "Stony Brook",
+      "name": "Stony Brook Seawolves",
+      "abbr": "STBK"
+    },
+    {
+      "id": 159,
+      "school": "Towson",
+      "name": "Towson Tigers",
+      "abbr": "TOW"
+    },
+    {
+      "id": 160,
+      "school": "UAlbany",
+      "name": "UAlbany Great Danes",
+      "abbr": "UALB"
+    },
+    {
+      "id": 161,
+      "school": "Villanova",
+      "name": "Villanova Wildcats",
+      "abbr": "VILL"
+    },
+    {
+      "id": 162,
+      "school": "William & Mary",
+      "name": "William & Mary Tribe",
+      "abbr": "W&M"
+    },
+    {
+      "id": 163,
+      "school": "Merrimack",
+      "name": "Merrimack Warriors",
+      "abbr": "MRMK"
+    },
+    {
+      "id": 164,
+      "school": "Sacred Heart",
+      "name": "Sacred Heart Pioneers",
+      "abbr": "SHU"
+    },
+    {
+      "id": 165,
+      "school": "Brown",
+      "name": "Brown Bears",
+      "abbr": "BRWN"
+    },
+    {
+      "id": 166,
+      "school": "Columbia",
+      "name": "Columbia Lions",
+      "abbr": "COLU"
+    },
+    {
+      "id": 167,
+      "school": "Cornell",
+      "name": "Cornell Big Red",
+      "abbr": "COR"
+    },
+    {
+      "id": 168,
+      "school": "Dartmouth",
+      "name": "Dartmouth Big Green",
+      "abbr": "DART"
+    },
+    {
+      "id": 169,
+      "school": "Harvard",
+      "name": "Harvard Crimson",
+      "abbr": "HARV"
+    },
+    {
+      "id": 170,
+      "school": "Pennsylvania",
+      "name": "Pennsylvania Quakers",
+      "abbr": "PENN"
+    },
+    {
+      "id": 171,
+      "school": "Princeton",
+      "name": "Princeton Tigers",
+      "abbr": "PRIN"
+    },
+    {
+      "id": 172,
+      "school": "Yale",
+      "name": "Yale Bulldogs",
+      "abbr": "YALE"
+    },
+    {
+      "id": 173,
+      "school": "Delaware State",
+      "name": "Delaware State Hornets",
+      "abbr": "DSU"
+    },
+    {
+      "id": 174,
+      "school": "Howard",
+      "name": "Howard Bison",
+      "abbr": "HOW"
+    },
+    {
+      "id": 175,
+      "school": "Morgan State",
+      "name": "Morgan State Bears",
+      "abbr": "MORG"
+    },
+    {
+      "id": 176,
+      "school": "Norfolk State",
+      "name": "Norfolk State Spartans",
+      "abbr": "NORF"
+    },
+    {
+      "id": 177,
+      "school": "North Carolina Central",
+      "name": "North Carolina Central Eagles",
+      "abbr": "NCCU"
+    },
+    {
+      "id": 178,
+      "school": "South Carolina State",
+      "name": "South Carolina State Bulldogs",
+      "abbr": "SCST"
+    },
+    {
+      "id": 179,
+      "school": "Illinois State",
+      "name": "Illinois State Redbirds",
+      "abbr": "ILST"
+    },
+    {
+      "id": 180,
+      "school": "Indiana State",
+      "name": "Indiana State Sycamores",
+      "abbr": "INST"
+    },
+    {
+      "id": 181,
+      "school": "Murray State",
+      "name": "Murray State Racers",
+      "abbr": "MUR"
+    },
+    {
+      "id": 182,
+      "school": "North Dakota",
+      "name": "North Dakota Fighting Hawks",
+      "abbr": "UND"
+    },
+    {
+      "id": 183,
+      "school": "North Dakota State",
+      "name": "North Dakota State Bison",
+      "abbr": "NDSU"
+    },
+    {
+      "id": 184,
+      "school": "Northern Iowa",
+      "name": "Northern Iowa Panthers",
+      "abbr": "UNI"
+    },
+    {
+      "id": 185,
+      "school": "South Dakota",
+      "name": "South Dakota Coyotes",
+      "abbr": "SDAK"
+    },
+    {
+      "id": 186,
+      "school": "South Dakota State",
+      "name": "South Dakota State Jackrabbits",
+      "abbr": "SDST"
+    },
+    {
+      "id": 187,
+      "school": "Southern Illinois",
+      "name": "Southern Illinois Salukis",
+      "abbr": "SIU"
+    },
+    {
+      "id": 188,
+      "school": "Youngstown State",
+      "name": "Youngstown State Penguins",
+      "abbr": "YSU"
+    },
+    {
+      "id": 189,
+      "school": "Central Connecticut",
+      "name": "Central Connecticut Blue Devils",
+      "abbr": "CCSU"
+    },
+    {
+      "id": 190,
+      "school": "Duquesne",
+      "name": "Duquesne Dukes",
+      "abbr": "DUQ"
+    },
+    {
+      "id": 191,
+      "school": "Long Island University",
+      "name": "Long Island University Sharks",
+      "abbr": "LIU"
+    },
+    {
+      "id": 192,
+      "school": "Mercyhurst",
+      "name": "Mercyhurst Lakers",
+      "abbr": "MERC"
+    },
+    {
+      "id": 193,
+      "school": "New Haven",
+      "name": "New Haven Chargers",
+      "abbr": "NHVN"
+    },
+    {
+      "id": 194,
+      "school": "Robert Morris",
+      "name": "Robert Morris Colonials",
+      "abbr": "RMU"
+    },
+    {
+      "id": 195,
+      "school": "Saint Francis",
+      "name": "Saint Francis Red Flash",
+      "abbr": "SFPA"
+    },
+    {
+      "id": 196,
+      "school": "Stonehill",
+      "name": "Stonehill Skyhawks",
+      "abbr": "STO"
+    },
+    {
+      "id": 197,
+      "school": "Wagner",
+      "name": "Wagner Seahawks",
+      "abbr": "WAG"
+    },
+    {
+      "id": 198,
+      "school": "Charleston Southern",
+      "name": "Charleston Southern Buccaneers",
+      "abbr": "CHSO"
+    },
+    {
+      "id": 199,
+      "school": "Eastern Illinois",
+      "name": "Eastern Illinois Panthers",
+      "abbr": "EIU"
+    },
+    {
+      "id": 200,
+      "school": "Gardner-Webb",
+      "name": "Gardner-Webb Runnin' Bulldogs",
+      "abbr": "GWEB"
+    },
+    {
+      "id": 201,
+      "school": "Lindenwood",
+      "name": "Lindenwood Lions",
+      "abbr": "LIN"
+    },
+    {
+      "id": 202,
+      "school": "Southeast Missouri State",
+      "name": "Southeast Missouri State Redhawks",
+      "abbr": "SEMO"
+    },
+    {
+      "id": 203,
+      "school": "Tennessee State",
+      "name": "Tennessee State Tigers",
+      "abbr": "TNST"
+    },
+    {
+      "id": 204,
+      "school": "Tennessee Tech",
+      "name": "Tennessee Tech Golden Eagles",
+      "abbr": "TNTC"
+    },
+    {
+      "id": 205,
+      "school": "UT Martin",
+      "name": "UT Martin Skyhawks",
+      "abbr": "UTM"
+    },
+    {
+      "id": 206,
+      "school": "Western Illinois",
+      "name": "Western Illinois Leathernecks",
+      "abbr": "WIU"
+    },
+    {
+      "id": 207,
+      "school": "Bucknell",
+      "name": "Bucknell Bison",
+      "abbr": "BUCK"
+    },
+    {
+      "id": 208,
+      "school": "Colgate",
+      "name": "Colgate Raiders",
+      "abbr": "COLG"
+    },
+    {
+      "id": 209,
+      "school": "Fordham",
+      "name": "Fordham Rams",
+      "abbr": "FOR"
+    },
+    {
+      "id": 210,
+      "school": "Georgetown",
+      "name": "Georgetown Hoyas",
+      "abbr": "GTWN"
+    },
+    {
+      "id": 211,
+      "school": "Holy Cross",
+      "name": "Holy Cross Crusaders",
+      "abbr": "HC"
+    },
+    {
+      "id": 212,
+      "school": "Lafayette",
+      "name": "Lafayette Leopards",
+      "abbr": "LAF"
+    },
+    {
+      "id": 213,
+      "school": "Lehigh",
+      "name": "Lehigh Mountain Hawks",
+      "abbr": "LEH"
+    },
+    {
+      "id": 214,
+      "school": "Richmond",
+      "name": "Richmond Spiders",
+      "abbr": "RICH"
+    },
+    {
+      "id": 215,
+      "school": "Butler",
+      "name": "Butler Bulldogs",
+      "abbr": "BUT"
+    },
+    {
+      "id": 216,
+      "school": "Davidson",
+      "name": "Davidson Wildcats",
+      "abbr": "DAV"
+    },
+    {
+      "id": 217,
+      "school": "Dayton",
+      "name": "Dayton Flyers",
+      "abbr": "DAY"
+    },
+    {
+      "id": 218,
+      "school": "Drake",
+      "name": "Drake Bulldogs",
+      "abbr": "DRKE"
+    },
+    {
+      "id": 219,
+      "school": "Marist",
+      "name": "Marist Red Foxes",
+      "abbr": "MRST"
+    },
+    {
+      "id": 220,
+      "school": "Morehead State",
+      "name": "Morehead State Eagles",
+      "abbr": "MORE"
+    },
+    {
+      "id": 221,
+      "school": "Presbyterian",
+      "name": "Presbyterian Blue Hose",
+      "abbr": "PRES"
+    },
+    {
+      "id": 222,
+      "school": "San Diego",
+      "name": "San Diego Toreros",
+      "abbr": "USD"
+    },
+    {
+      "id": 223,
+      "school": "St. Thomas-Minnesota",
+      "name": "St. Thomas-Minnesota Tommies",
+      "abbr": "STMN"
+    },
+    {
+      "id": 224,
+      "school": "Stetson",
+      "name": "Stetson Hatters",
+      "abbr": "STET"
+    },
+    {
+      "id": 225,
+      "school": "Valparaiso",
+      "name": "Valparaiso Beacons",
+      "abbr": "VAL"
+    },
+    {
+      "id": 226,
+      "school": "Chattanooga",
+      "name": "Chattanooga Mocs",
+      "abbr": "UTC"
+    },
+    {
+      "id": 227,
+      "school": "East Tennessee State",
+      "name": "East Tennessee State Buccaneers",
+      "abbr": "ETSU"
+    },
+    {
+      "id": 228,
+      "school": "Furman",
+      "name": "Furman Paladins",
+      "abbr": "FUR"
+    },
+    {
+      "id": 229,
+      "school": "Mercer",
+      "name": "Mercer Bears",
+      "abbr": "MER"
+    },
+    {
+      "id": 230,
+      "school": "Samford",
+      "name": "Samford Bulldogs",
+      "abbr": "SAM"
+    },
+    {
+      "id": 231,
+      "school": "The Citadel",
+      "name": "The Citadel Bulldogs",
+      "abbr": "CIT"
+    },
+    {
+      "id": 232,
+      "school": "VMI",
+      "name": "VMI Keydets",
+      "abbr": "VMI"
+    },
+    {
+      "id": 233,
+      "school": "Western Carolina",
+      "name": "Western Carolina Catamounts",
+      "abbr": "WCU"
+    },
+    {
+      "id": 234,
+      "school": "Wofford",
+      "name": "Wofford Terriers",
+      "abbr": "WOF"
+    },
+    {
+      "id": 235,
+      "school": "East Texas A&M",
+      "name": "East Texas A&M Lions",
+      "abbr": "ETAM"
+    },
+    {
+      "id": 236,
+      "school": "Houston Christian",
+      "name": "Houston Christian Huskies",
+      "abbr": "HCU"
+    },
+    {
+      "id": 237,
+      "school": "Incarnate Word",
+      "name": "Incarnate Word Cardinals",
+      "abbr": "UIW"
+    },
+    {
+      "id": 238,
+      "school": "Lamar",
+      "name": "Lamar Cardinals",
+      "abbr": "LAM"
+    },
+    {
+      "id": 239,
+      "school": "McNeese",
+      "name": "McNeese Cowboys",
+      "abbr": "MCN"
+    },
+    {
+      "id": 240,
+      "school": "Nicholls",
+      "name": "Nicholls Colonels",
+      "abbr": "NICH"
+    },
+    {
+      "id": 241,
+      "school": "Northwestern State",
+      "name": "Northwestern State Demons",
+      "abbr": "NWST"
+    },
+    {
+      "id": 242,
+      "school": "SE Louisiana",
+      "name": "SE Louisiana Lions",
+      "abbr": "SELA"
+    },
+    {
+      "id": 243,
+      "school": "Stephen F. Austin",
+      "name": "Stephen F. Austin Lumberjacks",
+      "abbr": "SFA"
+    },
+    {
+      "id": 244,
+      "school": "Alabama A&M",
+      "name": "Alabama A&M Bulldogs",
+      "abbr": "AAMU"
+    },
+    {
+      "id": 245,
+      "school": "Alabama State",
+      "name": "Alabama State Hornets",
+      "abbr": "ALST"
+    },
+    {
+      "id": 246,
+      "school": "Alcorn State",
+      "name": "Alcorn State Braves",
+      "abbr": "ALCN"
+    },
+    {
+      "id": 247,
+      "school": "Arkansas-Pine Bluff",
+      "name": "Arkansas-Pine Bluff Golden Lions",
+      "abbr": "UAPB"
+    },
+    {
+      "id": 248,
+      "school": "Bethune-Cookman",
+      "name": "Bethune-Cookman Wildcats",
+      "abbr": "BCU"
+    },
+    {
+      "id": 249,
+      "school": "Florida A&M",
+      "name": "Florida A&M Rattlers",
+      "abbr": "FAMU"
+    },
+    {
+      "id": 250,
+      "school": "Grambling",
+      "name": "Grambling Tigers",
+      "abbr": "GRAM"
+    },
+    {
+      "id": 251,
+      "school": "Jackson State",
+      "name": "Jackson State Tigers",
+      "abbr": "JKST"
+    },
+    {
+      "id": 252,
+      "school": "Mississippi Valley State",
+      "name": "Mississippi Valley State Delta Devils",
+      "abbr": "MVSU"
+    },
+    {
+      "id": 253,
+      "school": "Prairie View A&M",
+      "name": "Prairie View A&M Panthers",
+      "abbr": "PV"
+    },
+    {
+      "id": 254,
+      "school": "Southern",
+      "name": "Southern Jaguars",
+      "abbr": "SOU"
+    },
+    {
+      "id": 255,
+      "school": "Texas Southern",
+      "name": "Texas Southern Tigers",
+      "abbr": "TXSO"
+    },
+    {
+      "id": 256,
+      "school": "Abilene Christian",
+      "name": "Abilene Christian Wildcats",
+      "abbr": "ACU"
+    },
+    {
+      "id": 257,
+      "school": "Austin Peay",
+      "name": "Austin Peay Governors",
+      "abbr": "APSU"
+    },
+    {
+      "id": 258,
+      "school": "Central Arkansas",
+      "name": "Central Arkansas Bears",
+      "abbr": "CARK"
+    },
+    {
+      "id": 259,
+      "school": "Eastern Kentucky",
+      "name": "Eastern Kentucky Colonels",
+      "abbr": "EKU"
+    },
+    {
+      "id": 260,
+      "school": "North Alabama",
+      "name": "North Alabama Lions",
+      "abbr": "UNA"
+    },
+    {
+      "id": 261,
+      "school": "Southern Utah",
+      "name": "Southern Utah Thunderbirds",
+      "abbr": "SUU"
+    },
+    {
+      "id": 262,
+      "school": "Tarleton State",
+      "name": "Tarleton State Texans",
+      "abbr": "TAR"
+    },
+    {
+      "id": 263,
+      "school": "Utah Tech",
+      "name": "Utah Tech Trailblazers",
+      "abbr": "UTU"
+    },
+    {
+      "id": 264,
+      "school": "West Georgia",
+      "name": "West Georgia Wolves",
+      "abbr": "WGA"
+    },
+    {
+      "id": 265,
+      "school": "",
+      "name": "Pride",
+      "abbr": "HOF"
+    },
+    {
+      "id": 266,
+      "school": "",
+      "name": "All-Stars",
+      "abbr": "NOR"
+    },
+    {
+      "id": 267,
+      "school": "",
+      "name": "Bulldogs",
+      "abbr": "BOW"
+    },
+    {
+      "id": 268,
+      "school": "",
+      "name": "Golden Tigers",
+      "abbr": "TUS"
+    },
+    {
+      "id": 269,
+      "school": "",
+      "name": "Panthers",
+      "abbr": "VIR"
+    },
+    {
+      "id": 270,
+      "school": "",
+      "name": "American",
+      "abbr": "AMER"
+    },
+    {
+      "id": 271,
+      "school": "",
+      "name": "National",
+      "abbr": "NAT"
+    },
+    {
+      "id": 272,
+      "school": "",
+      "name": "Tigers",
+      "abbr": "EDW"
+    },
+    {
+      "id": 273,
+      "school": "",
+      "name": "Marauders",
+      "abbr": "CCI"
+    },
+    {
+      "id": 274,
+      "school": "",
+      "name": "Thunderwolves",
+      "abbr": "CSUP"
+    },
+    {
+      "id": 275,
+      "school": "",
+      "name": "Tigers",
+      "abbr": "SAV"
+    },
+    {
+      "id": 276,
+      "school": "",
+      "name": "Dolphins",
+      "abbr": "JAC"
+    },
+    {
+      "id": 277,
+      "school": "",
+      "name": "Wasps",
+      "abbr": "EMO"
+    },
+    {
+      "id": 278,
+      "school": "",
+      "name": "Hawks",
+      "abbr": "QUI"
+    },
+    {
+      "id": 279,
+      "school": "",
+      "name": "Tigers",
+      "abbr": "MOR"
+    },
+    {
+      "id": 280,
+      "school": "",
+      "name": "All-Stars",
+      "abbr": "EAST"
+    },
+    {
+      "id": 281,
+      "school": "",
+      "name": "Rams",
+      "abbr": "SHE"
+    },
+    {
+      "id": 282,
+      "school": "",
+      "name": "Wolves",
+      "abbr": "NBY"
+    },
+    {
+      "id": 283,
+      "school": "",
+      "name": "Greyhounds",
+      "abbr": "ASP"
+    },
+    {
+      "id": 284,
+      "school": "",
+      "name": "Bantams",
+      "abbr": "TRI"
+    },
+    {
+      "id": 285,
+      "school": "",
+      "name": "Cougars",
+      "abbr": "SIO"
+    },
+    {
+      "id": 286,
+      "school": "",
+      "name": "Knights",
+      "abbr": "MGST"
+    },
+    {
+      "id": 287,
+      "school": "",
+      "name": "Hawks",
+      "abbr": "CHO"
+    },
+    {
+      "id": 288,
+      "school": "Northeastern",
+      "name": "Northeastern Huskies",
+      "abbr": "NE"
+    },
+    {
+      "id": 289,
+      "school": "Western State",
+      "name": "Western State Mountaineers",
+      "abbr": "WES"
+    },
+    {
+      "id": 290,
+      "school": "Adams State",
+      "name": "Adams State Grizzlies",
+      "abbr": "ADST"
+    },
+    {
+      "id": 291,
+      "school": "Central Washington",
+      "name": "Central Washington Wildcats",
+      "abbr": "CEN"
+    },
+    {
+      "id": 292,
+      "school": "Western New Mexico",
+      "name": "Western New Mexico Mustangs",
+      "abbr": "WES"
+    },
+    {
+      "id": 293,
+      "school": "Arkansas-Monticello",
+      "name": "Arkansas-Monticello Weevils",
+      "abbr": "ARK"
+    },
+    {
+      "id": 294,
+      "school": "Humboldt State",
+      "name": "Humboldt State Lumberjacks",
+      "abbr": "HUM"
+    },
+    {
+      "id": 295,
+      "school": "Albany State (GA)",
+      "name": "Albany State (GA) Golden Rams",
+      "abbr": "ALB"
+    },
+    {
+      "id": 296,
+      "school": "Allen",
+      "name": "Allen Yellow Jackets",
+      "abbr": "ALN"
+    },
+    {
+      "id": 297,
+      "school": "Montana-Western",
+      "name": "Montana-Western Bulldogs",
+      "abbr": "MWST"
+    },
+    {
+      "id": 298,
+      "school": "Texas College",
+      "name": "Texas College Steers",
+      "abbr": "TXCL"
+    },
+    {
+      "id": 299,
+      "school": "",
+      "name": "Gyrenes",
+      "abbr": "AVE"
+    },
+    {
+      "id": 301,
+      "school": "",
+      "name": "Crusaders",
+      "abbr": "NG"
+    },
+    {
+      "id": 302,
+      "school": "",
+      "name": "Eagles",
+      "abbr": "REI"
+    },
+    {
+      "id": 303,
+      "school": "",
+      "name": "Choctaws",
+      "abbr": "MIS"
+    },
+    {
+      "id": 304,
+      "school": "Rhodes College",
+      "name": "Rhodes College Lynx",
+      "abbr": "RHO"
+    },
+    {
+      "id": 305,
+      "school": "Virginia State",
+      "name": "Virginia State Trojans",
+      "abbr": "VIR"
+    },
+    {
+      "id": 306,
+      "school": "Benedict College",
+      "name": "Benedict College Tigers",
+      "abbr": "BEN"
+    },
+    {
+      "id": 307,
+      "school": "Slippery Rock",
+      "name": "Slippery Rock The Rock",
+      "abbr": "SRU"
+    },
+    {
+      "id": 308,
+      "school": "St. Xavier (IL)",
+      "name": "St. Xavier (IL) Cougars",
+      "abbr": "STX"
+    },
+    {
+      "id": 309,
+      "school": "Minnesota State",
+      "name": "Minnesota State Mavericks",
+      "abbr": "MNST"
+    },
+    {
+      "id": 310,
+      "school": "Cheyney",
+      "name": "Cheyney Wolves",
+      "abbr": "CHE"
+    },
+    {
+      "id": 311,
+      "school": "Concord",
+      "name": "Concord Mountain Lions",
+      "abbr": "CON"
+    },
+    {
+      "id": 312,
+      "school": "William Penn",
+      "name": "William Penn Statesmen",
+      "abbr": "WIL"
+    },
+    {
+      "id": 313,
+      "school": "Union College",
+      "name": "Union College Dutchmen",
+      "abbr": "UNI"
+    },
+    {
+      "id": 314,
+      "school": "La Salle",
+      "name": "La Salle Explorers",
+      "abbr": "LAS"
+    },
+    {
+      "id": 315,
+      "school": "Buffalo State",
+      "name": "Buffalo State Bengals",
+      "abbr": "BUF"
+    },
+    {
+      "id": 316,
+      "school": "St. Peter's",
+      "name": "St. Peter's Peacocks",
+      "abbr": "SPU"
+    },
+    {
+      "id": 317,
+      "school": "Iona",
+      "name": "Iona Gaels",
+      "abbr": "IONA"
+    },
+    {
+      "id": 318,
+      "school": "Tiffin",
+      "name": "Tiffin Dragons",
+      "abbr": "TIF"
+    },
+    {
+      "id": 319,
+      "school": "Albion",
+      "name": "Albion Britons",
+      "abbr": "ALBI"
+    },
+    {
+      "id": 320,
+      "school": "Campbellsville",
+      "name": "Campbellsville Tigers",
+      "abbr": "CAI"
+    },
+    {
+      "id": 321,
+      "school": "Wisconsin Lutheran",
+      "name": "Wisconsin Lutheran Warriors",
+      "abbr": "WIS"
+    },
+    {
+      "id": 322,
+      "school": "Azusa Pacific",
+      "name": "Azusa Pacific Cougars",
+      "abbr": "AZU"
+    },
+    {
+      "id": 323,
+      "school": "Wingate",
+      "name": "Wingate Bulldogs",
+      "abbr": "WIN"
+    },
+    {
+      "id": 324,
+      "school": "Wisconsin-Platteville",
+      "name": "Wisconsin-Platteville Pioneers",
+      "abbr": "WIS"
+    },
+    {
+      "id": 325,
+      "school": "Lenoir-Rhyne",
+      "name": "Lenoir-Rhyne Bears",
+      "abbr": "LEN"
+    },
+    {
+      "id": 326,
+      "school": "Southern Oregon",
+      "name": "Southern Oregon Raiders",
+      "abbr": "SOU"
+    },
+    {
+      "id": 327,
+      "school": "St. Francis (IN)",
+      "name": "St. Francis (IN) Cougars",
+      "abbr": "SBP"
+    },
+    {
+      "id": 328,
+      "school": "St. Joseph's (IN)",
+      "name": "St. Joseph's (IN) Pumas",
+      "abbr": "STJ"
+    },
+    {
+      "id": 329,
+      "school": "Webber International",
+      "name": "Webber International Warriors",
+      "abbr": "WEBB"
+    },
+    {
+      "id": 330,
+      "school": "Charleston (WV)",
+      "name": "Charleston (WV) Golden Eagles",
+      "abbr": "CHA"
+    },
+    {
+      "id": 331,
+      "school": "Upper Iowa University",
+      "name": "Upper Iowa University Peacocks",
+      "abbr": "UPP"
+    },
+    {
+      "id": 332,
+      "school": "Waldorf",
+      "name": "Waldorf Warriors",
+      "abbr": "WAL"
+    },
+    {
+      "id": 333,
+      "school": "Aurora",
+      "name": "Aurora Spartans",
+      "abbr": "AUR"
+    },
+    {
+      "id": 334,
+      "school": "Stillman",
+      "name": "Stillman Tigers",
+      "abbr": "STI"
+    },
+    {
+      "id": 335,
+      "school": "WV State",
+      "name": "WV State Yellow Jackets",
+      "abbr": "WES"
+    },
+    {
+      "id": 336,
+      "school": "Johnson C Smith",
+      "name": "Johnson C Smith Golden Bulls",
+      "abbr": "JOH"
+    },
+    {
+      "id": 337,
+      "school": "Henderson State",
+      "name": "Henderson State Reddies",
+      "abbr": "HEN"
+    },
+    {
+      "id": 338,
+      "school": "Angelo State",
+      "name": "Angelo State Rams",
+      "abbr": "ANG"
+    },
+    {
+      "id": 339,
+      "school": "Ouachita Baptist",
+      "name": "Ouachita Baptist Tigers",
+      "abbr": "OUA"
+    },
+    {
+      "id": 340,
+      "school": "Texas A&M-Kingsville",
+      "name": "Texas A&M-Kingsville Javelinas",
+      "abbr": "TXA"
+    },
+    {
+      "id": 341,
+      "school": "OK Panhandle St",
+      "name": "OK Panhandle St Aggies",
+      "abbr": "OKP"
+    },
+    {
+      "id": 342,
+      "school": "Paul Quinn",
+      "name": "Paul Quinn Tigers",
+      "abbr": "PPN"
+    },
+    {
+      "id": 343,
+      "school": "Lincoln (MO)",
+      "name": "Lincoln (MO) Blue Tigers",
+      "abbr": "LIN"
+    },
+    {
+      "id": 344,
+      "school": "",
+      "name": "Wildcats",
+      "abbr": "INWS"
+    },
+    {
+      "id": 345,
+      "school": "",
+      "name": "Bobcats",
+      "abbr": "STTHO"
+    },
+    {
+      "id": 346,
+      "school": "Fort Lewis",
+      "name": "Fort Lewis Skyhawks",
+      "abbr": "FORTLEW"
+    },
+    {
+      "id": 347,
+      "school": "Western Oregon",
+      "name": "Western Oregon Wolves",
+      "abbr": "WORE"
+    },
+    {
+      "id": 348,
+      "school": "Elizabeth City State",
+      "name": "Elizabeth City State Vikings",
+      "abbr": "ELI"
+    },
+    {
+      "id": 349,
+      "school": "Millersville",
+      "name": "Millersville Marauders",
+      "abbr": "MIL"
+    },
+    {
+      "id": 350,
+      "school": "West Virginia Institute Of Tech",
+      "name": "West Virginia Institute Of Tech Golden Bears",
+      "abbr": "WVT"
+    },
+    {
+      "id": 351,
+      "school": "Minnesota Duluth",
+      "name": "Minnesota Duluth Bulldogs",
+      "abbr": "UMD"
+    },
+    {
+      "id": 352,
+      "school": "Iowa Wesleyan",
+      "name": "Iowa Wesleyan Tigers",
+      "abbr": "IOW"
+    },
+    {
+      "id": 353,
+      "school": "PennWest California",
+      "name": "PennWest California Vulcans",
+      "abbr": "PWC"
+    },
+    {
+      "id": 354,
+      "school": "Rowan",
+      "name": "Rowan Profs",
+      "abbr": "ROW"
+    },
+    {
+      "id": 355,
+      "school": "Wittenberg",
+      "name": "Wittenberg Tigers",
+      "abbr": "WITTEN"
+    },
+    {
+      "id": 356,
+      "school": "Cumberland (TN)",
+      "name": "Cumberland (TN) Bulldogs",
+      "abbr": "CUMBTN"
+    },
+    {
+      "id": 357,
+      "school": "Greensboro College",
+      "name": "Greensboro College Pride",
+      "abbr": "GRNSBORO"
+    },
+    {
+      "id": 358,
+      "school": "Menlo College",
+      "name": "Menlo College Oaks",
+      "abbr": "MENLO"
+    },
+    {
+      "id": 359,
+      "school": "Missouri S&T",
+      "name": "Missouri S&T Miners",
+      "abbr": "MIS"
+    },
+    {
+      "id": 360,
+      "school": "Chapman",
+      "name": "Chapman Panthers",
+      "abbr": "CHA"
+    },
+    {
+      "id": 361,
+      "school": "Mars Hill",
+      "name": "Mars Hill Lions",
+      "abbr": "MH"
+    },
+    {
+      "id": 362,
+      "school": "Georgetown College Kentucky",
+      "name": "Georgetown College Kentucky Tigers",
+      "abbr": "GTOWNCOLL"
+    },
+    {
+      "id": 363,
+      "school": "Bacone",
+      "name": "Bacone",
+      "abbr": "BACONE"
+    },
+    {
+      "id": 364,
+      "school": "Delta State",
+      "name": "Delta State Statesmen",
+      "abbr": "DELTAST"
+    },
+    {
+      "id": 365,
+      "school": "Northwestern Oklahoma State",
+      "name": "Northwestern Oklahoma State Rangers",
+      "abbr": "NWO"
+    },
+    {
+      "id": 366,
+      "school": "Langston University",
+      "name": "Langston University Lions",
+      "abbr": "LANGSTON"
+    },
+    {
+      "id": 367,
+      "school": "Concordia (AL)",
+      "name": "Concordia (AL) Hornets",
+      "abbr": "CON"
+    },
+    {
+      "id": 368,
+      "school": "Chadron State",
+      "name": "Chadron State Eagles",
+      "abbr": "CHA"
+    },
+    {
+      "id": 369,
+      "school": "Catawba",
+      "name": "Catawba Indians",
+      "abbr": "CAT"
+    },
+    {
+      "id": 370,
+      "school": "Winston-Salem",
+      "name": "Winston-Salem Rams",
+      "abbr": "WSSU"
+    },
+    {
+      "id": 371,
+      "school": "Miles",
+      "name": "Miles Golden Bears",
+      "abbr": "MIL"
+    },
+    {
+      "id": 372,
+      "school": "Cumberland College",
+      "name": "Cumberland College Indians",
+      "abbr": "CUM"
+    },
+    {
+      "id": 373,
+      "school": "St. Augustine's",
+      "name": "St. Augustine's Falcons",
+      "abbr": "STA"
+    },
+    {
+      "id": 374,
+      "school": "Southern Arkansas",
+      "name": "Southern Arkansas Muleriders",
+      "abbr": "SOU"
+    },
+    {
+      "id": 375,
+      "school": "Augustana (SD)",
+      "name": "Augustana (SD) Vikings",
+      "abbr": "AUG"
+    },
+    {
+      "id": 376,
+      "school": "Fort Valley State",
+      "name": "Fort Valley State Wildcats",
+      "abbr": "FOR"
+    },
+    {
+      "id": 377,
+      "school": "Lock Haven",
+      "name": "Lock Haven Bald Eagles",
+      "abbr": "LOC"
+    },
+    {
+      "id": 378,
+      "school": "Southwest Baptist",
+      "name": "Southwest Baptist Bearcats",
+      "abbr": "SWB"
+    },
+    {
+      "id": 379,
+      "school": "Kentucky Wesleyan",
+      "name": "Kentucky Wesleyan Panthers",
+      "abbr": "KYW"
+    },
+    {
+      "id": 380,
+      "school": "Southern Connecticut State",
+      "name": "Southern Connecticut State Owls",
+      "abbr": "SOU"
+    },
+    {
+      "id": 381,
+      "school": "Hanover",
+      "name": "Hanover Panthers",
+      "abbr": "HAN"
+    },
+    {
+      "id": 382,
+      "school": "Trinity International (IL)",
+      "name": "Trinity International (IL) Trojans",
+      "abbr": "TRN"
+    },
+    {
+      "id": 383,
+      "school": "West Chester",
+      "name": "West Chester Golden Rams",
+      "abbr": "WES"
+    },
+    {
+      "id": 384,
+      "school": "Fayetteville State",
+      "name": "Fayetteville State Broncos",
+      "abbr": "FAY"
+    },
+    {
+      "id": 385,
+      "school": "Pikeville",
+      "name": "Pikeville Bears",
+      "abbr": "PIKEV"
+    },
+    {
+      "id": 386,
+      "school": "West Alabama",
+      "name": "West Alabama Tigers",
+      "abbr": "WES"
+    },
+    {
+      "id": 387,
+      "school": "St Francis Illinois",
+      "name": "St Francis Illinois Fighting Saints",
+      "abbr": "SFIL"
+    },
+    {
+      "id": 388,
+      "school": "Western Connecticut State",
+      "name": "Western Connecticut State Colonials",
+      "abbr": "WES"
+    },
+    {
+      "id": 389,
+      "school": "UNC Pembroke",
+      "name": "UNC Pembroke Braves",
+      "abbr": "NCP"
+    },
+    {
+      "id": 390,
+      "school": "Urbana",
+      "name": "Urbana Blue Knights",
+      "abbr": "URB"
+    },
+    {
+      "id": 391,
+      "school": "Kalamazoo",
+      "name": "Kalamazoo Hornets",
+      "abbr": "KAL"
+    },
+    {
+      "id": 392,
+      "school": "Marian",
+      "name": "Marian Knights",
+      "abbr": "MAR"
+    },
+    {
+      "id": 393,
+      "school": "Carson-Newman",
+      "name": "Carson-Newman Eagles",
+      "abbr": "CNEW"
+    },
+    {
+      "id": 394,
+      "school": "WV Wesleyan",
+      "name": "WV Wesleyan Bobcats",
+      "abbr": "WVW"
+    },
+    {
+      "id": 395,
+      "school": "Clark Atlanta",
+      "name": "Clark Atlanta Panthers",
+      "abbr": "CLK"
+    },
+    {
+      "id": 396,
+      "school": "New Mexico Highlands",
+      "name": "New Mexico Highlands Cowboys",
+      "abbr": "NMH"
+    },
+    {
+      "id": 397,
+      "school": "Western Washington",
+      "name": "Western Washington Vikings",
+      "abbr": "WES"
+    },
+    {
+      "id": 398,
+      "school": "Livingstone",
+      "name": "Livingstone Blue Bears",
+      "abbr": "LVI"
+    },
+    {
+      "id": 399,
+      "school": "Delaware Valley",
+      "name": "Delaware Valley Aggies",
+      "abbr": "DV"
+    },
+    {
+      "id": 400,
+      "school": "Pace",
+      "name": "Pace Setters",
+      "abbr": "PAC"
+    },
+    {
+      "id": 401,
+      "school": "Wesley College",
+      "name": "Wesley College Wolverines",
+      "abbr": "WES"
+    },
+    {
+      "id": 402,
+      "school": "Washburn",
+      "name": "Washburn Ichabods",
+      "abbr": "WAS"
+    },
+    {
+      "id": 403,
+      "school": "Bentley",
+      "name": "Bentley Falcons",
+      "abbr": "BEN"
+    },
+    {
+      "id": 404,
+      "school": "Birmingham-Southern",
+      "name": "Birmingham-Southern Panthers",
+      "abbr": "BIR"
+    },
+    {
+      "id": 405,
+      "school": "Southern Virginia",
+      "name": "Southern Virginia Knights",
+      "abbr": "SVA"
+    },
+    {
+      "id": 406,
+      "school": "Methodist",
+      "name": "Methodist Monarchs",
+      "abbr": "MTH"
+    },
+    {
+      "id": 407,
+      "school": "Franklin",
+      "name": "Franklin Grizzlies",
+      "abbr": "FRA"
+    },
+    {
+      "id": 408,
+      "school": "Concordia (WI)",
+      "name": "Concordia (WI) Falcons",
+      "abbr": "CON"
+    },
+    {
+      "id": 409,
+      "school": "Carthage",
+      "name": "Carthage Redmen",
+      "abbr": "CAR"
+    },
+    {
+      "id": 410,
+      "school": "Shorter",
+      "name": "Shorter Hawks",
+      "abbr": "SHO"
+    },
+    {
+      "id": 411,
+      "school": "Faulkner",
+      "name": "Faulkner Eagles",
+      "abbr": "FAU"
+    },
+    {
+      "id": 412,
+      "school": "East Central",
+      "name": "East Central Tigers",
+      "abbr": "EAS"
+    },
+    {
+      "id": 413,
+      "school": "Southeastern Oklahoma",
+      "name": "Southeastern Oklahoma Savage Storm",
+      "abbr": "SEOS"
+    },
+    {
+      "id": 414,
+      "school": "Shaw",
+      "name": "Shaw Bears",
+      "abbr": "SHA"
+    },
+    {
+      "id": 415,
+      "school": "St. Cloud State",
+      "name": "St. Cloud State Huskies",
+      "abbr": "STC"
+    },
+    {
+      "id": 416,
+      "school": "Central Methodist",
+      "name": "Central Methodist Eagles",
+      "abbr": "CDF"
+    },
+    {
+      "id": 417,
+      "school": "SUNY Maritime",
+      "name": "SUNY Maritime Privateers",
+      "abbr": "MAR"
+    },
+    {
+      "id": 418,
+      "school": "Grand View",
+      "name": "Grand View Vikings",
+      "abbr": "GV"
+    },
+    {
+      "id": 419,
+      "school": "Glenville State",
+      "name": "Glenville State Pioneers",
+      "abbr": "GLE"
+    },
+    {
+      "id": 420,
+      "school": "Lambuth",
+      "name": "Lambuth Eagles",
+      "abbr": "LAM"
+    },
+    {
+      "id": 421,
+      "school": "Lincoln (PA)",
+      "name": "Lincoln (PA) Lions",
+      "abbr": "LIN"
+    },
+    {
+      "id": 422,
+      "school": "Central Missouri State",
+      "name": "Central Missouri State Mules",
+      "abbr": "CEN"
+    },
+    {
+      "id": 423,
+      "school": "St. Anselm",
+      "name": "St. Anselm Hawks",
+      "abbr": "STA"
+    },
+    {
+      "id": 424,
+      "school": "UVA-Wise",
+      "name": "UVA-Wise Highland Cavaliers",
+      "abbr": "VAW"
+    },
+    {
+      "id": 425,
+      "school": "Taylor",
+      "name": "Taylor Trojans",
+      "abbr": "TAY"
+    },
+    {
+      "id": 426,
+      "school": "Tusculum",
+      "name": "Tusculum Pioneers",
+      "abbr": "TUS"
+    },
+    {
+      "id": 427,
+      "school": "Minot State",
+      "name": "Minot State Beavers",
+      "abbr": "MIN"
+    },
+    {
+      "id": 428,
+      "school": "Willamette",
+      "name": "Willamette Bearcats",
+      "abbr": "WIL"
+    },
+    {
+      "id": 429,
+      "school": "Northeastern State",
+      "name": "Northeastern State RiverHawks",
+      "abbr": "NEO"
+    },
+    {
+      "id": 430,
+      "school": "McMurry",
+      "name": "McMurry War Hawks",
+      "abbr": "MCM"
+    },
+    {
+      "id": 431,
+      "school": "Virginia University Of Lynchburg",
+      "name": "Virginia University Of Lynchburg Dragons",
+      "abbr": "VIRLYN"
+    },
+    {
+      "id": 432,
+      "school": "American International",
+      "name": "American International Yellow Jackets",
+      "abbr": "AIC"
+    },
+    {
+      "id": 433,
+      "school": "Kentucky Christian",
+      "name": "Kentucky Christian Knights",
+      "abbr": "KCU"
+    },
+    {
+      "id": 434,
+      "school": "Apprentice School",
+      "name": "Apprentice School Builders",
+      "abbr": "APP"
+    },
+    {
+      "id": 435,
+      "school": "Evangel",
+      "name": "Evangel Crusaders",
+      "abbr": "EVA"
+    },
+    {
+      "id": 436,
+      "school": "South Dakota Mines",
+      "name": "South Dakota Mines Hardrockers",
+      "abbr": "SDA"
+    },
+    {
+      "id": 437,
+      "school": "Carroll College (MT)",
+      "name": "Carroll College (MT) Fighting Saints",
+      "abbr": "CARROLLMT"
+    },
+    {
+      "id": 438,
+      "school": "Colorado Mesa",
+      "name": "Colorado Mesa Mavericks",
+      "abbr": "MESA"
+    },
+    {
+      "id": 439,
+      "school": "Black Hills State",
+      "name": "Black Hills State Yellow Jackets",
+      "abbr": "BLA"
+    },
+    {
+      "id": 440,
+      "school": "Indianapolis",
+      "name": "Indianapolis Greyhounds",
+      "abbr": "IND"
+    },
+    {
+      "id": 441,
+      "school": "Southwestern Oklahoma",
+      "name": "Southwestern Oklahoma Bulldogs",
+      "abbr": "SWO"
+    },
+    {
+      "id": 442,
+      "school": "Eastern Oregon",
+      "name": "Eastern Oregon Mountaineers",
+      "abbr": "EAS"
+    },
+    {
+      "id": 443,
+      "school": "Wayland Baptist",
+      "name": "Wayland Baptist Pioneers",
+      "abbr": "WAYLAND"
+    },
+    {
+      "id": 444,
+      "school": "Eastern New Mexico",
+      "name": "Eastern New Mexico Greyhounds",
+      "abbr": "EAS"
+    },
+    {
+      "id": 445,
+      "school": "Oklahoma Baptist",
+      "name": "Oklahoma Baptist Bison",
+      "abbr": "OB"
+    },
+    {
+      "id": 446,
+      "school": "Pittsburg State",
+      "name": "Pittsburg State Gorillas",
+      "abbr": "PIT"
+    },
+    {
+      "id": 447,
+      "school": "Ferris State",
+      "name": "Ferris State Bulldogs",
+      "abbr": "FER"
+    },
+    {
+      "id": 448,
+      "school": "West Liberty",
+      "name": "West Liberty Hilltoppers",
+      "abbr": "WES"
+    },
+    {
+      "id": 449,
+      "school": "Salve Regina",
+      "name": "Salve Regina Seahawks",
+      "abbr": "SAL"
+    },
+    {
+      "id": 450,
+      "school": "Warner University",
+      "name": "Warner University Royals",
+      "abbr": "WARNE"
+    },
+    {
+      "id": 451,
+      "school": "Florida Tech",
+      "name": "Florida Tech Panthers",
+      "abbr": "FLTH"
+    },
+    {
+      "id": 452,
+      "school": "William Jewell College",
+      "name": "William Jewell College Cardinals",
+      "abbr": "WJC"
+    },
+    {
+      "id": 453,
+      "school": "Berry College",
+      "name": "Berry College Vikings",
+      "abbr": "BER"
+    },
+    {
+      "id": 454,
+      "school": "Carnegie Mellon",
+      "name": "Carnegie Mellon Tartans",
+      "abbr": "CAR"
+    },
+    {
+      "id": 455,
+      "school": "Arkansas Tech",
+      "name": "Arkansas Tech Wonder Boys",
+      "abbr": "ARK"
+    },
+    {
+      "id": 456,
+      "school": "Nebraska-Kearney",
+      "name": "Nebraska-Kearney Lopers",
+      "abbr": "NEB"
+    },
+    {
+      "id": 457,
+      "school": "Simon Fraser",
+      "name": "Simon Fraser Clansmen",
+      "abbr": "SIM"
+    },
+    {
+      "id": 458,
+      "school": "UW-Oshkosh",
+      "name": "UW-Oshkosh Titans",
+      "abbr": "WIS"
+    },
+    {
+      "id": 459,
+      "school": "Clarion",
+      "name": "Clarion Golden Eagles",
+      "abbr": "CLA"
+    },
+    {
+      "id": 460,
+      "school": "Alderson-Broaddus",
+      "name": "Alderson-Broaddus Battlers",
+      "abbr": "ABC"
+    },
+    {
+      "id": 461,
+      "school": "College of Faith - Charlotte",
+      "name": "College of Faith - Charlotte Saints",
+      "abbr": "COFC"
+    },
+    {
+      "id": 462,
+      "school": "Truman State",
+      "name": "Truman State Bulldogs",
+      "abbr": "TRU"
+    },
+    {
+      "id": 463,
+      "school": "Missouri Baptist",
+      "name": "Missouri Baptist Spartans",
+      "abbr": "MB"
+    },
+    {
+      "id": 464,
+      "school": "Limestone",
+      "name": "Limestone Saints",
+      "abbr": "LIM"
+    },
+    {
+      "id": 465,
+      "school": "Brevard College",
+      "name": "Brevard College Tornados",
+      "abbr": "BRE"
+    },
+    {
+      "id": 466,
+      "school": "University of Faith",
+      "name": "University of Faith Glory Eagles",
+      "abbr": "UFFL"
+    },
+    {
+      "id": 467,
+      "school": "Louisiana College",
+      "name": "Louisiana College Wildcats",
+      "abbr": "LAC"
+    },
+    {
+      "id": 468,
+      "school": "Maryville TN",
+      "name": "Maryville TN Fighting Scots",
+      "abbr": "MAR"
+    },
+    {
+      "id": 469,
+      "school": "Kentucky State",
+      "name": "Kentucky State Thorobreds",
+      "abbr": "KYS"
+    },
+    {
+      "id": 470,
+      "school": "Lane",
+      "name": "Lane Dragons",
+      "abbr": "LAN"
+    },
+    {
+      "id": 471,
+      "school": "Notre Dame College",
+      "name": "Notre Dame College Blue Falcons",
+      "abbr": "NOT"
+    },
+    {
+      "id": 472,
+      "school": "College of Faith",
+      "name": "College of Faith Warriors",
+      "abbr": "FAI"
+    },
+    {
+      "id": 473,
+      "school": "Bethany (KS)",
+      "name": "Bethany (KS) Swedes",
+      "abbr": "BET"
+    },
+    {
+      "id": 474,
+      "school": "Southwestern College",
+      "name": "Southwestern College Moundbuilders",
+      "abbr": "SWC"
+    },
+    {
+      "id": 475,
+      "school": "Concordia College (MI)",
+      "name": "Concordia College (MI) Cardinals",
+      "abbr": "CMI"
+    },
+    {
+      "id": 476,
+      "school": "Malone",
+      "name": "Malone Pioneers",
+      "abbr": "MAL"
+    },
+    {
+      "id": 477,
+      "school": "Bluefield College",
+      "name": "Bluefield College Rams",
+      "abbr": "BLU"
+    },
+    {
+      "id": 478,
+      "school": "McKendree",
+      "name": "McKendree Bearcats",
+      "abbr": "MAN"
+    },
+    {
+      "id": 479,
+      "school": "College of Idaho",
+      "name": "College of Idaho Yotes",
+      "abbr": "COI"
+    },
+    {
+      "id": 480,
+      "school": "Walsh",
+      "name": "Walsh Cavaliers",
+      "abbr": "WALSH"
+    },
+    {
+      "id": 481,
+      "school": "Guilford",
+      "name": "Guilford Quakers",
+      "abbr": "GUI"
+    },
+    {
+      "id": 482,
+      "school": "West Florida",
+      "name": "West Florida Argonauts",
+      "abbr": "WFLA"
+    },
+    {
+      "id": 483,
+      "school": "Point University",
+      "name": "Point University Point",
+      "abbr": "POINT"
+    },
+    {
+      "id": 484,
+      "school": "Mount St. Joseph",
+      "name": "Mount St. Joseph Lions",
+      "abbr": "MTS"
+    },
+    {
+      "id": 485,
+      "school": "Mayville State",
+      "name": "Mayville State Comets",
+      "abbr": "MAY"
+    },
+    {
+      "id": 486,
+      "school": "Franklin Pierce",
+      "name": "Franklin Pierce Ravens",
+      "abbr": "FP"
+    },
+    {
+      "id": 487,
+      "school": "East Stroudsburg",
+      "name": "East Stroudsburg Warriors",
+      "abbr": "EAS"
+    },
+    {
+      "id": 488,
+      "school": "Catholic University",
+      "name": "Catholic University Cardinals",
+      "abbr": "CAT"
+    },
+    {
+      "id": 489,
+      "school": "Western New England",
+      "name": "Western New England Golden Bears",
+      "abbr": "WES"
+    },
+    {
+      "id": 490,
+      "school": "NC Wesleyan",
+      "name": "NC Wesleyan Battling Bishops",
+      "abbr": "NOR"
+    },
+    {
+      "id": 491,
+      "school": "Bethel (TN)",
+      "name": "Bethel (TN) Wildcats",
+      "abbr": "BET"
+    },
+    {
+      "id": 492,
+      "school": "Arizona Christian",
+      "name": "Arizona Christian Firestorm",
+      "abbr": "ARI"
+    },
+    {
+      "id": 493,
+      "school": "Texas Wesleyan",
+      "name": "Texas Wesleyan Rams",
+      "abbr": "TXWE"
+    },
+    {
+      "id": 494,
+      "school": "Midwestern State",
+      "name": "Midwestern State Mustangs",
+      "abbr": "MID"
+    },
+    {
+      "id": 495,
+      "school": "TBD",
+      "name": "TBD",
+      "abbr": "TBD"
+    },
+    {
+      "id": 496,
+      "school": "West Texas A&M",
+      "name": "West Texas A&M Buffaloes",
+      "abbr": "WES"
+    },
+    {
+      "id": 497,
+      "school": "Missouri Western",
+      "name": "Missouri Western Griffons",
+      "abbr": "MIS"
+    },
+    {
+      "id": 498,
+      "school": "St. Andrews",
+      "name": "St. Andrews Knights",
+      "abbr": "ST. A"
+    },
+    {
+      "id": 499,
+      "school": "Michigan Tech",
+      "name": "Michigan Tech Huskies",
+      "abbr": "MTU"
+    },
+    {
+      "id": 500,
+      "school": "UFTL",
+      "name": "UFTL Eagles",
+      "abbr": "UFTL"
+    },
+    {
+      "id": 501,
+      "school": "DePauw",
+      "name": "DePauw Tigers",
+      "abbr": "DEP"
+    },
+    {
+      "id": 502,
+      "school": "Lincoln University (CA)",
+      "name": "Lincoln University (CA) Oaklanders",
+      "abbr": "LIN"
+    },
+    {
+      "id": 503,
+      "school": "Bloomsburg",
+      "name": "Bloomsburg Huskies",
+      "abbr": "BLOM"
+    },
+    {
+      "id": 504,
+      "school": "Thomas More College",
+      "name": "Thomas More College Saints",
+      "abbr": "THO"
+    },
+    {
+      "id": 505,
+      "school": "Post University",
+      "name": "Post University Eagles",
+      "abbr": "POST"
+    },
+    {
+      "id": 506,
+      "school": "La Verne",
+      "name": "La Verne Leopards",
+      "abbr": "LA"
+    },
+    {
+      "id": 507,
+      "school": "Barton College",
+      "name": "Barton College Bulldogs",
+      "abbr": "BAR"
+    },
+    {
+      "id": 508,
+      "school": "North American University",
+      "name": "North American University Stallions",
+      "abbr": "NAMERICAN"
+    },
+    {
+      "id": 509,
+      "school": "Florida Memorial University",
+      "name": "Florida Memorial University Lions",
+      "abbr": "FLMRL"
+    },
+    {
+      "id": 510,
+      "school": "Edinboro",
+      "name": "Edinboro Fighting Scots",
+      "abbr": "EDI"
+    },
+    {
+      "id": 511,
+      "school": "Wisconsin-Stevens Point",
+      "name": "Wisconsin-Stevens Point Pointers",
+      "abbr": "WIS"
+    },
+    {
+      "id": 512,
+      "school": "Northwestern (IA)",
+      "name": "Northwestern (IA) Nw College Iowa",
+      "abbr": "NAD"
+    },
+    {
+      "id": 513,
+      "school": "Wabash College",
+      "name": "Wabash College Little Giants",
+      "abbr": "WAB"
+    },
+    {
+      "id": 514,
+      "school": "Arkansas Baptist",
+      "name": "Arkansas Baptist Buffaloes",
+      "abbr": "ARKAN"
+    },
+    {
+      "id": 515,
+      "school": "Northern State",
+      "name": "Northern State Wolves",
+      "abbr": "NSU"
+    },
+    {
+      "id": 516,
+      "school": "Wheeling",
+      "name": "Wheeling Cardinals",
+      "abbr": "WHEE"
+    },
+    {
+      "id": 517,
+      "school": "Frostburg State",
+      "name": "Frostburg State Bobcats",
+      "abbr": "FRO"
+    },
+    {
+      "id": 518,
+      "school": "Erskine",
+      "name": "Erskine Flying Fleet",
+      "abbr": "ERS"
+    },
+    {
+      "id": 519,
+      "school": "Roosevelt",
+      "name": "Roosevelt Lakers",
+      "abbr": "ROOSE"
+    },
+    {
+      "id": 520,
+      "school": "TBD",
+      "name": "TBD",
+      "abbr": "TBD"
+    },
+    {
+      "id": 521,
+      "school": "Saginaw Valley State",
+      "name": "Saginaw Valley State Cardinals",
+      "abbr": "SVS"
+    },
+    {
+      "id": 522,
+      "school": "UT Rio Grande Valley",
+      "name": "UT Rio Grande Valley Vaqueros",
+      "abbr": "RGV"
+    },
+    {
+      "id": 523,
+      "school": "Sul Ross State",
+      "name": "Sul Ross State Lobos",
+      "abbr": "SROS"
+    },
+    {
+      "id": 524,
+      "school": "Adrian",
+      "name": "Adrian Bulldogs",
+      "abbr": "ADR"
+    },
+    {
+      "id": 525,
+      "school": "Ferrum",
+      "name": "Ferrum Panthers",
+      "abbr": "FER"
+    },
+    {
+      "id": 526,
+      "school": "Northern Michigan",
+      "name": "Northern Michigan Wildcats",
+      "abbr": "NMI"
+    },
+    {
+      "id": 527,
+      "school": "Valdosta State",
+      "name": "Valdosta State Blazers",
+      "abbr": "VAL"
+    },
+    {
+      "id": 528,
+      "school": "Chicago State",
+      "name": "Chicago State Cougars",
+      "abbr": "CHI"
+    },
+    {
+      "id": 530,
+      "school": "Ohio Dominican",
+      "name": "Ohio Dominican Panthers",
+      "abbr": "OHDM"
+    },
+    {
+      "id": 531,
+      "school": "Winona State",
+      "name": "Winona State Warriors",
+      "abbr": "WIN"
+    },
+    {
+      "id": 532,
+      "school": "Fairmont State",
+      "name": "Fairmont State Falcons",
+      "abbr": "FAI"
+    },
+    {
+      "id": 533,
+      "school": "Lawrence Tech",
+      "name": "Lawrence Tech LAWTE",
+      "abbr": "LTC"
+    },
+    {
+      "id": 534,
+      "school": "Dickinson (PA)",
+      "name": "Dickinson (PA) Red Devils",
+      "abbr": "DCK"
+    },
+    {
+      "id": 535,
+      "school": "Anderson (SC)",
+      "name": "Anderson (SC) Trojans",
+      "abbr": "AND"
+    },
+    {
+      "id": 536,
+      "school": "UT Permian Basin",
+      "name": "UT Permian Basin Falcons",
+      "abbr": "UTPB"
+    },
+    {
+      "id": 537,
+      "school": "Central Oklahoma",
+      "name": "Central Oklahoma Bronchos",
+      "abbr": "CENO"
+    }
+  ]
+}

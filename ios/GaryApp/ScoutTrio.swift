@@ -88,9 +88,7 @@ struct ScoutTrioData {
         homeName = Formatters.shortTeamName(homeSide, league: lg)
 
         func abbr(_ side: String, _ fallback: String?) -> String {
-            if let fallback, !fallback.isEmpty { return fallback }
-            let a = teamAbbrevFromName(side, league: row?.league)
-            return a.isEmpty ? side.uppercased() : a
+            scoreboardTeamAbbreviation(side, stored: fallback, league: row?.league)
         }
         let aAb = abbr(awaySide, row?.away_abbr), hAb = abbr(homeSide, row?.home_abbr)
         func matches(_ name: String?, _ side: String) -> Bool {

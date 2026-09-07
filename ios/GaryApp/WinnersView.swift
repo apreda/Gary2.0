@@ -50,17 +50,6 @@ enum WinnersSlot: Int {
     case nightcap = 3  // the latest start — carries action into the evening
 }
 
-/// Team abbreviation for the day-card seal timeline ("PHI 5:10") — the league
-/// keyword maps first, mascot prefix as the fallback.
-func winnersTeamAbbr(_ team: String?) -> String {
-    guard let t = team?.lowercased(), !t.isEmpty else { return "—" }
-    for map in [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, nflTeamKeywords] {
-        for (abbr, kws) in map where kws.contains(where: { t.contains($0) }) { return abbr }
-    }
-    let last = t.split(separator: " ").last.map(String.init) ?? t
-    return String(last.prefix(3)).uppercased()
-}
-
 /// Gary's last-10 graded game picks per league, explicitly labeled ALL PICKS.
 /// This is overall form, not Winners-only performance. Taps to Billfold.
 struct WinnersRecordBand: View {

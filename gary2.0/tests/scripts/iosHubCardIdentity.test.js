@@ -13,6 +13,9 @@ describe('native Hub card identity', () => {
     try {
       const script = `${source('NCAAFTeams.swift')}\n${source('HubCardIdentity.swift')}
 let h = HubCardIdentity.self
+// Display uses ESPN BTLR; existing provider cards still join using BUT.
+precondition(NCAAFTeams.abbreviation("Butler Bulldogs") == "BTLR")
+precondition(h.cardBelongsToTeam(cardLeague: "NCAAF", cardAbbr: "BUT", league: "NCAAF", team: "Butler Bulldogs", abbr: nil))
 precondition(h.cardBelongsToTeam(cardLeague: "MLB", cardAbbr: "HOU", league: "MLB", team: "Houston Astros", abbr: "HOU"))
 precondition(!h.cardBelongsToTeam(cardLeague: "NCAAF", cardAbbr: "HOU", league: "MLB", team: "Houston Astros", abbr: "HOU"))
 precondition(!h.cardBelongsToTeam(cardLeague: nil, cardAbbr: "HOU", league: "MLB", team: "Houston Astros", abbr: "HOU"))

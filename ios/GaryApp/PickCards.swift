@@ -909,41 +909,18 @@ struct CompactPickRow: View {
     private var pickParts: (pick: String, odds: String) { pick.formattedPickParts }
 
     /// Either side's abbreviation for the compact meta row (long-tag cards).
-    /// NCAAF prefers the pick's own stored abbreviations; every other league
-    /// resolves through the shared keyword maps.
+    /// ESPN college codes take priority over legacy stored display codes.
     private func metaTeamAbbrev(homeSide: Bool) -> String {
-        if (pick.league ?? "").uppercased() == "NCAAF" {
-            let stored = homeSide ? pick.homeTeamAbbreviation : pick.awayTeamAbbreviation
-            if let value = stored?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty {
-                return value.uppercased()
-            }
-        }
-        return teamAbbrevFromName(homeSide ? homeName : awayName, league: pick.league)
+        scoreboardTeamAbbreviation(homeSide ? pick.homeTeam : pick.awayTeam,
+                                   stored: homeSide ? pick.homeTeamAbbreviation : pick.awayTeamAbbreviation,
+                                   league: pick.league)
     }
 
-    /// Picked team's standard abbreviation (PHI, NYK, VGK, ...) via the league
-    /// keyword maps, with a mascot-initials fallback for other leagues.
+    /// The picked team uses the same league-aware code as the matchup.
     private func teamAbbrev(_ shortName: String) -> String {
-        let lower = shortName.lowercased()
-        let lg = (pick.league ?? "").uppercased()
-        if lg == "NCAAF" {
-            let stored = homeIsPicked ? pick.homeTeamAbbreviation : pick.awayTeamAbbreviation
-            if let value = stored?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty {
-                return value.uppercased()
-            }
-            return shortName.uppercased()
-        }
-        let maps: [[String: [String]]] = lg == "NBA" ? [nbaTeamKeywords]
-            : lg == "MLB" ? [mlbTeamKeywords]
-            : lg == "NHL" ? [nhlTeamKeywords]
-            : lg == "NFL" || lg == "NFL TDS" ? [nflTeamKeywords]
-            : lg == "WC" ? [wcTeamKeywords]
-            : [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, nflTeamKeywords, wcTeamKeywords]
-        for map in maps {
-            for (abbr, kws) in map where kws.contains(where: { lower.contains($0) }) { return abbr }
-        }
-        let last = lower.split(separator: " ").last.map(String.init) ?? lower
-        return String(last.prefix(3)).uppercased()
+        let fullName = homeIsPicked ? pick.homeTeam : pick.awayTeam
+        let stored = homeIsPicked ? pick.homeTeamAbbreviation : pick.awayTeamAbbreviation
+        return scoreboardTeamAbbreviation(fullName ?? shortName, stored: stored, league: pick.league)
     }
     /// The pick with the team name collapsed to its abbreviation (e.g. "PHI ML",
     /// "VGK ML"). The pick text may carry the full name, the short name, or a

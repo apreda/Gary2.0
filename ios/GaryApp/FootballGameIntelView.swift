@@ -235,7 +235,8 @@ struct FootballGameIntelView: View {
             return ScoutArmsStack(label: metricLabel(s), value: v)
         }
         guard !stacks.isEmpty else { return nil }
-        let abbr = laneAbbreviation(home: home) ?? (home ? sides.home : sides.away)
+        let abbr = scoreboardTeamAbbreviation(home ? sides.home : sides.away,
+            stored: laneAbbreviation(home: home), league: normalizedLeague)
         return ScoutArmsPlate(name: abbr.uppercased(), stacks: Array(stacks))
     }
 

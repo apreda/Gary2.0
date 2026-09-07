@@ -2431,7 +2431,7 @@ struct HomeView: View {
                         .padding(.bottom, 6)
                     ForEach(Array(upcoming.enumerated()), id: \.offset) { i, r in
                         HStack(spacing: 8) {
-                            Text("\(r.away_abbr ?? r.away_team ?? "") @ \(r.home_abbr ?? r.home_team ?? "")")
+                            Text("\(scoreboardTeamAbbreviation(r.away_team, stored: r.away_abbr, league: r.league)) @ \(scoreboardTeamAbbreviation(r.home_team, stored: r.home_abbr, league: r.league))")
                                 .font(.system(size: 13.5, weight: .bold).monospacedDigit())
                                 .foregroundStyle(Color.white.opacity(0.85))
                             Spacer(minLength: 8)

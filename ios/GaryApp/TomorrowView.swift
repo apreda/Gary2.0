@@ -357,8 +357,8 @@ struct TomorrowView {
                 let homeFav = mh <= ma
                 let favTeam = homeFav ? row.home_team : row.away_team
                 // Proper FIFA/league code (NED, MAR) — not the prefix(3) fallback (NET, MOR).
-                let favAbbr = (homeFav ? row.home_abbr : row.away_abbr)
-                    ?? (favTeam.map { teamAbbrevFromName($0, league: g.league) } ?? abbr(favTeam))
+                let favAbbr = scoreboardTeamAbbreviation(favTeam,
+                    stored: homeFav ? row.home_abbr : row.away_abbr, league: g.league)
                 parts.append("\(favAbbr) \(Self.mlStr(homeFav ? mh : ma))")
             }
             if let t = row.total { parts.append("O/U \(Self.trimNum(t))") }
@@ -419,8 +419,8 @@ struct TomorrowView {
 
         private func boardRow(_ row: TomorrowBoardRow, alt: Bool) -> some View {
             let marquee = row.is_marquee ?? false
-            let away = row.away_abbr ?? abbr(row.away_team)
-            let home = row.home_abbr ?? abbr(row.home_team)
+            let away = scoreboardTeamAbbreviation(row.away_team, stored: row.away_abbr, league: row.league)
+            let home = scoreboardTeamAbbreviation(row.home_team, stored: row.home_abbr, league: row.league)
             return HStack(spacing: 0) {
                 Text(TomorrowView.etTime(row.commence_time, withZone: false))
                     .font(GaryFonts.mono(12))
@@ -515,12 +515,6 @@ struct TomorrowView {
                              pOver: totalLine != nil ? pOver / z : nil, likelyHome: bi, likelyAway: bj)
         }
         private static func pct(_ v: Double) -> String { "\(Int((v * 100).rounded()))%" }
-
-        private func abbr(_ team: String?) -> String {
-            guard let team, !team.isEmpty else { return "—" }
-            // Fallback only — server normally provides away_abbr/home_abbr.
-            return String(team.prefix(3)).uppercased()
-        }
 
         private var lookAheadAvailable: [LookAheadLane] {
             LookAheadLane.allCases.filter { hasData($0) }
@@ -779,7 +773,7 @@ struct TomorrowView {
                     ForEach(Array(r.enumerated()), id: \.offset) { _, f in
                         HStack(spacing: 8) {
                             HStack(spacing: 5) {
-                                Text(f.abbr ?? abbr(f.team))
+                                Text(scoreboardTeamAbbreviation(f.team, stored: f.abbr, league: lg))
                                     .font(GaryFonts.mono(13.5, bold: true))
                                     .foregroundStyle(.white.opacity(0.92))
                                 if f.home == true {
@@ -813,7 +807,7 @@ struct TomorrowView {
                     let r = rows.filter { ($0.league ?? "").uppercased() == lg }
                     ForEach(Array(r.enumerated()), id: \.offset) { _, rp in
                         HStack(spacing: 8) {
-                            Text(rp.abbr ?? abbr(rp.team))
+                            Text(scoreboardTeamAbbreviation(rp.team, stored: rp.abbr, league: lg))
                                 .font(GaryFonts.mono(13.5, bold: true))
                                 .foregroundStyle(.white.opacity(0.92))
                                 .frame(maxWidth: .infinity, alignment: .leading)

@@ -16,7 +16,7 @@ enum HubCardIdentity {
     static func abbreviation(_ stored: String?, name: String, league: String) -> String? {
         let supplied = stored?.trimmingCharacters(in: .whitespacesAndNewlines)
         let value = (supplied?.isEmpty == false ? supplied : nil)
-            ?? (league.uppercased() == "NCAAF" ? NCAAFTeams.abbreviation(name) : nil)
+            ?? (league.uppercased() == "NCAAF" ? NCAAFTeams.providerAbbreviation(name) : nil)
         guard let value else { return nil }
         let upper = value.uppercased()
         if league.uppercased() == "MLB" {
