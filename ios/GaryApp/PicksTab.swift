@@ -1482,9 +1482,9 @@ struct PicksCarouselView: View {
         "\(store.allProps.count)-\(store.yesterdayPropsAll.count)-\(store.gamePicks.count)-\(store.yesterdayGamePicksAll.count)-\(store.slate.count)-\(connections.count)-\(store.refreshTick)"
     }
 
-    /// Land on the matchup the Hub deep-linked ("LAD @ ARI"). Leaves the
-    /// request pending while the slate is still loading; clears it once a
-    /// match attempt has been made.
+    /// Land on the exact game the Hub deep-linked. Typed requests wait for
+    /// loading to finish and never substitute a same-matchup sibling. Older
+    /// name-only links ("LAD @ ARI") retain their abbreviation fallback.
     private func consumeFocus() {
         guard let focus = focusState.focusGame else { return }
         let focusLeague = focusState.focusLeague
@@ -1504,12 +1504,15 @@ struct PicksCarouselView: View {
         let targetLeague = focusLeague
             ?? exactSlate?.league?.uppercased()
             ?? exactPick?.league?.uppercased()
-            ?? store.slate.first {
-                abbrGameMatches(focus, matchup: "\($0.away_team ?? "") @ \($0.home_team ?? "")")
-            }?.league?.uppercased()
-            ?? store.gamePicks.first {
-                abbrGameMatches(focus, matchup: "\($0.awayTeam ?? "") @ \($0.homeTeam ?? "")")
-            }?.league?.uppercased()
+            ?? { () -> String? in
+                guard focusGameID == nil else { return nil }
+                return store.slate.first {
+                    abbrGameMatches(focus, matchup: "\($0.away_team ?? "") @ \($0.home_team ?? "")")
+                }?.league?.uppercased()
+                    ?? store.gamePicks.first {
+                        abbrGameMatches(focus, matchup: "\($0.awayTeam ?? "") @ \($0.homeTeam ?? "")")
+                    }?.league?.uppercased()
+            }()
 
         // Change the day and league before consulting the scoped `games` memo.
         // The request stays pending across either state transition; the next
@@ -1521,7 +1524,13 @@ struct PicksCarouselView: View {
         if let targetLeague {
             // Do not consume a typed target against the wrong desk while its
             // league is still loading into the unscoped source set.
-            guard sports.contains(targetLeague) else { return }
+            guard sports.contains(targetLeague) else {
+                if focusGameID != nil && !store.loading {
+                    focusState.clearGameFocus()
+                    page = 0
+                }
+                return
+            }
             if sport != targetLeague {
                 sport = targetLeague
                 sportAutoSelected = false
@@ -1529,22 +1538,18 @@ struct PicksCarouselView: View {
             }
         }
 
-        guard !games.isEmpty else { return }
-        let exactKey = exactSlate.map {
-            Self.gameIdentityKey("\($0.away_team ?? "") @ \($0.home_team ?? "")",
-                                 $0.commence_time.flatMap(parseISO8601))
-        } ?? exactPick.map {
-            Self.gameIdentityKey("\($0.awayTeam ?? "") @ \($0.homeTeam ?? "")",
-                                 $0.commence_time.flatMap(parseISO8601))
+        if let gameID = focusGameID {
+            guard !store.loading else { return }
+            let idx = games.firstIndex { bdlGameId(for: $0) == gameID }
+            focusState.clearGameFocus()
+            // A settled missing target returns to the overview, including an
+            // empty desk. Matchup/time guesses could open another doubleheader.
+            withAnimation(.easeInOut(duration: 0.25)) { page = idx.map { $0 + 1 } ?? 0 }
+            return
         }
-        let idx = focusGameID.flatMap { gameID in
-            games.firstIndex { bdlGameId(for: $0) == gameID }
-        } ?? exactKey.flatMap { target in
-            games.firstIndex { Self.gameIdentityKey($0.matchup, $0.commence) == target }
-        } ?? games.firstIndex(where: { abbrGameMatches(focus, matchup: $0.matchup) })
 
-        // Data exists for the selected desk, so this is a completed match
-        // attempt whether or not a legacy fuzzy target could be resolved.
+        guard !games.isEmpty else { return }
+        let idx = games.firstIndex(where: { abbrGameMatches(focus, matchup: $0.matchup) })
         focusState.clearGameFocus()
         if let idx {
             withAnimation(.easeInOut(duration: 0.25)) { page = idx + 1 }

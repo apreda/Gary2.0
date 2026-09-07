@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { readIosViewsSource } from '../helpers/iosViewsSource.js';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 const models = readFileSync(new URL('../../../ios/GaryApp/Models.swift', import.meta.url), 'utf8');
 const views = readIosViewsSource();
@@ -10,6 +13,19 @@ const footballHub = readFileSync(new URL('../../../ios/GaryApp/FootballProofCont
 const hubView = readFileSync(new URL('../../../ios/GaryApp/HubView.swift', import.meta.url), 'utf8');
 const designSystem = readFileSync(new URL('../../../ios/GaryApp/DesignSystem.swift', import.meta.url), 'utf8');
 const contentView = readFileSync(new URL('../../../ios/GaryApp/ContentView.swift', import.meta.url), 'utf8');
+const picksTab = readFileSync(new URL('../../../ios/GaryApp/PicksTab.swift', import.meta.url), 'utf8');
+const hasSwift = spawnSync('swift', ['--version'], { encoding: 'utf8' }).status === 0;
+
+function swiftBlock(source, declaration) {
+  const start = source.indexOf(declaration);
+  if (start < 0) throw new Error(`declaration not found: ${declaration}`);
+  let depth = 0;
+  for (let index = source.indexOf('{', start); index < source.length; index += 1) {
+    if (source[index] === '{') depth += 1;
+    if (source[index] === '}' && --depth === 0) return source.slice(start, index + 1);
+  }
+  throw new Error(`unclosed declaration: ${declaration}`);
+}
 
 /// Text of ONE declaration, from its opening line to the next top-level one.
 /// Slicing to end-of-file instead silently widens every `not.toContain` in a
@@ -183,19 +199,20 @@ describe('Football Fantasy density', () => {
   });
 
   it('opens grounded football evidence instead of the MLB-only player-card placeholder', () => {
-    // Aug 20: the guard grew from fantasy-only to EVERY football row —
-    // quarterback/availability rows carry player_id and fell through to the
-    // MLB-only PlayerInsightSheet (a permanent "building" screen for NFL ids).
-    // Aug 27: the pipeline builds football packs, so the guard gated on
-    // verified pack existence by ID.
-    // Sep 4 2026: football lanes carry NO player id at all, so the id gate
-    // could never open a card for them. The route is now id+pack, then the
-    // row's NAME against today's packs, then the overlay. The invariant is
-    // unchanged and now covers every league: a tap with no pack behind it
-    // lands on the edge overlay, never on an empty player card.
-    expect(hubView).toContain('if let pid = s.playerId, intelCards.contains(where: { $0.player_id == pid && HubCardIdentity.sameLeague($0.league, s.league.label) }) {');
-    expect(hubView).toContain('if let row = intelCard(for: Self.signalPlayerName(s), league: s.league) {');
-    expect(hubView).toMatch(/if s\.teamId != nil \|\| s\.h2h != nil \{ teamCardSignal = s \}\s*\n\s*else \{ selectedSignal = s \}/);
+    // Every league uses the same current-day, exact-player/game resolver.
+    // Missing populated cards keep the original story readable; an old pack
+    // or the other game of a doubleheader must never become its destination.
+    const route = swiftBlock(hubView, 'private func openSignal(');
+    expect(route).toContain('let index = HubStoryIdentity.playerCardIndex(');
+    expect(route).toContain('league: s.league.label, slateDate: s.slateDate,');
+    expect(route).toContain('playerID: s.playerId, playerName: Self.signalPlayerName(s), gameID: s.gameId,');
+    expect(route).toContain('loadedDate: loadedDate, currentDate: SupabaseAPI.todayEST(),');
+    expect(route).toContain('.init(league: $0.league, playerID: $0.player_id, gameID: $0.game_id,');
+    expect(route).toContain('hasPayload: $0.payload != nil');
+    expect(route).toContain('playerRead = PlayerRead(signal: s, card: intelCards[index])');
+    expect(route).toContain('if s.playerId != nil { selectedSignal = s; return }');
+    expect(route).not.toContain('intelCard(for:');
+    expect(route).toMatch(/if s\.teamId != nil \|\| s\.h2h != nil \{ teamCardSignal = s \}\s*\n\s*else \{ selectedSignal = s \}/);
     expect(hubView).not.toContain('(sel == .nfl || sel == .ncaaf), Self.fantasyKinds.contains(s.kind)');
   });
 });
@@ -249,10 +266,13 @@ describe('Football Hub runs MLB\'s page', () => {
   it('keeps modules out of the story feed and gives the dark day its own card', () => {
     const moduleKinds = hubView.match(/moduleKinds: Set<SignalKind> = \[([^\]]+)\]/)?.[1] ?? '';
     for (const kind of ['.theSweat', '.afterGary', '.nextSlate']) expect(moduleKinds).toContain(kind);
-    expect(hubView).toContain('FootballNextSlatePreview(signal: next, accent: GaryColors.gold)');
-    expect(hubView).toContain('slateRows.isEmpty && leagueSignals.contains { $0.kind == .nextSlate }');
-    // The card stands in for the morning notice rather than stacking with it.
-    expect(hubView).toContain('} else if !showsNextSlateCard {');
+    const loaded = swiftBlock(hubView, 'private var hubLoadedContent: some View');
+    expect(loaded).toContain('if showsNextSlateCard, let next = leagueSignals.first(where: { $0.kind == .nextSlate }) {');
+    expect(loaded).toContain('FootballNextSlatePreview(signal: next, accent: GaryColors.gold)');
+    expect(swiftBlock(hubView, 'private var showsNextSlateCard: Bool')).toContain('slateRows.isEmpty && leagueSignals.contains { $0.kind == .nextSlate }');
+    // The actual selected front page determines emptiness. A schedule card,
+    // regression board or streak board must not also show a morning notice.
+    expect(loaded).toMatch(/if frontPageSelection\.lead == nil, items\(\.regression\)\.isEmpty,\s*!showsNextSlateCard, selStreakRows\.isEmpty \{\s*hubMorningNotice\s*\}/);
   });
 
   it('labels football lanes through the shared renamer, not a bespoke map', () => {
@@ -464,7 +484,7 @@ describe('Home MLB/NFL board parity', () => {
     expect(contentView).toContain('@Published var focusLeague: String? = nil');
     expect(contentView).toContain('@Published var focusGameID: Int? = nil');
     expect(views).toContain('$0.bdl_game_id == gameID');
-    expect(views).toContain('games.firstIndex { Self.gameIdentityKey($0.matchup, $0.commence) == target }');
+    expect(views).toContain('games.firstIndex { bdlGameId(for: $0) == gameID }');
   });
 
   it('switches an NCAAF Picks desk to Home\'s MLB target before reading scoped games', () => {
@@ -473,7 +493,7 @@ describe('Home MLB/NFL board parity', () => {
       views.indexOf('@ViewBuilder private var content', views.indexOf('private func consumeFocus()')),
     );
     const leagueSwitch = consumeFocus.indexOf('sport = targetLeague');
-    const scopedGamesRead = consumeFocus.indexOf('guard !games.isEmpty else { return }');
+    const scopedGamesRead = consumeFocus.indexOf('games.firstIndex');
 
     expect(consumeFocus).toContain('let targetLeague = focusLeague');
     expect(consumeFocus).toContain('sports.contains(targetLeague)');
@@ -488,6 +508,134 @@ describe('Home MLB/NFL board parity', () => {
     expect(views).toMatch(/\.onChange\(of: sport\)[\s\S]{0,350}?consumeFocus\(\)/);
     expect(views).toMatch(/\.onChange\(of: dataSignature\)[\s\S]{0,350}?consumeFocus\(\)/);
   });
+
+  it.skipIf(!hasSwift)('executes typed game focus without substituting a missing doubleheader sibling', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'gary-picks-focus-'));
+    try {
+      const keywords = ['mlb', 'nba', 'nhl', 'nfl', 'wc'].map(league => {
+        const start = picksTab.indexOf(`let ${league}TeamKeywords:`);
+        return picksTab.slice(start, picksTab.indexOf('\n]', start) + 2);
+      }).join('\n');
+      const functions = [
+        'static func matchupKey(', 'static func timeBucket(', 'static func gameIdentityKey(',
+        'private func propSportKey(', 'private func bdlGameId(', 'private func consumeFocus()',
+      ].map(declaration => swiftBlock(picksTab, declaration)).join('\n');
+      // Execute the shipping navigation, ID resolution and name matcher. Only
+      // SwiftUI animation/state and the network-backed model/store are stubbed.
+      const script = `import Foundation
+${keywords}
+${swiftBlock(picksTab, 'func abbrGameMatches(')}
+func parseISO8601(_ value: String) -> Date? { ISO8601DateFormatter().date(from: value) }
+struct Animation { static func easeInOut(duration: Double) -> Animation { Animation() } }
+func withAnimation(_ animation: Animation, _ action: () -> Void) { action() }
+struct PropPick { var game_id: Int?; var effectiveLeague: String? = "MLB" }
+struct SlateRow {
+ var league: String? = "MLB"; var bdl_game_id: Int?
+ var away_team: String? = "New York Mets"; var home_team: String? = "Atlanta Braves"
+ var commence_time: String? = "2026-09-07T17:00:00Z"
+}
+struct PickRow {
+ var league: String? = "MLB"; var game_id: Int?
+ var awayTeam: String? = "New York Mets"; var homeTeam: String? = "Atlanta Braves"
+ var commence_time: String? = "2026-09-07T17:00:00Z"
+}
+struct Store {
+ var loading = false; var slate: [SlateRow] = []
+ var gamePicks: [PickRow] = []; var yesterdayGamePicksAll: [PickRow] = []
+}
+final class FocusState {
+ var focusGame: String?; var focusLeague: String?; var focusGameID: Int?
+ ${swiftBlock(contentView, 'func focus(game:')}
+ ${swiftBlock(contentView, 'func clearGameFocus()')}
+}
+enum PickDay { case today, yesterday }
+typealias Game = (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])
+final class Router {
+ var focusState = FocusState(); var store = Store(); var pickDay = PickDay.today
+ var sport = "MLB"; var sportAutoSelected = true; var sports = ["MLB", "NFL", "NCAAF"]
+ var games: [Game] = []; var page = 0
+ ${functions}
+ func consume() { consumeFocus() }
+}
+func check(_ condition: Bool, _ reason: String) {
+ if !condition { print("Focus regression failed: " + reason); exit(1) }
+}
+let first = SlateRow(bdl_game_id: 101)
+let second = SlateRow(bdl_game_id: 102, commence_time: "2026-09-07T23:00:00Z")
+func game(_ row: SlateRow, propID: Int? = nil) -> Game {
+ (matchup: "New York Mets @ Atlanta Braves", time: "7 PM", commence: row.commence_time.flatMap(parseISO8601), dh: true,
+  props: propID.map { [PropPick(game_id: $0)] } ?? [])
+}
+func request(_ router: Router, id: Int? = 102, league: String? = "MLB") {
+ router.focusState.focus(game: "NYM @ ATL", league: league, gameID: id)
+}
+let loading = Router()
+loading.store.slate = [first]; loading.games = [game(first)]; loading.store.loading = true
+request(loading); loading.consume()
+check(loading.focusState.focusGameID == 102 && loading.page == 0, "typed request must wait while loading instead of opening game one")
+loading.store.slate.append(second); loading.games.append(game(second)); loading.store.loading = false
+loading.consume()
+check(loading.page == 2 && loading.focusState.focusGame == nil, "pending request must open the arriving exact second game")
+
+let absent = Router()
+absent.store.slate = [first]; absent.games = [game(first)]; absent.page = 1
+request(absent); absent.consume()
+check(absent.page == 0 && absent.focusState.focusGame == nil, "settled missing ID must clear to the overview")
+let empty = Router()
+empty.store.loading = true; request(empty); empty.consume()
+check(empty.focusState.focusGameID == 102, "empty loading desk must preserve typed request")
+empty.store.loading = false; empty.consume()
+check(empty.focusState.focusGame == nil && empty.page == 0, "settled empty desk must complete safely")
+let unavailable = Router()
+unavailable.sports = ["NFL"]; unavailable.store.loading = true; request(unavailable); unavailable.consume()
+check(unavailable.focusState.focusGameID == 102, "unavailable loading league must preserve typed request")
+unavailable.store.loading = false; unavailable.consume()
+check(unavailable.focusState.focusGame == nil && unavailable.page == 0, "settled unavailable league must complete safely")
+
+let staleMemo = Router()
+staleMemo.store.slate = [SlateRow(bdl_game_id: 102)]
+staleMemo.games = [game(first, propID: 101)]
+request(staleMemo); staleMemo.consume()
+check(staleMemo.page == 0 && staleMemo.focusState.focusGame == nil, "matching names and kickoff cannot override conflicting known ID")
+
+let switchDesk = Router()
+switchDesk.pickDay = .yesterday; switchDesk.sport = "NCAAF"
+switchDesk.store.slate = [first, second]; request(switchDesk)
+switchDesk.consume()
+check(switchDesk.pickDay == .today && switchDesk.focusState.focusGameID == 102, "day transition must preserve target")
+switchDesk.consume()
+check(switchDesk.sport == "MLB" && switchDesk.focusState.focusGameID == 102, "league transition must preserve target")
+switchDesk.games = [game(first), game(second)]; switchDesk.consume()
+check(switchDesk.page == 2 && switchDesk.focusState.focusGame == nil, "rebuilt correct desk must resolve exact game")
+
+let otherLeague = Router()
+otherLeague.store.slate = [SlateRow(league: "NFL", bdl_game_id: 102), first]
+otherLeague.games = [game(first)]; request(otherLeague); otherLeague.consume()
+check(otherLeague.page == 0 && otherLeague.sport == "MLB", "another league's same numeric ID must not resolve")
+let missingLeague = Router()
+missingLeague.sport = "NFL"; missingLeague.store.slate = [first]
+request(missingLeague, league: nil); missingLeague.consume()
+check(missingLeague.sport == "NFL" && missingLeague.focusState.focusGame == nil, "explicit missing ID must not infer another league from fuzzy names")
+
+let picksOnly = Router()
+picksOnly.store.gamePicks = [PickRow(game_id: 102)]
+picksOnly.games = [game(first)]; request(picksOnly); picksOnly.consume()
+check(picksOnly.page == 1 && picksOnly.focusState.focusGame == nil, "pick-only exact ID remains routable")
+let legacy = Router()
+legacy.store.slate = [first]; legacy.games = [game(first)]
+request(legacy, id: nil, league: nil); legacy.consume()
+check(legacy.page == 1 && legacy.focusState.focusGame == nil, "legacy name-only focus retains abbreviation fallback")
+print("Typed Picks focus regressions passed")
+`;
+      const path = join(directory, 'focus.swift');
+      writeFileSync(path, script);
+      const result = spawnSync('swift', [path], { encoding: 'utf8', timeout: 30_000 });
+      expect(result.status, result.stderr + result.stdout).toBe(0);
+      expect(result.stdout).toContain('Typed Picks focus regressions passed');
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }, 40_000);
 
   it('exposes the Picks league masthead and exactly one dock tab as accessible controls', () => {
     const sharedHeader = views.slice(

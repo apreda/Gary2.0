@@ -300,8 +300,8 @@ struct GaryPage: View {
                         // HubView (HubView.swift) is the July 2026 front-page
                         // redesign (founder-approved; the old PropsHubView was
                         // removed in the Jul 4 dead-code cleanup).
-                        HubView(isVisible: selectedTab == 2) { game in
-                            PicksFocusState.shared.focus(game: game)
+                        HubView(isVisible: selectedTab == 2) { game, league, gameID in
+                            PicksFocusState.shared.focus(game: game, league: league, gameID: gameID)
                             selectedTab = 3
                         }
                     }

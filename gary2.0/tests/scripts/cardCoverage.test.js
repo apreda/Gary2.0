@@ -27,22 +27,26 @@ describe('the player card reaches every named row', () => {
     expect(runner).toContain("String(row?.headline || '').split(/[:(,/·—]/)[0].trim()");
   });
 
-  it('sends a team row to the team card before any name lookup', () => {
+  it('keeps authoritative team rows outside player-name routing', () => {
     const open = hub.slice(hub.indexOf('private func openSignal('), hub.indexOf('static func signalPlayerName('));
-    const teamFirst = open.indexOf('if s.playerId == nil, s.teamId != nil || s.h2h != nil {');
-    const nameLookup = open.indexOf('if let row = intelCard(for: Self.signalPlayerName(s), league: s.league)');
-    expect(teamFirst).toBeGreaterThan(-1);
-    expect(teamFirst).toBeLessThan(nameLookup);
+    // The executable openSignal suite covers name collisions with team and
+    // head-to-head metadata. This guard must surround the card lookup itself.
+    expect(open).toContain('if s.playerId != nil || (s.teamId == nil && s.h2h == nil),');
+    expect(open).toContain('if s.playerId == nil, s.teamId != nil || s.h2h != nil {');
+    expect(open).toContain('teamCardSignal = s');
   });
 
-  it('opens a card by NAME when the row carries no player id', () => {
+  it('opens a scoped prefetched card with the full original read and preserves a missing-card fallback', () => {
     const open = hub.slice(hub.indexOf('private func openSignal('), hub.indexOf('static func signalPlayerName('));
-    expect(open).toContain('if let row = intelCard(for: Self.signalPlayerName(s), league: s.league)');
-    expect(open).toContain('namedCard = row');
-    // The old football gate — a tap with no pack fell straight to the overlay
-    // and could never reach a card — is gone.
+    // Identity and date behavior run as Swift assertions in the routing and
+    // player-scope suites. Here verify the sheet receives that exact result.
+    expect(open).toContain('HubStoryIdentity.playerCardIndex(');
+    expect(open).toContain('playerName: Self.signalPlayerName(s), gameID: s.gameId');
+    expect(open).toContain('loadedDate: loadedDate, currentDate: SupabaseAPI.todayEST()');
+    expect(open).toContain('playerRead = PlayerRead(signal: s, card: intelCards[index])');
+    expect(hub).toContain('.sheet(item: $playerRead) { PlayerInsightSheet(signal: $0.signal, prefetched: $0.card) }');
     expect(open).not.toContain('if sel == .nfl || sel == .ncaaf {');
-    // An empty player card is never the answer: no pack means the overlay.
+    expect(open).toContain('if s.playerId != nil { selectedSignal = s; return }');
     expect(open).toContain('else { selectedSignal = s }');
   });
 

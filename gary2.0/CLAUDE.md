@@ -1,8 +1,10 @@
 # CLAUDE.md
 
-Latest native visual preview: read
-`../HANDOFF_2026-09-07_WINNERS_VISUAL_PREVIEW.md` for the Winners background and
-solid Fantasy panels. These are simulator previews, not part of uploaded 903.
+Latest main Hub redesign: read `../HANDOFF_2026-09-07_HUB_BRIEFING.md`.
+Native build 905 passes automated checks and a signed archive, but final
+simulator QA and upload are pending because the Mac is locked. Do not report
+the main Hub redesign live yet. The preceding Fantasy/Winners changes shipped
+in uploaded build 904; see `../HANDOFF_2026-09-07_FANTASY_BRIEFING.md`.
 
 Latest app/stats audit: read `../HANDOFF_2026-09-07_PERFORMANCE_AUDIT.md` for
 player-log, pagination, token-accounting and native MLB prop fixes, live provider
@@ -65,7 +67,7 @@ Gary WILL follow explicit if/then rules — he takes instructions literally. If 
 ## Design Authority (rewritten July 7, 2026 — founder's call)
 
 September 7 exception: the founder explicitly requested
-`/Users/adam.preda/Desktop/anti-ai-slop-design.md` for the Fantasy/Winners visual
+`/Users/adam.preda/Desktop/anti-ai-slop-design.md` for the Fantasy/Winners/Hub visual
 work. Follow that supplied guide for this work; the older rule below does not
 override a new explicit design request.
 

@@ -1,13 +1,13 @@
 import SwiftUI
 
 // ============================================================================
-// THE HUB — tonight's front page (July 2026 redesign)
+// THE HUB — daily briefing (September 2026 redesign)
 //
 // The Hub is Gary's daily intelligence sheet, structured like the front of a
 // sports section instead of a filing cabinet of lanes: the lead story, the
-// best of the board (relevance-ranked across every lane), the signature
-// boards (Regression, Streak Watch), the beats (the long tail in four human
-// sections). (The Receipts section came off the page Aug 6 — graded rows
+// two supporting reads, and expandable specialist boards. The existing
+// game strip and full player/team reads remain the main navigation paths.
+// (The Receipts section came off the page Aug 6 — graded rows
 // now surface only through search.)
 //
 // Visual language (Jul 4, founder-tuned): heavy SF display for the wordmark
@@ -159,6 +159,58 @@ fileprivate struct HubCollapsible<Content: View>: View {
             .buttonStyle(.plain)
             if isOpen { content() }
         }
+    }
+}
+
+/// A specialist board keeps its complete renderer behind one clear disclosure.
+/// The compact first page gives the lead room without dropping the long tail.
+fileprivate struct HubBoardSection<Content: View>: View {
+    let anchor: String
+    @Binding var open: Set<String>
+    let title: String
+    var count: Int? = nil
+    @ViewBuilder let content: () -> Content
+
+    private var isOpen: Bool { open.contains(anchor) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    if isOpen { open.remove(anchor) } else { open.insert(anchor) }
+                }
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text(title)
+                        .font(HubFont.body(15, .semibold))
+                        .foregroundStyle(GaryColors.warmWhite)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    if let count, count > 0 {
+                        Text("\(count)")
+                            .font(HubFont.data(11, .medium))
+                            .foregroundStyle(GaryColors.sectionSub)
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(GaryColors.gold)
+                        .rotationEffect(.degrees(isOpen ? 90 : 0))
+                }
+                .padding(18)
+                .frame(minHeight: 52)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(title)
+            .accessibilityValue("\(count.map { "\($0) items, " } ?? "")\(isOpen ? "expanded" : "collapsed")")
+            .accessibilityHint(isOpen ? "Collapse board" : "Expand board")
+            if isOpen {
+                HubRule().padding(.horizontal, 18)
+                content().padding(.vertical, 12)
+            }
+        }
+        .garyPanel(radius: 12)
+        .padding(.horizontal, 18)
     }
 }
 
@@ -385,24 +437,42 @@ struct HubView: View {
     /// (opacity-switched), so visibility flips drive the staleness refetch
     /// and deep-link consumption instead of onAppear/.task.
     var isVisible: Bool = true
-    var onSelectGame: (String) -> Void = { _ in }
+    var onSelectGame: (String, String?, Int?) -> Void = { _, _, _ in }
 
     @StateObject private var focus = HubFocusState.shared
+    @ObservedObject private var liveScores = LiveScoreCache.shared
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var sel: HubLeagueSel = .mlb
     @State private var selectedSignal: Signal? = nil
-    @State private var breakdownSignal: Signal? = nil
+    private struct PlayerRead: Identifiable {
+        let signal: Signal
+        let card: PlayerInsightCardRow
+        var id: UUID { signal.id }
+    }
+    @State private var playerRead: PlayerRead? = nil
     @State private var teamCardSignal: Signal? = nil
     @State private var fantasyRefreshToken = UUID()
+    @State private var frontPageNow = Date()
 
     /// Player-backed signals open their populated player card — MLB always,
     /// football when today's pack exists for the id. Team-backed rows use
     /// the team card, with the compact signal overlay as the safe fallback.
     private func openSignal(_ s: Signal) {
-        // 1. The row's own id, when today's pack exists for it — the direct hit.
-        if let pid = s.playerId, intelCards.contains(where: { $0.player_id == pid && HubCardIdentity.sameLeague($0.league, s.league.label) }) {
-            breakdownSignal = s
+        // A populated, exact current-day/game card carries the full original
+        // read. Never refetch a player without the doubleheader's game id.
+        if s.playerId != nil || (s.teamId == nil && s.h2h == nil),
+           !(s.league == .ncaaf && s.lane?.source == "balldontlie_ncaaf_rankings"),
+           let index = HubStoryIdentity.playerCardIndex(
+            league: s.league.label, slateDate: s.slateDate,
+            playerID: s.playerId, playerName: Self.signalPlayerName(s), gameID: s.gameId,
+            loadedDate: loadedDate, currentDate: SupabaseAPI.todayEST(),
+            candidates: intelCards.map {
+                .init(league: $0.league, playerID: $0.player_id, gameID: $0.game_id,
+                      name: $0.player_name ?? $0.payload?.name, hasPayload: $0.payload != nil)
+            }
+        ) {
+            playerRead = PlayerRead(signal: s, card: intelCards[index])
             return
         }
         // The college poll lane describes both sides of a matchup. Its
@@ -425,19 +495,9 @@ struct HubView: View {
             teamCardSignal = s
             return
         }
-        // 3. THE NAME (founder, Sep 4 2026: "if i click a players name the
-        // player card should show up ... everywhere"). Football lanes carry no
-        // player id at all, and some MLB lanes carry one the pack build missed,
-        // so the row's own name is resolved against the day's packs. A resolved
-        // name opens the SAME card, prefetched.
-        if let row = intelCard(for: Self.signalPlayerName(s), league: s.league) {
-            namedCard = row
-            return
-        }
-        // 4. A player row whose pack is still building, or a row about neither:
-        // the team card if it names a team, else the edge overlay — which at
-        // least carries the row's own numbers. An empty player card is never
-        // the answer.
+        // Keep a player story's own full read when its exact card is absent.
+        if s.playerId != nil { selectedSignal = s; return }
+        // Team context without a populated player card uses the team page.
         if s.teamId != nil || s.h2h != nil { teamCardSignal = s }
         else { selectedSignal = s }
     }
@@ -596,7 +656,9 @@ struct HubView: View {
             // numbers ("France head the title market at +170" → "+175")
             // still collapses to one story.
             let subj = HubFmt.subject(s.headline).filter { !$0.isNumber }
-            let key = "\(s.kind)|\(s.game)|\(subj)|\(s.reg?.day ?? "")"
+            let key = HubStoryIdentity.dedupeKey(
+                league: s.league.label, slateDate: s.slateDate, gameID: s.gameId,
+                game: s.game, kind: String(describing: s.kind), subject: subj, variant: s.reg?.day)
             if seen.insert(key).inserted { out.append(s) }
         }
         return out
@@ -727,11 +789,16 @@ struct HubView: View {
         }
         yday = Self.dedupe(yday)
         let intel = await intelF
+        // A request crossing the slate rollover must not relabel yesterday's
+        // response as today's briefing. Restart against the new slate date.
+        guard date == SupabaseAPI.todayEST() else { await load(); return }
 
         await MainActor.run {
             // Successful desks replace their prior rows, including a genuine
-            // empty day. Failed desks alone retain their last-good snapshot.
-            let retained = fetched.filter { failedLeagues.contains($0.league) }
+            // empty day. Last-good rows survive only within their own slate.
+            let retained = fetched.filter {
+                loadedDate == date && $0.slateDate == date && failedLeagues.contains($0.league)
+            }
             let resolved = Self.dedupe(collected + retained)
             intelCards = intel
             didLoad = true
@@ -921,36 +988,23 @@ struct HubView: View {
     /// an empty NCAAF Tuesday as if a schedule were an insight.
     private static let moduleKinds: Set<SignalKind> = [.theSweat, .afterGary, .nextSlate, .practiceReport]
 
-    /// Rows that can actually carry the front page. Modules render in their own
-    /// slots, so they must not decide whether the page reads as empty.
-    private var storyRows: [Signal] {
-        leagueSignals.filter { !Self.moduleKinds.contains($0.kind) && $0.confirmedXI == nil }
-    }
-
     /// The dark-day schedule card stands in for the slate strip on a football
     /// day with no games — and takes the morning notice's place while it shows.
     private var showsNextSlateCard: Bool {
         slateRows.isEmpty && leagueSignals.contains { $0.kind == .nextSlate }
     }
 
-    /// Relevance-ranked stories across every lane (rows arrive relevance-
-    /// ordered per league): no look-ahead regression, no confirmed-XI cards,
-    /// no fantasy corner content, max 2 per lane so the top of the page mixes.
+    /// Keep the complete eligible pool in server relevance order. Applying a
+    /// seven-row cap before game-phase ordering buried later upcoming games.
+    /// Regression owns its specialist board; Fantasy and modules own theirs.
     private var ranked: [Signal] {
-        var counts: [SignalKind: Int] = [:]
-        var out: [Signal] = []
-        for s in leagueSignals {
-            if s.confirmedXI != nil { continue }
-            if Self.fantasyKinds.contains(s.kind) { continue }
-            if Self.moduleKinds.contains(s.kind) { continue }
-            if s.reg?.day == "tomorrow" { continue }
-            let c = counts[s.kind] ?? 0
-            guard c < 2 else { continue }
-            counts[s.kind] = c + 1
-            out.append(s)
-            if out.count == 7 { break }
+        let currentDate = SupabaseAPI.todayEST()
+        return leagueSignals.filter { s in
+            s.confirmedXI == nil && !Self.fantasyKinds.contains(s.kind)
+                && !Self.moduleKinds.contains(s.kind) && s.kind != .regression
+                && s.reg == nil && !(sel == .mlb && s.kind == .h2h)
+                && s.slateDate == currentDate
         }
-        return out
     }
     /// THE LEAD must be an INSIGHT — a connection between facts — never a raw
     /// counting stat (founder, Aug 3: "the headline we have now isn't really
@@ -971,9 +1025,40 @@ struct HubView: View {
     /// copies deeply enough to exhaust the production iPhone thread stack.
     private var frontPageSelection: (lead: Signal?, best: [Signal]) {
         let rows = ranked
-        let lead = rows.first(where: { Self.leadInsightKinds.contains($0.kind) }) ?? rows.first
-        guard let lead else { return (nil, []) }
-        return (lead, rows.filter { $0.id != lead.id })
+        let selection = HubFrontPageSelection.select(
+            stories: rows.enumerated().map { index, signal in
+                .init(index: index, kind: String(describing: signal.kind), gameID: signal.gameId,
+                      prefersLead: Self.leadInsightKinds.contains(signal.kind))
+            }, games: frontPageGames, now: frontPageNow)
+        return (selection.lead.map { rows[$0] }, selection.supporting.map { rows[$0] })
+    }
+
+    private var frontPageGames: [HubFrontPageSelection.Game] {
+        slateRows.compactMap { row in
+            guard let id = row.bdl_game_id else { return nil }
+            let live = liveScores.status(forGameId: id, league: row.league)
+            return .init(id: String(id), startsAt: row.hasConfirmedKickoff ? row.commence_time : nil,
+                         status: live?.status ?? row.game_status)
+        }
+    }
+
+    /// Exact provider identity keeps game two's time separate from game one's
+    /// final score. Missing status remains a scheduled-time label, never LIVE.
+    private func storyContext(_ signal: Signal) -> String {
+        guard let id = signal.gameId.flatMap(Int.init),
+              let row = slateRows.first(where: { $0.bdl_game_id == id }) else { return signal.game.uppercased() }
+        let score = liveScores.status(forGameId: id, league: signal.league.label)
+        let status = score?.status ?? row.game_status
+        let label: String
+        switch status?.lowercased() {
+        case "final": label = "FINAL"
+        case "live": label = score?.detail?.uppercased() ?? "LIVE"
+        case "postponed", "cancelled", "canceled", "suspended", "delayed":
+            label = score?.interruptionLabel ?? row.interruptionLabel ?? status?.uppercased() ?? "STATUS UNAVAILABLE"
+        default:
+            label = row.kickoffTimeLabel ?? TomorrowView.etTime(row.commence_time, withZone: true, meridiem: true)
+        }
+        return [signal.game.uppercased(), label == "—" ? "" : label].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
     /// Tonight's slate for the selected league, from the 5am board snapshot.
@@ -1055,9 +1140,8 @@ struct HubView: View {
     /// tomorrow." String compare works on ISO dates.
     static var hrThreatsLive: Bool { SupabaseAPI.todayEST() >= "2026-07-23" }
 
-    /// The stories already told at the top of the page. Football's thinner
-    /// feeds made the same signal appear as THE LEAD, BEST OF THE BOARD, and
-    /// again in its beat; once featured above, the beat keeps only the extras.
+    /// Only the three stories actually shown above are removed from later
+    /// beats, for every league. Unfeatured rows remain available in full.
     ///
     /// PERF (measured Aug 21 2026): this used to be rebuilt INSIDE `beatRows`,
     /// so every beat — and every pass of the jump nav over the beats — rebuilt
@@ -1067,7 +1151,6 @@ struct HubView: View {
     /// now compute this ONCE per pass and thread it in — the same "resolve the
     /// snapshot once" rule `frontPageSelection` itself was written for.
     private var featuredStoryIDs: Set<UUID> {
-        guard isFootball else { return [] }
         let selection = frontPageSelection
         return Set(([selection.lead].compactMap { $0 } + selection.best).map(\.id))
     }
@@ -1093,14 +1176,14 @@ struct HubView: View {
 
     /// Everything not already on the page — a safety net so a future backend
     /// lane always renders somewhere instead of vanishing.
-    private var overflow: [Signal] {
+    private func overflow(featured: Set<UUID>) -> [Signal] {
         // .h2h is EXCLUDED from the Hub, not merely placed (founder, Aug 6:
         // "the H2H parts here doesnt need to be on The Hub") — the team season
         // series lives on the Picks page game view, where the ledger renders.
         // Without this it would fall through to More Edges and reappear.
-        var placed: Set<SignalKind> = Self.fantasyKinds.union([.regression, .streak, .h2h, .theSweat, .nextSlate, .practiceReport])
+        var placed: Set<SignalKind> = Self.fantasyKinds.union([.regression, .h2h, .theSweat, .nextSlate, .practiceReport])
         for b in beats { for k in b.kinds { placed.insert(k) } }
-        return leagueSignals.filter { !placed.contains($0.kind) && $0.confirmedXI == nil }
+        return leagueSignals.filter { !placed.contains($0.kind) && $0.confirmedXI == nil && !featured.contains($0.id) }
     }
 
     // ---- the beats, one block each (extracted from body — the inline
@@ -1133,8 +1216,9 @@ struct HubView: View {
                                     onRow: { s in openSignal(s) })
                     .id(beat.anchor)
             } else if beat.anchor == "nrfi" {
-                HubNrfiSection(rows: rows) { s in openSignal(s) }
-                    .id(beat.anchor)
+                HubBoardSection(anchor: beat.anchor, open: $openBeats, title: "First-inning reads", count: rows.count) {
+                    HubNrfiSection(rows: rows, showsHeader: false) { s in openSignal(s) }
+                }.id(beat.anchor)
             } else if beat.anchor == "matchups" {
                 HubMatchupsSection(
                     rows: rows,
@@ -1142,7 +1226,7 @@ struct HubView: View {
                     openBeats: $openBeats,
                     kickerFor: kickerText,
                     onRow: { s in openSignal(s) },
-                    onProfile: { breakdownSignal = $0 },
+                    onProfile: { openSignal($0) },
                     onGame: { openGameSheet(for: $0) }
                 )
                 .id(beat.anchor)
@@ -1154,7 +1238,7 @@ struct HubView: View {
                     openBeats: $openBeats,
                     kickerFor: kickerText,
                     onRow: { s in openSignal(s) },
-                    onProfile: { breakdownSignal = $0 }
+                    onProfile: { openSignal($0) }
                 )
                 .id(beat.anchor)
             }
@@ -1182,8 +1266,7 @@ struct HubView: View {
 
     @ViewBuilder private var streakWatchSection: some View {
         if !selStreakRows.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                HubHead(title: "Streak Watch", count: selStreakRows.count)
+            HubBoardSection(anchor: "streaks", open: $openBeats, title: "Streak watch", count: selStreakRows.count) {
                 HubStreakWatch(rows: selStreakRows, onTeam: { openTeamCard(for: $0) },
                                cardFor: { intelCard(for: $0) }, onPlayer: { namedCard = $0 })
             }
@@ -1195,6 +1278,7 @@ struct HubView: View {
     @ViewBuilder private var beatsAndOverflow: some View {
         // ONE snapshot for the whole run (see `featuredStoryIDs`).
         let featured = featuredStoryIDs
+        let extras = overflow(featured: featured)
         ForEach(beats) { beat in
             beatView(beat, featured: featured)
         }
@@ -1202,15 +1286,15 @@ struct HubView: View {
         // Fantasy lives on its OWN page behind the header toggle
         // (founder, Jul 26) — never as a section in this feed.
 
-        if !overflow.isEmpty {
+        if !extras.isEmpty {
             HubBeatSection(
                 anchor: "more",
                 title: "More Edges",
-                rows: overflow,
+                rows: extras,
                 openBeats: $openBeats,
                 kickerFor: kickerText,
                 onRow: { s in openSignal(s) },
-                onProfile: { breakdownSignal = $0 }
+                onProfile: { openSignal($0) }
             )
             .id("more")
         }
@@ -1222,25 +1306,31 @@ struct HubView: View {
     @ViewBuilder private var frontPageBoards: some View {
         let selection = frontPageSelection
         if let lead = selection.lead {
-            HubLeadStory(s: lead) { s in
-                openSignal(s)
+            VStack(alignment: .leading, spacing: 14) {
+                Text(FantasyBriefing.dayLabel(SupabaseAPI.todayEST()).uppercased())
+                    .font(HubFont.kicker(10.5)).tracking(1)
+                    .foregroundStyle(GaryColors.sectionSub)
+                    .padding(.horizontal, 20)
+                HubLeadStory(s: lead, context: storyContext(lead), kicker: kickerText(lead)) { s in
+                    openSignal(s)
+                }
             }
             .id("lead")
         }
         if !selection.best.isEmpty {
             VStack(alignment: .leading, spacing: 4) {
-                HubHead(title: "The Best of the Board")
-                HubBestOf(signals: selection.best) { s in
+                HubHead(title: selection.best.count == 1 ? "One more to know" : "Two more to know")
+                HubBestOf(signals: selection.best, contextFor: storyContext, kickerFor: kickerText) { s in
                     openSignal(s)
                 }
             }
             .id("bestof")
         }
+    }
+
+    @ViewBuilder private var signatureBoards: some View {
         if !items(.regression).isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                // Sub lives on the tab strip now — a static
-                // "ERA vs expected" lied over the Teams tab.
-                HubHead(title: "The Regression Board")
+            HubBoardSection(anchor: "regression", open: $openBeats, title: "Regression watch", count: items(.regression).count) {
                 HubRegressionBoard(signals: items(.regression), todayEST: SupabaseAPI.todayEST()) { s in
                     openSignal(s)
                 }
@@ -1252,7 +1342,7 @@ struct HubView: View {
                 HubHead(title: "The xG Board", sub: "goals vs expected")
                 HubBeatList(rows: items(.xgRegression), open: true, kickerFor: kickerText,
                             onRow: { s in openSignal(s) },
-                            onProfile: { breakdownSignal = $0 })
+                            onProfile: { openSignal($0) })
             }
             .id("xgboard")
         }
@@ -1296,7 +1386,7 @@ struct HubView: View {
     // state/scope branches below are erased independently so Release builds do
     // not have to materialize that pathological generic type at launch.
     private var hubPageStack: some View {
-        VStack(alignment: .leading, spacing: 26) {
+        VStack(alignment: .leading, spacing: 22) {
             HubMasthead(
                 sel: $sel,
                 leagues: availableLeagues,
@@ -1392,7 +1482,7 @@ struct HubView: View {
     }
 
     private var hubLoadedContent: some View {
-        VStack(alignment: .leading, spacing: 26) {
+        VStack(alignment: .leading, spacing: 22) {
             if !slateRows.isEmpty {
                 HubSlateStrip(rows: slateRows) { r in
                     gameSheet = HubGameSel(row: r)
@@ -1407,9 +1497,9 @@ struct HubView: View {
                     .id("nextSlate")
             }
 
-            if !storyRows.isEmpty {
-                frontPageBoards
-            } else if !showsNextSlateCard {
+            frontPageBoards
+            if frontPageSelection.lead == nil, items(.regression).isEmpty,
+               !showsNextSlateCard, selStreakRows.isEmpty {
                 hubMorningNotice
             }
 
@@ -1417,14 +1507,17 @@ struct HubView: View {
             // — founder, Aug 3: the agate tables broke the page's flow
             // mid-editorial. It lives with Last Night now.)
 
-            streakWatchSection
-
-            if !leagueSignals.isEmpty {
-                beatsAndOverflow
+            VStack(alignment: .leading, spacing: 12) {
+                signatureBoards
+                streakWatchSection
+                if !leagueSignals.isEmpty {
+                    beatsAndOverflow
+                }
             }
 
             referenceShelf
         }
+        .environment(\.solidPanels, true)
     }
 
     // ---- body ----
@@ -1451,7 +1544,7 @@ struct HubView: View {
         .overlay(alignment: .bottomTrailing) {
             if !searchOpen, didLoad, !jumpItems.isEmpty, hubScope != "fantasy" {
                 HubSectionNav(items: jumpItems, open: $sectionNavOpen) { anchor in
-                    if anchor == "lastNight" { openBeats.insert(anchor) }
+                    openBeats.insert(anchor)
                     withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(anchor, anchor: .top) }
                 }
                 .padding(.trailing, 14)
@@ -1460,18 +1553,25 @@ struct HubView: View {
             }
         }
         .scrollDismissesKeyboard(.immediately)
+        .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { now in
+            guard isVisible, scenePhase == .active, hubScope == "hub" else { return }
+            frontPageNow = now
+            if didLoad, loadedDate != SupabaseAPI.todayEST() { Task { await load() } }
+        }
         .refreshable {
             if hubScope == "fantasy", sel == .mlb || sel == .nfl { fantasyRefreshToken = UUID() }
             else { await load() }
         }
         .onChange(of: isVisible) { vis in
             guard vis else { return }
+            frontPageNow = Date()
             consumeFocus()
             fantasyRefreshToken = UUID()
             Task { await reloadIfStale() }
         }
         .onChange(of: scenePhase) { phase in
             guard phase == .active, isVisible else { return }
+            frontPageNow = Date()
             fantasyRefreshToken = UUID()
             Task { await reloadIfStale() }
         }
@@ -1531,13 +1631,13 @@ struct HubView: View {
                                onClose: { withAnimation(.spring(response: 0.3, dampingFraction: 0.88)) { selectedSignal = nil } },
                                onViewGame: { g in
                                    selectedSignal = nil
-                                   onSelectGame(g)
+                                   onSelectGame(g, s.league.label, s.gameId.flatMap(Int.init))
                                })
                     .transition(.opacity.combined(with: .scale(scale: 0.94)))
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.88), value: selectedSignal?.id)
-        .sheet(item: $breakdownSignal) { PlayerInsightSheet(signal: $0) }
+        .sheet(item: $playerRead) { PlayerInsightSheet(signal: $0.signal, prefetched: $0.card) }
         .sheet(item: $teamCardSignal) { s in
             HubTeamCardSheet(
                 signal: s,
@@ -1573,7 +1673,11 @@ struct HubView: View {
                                  streaks: streaksFor(sel.row),
                                  kickerFor: kickerText,
                                  onClose: { withAnimation(.spring(response: 0.3, dampingFraction: 0.88)) { gameSheet = nil } },
-                                 onViewGame: { onSelectGame($0) },
+                                 onViewGame: { onSelectGame($0, sel.row.league, sel.row.bdl_game_id) },
+                                 onSignal: { signal in
+                                     gameSheet = nil
+                                     openSignal(signal)
+                                 },
                                  onTeam: { r in
                                      withAnimation(.spring(response: 0.3, dampingFraction: 0.88)) { gameSheet = nil }
                                      openTeamCard(for: r)
@@ -1637,14 +1741,15 @@ struct HubView: View {
             if !items(.regression).isEmpty { out.append(("regression", "Regression")) }
             if sel == .wc, !items(.xgRegression).isEmpty { out.append(("xgboard", "xG")) }
         }
-        if sel == .mlb, !pulseRows.isEmpty { out.append(("pulse", "Pulse")) }
         if !selStreakRows.isEmpty { out.append(("streaks", "Streaks")) }
         if !leagueSignals.isEmpty {
             let featured = featuredStoryIDs
             for beat in beats where !beatRows(beat, featured: featured).isEmpty {
                 out.append((beat.anchor, beat.title.replacingOccurrences(of: "The ", with: "")))
             }
+            if !overflow(featured: featured).isEmpty { out.append(("more", "More Edges")) }
         }
+        if [.mlb, .nfl, .ncaaf].contains(sel), !pulseRows.isEmpty { out.append(("pulse", "Pulse")) }
         if !selNightRows.isEmpty { out.append(("lastNight", nightLabel)) }
         return out
     }
@@ -1882,7 +1987,22 @@ fileprivate struct HubMasthead: View {
 /// Identifiable wrapper for the slate-strip → game-sheet presentation.
 fileprivate struct HubGameSel: Identifiable {
     let row: TomorrowBoardRow
-    var id: String { "\(row.away_team ?? row.away_abbr ?? "") @ \(row.home_team ?? row.home_abbr ?? "")" }
+    var id: String {
+        let game = row.bdl_game_id.map(String.init)
+            ?? "\(row.away_team ?? row.away_abbr ?? "")|\(row.home_team ?? row.home_abbr ?? "")|\(row.commence_time ?? row.scheduled_date ?? "")"
+        return "\(row.league ?? "")|\(game)"
+    }
+}
+
+/// Exact IDs are authoritative. A legacy name join is allowed only when a
+/// single score in the same league owns it, never between doubleheader games.
+@MainActor fileprivate func hubLiveScore(for row: TomorrowBoardRow, cache: LiveScoreCache) -> LiveScore? {
+    if let id = row.bdl_game_id { return cache.status(forGameId: id, league: row.league) }
+    let matchup = "\(row.away_team ?? "") @ \(row.home_team ?? "")"
+    let matches = cache.scores.filter {
+        HubCardIdentity.sameLeague($0.league, row.league ?? "") && abbrGameMatches($0.abbrGame, matchup: matchup)
+    }
+    return matches.count == 1 ? matches[0] : nil
 }
 
 /// WC board rows carry no abbreviations — fall back to the first three
@@ -1919,9 +2039,7 @@ fileprivate struct HubSlateStrip: View {
     @ViewBuilder private func block(_ r: TomorrowBoardRow) -> some View {
         let marquee = r.is_marquee == true
         let matchup = "\(side(r.away_abbr, r.away_team, r.league)) @ \(side(r.home_abbr, r.home_team, r.league))"
-        // The live lookup resolves through team-NAME keywords — feed it the
-        // full names ("Pirates @ Nationals"); "PIT @ WSH" resolves to nothing.
-        let ls = live.status(forMatchup: "\(r.away_team ?? "") @ \(r.home_team ?? "")")
+        let ls = hubLiveScore(for: r, cache: live)
         VStack(alignment: .leading, spacing: 3) {
             Text((ls?.isLive == true || ls?.isFinal == true) ? (ls?.scoreLine ?? matchup) : matchup)
                 .font(HubFont.data(11.5, .semibold))
@@ -1931,10 +2049,18 @@ fileprivate struct HubSlateStrip: View {
                     Text("▶ \((ls.detail ?? "LIVE").uppercased())")
                         .font(HubFont.data(9.5, .medium))
                         .foregroundStyle(GaryColors.win)
-                } else if let ls, ls.isFinal {
+                } else if ls?.isFinal == true || (ls == nil && r.game_status?.lowercased() == "final") {
                     Text("FINAL")
                         .font(HubFont.data(9.5, .medium))
                         .foregroundStyle(.white.opacity(0.55))
+                } else if let interruption = ls?.interruptionLabel ?? r.interruptionLabel {
+                    Text(interruption)
+                        .font(HubFont.data(9.5, .medium))
+                        .foregroundStyle(GaryColors.gold)
+                } else if ls == nil && r.game_status?.lowercased() == "live" {
+                    Text("LIVE")
+                        .font(HubFont.data(9.5, .medium))
+                        .foregroundStyle(GaryColors.win)
                 } else {
                     // A college row filed date-only carries no real kickoff —
                     // say so instead of printing a placeholder as a time.
@@ -1960,77 +2086,48 @@ fileprivate struct HubSlateStrip: View {
 
 fileprivate struct HubLeadStory: View {
     let s: Signal
+    let context: String
+    let kicker: String
     let onTap: (Signal) -> Void
-
-    /// The read under the headline — first two sentences, tight.
-    private var read: String {
-        let d = s.detail.trimmingCharacters(in: .whitespacesAndNewlines)
-        var count = 0
-        var idx = d.startIndex
-        while idx < d.endIndex, count < 2 {
-            guard let r = d.range(of: ". ", range: idx..<d.endIndex) else { return d }
-            count += 1
-            idx = r.upperBound
-        }
-        return count == 2 ? String(d[..<idx]).trimmingCharacters(in: .whitespaces) : d
-    }
-
-    /// What the hero number is measured against — spark[0]'s meaning differs
-    /// per lane, so the label names it (a generic "from X" misreads a platoon
-    /// split as a trend). Lanes without a known baseline shape show nothing.
-    private var baseline: String? {
-        guard s.spark.count >= 2 else { return nil }
-        let base = HubFmt.stat(s.spark[0])
-        switch s.kind {
-        case .hot, .cold, .starterForm: return "season \(base)"
-        case .ballpark:                 return "\(base) elsewhere"
-        case .platoon:                  return "\(base) other side"
-        case .regression:               return "\(base) ERA"
-        default:                        return nil
-        }
-    }
 
     var body: some View {
         Button { onTap(s) } label: {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 8) {
-                    HubKicker(text: "The Lead", size: 11, color: GaryColors.gold)
-                    Rectangle().fill(GaryColors.gold.opacity(0.35)).frame(width: 26, height: 1)
-                    HubKicker(text: s.kind.chip, size: 10, color: .white.opacity(0.55))
-                    Spacer()
-                    Text(s.game.uppercased())
-                        .font(HubFont.data(9.5, .medium))
-                        .foregroundStyle(.white.opacity(0.55))
-                        .lineLimit(1)
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    HubKicker(text: "The Lead", size: 11)
+                    Spacer(minLength: 0)
+                    Text(kicker.uppercased())
+                        .font(HubFont.kicker(10.5)).tracking(1)
+                        .foregroundStyle(GaryColors.gold)
+                        .multilineTextAlignment(.trailing)
+                }
+                if !context.isEmpty {
+                    Text(context)
+                        .font(HubFont.data(10.5, .medium))
+                        .foregroundStyle(GaryColors.sectionSub)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 10)
                 }
                 Text(s.headline)
-                    .font(HubFont.display(26))
+                    .font(HubFont.display(31))
                     .foregroundStyle(GaryColors.warmWhite)
                     .lineSpacing(0)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 10)
-                // The giant number is for compact stats only — a sentence
-                // value ("8-game unbeaten") already lives in the headline.
-                if s.valueIsCompact {
-                    HStack(alignment: .firstTextBaseline, spacing: 12) {
-                        Text(s.value)
-                            .font(HubFont.data(40))
-                            .foregroundStyle(hubValueTint(s))
-                            .lineLimit(1).minimumScaleFactor(0.6)
-                        if let baseline {
-                            Text(baseline)
-                                .font(HubFont.data(12, .medium))
-                                .foregroundStyle(.white.opacity(0.62))
-                        }
-                    }
-                    .padding(.top, 10)
-                }
-                Text(read)
-                    .font(HubFont.body(14))
-                    .foregroundStyle(.white.opacity(0.78))
+                    .padding(.top, 14)
+                // The statement leads; a repeated oversized stat adds no
+                // information. Preserve the author's full read and qualifiers.
+                Text(s.detail.trimmingCharacters(in: .whitespacesAndNewlines))
+                    .font(HubFont.body(14.5))
+                    .foregroundStyle(GaryColors.warmWhite.opacity(0.82))
                     .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 10)
+                if let value = s.displayValue, !s.detail.contains(value) {
+                    Text(value)
+                        .font(HubFont.data(12, .medium))
+                        .foregroundStyle(GaryColors.sectionSub)
+                        .padding(.top, 12)
+                }
                 HStack(spacing: 5) {
                     Text(s.playerId != nil ? "FULL BREAKDOWN" : "THE FULL READ")
                         .font(HubFont.kicker(10.5)).tracking(1.2)
@@ -2041,10 +2138,20 @@ fileprivate struct HubLeadStory: View {
                 }
                 .padding(.top, 12)
             }
-            .padding(.horizontal, 18)
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(hex: "#1B1813"))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(GaryColors.gold.opacity(0.22), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.25), radius: 12, y: 6)
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .multilineTextAlignment(.leading)
+        .padding(.horizontal, 18)
     }
 }
 
@@ -2052,50 +2159,40 @@ fileprivate struct HubLeadStory: View {
 
 fileprivate struct HubBestOf: View {
     let signals: [Signal]
+    let contextFor: (Signal) -> String
+    let kickerFor: (Signal) -> String
     let onTap: (Signal) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             ForEach(Array(signals.enumerated()), id: \.element.id) { i, s in
-                Button { onTap(s) } label: { row(i, s) }.buttonStyle(.plain)
-                if i < signals.count - 1 { HubRule(inset: 52) }
+                Button { onTap(s) } label: { row(s) }.buttonStyle(.plain)
+                if i < signals.count - 1 { HubRule().padding(.horizontal, 18) }
             }
         }
     }
 
-    @ViewBuilder private func row(_ i: Int, _ s: Signal) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            // 01-based: the list is its own board. (It used to start at 02 —
-            // "the lead is 01" — but the lead wears THE LEAD, not a number,
-            // so the 02 open read as a missing row, Aug 6.)
-            Text(String(format: "%02d", i + 1))
-                .font(HubFont.data(13, .medium))
-                .foregroundStyle(.white.opacity(0.62))
-                .frame(width: 24, alignment: .leading)
-                .padding(.top, 2)
-            VStack(alignment: .leading, spacing: 4) {
-                HubKicker(text: s.kind.chip, size: 9.5, color: GaryColors.gold.opacity(0.9))
+    @ViewBuilder private func row(_ s: Signal) -> some View {
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 5) {
+                HubKicker(text: kickerFor(s), size: 10.5)
                 Text(s.headline)
-                    .font(HubFont.body(14.5, .semibold))
+                    .font(HubFont.body(15, .semibold))
                     .foregroundStyle(.white.opacity(0.95))
-                    .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
-                Text(s.game.uppercased())
-                    .font(HubFont.data(10, .medium))
-                    .foregroundStyle(.white.opacity(0.62))
+                Text(contextFor(s))
+                    .font(HubFont.data(10.5, .medium))
+                    .foregroundStyle(GaryColors.sectionSub)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
-            if let v = s.displayValue {
-                Text(v)
-                    .font(HubFont.data(16))
-                    .foregroundStyle(hubValueTint(s))
-                    .lineLimit(1)
-                    .padding(.top, 14)
-            }
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(GaryColors.sectionSub)
         }
         .padding(.horizontal, 18)
-        .padding(.vertical, 11)
+        .padding(.vertical, 15)
         .contentShape(Rectangle())
     }
 }
@@ -2163,7 +2260,7 @@ fileprivate struct HubRegressionBoard: View {
         if let t = tab, availableTabs.contains(t) { return t }
         return availableTabs.first ?? .pitchers
     }
-    private var rows: [Signal] { Array(rowsFor(activeTab).prefix(8)) }
+    private var rows: [Signal] { rowsFor(activeTab) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -2559,9 +2656,8 @@ fileprivate struct HubStreakWatch: View {
 
 // MARK: - The Beats
 
-/// A beat: section head + top rows + "See all n". Rows keep the feed's
-/// relevance order; each carries its own lane kicker and special shape
-/// (swap / tug-of-war / first-inning dots) when its meta calls for one.
+/// A beat opens its complete relevance-ordered feed. One disclosure replaces
+/// the repeated four-row preview and nested See All control.
 fileprivate struct HubBeatSection: View {
     let anchor: String
     let title: String
@@ -2571,21 +2667,9 @@ fileprivate struct HubBeatSection: View {
     let onRow: (Signal) -> Void
     let onProfile: (Signal) -> Void
 
-    private var isOpen: Bool { openBeats.contains(anchor) }
-    private let topCount = 4
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HubHead(title: title, count: rows.count)
-            HubBeatList(rows: isOpen ? rows : Array(rows.prefix(topCount)),
-                        open: isOpen, kickerFor: kickerFor, onRow: onRow, onProfile: onProfile)
-            if rows.count > topCount {
-                HubSeeAllButton(isOpen: isOpen, total: rows.count) {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        if isOpen { openBeats.remove(anchor) } else { openBeats.insert(anchor) }
-                    }
-                }
-            }
+        HubBoardSection(anchor: anchor, open: $openBeats, title: title, count: rows.count) {
+            HubBeatList(rows: rows, open: true, kickerFor: kickerFor, onRow: onRow, onProfile: onProfile)
         }
     }
 }
@@ -2673,7 +2757,7 @@ fileprivate struct HubBeatList: View {
                     } else {
                         HubStoryRow(s: s, kicker: kickerFor(s), expandable: true,
                                     onTap: { onRow(s) },
-                                    onProfile: s.playerId != nil ? { onProfile(s) } : nil)
+                                    onProfile: { onProfile(s) })
                     }
                 }
                 if i < rows.count - 1 { HubRule(inset: 18) }
@@ -2700,6 +2784,7 @@ fileprivate struct HubStoryRow: View {
     private var dedupedDetail: String { hubDedupedDetail(s) }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
         Button {
             if expandable, !dedupedDetail.isEmpty {
                 withAnimation(.easeInOut(duration: 0.18)) { expanded.toggle() }
@@ -2752,21 +2837,6 @@ fileprivate struct HubStoryRow: View {
                         .lineSpacing(2)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 2)
-                    if let onProfile {
-                        Button(action: onProfile) {
-                            HStack(spacing: 5) {
-                                Text("FULL PROFILE")
-                                    .font(HubFont.kicker(10)).tracking(1.1)
-                                    .foregroundStyle(GaryColors.gold)
-                                Image(systemName: "arrow.right")
-                                    .font(.system(size: 8, weight: .bold))
-                                    .foregroundStyle(GaryColors.gold)
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.top, 4)
-                    }
                 }
             }
             .padding(.horizontal, 18)
@@ -2774,6 +2844,22 @@ fileprivate struct HubStoryRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        if expanded, let onProfile {
+            Button(action: onProfile) {
+                HStack(spacing: 6) {
+                    Text(s.playerId != nil ? "PLAYER CARD" : (s.teamId != nil || s.h2h != nil ? "TEAM CARD" : "THE FULL READ"))
+                        .font(HubFont.kicker(10.5)).tracking(1)
+                    Image(systemName: "arrow.right").font(.system(size: 10, weight: .semibold))
+                }
+                .foregroundStyle(GaryColors.gold)
+                .frame(minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 18)
+            .padding(.bottom, 6)
+        }
+        }
     }
 }
 
@@ -3015,6 +3101,7 @@ fileprivate struct HubDotsRow: View {
 /// glows green, a scoreless first burns red) and the 1st-inning price line.
 fileprivate struct HubNrfiSection: View {
     let rows: [Signal]
+    var showsHeader: Bool = true
     let onTap: (Signal) -> Void
 
     private let green = HubPalette.green
@@ -3022,7 +3109,7 @@ fileprivate struct HubNrfiSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HubHead(title: "The NRFI Watch", count: rows.count)
+            if showsHeader { HubHead(title: "The NRFI Watch", count: rows.count) }
             VStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { i, s in
                     Button { onTap(s) } label: { card(s) }.buttonStyle(.plain)
@@ -4351,6 +4438,7 @@ fileprivate struct HubGameSheet: View {
     let kickerFor: (Signal) -> String
     var onClose: () -> Void = {}
     let onViewGame: (String) -> Void
+    let onSignal: (Signal) -> Void
     /// Team tap on an On-the-Line row → close, then the team card (routing law).
     var onTeam: (StreakRow) -> Void = { _ in }
     /// Header team names → close, then the team card (the law, Aug 4: a team
@@ -4359,15 +4447,13 @@ fileprivate struct HubGameSheet: View {
     /// Tap-a-name → player card (On-the-Line player rows).
     var cardFor: (String?) -> PlayerInsightCardRow? = { _ in nil }
     @ObservedObject private var live = LiveScoreCache.shared
-    @State private var detailSignal: Signal? = nil
-    @State private var breakdownSignal: Signal? = nil
     @State private var namedCard: PlayerInsightCardRow? = nil
 
     private var abbrMatchup: String {
         "\(hubSideLabel(row.away_abbr, row.away_team, league: row.league)) @ \(hubSideLabel(row.home_abbr, row.home_team, league: row.league))"
     }
     private var ls: LiveScore? {
-        live.status(forMatchup: "\(row.away_team ?? "") @ \(row.home_team ?? "")")
+        hubLiveScore(for: row, cache: live)
     }
 
     var body: some View {
@@ -4383,8 +4469,7 @@ fileprivate struct HubGameSheet: View {
                     VStack(alignment: .leading, spacing: 4) {
                         HubHead(title: "The Edges", count: edges.count)
                         HubBeatList(rows: edges, open: true, kickerFor: kickerFor,
-                                    onRow: { s in if s.playerId != nil { breakdownSignal = s } else { detailSignal = s } },
-                                    onProfile: { breakdownSignal = $0 })
+                                    onRow: onSignal, onProfile: onSignal)
                     }
                 }
                 if !streaks.isEmpty {
@@ -4399,20 +4484,6 @@ fileprivate struct HubGameSheet: View {
             .padding(.top, 26).padding(.bottom, 34)
         }
         .background(GaryColors.darkBg)
-        .overlay {
-            if let s = detailSignal {
-                HubEdgeOverlay(signal: s,
-                               onClose: { withAnimation(.spring(response: 0.3, dampingFraction: 0.88)) { detailSignal = nil } },
-                               onViewGame: { g in
-                                   detailSignal = nil
-                                   onClose()
-                                   onViewGame(g)
-                               })
-                    .transition(.opacity.combined(with: .scale(scale: 0.94)))
-            }
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.88), value: detailSignal?.id)
-        .sheet(item: $breakdownSignal) { PlayerInsightSheet(signal: $0) }
         .sheet(item: $namedCard) { PlayerInsightSheet(signal: nil, prefetched: $0) }
     }
 
@@ -4422,8 +4493,12 @@ fileprivate struct HubGameSheet: View {
         VStack(alignment: .leading, spacing: 10) {
             if ls?.isLive == true {
                 HubKicker(text: "Live", size: 12.5, color: GaryColors.win)
-            } else if ls?.isFinal == true {
+            } else if ls?.isFinal == true || (ls == nil && row.game_status?.lowercased() == "final") {
                 HubKicker(text: "Final", size: 12.5, color: .white.opacity(0.62))
+            } else if let interruption = ls?.interruptionLabel ?? row.interruptionLabel {
+                HubKicker(text: interruption, size: 12.5)
+            } else if ls == nil && row.game_status?.lowercased() == "live" {
+                HubKicker(text: "Live", size: 12.5, color: GaryColors.win)
             } else {
                 HubKicker(text: "Tonight", size: 12.5, color: GaryColors.gold)
             }
@@ -4444,6 +4519,9 @@ fileprivate struct HubGameSheet: View {
                             .foregroundStyle(GaryColors.win)
                     }
                 }
+            } else if row.game_status?.lowercased() == "final" || row.game_status?.lowercased() == "live" {
+                Text("Score update unavailable")
+                    .font(HubFont.body(13.5)).foregroundStyle(GaryColors.sectionSub)
             } else {
                 HStack(spacing: 8) {
                     Text(TomorrowView.etTime(row.commence_time))
@@ -4517,7 +4595,8 @@ fileprivate struct HubGameSheet: View {
 
 /// A tapped edge, as a centered card over the dimmed page: kicker + game,
 /// the headline once, the value only when it isn't already in the headline,
-/// and only the sentences the row didn't say. VIEW GAME → Picks.
+/// and the complete original read. Long copy scrolls inside the centered panel
+/// while its close button stays reachable. VIEW GAME → exact game on Picks.
 fileprivate struct HubEdgeOverlay: View {
     let signal: Signal
     let onClose: () -> Void
@@ -4529,6 +4608,7 @@ fileprivate struct HubEdgeOverlay: View {
     }
 
     var body: some View {
+        GeometryReader { geo in
         ZStack {
             Color.black.opacity(0.62).ignoresSafeArea()
                 .onTapGesture { onClose() }
@@ -4545,11 +4625,34 @@ fileprivate struct HubEdgeOverlay: View {
                         Image(systemName: "xmark")
                             .font(.system(size: 12, weight: .bold))
                             .foregroundStyle(.white.opacity(0.6))
-                            .frame(width: 30, height: 30)
+                            .frame(width: 44, height: 44)
                             .background(Circle().fill(Color.white.opacity(0.08)))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Close full read")
                 }
+                ViewThatFits(in: .vertical) {
+                    readBody.fixedSize(horizontal: false, vertical: true)
+                    ScrollView(showsIndicators: true) { readBody }
+                }
+            }
+            .padding(18)
+            .frame(maxHeight: geo.size.height * 0.8)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color(hex: "#141210"))
+                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(GaryColors.gold.opacity(0.3), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.6), radius: 28, y: 12)
+            )
+            .padding(.horizontal, 26)
+        }
+        .frame(width: geo.size.width, height: geo.size.height)
+        }
+    }
+
+    private var readBody: some View {
+        VStack(alignment: .leading, spacing: 12) {
                 Text(signal.game.uppercased())
                     .font(HubFont.data(10, .medium))
                     .foregroundStyle(.white.opacity(0.62))
@@ -4559,10 +4662,10 @@ fileprivate struct HubEdgeOverlay: View {
                     .fixedSize(horizontal: false, vertical: true)
                 if !signal.valueEchoesHeadline, !signal.value.isEmpty {
                     Text(signal.value)
-                        .font(HubFont.data(30))
-                        .foregroundStyle(hubValueTint(signal))
+                        .font(HubFont.data(14, .medium))
+                        .foregroundStyle(GaryColors.sectionSub)
                 }
-                let body = hubDedupedDetail(signal)
+                let body = signal.detail.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !body.isEmpty {
                     Text(body)
                         .font(HubFont.body(14))
@@ -4589,17 +4692,8 @@ fileprivate struct HubEdgeOverlay: View {
                     .buttonStyle(.plain)
                     .padding(.top, 4)
                 }
-            }
-            .padding(18)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color(hex: "#141210"))
-                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(GaryColors.gold.opacity(0.3), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.6), radius: 28, y: 12)
-            )
-            .padding(.horizontal, 26)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

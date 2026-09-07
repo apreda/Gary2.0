@@ -69,31 +69,46 @@ print("Exact game edge regressions passed")
     }
   }, 40_000);
 
-  it.skipIf(!hasSwift)('executes actual routing against stored headline forms, team metadata and exact ranked-matchup identity', () => {
+  it.skipIf(!hasSwift)('executes actual routing with prefetched exact-game cards, full-story fallbacks, team metadata and ranked matchups', () => {
     const directory = mkdtempSync(join(tmpdir(), 'gary-hub-team-routing-'));
     try {
       const hub = source('HubView.swift');
       const picks = source('PicksTab.swift');
       const keywordStart = picks.indexOf('let mlbTeamKeywords:');
       const keywords = picks.slice(keywordStart, picks.indexOf('\n]', keywordStart) + 2);
-      const script = `${source('NCAAFTeams.swift')}\n${source('HubCardIdentity.swift')}
+      const script = `${source('NCAAFTeams.swift')}\n${source('HubCardIdentity.swift')}\n${source('HubStoryIdentity.swift')}
 ${keywords}
-enum HubLeagueSel { case mlb, ncaaf; var label: String { self == .mlb ? "MLB" : "NCAAF" } }
+enum HubLeagueSel {
+ case mlb, nfl, ncaaf
+ var label: String { switch self { case .mlb: return "MLB"; case .nfl: return "NFL"; case .ncaaf: return "NCAAF" } }
+}
+enum SupabaseAPI { static func todayEST() -> String { "2026-09-07" } }
 enum Kind { case bullpenFatigue, teamRecord, regression, streak, other }
 struct Meta { var team: String?; var team_abbr: String?; var dominant_name: String?; var source: String? }
 struct Signal {
+ let id = UUID()
  var league: HubLeagueSel = .mlb; var kind: Kind = .other; var headline: String
  var playerId: String?; var teamId: String?; var gameId: String?
+ var slateDate: String? = "2026-09-07"; var detail: String = "The original full story remains available."
  var h2h: Meta?; var fantasy: Meta?; var swap: Meta?; var lane: Meta?
 }
 struct Row { let league: String?; let bdl_game_id: Int? }
 struct HubGameSel { let row: Row }
-struct Card { let player_id: String?; let league: String? }
+struct PlayerInsightPack: Decodable { let name: String?; let game: String? }
+${block(source('Models.swift'), 'struct PlayerInsightCardRow:')}
+func card(_ player: String?, _ game: String?, _ league: String? = "MLB", name: String? = "Pete Crow-Armstrong", populated: Bool = true, rowName: Bool = true) -> PlayerInsightCardRow {
+ PlayerInsightCardRow(league: league, player_id: player, player_name: rowName ? name : nil, team_abbr: nil,
+                      game_id: game, payload: populated ? PlayerInsightPack(name: name, game: "CHC @ STL") : nil)
+}
 final class Router {
- var intelCards: [Card] = []; var slateRows: [Row] = []
- var breakdownSignal: Signal?; var selectedSignal: Signal?; var teamCardSignal: Signal?
- var namedCard: Card?; var gameSheet: HubGameSel?
- private func intelCard(for name: String?, league: HubLeagueSel? = nil) -> Card? { nil }
+ var intelCards: [PlayerInsightCardRow] = []; var slateRows: [Row] = []
+ var loadedDate = "2026-09-07"
+ var selectedSignal: Signal?; var teamCardSignal: Signal?; var gameSheet: HubGameSel?
+ ${block(hub, '    private struct PlayerRead:')}
+ private var playerRead: PlayerRead?
+ var openedPlayer: PlayerInsightCardRow? { playerRead?.card }
+ var openedRead: Signal? { playerRead?.signal }
+ var openedReadID: UUID? { playerRead?.id }
  ${block(hub, '    static func teamCardName(')}
  ${block(hub, '    static func signalPlayerName(')}
  ${block(hub, '    private func openSignal(')}
@@ -124,13 +139,60 @@ let noTeam = Signal(kind: .streak, headline: "NYY games have gone OVER 5 straigh
 precondition(Router.teamCardName(for: noTeam) == noTeam.headline)
 let ranking = Signal(league: .ncaaf, headline: "Oregon State at No. 23 Houston", teamId: "38", gameId: "457178", lane: Meta(source: "balldontlie_ncaaf_rankings"))
 let router = Router()
+router.intelCards = [card("38", "457178", "NCAAF", name: ranking.headline)]
 router.slateRows = [Row(league: "MLB", bdl_game_id: 457178), Row(league: "NCAAF", bdl_game_id: 457178)]
 router.open(ranking)
 precondition(router.gameSheet?.row.league == "NCAAF" && router.gameSheet?.row.bdl_game_id == 457178)
-precondition(router.teamCardSignal == nil && router.selectedSignal == nil)
+precondition(router.teamCardSignal == nil && router.selectedSignal == nil && router.openedPlayer == nil)
 for rows in [[], [Row(league: "MLB", bdl_game_id: 457178)], [Row(league: "NCAAF", bdl_game_id: 457178), Row(league: "NCAAF", bdl_game_id: 457178)]] {
  let fallback = Router(); fallback.slateRows = rows; fallback.open(ranking)
  precondition(fallback.gameSheet == nil && fallback.teamCardSignal == nil && fallback.selectedSignal != nil)
+}
+let player = Signal(headline: "Pete Crow-Armstrong: today's matchup", playerId: "700", teamId: "16", gameId: "2002", detail: String(repeating: "Complete explanation. ", count: 60))
+let firstGame = card("700", "2001")
+let secondGame = card("700", "2002")
+let playerRouter = Router()
+playerRouter.intelCards = [firstGame, card("700", "2002", "NFL"), secondGame]
+playerRouter.open(player)
+precondition(playerRouter.openedPlayer?.id == secondGame.id, "The prefetched card belongs to this doubleheader game and league")
+precondition(playerRouter.openedReadID == player.id && playerRouter.openedRead?.detail == player.detail, "The card sheet retains the full original signal")
+precondition(playerRouter.selectedSignal == nil && playerRouter.teamCardSignal == nil)
+for league in [HubLeagueSel.mlb, .nfl, .ncaaf] {
+ let scoped = Signal(league: league, headline: "Player: current read", playerId: "700", gameId: "2002")
+ let r = Router(); r.intelCards = [card("700", "2002", "NCAAF"), card("700", "2002", "NFL"), secondGame]
+ r.open(scoped)
+ precondition(r.openedPlayer?.league == league.label && r.openedReadID == scoped.id)
+}
+for candidates in [
+ [PlayerInsightCardRow](), [firstGame], [card("700", "2002", "NFL")], [card("700", "2002", nil)],
+ [card("different-id", "2002")], [card("700", "2002", populated: false)],
+ [secondGame, secondGame], [secondGame, card("700", "2002", populated: false)]
+] {
+ let r = Router(); r.intelCards = candidates; r.open(player)
+ precondition(r.openedPlayer == nil && r.teamCardSignal == nil && r.gameSheet == nil)
+ precondition(r.selectedSignal?.id == player.id && r.selectedSignal?.detail == player.detail, "A missing/ambiguous exact card retains the full player story, even with team metadata")
+}
+for oldStory in [nil, "2026-09-06", "2026-09-08"] as [String?] {
+ var stale = player; stale.slateDate = oldStory
+ let r = Router(); r.intelCards = [secondGame]; r.open(stale)
+ precondition(r.openedPlayer == nil && r.selectedSignal?.id == stale.id)
+}
+let staleCache = Router(); staleCache.loadedDate = "2026-09-06"; staleCache.intelCards = [secondGame]; staleCache.open(player)
+precondition(staleCache.openedPlayer == nil && staleCache.selectedSignal?.id == player.id)
+for named in ["Pete Crow-Armstrong: splits", "P. Crow-Armstrong / another player"] {
+ let signal = Signal(headline: named, gameId: "2002")
+ let r = Router(); r.intelCards = [firstGame, card("700", "2002", rowName: false)]; r.open(signal)
+ precondition(r.openedPlayer?.id == secondGame.id && r.openedReadID == signal.id, "A unique full name or initial uses the populated payload name in this game")
+}
+let ambiguousName = Signal(headline: "P. Crow-Armstrong: splits", gameId: "2002")
+let names = Router(); names.intelCards = [secondGame, card("701", "2002", name: "Paul Crow-Armstrong", populated: false)]; names.open(ambiguousName)
+precondition(names.openedPlayer == nil && names.selectedSignal?.id == ambiguousName.id)
+for team in [
+ Signal(headline: "Pete Crow-Armstrong: team context", teamId: "team", gameId: "2002"),
+ Signal(headline: "Pete Crow-Armstrong: matchup context", gameId: "2002", h2h: Meta(dominant_name: "Chicago Cubs"))
+] {
+ let r = Router(); r.intelCards = [secondGame]; r.open(team)
+ precondition(r.teamCardSignal?.id == team.id && r.openedPlayer == nil && r.selectedSignal == nil, "Authoritative team rows cannot become player cards through a matching name")
 }
 print("Hub team and ranking routes passed")
 `;

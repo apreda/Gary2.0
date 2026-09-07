@@ -1,0 +1,19 @@
+{
+  "date": "2026-09-07",
+  "scope": "Native main Hub daily briefing",
+  "version": "2.25",
+  "build": "905",
+  "focusedTests": { "files": 7, "passed": 67, "failed": 0 },
+  "storyIdentitySwiftChecks": 42,
+  "fantasySwiftHarness": "passed",
+  "debugBuild": "passed",
+  "releaseArchive": "passed",
+  "archivePath": "/Volumes/KINGSTON/Gary-2.25-905-Hub.xcarchive",
+  "simulatorInstall": "passed",
+  "simulatorVisualQA": "blocked: Mac locked; user asked to unlock",
+  "appStoreConnectUpload": "pending visual QA; not uploaded",
+  "testFlightAvailability": "not verified",
+  "backendCodeChanged": false,
+  "newProviderRequestsOrModelGeneration": false,
+  "knownLocalConfigurationException": "ios/GaryApp/GoogleService-Info.plist"
+}
