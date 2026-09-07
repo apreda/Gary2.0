@@ -74,6 +74,14 @@ game; a settled missing target returns to the overview.
 - Source review checked the new disclosure routes, complete board access,
   exact status joins, and the bounded full-read fallback. Diff and project
   plist checks passed.
+- Implementation commit `f5fee408` is pushed to `origin/main`. The production
+  truth audit at that commit confirmed scheduler PID 79083 in the canonical
+  checkout, Winners worker PID 89023 running, and all edge deployment timestamp
+  checks passing. MLB had 8/11 games published, three pending, and zero started
+  games missing a pick. The audit exited 1 solely for the preserved private
+  `GoogleService-Info.plist` working-tree exception; there were no unpushed
+  commits. Log: `/tmp/gary-hub-905-production-truth.log`. This read-only audit
+  does not replace the pending native visual check or upload.
 
 ## Resume after the Mac is unlocked
 
