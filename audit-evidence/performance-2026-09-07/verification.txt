@@ -1,0 +1,17 @@
+Command: npm run verify
+Runtime: Node v22.23.2
+Result: exit 0
+Full local log: /tmp/gary-performance-final-checks.log
+
+ Test Files  242 passed (242)
+      Tests  2193 passed (2193)
+   Duration  38.27s (transform 5.14s, setup 0ms, import 21.05s, tests 99.66s, environment 17ms)
+# tests 180
+# pass 180
+# fail 0
+# skipped 0
+ Test Files  48 passed (48)
+      Tests  349 passed (349)
+   Duration  1.75s (transform 1.94s, setup 597ms, import 3.23s, tests 3.84s, environment 5ms)
+Generating route types...
+✓ Types generated successfully

@@ -7,6 +7,7 @@ const LEAGUES = {
   NCAAF: 'americanfootball_ncaaf', MLB: 'baseball_mlb',
 };
 const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/[-‐‑–]/g, ' ')
   .toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
 const playerName = player => player.full_name || `${player.first_name || ''} ${player.last_name || ''}`.trim();
 const withoutSuffix = value => normalize(value).replace(/\s+(jr|sr|ii|iii|iv)$/, '');
@@ -33,16 +34,24 @@ export async function fetchPlayerGameLogEvidence({
   };
   if (!league) return finish('unavailable', { error: `Unsupported player-log league: ${sport}`, games_used: 0 });
   if (!normalize(requestedName)) return finish('unavailable', { error: 'A full player name is required', games_used: 0 });
+  const date = new Date(asOf);
+  if (!Number.isFinite(date.getTime())) return finish('unavailable', { error: 'A valid player-log cutoff is required', games_used: 0 });
+  envelope.as_of = date.toISOString();
   const bdl = service || (await import('../../ballDontLieService.js')).ballDontLieService;
-  const search = async term => array(await request(() => bdl.getPlayersGeneric(LEAGUES[league], { search: term, per_page: 25 })));
-  let players = await search(String(requestedName).trim());
+  // BDL search matches a FIRST or LAST name, not a whole full name. Narrow
+  // both documented filters and finish pagination before declaring identity
+  // unique; page one can otherwise hide a current player or a namesake.
+  // Search spelling may omit accents or punctuate initials/apostrophes.
+  // A contained name fragment retrieves candidates; the full-name comparison
+  // below still decides identity.
+  const fragment = value => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .match(/[a-z0-9]+/gi)?.sort((a, b) => b.length - a.length)[0] || '';
+  const players = array(await request(() => bdl.getPlayersGeneric(LEAGUES[league], {
+    first_name: fragment(String(requestedName).trim().split(/\s+/)[0]),
+    last_name: fragment(String(requestedName).trim().replace(/\s+(jr\.?|sr\.?|ii|iii|iv)$/i, '').split(/[\s‐‑–-]+/).at(-1)).toLowerCase(), per_page: 100,
+  }, 10, { complete: true, throwOnError: true })));
   const exactMatches = rows => rows.filter(p => withoutSuffix(playerName(p)) === withoutSuffix(requestedName));
   let matches = exactMatches(players);
-  const lastName = withoutSuffix(requestedName).split(' ').at(-1);
-  if (!matches.length && lastName !== normalize(requestedName)) {
-    players = await search(lastName);
-    matches = exactMatches(players);
-  }
   matches = [...new Map(matches.map(p => [String(p.id), p])).values()];
   if (matches.length > 1) {
     const teams = [homeTeam, awayTeam].map(normalize).filter(Boolean);
@@ -56,20 +65,19 @@ export async function fetchPlayerGameLogEvidence({
   const player = matches[0];
   envelope.player = { id: player.id, name: playerName(player), team: player.team || null };
   const year = new Date(asOf).getUTCFullYear();
-  const date = new Date(asOf);
   const defaultSeason = league === 'NFL' ? nflSeason(date) : league === 'NCAAF' ? ncaafSeason(date) : league === 'NBA' ? nbaSeason(date) : year;
   const selectedSeason = season != null && season !== '' && Number.isInteger(Number(season)) ? Number(season) : defaultSeason;
   let rows, diagnostics;
   if (league === 'NCAAF') {
-    const raw = await request(() => bdl.getNcaafPlayerGameStats({ playerId: player.id, season: selectedSeason }));
+    const raw = await request(() => bdl.getNcaafPlayerGameStats({ playerId: player.id, season: selectedSeason, throwOnError: true }));
     const cleaned = cleanNcaafPlayerRows(raw, { season: selectedSeason, playerIds: [player.id], asOf });
     rows = cleaned.rows;
     diagnostics = cleaned.diagnostics;
   } else if (league === 'NFL') {
-    const logs = await request(() => bdl.getNflPlayerGameLogsBatch([player.id], selectedSeason, count));
+    const logs = await request(() => bdl.getNflPlayerGameLogsBatch([player.id], selectedSeason, count, 15, { asOf, throwOnError: true }));
     rows = logs?.[player.id]?.games || [];
   } else if (league === 'MLB') {
-    rows = await request(() => bdl.getMlbPlayerGameRowsChrono(player.id, selectedSeason));
+    rows = await request(() => bdl.getMlbPlayerGameRowsChrono(player.id, selectedSeason, { throwOnError: true }));
   } else {
     const logs = await request(() => bdl.getNbaPlayerGameLogs(player.id, count, {}, { season: selectedSeason, asOf, throwOnError: true }));
     rows = Array.isArray(logs) ? logs : (logs?.games || []);
@@ -92,6 +100,8 @@ export async function fetchPlayerGameLogEvidence({
     source: `Ball Don't Lie ${league} player game logs`,
     data_window: dataWindow || String(selectedSeason),
     season: selectedSeason,
+    latest_game_at: games.length ? dateOf(games[0]) : null,
+    days_since_latest_game: games.length ? Math.floor((date.getTime() - Date.parse(dateOf(games[0]))) / 86_400_000) : null,
     games_used: selected.size, games, ...(diagnostics ? { diagnostics } : {}),
     note: games.length ? 'Only returned fields are evidence; missing fields are unknown. Dates and team identity belong to each game row.'
       : 'No eligible dated player-game rows returned; this is unavailable evidence, not zero production.',

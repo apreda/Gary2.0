@@ -79,12 +79,13 @@ struct CompactPropRow: View {
     /// the tracker has a line or for markets it can't read.
     private var liveValue: Int? {
         guard let market = prop.prop else { return nil }
-        return livePropCache.lines[LivePropStatsCache.nameKey(prop.player)]?.value(forMarket: market)
+        return livePropCache.observation(for: prop)?.line.value(forMarket: market)
     }
     /// The game card's liveGraded, prop edition: FINAL board + final line →
     /// verdict now, instead of waiting on the grading cron's next pass.
     private var livePropGraded: String? {
         guard identifiedGameStatus?.isFinal == true,
+              livePropCache.observation(for: prop)?.isFinal == true,
               let v = liveValue, let line = lineValue else { return nil }
         if Double(v) == line { return "push" }
         return (Double(v) > line) != isUnderBet ? "won" : "lost"
@@ -615,7 +616,7 @@ struct CompactPropRow: View {
         .onAppear {
             LiveScoreCache.shared.startIfNeeded()
             // MLB props live-track their player's box line (game-card parity).
-            if isMLBProp { LivePropStatsCache.shared.track(player: prop.player, matchup: prop.matchup) }
+            if isMLBProp { LivePropStatsCache.shared.track(prop) }
             if isSilverWon { runWinMoment() }
         }
         // Same transition gap as the gold bar: a live card graded WON while on

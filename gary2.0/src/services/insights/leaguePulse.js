@@ -157,7 +157,7 @@ async function buildMlbPulse(date, { batterIdsOverride, teamAbbrsOverride } = {}
   const hotTeams = await safeCall(() => buildMlbHotColdTeams({ date, season, bdl }), null);
   if (hotTeams) packs.push(hotTeams);
 
-  const pen = await safeCall(() => buildMlbBullpen({ date, season, bdl, games, teamMeta, getLineups }), null);
+  const pen = await safeCall(() => buildMlbBullpen({ date, season, bdl, teamMeta }), null);
   if (pen) packs.push(pen);
 
   const inj = await safeCall(() => buildMlbInjuries({ date, bdl, teamMeta }), null);
@@ -388,13 +388,11 @@ async function buildMlbHotColdTeams({ date, season, bdl }) {
 
 // ─── 3) BULLPEN WATCH (reduced) ──────────────────────────────────────────────
 //
-// PARTIALLY GROUNDABLE -> ship LEAN. Per-reliever rest / pen ERA are NOT cleanly
-// in BDL, so this tab carries ONLY the reliably-derivable relief-IP-last-3-days
-// (total pitcher IP in the game minus the game's starter IP), flagged "heavy" when
-// high. The back-to-back + pen_era columns are DROPPED (not fabricated). If even
-// the relief-IP inference is unusable (no completed games), the whole tab is dropped.
+// This table carries relief innings in each team's last three completed games.
+// Use the provider's actual starter flag; the pitcher with the most outs can
+// be a long reliever after an early hook. Unresolved starts stay unavailable.
 
-async function buildMlbBullpen({ date, season, bdl, games, teamMeta, getLineups }) {
+export async function buildMlbBullpen({ date, season, bdl, teamMeta }) {
   // Each slate team's last PEN_GAMES completed games (from the season index).
   const index = await safeCall(() => bdl.getMlbSeasonGameIndex(season), new Map());
   if (!index || !index.size) return null;
@@ -403,15 +401,30 @@ async function buildMlbBullpen({ date, season, bdl, games, teamMeta, getLineups 
   const slateTeamIds = [...teamMeta.keys()];
   if (!slateTeamIds.length) return null;
 
-  // ONE whole-season game-stats pull (cursor-paginated + cached), then bucketed by
-  // team locally — far cheaper than a per-team call. Each row carries team:{id} and
-  // game_id; the season index (above) supplies status/date/seasonType for the join.
-  const allStat = asArray(await safeCall(() => bdl.getMlbGameStats({ seasons: [season] }), []));
+  // Select each team's actual last three completed games FIRST. The previous
+  // whole-season stats request hit the transport cap before recent games,
+  // wasting pages and sometimes computing a "last 3" from April.
+  const recentByTeam = new Map();
+  for (const teamId of slateTeamIds) {
+    const recent = [...index].filter(([, g]) => g.status === 'STATUS_FINAL'
+      && g.seasonType !== 'spring_training'
+      && [g.homeId, g.awayId].some(id => String(id) === String(teamId))
+      && Number.isFinite(Date.parse(g.date))
+      && new Date(g.date).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) < date)
+      .sort((a, b) => Date.parse(b[1].date) - Date.parse(a[1].date)).slice(0, PEN_GAMES);
+    recentByTeam.set(String(teamId), new Set(recent.map(([id]) => String(id))));
+  }
+  const gameIds = [...new Set([...recentByTeam.values()].flatMap(ids => [...ids]))];
+  if (!gameIds.length) return null;
+  const allStat = [];
+  for (let i = 0; i < gameIds.length; i += 20) {
+    allStat.push(...asArray(await safeCall(() => bdl.getMlbGameStats({ gameIds: gameIds.slice(i, i + 20) }), [])));
+  }
   if (!allStat.length) return null;
   const statByTeam = new Map();
   for (const r of allStat) {
     const tid = r?.team?.id != null ? String(r.team.id) : null;
-    if (!tid || !slateTeamIds.includes(tid)) continue;
+    if (!tid || !recentByTeam.get(tid)?.has(String(r.game_id))) continue;
     if (!statByTeam.has(tid)) statByTeam.set(tid, []);
     statByTeam.get(tid).push(r);
   }
@@ -430,8 +443,9 @@ async function buildMlbBullpen({ date, season, bdl, games, teamMeta, getLineups 
       if (!gi || gi.status !== 'STATUS_FINAL' || gi.seasonType === 'spring_training') continue;
       if (ipOuts(r.ip) <= 0 && (num(r.p_k) == null) && (num(r.er) == null)) continue; // not a pitching line
       if (!byGame.has(r.game_id)) byGame.set(r.game_id, { date: gi.date, pitchers: [] });
-      // Only rows that actually pitched (have outs or pitching counters).
-      if (ipOuts(r.ip) > 0) byGame.get(r.game_id).pitchers.push(r);
+      // A confirmed starter can leave without recording an out. Preserve a
+      // measured 0.0 start, but never turn missing innings into that zero.
+      if (ipOuts(r.ip) > 0 || (num(r.games_started) === 1 && num(r.ip) === 0)) byGame.get(r.game_id).pitchers.push(r);
     }
     const completed = [...byGame.entries()]
       .map(([gameId, v]) => ({ gameId, ...v }))
@@ -440,16 +454,17 @@ async function buildMlbBullpen({ date, season, bdl, games, teamMeta, getLineups 
       .slice(0, PEN_GAMES);
     if (!completed.length) continue;
 
-    // Relief IP = total pitcher outs in the game MINUS the starter's outs (the
-    // starter = the pitcher with the most outs in that game — the documented,
-    // approximate inference; labeled as such).
     let reliefOuts = 0;
+    let observedGames = 0;
     for (const g of completed) {
-      const outsList = g.pitchers.map((p) => ipOuts(p.ip)).sort((x, y) => y - x);
-      const total = outsList.reduce((a, b) => a + b, 0);
-      const starterOuts = outsList[0] || 0;
+      const starters = g.pitchers.filter(p => num(p.games_started) === 1);
+      if (starters.length !== 1 || g.pitchers.some(p => ![0, 1].includes(num(p.games_started)))) continue;
+      const total = g.pitchers.reduce((sum, p) => sum + ipOuts(p.ip), 0);
+      const starterOuts = ipOuts(starters[0].ip);
       reliefOuts += Math.max(0, total - starterOuts);
+      observedGames++;
     }
+    if (!observedGames) continue;
     const reliefIp = reliefOuts / 3;
 
     rows.push({
@@ -457,7 +472,7 @@ async function buildMlbBullpen({ date, season, bdl, games, teamMeta, getLineups 
       team: abbr,
       ip3d: outsToIp(reliefOuts),
       flag: reliefIp >= PEN_HEAVY_IP ? 'heavy' : '',
-      gms: String(completed.length),
+      gms: String(observedGames),
     });
   }
 

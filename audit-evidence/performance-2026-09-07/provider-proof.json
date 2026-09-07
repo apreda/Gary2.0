@@ -1,0 +1,155 @@
+{
+  "checkedAt": "2026-09-07T16:45:48.497Z",
+  "results": [
+    {
+      "request": {
+        "sport": "MLB",
+        "player": "Carson Benge",
+        "season": 2026,
+        "asOf": "2026-09-07T16:00:00Z"
+      },
+      "quality": "available",
+      "player": "Carson Benge",
+      "playerId": 4839085,
+      "gamesUsed": 3,
+      "dates": [
+        "2026-09-06T17:40:00.000Z",
+        "2026-09-05T20:10:00.000Z",
+        "2026-09-04T23:10:00.000Z"
+      ],
+      "latestGameAt": "2026-09-06T17:40:00.000Z",
+      "daysSinceLatestGame": 0,
+      "elapsedMs": 9341
+    },
+    {
+      "request": {
+        "sport": "MLB",
+        "player": "Aaron Judge",
+        "season": 2026,
+        "asOf": "2026-09-07T16:00:00Z"
+      },
+      "quality": "available",
+      "player": "Aaron Judge",
+      "playerId": 569,
+      "gamesUsed": 3,
+      "dates": [
+        "2026-05-31T20:05:00.000Z",
+        "2026-05-31T02:05:00.000Z",
+        "2026-05-30T01:40:00.000Z"
+      ],
+      "latestGameAt": "2026-05-31T20:05:00.000Z",
+      "daysSinceLatestGame": 98,
+      "elapsedMs": 264
+    },
+    {
+      "request": {
+        "sport": "MLB",
+        "player": "Edwin Diaz",
+        "season": 2026,
+        "asOf": "2026-09-07T16:00:00Z"
+      },
+      "quality": "unavailable",
+      "gamesUsed": 0,
+      "elapsedMs": 133,
+      "error": "Ambiguous player identity: Edwin Diaz"
+    },
+    {
+      "request": {
+        "sport": "NFL",
+        "player": "Josh Allen",
+        "homeTeam": "Buffalo Bills",
+        "awayTeam": "New York Jets",
+        "season": 2025,
+        "asOf": "2026-02-01T00:00:00Z"
+      },
+      "quality": "available",
+      "player": "Josh Allen",
+      "playerId": 38,
+      "gamesUsed": 3,
+      "dates": [
+        "2025-12-28T21:25:00.000Z",
+        "2025-12-21T18:00:00.000Z",
+        "2025-12-14T18:00:00.000Z"
+      ],
+      "latestGameAt": "2025-12-28T21:25:00.000Z",
+      "daysSinceLatestGame": 34,
+      "elapsedMs": 788
+    },
+    {
+      "request": {
+        "sport": "NFL",
+        "player": "Josh Allen",
+        "homeTeam": "Buffalo Bills",
+        "awayTeam": "New York Jets",
+        "season": 2025,
+        "asOf": "2025-10-01T00:00:00Z"
+      },
+      "quality": "available",
+      "player": "Josh Allen",
+      "playerId": 38,
+      "gamesUsed": 3,
+      "dates": [
+        "2025-09-28T17:00:00.000Z",
+        "2025-09-19T00:15:00.000Z",
+        "2025-09-14T17:00:00.000Z"
+      ],
+      "latestGameAt": "2025-09-28T17:00:00.000Z",
+      "daysSinceLatestGame": 2,
+      "elapsedMs": 1
+    },
+    {
+      "request": {
+        "sport": "NCAAF",
+        "player": "Carlos Del Rio-Wilson",
+        "season": 2025,
+        "asOf": "2026-09-07T16:00:00Z"
+      },
+      "quality": "available",
+      "player": "Carlos Del Rio-Wilson",
+      "playerId": 51520,
+      "gamesUsed": 3,
+      "dates": [
+        "2025-11-29T18:30:00.000Z",
+        "2025-11-22T19:30:00.000Z",
+        "2025-11-15T19:00:00.000Z"
+      ],
+      "latestGameAt": "2025-11-29T18:30:00.000Z",
+      "daysSinceLatestGame": 281,
+      "elapsedMs": 1284,
+      "diagnostics": {
+        "wrongSeason": 0,
+        "wrongPlayerOrTeam": 0,
+        "invalidDate": 0,
+        "unfinished": 0,
+        "duplicates": 0,
+        "conflicts": 0
+      }
+    },
+    {
+      "request": {
+        "sport": "NCAAF",
+        "player": "Carlos Del Rio-Wilson",
+        "season": 2026,
+        "asOf": "2026-09-07T16:00:00Z"
+      },
+      "quality": "available",
+      "player": "Carlos Del Rio-Wilson",
+      "playerId": 51520,
+      "gamesUsed": 1,
+      "dates": [
+        "2026-09-05T19:30:00.000Z"
+      ],
+      "latestGameAt": "2026-09-05T19:30:00.000Z",
+      "daysSinceLatestGame": 1,
+      "elapsedMs": 596,
+      "diagnostics": {
+        "wrongSeason": 0,
+        "wrongPlayerOrTeam": 0,
+        "invalidDate": 0,
+        "unfinished": 0,
+        "duplicates": 0,
+        "conflicts": 0
+      }
+    }
+  ]
+}

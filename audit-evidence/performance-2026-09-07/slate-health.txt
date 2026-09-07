@@ -1,0 +1,14 @@
+MORNING HEALTH 2026-09-07 — OK — 2026-09-07T16:39:58.124Z
+OK      board: 12/12 slate games on today's board; updated 2026-09-07T15:01:01.541+00:00
+OK      insights:MLB: 117 rows across 11/11 games; signal categories are conditional, so every game need not produce a row.
+OK      cards:MLB: 11/11 games have cards; 0 due games missing and 0 due games partial (due = kickoff within 2h).
+OK      wire:MLB: 8 current-date items; check freshness
+PENDING picks:MLB: 7/11 published; 0 started without a saved pick; 4 still pregame (0 within the final 15-minute retry window).
+OK      insights:NCAAF: 7 rows across 1/1 games; signal categories are conditional, so every game need not produce a row.
+OK      cards:NCAAF: 1/1 games have cards; 1 games verified complete; 0 due games missing and 0 due games partial (due = kickoff within 2h).
+OK      pulse:NCAAF: 2 current-date league tabs; newest 2026-09-07T15:10:17.858323+00:00
+OK      wire:NCAAF: 3 current-date items; check freshness
+PENDING picks:NCAAF: 0/1 published; 0 started without a saved pick; 1 still pregame (0 within the final 30-minute retry window).
+OK      results: 18 settled rows for 2026-09-06; 0 saved tickets without an exact-game grade (pending/postponed status needs inspection).
+OK      recaps: 18/18 settled game rows have matching recaps; optional narrative availability is separate from grading.
+A stale lane does not prove the scheduler stopped. Inspect the owning stage and provider error before any restart.

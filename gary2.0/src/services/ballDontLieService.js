@@ -10,6 +10,8 @@ import {
   writeSharedBdlCache,
 } from './bdlSharedCache.js';
 import { decodeBdlRows, decodeBdlSdkItem, decodeBdlSdkRows } from './bdlResponse.js';
+import { fetchBdlPages } from './bdlPagination.js';
+import { eligibleNflPlayerRows } from './nflPlayerLogFacts.js';
 import { setTimeout as retryDelay } from 'node:timers/promises';
 
 // Set cache TTL (5 minutes for playoff data)
@@ -455,18 +457,9 @@ function normalizeName(value) {
  * Build the existing NFL prop-log summary from raw BDL stat rows.
  * Kept pure so the batched transport can be tested independently from HTTP.
  */
-export function summarizeNflPlayerGameLogs(rawStats, numGames = 5) {
-  const gameStats = (rawStats || [])
-    .filter((g) => {
-      if (!Number.isFinite(Date.parse(g.game?.date || ''))) return false;
-      const status = String(g.game?.status || '').trim().toLowerCase();
-      // The NFL stats feed can expose an in-progress row. Never let a partial
-      // box displace a completed game in the recent-results sample. Older
-      // fixtures without a status remain compatible with the established
-      // summary contract.
-      return completedGameStatus(status);
-    })
-    .sort((a, b) => new Date(b.game.date) - new Date(a.game.date))
+export function summarizeNflPlayerGameLogs(rawStats, numGames = 5, options = {}) {
+  const gameStats = eligibleNflPlayerRows(rawStats, options)
+    .sort((a, b) => new Date(b.game.date || b.game.datetime) - new Date(a.game.date || a.game.datetime))
     .slice(0, numGames);
 
   if (gameStats.length === 0) return null;
@@ -1418,12 +1411,12 @@ const ballDontLieService = {
   /**
    * Generic players fetch with HTTP fallback
    */
-  async getPlayersGeneric(sportKey, params = {}, ttlMinutes = 10) {
+  async getPlayersGeneric(sportKey, params = {}, ttlMinutes = 10, { complete = false, throwOnError = false } = {}) {
     try {
-      const cacheKey = `${sportKey}_players_${JSON.stringify(params)}`;
+      const cacheKey = `${sportKey}_players_${complete ? 'complete_v2_' : ''}${JSON.stringify(params)}`;
       return await getCachedOrFetch(cacheKey, async () => {
         const sport = this._getSportClient(sportKey);
-        if (sport?.getPlayers) {
+        if (!complete && sport?.getPlayers) {
           const resp = await sport.getPlayers(params);
           return resp?.data || [];
         }
@@ -1437,6 +1430,14 @@ const ballDontLieService = {
         };
         const path = endpointMap[sportKey];
         if (!path) return [];
+        if (complete) {
+          return fetchBdlPages(async cursor => {
+            const pageParams = { ...params, per_page: 100 };
+            if (cursor != null) pageParams.cursor = cursor;
+            const url = `${BALLDONTLIE_API_BASE_URL}/${path}${buildQuery(pageParams)}`;
+            return (await bdlHttp.get(url, { headers: { Authorization: API_KEY } })).data;
+          }, { label: `${sportKey} player identities`, maxPages: 30 });
+        }
         const url = `${BALLDONTLIE_API_BASE_URL}/${path}${buildQuery(params)}`;
         const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         // ⭐ FIX: Return BOTH data and meta for pagination support
@@ -1447,6 +1448,7 @@ const ballDontLieService = {
       }, ttlMinutes);
     } catch (e) {
       console.error(`[Ball Don't Lie] ${sportKey} getPlayers error:`, e.message);
+      if (throwOnError) throw e;
       return [];
     }
   },
@@ -2734,103 +2736,69 @@ const ballDontLieService = {
    * @returns {Object} - Map of playerId -> game log data with stats and trends
    */
   async getNflPlayerGameLogsBatch(playerIds, season = null, numGames = 5, ttlMinutes = 15, options = {}) {
-    // Calculate dynamic NFL season: Aug-Feb spans years
+    const asOf = options.asOf ?? new Date();
     if (!season) {
-      const month = new Date().getMonth() + 1;
-      const year = new Date().getFullYear();
-      season = month <= 7 ? year - 1 : year;
+      const date = new Date(asOf);
+      season = date.getUTCMonth() < 7 ? date.getUTCFullYear() - 1 : date.getUTCFullYear();
     }
     try {
       if (!Array.isArray(playerIds) || playerIds.length === 0) return {};
-
-      const uniquePlayerIds = [...new Set(playerIds.filter(Boolean))];
-      const results = {};
-      const seasonType = [1, 2, 3].includes(Number(options?.seasonType))
-        ? Number(options.seasonType)
-        : 2;
-
-      const missingPlayerIds = [];
-      for (const playerId of uniquePlayerIds) {
-        const playerCacheKey = `nfl_player_game_logs_${playerId}_${season}_${seasonType}_${numGames}`;
-        const cached = cacheMap.get(playerCacheKey);
-        if (cached && Date.now() < cached.expiry) {
-          if (cached.data) results[playerId] = cached.data;
-        } else {
-          missingPlayerIds.push(playerId);
-        }
+      const uniqueIds = [...new Set(playerIds.filter(id => id != null).map(String))];
+      const seasonType = [1, 2, 3].includes(Number(options.seasonType)) ? Number(options.seasonType) : 2;
+      const rawByPlayer = {};
+      const missing = [];
+      const playerKey = id => `nfl_player_game_rows_v2_${id}_${season}_${seasonType}`;
+      for (const id of uniqueIds) {
+        const cached = cacheMap.get(playerKey(id));
+        if (cached && Date.now() < cached.expiry) rawByPlayer[id] = cached.data;
+        else missing.push(id);
       }
-
-      if (missingPlayerIds.length > 0) {
+      const fetchRows = async ids => getCachedOrFetch(
+        `nfl_player_game_rows_batch_v2_${[...ids].sort().join('-')}_${season}_${seasonType}`,
+        () => fetchBdlPages(async cursor => {
+          const query = { player_ids: ids, seasons: [season], season_type: seasonType, per_page: 100 };
+          if (cursor != null) query.cursor = cursor;
+          const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/stats${buildQuery(query)}`;
+          return (await bdlHttp.get(url, { headers: { Authorization: API_KEY } })).data;
+        }, { label: 'NFL player game logs' }), ttlMinutes);
+      const remember = (ids, rows) => {
+        const expiry = Date.now() + ttlMinutes * 60_000;
+        for (const id of ids) {
+          const raw = rows.filter(row => String(row?.player?.id ?? row?.player_id) === id);
+          rawByPlayer[id] = raw;
+          cacheMap.set(playerKey(id), { data: raw, expiry });
+        }
+      };
+      if (missing.length) {
         try {
-          // BDL accepts multiple player_ids[] in one stats request. Fetch every
-          // candidate together and paginate so batching never truncates a full
-          // season. Typical seven-player props boards complete in one or two
-          // page calls instead of seven separate player requests.
-          const batchKey = `nfl_player_game_logs_batch_${[...missingPlayerIds].sort().join('-')}_${season}_${seasonType}_${numGames}`;
-          const rowsByPlayer = await getCachedOrFetch(batchKey, async () => {
-            const grouped = new Map(missingPlayerIds.map(id => [String(id), []]));
-            let cursor = null;
-            const seenCursors = new Set();
-
-            do {
-              const query = {
-                player_ids: missingPlayerIds,
-                seasons: [season],
-                season_type: seasonType,
-                per_page: 100
-              };
-              if (cursor) query.cursor = cursor;
-              const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/stats${buildQuery(query)}`;
-              const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
-              for (const row of (response.data?.data || [])) {
-                const playerId = row.player?.id ?? row.player_id;
-                const key = String(playerId ?? '');
-                if (grouped.has(key)) grouped.get(key).push(row);
-              }
-              const nextCursor = response.data?.meta?.next_cursor || null;
-              cursor = nextCursor && !seenCursors.has(String(nextCursor)) ? nextCursor : null;
-              if (cursor) seenCursors.add(String(cursor));
-            } while (cursor);
-
-            return Object.fromEntries(grouped);
-          }, ttlMinutes);
-
-          const expiry = Date.now() + (ttlMinutes * 60 * 1000);
-          for (const playerId of missingPlayerIds) {
-            const logs = summarizeNflPlayerGameLogs(rowsByPlayer?.[String(playerId)] || [], numGames);
-            cacheMap.set(`nfl_player_game_logs_${playerId}_${season}_${seasonType}_${numGames}`, { data: logs, expiry });
-            if (logs) results[playerId] = logs;
-          }
-        } catch (batchError) {
-          // Keep the old partial-success behavior if the multi-ID request is
-          // ever rejected: retry each player through the original one-player
-          // query shape instead of losing the entire props evidence set.
-          console.warn(`[Ball Don't Lie] Batched NFL game logs failed; retrying per player: ${batchError.message}`);
-          await Promise.all(missingPlayerIds.map(async (playerId) => {
-            const playerCacheKey = `nfl_player_game_logs_${playerId}_${season}_${seasonType}_${numGames}`;
-            try {
-              const logs = await getCachedOrFetch(playerCacheKey, async () => {
-                const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/stats${buildQuery({
-                  player_ids: [playerId],
-                  seasons: [season],
-                  season_type: seasonType,
-                  per_page: 25
-                })}`;
-                const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
-                return summarizeNflPlayerGameLogs(response.data?.data || [], numGames);
-              }, ttlMinutes);
-              if (logs) results[playerId] = logs;
-            } catch (playerError) {
-              console.warn(`[Ball Don't Lie] NFL game logs fetch failed for player ${playerId}:`, playerError.message);
+          remember(missing, await fetchRows(missing));
+        } catch (error) {
+          // Retry individual filters only when the provider rejects the batch
+          // shape. An outage, malformed page or rate limit must not fan out.
+          if (missing.length < 2 || ![400, 422].includes(error?.response?.status)) throw error;
+          const failures = [];
+          await Promise.all(missing.map(async id => {
+            try { remember([id], await fetchRows([id])); }
+            catch (failure) {
+              failures.push(failure);
+              console.warn(`[Ball Don't Lie] NFL game logs unavailable for player ${id}: ${failure.message}`);
             }
           }));
+          if (failures.length && options.throwOnError) throw failures[0];
         }
       }
-
-      console.log(`[Ball Don't Lie] NFL game logs: fetched for ${Object.keys(results).length}/${uniquePlayerIds.length} players`);
+      // Cache complete raw seasons, not last-N summaries. Different cutoffs
+      // and window sizes reuse transport without borrowing each other's sample.
+      const results = {};
+      for (const id of uniqueIds) {
+        const logs = summarizeNflPlayerGameLogs(rawByPlayer[id] || [], numGames, { asOf, season, playerId: id });
+        if (logs) results[id] = logs;
+      }
+      console.log(`[Ball Don't Lie] NFL game logs: fetched for ${Object.keys(results).length}/${uniqueIds.length} players`);
       return results;
-    } catch (e) {
-      console.error('[Ball Don\'t Lie] nfl getNflPlayerGameLogsBatch error:', e.message);
+    } catch (error) {
+      console.error(`[Ball Don't Lie] NFL player logs unavailable: ${error.message}`);
+      if (options.throwOnError) throw error;
       return {};
     }
   },
@@ -3253,7 +3221,7 @@ const ballDontLieService = {
     }
   },
 
-  async getNcaafPlayerGameStats({ playerIds, playerId, teamIds, teamId, season } = {}, ttlMinutes = 15) {
+  async getNcaafPlayerGameStats({ playerIds, playerId, teamIds, teamId, season, throwOnError = false } = {}, ttlMinutes = 15) {
     try {
       if (!season) return [];
       const pidArr = playerIds || (playerId ? [playerId] : undefined);
@@ -3261,7 +3229,7 @@ const ballDontLieService = {
       if ((!pidArr || pidArr.length === 0) && (!tidArr || tidArr.length === 0)) {
         return [];
       }
-      const cacheKey = `ncaaf_player_game_stats_${(pidArr || []).join('-')}_${(tidArr || []).join('-')}_${season}`;
+      const cacheKey = `ncaaf_player_game_stats_v2_${(pidArr || []).join('-')}_${(tidArr || []).join('-')}_${season}`;
       return await getCachedOrFetch(cacheKey, async () => {
         // `seasons[]` must be an ARRAY. The scalar `season` that
         // getNcaafPlayerSeasonStats uses returns ZERO rows here the moment
@@ -3269,35 +3237,28 @@ const ballDontLieService = {
         // needing seasons[] beside game_ids[].
         const baseQuery = { 'seasons[]': [season], per_page: 100 };
         if (Array.isArray(pidArr) && pidArr.length) {
-          baseQuery['player_ids[]'] = pidArr.slice(0, 100);
+          baseQuery['player_ids[]'] = pidArr;
         }
         if (Array.isArray(tidArr) && tidArr.length) {
-          baseQuery['team_ids[]'] = tidArr.slice(0, 100);
+          baseQuery['team_ids[]'] = tidArr;
         }
 
         // A whole team's season does NOT fit in one page: a single page of 100
         // rows covered only weeks 1-4, 6-7 for one team, so leaders computed
         // from it were drawn from a truncated season and the "last 5" was
         // missing the most recent games entirely. Follow the cursor.
-        const rows = [];
-        let cursor = null;
-        const seen = new Set();
-        for (let page = 0; page < 8; page += 1) {
-          const query = cursor ? { ...baseQuery, cursor } : baseQuery;
+        const rows = await fetchBdlPages(async cursor => {
+          const query = cursor != null ? { ...baseQuery, cursor } : baseQuery;
           const url = `${BALLDONTLIE_API_BASE_URL}/ncaaf/v1/player_stats${buildQuery(query)}`;
-          const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
-          rows.push(...(response.data?.data || []));
-          const next = response.data?.meta?.next_cursor || null;
-          if (!next || seen.has(String(next))) break;
-          seen.add(String(next));
-          cursor = next;
-        }
+          return (await bdlHttp.get(url, { headers: { Authorization: API_KEY } })).data;
+        }, { label: 'NCAAF player game stats' });
         // Same check as its sibling: this endpoint wants seasons[] today, and
         // the wrong form here would also answer with 2004 rather than an error.
         return this._onlySeason(rows, season, 'player_stats');
       }, ttlMinutes);
     } catch (e) {
       console.error('[Ball Don\'t Lie] ncaaf getNcaafPlayerGameStats error:', e.message);
+      if (throwOnError) throw e;
       return [];
     }
   },
@@ -5810,37 +5771,26 @@ const ballDontLieService = {
    * Get MLB per-game player stats (box score data)
    * Returns: AB, H, HR, RBI, BB, K, AVG, OBP, SLG + pitching stats for pitchers
    */
-  async getMlbGameStats({ gameIds, playerIds, seasons } = {}, ttlMinutes = 30) {
+  async getMlbGameStats({ gameIds, playerIds, seasons, throwOnError = false } = {}, ttlMinutes = 30) {
     try {
       const params = {};
       if (gameIds?.length) params.game_ids = gameIds;
       if (playerIds?.length) params.player_ids = playerIds;
       if (seasons?.length) params.seasons = seasons;
-      const cacheKey = `mlb_game_stats_${JSON.stringify(params)}`;
+      const cacheKey = `mlb_game_stats_v2_${JSON.stringify(params)}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        // Cursor-paginate the full result set. BDL defaults to 25 rows/page:
-        // a hitter's season is ~70 games and a single game's box is ~30 rows,
-        // so a page-1-only fetch truncated everything downstream — most
-        // painfully feeding "LAST 10 GAMES" windows from April (June 3 2026
-        // incident: James Wood reported .114 vs his real hot recent form).
-        // The page cap is a runaway guard (~1000 rows covers any sane query).
-        console.log(`[BDL] Fetching MLB game stats`);
-        const stats = [];
-        let cursor;
-        for (let page = 0; page < 10; page++) {
+        const stats = await fetchBdlPages(async cursor => {
           const pageParams = { ...params, per_page: 100 };
           if (cursor != null) pageParams.cursor = cursor;
           const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/stats${buildQuery(pageParams)}`;
-          const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
-          stats.push(...(response.data?.data || []));
-          cursor = response.data?.meta?.next_cursor;
-          if (cursor == null) break;
-        }
+          return (await bdlHttp.get(url, { headers: { Authorization: API_KEY } })).data;
+        }, { label: 'MLB game stats' });
         console.log(`[BDL] MLB game stats: ${stats.length} records`);
         return stats;
       }, ttlMinutes);
     } catch (error) {
       console.error(`[BDL] MLB game stats error:`, error?.response?.data || error.message);
+      if (throwOnError) throw error;
       return [];
     }
   },
@@ -5885,18 +5835,18 @@ const ballDontLieService = {
     }
   },
 
-  async getMlbSeasonGameIndex(season, ttlMinutes = 60) {
+  async getMlbSeasonGameIndex(season, ttlMinutes = 60, { throwOnError = false } = {}) {
     try {
-      const cacheKey = `mlb_game_index_${season}`;
+      const cacheKey = `mlb_game_index_v2_${season}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        const index = new Map();
-        let cursor;
-        for (let page = 0; page < 40; page++) {
+        const games = await fetchBdlPages(async cursor => {
           const params = { seasons: [season], per_page: 100 };
           if (cursor != null) params.cursor = cursor;
           const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/games${buildQuery(params)}`;
-          const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
-          for (const g of (response.data?.data || [])) {
+          return (await bdlHttp.get(url, { headers: { Authorization: API_KEY } })).data;
+        }, { label: 'MLB season game index', maxPages: 80 });
+        const index = new Map();
+        for (const g of games) {
             index.set(g.id, {
               date: g.date,
               status: g.status,
@@ -5911,14 +5861,12 @@ const ballDontLieService = {
               awayRuns: g.away_team_data?.runs
             });
           }
-          cursor = response.data?.meta?.next_cursor;
-          if (cursor == null) break;
-        }
         console.log(`[BDL] MLB game index ${season}: ${index.size} games`);
         return index;
       }, ttlMinutes);
     } catch (error) {
       console.error(`[BDL] MLB game index error:`, error?.response?.data || error.message);
+      if (throwOnError) throw error;
       return new Map();
     }
   },
@@ -5931,10 +5879,10 @@ const ballDontLieService = {
    * (game_id is NOT monotonic with date; June 3 2026 audit).
    * Each row gains `_game: { date, status, seasonType, postseason }`.
    */
-  async getMlbPlayerGameRowsChrono(playerId, season) {
+  async getMlbPlayerGameRowsChrono(playerId, season, { throwOnError = false } = {}) {
     const [rows, index] = await Promise.all([
-      this.getMlbGameStats({ playerIds: [playerId], seasons: [season] }),
-      this.getMlbSeasonGameIndex(season)
+      this.getMlbGameStats({ playerIds: [playerId], seasons: [season], throwOnError }),
+      this.getMlbSeasonGameIndex(season, 60, { throwOnError })
     ]);
     return (rows || [])
       .map(r => ({ ...r, _game: index.get(r.game_id) }))

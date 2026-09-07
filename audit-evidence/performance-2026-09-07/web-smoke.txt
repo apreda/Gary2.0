@@ -1,0 +1,45 @@
+(node:24348) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///private/tmp/gary-performance-web-fixture/web/lib/gary/dates.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /private/tmp/gary-performance-web-fixture/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+LOCAL QA FIXTURES: http://127.0.0.1:3112/picks
+Read-only fixture API: http://127.0.0.1:59005
+
+▲ Next.js 16.3.2 (webpack)
+- Local:         http://127.0.0.1:3112
+- Network:       http://127.0.0.1:3112
+✓ Ready in 270ms
+✓ Running next.config.ts took 18ms
+
+ GET / 200 in 3.3s (next.js: 2.8s, proxy.ts: 162ms, application-code: 265ms)
+PASS /: real server-rendered page contains expected content
+ GET /picks 200 in 775ms (next.js: 565ms, proxy.ts: 55ms, application-code: 154ms)
+PASS /picks: real server-rendered page contains expected content
+ GET /results 200 in 386ms (next.js: 186ms, proxy.ts: 85ms, application-code: 116ms)
+PASS /results: real server-rendered page contains expected content
+ GET /leaderboard 200 in 343ms (next.js: 218ms, proxy.ts: 30ms, application-code: 95ms)
+PASS /leaderboard: real server-rendered page contains expected content
+ GET /picks/mlb 200 in 698ms (next.js: 282ms, proxy.ts: 2ms, generate-params: 304ms, application-code: 110ms)
+PASS /picks/mlb: permanent analysis discovery
+ GET /picks/mlb/2026-09-07 200 in 611ms (next.js: 525ms, proxy.ts: 2ms, application-code: 84ms)
+PASS /picks/mlb/2026-09-07: permanent analysis discovery
+ GET /picks/mlb/2026-09-07/chicago-cubs-at-cincinnati-reds 200 in 679ms (next.js: 554ms, proxy.ts: 2ms, application-code: 122ms)
+PASS prop receipt: encoded 5.5 line, one market label, correct losing grade
+PASS /picks/mlb/2026-09-07/chicago-cubs-at-cincinnati-reds: permanent analysis discovery
+ GET /archive/2026-09-07 200 in 676ms (next.js: 562ms, proxy.ts: 1.7ms, application-code: 112ms)
+PASS /archive/2026-09-07: permanent analysis discovery
+ GET /archive/month/2026-09 200 in 642ms (next.js: 570ms, proxy.ts: 2ms, application-code: 70ms)
+PASS /archive/month/2026-09: permanent analysis discovery
+ GET /archive/sitemap.xml 200 in 701ms (next.js: 684ms, proxy.ts: 3ms, application-code: 14ms)
+PASS /archive/sitemap.xml: permanent analysis discovery
+ GET /picks/sitemap/0.xml 200 in 10ms (next.js: 2ms, proxy.ts: 2ms, application-code: 5ms)
+PASS /picks/sitemap/0.xml: permanent analysis discovery
+ GET /sitemap-index.xml 200 in 6ms (next.js: 1.5ms, proxy.ts: 1.9ms, application-code: 2ms)
+PASS /sitemap-index.xml: permanent analysis discovery
+ GET /feed.xml 200 in 312ms (next.js: 295ms, proxy.ts: 1.4ms, application-code: 15ms)
+PASS /feed.xml: permanent analysis discovery
+ GET /results.json 200 in 256ms (next.js: 247ms, proxy.ts: 1.4ms, application-code: 8ms)
+PASS /results.json: authoritative NFL + MLB, preseason and legacy NFL excluded
+Fixture smoke check passed. Use npm run preview for browser interaction.
+[?25h

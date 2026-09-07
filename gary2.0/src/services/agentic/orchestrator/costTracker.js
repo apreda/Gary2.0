@@ -1,12 +1,9 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // COST TRACKER — Per-pipeline token usage and cost logging
 // ═══════════════════════════════════════════════════════════════════════════
-// Tracks input/output tokens per model across a pipeline run.
-// Output tokens include thinking tokens (Gemini API bundles them together).
-//
-// Pricing (May 2026, Gemini Developer API):
-//   Rates for the live model families (Gemini retired Aug 24 2026 —
-//   its rows left the table with the vendor).
+// Tracks adapter-reported input/output and cached input per pipeline run.
+// Subscription calls have no marginal API charge. Known API rates below are
+// estimates; unmetered search and unknown models must not invent a total bill.
 // ═══════════════════════════════════════════════════════════════════════════
 
 const MODEL_RATES = {
@@ -16,7 +13,7 @@ const MODEL_RATES = {
   'gpt-5.5':                  { input: 5.00, output: 30.00 },
   'gpt-5':                    { input: 1.25, output: 10.00 },
   'claude-sonnet-5':          { input: 2.00, output: 10.00 },
-  // GPT-5.6 family (GA on our account Jul 22 2026). Sol = the game-pick brain.
+  // GPT-5.6 family (GA on our account Jul 22 2026).
   'gpt-5.6-sol':              { input: 5.00, output: 30.00 },
   // Anthropic API research tier (June engine restoration, Aug 18 2026).
   'anthropic-claude-haiku-4-5': { input: 1.00, output: 5.00 },
@@ -41,7 +38,7 @@ export function createCostTracker(pipelineLabel) {
 
   function ensureBucket(model) {
     if (!buckets[model]) {
-      buckets[model] = { inputTokens: 0, outputTokens: 0, calls: 0 };
+      buckets[model] = { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, calls: 0 };
     }
   }
 
@@ -49,13 +46,16 @@ export function createCostTracker(pipelineLabel) {
     /**
      * Record token usage from one API response.
      * @param {string} model - Model name (e.g. 'anthropic-claude-haiku-4-5')
-     * @param {Object} usage - { prompt_tokens, completion_tokens }
+     * @param {Object} usage - { prompt_tokens, completion_tokens, cached_tokens }
      */
     addUsage(model, usage) {
       if (!model || !usage) return;
       ensureBucket(model);
-      buckets[model].inputTokens += usage.prompt_tokens || 0;
-      buckets[model].outputTokens += usage.completion_tokens || 0;
+      const count = value => Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : 0;
+      const input = count(usage.prompt_tokens);
+      buckets[model].inputTokens += input;
+      buckets[model].outputTokens += count(usage.completion_tokens);
+      buckets[model].cachedInputTokens += Math.min(input, count(usage.cached_tokens));
       buckets[model].calls += 1;
     },
 
@@ -67,18 +67,24 @@ export function createCostTracker(pipelineLabel) {
     /** Get current totals without logging */
     getTotals() {
       let totalCost = 0;
+      let unpricedModelCalls = 0;
       const breakdown = [];
 
       for (const [model, b] of Object.entries(buckets)) {
-        const rates = MODEL_RATES[model] || MODEL_RATES['anthropic-claude-haiku-4-5'];
-        const inputCost = (b.inputTokens / 1_000_000) * rates.input;
-        const outputCost = (b.outputTokens / 1_000_000) * rates.output;
-        const modelCost = inputCost + outputCost;
-        totalCost += modelCost;
+        // Every codex-* model uses the same subscription bridge, including
+        // newly introduced models. Never invent a Haiku API bill for Astra.
+        const rates = model.startsWith('codex-') ? { input: 0, output: 0 } : MODEL_RATES[model];
+        const inputCost = rates ? (b.inputTokens / 1_000_000) * rates.input : null;
+        const outputCost = rates ? (b.outputTokens / 1_000_000) * rates.output : null;
+        const modelCost = rates ? inputCost + outputCost : null;
+        if (modelCost == null) unpricedModelCalls += b.calls;
+        else totalCost += modelCost;
         breakdown.push({
           model,
           inputTokens: b.inputTokens,
           outputTokens: b.outputTokens,
+          cachedInputTokens: b.cachedInputTokens,
+          uncachedInputTokens: b.inputTokens - b.cachedInputTokens,
           calls: b.calls,
           inputCost,
           outputCost,
@@ -86,29 +92,30 @@ export function createCostTracker(pipelineLabel) {
         });
       }
 
-      // Grounding: $14/1K queries (ignore free tier — hard to track across runs)
-      const groundingCost = (groundingCalls / 1000) * 14.00;
-      totalCost += groundingCost;
-
-      return { breakdown, groundingCalls, groundingCost, totalCost };
+      // The grounding facade can use subscription search or a metered
+      // fallback. A logical query count cannot establish either vendor's bill.
+      const groundingCost = groundingCalls ? null : 0;
+      return { breakdown, groundingCalls, groundingCost, knownModelCost: totalCost,
+        unpricedModelCalls, totalCost: groundingCalls || unpricedModelCalls ? null : totalCost };
     },
 
     /** Log a cost summary to console */
     logSummary() {
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-      const { breakdown, groundingCalls: gc, groundingCost, totalCost } = this.getTotals();
+      const { breakdown, groundingCalls: gc, knownModelCost, unpricedModelCalls, totalCost } = this.getTotals();
 
       console.log(`\n[Cost] ═══ ${pipelineLabel} ═══`);
       for (const b of breakdown) {
         // Print the real model, minus provider prefixes — the old 'Flash'/'Pro'
         // nicknames were Gemini-era labels on non-Gemini calls (Aug 24 2026).
         const shortModel = b.model.replace(/^(anthropic-|codex-)/, '');
-        console.log(`[Cost]   ${shortModel}: ${b.calls} calls, ${(b.inputTokens / 1000).toFixed(1)}K in ($${b.inputCost.toFixed(2)}), ${(b.outputTokens / 1000).toFixed(1)}K out ($${b.outputCost.toFixed(2)}) = $${b.modelCost.toFixed(2)}`);
+        const cost = b.modelCost == null ? 'unpriced' : `$${b.modelCost.toFixed(2)} model estimate`;
+        console.log(`[Cost]   ${shortModel}: ${b.calls} calls, ${(b.inputTokens / 1000).toFixed(1)}K in (${(b.cachedInputTokens / 1000).toFixed(1)}K cached, ${(b.uncachedInputTokens / 1000).toFixed(1)}K uncached), ${(b.outputTokens / 1000).toFixed(1)}K out = ${cost}`);
       }
       if (gc > 0) {
-        console.log(`[Cost]   Grounding: ${gc} searches ($${groundingCost.toFixed(2)})`);
+        console.log(`[Cost]   Grounding: ${gc} logical queries; provider costs not recorded here`);
       }
-      console.log(`[Cost]   TOTAL: $${totalCost.toFixed(2)} (${elapsed}s)`);
+      console.log(`[Cost]   TRACKED MODEL ESTIMATE: $${knownModelCost.toFixed(2)} (${elapsed}s)${totalCost == null ? `; total unavailable (${unpricedModelCalls} unpriced model calls, ${gc} grounding queries)` : ''}`);
       console.log(`[Cost] ═══════════════════════════\n`);
 
       return totalCost;

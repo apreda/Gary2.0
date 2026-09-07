@@ -1,0 +1,26 @@
+{
+  "checkedDate": "2026-09-07",
+  "scope": "pick_desks created from 2026-09-05 with decision_evidence",
+  "comparison": "desk to decision_evidence.deskText; research_briefing to decision_evidence.researchBriefing; both case fields exceed 200 characters",
+  "results": [
+    {
+      "league": "MLB",
+      "decisions": 37,
+      "exactDesk": 37,
+      "exactResearch": 37,
+      "bothCases": 37,
+      "minDeskChars": 100495,
+      "maxDeskChars": 118000
+    },
+    {
+      "league": "NCAAF",
+      "decisions": 32,
+      "exactDesk": 32,
+      "exactResearch": 32,
+      "bothCases": 32,
+      "minDeskChars": 35709,
+      "maxDeskChars": 58167
+    }
+  ],
+  "limits": "Saved-envelope identity verifies retained evidence, not hidden provider context compaction. Latest NFL publication is preseason week starting 2026-08-25 (16 picks), before these envelopes were introduced; NFL evidence preservation was checked with integration fixtures and provider reads."
+}

@@ -1114,7 +1114,7 @@ export async function buildRecentTeamMetrics(mlbTeams, etDateStr) {
     for (const g of games.filter((x) => x.playedDay >= start14Day)) neededIds.add(g.id);
   }
 
-  // Keep each query comfortably below getMlbGameStats' 1,000-row safety cap.
+  // Keep individual paginated collections small to bound retries and latency.
   // Three batches at a time is fast without bursting the upstream API.
   const ids = [...neededIds];
   const batches = [];

@@ -1,0 +1,5 @@
+[Ball Don't Lie] Fetching fresh data for ncaaf_player_game_stats_v2_3226739-3227852-3227854__2025
+NCAAF_GAP_CHECK {"season":2025,"players":[{"id":3226739,"rows":0},{"id":3227852,"rows":0},{"id":3227854,"rows":0}],"totalRows":0}
+[Ball Don't Lie] Fetching fresh data for ncaaf_player_game_stats_v2_3226739-3227852-3227854__2026
+[Ball Don't Lie] Shared rate gate: ncaaf_player_game_stats_v2_3226739-3227852-3227854__2026 waits 0.3s
+NCAAF_GAP_CHECK {"season":2026,"players":[{"id":3226739,"rows":0},{"id":3227852,"rows":0},{"id":3227854,"rows":0}],"totalRows":0}

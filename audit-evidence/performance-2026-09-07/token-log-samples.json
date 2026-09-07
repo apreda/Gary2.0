@@ -1,0 +1,68 @@
+{
+  "note": "Per-file totals include every logged Codex call, including retries. Total tokens include output; cached percentage is not billed-input percentage. NFL samples predate the September evidence cutover.",
+  "samples": [
+    {
+      "file": "2026-09-07---mlb---game-id-5059929.log",
+      "codexCalls": 19,
+      "reportedTotalTokens": 1482109,
+      "cachedInputTokens": 429056,
+      "cachedPercentOfTotal": 28.9
+    },
+    {
+      "file": "2026-09-07---mlb---game-id-5059932.log",
+      "codexCalls": 19,
+      "reportedTotalTokens": 1428912,
+      "cachedInputTokens": 495360,
+      "cachedPercentOfTotal": 34.7
+    },
+    {
+      "file": "2026-09-07---mlb---game-id-5059930.log",
+      "codexCalls": 21,
+      "reportedTotalTokens": 1535316,
+      "cachedInputTokens": 451072,
+      "cachedPercentOfTotal": 29.4
+    },
+    {
+      "file": "2026-08-29---nfl---game-id-1393595.log",
+      "codexCalls": 2,
+      "reportedTotalTokens": 101681,
+      "cachedInputTokens": 48384,
+      "cachedPercentOfTotal": 47.6
+    },
+    {
+      "file": "2026-08-29---nfl---game-id-1393594.log",
+      "codexCalls": 2,
+      "reportedTotalTokens": 100006,
+      "cachedInputTokens": 33024,
+      "cachedPercentOfTotal": 33.0
+    },
+    {
+      "file": "2026-08-28---nfl---game-id-1393593.log",
+      "codexCalls": 2,
+      "reportedTotalTokens": 83697,
+      "cachedInputTokens": 33024,
+      "cachedPercentOfTotal": 39.5
+    },
+    {
+      "file": "2026-09-06---ncaaf---game-id-457599---date-2026-09-06.log",
+      "codexCalls": 5,
+      "reportedTotalTokens": 207031,
+      "cachedInputTokens": 115200,
+      "cachedPercentOfTotal": 55.6
+    },
+    {
+      "file": "2026-09-06---ncaaf---game-id-457171---date-2026-09-06.log",
+      "codexCalls": 4,
+      "reportedTotalTokens": 185604,
+      "cachedInputTokens": 80640,
+      "cachedPercentOfTotal": 43.4
+    },
+    {
+      "file": "2026-09-06---ncaaf---game-id-457629---date-2026-09-06.log",
+      "codexCalls": 5,
+      "reportedTotalTokens": 196656,
+      "cachedInputTokens": 91776,
+      "cachedPercentOfTotal": 46.7
+    }
+  ]
+}

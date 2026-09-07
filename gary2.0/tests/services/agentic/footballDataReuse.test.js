@@ -392,7 +392,7 @@ describe('football BDL request reuse', () => {
     });
   });
 
-  it('batches all NFL prop-player game logs into one BDL request and caches each summary', async () => {
+  it('batches all NFL prop-player game logs into one BDL request and caches each full season', async () => {
     axiosGet.mockResolvedValue({
       data: {
         data: [
@@ -405,7 +405,7 @@ describe('football BDL request reuse', () => {
       }
     });
 
-    const first = await ballDontLieService.getNflPlayerGameLogsBatch([1, 2], 2026, 5);
+    const first = await ballDontLieService.getNflPlayerGameLogsBatch([1, 2], 2026, 5, 15, { asOf: new Date("2026-09-30") });
 
     expect(axiosGet).toHaveBeenCalledTimes(1);
     const requestUrl = axiosGet.mock.calls[0][0];
@@ -415,7 +415,7 @@ describe('football BDL request reuse', () => {
     expect(first[1].games.map(game => game.pass_yds)).toEqual([250, 100]);
     expect(first[2].games.map(game => game.rec_yds)).toEqual([40, 80]);
 
-    const second = await ballDontLieService.getNflPlayerGameLogsBatch([2, 1], 2026, 5);
+    const second = await ballDontLieService.getNflPlayerGameLogsBatch([2, 1], 2026, 5, 15, { asOf: new Date("2026-09-30") });
     expect(axiosGet).toHaveBeenCalledTimes(1);
     expect(second).toEqual(first);
   });
@@ -457,7 +457,7 @@ describe('football BDL request reuse', () => {
       };
     });
 
-    const result = await ballDontLieService.getNflPlayerGameLogsBatch([1, 2], 2026, 5);
+    const result = await ballDontLieService.getNflPlayerGameLogsBatch([1, 2], 2026, 5, 15, { asOf: new Date("2026-09-30") });
 
     expect(axiosGet).toHaveBeenCalledTimes(3);
     expect(result[1].averages.rush_yds).toBe('10.0');
@@ -479,7 +479,7 @@ describe('football BDL request reuse', () => {
         }
       });
 
-    const result = await ballDontLieService.getNflPlayerGameLogsBatch([1], 2026, 5);
+    const result = await ballDontLieService.getNflPlayerGameLogsBatch([1], 2026, 5, 15, { asOf: new Date("2026-09-30") });
 
     expect(axiosGet).toHaveBeenCalledTimes(2);
     expect(axiosGet.mock.calls[1][0]).toContain('cursor=123');
@@ -652,7 +652,7 @@ describe('football BDL request reuse', () => {
     const summary = summarizeNflPlayerGameLogs([
       logRow(1, '2026-09-01', { rushing_attempts: 5, rushing_yards: 20, receiving_targets: 2, receptions: 1 }),
       logRow(1, '2026-09-15', { rushing_attempts: 15, rushing_yards: 80, receiving_targets: 8, receptions: 6 })
-    ], 5);
+    ], 5, { asOf: new Date("2026-09-30") });
 
     expect(summary.games[0].rush_yds).toBe(80);
     expect(summary.averages.rush_yds).toBe('50.0');

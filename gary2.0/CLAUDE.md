@@ -1,5 +1,9 @@
 # CLAUDE.md
 
+Latest app/stats audit: read `../HANDOFF_2026-09-07_PERFORMANCE_AUDIT.md` for
+player-log, pagination, token-accounting and native MLB prop fixes, live provider
+checks, the repaired bullpen table and uploaded build 903.
+
 Latest Mac follow-up: read `../HANDOFF_2026-09-07_MAC_SECOND_PASS.md` for the
 deployed watchdog recovery guards and second cleanup/verification pass.
 

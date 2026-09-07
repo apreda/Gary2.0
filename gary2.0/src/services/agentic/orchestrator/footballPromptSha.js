@@ -14,6 +14,8 @@ const SHARED_SURFACE = [
   '../tools/playerGameLogTool.js',
   '../../playerGameLogFacts.js',
   '../../ballDontLieService.js',
+  '../../bdlPagination.js',
+  '../../nflPlayerLogFacts.js',
   // The system prompt file (extracted from orchestratorMain Sep 1 2026 —
   // without this line the extraction would have dropped the identity +
   // FACT-CHECKING + BASE_RULES surface out of the football era).

@@ -1,0 +1,187 @@
+{
+  "elapsedMs": 11151,
+  "slateTeams": 22,
+  "queries": [
+    {
+      "gameIds": [
+        "5059921",
+        "5059899",
+        "5059883",
+        "5059915",
+        "5059897",
+        "5059886",
+        "5059917",
+        "5059898",
+        "5059888",
+        "5059914",
+        "5059905",
+        "5059885",
+        "5059913",
+        "5059900",
+        "5059882",
+        "5059916",
+        "5059906",
+        "5059887",
+        "5059925",
+        "5059904"
+      ]
+    },
+    {
+      "gameIds": [
+        "5059892",
+        "5059918",
+        "5059907",
+        "5059891",
+        "5059912",
+        "5059901",
+        "5059884",
+        "5059919",
+        "5059903",
+        "5059889",
+        "5059924",
+        "5059909",
+        "5059894",
+        "5059926",
+        "5059910",
+        "5059896",
+        "5059922",
+        "5059908",
+        "5059893",
+        "5059923"
+      ]
+    },
+    {
+      "gameIds": [
+        "5059911",
+        "5059895"
+      ]
+    }
+  ],
+  "returnedRows": 1285,
+  "pack": {
+    "date": "2026-09-07",
+    "league": "MLB",
+    "tab": "bullpen",
+    "title": "Bullpen Watch",
+    "columns": [
+      {
+        "key": "team",
+        "label": "TEAM",
+        "align": "leading",
+        "emphasis": "primary"
+      },
+      {
+        "key": "ip3d",
+        "label": "RELIEF IP",
+        "align": "trailing",
+        "emphasis": "stat"
+      },
+      {
+        "key": "flag",
+        "label": "",
+        "align": "trailing",
+        "emphasis": "muted"
+      },
+      {
+        "key": "gms",
+        "label": "GP",
+        "align": "trailing",
+        "emphasis": "muted"
+      }
+    ],
+    "rows": [
+      {
+        "team": "SD",
+        "ip3d": "14.2",
+        "flag": "heavy",
+        "gms": "3"
+      },
+      {
+        "team": "STL",
+        "ip3d": "14.0",
+        "flag": "heavy",
+        "gms": "3"
+      },
+      {
+        "team": "CIN",
+        "ip3d": "14.0",
+        "flag": "heavy",
+        "gms": "3"
+      },
+      {
+        "team": "MIL",
+        "ip3d": "13.2",
+        "flag": "heavy",
+        "gms": "3"
+      },
+      {
+        "team": "TOR",
+        "ip3d": "13.2",
+        "flag": "heavy",
+        "gms": "3"
+      },
+      {
+        "team": "MIA",
+        "ip3d": "12.1",
+        "flag": "heavy",
+        "gms": "3"
+      },
+      {
+        "team": "OAK",
+        "ip3d": "12.1",
+        "flag": "heavy",
+        "gms": "3"
+      },
+      {
+        "team": "LAD",
+        "ip3d": "12.0",
+        "flag": "heavy",
+        "gms": "3"
+      },
+      {
+        "team": "NYM",
+        "ip3d": "11.1",
+        "flag": "heavy",
+        "gms": "3"
+      },
+      {
+        "team": "BAL",
+        "ip3d": "11.0",
+        "flag": "heavy",
+        "gms": "3"
+      },
+      {
+        "team": "CLE",
+        "ip3d": "11.0",
+        "flag": "heavy",
+        "gms": "3"
+      },
+      {
+        "team": "KC",
+        "ip3d": "11.0",
+        "flag": "heavy",
+        "gms": "3"
+      },
+      {
+        "team": "CHC",
+        "ip3d": "11.0",
+        "flag": "heavy",
+        "gms": "3"
+      },
+      {
+        "team": "SF",
+        "ip3d": "11.0",
+        "flag": "heavy",
+        "gms": "3"
+      },
+      {
+        "team": "MIN",
+        "ip3d": "10.2",
+        "flag": "",
+        "gms": "3"
+      }
+    ],
+    "subtitle": "Relief innings, last 3 games",
+    "sort_note": "Sorted by relief IP, high→low"
+  }
+}

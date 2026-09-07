@@ -67,7 +67,7 @@ const fmtOdds = (v) => (v == null ? null : (v > 0 ? `+${v}` : `${v}`));
 // when the desk surface the props brain reads moves: the board and the prop
 // sheets are what Gary prices from, so an edit there is a new era.
 const here = path.dirname(fileURLToPath(import.meta.url));
-const propsSurface = () => ['propSheets.js', 'propModel.js'].map((f) => {
+const propsSurface = () => ['propSheets.js', 'propModel.js', '../ballDontLieService.js', '../bdlPagination.js'].map((f) => {
   try { return readFileSync(path.join(here, f), 'utf8'); }
   catch { return `missing:${f}`; }
 }).join('\n⸻\n');

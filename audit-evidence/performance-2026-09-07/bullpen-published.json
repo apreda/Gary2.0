@@ -1,0 +1,98 @@
+{
+  "verifiedAt": "2026-09-07T16:44:15.573Z",
+  "date": "2026-09-07",
+  "league": "MLB",
+  "tab": "bullpen",
+  "rows": [
+    {
+      "gms": "3",
+      "flag": "heavy",
+      "ip3d": "14.2",
+      "team": "SD"
+    },
+    {
+      "gms": "3",
+      "flag": "heavy",
+      "ip3d": "14.0",
+      "team": "STL"
+    },
+    {
+      "gms": "3",
+      "flag": "heavy",
+      "ip3d": "14.0",
+      "team": "CIN"
+    },
+    {
+      "gms": "3",
+      "flag": "heavy",
+      "ip3d": "13.2",
+      "team": "MIL"
+    },
+    {
+      "gms": "3",
+      "flag": "heavy",
+      "ip3d": "13.2",
+      "team": "TOR"
+    },
+    {
+      "gms": "3",
+      "flag": "heavy",
+      "ip3d": "12.1",
+      "team": "MIA"
+    },
+    {
+      "gms": "3",
+      "flag": "heavy",
+      "ip3d": "12.1",
+      "team": "OAK"
+    },
+    {
+      "gms": "3",
+      "flag": "heavy",
+      "ip3d": "12.0",
+      "team": "LAD"
+    },
+    {
+      "gms": "3",
+      "flag": "heavy",
+      "ip3d": "11.1",
+      "team": "NYM"
+    },
+    {
+      "gms": "3",
+      "flag": "heavy",
+      "ip3d": "11.0",
+      "team": "BAL"
+    },
+    {
+      "gms": "3",
+      "flag": "heavy",
+      "ip3d": "11.0",
+      "team": "CLE"
+    },
+    {
+      "gms": "3",
+      "flag": "heavy",
+      "ip3d": "11.0",
+      "team": "KC"
+    },
+    {
+      "gms": "3",
+      "flag": "heavy",
+      "ip3d": "11.0",
+      "team": "CHC"
+    },
+    {
+      "gms": "3",
+      "flag": "heavy",
+      "ip3d": "11.0",
+      "team": "SF"
+    },
+    {
+      "gms": "3",
+      "flag": "",
+      "ip3d": "10.2",
+      "team": "MIN"
+    }
+  ]
+}

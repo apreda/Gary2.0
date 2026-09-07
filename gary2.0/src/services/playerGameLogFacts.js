@@ -6,7 +6,7 @@ export function numericStat(value) {
 }
 
 export function completedGameStatus(value) {
-  const status = String(value ?? '').trim().toLowerCase();
+  const status = String(value ?? '').trim().toLowerCase().replace(/^status_/, '');
   return !status || /^final(?:\b|\/)/.test(status) || ['post', 'complete', 'completed'].includes(status);
 }
 

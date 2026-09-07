@@ -23,8 +23,9 @@ describe('shared league-bound player game logs', () => {
       collegeRow(5, '2026-09-05T12:00:00Z', { game: { id: 5, date: '2026-09-05T12:00:00Z', season: 2026, status: 'in progress' } }),
     ]) });
     const result = await fetchPlayerGameLogEvidence({ ...args, service });
-    expect(service.getPlayersGeneric).toHaveBeenCalledWith('americanfootball_ncaaf', expect.any(Object));
-    expect(service.getNcaafPlayerGameStats).toHaveBeenCalledWith({ playerId: 7, season: 2026 });
+    expect(service.getPlayersGeneric).toHaveBeenCalledWith('americanfootball_ncaaf',
+      { first_name: 'Arch', last_name: 'manning', per_page: 100 }, 10, { complete: true, throwOnError: true });
+    expect(service.getNcaafPlayerGameStats).toHaveBeenCalledWith({ playerId: 7, season: 2026, throwOnError: true });
     expect(service.getNflPlayerGameLogsBatch).not.toHaveBeenCalled();
     expect(result).toMatchObject({ sport: 'NCAAF', quality: 'available', games_used: 1, games: [valid] });
     expect(JSON.parse(result.content).games[0].passing_touchdowns).toBe(0);
@@ -33,7 +34,7 @@ describe('shared league-bound player game logs', () => {
   it('keeps NFL football fields and the requested baseline season without inventing basketball averages', async () => {
     const service = setup({ getNflPlayerGameLogsBatch: vi.fn().mockResolvedValue({ 7: { games: [{ gameId: 1, date: '2025-12-01', pass_yds: 301, rush_yds: 0 }] } }) });
     const result = await fetchPlayerGameLogEvidence({ ...args, service, sport: 'NFL', season: 2025, dataWindow: '2025 completed regular season', numGames: 99 });
-    expect(service.getNflPlayerGameLogsBatch).toHaveBeenCalledWith([7], 2025, 15);
+    expect(service.getNflPlayerGameLogsBatch).toHaveBeenCalledWith([7], 2025, 15, 15, { asOf: args.asOf, throwOnError: true });
     expect(result).toMatchObject({ games_requested: 15, games_used: 1, data_window: '2025 completed regular season' });
     expect(result.content).toContain('"pass_yds":301');
     expect(result.content).not.toContain('PTS');
@@ -44,6 +45,26 @@ describe('shared league-bound player game logs', () => {
     const result = await fetchPlayerGameLogEvidence({ ...args, service });
     expect(result).toMatchObject({ quality: 'unavailable', games_used: 0 });
     expect(service.getNcaafPlayerGameStats).not.toHaveBeenCalled();
+  });
+
+  it('resolves compound surnames across hyphen and space spellings', async () => {
+    const service = setup({ getPlayersGeneric: vi.fn().mockResolvedValue([
+      { ...player, first_name: 'Carlos', last_name: 'Del Rio Wilson' },
+    ]) });
+    const result = await fetchPlayerGameLogEvidence({ ...args, player: 'Carlos Del Rio-Wilson', service });
+    expect(service.getPlayersGeneric).toHaveBeenCalledWith('americanfootball_ncaaf',
+      { first_name: 'Carlos', last_name: 'wilson', per_page: 100 }, 10, { complete: true, throwOnError: true });
+    expect(result.player.id).toBe(7);
+  });
+
+  it('uses accent/apostrophe-tolerant search fragments but still verifies the full name', async () => {
+    const service = setup({ getPlayersGeneric: vi.fn().mockResolvedValue([
+      { ...player, first_name: 'Jose', last_name: "O'Neill" },
+    ]) });
+    const result = await fetchPlayerGameLogEvidence({ ...args, player: "José O'Neill Jr.", service });
+    expect(service.getPlayersGeneric).toHaveBeenCalledWith('americanfootball_ncaaf',
+      { first_name: 'Jose', last_name: 'neill', per_page: 100 }, 10, { complete: true, throwOnError: true });
+    expect(result.player.id).toBe(7);
   });
 
   it('does not resolve duplicate names using shared city prefixes', async () => {
@@ -68,6 +89,19 @@ describe('shared league-bound player game logs', () => {
     expect(result.games.map(row => row._game.id)).toEqual([3, 3, 2]);
     expect(result.games[2].er).toBeNull();
     expect(result.content).not.toContain('No 2026 starts');
+  });
+
+  it('accepts BDL MLB STATUS_FINAL while rejecting scheduled and postponed rows', async () => {
+    const service = setup({ getMlbPlayerGameRowsChrono: vi.fn().mockResolvedValue([
+      { game_id: 1, _game: { date: '2026-09-01', status: 'STATUS_FINAL' }, hits: 2 },
+      { game_id: 2, _game: { date: '2026-09-02', status: 'STATUS_SCHEDULED' }, hits: 0 },
+      { game_id: 3, _game: { date: '2026-09-03', status: 'STATUS_POSTPONED' }, hits: 0 },
+    ]) });
+    const result = await fetchPlayerGameLogEvidence({ ...args, sport: 'MLB', service });
+    expect(result).toMatchObject({ quality: 'available', games_used: 1 });
+    expect(result).toMatchObject({ latest_game_at: '2026-09-01', days_since_latest_game: 4,
+      as_of: '2026-09-05T13:30:00.000Z' });
+    expect(result.games.map(row => row.game_id)).toEqual([1]);
   });
 
   it('retains NBA dates and zero values and marks empty evidence unavailable', async () => {
@@ -95,5 +129,11 @@ describe('shared league-bound player game logs', () => {
     expect(request).toHaveBeenCalledTimes(2);
     const cancelled = vi.fn().mockRejectedValue(new Error('Research budget expired'));
     await expect(fetchPlayerGameLogEvidence({ ...args, service, request: cancelled })).rejects.toThrow('Research budget expired');
+  });
+
+  it('rejects an invalid historical cutoff before spending a provider call', async () => {
+    const service = setup();
+    expect(await fetchPlayerGameLogEvidence({ ...args, service, asOf: 'invalid' })).toMatchObject({ quality: 'unavailable', games_used: 0 });
+    expect(service.getPlayersGeneric).not.toHaveBeenCalled();
   });
 });

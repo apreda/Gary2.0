@@ -1,0 +1,5 @@
+Simulator build: /tmp/gary-performance-ios-build.log — BUILD SUCCEEDED
+Release archive: /Volumes/KINGSTON/Gary-2.25-903-Performance.xcarchive
+Archive log: /tmp/gary-performance903-archive.log — ARCHIVE SUCCEEDED
+Upload log: /tmp/gary-performance903-upload.log — Upload succeeded; EXPORT SUCCEEDED at 2026-09-07 12:37:51 ET
+Apple accepted version 2.25 build 903 for processing. Processing/review completion has not been verified.
