@@ -255,7 +255,7 @@ const computeWindow = (sport) => {
  *   3. DEDUPE: same feed id, or same matchup at the same start time, prints
  *      once. Real doubleheaders differ by start time and both survive.
  */
-export function filterSlateGames(games, dates, now = Date.now(), sport = null) {
+export function filterSlateGames(games, dates, now = Date.now(), sport = null, fullDaySnapshot = false) {
   const seenIds = new Set();
   const seenSlots = new Set();
   const out = [];
@@ -282,7 +282,10 @@ export function filterSlateGames(games, dates, now = Date.now(), sport = null) {
     }
     etDate ??= scheduledDate;
     if (etDate && Array.isArray(dates) && dates.length && !dates.includes(etDate)) continue;
-    if (startMs != null && now - startMs > 6 * 60 * 60 * 1000) continue;
+    // A durable day's schedule must retain completed games. The upcoming-pick
+    // guard still drops old rows; only an exact requested day opts out.
+    const keepRequestedDay = fullDaySnapshot && etDate && Array.isArray(dates) && dates.includes(etDate);
+    if (!keepRequestedDay && startMs != null && now - startMs > 6 * 60 * 60 * 1000) continue;
     const slot = `${String(g.away_team || '').toLowerCase()}@${String(g.home_team || '').toLowerCase()}|${raw || scheduledDate || g.id}`;
     if (seenSlots.has(slot)) continue;
     seenSlots.add(slot);
@@ -396,7 +399,7 @@ export const oddsService = {
       // Aug 10 — the frozen -10000 Astros@Padres corpse and duplicate
       // matchup rows survived to the raw list; downstream nets caught them,
       // but the ET-date law belongs here).
-      const unique = filterSlateGames(combined, dates, Date.now(), sport);
+      const unique = filterSlateGames(combined, dates, Date.now(), sport, options.fullDaySnapshot === true);
 
       console.log(`[Odds Service] ${sport}: Found ${unique.length} games for today`)
 

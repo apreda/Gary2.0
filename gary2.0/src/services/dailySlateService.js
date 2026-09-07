@@ -252,6 +252,7 @@ export async function buildLeagueRows(sport, etDateStr) {
   const games = await oddsService.getUpcomingGames(sport.key, {
     nocache: true,
     targetDate: etDateStr,
+    fullDaySnapshot: true,
   });
   if (!Array.isArray(games)) {
     throw new Error(`${sport.league} source returned a non-array slate`);

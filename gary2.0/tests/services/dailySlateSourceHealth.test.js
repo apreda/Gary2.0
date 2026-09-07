@@ -26,6 +26,13 @@ beforeEach(() => {
 });
 
 describe('daily slate source health', () => {
+  it('requests a complete day so later reconciliation cannot age completed games out', async () => {
+    mocks.getUpcomingGames.mockResolvedValue([]);
+    await writeDailySlate('2099-10-03');
+    expect(mocks.getUpcomingGames).toHaveBeenCalledWith('baseball_mlb', {
+      nocache: true, targetDate: '2099-10-03', fullDaySnapshot: true,
+    });
+  });
   it('patches one exact MLB provider row for an official status transition', async () => {
     mocks.axios.mockResolvedValue({
       data: [{

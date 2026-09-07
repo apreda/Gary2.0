@@ -12,6 +12,15 @@ const D = ['2026-08-10'];
 const g = (id, away, home, ct) => ({ id, away_team: away, home_team: home, commence_time: ct });
 
 describe('filterSlateGames', () => {
+  it('full-day snapshots retain finished games on that exact date while upcoming selection stays guarded', () => {
+    const rows = [g(5059912, 'Brewers', 'Reds', '2026-09-06T16:10:00Z'),
+      g(5059921, 'Braves', 'Phillies', '2026-09-06T17:10:00Z'),
+      g(90, 'Cubs', 'Mets', '2026-09-05T17:10:00Z')];
+    const nextMorning = Date.parse('2026-09-07T10:00:00Z');
+    expect(filterSlateGames(rows, ['2026-09-06'], nextMorning, 'baseball_mlb', true).map(g=>g.id)).toEqual([5059912,5059921]);
+    expect(filterSlateGames(rows, ['2026-09-06'], nextMorning, 'baseball_mlb')).toEqual([]);
+    expect(filterSlateGames(rows, [], nextMorning, 'baseball_mlb', true)).toEqual([]);
+  });
   it('drops the frozen corpse from yesterday and keeps tonight, including the West-Coast late game', () => {
     const rows = [
       g(1, 'Astros', 'Padres', '2026-08-09T23:15:00Z'),   // yesterday's game — ET Aug 9 AND 22h stale
