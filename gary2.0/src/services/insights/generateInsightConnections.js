@@ -137,8 +137,8 @@ const FOOTBALL_COMPUTERS = [
 const NFL_COMPUTERS = [
   ...FOOTBALL_COMPUTERS,
   // Fantasy roster/lineup calls use the independent, dated briefing writer.
-  // The league's official injury report — the Wed/Thu/Fri practice grid on
-  // the game page (founder, Sep 3 2026). NFL-only: no college league ledger.
+  // BDL's dated practice report — the Wed/Thu/Fri grid on the game page.
+  // NFL-only: the provider's designation endpoint is league-specific.
   computeFootballPracticeReport,
   // Form and record lanes off the NFL standings row. NFL-only: the college
   // standings route answers one conference at a time, so a Saturday slate has

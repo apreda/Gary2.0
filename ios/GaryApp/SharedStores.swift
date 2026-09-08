@@ -30,8 +30,8 @@ func gradedMatchupKey(_ matchup: String?) -> String? {
 
 /// Live batting lines for prop players — the prop card's analog of the game
 /// card's live self-grading (founder, Jul 23 2026: props must live-grade the
-/// same way game picks do). Tracks today's prop players, polls the public MLB
-/// Stats API box score for their games while LIVE (a handful of games, 60s
+/// same way game picks do). Tracks today's prop players, reads Gary's licensed
+/// BDL batting cache for their exact games while LIVE (a handful of games, 60s
 /// cadence, hard back-off when idle), and publishes each player's running
 /// line. The card self-grades after a confirmed final box score is fetched;
 /// the cron-written prop_results row stays the authoritative
@@ -63,7 +63,7 @@ final class LivePropStatsCache: ObservableObject {
             }
         }
     }
-    struct Observation { let line: BattingLine; let isFinal: Bool }
+    struct Observation { let line: BattingLine; let isFinal: Bool; let fetchedAt: Date }
     /// Slate date + exact provider game ID + player; never a name-only total.
     @Published private(set) var lines: [String: Observation] = [:]
     private struct Tracked {
@@ -72,27 +72,31 @@ final class LivePropStatsCache: ObservableObject {
         var gameKey: String { "\(day)|\(gameId)" }
         var playerKey: String { "\(gameKey)|\(LivePropStatsCache.nameKey(player))" }
     }
-    private struct ScheduleGame {
-        let gamePk: Int, away: String, home: String
-        let start: Date?
-        let isFinal: Bool
+    private struct Snapshot: Decodable {
+        let date: String, game_id: String, source: String, fetched_at: String
+        let is_final: Bool
+        let lines: [ProviderLine]
+    }
+    private struct ProviderLine: Decodable {
+        let player_id: Int, name: String
+        let hits: Int?, runs: Int?, rbi: Int?, walks: Int?, home_runs: Int?, total_bases: Int?
     }
     private var tracked: [String: Tracked] = [:]
-    private var schedule: [ScheduleGame] = []
-    private var scheduleCheckedAt: Date?
     private var finalRead: Set<String> = []
     private var activeDay = ""
     private var started = false
     private let session: URLSession
     private let slateDay: () -> String
     private let automaticallyPoll: Bool
+    private let now: () -> Date
     private static let dayFormatter: DateFormatter = {
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = TimeZone(identifier: "America/New_York"); f.dateFormat = "yyyy-MM-dd"
         return f
     }()
-    init(session: URLSession = .shared, slateDay: @escaping () -> String = { SupabaseAPI.todayEST() }, automaticallyPoll: Bool = true) {
-        self.session = session; self.slateDay = slateDay; self.automaticallyPoll = automaticallyPoll
+    init(session: URLSession = .shared, slateDay: @escaping () -> String = { SupabaseAPI.todayEST() }, automaticallyPoll: Bool = true,
+         now: @escaping () -> Date = { Date() }) {
+        self.session = session; self.slateDay = slateDay; self.automaticallyPoll = automaticallyPoll; self.now = now
     }
     nonisolated static func nameKey(_ raw: String?) -> String {
         (raw ?? "").folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "en_US_POSIX"))
@@ -108,12 +112,19 @@ final class LivePropStatsCache: ObservableObject {
     }
     func observation(for prop: PropPick) -> Observation? {
         guard let identity = Self.identity(prop), identity.day == slateDay() else { return nil }
-        return lines[identity.playerKey]
+        guard let observation = lines[identity.playerKey],
+              observation.isFinal || now().timeIntervalSince(observation.fetchedAt) <= 180 else { return nil }
+        return observation
     }
     private func resetIfDayRolled() {
         let day = slateDay()
         guard activeDay != day else { return }
-        activeDay = day; tracked = [:]; lines = [:]; schedule = []; scheduleCheckedAt = nil; finalRead = []
+        activeDay = day; tracked = [:]; lines = [:]; finalRead = []
+    }
+    private func pruneExpiredLines() {
+        let current = now()
+        let fresh = lines.filter { $0.value.isFinal || current.timeIntervalSince($0.value.fetchedAt) <= 180 }
+        if fresh.count != lines.count { lines = fresh }
     }
     func track(_ prop: PropPick) {
         resetIfDayRolled()
@@ -133,107 +144,66 @@ final class LivePropStatsCache: ObservableObject {
             }
         }
     }
-    /// Exact BDL identity establishes status. MLB's separate gamePk is joined
-    /// by day/teams and, for doubleheaders, the unique original start instant.
+    /// The scoreboard starts polling; the exact licensed batting snapshot
+    /// establishes its own final state. No schedule/name join is needed.
     @discardableResult
     func pollOnce() async -> Bool {
         resetIfDayRolled()
+        pruneExpiredLines()
+        defer { pruneExpiredLines() }
         let day = activeDay
         let live = LiveScoreCache.shared
         var anyLive = false
         var wanted: [String: Tracked] = [:]
-        var needsFinalSchedule = false
         for t in tracked.values {
             guard let status = live.status(forGameId: t.gameId, league: "MLB") else { continue }
             if status.isLive { anyLive = true }
             if (status.isLive || status.isFinal) && !finalRead.contains(t.gameKey) {
                 wanted[t.gameKey] = t
-                if status.isFinal, scheduleGame(for: t)?.isFinal != true { needsFinalSchedule = true }
             }
         }
         guard !wanted.isEmpty else { return anyLive }
-        await loadSchedule(day: day, force: needsFinalSchedule)
-        guard activeDay == day, slateDay() == day else { return anyLive }
         for t in wanted.values {
-            guard let game = scheduleGame(for: t),
-                  let parsed = await fetchBoxLines(gamePk: game.gamePk) else { continue }
+            guard let snapshot = await fetchBoxLines(gameID: t.gameId, day: day) else { continue }
             guard activeDay == day, slateDay() == day else { return anyLive }
             var allPlayersPresent = true
             for player in tracked.values where player.gameKey == t.gameKey {
-                if let line = parsed[Self.nameKey(player.player)] {
-                    lines[player.playerKey] = Observation(line: line, isFinal: game.isFinal)
+                if let line = snapshot.lines[Self.nameKey(player.player)] {
+                    lines[player.playerKey] = Observation(line: line, isFinal: snapshot.isFinal, fetchedAt: snapshot.fetchedAt)
                 } else { allPlayersPresent = false }
             }
             // A previously polled live line can never become a final grade
             // merely because the separate scoreboard advanced to FINAL.
-            if game.isFinal && allPlayersPresent { finalRead.insert(t.gameKey) }
+            if snapshot.isFinal && allPlayersPresent { finalRead.insert(t.gameKey) }
         }
         return anyLive
     }
-    private func loadSchedule(day: String, force: Bool) async {
-        if !force, let at = scheduleCheckedAt, Date().timeIntervalSince(at) < 300 { return }
-        guard let url = URL(string: "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=\(day)"),
-              let root = await json(at: url), let dates = root["dates"] as? [[String: Any]] else { return }
-        let games = dates.flatMap { $0["games"] as? [[String: Any]] ?? [] }
-        let parsed: [ScheduleGame] = games.compactMap { g in
-            guard let pk = g["gamePk"] as? Int, let teams = g["teams"] as? [String: Any],
-                  let away = ((teams["away"] as? [String: Any])?["team"] as? [String: Any])?["name"] as? String,
-                  let home = ((teams["home"] as? [String: Any])?["team"] as? [String: Any])?["name"] as? String else { return nil }
-            return ScheduleGame(gamePk: pk, away: away, home: home,
-                start: (g["gameDate"] as? String).flatMap(parseISO8601),
-                isFinal: (g["status"] as? [String: Any])?["abstractGameState"] as? String == "Final")
-        }
-        guard activeDay == day, slateDay() == day, parsed.count == games.count else { return }
-        schedule = parsed; scheduleCheckedAt = Date()
-    }
-    private func scheduleGame(for tracked: Tracked) -> ScheduleGame? {
-        let parts = tracked.matchup.components(separatedBy: " @ ")
-        guard parts.count == 2 else { return nil }
-        let away = teamAbbrevFromName(parts[0], league: "MLB"), home = teamAbbrevFromName(parts[1], league: "MLB")
-        let matches = schedule.filter {
-            teamAbbrevFromName($0.away, league: "MLB") == away && teamAbbrevFromName($0.home, league: "MLB") == home
-        }
-        if matches.count == 1 { return matches[0] }
-        let timed = matches.filter { game in
-            guard let start = game.start else { return false }
-            return abs(start.timeIntervalSince(tracked.start)) <= 60
-        }
-        return timed.count == 1 ? timed[0] : nil
-    }
-    private func json(at url: URL) async -> [String: Any]? {
-        var request = URLRequest(url: url); request.timeoutInterval = 12
-        request.cachePolicy = .reloadIgnoringLocalCacheData
-        guard let (data, response) = try? await session.data(for: request),
-              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return nil }
-        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-    }
-    private func fetchBoxLines(gamePk: Int) async -> [String: BattingLine]? {
-        guard let url = URL(string: "https://statsapi.mlb.com/api/v1/game/\(gamePk)/boxscore"),
-              let root = await json(at: url), let teams = root["teams"] as? [String: Any] else { return nil }
-        func count(_ value: Any?) -> Int? {
-            guard let n = value as? NSNumber, String(cString: n.objCType) != "c",
-                  n.doubleValue >= 0, n.doubleValue.rounded() == n.doubleValue else { return nil }
-            return n.intValue
-        }
+    private func fetchBoxLines(gameID: Int, day: String) async -> (lines: [String: BattingLine], isFinal: Bool, fetchedAt: Date)? {
+        guard let request = SupabaseAPI.mlbLiveBattingRequest(date: day, gameID: gameID),
+              let (data, response) = try? await session.data(for: request),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([Snapshot].self, from: data), rows.count == 1,
+              let snapshot = rows.first, snapshot.game_id == String(gameID), snapshot.date == day,
+              snapshot.source == "balldontlie", let fetchedAt = parseISO8601(snapshot.fetched_at),
+              fetchedAt.timeIntervalSince(now()) <= 60,
+              snapshot.is_final || now().timeIntervalSince(fetchedAt) <= 180 else { return nil }
+        func count(_ value: Int?) -> Int? { value.flatMap { $0 >= 0 ? $0 : nil } }
         var out: [String: BattingLine] = [:]
-        for side in ["away", "home"] {
-            guard let players = (teams[side] as? [String: Any])?["players"] as? [String: Any] else { return nil }
-            for raw in players.values {
-                guard let p = raw as? [String: Any], let person = p["person"] as? [String: Any],
-                      let name = person["fullName"] as? String,
-                      let b = (p["stats"] as? [String: Any])?["batting"] as? [String: Any] else { continue }
-                // A roster/DNP zero line is not an observed batting appearance.
-                let appearances = ["plateAppearances", "atBats", "baseOnBalls", "hitByPitch", "sacFlies", "sacBunts"]
-                guard appearances.contains(where: { (count(b[$0]) ?? 0) > 0 }) else { continue }
-                let hits = count(b["hits"]), doubles = count(b["doubles"]), triples = count(b["triples"]), hr = count(b["homeRuns"])
-                var bases: Int?
-                if let hits, let doubles, let triples, let hr { bases = hits + doubles + 2 * triples + 3 * hr }
-                out[Self.nameKey(name)] = BattingLine(hits: hits, runs: count(b["runs"]), rbi: count(b["rbi"]),
-                    walks: count(b["baseOnBalls"]), homeRuns: hr, totalBases: bases)
-            }
+        var identities: Set<Int> = [], names: Set<String> = [], ambiguous: Set<String> = []
+        for player in snapshot.lines {
+            guard player.player_id > 0, identities.insert(player.player_id).inserted else { return nil }
+            let key = Self.nameKey(player.name)
+            guard !key.isEmpty else { return nil }
+            // Legacy props carry a name rather than a player ID. If two exact
+            // provider players normalize to that name, leave it unavailable.
+            if !names.insert(key).inserted { ambiguous.insert(key); out.removeValue(forKey: key); continue }
+            guard !ambiguous.contains(key) else { continue }
+            out[key] = BattingLine(hits: count(player.hits), runs: count(player.runs), rbi: count(player.rbi),
+                walks: count(player.walks), homeRuns: count(player.home_runs), totalBases: count(player.total_bases))
         }
-        return out
+        return (out, snapshot.is_final, fetchedAt)
     }
+
 }
 
 final class LiveScoreCache: ObservableObject {

@@ -1608,6 +1608,21 @@ enum SupabaseAPI {
         }
     }
 
+    /// The service publishes observed BDL batting lines; the app only reads
+    /// its exact game/date cache and never receives a provider credential.
+    static func mlbLiveBattingRequest(date: String, gameID: Int) -> URLRequest? {
+        guard let identity = ExactGameIdentity(date: date, gameID: gameID) else { return nil }
+        let url = buildURL(table: "mlb_live_batting", query: [
+            URLQueryItem(name: "select", value: "date,game_id,source,is_final,fetched_at,lines"),
+            URLQueryItem(name: "date", value: "eq.\(identity.date)"),
+            URLQueryItem(name: "game_id", value: "eq.\(identity.gameID)"),
+            URLQueryItem(name: "limit", value: "2")
+        ])
+        var request = makeRequest(url: url)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        return request
+    }
+
     /// Read exactly one stored provider game/date. A missing or mismatched
     /// identity leaves the field empty instead of borrowing a sibling lineup.
     static func fetchMlbFieldLineup(date: String?, gameID: Int?) async -> MLBFieldLineupRow? {

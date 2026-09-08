@@ -29,7 +29,6 @@ import { footballSeasonForDate, loadFootballSlate } from '../src/services/insigh
 import { computeNflFantasyEdges } from '../src/services/insights/computers/nflFantasyEdges.js';
 import { computeFootballQbWatch } from '../src/services/insights/computers/footballQbWatch.js';
 import { computeFootballPracticeReport } from '../src/services/insights/computers/footballPracticeReport.js';
-import { fetchOfficialInjuryReport } from '../src/services/insights/nflOfficialInjuryReport.js';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
@@ -118,7 +117,7 @@ async function loadConnections() {
     // writers regenerate them below in the shapes the pages read. Team
     // passing rows (no named starter) stay.
     for (const r of data) {
-      if (String(r.category).startsWith('fantasy_')) continue;
+      if (String(r.category).startsWith('fantasy_') || r.category === 'practice_report') continue;
       if (r.category === 'quarterback' && /starts at quarterback/i.test(r.headline || '')) continue;
       rows.push(retime(r, g));
     }
@@ -134,40 +133,24 @@ async function loadConnections() {
   return rows.sort((a, b) => (b.relevance_score ?? 0) - (a.relevance_score ?? 0));
 }
 
-/**
- * THE PRACTICE REPORT for the mock day: the league page carries no Week 1
- * tables until Wed Sep 9, so the sim borrows three archived 2025 weeks as the
- * mock week's Wednesday, Thursday and Friday snapshots — run through the real
- * computer, day by day, with each day's rows fed back as the prior snapshots
- * the production run would read from insight_connections. Real players,
- * real statuses; the week is borrowed and the fixture says so here.
- */
+/** Dated BDL reports for each actual fixture game. No cross-season NFL HTML
+ * is borrowed or relabeled as the current week's practice participation.
+ * Unavailable historical coverage remains absent from this DEBUG fixture. */
 async function loadPracticeRows() {
   const out = [];
-  const days = [['wed', 16, '2026-09-02'], ['thu', 17, '2026-09-03'], ['fri', 18, '2026-09-04']];
   for (const date of [...new Set(GAMES.map((g) => g.date))]) {
     const games = await loadFootballSlate({ bdl: ballDontLieService, league: 'nfl', date });
     const wanted = games.filter((game) => gameById.has(String(game?.id)));
-    if (!wanted.length) continue;
-    let prior = [];
-    let latest = [];
-    for (const [, week, mockDate] of days) {
-      const snapshot = prior;
-      latest = await computeFootballPracticeReport({
-        date: mockDate, league: 'nfl', games: wanted, helpers: { gameLabel },
-        officialInjuryReport: () => fetchOfficialInjuryReport({ season: 2025, week }),
-        rest: { supabaseUrl: 'mock', key: 'mock', client: { get: async () => ({ data: snapshot }) } },
-      });
-      prior = latest.map((r) => ({ date: mockDate, game_id: String(r.game_id), headline: r.headline, meta: r.meta }));
-    }
-    const text = (v) => (v == null ? null : String(v));
-    for (const r of latest) {
-      const g = gameById.get(String(r.game_id));
-      if (!g) continue;
-      out.push(retime({ ...r, date, league: 'NFL', game_id: text(r.game_id), team_id: text(r.team_id), player_id: null, result: null, result_note: null }, g));
+    const reports = await computeFootballPracticeReport({ date, league: 'nfl', games: wanted, helpers: { gameLabel } });
+    for (const row of reports) {
+      const fixture = gameById.get(String(row.game_id));
+      if (!fixture) continue;
+      out.push(retime({ ...row, date, league: 'NFL', game_id: String(row.game_id),
+        team_id: row.team_id == null ? null : String(row.team_id), player_id: row.player_id == null ? null : String(row.player_id),
+        result: null, result_note: null }, fixture));
     }
   }
-  console.log(`  practice_report rows built from the archived 2025 weeks: ${out.length}`);
+  console.log(`  practice_report rows from exact historical BDL games: ${out.length}`);
   return out;
 }
 

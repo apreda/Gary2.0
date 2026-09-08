@@ -1,165 +1,122 @@
-// THE PRACTICE REPORT — the NFL's official injury report, per slate game
-// (founder, Sep 3 2026: the Wed/Thu/Fri participation grid every fan reads).
-//
-// Source: nfl.com/injuries, the league's own ledger. One row per listed
-// player on either side of a slate game: his injury, today's practice status,
-// the game status. The page is a daily snapshot, so the week's grid is built
-// here from this week's earlier `practice_report` rows (read back from
-// insight_connections) plus today's page — a day the report did not list is
-// null, never guessed. NFL-only: the college report has no league ledger.
-//
-// This lane never touches injury labeling (FRESH / PRICED IN …) — that is the
-// locked dossier path. It is the league's printed report, verbatim.
-
-import axios from 'axios';
+// Per-game practice reports from BDL's dated player designations. This lane
+// does not alter dossier injury duration or FRESH / PRICED IN labeling.
 import { makeRow, TONES } from '../shared.js';
-import { fetchOfficialInjuryReport } from '../nflOfficialInjuryReport.js';
+import { fetchNflPracticeDesignations, nflSeasonType } from '../nflPracticeProvider.js';
 
-const PRACTICE_DAYS = ['wed', 'thu', 'fri'];
+const CODES = Object.freeze({ did_not_participate: 'DNP', limited: 'LP', full: 'FP' });
+const LABELS = Object.freeze({ DNP: 'Did not practice', LP: 'Limited practice', FP: 'Full practice' });
+const STATUSES = Object.freeze({ out: 'Out', doubtful: 'Doubtful', questionable: 'Questionable' });
 const RELEVANCE = Object.freeze({ Out: 82, Doubtful: 80, Questionable: 76, DNP: 70, LP: 62, FP: 50 });
+const id = value => /^\d+$/.test(String(value)) && Number(value) > 0 ? String(value) : null;
+const dateOnly = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+  && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+const weekday = date => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'America/New_York' }).toLowerCase();
+const dayET = date => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(date));
 
-function mascot(team) {
-  const name = String(team?.name || team?.full_name || '').trim();
-  return name.split(' ').pop().toLowerCase();
+function scope(game) {
+  const season = Number(game?.season), week = Number(game?.week), seasonType = nflSeasonType(game?.season_type);
+  const away = game?.away_team ?? game?.visitor_team, home = game?.home_team;
+  if (!id(game?.id) || !id(away?.id) || !id(home?.id) || String(away.id) === String(home.id) ||
+      !Number.isInteger(season) || !Number.isInteger(week) || (game.season_type != null && !seasonType)) return null;
+  // BDL's actual single-game response can omit season_type. Request explicit
+  // types together and match the globally unique game ID; never guess regular
+  // season from postseason:false (which can also describe preseason).
+  const seasonTypes = seasonType ? [seasonType] : game.postseason === true ? [3] : [1, 2, 3];
+  return { season, week, seasonType, seasonTypes, away, home, key: `${season}|${week}|${seasonTypes.join(',')}` };
 }
 
-function weekdayET(dateStr) {
-  const [y, m, d] = String(dateStr).split('-').map(Number);
-  const noonUtc = new Date(Date.UTC(y, m - 1, d, 12));
-  return noonUtc.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'America/New_York' }).toLowerCase();
-}
-
-/** Tuesday of the report week (ET) — the league week's first report day is Wednesday. */
-function weekStartET(dateStr) {
-  const [y, m, d] = String(dateStr).split('-').map(Number);
-  const day = new Date(Date.UTC(y, m - 1, d, 12));
-  const weekday = day.getUTCDay(); // 0 Sun … 6 Sat
-  const back = (weekday - 2 + 7) % 7; // days since Tuesday
-  day.setUTCDate(day.getUTCDate() - back);
-  return day.toISOString().slice(0, 10);
-}
-
-function restConfig(options = {}) {
-  const supabaseUrl = options.supabaseUrl ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
-  const key = options.key ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY;
-  return { supabaseUrl, key, client: options.client ?? axios };
-}
-
-/** This week's earlier snapshots for these games — the grid's other days. */
-async function priorSnapshots(gameIds, date, options) {
-  const { supabaseUrl, key, client } = restConfig(options);
-  if (!supabaseUrl || !key || !gameIds.length) return [];
-  try {
-    const { data } = await client.get(`${supabaseUrl}/rest/v1/insight_connections`, {
-      params: {
-        select: 'date,game_id,headline,meta',
-        league: 'eq.NFL',
-        category: 'eq.practice_report',
-        game_id: `in.(${gameIds.map((id) => `"${id}"`).join(',')})`,
-        date: `gte.${weekStartET(date)}`,
-        and: `(date.lt.${date})`,
-        limit: 2000,
-      },
-      headers: { apikey: key, Authorization: `Bearer ${key}` },
-    });
-    return Array.isArray(data) ? data : [];
-  } catch (err) {
-    console.warn(`[footballPracticeReport] prior snapshots unavailable (today's day only): ${err?.message || err}`);
-    return [];
+function datedPractice(reports, through) {
+  if (!Array.isArray(reports)) return { grid: {}, dates: {}, latest: null, latestDay: null };
+  const byDate = new Map();
+  for (const report of reports) {
+    if (!dateOnly(report?.date) || report.date > through || !Object.hasOwn(CODES, report.status)) continue;
+    const code = CODES[report.status];
+    // Conflicting marks for one date stay unknown rather than picking a winner.
+    if (byDate.has(report.date) && byDate.get(report.date) !== code) byDate.set(report.date, null);
+    else if (!byDate.has(report.date)) byDate.set(report.date, code);
   }
-}
-
-function tone(row) {
-  if (row.gameStatus === 'Out' || row.gameStatus === 'Doubtful' || row.practice === 'DNP') return TONES.COLD;
-  if (row.practice === 'FP' && !row.gameStatus) return TONES.HOT;
-  return TONES.NEUTRAL;
-}
-
-function relevance(row) {
-  return RELEVANCE[row.gameStatus] ?? RELEVANCE[row.practice] ?? 45;
+  const entries = [...byDate].sort(([a], [b]) => a.localeCompare(b));
+  const grid = {}, dates = {};
+  for (const [date, code] of entries) {
+    const day = weekday(date);
+    if (['wed', 'thu', 'fri'].includes(day)) { grid[day] = code; dates[day] = date; }
+  }
+  const last = entries.at(-1);
+  return { grid, dates, latest: last?.[1] ?? null, latestDay: last ? weekday(last[0]) : null };
 }
 
 export async function computeFootballPracticeReport(ctx) {
   const { games, helpers, date } = ctx;
-  if (String(ctx?.league || '').toLowerCase() !== 'nfl' || !Array.isArray(games) || games.length === 0) return [];
-
-  let report;
-  try {
-    report = await (ctx.officialInjuryReport ? ctx.officialInjuryReport() : fetchOfficialInjuryReport());
-  } catch (err) {
-    console.warn(`[footballPracticeReport] official report unavailable: ${err?.message || err}`);
-    return [];
-  }
-  if (!report?.units?.length) {
-    console.log(`[footballPracticeReport] NFL ${date}: the league page carries no team tables yet`);
-    return [];
-  }
-
-  // A team's table is a team's table wherever the page files it — each club
-  // appears in exactly one unit a week, so match each side by its own club.
-  const tableByMascot = new Map();
-  for (const unit of report.units) {
-    for (const team of unit.teams) tableByMascot.set(String(team.name || '').split(' ').pop().toLowerCase(), team);
-  }
-
-  const day = weekdayET(date);
-  const prior = await priorSnapshots(games.map((g) => String(g?.id)).filter(Boolean), date, ctx.rest);
-  const priorGrid = new Map(); // `${game_id}|${player}` → { wed, thu, fri }
-  for (const r of prior) {
-    const key = `${r.game_id}|${String(r.headline || '').toLowerCase()}`;
-    const grid = priorGrid.get(key) || {};
-    for (const d of PRACTICE_DAYS) if (r.meta?.practice?.[d]) grid[d] = r.meta.practice[d];
-    priorGrid.set(key, grid);
-  }
-
-  const rows = [];
+  if (String(ctx?.league || '').toLowerCase() !== 'nfl' || !Array.isArray(games) || !dateOnly(date)) return [];
+  const groups = new Map();
   for (const game of games) {
-    const away = game?.away_team ?? game?.visitor_team;
-    const home = game?.home_team;
-    if (game?.id == null || !away || !home) continue;
-    const sides = [
-      { key: 'away', team: away, table: tableByMascot.get(mascot(away)) },
-      { key: 'home', team: home, table: tableByMascot.get(mascot(home)) },
-    ];
-    if (!sides.some((side) => side.table)) continue;
-    for (const side of sides) {
-      for (const r of side.table?.rows || []) {
-        const practice = { ...(priorGrid.get(`${game.id}|${r.player.toLowerCase()}`) || {}) };
-        if (PRACTICE_DAYS.includes(day) && r.practice) practice[day] = r.practice;
-        const detailBits = [r.injury, r.practiceText, r.gameStatus].filter(Boolean);
+    const s = scope(game);
+    if (!s) continue;
+    const group = groups.get(s.key) ?? { ...s, games: [], teamIds: new Set() };
+    group.games.push(game);
+    group.teamIds.add(s.away.id); group.teamIds.add(s.home.id);
+    groups.set(s.key, group);
+  }
+  const rows = [];
+  for (const group of groups.values()) {
+    let reports;
+    try {
+      reports = await (ctx.practiceDesignations ?? fetchNflPracticeDesignations)({
+        season: group.season, week: group.week, seasonType: group.seasonType, seasonTypes: group.seasonTypes,
+        teamIds: [...group.teamIds], signal: ctx.signal,
+      });
+      if (!Array.isArray(reports)) throw new Error('Malformed report collection');
+    } catch (error) {
+      console.warn(`[footballPracticeReport] BDL report unavailable: ${error?.message || 'request failed'}`);
+      continue;
+    }
+    for (const game of group.games) {
+      const s = scope(game);
+      const unique = new Map();
+      for (const r of reports) {
+        if (String(r?.game_id) !== String(game.id) || Number(r.season) !== s.season || Number(r.week) !== s.week ||
+            !s.seasonTypes.includes(nflSeasonType(r.season_type)) || !id(r.player?.id) || !id(r.team?.id) ||
+            ![String(s.home.id), String(s.away.id)].includes(String(r.team.id))) continue;
+        const updated = Date.parse(r.updated_at);
+        // The provider's injury/game-status fields are current snapshots, not
+        // historical revisions. Do not leak a later update into a prior date.
+        if (!Number.isFinite(updated) || dayET(updated) > date) continue;
+        const key = `${r.team.id}|${r.player.id}`;
+        const prior = unique.get(key);
+        if (!prior || updated > prior.updated) unique.set(key, { r, updated });
+        else if (updated === prior.updated && JSON.stringify(r) !== JSON.stringify(prior.r)) {
+          unique.set(key, { r: null, updated });
+        }
+      }
+      for (const { r } of unique.values()) {
+        if (!r) continue;
+        const name = (r.player.full_name || [r.player.first_name, r.player.last_name].filter(Boolean).join(' ')).trim();
+        if (!name) continue;
+        const p = datedPractice(r.practice_reports, date);
+        const injury = typeof r.injury === 'string' ? r.injury.trim() || null : null;
+        const gameStatus = Object.hasOwn(STATUSES, r.game_status) ? STATUSES[r.game_status] : null;
+        // Designations include healthy roster members. Null is not "active"
+        // or "full practice"; did_not_play is a separate completed-game fact.
+        if (!injury && !gameStatus && !p.latest && !Object.values(p.grid).some(Boolean)) continue;
+        const home = String(r.team.id) === String(s.home.id), team = home ? s.home : s.away;
+        const tone = gameStatus === 'Out' || gameStatus === 'Doubtful' || p.latest === 'DNP' ? TONES.COLD
+          : p.latest === 'FP' && !gameStatus ? TONES.HOT : TONES.NEUTRAL;
         rows.push(makeRow({
-          category: 'practice_report',
-          headline: r.player,
-          detail: detailBits.length ? detailBits.join(' · ') : 'On the official report',
-          game: helpers.gameLabel(game),
-          value: r.gameStatus || r.practice || 'LISTED',
-          tone: tone(r),
-          relevance_score: relevance(r),
-          team_id: side.team.id,
-          game_id: game.id,
-          meta: {
-            kind: 'practice_report',
-            source: 'nfl.com official injury report',
-            report: report.title || null,
-            report_week: report.week ?? null,
-            report_season: report.season ?? null,
-            team: side.team.abbreviation || side.table?.abbr || null,
-            side: side.key,
-            position: r.position,
-            injury: r.injury,
-            practice_text: r.practiceText,
-            latest: r.practice,
-            latest_day: day,
-            practice,
-            game_status: r.gameStatus,
-            through: date,
-          },
+          category: 'practice_report', headline: name,
+          detail: [injury, LABELS[p.latest], gameStatus].filter(Boolean).join(' · ') || 'Practice report available',
+          game: helpers.gameLabel(game), value: gameStatus || p.latest || 'LISTED', tone,
+          relevance_score: RELEVANCE[gameStatus] ?? RELEVANCE[p.latest] ?? 45,
+          player_id: r.player.id, team_id: team.id, game_id: game.id,
+          meta: { kind: 'practice_report', source: 'BallDontLie player designations',
+            report: `Week ${s.week} practice and game status`, report_week: s.week, report_season: s.season,
+            team: team.abbreviation || null, side: home ? 'home' : 'away',
+            position: r.player.position_abbreviation || r.player.position || null,
+            injury, practice_text: LABELS[p.latest] ?? null, latest: p.latest, latest_day: p.latestDay,
+            practice: p.grid, practice_dates: p.dates, game_status: gameStatus, through: date, provider_updated_at: r.updated_at },
         }));
       }
     }
   }
-
-  console.log(`[footballPracticeReport] NFL ${date} (${day}): ${report.units.length} game(s) on the league page -> ${rows.length} row(s) for the slate`);
   return rows;
 }
 

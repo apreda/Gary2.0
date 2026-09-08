@@ -20,7 +20,7 @@ let directory; let started = false;
 const args = () => ['-h', directory, '-p', '55460', '-U', 'testadmin', '-d', 'postgres', '-X', '-v', 'ON_ERROR_STOP=1', '-At'];
 const sql = text => execFileSync(`${bin}/psql`, [...args(), '-c', text], { env: pgEnv, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
 
-const migration = readFileSync(new URL('../../supabase/migrations/20260908185851_licensed_mlb_live_batting.sql', import.meta.url), 'utf8');
+const migration = readFileSync(new URL('../../supabase/migrations/20260908191550_licensed_mlb_live_batting.sql', import.meta.url), 'utf8');
 const rows = () => JSON.parse(sql('SELECT json_agg(j ORDER BY jobid) FROM cron.job j;'));
 function cleanup() {
   try {

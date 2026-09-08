@@ -650,15 +650,15 @@ private struct FootballAvailabilityCard: View {
     let confirmed: [FootballEvidence.Availability]
     let wireAway: [Signal]
     let wireHome: [Signal]
-    /// The league's official report rows for this game (practice_report):
+    /// BDL's dated practice report rows for this game (practice_report):
     /// this week's Wed/Thu/Fri participation and the game status, per side.
     var practice: [Signal] = []
 
     @State private var homeUp = true
     @State private var open: Set<String> = []
 
-    /// One printed line of the report. Days are nil when the league did not
-    /// list the player that day; `official` marks a row off the league page.
+    /// One line of the report. Days are nil when the provider did not
+    /// list participation that day; `official` marks a dated practice row.
     private struct Line: Identifiable {
         let id: String
         let name: String
@@ -668,6 +668,7 @@ private struct FootballAvailabilityCard: View {
         let note: String?
         let wed: String?, thu: String?, fri: String?
         let latest: String?
+        let latestDay: String?
         let official: Bool
     }
 
@@ -721,31 +722,29 @@ private struct FootballAvailabilityCard: View {
                 return Line(id: s.id.uuidString, name: s.headline, position: m?.position, injury: m?.injury,
                             status: m?.game_status, note: note(for: s.headline, home: home),
                             wed: m?.practice?.wed, thu: m?.practice?.thu, fri: m?.practice?.fri,
-                            latest: m?.latest, official: true)
+                            latest: m?.latest, latestDay: m?.latest_day, official: true)
             }
             .sorted { Self.statusRank($0.status, $0.latest) < Self.statusRank($1.status, $1.latest) }
         }
-        // No league page for this game yet (a non-report day, the preseason):
+        // No dated provider report for this game yet:
         // the dossier's report, then the wire — same grammar, no day columns.
         var out: [Line] = confirmed.filter { $0.team == (home ? homeLabel : awayLabel) }.map { a in
             Line(id: a.id, name: a.name, position: nil, injury: nil, status: a.status, note: a.detail,
-                 wed: nil, thu: nil, fri: nil, latest: nil, official: false)
+                 wed: nil, thu: nil, fri: nil, latest: nil, latestDay: nil, official: false)
         }
         let seen = Set(out.map { $0.name.lowercased() })
         for w in (home ? wireHome : wireAway) {
             let name = Self.subject(of: w.headline)
             guard !seen.contains(name.lowercased()) else { continue }
             out.append(Line(id: w.id.uuidString, name: name, position: nil, injury: nil, status: w.value,
-                            note: w.detail, wed: nil, thu: nil, fri: nil, latest: nil, official: false))
+                            note: w.detail, wed: nil, thu: nil, fri: nil, latest: nil, latestDay: nil, official: false))
         }
         return out
     }
 
     private var shown: [Line] { lines(home: homeUp) }
-    private var hasDays: Bool { shown.contains { $0.official } }
-    private var latestDay: String? {
-        practice.first { $0.lane?.side == (homeUp ? "home" : "away") }?.lane?.latest_day?.uppercased()
-    }
+    private var hasPractice: Bool { shown.contains { $0.official } }
+    private var hasDays: Bool { shown.contains { $0.wed != nil || $0.thu != nil || $0.fri != nil } }
 
     var body: some View {
         // Hidden entirely when nothing is listed — an absent module, never an
@@ -755,7 +754,7 @@ private struct FootballAvailabilityCard: View {
                 header.padding(.horizontal, 18).padding(.bottom, 8)
                 columns.padding(.horizontal, 18).padding(.bottom, 2)
                 if shown.isEmpty {
-                    pending(title: "NO LISTED ABSENCES", sub: "Everyone on the report is available")
+                    pending(title: "REPORT NOT AVAILABLE", sub: "No current report for this team")
                 } else {
                     VStack(spacing: 0) {
                         ForEach(shown) { line in
@@ -765,7 +764,7 @@ private struct FootballAvailabilityCard: View {
                     }
                     .padding(.horizontal, 18)
                 }
-                if hasDays { key.padding(.horizontal, 18).padding(.top, 10) }
+                if hasPractice { key.padding(.horizontal, 18).padding(.top, 10) }
                 teamToggle.padding(.top, 12).padding(.bottom, 4).frame(maxWidth: .infinity)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -782,16 +781,11 @@ private struct FootballAvailabilityCard: View {
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(hasDays ? "PRACTICE REPORT" : "THE INJURY REPORT")
+            Text(hasPractice ? "PRACTICE REPORT" : "THE INJURY REPORT")
                 .font(GaryFonts.display(19)).tracking(1.2).foregroundStyle(GaryColors.gold)
             Spacer()
-            if hasDays, let latestDay {
-                Text("THROUGH \(latestDay)")
-                    .font(GaryFonts.data(9.5, .semibold)).tracking(1.1).foregroundStyle(.white.opacity(0.42))
-            } else {
-                Text("\(shown.count) LISTED")
-                    .font(GaryFonts.data(9.5, .semibold)).tracking(1.1).foregroundStyle(.white.opacity(0.42))
-            }
+            Text("\(shown.count) LISTED")
+                .font(GaryFonts.data(9.5, .semibold)).tracking(1.1).foregroundStyle(.white.opacity(0.42))
         }
     }
 
@@ -850,6 +844,13 @@ private struct FootballAvailabilityCard: View {
                             Text(injury).font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.55))
                                 .fixedSize(horizontal: false, vertical: true)
                         }
+                        if let latest = line.latest, let day = line.latestDay,
+                           !["wed", "thu", "fri"].contains(day.lowercased()) {
+                            Text("\(day.uppercased()) PRACTICE · \(latest.uppercased())")
+                                .font(GaryFonts.data(10, .semibold))
+                                .foregroundStyle(Self.statusColor(latest))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                     Spacer(minLength: 6)
                     if hasDays {
@@ -863,6 +864,9 @@ private struct FootballAvailabilityCard: View {
                                 .font(GaryFonts.data(10.5, .bold)).tracking(1.1)
                                 .foregroundStyle(Self.statusColor(status))
                                 .lineLimit(1).minimumScaleFactor(0.7)
+                        } else {
+                            Text("–").foregroundStyle(.white.opacity(0.25))
+                                .accessibilityLabel("Game status not reported")
                         }
                         if line.note != nil {
                             Image(systemName: "chevron.down")
@@ -894,7 +898,7 @@ private struct FootballAvailabilityCard: View {
                 HStack(spacing: 5) { dot("LP"); Text("LIMITED") }
                 HStack(spacing: 5) { dot("DNP"); Text("DID NOT PRACTICE") }
             }
-            Text("THE NFL'S OFFICIAL INJURY REPORT")
+            Text("PRACTICE AND GAME STATUS · BDL")
                 .tracking(1.1)
         }
         .font(GaryFonts.data(9.5, .semibold)).foregroundStyle(.white.opacity(0.42))

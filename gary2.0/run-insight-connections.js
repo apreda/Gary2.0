@@ -106,6 +106,8 @@ const VOLATILE_CATEGORIES = new Set([
   // construction: MLB's replacement lane writes category 'beneficiary', so
   // these two names replace-in-place only where football writes them.
   'injury',
+  // Dated provider practice participation and game designations change daily.
+  'practice_report',
   'quarterback',
   'pace_script',
   'market_range',
