@@ -32,6 +32,27 @@ beforeEach(() => {
 });
 
 describe('Hub synthesis enters before final display filtering', () => {
+  it('stamps fresh MLB observations before checkpoint and synthesis while retaining cached source clocks', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-09-08T16:00:00Z'));
+    const original = '2026-09-08T12:00:00Z';
+    fixtures.rows = [fixtures.rows[0], { ...fixtures.rows[1], id: 'stored', created_at: original },
+      { ...fixtures.rows[2], id: 'stored-unknown' }];
+    const checkpoint = vi.fn(async ({ rows }) => {
+      expect(rows[0].meta.source_collected_at).toBe('2026-09-08T16:00:00.000Z');
+    });
+    const synthesis = vi.fn(async args => {
+      expect(Date.parse(args.rows[0].meta.source_collected_at)).toBeLessThanOrEqual(Date.parse(args.asOf));
+      expect(args.rows[1].meta.source_collected_at).toBe(original);
+      expect(args.rows[2].meta.source_collected_at).toBeUndefined();
+      return { rows: args.rows };
+    });
+    const result = await generateInsightConnections({ date: '2026-09-08', league: 'MLB', options: {
+      onLaneRows: checkpoint, synthesizeJudgments: synthesis, minRelevance: 0,
+    } });
+    expect(checkpoint).toHaveBeenCalledOnce(); expect(synthesis).toHaveBeenCalledOnce();
+    expect(result.connections[0].meta.source_collected_at).toBe('2026-09-08T16:00:00.000Z');
+    expect(fixtures.rows[0].meta.source_collected_at).toBeUndefined();
+  });
   it('stamps real collector-shaped fresh availability rows but preserves cached observations at the synthesis seam', async () => {
     vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-09-08T16:00:00Z'));
     const base = { category: 'beneficiary', headline: 'A current absence changes the rotation', detail: 'A checked injury report.',

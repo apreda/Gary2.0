@@ -85,6 +85,12 @@ Source observation `as_of` retains its original collection/creation time.
 A metadata patch does not refresh that observation. Source `computed_detail`
 and structured measurements can support a judgment; old generated
 `detail`, `read`, `verdict` or `meta.evidence` cannot serve as factual proof.
+The observation clock is captured with the original computed sentence
+before optional model prose. Every league's generator carries that clock
+through checkpoints and publication as `source_collected_at`; model latency
+cannot make an older observation appear newly collected. Fresh unvoiced
+rows are stamped at collector completion, while cached rows keep their
+original clock and an unknown stored clock remains unknown.
 
 Current MLB context is collected independently of surfaced highlights:
 both teams' posted/partial/unposted orders, probable pitchers and exact

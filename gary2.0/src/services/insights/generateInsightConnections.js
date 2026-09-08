@@ -318,7 +318,7 @@ export async function generateInsightConnections({ date, league = 'mlb', options
       // This boundary is an actual completed collector read. Stored-row replay
       // never traverses it and must retain the original observation timestamp.
       const list = (Array.isArray(rows) ? rows : []).map(row => {
-        if (leagueKey === 'mlb' || !row || typeof row !== 'object') return row;
+        if (!row || typeof row !== 'object') return row;
         const originalClock = [row.meta?.computed_as_of, row.meta?.source_collected_at, row.created_at]
           .find(value => typeof value === 'string' && value.includes('T') && Number.isFinite(Date.parse(value)));
         const observedAt = originalClock || (row.id == null ? collectedAt : null);

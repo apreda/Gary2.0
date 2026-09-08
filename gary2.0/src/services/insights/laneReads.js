@@ -49,7 +49,11 @@ export async function attachLaneReads(lane, rows, factFor, { ask, sentences = '2
   for (const row of rows || []) {
     if (typeof row?.detail !== 'string' || !row.detail.trim() || row.meta?.computed_detail
         || row.meta?.read || row.meta?.evidence) continue;
-    row.meta = { ...(row.meta || {}), computed_detail: row.detail, computed_detail_kind: 'collector_context' };
+    const originalClock = [row.meta?.computed_as_of, row.meta?.source_collected_at, row.created_at]
+      .find(value => typeof value === 'string' && value.includes('T') && Number.isFinite(Date.parse(value)));
+    const observedAt = originalClock || (row.id == null ? new Date().toISOString() : null);
+    row.meta = { ...(row.meta || {}), computed_detail: row.detail, computed_detail_kind: 'collector_context',
+      ...(observedAt ? { computed_as_of: observedAt } : {}) };
   }
   // Only what SHIPS gets a read. The orchestrator keeps the strongest
   // SHIP_CAP rows per category (postProcess), so a lane handing us 25 hot
