@@ -4,8 +4,9 @@
  *
  * Calls generateInsightConnections() for a given date across the active leagues
  * and INSERTs the resulting flat rows into the `insight_connections`
- * Supabase table. Idempotent per day: the day's existing rows for each league are
- * replaced (DELETE-then-INSERT) so re-runs never duplicate.
+ * Supabase table. Existing original reads are retained; volatile factual lanes
+ * refresh within their exact date/league scope. Connected judgments publish
+ * separately through an atomic metadata-only RPC.
  *
  * Writes use the service-role REST path documented in the Supabase conventions
  * (mirrors storeDailyPicks in src/supabaseClient.js): axios POST to
@@ -18,6 +19,8 @@
  *   node run-insight-connections.js --league MLB          # single league
  *   node run-insight-connections.js --league mlb,nba      # multiple leagues
  *   node run-insight-connections.js --dry-run             # print rows, no write
+ *   node run-insight-connections.js --judgments-only      # refresh connected reads
+ *   node run-insight-connections.js --judgments-only --dry-run --judgment-output /tmp/hub-preview.json
  */
 
 // MUST load env vars FIRST before any other imports
@@ -27,6 +30,10 @@ import { insightRefreshOldIds, insightResetScopeParams } from './scripts/lib/ins
 import axios from 'axios';
 import { getESTDate } from './src/utils/dateUtils.js';
 import { completedPlayerCardGameIds, upsertPlayerCards } from './scripts/lib/playerCardStorage.js';
+import { runHubJudgmentPass, unavailableHubJudgments } from './scripts/lib/hubJudgmentRun.js';
+import { loadHubJudgmentSlate } from './scripts/lib/hubJudgmentSlate.js';
+import { readHubJudgmentRows, publishHubJudgments, hubJudgmentRevisionFilter } from './scripts/lib/hubJudgmentStorage.js';
+import { writeFile } from 'node:fs/promises';
 
 // Import after env is loaded (services read env at module init time)
 const { generateInsightConnections } = await import('./src/services/insights/generateInsightConnections.js');
@@ -124,6 +131,11 @@ function getArgValue(flag) {
 }
 
 const dryRun = args.includes('--dry-run');
+// Re-check the existing research against the current slate and posted lineups,
+// without rerunning every collector, rewriting legacy reads or rebuilding packs.
+const judgmentsOnly = args.includes('--judgments-only');
+const judgmentOutput = getArgValue('--judgment-output');
+const judgmentReports = [];
 /**
  * CARDS ONLY (Sep 4 2026). The player packs are built at the END of a league's
  * stage, behind every lane — and each lane owns its own minutes, so the college
@@ -135,6 +147,9 @@ const dryRun = args.includes('--dry-run');
  * can hold its own stage in the daily job with its own budget.
  */
 const cardsOnly = args.includes('--cards-only');
+if (judgmentsOnly && (cardsOnly || args.includes('--reset'))) {
+  throw new Error('--judgments-only cannot be combined with --cards-only or --reset');
+}
 // The daily pipeline gives cards their own stage so a long insights pass
 // cannot swallow their budget or build the same packs twice.
 const skipCards = args.includes('--skip-cards');
@@ -202,6 +217,10 @@ if (!dryRun) {
  * one-for-one so the iOS anon client can decode rows directly.
  */
 function toRow(connection, league, date) {
+  // Judgments have their own atomic, time-checked publisher. The legacy row
+  // writer must not bypass that gate or copy an expired packet into a new ID.
+  const meta = connection.meta ? { ...connection.meta } : null;
+  if (meta) delete meta.judgment;
   return {
     date,
     league,
@@ -218,7 +237,7 @@ function toRow(connection, league, date) {
     player_id: connection.player_id != null ? String(connection.player_id) : null,
     team_id: connection.team_id != null ? String(connection.team_id) : null,
     game_id: connection.game_id != null ? String(connection.game_id) : null,
-    meta: connection.meta ?? null,
+    meta,
   };
 }
 
@@ -231,6 +250,26 @@ const restHeaders = {
   Authorization: `Bearer ${adminKey}`,
   'Content-Type': 'application/json',
 };
+
+const readJudgments = (date, league) => readHubJudgmentRows({
+  client: axios, url: REST_URL, headers: restHeaders, date, league,
+});
+
+async function recordJudgmentPass(league, result, { publish = false } = {}) {
+  const rows = (result.rows || []).filter(row => row.meta?.judgment);
+  const publication = publish ? await publishHubJudgments({ rows,
+    invalidations: result.invalidations || [], client: axios, url: REST_URL,
+    headers: restHeaders, date: targetDate, league }) : null;
+  const report = { date: targetDate, league, checked_at: new Date().toISOString(),
+    judgments: rows.map(row => row.meta.judgment), invalidations: result.invalidations || [],
+    failures: result.failures || [], skipped: result.skipped || [],
+    diagnostics: result.diagnostics || [], publication };
+  judgmentReports.push(report);
+  console.log(`   Hub judgments: ${rows.length} current; ${report.invalidations.length} withdrawn; ${report.failures.length} failed${publication ? `; ${JSON.stringify(publication)}` : ' (preview)'}.`);
+  if (judgmentOutput) await writeFile(judgmentOutput, JSON.stringify(judgmentReports, null, 2) + '\n');
+  if (report.failures.length) console.warn(`   Hub judgment failures: ${JSON.stringify(report.failures)}`);
+  return report.failures.length === 0 && !(publication?.missing || publication?.rejected);
+}
 
 /**
  * Delete the day's general insight rows for a league. ONLY used by --reset;
@@ -388,11 +427,15 @@ async function existingRowsForPatch(date, league) {
 }
 
 /** PATCH one stored row by primary key. */
-async function patchRowById(id, patch) {
+async function patchRowById(id, patch, expectedMeta) {
   await axios({
     method: 'PATCH',
     url: REST_URL,
-    params: { id: `eq.${id}` },
+    // The ordinary content repair can race a lightweight judgment refresh.
+    // Compare its short atomic revision so an intervening judgment wins;
+    // the repair may safely retry during a later ordinary run. Never put
+    // the complete case/lineup packet in a request URL.
+    params: { id: `eq.${id}`, ...hubJudgmentRevisionFilter(expectedMeta) },
     data: JSON.parse(JSON.stringify(patch)),
     headers: { ...restHeaders, Prefer: 'return=minimal' },
   });
@@ -776,6 +819,34 @@ async function run() {
   for (const league of leagues) {
     console.log(`\n── ${league} ──`);
 
+    if (judgmentsOnly) {
+      let previousRows;
+      try {
+        if (!REST_URL || !adminKey) throw new Error('Judgment refresh requires the existing Supabase read configuration');
+        previousRows = await readJudgments(targetDate, league);
+        const games = await loadHubJudgmentSlate({ bdl: ballDontLieService,
+          date: targetDate, league, signal: AbortSignal.timeout(90_000) });
+        const result = await runHubJudgmentPass({ date: targetDate, league,
+          rows: previousRows, previousRows, games, bdl: ballDontLieService,
+          asOf: new Date().toISOString() });
+        if (!await recordJudgmentPass(league, result, { publish: !dryRun })) hadError = true;
+        totalRows += result.rows.filter(row => row.meta?.judgment).length;
+      } catch (error) {
+        hadError = true;
+        console.error(`   [${league}] Hub judgment refresh failed: ${error.message}`);
+        if (previousRows) {
+          try {
+            await recordJudgmentPass(league, unavailableHubJudgments({
+              date: targetDate, league, rows: previousRows, previousRows,
+              asOf: new Date().toISOString() }, error), { publish: !dryRun });
+          } catch (publicationError) {
+            console.error(`   [${league}] Could not withdraw unverified Hub judgments: ${publicationError.message}`);
+          }
+        }
+      }
+      continue;
+    }
+
     if (cardsOnly) {
       // The card build reads the day's stored connections itself, so it needs
       // nothing this run would have computed.
@@ -843,14 +914,33 @@ async function run() {
     }
 
     let connections;
+    let judgmentResult;
     let generatedGameCount = 0;
     try {
       const generated = await generateInsightConnections({
         date: targetDate,
         league,
-        options: onLaneRows ? { onLaneRows } : {},
+        options: { ...(onLaneRows ? { onLaneRows } : {}),
+          synthesizeJudgments: async (input) => {
+            const previousRows = REST_URL && adminKey ? await readJudgments(targetDate, league) : [];
+            judgmentResult = await runHubJudgmentPass({ ...input, previousRows });
+            return judgmentResult;
+          },
+        },
       });
       generatedGameCount = Number(generated?.gameCount) || 0;
+      if (!judgmentResult && generatedGameCount === 0 && REST_URL && adminKey) {
+        // The generator intentionally short-circuits on dark days. A game
+        // removed from the slate must still withdraw its previously ready take.
+        const previousRows = await readJudgments(targetDate, league);
+        judgmentResult = await runHubJudgmentPass({ date: targetDate, league,
+          rows: [], previousRows, games: [], bdl: ballDontLieService,
+          asOf: new Date().toISOString() });
+      }
+      if (generated?.judgmentFailures?.length) {
+        hadError = true;
+        console.error(`   [${league}] Hub synthesis failed: ${JSON.stringify(generated.judgmentFailures)}`);
+      }
       if (Array.isArray(generated?.failures) && generated.failures.length > 0) {
         hadError = true;
         console.error(
@@ -862,6 +952,15 @@ async function run() {
     } catch (err) {
       hadError = true;
       console.error(`❌ [${league}] generateInsightConnections failed: ${err.message}`);
+      if (REST_URL && adminKey) {
+        try {
+          const previousRows = await readJudgments(targetDate, league);
+          await recordJudgmentPass(league, unavailableHubJudgments({ date: targetDate,
+            league, rows: previousRows, previousRows, asOf: new Date().toISOString() }, err), { publish: !dryRun });
+        } catch (publicationError) {
+          console.error(`   [${league}] Could not withdraw unverified Hub judgments: ${publicationError.message}`);
+        }
+      }
       continue;
     }
 
@@ -901,6 +1000,7 @@ async function run() {
         );
       }
       console.log(`   No connections generated for ${league} on ${targetDate}.`);
+      if (judgmentResult && !await recordJudgmentPass(league, judgmentResult, { publish: !dryRun })) hadError = true;
       // League Pulse already ran at the top of this league's pass.
       continue;
     }
@@ -911,6 +1011,7 @@ async function run() {
     if (dryRun) {
       console.log(`   Would write ${rows.length} row(s):`);
       console.log(JSON.stringify(rows, null, 2));
+      if (judgmentResult && !await recordJudgmentPass(league, judgmentResult)) hadError = true;
       // Player insight cards (MLB rides connections; football rides the slate); in dry-run
       // this prints the pack count + one sample payload instead of writing.
       if (!skipCards) await buildAndStoreCards({ date: targetDate, league, connections });
@@ -1044,7 +1145,7 @@ async function run() {
             patch.player_id = String(r.player_id);
             if (s.team_id == null && r.team_id != null) patch.team_id = String(r.team_id);
           }
-          await patchRowById(s.id, patch);
+          await patchRowById(s.id, patch, s.meta);
           patched++;
         }
       } catch (e) {
@@ -1052,6 +1153,7 @@ async function run() {
       }
 
       console.log(`   ✅ ${fresh.length} new / ${rows.length} computed for ${league} (${targetDate}); ${Math.max(0, rows.length - fresh.length - upgraded - volatileKeys.size)} already posted (frozen); ${volatileKeys.size} volatile row(s) refreshed; ${upgraded} confirmedXI situational row(s) upgraded-in-place; ${patched} content-patched (voice/ids/fantasy evidence).`);
+      if (judgmentResult && !await recordJudgmentPass(league, judgmentResult, { publish: true })) hadError = true;
       // After the connections insert succeeds, build + store this league's
       // per-player breakdown packs (MLB + NFL/NCAAF). NON-FATAL — guarded internally.
       if (!skipCards) await buildAndStoreCards({ date: targetDate, league, connections });

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.gary.hub-judgments</string>
+  <key>Comment</key><string>Check existing Hub research against current context every fifteen minutes, 06:00–23:59 Eastern. Unchanged evidence reuses the existing judgment; changed or unavailable context withdraws stale advice. launchd serializes this worker; each league has a bounded process group. No pick, source collector or Fantasy writes.</string>
+  <key>WorkingDirectory</key><string>/Users/adam.preda/Gary2.0/gary2.0</string>
+  <key>ProgramArguments</key><array>
+    <string>/Users/adam.preda/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin/node</string>
+    <string>/Users/adam.preda/Gary2.0/gary2.0/scripts/run-hub-judgments.js</string>
+  </array>
+  <key>EnvironmentVariables</key><dict>
+    <key>GARY_CONTENT_MODEL_OVERRIDE</key><string>codex-gpt-5.6-sol</string>
+    <key>PATH</key><string>/Users/adam.preda/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin:/Users/adam.preda/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>StartInterval</key><integer>900</integer>
+  <key>StandardOutPath</key><string>/Users/adam.preda/Library/Logs/Gary2.0/hub-judgments-stdout.log</string>
+  <key>StandardErrorPath</key><string>/Users/adam.preda/Library/Logs/Gary2.0/hub-judgments-stderr.log</string>
+</dict></plist>
