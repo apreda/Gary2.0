@@ -62,8 +62,9 @@ describe('regression metric policy', () => {
     mocks.xstats.mockResolvedValue([{ name: 'Fixture Starter', era: 3.26, xera: 4.27, pa: 200 }]);
     const seasonIndex = new Map(Array.from({ length: 12 }, (_, i) => [i, {
       status: 'STATUS_FINAL', seasonType: 'regular', homeId: 1, awayId: 2, homeRuns: 4, awayRuns: 3,
+      date: '2026-09-01T20:00:00Z',
     }]));
-    const rows = await computeRegressionWatch({ season: 2026,
+    const rows = await computeRegressionWatch({ season: 2026, date: '2026-09-08',
       games: [{ id: 100, home_team: { id: 1, name: 'Fixture Club', abbreviation: 'FIX' }, visitor_team: { id: 3, abbreviation: 'OPP' } }],
       bdl: { getMlbSeasonGameIndex: async () => seasonIndex },
     });
