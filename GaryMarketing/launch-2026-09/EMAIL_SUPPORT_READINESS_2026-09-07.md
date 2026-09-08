@@ -35,7 +35,7 @@ Removing new capture does not fulfill any promise already made. Adam owns the fo
 
 ## Acceptance still needed before promising email
 
-1. Approve the factual company mailing address and deliberately authorize activation of the existing email workflow.
+1. Supply the exact approved factual company mailing address. Adam authorized the scoped email activation September 8; that approval need not be requested again, but it does not supply the missing address or test recipient.
 2. Verify the real Resend domain status, configured sender/reply-to identity, usable key, applicable provider capacity and registered webhook event selection for `/api/webhooks/resend`.
 3. Verify the current website-email storage/migration contracts without reading or exporting private recipient lists unnecessarily.
 4. Use an explicitly authorized owner-controlled test address to verify confirmation receipt, consent activation, the intended campaign, unsubscribe and suppression/event recording. No such test was performed by this audit.
@@ -49,3 +49,9 @@ These open items correspond to C10, C11 and the conditional P12 email row in `LA
 A read-only check of the existing authenticated Resend session, completed around midnight Eastern, exposed a workspace named `betwithgary` under the business identity. Its Domains table contained exactly one unrelated project domain and no `betwithgary.ai` sending domain; Webhooks reported “No webhooks yet.” The team selector listed only this workspace. The default Emails view reported no sent messages within its displayed last-15-days filter; no recipient lists or message contents were opened.
 
 This establishes a configuration gap in the accessible workspace, not the ownership of the production website's API key. The production key-to-workspace mapping was not verified and no secret value was read. It remains possible that production uses a different provider account. Before activation, establish that mapping and verify Gary's actual sender domain and webhook there. Do not replace DNS, rotate a key, create a webhook in an unconfirmed workspace or enable campaigns merely to make this screen look ready. No Resend settings, subscriptions, sends or billing were changed.
+
+## September 8 authorization follow-up
+
+Adam's confirmation grants the previously requested scoped email activation authority. The remaining request is factual: **the exact company mailing address to put in Gary's emails and an owner-controlled address authorized to receive confirmation, campaign and unsubscribe tests**. Neither value was supplied by the general approval. Do not infer a home address, use a placeholder or assume a business login address is the chosen delivery-test recipient.
+
+No production environment, provider, DNS, storage or sending setting was changed by this follow-up, and no email test or campaign was sent. Adding `COMPANY_POSTAL_ADDRESS` can activate both signup and existing scheduled campaigns; complete provider/storage checks and define the scoped acceptance plan before enabling it. Account for the scheduled campaign audience and timing, then verify delivery and unsubscribe during controlled activation before declaring the flow operational. Prior one-time NFL subscribers require their separate consented resolution, not an automatic recurring-list import. Their September 9 promise remains time-sensitive.

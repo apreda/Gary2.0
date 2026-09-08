@@ -6,7 +6,7 @@ September 4, updated September 8, 2026. Accountable owner: Adam. This replaces t
 
 The six workstreams have an explicit completion scorecard in [the September 8 execution review](EXECUTION_REVIEW_2026-09-08.md). Implementation is not audience validation. Codex handles authorized implementation, verification and analysis during active work; Adam supplies account access, founder footage and human contact decisions. The [personal-tracking pilot](PERSONAL_TRACKING_PILOT.md) must produce real observations before the integration spending gate is met.
 
-The [September 13 completion tracker](LAUNCH_COMPLETION_TRACKER.md) lists owners, deadlines and real completion receipts. The [Product Hunt packet](PRODUCT_HUNT_PACKET.md) and [Reddit playbook](REDDIT_PLAYBOOK.md) prepare those additional channels without claiming that accounts, platform drafts or posts are already live. This runbook remains authoritative for the offer and operating cadence.
+The [September 13 completion tracker](LAUNCH_COMPLETION_TRACKER.md) lists owners, deadlines and real completion receipts. The [Product Hunt packet](PRODUCT_HUNT_PACKET.md) records the existing account/draft and verified September 13 schedule; scheduled is not launched or approved. The [Reddit playbook](REDDIT_PLAYBOOK.md) records verified signup email and the remaining password/account handoff, not a completed account or published post. This runbook remains authoritative for the offer and operating cadence.
 
 Native availability facts come from the dated release-owner evidence and official Apple receipts recorded in the current execution review. A prepared binary or TestFlight notice does not establish public App Store availability; reconcile that separately before promotion.
 

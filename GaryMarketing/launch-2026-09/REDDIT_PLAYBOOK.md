@@ -1,10 +1,10 @@
 # Gary Reddit preparation and first-post playbook
 
-Prepared September 7, 2026. **Status: account and community permissions unverified; all text below is a local draft.** No account, subreddit, post, comment, private message or moderator inquiry has been created through this packet. The [launch runbook](LAUNCH_RUNBOOK.md) remains authoritative for product and channel promises. Reddit is an optional learning channel, not a prerequisite for September 13.
+Prepared September 7; updated September 8, 2026. **Status: business signup email verified; password creation handed to Adam.** Adam approved the proposed business identity/email and terms. `BetwithGary` is entered at the username/password step but is not yet reserved or a completed account. Profile/post copy below remains a local draft; no subreddit, post, comment, private message, moderator inquiry or vote was created. The [launch runbook](LAUNCH_RUNBOOK.md) remains authoritative for product and channel promises. Reddit is an optional learning channel, not a prerequisite for September 13.
 
 ## Account choice and truthful identity
 
-Inspect existing accounts first. For a founder story, Adam's existing personal account with his Gary relationship disclosed is the clearest choice. A transparent Gary business account is also possible; do not invent an unrelated fan or satisfied customer. Unlike Product Hunt, Reddit has business tools: Reddit Pro is free for eligible organizations, although it does not override community rules. [Reddit Pro](https://support.reddithelp.com/hc/en-us/articles/24368510335892-What-is-Reddit-Pro).
+An older personal account was found and left untouched. Adam approved a separate, transparent Gary business signup; do not invent an unrelated fan or satisfied customer. The browser skill requires Adam to create the new password and finish the credential step himself. Do not ask him to send the password in chat or save it here. Unlike Product Hunt, Reddit has business tools: Reddit Pro is free for eligible organizations, although it does not override community rules. [Reddit Pro](https://support.reddithelp.com/hc/en-us/articles/24368510335892-What-is-Reddit-Pro).
 
 Do not create both accounts merely to multiply distribution. Never use one to vote on, echo or defend the other. Choose an available username deliberately in the actual account; none is reserved or guaranteed here. Use a verified owner-controlled recovery email and available account protection, with secrets stored privately.
 
@@ -38,6 +38,8 @@ Reddit's current spam policy prohibits repeated/unsolicited mass engagement, pro
 | Adam's or Gary's own profile | A clearly disclosed product introduction | Ownership and profile posting settings; a profile post is not permission to cross-post elsewhere. |
 
 On September 7 the public web rule-page extractor returned empty/login-dependent shells for these communities. Therefore none is approved by this file. Use the signed-in visible rules to establish a real receipt. Do not infer permission from an old search result or another person's promotional post. If a rule is unclear, prepare a concise moderator question and send it only with the task's explicit message authority. Do not create a new Gary subreddit simply to mark “community” complete when no audience or moderation plan exists.
+
+On September 8, a visible Chrome check of [r/SideProject rules](https://www.reddit.com/r/SideProject/about/rules) again displayed an empty Community Rules shell with Log In, not the actual community rules. A bounded visible search did not establish a permitted placement. Recheck after account completion; this is not evidence that promotion is allowed.
 
 Complete this worksheet before a community post:
 
@@ -106,8 +108,8 @@ If a post is removed, preserve the reason and pause. Correct a factual error tra
 
 | Item | Actual receipt |
 |---|---|
-| Account/profile URL | Business-email sign-up form prepared September 7; paused at Continue (User Agreement) pending Adam's action-time approval. No new account created. An older personal account was found and left untouched. |
-| Rules/placement check | Not completed |
+| Account/profile URL | September 8: Adam approved identity/email/terms; business email verification completed. `BetwithGary` entered at the username/password step; no completed account/profile URL yet. New-password creation and submission handed to Adam. Older personal account untouched. No credentials or verification codes retained here. |
+| Rules/placement check | September 8 visible r/SideProject rules check returned an empty logged-out shell; no community permission or placement verified. |
 | Final title/body and version | Local draft only |
 | Post URL and publication time | Not published |
 | Moderator outcome | Unavailable |

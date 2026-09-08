@@ -1,7 +1,7 @@
 # Product Hunt gallery — real website examples
 
 Prepared and visually inspected September 7, 2026, around 11 PM Eastern.
-These are local ready-to-upload assets, not an uploaded or published Product Hunt launch.
+Uploaded September 8, around 8:50 AM Eastern, to the existing Gary draft under Adam's personal `@adam_preda1` account. The saved [prelaunch dashboard](https://www.producthunt.com/products/gary-ai/gary-ai/prelaunch) reports **Scheduled** for September 13, 12:01 AM PT / 3:01 AM EDT—not launched, featured or approved.
 
 | Order | File | Actual dimensions | What it shows |
 |---|---|---|---|
@@ -10,7 +10,7 @@ These are local ready-to-upload assets, not an uploaded or published Product Hun
 | 2 | [02-read-the-reasoning.jpg](exports/02-read-the-reasoning.jpg) | 1280 × 720 | An excerpt of the real Mets–Marlins written analysis; labeled historical, with its saved call/result. |
 | 3 | [03-check-the-record.jpg](exports/03-check-the-record.jpg) | 1280 × 720 | Real public game-pick record, including the losing recent windows and streak. Date, scope and limitations retained. |
 
-All files are below 3 MB. Product Hunt recommends 240 × 240 thumbnails and 1270 × 760 gallery images; those are recommendations, not the dimensions of these files. These exports retain the browser's native 1280 × 720 capture dimensions. Verify the actual upload preview before marking the gallery accepted. There are three gallery images, exceeding the documented two-image minimum.
+All files are below 3 MB. Product Hunt recommends 240 × 240 thumbnails and 1270 × 760 gallery images; those are recommendations, not the dimensions of these files. These exports retain the browser's native 1280 × 720 capture dimensions. The three older gallery associations were replaced with these JPGs and the unchanged original mark was uploaded. Asynchronous upload order was corrected to **Find your game → Reasoning → Record**. After saving, a fresh [listing preview](https://www.producthunt.com/products/gary-ai?launch=gary-ai) loaded all three images in that order. There are three gallery images, exceeding the documented two-image minimum; preview acceptance is not platform approval of the launch.
 
 The HTML composition is [index.html](index.html). Source screenshots are in `assets/`. The framing adds only explanatory headings, capture dates and caveats; no UI, picks, prices, results, users or testimonials were fabricated. Screenshots are excerpts, not a substitute for the complete pages.
 
@@ -24,4 +24,4 @@ Suggested image descriptions are embedded as `alt` text in the HTML. Retain the 
 
 For a local preview, serve this directory on localhost and open `/?piece=board&export=1`, `/?piece=reasoning&export=1` or `/?piece=record&export=1`. Render the real document with a browser; do not edit the source screenshot to improve the apparent record.
 
-The separate [submission packet](../PRODUCT_HUNT_PACKET.md) owns product fields, clean destination URL, maker identity and platform receipts. A new account still needs its actual sign-up/terms approval, real maker profile and verified posting eligibility. No product has been submitted or scheduled by producing these assets.
+The separate [submission packet](../PRODUCT_HUNT_PACKET.md) owns product fields, clean destination URL, maker identity and platform receipts. Adam approved account creation/terms and continuation; sign-in revealed an existing personal account and a March 17 draft, both reused. No new Product Hunt account or newsletter subscription was created. The schedule was submitted once and its **Scheduled** status freshly observed. Adam's real profile photo, launch-day availability and any personalization of the retained introductory comment remain follow-up items. No website code, native feature or pick process was changed by these account/gallery actions.
