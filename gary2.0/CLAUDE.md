@@ -1,5 +1,14 @@
 # CLAUDE.md
 
+Latest native release: read `../HANDOFF_2026-09-08_HUB_BRAND_ALIGNMENT.md`.
+Hub/Fantasy now use Gary's shared visual elements while retaining the approved
+layout and typography. Build 914 integrates the Billfold preseason and Hub
+slate-context fixes, with native source freeze `a82c2ea6`. Optimized simulator,
+signed archive, source parity and privacy checks passed. Upload succeeded
+September 8 at 13:33:26 UTC; Apple processing/internal TestFlight confirmation
+is pending. Do not upload 914 again. The handoff also verifies the existing
+live SEO correction; Google's full validation remains pending.
+
 Latest native design: read `../HANDOFF_2026-09-08_YOU_BILLFOLD.md`.
 The requested You/Gary Billfold parity is in build 913, source `9cb29134`,
 with focused tests and signed archive verified. Upload succeeded September 8
