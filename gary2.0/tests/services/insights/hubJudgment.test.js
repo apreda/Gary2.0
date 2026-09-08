@@ -175,6 +175,8 @@ describe('Hub structured judgment validation', () => {
     expect(judgment.evidence.every(entry => !/^e\d+$/.test(entry.id))).toBe(true);
     expect(() => validateHubJudgments(response(packets[0], { ...input, counter_evidence_ids: ['e999'] }), packets, { now: asOf })).toThrow('e999');
     expect(() => validateHubJudgments(response(packets[0], { ...input, supporting_evidence_ids: [alias(primary), primary] }), packets, { now: asOf })).toThrow('repeats');
+    expect(() => validateHubJudgments(response(packets[0], { ...input, primary_evidence_id: 'e999' }), packets, { now: asOf })).toThrow('"provided_primary_evidence_id":"e999"');
+    expect(() => validateHubJudgments(response(packets[0], { ...input, primary_evidence_id: alias('current_context') }), packets, { now: asOf })).toThrow('"primary_eligible":false');
   });
 });
 

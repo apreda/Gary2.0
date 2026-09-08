@@ -247,8 +247,15 @@ export function validateHubJudgments(response, packets, { now = new Date().toISO
     seen.add(item.game_id);
     const refs = new Map(packet.evidence.map(entry => [entry.id, entry]));
     const aliases = evidenceAliases(packet), resolveReference = value => aliases.get(value) || value;
-    const primary = refs.get(resolveReference(item.primary_evidence_id));
-    if (!primary?.id.startsWith('source_') || primary.primary_eligible !== true) throw new Error('Hub primary subject must identify an eligible collected source row');
+    const resolvedPrimary = resolveReference(item.primary_evidence_id), primary = refs.get(resolvedPrimary);
+    if (!primary?.id.startsWith('source_') || primary.primary_eligible !== true) {
+      throw new Error(`Hub primary subject must identify an eligible collected source row: ${JSON.stringify({
+        provided_primary_evidence_id: item.primary_evidence_id ?? null,
+        resolved_id: resolvedPrimary ?? null, primary_source_key_field: item.primary_source_key ?? null,
+        found_category: primary?.category ?? null, primary_eligible: primary?.primary_eligible === true,
+        eligible_primary_ids: [...aliases].filter(([, canonical]) => refs.get(canonical)?.primary_eligible === true).map(([alias]) => alias),
+      })}`);
+    }
     const validateRefs = (list, min, field) => {
       if (!Array.isArray(list) || list.length < min) throw new Error(`Hub ${field} needs at least ${min} distinct evidence references`);
       const resolved = list.map(resolveReference), unknown = list.filter(ref => typeof ref !== 'string' || !refs.has(resolveReference(ref)));
