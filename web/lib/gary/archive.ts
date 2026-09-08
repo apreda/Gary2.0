@@ -1,4 +1,4 @@
-import { estDateStr, todayEST } from './dates';
+import { todayEST } from './dates';
 import { filterWeeklyPicksForDate, parseGamePicksJson, parsePicksJson } from './picks';
 export { filterWeeklyPicksForDate } from './picks';
 import { mergeGameResults } from './results';

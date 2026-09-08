@@ -17,6 +17,7 @@ import {
   teamSlug,
 } from '@/lib/gary/gamepage';
 import type { GameResultRow, GaryPick, PropPick, PropResultRow } from '@/lib/gary/types';
+import * as dates from '@/lib/gary/dates';
 
 const pick = (o: Partial<GaryPick>): GaryPick => ({
   league: 'MLB', awayTeam: 'Cubs', homeTeam: 'Reds', pick: 'Cubs ML -118',
@@ -272,6 +273,23 @@ describe('page helpers', () => {
       { sport: 'mlb', date: '2026-08-30', slug: 'cubs-at-reds' },
       { sport: 'mlb', date: '2026-08-30', slug: 'rays-at-padres' },
     ]);
+  });
+
+  it('uses one date snapshot for all rows even if the clock advances during an inventory build', () => {
+    const today = vi.spyOn(dates, 'todayEST')
+      .mockReturnValueOnce('2026-09-07')
+      .mockReturnValue('2026-09-08');
+    try {
+      expect(gamePagePaths([
+        { date: '2026-09-07', league: 'MLB', sport: null, away_team: 'Cubs', home_team: 'Reds' },
+        { date: '2026-09-08', league: 'MLB', sport: null, away_team: 'Rays', home_team: 'Padres' },
+      ])).toEqual([
+        { sport: 'mlb', date: '2026-09-07', slug: 'cubs-at-reds' },
+      ]);
+      expect(today).toHaveBeenCalledTimes(1);
+    } finally {
+      today.mockRestore();
+    }
   });
 });
 

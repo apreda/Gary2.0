@@ -106,12 +106,13 @@ export default async function ResultsPage() {
       {/* The receipts — why this record can be trusted (and most can't) */}
       <section className="mt-8 grid gap-4 rounded-lg border border-line p-5 md:grid-cols-3">
         <div>
-          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-gold">Posted before lock</p>
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-gold">Publication receipt</p>
           <p className="mt-1.5 text-[14px] leading-relaxed text-mid">
-            Every pick is stored server-side before the game starts. Nothing is added after the fact.
+            When source timestamps are available, we show when the daily card was first stored
+            and its earliest listed game start. Individual picks may have been added later.
             {receipt && (
               <span className="tnum mt-1 block font-mono text-[12px] text-low">
-                Yesterday: card posted {receipt.posted}, first game {receipt.firstPitch}.
+                Yesterday: card first stored {receipt.posted}, earliest listed start {receipt.firstPitch}.
               </span>
             )}
           </p>

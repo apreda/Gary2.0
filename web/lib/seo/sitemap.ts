@@ -32,7 +32,7 @@ export function gameSitemapEntries(
     .toISOString()
     .slice(0, 10);
   const recent = (date: string) => date >= cutoff;
-  const paths = gamePagePaths(rows);
+  const paths = gamePagePaths(rows, today);
   const days = new Set<string>();
   const dayEntries: MetadataRoute.Sitemap = [];
 

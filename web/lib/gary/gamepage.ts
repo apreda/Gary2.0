@@ -8,6 +8,7 @@ import {
   isArchiveDate,
 } from './archive';
 import { fetchDailySlate, type SlateRow } from './board';
+import { todayEST } from './dates';
 import { propLine } from './format';
 import { normalizeLeague, sportByCode, sportBySlug } from './leagues';
 import { rest, restAll } from './supabase';
@@ -267,13 +268,13 @@ export function resultGamePath(row: GameResultRow): string | null {
 }
 
 /** Every game page URL the site can render, from the light `pick_page_index` view. */
-export function gamePagePaths(rows: PickIndexRow[]): GamePagePath[] {
+export function gamePagePaths(rows: PickIndexRow[], today = todayEST()): GamePagePath[] {
   const seen = new Set<string>();
   const out: GamePagePath[] = [];
   for (const r of rows) {
     const code = normalizeLeague(r.league, r.sport);
     const cfg = code ? sportByCode(code) : undefined;
-    if (!cfg || !isArchiveDate(r.date) || !r.away_team || !r.home_team) continue;
+    if (!cfg || !isArchiveDate(r.date, today) || !r.away_team || !r.home_team) continue;
     const slug = gameSlug(r.away_team, r.home_team);
     const key = `${cfg.slug}|${r.date}|${slug}`;
     if (seen.has(key)) continue;

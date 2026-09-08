@@ -1,9 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
-import { supabaseBrowser } from '@/lib/auth/client';
 import { accountHref } from '@/lib/auth/redirect';
 
 interface SummaryBet {
@@ -18,46 +17,84 @@ type BookState =
   | { kind: 'ready'; bets: SummaryBet[] };
 
 export function TodayBookSummary() {
+  const sectionRef = useRef<HTMLElement>(null);
   const [state, setState] = useState<BookState>({ kind: 'loading' });
 
   useEffect(() => {
     let mounted = true;
-    let authEventSeen = false;
-    let requestId = 0;
-    const supabase = supabaseBrowser();
+    let activated = false;
+    let observer: IntersectionObserver | undefined;
+    let unsubscribe: (() => void) | undefined;
 
-    async function load(session: Session | null) {
-      const activeRequest = ++requestId;
-      if (!session) {
-        if (mounted && activeRequest === requestId) setState({ kind: 'signed-out' });
-        return;
+    async function activate() {
+      if (!mounted || activated) return;
+      activated = true;
+      observer?.disconnect();
+
+      try {
+        // The personal Book is below the public briefing. Load its auth SDK
+        // when the section approaches the viewport, preserving the SSR shell.
+        const { supabaseBrowser } = await import('@/lib/auth/client');
+        if (!mounted) return;
+        const supabase = supabaseBrowser();
+        let authEventSeen = false;
+        let requestId = 0;
+
+        async function load(session: Session | null) {
+          const activeRequest = ++requestId;
+          if (!mounted) return;
+          if (!session) {
+            setState({ kind: 'signed-out' });
+            return;
+          }
+          try {
+            const { data, error } = await supabase
+              .from('user_bets')
+              .select('status,units_net')
+              .in('kind', ['tail', 'fade'])
+              .order('placed_at', { ascending: false })
+              .limit(400);
+            if (!mounted || activeRequest !== requestId) return;
+            setState(error ? { kind: 'error' } : { kind: 'ready', bets: (data ?? []) as SummaryBet[] });
+          } catch {
+            if (mounted && activeRequest === requestId) setState({ kind: 'error' });
+          }
+        }
+
+        const { data } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
+          authEventSeen = true;
+          void load(session);
+        });
+        unsubscribe = () => data.subscription.unsubscribe();
+        void supabase.auth.getSession().then((result: { data: { session: Session | null } }) => {
+          if (!authEventSeen) void load(result.data.session);
+        }).catch(() => {
+          if (mounted && !authEventSeen) setState({ kind: 'error' });
+        });
+      } catch {
+        if (mounted) setState({ kind: 'error' });
       }
-      const { data, error } = await supabase
-        .from('user_bets')
-        .select('status,units_net')
-        .in('kind', ['tail', 'fade'])
-        .order('placed_at', { ascending: false })
-        .limit(400);
-      if (!mounted || activeRequest !== requestId) return;
-      setState(error ? { kind: 'error' } : { kind: 'ready', bets: (data ?? []) as SummaryBet[] });
     }
 
-    void supabase.auth.getSession().then((result: { data: { session: Session | null } }) => {
-      if (!authEventSeen) void load(result.data.session);
-    });
-    const { data } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
-      authEventSeen = true;
-      void load(session);
-    });
+    const section = sectionRef.current;
+    if (!section || typeof IntersectionObserver === 'undefined') {
+      void activate();
+    } else {
+      observer = new IntersectionObserver(entries => {
+        if (entries.some(entry => entry.isIntersecting)) void activate();
+      }, { rootMargin: '320px 0px' });
+      observer.observe(section);
+    }
 
     return () => {
       mounted = false;
-      data.subscription.unsubscribe();
+      observer?.disconnect();
+      unsubscribe?.();
     };
   }, []);
 
   return (
-    <section className="rounded-panel border border-line bg-card p-5" aria-live="polite">
+    <section ref={sectionRef} className="rounded-panel border border-line bg-card p-5" aria-live="polite">
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="font-display text-2xl uppercase text-hi">Your Book</h2>
         {state.kind === 'ready' && (

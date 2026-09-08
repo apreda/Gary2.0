@@ -5,6 +5,7 @@ import { GET as inventoryXml } from '@/app/sitemap-data/[inventory]/route';
 import gameSitemap from '@/lib/seo/game-sitemap';
 import robots from '@/app/robots';
 import {
+  gameSitemapEntries,
   sitemapIdsForCount,
   sitemapIndexXml,
   sitemapUrlsForCount,
@@ -57,6 +58,7 @@ const FIXED = [
   '/results',
   ...SPORTS.map(sport => `/results/${sport.slug}`),
   '/results/audit',
+  '/leaderboard',
   '/archive',
   '/hub',
   '/nfl',
@@ -128,6 +130,18 @@ describe('sitemap', () => {
       '/picks/mlb/2026-08-30/rays-at-padres',
     ]);
     expect(new Set(paths).size).toBe(paths.length);
+  });
+
+  it('uses the supplied sitemap date for both URL eligibility and change frequency', () => {
+    const entries = gameSitemapEntries([
+      { date: '2026-08-26', league: 'MLB', sport: null, away_team: 'Cubs', home_team: 'Reds' },
+      { date: '2026-08-31', league: 'MLB', sport: null, away_team: 'Rays', home_team: 'Padres' },
+    ], '2026-08-30');
+    expect(entries.map(entry => pathOf(entry.url))).toEqual([
+      '/picks/mlb/2026-08-26',
+      '/picks/mlb/2026-08-26/cubs-at-reds',
+    ]);
+    expect(entries.every(entry => entry.changeFrequency === 'yearly')).toBe(true);
   });
 
   it('adds only content-backed archive dates and one hub per represented month', async () => {

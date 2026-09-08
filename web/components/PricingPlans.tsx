@@ -29,7 +29,7 @@ export function PricingPlans() {
   function unlock() {
     // Your membership resolves preview, founding and paid access on the server.
     // The selected catalog price is informational; no checkout starts here.
-    window.location.assign(accountHref('/you'));
+    window.location.assign(accountHref('/account'));
   }
 
   const isSel = (plan: Sel['plan'], sport?: string) => sel.plan === plan && sel.sport === sport;
