@@ -1,5 +1,19 @@
 # CLAUDE.md
 
+Latest Hub feature candidate: read `../HANDOFF_2026-09-08_HUB_JUDGMENT_916.md`.
+The connected-research Hub is implemented on main: current exact-matchup
+judgment, brief explanation, optional full case and evidence, coherent editorial
+ordering, shared dark reading layout and compact MLB Fantasy watch. NFL retains
+its weekly Fantasy desk. The additive publication RPC and refresh worker are
+deployed; all 15 current MLB cases passed independent content/publication review.
+Final 2.25 (916) Simulator and signed archive match 131 public native inputs at
+`54337a8a`; signature and all 21 privacy manifests passed independent verification.
+Final screens and tested interactions are in the handoff's review packet.
+Physical gestures and complete accessibility traversal remain human acceptance
+checks because the Mac input tool failed its native Settings control. This is
+ready for final feature review; **do not export, upload or submit 916 until Adam
+approves this candidate**. Build 915 keeps its separate immutable release state.
+
 Latest MLB decision and Winners policy: read
 `../HANDOFF_2026-09-08_MLB_STAGED_JUDGMENT.md`. New production MLB games use
 `mlb-judgment-v2`: same Gary session, visible odds, durable initial whole-game
