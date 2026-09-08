@@ -171,7 +171,7 @@ export function Leaderboard({ garyRows }: { garyRows?: GaryRows }) {
               {data.my_decided < data.min_decided
                 ? `${data.my_decided}/${data.min_decided} decided calls · ${data.min_decided - data.my_decided} more to qualify. `
                 : 'You have enough decided calls to qualify. '}
-              Choose a handle and enable public rankings in your profile to appear.{' '}
+              Public rankings require a handle and a public profile.{' '}
               <Link href="/account" className="text-gold underline underline-offset-4">
                 Profile settings
               </Link>
