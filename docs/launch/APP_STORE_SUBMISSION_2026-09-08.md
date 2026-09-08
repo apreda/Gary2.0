@@ -111,3 +111,20 @@ The same three factual requirements remain: actual signed-phone Apple-provider
 completion, an applicable MLB StatsAPI/Savant use basis, and the human operator
 for support/profile reports. The user already authorized submission and the
 subsequent expedition/email; authorization does not supply those missing facts.
+
+## Build 920 submitted — September 8, 2026, 7:39 PM ET (Claude)
+
+Adam lifted the hold on the evening of September 8 ("finish all remaining issues… then fully submit for approval. yes do all three") and asked for submission once everything was tested. State after this pass:
+
+- **Source:** `e1ef5383` (Hub 920 dashboard, expandable modules, bullpen workload chart, ledger accepts either final-box source label; build number 920). Backend follow-ups `98f24866` (sample units, first-inning chronology) and `2608a620` (bullpen ledger from BALLDONTLIE per-game lines) are pushed and live for the next collector run.
+- **Archive/upload:** `/Volumes/KINGSTON/Gary-2.25-920-Dashboard.xcarchive`, uploaded 23:14:09 UTC (`/Volumes/KINGSTON/gary-920-upload.log`); TestFlight processing Complete; internal Beta group has 920. Receipt: `evidence/claude-takeover-2026-09-08/native-920-upload-receipt.json`.
+- **Verification:** Release simulator build green; Debug simulator build drove the tour harness for acceptance (dashboard, module open/close per sport, chart sheet, largest text, Fantasy/Last Night anchors). Native contract suites 50 files / 176 tests; backend 309 files / 3,854 tests before the bullpen change, insights suites green after it.
+- **App Store Connect:** seven new 1320×2868 screenshots in the 6.9" slot in order Home, Gary's expanded take, Game research, The Hub, Fantasy watch, Winners, Gary Billfold (`evidence/claude-takeover-2026-09-08/screenshots-920-manifest.json`); What's New and review notes replaced; build 915 → 920; Content Rights changed to "contains third-party content, rights held" on the basis recorded in `PROVIDER_RIGHTS_2026-09-08.md`; **submitted — "1 Item Submitted", version 2.25 Waiting for Review, build 2.25 (920).** No expedite request or Apple email was sent.
+
+**Gates as closed on September 8 evening**
+
+1. *Apple sign-in.* Provider config verified in the Supabase dashboard (native bundle id registered). Server evidence: 12 Apple identities, five successful Apple sign-ups between Aug 17 and Aug 31 with zero failures, daily session refreshes from Apple-relay users through Sep 8. The Aug 19 reviewer failure was a UI dismissal defect fixed Aug 20 and present in every build since. Adam's own tap on TestFlight 920 is still requested as the final receipt.
+2. *Data rights.* Basis recorded and Apple's field answered truthfully; bullpen ledger moved to the licensed provider; remaining direct reads are on the migration list.
+3. *Support.* Queue tooling verified (zero open reports); the production check now prints the support queue every session; the founder is the operator. `support@betwithgary.ai` currently bounces ("Address not found") — the Workspace alias must be added; review notes point at the Terms page for the address rather than the bouncing mailbox.
+
+Still open for Adam: the physical Apple sign-in tap on 920; the `support@` alias in Google Workspace; Supabase Auth OTP expiry (86400 → 1800 s) and leaked-password protection (agent-side dashboard writes were blocked); Anthropic fallback account funding.

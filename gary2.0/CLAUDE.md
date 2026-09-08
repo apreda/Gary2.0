@@ -1,6 +1,4 @@
-# CLAUDE.md
-
-> **Latest direction — September 8, Claude takeover:** Adam explicitly said the Apple sign-in, data-rights and staffed-support issues must be fixed before submission. App Review is on hold. Build 919 already uploaded and processed; 920 is unfinished and has missing Swift components. Read `../HANDOFF_2026-09-08_CLAUDE_FABLE_5_1.md` and the final Git receipt before acting. Older ownership and readiness statements below are historical.
+> **Latest direction — September 8 evening, Claude:** Build 2.25 (920) is SUBMITTED to App Review (Waiting for Review since 7:39 PM ET). The Hub 920 dashboard shipped; the bullpen ledger now reads BALLDONTLIE per-game lines; Content Rights is answered on the recorded basis. Open for Adam: physical Apple sign-in tap on TestFlight 920, the support@ Workspace alias, Supabase OTP/leaked-password toggles. See `../docs/launch/APP_STORE_SUBMISSION_2026-09-08.md` (Build 920 section) and `../HANDOFF_2026-09-08_CLAUDE_FABLE_5_1.md`.
 
 Requested small-slate Winners policy: read
 `../HANDOFF_2026-09-08_WINNERS_SMALL_SLATES.md`. Adam requested automatic

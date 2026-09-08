@@ -1,0 +1,20 @@
+{
+  "build": "920",
+  "version": "2.25",
+  "source_commit": "e1ef5383",
+  "archive": "/Volumes/KINGSTON/Gary-2.25-920-Dashboard.xcarchive",
+  "archive_signing": "Apple Development: Adam Preda (AN9294U46X), team SFBTX6KPLM",
+  "upload_options": "/Volumes/KINGSTON/gary-920-export/upload-options.plist (method app-store-connect, destination upload, manageAppVersionAndBuildNumber false)",
+  "upload_log": "/Volumes/KINGSTON/gary-920-upload.log",
+  "upload_succeeded_utc": "2026-09-08T23:14:09Z",
+  "simulator_release_build_log": "xcodebuild-920-sim-r4.log (BUILD SUCCEEDED)",
+  "simulator_debug_qa_build_log": "xcodebuild-920-sim-debug-r4.log (BUILD SUCCEEDED; tour harness)",
+  "native_contract_suites": "ios-node-suites-920-final.log: 50 files / 176 tests passed",
+  "backend_suites": "backend-vitest-after-research-wip.log: 309 files / 3854 tests passed (before the bullpen provider change); insights-after-bullpen-bdl.log + hubDataAccuracy rerun green after it",
+  "qa_captures": "shots/ (iPhone 17 sim: dashboard, modules, open module, chart sheet, largest text) and promax/apple/ (seven 1320x2868 App Store frames + manifest.json)",
+  "known_open": [
+    "Physical Sign in with Apple tap on a signed build by Adam (server-side evidence: 12 Apple identities, 5 successful Apple sign-ups Aug 17-31, no failures; provider config verified with bundle id ai.betwithgary.app)",
+    "support@betwithgary.ai bounces (Address not found); review notes use adam.preda@betwithgary.ai until the Workspace alias exists",
+    "Supabase Auth OTP expiry 86400s and leaked-password protection off (dashboard change blocked for the agent)"
+  ]
+}

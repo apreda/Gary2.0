@@ -1,0 +1,61 @@
+{
+  "version": "2.25",
+  "build": "920",
+  "device": "GaryShots ProMax (iPhone 17 Pro Max, iOS 26.4)",
+  "captureMethod": "xcrun simctl io screenshot on the installed Debug simulator build; tour harness navigation only",
+  "dimensions": [
+    1320,
+    2868
+  ],
+  "images": [
+    {
+      "order": 1,
+      "title": "Home",
+      "source": "01-home.png",
+      "file": "01-home.png",
+      "sha256": "c59ff8ab63cf79a30bb29bcb7fa3034b651e5430a95d0226124de1f9db3cf644"
+    },
+    {
+      "order": 2,
+      "title": "Gary's expanded take",
+      "source": "02c-picks-today-flipped.png",
+      "file": "02-garys-expanded-take.png",
+      "sha256": "7eb2a6c2c5b78f79d36d850cf71a824dbea58169a229543d0f172299866e5c43"
+    },
+    {
+      "order": 3,
+      "title": "Game research",
+      "source": "03-game.png",
+      "file": "03-game-research.png",
+      "sha256": "7f2e056c89a806e84b0b1b1f669b0741c260c2bf8908b2068059346103fe03c2"
+    },
+    {
+      "order": 4,
+      "title": "The Hub",
+      "source": "04-hub.png",
+      "file": "04-the-hub.png",
+      "sha256": "2429bc403ba15512388c6bc30b9347a8bae208b35a4f7b194de9778fa477e050"
+    },
+    {
+      "order": 5,
+      "title": "Fantasy watch",
+      "source": "05-fantasy.png",
+      "file": "05-fantasy-watch.png",
+      "sha256": "986d99edb547de45cbc96429871b72ed0de03e1eda300d8c258c0bbe5c885fca"
+    },
+    {
+      "order": 6,
+      "title": "Winners",
+      "source": "06-winners.png",
+      "file": "06-winners.png",
+      "sha256": "8bc46ea8b77b4647373681e22337d1f626a05ba253e183cd3c2ec45943bb653e"
+    },
+    {
+      "order": 7,
+      "title": "Gary Billfold",
+      "source": "07-billfold.png",
+      "file": "07-gary-billfold.png",
+      "sha256": "66cd9d698bba40d5872dd42440d8862f98549960925ea6d3a9eaaf6da46326e5"
+    }
+  ]
+}
