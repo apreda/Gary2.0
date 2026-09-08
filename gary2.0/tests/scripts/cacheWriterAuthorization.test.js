@@ -96,7 +96,6 @@ describe('authorized cache refreshes preserve public cache row contracts', () =>
         if (call.url.pathname === '/mlb/v1/lineups') return Response.json({ data: entries });
         if (call.url.pathname === '/mlb/v1/season_stats') return Response.json({ data: [] });
       }
-      if (call.url.hostname === 'statsapi.mlb.com') return Response.json({ dates: [] });
       if (call.url.hostname === 'fixture.invalid') {
         expect(call.headers.get('Authorization')).toBe(`Bearer ${serviceKey}`);
         if (call.url.pathname === '/rest/v1/insight_connections') return Response.json([]);
@@ -115,5 +114,45 @@ describe('authorized cache refreshes preserve public cache row contracts', () =>
     expect(row).toMatchObject({ date: '2026-09-06', game_id: '99', home_team: 'CWS', away_team: 'BOS', status: 'confirmed' });
     expect(row.payload.home.fielders).toHaveLength(9);
     expect(row.payload.away.fielders).toHaveLength(9);
+    expect(f.calls.every(c => ['fixture.invalid', 'api.balldontlie.io'].includes(c.url.hostname))).toBe(true);
+  });
+
+  it('projects exact-game BDL pitchers across doubleheaders and leaves conflicting probables unknown', async () => {
+    const games = [game, { ...game, id: 100, date: '2026-09-06T23:00:00Z' }];
+    const probable = (abbr, id) => ({
+      team: { abbreviation: abbr, name: abbr }, is_probable_pitcher: true, position: 'SP',
+      player: { id, full_name: `Pitcher ${id}`, bats_throws: 'R/L' },
+    });
+    const prior = { home_team: 'CWS', away_team: 'BOS', payload: Object.fromEntries(['home', 'away'].map(side => [side, {
+      team: side, pitcher: { name: 'Old starter', playerId: '99999' },
+      fielders: [{ name: `Regular ${side}`, playerId: side === 'home' ? '1' : '2' }],
+    }])) };
+    const f = await fixture('mlb-field-lineups', { transport: call => {
+      if (call.url.hostname === 'api.balldontlie.io') {
+        if (call.url.pathname === '/mlb/v1/games') return Response.json({ data: games });
+        if (call.url.pathname === '/mlb/v1/lineups') {
+          const id = call.url.searchParams.get('game_ids[]');
+          expect(['99', '100']).toContain(id);
+          return Response.json({ data: id === '99'
+            ? [probable('CWS', 10), probable('CWS', 11), probable('BOS', 12)]
+            : [probable('CWS', 20), probable('BOS', 21)] });
+        }
+      }
+      if (call.url.hostname === 'fixture.invalid') {
+        if (call.url.pathname === '/rest/v1/insight_connections') return Response.json([]);
+        if (call.url.pathname === '/rest/v1/mlb_field_lineups') {
+          return call.method === 'POST' ? new Response(null, { status: 201 }) : Response.json([prior]);
+        }
+      }
+      throw new Error(`Unexpected lineup request ${call.url}`);
+    } });
+    const response = await f.handler(serviceRequest('mlb-field-lineups'));
+    expect(await response.json()).toMatchObject({ ok: true, projected: 2, scheduleSource: 'balldontlie' });
+    const rows = JSON.parse(f.calls.find(c => c.method === 'POST').body);
+    expect(rows[0].payload.home.pitcher).toMatchObject({ unknown: true, playerId: '' });
+    expect(rows[0].payload.away.pitcher).toMatchObject({ name: 'Pitcher 12', playerId: '12', hand: 'L' });
+    expect(rows[1].payload.home.pitcher).toMatchObject({ name: 'Pitcher 20', playerId: '20', hand: 'L' });
+    expect(rows[1].payload.away.pitcher.playerId).toBe('21');
+    expect(f.calls.every(c => ['fixture.invalid', 'api.balldontlie.io'].includes(c.url.hostname))).toBe(true);
   });
 });

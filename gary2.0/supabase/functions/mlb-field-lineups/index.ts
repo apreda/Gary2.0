@@ -14,9 +14,10 @@
 //
 // PROJECTED-LINEUP FALLBACK: for any game on today's slate with NO posted BDL sheet,
 // a PROJECTED payload is built from each team's most recent confirmed regulars (today's
-// flags refreshed) + today's REAL probable starter (MLB Stats API hydrate=probablePitcher),
+// flags refreshed) + today's probable starter from the exact BDL game lineup,
 // written with status='projected'. When the confirmed sheet later posts it UPSERT-overwrites
-// the projected row in place (status -> confirmed). So EVERY game shows a field immediately.
+// the projected row in place (status -> confirmed). Games without a recent confirmed
+// lineup remain unavailable until the provider supplies one.
 
 import { isCacheServiceRequest } from "../live-scores/authorization.ts";
 
@@ -24,9 +25,6 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const BDL_KEY = Deno.env.get("BALLDONTLIE_API_KEY") ?? "";
 const BDL_BASE = "https://api.balldontlie.io";
-// MLB Stats API — free, no key. Used to hydrate today's REAL probable starters
-// (?hydrate=probablePitcher) for the projected-lineup fallback's pitcher slot.
-const MLB_STATS_BASE = "https://statsapi.mlb.com/api/v1";
 
 function estDate(offset = 0): string {
   const d = new Date(Date.now() + offset * 86400000);
@@ -36,43 +34,9 @@ function estDate(offset = 0): string {
 }
 const handOf = (bt?: string) => (bt || "").split("/")[1]?.trim() || (bt || "").slice(-1) || "";
 const batsOf = (bt?: string) => (bt || "").split("/")[0]?.trim() || "";
-// BDL probable pitcher (from getMlbLineups) → the { name, hand, playerId } shape projTeam
-// expects. Used as the projected pitcher source when the MLB Stats API schedule is down.
+// All displayed identities stay in BDL's namespace. A probable must belong to
+// this exact game's sheet; never borrow the last game's pitcher or join by names.
 const bdlProbable = (p: any) => p?.name ? { name: p.name, hand: handOf(p.batsThrows), playerId: String(p.playerId ?? "") } : null;
-
-// ONE ID SPACE PER PAYLOAD (Aug 14 2026). Every fielder in this payload carries
-// a BDL player id, but the projected pitcher was taking `p.id` straight off the
-// MLB Stats API schedule — an MLBAM id (571927) sitting next to BDL ids (92,
-// 208). Downstream, playerInsightCards fed that MLBAM id to BDL's player APIs,
-// resolved nothing, and built ZERO pitcher cards every morning the projected
-// fallback was in play: no LAST OUTING, no LAST 3, no LAST 5 OUTINGS on the
-// whole slate. The Stats API stays the authority on WHO is starting (it is
-// today's real probable, not last turn's); the id comes from BDL's own sheet
-// when both name the same arm. If they disagree, ship the name with an EMPTY
-// id — a missing id degrades gracefully, a foreign-namespace id silently
-// resolves to the wrong player or to nothing at all.
-const foldPitcherName = (s: string) => String(s || "")
-  .normalize("NFD").replace(/[̀-ͯ]/g, "")
-  .toLowerCase().replace(/[.\-'’]/g, "").replace(/\s+/g, " ").trim();
-// The same merge also rescues the THROWING HAND. `?hydrate=probablePitcher`
-// returns the arm's id and name but no pitchHand, so `hand` has been shipping
-// empty on every projected lineup since the fallback was built — and
-// platoonEdge bails outright on an unknown opposing hand ("examined 0" all
-// morning, no platoon rows for the Picks rail). BDL's sheet carries batsThrows
-// for the probable even while its batting order is still empty, so when the two
-// sources name the same arm we take BOTH the id and the hand from it. A posted
-// statsapi hand (should one ever appear) still wins.
-function withBdlId(prob: { name: string; hand: string; playerId: string } | null, bdlSide: any) {
-  if (!prob) return null;
-  const bdlPitcher = bdlSide?.pitcher;
-  const sameArm = bdlPitcher?.name && foldPitcherName(bdlPitcher.name) === foldPitcherName(prob.name);
-  if (!sameArm) return { ...prob, playerId: "" };
-  return {
-    ...prob,
-    playerId: String(bdlPitcher.playerId ?? ""),
-    hand: prob.hand || handOf(bdlPitcher.batsThrows),
-  };
-}
 
 const sbHeaders = {
   apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json",
@@ -91,40 +55,6 @@ async function bdlGet(path: string, params: Record<string, string | string[]>): 
   if (!res.ok) throw new Error(`BDL ${path} ${res.status}`);
   const json = await res.json();
   return Array.isArray(json?.data) ? json.data : [];
-}
-
-// MLB Stats API schedule for a date, hydrated with probable starters. Flattens
-// dates[].games[] → game[]. No key needed; plain fetch works in the edge runtime.
-async function getMlbSchedule(date: string): Promise<any[]> {
-  const res = await fetch(`${MLB_STATS_BASE}/schedule?sportId=1&date=${date}&hydrate=probablePitcher,linescore`);
-  if (!res.ok) throw new Error(`MLB Stats API schedule ${res.status}`);
-  const data = await res.json();
-  const games: any[] = [];
-  for (const d of (data?.dates || [])) for (const g of (d?.games || [])) games.push(g);
-  return games;
-}
-
-// Match a BDL game side (abbreviation + name) to an MLB Stats API schedule team.
-// Abbreviations don't always agree across providers (AZ/ARI, CWS/CHW, ...), so we
-// accept either an exact abbreviation hit OR a team-name last-word hit (mirrors the
-// laptop builder's resolver).
-function teamMatches(schedTeam: any, bdlAbbr?: string, bdlName?: string): boolean {
-  const sAbbr = (schedTeam?.abbreviation || "").toUpperCase();
-  const sName = (schedTeam?.name || schedTeam?.teamName || "").toLowerCase();
-  if (sAbbr && bdlAbbr && sAbbr === String(bdlAbbr).toUpperCase()) return true;
-  const last = (bdlName || "").toLowerCase().split(" ").filter(Boolean).pop();
-  return !!(last && sName.includes(last));
-}
-
-// Real probable starter from the MLB Stats API schedule (hydrate=probablePitcher).
-// Returns { name, hand, playerId } or null when no probable is posted yet — NEVER
-// reuses a prior game's arm (the rotation turns over every ~5 days).
-function probableFrom(schedTeamSide: any): { name: string; hand: string; playerId: string } | null {
-  const p = schedTeamSide?.probablePitcher;
-  if (!p) return null;
-  const name = p.fullName || `${p.firstName || ""} ${p.lastName || ""}`.trim();
-  if (!name) return null;
-  return { name, hand: p.pitchHand?.code || "", playerId: String(p.id ?? "") };
 }
 
 // Port of bdl.getMlbLineups: group entries by team abbr → { batters[], pitcher, teamName }.
@@ -187,33 +117,6 @@ Deno.serve(async (req) => {
     games.push(g);
   }
 
-  // Real probable starters for the date, hydrated once from the MLB Stats API schedule
-  // (?hydrate=probablePitcher). Used to fill the PROJECTED lineup's pitcher slot with the
-  // ACTUAL probable for THIS game/date — NEVER the team's last game's starter (the rotation
-  // turns over every ~5 days). Falls back to BDL's probable flag below if this fails.
-  let schedule: any[] = [];
-  let scheduleSource = "mlb-stats-api";
-  try { schedule = await getMlbSchedule(dateStr); }
-  catch { scheduleSource = "bdl-fallback"; }
-
-  // Resolve { home, away } real probables for a BDL game by matching teams against the
-  // MLB Stats API schedule. Doubleheaders share teams+date — take the scheduled game
-  // closest to first pitch.
-  function probablesForGame(game: any, homeAbbr?: string, awayAbbr?: string) {
-    const homeName = game.home_team?.full_name || game.home_team?.name || "";
-    const awayName = game.away_team?.full_name || game.away_team?.name || "";
-    // BDL MLB games carry first-pitch ISO in `status` (for scheduled games); fall back to
-    // the slate date. Only used to break doubleheader ties, so a NaN here is harmless.
-    const startMs = new Date(game.start_time || game.status || game.date || dateStr).getTime();
-    const candidates = schedule.filter((g) =>
-      teamMatches(g.teams?.home?.team, homeAbbr, homeName) &&
-      teamMatches(g.teams?.away?.team, awayAbbr, awayName));
-    const match = candidates.sort((a, b) =>
-      Math.abs(new Date(a.gameDate || 0).getTime() - (startMs || 0)) -
-      Math.abs(new Date(b.gameDate || 0).getTime() - (startMs || 0)))[0];
-    return { home: probableFrom(match?.teams?.home), away: probableFrom(match?.teams?.away) };
-  }
-
   // today's MLB insight_connections → hot/cold / HR / platoon flags by player
   let insights: any[] = [];
   try { insights = await sbGet("insight_connections", `date=eq.${dateStr}&league=eq.MLB&select=category,headline,player_id&limit=2000`); }
@@ -273,10 +176,6 @@ Deno.serve(async (req) => {
       const homeAbbr = game.home_team?.abbreviation, awayAbbr = game.away_team?.abbreviation;
       if (!homeAbbr || !awayAbbr) continue;
 
-      // Real probable starters for THIS game/date (MLB Stats API), resolved per game.
-      // When the schedule fetch failed, fall back to BDL's probable from getMlbLineups below.
-      const probables = probablesForGame(game, homeAbbr, awayAbbr);
-
       const lineups = await getMlbLineups(String(game.id));
       const home = lineups?.[homeAbbr], away = lineups?.[awayAbbr];
 
@@ -316,17 +215,12 @@ Deno.serve(async (req) => {
         away: buildTeam(away, pitcherObj(away), pitcherObj(home)),
       };
       if (!payload.home && !payload.away) {
-        // No usable confirmed sheet (null or empty batters) → project from recent regulars,
-        // with today's REAL probable starters. When the MLB Stats API schedule was
-        // unavailable, fall back to BDL's probable arm (from getMlbLineups) for the slot.
+        // Project regular fielders when batting orders are not posted. Probable
+        // pitchers still come only from this exact game's current BDL sheet.
+        // An absent or conflicting probable remains unknown.
         status = "projected";
-        // The Stats API probable names the arm; its id is MLBAM, so re-key it to
-        // BDL's id off BDL's own sheet (see withBdlId). The BDL-sourced branch is
-        // already in BDL's id space and needs no re-keying.
-        const homeProb = withBdlId(probables.home, lineups?.[homeAbbr])
-          || (lineups?.[homeAbbr]?.pitcher ? bdlProbable(lineups[homeAbbr].pitcher) : null);
-        const awayProb = withBdlId(probables.away, lineups?.[awayAbbr])
-          || (lineups?.[awayAbbr]?.pitcher ? bdlProbable(lineups[awayAbbr].pitcher) : null);
+        const homeProb = bdlProbable(home?.pitcher);
+        const awayProb = bdlProbable(away?.pitcher);
         payload = {
           home: projTeam(homeAbbr, homeProb, awayProb),
           away: projTeam(awayAbbr, awayProb, homeProb),
@@ -355,6 +249,6 @@ Deno.serve(async (req) => {
 
   const projected = rows.filter((r) => r.status === "projected").length;
   return new Response(JSON.stringify({ ok: true, date: dateStr, games: games.length, written,
-    projected, confirmed: written - projected, scheduleSource, log }),
+    projected, confirmed: written - projected, scheduleSource: "balldontlie", log }),
     { headers: { "Content-Type": "application/json" } });
 });
