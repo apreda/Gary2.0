@@ -33,14 +33,22 @@ Verification: 330 focused backend/result-contract tests passed, followed by
 33 tests after hardening the scoring ledger (overlapping suites). Seven initial
 recap/native suites passed 36 checks, including executable Swift score mapping,
 box decoding, football/baseball rows, zero/missing values, dated-ticket isolation,
-and full/rolling Home request ownership. Current simulator build/visual evidence
-is recorded in the workspace evidence directory below.
+and full/rolling Home request ownership. Release simulator build 917 passed;
+the completed build's three affected native source hashes match this fix.
+An isolated signed-out simulator shows FINAL, SMU 27, FSU 24, TDs 6 on the
+reported card. The rendered accessibility tree also confirms all five MLB
+cards have final scores and HR totals (Mets 9, Marlins 4, HRs 1, for example).
+`headline-final.png`, `headline-accessibility.txt`, and the source/binary parity
+receipt are saved in the workspace evidence directory below. Horizontal input
+did not advance the simulator carousel, so the MLB visual check is limited
+to its rendered accessibility output and the executable Swift tests.
 
-The production audit confirms canonical worker paths and no unpushed commits
-at its snapshot. Global parity is not green: concurrent shared work includes
-the unrelated new `mlb-live-batting` function, and the required private local
-Google configuration remains different from the redacted template. Do not
-interpret this task as verification or deployment of those separate changes.
+The final production audit confirms canonical worker paths, healthy Winners
+workers, all 21 edge functions deployed, and no unpushed commits at its snapshot.
+Global parity still reports concurrent shared uncommitted work, including the
+required private local Google configuration exception. No task-owned source
+remains uncommitted. Do not interpret this task as verification or deployment
+of those separate changes.
 
 Evidence: `/Users/adam.preda/Documents/ChatGPT/Gary/headline-score-fix-2026-09-08`.
 The native change still requires a newly built app; a data repair alone cannot
