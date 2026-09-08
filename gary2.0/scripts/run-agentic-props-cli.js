@@ -457,7 +457,7 @@ export async function runAgenticPropsCli({
             return {
               ...pick,
               team: reconcilePropTeam(pick.team, _oddsRow?.team),
-              ...(leagueLabel === 'NCAAF' ? { player_id: _oddsRow?.player_id ?? null } : {}),
+              ...(FOOTBALL_PROP_LEAGUES.has(leagueLabel) ? { player_id: _oddsRow?.player_id ?? null } : {}),
               odds: _providerOdds != null ? String(_providerOdds) : (pick.odds != null ? String(pick.odds) : null),
               _oddsUnverified: _side == null || _providerOdds == null,
               prop: displayProp,
@@ -485,7 +485,7 @@ export async function runAgenticPropsCli({
             const beforeOdds = result.picks.length;
             result.picks = result.picks.filter(p => {
               if (!p.bet) { console.warn(`[Props CLI] 🛑 Direction gate: dropped ${p.player} ${p.prop} — bet must be over, under, or yes`); return false; }
-              if (leagueLabel === 'NCAAF' && p.player_id == null) { console.warn(`[Props CLI] 🛑 Player-id gate: dropped ${p.player} ${p.prop} — no exact BDL roster id`); return false; }
+              if (FOOTBALL_PROP_LEAGUES.has(leagueLabel) && p.player_id == null) { console.warn(`[Props CLI] 🛑 Player-id gate: dropped ${p.player} ${p.prop} — no exact BDL roster id`); return false; }
               if (p.odds == null) { console.warn(`[Props CLI] 🛑 Odds gate: dropped ${p.player} ${p.prop} — no price at all (model + BDL both missing)`); return false; }
               if (p._oddsUnverified) { console.warn(`[Props CLI] 🛑 Odds gate: dropped ${p.player} ${p.prop} @ ${p.odds} — no BDL line matched the pick (model-quoted price)`); return false; }
               // BET-WINDOW PERMISSION — every sport (founder, Aug 3: props

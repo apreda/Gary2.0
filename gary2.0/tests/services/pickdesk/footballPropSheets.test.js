@@ -61,8 +61,14 @@ describe('THE NFL PROP SHEETS', () => {
   });
 
   it('counts touchdowns instead of averaging them', () => {
-    const clause = seasonClause([wrGame(6, 84, 1), wrGame(3, 41), wrGame(5, 60, 1)], 'anytime_td', '2025');
+    const games = [wrGame(6, 84, 1), wrGame(3, 41), wrGame(5, 60, 1)]
+      .map(game => ({ ...game, fumbles_touchdowns: 0, interception_touchdowns: 0, kick_return_touchdowns: 0, punt_return_touchdowns: 0 }));
+    const clause = seasonClause(games, 'anytime_td', '2025');
     expect(clause).toBe('2025: 1 0 1 (3 g, scored in 2)');
+  });
+
+  it('omits TD history when summaries do not establish complete scoring totals', () => {
+    expect(seasonClause([{}, { rush_tds: null, rec_tds: null }, wrGame(3, 41)], 'anytime_td', '2025')).toBeNull();
   });
 
   it('prints nothing for a player with no games in either season', () => {

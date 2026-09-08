@@ -92,7 +92,20 @@ describe('NCAAF prop stat semantics', () => {
     expect(ncaafActualFromStatRow(stat, 'rushing_receiving_yards')).toBe(60);
     expect(ncaafActualFromStatRow(stat, 'anytime_touchdown')).toBe(1);
     expect(ncaafActualFromStatRow({ rushing_touchdowns: null, receiving_touchdowns: 1 }, 'anytime_touchdown')).toBe(1);
-    expect(ncaafActualFromStatRow({ ...stat, rushing_touchdowns: 0 }, 'anytime_touchdown')).toBe(0);
+    expect(ncaafActualFromStatRow({ ...stat, rushing_touchdowns: 0 }, 'anytime_touchdown')).toBeNull();
+  });
+
+  it.each([' ', false, true, [], {}, 12.5, Number.MAX_SAFE_INTEGER + 1])('rejects corrupt measurements %j', value => {
+    expect(ncaafActualFromStatRow({ passing_yards: value }, 'passing_yards')).toBeNull();
+    expect(hasNcaafPropStatEvidence({ passing_yards: value }, 'passing_yards')).toBe(false);
+  });
+
+  it('preserves signed yards and measured zero but rejects negative counts and unsafe sums', () => {
+    expect(ncaafActualFromStatRow({ rushing_yards: '-3' }, 'rushing_yards')).toBe(-3);
+    expect(ncaafActualFromStatRow({ receptions: '0' }, 'receptions')).toBe(0);
+    expect(ncaafActualFromStatRow({ receptions: -1 }, 'receptions')).toBeNull();
+    expect(ncaafActualFromStatRow({ rushing_touchdowns: -1, receiving_touchdowns: 0 }, 'rushing_receiving_touchdowns')).toBeNull();
+    expect(ncaafActualFromStatRow({ rushing_yards: Number.MAX_SAFE_INTEGER, receiving_yards: 1 }, 'rushing_receiving_yards')).toBeNull();
   });
 
   it('keeps missing data null instead of fabricating zero', () => {
@@ -114,6 +127,14 @@ describe('NCAAF prop stat semantics', () => {
 });
 
 describe('NCAAF market player validation', () => {
+  it.each([0, 5])('admits current zero-TD evidence ahead of a prior season with %s TDs without proving a final no-score result', priorTds => {
+    const stats = { player: { id: 22 }, rushing_touchdowns: 0, receiving_touchdowns: 0 };
+    const result = validateNcaafPropBoard({ props: [{ player: 'Quintrevion Wisner', prop_type: 'anytime_touchdown', line: 0.5 }],
+      rosterIndex, currentStats: [stats], previousStats: [{ ...stats, rushing_touchdowns: priorTds }], season: 2026 });
+    expect(result.accepted).toEqual([expect.objectContaining({ player_id: '22', prop_type: 'anytime_touchdown', _bdlStatsSeason: 2026 })]);
+    expect(ncaafActualFromStatRow(stats, 'anytime_touchdown')).toBeNull();
+  });
+
   it('requires an exact current-game roster player and stamps BDL team/id', () => {
     const props = [{ player: 'Arch Manning', prop_type: 'passing_yards', line: 268.5 }];
     const currentStats = [{ player: { id: 21 }, passing_yards: 0 }];

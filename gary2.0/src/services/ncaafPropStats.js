@@ -7,9 +7,15 @@
  */
 
 function numberOrNull(value) {
-  if (value === null || value === undefined || value === '') return null;
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  if (typeof value === 'string' && value.trim() === '') return null;
   const number = Number(value);
-  return Number.isFinite(number) ? number : null;
+  return Number.isSafeInteger(number) ? number : null;
+}
+
+function statOrNull(row, field) {
+  const number = numberOrNull(row?.[field]);
+  return number !== null && (field.endsWith('_yards') || number >= 0) ? number : null;
 }
 
 function normalizedType(type) {
@@ -21,9 +27,9 @@ function normalizedType(type) {
 }
 
 function sumRequired(row, fields) {
-  const values = fields.map((field) => numberOrNull(row?.[field]));
+  const values = fields.map((field) => statOrNull(row, field));
   return values.every((value) => value !== null)
-    ? values.reduce((sum, value) => sum + value, 0)
+    ? numberOrNull(values.reduce((sum, value) => sum + value, 0))
     : null;
 }
 
@@ -47,13 +53,13 @@ export function ncaafActualFromStatRow(row, propType) {
     return sumRequired(row, ['rushing_touchdowns', 'receiving_touchdowns']);
   }
   if (['anytime_touchdown', 'anytime_td'].includes(type)) {
-    const rushing = numberOrNull(row?.rushing_touchdowns);
-    const receiving = numberOrNull(row?.receiving_touchdowns);
+    const rushing = statOrNull(row, 'rushing_touchdowns');
+    const receiving = statOrNull(row, 'receiving_touchdowns');
     // One provider-confirmed TD is enough to prove YES even when the other
-    // category is null/non-applicable. Proving NO requires both categories;
-    // never turn one missing category into a fabricated zero.
+    // category is null/non-applicable. BDL's college player-stat schema does
+    // not include special-teams TDs, which also count for this market. Even
+    // two offensive zeroes cannot prove NO; leave the ticket unresolved.
     if ((rushing ?? 0) > 0 || (receiving ?? 0) > 0) return 1;
-    if (rushing !== null && receiving !== null) return 0;
     return null;
   }
 
@@ -84,10 +90,15 @@ export function ncaafActualFromStatRow(row, propType) {
   };
 
   const field = fieldByType[type];
-  return field ? numberOrNull(row[field]) : null;
+  return field ? statOrNull(row, field) : null;
 }
 
 export function hasNcaafPropStatEvidence(row, propType) {
+  if (['anytime_touchdown', 'anytime_td'].includes(normalizedType(propType))) {
+    // A measured scoring category (including zero) grounds player analysis.
+    // It need not establish the full exact-game outcome required to settle.
+    return ['rushing_touchdowns', 'receiving_touchdowns'].some(field => statOrNull(row, field) !== null);
+  }
   return ncaafActualFromStatRow(row, propType) !== null;
 }
 

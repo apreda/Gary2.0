@@ -185,8 +185,31 @@ describe('the production prop loop uses exact complete NFL plays for missing mea
   });
 });
 
-describe('NCAAF shares the complete-box boundary without changing college stat semantics', () => {
+describe('NCAAF complete-box and strict measurement boundaries', () => {
   const currentPick = { ...pick, sport: 'NCAAF' };
+
+  it.each([' ', false, true, [], {}, 12.5, Number.MAX_SAFE_INTEGER + 1])('keeps corrupt college yards %j pending through the actual loop', async value => {
+    const h = runner({ currentPick, pages: () => ({ data: [stat({ passing_yards: value })] }) });
+    expect(await h.run()).toMatchObject({ unresolvedFinal: 1, persisted: 0 });
+    expect(h.inserts).toEqual([]);
+    expect(h.lookup).not.toHaveBeenCalled();
+    expect(h.getPropGrounding).not.toHaveBeenCalled();
+  });
+
+  it.each(['over', 'under'])('does not settle anytime TD %s from offense-only zeroes', async bet => {
+    const h = runner({ currentPick: { ...currentPick, prop: 'anytime_touchdown', bet, line: 0.5 },
+      pages: () => ({ data: [stat({ rushing_touchdowns: 0, receiving_touchdowns: 0 })] }) });
+    expect(await h.run()).toMatchObject({ unresolvedFinal: 1, persisted: 0 });
+    expect(h.inserts).toEqual([]);
+    expect(h.getPropGrounding).not.toHaveBeenCalled();
+  });
+
+  it.each([['over', 'won'], ['under', 'lost']])('settles an exact offensive TD scorer %s as %s', async (bet, result) => {
+    const h = runner({ currentPick: { ...currentPick, prop: 'anytime_touchdown', bet, line: 0.5 },
+      pages: () => ({ data: [stat({ rushing_touchdowns: null, receiving_touchdowns: 1 })] }) });
+    expect(await h.run()).toMatchObject({ persisted: 1, unresolvedFinal: 0 });
+    expect(h.inserts).toEqual([expect.objectContaining({ result, actual_value: 1, game_id: '99', sport: 'NCAAF' })]);
+  });
 
   it('finds the exact stored player on the final page before grading', async () => {
     const h = runner({ currentPick, pages: (_path, params) => params.includes('cursor=2')

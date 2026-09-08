@@ -183,7 +183,7 @@ export function clearedCountClause(countingWindow, playerKey, propType, line) {
  * boardProps } in the props CLI's mapping shape — the chassis (gates, caps,
  * TD category stamp, store) is shared with MLB unchanged. boardProps is the
  * validated market board the CLI must adopt for provider-price
- * reconciliation (it carries NCAAF's exact player_id).
+ * reconciliation (it carries football's exact player_id).
  */
 export async function analyzeFootballPropsDesk(game, playerProps, options = {}) {
   const league = options.league;
@@ -196,9 +196,8 @@ export async function analyzeFootballPropsDesk(game, playerProps, options = {}) 
     ? await buildNflPropsAgenticContext(game, playerProps, { nocache: options.nocache, regularOnly: options.regularOnly })
     : await buildNcaafPropsAgenticContext(game, playerProps, { nocache: options.nocache });
 
-  // The validated board. NCAAF narrows to roster+stat-validated rows (exact
-  // player_id attached); NFL returns the (regularOnly-filtered) feed, so
-  // narrow it here to supported market types and validated candidates.
+  // Both contexts return player- and market-stat-validated rows with the
+  // exact provider player_id attached. Keep the supported-market boundary.
   const validatedPlayers = new Set((context.propCandidates || []).map((c) => norm(c.player)));
   if (!validatedPlayers.size) {
     throw new Error(`${league} props desk has no roster/stat-validated player candidates`);

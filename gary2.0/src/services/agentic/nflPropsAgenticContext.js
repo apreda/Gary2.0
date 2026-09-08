@@ -195,6 +195,36 @@ const NFL_PROP_TO_FIELD = {
 
 const NFL_ANYTIME_TD_TYPES = ['anytime_touchdown', 'anytime_td', 'player_anytime_td'];
 
+const NFL_FIELD_ALIASES = {
+  pass_yds: ['passing_yards'], rush_yds: ['rushing_yards'], rec_yds: ['receiving_yards'],
+  pass_tds: ['passing_touchdowns'], rush_tds: ['rushing_touchdowns'], rec_tds: ['receiving_touchdowns'],
+  pass_comp: ['passing_completions'], pass_att: ['passing_attempts'], rush_att: ['rushing_attempts'],
+  ints: ['passing_interceptions'],
+  longest_completion: ['passing_long', 'long_passing'],
+  longest_rush: ['long_rushing', 'rushing_long'],
+  longest_reception: ['long_reception', 'receiving_long'],
+};
+const NFL_YARD_FIELDS = new Set(['pass_yds', 'rush_yds', 'rec_yds', 'longest_completion', 'longest_rush', 'longest_reception']);
+const NFL_ANYTIME_FIELDS = ['rush_tds', 'rec_tds', 'fumbles_touchdowns', 'interception_touchdowns', 'kick_return_touchdowns', 'punt_return_touchdowns'];
+
+function nflMeasuredField(row, field) {
+  for (const key of [field, ...(NFL_FIELD_ALIASES[field] || [])]) {
+    const value = row?.[key];
+    if (value == null) continue;
+    if (!['number', 'string'].includes(typeof value) || (typeof value === 'string' && !value.trim())) return null;
+    const number = Number(value);
+    return Number.isSafeInteger(number) && (NFL_YARD_FIELDS.has(field) || number >= 0) ? number : null;
+  }
+  return null;
+}
+
+function nflMeasuredSum(row, fields) {
+  const values = fields.map(field => nflMeasuredField(row, field));
+  if (values.some(value => value === null)) return null;
+  const sum = values.reduce((total, value) => total + value, 0);
+  return Number.isSafeInteger(sum) ? sum : null;
+}
+
 /**
  * The actual value one summarized game row contributes to a market — the one
  * definition the cleared counts and THE NFL PROP SHEETS both read, so a sheet
@@ -202,13 +232,43 @@ const NFL_ANYTIME_TD_TYPES = ['anytime_touchdown', 'anytime_td', 'player_anytime
  */
 export function nflStatForProp(game, propType) {
   if (!game) return null;
-  const normalizedType = String(propType || '').toLowerCase();
+  const normalizedType = String(propType || '').trim().toLowerCase();
   if (NFL_ANYTIME_TD_TYPES.includes(normalizedType)) {
-    return numberOrZero(game.rush_tds) + numberOrZero(game.rec_tds);
+    // The final-game settlement contract includes return/recovery TDs too.
+    // A sparse summary cannot establish an exact TD total or a no-score game.
+    return nflMeasuredSum(game, NFL_ANYTIME_FIELDS);
   }
-  const field = NFL_PROP_TO_FIELD[normalizedType] || normalizedType;
-  const value = game[field];
-  return value === undefined ? null : value;
+  if (['rushing_receiving_yards', 'rush_rec_yds'].includes(normalizedType)) return nflMeasuredSum(game, ['rush_yds', 'rec_yds']);
+  if (['passing_rushing_yards', 'pass_rush_yds'].includes(normalizedType)) return nflMeasuredSum(game, ['pass_yds', 'rush_yds']);
+  if (['yards', 'total_yards'].includes(normalizedType)) return nflMeasuredSum(game, ['pass_yds', 'rush_yds', 'rec_yds']);
+  const field = NFL_PROP_TO_FIELD[normalizedType]
+    || ({ pass_completions: 'pass_comp', longest_pass: 'longest_completion' })[normalizedType]
+    || normalizedType;
+  return nflMeasuredField(game, field);
+}
+
+/** A market needs measured player data; roster membership alone is not evidence. */
+export function hasNflPropStatEvidence(row, propType) {
+  if (NFL_ANYTIME_TD_TYPES.includes(String(propType || '').trim().toLowerCase())) {
+    // Measured scoring categories ground a TD market without asserting an
+    // exact historical total from an incomplete box score.
+    return NFL_ANYTIME_FIELDS.some(field => nflMeasuredField(row, field) !== null);
+  }
+  return isSupportedNflPropType(propType) && nflStatForProp(row, propType) !== null;
+}
+
+export function validateNflPropBoard({ props, candidates, playerIdMap, playerSeasonStats, playerGameLogs, priorSeasonStats, priorGameLogs }) {
+  const candidateNames = new Set(candidates.map(candidate => candidate.player.toLowerCase()));
+  return props.flatMap(prop => {
+    const name = String(prop.player || '').toLowerCase();
+    const player = playerIdMap[name];
+    const providerId = prop.player_id ?? prop.playerId;
+    if (!candidateNames.has(name) || !player?.id || providerId == null || String(providerId) !== String(player.id)) return [];
+    const rows = [playerSeasonStats?.[player.id], priorSeasonStats?.[player.id],
+      ...(playerGameLogs?.[player.id]?.games || []), ...(priorGameLogs?.[player.id]?.games || [])];
+    if (!rows.some(row => hasNflPropStatEvidence(row, prop.prop_type))) return [];
+    return [{ ...prop, player_id: player.id, team: player.team }];
+  });
 }
 
 export function calculateNflHitRate(games, propType, line) {
@@ -866,9 +926,20 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
   const priorSeasonStats = priorSeasonStatsRaw
     || (carryPrior && dataWindow.baselineSeason === dataWindow.priorSeason ? playerSeasonStats : null);
 
+  const validatedProps = validateNflPropBoard({
+    props: filteredProps, candidates: availableCandidates, playerIdMap,
+    playerSeasonStats, playerGameLogs, priorSeasonStats, priorGameLogs,
+  });
+  const statCandidates = availableCandidates.flatMap(candidate => {
+    const markets = validatedProps.filter(prop => prop.player.toLowerCase() === candidate.player.toLowerCase());
+    if (!markets.length) return [];
+    return [{ ...candidate, playerId: playerIdMap[candidate.player.toLowerCase()].id,
+      props: candidate.props.filter(prop => markets.some(market => market.prop_type === prop.type && Number(market.line) === Number(prop.line))) }];
+  });
+
   const playersWithStats = Object.keys(playerSeasonStats).length;
   const playersWithLogs = Object.keys(playerGameLogs).length;
-  const totalCandidates = availableCandidates.length;
+  const totalCandidates = statCandidates.length;
   console.log(`[NFL Props Context] Stats coverage: ${playersWithStats}/${totalCandidates} | Logs coverage: ${playersWithLogs}/${totalCandidates}`);
 
   const marketSnapshot = buildMarketSnapshot(game.bookmakers || [],
@@ -880,7 +951,7 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
   const playerStats = buildNflPlayerStatsText(
     game.home_team,
     game.away_team,
-    availableCandidates,
+    statCandidates,
     playerSeasonStats,
     playerIdMap,
     formattedInjuries,
@@ -891,7 +962,7 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
   // Build token data
   const tokenData = buildNflPropsTokenSlices(
     playerStats,
-    availableCandidates,
+    statCandidates,
     formattedInjuries,
     marketSnapshot,
     playerSeasonStats,
@@ -921,7 +992,7 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     },
     gameEnvironment: getNflGameTotalContext(marketSnapshot, game.home_team, game.away_team),
     propCount: playerProps.length,
-    topCandidates: availableCandidates.map(p => p.player).slice(0, 6),
+    topCandidates: statCandidates.map(p => p.player).slice(0, 6),
     playerStatsAvailable: playersWithStats > 0
   };
 
@@ -941,7 +1012,7 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
   }
 
   console.log(`[NFL Props Context] ✓ Built context:`);
-  console.log(`   - ${availableCandidates.length} player candidates`);
+  console.log(`   - ${statCandidates.length} player candidates with measured market data`);
   console.log(`   - ${playersWithStats} with season stats (${(statsCoverage * 100).toFixed(0)}%)`);
   console.log(`   - ${playersWithLogs} with game logs (${(logsCoverage * 100).toFixed(0)}%)`);
   console.log(`   - ${formattedInjuries.length} injuries`);
@@ -951,8 +1022,8 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
   return {
     gameSummary,
     tokenData,
-    playerProps: filteredProps,
-    propCandidates: availableCandidates,
+    playerProps: validatedProps,
+    propCandidates: statCandidates,
     playerStats,
     playerSeasonStats,
     playerGameLogs,
