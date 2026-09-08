@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+> **Latest direction — September 8, Claude takeover:** Adam explicitly said the Apple sign-in, data-rights and staffed-support issues must be fixed before submission. App Review is on hold. Build 919 already uploaded and processed; 920 is unfinished and has missing Swift components. Read `../HANDOFF_2026-09-08_CLAUDE_FABLE_5_1.md` and the final Git receipt before acting. Older ownership and readiness statements below are historical.
+
 Requested small-slate Winners policy: read
 `../HANDOFF_2026-09-08_WINNERS_SMALL_SLATES.md`. Adam requested automatic
 single-game admission for NFL/MLB, conditional single-game NCAAF admission
@@ -24,19 +26,20 @@ Preserve actual ERA and other useful accurate measurements. BDL is not an
 exclusive source requirement; other sources still need an applicable use basis.
 
 
-Latest Hub direction: read `../HANDOFF_2026-09-08_HUB_RESTORED_917.md`.
-Adam explicitly superseded the unapproved judgment-first 916 candidate and
-requested restoration of the earlier gray-card Hub and original observational
-research before discussing further refinements. Player, team and exact-game
-cards, League Pulse and the original research sections are the foundation.
-The dedicated judgment worker is disabled reversibly; ordinary collection must
-not generate game judgments by default. MLB keeps its compact Fantasy watch
-without a separate Fantasy tab; NFL keeps its weekly desk. Correctness and
-accessibility fixes remain. Header changes and new research categories are
-discussion ideas, not additional implementation requirements. Build 917 is the
-local restoration candidate; the handoff records its verification status.
-Do not export/upload/select the superseded 916 artifact. Final submission
-requires the release owner's settled source and readiness verification.
+Latest Hub direction: read `../HANDOFF_2026-09-08_HUB_RESEARCH_919.md`.
+Adam explicitly authorized a compact, stats-first research dashboard after the
+917 restoration. Surface useful dated measurements and connections; let users
+reach their own conclusions. Workload alone must not imply a reliever is
+unavailable. Keep original research categories and exact player/team/game
+cards. Build 919 compacts the lead, adds two varied supporting observations,
+clarifies research destinations and refreshes the player/team cards. Its
+bullpen ledger preserves named arms, workload, season context and source dates.
+This supersedes the earlier statement that header changes were discussion only.
+The specific visual treatment is an implementation, not a standing style guide.
+The dedicated judgment worker stays disabled and ordinary collection must not
+produce game judgments by default. MLB keeps compact Fantasy watch and NFL its
+weekly desk. Do not export/upload/select superseded 916. Native 919 is frozen
+at `96e7f905`; consult the handoff for final upload and acceptance status.
 
 Latest MLB decision and Winners policy: read
 `../HANDOFF_2026-09-08_MLB_STAGED_JUDGMENT.md`. New production MLB games use

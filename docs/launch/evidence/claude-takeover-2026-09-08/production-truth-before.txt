@@ -1,0 +1,46 @@
+
+═══ PRODUCTION TRUTH ═══
+
+Scheduler              PID 96216 @ /Users/adam.preda/Gary2.0/gary2.0
+Repo                   /Users/adam.preda/Gary2.0/gary2.0
+Commit                 7bae591a+dirty
+Game era (disk)        81cdc873daf6
+Props era (disk)       dd289e7071a6
+[Orchestrator] MLB June brain: codex-gpt-6-astra. Non-MLB game brain: codex-gpt-6-astra. Props desk: codex-gpt-5.6-sol. Model cascade: codex-gpt-5.6-sol → anthropic-claude-opus-5 → anthropic-claude-sonnet-5 (each lane skips its own primary).
+June era (disk)        81cdc873daf6
+Game model (plist)     codex-gpt-6-astra
+Props model (plist)    codex-gpt-5.6-sol
+MLB model (plist)      codex-gpt-6-astra
+Winners worker         PID 759 · running
+Stored (2026-09-08)    10 picks · eras [4f768ec0c9b7, b387a3b48959, 81cdc873daf6] · models [codex-gpt-6-astra]
+MLB publication        10/15 slate games published · 0 started without a pick · 5 pending
+
+─── DEPLOY PARITY (edge functions) ───
+A new version of Supabase CLI is available: v2.117.0 (currently installed v2.104.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+billing-portal         ✅ deployed 2026-09-04T22:12Z (v2)
+create-checkout        ✅ deployed 2026-09-04T22:07Z (v13)
+delete-account         ✅ deployed 2026-09-04T22:44Z (v9)
+engagement-sheet       ✅ deployed 2026-09-05T11:47Z (v7)
+get-tweet-metrics      ✅ deployed 2026-09-08T03:43Z (v14)
+grade-props            ✅ deployed 2026-09-08T13:25Z (v22)
+grade-results          ✅ deployed 2026-09-08T03:52Z (v35)
+live-scores            ✅ deployed 2026-09-08T03:50Z (v22)
+mlb-field-lineups      ✅ deployed 2026-09-08T18:51Z (v11)
+mlb-live-batting       ✅ deployed 2026-09-08T19:15Z (v1)
+notify-new-pick        ✅ deployed 2026-09-08T03:28Z (v8)
+post-delete-tweet      ✅ deployed 2026-09-08T03:43Z (v7)
+post-quote-tweet       ✅ deployed 2026-09-08T03:43Z (v7)
+post-reply-tweet       ✅ deployed 2026-09-08T03:43Z (v13)
+post-single-tweet      ✅ deployed 2026-09-08T03:43Z (v13)
+post-tweet-media       ✅ deployed 2026-09-08T03:43Z (v9)
+reply-engine-scan      ✅ deployed 2026-09-08T03:43Z (v11)
+reply-engine-send      ✅ deployed 2026-09-08T03:43Z (v8)
+social-auto-post       ✅ deployed 2026-09-08T10:10Z (v108)
+stripe-webhook         ✅ deployed 2026-09-04T21:52Z (v18)
+update-x-banner        ✅ deployed 2026-09-08T03:43Z (v8)
+Working tree           ⚠️ 13 uncommitted change(s)
+Unpushed               ✅ none
+
+🚨 PRODUCTION PARITY FAILED OR UNVERIFIED — see flags above
+

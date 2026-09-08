@@ -1,6 +1,8 @@
 # Gary 2.25 App Store submission preparation and source repairs
 
-**918 uploaded; App Review submission remains pending.** The latest user instruction supersedes the earlier end-of-day timing hold: submit as soon as the app is ready, then request expedition and send the email. Adam subsequently explicitly requested fixing the three open content-rights, Apple sign-in and support/report checks. A fresh live readback still shows **2.25 (915) / Prepare for Submission**, disabled Save, the seven ordered screenshots and the unchanged inaccurate Content Rights answer. No expedited-review request or Apple email has been sent by this task.
+> **Latest direction — September 8, Claude takeover:** Adam explicitly said the Apple sign-in, data-rights and staffed-support issues must be fixed before submission. App Review is on hold. Build 919 already uploaded and processed; 920 is unfinished and has missing Swift components. Read `HANDOFF_2026-09-08_CLAUDE_FABLE_5_1.md` at the repository root and the final Git receipt before acting. Older ownership and readiness statements below are historical.
+
+**919 uploaded and processed; 920 reserved for the newly authorized final Hub layout. App Review submission remains pending.** The latest user instruction supersedes the earlier end-of-day timing hold: submit as soon as the app is ready, then request expedition and send the email. Adam subsequently explicitly requested fixing the three open content-rights, Apple sign-in and support/report checks. A fresh live readback still shows **2.25 (915) / Prepare for Submission**, disabled Save, the seven ordered screenshots and the unchanged inaccurate Content Rights answer. No expedited-review request or Apple email has been sent by this task.
 
 The earlier timing hold is historical. No new submission authorization is needed. The authorized replacement build upload makes signed-device acceptance possible; it does not satisfy the remaining factual checks. The final candidate still needs to be frozen and verified after the authorized fixes; testing cannot guarantee no bugs or Apple approval. The saved 915 draft is not an automatic final-candidate decision: a necessary native data-source change requires a new reviewed build with matching screenshots, notes and readiness evidence. Adam superseded the 916 judgment-first Hub and restored the original observational Hub in local build 917. Do not upload 916. The new source-repair candidate is 918, retaining that restoration. This task retains sole ownership of App Store submission, expedition and the subsequent email; no automatic submission has been scheduled.
 
@@ -77,3 +79,35 @@ This task did not read or change the private Google configuration or SecretsLoca
 Root's independent `native-918-artifacts-independent.json` matches all 162 public files to the frozen snapshot, current disk and `994b948a` Git blobs, verifies archive/distribution signatures and the shared executable UUID, and confirms all 21 privacy manifests are byte-identical to 915. The upload is therefore tied to the reviewed source; actual Apple-provider completion, remaining MLB/Savant use permission, and support/inbox staffing are still factual requirements. Do not infer those facts from successful build/export/upload.
 
 **Processing completion:** Apple build UUID `29e19657-fc83-4560-8f9d-fb3168b8dcfe`. The build list reports Ready to Submit (TestFlight's build state, not an App Review submission) and the build detail confirms the existing internal Beta group with one tester. The saved TestFlight What to Test text explicitly asks for actual Apple authorization, sign-in dismissal and retained profile login, plus the changed data/UI checks. No new testers or groups were added. The remaining provider/operator facts and signed-phone result have not been supplied.
+
+
+## Hub research 919 and subsequent 920 reservation
+
+Build 919, frozen public native source `96e7f905`, uploaded successfully on
+September 8 at **21:07:38.621 UTC**. Apple processing is Complete; UUID
+`459985e1-b2fb-4b21-b542-719d016c65f6` has the existing internal Beta group and
+one tester. Its What to Test text is saved and emphasizes actual Apple sign-in,
+compact research navigation, the eight-arm bullpen ledger and large text.
+Archive/distribution source, strict signatures, production entitlements and
+21 privacy manifests passed independent verification. Do not upload 919 again.
+
+919 adds a compact stats-first Hub, explicit research destinations, refreshed
+player/team cards, quiet streak text and dated named bullpen workload/performance.
+Texas's 18 relief innings are presented with named usage, season ERA/IP, source
+dates and the verified September 7 off day; no unavailability is inferred.
+Further current research copy corrections are recorded in
+[the Hub 919 handoff](../../HANDOFF_2026-09-08_HUB_RESEARCH_919.md).
+
+Adam then explicitly authorized the final 920 layout in `Discuss Hub redesign
+and product`. That task owns native changes; the current task retains sole
+Apple upload/submission ownership. **920 is reserved, not archived or uploaded.**
+Wait for that native owner's final source and verification. 919 captures and
+review-note drafts (3,920 UTF-8 bytes) remain local; App Store screenshot assembly
+stopped because the final 920 layout needs matching materials. The saved draft
+still references 915. Do not present 919's TestFlight status as App Review
+submission. No expedited request or urgency email has been sent.
+
+The same three factual requirements remain: actual signed-phone Apple-provider
+completion, an applicable MLB StatsAPI/Savant use basis, and the human operator
+for support/profile reports. The user already authorized submission and the
+subsequent expedition/email; authorization does not supply those missing facts.
