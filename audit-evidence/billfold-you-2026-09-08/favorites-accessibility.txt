@@ -1,0 +1,9 @@
+The following is a diff from the previous accessibility tree for Window: "iPhone 17 (Gary)" with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 59-64
+~		37 text Description: 1-0, Secondary Actions: Cancel
+~		38 text Description: +$72.40, Secondary Actions: Cancel
+~		44 text Description: 100%, Secondary Actions: Cancel
+~		45 text Description: +72%, Secondary Actions: Cancel
+~		46 text Description: -138, Secondary Actions: Cancel
+~		53 button Description: Show all bets, ID: heart.fill, Secondary Actions: Cancel
+The focused UI element is 0 standard window iPhone 17 (Gary) – iOS 26.4, Secondary Actions: Raise

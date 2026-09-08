@@ -1,0 +1,109 @@
+Window: "iPhone 17 (Gary)", App: Simulator.
+0 standard window iPhone 17 (Gary) – iOS 26.4, Secondary Actions: Raise
+	1 button Action
+	2 button Volume Up
+	3 button Volume Down
+	4 button Sleep/Wake
+	5 container
+		6 image Description: GaryIconBG, Secondary Actions: Cancel
+		7 text Description: BILLFOLD, Secondary Actions: Cancel
+		8 text Description: GARY, Secondary Actions: Cancel
+		9 text Description: YOU, Secondary Actions: Cancel
+		10 text Description: BOARD, Secondary Actions: Cancel
+		11 pop up button Description: Choose local design fixture, Secondary Actions: Cancel
+		12 button (selected) Description: ALL, Secondary Actions: Cancel
+		13 button Description: TAILS, Secondary Actions: Cancel
+		14 button Description: FADES, Secondary Actions: Cancel
+		15 button Description: YOURS, Secondary Actions: Cancel
+		16 pop up button Description: Book date range: All time, Secondary Actions: Cancel
+		17 image Description: Home, ID: house.fill, Secondary Actions: Cancel
+		18 image (selected) Description: Verified, ID: checkmark.seal.fill, Secondary Actions: Cancel
+		19 image Description: GaryIconBG, Secondary Actions: Cancel
+		20 image Description: list.bullet.rectangle.fill, Secondary Actions: Cancel
+		21 image Description: banknote, Secondary Actions: Cancel
+		22 text Description: HOME, Secondary Actions: Cancel
+		23 text Description: WINNERS, Secondary Actions: Cancel
+		24 text Description: THE HUB, Secondary Actions: Cancel
+		25 text Description: PICKS, Secondary Actions: Cancel
+		26 text Description: BILLFOLD, Secondary Actions: Cancel
+		27 text Description: LOCAL FIXTURE · PHOTO RECORD, Secondary Actions: Cancel
+		28 text Description: NET BALANCE · WITH GARY, Secondary Actions: Cancel
+		29 text Description: -$127.60, Secondary Actions: Cancel
+		30 text Description: ROI -42.5%, Secondary Actions: Cancel
+		31 text Description: ·, Secondary Actions: Cancel
+		32 text Description: 1–2–0, Secondary Actions: Cancel
+		33 text Description: ·, Secondary Actions: Cancel
+		34 text Description: -1.3u, Secondary Actions: Cancel
+		35 text Description: 33% win, Secondary Actions: Cancel
+		36 text Description: ·, Secondary Actions: Cancel
+		37 text Description: All time, Secondary Actions: Cancel
+		38 text Description: WITH GARY · VERIFIED, Secondary Actions: Cancel
+		39 text Description: EQUITY CURVE, Secondary Actions: Cancel
+		40 text Description: VERIFIED, Secondary Actions: Cancel
+		41 text Description: -$127.60, Secondary Actions: Cancel
+		42 element Description: Aug 13, 2026 at 12 AM to Aug 15, 2026 at 12 AM, Value: -1, 3 Zeros to Units, Secondary Actions: Cancel
+		43 element Description: Aug 19, 2026 at 12 AM to Aug 21, 2026 at 12 AM, Value: -2, 3 Zeros to Units, Secondary Actions: Cancel
+		44 element Description: Aug 27, 2026 at 12 AM to Aug 29, 2026 at 12 AM, Value: -1.28 to -1.28, 3 Zeros to Units, Secondary Actions: Cancel
+		45 button Description: 1W, Secondary Actions: Cancel
+		46 button Description: 1M, Secondary Actions: Cancel
+		47 button Description: SEASON, Secondary Actions: Cancel
+		48 button (selected) Description: ALL, Secondary Actions: Cancel
+		49 text Description: Your logged stakes · with gary · verified, Secondary Actions: Cancel
+		50 button Description: LOG A BET, Secondary Actions: Cancel
+		51 button Description: Share your all-time verified record, Secondary Actions: Cancel
+		52 text Description: THE STREAK, Secondary Actions: Cancel
+		53 text Description: BEST 0, Secondary Actions: Cancel
+		54 text Description: 0, Secondary Actions: Cancel
+		55 text Secondary Actions: Cancel, Description: Star one pregame tail or fade per date. Wins build your streak; a loss resets it. Pushes, voids and days off keep it intact.
+		56 text Description: BY SOURCE, Secondary Actions: Cancel
+		57 text Description: SOURCE, Secondary Actions: Cancel
+		58 text Description: RECORD, Secondary Actions: Cancel
+		59 text Description: NET, Secondary Actions: Cancel
+		60 text Description: WITH GARY, Secondary Actions: Cancel
+		61 text Description: 1-2, Secondary Actions: Cancel
+		62 text Description: -$127.60, Secondary Actions: Cancel
+		63 text Description: VERIFIED, Secondary Actions: Cancel
+		64 text Description: YOUR PLAYS, Secondary Actions: Cancel
+		65 text Description: 0-0, Secondary Actions: Cancel
+		66 text Description: +$0, Secondary Actions: Cancel
+		67 text Description: SELF-GRADED, Secondary Actions: Cancel
+		68 text Description: 33%, Secondary Actions: Cancel
+		69 text Description: -43%, Secondary Actions: Cancel
+		70 text Description: -114, Secondary Actions: Cancel
+		71 text Description: +$72.40, Secondary Actions: Cancel
+		72 text Description: WIN%, Secondary Actions: Cancel
+		73 text Description: ROI, Secondary Actions: Cancel
+		74 text Description: AVG ODDS, Secondary Actions: Cancel
+		75 text Description: BEST DAY, Secondary Actions: Cancel
+		76 text field (settable) Value: Search your bets, Secondary Actions: Cancel
+		77 button Description: Show favorites, ID: heart, Secondary Actions: Cancel
+		78 button Description: Export filtered bet history as CSV, ID: square.and.arrow.up, Secondary Actions: Cancel
+		79 text Description: DAILY LEDGER, Secondary Actions: Cancel
+		80 text Description: THU 8/27, Secondary Actions: Cancel
+		81 text Description: +$72.40, Secondary Actions: Cancel
+		82 button Description: FADE, Rockies ML +126, 2026-08-27 · $100 · -138, +$72.40, Secondary Actions: Cancel
+		83 text Description: THU 8/20, Secondary Actions: Cancel
+		84 text Description: -$100, Secondary Actions: Cancel
+		85 button Description: FADE, Cardinals ML -108, 2026-08-20 · $100 · +100, -$100, Secondary Actions: Cancel
+		86 text Description: THU 8/13, Secondary Actions: Cancel
+		87 text Description: -$100, Secondary Actions: Cancel
+		88 button Description: TAIL, Guardians ML -108, 2026-08-13 · $100 · -108, -$100, Secondary Actions: Cancel
+	89 toolbar
+		90 button Description: Home, Secondary Actions: Move previous, Move next, Remove from toolbar
+		91 button Description: Save Screen, Secondary Actions: Move previous, Move next, Remove from toolbar
+		92 button Description: Rotate, Secondary Actions: Move previous, Move next, Remove from toolbar
+	93 close button
+	94 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	95 minimize button
+	96 text iPhone 17 (Gary) iOS 26.4
+97 menu bar
+	98 Simulator
+	99 File
+	100 Edit
+	101 Device
+	102 I/O
+	103 Features
+	104 Window
+	105 Help
+
+The focused UI element is 0 standard window iPhone 17 (Gary) – iOS 26.4, Secondary Actions: Raise

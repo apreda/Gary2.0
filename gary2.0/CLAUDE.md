@@ -1,5 +1,11 @@
 # CLAUDE.md
 
+Latest native design: read `../HANDOFF_2026-09-08_YOU_BILLFOLD.md`.
+The requested You/Gary Billfold parity is in build 913, source `9cb29134`,
+with focused tests and signed archive verified. Upload succeeded September 8
+at 12:18:40 UTC; Apple processing/TestFlight availability is pending. Do not
+upload 913 again. This does not resolve the broader launch acceptance gates.
+
 Latest integrated launch readiness: read `../HANDOFF_2026-09-08_LAUNCH_READINESS.md`
 and `../docs/launch/READINESS_2026-09-07.md`. Root owns the 909/910 follow-up;
 do not confuse source/build/upload evidence with Apple or physical-device acceptance.
