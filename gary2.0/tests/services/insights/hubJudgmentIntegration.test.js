@@ -32,6 +32,32 @@ beforeEach(() => {
 });
 
 describe('Hub synthesis enters before final display filtering', () => {
+  it.each(['default', 'failed opt-in'])('treats retained ready/ranked metadata as inert in %s observation filtering and checkpoints', async mode => {
+    const row = (player_id, relevance_score, category = 'heat_check') => ({ category, player_id,
+      headline: `Observation ${player_id}`, detail: `Measured source ${player_id}.`, team_id: 1, game_id: 10,
+      game: 'AWY @ HOM', value: String(player_id), tone: 'neutral', relevance_score, meta: { observed: player_id } });
+    const previousJudgment = { status: 'ready', take: 'An earlier retained take.', editorial_rank: 1, editorial_fingerprint: 'old' };
+    const judged = value => ({ ...value, meta: { ...value.meta, judgment: structuredClone(previousJudgment) } });
+    const first = row(100, 90);
+    fixtures.rows = [first, judged({ ...first, detail: 'The later duplicate must not replace the original source.' }),
+      judged(row(101, 10)), judged(row(102, 70)), row(103, 85, 'owned'), judged(row(104, 80, 'platoon_edge'))];
+    const before = structuredClone(fixtures.rows), checkpoint = vi.fn();
+    const options = { minRelevance: 50, maxPerCategory: 1, onLaneRows: checkpoint,
+      ...(mode === 'failed opt-in' ? { synthesizeJudgments: async () => { throw new Error('optional synthesis failed'); } } : {}) };
+    const retained = await generateInsightConnections({ date: '2026-09-08', league: 'MLB', options });
+    fixtures.rows = before.map(value => { const meta = { ...value.meta }; delete meta.judgment; return { ...value, meta }; });
+    const cleanCheckpoint = vi.fn();
+    const clean = await generateInsightConnections({ date: '2026-09-08', league: 'MLB',
+      options: { minRelevance: 50, maxPerCategory: 1, onLaneRows: cleanCheckpoint } });
+    const observations = values => values.map(({ player_id, headline, detail, category, relevance_score }) =>
+      ({ player_id, headline, detail, category, relevance_score }));
+    expect(retained.connections.map(value => value.player_id)).toEqual([100, 103, 104]);
+    expect(observations(retained.connections)).toEqual(observations(clean.connections));
+    expect(observations(checkpoint.mock.calls[0][0].rows)).toEqual(observations(cleanCheckpoint.mock.calls[0][0].rows));
+    expect(retained.connections[0].detail).toBe(first.detail);
+    expect(retained.connections[2].meta.judgment).toEqual(previousJudgment);
+    expect(before[1].meta.judgment).toEqual(previousJudgment);
+  });
   it('keeps the default collector path observational with checkpoints and measured-source provenance intact', async () => {
     const checkpoint = vi.fn();
     const result = await generateInsightConnections({ date: '2026-09-08', league: 'MLB',

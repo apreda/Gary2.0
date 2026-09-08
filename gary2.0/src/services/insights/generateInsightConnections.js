@@ -371,6 +371,7 @@ export async function generateInsightConnections({ date, league = 'mlb', options
   // statistics or the independently graded source signal. Runner persistence
   // receives updates separately so a cap cannot hide an invalidation/refresh.
   let judgedRows = raw;
+  let honorJudgments = false;
   let judgmentUpdates = [], judgmentInvalidations = [], judgmentFailures = [];
   if (typeof options.synthesizeJudgments === 'function') {
     try {
@@ -383,12 +384,13 @@ export async function generateInsightConnections({ date, league = 'mlb', options
       judgmentUpdates = judgedRows.filter(row => row.meta?.judgment);
       judgmentInvalidations = Array.isArray(result.invalidations) ? result.invalidations : [];
       judgmentFailures = Array.isArray(result.failures) ? result.failures : [];
+      honorJudgments = true;
     } catch (error) {
       judgmentFailures = [{ message: error.message }];
       console.error(`[insights] Hub synthesis failed; source research preserved: ${error.message}`);
     }
   }
-  const connections = postProcess(judgedRows, { slateGameIds, minRelevance, maxRows, maxPerCategory });
+  const connections = postProcess(judgedRows, { slateGameIds, minRelevance, maxRows, maxPerCategory, honorJudgments });
 
   console.log(
     `[insights] ${leagueKey.toUpperCase()} ${dateStr}: ${games.length} games, ` +
@@ -420,10 +422,14 @@ export function insightConnectionIdentity(row) {
   return `${row?.category}|${row?.game_id ?? row?.game}|${row?.player_id ?? ''}|${row?.team_id ?? ''}|${row?.value}`;
 }
 
-function postProcess(rows, { slateGameIds, minRelevance, maxRows, maxPerCategory = 8 }) {
+function postProcess(rows, { slateGameIds, minRelevance, maxRows, maxPerCategory = 8, honorJudgments = false }) {
   const seen = new Map();
   const out = [];
   const exactSlate = new Set([...slateGameIds].map(String));
+  // Retained/cached metadata is inert during ordinary observational collection
+  // and checkpoints. Only this pass's successful explicit synthesis can give
+  // a judgment anchor priority over the original source relevance and caps.
+  const readyJudgment = row => honorJudgments && row?.meta?.judgment?.status === 'ready';
 
   for (const row of rows) {
     if (!isValidRow(row)) continue;
@@ -432,12 +438,12 @@ function postProcess(rows, { slateGameIds, minRelevance, maxRows, maxPerCategory
     if (row.game_id != null && exactSlate.size && !exactSlate.has(String(row.game_id))) continue;
 
     row.relevance_score = clampScore(row.relevance_score);
-    if (row.relevance_score < minRelevance && row.meta?.judgment?.status !== 'ready') continue;
+    if (row.relevance_score < minRelevance && !readyJudgment(row)) continue;
 
     const dedupeKey = insightConnectionIdentity(row);
     if (seen.has(dedupeKey)) {
       const existingIndex = seen.get(dedupeKey);
-      if (row.meta?.judgment?.status === 'ready' && out[existingIndex]?.meta?.judgment?.status !== 'ready') out[existingIndex] = row;
+      if (readyJudgment(row) && !readyJudgment(out[existingIndex])) out[existingIndex] = row;
       continue;
     }
     seen.set(dedupeKey, out.length);
@@ -445,7 +451,7 @@ function postProcess(rows, { slateGameIds, minRelevance, maxRows, maxPerCategory
     out.push(row);
   }
 
-  out.sort((a, b) => Number(b.meta?.judgment?.status === 'ready') - Number(a.meta?.judgment?.status === 'ready')
+  out.sort((a, b) => Number(readyJudgment(b)) - Number(readyJudgment(a))
     || b.relevance_score - a.relevance_score);
 
   // Keep only the strongest N per category (list is already best-first).
@@ -453,7 +459,7 @@ function postProcess(rows, { slateGameIds, minRelevance, maxRows, maxPerCategory
   const capped = [];
   for (const row of out) {
     const n = perCategory.get(row.category) ?? 0;
-    if (n >= maxPerCategory && row.meta?.judgment?.status !== 'ready') continue;
+    if (n >= maxPerCategory && !readyJudgment(row)) continue;
     perCategory.set(row.category, n + 1);
     capped.push(row);
   }
