@@ -253,3 +253,13 @@ before the final guards were added. The resulting focused runner/storage/
 staged suite passes **143 tests across five suites**; log:
 `/tmp/gary-mlb-bugcheck-final-contract-20260908.log`. The full 3,414-test receipt
 above predates only this final runner guard and its two regression cases.
+
+Final runner follow-up **11fbfeb3** is pushed. The final production check
+confirms the same healthy worker, scheduler, era and deployment state; log:
+`/tmp/gary-mlb-bugcheck-production-final-20260908.log`. The runner launches fresh
+for each game, so this final runner-only change requires no additional worker
+restart. Independent review passed the actual public mapper (including a
+failure control with the fix removed), queue prerequisites, selector write
+recovery, exact memory result identity, one-batch scheduling and both final
+era-read cancellation cases. No independent findings remain open. Natural
+new-policy publications and completed postgame memories remain future checks.
