@@ -314,7 +314,7 @@ describe('standalone leaderboard account guidance', () => {
     render('leaderboard'); fixture.effects[1](); await flush();
     const html = render('leaderboard');
     expect(html).toContain('2/5 decided calls · 3 more to qualify.');
-    expect(html).toContain('Choose a handle and enable public rankings');
+    expect(html).toContain('Public rankings require a handle and a public profile.');
   });
 
   it('distinguishes meeting the pick minimum from opting in publicly', async () => {
