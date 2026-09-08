@@ -1,6 +1,6 @@
 # Gary 2.25 (918): source policy and release candidate
 
-September 8, 2026. The user's submission authorization is active. **Build 918 uploaded successfully at 20:04:04.076 UTC; Apple processing is pending. Do not upload it again.** App Review submission, expedition and the urgency email remain unsent for this candidate. The profile-icon task retains sole ownership of those Apple writes.
+September 8, 2026. The user's submission authorization is active. **Build 918 uploaded successfully at 20:04:04.076 UTC; Apple processing is Complete; the existing internal Beta group (one tester) has access. Build UUID: `29e19657-fc83-4560-8f9d-fb3168b8dcfe`. Do not upload it again.** App Review submission, expedition and the urgency email remain unsent for this candidate. The profile-icon task retains sole ownership of those Apple writes.
 
 The user reaffirmed that xERA must never be used and that BDL is not the only acceptable provider. Accurate, useful non-xERA measurements remain; third-party use still needs an applicable permission basis. The frozen 918 native source is `994b948a`, retaining the original observational Hub restored in 917. The superseded 916 must not be uploaded. Existing 915 and 917 artifacts remain intact.
 
