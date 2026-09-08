@@ -74,7 +74,7 @@ describe.skipIf(!supported)('Fantasy single-snapshot publication on isolated Pos
     sql(readFileSync(new URL('../../supabase/migrations/20260907183011_fantasy_briefing_legacy_projection.sql', import.meta.url), 'utf8'));
     sql(readFileSync(new URL('../../supabase/migrations/20260907183743_fantasy_briefing_payload_types.sql', import.meta.url), 'utf8'));
     sql(readFileSync(new URL('../../supabase/migrations/20260907192157_fantasy_briefing_legacy_pitcher_role.sql', import.meta.url), 'utf8'));
-    sql(readFileSync(new URL('../../supabase/migrations/20260908135307_fantasy_comparison_deadline_note.sql', import.meta.url), 'utf8'));
+    sql(readFileSync(new URL('../../supabase/migrations/20260908140425_fantasy_comparison_deadline_note.sql', import.meta.url), 'utf8'));
   }, 30_000);
   afterAll(() => {
     if (started) execFileSync(`${bin}/pg_ctl`, ['-D', `${directory}/data`, '-m', 'immediate', '-w', 'stop'], { env: pgEnv, stdio: 'ignore' });
