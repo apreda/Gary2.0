@@ -16,15 +16,17 @@ private leased retry queue. Historical v1/v3 records and the separate notebook/
 formula experiments remain intact. This is backend/database deployment;
 no native/web/edge contract changes are required.
 
-Latest native release: read `../HANDOFF_2026-09-08_HUB_BRAND_ALIGNMENT.md`.
-Hub/Fantasy now use Gary's shared visual elements while retaining the approved
-layout and typography. Build 914 integrates the Billfold preseason and Hub
-slate-context fixes, with native source freeze `a82c2ea6`. Optimized simulator,
-signed archive, source parity and privacy checks passed. Upload succeeded
-September 8 at 13:33:26 UTC; Apple processing is Complete and the internal
-Beta group shows Testing (verified 13:41 UTC). Do not upload 914 again.
-The handoff also verifies the existing
-live SEO correction; Google's full validation remains pending.
+Latest native release: read `../HANDOFF_2026-09-08_ACCOUNT_GUARD_915.md`.
+Build 915 retains the brighter Fantasy/shared Hub branding and adds account
+ownership protection, Winners spacing, profile/selector polish and exact dated
+game/player context. Frozen source is `41793ede`; simulator, signed archive,
+installed history and independent seven-screenshot checks passed. Upload
+succeeded September 8 at 16:33:34.556 UTC; Apple processing is Complete and
+internal Beta shows Testing. Do not upload 915 again. Main may advance to the
+separate 916 Hub candidate; use the frozen snapshot for 915 source parity.
+The designated submission owner handles App Review; upload is not approval.
+The build-914 handoff retains the live SEO verification; Google’s full
+validation remains pending.
 
 Latest native design: read `../HANDOFF_2026-09-08_YOU_BILLFOLD.md`.
 The requested You/Gary Billfold parity is in build 913, source `9cb29134`,
