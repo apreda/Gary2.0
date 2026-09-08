@@ -37,6 +37,8 @@ Winners and Insights can become a clearer combined experience later. Do not anno
 
 September 9 kickoff is Patriots at Seattle at 8:20 PM ET. The September 13 marketing date does not determine Apple's release date. [Official game preview](https://www.patriots.com/news/game-preview-patriots-at-seahawks-week-1)
 
+September 8 execution: the first website introduction and single destination reply are [published and pinned on Gary's X profile](https://x.com/BetwithGary/status/2097311939441434809). [Actual copy, image and verification receipt](content/README.md#september-8-publication-receipt). With that first slot now used, the remaining editorial plan is reasoning September 10 and record September 13; Your Book follows in the next ready slot after its live journey is rechecked. This preserves the up-to-three original Gary product pieces per week below. These future slots are not platform schedules; the existing game-paced publisher remains unchanged.
+
 ## The weekly operating rhythm
 
 Adam owns publication, support and account access until another person is assigned. Code automates the existing game feed. There is no new unattended posting schedule. A daily Codex follow-up is active for 28 runs from September 5 to revisit readiness, evidence and authorized improvements; it reports material changes only.

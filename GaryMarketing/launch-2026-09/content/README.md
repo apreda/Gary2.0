@@ -2,7 +2,7 @@
 
 Four finished concepts, each exported as **1080×1350 portrait** and **1600×900 landscape** JPEG. The editable source is `index.html`; assets are local and no external rendering service is required. The graphics were inspected in the browser at export size. They use original layouts, existing Gary art/fonts and a dated real app screenshot. No audience figures, testimonials or winning results were invented.
 
-**Publication status:** prepared, not posted or scheduled. First-party organic X and the Gary website are the initial destinations. Instagram publication remains gated by all account checks in [tracker C06](../LAUNCH_COMPLETION_TRACKER.md): the saved/reloaded mobile minimum-age setting, working website link and recorded domain-shaped username decision. TikTok video scripts require founder footage and a permitted publishing route. Do not boost these assets or book a creator from this package alone.
+**Publication status:** concept 01 published and pinned on @BetwithGary September 8 at 9:11 AM Eastern; [root post](https://x.com/BetwithGary/status/2097311939441434809), [single website reply](https://x.com/BetwithGary/status/2097311941194555611). Remaining concepts are prepared, not posted or scheduled. First-party organic X and the Gary website are the initial destinations. Instagram publication remains gated by all account checks in [tracker C06](../LAUNCH_COMPLETION_TRACKER.md): the saved/reloaded mobile minimum-age setting, working website link and recorded domain-shaped username decision. TikTok video scripts require founder footage and a permitted publishing route. Do not boost these assets or book a creator from this package alone.
 
 ## Copy ready for review
 
@@ -10,14 +10,14 @@ Gary-account copy below uses his voice. Put the destination in a single reply to
 
 | Suggested slot | Main post | Asset |
 |---|---|---|
-| First ready slot before September 13 · Start here | You’re already watching the game. I’ve got a pick and the reasoning behind it. Find your game, read my take, make your own decision. | `01-find-your-game-1600x900.jpg` |
-| September 8 · Reasoning | Don’t stop at the team name. Open the pick and read why I chose it. You might agree with the matchup and still disagree with me. That’s fine. | `02-read-the-reasoning-1600x900.jpg` |
-| September 11 · Your Book | You remember the winner. Your Book remembers the rest. Save your picks, odds, units and notes, then record how they finished. Private by default. | `04-your-book-1600x900.jpg` |
+| Published September 8 · Start here | Find your game. Read my pick and the reasoning behind it, then make your own decision. Free published game picks and breakdowns on the website. 21+. | `01-find-your-game-1600x900.jpg` |
+| Planned September 10 · Reasoning | Don’t stop at the team name. Open the pick and read why I chose it. You might agree with the matchup and still disagree with me. That’s fine. | `02-read-the-reasoning-1600x900.jpg` |
+| Next ready slot after September 13 · Your Book | You remember the winner. Your Book remembers the rest. Save your picks, odds, units and notes, then record how they finished. Private by default. | `04-your-book-1600x900.jpg` |
 | September 13 · The record | The good days are on the record. So are the ones I’d rather forget. Check the dates, original picks and results before you decide what to make of me. | `03-check-the-record-1600x900.jpg` |
 
 Reply copy and instrumented destinations:
 
-1. **Find your game:** “The free game board and written breakdowns are here. 21+.”
+1. **Find your game — published:** “Open a posted pick for the full breakdown. If today’s call isn’t up yet, use Pick Archive for a dated example. 21+.”
    `https://www.betwithgary.ai/picks?utm_source=x&utm_medium=organic_social&utm_campaign=launch_sep26&utm_content=find_game_v1`
 2. **Read the reasoning:** “Open a game to read the full breakdown. Image: September 4 app example, not a current recommendation. 21+.”
    `https://www.betwithgary.ai/picks?utm_source=x&utm_medium=organic_social&utm_campaign=launch_sep26&utm_content=reasoning_v1`
@@ -30,6 +30,16 @@ Reply copy and instrumented destinations:
 
 The screenshot in concept 02 shows an actual September 4 Winners game card, used solely as a product example. Its original odds are historical. Keep the date/example label visible. The Your Book panel is an explicitly labeled feature overview, not a fabricated app screenshot. The footer route is `/you`.
 
+The September 8 publication moves the remaining editorial slots forward without stacking missed posts. Intro September 8, reasoning September 10 and record September 13 use the runbook's up-to-three original Gary product pieces per week; Your Book follows in the next ready slot after its live journey is rechecked. These are editorial intentions, not saved platform schedules. The existing automated game feed is unchanged.
+
+## September 8 publication receipt
+
+The correct existing @BetwithGary identity was selected. The current profile had no product pin; its visible exact-phrase search returned no matching intro. The reviewed concept 01 image and supplied alt text were uploaded. The root and single website reply were submitted together once; X confirmed “Your posts were sent.” A fresh thread read showed the exact copy, image/alt text and both URLs above. Pinning was confirmed once, then a fresh profile load showed **Pinned** on that exact root post. No existing post was deleted, no paid boost was used and no game-pick process or posting automation was changed.
+
+The reply's real X redirect was followed and resolved to the exact `find_game_v1` campaign URL above. The live board correctly showed 15 future games and zero published calls at inspection. Its archive fallback opened September 7 and a [permanent Mets–Marlins analysis](https://www.betwithgary.ai/picks/mlb/2026-09-07/mets-at-marlins), with dated reasoning and separate result/prop labels. This was QA, not evidence of an acquired user; the thread's own reply is not an audience conversation.
+
+The pre-publication read-only readiness check at 13:07:30 UTC found no past-start coverage gaps or uncertain publication sends; the only reported issue was stale private engagement drafts. [Scoped receipt](../evidence/x-introduction-2026-09-08.json). No private draft-generation or account-credit change was required to publish this reviewed product introduction.
+
 ## Profile and introductory copy
 
 **X bio saved September 5:**
@@ -40,11 +50,11 @@ The screenshot in concept 02 shows an actual September 4 Winners game card, used
 
 > AI sports picks with reasoning. Wins and losses on the record. Track your own Book. Built by a sports fan. 21+
 
-**Pinned product post draft:**
+**Earlier separate product-pin draft — superseded by the published concept 01 pin:**
 
 > Find your game. See my pick and the reasoning. The full game board is free. You can check my record and keep your own Book. Start with the game you’re watching.
 
-Reply with the website board and the exact launch offer from `../LAUNCH_RUNBOOK.md` if discussing Winners. The September 1 season-offer post was unpinned on September 5 and retained as a historical post. The new product pin is still a draft. The X profile website was changed to `https://www.betwithgary.ai/picks?utm_source=x&utm_content=bio_v1`; no App Store install attribution is claimed.
+The concept 01 post above is now the actual product pin; do not publish this separate draft merely to satisfy the same checklist item. Use the exact launch offer from `../LAUNCH_RUNBOOK.md` if discussing Winners. The September 1 season-offer post was unpinned on September 5 and retained as a historical post. The X profile website was changed to `https://www.betwithgary.ai/picks?utm_source=x&utm_content=bio_v1`; no App Store install attribution is claimed.
 
 For a permitted Instagram company profile, start with concepts 01, 02 and 03 as the introductory trio, then concept 04. Suggested highlights: Start Here, The Record, Your Book, Help. One useful caption per asset is enough; do not paste an automated game thread into every channel.
 
