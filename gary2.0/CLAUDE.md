@@ -5,8 +5,9 @@ Hub/Fantasy now use Gary's shared visual elements while retaining the approved
 layout and typography. Build 914 integrates the Billfold preseason and Hub
 slate-context fixes, with native source freeze `a82c2ea6`. Optimized simulator,
 signed archive, source parity and privacy checks passed. Upload succeeded
-September 8 at 13:33:26 UTC; Apple processing/internal TestFlight confirmation
-is pending. Do not upload 914 again. The handoff also verifies the existing
+September 8 at 13:33:26 UTC; Apple processing is Complete and the internal
+Beta group shows Testing (verified 13:41 UTC). Do not upload 914 again.
+The handoff also verifies the existing
 live SEO correction; Google's full validation remains pending.
 
 Latest native design: read `../HANDOFF_2026-09-08_YOU_BILLFOLD.md`.
