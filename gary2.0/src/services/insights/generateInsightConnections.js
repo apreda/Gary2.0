@@ -12,7 +12,8 @@
 // The orchestrator's only jobs:
 //   1. Resolve the slate (so every computer scores against the SAME games).
 //   2. Run computers concurrently, isolating failures (Promise.allSettled).
-//   3. Flatten, de-dupe, sort by relevance, and hand the rows back.
+//   3. Offer the complete collected pool to the optional Hub synthesis stage.
+//   4. Flatten, de-dupe, sort by relevance, and hand the rows back.
 //
 // It does NOT write to Supabase or shape prose — computers own the content,
 // the caller owns persistence (service-role upsert into insight_connections,
@@ -345,25 +346,48 @@ export async function generateInsightConnections({ date, league = 'mlb', options
     }
   });
 
-  const connections = postProcess(raw, { slateGameIds, minRelevance, maxRows, maxPerCategory });
-
-  // Tap-through contract (Jul 27 2026): back-fill missing player ids so every
-  // player name on the hub opens its card. Exact-name hits only; MLB only.
-  if (leagueKey === 'mlb' && connections.length) {
+  // Resolve the source identity before constructing judgment source keys. A
+  // later name->ID enrichment must not invalidate a newly attached judgment.
+  if (leagueKey === 'mlb' && raw.length) {
     try {
       const { resolveInsightIds } = await import('./resolveIds.js');
-      await resolveInsightIds(connections);
+      await resolveInsightIds(raw);
     } catch (e) {
       console.warn(`[insights] id resolver skipped: ${e.message}`);
     }
   }
+
+  // Synthesis sees the full pool, including counterevidence that would lose a
+  // category's display cap. Its additive metadata never changes source prose,
+  // statistics or the independently graded source signal. Runner persistence
+  // receives updates separately so a cap cannot hide an invalidation/refresh.
+  let judgedRows = raw;
+  let judgmentUpdates = [], judgmentInvalidations = [], judgmentFailures = [];
+  if (typeof options.synthesizeJudgments === 'function') {
+    try {
+      const result = await options.synthesizeJudgments({
+        date: dateStr, league: leagueKey, rows: raw, games,
+        bdl: ballDontLieService, asOf: new Date().toISOString(), collectorFailures: failures,
+      });
+      if (!Array.isArray(result?.rows) || result.rows.length !== raw.length) throw new Error('Hub synthesis must preserve the complete source-row pool');
+      judgedRows = result.rows;
+      judgmentUpdates = judgedRows.filter(row => row.meta?.judgment);
+      judgmentInvalidations = Array.isArray(result.invalidations) ? result.invalidations : [];
+      judgmentFailures = Array.isArray(result.failures) ? result.failures : [];
+    } catch (error) {
+      judgmentFailures = [{ message: error.message }];
+      console.error(`[insights] Hub synthesis failed; source research preserved: ${error.message}`);
+    }
+  }
+  const connections = postProcess(judgedRows, { slateGameIds, minRelevance, maxRows, maxPerCategory });
 
   console.log(
     `[insights] ${leagueKey.toUpperCase()} ${dateStr}: ${games.length} games, ` +
       `${raw.length} raw connections -> ${connections.length} after filter/sort/cap.`,
   );
 
-  return { date: dateStr, league: leagueKey, season, gameCount: games.length, connections, failures };
+  return { date: dateStr, league: leagueKey, season, gameCount: games.length, connections, failures,
+    judgmentUpdates, judgmentInvalidations, judgmentFailures };
 }
 
 /**
@@ -384,37 +408,43 @@ export function insightConnectionIdentity(row) {
     const pickId = String(row?.meta?.pick_id ?? '');
     if (row?.game_id != null && pickId) return `after_gary|${row.game_id}|${pickId}`;
   }
-  return `${row?.category}|${row?.game}|${row?.player_id ?? ''}|${row?.value}`;
+  return `${row?.category}|${row?.game_id ?? row?.game}|${row?.player_id ?? ''}|${row?.team_id ?? ''}|${row?.value}`;
 }
 
 function postProcess(rows, { slateGameIds, minRelevance, maxRows, maxPerCategory = 8 }) {
-  const seen = new Set();
+  const seen = new Map();
   const out = [];
+  const exactSlate = new Set([...slateGameIds].map(String));
 
   for (const row of rows) {
     if (!isValidRow(row)) continue;
 
     // If a computer tagged a game_id, it MUST be on today's slate.
-    if (row.game_id != null && slateGameIds.size && !slateGameIds.has(row.game_id)) continue;
+    if (row.game_id != null && exactSlate.size && !exactSlate.has(String(row.game_id))) continue;
 
     row.relevance_score = clampScore(row.relevance_score);
-    if (row.relevance_score < minRelevance) continue;
+    if (row.relevance_score < minRelevance && row.meta?.judgment?.status !== 'ready') continue;
 
     const dedupeKey = insightConnectionIdentity(row);
-    if (seen.has(dedupeKey)) continue;
-    seen.add(dedupeKey);
+    if (seen.has(dedupeKey)) {
+      const existingIndex = seen.get(dedupeKey);
+      if (row.meta?.judgment?.status === 'ready' && out[existingIndex]?.meta?.judgment?.status !== 'ready') out[existingIndex] = row;
+      continue;
+    }
+    seen.set(dedupeKey, out.length);
 
     out.push(row);
   }
 
-  out.sort((a, b) => b.relevance_score - a.relevance_score);
+  out.sort((a, b) => Number(b.meta?.judgment?.status === 'ready') - Number(a.meta?.judgment?.status === 'ready')
+    || b.relevance_score - a.relevance_score);
 
   // Keep only the strongest N per category (list is already best-first).
   const perCategory = new Map();
   const capped = [];
   for (const row of out) {
     const n = perCategory.get(row.category) ?? 0;
-    if (n >= maxPerCategory) continue;
+    if (n >= maxPerCategory && row.meta?.judgment?.status !== 'ready') continue;
     perCategory.set(row.category, n + 1);
     capped.push(row);
   }

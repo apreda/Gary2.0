@@ -42,6 +42,15 @@ export const detailFact = (r) => {
 // long text parts... should be the same size we have for MLB parts"). The old
 // '3-5' default was the whole gap: no football lane overrode it.
 export async function attachLaneReads(lane, rows, factFor, { ask, sentences = '2-3', limit = SHIP_CAP } = {}) {
+  // Preserve the collector's original sentence before any model call, even
+  // when the prose pass fails or a row falls outside its display budget.
+  // This is collector context, which may include a template interpretation;
+  // downstream analysis must distinguish its measurements from that opinion.
+  for (const row of rows || []) {
+    if (typeof row?.detail !== 'string' || !row.detail.trim() || row.meta?.computed_detail
+        || row.meta?.read || row.meta?.evidence) continue;
+    row.meta = { ...(row.meta || {}), computed_detail: row.detail, computed_detail_kind: 'collector_context' };
+  }
   // Only what SHIPS gets a read. The orchestrator keeps the strongest
   // SHIP_CAP rows per category (postProcess), so a lane handing us 25 hot
   // bats would otherwise buy 17 reads that never reach a screen. Sort a copy
@@ -82,7 +91,7 @@ ${facts}`;
       const x = eligible[item?.i];
       const read = String(item?.read || '').trim();
       if (!x || read.length < 60) continue;
-      x.r.meta = { ...(x.r.meta || {}), computed_detail: x.r.detail, read };
+      x.r.meta = { ...(x.r.meta || {}), computed_detail: x.r.meta?.computed_detail || x.r.detail, read };
       x.r.detail = read;
       attached += 1;
     }
