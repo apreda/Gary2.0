@@ -96,7 +96,7 @@ describe.skipIf(!supported)('atomic Hub judgment publication on isolated Postgre
       GRANT SELECT ON public.insight_connections TO anon, authenticated;
       CREATE POLICY public_read ON public.insight_connections FOR SELECT TO anon, authenticated USING (true);`);
     sql(readFileSync(new URL('../../../supabase/migrations/20260908151609_hub_judgment_publication.sql', import.meta.url), 'utf8'));
-    sql(readFileSync(new URL('../../../supabase/migrations/20260908161526_hub_judgment_source_observation_guard.sql', import.meta.url), 'utf8'));
+    sql(readFileSync(new URL('../../../supabase/migrations/20260908161936_hub_judgment_source_observation_guard.sql', import.meta.url), 'utf8'));
   }, 30_000);
   afterAll(() => {
     if (started) execFileSync(`${bin}/pg_ctl`, ['-D', `${directory}/data`, '-m', 'immediate', '-w', 'stop'], { env: pgEnv, stdio: 'ignore' });
