@@ -124,44 +124,6 @@ enum WinnersSlot: Int {
     case nightcap = 3  // the latest start — carries action into the evening
 }
 
-/// Gary's last-10 graded game picks per league, explicitly labeled ALL PICKS.
-/// This is overall form, not Winners-only performance. Taps to Billfold.
-struct WinnersRecordBand: View {
-    let records: [(league: String, w: Int, l: Int)]
-    let onLedger: () -> Void
-    var body: some View {
-        if !records.isEmpty {
-            HStack(spacing: 12) {
-                Text("ALL PICKS\nLAST 10")
-                    .font(GaryFonts.accent(10)).tracking(1)
-                    .foregroundStyle(GaryColors.gold)
-                ForEach(records, id: \.league) { r in
-                    HStack(spacing: 5) {
-                        Text(r.league)
-                            .font(GaryFonts.mono(10)).foregroundStyle(GaryColors.meta)
-                        Text("\(r.w)–\(r.l)")
-                            .font(GaryFonts.mono(11, bold: true))
-                            .foregroundStyle(r.w > r.l ? GaryColors.win : .white.opacity(0.85))
-                    }
-                }
-                Spacer(minLength: 8)
-                Button(action: onLedger) {
-                    HStack(spacing: 4) {
-                        Text("FULL LEDGER")
-                            .font(GaryFonts.mono(10, bold: true))
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 7, weight: .bold))
-                    }
-                    .foregroundStyle(GaryColors.gold)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 18)
-        }
-    }
-}
-
 struct PremiumPicksView: View {
     // Dev/QA all-access preview — overrides entitlements while testing.
     @AppStorage("isPremiumUnlocked") private var isPremium: Bool = false
@@ -624,9 +586,6 @@ struct PremiumPicksView: View {
             }
             emptyTodayIntro
                 .pageGutter()
-            // The record signs the page off (founder, Aug 6 night: off the
-            // top — "below or just removed") — honesty stays, the board leads.
-            winnersRecordBand
             // THE LAUNCH closes the pre-drop page exactly as it closes a live
             // board (founder, Sep 1). It was only reachable from the
             // has-content branch, so the free-launch news — and the sign-in
@@ -760,25 +719,11 @@ struct PremiumPicksView: View {
         return v > 0 ? v : Int((10000.0 / Double(abs(v))).rounded())
     }
 
-    private var winnersRecordBand: some View {
-        WinnersRecordBand(
-            records: canonicalSports.compactMap { lg in
-                guard let r = sportRecords[lg], r.w + r.l > 0 else { return nil }
-                return (league: lg, w: r.w, l: r.l)
-            },
-            onLedger: { withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 } })
-    }
-
     @ViewBuilder private func modeContent(minHeight: CGFloat) -> some View {
         // Tighter inter-shelf rhythm (was 22) — the shelf headers already give
         // each rail vertical breathing room, so 22 over-spaced the board.
         VStack(alignment: .leading, spacing: 16) {
             if mode == .games {
-                // Day card removed here too (founder, Aug 5) — it was the same
-                // component, so leaving it on the posted board would have put it
-                // back on screen the moment the first pick landed. The record
-                // band moved to the sign-off slot (Aug 6 night: off the top).
-                // (Tonight's Top Plays carousel removed from Winners per founder.)
                 // Paid boards lead with full cards. Locked boards with content
                 // follow as blurred previews — the user sees the real board
                 // exactly as members do, just unreadable (tap = checkout).
@@ -797,7 +742,6 @@ struct PremiumPicksView: View {
                 if !lockedGameBoards.isEmpty {
                     storefrontTail(lockedGameBoards)
                 }
-                winnersRecordBand
             } else {
                 let lockedProps = lockedBoardSummaries.filter { $0.kind == "prop" }
                 ForEach(lockedProps) { summary in lockedBoardCard(summary).id("p-\(summary.league)") }
@@ -1411,8 +1355,8 @@ struct PremiumPicksView: View {
             .map { (league: $0.league, count: $0.props.count, unit: "prop", live: !$0.settled) }
     }
 
-    /// The locked-sports storefront uses the same explicitly labeled overall
-    /// game-pick record as the form band, not a Winners-only performance claim.
+    /// The locked-sports storefront explicitly labels its overall game-pick
+    /// record to distinguish it from Winners-only performance.
     private func storefrontTail(_ boards: [(league: String, count: Int, unit: String, live: Bool)]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HubSectionHeader(eyebrow: "More boards", sub: "Sports you haven't unlocked")

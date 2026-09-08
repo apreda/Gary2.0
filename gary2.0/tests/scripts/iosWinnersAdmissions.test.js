@@ -39,7 +39,6 @@ describe('iOS immutable Winners admission contract', () => {
     expect(body(view, 'private func loadHistorical')).toContain('if date >= SupabaseAPI.winnersAdmissionCutover');
     expect(body(view, 'private func shelfPadCount')).toContain('< SupabaseAPI.winnersAdmissionCutover');
     expect(view).not.toContain('PICKS DROP ~90 MIN');
-    expect(view).toContain('ALL PICKS\\nLAST 10');
     expect(view).toContain('ALL PICKS · LAST 10');
     expect(home).toContain('let featuresUnderdog = calls.contains(where: Self.isPostedMoneylineUnderdog)');
     expect(home).toContain('railWorthy: featuresUnderdog');
