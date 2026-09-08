@@ -1,0 +1,44 @@
+# Gary 2.25 (915) App Store submission preparation
+
+**Not submitted.** App Store Connect independently read back **Prepare for Submission** on September 8, 2026 at 16:56 UTC. Build 915, matching release copy and all seven approved screenshots are saved. No expedited-review request or Apple email has been sent by this task. The user explicitly authorized submission, expedition and email; the remaining prerequisites are factual readiness evidence, not another request for that authorization.
+
+## Saved Apple state
+
+- App: Gary AI - Sports Predictions, Apple ID `6751238914`, bundle `ai.betwithgary.app`, Gary A.I. LLC.
+- Selected version/build: **2.25 (915)**, Apple build UUID `85fccc30-ce8c-4ac6-9c57-d5fdaaa6a021`. The earlier selected 914 was detached from the editable draft and replaced with 915. Apple processing is Complete and the internal Beta group is Testing, independently verified by the release owner.
+- Native candidate remains the frozen committed public snapshot `41793ededc47a1934a3c2ef09fb2a5608822bed1`. Main has advanced for the separate 916 candidate; do not rebuild 915 from mutable main or select 916 under this handoff.
+- Notes match the approved 3,950-byte UTF-8 text exactly; What's New matches the approved 844-character text exactly after page reload. The version-page Save button is disabled. Reviewer credentials and review contact remain the prepared values; credentials are intentionally excluded from this handoff.
+- The seven old screenshot entries were replaced with the independently approved 1320 × 2868 RGB PNGs from `account-guard-915-2026-09-08/screenshots/apple/`. Apple's batch uploader initially reordered them by completion; explicit drag reordering and a fresh version-page readback verified **01 Home, 02 Gary's expanded take, 03 historical game, 04 Hub, 05 Fantasy, 06 Winners, 07 Gary Billfold**. The 6.5-inch slot inherits this exact 6.9-inch set. Source hashes, original/native parity and independent visual approval are in the release screenshot manifest.
+- Automatic release after approval and immediate availability of updates remain selected. The current subtitle is **Sports picks with the receipts**, with no pricing language. Category is Sports and the current age rating is 18+ (older-system global rating 17+ with regional exceptions).
+- Public Contact, Privacy, Terms and Data Sources pages returned HTTP 200. Support and nflverse credit destinations were verified. This does not establish human support coverage.
+
+The source changes for the refined profile avatar (`5d5e78ba`) and underline-free Billfold selector (`110623f9`) are already on origin/main and included in 915. Their existing verification and the final archive/source signatures are recorded in [the release handoff](../../HANDOFF_2026-09-08_ACCOUNT_GUARD_915.md).
+
+## Remaining factual evidence
+
+1. **Content Rights.** A fresh App Information readback still says the app does not contain, show or access third-party content. That answer conflicts with the implemented provider reads. BallDontLie and The Odds API have verified public commercial-use grants, and nflverse attribution is deployed. Direct MLB StatsAPI and NFL practice-report reads still lack a documented permission basis in the bounded records audit. A missing record is not proof that permission does not exist. Adam has been asked for the applicable authorization or other documented basis; no answer has been received. Do not replace the field with an unsupported all-rights attestation. See [provider rights evidence](PROVIDER_RIGHTS_2026-09-08.md) and [Apple's field definition](https://developer.apple.com/help/app-store-connect/reference/app-information/app-information/).
+2. **Prior Apple sign-in rejection.** App Review's August 19 message for actual reviewed version 2.23 (874), on iPad Air 11-inch (M3)/iPadOS 26.6, described Apple sign-in returning to the login screen without completion. It also identified pricing in the subtitle and missing reviewer access. The removed submission is `69d7a35f-3e08-4600-aaeb-b36f1c865b19`; its current item link now displays the mutable version's selected 915, which must not be mistaken for the build reviewed on August 19. Subtitle and reviewer access are addressed. Current AuthView retains the authorization controller, supplies an explicit active-window anchor, exposes exchange failures and dismisses an already-authenticated sheet on appearance as well as on a fresh authentication transition. AuthManager adopts the Apple token exchange through the generation-bound session handler. These targeted fixes are included in the frozen source, but source review and successful email sign-in are not evidence of actual Apple-provider completion. Physical 915 is installed; successful provider completion remains unverified. Adam has been asked to test Apple sign-in through the signed-in profile and login-screen dismissal.
+3. **Support and report handling.** Report/block controls, the private moderation queue and public rules/support contact are implemented and tested. Adam has been asked who monitors support and reports, and the response coverage for reports/appeals; no operational commitment has been recorded. Technical queue availability does not establish timely human response.
+
+The release handoff separately bounds manual scrolling, VoiceOver, physical provider/push/billing acceptance and the remaining Auth dashboard settings. No confirmed new native defect was inferred from an unavailable or inconclusive test. Apple approval is not guaranteed by these preparations.
+
+## Expedition and email
+
+Local, reviewable drafts are complete in `/Users/adam.preda/Documents/ChatGPT/Gary/app-store-submission-2026-09-08/`:
+
+- `expedite-reason-draft.txt`: requests review before the documented Product Hunt launch on **September 13, 2026 at 12:01 a.m. Pacific Time**, explaining the relationship between the release, launch materials and arriving users. The user has been invited to supply a more specific deadline or impact. No outage, critical emergency or entitlement to expedition is invented.
+- `apple-email-draft.txt`: an urgency email to the previously verified Apple Developer Support address `devprograms@apple.com`, from the Apple developer's connected Gmail account. It identifies the app/version/build and requests routing to App Review. It does not falsely claim submission or an expedite case already exists.
+
+The authenticated expedited-review page was opened at `https://developer.apple.com/contact/app-store/?topic=expedite`; the registered app (shown there under its older Sports Betting Picks name) and iOS platform were selected. The form did not expose the complete request fields during preparation. No submit action occurred. After truthful readiness is established, complete App Store submission, verify the new submission ID/status, complete Apple's request form, verify its confirmation, update the email with the actual submission/request identifiers and send once. Preserve the returned receipts; do not infer success from a click or draft.
+
+## Evidence and verification scope
+
+Task evidence directory: `/Users/adam.preda/Documents/ChatGPT/Gary/app-store-submission-2026-09-08/`.
+
+- `saved-version-verification.json`: fresh reload, exact copy matches, selected build identity, screenshot order, disabled Save and explicit unsent statuses.
+- `app-information-verification.txt`: current subtitle, rating and unresolved Content Rights answer.
+- `prior-apple-review-feedback.txt`: authoritative prior reviewer message and reviewed-build distinction.
+- `public-links.json`: public destination HTTP checks.
+- `production-truth.log`: read-only production check at `1a856215`. Scheduler and Winners worker run from the canonical repository; all 20 edge deployment timestamp checks passed and no started MLB game lacked a pick. The command exited 1 for seven shared dirty paths at that moment (six launch documents subsequently committed/pushed by their owner plus the preserved private configuration). There were no unpushed commits. This is a bounded readback, not a clean global parity pass; native parity is established against the frozen 915 snapshot.
+
+This task did not read or change the private Google configuration or SecretsLocal file. The release owner's artifact/screenshot handoff is pushed as `1a856215`; root's matching six launch/metadata documents are pushed as `161e4c9e`.
