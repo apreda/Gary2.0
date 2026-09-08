@@ -1,5 +1,9 @@
 # CLAUDE.md
 
+Latest integrated launch readiness: read `../HANDOFF_2026-09-08_LAUNCH_READINESS.md`
+and `../docs/launch/READINESS_2026-09-07.md`. Root owns the 909/910 follow-up;
+do not confuse source/build/upload evidence with Apple or physical-device acceptance.
+
 Latest native responsiveness: read `../HANDOFF_2026-09-08_RESPONSIVENESS.md`.
 All five Home/Hub/Picks audit findings are implemented. Build 908 passed final
 optimized checks and uploaded; Apple processing/internal TestFlight verification
