@@ -1,5 +1,13 @@
 # CLAUDE.md
 
+Latest source-policy release: read `../HANDOFF_2026-09-08_SOURCE_POLICY_918.md`.
+Build 918 (native source `994b948a`) retains the restored observational Hub,
+removes xERA, and uses the verified BDL practice/live-batting paths. Signed
+archive/distribution checks passed and upload succeeded September 8 at
+20:04:04.076 UTC. Do not upload 918 again. Processing and actual signed-phone
+Apple sign-in remain separate checks; remaining rights/support facts still
+prevent App Review submission. The designated submission owner handles it.
+
 ## MLB metric policy (founder reaffirmed September 8, 2026)
 
 Do not use, cite, estimate or display xERA (expected ERA) anywhere in Gary.
