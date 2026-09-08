@@ -1,5 +1,12 @@
 # CLAUDE.md
 
+Latest native responsiveness: read `../HANDOFF_2026-09-08_RESPONSIVENESS.md`.
+All five Home/Hub/Picks audit findings are implemented. Build 908 passed final
+optimized checks and uploaded; Apple processing/internal TestFlight verification
+is pending an expired browser sign-in. Do not upload that build again.
+The approved Hub/Fantasy redesign shipped in build 907; its presentation and
+font choices remain described in `../HANDOFF_2026-09-07_HUB_FANTASY_REDESIGN.md`.
+
 Latest Hub completion: read `../HANDOFF_2026-09-07_HUB_PRODUCTION.md`.
 The main Hub, shared player cards, data identity and content checks have been
 hardened. Build 906 passed final release verification, uploaded successfully

@@ -1,0 +1,49 @@
+Gary 2.25 (908) — final verification receipts
+Native source frozen at a7cd5702; implementation begins at 8ac4a271.
+
+Frozen backend a7cd5702
+Test Files  275 passed (275)
+Tests  2676 passed (2676)
+Start at  23:44:29
+Duration  79.91s (transform 2.22s, setup 0ms, import 12.32s, tests 129.91s, environment 11ms)
+
+Web 291f735d
+Test Files  54 passed (54)
+Tests  385 passed (385)
+Start at  23:35:00
+Duration  1.89s (transform 2.55s, setup 711ms, import 4.69s, tests 4.26s, environment 3ms)
+
+Native edge helpers 291f735d
+# tests 216
+# pass 216
+# fail 0
+# skipped 0
+
+Optimized Hub routing
+Test Files  1 passed (1)
+Tests  1 passed (1)
+Start at  23:32:32
+Duration  3.33s (transform 9ms, setup 0ms, import 96ms, tests 3.17s, environment 0ms)
+
+Old-code negative control (expected failure)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+Test Files  1 failed (1)
+Tests  1 failed (1)
+Start at  23:33:04
+Duration  3.45s (transform 36ms, setup 0ms, import 169ms, tests 3.18s, environment 0ms)
+
+Final simulator build
+** BUILD SUCCEEDED **
+
+Final device archive
+** ARCHIVE SUCCEEDED **
+
+Three final optimized iPhone 17 / iOS 26.4 simulator cold launches rendered.
+No new GaryApp crash diagnostic as of 2026-09-08 03:51 UTC.
+Live Connection decode audit: 264/264, previously 250/264.
+Actual Combine fixture: 1530 scroll samples, 5 publications.
+No physical-iPhone timing or battery improvement measured.
+
+Upload: 2026-09-08 03:52:58 UTC, Uploaded GaryApp, EXPORT SUCCEEDED.
+Apple accepted the package for processing.
+Processing completion/internal TestFlight availability pending browser sign-in.
