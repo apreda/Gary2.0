@@ -10,11 +10,15 @@ struct SettingsView: View {
     @State private var animateIn = false
     @State private var showSignOutConfirm = false
     @State private var showDeleteConfirm = false
+    @State private var deleteConfirmation: AccountDeletionIntent?
+    @State private var deleteOperationID: UUID?
     @State private var deleting = false
     @State private var deleteError: String? = nil
+    @State private var deleteErrorGeneration: UUID?
     @State private var showSignIn = false
     @State private var showDeletionComplete = false
     @State private var needsAppleRevocation = false
+    @State private var deletionResult: AccountDeletionResult?
     @AppStorage(PrivacyPreferences.analyticsKey) private var analyticsAllowed = false
     @AppStorage(PrivacyPreferences.readingAnalyticsKey) private var readingAnalyticsAllowed = false
     @Environment(\.openURL) private var openURL
@@ -79,21 +83,12 @@ struct SettingsView: View {
         } message: {
             Text("Are you sure you want to sign out?")
         }
-        .alert("Delete Account", isPresented: $showDeleteConfirm) {
-            Button("Cancel", role: .cancel) {}
+        .alert("Delete Account", isPresented: $showDeleteConfirm, presenting: deleteConfirmation) { intent in
+            Button("Cancel", role: .cancel) { deleteConfirmation = nil }
             Button("Delete Account", role: .destructive) {
-                deleting = true
-                Task {
-                    do {
-                        needsAppleRevocation = try await authManager.deleteAccount()
-                        showDeletionComplete = true
-                    } catch {
-                        deleteError = (error as? LocalizedError)?.errorDescription ?? "Couldn't delete your account. Please try again."
-                    }
-                    deleting = false
-                }
+                Task { await deleteConfirmedAccount(intent) }
             }
-        } message: {
+        } message: { _ in
             Text("This cancels your Gary subscriptions and permanently deletes your profile, bets, and account data. This can't be undone.")
         }
         .alert("Couldn't Delete Account", isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })) {
@@ -115,6 +110,57 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showSignIn) {
             AuthView()
+        }
+        .onChange(of: authManager.accountGeneration) { generation in
+            accountChanged(to: generation)
+        }
+    }
+
+    @MainActor
+    private func accountChanged(to generation: UUID) {
+        if deleteConfirmation?.generation != generation {
+            showDeleteConfirm = false
+            deleteConfirmation = nil
+            deleteOperationID = nil
+            deleting = false
+        }
+        if deleteErrorGeneration != generation { deleteError = nil }
+        if deletionResult.map({ authManager.canPresentDeletionResult($0) }) != true {
+            showDeletionComplete = false
+            deletionResult = nil
+            needsAppleRevocation = false
+        }
+    }
+
+    @MainActor
+    private func deleteConfirmedAccount(_ intent: AccountDeletionIntent) async {
+        guard !deleting, authManager.isCurrentDeletionIntent(intent) else { return }
+        let operation = UUID()
+        deleteOperationID = operation
+        deleting = true
+        deleteError = nil
+        defer {
+            if deleteOperationID == operation {
+                deleteOperationID = nil
+                deleting = false
+            }
+        }
+        do {
+            let result = try await authManager.deleteAccount(intent: intent)
+            guard authManager.canPresentDeletionResult(result) else { return }
+            deletionResult = result
+            needsAppleRevocation = result.appleRevocationRequired
+            showDeletionComplete = true
+        } catch is CancellationError {
+            // A confirmation cannot follow an account through a switch or sign-out.
+        } catch let failure as AccountDeletionFailure {
+            guard authManager.accountGeneration == failure.generation else { return }
+            deleteErrorGeneration = failure.generation
+            deleteError = failure.errorDescription
+        } catch {
+            guard authManager.isCurrentDeletionIntent(intent) else { return }
+            deleteErrorGeneration = intent.generation
+            deleteError = (error as? LocalizedError)?.errorDescription ?? "Couldn't delete your account. Please try again."
         }
     }
 
@@ -303,7 +349,13 @@ struct SettingsView: View {
             // Account deletion — required by App Store Guideline 5.1.1(v) for any
             // app with account creation. Permanent; clears the session on success.
             Button {
-                showDeleteConfirm = true
+                do {
+                    deleteConfirmation = try authManager.accountDeletionIntent()
+                    showDeleteConfirm = true
+                } catch {
+                    deleteErrorGeneration = authManager.accountGeneration
+                    deleteError = "Please sign in again before deleting your account."
+                }
             } label: {
                 HStack {
                     SettingsRowLabel(title: deleting ? "Deleting…" : "Delete Account",

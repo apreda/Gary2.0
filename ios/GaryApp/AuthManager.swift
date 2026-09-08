@@ -16,6 +16,8 @@ final class AuthManager: ObservableObject {
     @Published var isAuthenticated = false
     @Published var isLoading = true
     @Published var currentUser: GaryUser?
+    /// Changes when an account/session is replaced or cleared, never for a token refresh.
+    @Published private(set) var accountGeneration = UUID()
     @Published var errorMessage: String?
     /// Non-error guidance (e.g. "confirm your email") — shown gold, not red.
     @Published var infoMessage: String?
@@ -109,6 +111,7 @@ final class AuthManager: ObservableObject {
     // MARK: - Email/Password Sign Up
 
     func signUp(email: String, password: String) async throws {
+        let generation = accountGeneration
         errorMessage = nil
         infoMessage = nil
 
@@ -126,13 +129,16 @@ final class AuthManager: ObservableObject {
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
+        try Task.checkCancellation()
+        guard accountGeneration == generation else { throw CancellationError() }
+
         guard let http = response as? HTTPURLResponse else {
             throw AuthError.networkError
         }
 
         if http.statusCode == 200 || http.statusCode == 201 {
             if let session = try? JSONDecoder().decode(AuthResponse.self, from: data) {
-                handleAuthResponse(session)
+                try await handleAuthResponse(session, expectedGeneration: generation)
             } else {
                 // Email confirmations are on: signup returns the bare user with
                 // no session. Tell the user the next step instead of failing.
@@ -154,6 +160,7 @@ final class AuthManager: ObservableObject {
     // MARK: - Email/Password Sign In
 
     func signIn(email: String, password: String) async throws {
+        let generation = accountGeneration
         errorMessage = nil
         infoMessage = nil
 
@@ -171,13 +178,16 @@ final class AuthManager: ObservableObject {
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
+        try Task.checkCancellation()
+        guard accountGeneration == generation else { throw CancellationError() }
+
         guard let http = response as? HTTPURLResponse else {
             throw AuthError.networkError
         }
 
         if http.statusCode == 200 {
             let session = try JSONDecoder().decode(AuthResponse.self, from: data)
-            handleAuthResponse(session)
+            try await handleAuthResponse(session, expectedGeneration: generation)
         } else {
             let errorBody = try? JSONDecoder().decode(AuthErrorResponse.self, from: data)
             let diagnostic = errorBody?.error_description ?? errorBody?.msg ?? "HTTP \(http.statusCode)"
@@ -194,6 +204,7 @@ final class AuthManager: ObservableObject {
     // MARK: - Sign In with Apple
 
     func signInWithApple(credential: ASAuthorizationAppleIDCredential) async throws {
+        let generation = accountGeneration
         errorMessage = nil
 
         guard let identityToken = credential.identityToken,
@@ -234,7 +245,7 @@ final class AuthManager: ObservableObject {
 
         if http.statusCode == 200 {
             let session = try JSONDecoder().decode(AuthResponse.self, from: data)
-            handleAuthResponse(session)
+            try await handleAuthResponse(session, expectedGeneration: generation)
             if isAuthenticated {
                 KeychainStore.set("gary_apple_subject", credential.user)
                 KeychainStore.set("gary_apple_account", userId)
@@ -268,6 +279,7 @@ final class AuthManager: ObservableObject {
     /// one tap, Continue); the resulting ID token exchanges directly against
     /// GoTrue — no browser round-trip, no passkey interstitial.
     func signInWithGoogleNative() async throws {
+        let generation = accountGeneration
         errorMessage = nil
         infoMessage = nil
         guard let clientID = googleNativeClientID else {
@@ -324,10 +336,7 @@ final class AuthManager: ObservableObject {
         }
 
         let session = try JSONDecoder().decode(AuthResponse.self, from: data)
-        handleAuthResponse(session)
-        let user = try await fetchCurrentUser()
-        remember(user)
-        isAuthenticated = true
+        try await handleAuthResponse(session, expectedGeneration: generation)
     }
 
     private static func makeGoogleNonce() throws -> (raw: String, hashed: String) {
@@ -381,6 +390,7 @@ final class AuthManager: ObservableObject {
 
     /// Handle the OAuth callback URL containing tokens
     func handleOAuthCallback(url: URL) async throws {
+        let generation = accountGeneration
         errorMessage = nil
 
         // Parse fragment (Supabase returns tokens in URL fragment)
@@ -406,12 +416,10 @@ final class AuthManager: ObservableObject {
             throw AuthError.serverError(message)
         }
 
-        accessToken = token
-        refreshToken = refresh
-
-        let user = try await fetchCurrentUser()
-        remember(user)
-        isAuthenticated = true
+        // Validate the candidate token before publishing any part of its session.
+        // The previous account must never be paired with the callback's token.
+        try await handleAuthResponse(AuthResponse(access_token: token, refresh_token: refresh,
+            token_type: nil, expires_in: nil, user: nil), expectedGeneration: generation)
     }
 
     // MARK: - Sign Out
@@ -436,31 +444,54 @@ final class AuthManager: ObservableObject {
     /// Permanently deletes the signed-in user's account + their data via the
     /// `delete-account` edge function (which verifies the caller from this token,
     /// then admin-deletes their rows + auth user), then clears the local session.
-    func deleteAccount() async throws -> Bool {
-        guard !accessToken.isEmpty,
+    func accountDeletionIntent() throws -> AccountDeletionIntent {
+        guard isAuthenticated, let owner = currentUser?.id, !accessToken.isEmpty else {
+            throw AuthError.unauthorized
+        }
+        return AccountDeletionIntent(ownerID: owner, generation: accountGeneration)
+    }
+
+    func isCurrentDeletionIntent(_ intent: AccountDeletionIntent) -> Bool {
+        isAuthenticated && currentUser?.id == intent.ownerID && accountGeneration == intent.generation
+    }
+
+    func canPresentDeletionResult(_ result: AccountDeletionResult) -> Bool {
+        accountGeneration == result.generation && !isAuthenticated && currentUser == nil
+    }
+
+    private func accountDeletionRequest(_ intent: AccountDeletionIntent) throws -> URLRequest {
+        guard isCurrentDeletionIntent(intent) else { throw CancellationError() }
+        let token = accessToken
+        guard !token.isEmpty,
               let url = URL(string: "\(baseURL)/functions/v1/delete-account") else {
             throw AuthError.unauthorized
         }
-        let owner = currentUser?.id
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue(apiKey, forHTTPHeaderField: "apikey")
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        return request
+    }
 
+    func deleteAccount(intent: AccountDeletionIntent) async throws -> AccountDeletionResult {
+        // Validation and token capture are synchronous on MainActor before dispatch.
+        let request = try accountDeletionRequest(intent)
         let (data, response) = try await URLSession.shared.data(for: request)
+        guard isCurrentDeletionIntent(intent) else { throw CancellationError() }
         let result = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode), result?["ok"] as? Bool == true else {
-            if result?["signed_out"] as? Bool == true, currentUser?.id == owner { clearSession() }
-            throw AuthError.serverError(result?["error"] as? String ?? "Account deletion did not finish. Please sign in again and retry.")
+            if result?["signed_out"] as? Bool == true { clearSession() }
+            throw AccountDeletionFailure(generation: accountGeneration,
+                message: result?["error"] as? String ?? "Account deletion did not finish. Please sign in again and retry.")
         }
         let appleRevocation = result?["apple_revocation_required"] as? Bool == true
-        if currentUser?.id == owner {
-            UserDefaults.standard.removeObject(forKey: PrivacyPreferences.analyticsKey)
-            UserDefaults.standard.removeObject(forKey: PrivacyPreferences.readingAnalyticsKey)
-            clearSession()
-        }
-        return appleRevocation
+        UserDefaults.standard.removeObject(forKey: PrivacyPreferences.analyticsKey)
+        UserDefaults.standard.removeObject(forKey: PrivacyPreferences.readingAnalyticsKey)
+        clearSession()
+        // This generation includes our own successful sign-out. A later sign-in
+        // invalidates the completion without hiding a legitimate deletion notice.
+        return AccountDeletionResult(generation: accountGeneration, appleRevocationRequired: appleRevocation)
     }
 
     /// Apple may revoke the provider credential independently of a Supabase
@@ -507,6 +538,17 @@ final class AuthManager: ObservableObject {
 
     private func fetchCurrentUser() async throws -> GaryUser {
         let token = accessToken
+        do {
+            let user = try await fetchUser(token: token)
+            guard accessToken == token else { throw CancellationError() }
+            return user
+        } catch {
+            guard accessToken == token else { throw CancellationError() }
+            throw error
+        }
+    }
+
+    private func fetchUser(token: String) async throws -> GaryUser {
         let url = try authURL("/auth/v1/user")
         var request = URLRequest(url: url)
         request.setValue(apiKey, forHTTPHeaderField: "apikey")
@@ -514,7 +556,6 @@ final class AuthManager: ObservableObject {
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
-        guard accessToken == token else { throw CancellationError() }
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         if [400, 401, 403].contains(http.statusCode) { throw AuthError.unauthorized }
         guard http.statusCode == 200 else { throw URLError(.badServerResponse) }
@@ -548,14 +589,21 @@ final class AuthManager: ObservableObject {
         PushRegistrationCoordinator.shared.requestSync()
     }
 
-    private func handleAuthResponse(_ response: AuthResponse) {
+    private func handleAuthResponse(_ response: AuthResponse, expectedGeneration: UUID) async throws {
+        try Task.checkCancellation()
+        guard accountGeneration == expectedGeneration else { throw CancellationError() }
+        let user: GaryUser
+        if let embedded = response.user {
+            user = embedded
+        } else {
+            user = try await fetchUser(token: response.access_token)
+        }
+        try Task.checkCancellation()
+        guard accountGeneration == expectedGeneration else { throw CancellationError() }
+        accountGeneration = UUID()
         accessToken = response.access_token
-        if let refresh = response.refresh_token {
-            refreshToken = refresh
-        }
-        if let user = response.user {
-            remember(user)
-        }
+        refreshToken = response.refresh_token ?? ""
+        remember(user)
         isAuthenticated = true
         PushRegistrationCoordinator.shared.requestSync()
     }
@@ -564,7 +612,10 @@ final class AuthManager: ObservableObject {
     /// token responses omit the embedded user, so every later `/user` fetch
     /// must refresh the same durable fields instead of updating only the UI.
     private func remember(_ user: GaryUser) {
-        if userId != user.id { clearProfileCache() }
+        if userId != user.id {
+            accountGeneration = UUID()
+            clearProfileCache()
+        }
         userId = user.id
         userEmail = user.email ?? ""
         currentUser = user
@@ -581,6 +632,7 @@ final class AuthManager: ObservableObject {
     }
 
     private func clearSession() {
+        accountGeneration = UUID()
         clearProfileCache()
         accessToken = ""
         refreshToken = ""
@@ -598,6 +650,22 @@ final class AuthManager: ObservableObject {
 }
 
 // MARK: - Models
+
+struct AccountDeletionIntent: Equatable {
+    let ownerID: String
+    let generation: UUID
+}
+
+struct AccountDeletionResult {
+    let generation: UUID
+    let appleRevocationRequired: Bool
+}
+
+struct AccountDeletionFailure: LocalizedError {
+    let generation: UUID
+    let message: String
+    var errorDescription: String? { message }
+}
 
 struct GaryUser: Codable, Identifiable {
     let id: String

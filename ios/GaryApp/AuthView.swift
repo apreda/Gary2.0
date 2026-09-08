@@ -18,6 +18,7 @@ struct AuthView: View {
     @State private var password = ""
     @State private var confirmPassword = ""
     @State private var isSubmitting = false
+    @State private var emailSubmission: Task<Void, Never>?
     @State private var recoveryBrowserFailed = false
     @State private var animateIn = false
 
@@ -187,7 +188,7 @@ struct AuthView: View {
 
                     // Submit Button
                     Button {
-                        Task { await handleSubmit() }
+                        emailSubmission = Task { await handleSubmit() }
                     } label: {
                         HStack(spacing: 10) {
                             if isSubmitting {
@@ -295,6 +296,14 @@ struct AuthView: View {
         .onAppear {
             if authManager.isAuthenticated { dismiss() }
         }
+        .onDisappear {
+            cancelEmailSubmission()
+        }
+    }
+
+    private func cancelEmailSubmission() {
+        emailSubmission?.cancel()
+        emailSubmission = nil
     }
 
     // MARK: - Form Validation
