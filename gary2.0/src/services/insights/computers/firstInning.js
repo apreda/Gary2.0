@@ -1,8 +1,7 @@
 // gary2.0/src/services/insights/computers/firstInning.js
 //
 // LANE: firstInning  (category token emitted: first_inning)
-// "NRFI / YRFI watch: how often have these teams' games produced a first-inning
-//  run lately — and does tonight's matchup line up clean on one side of it?"
+// Observed first-inning scoring frequency and named season pitching samples.
 //
 // Approach (MLB Stats API via mlbStatsApiService — the free statsapi feed the
 // pipeline already uses for schedules/lineups/weather):
@@ -23,41 +22,47 @@
 //     first", tone HOT) or in <= TEAM_COLD ("flat in the 1st", tone COLD),
 //     value "k/N", team_id set so the grader can check THAT side's 1st.
 //
-// Starters' own first-inning runs allowed would need per-start play-by-play —
-// not cheaply available, so this lane is team-side only (by design).
+// Optional named pitcher season splits are historical context, not a claim
+// about who will pitch or how tonight's opening inning will go.
 //
 // Defensive: unmatched team, thin sample, missing linescore -> skip silently;
 // never throws. One row max per game; slate-wide cap, relevance-ranked.
 
 import {
-  makeRow, TONES, pickVariant, nameKey, shiftDateStr, clampScore,
+  makeRow, TONES, nameKey, shiftDateStr, clampScore,
 } from '../shared.js';
 import mlbStatsApi from '../../mlbStatsApiService.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
-import { attachLaneReads, detailFact } from '../laneReads.js';
+import { firstInningResearchDetail, observedCount, RESEARCH_FACTS_VERSION } from '../researchFacts.js';
 
 // ── NRFI engine (founder GO, Jul 27 2026) ───────────────────────────────────
 // Two enrichments per surfaced game, both facts: tonight's live 1st-inning
 // number (BDL markets catalog) and each probable starter's own first-inning
 // season split (Stats API situational sitCode i01). Failures skip silently.
 
-const fmtAm = (v) => (v == null ? null : (v > 0 ? `+${v}` : `${v}`));
-
-/** Probables for the slate date, keyed by MLBAM team id. Memoized per run. */
+/** A team must appear in exactly one verified game on this date. Counting all
+ * appearances before reading probables prevents a doubleheader's second starter
+ * from replacing its first, including when one game has no probable yet. */
 async function probablesByTeam(date) {
   try {
     const resp = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${date}&hydrate=probablePitcher`);
     if (!resp.ok) return new Map();
     const j = await resp.json();
-    const out = new Map();
-    for (const g of j?.dates?.[0]?.games || []) {
+    const out = new Map(), appearances = new Map();
+    for (const g of (j?.dates || []).flatMap(day => day?.games || [])) {
+      const teams = g?.teams;
       for (const side of ['home', 'away']) {
-        const t = g?.teams?.[side];
-        if (t?.team?.id != null && t?.probablePitcher?.id != null) {
-          out.set(t.team.id, { name: t.probablePitcher.fullName, id: t.probablePitcher.id });
+        const t = teams?.[side], opponent = teams?.[side === 'home' ? 'away' : 'home'];
+        if (t?.team?.id == null) continue;
+        appearances.set(t.team.id, (appearances.get(t.team.id) || 0) + 1);
+        if (g.officialDate === date && g.gamePk != null && opponent?.team?.id != null
+          && opponent.team.id !== t.team.id && t?.probablePitcher?.id != null) {
+          out.set(t.team.id, { name: t.probablePitcher.fullName, id: t.probablePitcher.id,
+            opponentId: opponent.team.id, side, gamePk: g.gamePk, date });
         }
       }
     }
+    for (const [teamId, count] of appearances) if (count !== 1) out.delete(teamId);
     return out;
   } catch { return new Map(); }
 }
@@ -70,7 +75,7 @@ async function firstInningSplit(pitcherId, season) {
     const j = await resp.json();
     const s = j?.stats?.[0]?.splits?.[0]?.stat;
     if (!s || !s.inningsPitched || parseFloat(s.inningsPitched) < 5) return null; // thin split says nothing
-    return { era: s.era, avg: s.avg, ip: s.inningsPitched, hr: s.homeRuns ?? 0 };
+    return { era: s.era, avg: s.avg, ip: s.inningsPitched, hr: observedCount(s.homeRuns) };
   } catch { return null; }
 }
 
@@ -78,37 +83,48 @@ async function firstInningSplit(pitcherId, season) {
  * Evidence + meta for one game: the live 0.5 number and both starters'
  * first-inning splits. Everything optional — absent pieces just don't print.
  */
-async function nrfiEnrichment({ game, date, season, probables }) {
-  const bits = [];
-  const meta = {};
+async function nrfiEnrichment({ game, season, probables }) {
+  const meta = { season };
   try {
     const market = await ballDontLieService.getMlbFirstInningRunsMarket(game?.id);
     if (market && (market.overOdds != null || market.underOdds != null)) {
       meta.price = { over: market.overOdds, under: market.underOdds, vendor: market.vendor };
-      const sides = [
-        market.overOdds != null ? `Over 0.5 ${fmtAm(market.overOdds)}` : null,
-        market.underOdds != null ? `Under 0.5 ${fmtAm(market.underOdds)}` : null,
-      ].filter(Boolean).join(' / ');
-      bits.push(`Tonight's 1st-inning number: ${sides}.`);
     }
   } catch { /* price optional */ }
   try {
-    const spBits = [];
     const sp = [];
+    const mlbamId = side => probables.mlbamIdByName?.get(nameKey(game?.[side]?.display_name || game?.[side]?.full_name || game?.[side]?.name));
     for (const side of ['home_team', 'visitor_team']) {
-      const teamMlbamId = probables.mlbamIdByName?.get(nameKey(game?.[side]?.display_name || game?.[side]?.full_name || game?.[side]?.name));
+      const teamMlbamId = mlbamId(side);
+      const opponentMlbamId = mlbamId(side === 'home_team' ? 'visitor_team' : 'home_team');
       const prob = teamMlbamId != null ? probables.byTeam.get(teamMlbamId) : null;
-      if (!prob) continue;
+      const gameSide = side === 'home_team' ? 'home' : 'away';
+      if (!prob || opponentMlbamId == null || prob.opponentId !== opponentMlbamId || prob.side !== gameSide) continue;
       const split = await firstInningSplit(prob.id, season);
       if (!split) continue;
-      sp.push({ side: side === 'home_team' ? 'home' : 'away', name: prob.name, ...split });
-      spBits.push(`${prob.name} ${split.era} ERA, ${split.avg} BA against in first innings (${split.ip} IP${split.hr ? `, ${split.hr} HR` : ''})`);
+      sp.push({ side: gameSide, name: prob.name, mlbam_player_id: prob.id, mlbam_game_id: prob.gamePk,
+        game_date: prob.date, ...split });
     }
     if (sp.length) meta.sp_first_inning = sp;
-    if (spBits.length) bits.push(`Starters' first innings this season — ${spBits.join('; ')}.`);
   } catch { /* splits optional */ }
-  return { clause: bits.length ? ` ${bits.join(' ')}` : '', meta };
+  return { meta };
 }
+
+/** Provider first pitch as an ISO instant, or null when absent/unparseable. */
+function firstPitch(value) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? new Date(ms).toISOString().replace('.000Z', 'Z') : null;
+}
+
+/** Same-date order: first pitch, then game number. 0 = no provable order. */
+function compareOrder(a, b) {
+  if (a.gameDate && b.gameDate && a.gameDate !== b.gameDate) return a.gameDate < b.gameDate ? -1 : 1;
+  if (a.gameNumber != null && b.gameNumber != null && a.gameNumber !== b.gameNumber) return a.gameNumber - b.gameNumber;
+  return 0;
+}
+
+const sampleGame = ({ gamePk, date, gameDate, gameNumber }) => ({ gamePk, date, gameDate, gameNumber });
 
 // Tunables.
 const LOOKBACK_DAYS = 16;   // ET calendar dates walked to gather recent finals
@@ -125,7 +141,7 @@ export async function computeFirstInning(ctx) {
   let examined = 0;
 
   // 1. Walk recent ET dates once; collect finals with a 1st-inning linescore.
-  const finals = [];
+  const finalsById = new Map(), conflictingTeams = new Set();
   for (let back = 1; back <= LOOKBACK_DAYS; back++) {
     const d = shiftDateStr(date, -back);
     if (!d) break;
@@ -133,28 +149,60 @@ export async function computeFirstInning(ctx) {
       const sched = (await mlbStatsApi.getMlbSchedule(d)) || [];
       for (const g of sched) {
         if (g?.status?.detailedState !== 'Final') continue;
+        const gamePk = observedCount(g.gamePk);
+        if (gamePk === null || gamePk === 0) continue;
         const inn1 = g?.linescore?.innings?.[0];
-        const homeR = Number(inn1?.home?.runs);
-        const awayR = Number(inn1?.away?.runs);
-        if (!Number.isFinite(homeR) || !Number.isFinite(awayR)) continue;
-        finals.push({
-          date: String(g.officialDate || g.gameDate || d).slice(0, 10),
-          gamePk: g.gamePk,
-          homeId: g?.teams?.home?.team?.id,
-          awayId: g?.teams?.away?.team?.id,
+        const homeR = observedCount(inn1?.home?.runs);
+        const awayR = observedCount(inn1?.away?.runs);
+        const officialDate = typeof g.officialDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(g.officialDate)
+          ? g.officialDate : null;
+        const fact = {
+          date: officialDate, gamePk,
+          // First pitch and game number are the provider's own order evidence for
+          // a doubleheader; a game id is not.
+          gameDate: firstPitch(g.gameDate),
+          gameNumber: observedCount(g.gameNumber),
+          homeId: observedCount(g?.teams?.home?.team?.id),
+          awayId: observedCount(g?.teams?.away?.team?.id),
           homeR1: homeR,
           awayR1: awayR,
-        });
+        };
+        const previous = finalsById.get(gamePk);
+        if (previous && ['date', 'gameDate', 'gameNumber', 'homeId', 'awayId', 'homeR1', 'awayR1'].some(key => previous[key] !== fact[key])) {
+          for (const teamId of [previous.homeId, previous.awayId, fact.homeId, fact.awayId]) {
+            if (teamId != null) conflictingTeams.add(teamId);
+          }
+        } else if (!previous) finalsById.set(gamePk, fact);
       }
     } catch (err) {
       console.error('[firstInning] schedule error:', err?.message || err);
     }
   }
+  const finals = [...finalsById.values()].filter(f => f.date && f.date < date && f.date >= shiftDateStr(date, -LOOKBACK_DAYS)
+    && f.homeId != null && f.awayId != null && f.homeId !== f.awayId && f.homeR1 !== null && f.awayR1 !== null);
   if (!finals.length) {
     console.log('[firstInning] examined 0, emitted 0 (no recent finals)');
     return [];
   }
-  finals.sort((a, b) => b.date.localeCompare(a.date)); // newest first
+  finals.sort((a, b) => b.date.localeCompare(a.date) || compareOrder(b, a) || b.gamePk - a.gamePk);
+
+  // A team whose same-date games cannot be ordered by first pitch or game
+  // number has no provable "last N" window; it is suppressed, not guessed.
+  const datesByTeam = new Map();
+  for (const f of finals) {
+    for (const teamId of [f.homeId, f.awayId]) {
+      const key = `${teamId}|${f.date}`;
+      const list = datesByTeam.get(key) || [];
+      list.push(f);
+      datesByTeam.set(key, list);
+    }
+  }
+  for (const [key, list] of datesByTeam) {
+    if (list.length < 2) continue;
+    for (let i = 1; i < list.length; i++) {
+      if (compareOrder(list[i - 1], list[i]) === 0) conflictingTeams.add(Number(key.split('|')[0]));
+    }
+  }
 
   // Per MLBAM team id: the last SAMPLE_GAMES finals' 1st-inning facts.
   const byTeam = new Map();
@@ -165,8 +213,9 @@ export async function computeFirstInning(ctx) {
     if (list.length < SAMPLE_GAMES) list.push(fact);
   };
   for (const f of finals) {
-    push(f.homeId, { scored: f.homeR1 > 0, allowed: f.awayR1 > 0, any: f.homeR1 + f.awayR1 > 0 });
-    push(f.awayId, { scored: f.awayR1 > 0, allowed: f.homeR1 > 0, any: f.homeR1 + f.awayR1 > 0 });
+    const source = { gamePk: f.gamePk, date: f.date, gameDate: f.gameDate, gameNumber: f.gameNumber };
+    push(f.homeId, { ...source, scored: f.homeR1 > 0, allowed: f.awayR1 > 0, any: f.homeR1 + f.awayR1 > 0 });
+    push(f.awayId, { ...source, scored: f.awayR1 > 0, allowed: f.homeR1 > 0, any: f.homeR1 + f.awayR1 > 0 });
   }
 
   // 2. BDL slate team -> MLBAM team, joined by full-name key.
@@ -180,6 +229,7 @@ export async function computeFirstInning(ctx) {
   }
   const sampleFor = (bdlTeam) => {
     const mlbamId = mlbamIdByName.get(nameKey(bdlTeam?.display_name || bdlTeam?.full_name || bdlTeam?.name));
+    if (conflictingTeams.has(mlbamId)) return null;
     const list = mlbamId != null ? byTeam.get(mlbamId) : null;
     return Array.isArray(list) && list.length >= MIN_SAMPLE ? list : null;
   };
@@ -213,15 +263,11 @@ export async function computeFirstInning(ctx) {
     // Matchup NRFI / YRFI rows — enriched with tonight's live number and the
     // starters' own first-inning season splits (facts; absent pieces skip).
     if (hAny <= NRFI_MAX && aAny <= NRFI_MAX) {
-      const quiet = (hN - hAny) + (aN - aAny);
-      const enr = await nrfiEnrichment({ game, date, season, probables });
+      const enr = await nrfiEnrichment({ game, season, probables });
       rows.push(makeRow({
         category: 'firstInning',
         headline: `NRFI watch: quiet first innings on both sides of ${label}`,
-        detail: pickVariant([
-          `${home.abbreviation} games have seen a first-inning run in just ${hAny} of their last ${hN}; ${away.abbreviation} games in ${aAny} of ${aN}. That is ${quiet} clean opening frames between them.`,
-          `Neither side has been scoring early — a 1st-inning run in only ${hAny} of ${hN} for ${home.abbreviation} and ${aAny} of ${aN} for ${away.abbreviation} games lately.`,
-        ], gameId) + enr.clause,
+        detail: '', // filled from validated metadata below
         game: label,
         value: 'NRFI',
         tone: TONES.COLD,
@@ -233,20 +279,19 @@ export async function computeFirstInning(ctx) {
           home_seq: homeSample.map((f) => (f.any ? 1 : 0)),
           away_seq: awaySample.map((f) => (f.any ? 1 : 0)),
           home_any: hAny, home_n: hN, away_any: aAny, away_n: aN,
+          home_sample_games: homeSample.map(sampleGame),
+          away_sample_games: awaySample.map(sampleGame),
           ...enr.meta,
         },
       }));
       continue;
     }
     if (hAny >= YRFI_MIN && aAny >= YRFI_MIN) {
-      const enr = await nrfiEnrichment({ game, date, season, probables });
+      const enr = await nrfiEnrichment({ game, season, probables });
       rows.push(makeRow({
         category: 'firstInning',
         headline: `YRFI watch: first innings have been live on both sides of ${label}`,
-        detail: pickVariant([
-          `${home.abbreviation} games have produced a first-inning run in ${hAny} of their last ${hN}; ${away.abbreviation} games in ${aAny} of ${aN}. Early runs have been the rule, not the exception.`,
-          `Both sides keep scoring early — a 1st-inning run in ${hAny} of ${hN} for ${home.abbreviation} and ${aAny} of ${aN} for ${away.abbreviation} games lately.`,
-        ], gameId) + enr.clause,
+        detail: '', // filled from validated metadata below
         game: label,
         value: 'YRFI',
         tone: TONES.HOT,
@@ -258,6 +303,8 @@ export async function computeFirstInning(ctx) {
           home_seq: homeSample.map((f) => (f.any ? 1 : 0)),
           away_seq: awaySample.map((f) => (f.any ? 1 : 0)),
           home_any: hAny, home_n: hN, away_any: aAny, away_n: aN,
+          home_sample_games: homeSample.map(sampleGame),
+          away_sample_games: awaySample.map(sampleGame),
           ...enr.meta,
         },
       }));
@@ -283,16 +330,13 @@ export async function computeFirstInning(ctx) {
       }
     }
     if (best) {
-      const name = best.team.full_name || best.team.display_name || best.team.abbreviation;
-      const enr = await nrfiEnrichment({ game, date, season, probables });
+      const enr = await nrfiEnrichment({ game, season, probables });
       rows.push(makeRow({
         category: 'firstInning',
         headline: best.hot
           ? `${best.team.abbreviation} strike first: 1st-inning runs in ${best.scored} of their last ${best.n}`
           : `${best.team.abbreviation} have gone quiet in the 1st: runs in ${best.scored} of their last ${best.n}`,
-        detail: (best.hot
-          ? `${name} have put up a first-inning run in ${best.scored} of their last ${best.n} games — they jump on starters early and the YRFI side of their games has been doing the work.`
-          : `${name} have scored in the first inning just ${best.scored} time${best.scored === 1 ? '' : 's'} in their last ${best.n} games — slow-starting lineup, and the 1st has been a free pass for opposing starters.`) + enr.clause,
+        detail: '', // filled from validated metadata below
         game: label,
         value: `${best.scored}/${best.n}`,
         tone: best.hot ? TONES.HOT : TONES.COLD,
@@ -304,6 +348,7 @@ export async function computeFirstInning(ctx) {
           team_abbr: best.team.abbreviation,
           team_seq: best.seq,
           team_scored: best.scored, team_n: best.n,
+          team_sample_games: sampleFor(best.team).map(sampleGame),
           ...enr.meta,
         },
       }));
@@ -311,12 +356,14 @@ export async function computeFirstInning(ctx) {
   }
 
   rows.sort((a, b) => b.relevance_score - a.relevance_score);
-  const capped = rows.slice(0, MAX_ROWS);
-  // THE GARY LAYER (founder, Aug 5): the drop-down elaborates — it never
-  // repeats the headline. Fenced to this lane's own computed facts.
-  await attachLaneReads('firstInning', capped, detailFact, {
-    ask: 'what this first-inning pattern actually means tonight — how the top of the game is likely to go and what that sets up for the rest of it',
-  });
+  const capped = rows.flatMap(row => {
+    const detail = firstInningResearchDetail(row.meta);
+    if (!detail) return [];
+    row.detail = detail;
+    row.meta = { ...row.meta, research_facts_version: RESEARCH_FACTS_VERSION,
+      computed_detail: detail, computed_detail_kind: 'measured_research', evidence: detail, read: detail };
+    return [row];
+  }).slice(0, MAX_ROWS);
 
   console.log(`[firstInning] examined ${examined}, emitted ${capped.length}`);
   return capped;

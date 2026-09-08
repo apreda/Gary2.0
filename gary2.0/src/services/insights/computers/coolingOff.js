@@ -29,12 +29,13 @@ import {
 } from '../shared.js';
 import { attachLaneReads, detailFact } from '../laneReads.js';
 import { makeLineupReader } from '../lineupSource.js';
+import { recentBattingSample, recentBattingSampleMeta } from '../recentBattingSample.js';
 
 const MIN_RECENT_PA = 25;     // require a real recent PA sample
 const MIN_RECENT_AB = 22;     // lower floor when only at_bats is available
 const MIN_SEASON_GP = 15;     // require a real season baseline (fail closed if absent)
 const MIN_OPS_DIP = 0.130;    // recent OPS must trail season by this much
-const PA_FULL_CREDIT = 60;    // recent windows >= this PA get full dip weight
+const SAMPLE_FULL_CREDIT = 60; // preserve the existing count-based ranking weight
 const MIN_SPLIT_AB = 40;      // vs-hand split needs a real sample before we name it
 const MAX_PER_GAME = 2;
 const RELEVANCE_SCALE = 200;
@@ -57,7 +58,7 @@ export async function computeCoolingOff(ctx) {
   // THE GARY LAYER (founder, Aug 5): the drop-down elaborates — it never
   // repeats the headline. Fenced to this lane's own computed facts.
   await attachLaneReads('coolingOff', rows, detailFact, {
-    ask: 'what this slump actually means tonight — whether the swing looks off or the results are lagging the contact, and what it sets up in this matchup',
+    ask: 'the recent OPS, its explicitly supplied PA or AB sample, and the supplied season or handedness comparison; preserve each sample unit exactly',
   });
 
   console.log(`[coolingOff] examined ${stats.examined}, emitted ${stats.emitted}`);
@@ -117,18 +118,8 @@ async function coldForGame(game, { season, bdl, gameLabel, stats, lineupsFor }) 
 
       // Prefer true plate_appearances; fall back to at_bats against a lower floor
       // (AB undercounts PA — reusing the PA floor on an AB count over-demands).
-      const recentPaRaw = Number(recent.plate_appearances);
-      const recentAbRaw = Number(recent.at_bats);
-      let recentSample;
-      if (Number.isFinite(recentPaRaw)) {
-        if (recentPaRaw < MIN_RECENT_PA) continue;
-        recentSample = recentPaRaw;
-      } else if (Number.isFinite(recentAbRaw)) {
-        if (recentAbRaw < MIN_RECENT_AB) continue;
-        recentSample = recentAbRaw;
-      } else {
-        continue;
-      }
+      const sample = recentBattingSample(recent, { minPA: MIN_RECENT_PA, minAB: MIN_RECENT_AB });
+      if (!sample) continue;
 
       const recentOps = Number(recent.ops);
       if (!Number.isFinite(recentOps) || recentOps <= 0) continue;
@@ -137,7 +128,7 @@ async function coldForGame(game, { season, bdl, gameLabel, stats, lineupsFor }) 
       if (dip < MIN_OPS_DIP) continue;
 
       // Weight the dip by sample size so a 25-PA slump can't score like a 120-PA one.
-      const effectiveDip = dip * Math.min(1, recentSample / PA_FULL_CREDIT);
+      const effectiveDip = dip * Math.min(1, sample.count / SAMPLE_FULL_CREDIT);
 
       // Second-order context: tonight's opposing hand + this batter's vs-hand
       // split. {} when unavailable -> row stays first-order.
@@ -152,7 +143,7 @@ async function coldForGame(game, { season, bdl, gameLabel, stats, lineupsFor }) 
         seasonOps,
         dip,
         effectiveDip,
-        recentPa: recentSample,
+        recentSample: sample,
         recentLabel: recent.split_name || 'recent',
         ...matchup,
       });
@@ -186,7 +177,8 @@ async function coldForGame(game, { season, bdl, gameLabel, stats, lineupsFor }) 
       game_id: gameId,
       // position drives the iOS Insights row's gold position tag; merged with the
       // cold-context matchup payload when a probable pitcher is known.
-      meta: (c.position || c.pitcherName) ? {
+      meta: {
+        ...recentBattingSampleMeta(c.recentSample, c.recentLabel),
         ...(c.position ? { position: c.position } : {}),
         ...(c.pitcherName ? {
           kind: 'cold_context',
@@ -196,7 +188,7 @@ async function coldForGame(game, { season, bdl, gameLabel, stats, lineupsFor }) 
           vs_hand_ab: c.vsHandAb,
           side: c.sideWord || null,
         } : {}),
-      } : undefined,
+      },
     });
   });
 }
@@ -251,17 +243,18 @@ function buildDetail(c) {
   const base = pct3(c.seasonOps);
   const win = c.recentLabel.toLowerCase();
   const drop = round(c.dip, 3);
+  const sample = `${c.recentSample.count} ${c.recentSample.unit}`;
 
   if (c.pitcherName && c.pitcherHand) {
     const handWord = c.pitcherHand === 'L' ? 'LHP' : 'RHP';
     const sideClause = c.sideWord ? ` — ${c.sideWord}` : '';
-    return `${c.name}'s ${recent} OPS over the ${win} (${c.recentPa} PA) trails his ${base} season mark, down ${drop}. Tonight he draws ${handWord} ${c.pitcherName}${sideClause}: a ${pct3(c.vsHandOps)} OPS vs ${handWord} across ${c.vsHandAb} AB.`;
+    return `${c.name}'s ${recent} OPS over the ${win} (${sample}) trails his ${base} season mark, down ${drop}. Tonight he draws ${handWord} ${c.pitcherName}${sideClause}: a ${pct3(c.vsHandOps)} OPS vs ${handWord} across ${c.vsHandAb} AB.`;
   }
 
   const variants = [
-    `Over the ${win} (${c.recentPa} PA) he is at a ${recent} OPS, down ${drop} from his ${base} season mark.`,
-    `That ${recent} OPS spans the ${win} (${c.recentPa} PA) against a ${base} season baseline, a ${drop} drop.`,
-    `The ${win} sample runs ${c.recentPa} PA: a ${recent} OPS versus ${base} for the season, ${drop} below his norm.`,
+    `Over the ${win} (${sample}) he is at a ${recent} OPS, down ${drop} from his ${base} season mark.`,
+    `That ${recent} OPS spans the ${win} (${sample}) against a ${base} season baseline, a ${drop} drop.`,
+    `The ${win} sample runs ${sample}: a ${recent} OPS versus ${base} for the season, ${drop} below his norm.`,
   ];
   return pickVariant(variants, c.playerId);
 }
