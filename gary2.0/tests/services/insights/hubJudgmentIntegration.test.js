@@ -32,6 +32,18 @@ beforeEach(() => {
 });
 
 describe('Hub synthesis enters before final display filtering', () => {
+  it('keeps the default collector path observational with checkpoints and measured-source provenance intact', async () => {
+    const checkpoint = vi.fn();
+    const result = await generateInsightConnections({ date: '2026-09-08', league: 'MLB',
+      options: { onLaneRows: checkpoint, minRelevance: 0 } });
+    expect(checkpoint).toHaveBeenCalledOnce();
+    expect(result.connections.length).toBeGreaterThan(0);
+    expect(result.connections.every(row => row.detail === 'Original observed context.' && !row.meta.judgment)).toBe(true);
+    expect(result.connections.every(row => Number.isFinite(Date.parse(row.meta.source_collected_at)))).toBe(true);
+    expect(result.judgmentUpdates).toEqual([]);
+    expect(result.judgmentInvalidations).toEqual([]);
+    expect(result.judgmentFailures).toEqual([]);
+  });
   it('stamps fresh MLB observations before checkpoint and synthesis while retaining cached source clocks', async () => {
     vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-09-08T16:00:00Z'));
     const original = '2026-09-08T12:00:00Z';

@@ -4,7 +4,31 @@ import {
   shouldRepairFootballMarketVendor,
   shouldPreserveCurrentFootballFantasySnapshot,
   shouldUpgradeFootballFantasyEvidence,
+  insightRunJudgmentsEnabled,
 } from '../../scripts/lib/insightRunPolicy.js';
+import { dailyContentStages, collegeCardStages, fantasyContentStages } from '../../scripts/lib/dailyContentPipeline.js';
+
+describe('observational Hub default and explicit judgment opt-in', () => {
+  it('keeps every existing daily insight/card stage observational without changing stage ownership', () => {
+    const stages = dailyContentStages('2026-09-08', {});
+    const insights = stages.filter(stage => stage.args[0] === 'run-insight-connections.js');
+    expect(insights.map(stage => stage.id)).toEqual([
+      'mlb-insights', 'mlb-cards', 'nfl-cards', 'ncaaf-cards', 'nfl-insights', 'ncaaf-insights', 'ncaaf-card-subjects',
+    ]);
+    expect(insights.every(stage => !insightRunJudgmentsEnabled(stage.args))).toBe(true);
+    expect(collegeCardStages('2026-09-08', {}).every(stage => !insightRunJudgmentsEnabled(stage.args))).toBe(true);
+    expect(fantasyContentStages('2026-09-08', {}, new Date('2026-09-08T16:00:00Z'))
+      .every(stage => !insightRunJudgmentsEnabled(stage.args))).toBe(true);
+  });
+
+  it('requires an explicit judgment mode, not a date, league, dry run or report filename', () => {
+    for (const args of [[], ['--league', 'NFL,NCAAF'], ['--dry-run'], ['--judgment-output', '/tmp/preview.json'], ['--with-judgments=false']]) {
+      expect(insightRunJudgmentsEnabled(args)).toBe(false);
+    }
+    expect(insightRunJudgmentsEnabled(['--league', 'MLB', '--with-judgments'])).toBe(true);
+    expect(insightRunJudgmentsEnabled(['--judgments-only', '--dry-run'])).toBe(true);
+  });
+});
 
 describe('football fantasy Hub persistence', () => {
   it('allows only the monotonic prior-baseline to current-season transition', () => {

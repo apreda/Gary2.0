@@ -11,6 +11,12 @@ const NON_SPORTSBOOK_FOOTBALL_VENDORS = new Set([
   'opening_snapshot',
 ]);
 
+/** Observational Hub research is the ordinary daily product. Connected game
+ * judgments and their editorial ordering require an explicit operator opt-in. */
+export function insightRunJudgmentsEnabled(args = []) {
+  return args.includes('--with-judgments') || args.includes('--judgments-only');
+}
+
 /**
  * Repair a legacy football market card that was frozen from a prediction
  * market before canonical sportsbook selection was enforced. The exception is

@@ -5,8 +5,8 @@
  * Calls generateInsightConnections() for a given date across the active leagues
  * and INSERTs the resulting flat rows into the `insight_connections`
  * Supabase table. Existing original reads are retained; volatile factual lanes
- * refresh within their exact date/league scope. Connected judgments publish
- * separately through an atomic metadata-only RPC.
+ * refresh within their exact date/league scope. Daily collection keeps the
+ * observational Hub; connected game judgments are an explicit opt-in.
  *
  * Writes use the service-role REST path documented in the Supabase conventions
  * (mirrors storeDailyPicks in src/supabaseClient.js): axios POST to
@@ -19,6 +19,7 @@
  *   node run-insight-connections.js --league MLB          # single league
  *   node run-insight-connections.js --league mlb,nba      # multiple leagues
  *   node run-insight-connections.js --dry-run             # print rows, no write
+ *   node run-insight-connections.js --with-judgments      # opt in to connected game judgments
  *   node run-insight-connections.js --judgments-only      # refresh connected reads
  *   node run-insight-connections.js --judgments-only --dry-run --judgment-output /tmp/hub-preview.json
  */
@@ -26,6 +27,7 @@
 // MUST load env vars FIRST before any other imports
 import './src/loadEnv.js';
 import { insightRefreshOldIds, insightResetScopeParams } from './scripts/lib/insightRefreshScope.js';
+import { insightRunJudgmentsEnabled } from './scripts/lib/insightRunPolicy.js';
 
 import axios from 'axios';
 import { getESTDate } from './src/utils/dateUtils.js';
@@ -34,6 +36,22 @@ import { runHubJudgmentPass, unavailableHubJudgments, hubJudgmentPassBudget } fr
 import { loadHubJudgmentSlate } from './scripts/lib/hubJudgmentSlate.js';
 import { readHubJudgmentRows, publishHubJudgments, hubJudgmentRevisionFilter } from './scripts/lib/hubJudgmentStorage.js';
 import { writeFile } from 'node:fs/promises';
+
+// Help exits before importing provider services or running any collection.
+if (process.argv.includes('--help')) {
+  console.log(`Usage: node run-insight-connections.js [options]
+Default: collect observational Hub connections, League Pulse and player cards.
+  --date YYYY-MM-DD       Eastern slate date (default: today)
+  --league MLB,NBA        Selected leagues (default: MLB,NBA)
+  --dry-run              Preview without database writes
+  --skip-cards           Leave player cards to their separate daily stage
+  --cards-only           Build player cards from existing research
+  --with-judgments       Explicitly add connected game judgments and editorial ordering
+  --judgments-only       Explicitly refresh judgments from stored research
+  --judgment-output PATH Save a judgment preview/publication report
+Judgments are opt-in; ordinary daily stages use the observational default.`);
+  process.exit(0);
+}
 
 // Import after env is loaded (services read env at module init time)
 const { generateInsightConnections } = await import('./src/services/insights/generateInsightConnections.js');
@@ -134,6 +152,7 @@ const dryRun = args.includes('--dry-run');
 // Re-check the existing research against the current slate and posted lineups,
 // without rerunning every collector, rewriting legacy reads or rebuilding packs.
 const judgmentsOnly = args.includes('--judgments-only');
+const judgmentsEnabled = insightRunJudgmentsEnabled(args);
 const judgmentOutput = getArgValue('--judgment-output');
 const judgmentReports = [];
 /**
@@ -921,16 +940,17 @@ async function run() {
       const generated = await generateInsightConnections({
         date: targetDate,
         league,
-        options: { ...(onLaneRows ? { onLaneRows } : {}),
+        options: { ...(onLaneRows ? { onLaneRows } : {}), ...(judgmentsEnabled ? {
           synthesizeJudgments: async (input) => {
             const previousRows = REST_URL && adminKey ? await readJudgments(targetDate, league) : [];
             judgmentResult = await runHubJudgmentPass({ ...input, previousRows });
             return judgmentResult;
           },
+        } : {}),
         },
       });
       generatedGameCount = Number(generated?.gameCount) || 0;
-      if (!judgmentResult && generatedGameCount === 0 && REST_URL && adminKey) {
+      if (judgmentsEnabled && !judgmentResult && generatedGameCount === 0 && REST_URL && adminKey) {
         // The generator intentionally short-circuits on dark days. A game
         // removed from the slate must still withdraw its previously ready take.
         const previousRows = await readJudgments(targetDate, league);
@@ -938,7 +958,7 @@ async function run() {
           rows: [], previousRows, games: [], bdl: ballDontLieService,
           asOf: new Date().toISOString() });
       }
-      if (generated?.judgmentFailures?.length) {
+      if (judgmentsEnabled && generated?.judgmentFailures?.length) {
         hadError = true;
         console.error(`   [${league}] Hub synthesis failed: ${JSON.stringify(generated.judgmentFailures)}`);
       }
@@ -953,7 +973,7 @@ async function run() {
     } catch (err) {
       hadError = true;
       console.error(`❌ [${league}] generateInsightConnections failed: ${err.message}`);
-      if (REST_URL && adminKey) {
+      if (judgmentsEnabled && REST_URL && adminKey) {
         try {
           const previousRows = await readJudgments(targetDate, league);
           await recordJudgmentPass(league, unavailableHubJudgments({ date: targetDate,
