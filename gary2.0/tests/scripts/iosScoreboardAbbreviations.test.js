@@ -75,7 +75,7 @@ precondition(teamAbbrevFromName("Miami (OH) RedHawks", league: "NCAAF") == "M-OH
 precondition(teamAbbrevFromName("Miami Hurricanes", league: "NCAAF") == "MIA")
 precondition(teamAbbrevFromName("Unlisted College Panthers", league: "NCAAF") == "UNLISTED COLLEGE PANTHERS")
 precondition(teamAbbrevFromName("Rio Grande Red Storm", league: "NCAAF") == "RIO GRANDE")
-precondition(finalScoreLine(matchup: "SMU Mustangs @ Florida State Seminoles", raw: "24-21", league: "NCAAF") == "SMU 24 · FSU 21")
+precondition(finalScoreLine(matchup: "SMU Mustangs @ Florida State Seminoles", awayScore: 24, homeScore: 21, league: "NCAAF") == "SMU 24 · FSU 21")
 print("All FBS display routes and collision regressions passed")
 `;
       const path = join(directory, 'scoreboard.swift');

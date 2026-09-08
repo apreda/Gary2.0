@@ -534,8 +534,9 @@ final class LiveScoreCache: ObservableObject {
         return byLeagueGameId[Self.leagueGameKey(gameId: String(gid), league: league)]
     }
 
-    /// Settled final score string ("3-1") for a matchup, from game_results (today
-    /// + yesterday). The card uses this only after the live board comes up empty.
+    /// Settled presentation string (team-labeled only when its score source
+    /// establishes identity), from today's/yesterday's results. Read unchanged;
+    /// archived bare score text does not establish away/home orientation.
     func gradedScore(forMatchup matchup: String) -> String? {
         guard let k = gradedMatchupKey(matchup), let s = gradedFinals[k], !s.isEmpty else { return nil }
         return s
@@ -816,10 +817,10 @@ final class PropsSlateStore: ObservableObject {
             let rk = garyGameResultKey(matchupKey: k, pickText: r.pick_text)
             if r.game_date == yesterday {
                 resultsMap[rk] = outcome.lowercased()
-                if let score = r.final_score, !score.trimmingCharacters(in: .whitespaces).isEmpty { ydayScores[k] = score }
+                if let score = r.displayFinalScore, !score.trimmingCharacters(in: .whitespaces).isEmpty { ydayScores[k] = score }
             } else if r.game_date == date {
                 todayMap[rk] = outcome.lowercased()
-                if let score = r.final_score, !score.trimmingCharacters(in: .whitespaces).isEmpty { scoreMap[k] = score }
+                if let score = r.displayFinalScore, !score.trimmingCharacters(in: .whitespaces).isEmpty { scoreMap[k] = score }
             }
         }
         scoreMap.merge(ydayScores) { today, _ in today }

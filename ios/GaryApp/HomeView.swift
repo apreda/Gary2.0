@@ -1015,7 +1015,7 @@ struct HomeView: View {
                     // Scores first — headlineStories reads this map as it builds.
                     scoreByMatchup = Dictionary(
                         recentGameResults.compactMap { r -> (String, String)? in
-                            guard let m = r.matchup?.lowercased(), let s = r.final_score,
+                            guard let m = r.matchup?.lowercased(), let s = r.displayFinalScore,
                                   !m.isEmpty, !s.isEmpty else { return nil }
                             return (m, s)
                         },
@@ -1066,7 +1066,7 @@ struct HomeView: View {
                                 yesterdayTopPickResult = "won"
                             }
                             #endif
-                            yesterdayTopPickScore = row?.final_score
+                            yesterdayTopPickScore = row?.displayFinalScore
                         } else {
                             // Every yesterday source answered with no pick. That is an
                             // authoritative empty board, not a reason to keep an older day.
@@ -1353,7 +1353,7 @@ struct HomeView: View {
         if !recentGames.isEmpty {
             scoreByMatchup = Dictionary(
                 recentGames.compactMap { row -> (String, String)? in
-                    guard let matchup = row.matchup?.lowercased(), let score = row.final_score,
+                    guard let matchup = row.matchup?.lowercased(), let score = row.displayFinalScore,
                           !matchup.isEmpty, !score.isEmpty else { return nil }
                     return (matchup, score)
                 }, uniquingKeysWith: { first, _ in first })
@@ -1962,7 +1962,7 @@ struct HomeView: View {
                 // FINAL and outlives that transient feed until the 6am roll.
                 zone = .settled
                 if let score = ls?.scoreLine
-                    ?? storedRows.compactMap({ $0.final_score }).first(where: { !$0.isEmpty }) {
+                    ?? storedRows.compactMap({ $0.displayFinalScore }).first(where: { !$0.isEmpty }) {
                     title = score.uppercased()
                 }
                 if let ls, ls.isFinal { hitLines = Self.liveHitStrings(ls) }
@@ -3414,7 +3414,7 @@ struct HomeView: View {
 
     /// "Knicks over the Spurs, 105–95" — a real game headline from facts.
     private static func gameHeadline(_ r: GameResult, cashed: Bool) -> String {
-        if let (away, home, a, h) = Self.scoreParts(r) {
+        if let (away, home, a, h) = Self.scoreParts(r), a != h {
             let winner = a > h ? away : home
             let loser = a > h ? home : away
             // Clubs take "the" (Knicks over the Spurs); national teams don't (Switzerland over Canada).
@@ -3430,7 +3430,7 @@ struct HomeView: View {
         var bits: [String] = []
         if let (away, home, _, _) = Self.scoreParts(r) { bits.append("\(away) @ \(home)") }
         else if let m = r.matchup { bits.append(m) }
-        if let fs = r.final_score, !fs.isEmpty { bits.append("Final \(fs)") }
+        if let fs = r.displayFinalScore, !fs.isEmpty { bits.append("Final \(fs)") }
         return bits.joined(separator: " · ")
     }
 
@@ -3443,17 +3443,12 @@ struct HomeView: View {
         return g.matchup ?? "Graded win"
     }
 
-    /// Split "Away Team @ Home Team" + "5-4" into short names + scores.
+    /// A headline needs numeric score fields or the game_results source contract.
     private static func scoreParts(_ r: GameResult) -> (away: String, home: String, a: Int, h: Int)? {
-        guard let m = r.matchup else { return nil }
-        let teams = m.components(separatedBy: " @ ")
-        guard teams.count == 2 else { return nil }
-        let away = Formatters.shortTeamName(teams[0], league: r.effectiveLeague)
-        let home = Formatters.shortTeamName(teams[1], league: r.effectiveLeague)
-        let nums = (r.final_score ?? "").components(separatedBy: CharacterSet(charactersIn: "-–"))
-            .compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
-        guard nums.count == 2 else { return nil }
-        return (away, home, nums[0], nums[1])
+        guard let score = r.teamScores else { return nil }
+        let away = Formatters.shortTeamName(score.away, league: r.effectiveLeague)
+        let home = Formatters.shortTeamName(score.home, league: r.effectiveLeague)
+        return (away, home, score.a, score.h)
     }
 
     /// Per-lane records from the graded ledger — HR Threats lead when present

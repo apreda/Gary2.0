@@ -128,6 +128,7 @@ struct PropResult {
  var result: String? = "won"
 }
 struct GameResult {
+ var displayFinalScore: String? { final_score }
  var matchup: String? = "Away @ Home"
  var pick_text: String? = "Away ML"
  var result: String? = "won"

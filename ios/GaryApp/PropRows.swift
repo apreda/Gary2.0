@@ -321,23 +321,19 @@ struct CompactPropRow: View {
     /// Footer live line — teams + score + situation (minute / outs+bases),
     /// IDENTICAL to the game card via the shared formatter.
     private var liveFooterText: String? {
-        // Settled — the FINAL score with team names rides the footer's left corner, exactly
+        // Settled — the FINAL score rides the footer's left corner, exactly
         // like the game card (the prop's own CASHED/LOST stamp sits separately in the corner).
         if resolvedResult != nil {
             let mk = prop.matchup ?? ""
-            // Game-card parity: rich cache line only when it names the teams,
-            // else the formatted score paths (never a bare "17-1" fragment).
-            if let ls = identifiedGameStatus,
-               ls.isFinal, ls.away_score != nil, ls.home_score != nil,
-               ls.away_abbr != nil, ls.home_abbr != nil {
-                return liveLineRich(ls, label: "FINAL")
-            }
-            if let fs = finalScore, !fs.isEmpty { return "FINAL · \(finalScoreLine(matchup: mk, raw: fs, league: prop.effectiveLeague))" }
-            if let g = liveCache.gradedScore(forMatchup: mk) { return "FINAL · \(finalScoreLine(matchup: mk, raw: g, league: prop.effectiveLeague))" }
+            // Game-card parity: label explicit numeric live scores; preserve
+            // archived presentation strings without guessing their order.
             if let ls = identifiedGameStatus, ls.isFinal,
                let a = ls.away_score, let h = ls.home_score {
-                return "FINAL · \(finalScoreLine(matchup: mk, raw: "\(a)-\(h)", league: prop.effectiveLeague))"
+                if ls.away_abbr != nil, ls.home_abbr != nil { return liveLineRich(ls, label: "FINAL") }
+                return "FINAL · \(finalScoreLine(matchup: mk, awayScore: a, homeScore: h, league: prop.effectiveLeague))"
             }
+            if let fs = finalScore, !fs.isEmpty { return "FINAL · \(fs)" }
+            if let g = liveCache.gradedScore(forMatchup: mk) { return "FINAL · \(g)" }
             return "FINAL"
         }
         guard let ls = liveStatus else { return interruptionOverride }

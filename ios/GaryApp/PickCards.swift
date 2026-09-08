@@ -1300,18 +1300,14 @@ struct CompactPickRow: View {
         // a score. This is the one place the final state lives on every card now.
         if displayResult != nil {
             let mk = "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")"
-            // The rich cache line only when it can NAME the teams — a bare
-            // "17-1" slot line reads like a fragment on a settled card, so
-            // abbr-less cache rows fall through to the formatted paths below.
-            if let ls = liveFinal, ls.away_score != nil, ls.home_score != nil,
-               ls.away_abbr != nil, ls.home_abbr != nil {
-                return liveLineRich(ls, label: "FINAL")
-            }
-            if let fs = finalScore, !fs.isEmpty { return "FINAL · \(finalScoreLine(matchup: mk, raw: fs, league: pick.league))" }
-            if let g = liveCache.gradedScore(forMatchup: mk) { return "FINAL · \(finalScoreLine(matchup: mk, raw: g, league: pick.league))" }
+            // Explicit live score columns can name teams even when provider
+            // abbreviations are absent. Archived cache strings cannot.
             if let ls = liveFinal, let a = ls.away_score, let h = ls.home_score {
-                return "FINAL · \(finalScoreLine(matchup: mk, raw: "\(a)-\(h)", league: pick.league))"
+                if ls.away_abbr != nil, ls.home_abbr != nil { return liveLineRich(ls, label: "FINAL") }
+                return "FINAL · \(finalScoreLine(matchup: mk, awayScore: a, homeScore: h, league: pick.league))"
             }
+            if let fs = finalScore, !fs.isEmpty { return "FINAL · \(fs)" }
+            if let g = liveCache.gradedScore(forMatchup: mk) { return "FINAL · \(g)" }
             return "FINAL"
         }
         guard let ls = liveStatus else { return interruptionOverride }

@@ -377,14 +377,27 @@ func scoreboardTeamAbbreviation(_ name: String?, stored: String? = nil, league: 
     return team.isEmpty ? "—" : teamAbbrevFromName(team, league: league)
 }
 
-/// A settled score WITH team labels ("CHC 10 · NYM 3") from a matchup + a raw "10-3".
-/// Falls back to the raw score if it can't parse. Global — shared by every card footer.
-
-func finalScoreLine(matchup: String, raw: String, league: String? = nil) -> String {
-    let parts = raw.components(separatedBy: CharacterSet(charactersIn: "-\u{2013}")).map { $0.trimmingCharacters(in: .whitespaces) }
+/// Team labels require explicit away/home scores. Never infer the orientation
+/// of an archived final_score string, which may instead be winner-first.
+func finalScoreLine(matchup: String, awayScore: Int, homeScore: Int, league: String? = nil) -> String {
     let teams = matchup.components(separatedBy: " @ ")
-    guard parts.count == 2, teams.count == 2 else { return raw }
-    return "\(teamAbbrevFromName(teams[0], league: league)) \(parts[0]) \u{00B7} \(teamAbbrevFromName(teams[1], league: league)) \(parts[1])"
+    guard teams.count == 2,
+          teams.allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
+        return "\(awayScore)–\(homeScore)"
+    }
+    return "\(teamAbbrevFromName(teams[0], league: league)) \(awayScore) \u{00B7} \(teamAbbrevFromName(teams[1], league: league)) \(homeScore)"
+}
+
+extension GameResult {
+    /// Store this presentation string in card caches unchanged. Unknown legacy
+    /// text stays unlabeled; numeric/table-proven scores keep team identities.
+    var displayFinalScore: String? {
+        if let score = teamScores {
+            return finalScoreLine(matchup: "\(score.away) @ \(score.home)",
+                                  awayScore: score.a, homeScore: score.h, league: effectiveLeague)
+        }
+        return final_score
+    }
 }
 
 func liveLineRich(_ ls: LiveScore, label: String) -> String {
@@ -2011,7 +2024,7 @@ struct PicksCarouselView: View {
     /// can't say WHICH game it belongs to and stays off (never the twin's).
     private func liveFinalLine(for g: (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])) -> (text: String, color: Color)? {
         if pickDay == .yesterday, !g.dh, let raw = store.finalScore(forMatchup: g.matchup) {
-            return ("FINAL · \(formatFinalScore(g.matchup, raw))", .white.opacity(0.45))
+            return ("FINAL · \(raw)", .white.opacity(0.45))
         }
         if let ls = liveScore(for: g) {
             if let interruption = ls.interruptionLabel {
@@ -2022,8 +2035,9 @@ struct PicksCarouselView: View {
                 let det = (ls.detail?.isEmpty == false) ? " · \(ls.detail!)" : ""
                 return ("▶ LIVE\(score)\(det)", GaryColors.win)
             }
-            if ls.isFinal, let score = ls.scoreLine {
-                return ("FINAL · \(formatFinalScore(g.matchup, score))", .white.opacity(0.45))
+            if ls.isFinal, let away = ls.away_score, let home = ls.home_score {
+                let score = finalScoreLine(matchup: g.matchup, awayScore: away, homeScore: home, league: gameLeague(g))
+                return ("FINAL · \(score)", .white.opacity(0.45))
             }
         }
         // The exact slate row closes the brief gap before live_scores picks up
@@ -2053,13 +2067,6 @@ struct PicksCarouselView: View {
     /// Shared scoreboard formatter for every league and date.
     private func teamAbbrev(_ name: String, league: String) -> String {
         teamAbbrevFromName(name, league: league)
-    }
-
-    /// "6-8" + "Rockies @ Cubs" -> "COL 6 · CHC 8". final_score is away-home,
-    /// matching the matchup's "Away @ Home" order.
-    private func formatFinalScore(_ matchup: String, _ raw: String) -> String {
-        finalScoreLine(matchup: matchup, raw: raw,
-                       league: gameLeague((matchup: matchup, time: "", commence: nil, dh: false, props: [])))
     }
 
     /// Pre-pick page with VALUE, not a shrug (founder, Jul 12: the dashed

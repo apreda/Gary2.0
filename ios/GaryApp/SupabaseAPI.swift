@@ -1852,7 +1852,7 @@ enum SupabaseAPI {
 
         let rows: [GameResult] = try await fetchAllPages(table: "game_results", baseQuery: query)
         // NFL moved to nfl_results; older copies here must not enter records twice.
-        return rows.filter { $0.effectiveLeague != "NFL" }
+        return rows.filter { $0.effectiveLeague != "NFL" }.map { $0.withGameResultsScoreOrder() }
     }
     
     /// Fetch NFL results from nfl_results table
@@ -2021,7 +2021,8 @@ enum SupabaseAPI {
         async let gameResults: [GameResult] = fetchDecodablePage(table: "game_results", query: finalGameQuery)
         async let nflResultsRaw: [NFLResult] = fetchDecodablePage(table: "nfl_results", query: finalNFLQuery)
 
-        let combined = try await gameResults.filter { $0.effectiveLeague != "NFL" } + nflResultsRaw.map { $0.toGameResult() }
+        let combined = try await gameResults.filter { $0.effectiveLeague != "NFL" }.map { $0.withGameResultsScoreOrder() }
+            + nflResultsRaw.map { $0.toGameResult() }
         return Array(combined.sorted { ($0.game_date ?? "") > ($1.game_date ?? "") }.prefix(limit))
     }
 

@@ -58,7 +58,7 @@ struct SourceReadFailure: Error {
                 ["game_id": "legacy-\\(index)", "game_date": "2026-09-04", "league": index == 0 ? "americanfootball_nfl" : "NFL", "pick_text": "Legacy -110", "result": index < 4 ? "won" : "lost"]
             }
             rows += (0..<1200).map { index in
-                ["game_id": "game-\\(index)", "game_date": "2026-09-04", "league": index == 0 ? NSNull() : "MLB", "pick_text": "Game -110", "result": index == 1199 ? "Lost" : (index % 2 == 0 ? "WON" : "lost")]
+                ["game_id": "game-\\(index)", "game_date": "2026-09-04", "league": index == 0 ? NSNull() : "MLB", "matchup": "Rockies @ Cubs", "final_score": "6-8", "pick_text": "Game -110", "result": index == 1199 ? "Lost" : (index % 2 == 0 ? "WON" : "lost")]
             }
         } else {
             precondition(table == "nfl_results")
@@ -102,6 +102,9 @@ precondition(all.countable.filter { $0.result == "won" }.count == 601)
 precondition(all.countable.filter { $0.result == "lost" }.count == 601)
 precondition(!all.contains { $0.game_id?.hasPrefix("legacy-") == true })
 precondition(all.contains { $0.game_id == "game-0" && $0.league == nil })
+precondition(all.first { $0.game_id == "game-1" }?.teamScores?.a == 6)
+precondition(all.first { $0.game_id == "game-1" }?.teamScores?.h == 8)
+precondition(all.filter { $0.effectiveLeague == "NFL" }.allSatisfy { $0.scoreSource == .unknown })
 let nflWin = all.first { $0.game_id == "canonical-win" }!
 precondition(nflWin.league == "NFL" && nflWin.matchup == "Packers @ Bears" && nflWin.effectiveOdds == "125" && nflWin.result == "won")
 precondition(all.first { $0.game_id == "preseason" }?.result == "push")
@@ -124,6 +127,8 @@ Reader.failGamePage = false
 let recent = try await Reader.fetchRecentGameResults(limit: 5, since: "2026-09-04")
 precondition(recent.count == 5 && recent.prefix(2).allSatisfy { $0.effectiveLeague == "NFL" })
 precondition(!recent.contains { $0.game_id?.hasPrefix("legacy-") == true || $0.isPreseasonResult })
+precondition(recent.filter { $0.effectiveLeague != "NFL" }.allSatisfy { $0.teamScores?.a == 6 && $0.teamScores?.h == 8 })
+precondition(recent.filter { $0.effectiveLeague == "NFL" }.allSatisfy { $0.scoreSource == .unknown })
 print("canonical=1203 countable=1202 won=601 lost=601 recent=5")
 // Optional local read-only audit executes the same production readers against a
 // complete public-data snapshot; fixture tests never require live credentials.

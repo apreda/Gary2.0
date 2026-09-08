@@ -2109,12 +2109,21 @@ struct GameResult: Decodable {
     let result: String?
     let odds: StringOrNumber?
     let final_score: String?
+    /// Named score columns establish orientation. Bare text needs an explicit
+    /// source contract; legacy nfl_results text has no consistent ordering.
+    let away_score: Int?
+    let home_score: Int?
+    let away_team: String?
+    let home_team: String?
     /// BDL numbering carried only by nfl_results rows (1 = preseason,
     /// 2 = regular, 3 = postseason); game_results rows decode nil.
     let season_type: Int?
+    enum ScoreSource { case unknown, gameResultsAwayHome }
+    private(set) var scoreSource: ScoreSource = .unknown
 
     enum CodingKeys: String, CodingKey {
         case game_id, game_date, league, matchup, pick_text, result, odds, final_score, season_type
+        case away_score, home_score, away_team, home_team
     }
 
     init(from decoder: Decoder) throws {
@@ -2128,12 +2137,16 @@ struct GameResult: Decodable {
             result: try container.decodeIfPresent(String.self, forKey: .result),
             odds: try container.decodeIfPresent(StringOrNumber.self, forKey: .odds),
             final_score: try container.decodeIfPresent(String.self, forKey: .final_score),
-            season_type: try container.decodeIfPresent(Int.self, forKey: .season_type)
+            season_type: try container.decodeIfPresent(Int.self, forKey: .season_type),
+            away_score: try container.decodeIfPresent(Int.self, forKey: .away_score),
+            home_score: try container.decodeIfPresent(Int.self, forKey: .home_score),
+            away_team: try container.decodeIfPresent(String.self, forKey: .away_team),
+            home_team: try container.decodeIfPresent(String.self, forKey: .home_team)
         )
     }
 
     /// Memberwise initializer for creating from NFLResult
-    init(game_id: String? = nil, game_date: String?, league: String?, matchup: String?, pick_text: String?, result: String?, odds: StringOrNumber?, final_score: String?, season_type: Int? = nil) {
+    init(game_id: String? = nil, game_date: String?, league: String?, matchup: String?, pick_text: String?, result: String?, odds: StringOrNumber?, final_score: String?, season_type: Int? = nil, away_score: Int? = nil, home_score: Int? = nil, away_team: String? = nil, home_team: String? = nil) {
         self.game_id = game_id
         self.game_date = game_date
         self.league = league
@@ -2145,6 +2158,43 @@ struct GameResult: Decodable {
         self.odds = odds
         self.final_score = final_score
         self.season_type = season_type
+        self.away_score = away_score
+        self.home_score = home_score
+        self.away_team = away_team
+        self.home_team = home_team
+    }
+
+    /// Applied only by the game_results readers. Both canonical writers store
+    /// away-home text aligned to the matchup; NFL history has a separate contract.
+    /// This provenance is never decoded from an arbitrary result payload.
+    func withGameResultsScoreOrder() -> GameResult {
+        var row = self
+        if effectiveLeague != "NFL" { row.scoreSource = .gameResultsAwayHome }
+        return row
+    }
+
+    /// Named numeric columns take priority. Only the reviewed game_results
+    /// writer contract may supply their absence; bare NFL/unknown text cannot.
+    var teamScores: (away: String, home: String, a: Int, h: Int)? {
+        let a: Int, h: Int
+        if let away = away_score, let home = home_score {
+            a = away; h = home
+        } else if away_score == nil, home_score == nil, scoreSource == .gameResultsAwayHome {
+            let parts = (final_score ?? "").components(separatedBy: CharacterSet(charactersIn: "-–"))
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            guard parts.count == 2, let away = Int(parts[0]), let home = Int(parts[1]) else { return nil }
+            a = away; h = home
+        } else { return nil }
+        guard a >= 0, h >= 0 else { return nil }
+        let teams = (matchup ?? "").components(separatedBy: " @ ")
+        let away = away_team?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let home = home_team?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !away.isEmpty, !home.isEmpty { return (away, home, a, h) }
+        guard teams.count == 2 else { return nil }
+        let matchupAway = teams[0].trimmingCharacters(in: .whitespacesAndNewlines)
+        let matchupHome = teams[1].trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !matchupAway.isEmpty, !matchupHome.isEmpty else { return nil }
+        return (matchupAway, matchupHome, a, h)
     }
 
     /// Preseason football never counts in any Gary record (founder law,
@@ -2199,13 +2249,15 @@ struct NFLResult: Decodable {
     let result: String?
     let odds: StringOrNumber?
     let final_score: String?
+    let home_score: Int?
+    let away_score: Int?
     let home_team: String?
     let away_team: String?
     let pick_type: String?
 
     enum CodingKeys: String, CodingKey {
         case game_id, game_date, week_number, season, season_type, matchup, pick_text, result, odds, final_score
-        case home_team, away_team, pick_type
+        case home_team, away_team, home_score, away_score, pick_type
     }
 
     /// Convert to GameResult for unified display
@@ -2219,7 +2271,11 @@ struct NFLResult: Decodable {
             result: result,
             odds: odds,
             final_score: final_score,
-            season_type: season_type
+            season_type: season_type,
+            away_score: away_score,
+            home_score: home_score,
+            away_team: away_team,
+            home_team: home_team
         )
     }
 }

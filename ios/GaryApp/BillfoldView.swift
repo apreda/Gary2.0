@@ -1758,7 +1758,7 @@ struct BillfoldView: View {
                 // no flip, no Take affordance.
                 CompactPickRow(pick: pick,
                                gameResult: result.result,
-                               finalScore: result.final_score,
+                               finalScore: result.displayFinalScore,
                                showSportBadge: true,
                                showTakeAffordance: false)
                     .frame(width: 300)
@@ -1782,7 +1782,7 @@ struct BillfoldView: View {
         let rword = (r.result ?? "").uppercased()
         var recap: [String] = []
         if !rword.isEmpty { recap.append("Graded \(rword)") }
-        if let s = r.final_score, !s.isEmpty { recap.append("final \(s)") }
+        if let s = r.displayFinalScore, !s.isEmpty { recap.append("final \(s)") }
         if let pt = r.pick_text, !pt.isEmpty { recap.append(pt) }
         let league = r.effectiveLeague ?? r.league ?? ""
         return GaryPick.from(dict: [

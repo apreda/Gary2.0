@@ -1633,7 +1633,7 @@ struct PremiumPicksView: View {
             guard let k = gpKey(from: r.matchup), let o = r.result else { continue }
             let key = garyGameResultKey(matchupKey: k, pickText: r.pick_text)
             rMap[key] = o.lowercased()
-            if let s = r.final_score, !s.trimmingCharacters(in: .whitespaces).isEmpty {
+            if let s = r.displayFinalScore, !s.trimmingCharacters(in: .whitespaces).isEmpty {
                 sMap[key] = s
                 mMap[k] = s   // matchup-only: props borrow their game's final
             }
@@ -1804,7 +1804,7 @@ struct PremiumPicksView: View {
             guard let matchup = gpKey(from: result.matchup), let outcome = result.result else { continue }
             let key = garyGameResultKey(matchupKey: matchup, pickText: result.pick_text)
             rMap[key] = outcome.lowercased()
-            if let score = result.final_score, !score.trimmingCharacters(in: .whitespaces).isEmpty {
+            if let score = result.displayFinalScore, !score.trimmingCharacters(in: .whitespaces).isEmpty {
                 sMap[key] = score
                 mMap[matchup] = score
             }
