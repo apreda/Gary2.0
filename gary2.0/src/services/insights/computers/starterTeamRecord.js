@@ -11,7 +11,7 @@
 //     (pitcher per side; the starterForm.js path proves this resolves live), with
 //     the side's team id off the normalized game.
 //   - getMlbPlayerGameRowsChrono(playerId, season): his completed-game rows
-//     oldest -> newest (STATUS_FINAL, non-spring). ip > 0 rows = his starts;
+//     oldest -> newest (STATUS_FINAL, non-spring). Explicit games_started rows;
 //     tonight's slate game excluded. Take the last WINDOW_STARTS game_ids.
 //   - getGames('baseball_mlb', { team_ids:[teamId], seasons:[season] }): the
 //     starter's TEAM's games (finals carry home/visitor scores + ids). Map
@@ -31,8 +31,9 @@
 //
 // Defensive: any missing piece -> skip that starter silently; never throws.
 
-import { makeRow, TONES, scoreFromEdge, parseIpThirds } from '../shared.js';
+import { makeRow, TONES, scoreFromEdge } from '../shared.js';
 import { attachLaneReads, detailFact } from '../laneReads.js';
+import { isMlbStart } from '../../mlbGameRows.js';
 
 // Tunables.
 const WINDOW_STARTS = 8;     // "his last 8 starts"
@@ -99,7 +100,7 @@ async function forGame(game, { season, bdl, gameLabel, stats }) {
       continue;
     }
     const startIds = chrono
-      .filter((r) => r.game_id !== gameId && parseIpThirds(r.ip) > 0)
+      .filter((r) => String(r.game_id) !== String(gameId) && isMlbStart(r))
       .map((r) => r.game_id);
     if (startIds.length < MIN_STARTS) continue;
     const windowIds = startIds.slice(-WINDOW_STARTS);

@@ -25,7 +25,7 @@
 // the SLATE game's id (slate-membership gate). Never throws; thin data -> skip.
 
 import {
-  makeRow, TONES, parseIpThirds, nameKey, shiftDateStr, round, clampScore,
+  makeRow, TONES, parseIpThirds, formatIpThirds, nameKey, shiftDateStr, clampScore,
 } from '../shared.js';
 import mlbStatsApi from '../../mlbStatsApiService.js';
 import { attachLaneReads } from '../laneReads.js';
@@ -139,7 +139,7 @@ export async function computeBullpenFatigue(ctx) {
         .slice(0, 6)
         .map((a) => ({
           name: a.name,
-          ip: round(a.ip, 1),
+          ip: formatIpThirds(a.ip),
           pitches: a.pitches,
           g: a.dates.length,
           b2b: lastTwo.length === 2 && lastTwo.every((d) => a.dates.includes(d)),
@@ -148,7 +148,7 @@ export async function computeBullpenFatigue(ctx) {
       const oppName = oppSide?.display_name || oppSide?.full_name || oppSide?.name || '';
 
       const team = bdlTeam.display_name || bdlTeam.full_name || bdlTeam.name || bdlTeam.abbreviation;
-      const ipDisp = round(reliefIp, 1);
+      const ipDisp = formatIpThirds(reliefIp);
       const armClause = multiArms > 0
         ? `, with ${multiArms} arm${multiArms === 1 ? '' : 's'} working multiple of them`
         : '';

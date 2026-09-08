@@ -28,6 +28,7 @@ import { normalizePropBetDirection } from '../agentic/propsSharedUtils.js';
 import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from '../agentic/orchestrator/statAudit.js';
 import { ballDontLieService } from '../ballDontLieService.js';
 import { propOddsService } from '../propOddsService.js';
+import { isMlbStart } from '../mlbGameRows.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // THE ZERO-BASED PROMPT SURFACE — same entry rule as garyBrain (Jul 26 2026):
@@ -67,7 +68,7 @@ const fmtOdds = (v) => (v == null ? null : (v > 0 ? `+${v}` : `${v}`));
 // when the desk surface the props brain reads moves: the board and the prop
 // sheets are what Gary prices from, so an edit there is a new era.
 const here = path.dirname(fileURLToPath(import.meta.url));
-const propsSurface = () => ['propSheets.js', 'propModel.js', '../ballDontLieService.js', '../bdlPagination.js'].map((f) => {
+const propsSurface = () => ['propSheets.js', 'propModel.js', '../ballDontLieService.js', '../bdlPagination.js', '../mlbGameRows.js'].map((f) => {
   try { return readFileSync(path.join(here, f), 'utf8'); }
   catch { return `missing:${f}`; }
 }).join('\n⸻\n');
@@ -147,7 +148,7 @@ export function clearedClause(chronoRows, propType, line) {
   if (!Array.isArray(chronoRows) || !chronoRows.length || line == null) return null;
   const isPitcherProp = norm(propType).startsWith('pitcher_');
   const played = isPitcherProp
-    ? chronoRows.filter((r) => r?.ip != null && parseFloat(r.ip) > 0)
+    ? chronoRows.filter(isMlbStart)
     : chronoRows.filter((r) => r?.at_bats != null);
   const window = played.slice(-(isPitcherProp ? PITCHER_WINDOW : HITTER_WINDOW));
   const vals = window.map((r) => statForProp(r, propType)).filter((v) => v != null);

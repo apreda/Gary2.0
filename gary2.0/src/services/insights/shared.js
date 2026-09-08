@@ -185,6 +185,13 @@ export function parseIpThirds(ip) {
   return whole + thirds / 3;
 }
 
+/** Display decimal innings as baseball IP (one/two outs are .1/.2). */
+export function formatIpThirds(innings) {
+  if (!Number.isFinite(innings) || innings < 0) return null;
+  const outs = Math.round(innings * 3);
+  return Math.floor(outs / 3) + (outs % 3) / 10;
+}
+
 /** "AWAY @ HOME" display string from a normalized BDL game. */
 export function gameLabel(game) {
   const away = game?.visitor_team?.abbreviation || game?.visitor_team?.name || 'AWY';

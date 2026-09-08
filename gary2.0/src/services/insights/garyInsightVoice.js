@@ -21,6 +21,8 @@ import { contentModel, contentModelCascade } from './solText.js';
 const SKIP_CATEGORIES = new Set([
   'gary_hr_threats', 'closer_watch', 'cut_list', 'fantasy_pickups',
   'two_start_week', 'return_watch',
+  // Preserve the explicit future date in projected-starter evidence.
+  'regression_tomorrow',
   // Deterministic NFL fantasy evidence must keep its measured comparison copy;
   // a generic voice rewrite could introduce an unsupported role or matchup fact.
   'fantasy_usage', 'fantasy_trend', 'fantasy_matchup',

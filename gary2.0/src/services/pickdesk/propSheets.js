@@ -18,6 +18,7 @@
  * is the player's own distribution against the number.
  */
 import { statForProp } from './propsBrain.js';
+import { isMlbStart } from '../mlbGameRows.js';
 
 const norm = (s) => String(s || '').toLowerCase().trim();
 
@@ -50,9 +51,7 @@ export function hitterGames(rows) {
 
 /** Rows where the pitcher started, oldest → newest (relief outings excluded). */
 export function pitcherStarts(rows) {
-  const pitched = (rows || []).filter((r) => r?.ip != null && parseFloat(r.ip) > 0);
-  const starts = pitched.filter((r) => Number(r?.games_started) === 1);
-  return starts.length ? starts : pitched;
+  return (rows || []).filter(isMlbStart);
 }
 
 const outsOf = (r) => (r?.pitching_outs != null ? Number(r.pitching_outs) : statForProp(r, 'pitcher_outs'));

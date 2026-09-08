@@ -66,6 +66,16 @@ describe('cleared counts (founder: past-tense counts, never rates)', () => {
     expect(clearedClause(null, 'hits', 0.5)).toBeNull();
   });
 
+  it('keeps actual starts separate from Bello-like bulk relief appearances', () => {
+    const starts = [5, 3, 2, 4, 8, 4, 7, 8].map(er => ({ games_started: 1, ip: 5, er }));
+    const relief = [0, 0, 0, 1, 1, 1, 4, 4].map(er => ({ games_started: 0, ip: 3, er }));
+    expect(clearedClause([...starts, ...relief], 'pitcher_earned_runs', 1.5))
+      .toBe('over in 8 of his last 8 starts');
+    expect(clearedClause(relief, 'pitcher_earned_runs', 1.5)).toBeNull();
+    expect(clearedClause([...starts.slice(0, 7), { games_started: '1', ip: 0, er: 0 }], 'pitcher_earned_runs', 1.5))
+      .toBe('over in 7 of his last 8 starts');
+  });
+
 });
 
 // ═══ Board V2 (Aug 3 2026): markets, not filtered scrape rows ═══════════════

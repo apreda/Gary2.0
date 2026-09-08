@@ -36,6 +36,12 @@ describe('prop sheet lines', () => {
     expect(pitchCountLine(starts([5]).map((r) => ({ ...r, pitch_count: null })))).toBeNull();
     expect(paPerGame([])).toBeNull();
   });
+  it('includes zero-out starts and never labels a relief-only history as starts', () => {
+    const zero = { games_started: '1', ip: 0, pitching_outs: 0, p_k: 0 };
+    expect(pitcherMarketLine([...starts([6, 7]), zero], 'pitcher_outs', 17.5, null))
+      .toContain('last 3 starts: 0 18 18');
+    expect(pitcherStarts([{ games_started: 0, ip: 4 }, { ip: 6 }, { games_started: true, ip: 3 }])).toEqual([]);
+  });
   it('lineup tendencies read the opposing nine from the rows on hand, and say how many were covered', () => {
     const rows = [{ plate_appearances: 4, at_bats: 4, k: 1, bb: 0 }, { plate_appearances: 5, at_bats: 4, k: 2, bb: 1 }];
     const chrono = new Map(['a', 'b', 'c', 'd', 'e'].map((n) => [n, rows]));
@@ -72,7 +78,7 @@ describe('buildPropSheets', () => {
 
   it('walks each lineup in batting order, then the starter, with the frame on every header', () => {
     const { text, players } = buildPropSheets({ markets, chronoByPlayer: chrono, lineups, homeTeam: 'Dodgers', awayTeam: 'Cardinals' });
-    expect(players).toBe(4);
+    expect(players).toBe(3);
     expect(text.startsWith('═══ THE PROP SHEETS — the numbers each market settles on, newest first ═══')).toBe(true);
     expect(text.indexOf('CARDINALS (away)')).toBeLessThan(text.indexOf('DODGERS (home)'));
     expect(text).toContain('1st Brendan Donovan (L) 2B · vs RHP Yoshinobu Yamamoto · 4.0 PA per game');
@@ -83,8 +89,8 @@ describe('buildPropSheets', () => {
     expect(text).toContain('SP Yoshinobu Yamamoto (R) · faces 1 LHB / 0 RHB');
     expect(text).toContain('   pitcher_strikeouts 6.5 (Over -115 / Under -105) — last 4 starts: 7 5 9 8 · season 7.3 per start (4 starts)');
     expect(text).toContain('   pitches, last 4 starts: 93 92 91 90');
-    // The reliever is not in either lineup: his numbers still print, under ALSO ON THE BOARD.
-    expect(text).toContain('ALSO ON THE BOARD\nSome Reliever (LAD)\n   pitcher_strikeouts 1.5 (Over -110 / Under -110) — last 1 starts: 2');
+    // A relief-only history must not be represented as a starting sample.
+    expect(text).not.toContain('Some Reliever');
     // A lineup batter with no market prints nothing.
     expect(text).not.toContain('Mookie Betts');
   });

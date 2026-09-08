@@ -115,8 +115,10 @@ export async function computeRegressionWatch(ctx) {
   // The Gary layer (founder, Jul 30): "ERA vs xERA" alone is a number, not an
   // insight — the drop-down explains WHY the gap exists (which peripherals say
   // deserved vs luck) and what it means for this specific start.
+  // Future starters retain their computed date-bearing evidence. Generic prose
+  // passes can otherwise turn a tomorrow projection into a claim about tonight.
   await attachLaneReads('regressionWatch',
-    rows.filter((r) => r?.meta?.kind === 'regression_pitcher'),
+    rows.filter((r) => r?.meta?.kind === 'regression_pitcher' && r.meta.day !== 'tomorrow'),
     (r) => {
       const m = r.meta || {};
       if (m.era == null || m.xera == null) return null;
@@ -131,9 +133,8 @@ export async function computeRegressionWatch(ctx) {
     },
     {
       ask: 'why this gap between his results and his expected numbers exists — whether the peripherals say it is deserved or luck — and what that means for this specific start',
-      // This lane hand-filters to the rows it wants read (and its tomorrow rows
-      // surface on their own board, outside the per-category cap), so it opts
-      // out of the ship-cap the other lanes take by default.
+      // This lane hand-filters today's pitcher rows, so it opts out of the
+      // ship-cap the other lanes take by default.
       limit: Infinity,
     });
 

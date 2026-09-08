@@ -14,12 +14,12 @@
 //     that are ALREADY FINAL are skipped entirely (a BDL slate date is a UTC
 //     date, so last night's finals share it — a "tonight's starter" row about
 //     a finished game is dead content and would grade with hindsight).
-//   - Window = the last 3 pitching rows (ip > 0). Recent ERA/WHIP computed
+//   - Window = the last 3 explicit starts, including zero-out starts. ERA/WHIP computed
 //     exactly from summed ER / IP (thirds convention) / hits+walks.
 //   - Season baseline from getMlbPlayerSeasonStats({ season, playerIds }) —
 //     pitching_era / pitching_whip on the per-player record.
 //   - Guards FAIL CLOSED: need 3 full window starts, >= MIN_WINDOW_IP innings in
-//     the window, >= MIN_SEASON_STARTS total pitching rows, and a finite season
+//     the window, >= MIN_SEASON_STARTS confirmed starts, and a finite season
 //     ERA. Edge = seasonEra - recentEra; |edge| >= MIN_ERA_EDGE surfaces.
 //
 // Tone: HOT when the recent ERA is well under the season mark (dealing),
@@ -31,9 +31,10 @@
 // Emits a one-line examined/emitted summary for 0-row diagnosability.
 
 import {
-  makeRow, TONES, scoreFromEdge, round, parseIpThirds, pickVariant,
+  makeRow, TONES, scoreFromEdge, round, parseIpThirds, formatIpThirds, pickVariant,
 } from '../shared.js';
 import { attachLaneReads, detailFact } from '../laneReads.js';
+import { isMlbStart } from '../../mlbGameRows.js';
 
 // Tunables.
 const WINDOW_STARTS = 3;        // "last 3 starts" window
@@ -93,7 +94,7 @@ async function starterFormForGame(game, { season, bdl, gameLabel, stats }) {
     if (playerId == null) continue;
     if (stats) stats.examined += 1;
 
-    // Completed pitching rows, oldest -> newest, excluding tonight's game.
+    // Completed starts, oldest -> newest, excluding tonight's game.
     let chrono = [];
     try {
       chrono = (await bdl.getMlbPlayerGameRowsChrono(playerId, season)) || [];
@@ -101,7 +102,7 @@ async function starterFormForGame(game, { season, bdl, gameLabel, stats }) {
       console.error('[starterForm] chrono error:', err?.message || err);
       continue;
     }
-    const pitched = chrono.filter((r) => r.game_id !== gameId && parseIpThirds(r.ip) > 0);
+    const pitched = chrono.filter((r) => String(r.game_id) !== String(gameId) && isMlbStart(r));
     if (pitched.length < MIN_SEASON_STARTS) continue;
 
     const window = pitched.slice(-WINDOW_STARTS);
@@ -143,7 +144,7 @@ async function starterFormForGame(game, { season, bdl, gameLabel, stats }) {
     const reEra = round(recentEra, 2).toFixed(2);
     const seEra = round(seasonEra, 2).toFixed(2);
     const reWhip = round(recentWhip, 2).toFixed(2);
-    const ipDisp = round(ip, 1);
+    const ipDisp = formatIpThirds(ip);
 
     const headline = `${name}: ${reEra} ERA over his last ${WINDOW_STARTS} starts`;
 
@@ -175,7 +176,7 @@ async function starterFormForGame(game, { season, bdl, gameLabel, stats }) {
       meta: {
         kind: 'starter_form',
         window_starts: WINDOW_STARTS,
-        window_ip: round(ip, 1),
+        window_ip: ipDisp,
         window_er: er,
         window_k: k,
         recent_era: round(recentEra, 2),
