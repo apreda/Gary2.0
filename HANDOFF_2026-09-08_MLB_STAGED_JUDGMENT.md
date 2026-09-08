@@ -176,3 +176,12 @@ orchestrator, agentic, pickdesk and diary paths. This includes **38 real
 PostgreSQL ledger cases** with direct tool-evidence tampering and official-ID,
 null/type, alias and doubleheader cases, plus the existing database contracts.
 Log: `/tmp/gary-mlb-identity-final-contract-20260908.log`.
+
+Follow-up source commit **de54bc3d** is pushed to `origin/main`. The canonical
+Winners worker restarted at **2026-09-08T16:19:48.285Z**, PID **72466**, logging
+`mlb-conviction-v4`. The production checker confirms era **343f7f327a80**, Astra,
+scheduler PID **96216**, all 20 edge deployments and no unpushed commits at its
+snapshot. Its only failure remains unrelated shared working-tree changes (10
+at that snapshot). Worker stderr has no new writes. Live ledger and memory
+counts remain zero before today's first decision; no public QA picks were
+created. Runtime log: `/tmp/gary-mlb-identity-production-20260908.log`.
