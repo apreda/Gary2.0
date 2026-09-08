@@ -1,5 +1,13 @@
 # CLAUDE.md
 
+Requested small-slate Winners policy: read
+`../HANDOFF_2026-09-08_WINNERS_SMALL_SLATES.md`. Adam requested automatic
+single-game admission for NFL/MLB, conditional single-game NCAAF admission
+(ranked or “Big 5” team), and one Winner on a two-game day unless both
+independently qualify. This is recorded direction, NOT a deployed exception;
+NCAAF conference membership and the two-game rule's full sport scope await
+clarification. Do not claim the current selector implements these rules.
+
 Latest source-policy release: read `../HANDOFF_2026-09-08_SOURCE_POLICY_918.md`.
 Build 918 (native source `994b948a`) retains the restored observational Hub,
 removes xERA, and uses the verified BDL practice/live-batting paths. Signed
