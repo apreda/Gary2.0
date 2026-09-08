@@ -161,14 +161,13 @@ export default async function GamePage({ params }: { params: Params }) {
         mainEntityOfPage: { '@type': 'WebPage', '@id': pageUrl },
         isAccessibleForFree: true,
         articleBody: body,
-        about: {
-          '@type': 'SportsEvent',
-          name: headline(lead),
-          startDate: lead.commence_time ?? date,
-          ...(venue ? { location: { '@type': 'Place', name: venue } } : {}),
-          awayTeam: { '@type': 'SportsTeam', name: lead.awayTeam },
-          homeTeam: { '@type': 'SportsTeam', name: lead.homeTeam },
-        },
+        // This page is analysis of a matchup, not a bookable event listing.
+        // Describe its subjects without claiming event-rich-result fields.
+        about: [
+          { '@type': 'Thing', name: headline(lead) },
+          { '@type': 'SportsTeam', name: lead.awayTeam },
+          { '@type': 'SportsTeam', name: lead.homeTeam },
+        ],
       }} />
 
       <nav className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] uppercase tracking-[0.05em] text-low">
