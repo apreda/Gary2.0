@@ -76,6 +76,34 @@ struct FantasyBriefingTests {
         precondition(!secondGame.matchesPlayerCard(playerID: "38", gameID: nil, loadedDate: "2026-09-07", now: beforeSecond), "A missing game ID is not a matchup match")
         precondition(!secondGame.matchesPlayerCard(playerID: "38", gameID: "second", loadedDate: "2026-09-06", now: beforeSecond), "Yesterday's prefetched card cannot route today's call")
         precondition(!secondGame.matchesPlayerCard(playerID: "38", gameID: "second", loadedDate: "2026-09-07", now: FantasyBriefing.timestamp("2026-09-07T23:00:00Z")!), "A call closed at first pitch cannot open a different game's pack")
-        print("Fantasy native model: full copy, league/date isolation, expiry, overnight recovery and exact player/game routing passed")
+        // Citations are presentation only. The numbers follow evidence order,
+        // including cited comparison players, rather than order of appearance.
+        var citedPayload = decision
+        let citedText = "José 🇩🇴 has a 6.08 ERA, not a forecast. [recent_pitcher][expected_pitcher]"
+        citedPayload["why_now"] = citedText
+        citedPayload["evidence"] = [
+            ["id": "season", "label": "Season", "source": "Provider", "summary": "A 5.57 ERA [season]"],
+            ["id": "today", "label": "Today", "source": "Provider"],
+            ["id": "recent_pitcher", "label": "Recent appearances", "source": "Provider"],
+            ["id": "expected_pitcher", "label": "Contact measurements", "source": "Provider"],
+            ["id": "bdl:773/weekly_projection", "label": "Comparison player", "source": "Provider"],
+        ]
+        let cited = try JSONDecoder().decode(FantasyDecision.self, from: JSONSerialization.data(withJSONObject: citedPayload))
+        precondition(cited.displayText(cited.why_now) == "José 🇩🇴 has a 6.08 ERA, not a forecast. [3, 4]", "Real adjacent source IDs must become readable evidence numbers without changing the advice")
+        precondition(cited.displayText("[today][season] and [season][today]") == "[2, 1] and [1, 2]", "Citations must match the numbered evidence rows, not first mention order")
+        precondition(cited.displayText("12.3 projected PPR points [bdl:773/weekly_projection].") == "12.3 projected PPR points [5].", "Exact cross-player evidence IDs must use this decision's evidence numbering")
+        precondition(cited.displayText("[unknown][season][today][another]") == "[unknown][1, 2][another]", "Unrecognized bracket content must remain verbatim beside known citations")
+        let unknownText = "[Season] [ season ] [season,today] [recent] [6.08] [0, 1] [season_extra] [not closed"
+        precondition(cited.displayText(unknownText) == unknownText, "No case folding, prefix matching, trimming or broad bracket stripping is allowed")
+        precondition(cited.displayText("[season] \n[today]\t[season]") == "[1] \n[2]\t[1]", "Non-adjacent references must preserve the original whitespace")
+        precondition(cited.displayText("[season][season]") == "[1, 1]", "Repeated source references must not disappear")
+        precondition(cited.displayText("A .251 xBA and 23.2 IP remain uncertain.") == "A .251 xBA and 23.2 IP remain uncertain.")
+        precondition(cited.displayText("") == "")
+        precondition(cited.displayText(cited.evidence[0].summary!) == "A 5.57 ERA [1]")
+        precondition(cited.why_now == citedText && cited.evidence[0].summary == "A 5.57 ERA [season]", "Rendering must never mutate published source strings")
+        citedPayload["evidence"] = []
+        let uncited = try JSONDecoder().decode(FantasyDecision.self, from: JSONSerialization.data(withJSONObject: citedPayload))
+        precondition(uncited.displayText(citedText) == citedText, "A missing evidence map must leave the original copy intact")
+        print("Fantasy native model: full copy, readable source citations, league/date isolation, expiry, overnight recovery and exact player/game routing passed")
     }
 }

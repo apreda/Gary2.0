@@ -136,6 +136,41 @@ struct FantasyDecision: Decodable, Identifiable {
 
     var identity: String { [position, team].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ") }
 
+    /// Converts cited source IDs for display only. Evidence keeps its original
+    /// order and the stored advice remains unchanged, including unknown brackets.
+    func displayText(_ source: String) -> String {
+        let numbers = Dictionary(evidence.enumerated().map { ($0.element.id, $0.offset + 1) },
+                                 uniquingKeysWith: { first, _ in first })
+        guard !source.isEmpty, !numbers.isEmpty,
+              let pattern = try? NSRegularExpression(pattern: #"\[([^\[\]\r\n]+)\]"#) else { return source }
+        let text = source as NSString
+        let references = pattern.matches(in: source, range: NSRange(location: 0, length: text.length))
+            .compactMap { match -> (range: NSRange, number: Int)? in
+                guard let number = numbers[text.substring(with: match.range(at: 1))] else { return nil }
+                return (match.range, number)
+            }
+        guard !references.isEmpty else { return source }
+
+        var result = ""
+        var cursor = 0
+        var index = 0
+        while index < references.count {
+            let reference = references[index]
+            result += text.substring(with: NSRange(location: cursor, length: reference.range.location - cursor))
+            var citations = [reference.number]
+            cursor = NSMaxRange(reference.range)
+            index += 1
+            while index < references.count, references[index].range.location == cursor {
+                citations.append(references[index].number)
+                cursor = NSMaxRange(references[index].range)
+                index += 1
+            }
+            result += "[" + citations.map(String.init).joined(separator: ", ") + "]"
+        }
+        result += text.substring(from: cursor)
+        return result
+    }
+
     func isActionable(now: Date) -> Bool {
         if horizon == "week" { return true }
         guard let valid_until, let closes = FantasyBriefing.timestamp(valid_until) else { return false }

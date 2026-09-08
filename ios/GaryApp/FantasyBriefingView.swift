@@ -1,5 +1,15 @@
 import SwiftUI
 
+private enum FantasyInk {
+    static let background = Color(red: 22 / 255, green: 20 / 255, blue: 18 / 255)
+    static let raised = Color(red: 33 / 255, green: 30 / 255, blue: 24 / 255)
+    static let paper = Color(red: 244 / 255, green: 238 / 255, blue: 228 / 255)
+    static let secondary = Color(red: 199 / 255, green: 190 / 255, blue: 176 / 255)
+    static let muted = Color(red: 175 / 255, green: 164 / 255, blue: 151 / 255)
+    static let gold = Color(red: 221 / 255, green: 183 / 255, blue: 111 / 255)
+    static let rule = Color(red: 199 / 255, green: 190 / 255, blue: 176 / 255).opacity(0.17)
+}
+
 private struct FantasySelection: Identifiable {
     let id = UUID()
     let decision: FantasyDecision
@@ -14,6 +24,7 @@ struct FantasyBriefingPage: View {
     var openPlayer: (FantasyDecision) -> Bool = { _ in false }
     @AppStorage("fantasyMLBFormat") private var mlbFormat = "categories"
     @AppStorage("fantasyNFLFormat") private var nflFormat = "half_ppr"
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var briefing: FantasyBriefing?
     @State private var loaded = false
     @State private var failed = false
@@ -40,7 +51,7 @@ struct FantasyBriefingPage: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(alignment: .leading, spacing: 24) {
             masthead
             TimelineView(.periodic(from: .now, by: 60)) { context in
                 content(now: context.date)
@@ -65,61 +76,102 @@ struct FantasyBriefingPage: View {
 
     private var masthead: some View {
         VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Gary’s fantasy briefing")
-                    .font(.title2.weight(.bold)).foregroundStyle(GaryColors.warmWhite)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(league == "NFL" ? "Your next move, before the next kickoff." : "The call. The case. What matters today.")
-                    .font(GaryFonts.ui(14)).foregroundStyle(GaryColors.sectionSub)
-                if let briefing {
-                    Text(league == "MLB" ? FantasyBriefing.dayLabel(briefing.date).uppercased()
-                        : "\(briefing.week.map { "WEEK \($0) · " } ?? "")\(FantasyBriefing.dayLabel(briefing.window_start)) – \(FantasyBriefing.dayLabel(briefing.window_end))")
-                        .font(GaryFonts.kicker(10)).foregroundStyle(GaryColors.gold).padding(.top, 4)
+            if league == "NFL", let briefing {
+                FantasyEyebrow(text: "\(briefing.week.map { "WEEK \($0) · " } ?? "")\(FantasyBriefing.dayLabel(briefing.window_start)) – \(FantasyBriefing.dayLabel(briefing.window_end))")
+            }
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 14) {
+                    scoringMenu
+                    checkedTime
+                }
+            } else {
+                HStack(alignment: .center, spacing: 18) {
+                    scoringMenu
+                    checkedTime
                 }
             }
-            HStack(alignment: .center, spacing: 16) {
-                Menu {
-                    ForEach(formatOptions, id: \.0) { item in
-                        Button {
-                            if league == "MLB" { mlbFormat = item.0 } else { nflFormat = item.0 }
-                        } label: {
-                            if format == item.0 { Label(item.1, systemImage: "checkmark") }
-                            else { Text(item.1) }
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Text(formatLabel)
-                        Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold))
-                    }
-                    .font(GaryFonts.ui(14, .semibold)).foregroundStyle(GaryColors.gold)
-                    .padding(.vertical, 10)
+            VStack(alignment: .leading, spacing: 0) {
+                if dynamicTypeSize.isAccessibilitySize {
+                    VStack(spacing: 0) { focusControls }
+                } else {
+                    HStack(spacing: 12) { focusControls }
                 }
-                .accessibilityLabel("Scoring format: \(formatLabel)")
-                Spacer(minLength: 0)
-                if let briefing, let at = FantasyBriefing.timestamp(briefing.fetched_as_of) {
-                    Text("Checked \(at.formatted(.dateTime.hour().minute()))")
-                        .font(GaryFonts.ui(12)).foregroundStyle(GaryColors.meta)
-                }
+                FantasyRule()
             }
-            HStack(spacing: 22) {
-                focusButton("All calls", key: "all")
-                focusButton("Pickups", key: "pickups")
-                focusButton("Lineup", key: "lineup")
-                Spacer(minLength: 0)
-            }
-            Rectangle().fill(GaryColors.panelStroke).frame(height: 1)
         }
+    }
+
+    private var scoringMenu: some View {
+        Menu {
+            ForEach(formatOptions, id: \.0) { item in
+                Button {
+                    if league == "MLB" { mlbFormat = item.0 } else { nflFormat = item.0 }
+                } label: {
+                    if format == item.0 { Label(item.1, systemImage: "checkmark") }
+                    else { Text(item.1) }
+                }
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 7) {
+                FantasyEyebrow(text: "SCORING")
+                scoringValue
+            }
+            .padding(.horizontal, 16).padding(.vertical, 12)
+            .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+            .background(FantasyInk.raised, in: RoundedRectangle(cornerRadius: 12))
+            .contentShape(Rectangle())
+        }
+        .accessibilityLabel("Scoring format: \(formatLabel)")
+        .accessibilityHint("Choose how your fantasy league scores players")
+    }
+
+    private var scoringValue: some View {
+        HStack(spacing: 10) {
+            Text(formatLabel).font(.subheadline.weight(.semibold))
+                .foregroundStyle(FantasyInk.paper)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.down")
+                .font(.caption.weight(.semibold)).foregroundStyle(FantasyInk.gold)
+                .accessibilityHidden(true)
+        }
+    }
+
+    @ViewBuilder private var checkedTime: some View {
+        if let briefing, let at = FantasyBriefing.timestamp(briefing.fetched_as_of) {
+            VStack(alignment: .leading, spacing: 7) {
+                FantasyEyebrow(text: "CHECKED")
+                Text(fantasyCheckedTime(at)).font(.caption).foregroundStyle(FantasyInk.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Evidence checked \(fantasyTimestamp(at))")
+        }
+    }
+
+    @ViewBuilder private var focusControls: some View {
+        focusButton("All calls", key: "all")
+        focusButton("Pickups", key: "pickups")
+        focusButton("Lineup", key: "lineup")
     }
 
     private func focusButton(_ title: String, key: String) -> some View {
         Button { focus = key } label: {
-            VStack(spacing: 9) {
-                Text(title).font(GaryFonts.ui(14, focus == key ? .semibold : .regular))
-                    .foregroundStyle(focus == key ? GaryColors.warmWhite : GaryColors.sectionSub)
-                Rectangle().fill(focus == key ? GaryColors.gold : .clear).frame(height: 2)
+            VStack(spacing: 0) {
+                HStack(spacing: 8) {
+                    Text(title).font(.subheadline.weight(focus == key ? .semibold : .regular))
+                        .fixedSize(horizontal: false, vertical: true)
+                    if dynamicTypeSize.isAccessibilitySize {
+                        Spacer(minLength: 0)
+                        if focus == key { Image(systemName: "checkmark").accessibilityHidden(true) }
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .padding(.vertical, 4)
+                Rectangle().fill(focus == key ? FantasyInk.gold : .clear).frame(height: 2)
             }
-            .padding(.top, 5)
+            .foregroundStyle(focus == key ? FantasyInk.paper : FantasyInk.secondary)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(focus == key ? [.isSelected] : [])
@@ -128,29 +180,46 @@ struct FantasyBriefingPage: View {
     @ViewBuilder private func content(now: Date) -> some View {
         let calls = calls(now: now)
         if !loaded {
-            ProgressView("Loading Gary’s briefing").tint(GaryColors.gold)
-                .font(GaryFonts.ui(14)).foregroundStyle(GaryColors.sectionSub)
+            ProgressView("Loading Gary’s briefing").tint(FantasyInk.gold)
+                .font(.subheadline).foregroundStyle(FantasyInk.secondary)
                 .frame(maxWidth: .infinity).padding(.vertical, 40)
         } else if let briefing, briefing.isCurrent(now: now) {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 26) {
                 if failed {
                     notice("The latest check failed. These calls are still within their evidence window.", retry: true)
                 }
-                if calls.isEmpty {
-                    notice(briefing.decisions.isEmpty
-                        ? "No calls are available for this window. Check back as the evidence changes."
-                        : "No calls match this view. Try All calls or a different scoring format.", retry: false)
-                } else {
-                    LazyVStack(alignment: .leading, spacing: 16) {
-                        ForEach(Array(calls.enumerated()), id: \.element.id) { index, decision in
-                            FantasyCallPanel(decision: decision, leading: index == 0, now: now, onPlayer: {
-                                if !openPlayer(decision) { selected = FantasySelection(decision: decision, briefing: briefing) }
-                            }, onDetails: { selected = FantasySelection(decision: decision, briefing: briefing) })
+                if let featured = calls.first {
+                    FantasyFeaturedCall(decision: featured, now: now, onPlayer: {
+                        open(featured, briefing: briefing)
+                    }, onDetails: { selected = FantasySelection(decision: featured, briefing: briefing) })
+                    if calls.count > 1 {
+                        VStack(alignment: .leading, spacing: 14) {
+                            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                                Text("More calls").font(.title3.weight(.semibold)).foregroundStyle(FantasyInk.paper)
+                                Text("\(calls.count - 1)").font(.subheadline.monospacedDigit()).foregroundStyle(FantasyInk.muted)
+                            }
+                            .accessibilityElement(children: .combine)
+                            LazyVStack(alignment: .leading, spacing: 0) {
+                                ForEach(Array(calls.dropFirst().enumerated()), id: \.element.id) { index, decision in
+                                    if index > 0 { FantasyRule().padding(.horizontal, 18) }
+                                    FantasyCompactCall(decision: decision, now: now, onPlayer: {
+                                        open(decision, briefing: briefing)
+                                    }, onDetails: { selected = FantasySelection(decision: decision, briefing: briefing) })
+                                }
+                            }
+                            .background(FantasyInk.background, in: RoundedRectangle(cornerRadius: 18))
                         }
                     }
+                } else {
+                    let allCallsClosed = !briefing.decisions.isEmpty && !briefing.decisions.contains { $0.isActionable(now: now) }
+                    notice(allCallsClosed
+                        ? "These calls have reached the end of their playing window. Check for a refreshed briefing."
+                        : briefing.decisions.isEmpty
+                        ? "No calls are available for this window. Check back as the evidence changes."
+                        : "No calls match this view. Try All calls or a different scoring format.", retry: allCallsClosed)
                 }
                 Text("Advice is filtered by scoring format. Availability in your league and your exact roster are still yours to check.")
-                    .font(GaryFonts.ui(12)).foregroundStyle(GaryColors.meta)
+                    .font(.caption).foregroundStyle(FantasyInk.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
         } else {
@@ -160,17 +229,25 @@ struct FantasyBriefingPage: View {
         }
     }
 
+    private func open(_ decision: FantasyDecision, briefing: FantasyBriefing) {
+        if !openPlayer(decision) { selected = FantasySelection(decision: decision, briefing: briefing) }
+    }
+
     private func notice(_ message: String, retry: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(message).font(GaryFonts.ui(15)).foregroundStyle(GaryColors.sectionSub)
+        VStack(alignment: .leading, spacing: 10) {
+            Text(message).font(.body).foregroundStyle(FantasyInk.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             if retry {
-                Button("Check for update") { Task { await load() } }
-                    .font(GaryFonts.ui(14, .semibold)).foregroundStyle(GaryColors.gold)
+                Button { Task { await load() } } label: {
+                    Text("Check for update")
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(FantasyInk.gold)
+                        .frame(minHeight: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(18).frame(maxWidth: .infinity, alignment: .leading)
-        .quantPanel(radius: GaryLayout.Radius.card)
+        .background(FantasyInk.raised, in: RoundedRectangle(cornerRadius: 18))
     }
 
     @MainActor private func load() async {
@@ -191,61 +268,189 @@ struct FantasyBriefingPage: View {
     }
 }
 
-private struct FantasyCallPanel: View {
+private struct FantasyFeaturedCall: View {
     let decision: FantasyDecision
-    let leading: Bool
     let now: Date
     let onPlayer: () -> Void
     let onDetails: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(decision.actionLabel).font(GaryFonts.kicker(11)).tracking(1)
-                .foregroundStyle(GaryColors.gold)
-            Button(action: onPlayer) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(decision.player_name).font(GaryFonts.ui(17, .semibold))
-                        .foregroundStyle(GaryColors.warmWhite)
-                    Text(decision.identity).font(GaryFonts.data(10, .medium)).foregroundStyle(GaryColors.meta)
+        VStack(alignment: .leading, spacing: 18) {
+            FantasyEyebrow(text: "THE FEATURED CALL")
+            VStack(alignment: .leading, spacing: 16) {
+                FantasyPlayerLink(decision: decision, featured: true, action: onPlayer)
+                FantasyEyebrow(text: fantasyAction(decision))
+                Text(decision.displayText(decision.headline))
+                    .font(.title2.weight(.bold)).foregroundStyle(FantasyInk.paper)
+                    .fixedSize(horizontal: false, vertical: true)
+                FantasyNextOpportunity(decision: decision, now: now)
+                Text(decision.displayText(decision.why_now))
+                    .font(.body).lineSpacing(4).foregroundStyle(FantasyInk.paper)
+                    .fixedSize(horizontal: false, vertical: true)
+                FantasyRule()
+                FantasyTextSection(title: "THE RISK", text: decision.displayText(decision.risk))
+                Button(action: onDetails) {
+                    FantasyReadLink(title: "Read Gary’s full case")
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .buttonStyle(.plain)
+                .accessibilityLabel("Read the full fantasy case for \(decision.player_name)")
+                .accessibilityHint("Includes scoring fit, what to watch next, and every evidence source")
             }
-            .buttonStyle(.plain)
-            if let game = decision.nextGameLabel(now: now) {
-                Text(game).font(GaryFonts.ui(12)).foregroundStyle(GaryColors.meta)
-            }
-            Text(decision.headline).font(GaryFonts.ui(leading ? 24 : 21, .semibold))
-                .foregroundStyle(GaryColors.warmWhite).lineSpacing(2)
-            Text(decision.why_now).font(GaryFonts.ui(15)).lineSpacing(4)
-                .foregroundStyle(GaryColors.warmWhite.opacity(0.9))
-            FantasyTextSection(title: "WHO THIS HELPS", text: decision.fit)
-            Rectangle().fill(GaryColors.panelStroke).frame(height: 1)
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(FantasyInk.raised, in: RoundedRectangle(cornerRadius: 18))
+        }
+    }
+}
+
+private struct FantasyCompactCall: View {
+    let decision: FantasyDecision
+    let now: Date
+    let onPlayer: () -> Void
+    let onDetails: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FantasyEyebrow(text: fantasyAction(decision))
+            FantasyPlayerLink(decision: decision, featured: false, action: onPlayer)
             Button(action: onDetails) {
-                HStack(spacing: 10) {
-                    Text("Tradeoff & evidence").font(GaryFonts.ui(14, .semibold))
-                    Spacer(minLength: 0)
-                    Image(systemName: "arrow.up.right").font(.system(size: 12, weight: .semibold))
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .firstTextBaseline, spacing: 14) {
+                        Text(decision.displayText(decision.headline))
+                            .font(.headline).foregroundStyle(FantasyInk.paper)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Image(systemName: "arrow.up.right").font(.caption.weight(.semibold))
+                            .foregroundStyle(FantasyInk.gold).accessibilityHidden(true)
+                    }
+                    FantasyNextOpportunity(decision: decision, now: now)
                 }
-                .foregroundStyle(GaryColors.gold).padding(.vertical, 3)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityHint("Opens the complete argument, scoring fit, risk, and evidence")
         }
-        .fixedSize(horizontal: false, vertical: true)
-        .padding(18).frame(maxWidth: .infinity, alignment: .leading)
-        .quantPanel(radius: GaryLayout.Radius.card)
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
+}
+
+private struct FantasyPlayerLink: View {
+    let decision: FantasyDecision
+    let featured: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(decision.player_name)
+                        .font(featured ? .title3.weight(.semibold) : .subheadline.weight(.semibold))
+                        .foregroundStyle(FantasyInk.paper)
+                    if !decision.identity.isEmpty {
+                        Text(decision.identity).font(.caption).foregroundStyle(FantasyInk.muted)
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "person.text.rectangle")
+                    .font(.body).foregroundStyle(FantasyInk.muted).accessibilityHidden(true)
+            }
+            .frame(minHeight: 44).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(decision.player_name), \(decision.identity)")
+        .accessibilityHint("Opens the matching player card when available, otherwise Gary’s full call")
+    }
+}
+
+private struct FantasyReadLink: View {
+    let title: String
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(title).font(.subheadline.weight(.semibold))
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Image(systemName: "arrow.up.right").font(.caption.weight(.semibold)).accessibilityHidden(true)
+        }
+        .foregroundStyle(FantasyInk.gold)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+}
+
+private struct FantasyEyebrow: View {
+    let text: String
+    var body: some View {
+        Text(text).font(.system(.caption, design: .monospaced).weight(.semibold))
+            .tracking(0.7).foregroundStyle(FantasyInk.gold)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+private struct FantasyRule: View {
+    var body: some View { Rectangle().fill(FantasyInk.rule).frame(height: 1).accessibilityHidden(true) }
 }
 
 private struct FantasyTextSection: View {
     let title: String
     let text: String
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(title).font(GaryFonts.kicker(10)).tracking(0.8).foregroundStyle(GaryColors.gold)
-            Text(text).font(GaryFonts.ui(14)).lineSpacing(3).foregroundStyle(GaryColors.sectionSub)
+        VStack(alignment: .leading, spacing: 8) {
+            FantasyEyebrow(text: title)
+            Text(text).font(.callout).lineSpacing(4).foregroundStyle(FantasyInk.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private func fantasyAction(_ decision: FantasyDecision) -> String {
+    decision.action == "START" ? "START" : decision.actionLabel
+}
+
+private func fantasyTimestamp(_ date: Date) -> String {
+    let label = date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute())
+    let zone = TimeZone.current.abbreviation(for: date) ?? ""
+    return zone.isEmpty ? label : "\(label) \(zone)"
+}
+
+private func fantasyCheckedTime(_ date: Date) -> String {
+    let label = Calendar.current.isDateInToday(date)
+        ? date.formatted(.dateTime.hour().minute())
+        : date.formatted(.dateTime.month(.abbreviated).day().hour().minute())
+    let zone = TimeZone.current.abbreviation(for: date) ?? ""
+    return zone.isEmpty ? label : "\(label) \(zone)"
+}
+
+private func fantasyMatchup(_ opportunity: FantasyDecision.Opportunity) -> String? {
+    guard let opponent = opportunity.opponent, !opponent.isEmpty else { return nil }
+    if opportunity.home == true { return "vs \(opponent)" }
+    if opportunity.home == false { return "at \(opponent)" }
+    return opponent
+}
+
+private struct FantasyNextOpportunity: View {
+    let decision: FantasyDecision
+    let now: Date
+    private var next: (FantasyDecision.Opportunity, Date)? {
+        decision.opportunities.compactMap { opportunity -> (FantasyDecision.Opportunity, Date)? in
+            guard let date = opportunity.start_at.flatMap(FantasyBriefing.timestamp), date > now else { return nil }
+            return (opportunity, date)
+        }.min { $0.1 < $1.1 }
+    }
+    var body: some View {
+        if let (opportunity, date) = next {
+            HStack(alignment: .firstTextBaseline, spacing: 7) {
+                Image(systemName: "calendar").accessibilityHidden(true)
+                Text([fantasyMatchup(opportunity), fantasyTimestamp(date)].compactMap { $0 }.joined(separator: " · "))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .font(.caption).foregroundStyle(FantasyInk.muted)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Next game: \([fantasyMatchup(opportunity), fantasyTimestamp(date)].compactMap { $0 }.joined(separator: ", "))")
+        }
     }
 }
 
@@ -254,66 +459,180 @@ private struct FantasyDecisionSheet: View {
     let league: String
     let briefing: FantasyBriefing
     let close: () -> Void
+
     var body: some View {
         NavigationStack {
             TimelineView(.periodic(from: .now, by: 30)) { context in
                 if briefing.isCurrent(now: context.date), decision.isActionable(now: context.date) {
-                    evidenceContent
+                    evidenceContent(now: context.date)
                 } else {
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("This call’s window has closed.").font(GaryFonts.ui(23, .semibold)).foregroundStyle(GaryColors.warmWhite)
-                        Text("Return to the briefing for advice based on the next available update.").font(GaryFonts.ui(15)).foregroundStyle(GaryColors.sectionSub)
-                        Button("Back to briefing", action: close).foregroundStyle(GaryColors.gold)
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("This call’s window has closed.").font(.title2.weight(.semibold)).foregroundStyle(FantasyInk.paper)
+                            Text("Return to the briefing for advice based on the next available update.")
+                                .font(.body).foregroundStyle(FantasyInk.secondary)
+                            Button(action: close) {
+                                Text("Back to briefing").font(.headline).foregroundStyle(FantasyInk.gold)
+                                    .frame(minHeight: 44).contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(GaryLayout.gutter).frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .padding(GaryLayout.gutter).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
             }
-            .background(GaryColors.darkBg)
+            .background(FantasyInk.background)
             .navigationTitle("Gary’s call").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done", action: close).tint(GaryColors.gold) } }
+            .toolbarBackground(FantasyInk.background, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: close) {
+                        Text("Done").font(.body.weight(.semibold))
+                            .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+                    }
+                    .tint(FantasyInk.gold)
+                }
+            }
         }
         .preferredColorScheme(.dark)
     }
 
-    private var evidenceContent: some View {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    VStack(alignment: .leading, spacing: 7) {
-                        Text(decision.player_name).font(GaryFonts.ui(27, .semibold)).foregroundStyle(GaryColors.warmWhite)
-                        Text("\(league) · \(decision.identity)").font(GaryFonts.data(11, .medium)).foregroundStyle(GaryColors.meta)
+    private func evidenceContent(now: Date) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 26) {
+                VStack(alignment: .leading, spacing: 12) {
+                    FantasyEyebrow(text: fantasyAction(decision))
+                    Text(decision.player_name).font(.largeTitle.weight(.bold)).foregroundStyle(FantasyInk.paper)
+                    Text([league, decision.identity].filter { !$0.isEmpty }.joined(separator: " · "))
+                        .font(.subheadline).foregroundStyle(FantasyInk.muted)
+                    FantasyNextOpportunity(decision: decision, now: now)
+                    Text(decision.displayText(decision.headline))
+                        .font(.title2.weight(.semibold)).foregroundStyle(FantasyInk.paper)
+                }
+                FantasyTextSection(title: "WHY NOW", text: decision.displayText(decision.why_now))
+                FantasyTextSection(title: "WHO THIS HELPS", text: decision.displayText(decision.fit))
+                VStack(alignment: .leading, spacing: 18) {
+                    FantasyTextSection(title: "THE COUNTERARGUMENT", text: decision.displayText(decision.risk))
+                    FantasyRule()
+                    FantasyTextSection(title: "WHAT TO CHECK NEXT", text: decision.displayText(decision.watch_for))
+                }
+                .padding(18).background(FantasyInk.raised, in: RoundedRectangle(cornerRadius: 16))
+                applicability
+                if !decision.opportunities.isEmpty { opportunities }
+                if let ownership = decision.availability?.rostered_percent {
+                    FantasyTextSection(title: "AVAILABILITY", text: "\(ownership.formatted(.number.precision(.fractionLength(1))))% rostered across the provider’s leagues. Check your own league’s player pool.")
+                }
+                FantasyRule()
+                evidence
+                if !decision.limitations.isEmpty {
+                    FantasyTextSection(title: "LIMITS OF THIS READ", text: decision.limitations.map { decision.displayText($0) }.joined(separator: "\n\n"))
+                }
+                collectionWindow
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(GaryLayout.gutter).padding(.bottom, 24)
+            .textSelection(.enabled)
+        }
+    }
+
+    private var applicability: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FantasyEyebrow(text: "WHERE THE CALL FITS")
+            Text("Scoring: \(decision.formats.map(fantasyFormatLabel).joined(separator: ", "))")
+                .font(.callout).foregroundStyle(FantasyInk.secondary)
+            if !decision.categories.isEmpty {
+                Text("Focus: \(decision.categories.map(fantasyCategoryLabel).joined(separator: ", "))")
+                    .font(.callout).foregroundStyle(FantasyInk.secondary)
+            }
+            Text(decision.horizon == "week"
+                ? "This week: \(FantasyBriefing.dayLabel(briefing.window_start)) – \(FantasyBriefing.dayLabel(briefing.window_end))"
+                : "This call applies to the next game.")
+                .font(.caption).foregroundStyle(FantasyInk.muted)
+        }
+    }
+
+    private var opportunities: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            FantasyEyebrow(text: "THE PLAYING WINDOW")
+            ForEach(Array(decision.opportunities.enumerated()), id: \.offset) { _, opportunity in
+                VStack(alignment: .leading, spacing: 5) {
+                    if let matchup = fantasyMatchup(opportunity) {
+                        Text(matchup).font(.callout.weight(.semibold)).foregroundStyle(FantasyInk.paper)
                     }
-                    Text(decision.headline).font(GaryFonts.ui(23, .semibold)).foregroundStyle(GaryColors.warmWhite)
-                    FantasyTextSection(title: "WHY NOW", text: decision.why_now)
-                    FantasyTextSection(title: "WHO THIS HELPS", text: decision.fit)
-                    FantasyTextSection(title: "THE COUNTERARGUMENT", text: decision.risk)
-                    FantasyTextSection(title: "WHAT TO CHECK NEXT", text: decision.watch_for)
-                    Rectangle().fill(GaryColors.panelStroke).frame(height: 1)
-                    VStack(alignment: .leading, spacing: 20) {
-                        Text("THE EVIDENCE").font(GaryFonts.kicker(12)).tracking(1).foregroundStyle(GaryColors.gold)
-                        ForEach(decision.evidence) { evidence in
-                            VStack(alignment: .leading, spacing: 7) {
-                                Text(evidence.label).font(GaryFonts.ui(15, .semibold)).foregroundStyle(GaryColors.warmWhite)
-                                if let summary = evidence.summary, !summary.isEmpty {
-                                    Text(summary).font(GaryFonts.ui(14)).foregroundStyle(GaryColors.sectionSub).lineSpacing(3)
-                                }
-                                Text(evidence.source).font(GaryFonts.ui(12)).foregroundStyle(GaryColors.meta)
-                            }
-                        }
-                    }
-                    if let ownership = decision.availability?.rostered_percent {
-                        FantasyTextSection(title: "AVAILABILITY", text: "\(ownership.formatted(.number.precision(.fractionLength(1))))% rostered across the provider’s leagues. Check your own league’s player pool.")
-                    }
-                    if let at = FantasyBriefing.timestamp(briefing.fetched_as_of) {
-                        Text("Evidence collected \(at.formatted(date: .abbreviated, time: .shortened)). Game and sample dates are shown above.")
-                            .font(GaryFonts.ui(12)).foregroundStyle(GaryColors.meta)
-                    }
-                    if !decision.limitations.isEmpty {
-                        FantasyTextSection(title: "LIMITS OF THIS READ", text: decision.limitations.joined(separator: "\n\n"))
+                    if let date = opportunity.start_at.flatMap(FantasyBriefing.timestamp) {
+                        Text(fantasyTimestamp(date)).font(.callout).foregroundStyle(FantasyInk.secondary)
+                    } else {
+                        Text("Game time not available.").font(.callout).foregroundStyle(FantasyInk.muted)
                     }
                 }
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(GaryLayout.gutter).padding(.bottom, 24)
             }
+        }
+    }
+
+    private var evidence: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            FantasyEyebrow(text: "THE EVIDENCE")
+            ForEach(Array(decision.evidence.enumerated()), id: \.element.id) { index, item in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("[\(index + 1)] \(decision.displayText(item.label))")
+                        .font(.headline).foregroundStyle(FantasyInk.paper)
+                    if let summary = item.summary, !summary.isEmpty {
+                        Text(decision.displayText(summary)).font(.callout)
+                            .foregroundStyle(FantasyInk.secondary).lineSpacing(4)
+                    }
+                    Text(item.source).font(.caption).foregroundStyle(FantasyInk.muted)
+                    if let observedAt = item.observed_at.flatMap(FantasyBriefing.timestamp) {
+                        Text("Source observed \(fantasyTimestamp(observedAt)).")
+                            .font(.caption).foregroundStyle(FantasyInk.muted)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private var collectionWindow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            FantasyRule().padding(.bottom, 8)
+            if let at = FantasyBriefing.timestamp(briefing.fetched_as_of) {
+                Text("Evidence collected \(fantasyTimestamp(at)). Game and sample dates are shown above.")
+            }
+            if let expires = FantasyBriefing.timestamp(briefing.expires_at) {
+                Text("Briefing evidence window ends \(fantasyTimestamp(expires)).")
+            }
+            if decision.horizon == "next_game", let validUntil = decision.valid_until.flatMap(FantasyBriefing.timestamp) {
+                Text("This call closes \(fantasyTimestamp(validUntil)).")
+            }
+        }
+        .font(.caption).foregroundStyle(FantasyInk.muted)
+    }
+}
+
+private func fantasyFormatLabel(_ value: String) -> String {
+    switch value {
+    case "categories": return "Categories"
+    case "points": return "Points"
+    case "standard": return "Standard"
+    case "half_ppr": return "Half PPR"
+    case "ppr": return "PPR"
+    default: return value
+    }
+}
+
+private func fantasyCategoryLabel(_ value: String) -> String {
+    switch value.lowercased() {
+    case "era": return "ERA"
+    case "whip": return "WHIP"
+    case "rbi": return "RBI"
+    case "flex": return "FLEX"
+    case "obp": return "OBP"
+    case "ops": return "OPS"
+    case "avg": return "AVG"
+    case "qb", "rb", "wr", "te", "hr", "sb", "ip", "qs": return value.uppercased()
+    default:
+        let words = value.replacingOccurrences(of: "_", with: " ")
+        return words.prefix(1).uppercased() + words.dropFirst()
     }
 }

@@ -204,29 +204,54 @@ struct Reader {
 
   it.skipIf(!hasSwift)('keeps NBA, college and retired leagues in the main Hub when the preceding league was in Fantasy', () => {
     const hub = hubSource();
+    const masthead = block(hub, 'fileprivate struct HubMasthead:');
+    const searchButtonGuard = masthead.match(/if\s+([^\n{]+)\{\s*searchButton\s*\}/)?.[1]?.trim();
+    const searchFieldGuard = masthead.match(/if\s+([^\n{]+)\{\s*searchField\s*\}/)?.[1]?.trim();
+    expect(searchButtonGuard).toBeTruthy();
+    expect(searchFieldGuard).toBeTruthy();
     runSwift(`
 enum HubLeagueSel { case mlb, nfl, ncaaf, nba, wc }
 ${block(hub, 'fileprivate extension HubLeagueSel {')}
 struct Reader {
  var hubScope = "hub"
  var sel: HubLeagueSel = .mlb
+ var searchOpen = false
  ${block(hub, '    private var showsFantasy:')}
+ ${block(masthead, '    private var mainScope:')}
  var isFantasy: Bool { showsFantasy }
+ var isMain: Bool { mainScope }
+ var searchButtonVisible: Bool { if ${searchButtonGuard} { return true }; return false }
+ var searchFieldVisible: Bool { if ${searchFieldGuard} { return true }; return false }
 }
 @main struct Fixture {
  static func main() {
   var reader = Reader()
   for league in [HubLeagueSel.mlb, .nfl, .ncaaf, .nba, .wc] {
    reader.sel = league
-   precondition(!reader.isFantasy, "The main Hub remains main for every league")
+   precondition(!reader.isFantasy && reader.isMain, "The page and masthead agree that the main Hub remains main for every league")
   }
   reader.hubScope = "fantasy"
   for league in [HubLeagueSel.mlb, .nfl] {
    reader.sel = league
-   precondition(reader.isFantasy)
+   precondition(reader.isFantasy && !reader.isMain)
    for unsupported in [HubLeagueSel.ncaaf, .nba, .wc] {
     reader.sel = unsupported
-    precondition(!reader.isFantasy, "Unsupported Fantasy desks keep their main page, search, section index and slate clock")
+    precondition(!reader.isFantasy && reader.isMain, "Unsupported Fantasy desks keep their main page, search, section index and slate clock")
+   }
+  }
+  // Execute the actual masthead predicate and the actual two SwiftUI guards;
+  // the label's capitalization or an extracted property name is not behavior.
+  for scope in ["hub", "fantasy", "legacy"] {
+   reader.hubScope = scope
+   for league in [HubLeagueSel.mlb, .nfl, .ncaaf, .nba, .wc] {
+    reader.sel = league
+    let expectedFantasy = scope == "fantasy" && (league == .mlb || league == .nfl)
+    precondition(reader.isFantasy == expectedFantasy && reader.isMain == !expectedFantasy)
+    for isOpen in [false, true] {
+     reader.searchOpen = isOpen
+     precondition(reader.searchButtonVisible == !expectedFantasy, "The search toggle remains reachable for every main Hub desk")
+     precondition(reader.searchFieldVisible == (isOpen && !expectedFantasy), "An open search field cannot leak onto the Fantasy page")
+    }
    }
   }
   print("Hub lifecycle assertions passed")
@@ -239,10 +264,9 @@ struct Reader {
     expect(block(hub, '        .overlay(alignment: .bottomTrailing)')).toContain('!showsFantasy');
     expect(block(hub, '        .refreshable')).toContain('if showsFantasy');
     expect(block(hub, '    private func consumeFocus()')).toContain('Self.fantasyKinds.contains(lane), sel.supportsFantasy');
-    const masthead = block(hub, 'fileprivate struct HubMasthead:');
     expect(masthead).toContain('if sel.supportsFantasy {');
-    expect(masthead).toContain('scopeWord("THE HUB", on: hubScope != "fantasy" || !sel.supportsFantasy)');
-    expect(masthead).toContain('if searchOpen, hubScope != "fantasy" || !sel.supportsFantasy {');
+    expect(masthead).toMatch(/scopeWord\([^,]+,\s*on:\s*mainScope\)\s*\{\s*hubScope = "hub"\s*\}/);
+    expect(masthead).toMatch(/scopeWord\([^,]+,\s*on:\s*!mainScope\)\s*\{\s*hubScope = "fantasy"\s*\}/);
   }, 45_000);
 
   it.skipIf(!hasSwift)('shares one refresh across simultaneous triggers and keeps a canceled waiter from poisoning the shared load', () => {
