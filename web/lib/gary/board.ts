@@ -11,6 +11,7 @@ import type { GaryPick } from './types';
  * so a morning visitor saw a single card and acres of black.
  */
 export interface SlateRow {
+  bdl_game_id?: string | number | null;
   league: string | null;
   away_team: string | null;
   home_team: string | null;
@@ -24,7 +25,7 @@ export interface SlateRow {
 
 export async function fetchDailySlate(date: string, revalidate = 600): Promise<SlateRow[]> {
   return rest<SlateRow[]>(
-    `daily_slate?select=league,away_team,home_team,commence_time,venue,spread,ml_home,ml_away,total` +
+    `daily_slate?select=league,away_team,home_team,commence_time,venue,spread,ml_home,ml_away,total,bdl_game_id` +
       `&date=eq.${date}&order=commence_time.asc`,
     { revalidate },
   );
@@ -65,21 +66,49 @@ export interface BoardGame {
  */
 export function buildBoard(slate: SlateRow[], picks: GaryPick[]): BoardGame[] {
   const used = new Set<GaryPick>();
+  const attached = new Map<number, GaryPick>();
+
+  // Resolve each ticket before consuming any row. A missing game-1 pick must
+  // never make the nightcap inherit game 1's clock, market or Book lock.
+  const matches = picks.flatMap(pick => {
+    if ((pick.type ?? 'game') === 'prop') return [];
+    const pickLeague = normalizeLeague(pick.league, pick.sport);
+    const candidates = slate.flatMap((row, index) => {
+      const league = normalizeLeague(row.league);
+      return (!league || !pickLeague || pickLeague === league) &&
+        sameTeam(pick.awayTeam, row.away_team) && sameTeam(pick.homeTeam, row.home_team)
+        ? [{ row, index }] : [];
+    });
+    const id = pick.bdl_game_id == null ? '' : String(pick.bdl_game_id).trim();
+    const exactIds = id ? candidates.filter(({ row }) => String(row.bdl_game_id ?? '').trim() === id) : [];
+    if (exactIds.length === 1) return [{ pick, index: exactIds[0].index, priority: 3 }];
+    if (exactIds.length > 1) return [];
+
+    // Never override conflicting provider IDs with a coincident clock. The
+    // generic game_id can be an odds-vendor ID, so only compare BDL fields.
+    const compatible = candidates.filter(({ row }) => !id || row.bdl_game_id == null || String(row.bdl_game_id).trim() === '');
+    const start = parseGameTime(pick.commence_time)?.getTime();
+    const exactTimes = start == null ? [] : compatible.filter(({ row }) => parseGameTime(row.commence_time)?.getTime() === start);
+    if (exactTimes.length === 1) return [{ pick, index: exactTimes[0].index, priority: 2 }];
+    if (exactTimes.length > 1) return [];
+
+    // Legacy name-only tickets are safe only for an unambiguous matchup,
+    // and never when both clocks explicitly identify different games.
+    if (candidates.length === 1 && compatible.length === 1 &&
+        (start == null || parseGameTime(compatible[0].row.commence_time) == null)) {
+      return [{ pick, index: compatible[0].index, priority: 1 }];
+    }
+    return [];
+  }).sort((a, b) => b.priority - a.priority);
+  for (const { pick, index } of matches) {
+    if (attached.has(index) || used.has(pick)) continue;
+    attached.set(index, pick);
+    used.add(pick);
+  }
 
   const games: BoardGame[] = slate.map((row, i) => {
     const league = normalizeLeague(row.league) ?? (row.league ?? '').toUpperCase();
-    const pick =
-      picks.find(
-        p => {
-          const pickLeague = normalizeLeague(p.league, p.sport);
-          return !used.has(p) &&
-            (p.type ?? 'game') !== 'prop' &&
-            (!league || !pickLeague || pickLeague === league) &&
-            sameTeam(p.awayTeam, row.away_team) &&
-            sameTeam(p.homeTeam, row.home_team);
-        },
-      ) ?? null;
-    if (pick) used.add(pick);
+    const pick = attached.get(i) ?? null;
     return {
       key: `${row.away_team}-${row.home_team}-${i}`,
       league,
@@ -95,10 +124,10 @@ export function buildBoard(slate: SlateRow[], picks: GaryPick[]): BoardGame[] {
     };
   });
 
-  for (const p of picks) {
+  for (const [index, p] of picks.entries()) {
     if (used.has(p) || (p.type ?? 'game') === 'prop') continue;
     games.push({
-      key: `${p.pick_id ?? `${p.awayTeam}-${p.homeTeam}`}`,
+      key: `${p.pick_id ?? `${p.awayTeam}-${p.homeTeam}-${p.commence_time ?? 'unknown'}-${index}`}`,
       league: normalizeLeague(p.league, p.sport) ?? '',
       away: p.awayTeam ?? '',
       home: p.homeTeam ?? '',

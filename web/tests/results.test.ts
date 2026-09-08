@@ -4,6 +4,7 @@ import {
   currentStreak, recordByLeague, isLegitPropResult, computePropsRecord, propsBookRows, isHrLaneResult, PROPS_BOOK_SINCE,
 } from '@/lib/gary/results';
 import type { GameResultRow, NflResultRow, PropResultRow } from '@/lib/gary/types';
+import { publicResultsLedger } from '@/lib/gary/ledger';
 
 const row = (over: Partial<GameResultRow>): GameResultRow => ({
   game_date: '2026-06-03', league: 'MLB', matchup: 'A @ B',
@@ -190,6 +191,15 @@ describe('the props book (Sep 2 2026): starts at the rebuild, never the HR lane'
   const prop = (over: Partial<PropResultRow>): PropResultRow => ({
     game_date: '2026-09-03', player_name: 'Manny Machado', prop_type: 'total_bases', line_value: 1.5,
     actual_value: 2, result: 'won', odds: '-115', pick_text: null, matchup: 'Padres @ Reds', bet: 'over', sport: 'MLB', ...over,
+  });
+  it('excludes only NFL anytime-TD fun rows from core results and units', () => {
+    const nfl = prop({ sport: 'NFL', prop_type: 'anytime_td', result: 'lost' });
+    const ncaaf = prop({ sport: 'NCAAF', prop_type: 'anytime_td' });
+    const passing = prop({ sport: 'NFL', prop_type: 'passing_touchdowns' });
+    expect(computePropsRecord([nfl, ncaaf, passing])).toMatchObject({ wins: 2, losses: 0, graded: 2 });
+    expect(publicResultsLedger([], [nfl]).props).toEqual([nfl]);
+    const legacy = prop({ sport: 'NFL', prop_type: null, pick_text: 'Player A Anytime Touchdown +150', result: 'lost' });
+    expect(propsBookRows([legacy])).toEqual([]);
   });
   it('rows before the book start are archive, not record', () => {
     expect(PROPS_BOOK_SINCE).toBe('2026-09-02');

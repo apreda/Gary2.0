@@ -26,6 +26,7 @@ export interface InjuryReport {
 }
 
 export interface GaryPick {
+  game_id?: string | number; bdl_game_id?: string | number | null;
   pick?: string; type?: string; odds?: number; confidence?: number;
   homeTeam?: string; awayTeam?: string; league?: string; sport?: string;
   rationale?: string; time?: string; venue?: string; commence_time?: string;

@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { boardLeagues, buildBoard, type SlateRow } from '@/lib/gary/board';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+import { boardLeagues, buildBoard, fetchDailySlate, type SlateRow } from '@/lib/gary/board';
 import type { GaryPick } from '@/lib/gary/types';
 
 const slateRow = (over: Partial<SlateRow> = {}): SlateRow => ({
@@ -16,6 +16,86 @@ const slateRow = (over: Partial<SlateRow> = {}): SlateRow => ({
 });
 
 describe('buildBoard', () => {
+  const early = '2026-09-08T17:05:00Z';
+  const late = '2026-09-08T23:05:00Z';
+  const doubleheader = () => [
+    slateRow({ commence_time: early, bdl_game_id: 111 }),
+    slateRow({ commence_time: late, bdl_game_id: 222 }),
+  ];
+  const ticket = (overrides: Partial<GaryPick> = {}): GaryPick => ({
+    awayTeam: 'Mariners', homeTeam: 'Rangers', league: 'MLB', pick: 'Rangers ML -110',
+    ...overrides,
+  });
+
+  it('attaches the only nightcap pick to game 2 by its clock when no provider ID exists', () => {
+    const pick = ticket({ commence_time: late });
+    const board = buildBoard(doubleheader(), [pick]);
+    expect(board).toHaveLength(2);
+    expect(board[0].pick).toBeNull();
+    expect(board[1].pick).toBe(pick);
+    expect(board[1].commence).toBe(late);
+  });
+
+  it('resolves reverse-published doubleheader tickets using exact provider IDs', () => {
+    const first = ticket({ bdl_game_id: '111', commence_time: early });
+    const second = ticket({ bdl_game_id: 222, commence_time: late });
+    expect(buildBoard(doubleheader(), [second, first]).map(row => row.pick)).toEqual([first, second]);
+  });
+
+  it('uses an authoritative BDL match after a schedule-time change', () => {
+    const pick = ticket({ bdl_game_id: 222, commence_time: early });
+    const board = buildBoard(doubleheader(), [pick]);
+    expect(board[0].pick).toBeNull();
+    expect(board[1].pick).toBe(pick);
+    expect(board[1].commence).toBe(late);
+  });
+
+  it('normalizes PostgreSQL and ISO clocks without equating unrelated vendor IDs', () => {
+    const pick = ticket({ game_id: 'odds-vendor-111', commence_time: late });
+    const board = buildBoard([
+      slateRow({ bdl_game_id: 111, commence_time: '2026-09-08 23:05:00+00' }),
+    ], [pick]);
+    expect(board).toHaveLength(1);
+    expect(board[0].pick).toBe(pick);
+  });
+
+  it('does not let a matching clock override a conflicting BDL game ID', () => {
+    const pick = ticket({ bdl_game_id: 333, commence_time: late });
+    const board = buildBoard(doubleheader(), [pick]);
+    expect(board).toHaveLength(3);
+    expect(board.slice(0, 2).filter(row => row.pick)).toHaveLength(0);
+    expect(board[2].pick).toBe(pick);
+  });
+
+  it('preserves an ambiguous legacy ticket separately instead of inventing its lock time', () => {
+    const pick = ticket();
+    const board = buildBoard(doubleheader(), [pick]);
+    expect(board).toHaveLength(3);
+    expect(board.slice(0, 2).every(row => row.pick === null)).toBe(true);
+    expect(board[2]).toMatchObject({ commence: null, pick });
+  });
+
+  it('does not merge same-team rows with contradictory confirmed clocks', () => {
+    const pick = ticket({ commence_time: late });
+    const board = buildBoard([slateRow({ commence_time: early })], [pick]);
+    expect(board).toHaveLength(2);
+    expect(board[0].pick).toBeNull();
+    expect(board[1].pick).toBe(pick);
+  });
+
+  it('reserves exact matches before a legacy name-only ticket can claim the row', () => {
+    const legacy = ticket();
+    const exact = ticket({ bdl_game_id: 111, commence_time: early });
+    const board = buildBoard([doubleheader()[0]], [legacy, exact]);
+    expect(board[0].pick).toBe(exact);
+    expect(board[1].pick).toBe(legacy);
+  });
+
+  it('keeps unique disclosure keys for unmatched same-team tickets without pick IDs', () => {
+    const board = buildBoard([], [ticket({ commence_time: early }), ticket({ commence_time: late })]);
+    expect(new Set(board.map(row => row.key)).size).toBe(2);
+  });
+
   it('renders every slate game, posted or not', () => {
     const board = buildBoard([slateRow(), slateRow({ away_team: 'Phillies', home_team: 'Marlins' })], []);
     expect(board).toHaveLength(2);
@@ -108,6 +188,19 @@ describe('buildBoard', () => {
       [],
     );
     expect(board.map(g => g.away)).toEqual(['Early', 'Late']);
+  });
+});
+
+describe('fetchDailySlate identity', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it('requests the existing provider identity column for the board join', async () => {
+    const fetchMock = vi.fn(async (input: string) => {
+      expect(input).toContain('daily_slate?');
+      return Response.json([]);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    await fetchDailySlate('2026-09-08');
+    expect(new URL(fetchMock.mock.calls[0][0]).searchParams.get('select')?.split(',')).toContain('bdl_game_id');
   });
 });
 

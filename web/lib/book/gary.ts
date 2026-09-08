@@ -3,6 +3,7 @@ import {
   fetchAllGameResults,
   fetchAllPropResults,
   isHrLaneResult,
+  isNflTdLaneResult,
   isLegitPropResult,
   unitsFor,
 } from '@/lib/gary/results';
@@ -13,7 +14,7 @@ import type { BoardRow } from './api';
 /**
  * Gary as an official comparator on the leaderboard (iOS
  * fetchGaryLeaderboardRow) — derived from the PUBLIC graded ledger, not a fake
- * auth account. Games + core props; the HR fun lane never counts, same as the
+ * auth account. Games + core props; HR/NFL-TD fun lanes never count, same as the
  * official record. Server-side because it walks the full results history
  * (ISR-cached fetches), then handed to the client board as plain props.
  */
@@ -65,10 +66,10 @@ export async function garyBoardRows(): Promise<GaryRows> {
     });
   }
   for (const p of props.filter(isLegitPropResult)) {
-    // The home run is the fun lane, never part of the official props record.
+    // Home-run and NFL anytime-TD fun picks stay outside the official record.
     // isHrLaneResult reads the batter's market, so a pitcher's home runs
     // ALLOWED stays the core prop it is.
-    if (isHrLaneResult(p)) continue;
+    if (isHrLaneResult(p) || isNflTdLaneResult(p)) continue;
     const result = (p.result ?? '').trim().toLowerCase();
     if ((p.game_date ?? '') > today || !['won', 'lost', 'push'].includes(result)) continue;
     settled.push({

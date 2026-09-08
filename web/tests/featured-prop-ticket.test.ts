@@ -3,10 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PropPick } from '@/lib/gary/types';
 
 const feed = vi.hoisted(() => ({ props: [] as PropPick[], error: false }));
-vi.mock('@/lib/gary/picks', () => ({
+vi.mock('@/lib/gary/picks', async importOriginal => ({
+  ...await importOriginal<typeof import('@/lib/gary/picks')>(),
   fetchTodayPropPicks: async () => { if (feed.error) throw new Error('Fixture source unavailable'); return feed.props; },
-  isLongShot: () => false,
-  selectTopProps: (props: PropPick[], count: number) => props.slice(0, count),
 }));
 vi.mock('@/lib/gary/results', () => ({
   fetchPropResultsForDate: async () => [], computePropsRecord: () => ({ wins: 0, losses: 0, pushes: 0, graded: 0 }),
@@ -26,6 +25,16 @@ function descendants(node: ReactNode): ReactElement<{ children?: ReactNode; prop
 beforeEach(() => { feed.props = []; feed.error = false; });
 
 describe('featured prop source identity', () => {
+  it('retains an NFL scorer on its game panel while featuring the highest-confidence core prop', async () => {
+    const scorer: PropPick = { player: 'Scorer', prop: 'anytime_td', sport: 'NFL', confidence: 0.99, matchup: 'Away @ Home', game_id: 222 };
+    const core: PropPick = { player: 'Receiver', prop: 'receptions', sport: 'NFL', confidence: 0.75, matchup: 'Away @ Home', game_id: 222 };
+    feed.props = [scorer, core];
+    const items = descendants(await PropsPage());
+    const featured = items.find(node => typeof node.type === 'function' && node.type.name === 'FeaturedProp');
+    const panels = items.filter(node => typeof node.type === 'function' && node.type.name === 'GamePropPanel');
+    expect(featured?.props.prop).toBe(core);
+    expect(panels.flatMap(node => node.props.props ?? [])).toContain(scorer);
+  });
   it.each([
     { game_id: 'doubleheader-2', bdl_game_id: 999, line: '1.5', expectedId: 'doubleheader-2', expectedLine: 1.5 },
     { bdl_game_id: 42, line: 0, expectedId: '42', expectedLine: 0 },

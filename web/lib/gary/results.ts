@@ -1,5 +1,6 @@
 import { rest, restAll } from './supabase';
 import type { GameResultRow, NflResultRow, PropResultRow } from './types';
+import { isNflAnytimeTd } from './prop-lanes';
 
 import { effectiveOdds } from './odds';
 export { effectiveOdds } from './odds';
@@ -160,9 +161,14 @@ export function isHrLaneResult(r: PropResultRow): boolean {
   return type === 'home_runs' || type === 'home_run' || type === 'home runs';
 }
 
+/** Matches the native NFL-only TD lane; NCAAF and unknown leagues stay core. */
+export function isNflTdLaneResult(r: PropResultRow): boolean {
+  return isNflAnytimeTd(r.sport, r.prop_type, r.pick_text);
+}
+
 /** The rows the props record is computed over: legit, core lane, from the book's start. */
 export function propsBookRows(rows: PropResultRow[]): PropResultRow[] {
-  return rows.filter(r => isLegitPropResult(r) && !isHrLaneResult(r) && (r.game_date ?? '') >= PROPS_BOOK_SINCE);
+  return rows.filter(r => isLegitPropResult(r) && !isHrLaneResult(r) && !isNflTdLaneResult(r) && (r.game_date ?? '') >= PROPS_BOOK_SINCE);
 }
 
 /** Props use the odds COLUMN (text), with pick_text tail as fallback. */

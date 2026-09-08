@@ -116,7 +116,9 @@ export default async function ResultsAuditPage() {
           This record starts September 2, 2026 and covers Gary&rsquo;s core player-prop
           board. Older core player-prop rows remain available in the raw CSV and
           JSON ledgers. The separate Home Run Threat lane is excluded from both
-          this record and those downloads. Some winning rows
+          this record and those downloads. NFL anytime-touchdown fun picks are
+          excluded from this core record and remain available in the raw ledgers.
+          Some winning rows
           have no recorded odds and use the disclosed 0.9-unit fallback in net-unit
           calculations; the exports retain the original missing values.
         </p>

@@ -5,10 +5,12 @@ import { PageMasthead, StitchRule } from '@/components/Terminal';
 import {
   fetchTodayInsights, fetchGradedYesterday, groupInsightsByLane,
   computeHitRate, LANES, LANE_ORDER, type LaneKey,
+  availableHubLeagues, laneNeedsFullDetail,
 } from '@/lib/gary/hub';
 import { todayEST } from '@/lib/gary/dates';
 import type { InsightRow } from '@/lib/gary/types';
 import { pageMetadata } from '@/lib/seo/metadata';
+import { normalizeLeague } from '@/lib/gary/leagues';
 
 export const revalidate = 600;
 
@@ -123,7 +125,12 @@ function InsightGrid({ rows, tint }: { rows: InsightRow[]; tint: Tint }) {
 
 /** Pick the display mode from the lane's position and size — variety with intent,
     not a grid all the way down. */
-function Lane({ laneIdx, rows, tint }: { laneIdx: number; rows: InsightRow[]; tint: Tint }) {
+function Lane({ lane, laneIdx, rows, tint }: { lane: LaneKey; laneIdx: number; rows: InsightRow[]; tint: Tint }) {
+  // Newly surfaced research carries its sample, baseline season or projected
+  // return/start date in detail. Keep those qualifications beside the value.
+  if (laneNeedsFullDetail(lane)) {
+    return <InsightGrid rows={rows.slice(0, 8)} tint={tint} />;
+  }
   if (laneIdx === 0) {
     const [lead, ...rest] = rows;
     return (
@@ -149,7 +156,7 @@ export default async function HubPage() {
 
   const hitRate = gradedYday ? computeHitRate(gradedYday) : null;
   const safeInsights = insights ?? [];
-  const leagues = ['MLB', 'NBA', 'WC'].filter(lg => safeInsights.some(r => (r.league ?? '').toUpperCase() === lg));
+  const leagues = availableHubLeagues(safeInsights);
 
   return (
     <main className="mx-auto max-w-6xl px-5 pb-16 pt-12">
@@ -165,7 +172,7 @@ export default async function HubPage() {
         )}
       </PageMasthead>
 
-      {safeInsights.length === 0 && (
+      {leagues.length === 0 && (
         <div className="mt-7 rounded-panel border border-line bg-card p-7 sm:p-10">
           <p className="text-center text-low">
             No insights are available here yet. Check back as research is published.
@@ -180,13 +187,13 @@ export default async function HubPage() {
       )}
 
       {leagues.map((lg, i) => {
-        const laneMap = groupInsightsByLane(safeInsights.filter(r => (r.league ?? '').toUpperCase() === lg));
+        const laneMap = groupInsightsByLane(safeInsights.filter(r => normalizeLeague(r.league) === lg));
         const lanes = LANE_ORDER.filter(k => laneMap.has(k));
         if (lanes.length === 0) return null;
         return (
           <section key={lg} className={i === 0 ? 'mt-7' : 'mt-16'}>
             {i > 0 && <StitchRule tone="faint" className="mb-10" />}
-            <h2 className="font-display text-2xl uppercase text-hi">{lg === 'WC' ? '2026 World Cup' : lg}</h2>
+            <h2 className="font-display text-2xl uppercase text-hi">{lg}</h2>
             {lanes.map((k: LaneKey, laneIdx: number) => (
               <div key={k} className="mt-7">
                 {/* One heading, not two: the eyebrow used to print the lane's
@@ -197,7 +204,7 @@ export default async function HubPage() {
                   <span className="tnum font-mono text-[11px] text-low">{laneMap.get(k)!.length}</span>
                 </div>
                 <div className="mt-3">
-                  <Lane laneIdx={laneIdx} rows={laneMap.get(k)!} tint={LANES[k].tint} />
+                  <Lane lane={k} laneIdx={laneIdx} rows={laneMap.get(k)!} tint={LANES[k].tint} />
                 </div>
               </div>
             ))}
@@ -205,7 +212,7 @@ export default async function HubPage() {
         );
       })}
 
-      {safeInsights.length > 0 && (
+      {leagues.length > 0 && (
         <AccountCta
           nextPath="/hub"
           title="Turn a read into your own call"

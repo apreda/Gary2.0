@@ -52,8 +52,8 @@ export function PropRow({ prop }: { prop: PropPick }) {
   const read = (prop.rationale ?? prop.analysis ?? '').trim();
   const hasRead = parseScoutSections(read).length > 0;
   const conf = prop.confidence ? Math.round(prop.confidence * 100) : null;
-  // The long shot wears its lane so nobody reads it as a core prop: it is one
-  // home run a game, for the fun of it, and it never enters the props record.
+  // MLB home runs and NFL anytime scorers wear their fun lane so nobody
+  // reads either as a core prop; neither enters the core props record.
   const longShot = isLongShot(prop);
 
   return (

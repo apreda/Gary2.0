@@ -1,3 +1,4 @@
+import { isLongShot } from './prop-lanes';
 export { isLongShot } from './prop-lanes';
 import { rest } from './supabase';
 import { estDateStr, todayEST } from './dates';
@@ -52,9 +53,9 @@ export function selectTopPick(picks: GaryPick[]): GaryPick | null {
   return games.reduce((best, p) => ((p.confidence ?? 0) > (best.confidence ?? 0) ? p : best));
 }
 
-/** Confidence-desc top-N (iOS topProps). */
+/** Confidence-desc core props for Home, Today and the featured prop band. */
 export function selectTopProps(props: PropPick[], n: number): PropPick[] {
-  return [...props].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0)).slice(0, n);
+  return props.filter(p => !isLongShot(p)).sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0)).slice(0, n);
 }
 
 /** Weekly cards belong only on the ET calendar date of each game. */

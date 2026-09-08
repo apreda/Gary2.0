@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parsePicksJson, selectTopPick, selectTopProps } from '@/lib/gary/picks';
+import { isLongShot, parsePicksJson, selectTopPick, selectTopProps } from '@/lib/gary/picks';
 import type { GaryPick, PropPick } from '@/lib/gary/types';
 
 describe('parsePicksJson (iOS PicksValue port)', () => {
@@ -36,6 +36,15 @@ describe('selectTopPick (iOS topPickCandidates port)', () => {
 });
 
 describe('selectTopProps', () => {
+  it('keeps NFL scorers and MLB home-run fun picks out of every core showcase', () => {
+    const props: PropPick[] = [
+      { player: 'NFL scorer', sport: 'NFL', prop: 'anytime_td', confidence: 0.99 },
+      { player: 'MLB long shot', sport: 'MLB HR', prop: 'home_runs', confidence: 0.99 },
+      { player: 'Core receiver', sport: 'NFL', prop: 'receptions', confidence: 0.8 },
+    ];
+    expect(selectTopProps(props, 1).map(p => p.player)).toEqual(['Core receiver']);
+    expect(selectTopProps(props.slice(0, 2), 1)).toEqual([]);
+  });
   it('sorts by confidence desc and takes n', () => {
     const props: PropPick[] = [
       { player: 'A', confidence: 0.6 },
@@ -43,5 +52,17 @@ describe('selectTopProps', () => {
       { player: 'C', confidence: 0.8 },
     ];
     expect(selectTopProps(props, 2).map(p => p.player)).toEqual(['B', 'C']);
+  });
+});
+
+describe('league-specific fun props', () => {
+  it.each(['anytime_td', 'anytime_touchdown', 'td_scorer', 'touchdown_scorer', 'Anytime TD 0.5'])('separates NFL %s from core props', prop => {
+    expect(isLongShot({ sport: 'NFL', prop })).toBe(true);
+    expect(isLongShot({ sport: 'NCAAF', prop })).toBe(false);
+    expect(isLongShot({ prop })).toBe(false);
+  });
+  it('keeps passing/rushing touchdown totals in core props', () => {
+    expect(isLongShot({ sport: 'NFL', prop: 'passing_touchdowns' })).toBe(false);
+    expect(isLongShot({ sport: 'NFL', prop: 'rushing_touchdowns' })).toBe(false);
   });
 });

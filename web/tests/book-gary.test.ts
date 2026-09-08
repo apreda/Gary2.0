@@ -36,6 +36,15 @@ afterEach(() => {
 });
 
 describe('Gary leaderboard comparator', () => {
+  it('keeps NFL anytime-TD fun results out of Gary core comparison without excluding college TDs', async () => {
+    vi.mocked(fetchAllPropResults).mockResolvedValue([
+      prop({ sport: 'NFL', prop_type: 'anytime_td', result: 'lost' }),
+      prop({ sport: 'NCAAF', prop_type: 'anytime_td', result: 'won' }),
+    ]);
+    for (const row of Object.values(await garyBoardRows())) {
+      expect(row).toMatchObject({ wins: 1, losses: 0, units: 1 });
+    }
+  });
   it('uses the same inclusive 7-day and 30-day calendar windows before the slate rollover', async () => {
     vi.mocked(fetchAllGameResults).mockResolvedValue([
       game('2026-08-28'),

@@ -230,7 +230,7 @@ export default async function ResultsPage() {
         <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-mid">
           Props record since Sep 2, 2026: <span className="tnum font-mono text-hi">{propsRec.wins}-{propsRec.losses}</span>{propsRec.graded > 0 ? ` (${propsRec.pct}%)` : ''}.
           The props system was rebuilt on Sep 2, 2026 and the book starts there; every older graded prop stays in the
-          archive by date. Home-run picks are tracked on their own and never count here.
+          archive by date. Home-run picks and NFL anytime-touchdown fun picks never count here.
         </p>
       </section>
 

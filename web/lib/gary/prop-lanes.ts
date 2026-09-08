@@ -1,11 +1,22 @@
 import { normalizeLeague } from './leagues';
 import type { PropPick } from './types';
 
-/**
- * The long shot (sport 'MLB HR'): one home run a game, priced for the fun of
- * it. It publishes as a pick card beside that game's props (founder, Sep 3
- * 2026) and never counts in the props record.
- */
+/** NFL-only anytime-scorer classification, matching the current native lane. */
+export function isNflAnytimeTd(
+  league?: string | null,
+  market?: string | null,
+  pickText?: string | null,
+): boolean {
+  if (normalizeLeague(league) !== 'NFL') return false;
+  return [market, pickText].some(value => {
+    const token = (value ?? '').toLowerCase().replace(/_/g, ' ').trim();
+    return /\banytime[\s-]*(?:td|touchdown)\b/.test(token) ||
+      /^(?:td|touchdown) scorer(?:\s+[+-]?\d+(?:\.\d+)?)?$/.test(token);
+  });
+}
+
+/** Fun picks remain game-adjacent cards, outside the core prop showcase. */
 export function isLongShot(p: PropPick): boolean {
-  return normalizeLeague(p.league, p.sport) === 'MLB HR';
+  const league = normalizeLeague(p.league, p.sport);
+  return league === 'MLB HR' || isNflAnytimeTd(league, p.prop);
 }
