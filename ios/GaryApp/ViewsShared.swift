@@ -611,7 +611,10 @@ enum BillfoldCompute {
                 continue
             }
 
-            guard let result = resultLookup["\(row.date)|\(row.pickText)"] else {
+            // The lookup also preserves graded preseason pick-card stamps;
+            // only eligible results may enter this performance calculation.
+            guard let result = resultLookup["\(row.date)|\(row.pickText)"],
+                  !result.isPreseasonResult else {
                 continue
             }
 
@@ -860,6 +863,9 @@ enum BillfoldCompute {
         cutoff: Date?,
         selectedSport: Sport
     ) -> [GameResult] {
+        // Full loads, sport taps and independent spread refreshes all enter
+        // here. Keep record eligibility consistent across every control path.
+        let rows = rows.countable
         let filteredByTime = cutoffKey(cutoff).map { key in
             rows.filter { dateKey($0.game_date) >= key }
         } ?? rows
