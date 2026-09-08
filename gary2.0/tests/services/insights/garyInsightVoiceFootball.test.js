@@ -40,3 +40,42 @@ describe('football Hub copy integrity', () => {
     expect(sessions.send).not.toHaveBeenCalled();
   });
 });
+
+describe('MLB Hub research copy integrity', () => {
+  const row = () => ({ category: 'heat_check', headline: 'Fixture Hitter: .312 AVG',
+    detail: 'Fixture Hitter is 10-for-32 over the last 8 games, with a .312 AVG.',
+    game: 'FIX @ OPP', value: '.312', meta: {} });
+
+  it('never sends deterministic bullpen evidence through the generic model', async () => {
+    const rows = [{ ...row(), category: 'bullpen_fatigue', detail: 'Fixture Arm threw 40 pitches across two games; the team had no game yesterday.' }];
+    const before = structuredClone(rows);
+    expect(await applyGaryVoice(rows, { league: 'MLB' })).toEqual(before);
+    expect(sessions.create).not.toHaveBeenCalled();
+    expect(sessions.send).not.toHaveBeenCalled();
+  });
+
+  it('uses the shared research rules and accepts only the same supplied sample', async () => {
+    sessions.create.mockResolvedValue({});
+    sessions.send.mockResolvedValue({ content: '{"reads":[{"i":0,"take":"Over the last 8 games, Fixture Hitter has a .312 AVG on 10-for-32 hitting."}]}' });
+    const [result] = await applyGaryVoice([row()], { league: 'MLB' });
+    expect(result.detail).toBe('Over the last 8 games, Fixture Hitter has a .312 AVG on 10-for-32 hitting.');
+    expect(result.meta.evidence).toBe(row().detail);
+    expect(sessions.create.mock.calls[0][0].systemPrompt).toContain('No betting recommendation');
+  });
+
+  it.each([
+    [{ i: 0, take: 'I want the opposing bats against this bullpen.' }],
+    [{ i: 0, take: 'Fixture Hitter is 14-for-32 over the last 8 games.' }],
+    [{ i: 0, take: 'The pitcher has a 0.312 xERA.' }],
+    [{ i: 0, take: 'First answer.' }, { i: 0, take: 'Conflicting answer.' }],
+    [{ i: '0', take: 'A numeric string must not identify a row.' }],
+    [{ i: 0, take: true }],
+    [{ i: 0, take: { text: 'Malformed object response' } }],
+  ])('keeps the observed detail when a rewrite is unsupported or ambiguous (%j)', async (...entries) => {
+    sessions.create.mockResolvedValue({});
+    sessions.send.mockResolvedValue({ content: JSON.stringify({ reads: entries }) });
+    const [result] = await applyGaryVoice([row()], { league: 'MLB' });
+    expect(result.detail).toBe(row().detail);
+    expect(result.meta.evidence).toBeUndefined();
+  });
+});

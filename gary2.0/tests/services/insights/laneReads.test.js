@@ -1,9 +1,6 @@
 /**
- * THE GARY LAYER pins (Aug 5 2026 — the founder's "there's a lot of things in
- * the hub that could use some real rationale" pass). Every hub lane now hands
- * its shipped rows to one batched Gary read; these pin the contract that pass
- * runs under: fenced to the lane's own facts, only what ships gets written,
- * and a failure never costs the page its computed detail.
+ * Optional Hub research rewrites retain the lane's evidence and sample;
+ * recommendations, new numbers and ambiguous response slots keep the source.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -26,7 +23,7 @@ const row = (i, over = {}) => ({
 
 const readsFor = (n) => JSON.stringify({
   reads: Array.from({ length: n }, (_, i) => ({
-    i, read: `Gary read ${i} — ${'x'.repeat(70)}`,
+    i, read: 'The measured batting average is .312; the stated matchup is Reds at Cubs.',
   })),
 });
 
@@ -35,7 +32,7 @@ beforeEach(() => generateSolText.mockReset());
 describe('detailFact', () => {
   it('builds the sheet from the row the computer already wrote', () => {
     expect(detailFact(row(1))).toBe(
-      'Row 1 headline (.311). Row 1 computed detail with a number, .312. Tonight: Reds at Cubs.',
+      'Row 1 headline (.311). Row 1 computed detail with a number, .312. Matchup: Reds at Cubs.',
     );
   });
 
@@ -50,7 +47,7 @@ describe('attachLaneReads', () => {
     generateSolText.mockResolvedValue(readsFor(1));
     const rows = [row(1)];
     await attachLaneReads('testLane', rows, detailFact, { ask: 'what it means' });
-    expect(rows[0].detail).toMatch(/^Gary read 0/);
+    expect(rows[0].detail).toMatch(/^The measured batting average is .312/);
     expect(rows[0].meta.computed_detail).toBe('Row 1 computed detail with a number, .312.');
     expect(rows[0].meta.read).toBe(rows[0].detail);
   });
@@ -80,9 +77,12 @@ describe('attachLaneReads', () => {
     await attachLaneReads('testLane', [row(1)], detailFact, { ask: 'what it means' });
     const prompt = generateSolText.mock.calls[0][0];
     expect(prompt).toContain('never as an AI');
-    expect(prompt).toContain('they are ALL you may use');
+    expect(prompt).toContain('facts are ALL you may use');
     expect(prompt).toContain('no emojis');
-    expect(prompt).toContain('never mention data feeds, tools, or missing data');
+    expect(prompt).toContain('Never mention data feeds or tools');
+    expect(prompt).toContain('missing comparison or uncertain status materially limits');
+    expect(prompt).toContain('No betting recommendation, first-person preference');
+    expect(prompt).not.toContain('Never restate the item back');
   });
 
   it('a model failure costs nothing — the computed detail still ships', async () => {
@@ -99,6 +99,55 @@ describe('attachLaneReads', () => {
     const rows = [row(1)];
     await attachLaneReads('testLane', rows, detailFact, { ask: 'x' });
     expect(rows[0].detail).toBe('Row 1 computed detail with a number, .312.');
+  });
+
+  it.each([
+    'I want the Mariners bats against this bullpen after the reported workload; that is the side I prefer.',
+    'The remaining relievers have a 6.20 ERA, which is higher than their recorded season performance.',
+    'The pitcher has an xERA of .312; that expected measurement supplies another comparison with the season.',
+  ])('keeps the actual source when the model adds advice or unsupported analysis: %s', async read => {
+    const rows = [row(1)];
+    const original = rows[0].detail;
+    generateSolText.mockResolvedValue(JSON.stringify({ reads: [{ i: 0, read }] }));
+    await attachLaneReads('testLane', rows, detailFact);
+    expect(rows[0].detail).toBe(original);
+    expect(rows[0].meta.computed_detail).toBe(original);
+    expect(rows[0].meta.read).toBeUndefined();
+  });
+
+  it('does not borrow another row’s number or the response index as evidence', async () => {
+    const rows = [row(7), row(8, { detail: 'The second source reports a 6.20 ERA over the measured sample.' })];
+    const original = rows[0].detail;
+    generateSolText.mockResolvedValue(JSON.stringify({ reads: [{ i: 0,
+      read: 'The reported ERA is 6.20 across the measured sample; the recorded matchup is Reds at Cubs.' }] }));
+    await attachLaneReads('testLane', rows, detailFact);
+    expect(rows[0].detail).toBe(original);
+    generateSolText.mockResolvedValue(JSON.stringify({ reads: [{ i: 0,
+      read: 'The pitcher allowed 0 earned runs in the measured sample; the recorded matchup is Reds at Cubs.' }] }));
+    await attachLaneReads('testLane', rows, detailFact);
+    expect(rows[0].detail).toBe(original);
+  });
+
+  it('accepts a measured comparison with its sample and a material missingness limit', async () => {
+    const rows = [row(1, {
+      headline: 'A reliever threw 18 pitches', value: '18 P',
+      detail: 'The reliever threw 18 pitches in his last appearance. No availability report is supplied.',
+    })];
+    const read = 'The reliever threw 18.0 pitches in his last appearance. His availability is not reported.';
+    generateSolText.mockResolvedValue(JSON.stringify({ reads: [{ i: 0, read }] }));
+    await attachLaneReads('testLane', rows, detailFact);
+    expect(rows[0].detail).toBe(read);
+  });
+
+  it('rejects duplicate, string, negative and unknown slots while retaining an unambiguous valid row', async () => {
+    const rows = [row(1), row(2)], original = rows[0].detail;
+    const read = 'The measured batting average is .312; the stated matchup is Reds at Cubs.';
+    generateSolText.mockResolvedValue(JSON.stringify({ reads: [
+      { i: 0, read }, { i: 0, read }, { i: '1', read }, { i: -1, read }, { i: 12, read }, { i: 1, read },
+    ] }));
+    await attachLaneReads('testLane', rows, detailFact);
+    expect(rows[0].detail).toBe(original);
+    expect(rows[1].detail).toBe(read);
   });
 
   it('no rows, no call', async () => {

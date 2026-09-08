@@ -51,7 +51,9 @@ describe('Hub baseball innings evidence', () => {
     expect(rows[0].headline).toContain('12.2 relief IP');
     expect(rows[0].meta.relief_ip).toBe(12.2);
     expect(rows[0].meta.arms[0].ip).toBe(12.2);
-    expect(mocks.read.mock.calls[0][0]).toContain('Fixture Reliever 12.2 IP');
+    expect(rows[0].detail).toContain('Fixture Reliever worked all 3 games (120 pitches)');
+    expect(rows[0].detail).toContain('Sep 5–Sep 7');
+    expect(mocks.read).not.toHaveBeenCalled();
   });
 });
 

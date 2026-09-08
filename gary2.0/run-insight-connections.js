@@ -55,6 +55,7 @@ Judgments are opt-in; ordinary daily stages use the observational default.`);
 
 // Import after env is loaded (services read env at module init time)
 const { generateInsightConnections } = await import('./src/services/insights/generateInsightConnections.js');
+const { shouldUpgradeBullpenEvidence } = await import('./src/services/insights/computers/bullpenFatigue.js');
 const { buildPlayerInsightCards } = await import('./src/services/insights/playerInsightCards.js');
 const { ballDontLieService } = await import('./src/services/ballDontLieService.js');
 const { buildLeaguePulse } = await import('./src/services/insights/leaguePulse.js');
@@ -440,7 +441,7 @@ async function existingRowsForPatch(date, league) {
     params: {
       date: `eq.${date}`,
       league: `eq.${league}`,
-      select: 'id,category,headline,game,player_id,team_id,game_id,meta',
+      select: 'id,date,category,headline,game,player_id,team_id,game_id,meta,result',
       limit: 500,
     },
   });
@@ -448,7 +449,7 @@ async function existingRowsForPatch(date, league) {
 }
 
 /** PATCH one stored row by primary key. */
-async function patchRowById(id, patch, expectedMeta) {
+async function patchRowById(id, patch, expectedMeta, scope = {}) {
   await axios({
     method: 'PATCH',
     url: REST_URL,
@@ -456,7 +457,7 @@ async function patchRowById(id, patch, expectedMeta) {
     // Compare its short atomic revision so an intervening judgment wins;
     // the repair may safely retry during a later ordinary run. Never put
     // the complete case/lineup packet in a request URL.
-    params: { id: `eq.${id}`, ...hubJudgmentRevisionFilter(expectedMeta) },
+    params: { id: `eq.${id}`, ...hubJudgmentRevisionFilter(expectedMeta), ...scope },
     data: JSON.parse(JSON.stringify(patch)),
     headers: { ...restHeaders, Prefer: 'return=minimal' },
   });
@@ -1145,11 +1146,22 @@ async function run() {
               && !Array.isArray(s.meta?.meetings));
           const needsFantasyEvidenceUpgrade = shouldUpgradeFootballFantasyEvidence(s, r);
           const needsMarketVendorRepair = shouldRepairFootballMarketVendor(s, r);
-          if (!needsVoice && !needsId && !needsEnrich && !needsFantasyEvidenceUpgrade && !needsMarketVendorRepair) continue;
+          // Founder Sep 8: replace the current ungraded bullpen's speculative
+          // prose with named, dated facts. Historical observations stay frozen.
+          const needsBullpenEvidenceUpgrade = shouldUpgradeBullpenEvidence(s, r, getESTDate());
+          // The older generic voice/enrichment repairs must not bypass the
+          // bullpen's date and grading protection on pre-voice historical rows.
+          if (r.category === 'bullpen_fatigue' && !needsBullpenEvidenceUpgrade) continue;
+          if (!needsVoice && !needsId && !needsEnrich && !needsFantasyEvidenceUpgrade && !needsMarketVendorRepair && !needsBullpenEvidenceUpgrade) continue;
           const patch = {};
-          if (needsVoice || needsEnrich || needsFantasyEvidenceUpgrade || needsMarketVendorRepair) {
+          if (needsVoice || needsEnrich || needsFantasyEvidenceUpgrade || needsMarketVendorRepair || needsBullpenEvidenceUpgrade) {
             patch.detail = r.detail;
             patch.meta = { ...(s.meta || {}), ...(r.meta || {}) };
+          }
+          if (needsBullpenEvidenceUpgrade) {
+            patch.tone = r.tone;
+            patch.headline = r.headline;
+            patch.value = r.value;
           }
           if (needsFantasyEvidenceUpgrade || needsMarketVendorRepair) {
             // This is the one content transition that may change already-shown
@@ -1168,7 +1180,10 @@ async function run() {
             patch.player_id = String(r.player_id);
             if (s.team_id == null && r.team_id != null) patch.team_id = String(r.team_id);
           }
-          await patchRowById(s.id, patch, s.meta);
+          await patchRowById(s.id, patch, s.meta, needsBullpenEvidenceUpgrade ? {
+            date: `eq.${targetDate}`, league: 'eq.MLB', category: 'eq.bullpen_fatigue', result: 'is.null',
+            team_id: `eq.${r.team_id}`, game_id: `eq.${r.game_id}`,
+          } : {});
           patched++;
         }
       } catch (e) {

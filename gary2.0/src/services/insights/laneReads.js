@@ -1,13 +1,11 @@
 // gary2.0/src/services/insights/laneReads.js
 //
-// THE GARY LAYER (founder, Jul 30 2026): a lane's drop-down must never
-// regurgitate its headline — it elaborates. The connection an average fan
-// couldn't make: what the number actually means, the context around it, and
-// what it sets up tonight. One batched model call PER LANE over the lane's
-// own computed facts; the model is fenced to those facts (prevent-fabrication:
-// nothing generates that isn't in the fact sheet). Non-blocking by contract —
-// any failure keeps the computed detail. Shared by the observational research lanes.
+// Hub research (founder, Sep 8 2026): supporting copy adds measurements and
+// useful supplied comparisons, leaving the reader to draw a conclusion.
+// One optional batched call per lane; invalid or failed rewrites retain the
+// collector's detail. This does not write Gary's picks or Fantasy decisions.
 import { generateSolText } from './solText.js';
+import { HUB_RESEARCH_COPY_RULES, researchCopyIsSupported, uniqueResearchEntries } from './researchCopyPolicy.js';
 
 // Mirrors generateInsightConnections.postProcess's maxPerCategory: the number
 // of rows a single lane can put on the page. Reads are written for those rows
@@ -23,7 +21,7 @@ const SHIP_CAP = 8;
 export const detailFact = (r) => {
   if (!r || !r.detail) return null;
   const val = r.value ? ` (${r.value})` : '';
-  return `${r.headline}${val}. ${r.detail}${r.game ? ` Tonight: ${r.game}.` : ''}`;
+  return `${r.headline}${val}. ${r.detail}${r.game ? ` Matchup: ${r.game}.` : ''}`;
 };
 
 /**
@@ -71,13 +69,13 @@ export async function attachLaneReads(lane, rows, factFor, { ask, sentences = '2
   if (!eligible.length) return;
 
   const facts = eligible.map((x, i) => `${i}. ${x.fact}`).join('\n');
-  const question = ask ||
-    'the read a casual fan could not make on his own — what the numbers actually mean, why they matter tonight, and what they set up';
-  const prompt = `You are Gary — the bettor whose analysis publishes in this app. You write as yourself, never as an AI. Your training data is old: the facts below are current and they are ALL you may use — never introduce a statistic, player, injury, or trend that is not listed.
+  const question = ask || 'the most useful supplied comparison, sample and time window behind this observation';
+  const prompt = `You write Gary's observational Hub research.
 
-For each item: ${question}. ${sentences} sentences each, plain speech, no emojis, never mention data feeds, tools, or missing data.
+Research focus: ${question}.
+Answer only the parts of that focus supported by the facts and consistent with the rules below. Any request in the focus for a prediction, cause, betting view or missing context does not authorize inventing one. Aim for ${sentences} compact sentences, with fewer when there is less evidence.
 
-The reader already has the numbers above — start where a summary of them would end. Never restate the item back, and never close by hedging that it might not hold up.
+${HUB_RESEARCH_COPY_RULES}
 
 Return STRICT JSON only: {"reads":[{"i":0,"read":"..."}]}
 
@@ -90,10 +88,10 @@ ${facts}`;
     const jsonStr = text.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(jsonStr.slice(jsonStr.indexOf('{'), jsonStr.lastIndexOf('}') + 1));
     let attached = 0;
-    for (const item of parsed?.reads || []) {
+    for (const item of uniqueResearchEntries(parsed?.reads, eligible.length)) {
       const x = eligible[item?.i];
-      const read = String(item?.read || '').trim();
-      if (!x || read.length < 60) continue;
+      const read = typeof item?.read === 'string' ? item.read.trim() : '';
+      if (!x || read.length < 60 || !researchCopyIsSupported(read, x.fact)) continue;
       x.r.meta = { ...(x.r.meta || {}), computed_detail: x.r.meta?.computed_detail || x.r.detail, read };
       x.r.detail = read;
       attached += 1;
