@@ -5,7 +5,7 @@
 // meeting (the revenge spot). The angle a bettor knows about their OWN team but
 // not about a team they're fading because they don't follow it.
 //
-// Pure data, $0: this season's head-to-head FINALS pulled straight from the
+// Pure data, $0: this regular season's head-to-head FINALS pulled straight from the
 // BDL season game index (getMlbSeasonGameIndex) — every real game between the two
 // teams, with home/away ids + runs + date. No external call beyond the index the
 // other team-level computers already cache.
@@ -35,43 +35,48 @@ const MAX_ROWS = 20;
 const RELEVANCE_SCALE = 13;
 
 const isFinal = (g) => String(g?.status || '').toUpperCase().includes('FINAL');
+const regularSeason = (g) => g?.seasonType === 'regular' && g?.postseason === false;
+const validRuns = value => ['number', 'string'].includes(typeof value) && String(value).trim() !== ''
+  && Number.isInteger(Number(value)) && Number(value) >= 0;
 const decided = (g) =>
-  isFinal(g) && Number.isFinite(Number(g?.homeRuns)) && Number.isFinite(Number(g?.awayRuns))
+  isFinal(g) && validRuns(g?.homeRuns) && validRuns(g?.awayRuns)
   && Number(g.homeRuns) !== Number(g.awayRuns);
+const instant = value => typeof value === 'string' && /T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value)
+  && Number.isFinite(Date.parse(value)) ? Date.parse(value) : null;
+const easternDay = value => new Date(value).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 
-export async function computeHeadToHead(ctx) {
-  const { games, season, bdl, helpers } = ctx;
-
-  let index;
-  try {
-    index = await bdl.getMlbSeasonGameIndex(season);
-  } catch (err) {
-    console.error('[headToHead] season index error:', err?.message || err);
-    return [];
-  }
-  if (!index || typeof index.values !== 'function') return [];
-  const seasonGames = [...index.values()].filter(decided);
+/** Pure construction also supports a reviewed factual repair without rerunning
+ * unrelated collectors or paying for the optional legacy prose layer. */
+export function buildHeadToHeadRows(ctx, index) {
+  const { games = [], season, helpers, date } = ctx;
+  if (!index || typeof index.entries !== 'function') return [];
+  // The shared provider index deliberately contains spring training and
+  // postseason too. A calendar date or postseason:false cannot establish
+  // regular-season scope: the provider's explicit seasonType must agree.
+  const seasonGames = [...index.entries()].map(([id, game]) => ({ ...game, sourceGameID: String(id) }))
+    .filter(g => regularSeason(g) && decided(g));
 
   const candidates = [];
-  let examined = 0;
 
   for (const game of games) {
-    // Finals are NOT skipped (founder, Aug 6: a finished game's card was
-    // still drawing the old prose format because its row could never be
-    // recomputed, so the meetings ledger had nothing to backfill from). A
-    // season series is history either way, and this lane now renders only on
-    // the game's own page — where a finished game showing its series reads
-    // correctly rather than as dead "tonight" content.
+    // A finished game's page may retain its history, but a historical rebuild
+    // cannot turn that game's own result or later finals into pregame context.
     const gameId = game?.id;
     const home = { id: game?.home_team?.id, abbr: game?.home_team?.abbreviation, name: game?.home_team?.name };
     const away = { id: game?.away_team?.id, abbr: game?.away_team?.abbreviation, name: game?.away_team?.name };
     if (gameId == null || home.id == null || away.id == null) continue;
-    examined += 1;
+    const cutoff = [game.datetime, game.date, game.commence_time, game.start_time_utc]
+      .map(instant).find(value => value != null);
+    const cutoffDay = /^\d{4}-\d{2}-\d{2}$/.test(date || '') ? date : null;
 
-    // Every decided game between THESE two teams this season.
-    const h2h = seasonGames.filter((g) =>
-      (g.homeId === home.id && g.awayId === away.id) || (g.homeId === away.id && g.awayId === home.id),
-    );
+    // Strict chronological scope keeps separate doubleheader games separate.
+    // If today's start is unknown, only prior Eastern dates establish history.
+    const h2h = seasonGames.filter(g => {
+      const at = instant(g.date);
+      return g.sourceGameID !== String(gameId) && at != null
+        && (cutoff != null ? at < cutoff : cutoffDay != null && easternDay(at) < cutoffDay)
+        && ((g.homeId === home.id && g.awayId === away.id) || (g.homeId === away.id && g.awayId === home.id));
+    });
     if (h2h.length < MIN_GAMES) continue;
     h2h.sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));   // oldest -> newest
 
@@ -158,12 +163,27 @@ export async function computeHeadToHead(ctx) {
           };
         }),
         season,
+        season_type: 'regular',
+        source: 'BALLDONTLIE completed regular-season games',
+        ...(cutoff != null ? { history_before: new Date(cutoff).toISOString() }
+          : { history_before_date: cutoffDay }),
       },
     }));
   }
 
   candidates.sort((a, b) => b.relevance_score - a.relevance_score);
-  const rows = candidates.slice(0, MAX_ROWS);
+  return candidates.slice(0, MAX_ROWS);
+}
+
+export async function computeHeadToHead(ctx) {
+  let index;
+  try {
+    index = await ctx.bdl.getMlbSeasonGameIndex(ctx.season);
+  } catch (err) {
+    console.error('[headToHead] season index error:', err?.message || err);
+    return [];
+  }
+  const rows = buildHeadToHeadRows(ctx, index);
 
   // THE GARY LAYER (founder, Aug 5). This lane can headline the page, and a
   // bare season series ("did good last time") is the emptiest read there is —
@@ -180,7 +200,7 @@ export async function computeHeadToHead(ctx) {
     ask: "what this season series actually means for tonight — whether anything in the matchup explains it (arms they've faced, where the games were played, how they were won) or it is just history that has no hold on tonight",
   });
 
-  console.log(`[headToHead] examined ${examined}, emitted ${rows.length}`);
+  console.log(`[headToHead] emitted ${rows.length}`);
   return rows;
 }
 
