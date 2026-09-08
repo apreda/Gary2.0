@@ -14,6 +14,31 @@ Reports retain the public identity snapshot, reason, optional details, reporter 
 
 Public help and appeals: https://www.betwithgary.ai/terms#profile-safety and support@betwithgary.ai (subject: Gary profile safety). This URL is used by both client implementations. No new support message or fake production report was created for this work.
 
+### Operator commands
+
+The local operator now has a tested command interface in the canonical checkout's `gary2.0` directory. It uses the authenticated Supabase CLI and existing privileged review RPC; it adds no public endpoint or client privilege.
+
+```sh
+node scripts/profile-safety.js status
+node scripts/profile-safety.js queue
+node scripts/profile-safety.js show REPORT_UUID
+```
+
+`status` returns the open count, oldest open report, count older than 24 hours and last review. It is safe for a status check without exposing profile/report details. `queue` lists the oldest 50 report references, reasons and times. `show` displays that report's saved public snapshot alongside the current identity; treat this output as private. The reporter identity is deliberately excluded from these operator commands.
+
+After reviewing the evidence, save a factual decision note in a private local text file. A decision previews without writing until the operator supplies `--apply`:
+
+```sh
+node scripts/profile-safety.js hide REPORT_UUID --reviewer "Operator name" --note-file /private/path/decision.txt
+node scripts/profile-safety.js hide REPORT_UUID --reviewer "Operator name" --note-file /private/path/decision.txt --apply
+node scripts/profile-safety.js dismiss REPORT_UUID --reviewer "Operator name" --note-file /private/path/decision.txt --apply
+node scripts/profile-safety.js restore PROFILE_UUID --reviewer "Operator name" --note-file /private/path/appeal.txt --apply
+```
+
+Hide/dismiss resolve the subject from the selected open report; the existing locked RPC checks that it is still open before changing anything. Restore uses the actual profile UUID from a reviewed appeal. All actions use the existing private audit log. The command does not delete accounts, modify bets or automatically punish a reported profile. Notes are passed via a private temporary SQL file and removed after the command; no shell interpolation is used.
+
+**September 8 verification:** all 15 isolated PostgreSQL profile-safety cases passed, including the operator's report inspection, exact-subject hide, literal SQL-like note preservation, stale-report rejection, appeal restoration and unchanged bets. A read-only production status call through the actual command succeeded: zero open reports and no recorded moderation decisions. No synthetic production report or decision was created. Inbox delivery, the responsible human and actual response coverage remain separate checks; do not mark staffing complete from this tooling receipt.
+
 1. The named operator checks the restricted queue and support mailbox at the beginning and end of each staffed period, with urgent threats escalated promptly. Record the actual staffed schedule and a backup operator before launch. Do not promise a response deadline without coverage to meet it.
 2. Use a privileged database session or a service credential held only in a server/secret store. Review the oldest open reports, their saved public snapshot and current public identity. Keep identifiers and report details out of application logs, chat, commits and public issue trackers. The report has no moderator-facing claim of proof; evaluate it in context.
 3. Hide a violating public profile, dismiss a report that does not justify action, or restore a corrected profile after an appeal. Supply an identifiable operator label and a short factual reason. Do not change bets, results, global qualification rules or the user's public opt-in preference. A report alone is never a ranking penalty.

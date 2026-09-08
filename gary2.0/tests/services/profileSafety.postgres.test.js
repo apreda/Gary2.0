@@ -3,6 +3,7 @@ import { execFileSync, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { accessSync, constants, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
+import { profileSafetyReadQuery, profileSafetyDecisionQuery } from '../../scripts/lib/profileSafetyAdmin.js';
 
 const run = promisify(execFile);
 const pgEnv = { ...process.env, LC_ALL: 'C' };
@@ -65,6 +66,33 @@ describe.skipIf(!supported)('public profile safety on isolated PostgreSQL', () =
   }, 40000);
   afterAll(cleanup);
   beforeEach(seed);
+
+  it('lets the operator inspect, decide and restore through the existing private audit workflow', () => {
+    const receipt = report(25, 1, 'harassment', 'Fixture report for operator review');
+    expect(JSON.parse(sql(`select row_to_json(s) from (${profileSafetyReadQuery('status').replace(/;\s*$/, '')}) s;`)).open_reports).toBe(1);
+    const queue = JSON.parse(sql(`select row_to_json(s) from (${profileSafetyReadQuery('queue').replace(/;\s*$/, '')}) s;`));
+    expect(Object.keys(queue).sort()).toEqual(['created_at', 'id', 'reason']);
+    const details = JSON.parse(sql(`select row_to_json(s) from (${profileSafetyReadQuery('show', receipt.report_id).replace(/;\s*$/, '')}) s;`));
+    expect(details.subject_id).toBe(uid(1));
+    expect(details.current_identity.handle).toBe('Player01');
+    const note = "Reviewed quote: '; delete from public.user_bets; -- \\ $$ — no SQL execution";
+    sql(profileSafetyDecisionQuery({ action: 'hide', reference: receipt.report_id, reviewer: 'Test operator', note }));
+    expect(card(24, 1)).toBe(true);
+    expect(card(24, 2)).toBe(false);
+    expect(sql('select note from profile_safety_private.review_log;')).toBe(note);
+    expect(sql('select count(*) from public.user_bets;')).toBe('625');
+    expect(() => sql(profileSafetyDecisionQuery({ action: 'dismiss', reference: receipt.report_id, reviewer: 'Test operator', note: 'Already handled' }))).toThrow();
+    sql(profileSafetyDecisionQuery({ action: 'restore', reference: uid(1), reviewer: 'Test operator', note: 'Appeal reviewed; fixture corrected' }));
+    expect(card(24, 1)).toBe(false);
+    expect(sql('select count(*) from profile_safety_private.review_log;')).toBe('2');
+  });
+
+  it('rejects malformed operator references and incomplete decisions before accessing the database', () => {
+    expect(() => profileSafetyReadQuery('show', "';select 1;--")).toThrow();
+    expect(() => profileSafetyDecisionQuery({ action: 'delete', reference: uid(1), reviewer: 'Operator', note: 'Reason' })).toThrow();
+    expect(() => profileSafetyDecisionQuery({ action: 'hide', reference: uid(1), reviewer: '', note: 'Reason' })).toThrow();
+    expect(() => profileSafetyDecisionQuery({ action: 'hide', reference: uid(1), reviewer: 'Operator', note: ' ' })).toThrow();
+  });
 
   it('filters blocked profiles before pagination but preserves everyone’s global rank, counts and scores', () => {
     const before = board(25, 1);
