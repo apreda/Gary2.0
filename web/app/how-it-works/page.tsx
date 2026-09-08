@@ -32,7 +32,7 @@ const faqItems = [
   {
     question: 'Does Gary place bets?',
     answer:
-      'No. Gary is for informational and entertainment purposes only. We do not facilitate gambling, accept deposits, or place bets on anyone\'s behalf.',
+      'No. Gary provides sports analysis and personal tracking. We do not accept wagering deposits or place bets on anyone\'s behalf.',
   },
   {
     question: 'How is the track record calculated?',

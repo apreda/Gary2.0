@@ -168,8 +168,7 @@ export function WinnersClient() {
                 <h2 className="font-display text-2xl text-hi">A board is earned.</h2>
                 <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-mid">
                   No Winners have been published for this view. Gary publishes only tickets that pass review;
-                  an empty board is a valid result. Try another sport or return as today&apos;s reviews
-                  finish.
+                  an empty board is a valid result. Try another sport or board date.
                 </p>
               </div>
             )

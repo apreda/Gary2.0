@@ -23,7 +23,7 @@ export const BRAND = {
   boilerplateLong:
     `Gary AI is a sports-analysis product built for fans who want to see what AI thinks about their game. Published game picks, written reasoning, available props, the Hub and public graded record stay free. ${ACTIVE_COVERAGE} Gary uses a sport-specific data desk; MLB also uses a research assistant. Winners is a separately reviewed shortlist of exact published tickets. Confidence expresses model judgment, not a calibrated win probability, and no review guarantees accuracy or profit. Your Book supports private manual bet tracking and verified tail/fade comparisons without placing wagers. ${LAUNCH_OFFER} After the preview, other accounts can choose Winners from $9.99/month per sport or All-Access. Gary is available on web and iOS for informational and entertainment purposes.`,
   disclaimer:
-    "Gary is for informational and entertainment purposes only. We don't facilitate gambling, accept deposits, or place bets. 18+. If you or someone you know has a gambling problem, call 1-800-GAMBLER.",
+    "Gary is for informational and entertainment purposes only. We don't accept wagering deposits or place bets. 18+. If you or someone you know has a gambling problem, call 1-800-GAMBLER.",
 };
 
 export async function liveStats() {

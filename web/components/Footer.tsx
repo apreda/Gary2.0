@@ -89,8 +89,8 @@ export function Footer() {
         <StitchRule tone="faint" className="mt-10" />
 
         <p className="mt-6 text-[13px] leading-relaxed text-low">
-          Gary is for informational and entertainment purposes only. We don&apos;t facilitate
-          gambling, accept deposits, or place bets. 18+. If you or someone you know has a
+          Gary is for informational and entertainment purposes only. We don&apos;t accept
+          wagering deposits or place bets. 18+. If you or someone you know has a
           gambling problem, call 1-800-GAMBLER.
         </p>
         <p className="mt-4 font-mono text-[11px] text-faint">

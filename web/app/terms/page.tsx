@@ -52,15 +52,15 @@ export default function TermsPage() {
             </li>
             <li>
               <strong className="text-hi">iOS App:</strong> A free-to-download companion app
-              offering the same free content plus optional features (push notifications,
-              personalized notifications) available after creating an optional account via
-              email, Apple Sign-In, or Google Sign-In, and optional paid subscriptions
-              (Winners boards and passes) billed through Stripe.
+              offering free sports analysis and optional notifications with your permission.
+              An optional account via email, Apple Sign-In, or Google Sign-In adds personal
+              tracking and account-specific result alerts. Optional paid subscriptions
+              (Winners boards and passes) are billed through Stripe.
             </li>
           </ul>
           <p className="mt-3">
-            We do not place bets on your behalf, accept deposits, or facilitate wagering of any
-            kind. All wagering decisions and financial risk are yours alone. Content is provided
+            We do not place bets on your behalf, accept wagering deposits, or hold wagering
+            balances. All wagering decisions and financial risk are yours alone. Content is provided
             for informational and entertainment purposes only — no real-money wagering occurs
             within our platform, and past performance does not guarantee future results.
           </p>

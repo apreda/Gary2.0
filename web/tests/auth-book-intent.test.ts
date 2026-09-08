@@ -26,12 +26,22 @@ describe('book auth intent', () => {
   });
 
   it('keeps prop identity stable and encodes it into the account return URL', () => {
-    expect(propIntentKey('Luis Castillo', 'strikeouts')).toBe('prop:luis castillo:strikeouts');
+    const key = propIntentKey(' Luis Castillo ', 'STRIKEOUTS', 'game-2', 5.5, ' Over ');
+    expect(key).toBe('prop:v2:["luis castillo","strikeouts","game-2",5.5,"over"]');
     expect(bookIntentAccountHref('/props', {
       kind: 'prop',
       side: 'fade',
-      key: 'prop:luis castillo:strikeouts',
+      key: key!,
     })).toContain('next=%2Fprops%3Fbook_kind%3Dprop');
+  });
+
+  it('distinguishes doubleheaders, alternate lines and sides without inventing missing identity', () => {
+    const base = propIntentKey('Judge', 'hits', 'game-1', 1.5, 'over');
+    expect(propIntentKey('Judge', 'hits', 'game-2', 1.5, 'over')).not.toBe(base);
+    expect(propIntentKey('Judge', 'hits', 'game-1', 0.5, 'over')).not.toBe(base);
+    expect(propIntentKey('Judge', 'hits', 'game-1', 1.5, 'under')).not.toBe(base);
+    expect(propIntentKey('Judge', 'hits')).toBeNull();
+    expect(propIntentKey('Judge', 'hits', 'game-1', Number.NaN, 'over')).toBeNull();
   });
 
   it('clears only transient Book keys after the UI resumes', () => {

@@ -55,8 +55,8 @@ export default function AboutPage() {
           </p>
           <p>
             The service publishes sports analysis for informational and entertainment
-            purposes. It is not a sportsbook: it does not accept deposits, hold funds,
-            facilitate wagering, or place bets for users.
+            purposes. It is not a sportsbook: it does not accept wagering deposits, hold
+            wagering balances, or place bets for users.
           </p>
         </div>
       </section>

@@ -23,6 +23,7 @@ import {
 import { parseGameTime } from '@/lib/gary/format';
 import { todayEST } from '@/lib/gary/dates';
 import { logBookActionStarted, logFirstBookAction } from '@/lib/gary/analytics';
+import { accountHref } from '@/lib/auth/redirect';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tail/Fade rows — the same interaction as the app's card backs. One tap arms
@@ -34,18 +35,32 @@ import { logBookActionStarted, logFirstBookAction } from '@/lib/gary/analytics';
 const FADE_TINT = '#8B93A7';
 const STREAK_TINT = '#E5844B';
 
-function useLocked(commence?: string | null): boolean {
-  const [locked, setLocked] = useState(false);
+type BookTiming = 'checking' | 'unavailable' | 'open' | 'locked';
+
+function bookTiming(commence: string | null | undefined, now: number | null): BookTiming {
+  // A date alone or a local time without a zone does not confirm kickoff.
+  const confirmedTime = commence?.trim().match(/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}(?::?\d{2})?)$/i);
+  const start = confirmedTime ? parseGameTime(commence) : null;
+  if (!start) return 'unavailable';
+  if (now === null) return 'checking';
+  return now >= start.getTime() ? 'locked' : 'open';
+}
+
+const timingMessage = (timing: BookTiming) => timing === 'unavailable'
+  ? 'Book tracking is unavailable until the game start time is confirmed.'
+  : 'Book tracking is locked because the game has started.';
+
+function useBookTiming(commence?: string | null): BookTiming {
+  // Keep server rendering and hydration identical; enable only after the
+  // browser has checked the clock. Event handlers check again before writes.
+  const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
-    const update = () => {
-      const d = parseGameTime(commence);
-      setLocked(d ? Date.now() >= d.getTime() : false);
-    };
+    const update = () => setNow(Date.now());
     const timer = window.setTimeout(update, 0);
     const interval = window.setInterval(update, 15000);
     return () => { window.clearTimeout(timer); window.clearInterval(interval); };
   }, [commence]);
-  return locked;
+  return bookTiming(commence, now);
 }
 
 function ErrorLine({ text }: { text: string | null }) {
@@ -210,7 +225,8 @@ export function TailFadeRow({
 }) {
   const ctx = useBookDay();
   const router = useRouter();
-  const locked = useLocked(commence);
+  const timing = useBookTiming(commence);
+  const locked = timing !== 'open';
   const [unitDollars] = useUnitDollars();
   const [arming, setArming] = useState<'tail' | 'fade' | null>(null);
   const [busy, setBusy] = useState(false);
@@ -240,10 +256,10 @@ export function TailFadeRow({
     const timer = window.setTimeout(() => {
       const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
       window.history.replaceState(window.history.state, '', clearBookIntent(current));
-      if (!ambiguous && !mine && !locked) setArming(intent.side);
+      if (!ambiguous && !mine && bookTiming(commence, Date.now()) === 'open') setArming(intent.side);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [ambiguous, arming, ctx?.ready, ctx?.signedIn, intentKey, locked, mine]);
+  }, [ambiguous, arming, commence, ctx?.ready, ctx?.signedIn, intentKey, locked, mine]);
 
   if (!ctx || !pickText) return null;
 
@@ -256,9 +272,20 @@ export function TailFadeRow({
     );
   }
 
+  if (!mine && timing === 'unavailable') {
+    return <p className="mt-4 text-right font-mono text-[9.5px] leading-relaxed text-low">{timingMessage(timing)}</p>;
+  }
   if (!mine && locked) return null; // never advertise a bet you can no longer place
 
+  const blockedByStart = () => {
+    const current = bookTiming(commence, Date.now());
+    if (current === 'open') return false;
+    setErrorText(timingMessage(current));
+    return true;
+  };
+
   const arm = (side: 'tail' | 'fade') => {
+    if (!ctx.ready || blockedByStart()) return;
     setErrorText(null);
     logBookActionStarted(side, {
       content_type: 'game',
@@ -273,10 +300,12 @@ export function TailFadeRow({
   };
 
   const place = async (stake: number, streak: boolean) => {
+    if (!arming || blockedByStart()) return;
     setBusy(true);
     try {
       const action = arming!;
       const { placeBet } = await import('@/lib/book/api');
+      if (blockedByStart()) return;
       const bet = await placeBet({
         gameDate,
         pickId,
@@ -299,11 +328,12 @@ export function TailFadeRow({
   };
 
   const undo = async () => {
-    if (!mine) return;
+    if (!mine || blockedByStart()) return;
     setBusy(true);
     setErrorText(null);
     try {
       const { deleteBet } = await import('@/lib/book/api');
+      if (blockedByStart()) return;
       if (await deleteBet(mine.id)) ctx.removeBet(mine.id);
     } catch (e) {
       setErrorText(e instanceof Error ? e.message : 'We could not undo that right now.');
@@ -374,51 +404,67 @@ export function PropTailFadeRow({
 }) {
   const ctx = useBookDay();
   const router = useRouter();
-  const locked = useLocked(commence);
+  const timing = useBookTiming(commence);
+  const locked = timing !== 'open';
   const [unitDollars] = useUnitDollars();
   const [arming, setArming] = useState<'tail' | 'fade' | null>(null);
   const [busy, setBusy] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
 
   const propToken = (prop.split(' ')[0] ?? '').toLowerCase();
-  const intentKey = propIntentKey(player, propToken);
+  const intentKey = propIntentKey(player, propToken, gameId, line, side);
   // Props are stored in the provider's daily prop_picks row. Preserve that
   // publication-date identity; only game cards can span a weekly board.
   const gameDate = ctx?.date ?? gameDateForBook(commence, todayEST());
   const mine = ctx ? findExistingPropBet(ctx.mine, gameDate, player, propToken, gameId, line, side) : null;
 
   useEffect(() => {
-    if (!ctx?.ready || !ctx.signedIn || arming) return;
+    if (!ctx?.ready || !ctx.signedIn || arming || !intentKey) return;
     const intent = readBookIntent(window.location.search);
     if (intent?.kind !== 'prop' || intent.key !== intentKey) return;
     const timer = window.setTimeout(() => {
       const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
       window.history.replaceState(window.history.state, '', clearBookIntent(current));
-      if (!mine && !locked) setArming(intent.side);
+      if (!mine && bookTiming(commence, Date.now()) === 'open') setArming(intent.side);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [arming, ctx?.ready, ctx?.signedIn, intentKey, locked, mine]);
+  }, [arming, commence, ctx?.ready, ctx?.signedIn, intentKey, locked, mine]);
 
   if (!ctx || !player || !propToken) return null;
 
+  if (!mine && timing === 'unavailable') {
+    return <p className="mt-3.5 text-right font-mono text-[9.5px] leading-relaxed text-low">{timingMessage(timing)}</p>;
+  }
   if (!mine && locked) return null;
 
+  const blockedByStart = () => {
+    const current = bookTiming(commence, Date.now());
+    if (current === 'open') return false;
+    setErrorText(timingMessage(current));
+    return true;
+  };
+
   const arm = (side: 'tail' | 'fade') => {
+    if (!ctx.ready || blockedByStart()) return;
     setErrorText(null);
     logBookActionStarted(side, { content_type: 'prop' });
     if (!ctx.signedIn) {
       const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-      router.push(bookIntentAccountHref(current, { kind: 'prop', side, key: intentKey }));
+      router.push(intentKey
+        ? bookIntentAccountHref(current, { kind: 'prop', side, key: intentKey })
+        : accountHref(current));
       return;
     }
     setArming(side);
   };
 
   const place = async (stake: number, streak: boolean) => {
+    if (!arming || blockedByStart()) return;
     setBusy(true);
     try {
       const action = arming!;
       const { placePropBet } = await import('@/lib/book/api');
+      if (blockedByStart()) return;
       const bet = await placePropBet({
         gameDate,
         player,
@@ -438,11 +484,12 @@ export function PropTailFadeRow({
   };
 
   const undo = async () => {
-    if (!mine) return;
+    if (!mine || blockedByStart()) return;
     setBusy(true);
     setErrorText(null);
     try {
       const { deleteBet } = await import('@/lib/book/api');
+      if (blockedByStart()) return;
       if (await deleteBet(mine.id)) ctx.removeBet(mine.id);
     } catch (e) {
       setErrorText(e instanceof Error ? e.message : 'We could not undo that right now.');

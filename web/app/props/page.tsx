@@ -63,7 +63,9 @@ function FeaturedProp({ prop }: { prop: PropPick }) {
             <ScoutRead text={read} />
           </div>
         </div>
-        <PropTailFadeRow player={prop.player ?? ''} prop={prop.prop ?? ''} commence={prop.commence_time} />
+        <PropTailFadeRow player={prop.player ?? ''} prop={prop.prop ?? ''} commence={prop.commence_time}
+          gameId={prop.game_id != null || prop.bdl_game_id != null ? String(prop.game_id ?? prop.bdl_game_id) : null}
+          line={prop.line != null && Number.isFinite(Number(prop.line)) ? Number(prop.line) : null} side={prop.bet} />
       </div>
     </article>
   );
@@ -109,7 +111,9 @@ export default async function PropsPage() {
   const date = todayEST();
   const graded = hubGradedDateEST();
   const [props, gradedRows] = await Promise.all([
-    fetchTodayPropPicks().catch(() => null),
+    // A failed source is not an empty slate; let the route's error boundary
+    // handle it and preserve the last successful server-cached board.
+    fetchTodayPropPicks(),
     fetchPropResultsForDate(graded).catch(() => []),
   ]);
   const yesterday = computePropsRecord(gradedRows);
@@ -125,7 +129,12 @@ export default async function PropsPage() {
   // page), not scattered down a grid.
   const byGame = new Map<string, PropPick[]>();
   for (const p of boardProps) {
-    const key = p.matchup?.trim() || 'Other';
+    const gameId = p.game_id ?? p.bdl_game_id;
+    const normalizedLeague = normalizeLeague(p.league, p.sport) ?? '';
+    const league = normalizedLeague === 'MLB HR' ? 'MLB' : normalizedLeague;
+    const key = JSON.stringify([league, gameId != null
+      ? String(gameId)
+      : [p.matchup?.trim() || 'Other', p.commence_time ?? null]]);
     byGame.set(key, [...(byGame.get(key) ?? []), p]);
   }
   const games = [...byGame.entries()].sort((a, b) => {
@@ -170,8 +179,8 @@ export default async function PropsPage() {
             </div>
             <StitchRule tone="faint" className="mt-4" />
             <div className="mt-6 space-y-4">
-              {games.map(([matchup, items]) => (
-                <GamePropPanel key={matchup} matchup={matchup} props={items} />
+              {games.map(([key, items]) => (
+                <GamePropPanel key={key} matchup={items[0]?.matchup?.trim() || 'Other'} props={items} />
               ))}
             </div>
           </section>

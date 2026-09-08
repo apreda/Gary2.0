@@ -15,8 +15,19 @@ export function gameIntentKey(pickId: string | null | undefined, pickText: strin
   return `game:${pickId?.trim() || pickText.trim()}`;
 }
 
-export function propIntentKey(player: string, propToken: string): string {
-  return `prop:${player.trim().toLowerCase()}:${propToken.trim().toLowerCase()}`;
+export function propIntentKey(
+  player: string,
+  propToken: string,
+  gameId?: string | null,
+  line?: number | null,
+  side?: string | null,
+): string | null {
+  if (!gameId?.trim() || line == null || !Number.isFinite(line) || !side?.trim()) return null;
+  // An auth return may arm only the exact ticket that was tapped. Legacy
+  // player/market keys can identify multiple doubleheader or alternate lines.
+  return `prop:v2:${JSON.stringify([
+    player.trim().toLowerCase(), propToken.trim().toLowerCase(), gameId.trim(), line, side.trim().toLowerCase(),
+  ])}`;
 }
 
 /** Put a pending UI choice into the local return URL. It never places a bet. */

@@ -164,7 +164,7 @@ export default async function PicksPage() {
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
               <h2 className="font-display text-[1.6rem] uppercase leading-none text-hi">The board</h2>
               <span className="tnum font-mono text-[11px] font-bold uppercase tracking-[0.06em] text-low">
-                {board.length} games · {posted} posted
+                {board.length} {board.length === 1 ? 'game' : 'games'} · {posted} posted
               </span>
             </div>
             <StitchRule tone="faint" className="mt-4" />

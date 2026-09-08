@@ -117,6 +117,18 @@ export default function PrivacyPage() {
               associated these events with an account or installation identifier.
             </li>
             <li>
+              App versions that offer <strong className="text-hi">Share reading analytics</strong>{' '}
+              ask for a separate permission, off by default. This measures app sessions and whether
+              expanded original pick or prop reasoning was visible for five continuous foreground
+              seconds. Events include a random session identifier, the measurement version and whether
+              the reading surface was a game or prop card. The session identifier is held only in app
+              memory and is replaced after the app process ends, an account change, thirty minutes
+              in the background, or withdrawal of this permission. These reading events contain no
+              account or notification identifier, pick details, bet information or reasoning text.
+              They do not link visits across app launches. You can turn this setting off any time;
+              it is independent of the plan and checkout analytics setting.
+            </li>
+            <li>
               When you choose Google sign-in or push notifications, the corresponding Google
               and Firebase services also process technical service information. Their SDK
               declarations include device or account identifiers, app/device metadata, diagnostic
