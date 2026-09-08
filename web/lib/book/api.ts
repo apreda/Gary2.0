@@ -216,7 +216,7 @@ export async function fetchMyProfile(expectedOwner?: string): Promise<MyProfile>
   return data as MyProfile;
 }
 
-async function bookAuthorization(expectedOwner: string): Promise<string> {
+export async function bookAuthorization(expectedOwner: string): Promise<string> {
   const { data, error } = await supabaseBrowser().auth.getSession();
   if (error || !expectedOwner || data.session?.user.id !== expectedOwner || !data.session.access_token) {
     throw new Error('Your account changed. Reopen your Book or profile to continue.');

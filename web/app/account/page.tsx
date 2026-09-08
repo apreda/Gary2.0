@@ -113,7 +113,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Acco
           </Link>
         </div>
       </div>
-      <DeleteAccount />
+      <DeleteAccount key={user.id} ownerId={user.id} />
     </main>
   );
 }
