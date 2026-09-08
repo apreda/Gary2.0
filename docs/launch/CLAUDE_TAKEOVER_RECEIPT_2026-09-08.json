@@ -1,0 +1,40 @@
+{
+  "date": "2026-09-08",
+  "timezone": "America/New_York",
+  "canonical_repo": "/Users/adam.preda/Gary2.0",
+  "main_handoff_commit": "5cf7582e57a36e8bc835ddd4254b899cc1c42775",
+  "unfinished_checkpoint_branch": "codex/claude-handoff-2026-09-08",
+  "unfinished_checkpoint_commit": "ab8f41b9f492045113e4e15b82c87cf2fa9cb9bb",
+  "checkpoint_paths": [
+    "gary2.0/src/services/insights/computers/coolingOff.js",
+    "gary2.0/src/services/insights/computers/firstInning.js",
+    "gary2.0/src/services/insights/computers/heatCheck.js",
+    "gary2.0/src/services/insights/recentBattingSample.js",
+    "gary2.0/tests/services/insights/firstInningResearch.test.js",
+    "gary2.0/tests/services/insights/recentBattingSample.test.js",
+    "ios/GaryApp/FantasyBriefingView.swift",
+    "ios/GaryApp/HubFrontPageSelection.swift",
+    "ios/GaryApp/HubView.swift"
+  ],
+  "checkpoint_matches_current_public_files": true,
+  "main_left_checked_out": true,
+  "local_pending_source_preserved": true,
+  "excluded_private_configuration": [
+    "ios/GaryApp/GoogleService-Info.plist",
+    "ios/GaryApp/SecretsLocal.swift"
+  ],
+  "focused_test_suites": 6,
+  "focused_tests_passed": 94,
+  "native_920_built": false,
+  "native_920_blocker": "HubResearchDashboard, HubQuickResearchPage, HubResearchModule, HubResearchModuleCard and HubBullpenChartSheet referenced without definitions",
+  "latest_prior_testflight_build": "2.25 (919)",
+  "apple_status_basis": "Prior release receipts; no new authenticated read in takeover task",
+  "app_review_submission_on_hold_by_user": true,
+  "uploads_this_task": 0,
+  "app_review_submissions_this_task": 0,
+  "expedite_requests_this_task": 0,
+  "apple_emails_this_task": 0,
+  "push_status": "Handoff commit and WIP checkpoint successfully pushed atomically; exact remote heads independently verified with git ls-remote.",
+  "remote_verified_handoff_commit": "5cf7582e57a36e8bc835ddd4254b899cc1c42775",
+  "remote_verified_checkpoint_commit": "ab8f41b9f492045113e4e15b82c87cf2fa9cb9bb"
+}

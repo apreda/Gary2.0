@@ -1,0 +1,12 @@
+Take over Gary as the engineering/product collaborator. Adam has explicitly put App Review submission on hold until actual Sign in with Apple completion, the remaining MLB StatsAPI/Baseball Savant use basis, and human support/profile-report operations are resolved. He wants you to finish those repairs and the incomplete Hub 920 work before shipping.
+
+Start by reading the full 5,000-word handoff at:
+/Users/adam.preda/Gary2.0/HANDOFF_2026-09-08_CLAUDE_FABLE_5_1.md
+
+Then read AGENTS.md, gary2.0/CLAUDE.md, and docs/launch/CLAUDE_TAKEOVER_RECEIPT_2026-09-08.json in that repository. The live checkout is /Users/adam.preda/Gary2.0 on main, not Documents/ChatGPT/Gary/repo. Remote: https://github.com/apreda/Gary2.0.
+
+Unfinished source has been preserved on remote branch codex/claude-handoff-2026-09-08, checkpoint ab8f41b9f492045113e4e15b82c87cf2fa9cb9bb. Those same pending edits remain in the local main working directory. Compare before applying anything; do not reset, clean or duplicate-cherry-pick them. Keep private GoogleService-Info.plist and SecretsLocal.swift untouched and out of Git.
+
+919 is already processed in TestFlight, with the existing internal Beta group. The latest recorded App Store draft still selects 915. Do not upload 919 again. 920 is not built: it references five missing Swift component types, and the pending backend research changes still need chronology and live PA/AB acceptance work. The handoff lists exact files, completed fixes, outstanding issues, 94 passing focused tests, runtime evidence, acceptance steps and release order.
+
+Read the whole handoff before making changes. Reconcile live state, make concrete technical progress, and ask Adam only for facts or access you actually need. Preserve the pick/evidence ledgers, xERA prohibition, current Astra/Sol policy, locked injury behavior, founding-access offer and latest observational Hub direction. Do not replace the intended product with a new redesign or silently call unverified work done. Do not submit App Review, send an expedite request or send Apple urgency email until the stated prerequisites are actually satisfied.
