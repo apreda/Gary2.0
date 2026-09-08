@@ -2,6 +2,14 @@
 
 The root launch task owns the active goal requested by Adam: audit and repair the app, its game/prop systems, incomplete intended features and release experience. **Do not mark launch readiness complete yet.** The current gate-by-gate record is [docs/launch/READINESS_2026-09-07.md](docs/launch/READINESS_2026-09-07.md).
 
+## Current 911 follow-up
+
+Source `04635425` completes handle-free private preferences on native/web, preserves existing identities, prevents avatar/bio edits from being falsely reported saved, and normalizes stored zero/unset native unit preferences so Save remains usable on reopen. Web bounded history ends at Eastern today while unresolved open slips stay accessible across dates and retain the other filters. The native empty-history copy is accurate. Home actor annotations and two unused bindings are cleaned up without changing behavior.
+
+The 911 optimized simulator build passes with no app-source warnings. Final integrated backend: **291 files / 2,769 tests pass**, PostgreSQL 17 enabled; web: **64 files / 484 tests pass**, TypeScript pass. A first concurrent run exposed the routing fixture's five-second wrapper deadline around an already bounded 60-second compiler / 10-second executable; the wrapper now allows 75 seconds, with the same runtime assertions and subprocess limits. Signed archive passed at 02:17 ET; `/Volumes/KINGSTON/gary-911-archive.log`. Its strict/deep signature and 21-manifest / 14-category inventory pass and match signed 910. Upload is running; `/Volumes/KINGSTON/gary-911-upload.log`. No new UI acceptance is claimed while the Mac is locked.
+
+The paired iPhone 17 Pro was reachable on the local network, but developer disk image services could not mount on its iOS 26.6.1 beta. It is not ready for SDK-driven physical acceptance; do not treat mere pairing as a passing device test.
+
 ## Canonical source and delivered changes
 
 Work directly on `/Users/adam.preda/Gary2.0`, `main`, preserving the private uncommitted `ios/GaryApp/GoogleService-Info.plist`. Do not inspect or stage that configuration or `SecretsLocal.swift`. The retired workspace clone is not production. No prediction prompts, model choices or retired sports were changed by this release.
@@ -29,8 +37,8 @@ The Mac locked during the final pitcher-stats header check. Adam was asked to un
 
 ## Required continuation
 
-1. Inspect 910 changed labels after the Mac is unlocked. Build/archive/privacy/signature/upload checks already pass; preserve the exact signed archive. Do not bypass the lock or manufacture screenshots.
-2. After the existing App Store Connect sign-in request is satisfied, verify Apple processing/internal TestFlight inclusion and intended build selection. Apply the prepared review package [GaryMarketing/APP_REVIEW_2_25_910.md](GaryMarketing/APP_REVIEW_2_25_910.md), accurate store screenshots and privacy labels only after reconciling the candidate and review-account access. Customer Support classification is in the binary but still must be reconciled in App Store Connect.
+1. Finish the 911 upload receipt, then inspect changed labels/profile forms after the Mac is unlocked. Signed archive/privacy/signature already pass; website 04635425 is live READY as dpl_Cxkfi88cCyriD8dyeSRxXY9orXL6 on both Gary domains, with guest route readbacks returning 200. Preserve the uploaded 909/910 artifacts and do not upload those build numbers again. Do not bypass the lock or manufacture screenshots.
+2. After the existing App Store Connect sign-in request is satisfied, verify Apple processing/internal TestFlight inclusion and intended build selection. Apply the prepared review package [GaryMarketing/APP_REVIEW_2_25_911.md](GaryMarketing/APP_REVIEW_2_25_911.md), accurate store screenshots and privacy labels only after reconciling the candidate and review-account access. Customer Support classification is in the binary but still must be reconciled in App Store Connect.
 3. Complete physical Apple/Google/email sign-in and recovery, APNs/FCM delivery/account transitions, storefront/billing return and authorized disposable-account Book/profile/deletion checks. Fixtures and guest simulator screens do not establish these results.
 4. Supabase dashboard sign-in in Chrome was requested. Advisor status remains 0 ERROR / 63 WARN / 46 INFO; OTP lifetime exceeds one hour and leaked-password protection is off. The existing Pro plan supports protection. Configure/verify after sign-in; no setting change has been claimed.
 5. Obtain Adam's actual moderation/support owner and coverage commitment. The question about the private report queue and `support@betwithgary.ai` is pending; functioning controls and a runbook do not prove staffed coverage.

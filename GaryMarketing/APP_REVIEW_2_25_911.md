@@ -1,6 +1,6 @@
-# App Review package — Gary AI 2.25 / candidate 910
+# App Review package — Gary AI 2.25 / candidate 911
 
-Prepared September 8, 2026. **Draft; not submitted.** Candidate 910 adds a narrow Hub streak-context clarification to the signed 909 baseline. Its optimized simulator build, signed archive and privacy/signature inventory pass; upload succeeded at **05:54:41.786 UTC** on September 8, with Apple reporting processing. Candidate 909 archived and uploaded successfully at 05:42:00 UTC on September 8; Apple reported that the uploaded package is processing. Processing completion, internal TestFlight availability and selection for App Review remain unverified. The earlier 901 submission and uploaded 908 build are separate records. Do not reuse the older crash-only What's New text for this candidate.
+Prepared September 8, 2026. **Draft; not submitted.** Candidate 911 completes private preference editing and corrects personal Book history/open-slip presentation. Its optimized simulator build and integrated tests pass; signed archive, strict/deep signature and privacy inventory pass; upload is running. Source: `04635425`. The preceding 910 upload succeeded at **05:54:41.786 UTC**, and 909 uploaded at 05:42:00 UTC on September 8. Processing completion, internal TestFlight availability and selection for App Review remain unverified. The earlier 901 submission and uploaded 908 build are separate records. Do not reuse the older crash-only What's New text for this candidate.
 
 ## Notes for Review
 
@@ -8,7 +8,7 @@ Gary is an AI sports analysis and personal bet-tracking app from Gary A.I. LLC. 
 
 Public features include Home, Picks, Hub player/team information, Fantasy analysis and Billfold's historical record. Coverage varies by sport and season. A scheduled game can appear before its analysis is published. Winners contains a smaller set of reviewed game and prop selections and can have no selections for a slate.
 
-Use the dedicated account in Sign-In Information for account features. Accept the welcome notice, then open Billfold > You > Sign in. An account adds Your Book, private manual entries, CSV export, profile/preferences and an optional public leaderboard. Public profiles show a handle, avatar, bio and verified record. Private stakes, notes and outside bets do not affect public rankings. No purchase is required for the review account.
+Use the dedicated account in Sign-In Information for account features. Accept the welcome notice, then open Billfold > You > Sign in. An account adds Your Book, private manual entries, CSV export, profile/preferences and an optional public leaderboard. Favorite sports and Book display preferences can be saved without claiming a public handle. A handle is required to create a profile with an avatar/bio or join public rankings. Public profiles show a handle, avatar, bio and verified record. Private stakes, notes and outside bets do not affect public rankings. No purchase is required for the review account.
 
 To check the product: open Picks, choose a supported sport and a published game, then read its original reasoning. Explore a Hub player or team read. Open Billfold > Gary for historical results and Billfold > You for your own book. The leaderboard uses qualified, opted-in public records; an empty ranking is a valid state. In another public profile, signed-in users can report or block the profile; blocked profiles can be managed from the Board. Profile text is filtered on the server, and reports enter a private moderation queue. Support and appeals are available at support@betwithgary.ai.
 
@@ -22,7 +22,7 @@ Apple, Google and email sign-in are available. Forgot Password opens Gary's webs
 
 ## What's New
 
-Improved Home, Picks and Hub loading and scrolling. Added profile reporting and blocking, clearer empty Winners boards, reliable links from game alerts, and separate optional reading analytics. Fixed game-detail matching, Settings navigation and date changes while the app stays open.
+Improved Home, Picks and Hub loading and scrolling. Added profile reporting and blocking, clearer empty Winners boards, reliable links from game alerts, and separate optional reading analytics. Save private preferences without claiming a public handle. Fixed game-detail matching, Settings navigation and date changes while the app stays open.
 
 ## Store listing
 
@@ -35,6 +35,7 @@ Retain variable-coverage language, the accurate October offer, personal-tracking
 
 ## Candidate evidence and remaining release gates
 
+- 911 source `04635425` passes 2,769 backend tests / 291 files, 484 web tests / 64 files, TypeScript and its optimized simulator build. The native zero/unset unit preference reopens correctly; saved public identities are preserved. Signed 911 archive/privacy/signature checks pass at 06:19:12 UTC, with all 21 manifests / 14 categories matching signed 910. Upload and changed-form UI receipts are pending.
 - Build 910 source is committed and pushed as `e88b70ce`. It clarifies team streak context and labels the stored next opponent explicitly; it changes no pick, grading, provider or privacy behavior. Final optimized simulator build, signed archive and strict/deep signature pass. All 21 manifests / 14 categories match signed 909. Upload succeeded at **05:54:41.786 UTC**; `/Volumes/KINGSTON/gary-910-upload.log`. The changed-label UI check is pending Mac unlock, and Apple processing completion/selection remains unverified.
 - Complete: optimized simulator build, signed 909 archive, strict/deep code-signature verification and successful upload. Archive: `/Volumes/KINGSTON/Gary-2.25-909-Launch.xcarchive`; upload log: `/Volumes/KINGSTON/gary-909-upload.log`.
 - Complete: signed archive inventory has 21 valid manifests, a 14-category collected-data union, no tracking or tracking domains. The root manifest matches canonical source and declares System Boot Time / `35F9.1` and Customer Support linked to the user for App Functionality.
