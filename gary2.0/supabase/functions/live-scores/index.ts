@@ -24,6 +24,7 @@
 // Grading (grade-on-final) is a SEPARATE function/layer — this one only mirrors
 // scores, which keeps it cheap and low-risk to run all day.
 
+import { isCacheServiceRequest } from "./authorization.ts";
 import {
   addUtcDateDays,
   footballBdlRequest,
@@ -232,7 +233,10 @@ async function dailySlateSourceGate(
   }
 }
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
+  if (!isCacheServiceRequest(req, SERVICE_KEY)) {
+    return Response.json({ ok: false, error: "Service authorization required" }, { status: 403 });
+  }
   if (!BDL_KEY) {
     return new Response(JSON.stringify({ ok: false, error: "BALLDONTLIE_API_KEY not set" }), {
       status: 500, headers: { "Content-Type": "application/json" },

@@ -18,6 +18,8 @@
 // written with status='projected'. When the confirmed sheet later posts it UPSERT-overwrites
 // the projected row in place (status -> confirmed). So EVERY game shows a field immediately.
 
+import { isCacheServiceRequest } from "../live-scores/authorization.ts";
+
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const BDL_KEY = Deno.env.get("BALLDONTLIE_API_KEY") ?? "";
@@ -154,6 +156,9 @@ async function getMlbLineups(gameId: string): Promise<Record<string, any> | null
 }
 
 Deno.serve(async (req) => {
+  if (!isCacheServiceRequest(req, SERVICE_KEY)) {
+    return Response.json({ ok: false, error: "Service authorization required" }, { status: 403 });
+  }
   if (!BDL_KEY) return new Response(JSON.stringify({ ok: false, error: "BALLDONTLIE_API_KEY not set" }),
     { status: 500, headers: { "Content-Type": "application/json" } });
 
