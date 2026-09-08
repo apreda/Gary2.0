@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { runHubJudgmentPass, unavailableHubJudgments } from '../../scripts/lib/hubJudgmentRun.js';
+import { runHubJudgmentPass, unavailableHubJudgments, hubJudgmentPassBudget } from '../../scripts/lib/hubJudgmentRun.js';
 
 const date = '2026-09-08', asOf = '2026-09-08T15:00:00.000Z', failedAt = '2026-09-08T15:01:00.000Z';
 function failedRefreshFixture() {
@@ -13,6 +13,39 @@ function failedRefreshFixture() {
 }
 
 describe('bounded Hub research-to-judgment pass', () => {
+  it.each([
+    [0, 390_000, 330_000], [90_000, 330_000, 330_000],
+    [150_000, 270_000, 270_000], [420_000, 0, 0], [480_000, 0, 0],
+  ])('reserves publication time after %ims of source/slate reads', (elapsed, totalBudgetMs, budgetMs) => {
+    expect(hubJudgmentPassBudget(1_000, 1_000 + elapsed)).toEqual({ totalBudgetMs, budgetMs });
+    if (elapsed <= 420_000) expect(elapsed + totalBudgetMs + 60_000).toBeLessThanOrEqual(480_000);
+  });
+
+  it('starts no provider, synthesis or editor when the source/slate prelude exhausted the publication reserve', async () => {
+    const collectContext = vi.fn(), synthesize = vi.fn(), orderJudgments = vi.fn();
+    const result = await runHubJudgmentPass(failedRefreshFixture(), {
+      ...hubJudgmentPassBudget(1_000, 421_000), collectContext, synthesize, orderJudgments, now: () => failedAt });
+    expect(collectContext).not.toHaveBeenCalled(); expect(synthesize).not.toHaveBeenCalled(); expect(orderJudgments).not.toHaveBeenCalled();
+    expect(result.invalidations[0]).toMatchObject({ status: 'context_unavailable', valid_until: failedAt });
+    expect(result.failures[0].message).toContain('publication reserve');
+  });
+
+  it('skips the editor synchronously at the total deadline and preserves completed cases and withdrawals', async () => {
+    const args = failedRefreshFixture(), orderJudgments = vi.fn();
+    const settled = { rows: args.rows, invalidations: [{ game_id: 'other', status: 'context_changed' }], failures: [] };
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000);
+    try {
+      const result = await runHubJudgmentPass(args, { collectContext: async () => new Map(), orderJudgments,
+        synthesize: async () => { clock.mockReturnValue(1_040); return settled; },
+        totalBudgetMs: 40, budgetMs: 40, now: () => failedAt });
+      expect(orderJudgments).not.toHaveBeenCalled();
+      expect(result.rows[0].meta.judgment).toEqual(args.rows[0].meta.judgment);
+      expect(result.invalidations).toEqual([{ game_id: 'other', status: 'context_changed' }]);
+      expect(result.failures).toEqual([]);
+      expect(result.editorial_diagnostics).toEqual([{ stage: 'editorial_order', status: 'budget_exhausted' }]);
+    } finally { clock.mockRestore(); }
+  });
+
   it('passes the complete original source pool and fresh checked context together', async () => {
     const rows = [{ category: 'heat_check', detail: 'Original source' }, { category: 'starter_form', detail: 'Opposing evidence' }];
     const previousRows = [{ meta: { judgment: { input_fingerprint: 'earlier' } } }];

@@ -38,6 +38,16 @@ async function bounded(work, signal) {
   } finally { signal.removeEventListener('abort', listener); }
 }
 
+/** The existing refresh worker allows eight minutes per league, including
+ * source/slate reads and publication. Optional editing cannot spend the final
+ * minute needed to publish ready cases and explicit withdrawals. */
+export function hubJudgmentPassBudget(startedAt, nowMs = Date.now()) {
+  if (![startedAt, nowMs].every(Number.isFinite)) throw new Error('Hub refresh budget needs actual elapsed clocks');
+  const elapsed = Math.max(0, nowMs - startedAt);
+  const totalBudgetMs = Math.max(0, Math.min(390_000, 480_000 - elapsed - 60_000));
+  return { totalBudgetMs, budgetMs: Math.min(330_000, totalBudgetMs) };
+}
+
 /** One reusable pass for the complete collector pool and lightweight refreshes
  * of published research. Neither path writes; publication is a separate step. */
 export async function runHubJudgmentPass(args, { collectContext = collectHubJudgmentContext,
@@ -45,10 +55,13 @@ export async function runHubJudgmentPass(args, { collectContext = collectHubJudg
   orderJudgments = orderHubJudgments, generateEditorialText, editorialBudgetMs = 60_000, totalBudgetMs = 390_000,
   now = () => new Date().toISOString() } = {}) {
   signal?.throwIfAborted();
-  const started = Date.now(), controller = new AbortController();
+  const started = Date.now(), phaseBudget = Math.min(budgetMs, totalBudgetMs);
+  if (!Number.isFinite(phaseBudget) || phaseBudget <= 0) {
+    return unavailableHubJudgments({ ...args, asOf: now() }, new Error('Hub judgment publication reserve reached before verification'));
+  }
+  const controller = new AbortController();
   const abort = () => controller.abort(signal?.reason || new Error('Hub judgment pass cancelled'));
   if (signal?.aborted) abort(); else signal?.addEventListener('abort', abort, { once: true });
-  const phaseBudget = Math.min(budgetMs, totalBudgetMs);
   const timer = setTimeout(() => controller.abort(new Error('Hub judgment pass exceeded its deadline')), phaseBudget);
   let result;
   try {
@@ -70,6 +83,11 @@ export async function runHubJudgmentPass(args, { collectContext = collectHubJudg
   // Ordering is optional: an unavailable editor must never withdraw an
   // already verified argument or overwrite synthesis diagnostics.
   const remaining = Math.max(0, Math.min(60_000, editorialBudgetMs, totalBudgetMs - (Date.now() - started)));
+  if (!Number.isFinite(remaining) || remaining <= 0) {
+    result.rows = withoutHubEditorialOrder(result.rows);
+    result.editorial_diagnostics = [{ stage: 'editorial_order', status: 'budget_exhausted' }];
+    return result;
+  }
   const editorialController = new AbortController();
   const abortEditorial = () => editorialController.abort(signal?.reason || new Error('Hub editorial pass cancelled'));
   if (signal?.aborted) abortEditorial(); else signal?.addEventListener('abort', abortEditorial, { once: true });

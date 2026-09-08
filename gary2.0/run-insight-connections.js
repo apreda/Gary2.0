@@ -30,7 +30,7 @@ import { insightRefreshOldIds, insightResetScopeParams } from './scripts/lib/ins
 import axios from 'axios';
 import { getESTDate } from './src/utils/dateUtils.js';
 import { completedPlayerCardGameIds, upsertPlayerCards } from './scripts/lib/playerCardStorage.js';
-import { runHubJudgmentPass, unavailableHubJudgments } from './scripts/lib/hubJudgmentRun.js';
+import { runHubJudgmentPass, unavailableHubJudgments, hubJudgmentPassBudget } from './scripts/lib/hubJudgmentRun.js';
 import { loadHubJudgmentSlate } from './scripts/lib/hubJudgmentSlate.js';
 import { readHubJudgmentRows, publishHubJudgments, hubJudgmentRevisionFilter } from './scripts/lib/hubJudgmentStorage.js';
 import { writeFile } from 'node:fs/promises';
@@ -820,6 +820,7 @@ async function run() {
     console.log(`\n── ${league} ──`);
 
     if (judgmentsOnly) {
+      const judgmentStageStarted = Date.now();
       let previousRows;
       try {
         if (!REST_URL || !adminKey) throw new Error('Judgment refresh requires the existing Supabase read configuration');
@@ -828,7 +829,7 @@ async function run() {
           date: targetDate, league, signal: AbortSignal.timeout(90_000) });
         const result = await runHubJudgmentPass({ date: targetDate, league,
           rows: previousRows, previousRows, games, bdl: ballDontLieService,
-          asOf: new Date().toISOString() });
+          asOf: new Date().toISOString() }, hubJudgmentPassBudget(judgmentStageStarted));
         if (!await recordJudgmentPass(league, result, { publish: !dryRun })) hadError = true;
         totalRows += result.rows.filter(row => row.meta?.judgment).length;
       } catch (error) {

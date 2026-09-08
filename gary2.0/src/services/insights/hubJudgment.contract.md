@@ -214,6 +214,12 @@ uses the ordinary prominence/kickoff/source-order fallback.
 
 `runHubJudgmentPass` retains its 330-second research/synthesis phase and
 adds at most 60 seconds for editorial ordering, within a 390-second total.
+For the eight-minute judgments-only worker stage, the CLI starts its clock
+before reading stored sources or the fresh slate. It caps the helper at
+`min(390 seconds, 480 seconds - elapsed - 60 seconds)` and reserves that final
+minute for publication and withdrawals. A slow 90-second prelude therefore
+leaves at most 330 seconds for both synthesis and optional ordering. No
+editor starts once the remaining allocation reaches zero.
 The optional stage has a separate `generateEditorialText` injection and
 `editorial_diagnostics` report, and cannot withdraw a verified argument on
 failure. Its `generateSolTextOnce` adapter uses the existing configured
