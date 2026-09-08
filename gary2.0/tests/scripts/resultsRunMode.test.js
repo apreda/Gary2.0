@@ -118,7 +118,7 @@ describe('near-real-time football workflow wiring', () => {
     expect(runner).toContain("processGenericGames('weekly_nfl_picks', weekStart, 'NFL', { settlementOnly: true })");
     expect(runner).toContain('if (!settlementOnly)');
     expect(runner).toContain('if (RUN_OPTIONS.footballSettlements)');
-    expect(runner).toContain('waitForBdlRequestSlot(`football-results ${path}`)');
+    expect(runner).toContain('waitForBdlRequestSlot(`football-results ${path}`, { signal: deadlineSignal })');
     expect(runner).toContain('nflGames.filter((game) => nflFinalIds.has(String(game.id)) && referencedNFLGameIds.has(String(game.id)))');
     expect(runner).toContain('[...ncaafFinalIds].filter((gameId) => referencedNCAAFGameIds.has(gameId))');
   });

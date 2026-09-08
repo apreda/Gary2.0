@@ -29,12 +29,19 @@ import {
 } from '../src/services/ncaafPropStats.js';
 import { ncaafSlateDateForKickoff } from '../src/services/ncaafGamePolicy.js';
 import {
+  buildNflPlaySettlement,
+  nflPlayActualForProp,
+  NFL_PLAY_SETTLEMENT_MARKETS,
+} from './lib/nflPlaySettlement.js';
+import {
   assertFootballSettlementCoverage,
   buildFootballSettlementOutcome,
   buildNflResultWritePayload,
+  canonicalNFLPropType,
   gradePropResult,
   isFinalGameStatus,
   nflActualFromStatRow,
+  findNflSettlementPlayer,
   nflSeasonTypeForGame,
   normalizeStoredPropType,
   pickGameId as storedPickGameId,
@@ -200,19 +207,25 @@ function normalizeToETDate(matchedGame) {
 /**
  * BDL API Helpers
  */
-async function bdlFetch(path, params = '') {
+async function bdlFetch(path, params = '', { timeoutMs = null, deadlineAt = null, rateLimit = false } = {}) {
   const url = `https://api.balldontlie.io/${path}${params ? '?' + params : ''}`;
   const attempts = RUN_OPTIONS.footballSettlements ? 2 : 1;
+  const deadlineSignal = deadlineAt == null ? undefined : AbortSignal.timeout(Math.max(1, deadlineAt - Date.now()));
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
+      deadlineSignal?.throwIfAborted();
+      if (deadlineAt != null && Date.now() >= deadlineAt) throw new Error('settlement evidence deadline reached');
       // The narrow manual football backstop shares a five-starts/minute BDL
       // account with the live-score function. Keep this process to three evenly
       // spaced starts/minute and give a collision-throttled request one retry.
       // The historical full/nightly mode is intentionally unchanged.
-      if (RUN_OPTIONS.footballSettlements) {
-        await waitForBdlRequestSlot(`football-results ${path}`);
+      if (RUN_OPTIONS.footballSettlements || rateLimit) {
+        await waitForBdlRequestSlot(`football-results ${path}`, { signal: deadlineSignal });
       }
-      const res = await fetch(url, { headers: { 'Authorization': BDL_API_KEY } });
+      if (deadlineAt != null && Date.now() >= deadlineAt) throw new Error('settlement evidence deadline reached');
+      const requestTimeout = deadlineAt == null ? timeoutMs : Math.min(timeoutMs ?? 20_000, deadlineAt - Date.now());
+      const res = await fetch(url, { headers: { 'Authorization': BDL_API_KEY },
+        ...(requestTimeout == null ? {} : { signal: AbortSignal.timeout(Math.max(1, requestTimeout)) }) });
       if (res.ok) return await res.json();
       if (res.status === 429 && attempt + 1 < attempts) {
         console.warn(`  ⚠️ BDL ${path} rate-limited; retrying on the next guarded slot`);
@@ -223,9 +236,9 @@ async function bdlFetch(path, params = '') {
       console.warn(`  ⚠️ ${message}`);
       return null;
     } catch (e) {
-      if (attempt + 1 >= attempts) {
+      if (deadlineSignal?.aborted || (deadlineAt != null && Date.now() >= deadlineAt) || attempt + 1 >= attempts) {
         if (RUN_OPTIONS.footballSettlements) {
-          throw new Error(`BDL ${path} failed after ${attempts} attempt(s): ${e.message}`, { cause: e });
+          throw new Error(`BDL ${path} failed after ${attempt + 1} attempt(s): ${e.message}`, { cause: e });
         }
         return null;
       }
@@ -339,11 +352,59 @@ async function fetchBoxScores(league, date) {
   return box;
 }
 
+/** Exact-game plays are a bounded fallback only for a supported missing stat. */
+async function fetchNFLPlayEvidence(gameId, playerStats) {
+  if (!playerStats?.length || playerStats.some(row => row?._football_box_complete !== true
+    || String(row?._game_id ?? '') !== String(gameId))) return null;
+  const key = `nfl-play-settlement-${gameId}`;
+  if (cache.stats.has(key)) return cache.stats.get(key);
+  const plays = [];
+  const seenPlays = new Set();
+  const seenCursors = new Set();
+  const deadlineAt = Date.now() + 120_000;
+  let cursor = null;
+  try {
+    for (let page = 0; page < 5; page += 1) {
+      if (Date.now() >= deadlineAt) throw new Error('play evidence deadline reached');
+      const cursorParam = cursor == null ? '' : `&cursor=${encodeURIComponent(cursor)}`;
+      const data = await bdlFetch('nfl/v1/plays', `game_id=${gameId}&per_page=100${cursorParam}`,
+        { timeoutMs: 20_000, deadlineAt, rateLimit: true });
+      if (!Array.isArray(data?.data)) throw new Error('missing plays page');
+      const next = data?.meta?.next_cursor ?? null;
+      if (next != null && (!['number', 'string'].includes(typeof next) || !String(next).trim())) {
+        throw new Error('invalid plays cursor');
+      }
+      if (next != null && !data.data.length) throw new Error('empty nonterminal plays page');
+      for (const play of data.data) {
+        if (!['number', 'string'].includes(typeof play?.id) || !String(play.id).trim()
+          || seenPlays.has(String(play.id)) || String(play?.game?.id ?? '') !== String(gameId)
+          || (play?.game_id != null && String(play.game_id) !== String(gameId))
+          || !isFinalGameStatus(play?.game?.status)) throw new Error('invalid final play identity');
+        seenPlays.add(String(play.id));
+        plays.push(play);
+      }
+      if (next == null) {
+        if (!plays.length) throw new Error('empty plays evidence');
+        const evidence = buildNflPlaySettlement({ gameId, plays, playerStats, playsComplete: true, boxComplete: true });
+        cache.stats.set(key, evidence);
+        return evidence;
+      }
+      if (seenCursors.has(String(next))) throw new Error('repeated plays cursor');
+      seenCursors.add(String(next));
+      cursor = next;
+    }
+    throw new Error('plays pagination limit reached');
+  } catch (error) {
+    console.warn(`  ⚠️ NFL ${gameId} play evidence unavailable; leaving its props pending: ${error.message}`);
+    return null;
+  }
+}
+
 async function fetchNFLStats(games) {
   if (!games.length) return [];
-  const exactGames = games
+  const exactGames = [...new Map(games
     .filter((game) => game?.id != null)
-    .map((game) => ({ game, gameId: String(game.id), seasonType: nflSeasonTypeForGame(game) }));
+    .map((game) => [String(game.id), { gameId: String(game.id), seasonType: nflSeasonTypeForGame(game) }])).values()];
   const key = `nfl-stats-${exactGames.map(({ gameId, seasonType }) => `${gameId}:${seasonType}`).join(',')}`;
   if (cache.stats.has(key)) return cache.stats.get(key);
 
@@ -354,44 +415,111 @@ async function fetchNFLStats(games) {
   // to regular season and returns a clean-but-empty array for an exact August
   // preseason game id.
   const stats = [];
+  let allComplete = true;
   for (const { gameId, seasonType } of exactGames) {
-    const data = await bdlFetch(
-      'nfl/v1/stats',
-      `game_ids[]=${gameId}&season_type=${seasonType}&per_page=100`,
-    );
-    if (data?.data) {
-      stats.push(...data.data.map((row) => ({ ...row, _game_id: String(gameId) })));
+    // A partial page is not a complete box: an absent player may simply be
+    // on the next page. Publish rows only after the exact game's final page.
+    const gameRows = [];
+    const seenPlayers = new Set();
+    const seenCursors = new Set();
+    let cursor = null;
+    let complete = false;
+    try {
+      for (let page = 0; page < 10; page += 1) {
+        const cursorParam = cursor == null ? '' : `&cursor=${encodeURIComponent(cursor)}`;
+        const data = await bdlFetch(
+          'nfl/v1/stats',
+          `game_ids[]=${gameId}&season_type=${seasonType}&per_page=100${cursorParam}`,
+        );
+        if (!Array.isArray(data?.data)) throw new Error('missing stats page');
+        const next = data?.meta?.next_cursor ?? null;
+        if (next != null && (!['number', 'string'].includes(typeof next) || !String(next).trim())) {
+          throw new Error('invalid stats cursor');
+        }
+        if (next != null && data.data.length === 0) throw new Error('empty nonterminal stats page');
+        for (const row of data.data) {
+          const playerId = row?.player?.id ?? row?.player_id;
+          const reportedGameIds = [row?.game?.id, row?.game_id].filter(value => value != null);
+          if (!['number', 'string'].includes(typeof playerId) || !String(playerId).trim()
+            || !Number.isSafeInteger(Number(playerId)) || Number(playerId) <= 0 || seenPlayers.has(String(playerId))
+            || reportedGameIds.some(id => String(id) !== gameId)
+            || (row?.game?.status != null && !isFinalGameStatus(row.game.status))) {
+            throw new Error('invalid game/player identity in stats page');
+          }
+          seenPlayers.add(String(playerId));
+          gameRows.push({ ...row, _game_id: String(gameId), _football_box_complete: true });
+        }
+        if (next == null) { complete = true; break; }
+        if (seenCursors.has(String(next))) throw new Error('repeated stats cursor');
+        seenCursors.add(String(next));
+        cursor = next;
+      }
+      if (!complete) throw new Error('stats pagination limit reached');
+      stats.push(...gameRows);
+    } catch (error) {
+      allComplete = false;
+      console.warn(`  ⚠️ NFL ${gameId} stats incomplete; leaving its props pending: ${error.message}`);
     }
   }
-  cache.stats.set(key, stats);
+  // Failed games must be retried, not cached as absent players. Complete
+  // games in this batch may still settle independently.
+  if (allComplete) cache.stats.set(key, stats);
   return stats;
 }
 
 async function fetchNCAAFStats(gameIds) {
   if (!gameIds.length) return [];
+  gameIds = [...new Set(gameIds.map(String))];
   const key = `ncaaf-stats-${gameIds.join(',')}`;
   if (cache.stats.has(key)) return cache.stats.get(key);
 
   // As with NFL, fetch and stamp one exact game at a time. A date-wide pool is
   // not sufficient attribution for a college slate with many same-name players.
   const stats = [];
+  let allComplete = true;
   for (const gameId of gameIds) {
+    const gameRows = [];
+    const seenPlayers = new Set();
+    const seenCursors = new Set();
     let cursor = null;
-    for (let page = 0; page < 10; page += 1) {
-      const cursorParam = cursor != null ? `&cursor=${encodeURIComponent(cursor)}` : '';
-      const data = await bdlFetch('ncaaf/v1/player_stats', `game_ids[]=${gameId}&per_page=100${cursorParam}`);
-      if (!data) break;
-      // Do not blindly trust/filter-stamp a response row. NCAAF rows expose a
-      // nested game id, so require it to equal the requested final game before
-      // it is eligible to grade anything.
-      stats.push(...(data.data || [])
-        .filter((row) => String(row?.game?.id ?? '') === String(gameId))
-        .map((row) => ({ ...row, _game_id: String(gameId) })));
-      cursor = data?.meta?.next_cursor ?? null;
-      if (cursor == null) break;
+    let complete = false;
+    try {
+      for (let page = 0; page < 10; page += 1) {
+        const cursorParam = cursor != null ? `&cursor=${encodeURIComponent(cursor)}` : '';
+        const data = await bdlFetch('ncaaf/v1/player_stats', `game_ids[]=${gameId}&per_page=100${cursorParam}`);
+        if (!Array.isArray(data?.data)) throw new Error('missing stats page');
+        const next = data?.meta?.next_cursor ?? null;
+        if (next != null && (!['number', 'string'].includes(typeof next) || !String(next).trim())) {
+          throw new Error('invalid stats cursor');
+        }
+        if (next != null && data.data.length === 0) throw new Error('empty nonterminal stats page');
+        for (const row of data.data) {
+          // College rows provide an exact game id; conflicting/missing rows
+          // invalidate the entire page rather than becoming false absences.
+          const playerId = row?.player?.id ?? row?.player_id;
+          if (String(row?.game?.id ?? '') !== String(gameId)
+            || (row?.game_id != null && String(row.game_id) !== String(gameId))
+            || !['number', 'string'].includes(typeof playerId) || !String(playerId).trim()
+            || !Number.isSafeInteger(Number(playerId)) || Number(playerId) <= 0 || seenPlayers.has(String(playerId))
+            || (row?.game?.status != null && !isFinalGameStatus(row.game.status))) {
+            throw new Error('invalid game/player identity in stats page');
+          }
+          seenPlayers.add(String(playerId));
+          gameRows.push({ ...row, _game_id: String(gameId), _football_box_complete: true });
+        }
+        if (next == null) { complete = true; break; }
+        if (seenCursors.has(String(next))) throw new Error('repeated stats cursor');
+        seenCursors.add(String(next));
+        cursor = next;
+      }
+      if (!complete) throw new Error('stats pagination limit reached');
+      stats.push(...gameRows);
+    } catch (error) {
+      allComplete = false;
+      console.warn(`  ⚠️ NCAAF ${gameId} stats incomplete; leaving its props pending: ${error.message}`);
     }
   }
-  cache.stats.set(key, stats);
+  if (allComplete) cache.stats.set(key, stats);
   return stats;
 }
 
@@ -460,10 +588,9 @@ function gradeGame(pickText, homeTeam, awayTeam, hScore, vScore) {
 /**
  * Prop Value Extraction
  */
-// `meta` is an out-param for the football DNP-void (Aug 20 2026):
-// meta.playerFound = the player's stat row was located in the (exact-game)
-// pool, so a null return means the TYPE has no mapping — never a DNP. Only
-// the NFL/NCAAF branches set it; other sports leave it untouched.
+// `meta` records exact football player lookup. NFL additionally supplies the
+// resolved playerId for an optional exact-play fallback. Missing measurements
+// and absent/ambiguous stat rows never establish nonparticipation.
 function getStatValue(sport, data, name, type, playerId = null, meta = {}) {
   const target = normalizeName(name), t = type.toLowerCase();
   if (!data || data.length === 0) return null;
@@ -535,8 +662,14 @@ function getStatValue(sport, data, name, type, playerId = null, meta = {}) {
       console.warn(`    [Stat] NHL: Found ${name} but no match for prop type "${type}"`);
     }
   } else if (sport === 'NFL') {
-    const p = findPlayerFlat(data);
-    if (p) { meta.playerFound = true; return nflActualFromStatRow(p, type, data); }
+    const lookup = findNflSettlementPlayer(data, { playerId, name });
+    // Ambiguous identities are unavailable, never proof that a player was
+    // absent. A stored id cannot silently fall back to a different namesake.
+    meta.playerFound = lookup.status !== 'missing';
+    if (lookup.row) {
+      meta.playerId = lookup.row.player?.id ?? lookup.row.player_id;
+      return nflActualFromStatRow(lookup.row, type, data);
+    }
   } else if (sport === 'NCAAF') {
     // Generation stamps the exact BDL roster id. Require it here too: a
     // college game can contain duplicate/similar names, so name-only matching
@@ -1364,6 +1497,7 @@ async function processPropBets(date, sportFilter = null, { settlementOnly = fals
 
   const handled = new Set();
   const claimedExistingResultIds = new Set();
+  const nflPlayEvidenceByGame = new Map();
   let skippedNotFinal = 0;
 
   for (const row of rows) {
@@ -1417,7 +1551,6 @@ async function processPropBets(date, sportFilter = null, { settlementOnly = fals
       // above prevent partial/live stats from creating one in the first place.
       let actual = null;
       let source = 'none';
-      let footballDnpVoid = false;
       if (dataSport === 'NBA') actual = getStatValue('NBA', nbaBox, name, type);
       else if (dataSport === 'NHL') actual = getStatValue('NHL', nhlBox, name, type);
       else if (dataSport === 'MLB') {
@@ -1429,23 +1562,26 @@ async function processPropBets(date, sportFilter = null, { settlementOnly = fals
         const gameRows = statsForGame(dataSport === 'NFL' ? nflStats : ncaafStats, gameId);
         const lookupMeta = {};
         actual = getStatValue(dataSport, gameRows, name, type,
-          dataSport === 'NCAAF' ? p.player_id : null, lookupMeta);
-        // FOOTBALL DNP VOID (Aug 20 2026 — the MLB Aug 3 semantics): the game
-        // is FINAL (finality gates above), its box is POPULATED, and this
-        // player has no stat row — an inactive; the book voids the bet and the
-        // ledger records a push (these used to sit pending forever: 106 of
-        // 108 legacy anytime-TD picks never graded). A thin/empty box is a
-        // provider hole, never a slate of DNPs — those stay pending. A row
-        // that WAS found with an unmapped type is also never a DNP.
-        if (actual === null && !lookupMeta.playerFound && gameRows.length >= 10) {
-          footballDnpVoid = true;
-          console.log(`    [DNP Void] ${dataSport}: ${name} absent from final game ${gameId} box (${gameRows.length} rows) — push`);
+          p.player_id, lookupMeta);
+        const nflMarket = dataSport === 'NFL' ? canonicalNFLPropType(type) : null;
+        if (actual === null && lookupMeta.playerId != null && NFL_PLAY_SETTLEMENT_MARKETS.has(nflMarket)) {
+          // At most one bounded play fetch per game in this settlement pass,
+          // including an unavailable result; another prop must not fan out
+          // the same failed provider request. A later pass can retry.
+          if (!nflPlayEvidenceByGame.has(gameId)) {
+            nflPlayEvidenceByGame.set(gameId, await fetchNFLPlayEvidence(gameId, gameRows));
+          }
+          const evidence = nflPlayEvidenceByGame.get(gameId);
+          actual = nflPlayActualForProp(evidence, { playerId: lookupMeta.playerId, propType: nflMarket });
         }
+        // A complete stats box is a contributor list, not proof of game
+        // inactivity: the actual NFL play feed includes participants absent
+        // from that box. No football DNP void without authoritative separate
+        // nonparticipation evidence; absent or ambiguous rows stay pending.
+
       }
 
       if (actual !== null) {
-        source = 'api';
-      } else if (footballDnpVoid) {
         source = 'api';
       } else if (['MLB', 'NFL', 'NCAAF'].includes(dataSport)) {
         // Exact final-game BDL stats are the MLB/football grading authority.
@@ -1460,8 +1596,8 @@ async function processPropBets(date, sportFilter = null, { settlementOnly = fals
         if (actual !== null) source = 'grounding';
       }
 
-      if (actual !== null || footballDnpVoid) {
-        const res = footballDnpVoid ? 'push' : gradePropResult(actual, line, bet);
+      if (actual !== null) {
+        const res = gradePropResult(actual, line, bet);
         if (res == null) {
           if (['NFL', 'NCAAF'].includes(dataSport)) stats.unresolvedFinal++;
           console.error(`  ❌ ${sport}: ${name} ${type} — invalid grade inputs (${bet} ${line}, actual ${actual}).`);

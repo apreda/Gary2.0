@@ -32,7 +32,7 @@ const sql=s=>execFileSync(`${bin}/psql`,[...args(),'-c',s],{env:pgEnv,encoding:'
 const retention = readFileSync(new URL('../../supabase/migrations/20260905144249_reduce_cron_history_io.sql', import.meta.url), 'utf8').split('$cleanup$')[1];
 const repair = readFileSync(new URL('../../scripts/lib/repairNcaafQuarterbackNames.sql', import.meta.url), 'utf8');
 const migrationDirectory = new URL('../../supabase/migrations/', import.meta.url);
-const measurementFiles = readdirSync(migrationDirectory).filter(name => name.endsWith('_correct_verified_legacy_nfl_touchdown_measurement.sql'));
+const measurementFiles = readdirSync(migrationDirectory).filter(name => /^\d{14}_correct_verified_legacy_nfl_touchdown_measurement\.sql$/.test(name));
 if (measurementFiles.length !== 1) throw new Error('Expected exactly one verified NFL measurement correction migration');
 const measurementCorrection = readFileSync(new URL(measurementFiles[0], migrationDirectory), 'utf8');
 const insertMeasurement = (extra = {}) => {

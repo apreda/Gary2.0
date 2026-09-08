@@ -1,4 +1,5 @@
 import { isFinalSettlementStatus } from '../../supabase/functions/_shared/gameSettlement.js';
+import { findMlbSettlementPlayer } from '../../supabase/functions/_shared/mlbPropSettlement.js';
 export { gradeGameSpread } from '../../supabase/functions/_shared/gameSettlement.js';
 
 const clean = (value) => String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
@@ -207,89 +208,97 @@ export function canonicalNFLPropType(value) {
 
 function finiteStat(row, ...fields) {
   for (const field of fields) {
-    const value = Number(row?.[field]);
-    if (row?.[field] != null && Number.isFinite(value)) return value;
+    const raw = row?.[field];
+    if (raw == null) continue;
+    if (!['number', 'string'].includes(typeof raw) || String(raw).trim() === '') return null;
+    const value = Number(raw);
+    return Number.isSafeInteger(value) ? value : null;
   }
   return null;
 }
 
-function statOrZero(row, ...fields) {
-  return finiteStat(row, ...fields) ?? 0;
+function countStat(row, ...fields) {
+  const value = finiteStat(row, ...fields);
+  return value != null && value >= 0 ? value : null;
 }
 
-function sameNFLTeam(left, right) {
-  const leftId = left?.team?.id ?? left?.team_id;
-  const rightId = right?.team?.id ?? right?.team_id;
-  if (leftId != null && rightId != null) return String(leftId) === String(rightId);
-  const leftKey = left?.team?.abbreviation ?? left?.team?.full_name ?? left?.team?.name;
-  const rightKey = right?.team?.abbreviation ?? right?.team?.full_name ?? right?.team?.name;
-  return leftKey != null && rightKey != null && clean(leftKey) === clean(rightKey);
+function sumStats(row, fields, read = finiteStat) {
+  const values = fields.map(field => read(row, field));
+  if (values.some(value => value == null)) return null;
+  const total = values.reduce((sum, value) => sum + value, 0);
+  return Number.isSafeInteger(total) ? total : null;
+}
+
+/** Reuse the sport-independent exact-id/name rules already exercised by MLB. */
+export function findNflSettlementPlayer(rows, { playerId = null, name = '' } = {}) {
+  const normalized = rows.map(row => row?.player?.id != null ? row : {
+    ...row, player: { ...row?.player, id: row?.player_id },
+  });
+  const match = findMlbSettlementPlayer(normalized, { playerId, name });
+  if (playerId != null && String(playerId).trim() && match.status === 'missing'
+    && findMlbSettlementPlayer(normalized, { name }).status !== 'missing') {
+    return { status: 'conflict', row: null };
+  }
+  return match;
 }
 
 /**
  * Deterministic NFL box-score extraction for every market the NFL prop desk is
  * authorized to publish. `allRows` must already be scoped to the prop's exact
- * game. Longest completion is the longest reception by the passer's team when
- * the provider does not repeat that derived value on the quarterback row.
+ * game. A null/omitted provider category is not a measured zero. In particular,
+ * nullable TD components cannot establish the exact scoring total. Longest
+ * completion needs a direct player measurement; receiver maxima are not
+ * equivalent even with one passer because receiving laterals split yardage.
  */
-export function nflActualFromStatRow(row, propType, allRows = []) {
+export function nflActualFromStatRow(row, propType) {
   if (!row) return null;
   const type = canonicalNFLPropType(propType);
   if (!type) return null;
 
   switch (type) {
     case 'passing_yards':
-      return statOrZero(row, 'passing_yards');
+      return finiteStat(row, 'passing_yards');
     case 'rushing_yards':
-      return statOrZero(row, 'rushing_yards');
+      return finiteStat(row, 'rushing_yards');
     case 'receiving_yards':
-      return statOrZero(row, 'receiving_yards');
+      return finiteStat(row, 'receiving_yards');
     case 'receptions':
-      return statOrZero(row, 'receptions');
+      return countStat(row, 'receptions');
     case 'passing_touchdowns':
-      return statOrZero(row, 'passing_touchdowns');
+      return countStat(row, 'passing_touchdowns');
     case 'rushing_touchdowns':
-      return statOrZero(row, 'rushing_touchdowns');
+      return countStat(row, 'rushing_touchdowns');
     case 'receiving_touchdowns':
-      return statOrZero(row, 'receiving_touchdowns');
+      return countStat(row, 'receiving_touchdowns');
     case 'anytime_touchdown':
-      return [
+      return sumStats(row, [
         'rushing_touchdowns',
         'receiving_touchdowns',
         'fumbles_touchdowns',
         'interception_touchdowns',
         'kick_return_touchdowns',
         'punt_return_touchdowns',
-      ].reduce((total, field) => total + statOrZero(row, field), 0);
+      ], countStat);
     case 'completions':
-      return statOrZero(row, 'passing_completions');
+      return countStat(row, 'passing_completions');
     case 'pass_attempts':
-      return statOrZero(row, 'passing_attempts');
+      return countStat(row, 'passing_attempts');
     case 'rushing_attempts':
-      return statOrZero(row, 'rushing_attempts');
+      return countStat(row, 'rushing_attempts');
     case 'interceptions':
-      return statOrZero(row, 'passing_interceptions');
+      return countStat(row, 'passing_interceptions');
     case 'longest_rush':
-      return statOrZero(row, 'long_rushing', 'rushing_long', 'longest_rush');
+      return finiteStat(row, 'long_rushing', 'rushing_long', 'longest_rush');
     case 'longest_reception':
-      return statOrZero(row, 'long_reception', 'receiving_long', 'longest_reception');
-    case 'longest_completion': {
-      const direct = finiteStat(row, 'longest_completion', 'passing_long', 'long_passing');
-      if (direct != null) return direct;
-      const teammateLongs = (allRows || [])
-        .filter((candidate) => sameNFLTeam(candidate, row))
-        .map((candidate) => finiteStat(candidate, 'long_reception', 'receiving_long', 'longest_reception'))
-        .filter((value) => value != null);
-      return teammateLongs.length ? Math.max(...teammateLongs) : 0;
-    }
+      return finiteStat(row, 'long_reception', 'receiving_long', 'longest_reception');
+    case 'longest_completion':
+      return finiteStat(row, 'longest_completion', 'passing_long', 'long_passing');
     case 'rushing_receiving_yards':
-      return statOrZero(row, 'rushing_yards') + statOrZero(row, 'receiving_yards');
+      return sumStats(row, ['rushing_yards', 'receiving_yards']);
     case 'passing_rushing_yards':
-      return statOrZero(row, 'passing_yards') + statOrZero(row, 'rushing_yards');
+      return sumStats(row, ['passing_yards', 'rushing_yards']);
     case 'total_yards':
-      return statOrZero(row, 'passing_yards')
-        + statOrZero(row, 'rushing_yards')
-        + statOrZero(row, 'receiving_yards');
+      return sumStats(row, ['passing_yards', 'rushing_yards', 'receiving_yards']);
     default:
       return null;
   }

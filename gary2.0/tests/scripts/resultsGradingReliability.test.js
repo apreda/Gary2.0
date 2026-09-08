@@ -179,6 +179,12 @@ describe('NFL deterministic prop extraction', () => {
     passing_interceptions: 1,
     rushing_yards: 42,
     rushing_touchdowns: 1,
+    receiving_yards: 0,
+    receiving_touchdowns: 0,
+    fumbles_touchdowns: 0,
+    interception_touchdowns: 0,
+    kick_return_touchdowns: 0,
+    punt_return_touchdowns: 0,
     long_rushing: 18,
   };
   const receiver = {
@@ -219,7 +225,8 @@ describe('NFL deterministic prop extraction', () => {
     expect(nflActualFromStatRow(qb, 'pass_attempts', [qb, receiver])).toBe(35);
     expect(nflActualFromStatRow(qb, 'rushing_attempts', [qb, receiver])).toBe(8);
     expect(nflActualFromStatRow(qb, 'longest_rush', [qb, receiver])).toBe(18);
-    expect(nflActualFromStatRow(qb, 'longest_pass', [qb, receiver])).toBe(37);
+    expect(nflActualFromStatRow(qb, 'longest_pass', [qb, receiver])).toBeNull();
+    expect(nflActualFromStatRow({ ...qb, longest_completion: 37 }, 'longest_pass', [qb, receiver])).toBe(37);
     expect(nflActualFromStatRow(receiver, 'longest_reception', [qb, receiver])).toBe(37);
   });
 
@@ -413,13 +420,12 @@ describe('run-all-results wiring', () => {
     expect(runner).toContain("const nflFinalIds = new Set(nflGames.filter(g => isFinalGameStatus(g.status))");
     expect(runner).toContain("dataSport === 'NFL' && gameId == null");
     expect(runner).toContain("dataSport === 'NFL' && !nflFinalIds.has(gameId)");
-    // Football stat lookups share one exact-game branch with the DNP-void
-    // (Aug 20 2026): populated final box + absent player = push; provider
-    // holes stay pending; grounding never settles football in ANY pass.
+    // Complete stats still do not prove inactivity. Actual NFL plays contain
+    // participants absent from the contributor box; missing rows stay pending.
     expect(runner).toContain("statsForGame(dataSport === 'NFL' ? nflStats : ncaafStats, gameId)");
-    expect(runner).toContain("!lookupMeta.playerFound && gameRows.length >= 10");
-    expect(runner).toContain('footballDnpVoid = true');
-    expect(runner).toContain("footballDnpVoid ? 'push' : gradePropResult(actual, line, bet)");
+    expect(runner).not.toContain('footballDnpVoid = true');
+    expect(runner).toContain('No football DNP void without authoritative separate');
+    expect(runner).toContain('const res = gradePropResult(actual, line, bet)');
     expect(runner).toContain('season_type=${seasonType}&per_page=100');
     expect(runner).toContain('normalizeStoredPropType(rawProp)');
     expect(runner).toContain("_game_id: String(gameId)");
@@ -441,10 +447,10 @@ describe('run-all-results wiring', () => {
     expect(runner).toContain("timeZone: 'America/New_York'");
     expect(runner).toContain("dataSport === 'NCAAF' && gameId == null");
     expect(runner).toContain("dataSport === 'NCAAF' && !ncaafFinalIds.has(gameId)");
-    expect(runner).toContain("dataSport === 'NCAAF' ? p.player_id : null");
+    expect(runner).toContain('p.player_id, lookupMeta');
     expect(runner).toContain('findExactNcaafStatRow(data, playerId)');
     expect(runner).toContain("bdlFetch('ncaaf/v1/player_stats', `game_ids[]=${gameId}&per_page=100${cursorParam}`)");
-    expect(runner).toContain("String(row?.game?.id ?? '') === String(gameId)");
+    expect(runner).toContain("String(row?.game?.id ?? '') !== String(gameId)");
     expect(runner).toContain('[BDL Miss] ${dataSport}:');
     expect(runner).toContain('leaving pending');
   });
