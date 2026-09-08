@@ -668,9 +668,8 @@ struct BillfoldView: View {
                        })
     }
 
-    /// GARY / YOU book switch — whose record the page shows. Persisted so the
-    /// reader's choice sticks across launches (founder, Jul 26). House selector
-    /// grammar: text + underline bar, never a pill (founder law, Jul 26).
+    /// GARY / YOU / BOARD selects the record shown and persists across launches.
+    /// Gold and a stronger text weight identify the selected scope.
     private var bookScopeToggle: some View {
         HStack(spacing: 14) {
             bookScopeTab("GARY", isOn: billfoldScope != "you" && billfoldScope != "board") { billfoldScope = "gary" }
@@ -681,15 +680,15 @@ struct BillfoldView: View {
 
     private func bookScopeTab(_ label: String, isOn: Bool, tap: @escaping () -> Void) -> some View {
         Button(action: tap) {
-            VStack(spacing: 3) {
-                Text(label)
-                    .font(GaryFonts.mono(10, bold: true)).tracking(1)
-                    .foregroundStyle(isOn ? brass : .white.opacity(0.5))
-                Rectangle().fill(isOn ? brass : .clear).frame(height: 1.5)
-            }
-            .fixedSize()
+            Text(label)
+                .font(GaryFonts.mono(10, bold: isOn)).tracking(1)
+                .foregroundStyle(isOn ? brass : .white.opacity(0.5))
+                .padding(.vertical, 3)
+                .fixedSize()
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 
     // MARK: - Sport Tabs + Picks/Props + Timeframe
