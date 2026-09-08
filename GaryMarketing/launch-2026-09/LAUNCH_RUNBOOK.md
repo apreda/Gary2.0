@@ -6,6 +6,10 @@ September 4, updated September 7, 2026. Accountable owner: Adam. This replaces t
 
 The six workstreams have an explicit completion scorecard in [the September 7 execution review](EXECUTION_REVIEW_2026-09-07.md). Implementation is not audience validation. Codex handles authorized implementation, verification and analysis during active work; Adam supplies account access, founder footage and human contact decisions. The [personal-tracking pilot](PERSONAL_TRACKING_PILOT.md) must produce real observations before the integration spending gate is met.
 
+The [September 13 completion tracker](LAUNCH_COMPLETION_TRACKER.md) lists owners, deadlines and real completion receipts. The [Product Hunt packet](PRODUCT_HUNT_PACKET.md) and [Reddit playbook](REDDIT_PLAYBOOK.md) prepare those additional channels without claiming that accounts, platform drafts or posts are already live. This runbook remains authoritative for the offer and operating cadence.
+
+Native/build details below are historical release-owner handoff facts, not a fresh certification of current App Store availability. This website/marketing session does not inspect or change iOS, native builds or Apple accounts. Obtain a dated current handoff from the separate release owner before using native availability claims in launch material.
+
 ## The promise
 
 **Find your game. See Gary’s pick.** Free game picks with written reasoning are the first useful experience. The public record lets people judge Gary. Your Book lets them track their own decisions. Winners is the selected board; its September 4 selection process has its own history and must earn its reputation.
@@ -90,4 +94,4 @@ Do not delete losing picks or blend the new Winners history with the whole slate
 - `content/VIDEO_SCRIPTS.md`: three founder-led recording scripts and shot lists; no footage has been recorded.
 - `INTEGRATION_PACKET.md`: accurate company/product brief, audience limitations, vendor questions and an unsent inquiry.
 - `evidence/`: aggregate operational snapshots. Refresh before making external audience claims.
-- `../APP_REVIEW_2_25_901.md`: current submitted-build review instructions and privacy disclosures. Build 901 entered Waiting for Review September 5 at 3:13 PM Eastern; Apple approval remains pending in the latest receipt.
+- `../APP_REVIEW_2_25_901.md`: historical build-901 review instructions and privacy disclosures. Its September 5, 3:13 PM Eastern Waiting for Review receipt is not current release status; obtain the separate release owner's latest handoff before making an availability claim.

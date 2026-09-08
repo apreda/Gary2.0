@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gary AI — Product Hunt website gallery</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #0a0908; color: #f4f0e7; font-family: Arial, sans-serif; }
+    .slide { width: 1280px; height: 720px; overflow: hidden; display: none; }
+    .slide.selected { display: block; }
+    header { height: 76px; padding: 16px 30px 12px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+    h1 { margin: 0 0 5px; font-size: 27px; letter-spacing: -.6px; line-height: 1; }
+    .context { margin: 0; color: #c6bfae; font-size: 14px; line-height: 1.25; }
+    .brand { font-size: 15px; font-weight: 700; letter-spacing: 2px; color: #cfb049; white-space: nowrap; }
+    figure { height: 612px; margin: 0; text-align: center; }
+    figure img { display: block; width: 1088px; height: 612px; margin: 0 auto; object-fit: contain; }
+    footer { height: 32px; padding: 7px 30px; font-size: 13px; color: #bdb6a6; display: flex; justify-content: space-between; }
+    nav { padding: 18px 30px; display: flex; gap: 24px; font-size: 15px; }
+    nav a { color: #e1c665; }
+    body.export nav { display: none; }
+  </style>
+</head>
+<body>
+  <main>
+    <article class="slide" id="board">
+      <header><div><h1>Find your game.</h1><p class="context">Real website example · September 7, 2026 · Not current picks</p></div><span class="brand">GARY A.I.</span></header>
+      <figure><img src="assets/board-2026-09-07.jpg" alt="Gary's actual September 7 website game board, showing published calls and dates."></figure>
+      <footer><span>Free published game picks and written reasoning.</span><span>21+ · Sports information · No wagers placed</span></footer>
+    </article>
+    <article class="slide" id="reasoning">
+      <header><div><h1>Read the reasoning.</h1><p class="context">Mets at Marlins · September 7, 2026 · Historical example, not a current pick</p></div><span class="brand">GARY A.I.</span></header>
+      <figure><img src="assets/reasoning-2026-09-07.jpg" alt="An excerpt of Gary's actual written analysis for the September 7 Mets–Marlins game, with the saved call and result."></figure>
+      <footer><span>An excerpt, not the full analysis. Confidence is not a calibrated win probability.</span><span>21+ · No guaranteed outcomes</span></footer>
+    </article>
+    <article class="slide" id="record">
+      <header><div><h1>Check the record. Including the losses.</h1><p class="context">Actual website snapshot · September 7, 2026 · Figures will change</p></div><span class="brand">GARY A.I.</span></header>
+      <figure><img src="assets/record-2026-09-07.jpg" alt="Gary's actual public game-pick record, including a losing 30-day period and losing streak; player props have a separate record."></figure>
+      <footer><span>Game picks only. Listed odds; flat 1-unit stakes.</span><span>21+ · Past results do not guarantee future outcomes</span></footer>
+    </article>
+  </main>
+  <nav aria-label="Gallery previews"><a href="?piece=board">Game board</a><a href="?piece=reasoning">Reasoning</a><a href="?piece=record">Record</a></nav>
+  <script>
+    const query = new URLSearchParams(location.search);
+    const requested = query.get('piece');
+    const selected = ['board', 'reasoning', 'record'].includes(requested) ? requested : 'board';
+    document.getElementById(selected).classList.add('selected');
+    if (query.has('export')) document.body.classList.add('export');
+  </script>
+</body>
+</html>
