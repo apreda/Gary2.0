@@ -138,7 +138,7 @@ enum SilverBar {
     }
 }
 
-// MARK: - Members Only reveal system 
+// MARK: - Members Only reveal system
 //
 // A new Winners pick sits SEALED in the rail — black members card, chrome bear,
 // live countdown to first pitch. The owner taps to flip it open into the gold
