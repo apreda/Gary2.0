@@ -1,10 +1,49 @@
 # Gary launch readiness — September 8, 2026
 
+**Current checkpoint: September 8, 14:36 UTC. NOT YET READY for launch signoff.** Website deletion repair `bc64568c` is independently reviewed and deployed with Product Hunt badge `a729d9c1` in production deployment `dpl_49QP7SoBHoDR4FETafF8PYbCa6UF` (READY; canonical aliases verified). All **838 web tests / 72 suites**, TypeScript and full ESLint pass. Actual web QA A deletion completed through the public account page; all 30 checked account-data relations are empty, the deleted login is rejected, and QA B plus the retained reviewer remain intact. [Live deletion receipt](/Users/adam.preda/Documents/ChatGPT/Gary/launch-readiness/continuation-2026-09-08/web-account-deletion-live-acceptance.json).
+
+Native account repair `4e985ac8` passed independent review and five focused tests across three files. The first optimized 915 build and archive passed, but the release hash check caught the concurrent, user-requested Winners strip removal `acd2ca43`; **915 has not been uploaded**. The unused build number will be rebuilt from one combined source freeze. The original installed 915 is only the account-repair baseline, not the final Winners artifact. Native QA B deletion and final empty/sparse Winners visual acceptance remain pending; GUI testing is paused after unexpected screen changes while a quiet test window is requested.
+
+App Store Connect holds the saved **914 / Prepare for Submission** interim draft after withdrawal of 901. Full reviewed copy, actual tested reviewer login, contact and 14 privacy categories are saved. Replace the draft with the final verified 915 artifact, screenshots and notes. The retained reviewer has actual 914 private Profile/Book/Winners/Settings acceptance. Attribution and corrected Hub content are publicly verified. Provider-rights evidence, physical/provider flows, narrow Supabase Auth settings and support/moderation ownership remain open. No App Store approval or release is claimed.
+
+## Earlier 13:53 UTC checkpoint
+
+The following preserves the earlier 914 checkpoint and is superseded by the current account-repair and App Store state above.
+
+The gate-by-gate record is [the release ledger](docs/launch/READINESS_2026-09-07.md). [This continuation receipt](docs/launch/CONTINUATION_2026-09-08.md) links the sanitized evidence and distinguishes source, simulator, physical install, TestFlight and App Review results.
+
+## Current source and release state
+
+- **Native 2.25 (914), source `a82c2ea6`, uploaded successfully at 13:33:26 UTC.** The final archive is `/Volumes/KINGSTON/Gary-2.25-914-Hub-Brand-final.xcarchive`; upload UUID `7df2c9e4-fbc3-4276-962c-f22bf97d9b3a`. The release owner independently verified Apple upload **Complete** and internal **Beta / Testing**. The earlier pre-countability archive was held and is not this artifact. No 914 physical/TestFlight installation or App Review selection is implied.
+- **Actual final 914 simulator checks show NFL 30–29–0 / −1u and correct tomorrow context.** This closes the earlier sport-selection defect where 34 preseason rows inflated the record to 52–40–1. `875fc9bb` preserves all 93 history rows while counting 59 eligible results; the executed Swift fixture gives −1.039919 units before display rounding. Final Hub/Fantasy and off-slate context evidence is recorded alongside the release. Earlier 913 guest Profile/Settings/auth entry/What's New/Board checks remain valid within their sampled scope; both optional analytics toggles were off.
+- **Website account ownership repair `2debee7b` remains live; current READY web source is `210b2f38`, including `3943c69d`.** The latest full web sweep passes **611 tests / 68 files, PostgreSQL 17.10 enabled, TypeScript and full ESLint**. The earlier 525-test account repair and 504-test attribution checks remain dated baselines. Account deletion migration `20260908132857` is deployed; authorized disposable-account acceptance is underway. Wait for its final receipt before claiming completed CRUD/deletion/provider acceptance.
+- **App Store privacy labels were published around 13:07 UTC:** 14 types, including Customer Support / App Functionality / linked to identity, with no tracking selected and the prior 13 types preserved. Subtitle, promotional text and support URL were saved. The reviewed submission remains **2.25 Waiting for Review / build 901**. The supplied review phone and email are saved and independently confirmed in the returned form; Save is disabled. Working reviewer credentials and final selection/materials still need their own receipts.
+- **nflverse attribution is committed locally as `779ab336`, pending push/deployment.** It uses existing Data Sources and Terms pages, with license permissions preserved and no native change. [The rights audit](docs/launch/PROVIDER_RIGHTS_2026-09-08.md) identifies explicit commercial grants for BDL/The Odds API, narrow MLB/NFL direct-feed evidence gaps and unverified Tank01 terms. The Apple Content Rights answer still needs reconciliation against documented rights; do not claim all-provider clearance.
+- **Backend baseline `40e93140`: 2,922 tests / 295 files** with PostgreSQL fixtures and no skips. This is the dated 912 full run, not a full-suite claim for later account-deletion and shared Hub corrections. [Football repair](docs/launch/FOOTBALL_SETTLEMENT_2026-09-08.md) retains its exact provider/provenance boundaries. Shared stored-Hub corrections and final runtime readback are being coordinated by root; do not reuse old production hashes as a new verification.
+
+## Current remaining gates
+
+1. **Complete authorized account/provider acceptance and final runtime readback.** The 914 artifact and sampled NFL/Hub checks are delivered. The current disposable-account QA needs its own final receipt; prior guest and fixture checks do not establish all private flows. Deploy the reviewed attribution and complete root's shared Hub correction verification.
+2. **Physical acceptance.** DDI/developer services work and in-place 913 installation succeeded; iOS denied launch because the phone was locked, not because of a Gary crash. Mirroring's Unable to Connect is separate. Finish actual auth/recovery, push/account transitions, storefront/billing, Book/profile/report/block/deletion, long-reading and VoiceOver flows with authorized device input. A processed 914 is not an installed-and-tested 914.
+3. **App Review selection, reviewer access and rights.** Live 2.25 Waiting for Review still uses 901. The supplied review phone and email are saved and independently visually confirmed; Save is disabled. Working reviewer access, the intended verified build and final screenshots/notes remain required. Resolve the documented rights bases before an all-rights attestation. Privacy publication and internal Testing are separate from review selection, approval and release.
+4. **Supabase Auth configuration.** Connected tools/CLI work; the dashboard's GitHub login is pending. OTP lifetime remains over one hour and leaked-password protection is off. No Auth setting change is claimed.
+5. **Human moderation/support.** Report-queue/support ownership, coverage cadence and appeals handling still need an explicit operational commitment. A supplied contact address and implemented controls do not establish staffing.
+
+Product Hunt's existing account/draft is verified **Scheduled for September 13 at 12:01 AM PT / 3:01 AM ET**, not launched or approved. Reddit's business email is verified; password/signup handoff remains pending. See the [execution review](GaryMarketing/launch-2026-09/EXECUTION_REVIEW_2026-09-08.md); those outcomes do not close app-release gates.
+
+## Working rules
+
+Use `/Users/adam.preda/Gary2.0`, main, with explicit owned paths. Preserve the private local Firebase plist without reading/editing/staging it; do not read SecretsLocal.swift or private QA credentials. Root owns integration, UI/device acceptance, submission and final signoff. Do not repeat completed archives/uploads or broad unchanged suites. “Built,” “installed,” “processed,” “Testing,” “selected for review,” “approved” and “released” remain separate facts.
+
+## Historical 912 checkpoint and heartbeat — superseded where updated above
+
+The following preserves the earlier 07:18–11:58 UTC evidence and access limitations. It does not describe the current Mac, DDI, App Store Connect, website or candidate state.
+
 Adam’s launch-readiness goal remains unachieved. Source repair, feature completion and the current release artifact are delivered; physical/account, access and human-operation gates remain open. Do not claim zero bugs or launch approval. The current gate-by-gate record is [the release ledger](docs/launch/READINESS_2026-09-07.md); previous 909–911 receipts remain there as history.
 
 **11:58 UTC continuation:** Mac access returned for a focused simulator pass. Installed the existing optimized 912 product over simulator 909 and verified the NFL next-slate card, restored MLB starter-record detail, pitcher `OPP AVG` expansion/collapse and visible `NEXT GAME` streak labels. [Fresh UI evidence and limits](audit-evidence/resumed-912-2026-09-08/README.md). Earlier Mac-lock statements below describe the earlier checks. Physical/account acceptance, remaining changed-page checks and Apple review selection remain open; Chrome's existing Apple tab points to failed sign-in and fresh page reads timed out. No source change, rebuild or upload occurred.
 
-## Current source and artifact
+### 912 source and artifact at the earlier checkpoint
 
 - Native **2.25 (912)**, commit `7745aada`: preserve verified team scores, avoid falsely labeling ambiguous legacy NFL score strings, and derive Home winner headlines only from oriented evidence. Includes completed 909–911 feature/access/privacy repairs. Seventy-nine unique focused tests, optimized simulator build and signed archive pass.
 - Signed archive `/Volumes/KINGSTON/Gary-2.25-912-Launch.xcarchive`; strict/deep code signature and all 21 manifests / 14 categories verified at 07:09:41 UTC. Root privacy matches canonical and signed 911, with System Boot Time 35F9.1, linked Customer Support/App Functionality and no tracking.
@@ -14,7 +53,7 @@ Adam’s launch-readiness goal remains unachieved. Source repair, feature comple
 - All 93 saved NFL game grades reproduce; only 34 retain exact original tickets. Legacy prop provenance is limited: 231 unique retained-ticket matches reproduce saved-actual grades, not independently refetched actuals. One separately verified Etienne TD measurement was corrected from0 to1, preserving the already-correct win grade, original identity and ticket. Migration `20260908065134` applied and independently read back; code/evidence `c94a87d3`.
 - Website source is now `04647d9f`, deployed READY as `dpl_GKkkBwwyfxnYYBHjg8mW985aKdk9` on Gary domains. The attribution repair passes 504 tests / 64 files, types and full lint; public routes and served classifier are verified. Prior `04635425` retains its dated fixture SSR/browser baseline; this new change does not establish authenticated provider acceptance.
 
-## Canonical and verification rules
+### Canonical and verification rules retained from that checkpoint
 
 Work directly on `/Users/adam.preda/Gary2.0`, main; commit/push completed authorized changes using explicit paths. Preserve the private uncommitted `ios/GaryApp/GoogleService-Info.plist`; do not read/edit/stage it or read `SecretsLocal.swift`. The retired Documents workspace clone is not production. No prediction prompts, model choices, injury handling or retired sports were changed.
 
@@ -22,7 +61,7 @@ Local live-finalization/daily jobs launch fresh `run-all-results.js` children fr
 
 Use Node22 at `/Users/adam.preda/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin`. PostgreSQL17 fixtures use internal `/tmp`; ExFAT cannot host PG data. Builds/archives/logs belong on KINGSTON. `/Volumes/KINGSTON/gary-launch-909-checks` is a credential-free test snapshot, never production. Current tested source hashes are in the launch workspace’s `launch-readiness/candidate-912-test-source.json`; independent NFL source/review receipts are alongside it.
 
-## Remaining gates — requests already pending
+### Gates recorded before access returned
 
 1. **Mac unlock / physical device.** Fresh approved Computer Use recheck says the Mac is locked and cannot auto-unlock. Do not bypass it or manufacture screenshots. Paired iPhone17Pro on iOS26.6.1 beta has Developer Mode and a connected tunnel, but DDI services are unavailable because its developer disk image could not mount. Mere pairing is not physical acceptance.
 2. **Actual changed-page/device acceptance.** Prior actual guest UI matrix is 909. After access returns, inspect 910 next-opponent labels, 911 private preferences and 912 historical score display. Finish long reading/collapse and VoiceOver. Ordinary coordinate expansion was aligned, while AX/drag tools also failed on ordinary Home; this does not prove an app touch bug or a VoiceOver pass.
