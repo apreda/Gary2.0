@@ -34,3 +34,8 @@ The launch/founding/October offer agrees in source and deployed pages. Live Stri
 Completed intended launch features include the private Book, verified receipts/streaks, qualified opt-in leaderboard and profiles, preferences, report/block/deletion controls and Fantasy. A real empty leaderboard is correct qualification behavior, not a reason to seed fake standings. Sportsbook account import and Talk to Gary are explicitly future features, not controls to enable without implementation.
 
 The active work has reached external acceptance dependencies after the 912 source/artifact repairs. An operational readiness claim needs the access and owner inputs above; another automated source-only pass cannot substitute for them. “Uploaded,” “processed,” “available in TestFlight,” “selected for review” and “approved” remain separate states.
+
+
+Final 912 production readback is complete on `792e35ca` at07:18UTC: canonical workers, intended models, all20 edge timestamp checks pass, zero unpushed commits; sole exit1 flag is the preserved private plist. Active 6AM slate at07:18:44UTC is Sep7 MLB11/11, zero started missing. Vercel READY/canonical aliases were rechecked; current web source matches deployed04635425 exactly. Fresh approved UI access still reports Mac locked. Detailed receipt: launch workspace `launch-readiness/912-final-release-receipt.json`.
+
+The same external prerequisites have recurred through the original goal turn and both continuations; all independently actionable 912 source/artifact work is now finished. The goal is at an external dependency and must not be marked complete. Resume real acceptance after Mac/login access and support ownership are supplied, without repeating completed archives, audits or unchanged regressions.
