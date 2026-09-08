@@ -120,7 +120,7 @@ fileprivate struct HubHead: View {
                 }
             }
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, GaryLayout.gutter)
     }
 }
 
@@ -266,8 +266,8 @@ fileprivate struct HubBoardSection<Content: View>: View {
                 content().padding(.vertical, 12)
             }
         }
-        .background(Color(hex: "#161412"), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .padding(.horizontal, 20)
+        .garyPanel(radius: GaryLayout.Radius.card, fill: GaryColors.readingPanel)
+        .padding(.horizontal, GaryLayout.gutter)
     }
 }
 
@@ -1714,9 +1714,8 @@ struct HubView: View {
         // the safe area. The page itself remains a vertical viewport.
         .clipped()
         .background {
-            LinearGradient(colors: [Color(hex: "#17150F"), Color(hex: "#0A0908"), Color(hex: "#0A0908")],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-                .ignoresSafeArea().allowsHitTesting(false).accessibilityHidden(true)
+            LiquidGlassBackground(grainDensity: 0)
+                .allowsHitTesting(false).accessibilityHidden(true)
         }
         .coordinateSpace(name: "hubScroll")
         .overlay(alignment: .bottomTrailing) {
@@ -2118,6 +2117,8 @@ fileprivate struct HubMasthead: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 14) {
+                Image(GaryBrand.mark).resizable().scaledToFit()
+                    .frame(width: 25, height: 25).accessibilityHidden(true)
                 leagueButton
                 if !dynamicTypeSize.isAccessibilitySize {
                     Text(FantasyBriefing.dayLabel(SupabaseAPI.todayEST()).uppercased())
@@ -2141,9 +2142,11 @@ fileprivate struct HubMasthead: View {
                 }
             }
             .padding(.bottom, 4)
+            Rectangle().fill(GaryColors.gold.opacity(0.28)).frame(height: 1)
+                .accessibilityHidden(true)
             if searchOpen, mainScope { searchField }
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, GaryLayout.gutter)
     }
 
     private var leagueButton: some View {
@@ -2206,7 +2209,7 @@ fileprivate struct HubMasthead: View {
             }
         }
         .padding(.horizontal, 14).frame(minHeight: 50)
-        .background(Color(hex: "#211E18"), in: RoundedRectangle(cornerRadius: 12))
+        .garyPanel(fill: GaryColors.readingPanel)
         .padding(.top, 8)
     }
 
@@ -2214,7 +2217,7 @@ fileprivate struct HubMasthead: View {
         Button(action: tap) {
             VStack(alignment: .leading, spacing: 11) {
                 Text(label).hubTitleFont(28, .bold)
-                    .foregroundStyle(on ? GaryColors.warmWhite : Color(hex: "#8A857A"))
+                    .foregroundStyle(on ? GaryColors.warmWhite : GaryColors.sectionSub)
                     .fixedSize(horizontal: false, vertical: true)
                 Rectangle().fill(on ? GaryColors.gold : .clear).frame(width: 32, height: 3)
             }
@@ -2379,17 +2382,16 @@ fileprivate struct HubLeadStory: View {
             }
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(hex: "#1D1A14"), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .garyPanel(radius: GaryLayout.Radius.card, fill: GaryColors.readingPanel)
             .overlay(alignment: .topLeading) {
                 Rectangle().fill(GaryColors.gold).frame(width: 36, height: 3)
                     .padding(.leading, 24).accessibilityHidden(true)
             }
-            .shadow(color: .black.opacity(0.2), radius: 18, y: 10)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .multilineTextAlignment(.leading)
-        .padding(.horizontal, 20)
+        .padding(.horizontal, GaryLayout.gutter)
     }
 }
 
@@ -2408,8 +2410,8 @@ fileprivate struct HubBestOf: View {
                 if i < signals.count - 1 { HubRule().padding(.horizontal, 20) }
             }
         }
-        .background(Color(hex: "#161412"), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .padding(.horizontal, 20)
+        .garyPanel(radius: GaryLayout.Radius.card, fill: GaryColors.readingPanel)
+        .padding(.horizontal, GaryLayout.gutter)
     }
 
     @ViewBuilder private func row(_ s: Signal) -> some View {

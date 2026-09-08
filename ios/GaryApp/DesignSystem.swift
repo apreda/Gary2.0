@@ -126,6 +126,9 @@ enum GaryColors {
     // ink, locked opaque, so cards sit ON the world instead of dissolving into
     // it. Applied on Home, Winners and the Fantasy player panels.
     static let panelFillOpaque = Color(hex: "#141210")
+    /// Brighter solid surfaces for longer Hub and Fantasy reading.
+    static let readingPanel = Color(hex: "#24211D")
+    static let readingPanelRaised = Color(hex: "#2C2822")
 }
 
 // MARK: - Layout (single source of truth)
@@ -292,8 +295,8 @@ extension View {
 
     /// The one panel surface (fill + hairline stroke). Replaces quantPanel()
     /// and the six hand-rolled warm-white panels that had drifted 0.008 apart.
-    func garyPanel(radius: CGFloat = GaryLayout.Radius.panel) -> some View {
-        modifier(GaryPanelSurface(radius: radius))
+    func garyPanel(radius: CGFloat = GaryLayout.Radius.panel, fill: Color? = nil) -> some View {
+        modifier(GaryPanelSurface(radius: radius, fill: fill))
     }
 }
 
@@ -315,8 +318,9 @@ extension EnvironmentValues {
 struct GaryPanelSurface: ViewModifier {
     @Environment(\.solidPanels) private var solidPanels
     let radius: CGFloat
+    var fill: Color? = nil
     func body(content: Content) -> some View {
-        if solidPanels {
+        if solidPanels || fill != nil {
             // FLOATING treatment over THE FLOOR (founder, Aug 19: containers
             // "super close... the background super far away... without going
             // to a gold background"). Black-on-black depth is light + shadow:
@@ -325,7 +329,7 @@ struct GaryPanelSurface: ViewModifier {
             // beneath, so the card reads as hovering OVER the floor.
             content.background(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(GaryColors.panelFillOpaque)
+                    .fill(fill ?? GaryColors.panelFillOpaque)
                     .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
                         .stroke(LinearGradient(stops: [
                             .init(color: GaryColors.warmWhite.opacity(0.16), location: 0),

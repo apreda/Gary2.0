@@ -1,13 +1,13 @@
 import SwiftUI
 
 private enum FantasyInk {
-    static let background = Color(red: 22 / 255, green: 20 / 255, blue: 18 / 255)
-    static let raised = Color(red: 33 / 255, green: 30 / 255, blue: 24 / 255)
-    static let paper = Color(red: 244 / 255, green: 238 / 255, blue: 228 / 255)
-    static let secondary = Color(red: 199 / 255, green: 190 / 255, blue: 176 / 255)
-    static let muted = Color(red: 175 / 255, green: 164 / 255, blue: 151 / 255)
-    static let gold = Color(red: 221 / 255, green: 183 / 255, blue: 111 / 255)
-    static let rule = Color(red: 199 / 255, green: 190 / 255, blue: 176 / 255).opacity(0.17)
+    static let background = GaryColors.cardBg
+    static let raised = GaryColors.readingPanelRaised
+    static let paper = GaryColors.warmWhite
+    static let secondary = GaryColors.warmWhite.opacity(0.86)
+    static let muted = GaryColors.warmWhite.opacity(0.74)
+    static let gold = GaryColors.gold
+    static let rule = GaryColors.warmWhite.opacity(0.17)
 }
 
 private struct FantasySelection: Identifiable {
@@ -118,7 +118,7 @@ struct FantasyBriefingPage: View {
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
             .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-            .background(FantasyInk.raised, in: RoundedRectangle(cornerRadius: 12))
+            .garyPanel(fill: GaryColors.readingPanel)
             .contentShape(Rectangle())
         }
         .accessibilityLabel("Scoring format: \(formatLabel)")
@@ -207,7 +207,7 @@ struct FantasyBriefingPage: View {
                                     }, onDetails: { selected = FantasySelection(decision: decision, briefing: briefing) })
                                 }
                             }
-                            .background(FantasyInk.background, in: RoundedRectangle(cornerRadius: 18))
+                            .garyPanel(radius: GaryLayout.Radius.card, fill: GaryColors.readingPanel)
                         }
                     }
                 } else {
@@ -298,7 +298,11 @@ private struct FantasyFeaturedCall: View {
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(FantasyInk.raised, in: RoundedRectangle(cornerRadius: 18))
+            .garyPanel(radius: GaryLayout.Radius.card, fill: FantasyInk.raised)
+            .overlay(alignment: .topLeading) {
+                Capsule().fill(GaryColors.gold).frame(width: 36, height: 3)
+                    .padding(.leading, 20).accessibilityHidden(true)
+            }
         }
     }
 }
@@ -374,7 +378,7 @@ private struct FantasyReadLink: View {
             Spacer(minLength: 0)
             Image(systemName: "arrow.up.right").font(.caption.weight(.semibold)).accessibilityHidden(true)
         }
-        .foregroundStyle(FantasyInk.gold)
+        .foregroundStyle(GaryColors.lightGold)
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         .contentShape(Rectangle())
     }
@@ -517,7 +521,7 @@ private struct FantasyDecisionSheet: View {
                     FantasyRule()
                     FantasyTextSection(title: "WHAT TO CHECK NEXT", text: decision.displayText(decision.watch_for))
                 }
-                .padding(18).background(FantasyInk.raised, in: RoundedRectangle(cornerRadius: 16))
+                .padding(18).garyPanel(radius: GaryLayout.Radius.card, fill: FantasyInk.raised)
                 applicability
                 if !decision.opportunities.isEmpty { opportunities }
                 if let ownership = decision.availability?.rostered_percent {
