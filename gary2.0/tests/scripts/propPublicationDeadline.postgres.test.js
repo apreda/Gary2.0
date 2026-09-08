@@ -34,7 +34,7 @@ describe.skipIf(!supported)('prop publication deadline on isolated PostgreSQL', 
     execFileSync(`${bin}/pg_ctl`, ['-D', `${directory}/data`, '-l', `${directory}/server.log`, '-o', `-k ${directory} -h '' -p 55441`, '-w', 'start'], { env: pgEnv, stdio: 'pipe' });
     started = true;
     sql('CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS; CREATE TABLE public.prop_picks(date text PRIMARY KEY,picks jsonb,created_at timestamptz,updated_at timestamptz); GRANT ALL ON public.prop_picks TO service_role;');
-    sql(readFileSync(new URL('../../supabase/migrations/20260908025501_enforce_prop_publication_deadline.sql', import.meta.url), 'utf8'));
+    sql(readFileSync(new URL('../../supabase/migrations/20260908031714_enforce_prop_publication_deadline.sql', import.meta.url), 'utf8'));
   }, 30000);
   afterAll(() => {
     if (started) execFileSync(`${bin}/pg_ctl`, ['-D', `${directory}/data`, '-m', 'immediate', '-w', 'stop'], { env: pgEnv, stdio: 'ignore' });
