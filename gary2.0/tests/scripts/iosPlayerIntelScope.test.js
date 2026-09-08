@@ -24,10 +24,10 @@ function block(text, start) {
 
 describe('native game-page player card scope', () => {
   it('passes each page league into the card selection and task identity', () => {
-    expect(scout).toContain('PlayerIntelSection(matchup: group.matchup, league: "MLB")');
-    expect(source('FootballGameIntelView.swift')).toContain('PlayerIntelSection(matchup: matchup, league: normalizedLeague, gameId: exactGameID)');
-    expect(scout).toContain('Self.cardsForGame(all, league: league, gameId: gameId, matchup: matchup)');
-    expect(scout).toContain('.task(id: [league, matchup, gameId ?? ""].joined(separator: "|"))');
+    expect(scout).toContain('PlayerIntelSection(matchup: group.matchup, league: pageLeague, gameId: bdlGameId.map(String.init), gameDate: slateDate)');
+    expect(source('FootballGameIntelView.swift')).toContain('PlayerIntelSection(matchup: matchup, league: normalizedLeague, gameId: exactGameID, gameDate: gameDate)');
+    expect(scout).toContain('Self.cardsForGame(all, league: scope.league, gameId: String(scope.gameID), matchup: matchup)');
+    expect(scout).toContain('.task(id: playerScope) { await loadPlayers() }');
   });
 
   it.skipIf(!hasSwift)('executes the real page and story selectors against colliding ids, doubleheaders and cross-sport abbreviations', () => {
@@ -58,7 +58,7 @@ let all = [mlb, nfl, college, unknown, wrongGame]
 // The existing shared keyword matcher can match NFL Atlanta/Giants to an
 // MLB Braves/Giants matchup. The selector must reject it by league first.
 precondition(abbrGameMatches("ATL @ NYG", matchup: matchup))
-precondition(Cards.cardsForGame(all, league: "MLB", gameId: nil, matchup: matchup).map { $0.id } == [mlb.id])
+precondition(Cards.cardsForGame(all, league: "MLB", gameId: "123", matchup: matchup).map { $0.id } == [mlb.id])
 precondition(Cards.cardsForGame(all, league: "NFL", gameId: "123", matchup: matchup).map { $0.id } == [nfl.id])
 precondition(Cards.cardsForGame(all, league: "NCAAF", gameId: "123", matchup: matchup).map { $0.id } == [college.id])
 precondition(Cards.cardsForGame(all, league: "NFL", gameId: "missing", matchup: matchup).isEmpty)

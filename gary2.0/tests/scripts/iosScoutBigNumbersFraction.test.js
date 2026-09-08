@@ -31,10 +31,9 @@ describe('iOS Scout first-inning Big Number', () => {
 describe('iOS Scout doubleheader weather identity', () => {
   it('requires a same-time forecast and never falls back to the twin game', () => {
     expect(trioData).toContain('let weatherCandidates = (board?.weather ?? []).filter');
-    expect(trioData).toContain('if isDoubleheader {');
-    expect(trioData).toContain('if let myBucket = PicksCarouselView.timeBucket(commence)');
-    expect(trioData).toContain('PicksCarouselView.timeBucket(parseISO8601($0.commence_time ?? "")) == myBucket');
-    expect(trioData).toContain('} else {\n                w = nil\n            }');
-    expect(trioData).toContain('} else {\n            w = weatherCandidates.first\n        }');
+    expect(trioData).toContain('let weatherHits = weatherCandidates.filter { GamePageDataScope.sameStart($0.commence_time, contextStart) }');
+    expect(trioData).toContain('let w = weatherHits.count == 1 ? weatherHits.first : nil');
+    expect(trioData).toContain('let hits = cands.filter { GamePageDataScope.sameStart($0.game_time, contextStart) }');
+    expect(trioData).toContain('return hits.count == 1 ? hits.first : nil');
   });
 });

@@ -1155,13 +1155,24 @@ struct PicksCarouselView: View {
     /// The game's BDL id from its slate row (doubleheader-exact edge + live
     /// attachment). nil when the slate hasn't landed or the row predates ids.
     private func bdlGameId(for g: (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])) -> Int? {
+        guard let selectedDate = GamePageDataScope.slateDate(loadedDate: store.loadedDate, yesterday: pickDay == .yesterday) else { return nil }
+        let expectedGameDate = ExactGameIdentity.easternDate(of: g.commence) ?? selectedDate
+        func belongsToSelectedDate(_ stamp: String?) -> Bool {
+            guard let stamp, !stamp.isEmpty else { return true }
+            return ExactGameIdentity.easternDate(of: parseISO8601(stamp)) == expectedGameDate
+        }
+        // The slate store holds Today only. Historical picks must never borrow
+        // today's sole same-team id when their original identity is unavailable.
+        let daySlate = pickDay == .today ? store.slate : []
         let propIds = Set(g.props.compactMap(\.game_id))
-        if propIds.count == 1 { return propIds.first }
+        guard propIds.count <= 1 else { return nil }
+        if propIds.count == 1, g.props.allSatisfy({ belongsToSelectedDate($0.commence_time) }) { return propIds.first }
 
         let key = Self.gameIdentityKey(g.matchup, g.commence)
         let scopedLeague = g.props.first.map { propSportKey($0) }
             ?? sport.uppercased()
-        let dayPicks = pickDay == .today ? store.gamePicks : store.yesterdayGamePicksAll
+        let dayPicks = (pickDay == .today ? store.gamePicks : store.yesterdayGamePicksAll)
+            .filter { belongsToSelectedDate($0.commence_time) }
         if let id = dayPicks.first(where: {
             let rowLeague = ($0.league ?? "").uppercased()
             return rowLeague == scopedLeague
@@ -1169,9 +1180,9 @@ struct PicksCarouselView: View {
                                         $0.commence_time.flatMap(parseISO8601)) == key
         })?.game_id { return id }
 
-        if let id = store.slate.first(where: {
+        if let id = daySlate.first(where: {
             let rowLeague = ($0.league ?? "").uppercased()
-            return rowLeague == scopedLeague
+            return rowLeague == scopedLeague && belongsToSelectedDate($0.commence_time)
                 && Self.gameIdentityKey("\($0.away_team ?? "") @ \($0.home_team ?? "")",
                                         $0.commence_time.flatMap(parseISO8601)) == key
         })?.bdl_game_id { return id }
@@ -1189,10 +1200,10 @@ struct PicksCarouselView: View {
                       Self.matchupKey(matchup) == matchupKey else { return nil }
                 return pick.game_id
             }
-            + store.slate.compactMap { row -> Int? in
+            + daySlate.compactMap { row -> Int? in
                 let rowLeague = (row.league ?? "").uppercased()
                 let matchup = "\(row.away_team ?? "") @ \(row.home_team ?? "")"
-                guard rowLeague == scopedLeague,
+                guard rowLeague == scopedLeague, belongsToSelectedDate(row.commence_time),
                       Self.matchupKey(matchup) == matchupKey else { return nil }
                 return row.bdl_game_id
             }
@@ -1717,6 +1728,7 @@ struct PicksCarouselView: View {
                                       }(),
                                       gamePickResult: { store.gamePickResult($0, forYesterday: pickDay == .yesterday) }, resultForProp: { store.resultForProp($0, forYesterday: pickDay == .yesterday) },
                                       edges: edges(for: g), bdlGameId: bdlGameId(for: g),
+                                      slateDate: GamePageDataScope.slateDate(loadedDate: store.loadedDate, yesterday: pickDay == .yesterday),
                                       interruptionLabel: interruptionLabel(for: g),
                                       onTapProp: { selectedProp = $0 },
                                       onSeeYesterday: { withAnimation(.easeInOut(duration: 0.25)) { pickDay = .yesterday; page = 0 } },
@@ -2211,7 +2223,7 @@ struct PicksCarouselView: View {
     private var effectiveScope: String { sport }
 
     private var currentConnections: [Signal] {
-        guard connectionDate == store.loadedDate, connectionDate == SupabaseAPI.todayEST() else { return [] }
+        guard pickDay == .today, connectionDate == store.loadedDate, connectionDate == SupabaseAPI.todayEST() else { return [] }
         return connections.filter { $0.slateDate == connectionDate }
     }
 
@@ -2511,8 +2523,8 @@ struct TeasedPickCard: View {
 /// written the evening before) — ONE fetch feeds every game page's scout.
 @MainActor
 enum TodayBoardCache {
-    private static var stored: (day: String, board: TomorrowBoard, fetchedAt: Date)? = nil
-    private static var inFlight: (day: String, task: Task<TomorrowBoard?, Never>)? = nil
+    private static var stored: [String: (board: TomorrowBoard, fetchedAt: Date)] = [:]
+    private static var inFlight: [String: Task<TomorrowBoard?, Never>] = [:]
 
     /// A board can improve after the first morning read (probables, lines and
     /// generated copy land in stages). The former day-long cache froze a 6 AM
@@ -2541,19 +2553,28 @@ enum TodayBoardCache {
         return hasMissingMLBArms ? 30 : 300
     }
 
-    static func get() async -> TomorrowBoard? {
-        let day = SupabaseAPI.todayEST()
-        if let stored, stored.day == day,
-           Date().timeIntervalSince(stored.fetchedAt) < cacheLifetime(for: stored.board) {
-            return stored.board
+    static func get(date: String? = nil) async -> TomorrowBoard? {
+        let day = date ?? SupabaseAPI.todayEST()
+        guard GamePageDataScope.shiftDay(day, 0) == day else { return nil }
+        if let cached = stored[day],
+           Date().timeIntervalSince(cached.fetchedAt) < cacheLifetime(for: cached.board) {
+            return cached.board
         }
-        if let inFlight, inFlight.day == day { return await inFlight.task.value }
-        let task = Task { await SupabaseAPI.fetchTodayBoard(date: day) }
-        inFlight = (day, task)
+        if let task = inFlight[day] { return await task.value ?? stored[day]?.board }
+        let task = Task { () -> TomorrowBoard? in
+            let board = await SupabaseAPI.fetchTodayBoard(date: day)
+            guard let board, board.date == day else { return nil }
+            return board
+        }
+        inFlight[day] = task
         let board = await task.value
-        if inFlight?.day == day { inFlight = nil }
-        guard let board else { return stored?.day == day ? stored?.board : nil }
-        stored = (day, board, Date())
+        inFlight[day] = nil
+        guard let board else { return stored[day]?.board }
+        stored[day] = (board, Date())
+        // Only nearby slates are reachable here; bound retained historical data.
+        for key in stored.keys.sorted(by: { stored[$0]!.fetchedAt > stored[$1]!.fetchedAt }).dropFirst(4) {
+            stored[key] = nil
+        }
         return board
     }
 }
@@ -2562,33 +2583,41 @@ enum TodayBoardCache {
 /// for the scout capsules. One fetch pair shared by every game page.
 @MainActor
 enum ScoutWireCache {
-    private static var stored: (day: String, items: [SupabaseAPI.WireItem], fetchedAt: Date)? = nil
+    private static var stored: [String: (items: [SupabaseAPI.WireItem], fetchedAt: Date)] = [:]
+    private static var inFlight: [String: Task<[SupabaseAPI.WireItem], Never>] = [:]
     /// The wire is written mid-morning (and again through the day) — an
     /// all-day cache kept serving yesterday's headlines to anyone who opened
     /// the app before the day's first write (founder screenshot, Aug 20:
     /// a stale IL line at 9:48 AM). Twenty minutes keeps the page current
     /// without hammering the table.
     private static let ttl: TimeInterval = 20 * 60
-    static func get() async -> [SupabaseAPI.WireItem] {
-        let day = SupabaseAPI.todayEST()
-        if let stored, stored.day == day, !stored.items.isEmpty,
-           Date().timeIntervalSince(stored.fetchedAt) < ttl { return stored.items }
-        async let today = SupabaseAPI.fetchWireItems(date: day, limit: 24)
-        async let prior = SupabaseAPI.fetchWireItems(date: shiftDay(day, -1), limit: 24)
-        let items = await today + prior
+    static func get(date: String? = nil) async -> [SupabaseAPI.WireItem] {
+        let day = date ?? SupabaseAPI.todayEST()
+        guard let priorDay = GamePageDataScope.shiftDay(day, -1) else { return [] }
+        if let cached = stored[day], !cached.items.isEmpty,
+           Date().timeIntervalSince(cached.fetchedAt) < ttl { return cached.items }
+        if let task = inFlight[day] {
+            let items = await task.value
+            return items.isEmpty ? (stored[day]?.items ?? []) : items
+        }
+        let task = Task { () -> [SupabaseAPI.WireItem] in
+            async let today = SupabaseAPI.fetchWireItems(date: day, limit: 24)
+            async let prior = SupabaseAPI.fetchWireItems(date: priorDay, limit: 24)
+            let items = await today + prior
+            let scoped = items.filter { $0.date == day || $0.date == priorDay }
+            return scoped
+        }
+        inFlight[day] = task
+        let items = await task.value
+        inFlight[day] = nil
         // NEVER cache an empty read — a page swipe cancels in-flight .tasks and
         // the cancelled fetch returns [], which would poison every later page.
         // On a failed refresh, the previous non-empty copy keeps serving.
-        if !items.isEmpty { stored = (day, items, Date()) }
-        return stored?.day == day ? (stored?.items ?? items) : items
-    }
-    private static func shiftDay(_ iso: String, _ delta: Int) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        f.timeZone = TimeZone(identifier: "America/New_York")
-        guard let d = f.date(from: iso),
-              let shifted = Calendar.current.date(byAdding: .day, value: delta, to: d) else { return iso }
-        return f.string(from: shifted)
+        if !items.isEmpty { stored[day] = (items, Date()) }
+        for key in stored.keys.sorted(by: { stored[$0]!.fetchedAt > stored[$1]!.fetchedAt }).dropFirst(4) {
+            stored[key] = nil
+        }
+        return stored[day]?.items ?? items
     }
 }
 

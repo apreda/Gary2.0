@@ -121,6 +121,9 @@ private struct MLBCapBrim: Shape {
 struct MLBGameIntelView: View {
     let gameID: Int?
     let gameDate: String?
+    /// Player packs use the accepted app slate; a post-midnight game's lineup
+    /// cache can use a different Eastern calendar date.
+    var playerIntelDate: String? = nil
     let matchup: String
     let edges: [Signal]
     var read: Signal? = nil
@@ -230,7 +233,7 @@ struct MLBGameIntelView: View {
             // Centered popup carousel — swipe through the team's lineup like a pack of cards.
             // .presentationBackground(.clear) lets the dimmed page show through (iOS 16.4+).
             let carousel = PlayerCardCarousel(
-                players: displayLineup.map { CarouselPlayer(id: $0.playerId, name: $0.name, heat: $0.heat, game: matchup.uppercased(), edge: playerEdge(forId: $0.playerId)) },
+                players: displayLineup.map { CarouselPlayer(id: $0.playerId, name: $0.name, heat: $0.heat, game: matchup.uppercased(), edge: playerEdge(forId: $0.playerId), gameDate: playerIntelDate, gameID: gameID) },
                 index: displayLineup.firstIndex(where: { $0.name == f.name }) ?? 0,
                 onClose: { selected = nil }
             )
@@ -690,6 +693,26 @@ struct CarouselPlayer: Identifiable {
     let heat: String      // hot / cold / steady (from the field card)
     let game: String      // "CUBS @ METS" context line
     var edge: PlayerCardV4Edge? = nil   // category edge (HR Threat, Heat Check…) — matches the Hub's hero
+    var gameDate: String? = nil
+    var gameID: Int? = nil
+}
+
+struct CarouselCardScope: Hashable {
+    let game: GamePageDataScope
+    let playerID: String
+    init?(date: String?, gameID: Int?, playerID: String) {
+        guard let game = GamePageDataScope(date: date, league: "MLB", gameID: gameID),
+              !playerID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        self.game = game; self.playerID = playerID
+    }
+
+    func pack(in rows: [PlayerInsightCardRow]) -> PlayerInsightPack? {
+        let matches = rows.filter {
+            HubCardIdentity.sameLeague($0.league, game.league)
+                && $0.game_id == String(game.gameID) && $0.player_id == playerID
+        }
+        return matches.count == 1 ? matches.first?.payload : nil
+    }
 }
 
 struct PlayerCardCarousel: View {
@@ -745,13 +768,28 @@ private struct CarouselCard: View {
     let player: CarouselPlayer
     @State private var pack: PlayerInsightPack? = nil
     @State private var loading = true
+    @State private var requestID = UUID()
+    @State private var loadedScope: CarouselCardScope? = nil
+    private var scope: CarouselCardScope? {
+        CarouselCardScope(date: player.gameDate, gameID: player.gameID, playerID: player.id)
+    }
     var body: some View {
-        PlayerCardV4(name: player.name, heat: player.heat, game: player.game, pack: pack, loading: loading, edge: player.edge)
-            .task(id: player.id) {
-                loading = true
-                pack = await SupabaseAPI.fetchPlayerInsightCard(date: SupabaseAPI.todayEST(), playerId: player.id, league: "MLB")
-                loading = false
-            }
+        PlayerCardV4(name: player.name, heat: player.heat, game: player.game,
+                     pack: scope != nil && loadedScope == scope ? pack : nil,
+                     loading: scope != nil && (loadedScope != scope || loading), edge: player.edge)
+            .task(id: scope) { await loadPack() }
+    }
+
+    @MainActor
+    private func loadPack() async {
+        let nextScope = scope
+        let token = UUID(); requestID = token
+        loadedScope = nil; pack = nil; loading = nextScope != nil
+        guard let nextScope else { return }
+        let rows = await SupabaseAPI.fetchPlayerIntelRows(date: nextScope.game.date)
+        guard !Task.isCancelled, requestID == token, scope == nextScope else { return }
+        pack = nextScope.pack(in: rows)
+        loadedScope = nextScope; loading = false
     }
 }
 

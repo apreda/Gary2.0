@@ -14,6 +14,7 @@ const hubView = readFileSync(new URL('../../../ios/GaryApp/HubView.swift', impor
 const designSystem = readFileSync(new URL('../../../ios/GaryApp/DesignSystem.swift', import.meta.url), 'utf8');
 const contentView = readFileSync(new URL('../../../ios/GaryApp/ContentView.swift', import.meta.url), 'utf8');
 const picksTab = readFileSync(new URL('../../../ios/GaryApp/PicksTab.swift', import.meta.url), 'utf8');
+const scoutTrio = readFileSync(new URL('../../../ios/GaryApp/ScoutTrio.swift', import.meta.url), 'utf8');
 const hasSwift = spawnSync('swift', ['--version'], { encoding: 'utf8' }).status === 0;
 
 function swiftBlock(source, declaration) {
@@ -524,12 +525,18 @@ describe('Home MLB/NFL board parity', () => {
       // Execute the shipping navigation, ID resolution and name matcher. Only
       // SwiftUI animation/state and the network-backed model/store are stubbed.
       const script = `import Foundation
+import CoreFoundation
+${swiftBlock(models, 'struct ExactGameIdentity:')}
+${swiftBlock(scoutTrio, 'struct GamePageDataScope:')}
+struct TomorrowBoard { let date: String; let board: [TomorrowBoardRow] }
+struct TomorrowBoardRow { let league: String?; let bdl_game_id: Int? }
+typealias PicksCarouselView = Router
 ${keywords}
 ${swiftBlock(picksTab, 'func abbrGameMatches(')}
 func parseISO8601(_ value: String) -> Date? { ISO8601DateFormatter().date(from: value) }
 struct Animation { static func easeInOut(duration: Double) -> Animation { Animation() } }
 func withAnimation(_ animation: Animation, _ action: () -> Void) { action() }
-struct PropPick { var game_id: Int?; var effectiveLeague: String? = "MLB" }
+struct PropPick { var game_id: Int?; var effectiveLeague: String? = "MLB"; var commence_time: String? = nil }
 struct SlateRow {
  var league: String? = "MLB"; var bdl_game_id: Int?
  var away_team: String? = "New York Mets"; var home_team: String? = "Atlanta Braves"
@@ -541,6 +548,7 @@ struct PickRow {
  var commence_time: String? = "2026-09-07T17:00:00Z"
 }
 struct Store {
+ var loadedDate: String? = "2026-09-07"
  var loading = false; var slate: [SlateRow] = []
  var gamePicks: [PickRow] = []; var yesterdayGamePicksAll: [PickRow] = []
 }

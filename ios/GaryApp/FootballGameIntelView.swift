@@ -19,6 +19,7 @@ struct FootballGameIntelView: View {
     /// Aug 20: the football page must carry MLB-depth from the morning, not
     /// only after the pick lands at T-90).
     var wire: [SupabaseAPI.WireItem] = []
+    var gameDate: String? = nil
 
     private var normalizedLeague: String { league.uppercased() }
     private var isCollege: Bool { normalizedLeague == "NCAAF" }
@@ -132,7 +133,7 @@ struct FootballGameIntelView: View {
     /// "Raiders", never "LV".
     private var newsLines: [String] {
         let lg = normalizedLeague
-        let today = SupabaseAPI.todayEST()
+        guard let today = gameDate else { return [] }
         func key(_ full: String?, side: String) -> String {
             let source = (full?.isEmpty == false ? full! : side)
             return source.components(separatedBy: " ").last ?? side
@@ -391,7 +392,7 @@ struct FootballGameIntelView: View {
             ScoutBigNumbersRail(rows: bigNumberRows)
             // The series lives HERE and only here — the same section as MLB.
             GameH2HSection(edges: edges.filter { matchesThisGame($0) })
-            PlayerIntelSection(matchup: matchup, league: normalizedLeague, gameId: exactGameID)
+            PlayerIntelSection(matchup: matchup, league: normalizedLeague, gameId: exactGameID, gameDate: gameDate)
             FootballAvailabilityCard(awayLabel: sides.away, homeLabel: sides.home,
                                      confirmed: availability,
                                      wireAway: wireRows(home: false), wireHome: wireRows(home: true),

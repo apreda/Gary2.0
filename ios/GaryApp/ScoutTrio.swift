@@ -80,7 +80,7 @@ struct ScoutTrioData {
     let armsTake: String?
 
     init(matchup: String, row: TomorrowBoardRow?, board: TomorrowBoard?, wire: [SupabaseAPI.WireItem],
-         commence: Date? = nil, isDoubleheader: Bool = false) {
+         commence: Date? = nil, isDoubleheader: Bool = false, gameDate: String? = nil) {
         let sides = matchup.components(separatedBy: " @ ")
         let awaySide = sides.first ?? "", homeSide = sides.count > 1 ? sides[1] : ""
         let lg = (row?.league ?? "MLB").uppercased()
@@ -96,21 +96,13 @@ struct ScoutTrioData {
             let s = side.lowercased()
             return s == b || s.hasSuffix(b) || b.hasSuffix(s)
         }
-        // The arm is selected BY GAME, never by team alone (Jul 22 2026, the
-        // Max Fried mixup): a doubleheader puts two same-team starters on one
-        // date. The board stamps each with its game_time; require the stamp to
-        // match this page's start bucket. On a doubleheader with no matching
-        // stamp, show NO arm rather than guess the twin's.
+        // The exact board row supplies the official game time. A known wrong
+        // starter/forecast stamp is never a fallback, even on a single-game day.
+        let contextStart = row?.commence_time.flatMap(parseISO8601) ?? commence
         func starterFor(_ ab: String) -> TomorrowPerson? {
-            let cands = (board?.starters ?? []).filter { $0.abbr == ab }
-            if cands.count <= 1 && !isDoubleheader { return cands.first }
-            guard let myBucket = PicksCarouselView.timeBucket(commence) else {
-                return isDoubleheader ? nil : cands.first
-            }
-            if let hit = cands.first(where: {
-                PicksCarouselView.timeBucket(parseISO8601($0.game_time ?? "")) == myBucket
-            }) { return hit }
-            return isDoubleheader ? nil : cands.first
+            let cands = (board?.starters ?? []).filter { $0.abbr == ab && ($0.league ?? "").uppercased() == lg }
+            let hits = cands.filter { GamePageDataScope.sameStart($0.game_time, contextStart) }
+            return hits.count == 1 ? hits.first : nil
         }
         awayStarter = starterFor(aAb)
         homeStarter = starterFor(hAb)
@@ -135,21 +127,8 @@ struct ScoutTrioData {
         let weatherCandidates = (board?.weather ?? []).filter {
             ($0.away_abbr == aAb && $0.home_abbr == hAb) || matches($0.matchup, matchup)
         }
-        let w: TomorrowWeather?
-        if isDoubleheader {
-            // A twin bill can have materially different first-pitch weather.
-            // Require the same game-time bucket; never borrow the other game's
-            // forecast when this game's timestamp is absent or does not match.
-            if let myBucket = PicksCarouselView.timeBucket(commence) {
-                w = weatherCandidates.first {
-                    PicksCarouselView.timeBucket(parseISO8601($0.commence_time ?? "")) == myBucket
-                }
-            } else {
-                w = nil
-            }
-        } else {
-            w = weatherCandidates.first
-        }
+        let weatherHits = weatherCandidates.filter { GamePageDataScope.sameStart($0.commence_time, contextStart) }
+        let w = weatherHits.count == 1 ? weatherHits.first : nil
         venue = w?.venue ?? row?.venue
         tempF = w?.temp_f; windMph = w?.wind_mph; weatherNote = w?.note
         total = row?.total
@@ -158,7 +137,7 @@ struct ScoutTrioData {
 
         // The wire, one line per team: injury first, else today's move (the
         // same selection GameScoutSection used).
-        let today = SupabaseAPI.todayEST()
+        let today = gameDate
         func news(_ key: String) -> String? {
             let k = key.lowercased()
             guard !k.isEmpty else { return nil }
@@ -722,6 +701,63 @@ struct ScoutBigNumbersSection: View {
     }
 }
 
+/// Accepted slate identity for optional game context. Team names never prove
+/// that two rows on different dates (or a doubleheader) describe the same game.
+struct GamePageDataScope: Hashable {
+    let date: String
+    let league: String
+    let gameID: Int
+
+    init?(date: String?, league: String, gameID: Int?) {
+        guard let date, ExactGameIdentity(date: date, gameID: gameID) != nil, let gameID else { return nil }
+        let league = league.uppercased() == "MLB HR" ? "MLB" : league.uppercased()
+        guard ["MLB", "NBA", "NFL", "NCAAF"].contains(league) else { return nil }
+        self.date = date; self.league = league; self.gameID = gameID
+    }
+
+    static func shiftDay(_ iso: String, _ offset: Int) -> String? {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York")!
+        f.calendar = calendar; f.timeZone = calendar.timeZone
+        f.dateFormat = "yyyy-MM-dd"; f.isLenient = false
+        guard let date = f.date(from: iso), f.string(from: date) == iso,
+              let shifted = calendar.date(byAdding: .day, value: offset, to: date) else { return nil }
+        return f.string(from: shifted)
+    }
+
+    static func slateDate(loadedDate: String?, yesterday: Bool) -> String? {
+        loadedDate.flatMap { shiftDay($0, yesterday ? -1 : 0) }
+    }
+
+    static func sameStart(_ stamp: String?, _ start: Date?) -> Bool {
+        guard let stamp, let date = parseISO8601(stamp), let start else { return false }
+        return PicksCarouselView.timeBucket(date) == PicksCarouselView.timeBucket(start)
+    }
+
+    func row(in board: TomorrowBoard?) -> TomorrowBoardRow? {
+        guard let board, board.date == date else { return nil }
+        let matches = board.board.filter {
+            ($0.league ?? "").uppercased() == league && $0.bdl_game_id == gameID
+        }
+        return matches.count == 1 ? matches.first : nil
+    }
+}
+
+/// A token distinguishes two visits to A when a cancelled A → B → A read
+/// finishes late. Loaded scope separately masks old state before a task starts.
+struct GamePageLoadState {
+    private(set) var scope: GamePageDataScope?
+    private(set) var requestID = UUID()
+    mutating func begin(_ scope: GamePageDataScope?) -> UUID {
+        self.scope = scope; requestID = UUID(); return requestID
+    }
+    func accepts(_ scope: GamePageDataScope, requestID: UUID, cancelled: Bool) -> Bool {
+        !cancelled && self.scope == scope && self.requestID == requestID
+    }
+}
+
 struct PicksGamePage: View {
     let group: (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])
     let entries: [(pick: GaryPick, isYesterday: Bool)]
@@ -731,6 +767,8 @@ struct PicksGamePage: View {
     /// This game's BDL id (from its slate row) — doubleheader-exact live-score
     /// lookups; nil when the slate hasn't landed.
     var bdlGameId: Int? = nil
+    /// The store's accepted Today/Yesterday date, including its 6 AM boundary.
+    var slateDate: String? = nil
     /// Exact daily-slate/live-score interruption label for the no-pick card.
     var interruptionLabel: String? = nil
     let onTapProp: (PropPick) -> Void
@@ -747,25 +785,21 @@ struct PicksGamePage: View {
     /// (founder, Jul 7: the game page sat blank until the first intel run).
     @State private var scoutBoard: TomorrowBoard? = nil
     @State private var scoutWire: [SupabaseAPI.WireItem] = []
+    @State private var scoutLoad = GamePageLoadState()
+    @State private var loadedScoutScope: GamePageDataScope? = nil
 
-    private var matchSides: (away: String, home: String) {
-        let p = group.matchup.components(separatedBy: " @ ")
-        return (p.first ?? "", p.count > 1 ? p[1] : "")
+    private var gameDataScope: GamePageDataScope? {
+        GamePageDataScope(date: slateDate, league: pageLeague, gameID: bdlGameId)
     }
-    private static func scoutSideMatches(_ boardName: String?, _ side: String) -> Bool {
-        guard let b = boardName?.lowercased(), !b.isEmpty else { return false }
-        let s = side.lowercased()
-        return s == b || s.hasSuffix(b) || b.hasSuffix(s)
+    private var scopedScoutBoard: TomorrowBoard? {
+        guard let scope = gameDataScope, loadedScoutScope == scope,
+              scope.row(in: scoutBoard) != nil else { return nil }
+        return scoutBoard
     }
-    private var scoutRow: TomorrowBoardRow? {
-        scoutBoard?.board.first {
-            Self.scoutSideMatches($0.away_team, matchSides.away) &&
-            Self.scoutSideMatches($0.home_team, matchSides.home) &&
-            // Doubleheader days: the row must be THIS game's (same start
-            // bucket) — never the twin's lines (Jul 22 2026).
-            (!group.dh || PicksCarouselView.timeBucket(parseISO8601($0.commence_time ?? ""))
-                == PicksCarouselView.timeBucket(group.commence))
-        }
+    private var scoutRow: TomorrowBoardRow? { gameDataScope?.row(in: scopedScoutBoard) }
+    private var scopedScoutWire: [SupabaseAPI.WireItem] {
+        guard let scope = gameDataScope, loadedScoutScope == scope else { return [] }
+        return scoutWire
     }
     private var topProps: [PropPick] {
         // The slip scales — show up to 5, strongest first, and the home run
@@ -786,7 +820,6 @@ struct PicksGamePage: View {
         if let league = pageLeagueHint, !league.isEmpty { return league.uppercased() }
         if let league = group.props.first?.effectiveLeague, !league.isEmpty { return league.uppercased() }
         if let league = entries.first?.pick.league, !league.isEmpty { return league.uppercased() }
-        if let league = scoutRow?.league, !league.isEmpty { return league.uppercased() }
         return edges.first?.league.label ?? ""
     }
 
@@ -884,15 +917,16 @@ struct PicksGamePage: View {
                     props: topProps,
                     row: scoutRow,
                     edges: edges,
-                    wire: scoutWire
+                    wire: scopedScoutWire,
+                    gameDate: slateDate
                 )
             } else {
             // The Scout Trio (founder, Jul 22): the three approved mocks
             // stacked in his order — THE TUG, THE NOTEBOOK, THE BIG NUMBERS.
             // One shared extraction feeds all three; GameScoutSection retired
             // from this page (struct kept while the design settles).
-            let trio = ScoutTrioData(matchup: group.matchup, row: scoutRow, board: scoutBoard, wire: scoutWire,
-                                     commence: group.commence, isDoubleheader: group.dh)
+            let trio = ScoutTrioData(matchup: group.matchup, row: scoutRow, board: scopedScoutBoard, wire: scopedScoutWire,
+                                     commence: group.commence, isDoubleheader: group.dh, gameDate: slateDate)
             // "SCOUTING REPORT" label removed (founder, Aug 4) — the page
             // opens straight with THE ARMS.
             ScoutArmsSection(d: trio)
@@ -900,7 +934,7 @@ struct PicksGamePage: View {
             ScoutBigNumbersSection(d: trio)
             // The season series lives HERE and only here (founder, Aug 6).
             GameH2HSection(edges: edges)
-            PlayerIntelSection(matchup: group.matchup, league: "MLB")
+            PlayerIntelSection(matchup: group.matchup, league: pageLeague, gameId: bdlGameId.map(String.init), gameDate: slateDate)
             }
             if isMLB {
                 // MLB: the flat GAME INTEL list becomes the modular dashboard —
@@ -908,18 +942,30 @@ struct PicksGamePage: View {
                 // Projected/confirmed fields use the selected provider game
                 // and its real date. A special event without that identity
                 // remains unavailable rather than borrowing another lineup.
-                MLBGameIntelView(gameID: bdlGameId, gameDate: ExactGameIdentity.easternDate(of: group.commence),
-                                 matchup: group.matchup, edges: edges, showHeader: false)
+                MLBGameIntelView(gameID: bdlGameId, gameDate: ExactGameIdentity.easternDate(of: group.commence) ?? slateDate,
+                                 playerIntelDate: slateDate, matchup: group.matchup, edges: edges, showHeader: false)
             } else if !isFootball && !entries.contains(where: { ($0.pick.type ?? "") == "special" }) {
                 EdgesSection(title: "GAME INTEL", edges: edges)
             }
         }
         .padding(.top, 14)
-        .task {
-            scoutBoard = await TodayBoardCache.get()
-            scoutWire = await ScoutWireCache.get()
-        }
+        .task(id: gameDataScope) { await loadScout() }
         .onAppear { LiveScoreCache.shared.startIfNeeded() }
+    }
+
+    @MainActor
+    private func loadScout() async {
+        let scope = gameDataScope
+        let requestID = scoutLoad.begin(scope)
+        loadedScoutScope = nil; scoutBoard = nil; scoutWire = []
+        guard let scope else { return }
+        async let board = TodayBoardCache.get(date: scope.date)
+        async let wire = ScoutWireCache.get(date: scope.date)
+        let (nextBoard, nextWire) = await (board, wire)
+        guard scoutLoad.accepts(scope, requestID: requestID, cancelled: Task.isCancelled) else { return }
+        scoutBoard = scope.row(in: nextBoard) == nil ? nil : nextBoard
+        scoutWire = nextWire
+        loadedScoutScope = scope
     }
 }
 
@@ -933,13 +979,20 @@ struct PicksGamePage: View {
 struct PlayerIntelSection: View {
     let matchup: String
     let league: String
-    /// Exact-id scope (football pages, Aug 27 2026): football packs carry the
-    /// BDL game id, and college abbreviations have no keyword table for the
-    /// matchup-string join — when the caller knows the game id, packs attach
-    /// by identity instead. MLB keeps the matchup join unchanged (nil here).
+    /// Both league and exact game/date are required, including historical MLB.
     var gameId: String? = nil
+    var gameDate: String? = nil
     @State private var rows: [PlayerInsightCardRow] = []
     @State private var selected: PlayerInsightCardRow? = nil
+    @State private var playerLoad = GamePageLoadState()
+    @State private var loadedPlayerScope: GamePageDataScope? = nil
+    private var playerScope: GamePageDataScope? {
+        GamePageDataScope(date: gameDate, league: league, gameID: gameId.flatMap(Int.init))
+    }
+    private var visibleRows: [PlayerInsightCardRow] {
+        guard let scope = playerScope, loadedPlayerScope == scope else { return [] }
+        return rows
+    }
 
     /// Keeps the page scannable — the slate page is a stack, not a roster dump.
     private static let maxRows = 8
@@ -947,27 +1000,26 @@ struct PlayerIntelSection: View {
     /// Provider game ids and abbreviation pairs can repeat across sports.
     /// Resolve a game's cards only after restricting them to its own league.
     static func cardsForGame(_ all: [PlayerInsightCardRow], league: String, gameId: String?, matchup: String) -> [PlayerInsightCardRow] {
-        all.filter { row in
+        guard let gameId, let numericID = Int(gameId), numericID > 0 else { return [] }
+        return all.filter { row in
             guard HubCardIdentity.sameLeague(row.league, league) else { return false }
-            if let gameId { return row.game_id == gameId }
-            guard let game = row.payload?.game, !game.isEmpty else { return false }
-            return abbrGameMatches(game, matchup: matchup)
+            return row.game_id == gameId
         }
     }
 
     var body: some View {
         Group {
-            if !rows.isEmpty {
+            if !visibleRows.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("PLAYER INTEL")
                         .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
                         .foregroundStyle(.white.opacity(0.62))
                         .padding(.horizontal, 16).padding(.top, 4)
                     VStack(spacing: 0) {
-                        ForEach(Array(rows.enumerated()), id: \.element.id) { idx, row in
+                        ForEach(Array(visibleRows.enumerated()), id: \.element.id) { idx, row in
                             Button { selected = row } label: { intelRow(row) }
                                 .buttonStyle(.plain)
-                            if idx < rows.count - 1 {
+                            if idx < visibleRows.count - 1 {
                                 Divider().background(Color.white.opacity(0.05)).padding(.leading, 14)
                             }
                         }
@@ -977,9 +1029,19 @@ struct PlayerIntelSection: View {
                 }
             }
         }
-        .task(id: [league, matchup, gameId ?? ""].joined(separator: "|")) {
-            let all = await SupabaseAPI.fetchPlayerIntelRows(date: SupabaseAPI.todayEST())
-            let mine = Self.cardsForGame(all, league: league, gameId: gameId, matchup: matchup)
+        .task(id: playerScope) { await loadPlayers() }
+        .sheet(item: $selected) { PlayerInsightSheet(signal: nil, prefetched: $0) }
+    }
+
+    @MainActor
+    private func loadPlayers() async {
+            let scope = playerScope
+            let requestID = playerLoad.begin(scope)
+            loadedPlayerScope = nil; rows = []; selected = nil
+            guard let scope else { return }
+            let all = await SupabaseAPI.fetchPlayerIntelRows(date: scope.date)
+            guard playerLoad.accepts(scope, requestID: requestID, cancelled: Task.isCancelled) else { return }
+            let mine = Self.cardsForGame(all, league: scope.league, gameId: String(scope.gameID), matchup: matchup)
             // Pitchers lead (they drive the matchup) — quarterbacks are the
             // football counterpart — then everyone else by name.
             rows = Array(mine.sorted { a, b in
@@ -988,8 +1050,7 @@ struct PlayerIntelSection: View {
                 if ap != bp { return ap }
                 return (a.player_name ?? "") < (b.player_name ?? "")
             }.prefix(Self.maxRows))
-        }
-        .sheet(item: $selected) { PlayerInsightSheet(signal: nil, prefetched: $0) }
+            loadedPlayerScope = scope
     }
 
     private func intelRow(_ row: PlayerInsightCardRow) -> some View {
