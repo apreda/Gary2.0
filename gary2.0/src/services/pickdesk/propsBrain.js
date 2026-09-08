@@ -29,6 +29,7 @@ import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from
 import { ballDontLieService } from '../ballDontLieService.js';
 import { propOddsService } from '../propOddsService.js';
 import { isMlbStart } from '../mlbGameRows.js';
+import { mlbStatNumber } from '../../../supabase/functions/_shared/mlbPropSettlement.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // THE ZERO-BASED PROMPT SURFACE — same entry rule as garyBrain (Jul 26 2026):
@@ -68,7 +69,7 @@ const fmtOdds = (v) => (v == null ? null : (v > 0 ? `+${v}` : `${v}`));
 // when the desk surface the props brain reads moves: the board and the prop
 // sheets are what Gary prices from, so an edit there is a new era.
 const here = path.dirname(fileURLToPath(import.meta.url));
-const propsSurface = () => ['propSheets.js', 'propModel.js', '../ballDontLieService.js', '../bdlPagination.js', '../mlbGameRows.js'].map((f) => {
+const propsSurface = () => ['propSheets.js', 'propModel.js', '../ballDontLieService.js', '../bdlPagination.js', '../mlbGameRows.js', '../../../supabase/functions/_shared/mlbPropSettlement.js'].map((f) => {
   try { return readFileSync(path.join(here, f), 'utf8'); }
   catch { return `missing:${f}`; }
 }).join('\n⸻\n');
@@ -84,17 +85,22 @@ export const PROPS_PROMPT_SHA = createHash('sha256')
 
 /** IP string ("6.2" = 6⅔) → recorded outs. */
 const ipToOuts = (ip) => {
-  if (ip == null) return null;
-  const [whole, frac] = String(ip).split('.');
-  const w = parseInt(whole, 10);
-  if (!Number.isFinite(w)) return null;
-  return w * 3 + (parseInt(frac || '0', 10) || 0);
+  if (!['number', 'string'].includes(typeof ip)) return null;
+  const match = String(ip).trim().match(/^(\d+)(?:\.([012]))?$/);
+  if (!match) return null;
+  return mlbStatNumber(Number(match[1]) * 3 + Number(match[2] ?? 0));
 };
 
 /** The box-score value a prop type settles on, from one chrono stat row. */
 export function statForProp(row, propType) {
+  if (!row || typeof row !== 'object') return null;
   const t = norm(propType);
-  const n = (v) => (v == null ? null : Number(v));
+  const n = mlbStatNumber;
+  const sum = (...fields) => {
+    const values = fields.map(field => n(row[field]));
+    if (values.some(value => value === null)) return null;
+    return n(values.reduce((total, value) => total + value, 0));
+  };
   switch (t) {
     case 'hits': return n(row.hits);
     case 'total_bases': return n(row.total_bases);
@@ -107,27 +113,17 @@ export function statForProp(row, propType) {
     case 'triples': return n(row.triples);
     case 'stolen_bases': return n(row.stolen_bases);
     case 'singles': {
-      const h = n(row.hits);
-      if (h == null) return null;
-      return h - (n(row.doubles) || 0) - (n(row.triples) || 0) - (n(row.hr) || 0);
+      const parts = [n(row.hits), n(row.doubles), n(row.triples), n(row.hr)];
+      if (parts.some(value => value === null)) return null;
+      return n(parts[0] - parts[1] - parts[2] - parts[3]);
     }
-    case 'hits_runs_rbis': {
-      const h = n(row.hits), r = n(row.runs), rb = n(row.rbi);
-      if (h == null && r == null && rb == null) return null;
-      return (h || 0) + (r || 0) + (rb || 0);
-    }
-    case 'runs_rbis': {
-      const r = n(row.runs), rb = n(row.rbi);
-      if (r == null && rb == null) return null;
-      return (r || 0) + (rb || 0);
-    }
-    case 'extra_base_hits': {
-      const d = n(row.doubles), tr = n(row.triples), hr = n(row.hr);
-      if (d == null && tr == null && hr == null) return null;
-      return (d || 0) + (tr || 0) + (hr || 0);
-    }
+    case 'hits_runs_rbis': return sum('hits', 'runs', 'rbi');
+    case 'runs_rbis': return sum('runs', 'rbi');
+    case 'extra_base_hits': return sum('doubles', 'triples', 'hr');
     case 'pitcher_strikeouts': return n(row.p_k);
-    case 'pitcher_outs': return ipToOuts(row.ip);
+    // Explicit provider outs are authoritative, including zero. An invalid
+    // supplied value cannot be hidden by a valid-looking innings fallback.
+    case 'pitcher_outs': return row.pitching_outs != null ? n(row.pitching_outs) : ipToOuts(row.ip);
     case 'pitcher_hits_allowed': return n(row.p_hits);
     case 'pitcher_walks': return n(row.p_bb);
     case 'pitcher_earned_runs': return n(row.er);

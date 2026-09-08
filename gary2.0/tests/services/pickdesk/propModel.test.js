@@ -11,6 +11,30 @@ const hitterRow = (i, over = {}) => ({
 });
 const sum = (d) => d.reduce((a, b) => a + b, 0);
 
+describe('prop model measured input boundaries', () => {
+  it('does not add missing scalar measurements to the empirical distribution', () => {
+    const measured = Array.from({ length: 5 }, (_, i) => hitterRow(i, { hits: 1 }));
+    const invalid = ['', false, NaN, 'unknown'].map((hits, i) => hitterRow(i + 5, { hits }));
+    expect(empiricalDistribution([...measured, ...invalid], 'hits'))
+      .toEqual(empiricalDistribution(measured, 'hits'));
+  });
+
+  it('does not reach the minimum empirical sample using an incomplete combined stat', () => {
+    const rows = Array.from({ length: 4 }, (_, i) => hitterRow(i));
+    expect(empiricalDistribution([...rows, hitterRow(5, { rbi: null })], 'hits_runs_rbis')).toBeNull();
+  });
+
+  it('keeps explicit pitcher outs authoritative and excludes corrupt counts without IP fallback', () => {
+    const row = { games_started: 1, batters_faced: 24, p_k: 5, p_hits: 3, p_bb: 1, er: 1, p_hr: 0, ip: '6.2' };
+    const rows = [0, '18', null, '', false, NaN].map((pitching_outs, i) => ({ ...row, pitching_outs, _game: { date: day(i) } }));
+    const profile = pitcherProfile([...rows, { ...row, ip: '6.3' }]);
+    expect(profile.outs).toEqual([0, 18, 20]);
+    const distribution = pitcherDistribution(profile, 'pitcher_outs');
+    expect(sum(distribution)).toBeCloseTo(1, 9);
+    expect(distribution.every(Number.isFinite)).toBe(true);
+  });
+});
+
 describe('the prop model — arithmetic', () => {
   it('vig-free market probabilities sum to one and favor the juiced side', () => {
     const m = marketProbabilities(-130, 105);

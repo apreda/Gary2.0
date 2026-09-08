@@ -275,7 +275,7 @@ export function pitcherProfile(rows, { asOf = null } = {}) {
   const bfSeason = withBf.length ? withBf.reduce((a, r) => a + bf(r), 0) / withBf.length : null;
   const expectedBf = bfRecent == null ? LEAGUE.bf_per_start
     : bfSeason == null ? bfRecent : 0.6 * bfRecent + 0.4 * bfSeason;
-  const outs = starts.map((r) => (r.pitching_outs != null ? Number(r.pitching_outs) : statForProp(r, 'pitcher_outs'))).filter((v) => v != null);
+  const outs = starts.map((r) => statForProp(r, 'pitcher_outs')).filter((v) => v != null);
   return {
     starts: starts.length,
     rows: starts,

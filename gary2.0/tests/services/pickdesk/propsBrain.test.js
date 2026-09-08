@@ -2,6 +2,56 @@ import { describe, it, expect } from 'vitest';
 import { buildGaryPropsSystemPrompt, THE_PROPS_ASK, buildPropBoardV2, selectPrimaryMarkets, statForProp, clearedClause, resolvedConfirmedLineupNames } from '../../../src/services/pickdesk/propsBrain.js';
 import { propOddsService } from '../../../src/services/propOddsService.js';
 
+describe('measured MLB prop values', () => {
+  it.each([null, undefined, '', ' ', false, true, [], {}, 'unknown', NaN, Infinity, 1.5, -1, Number.MAX_SAFE_INTEGER + 1])('rejects invalid scalar count %j', value => {
+    expect(statForProp({ hits: value }, 'hits')).toBeNull();
+    expect(statForProp({ p_k: value }, 'pitcher_strikeouts')).toBeNull();
+  });
+
+  it.each([
+    ['singles', ['hits', 'doubles', 'triples', 'hr']],
+    ['hits_runs_rbis', ['hits', 'runs', 'rbi']],
+    ['runs_rbis', ['runs', 'rbi']],
+    ['extra_base_hits', ['doubles', 'triples', 'hr']],
+  ])('requires every measured %s component', (market, fields) => {
+    const row = { hits: 3, doubles: 1, triples: 0, hr: 1, runs: 2, rbi: 2 };
+    for (const field of fields) {
+      for (const value of [undefined, null, '', false, NaN, 1.5]) {
+        expect(statForProp({ ...row, [field]: value }, market)).toBeNull();
+      }
+    }
+    expect(statForProp(Object.fromEntries(fields.map(field => [field, '0'])), market)).toBe(0);
+  });
+
+  it('rejects impossible singles and unsafe totals while retaining measured string counts', () => {
+    expect(statForProp({ hits: 1, doubles: 2, triples: 0, hr: 0 }, 'singles')).toBeNull();
+    expect(statForProp({ hits: Number.MAX_SAFE_INTEGER, runs: 1, rbi: 0 }, 'hits_runs_rbis')).toBeNull();
+    expect(statForProp({ hits: '3', doubles: '1', triples: '0', hr: '1' }, 'singles')).toBe(1);
+    expect(statForProp(null, 'hits')).toBeNull();
+  });
+
+  it.each(['', ' ', '6.3', '6.10', '6.2oops', '6.2.1', '+6.2', '-1.0', false, true, {}, [], '1e2', Infinity, Number.MAX_SAFE_INTEGER])('rejects invalid baseball innings %j', ip => {
+    expect(statForProp({ ip }, 'pitcher_outs')).toBeNull();
+  });
+
+  it('preserves explicit measured outs, zero-out starts and strict IP fallback precedence', () => {
+    expect(statForProp({ pitching_outs: '0', ip: '6.2' }, 'pitcher_outs')).toBe(0);
+    expect(statForProp({ pitching_outs: 17, ip: '6.2' }, 'pitcher_outs')).toBe(17);
+    expect(statForProp({ pitching_outs: false, ip: '6.2' }, 'pitcher_outs')).toBeNull();
+    expect(statForProp({ pitching_outs: '', ip: '6.2' }, 'pitcher_outs')).toBeNull();
+    expect(statForProp({ pitching_outs: null, ip: '6.2' }, 'pitcher_outs')).toBe(20);
+    expect(statForProp({ ip: 0 }, 'pitcher_outs')).toBe(0);
+    expect(statForProp({ ip: '6.1' }, 'pitcher_outs')).toBe(19);
+  });
+
+  it('excludes unknown measurements from cleared-count denominators', () => {
+    const measured = Array.from({ length: 5 }, () => ({ at_bats: 4, hits: 1 }));
+    const missing = ['', false, NaN, 'unknown'].map(hits => ({ at_bats: 4, hits }));
+    expect(clearedClause([...measured, ...missing], 'hits', 0.5)).toBe('over in 5 of his last 5');
+    expect(clearedClause([...measured.slice(0, 4), ...missing], 'hits', 0.5)).toBeNull();
+  });
+});
+
 // The props prompt surface is a product contract (spec 2026-07-26-props-desk).
 // These pins exist so no edit lands without failing a test first.
 describe('props prompt surface', () => {

@@ -13,6 +13,26 @@ const starts = (ks) => ks.map((k, i) => ({
 }));
 
 describe('prop sheet lines', () => {
+  it('omits malformed and incomplete market values instead of printing zero or NaN', () => {
+    const valid = { plate_appearances: 4, hits: 2, runs: 1, rbi: 1 };
+    const invalid = [null, '', false, 'unknown'].map(rbi => ({ ...valid, rbi }));
+    expect(hitterMarketLine([valid, ...invalid], 'hits_runs_rbis', 1.5, null))
+      .toBe('hits_runs_rbis 1.5 — last 1: 4 · season 4.0 per game (1 g)');
+    expect(hitterMarketLine(invalid, 'hits_runs_rbis', 1.5, null)).toBeNull();
+  });
+
+  it('uses only validated explicit outs or strict IP fallback for pitcher sheets', () => {
+    const rows = [
+      { games_started: 1, pitching_outs: '0', ip: '6.2' },
+      { games_started: 1, pitching_outs: 18, ip: '6.2' },
+      { games_started: 1, pitching_outs: null, ip: '6.2' },
+      ...['', false, NaN].map(pitching_outs => ({ games_started: 1, pitching_outs, ip: '6.2' })),
+      { games_started: 1, ip: '6.3' },
+    ];
+    expect(pitcherMarketLine(rows, 'pitcher_outs', 17.5, null))
+      .toBe('pitcher_outs 17.5 — last 3 starts: 20 18 0 · season 12.7 per start (3 starts)');
+  });
+
   it('a hitter market prints the last 15 values newest first and the season rate', () => {
     const rows = hitterRows([0, 1, 2, 0, 4, 1, 1, 0, 3, 1, 2, 0, 1, 0, 2, 1, 1]); // 17 games
     const line = hitterMarketLine(rows, 'total_bases', 1.5, 'Over -120 / Under -105');

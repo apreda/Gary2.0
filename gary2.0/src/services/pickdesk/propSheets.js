@@ -54,7 +54,7 @@ export function pitcherStarts(rows) {
   return (rows || []).filter(isMlbStart);
 }
 
-const outsOf = (r) => (r?.pitching_outs != null ? Number(r.pitching_outs) : statForProp(r, 'pitcher_outs'));
+const outsOf = (r) => statForProp(r, 'pitcher_outs');
 
 /** One market's line on a hitter sheet: last-N values newest first + the season rate. */
 export function hitterMarketLine(rows, propType, line, priceText) {
