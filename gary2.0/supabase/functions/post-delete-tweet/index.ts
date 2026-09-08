@@ -1,8 +1,9 @@
+import { isSocialServiceRequest } from "../post-single-tweet/authorization.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 // post-delete-tweet — delete a tweet by id (v2 DELETE /2/tweets/:id, OAuth1.0a). Used to clean up smoke-test posts.
 // Body: { tweetId: string }  →  { success, deleted }
-async function hmacSha1(key: Uint8Array, message: string): Promise<string> {
+async function hmacSha1(key: Uint8Array<ArrayBuffer>, message: string): Promise<string> {
   const cryptoKey = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
   const sig = await crypto.subtle.sign("HMAC", cryptoKey, new TextEncoder().encode(message));
   return btoa(String.fromCharCode(...new Uint8Array(sig)));
@@ -22,6 +23,9 @@ async function oauth(method: string, url: string, k: string, ks: string, t: stri
 }
 
 Deno.serve(async (req: Request) => {
+  if (!isSocialServiceRequest(req, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"))) {
+    return Response.json({ ok: false, error: "Service authorization required" }, { status: 403 });
+  }
   try {
     const { tweetId } = await req.json();
     if (!tweetId) return Response.json({ error: "Missing 'tweetId'" }, { status: 400 });

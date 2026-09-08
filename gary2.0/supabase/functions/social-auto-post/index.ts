@@ -1,3 +1,4 @@
+import { isSocialServiceRequest } from "../post-single-tweet/authorization.ts";
 // social-auto-post — server-side @BetwithGary auto-poster (picks drip + metrics refresh)
 // Cron: every 15 min (was hourly at :45 UTC until Aug 5 2026). Every run: refresh metrics, then post every
 // pick whose FIRST PITCH is still 5-120 min away. Posting is game-paced, not clock-paced — see the LEAD_*
@@ -170,7 +171,7 @@ async function postTweet(text: string, replyToId?: string): Promise<string> {
   if (replyToId) body.replyToId = replyToId;
   const r = await fetch(`${SB_URL}/functions/v1/${fn}`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${ANON_KEY}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   const j = await r.json();
@@ -181,7 +182,7 @@ async function postTweet(text: string, replyToId?: string): Promise<string> {
 async function postQuote(text: string, quoteTweetId: string): Promise<string> {
   const r = await fetch(`${SB_URL}/functions/v1/post-quote-tweet`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${ANON_KEY}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({ text, quoteTweetId }),
   });
   const j = await r.json();
@@ -196,7 +197,7 @@ async function fetchMetricsBatch(ids: string[]): Promise<Record<string, any>> {
     if (!chunk.length) continue;
     const r = await fetch(`${SB_URL}/functions/v1/get-tweet-metrics`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${ANON_KEY}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({ tweetIds: chunk }),
     });
     const j = await r.json();
@@ -903,6 +904,9 @@ Write something real: a confession, a reflection, a sharp aside about sweating e
 }
 
 Deno.serve(async (req) => {
+  if (!isSocialServiceRequest(req, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"))) {
+    return Response.json({ ok: false, error: "Service authorization required" }, { status: 403 });
+  }
   let dryRun = false;
   let runKind = "scheduled";
   let publicationRecovery: any[] = [];

@@ -1,3 +1,4 @@
+import { isSocialServiceRequest } from "../post-single-tweet/authorization.ts";
 // reply-engine-scan — Sub-A REPLY-BACK scanner (Jun 18 2026). Polls @BetwithGary's mentions (people replying to Gary's
 // posts), matches each to the pick they're replying about, runs a Gemini safety-gate + voice draft, validates it, and
 // QUEUES it into reply_queue as 'pending'. It NEVER posts (reply-engine-send does that, only on approval). Safe slice:
@@ -13,7 +14,7 @@ const ANTHROPIC_MODEL = Deno.env.get("SOCIAL_ANTHROPIC_MODEL") ?? "claude-sonnet
 const sb = createClient(SB_URL, SERVICE_KEY);
 const GARY_ID = "2001291581446631424"; // @BetwithGary numeric user id (from x-api-probe)
 
-async function hmacSha1(key: Uint8Array, message: string): Promise<string> {
+async function hmacSha1(key: Uint8Array<ArrayBuffer>, message: string): Promise<string> {
   const k = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
   return btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(message)))));
 }
@@ -73,6 +74,9 @@ function validate(draft: string, pickText: string): { ok: boolean; reason: strin
 const SCAN_VOICE = `You are Gary (@BetwithGary), an AI that calls sports games, deciding whether to reply back to someone who replied to one of your posts, and if so writing that reply. Reply-backs are conversational: someone engaged your pick, you respond like the sharpest friend in the group chat.`;
 
 Deno.serve(async (req: Request) => {
+  if (!isSocialServiceRequest(req, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"))) {
+    return Response.json({ ok: false, error: "Service authorization required" }, { status: 403 });
+  }
   try {
     const url = new URL(req.url);
     const dryRun = url.searchParams.get("dry_run") === "1";

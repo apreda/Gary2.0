@@ -1,7 +1,8 @@
+import { isSocialServiceRequest } from "../post-single-tweet/authorization.ts";
 // post-quote-tweet — posts a tweet quoting another tweet (X API v2 quote_tweet_id). Body: { text, quoteTweetId }.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-async function hmacSha1(key: Uint8Array, message: string): Promise<string> {
+async function hmacSha1(key: Uint8Array<ArrayBuffer>, message: string): Promise<string> {
   const encoder = new TextEncoder();
   const cryptoKey = await crypto.subtle.importKey(
     "raw", key, { name: "HMAC", hash: "SHA-1" }, false, ["sign"]
@@ -43,6 +44,9 @@ async function generateOAuthHeader(
 }
 
 Deno.serve(async (req: Request) => {
+  if (!isSocialServiceRequest(req, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"))) {
+    return Response.json({ ok: false, error: "Service authorization required" }, { status: 403 });
+  }
   try {
     const { text, quoteTweetId } = await req.json();
     if (!text) {

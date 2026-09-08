@@ -1,3 +1,4 @@
+import { isSocialServiceRequest } from "../post-single-tweet/authorization.ts";
 // reply-engine-send — posts APPROVED reply_queue rows (Jun 18 2026). Only ever posts rows a human set to status='approved'.
 // Enforces daily_cap, per_account_cap, and spacing_minutes (from reply_engine_config). Posts the oldest approved first,
 // default 1 per invocation (so spacing is naturally enforced by how often it's called). Marks each sent/error. If a post
@@ -6,12 +7,14 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const sb = createClient(SB_URL, SERVICE_KEY);
 
 function utcDayStart(): string { return new Date().toISOString().slice(0, 10) + "T00:00:00Z"; }
 
 Deno.serve(async (req: Request) => {
+  if (!isSocialServiceRequest(req, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"))) {
+    return Response.json({ ok: false, error: "Service authorization required" }, { status: 403 });
+  }
   try {
     const url = new URL(req.url);
     const dryRun = url.searchParams.get("dry_run") === "1";
@@ -45,7 +48,7 @@ Deno.serve(async (req: Request) => {
       if (row.target_author && (perAuthor[row.target_author] || 0) >= perAccountCap) { out.push({ id: row.id, skipped: `per-account cap (${row.target_author})` }); continue; }
       if (dryRun) { out.push({ id: row.id, would_reply_to: row.target_tweet_id, author: row.target_author, draft: row.draft }); posted++; continue; }
 
-      const pr = await fetch(`${SB_URL}/functions/v1/post-reply-tweet`, { method: "POST", headers: { Authorization: `Bearer ${ANON_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ text: row.draft, replyToId: row.target_tweet_id }) });
+      const pr = await fetch(`${SB_URL}/functions/v1/post-reply-tweet`, { method: "POST", headers: { Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ text: row.draft, replyToId: row.target_tweet_id }) });
       const pj = await pr.json();
       if (pj.success && pj.tweetId) {
         await sb.from("reply_queue").update({ status: "sent", posted_tweet_id: pj.tweetId, sent_at: new Date().toISOString() }).eq("id", row.id);
