@@ -173,28 +173,57 @@ describe('Football Field density', () => {
 });
 
 describe('Football Fantasy density', () => {
-  it('shares the dated Fantasy briefing between its supported MLB and NFL desks', () => {
-    // MLB and NFL share the current briefing renderer. An unsupported sport
-    // must not inherit the generic baseball Fantasy page through saved scope.
+  it('shares dated Fantasy research between the inline MLB watch and the NFL desk', () => {
+    // The weekly NFL desk and compact MLB section use the same dated cases.
+    // Saved MLB Fantasy scope must not restore the retired standalone page.
     expect(footballIntel).not.toContain('struct FootballFantasyPage');
     expect(footballIntel).not.toContain('struct FootballFantasyRow');
     expect(footballIntel).not.toContain('enum FootballFantasyEvidence');
     expect(hubView).not.toContain('FantasyCornerPage');
-    expect(swiftBlock(hubView, 'fileprivate extension HubLeagueSel')).toContain('self == .mlb || self == .nfl');
+    expect(swiftBlock(hubView, 'fileprivate extension HubLeagueSel')).toContain('self == .nfl');
     const scope = swiftBlock(hubView, 'private var hubScopeContent:');
     expect(scope).toContain('if showsFantasy {');
     expect(scope).toContain('FantasyBriefingPage(league: sel.label');
     expect(scope).toContain('return AnyView(hubEditorialContent)');
+    expect(swiftBlock(hubView, 'private var hubEditorialContent:')).toContain('hubEditorialStateContent');
+    expect(swiftBlock(hubView, 'private var hubEditorialStateContent:')).toContain('return AnyView(hubLoadedContent)');
+    const editorial = swiftBlock(hubView, 'private var hubLoadedContent:');
+    expect(editorial).toMatch(/if sel == \.mlb \{\s*FantasyBriefingPage\(league: "MLB"/);
+    expect(editorial).toContain('compact: true, openPlayer: openFantasyPlayer');
+    expect(editorial).toContain('.id("fantasy")');
   });
 
-  it('keeps roster-verified prior-season provenance visible on the shared fantasy card', () => {
-    // The label moved from the deleted football row's headline to the MLB
-    // card's stat strip when the two pages merged. What the user sees — the
-    // season plus the word BASELINE on a prior-season row — is unchanged, and
-    // it now reads the structured meta instead of parsing the headline.
-    const strip = sliceStruct(hubView, 'fileprivate struct FantasyCard: View {');
-    expect(strip).toContain('if m.evidence_scope == "prior_season_baseline", let y = m.season?.display { bits.append("\\(y) baseline") }');
-  });
+  it('keeps dated prior-season provenance visible in the current shared Fantasy full case', () => {
+    const fantasy = readFileSync(new URL('../../../ios/GaryApp/FantasyBriefingView.swift', import.meta.url), 'utf8');
+    const sheet = swiftBlock(fantasy, 'private struct FantasyDecisionSheet:');
+    const evidence = swiftBlock(sheet, 'private var evidence:');
+    expect(evidence).toContain('decision.displayText(item.label)');
+    expect(evidence).toContain('decision.displayText(summary)');
+    expect(evidence).toContain('Text(item.source)');
+    expect(evidence).toContain('Source observed \\(fantasyTimestamp(observedAt))');
+    expect(fantasy).toContain('FantasyDecisionSheet(decision: selection.decision, league: league, briefing: selection.briefing)');
+    expect(swiftBlock(fantasy, 'private func watchContent(')).toContain('selected = FantasySelection(decision: decision, briefing: briefing)');
+    if (!hasSwift) return;
+    // Decode the real evidence type: season, sample scope and caveat are
+    // preserved source copy, which both the compact and full desks display.
+    const model = readFileSync(new URL('../../../ios/GaryApp/FantasyBriefing.swift', import.meta.url), 'utf8');
+    const directory = mkdtempSync(join(tmpdir(), 'gary-fantasy-provenance-'));
+    try {
+      const path = join(directory, 'Fixture.swift');
+      writeFileSync(path, `${model}
+let payload = #"{"id":"prior_regular_baseline","label":"2025 regular-season baseline","source":"BALLDONTLIE dated final player game stats","observed_at":"2026-09-08T12:00:00Z","summary":"2025 regular-season baseline: 8 observed games. This is not current role or current form."}"#
+let evidence = try JSONDecoder().decode(FantasyDecision.Evidence.self, from: Data(payload.utf8))
+precondition(evidence.label == "2025 regular-season baseline")
+precondition(evidence.summary?.contains("8 observed games") == true)
+precondition(evidence.summary?.contains("not current role or current form") == true)
+precondition(evidence.observed_at == "2026-09-08T12:00:00Z")
+print("Fantasy provenance preserved")
+`);
+      const result = spawnSync('swift', [path], { encoding: 'utf8', timeout: 30_000 });
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stdout).toContain('Fantasy provenance preserved');
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  }, 35_000);
 
   it('opens grounded football evidence instead of the MLB-only player-card placeholder', () => {
     // Every league uses the same current-day, exact-player/game resolver.
