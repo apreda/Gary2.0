@@ -1,5 +1,9 @@
 # Launch continuation — September 8, 2026
 
+## Later candidate scope update
+
+Adam subsequently authorized implementation of stats-first bullpen evidence, a compact Hub research dashboard, clearer navigation, refreshed team/player cards and a quieter W1 pill in **Update profile icon**. That owner controls the new source/build/GUI pass and prospective replacement build number. Root must not compete for those resources. Uploaded 918 remains immutable and available for TestFlight acceptance, but the final submission candidate and matching materials must follow the settled, verified replacement. Do not submit while this newly authorized work is underway. The source changes do not supply the still-missing real-world permission, support or signed-provider facts. The 20:15 UTC evidence below remains a valid dated checkpoint, not acceptance of the new design.
+
 ## Current checkpoint — 20:15 UTC
 
 **918 has completed Apple processing and is assigned to the existing internal TestFlight Beta group. App Review submission, expedition and the Apple email remain pending.** Build UUID is `29e19657-fc83-4560-8f9d-fb3168b8dcfe`; upload succeeded at 20:04:04.076 UTC. Do not upload it again. The latest independently reviewed native source is `994b948a`; 162 public snapshot files, the signed archive, actual local distribution export and all 21 privacy manifests pass independent checks. Two sampled rendered screens pass static review. Those checks do not establish actual provider login or all physical/accessibility behavior. The last saved App Store draft still selects 915 / Prepare for Submission; its materials must be reconciled to accepted 918. [Artifact receipt](/Users/adam.preda/Documents/ChatGPT/Gary/app-store-submission-2026-09-08/native-918-artifacts-independent.json), [TestFlight readback](/Users/adam.preda/Documents/ChatGPT/Gary/app-store-submission-2026-09-08/native-918-testflight-verification.json).
