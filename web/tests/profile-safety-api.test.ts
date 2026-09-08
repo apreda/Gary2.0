@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const mock = vi.hoisted(() => ({ rpc: vi.fn() }));
-vi.mock('@/lib/auth/client', () => ({ supabaseBrowser: () => ({ rpc: mock.rpc }) }));
+const mock = vi.hoisted(() => ({ rpc: vi.fn(), session: vi.fn() }));
+vi.mock('@/lib/auth/client', () => ({ supabaseBrowser: () => ({ rpc: (...args: unknown[]) => { const response = mock.rpc(...args); return Object.assign(response, { setHeader: () => response }); }, auth: { getSession: mock.session } }) }));
 import { fetchProfileSafety, fetchBlockedProfiles, reportProfile, setProfileBlock } from '@/lib/book/profile-safety';
 import { saveMyProfile } from '@/lib/book/api';
-beforeEach(() => vi.resetAllMocks());
+beforeEach(() => { vi.resetAllMocks(); mock.session.mockResolvedValue({ data: { session: { user: { id: 'owner-a' }, access_token: 'fixture-token' } }, error: null }); });
 
 describe('profile safety API boundary', () => {
   it('reports only the chosen public target and reason, leaving actor identity to the server', async () => {
@@ -43,6 +43,6 @@ describe('profile safety API boundary', () => {
   });
   it('explains rejected profile content instead of a misleading handle-format error', async () => {
     mock.rpc.mockResolvedValue({ data: null, error: { message: 'profile text is not allowed; remove abusive wording' } });
-    await expect(saveMyProfile({ bio: 'fixture rejected content' })).rejects.toThrow('without abusive wording');
+    await expect(saveMyProfile({ bio: 'fixture rejected content' }, 'owner-a')).rejects.toThrow('without abusive wording');
   });
 });

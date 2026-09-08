@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { fetchMyBets, fetchMyProfile, fetchMyStreak, type MyProfile, type UserStreak } from '@/lib/book/api';
 import {
   betsCsv,
@@ -84,12 +85,40 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
   const [showProfile, setShowProfile] = useState(false);
   const [unitDollars, setUnitDollars] = useUnitDollars();
   const [reloadKey, setReloadKey] = useState(0);
+  const [ownerId, setOwnerId] = useState<string | null>(null);
+  const [accountGeneration, setAccountGeneration] = useState(0);
+  const accountEpoch = useRef(0);
+  const owner = useRef<string | null | undefined>(undefined);
   const requestVersion = useRef(0);
+  const clearAccount = useCallback((next: string | null) => {
+    owner.current = next; setOwnerId(next); requestVersion.current += 1;
+    accountEpoch.current += 1; setAccountGeneration(accountEpoch.current);
+    setBets([]); setProfile(null); setStreak(null); setHasLoaded(false);
+    setShowLog(false); setShowProfile(false); setSearch('');
+    setSource('all'); setTimeframe('all'); setLeague(''); setStatus(''); setFavorites(false);
+    setError(null); setLoading(next !== null); setUnitDollars(0);
+  }, [setUnitDollars]);
   const reload = useCallback(async (recordOpen = false) => {
-    const request = ++requestVersion.current;
+    let request = ++requestVersion.current;
     try {
-      const [rows, s, p] = await Promise.all([fetchMyBets(), fetchMyStreak(), fetchMyProfile()]);
+      const { data: session, error: sessionError } = await supabaseBrowser().auth.getSession();
       if (request !== requestVersion.current) return;
+      const account = session.session?.user.id;
+      if (sessionError || !account) {
+        clearAccount(null); request = requestVersion.current;
+        throw new Error('Your session has ended. Sign in to open your book.');
+      }
+      if (owner.current !== undefined && owner.current !== account) {
+        clearAccount(account); request = requestVersion.current;
+      }
+      owner.current = account; setOwnerId(account);
+      const [rows, s, p] = await Promise.all([fetchMyBets(), fetchMyStreak(), fetchMyProfile(account)]);
+      const { data: current, error: currentError } = await supabaseBrowser().auth.getSession();
+      if (request !== requestVersion.current) return;
+      if (currentError || current.session?.user.id !== account || owner.current !== account) {
+        clearAccount(current.session?.user.id ?? null); request = requestVersion.current;
+        throw new Error('Your account changed. Reopen your book to continue.');
+      }
       setBets(rows);
       setStreak(s);
       setProfile(p);
@@ -100,12 +129,23 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
       // refreshes cannot manufacture new visits or retention.
       if (recordOpen) logBookMilestone('book_opened');
     } catch (e) {
-      if (request === requestVersion.current)
-        setError(e instanceof Error ? e.message : 'Your book could not load. Please retry.');
+      if (request !== requestVersion.current) return;
+      // An owner-bound profile read can reject before Promise.all completes.
+      // Keep stale private rows only after confirming the same account remains.
+      let currentOwner: string | null = null;
+      try {
+        const { data, error } = await supabaseBrowser().auth.getSession();
+        if (!error) currentOwner = data.session?.user.id ?? null;
+      } catch { /* An unavailable session cannot confirm private ownership. */ }
+      if (request !== requestVersion.current) return;
+      if (currentOwner !== owner.current) {
+        clearAccount(currentOwner); request = requestVersion.current;
+      }
+      setError(e instanceof Error ? e.message : 'Your book could not load. Please retry.');
     } finally {
       if (request === requestVersion.current) setLoading(false);
     }
-  }, [setUnitDollars]);
+  }, [setUnitDollars, clearAccount]);
   useEffect(() => {
     let cancelled = false;
     const load = (recordOpen = false) => {
@@ -117,14 +157,12 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
     }, 60000);
     const onFocus = () => load(true);
     window.addEventListener('focus', onFocus);
-    const { data: auth } = supabaseBrowser().auth.onAuthStateChange((event: string) => {
-      if (event === 'SIGNED_OUT') {
-        requestVersion.current += 1;
-        setBets([]);
-        setProfile(null);
-        setStreak(null);
-        setHasLoaded(false);
-        window.location.assign('/you');
+    const { data: auth } = supabaseBrowser().auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
+      const next = session?.user.id ?? null;
+      if (next !== owner.current) {
+        clearAccount(next);
+        if (next) window.setTimeout(() => load(true), 0);
+        else window.location.assign('/you');
       }
     });
     return () => {
@@ -135,7 +173,7 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
       window.removeEventListener('focus', onFocus);
       auth.subscription.unsubscribe();
     };
-  }, [reload]);
+  }, [reload, clearAccount]);
   const handle = profile?.profile?.display_name;
   const matching = searchBets(filterBets(bets, 'all', source), search, league, status, favorites);
   const filtered = filterBets(matching, timeframe, 'all');
@@ -153,6 +191,7 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   const streakPicks = bets.filter((b) => b.streak_pick && b.status === 'pending');
+  const isCurrentAccount = () => ownerId !== null && owner.current === ownerId && accountEpoch.current === accountGeneration;
   return (
     <div className="mt-7 space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -177,6 +216,7 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
             {showProfile ? 'Close profile' : 'Edit profile'}
           </button>
           <button
+            disabled={!ownerId}
             onClick={() => setShowLog((v) => !v)}
             className="rounded-chip bg-gold px-4 py-2 text-[12px] font-semibold text-ink"
           >
@@ -205,7 +245,9 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
       {showProfile && profile && (
         <ProfileEditor
           initial={profile}
+          initialOwnerId={ownerId ?? undefined}
           onSaved={(p) => {
+            if (!isCurrentAccount()) return;
             setProfile(p);
             setReloadKey((n) => n + 1);
           }}
@@ -221,10 +263,13 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
       )}
       {showLog && (
         <LogBet
+          ownerId={ownerId ?? undefined}
+          isCurrent={isCurrentAccount}
           onLogged={(bet) => {
+            if (!isCurrentAccount()) return;
             setBets((prev) => [bet, ...prev.filter((b) => b.id !== bet.id)]);
           }}
-          onClose={() => setShowLog(false)}
+          onClose={() => { if (isCurrentAccount()) setShowLog(false); }}
         />
       )}
       {loading ? (

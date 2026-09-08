@@ -155,14 +155,13 @@ export async function logManual(args: {
   notes?: string;
   bookmaker?: string;
   favorite?: boolean;
-}): Promise<UserBet> {
+}, expectedOwner: string, isCurrent: () => boolean = () => true): Promise<UserBet> {
   const supabase = supabaseBrowser();
-  const { data: auth } = await supabase.auth.getUser();
-  const uid = auth.user?.id;
-  if (!uid) throw new Error('Sign in to keep a book.');
+  const authorization = await bookAuthorization(expectedOwner);
+  if (!isCurrent()) throw new Error('Your account changed. Reopen your book before saving.');
 
   const row: Record<string, unknown> = {
-    user_id: uid,
+    user_id: expectedOwner,
     kind: 'manual',
     game_date: args.gameDate,
     league: args.league,
@@ -175,7 +174,7 @@ export async function logManual(args: {
   };
   if (args.odds != null) row.odds_american = args.odds;
 
-  const { data, error } = await supabase.from('user_bets').insert(row).select('*');
+  const { data, error } = await supabase.from('user_bets').insert(row).select('*').setHeader('Authorization', authorization);
   if (error) {
     console.warn('[YourBook] manual insert failed:', error.message);
     throw new Error(friendly(error.message));
@@ -208,18 +207,33 @@ export interface MyProfile {
   preferences: { favorite_sports: string[]; unit_value: number | null } | null;
 }
 
-export async function fetchMyProfile(): Promise<MyProfile> {
-  const { data, error } = await supabaseBrowser().rpc('get_my_profile');
+export async function fetchMyProfile(expectedOwner?: string): Promise<MyProfile> {
+  const client = supabaseBrowser();
+  const authorization = expectedOwner ? await bookAuthorization(expectedOwner) : null;
+  const request = client.rpc('get_my_profile');
+  const { data, error } = await (authorization ? request.setHeader('Authorization', authorization) : request);
   if (error || !data?.ok) throw new Error('Your profile could not load. Please retry.');
   return data as MyProfile;
 }
 
-export async function saveMyProfile(args: { handle?: string; avatar?: string; bio?: string; visible?: boolean; sports?: string[]; unitValue?: number | null }): Promise<MyProfile> {
+async function bookAuthorization(expectedOwner: string): Promise<string> {
+  const { data, error } = await supabaseBrowser().auth.getSession();
+  if (error || !expectedOwner || data.session?.user.id !== expectedOwner || !data.session.access_token) {
+    throw new Error('Your account changed. Reopen your Book or profile to continue.');
+  }
+  return `Bearer ${data.session.access_token}`;
+}
+
+export async function saveMyProfile(args: { handle?: string; avatar?: string; bio?: string; visible?: boolean; sports?: string[]; unitValue?: number | null }, expectedOwner: string, isCurrent: () => boolean = () => true): Promise<MyProfile> {
+  const authorization = await bookAuthorization(expectedOwner);
+  if (!isCurrent()) throw new Error('Your account changed. Reopen your profile before saving.');
+  // Bind this request to the checked session. The SDK otherwise looks up its
+  // current token asynchronously, after the editor's account guard has run.
   const { data, error } = await supabaseBrowser().rpc('save_my_profile', {
     p_handle: args.handle ?? null, p_avatar: args.avatar ?? null, p_bio: args.bio ?? null,
     p_leaderboard_visible: args.visible ?? null, p_favorite_sports: args.sports ?? null,
     p_unit_value: args.unitValue ?? null,
-  });
+  }).setHeader('Authorization', authorization);
   if (error || !data?.ok) throw new Error(friendly(error?.message ?? data?.error ?? 'profile'));
   return data as MyProfile;
 }

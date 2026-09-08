@@ -5,7 +5,9 @@ import type { MyProfile } from '@/lib/book/api';
 
 const f = vi.hoisted(() => ({
   cells: [] as unknown[], cursor: 0,
-  rpc: vi.fn(), unit: vi.fn(), saved: vi.fn(),
+  rpc: vi.fn(), unit: vi.fn(), saved: vi.fn(), getSession: vi.fn(),
+  effects: [] as (() => void | (() => void))[], auth: null as null | ((event: string, session: { user: { id: string } } | null) => void),
+  owner: 'owner-a', mounted: false, childKey: null as string | null, childStart: 0,
 }));
 vi.mock('react', async original => ({
   ...await original<typeof import('react')>(),
@@ -16,11 +18,17 @@ vi.mock('react', async original => ({
       f.cells[index] = typeof next === 'function' ? next(f.cells[index]) : next;
     }];
   },
-  useEffect: () => {},
+  useRef: (initial: unknown) => {
+    const i = f.cursor++; if (!(i in f.cells)) f.cells[i] = { current: initial }; return f.cells[i];
+  },
+  useEffect: (effect: () => void | (() => void)) => { f.effects.push(effect); },
 }));
 // The component and saveMyProfile transport adapter are real. Only the
 // authenticated RPC boundary is intercepted; no network/account is used.
-vi.mock('@/lib/auth/client', () => ({ supabaseBrowser: () => ({ rpc: f.rpc }) }));
+vi.mock('@/lib/auth/client', () => ({ supabaseBrowser: () => ({
+  rpc: (...args: unknown[]) => { const response = f.rpc(...args); return Object.assign(response, { setHeader: () => response }); },
+  auth: { getSession: f.getSession, onAuthStateChange: (callback: typeof f.auth) => { f.auth = callback; return { data: { subscription: { unsubscribe: vi.fn() } } }; } },
+}) }));
 vi.mock('@/components/book/BookDay', () => ({ useUnitDollars: () => [0, f.unit] }));
 vi.mock('@/components/book/LogBet', () => ({ bookButton: '', bookField: '' }));
 import { ProfileEditor } from '@/components/book/ProfileEditor';
@@ -45,11 +53,18 @@ const claimedProfile = (visible = false): MyProfile => ({
 let initial: MyProfile;
 
 function render(): ReactNode {
-  f.cursor = 0;
-  const editor = ProfileEditor({ initial, onSaved: f.saved });
-  if (!isValidElement(editor) || typeof editor.type !== 'function') {
-    throw new Error('The supplied initial profile must render the actual ProfileForm');
+  f.cursor = 0; f.effects = [];
+  let editor = ProfileEditor({ initial, initialOwnerId: 'owner-a', onSaved: f.saved });
+  if (!f.mounted) {
+    f.mounted = true; f.effects[0](); f.auth?.('INITIAL_SESSION', { user: { id: f.owner } });
+    f.cursor = 0; f.effects = [];
+    editor = ProfileEditor({ initial, initialOwnerId: 'owner-a', onSaved: f.saved });
   }
+  if (!isValidElement(editor) || typeof editor.type !== 'function') {
+    return editor;
+  }
+  if (f.childKey !== editor.key) { f.cells.length = f.cursor; f.childKey = editor.key; }
+  f.childStart = f.cursor;
   // Execute the private child function reached through ProfileEditor's real
   // React element. Hook cells survive renders; onSaved never replaces initial.
   return (editor.type as (props: unknown) => ReactNode)(editor.props);
@@ -81,7 +96,8 @@ async function submit() {
 function receipt(data: MyProfile) { return { data, error: null }; }
 
 beforeEach(() => {
-  vi.resetAllMocks(); f.cells = []; f.cursor = 0; initial = privateProfile();
+  vi.resetAllMocks(); f.cells = []; f.cursor = 0; f.effects = []; f.auth = null; f.owner = 'owner-a'; f.mounted = false; f.childKey = null; initial = privateProfile();
+  f.getSession.mockImplementation(async () => ({ data: { session: { user: { id: f.owner }, access_token: 'fixture-token-' + f.owner } }, error: null }));
   f.rpc.mockResolvedValue(receipt(privateProfile()));
 });
 
@@ -209,5 +225,62 @@ describe('private profile preference submission', () => {
     });
     expect(handle().value).toBe('FirstClaim'); expect(f.unit).toHaveBeenLastCalledWith(12.5);
     expect(f.saved).toHaveBeenLastCalledWith(second);
+  });
+});
+
+const flush = () => new Promise<void>(resolve => setImmediate(resolve));
+function switchOwner(id: string | null) {
+  f.owner = id ?? '';
+  f.auth?.('SIGNED_IN', id ? { user: { id } } : null);
+}
+async function loadChangedOwner(profile: MyProfile) {
+  f.rpc.mockResolvedValueOnce(receipt(profile));
+  render(); f.effects[1]?.(); await flush(); render();
+}
+
+describe('profile account ownership', () => {
+  it('preserves a same-owner draft on token refresh', () => {
+    initial = claimedProfile(); change(bio(), 'Unsaved owner A draft');
+    f.auth?.('TOKEN_REFRESHED', { user: { id: 'owner-a' } });
+    expect(bio().value).toBe('Unsaved owner A draft');
+    expect(f.rpc).not.toHaveBeenCalled();
+  });
+
+  it('clears a changed-owner draft immediately and rejects its retained submit callback', async () => {
+    initial = claimedProfile(); change(bio(), 'Unsaved owner A draft');
+    const oldSubmit = nodes(render(), 'form')[0].onSubmit!;
+    switchOwner('owner-b');
+    expect(markup()).not.toContain('KnownFan');
+    expect(markup()).not.toContain('Unsaved owner A draft');
+    expect(nodes(render(), 'form')).toHaveLength(0);
+    await oldSubmit({ preventDefault: vi.fn() });
+    expect(f.rpc).not.toHaveBeenCalled();
+    await loadChangedOwner(privateProfile());
+    expect(handle().value).toBe(''); expect(bio().value).toBe('');
+  });
+
+  it.each(['owner-b', 'owner-a'])('ignores a late save after A→B→%s, including units and parent callbacks', async finalOwner => {
+    initial = claimedProfile(); change(unit(), '77');
+    let resolve!: (value: ReturnType<typeof receipt>) => void;
+    f.rpc.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+    const saving = submit(); await flush();
+    expect(f.rpc).toHaveBeenCalledOnce();
+    switchOwner('owner-b');
+    if (finalOwner === 'owner-a') switchOwner('owner-a');
+    await loadChangedOwner(privateProfile());
+    resolve(receipt(claimedProfile())); await saving;
+    expect(handle().value).toBe('');
+    expect(f.saved).not.toHaveBeenCalled(); expect(f.unit).not.toHaveBeenCalled();
+    expect(markup()).not.toContain('Profile saved.');
+  });
+
+  it('rejects an old profile load after another owner finishes loading', async () => {
+    initial = claimedProfile(); render(); switchOwner('owner-b');
+    let resolve!: (value: ReturnType<typeof receipt>) => void;
+    f.rpc.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+    render(); f.effects[1]?.(); await flush();
+    switchOwner('owner-c'); await loadChangedOwner(privateProfile());
+    resolve(receipt(claimedProfile())); await flush();
+    expect(handle().value).toBe(''); expect(markup()).not.toContain('KnownFan');
   });
 });

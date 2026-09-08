@@ -8,6 +8,7 @@ const fixture = vi.hoisted(() => ({
   callbacks: [] as ((...args: unknown[]) => Promise<void>)[],
   effects: [] as (() => void | (() => void))[],
   authChanged: null as null | ((event: string, session: { user: { id: string } } | null) => void),
+  sessionOwner: 'owner-a' as string | null, getSession: vi.fn(),
   bets: vi.fn(), streak: vi.fn(), profile: vi.fn(), rankings: vi.fn(), rpc: vi.fn(), unit: vi.fn(),
 }));
 
@@ -29,7 +30,7 @@ vi.mock('react', async (original) => ({
     return fixture.cells[index];
   },
   useCallback: (callback: (...args: unknown[]) => Promise<void>) => {
-    fixture.callbacks.push(callback); return callback;
+    if (callback.constructor.name === 'AsyncFunction') fixture.callbacks.push(callback); return callback;
   },
   useEffect: (effect: () => void | (() => void)) => { fixture.effects.push(effect); },
 }));
@@ -38,7 +39,7 @@ vi.mock('next/link', async () => {
   return { default: ({ children, ...props }: { children: import('react').ReactNode }) => createElement('a', props, children) };
 });
 vi.mock('@/lib/auth/client', () => ({
-  supabaseBrowser: () => ({ rpc: fixture.rpc, auth: { onAuthStateChange: (callback: typeof fixture.authChanged) => {
+  supabaseBrowser: () => ({ rpc: fixture.rpc, auth: { getSession: fixture.getSession, onAuthStateChange: (callback: typeof fixture.authChanged) => {
     fixture.authChanged = callback;
     return { data: { subscription: { unsubscribe: vi.fn() } } };
   } } }),
@@ -63,6 +64,8 @@ import { BookClient } from '@/components/book/BookClient';
 import { Leaderboard } from '@/components/book/Leaderboard';
 import { Ledger, OpenSlips } from '@/components/book/BookSlips';
 import { RideChart } from '@/components/book/RideChart';
+import { LogBet } from '@/components/book/LogBet';
+import { ProfileEditor } from '@/components/book/ProfileEditor';
 
 const actualSlips = await vi.importActual<typeof import('@/components/book/BookSlips')>('@/components/book/BookSlips');
 
@@ -82,6 +85,8 @@ const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
 beforeEach(() => {
   vi.resetAllMocks();
   fixture.cells = []; fixture.cursor = 0; fixture.callbacks = []; fixture.effects = []; fixture.authChanged = null;
+  fixture.sessionOwner = 'owner-a';
+  fixture.getSession.mockImplementation(async () => ({ data: { session: fixture.sessionOwner ? { user: { id: fixture.sessionOwner } } : null }, error: null }));
   fixture.bets.mockResolvedValue([]);
   fixture.streak.mockResolvedValue(null);
   fixture.profile.mockResolvedValue({ profile: null, preferences: { unit_value: 0 } });
@@ -380,5 +385,102 @@ describe('public profile transport failures', () => {
     fixture.effects[1](); await flush();
     expect(render('public-profile')).toContain('This profile is unavailable');
     expect(render('public-profile')).not.toContain('could not load');
+  });
+});
+
+describe('Book account ownership', () => {
+  function mountBook() {
+    vi.stubGlobal('window', {
+      setTimeout: vi.fn(), setInterval: vi.fn(),
+      addEventListener: vi.fn(), removeEventListener: vi.fn(),
+      location: { assign: vi.fn() },
+    });
+    render('book'); fixture.effects[0]();
+    fixture.authChanged!('INITIAL_SESSION', { user: { id: 'owner-a' } });
+  }
+  const privateIdentity = (name: string, unit: number) => ({
+    ok: true, profile: { display_name: name, handle: name, avatar: 'initials', leaderboard_visible: false },
+    preferences: { favorite_sports: [], unit_value: unit },
+  });
+  async function load() { render('book'); await fixture.callbacks[0](); }
+  function changeOwner(id: string) {
+    fixture.sessionOwner = id;
+    fixture.authChanged!('SIGNED_IN', { user: { id } });
+  }
+  it('clears old account record and open editors immediately, but retains them on a same-owner refresh', async () => {
+    mountBook(); fixture.bets.mockResolvedValue(record); fixture.profile.mockResolvedValue(privateIdentity('OwnerAFan', 25));
+    await load();
+    const edit = elements(bookTree()).find(node => node.type === 'button' && textOf(node) === 'Edit profile')!;
+    (edit.props.onClick as () => void)();
+    expect(render('book')).toContain('Close profile'); expect(render('book')).toContain('OwnerAFan');
+    fixture.authChanged!('TOKEN_REFRESHED', { user: { id: 'owner-a' } });
+    expect(render('book')).toContain('Close profile'); expect(render('book')).toContain('OwnerAFan');
+    changeOwner('owner-b');
+    const html = render('book');
+    expect(html).not.toContain('OwnerAFan'); expect(html).not.toContain('Close profile'); expect(html).not.toContain('1–0');
+    expect(fixture.unit).toHaveBeenLastCalledWith(0);
+  });
+  it('rejects an old account read after the new account has loaded, including shared unit display', async () => {
+    mountBook();
+    let oldRows!: (rows: typeof record) => void;
+    fixture.bets.mockImplementationOnce(() => new Promise(resolve => { oldRows = resolve; })).mockResolvedValue([]);
+    fixture.profile.mockResolvedValueOnce(privateIdentity('OwnerAFan', 25)).mockResolvedValue(privateIdentity('OwnerBFan', 5));
+    render('book'); const oldLoad = fixture.callbacks[0](); await flush();
+    changeOwner('owner-b'); await load();
+    expect(render('book')).toContain('OwnerBFan');
+    oldRows(record); await oldLoad;
+    expect(render('book')).toContain('OwnerBFan'); expect(render('book')).not.toContain('OwnerAFan');
+    expect(render('book')).not.toContain('1–0'); expect(fixture.unit).toHaveBeenLastCalledWith(5);
+    expect(fixture.unit).not.toHaveBeenCalledWith(25);
+  });
+  it('clears retained private history when the first session read confirms sign-out before the event', async () => {
+    mountBook(); fixture.bets.mockResolvedValue(record); fixture.profile.mockResolvedValue(privateIdentity('OwnerAFan', 25));
+    await load(); fixture.sessionOwner = null; await load();
+    const html = render('book');
+    expect(html).toContain('Your session has ended'); expect(html).not.toContain('OwnerAFan'); expect(html).not.toContain('1–0');
+    expect(fixture.unit).toHaveBeenLastCalledWith(0);
+  });
+  it.each([false, true])('keeps a log callback owner-bound while allowing same-owner reload: switch=%s', async switchAccount => {
+    mountBook(); await load();
+    const add = elements(bookTree()).find(node => node.type === 'button' && textOf(node) === '+ Log a bet')!;
+    (add.props.onClick as () => void)();
+    const form = elements(bookTree()).find(node => node.type === LogBet)!;
+    expect(form.props.ownerId).toBe('owner-a');
+    if (switchAccount) changeOwner('owner-b');
+    await load();
+    (form.props.onLogged as (bet: UserBet) => void)({ ...record[0], id: 'old-account-manual', kind: 'manual', status: 'pending' } as UserBet);
+    const rows = (rowElement(bookTree(), OpenSlips)?.props.bets ?? []) as UserBet[];
+    expect(rows.some(row => row.id === 'old-account-manual')).toBe(!switchAccount);
+  });
+  it.each(['owner-b', null])('rejects an old editor callback after the parent detects session %s before the auth event', async nextOwner => {
+    mountBook(); fixture.profile.mockResolvedValue(privateIdentity('OwnerAFan', 25)); await load();
+    const edit = elements(bookTree()).find(node => node.type === 'button' && textOf(node) === 'Edit profile')!;
+    (edit.props.onClick as () => void)();
+    const editor = elements(bookTree()).find(node => node.type === ProfileEditor)!;
+    fixture.sessionOwner = nextOwner; fixture.profile.mockResolvedValue(privateIdentity('OwnerBFan', 5));
+    await load();
+    (editor.props.onSaved as (profile: unknown) => void)(privateIdentity('LateOwnerAFan', 99));
+    expect(render('book')).not.toContain('LateOwnerAFan');
+    if (nextOwner) expect(render('book')).toContain('OwnerBFan');
+  });
+  it('rechecks ownership after an account-bound data read fails before the final session check', async () => {
+    mountBook(); fixture.bets.mockResolvedValue(record); fixture.profile.mockResolvedValue(privateIdentity('OwnerAFan', 25)); await load();
+    fixture.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'owner-a' } } }, error: null })
+      .mockResolvedValueOnce({ data: { session: { user: { id: 'owner-b' } } }, error: null });
+    fixture.profile.mockRejectedValueOnce(new Error('Your account changed.'));
+    await load();
+    const html = render('book');
+    expect(html).not.toContain('OwnerAFan'); expect(html).not.toContain('1–0');
+    expect(fixture.unit).toHaveBeenLastCalledWith(0);
+  });
+  it('clears retained private history if a cookie-session change is detected before its auth event', async () => {
+    mountBook(); fixture.bets.mockResolvedValue(record); fixture.profile.mockResolvedValue(privateIdentity('OwnerAFan', 25));
+    await load();
+    fixture.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'owner-a' } } }, error: null })
+      .mockResolvedValueOnce({ data: { session: { user: { id: 'owner-b' } } }, error: null });
+    await load();
+    const html = render('book');
+    expect(html).toContain('Your account changed'); expect(html).not.toContain('OwnerAFan'); expect(html).not.toContain('1–0');
+    expect(fixture.unit).toHaveBeenLastCalledWith(0);
   });
 });

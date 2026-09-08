@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { logManual, updateBet } from '@/lib/book/api';
 import type { UserBet } from '@/lib/book/model';
 import { todayEST } from '@/lib/gary/dates';
@@ -17,11 +17,17 @@ export function LogBet({
   onLogged,
   onClose,
   existing,
+  ownerId,
+  isCurrent = () => true,
 }: {
   onLogged: (bet: UserBet) => void;
   onClose: () => void;
   existing?: UserBet;
+  ownerId?: string;
+  isCurrent?: () => boolean;
 }) {
+  const active = useRef(true);
+  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const [league, setLeague] = useState(existing?.league ?? 'MLB');
   const [description, setDescription] = useState(existing?.pick_text ?? '');
   const [oddsText, setOddsText] = useState(String(existing?.odds_american ?? -110));
@@ -35,6 +41,8 @@ export function LogBet({
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (busy || !active.current || !isCurrent()) return;
+    if (!existing && !ownerId) { setError('Reopen your book to confirm your account before saving.'); return; }
     const desc = description.trim();
     const odds = Number(oddsText);
     const stake = Number(stakeText);
@@ -70,14 +78,15 @@ export function LogBet({
             notes,
             bookmaker,
             favorite,
-          });
+          }, ownerId!, () => active.current && isCurrent());
+      if (!active.current || !isCurrent()) return;
       if (!existing) logBookMilestone('manual_bet_saved');
       onLogged(bet);
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'We could not save that bet. Please retry.');
+      if (active.current && isCurrent()) setError(err instanceof Error ? err.message : 'We could not save that bet. Please retry.');
     } finally {
-      setBusy(false);
+      if (active.current && isCurrent()) setBusy(false);
     }
   };
 

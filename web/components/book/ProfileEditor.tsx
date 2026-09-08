@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
+import { supabaseBrowser } from '@/lib/auth/client';
 import { fetchMyProfile, saveMyProfile, type MyProfile } from '@/lib/book/api';
 import { useUnitDollars } from './BookDay';
 import { bookButton, bookField } from './LogBet';
@@ -23,33 +25,52 @@ export function profileAvatar(value: string | null | undefined, handle: string) 
 
 export function ProfileEditor({
   initial,
+  initialOwnerId,
   onSaved,
 }: {
   initial?: MyProfile;
+  initialOwnerId?: string;
   onSaved?: (profile: MyProfile) => void;
 }) {
-  const [loaded, setLoaded] = useState(!!initial);
-  const [profile, setProfile] = useState(initial ?? null);
+  const [loaded, setLoaded] = useState(false);
+  const [profile, setProfile] = useState<MyProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const seed = useRef({ initial, initialOwnerId });
+  const owner = useRef<{ id: string | null; epoch: number } | null>(null);
+  const [account, setAccount] = useState<{ id: string | null; epoch: number } | null>(null);
   useEffect(() => {
-    if (initial) return;
+    let active = true;
+    const { data } = supabaseBrowser().auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
+      if (!active || owner.current?.id === (session?.user.id ?? null)) return;
+      const previous = owner.current;
+      const next = { id: session?.user.id ?? null, epoch: (previous?.epoch ?? 0) + 1 };
+      owner.current = next;
+      const seeded = !previous && next.id && seed.current.initialOwnerId === next.id ? seed.current.initial : undefined;
+      setAccount(next); setProfile(seeded ?? null); setLoaded(!!seeded); setError(null);
+    });
+    return () => { active = false; owner.current = null; data.subscription.unsubscribe(); };
+  }, []);
+  useEffect(() => {
+    if (!account?.id) return;
+    if (account.epoch === 1 && attempt === 0 && seed.current.initialOwnerId === account.id && seed.current.initial) return;
     let cancelled = false;
-    fetchMyProfile()
+    fetchMyProfile(account.id)
       .then((p) => {
-        if (!cancelled) {
+        if (!cancelled && owner.current === account) {
           setProfile(p);
           setLoaded(true);
           setError(null);
         }
       })
       .catch((e) => {
-        if (!cancelled) setError(e.message);
+        if (!cancelled && owner.current === account) setError(e instanceof Error ? e.message : 'Your profile could not load. Please retry.');
       });
     return () => {
       cancelled = true;
     };
-  }, [initial, attempt]);
+  }, [account, attempt]);
+  if (account && !account.id) return <p className="text-sm text-mid">Sign in to edit your profile.</p>;
   if (!loaded)
     return (
       <div className="rounded-panel border border-line bg-card p-6">
@@ -63,10 +84,10 @@ export function ProfileEditor({
         )}
       </div>
     );
-  return <ProfileForm initial={profile!} onSaved={onSaved} />;
+  return <ProfileForm key={account!.epoch} initial={profile!} ownerId={account!.id!} isCurrent={() => owner.current === account} onSaved={onSaved} />;
 }
 
-function ProfileForm({ initial, onSaved }: { initial: MyProfile; onSaved?: (profile: MyProfile) => void }) {
+function ProfileForm({ initial, ownerId, isCurrent, onSaved }: { initial: MyProfile; ownerId: string; isCurrent: () => boolean; onSaved?: (profile: MyProfile) => void }) {
   const [handle, setHandle] = useState(initial.profile?.handle ?? initial.profile?.display_name ?? '');
   const [savedHandle, setSavedHandle] = useState(initial.profile?.handle ?? initial.profile?.display_name ?? '');
   const [bio, setBio] = useState(initial.profile?.bio ?? '');
@@ -82,7 +103,7 @@ function ProfileForm({ initial, onSaved }: { initial: MyProfile; onSaved?: (prof
   const needsHandle = visible || (!savedHandle && (bio.trim() !== '' || avatar !== 'initials'));
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (busy) return;
+    if (busy || !isCurrent()) return;
     setError(null);
     setFeedback(null);
     if (handle.trim() && !/^[A-Za-z0-9_]{3,18}$/.test(handle.trim())) {
@@ -106,7 +127,8 @@ function ProfileForm({ initial, onSaved }: { initial: MyProfile; onSaved?: (prof
         visible,
         sports,
         unitValue,
-      });
+      }, ownerId, isCurrent);
+      if (!isCurrent()) return;
       const persistedHandle = p.profile?.handle ?? p.profile?.display_name ?? '';
       setSavedHandle(persistedHandle);
       setHandle(persistedHandle);
@@ -116,9 +138,9 @@ function ProfileForm({ initial, onSaved }: { initial: MyProfile; onSaved?: (prof
         ? 'Profile saved. Your preferences sync with the app.'
         : 'Private preferences saved. No public profile was created.');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Your profile could not be saved.');
+      if (isCurrent()) setError(e instanceof Error ? e.message : 'Your profile could not be saved.');
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   };
   return (
