@@ -1,3 +1,6 @@
+import { isFinalSettlementStatus } from '../../supabase/functions/_shared/gameSettlement.js';
+export { gradeGameSpread } from '../../supabase/functions/_shared/gameSettlement.js';
+
 const clean = (value) => String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
 
 const finiteNumber = (value) => {
@@ -109,30 +112,6 @@ export function requiredPropSourceSports(storedPicks = [], allowedSports = null)
   }
 
   return required;
-}
-
-/**
- * Grade a point-spread selection once the picked side has been resolved.
- * Football books legitimately post half-point pick'em lines (+0.5/-0.5),
- * signed zero, and PK/pick'em text; none of those may fall through to the
- * moneyline grader.
- */
-export function gradeGameSpread(pickText, side, homeScore, awayScore) {
-  const text = String(pickText ?? '');
-  const numeric = text.match(/([+-](?:0|[1-9]\d{0,1})(?:\.\d+)?)(?![\d.])/);
-  const pickEm = /\b(?:pk|pick\s*['’]?\s*em)\b/i.test(text);
-  if (!numeric && !pickEm) return null;
-  if (!['home', 'away'].includes(side)) return null;
-
-  const spread = numeric ? Number(numeric[1]) : 0;
-  const home = Number(homeScore);
-  const away = Number(awayScore);
-  if (![spread, home, away].every(Number.isFinite)) return null;
-
-  const margin = side === 'home' ? home - away : away - home;
-  const covered = margin + spread;
-  if (covered === 0) return 'push';
-  return covered > 0 ? 'won' : 'lost';
 }
 
 /**
@@ -450,19 +429,7 @@ export function assertFootballSettlementCoverage(outcome) {
  * BDL final statuses are not limited to the exact string "Final". NFL games,
  * for example, use "Final/OT" for overtime finishes.
  */
-export function isFinalGameStatus(status) {
-  const normalized = clean(status);
-  if (!normalized) return false;
-
-  // Check explicit non-final terminal/interruption labels before the broad
-  // final-token match ("postponed" must never be mistaken for "post").
-  if (/cancel|postpon|suspend|delay|scheduled|in[ _-]?progress|halftime/.test(normalized)) {
-    return false;
-  }
-
-  return /(?:^|[^a-z])final(?:[^a-z]|$)/.test(normalized)
-    || ['post', 'completed', 'finished', 'closed'].includes(normalized);
-}
+export const isFinalGameStatus = isFinalSettlementStatus;
 
 export function propGameId(prop) {
   const value = prop?.game_id ?? prop?.bdl_game_id ?? null;

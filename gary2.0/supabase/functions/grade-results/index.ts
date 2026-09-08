@@ -30,6 +30,7 @@
 // Side-detection (which team a pick is on) + gradeGame live in the pure,
 // unit-tested ./grading.ts — hardened Jul 9 2026 against the shared-mascot bug that
 // graded a 5-0 Red Sox win over the White Sox as a loss (both end in "Sox").
+import { isFinalSettlementStatus } from '../_shared/gameSettlement.js';
 import {
   gameOnlyHeadline,
   gradeGame,
@@ -76,7 +77,7 @@ function estDate(offset = 0): string {
 const num = resultNumber;
 
 function isFinalStatus(raw: unknown): boolean {
-  return String(raw ?? "").toUpperCase().includes("FINAL");
+  return isFinalSettlementStatus(raw);
 }
 
 // ── BDL / Supabase REST ─────────────────────────────────────────────────────
@@ -114,7 +115,7 @@ async function readWinnersFlags(date: string, picks: any[]): Promise<boolean[]> 
 // above), which resolves the pick's side using only the tokens that
 // distinguish the two teams — never a shared mascot like "Sox".
 
-const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
+const norm = (s: unknown) => typeof s === "string" ? s.toLowerCase().replace(/[^a-z]/g, "") : "";
 
 // Team-name match for one BDL game row against pick-side team names (norm-token
 // containment both ways — the same rule the grading loop has always used).
@@ -122,7 +123,8 @@ function mlbGameMatches(g: any, homeTeam: string, awayTeam: string): boolean {
   const gh = norm(g.home_team?.full_name ?? g.home_team?.name ?? "");
   const gv = norm(g.away_team?.full_name ?? g.away_team?.name ?? "");
   const ph = norm(homeTeam ?? ""), pv = norm(awayTeam ?? "");
-  return (gh.includes(ph) || ph.includes(gh)) && (gv.includes(pv) || pv.includes(gv));
+  return !!gh && !!gv && !!ph && !!pv && gh !== gv && ph !== pv
+    && (gh.includes(ph) || ph.includes(gh)) && (gv.includes(pv) || pv.includes(gv));
 }
 
 // ── game_results dedup write (re-grade on exist) ─────────────────────────────

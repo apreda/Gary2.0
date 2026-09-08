@@ -1,6 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  assertPropPublicationPregame,
+  assertAtomicPropReceipt,
+  assertExistingPropPublications,
   deriveFootballTdCategory,
   stampFootballTdCategory,
   storePropPicksAtomic,
@@ -10,6 +13,7 @@ import {
 const nflProp = (overrides = {}) => ({
   sport: 'NFL',
   game_id: 1393557,
+  commence_time: '2026-08-15T23:00:00Z',
   matchup: 'Carolina Panthers @ Buffalo Bills',
   player: 'James Cook',
   prop: 'rushing_yards 63.5',
@@ -17,6 +21,9 @@ const nflProp = (overrides = {}) => ({
   line: '63.5',
   ...overrides,
 });
+
+beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-08-15T12:00:00Z')); });
+afterEach(() => { vi.useRealTimers(); });
 
 describe('atomic prop-picks client', () => {
   let rpc;
@@ -218,7 +225,7 @@ describe('atomic prop-picks client', () => {
       date: '2026-08-15',
       leagueLabel: 'NFL',
       picks: [nflProp()],
-    })).rejects.toThrow('did not return game_ids');
+    })).rejects.toThrow('Invalid atomic prop publication receipt');
   });
 });
 
@@ -227,7 +234,7 @@ describe('Winners receives the persisted prop decision after atomic publication'
   const setup = ({ incoming, published, readError = null } = {}) => {
     const events = [];
     const query = { select: () => query, eq: () => query, maybeSingle: async () => { events.push('read-published'); return { data: { picks: published }, error: readError }; } };
-    const client = { rpc: vi.fn(async () => { events.push('published'); return { data: { added: 1, skipped: 1, game_ids: ['1393557'], added_game_ids: ['1393557'] }, error: null }; }), from: vi.fn(() => query) };
+    const client = { rpc: vi.fn(async () => { events.push('published'); return { data: { added: 1, skipped: incoming.length - 1, replaced: 0, total: incoming.length, mode: 'append', game_ids: ['1393557'], added_game_ids: ['1393557'], skipped_game_ids: incoming.length > 1 ? ['1393557'] : [], replaced_game_ids: [] }, error: null }; }), from: vi.fn(() => query) };
     const evidence = { '1393557': { deskText: 'Original desk before the Sol call', observedAt: '2026-09-04T16:00:00Z' } };
     return { events, client, evidence, incoming };
   };
@@ -263,5 +270,79 @@ describe('Winners receives the persisted prop decision after atomic publication'
     await storePropPicksAtomic({ client: run.client, date: '2026-09-04', leagueLabel: 'NFL', picks: run.incoming, enqueueWinners: queue });
     expect(run.client.from).not.toHaveBeenCalled();
     expect(queue).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('prop publication pregame boundary', () => {
+  const receipt = { added: 1, skipped: 0, replaced: 0, total: 1, mode: 'append', game_ids: ['1393557'], added_game_ids: ['1393557'], skipped_game_ids: [], replaced_game_ids: [] };
+  const store = (client, pick) => storePropPicksAtomic({ client, date: '2026-08-15', leagueLabel: 'NFL', picks: [pick] });
+  it.each([null, undefined, '', 'not-a-date', '2026-08-15T23:00:00'])('rejects invalid or timezone-less start %s before the RPC', async commence_time => {
+    const rpc = vi.fn();
+    await expect(store({ rpc }, nflProp({ commence_time }))).rejects.toThrow('timezone-qualified commence_time');
+    expect(rpc).not.toHaveBeenCalled();
+  });
+  it('rejects a started batch before RPC while preserving the input ticket', async () => {
+    const rpc = vi.fn();
+    const pick = Object.freeze(nflProp({ commence_time: new Date(Date.now()).toISOString(), rationale: 'Original take' }));
+    await expect(store({ rpc }, pick)).rejects.toThrow('has started');
+    expect(rpc).not.toHaveBeenCalled();
+    expect(pick.rationale).toBe('Original take');
+  });
+  it('checks the batch after generation and on every transient retry', async () => {
+    const rpc = vi.fn().mockResolvedValueOnce({ data: null, error: { message: 'upstream request timeout' } }).mockResolvedValue({ data: receipt, error: null });
+    const pick = nflProp({ commence_time: new Date(Date.now() + 10_000).toISOString() });
+    const rejected = expect(store({ rpc }, pick)).rejects.toThrow('has started');
+    await vi.advanceTimersByTimeAsync(15_000);
+    await rejected;
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+  it('still retries a transient failure while every game remains pregame', async () => {
+    const rpc = vi.fn().mockResolvedValueOnce({ data: null, error: { message: 'upstream request timeout' } }).mockResolvedValue({ data: receipt, error: null });
+    const pending = store({ rpc }, nflProp());
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect((await pending).added).toBe(1);
+    expect(rpc).toHaveBeenCalledTimes(2);
+  });
+  it('accepts a durable server receipt arriving after the pregame request', async () => {
+    const rpc = vi.fn(async () => { await new Promise(resolve => setTimeout(resolve, 15_000)); return { data: receipt, error: null }; });
+    const pending = store({ rpc }, nflProp({ commence_time: new Date(Date.now() + 10_000).toISOString() }));
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect((await pending).added).toBe(1);
+  });
+  it('refuses the whole batch if only one game has already started', () => {
+    expect(() => assertPropPublicationPregame([nflProp(), nflProp({ commence_time: '2026-08-15T11:00:00Z' })])).toThrow('has started');
+  });
+});
+
+
+describe('prop publication receipts and immutable confirmation', () => {
+  const original = () => nflProp({ odds: '-115', rationale: 'Original published card' });
+  const receipt = changes => ({ added: 1, skipped: 0, replaced: 0, total: 1, mode: 'insert', game_ids: ['1393557'], added_game_ids: ['1393557'], skipped_game_ids: [], replaced_game_ids: [], ...changes });
+  it.each([
+    null, {}, { game_ids: [] }, receipt({ added: 0 }), receipt({ skipped: 1 }),
+    receipt({ total: 0 }), receipt({ added: '1' }), receipt({ total: -1 }),
+    receipt({ game_ids: [] }), receipt({ game_ids: ['other'] }), receipt({ game_ids: ['1393557', '1393557'] }),
+    receipt({ added_game_ids: [] }), receipt({ skipped_game_ids: ['1393557'] }),
+    receipt({ mode: 'replace' }), receipt({ replaced: 1 }), receipt({ replaced_game_ids: ['1393557'] }),
+  ])('rejects an incomplete or inconsistent receipt', value => {
+    expect(() => assertAtomicPropReceipt(value, [original()])).toThrow('publication is unconfirmed');
+  });
+  it('allows mixed add/skip identity groups when two props share a game', () => {
+    expect(() => assertAtomicPropReceipt(receipt({ added: 1, skipped: 1, total: 2, skipped_game_ids: ['1393557'] }), [original(), original()])).not.toThrow();
+  });
+  it('confirms the original natural ticket despite a changed retry price or rationale', () => {
+    expect(() => assertExistingPropPublications([original()], [{ ...original(), odds: '-120', rationale: 'Unpublished retry' }])).not.toThrow();
+  });
+  it.each([
+    { game_id: 'other' }, { sport: 'MLB' }, { player: 'Other Player' }, { prop: 'receiving_yards 63.5' },
+    { bet: 'under' }, { line: '64.5' }, { td_category: 'standard' }, { odds: null }, { rationale: '' },
+  ])('refuses missing/malformed or different original ticket %j', change => {
+    expect(() => assertExistingPropPublications([{ ...original(), ...change }], [original()])).toThrow('original ticket is missing or malformed');
+  });
+  it('does not acknowledge a skipped write when the subsequent ledger read fails', async () => {
+    const query = { select: () => query, eq: () => query, maybeSingle: async () => ({ data: null, error: { message: 'read offline' } }) };
+    const client = { rpc: async () => ({ data: receipt({ added: 0, skipped: 1, mode: 'append', added_game_ids: [], skipped_game_ids: ['1393557'] }), error: null }), from: () => query };
+    await expect(storePropPicksAtomic({ client, date: '2026-08-15', leagueLabel: 'NFL', picks: [original()] })).rejects.toThrow('publication confirmation failed');
   });
 });

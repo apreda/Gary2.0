@@ -6,14 +6,10 @@
 // to the active sports: MLB (incl. "MLB HR"). Other leagues are counted-and-skipped,
 // never silently mis-graded.
 //
-// Two deliberate improvements over the laptop script, both correctness-positive:
-//   1. FINALITY GATE — only grade props whose game is FINAL (MLB STATUS_FINAL).
-//      The laptop grader has none and relies on re-grade self-correction; gating
-//      means a prop is never shown "lost" mid-game.
-//   2. SKIP-ALREADY-GRADED — read prop_results once up front; any prop already
-//      settled (result not null) is skipped before any BDL call. Combined
-//      with the finality gate this is safe (a final stat won't change) and makes
-//      steady-state nearly free.
+// Both cloud and local graders require final games and share MLB field and
+// player identity validation. This cloud lane skips existing settled results
+// before provider work; the local lane can reconcile later provider corrections.
+// Missing fields, ambiguous players and incomplete boxes remain pending.
 //
 // Writes to prop_results using the same exact game/sport/player/market/side/line
 // identity as the laptop grader, so the two established lanes stay idempotent
@@ -22,10 +18,12 @@
 // prop_type stored to match existing rows: first token of the prop string
 // ("home_runs", "total_bases", "hits_runs_rbis").
 
+import { isFinalSettlementStatus } from '../_shared/gameSettlement.js';
 import { settleUserBet, patchUserBet, fetchUserBetsForDates, matchingPropGrade } from "../grade-results/userbets.ts";
 import { updateUserStreak } from "../grade-results/streaks.ts";
 import { notifySettles, type UserSettleBatch } from "../grade-results/push.ts";
 import { gradePropResult } from "./grading.ts";
+import { mlbPropActual, findMlbSettlementPlayer, validateMlbSettlementBox, canConfirmMlbAbsence } from "../_shared/mlbPropSettlement.js";
 import {
   normalizedResultSport,
   propResultIdentityKey,
@@ -44,12 +42,6 @@ function estDate(offset = 0): string {
     timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
   }).format(d);
 }
-const num = (v: unknown): number => (v == null ? 0 : Number(v));
-const strip = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "");
-function normalizeName(name?: string): string {
-  if (!name) return "";
-  return name.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
-}
 
 const sbHeaders = {
   apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json",
@@ -63,6 +55,7 @@ async function sbGet(table: string, query: string): Promise<any[]> {
 async function bdlGet(path: string, params: Record<string, string | string[]>): Promise<any[]> {
   const all: any[] = [];
   let cursor: string | null = null;
+  const seen = new Set<string>();
   for (let page = 0; page < 50; page++) {
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) {
@@ -72,80 +65,19 @@ async function bdlGet(path: string, params: Record<string, string | string[]>): 
     const res = await fetch(`${BDL_BASE}${path}?${qs.toString()}`, { headers: { Authorization: BDL_KEY } });
     if (!res.ok) throw new Error(`BDL ${path} ${res.status}`);
     const json = await res.json();
-    const rows = Array.isArray(json?.data) ? json.data : [];
+    if (!Array.isArray(json?.data)) throw new Error(`BDL ${path} malformed data page`);
+    const rows = json.data;
     all.push(...rows);
     const next = json?.meta?.next_cursor;
-    if (next == null || String(next) === cursor || rows.length === 0) break;
+    if (next == null) return all;
+    if (!["string", "number"].includes(typeof next) || String(next).trim() === ""
+      || !rows.length || seen.has(String(next))) {
+      throw new Error(`BDL ${path} incomplete or repeated pagination cursor`);
+    }
+    seen.add(String(next));
     cursor = String(next);
   }
-  return all;
-}
-
-// MLB: `token` is the first word of the prop ("home_runs", "total_bases", ...).
-// `p` is a BallDontLie mlb/v1/stats row. Returns the actual stat or null if the
-// market isn't supported.
-function mlbStat(token: string, p: any): number | null {
-  const t = token.toLowerCase();
-  // Combo prop FIRST — "hits_runs_rbis" contains "rbi" as a substring, so it must be
-  // checked before the individual rbi/hit tests below or it gets intercepted by them
-  // and graded on RBI count alone instead of the hits+runs+rbi sum.
-  if (t.includes("hits_runs_rbi") || t.includes("h+r+rbi")) return num(p.hits) + num(p.runs) + num(p.rbi);
-  if (t.includes("hit") && !t.includes("run") && !t.includes("allow")) return num(p.hits);
-  if (t.includes("home_run") || t.includes("homer")) return num(p.hr ?? p.home_runs);
-  if (t.includes("total_base")) return p.total_bases != null ? num(p.total_bases) : null;
-  if (t.includes("rbi") || t.includes("runs_batted")) return num(p.rbi);
-  if (t.includes("runs_scored") || t === "runs") return num(p.runs);
-  if (t.includes("walk") || t.includes("bases_on_ball")) return num(p.bb);
-  if (t.includes("stolen_base") || t.includes("steal")) {
-    if (p.stolen_bases != null) return num(p.stolen_bases);
-    if (p.sb != null) return num(p.sb);
-    return null;
-  }
-  if (t.includes("triple")) return p.triples != null ? num(p.triples) : null;
-  if (t.includes("double") && !t.includes("play")) return p.doubles != null ? num(p.doubles) : null;
-  if (t.includes("single")) {
-    return (p.hits != null && p.doubles != null && p.triples != null && p.hr != null)
-      ? num(p.hits) - num(p.doubles) - num(p.triples) - num(p.hr) : null;
-  }
-  // pitcher markets
-  // MLB IP is THIRDS notation ("5.2" = 5⅔ = 17 outs) — `ip * 3` graded 16
-  // on every fractional line (Jul 30, mirrors the local grader fix).
-  if (t.includes("pitcher_out") || t.includes("outs_recorded")) {
-    if (p.ip == null) return null;
-    const raw = parseFloat(p.ip);
-    return Number.isFinite(raw) ? Math.floor(raw) * 3 + Math.round((raw % 1) * 10) : null;
-  }
-  if (t.includes("earned_run") || t.includes("pitcher_earned")) return num(p.er);
-  if (t.includes("hits_allowed") || t.includes("pitcher_hit")) return num(p.p_hits);
-  if (t.includes("pitcher_walk")) return num(p.p_bb);
-  // Board semantics (Jul 30, attribution-swap class): 'pitcher_strikeouts'
-  // = p_k; bare 'strikeouts' = the BATTER's Ks. The old pitcher-first
-  // heuristic graded a batter-Ks prop on pitching Ks when he also pitched.
-  if (t.includes("strikeout")) {
-    if (t.includes("pitcher")) return num(p.p_k);
-    if (p.k != null) return num(p.k);
-    return num(p.p_k);
-  }
-  return null;
-}
-
-function playerMatchesMlb(pickName: string, pl: any): boolean {
-  if (!pl) return false;
-  const target = normalizeName(pickName);
-  const targetLast = target.split(" ").pop()!;
-  const full = normalizeName(pl.full_name || `${pl.first_name || ""} ${pl.last_name || ""}`);
-  if (full === target) return true;
-  if (strip(full) === strip(target)) return true;
-  // Surname alone is NOT identity (Jul 30, attribution-swap class): two
-  // same-surname players in one game graded the prop on whichever appeared
-  // first. Require the first initial whenever both sides carry one.
-  const last = normalizeName(pl.last_name || full.split(" ").pop() || "");
-  if (last === targetLast && last.length > 3) {
-    const fi = normalizeName(pl.first_name || full.split(" ")[0] || "").charAt(0);
-    const ti = target.charAt(0);
-    return !fi || !ti || fi === ti;
-  }
-  return false;
+  throw new Error(`BDL ${path} pagination exceeded 50 pages`);
 }
 
 // ── prop_results dedup write ─────────────────────────────────────────────────
@@ -218,7 +150,8 @@ Deno.serve(async (req) => {
     ? [dateParam]
     : [estDate(0), estDate(-1)];
   const stats = { insert: 0, update: 0, noop: 0, fail: 0, invalidIdentity: 0,
-    skippedGraded: 0, skippedNotFinal: 0, skippedOther: 0, skippedNoStat: 0, dnpPush: 0 };
+    skippedGraded: 0, skippedNotFinal: 0, skippedOther: 0, skippedNoStat: 0,
+    unavailableBox: 0, ambiguousPlayer: 0, dnpPush: 0 };
 
   // 1. read all prop picks for the window, flatten with parent row id + date
   const pickRows = await sbGet("prop_picks", `date=in.(${dates.join(",")})&select=id,date,picks`);
@@ -280,7 +213,7 @@ Deno.serve(async (req) => {
     const etDateById = new Map<string, string>();
     const etDateOf = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
     for (const g of games) {
-      finalById.set(String(g.id), String(g.status ?? "").toUpperCase().includes("FINAL"));
+      finalById.set(String(g.id), isFinalSettlementStatus(g.status));
       if (g.date) etDateById.set(String(g.id), etDateOf(String(g.date)));
     }
 
@@ -298,26 +231,33 @@ Deno.serve(async (req) => {
     }
     for (const gid of Object.keys(byGame)) {
       let statRows: any[] = [];
-      try { statRows = await bdlGet("/mlb/v1/stats", { game_ids: [gid], per_page: "100" }); }
-      catch { stats.skippedNotFinal += byGame[gid].length; continue; }
+      try {
+        statRows = await bdlGet("/mlb/v1/stats", { game_ids: [gid], per_page: "100" });
+        validateMlbSettlementBox(statRows, gid);
+      } catch (error) {
+        stats.unavailableBox += byGame[gid].length;
+        console.warn(`[Prop settlement] MLB game ${gid}: ${(error as Error).message}`);
+        continue;
+      }
       // Empty box on a FINAL game = provider data hole, not a slate of DNPs —
       // skip the game rather than voiding every prop in it.
-      if (!statRows.length) { stats.skippedNotFinal += byGame[gid].length; continue; }
+      if (!statRows.length) { stats.unavailableBox += byGame[gid].length; continue; }
       for (const f of byGame[gid]) {
-        const row = statRows.find((s) => playerMatchesMlb(String(f.p.player), s.player));
-        // DNP VOID (Aug 3 2026): the game is FINAL and its box has no line for
-        // this player — he didn't appear, so the book voids the bet and the
-        // ledger records a push (it used to sit "pending" forever). Pick names
-        // and box names share one source (BDL player records), so absent-from-
-        // box means absence, not a name miss.
+        const lookup = findMlbSettlementPlayer(statRows, {
+          playerId: f.p.player_id,
+          name: String(f.p.player ?? f.p.player_name ?? ""),
+        });
+        if (lookup.status === "ambiguous") { stats.ambiguousPlayer++; continue; }
+        const row = lookup.row;
         if (!row) {
+          if (!canConfirmMlbAbsence(statRows)) { stats.unavailableBox++; continue; }
           stats.dnpPush++;
-          writes.push(buildRow(f, null, "push", parseFloat(f.p.line)));
+          writes.push(buildRow(f, null, "push", Number(f.p.line ?? f.p.line_value)));
           continue;
         }
-        const actual = mlbStat(f.propType, row);
+        const actual = mlbPropActual(f.propType, row);
         if (actual == null) { stats.skippedNoStat++; continue; }
-        const line = parseFloat(f.p.line);
+        const line = Number(f.p.line ?? f.p.line_value);
         const result = gradePropResult(actual, line, String(f.p.bet ?? ""));
         if (result == null) { stats.skippedNoStat++; continue; }
         writes.push(buildRow(f, actual, result, line));

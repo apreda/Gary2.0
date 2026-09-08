@@ -15,13 +15,13 @@
 // never a token they share. This can't flip a result for any same-mascot (or otherwise
 // name-colliding) matchup, and leaves every non-colliding grade unchanged.
 
+import { gradeGameMarket, settlementNumber } from '../_shared/gameSettlement.js';
+
 export type Side = "home" | "away" | null;
 
 /** Provider numeric evidence; null/blank values remain missing, never zero. */
 export function resultNumber(value: unknown): number | null {
-  if (value == null || String(value).trim() === "") return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
+  return settlementNumber(value);
 }
 
 // Home's headline card tells the story of the GAME. The recap body may explain
@@ -177,41 +177,7 @@ export function pickSide(pickText: string, homeTeam: string, awayTeam: string): 
 export function gradeGame(
   pickText: string, homeTeam: string, awayTeam: string, hScore: number, vScore: number,
 ): string | null {
-  const p = pickText.toLowerCase();
-  const isML = p.includes(" ml") || p.includes("moneyline");
-
-  // Total (Over/Under) — team-agnostic, so no side needed.
-  const total = pickText.match(/(over|under)\s+(\d+\.?\d*)/i);
-  if (total) {
-    const line = parseFloat(total[2]), actual = hScore + vScore;
-    if (actual === line) return "push";
-    return (total[1].toLowerCase() === "over" ? actual > line : actual < line) ? "won" : "lost";
-  }
-
-  const side = pickSide(pickText, homeTeam, awayTeam);
-
-  // Spread (only if not a moneyline pick).
-  if (!isML) {
-    const sp = pickText.match(/([+-][1-9]\d{0,1}(\.\d)?)(?!\d)/);
-    if (sp) {
-      const spread = parseFloat(sp[1]);
-      const diff = side === "home" ? hScore - vScore : vScore - hScore;
-      if (diff + spread === 0) return "push";
-      return diff + spread > 0 ? "won" : "lost";
-    }
-  }
-
-  // 3-way DRAW pick — checked before the team-ML fallback.
-  if (/\b(draw|tie)\b/.test(p)) return hScore === vScore ? "won" : "lost";
-
-  // Moneyline / team-to-win.
-  if (side === "home") return hScore > vScore ? "won" : "lost";
-  if (side === "away") return vScore > hScore ? "won" : "lost";
-  // Not a team-score bet gradeGame can classify (e.g. a player prop) — leave
-  // ungraded rather than fabricate a loss (Jul 15 2026: this returned "lost"
-  // unconditionally here, so any player-prop-shaped pick living in daily_picks
-  // got a fabricated result).
-  return null;
+  return gradeGameMarket(pickText, pickSide(pickText, homeTeam, awayTeam), hScore, vScore);
 }
 
 // ── The Jul 10 2026 "stale recap" bug this function fixes ────────────────────

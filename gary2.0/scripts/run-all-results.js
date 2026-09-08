@@ -12,6 +12,8 @@
  * Usage: node scripts/run-all-results.js [YYYY-MM-DD]
  */
 
+import { gradeGameMarket } from '../supabase/functions/_shared/gameSettlement.js';
+import { mlbPropActual, findMlbSettlementPlayer, fetchMlbSettlementBox } from '../supabase/functions/_shared/mlbPropSettlement.js';
 import { createClient } from '@supabase/supabase-js';
 import { admittedGameKeys, isWinnersGame } from '../src/services/pickdesk/winnersBook.js';
 import { WINNERS_CUTOVER_DATE } from '../src/services/pickdesk/winnersAdmissions.js';
@@ -30,7 +32,6 @@ import {
   assertFootballSettlementCoverage,
   buildFootballSettlementOutcome,
   buildNflResultWritePayload,
-  gradeGameSpread,
   gradePropResult,
   isFinalGameStatus,
   nflActualFromStatRow,
@@ -427,17 +428,23 @@ async function fetchMLBStats(gameIds) {
   const key = `mlb-stats-${gameIds.join(',')}`;
   if (cache.stats.has(key)) return cache.stats.get(key);
 
-  // Fetch stats PER GAME — BDL per_page=100 is per request, not per game.
-  // With ~26 players/game, batching multiple games loses data to pagination.
-  let allStats = [];
+  // Each game is a complete, validated box before it joins the date pool.
+  const allStats = [];
+  let complete = true;
   for (const gameId of gameIds) {
-    const data = await bdlFetch('mlb/v1/stats', `game_ids[]=${gameId}&per_page=100`);
-    // Tag each row with its source game so prop grading can scope the player
-    // search to the pick's OWN game (local-only field, never stored).
-    if (data?.data) allStats.push(...data.data.map(s => ({ ...s, _game_id: String(gameId) })));
+    try {
+      const rows = await fetchMlbSettlementBox(gameId, cursor => bdlFetch(
+        'mlb/v1/stats',
+        `game_ids[]=${encodeURIComponent(gameId)}&per_page=100${cursor == null ? '' : `&cursor=${encodeURIComponent(cursor)}`}`,
+      ));
+      allStats.push(...rows.map(row => ({ ...row, _game_id: String(gameId) })));
+    } catch (error) {
+      complete = false;
+      console.warn(`  [MLB settlement] Game ${gameId} box unavailable: ${error.message}`);
+    }
   }
   console.log(`  📊 MLB stats: ${allStats.length} player entries for ${gameIds.length} games`);
-  cache.stats.set(key, allStats);
+  if (complete) cache.stats.set(key, allStats);
   return allStats;
 }
 
@@ -447,53 +454,7 @@ async function fetchMLBStats(gameIds) {
  * see that file for the Jul 15 2026 swapped-by-default fix.
  */
 function gradeGame(pickText, homeTeam, awayTeam, hScore, vScore) {
-  const pickLower = pickText.toLowerCase();
-
-  // 1. Moneyline Detection (Prioritize this)
-  const isML = pickLower.includes(' ml') || pickLower.includes('moneyline');
-
-  // 2. Total (Over/Under) — team-agnostic.
-  const totalMatch = pickText.match(/(over|under)\s+(\d+\.?\d*)/i);
-  if (totalMatch) {
-    const line = parseFloat(totalMatch[2]), actual = hScore + vScore;
-    if (actual === line) return 'push';
-    return (totalMatch[1].toLowerCase() === 'over' ? actual > line : actual < line) ? 'won' : 'lost';
-  }
-
-  // Side resolved via the tokens that DISTINGUISH the two teams (never a shared mascot
-  // like "Sox"), so a same-mascot matchup can't flip the result. See teamMatch.js.
-  const side = pickSide(pickText, homeTeam, awayTeam);
-
-  // 3. Spread (Only if not a Moneyline pick)
-  if (!isML) {
-    const spreadResult = gradeGameSpread(pickText, side, hScore, vScore);
-    if (spreadResult) return spreadResult;
-  }
-
-  // 3-way moneyline DRAW pick (win · tie · lose) — wins only on a level
-  // result. Checked before the team-ML fallback, which would otherwise
-  // misgrade a correct draw pick as a loss.
-  if (/\b(draw|tie)\b/.test(pickLower)) return (hScore === vScore) ? 'won' : 'lost';
-
-  // 4. Moneyline / team-to-win. A 2-way US-book moneyline PUSHES on a level
-  // final — the stake refunds, it does not lose (Sep 1 2026 audit; NFL ties
-  // are rare but real, MLB cannot end level, NCAAF overtime prevents it).
-  // The explicit draw-pick branch above was the dead soccer lane's 3-way
-  // contract, where a draw bet WINS on level — different market, unchanged.
-  if (side === 'home' || side === 'away') {
-    if (hScore === vScore) return 'push';
-    if (side === 'home') return (hScore > vScore) ? 'won' : 'lost';
-    return (vScore > hScore) ? 'won' : 'lost';
-  }
-
-  // Not classifiable as ML/spread/total/draw AND no distinguishing team token —
-  // this isn't a team-score bet at all (e.g. a player prop like "Freeman to win
-  // ASG MVP" living in daily_picks instead of the dedicated props table).
-  // Leave it ungraded rather than fabricate a loss (Jul 15 2026: this used to
-  // return 'lost' unconditionally here, so "Freeman to win ASG MVP" and "Cease
-  // 2+ strikeouts" both got marked LOST with the team's final score attached,
-  // regardless of the real outcome).
-  return null;
+  return gradeGameMarket(pickText, pickSide(pickText, homeTeam, awayTeam), hScore, vScore);
 }
 
 /**
@@ -583,76 +544,8 @@ function getStatValue(sport, data, name, type, playerId = null, meta = {}) {
     const p = findExactNcaafStatRow(data, playerId);
     if (p) { meta.playerFound = true; return ncaafActualFromStatRow(p, type); }
   } else if (sport === 'MLB') {
-    // BDL /mlb/v1/stats returns flat array with player objects
-    const p = findPlayerFlat(data) || findPlayerInGames(data);
-    if (p) {
-      // BDL MLB stats fields: at_bats, runs, hits, rbi, hr, bb, k, avg, obp, slg,
-      // ip, p_hits, p_runs, er, p_bb, p_k, p_hr, pitch_count, strikes, era
-      // The box also carries doubles, triples, total_bases and stolen_bases
-      // (verified against live rows Sep 1 2026) — the old "NOT in BDL" note was stale.
-
-      // Batter props
-      // Combo prop FIRST — "hits_runs_rbis" contains "rbi" as a substring, so it must be
-      // checked before the individual rbi/hit tests below or it gets intercepted by them
-      // and graded on RBI count alone instead of the hits+runs+rbi sum.
-      if (t.includes('hits_runs_rbi') || t.includes('h+r+rbi')) return (p.hits || 0) + (p.runs || 0) + (p.rbi || 0);
-      // PITCHER props must be tested BEFORE their batter cousins — every one
-      // contains the batter word as a substring ('pitcher_walks' ⊃ 'walk'),
-      // and the generic branch graded Skenes' 4-walk start on batter-bb 0
-      // (Aug 19: "pitcher walks over 1.5" settled LOST on a 4-walk night).
-      if (t.includes('pitcher_walk') || t.includes('walks_allowed')) return p.p_bb ?? 0;
-      if (t.includes('pitcher_hit') || t.includes('hits_allowed')) return p.p_hits ?? 0;
-      if (t.includes('pitcher_home_run') || t.includes('home_runs_allowed')) return p.p_hr ?? 0;
-      if (t.includes('hit') && !t.includes('run') && !t.includes('allow') && !t.includes('pitcher')) return p.hits ?? 0;
-      if (t.includes('home_run') || t.includes('homer')) return p.hr ?? p.home_runs ?? 0;
-      if (t.includes('total_base')) {
-        // BDL doesn't have total_bases — compute from hits if we have component data
-        if (p.total_bases != null) return p.total_bases;
-        // Can't compute without doubles/triples — return null to try grounding
-        return null;
-      }
-      if (t.includes('rbi') || t.includes('runs_batted')) return p.rbi ?? 0;
-      if (t.includes('runs_scored') || t === 'runs') return p.runs ?? 0;
-      if ((t.includes('walk') || t.includes('bases_on_ball')) && !t.includes('pitcher')) return p.bb ?? 0;
-      if (t.includes('stolen_base') || t.includes('steal')) {
-        if (p.stolen_bases != null) return p.stolen_bases;
-        if (p.sb != null) return p.sb;
-        return null; // BDL may not have SB — let grounding try
-      }
-      // SINGLES (Sep 1 2026): hits − doubles − triples − HR, the same derivation
-      // the cloud grader uses. Any missing component stays null so the prop
-      // waits rather than settling on a fabricated zero — and a singles prop
-      // no longer spends a web search every re-grade pass.
-      if (t.includes('single')) {
-        const hr = p.hr ?? p.home_runs;
-        return (p.hits != null && p.doubles != null && p.triples != null && hr != null)
-          ? Number(p.hits) - Number(p.doubles) - Number(p.triples) - Number(hr)
-          : null;
-      }
-      if (t.includes('double') && !t.includes('play')) return p.doubles ?? null;
-      // Strikeouts — keyed by the BOARD's own semantics (Jul 30, the Jun 4
-      // "attribution-swap" class): 'pitcher_strikeouts' = p_k, bare
-      // 'strikeouts' = the BATTER's Ks (row.k on the board). The old
-      // "pitcher first if p_k > 0" heuristic graded a batter-Ks prop on
-      // PITCHING Ks any night the player also pitched.
-      if (t.includes('strikeout')) {
-        if (t.includes('pitcher')) return p.p_k ?? 0;
-        if (p.k != null) return p.k;
-        return p.p_k ?? 0; // legacy pitcher props stored as bare 'strikeouts'
-      }
-      // Pitcher props
-      if (t.includes('pitcher_out') || t.includes('outs_recorded')) {
-        // MLB IP is THIRDS notation ("5.2" = 5⅔ = 17 outs) — the old
-        // `ip * 3` graded 16 on every fractional line (Jul 30).
-        if (p.ip != null) {
-          const raw = parseFloat(p.ip);
-          if (Number.isFinite(raw)) return Math.floor(raw) * 3 + Math.round((raw % 1) * 10);
-        }
-        return null;
-      }
-      if (t.includes('pitcher_earned') || t.includes('earned_run')) return p.er ?? 0;
-      console.warn(`    [Stat] MLB: Found ${name} but no match for prop type "${type}"`);
-    }
+    const lookup = findMlbSettlementPlayer(data, { playerId, name });
+    return lookup.row ? mlbPropActual(type, lookup.row) : null;
   }
   return null;
 }
@@ -1498,8 +1391,9 @@ async function processPropBets(date, sportFilter = null, { settlementOnly = fals
       // FINALITY GATE (props) — never grade a prop whose game isn't final. An in-progress or
       // unstarted game returns 0/partial stats and settles the player prematurely (a live MLB
       // game graded "0 total bases -> LOST" before first pitch). Skip -> the prop stays pending
-      // and grades correctly once the game is final. Props with no game_id fall through (legacy).
-      if (dataSport === 'MLB' && gameId != null && !mlbFinalIds.has(gameId)) { skippedNotFinal++; stats.pendingNonFinal++; continue; }
+      // and grades correctly once the game is final. Missing exact ids stay pending.
+      if (dataSport === 'MLB' && gameId == null) { stats.candidates++; stats.invalidIdentity++; continue; }
+      if (dataSport === 'MLB' && !mlbFinalIds.has(gameId)) { skippedNotFinal++; stats.pendingNonFinal++; continue; }
       // NFL stat rows can report zero/partial production while a game is live.
       // Unlike legacy lanes, an NFL prop must carry an exact game id and that
       // provider game must be final before API stats OR grounding may settle it.
@@ -1527,16 +1421,9 @@ async function processPropBets(date, sportFilter = null, { settlementOnly = fals
       if (dataSport === 'NBA') actual = getStatValue('NBA', nbaBox, name, type);
       else if (dataSport === 'NHL') actual = getStatValue('NHL', nhlBox, name, type);
       else if (dataSport === 'MLB') {
-        // Scope the search to the pick's OWN game (Aug 3): the date-wide pool
-        // let a same-surname player in ANOTHER game match first, and the
-        // unconditional UPDATE below then overwrote the cloud grader's correct
-        // per-game grade every night (Torres/Pederson/Perez HR credits came
-        // from other games' boxes). Legacy picks without game_id keep the
-        // date-wide fallback.
-        const pool = p.game_id != null
-          ? mlbStats.filter(s => s._game_id === String(p.game_id))
-          : mlbStats;
-        actual = getStatValue('MLB', pool, name, type);
+        // The exact stored identity and validated box prevent cross-game matches.
+        const pool = mlbStats.filter(s => s._game_id === gameId);
+        actual = getStatValue('MLB', pool, name, type, p.player_id);
       }
       else if (['NFL', 'NCAAF'].includes(dataSport)) {
         const gameRows = statsForGame(dataSport === 'NFL' ? nflStats : ncaafStats, gameId);
@@ -1560,12 +1447,10 @@ async function processPropBets(date, sportFilter = null, { settlementOnly = fals
         source = 'api';
       } else if (footballDnpVoid) {
         source = 'api';
-      } else if (['NFL', 'NCAAF'].includes(dataSport)) {
-        // Football never lets a model settle a wager — in ANY pass, not just
-        // the cloud settlement lane (Aug 20; previously the laptop path fell
-        // through to grounding for football). Exact final-game BDL stats are
-        // the grading authority; a provider hole stays pending and self-heals
-        // on a later idempotent run.
+      } else if (['MLB', 'NFL', 'NCAAF'].includes(dataSport)) {
+        // Exact final-game BDL stats are the MLB/football grading authority.
+        // Missing measurements and ambiguous players stay pending; model
+        // grounding cannot undo the validated box's unavailable result.
         console.error(`    [BDL Miss] ${dataSport}: ${name} "${type}" missing from exact game ${gameId}; leaving pending`);
         stats.unresolvedFinal++;
         continue;
