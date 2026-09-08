@@ -237,11 +237,18 @@ enum HubJudgmentSelection {
     }
 
     static func sameCase(_ lhs: HubJudgment, _ rhs: HubJudgment) -> Bool {
-        lhs.primary_source_key == rhs.primary_source_key && lhs.input_fingerprint == rhs.input_fingerprint
+        lhs.valid_until == rhs.valid_until && sameArgument(lhs, rhs)
+    }
+
+    /// Renewing a check/expiry clock does not change the argument already open
+    /// in a sheet. Publication conflicts still use the stricter sameCase gate.
+    static func sameArgument(_ lhs: HubJudgment, _ rhs: HubJudgment) -> Bool {
+        lhs.date == rhs.date && lhs.league.uppercased() == rhs.league.uppercased() && lhs.game_id == rhs.game_id
+            && lhs.primary_source_key == rhs.primary_source_key && lhs.input_fingerprint == rhs.input_fingerprint
             && lhs.take == rhs.take && lhs.explanation == rhs.explanation && lhs.full_case == rhs.full_case
             && lhs.counterargument == rhs.counterargument && lhs.watch_for == rhs.watch_for
             && lhs.critical_condition == rhs.critical_condition
-            && lhs.what_changed == rhs.what_changed && lhs.valid_until == rhs.valid_until
+            && lhs.what_changed == rhs.what_changed
             && lhs.horizon == rhs.horizon && lhs.evidence == rhs.evidence
             && lhs.supporting_evidence_ids == rhs.supporting_evidence_ids
             && lhs.counter_evidence_ids == rhs.counter_evidence_ids

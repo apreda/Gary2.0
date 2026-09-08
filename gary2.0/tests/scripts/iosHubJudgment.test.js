@@ -105,7 +105,9 @@ ${block(search, '        func hits(')}
     expect(hub).toContain('.task(id: isVisible ? nextJudgmentExpiry : nil)');
     const load = block(hub, '    @MainActor private func loadCurrent(');
     expect(load.indexOf('refreshSourceObservations(incoming, league: league)')).toBeLessThan(load.indexOf('fetched = Self.dedupe(resolved)'));
-    expect(block(hub, '    private func judgmentCase(')).toContain('HubJudgmentSelection.sameCase(current, selection.judgment)');
+    const savedCase = block(hub, '    private func judgmentCase(');
+    expect(savedCase).toContain('HubJudgmentSelection.sameArgument(current, selection.judgment)');
+    expect(savedCase).toContain('return selection.judgment.isCurrent(');
   }, 60_000);
 
   it.skipIf(!hasSwift)('uses original observation clocks through shipping metadata and ignores later persistence time', () => {

@@ -1661,7 +1661,7 @@ struct HubView: View {
         }
         return HubJudgmentCaseView(judgment: selection.judgment, context: storyContext(signal), isCurrent: { now in
             guard let key = judgmentKey(signal), let current = judgmentReads[key],
-                  HubJudgmentSelection.sameCase(current, selection.judgment) else { return false }
+                  HubJudgmentSelection.sameArgument(current, selection.judgment) else { return false }
             return selection.judgment.isCurrent(league: signal.league.label, date: SupabaseAPI.todayEST(),
                                                 gameID: signal.gameId, sourceKey: signal.sourceKey, now: now)
         }, onPlayer: playerMatches.count == 1 ? {

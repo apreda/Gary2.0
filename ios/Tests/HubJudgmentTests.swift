@@ -36,6 +36,13 @@ struct HubJudgmentTests {
         let cached = try JSONDecoder().decode(HubJudgment.self, from: JSONEncoder().encode(read))
         precondition(valid(cached) && cached.full_case == read.full_case)
         precondition(HubJudgmentSelection.sameCase(read, cached), "An unchanged refresh must keep the saved case current")
+        var renewalPayload = payload
+        renewalPayload["as_of"] = "2026-09-08T15:30:00Z"
+        renewalPayload["valid_until"] = "2026-09-08T23:30:00Z"
+        let renewed = try decode(renewalPayload)
+        precondition(HubJudgmentSelection.sameArgument(read, renewed), "Renewed clocks must not label an unchanged open argument outdated")
+        precondition(!HubJudgmentSelection.sameCase(read, renewed), "Same-clock publication conflicts still compare expiry")
+        precondition(!valid(read, at: read.validUntilDate!), "An open sheet must still respect its own original expiry")
         for game in [nil, "", "101", "0100"] as [String?] { precondition(!valid(read, game: game)) }
         for key in [nil, "", "heat_check|101|44|8", "heat_check|100|45|8"] as [String?] { precondition(!valid(read, key: key)) }
         precondition(!valid(read, league: "NFL") && !valid(read, date: "2026-09-09"))
@@ -139,6 +146,7 @@ struct HubJudgmentTests {
         var tiedPayload = payload; tiedPayload["take"] = "A conflicting read at the same check time"
         let tied = try decode(tiedPayload)
         precondition(!HubJudgmentSelection.sameCase(read, tied), "New wording from the same input cannot keep an older saved case current")
+        precondition(!HubJudgmentSelection.sameArgument(read, tied), "A changed argument must retire the older open case")
         let tiedCandidate = Candidate(index: 13, league: "MLB", date: "2026-09-08", gameID: "100", sourceKey: sourceKey, judgment: tied)
         precondition(HubJudgmentSelection.sourceChoices([candidate, tiedCandidate])[10] == false)
         precondition(selected([game], [candidate, tiedCandidate]).isEmpty)
