@@ -1,6 +1,6 @@
 # Historical Picks game context repair — September 8, 2026
 
-Native source commit `41793ede` fixes a confirmed display join: the September 7 NYM @ MIA pick showed today's scouting report underneath its original rationale. The four native source files are reviewed and frozen. A new release build and visual readback belong to the release owner; this receipt does not claim that an installed binary is repaired yet.
+Native source commit `41793ede` fixes a confirmed display join: the September 7 NYM @ MIA pick showed today's scouting report underneath its original rationale. The four native source files are reviewed and frozen. Subsequent September 8 acceptance verified the corrected installed simulator UI and final signed build 915 archive, as recorded below. Upload has started; Apple processing and the remaining release acceptance steps are still pending.
 
 ## Evidence and cause
 
@@ -53,4 +53,20 @@ Frozen native SHA-256:
 | FootballGameIntelView.swift | `08ff7990c676526d103b37be53e148b1b87947d111381714b05382dc75381da6` |
 | MLBGameIntelView.swift | `466928bf2cce72c90450ee9587c38459cdcbc1f1a2b1e6ff8db775c166630b3e` |
 
-This evidence establishes the bounded source repair. Signed build, App Store processing and the corrected installed UI remain separate release acceptance steps.
+## Subsequent acceptance — September 8, 2026, 16:29 UTC
+
+The final installed version 2.25/build 915 simulator executable is `f3217e7d01382e660fdffe46ef5d5733592be3803e4d9dfebd86388d6d04f0dd`, built from frozen source `41793ededc47a1934a3c2ef09fb2a5608822bed1`. Root's 16:24 UTC review of the release owner's actual screenshots and accessibility evidence confirms:
+
+- Yesterday September 7 → NYM @ MIA shows final NYM 9–MIA 4, Mets ML +108, Tong/Pérez starter cards and a Tong/Pérez Arms report.
+- The historical Jakob Marsee card visibly shows the Tong-specific read, right-handed split `.221 AVG / .670 OPS`, 8 HR in 357 AB, and the matching left-handed split. Eleven checks against the unique stored September 7/game 5059929/player 2618564 pack passed, with zero mismatches or unavailable values. Recent-game and pitch-mix fields below the captured viewport were confirmed through the saved accessibility tree, not a successful physical scroll.
+- Returning to Today September 8 shows NYM @ MIA at 6:40 PM Eastern, Picks Incoming, and the distinct Manaea/Alcantara starters and Arms report. The separate September 8 Marsee pack is available and materially different; the historical card did not borrow it.
+
+Root's 16:29 UTC independent archive review passed for `/Volumes/KINGSTON/Gary-2.25-915-Account-Guard-FINAL.xcarchive`: version 2.25/build 915, strict/deep signature validation, all 129 public build inputs unchanged, and all 21 privacy manifests identical to the verified build 914 manifests. The signed executable SHA-256 is `b6a553295ed11d0e923ecda3e8ca6959752ded3095e0c2b0bc4dd789782368ae`.
+
+Acceptance receipts, relative to `/Users/adam.preda/Documents/ChatGPT/Gary/`:
+
+- `account-guard-915-2026-09-08/root-historical-installed-ui-review.json`
+- `account-guard-915-2026-09-08/root-final-archive-independent-review.json`
+- `launch-readiness/915-historical-marsee-pack-match.json`
+
+The earlier source/test evidence above remains the implementation record. Installed historical/current context and the signed archive are now verified. Upload is underway; successful delivery and Apple processing, the final screenshot set, physical-device acceptance and manual empty-Winners bottom-scroll acceptance have not yet passed. This bounded repair does not establish overall launch readiness.
