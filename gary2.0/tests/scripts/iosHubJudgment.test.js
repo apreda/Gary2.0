@@ -26,40 +26,48 @@ function run(source) {
   } finally { rmSync(directory, { recursive: true, force: true }); }
 }
 
-describe('native Hub judgment contract and shipping integration', () => {
+describe('native Hub observation presentation and additive judgment compatibility', () => {
   it.skipIf(!hasSwift)('validates actual model, exact game/source scope, full cases, expiry, changes and source suppression', () => {
     const tests = readFileSync(new URL('../../../ios/Tests/HubJudgmentTests.swift', import.meta.url), 'utf8');
     expect(run(native('HubJudgment.swift') + '\n' + tests)).toContain('Hub judgment model passed:');
   }, 60_000);
 
-  it.skipIf(!hasSwift)('preserves newest envelopes before legacy deduplication and searches the visible take and full reasoning', () => {
+  it.skipIf(!hasSwift)('keeps original observation order, lanes and search even when stored judgments are ready', () => {
     const hub = native('HubView.swift');
     const search = block(hub, 'fileprivate struct HubSearchResults:');
     const source = `${native('HubJudgment.swift')}\n${native('HubStoryIdentity.swift')}
 ${block(hub, 'enum HubFmt {')}
 enum League { case mlb; var label: String { "MLB" } }
 typealias HubLeagueSel = League
-enum Kind { case hot }
+enum SignalKind { case hot, bullpen, regression, h2h, fantasy, module }
 struct Meta { let judgment: HubJudgment? }
 struct Regression { let day: String }
 struct Signal {
- let id: Int; let headline: String; let detail: String
- var league: League = .mlb; var kind: Kind = .hot; var game = "CHC @ STL"; var value = ""
+ let id: UUID = UUID(); let headline: String; let detail: String
+ var league: League = .mlb; var kind: SignalKind = .hot; var game = "CHC @ STL"; var value = ""
  var slateDate: String? = "2026-09-08"; var gameId: String? = "100"; var sourceKey: String? = "heat_check|100|44|8"
- var sourceObservedAt: Date? = nil
- var lane: Meta?; var reg: Regression?; var rejectsJudgment = false
+ var lane: Meta?; var reg: Regression?; var confirmedXI: String? = nil
 }
-func signalChipLabel(kind: Kind, league: League) -> String { "Heat check" }
+func signalChipLabel(kind: SignalKind, league: League) -> String { "Heat check" }
+enum SupabaseAPI { static func todayEST() -> String { "2026-09-08" } }
+struct Beat { let kinds: [SignalKind] }
 final class Reader {
- var sourceObservationClocks: [League: [String: Date]] = [:]
+ var sel: League = .mlb
+ var leagueSignals: [Signal] = []
+ var itemsIndex: [League: [SignalKind: [Signal]]] = [:]
+ static let fantasyKinds: Set<SignalKind> = [.fantasy]
+ static let moduleKinds: Set<SignalKind> = [.module]
 ${block(hub, '    private static func dedupe(')}
-${block(hub, '    private func refreshSourceObservations(')}
+${block(hub, '    private var ranked:')}
+${block(hub, '    private func items(')}
+${block(hub, '    private func beatRows(')}
  static func resolve(_ rows: [Signal]) -> [Signal] { dedupe(rows) }
- func observe(_ rows: [Signal]) { refreshSourceObservations(rows, league: .mlb) }
+ var frontPage: [Signal] { ranked }
+ func lane(_ kind: SignalKind) -> [Signal] { items(kind) }
+ func beat(_ kinds: [SignalKind], featured: Set<UUID> = []) -> [Signal] { beatRows(Beat(kinds: kinds), featured: featured) }
 }
 struct Search {
  let q: String
- let judgmentFor: (Signal) -> HubJudgment?
 ${block(search, '        func hits(')}
 }
 @main struct Fixture {
@@ -67,47 +75,61 @@ ${block(search, '        func hits(')}
   func envelope(_ status: String, _ clock: String, _ take: String = "The matchup gives the streak a different meaning") throws -> HubJudgment {
    let payload: [String: Any] = ["schema_version": 1, "status": status, "date": "2026-09-08", "league": "mlb",
     "game_id": "100", "primary_source_key": "heat_check|100|44|8", "as_of": clock, "take": take,
-    "explanation": "Contact and the current opponent connect", "full_case": "A distinctive full argument about breaking pitches"]
+    "explanation": "Contact and the current opponent connect", "full_case": "A distinctive full argument about breaking pitches",
+    "counterargument": "The sample is limited", "watch_for": "The posted order", "horizon": "pregame",
+    "valid_until": "2026-09-08T23:00:00Z", "prominence": "major", "editorial_rank": 1,
+    "editorial_fingerprint": String(repeating: "a", count: 64),
+    "supporting_evidence_ids": ["form", "today"], "counter_evidence_ids": ["form"],
+    "supersedes_source_keys": ["bullpen_fatigue|100||8"],
+    "evidence": [
+     ["id": "form", "source_key": "heat_check|100|44|8", "label": "Form", "summary": "Observed contact", "source": "Provider", "game_id": "100", "as_of": clock],
+     ["id": "today", "source_key": "bullpen_fatigue|100||8", "label": "Bullpen", "summary": "Observed workload", "source": "Provider", "game_id": "100", "as_of": clock]]]
    return try JSONDecoder().decode(HubJudgment.self, from: JSONSerialization.data(withJSONObject: payload))
   }
   let ready = try envelope("ready", "2026-09-08T15:00:00Z")
+  precondition(ready.isCurrent(league: "MLB", date: "2026-09-08", gameID: "100", sourceKey: "heat_check|100|44|8", now: HubJudgment.timestamp("2026-09-08T16:00:00Z")!))
   let newer = try envelope("context_unavailable", "2026-09-08T15:30:00Z")
-  let raw = Signal(id: 1, headline: "José: hot recent form", detail: "Original facts")
-  let upgraded = Signal(id: 2, headline: raw.headline, detail: raw.detail, lane: Meta(judgment: ready))
-  let invalidated = Signal(id: 3, headline: raw.headline, detail: raw.detail, lane: Meta(judgment: newer))
-  precondition(Reader.resolve([raw, upgraded]).map(\\.id) == [2], "First unjudged source must not swallow its upgrade")
-  precondition(Reader.resolve([upgraded, invalidated]).map(\\.id) == [3], "Newest invalidation must reach the selector")
-  precondition(Reader.resolve([invalidated, upgraded]).map(\\.id) == [3], "Relevance order must not revive older context")
-  let conflicting = Signal(id: 4, headline: raw.headline, detail: raw.detail,
-      lane: Meta(judgment: try envelope("ready", "2026-09-08T15:00:00Z", "A conflicting take")))
-  let conflict = Reader.resolve([upgraded, conflicting])
-  precondition(conflict.count == 1 && conflict[0].rejectsJudgment && conflict[0].detail == raw.detail)
+  let raw = Signal(headline: "José: hot recent form", detail: "Original facts")
+  let upgraded = Signal(headline: raw.headline, detail: raw.detail, lane: Meta(judgment: ready))
+  let invalidated = Signal(headline: raw.headline, detail: raw.detail, lane: Meta(judgment: newer))
+  precondition(Reader.resolve([raw, upgraded]).map(\\.id) == [raw.id], "Stored narratives cannot replace relevance-ordered observations")
+  precondition(Reader.resolve([upgraded, invalidated]).map(\\.id) == [upgraded.id], "Envelope clocks cannot change observation deduplication")
+  precondition(Reader.resolve([invalidated, upgraded]).map(\\.id) == [invalidated.id])
   var gameTwo = raw; gameTwo.gameId = "101"; gameTwo.sourceKey = "heat_check|101|44|8"
-  precondition(Reader.resolve([raw, gameTwo]).count == 2, "Doubleheaders stay separate before selection")
-  var laterSource = raw; laterSource.sourceObservedAt = HubJudgment.timestamp("2026-09-08T15:45:00Z")
+  precondition(Reader.resolve([raw, gameTwo]).count == 2, "Doubleheaders remain separate")
+  var nextDate = raw; nextDate.slateDate = "2026-09-09"
+  precondition(Reader.resolve([raw, nextDate]).count == 2, "Dated observations remain separate")
+  let bullpen = Signal(headline: "Texas bullpen: 18 innings over three days", detail: "Original workload facts", kind: .bullpen, sourceKey: "bullpen_fatigue|100||8")
   let reader = Reader()
-  reader.observe([upgraded, laterSource])
-  precondition(Reader.resolve([upgraded, laterSource]).map(\\.id) == [2])
-  let scopedKey = HubJudgmentSelection.suppressionKey(league: "MLB", date: "2026-09-08", gameID: "100", sourceKey: raw.sourceKey)!
-  precondition(reader.sourceObservationClocks[.mlb]?[scopedKey] == laterSource.sourceObservedAt,
-               "Original source observations must survive actual presentation deduplication")
-  let resolves: (Signal) -> HubJudgment? = { $0.id == 2 ? ready : nil }
-  for term in ["matchup gives", "opponent connect", "breaking pitches", "josé"] {
-   precondition(Search(q: term, judgmentFor: resolves).hits(upgraded), "Visible judgment and full case are searchable")
+  reader.leagueSignals = [bullpen, upgraded, nextDate]
+  reader.itemsIndex = [.mlb: [.bullpen: [bullpen], .hot: [upgraded]]]
+  precondition(reader.frontPage.map(\\.id) == [bullpen.id, upgraded.id], "Major/editorial rank and superseded keys cannot override original current-day ordering")
+  precondition(reader.lane(.bullpen).map(\\.id) == [bullpen.id] && reader.lane(.hot).map(\\.id) == [upgraded.id])
+  precondition(reader.beat([.bullpen, .hot]).map(\\.id) == [bullpen.id, upgraded.id, nextDate.id], "Original lanes retain observations cited by stored narratives")
+  precondition(reader.beat([.bullpen, .hot], featured: [upgraded.id]).map(\\.id) == [bullpen.id, nextDate.id], "Only actual featured observations are omitted from supporting beats")
+  for term in ["josé", "original facts", "chc", "heat check"] {
+   precondition(Search(q: term).hits(upgraded), "Visible original observation remains searchable")
   }
-  precondition(!Search(q: "breaking pitches", judgmentFor: { _ in nil }).hits(upgraded), "Expired judgments cannot leak into active search")
-  print("Hub judgment integration passed")
+  for term in ["matchup gives", "opponent connect", "breaking pitches"] {
+   precondition(!Search(q: term).hits(upgraded), "Stored narrative prose cannot leak into observation search")
+  }
+  print("Hub observation integration passed")
  }
 }
 `;
-    expect(run(source)).toContain('Hub judgment integration passed');
+    expect(run(source)).toContain('Hub observation integration passed');
     expect(hub).toContain('now.timeIntervalSince($0) >= 300');
-    expect(hub).toContain('.task(id: isVisible ? nextJudgmentExpiry : nil)');
-    const load = block(hub, '    @MainActor private func loadCurrent(');
-    expect(load.indexOf('refreshSourceObservations(incoming, league: league)')).toBeLessThan(load.indexOf('fetched = Self.dedupe(resolved)'));
-    const savedCase = block(hub, '    private func judgmentCase(');
-    expect(savedCase).toContain('HubJudgmentSelection.sameArgument(current, selection.judgment)');
-    expect(savedCase).toContain('return selection.judgment.isCurrent(');
+    expect(hub).not.toMatch(/HubJudgment|currentJudgment|openRead\(/);
+    for (const marker of ['fileprivate struct HubLeadStory:', 'fileprivate struct HubBestOf:', 'fileprivate struct HubBoardSection']) {
+      expect(block(hub, marker)).toContain('fill: GaryColors.readingPanel');
+    }
+    expect(block(hub, 'fileprivate struct HubLeadStory:')).toContain('Text(s.headline)');
+    expect(block(hub, 'fileprivate struct HubLeadStory:')).toContain('Text(s.detail.trimmingCharacters');
+    expect(block(hub, '    @ViewBuilder private var frontPageBoards:')).toContain('openSignal(s)');
+    expect(block(hub, '    @ViewBuilder private var referenceShelf:')).toContain('title: "League Pulse"');
+    expect(block(hub, '    @ViewBuilder private var referenceShelf:')).toContain('HubCollapsible(anchor: "lastNight"');
+    expect(hub).toContain('.accessibilityLabel("Close game research")');
+    expect(hub).toContain('.accessibilityAddTraits(.isModal)');
   }, 60_000);
 
   it.skipIf(!hasSwift)('uses original observation clocks through shipping metadata and ignores later persistence time', () => {

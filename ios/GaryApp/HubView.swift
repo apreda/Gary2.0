@@ -1,11 +1,8 @@
 import SwiftUI
 
 // ============================================================================
-// THE HUB — researched judgments and their full supporting cases
+// THE HUB — daily observations, specialist boards and full player/team reads
 //
-// The Hub connects today's evidence into a useful take, a short explanation,
-// and an optional full case. Exact-game groups connect related research;
-// specialist boards retain the original observations and player/team routes.
 // (The Receipts section came off the page Aug 6 — graded rows
 // now surface only through search.)
 //
@@ -216,7 +213,6 @@ fileprivate struct HubBoardSection<Content: View>: View {
         case "series": return "What the previous meetings tell us"
         case "schedule": return "Rest, travel and the next matchup"
         case "availability": return "The latest player context"
-        case "reference": return "League tables and recent game performances"
         default: return nil
         }
     }
@@ -263,7 +259,7 @@ fileprivate struct HubBoardSection<Content: View>: View {
                 content().padding(.vertical, 12)
             }
         }
-        .overlay(alignment: .bottom) { HubRule().padding(.horizontal, 18) }
+        .garyPanel(radius: GaryLayout.Radius.card, fill: GaryColors.readingPanel)
         .padding(.horizontal, GaryLayout.gutter)
     }
 }
@@ -528,83 +524,6 @@ struct HubView: View {
     @State private var teamCardSignal: Signal? = nil
     @State private var fantasyRefreshToken = UUID()
     @State private var frontPageNow = Date()
-    @State private var judgmentReads: [String: HubJudgment] = [:]
-    /// Complete source clocks survive presentation deduplication and a failed
-    /// refresh, so newer cited facts can withdraw an older interpretation.
-    @State private var sourceObservationClocks: [HubLeagueSel: [String: Date]] = [:]
-    private struct JudgmentRead: Identifiable {
-        let signal: Signal
-        let judgment: HubJudgment
-        var id: UUID { signal.id }
-    }
-    @State private var judgmentRead: JudgmentRead?
-
-    private func judgmentKey(_ signal: Signal) -> String? {
-        HubJudgmentSelection.suppressionKey(league: signal.league.label, date: signal.slateDate,
-                                            gameID: signal.gameId, sourceKey: signal.sourceKey)
-    }
-
-    private func currentJudgment(_ signal: Signal) -> HubJudgment? {
-        guard let key = judgmentKey(signal), let judgment = judgmentReads[key],
-              judgment === signal.lane?.judgment,
-              judgment.isCurrent(league: signal.league.label, date: SupabaseAPI.todayEST(),
-                                 gameID: signal.gameId, sourceKey: signal.sourceKey, now: Date()) else { return nil }
-        return judgment
-    }
-
-    /// Evidence validation/date parsing happen once per fresh packet; this
-    /// pass runs only when source data, game state or the clock changes.
-    private func refreshJudgments(now: Date = Date()) {
-        let candidates = fetched.enumerated().compactMap { index, signal -> HubJudgmentSelection.Candidate? in
-            guard !Self.fantasyKinds.contains(signal.kind), !Self.moduleKinds.contains(signal.kind),
-                  signal.reg?.day != "tomorrow", signal.confirmedXI == nil else { return nil }
-            return .init(index: index, league: signal.league.label, date: signal.slateDate,
-                         gameID: signal.gameId, sourceKey: signal.sourceKey,
-                         judgment: signal.lane?.judgment, blocked: signal.rejectsJudgment,
-                         sourceObservedAt: signal.sourceObservedAt)
-        }
-        let selection = HubJudgmentSelection.current(candidates: candidates, games: judgmentGames,
-                                                     date: SupabaseAPI.todayEST(), now: now,
-                                                     sourceClocks: sourceObservationClocks.values.reduce(into: [:]) { all, clocks in
-                                                         all.merge(clocks, uniquingKeysWith: max)
-                                                     })
-        var next: [String: HubJudgment] = [:]
-        for (index, judgment) in selection {
-            if let key = judgmentKey(fetched[index]) { next[key] = judgment }
-        }
-        if next.count != judgmentReads.count || !next.allSatisfy({ judgmentReads[$0.key] === $0.value }) {
-            judgmentReads = next
-        }
-    }
-
-    private var judgmentGames: [HubJudgmentSelection.Game] {
-        (todayBoard?.board ?? []).compactMap { row in
-            guard let gameID = row.bdl_game_id, let league = row.league else { return nil }
-            return .init(league: league, gameID: String(gameID),
-                         startsAt: row.hasConfirmedKickoff ? row.commence_time : nil,
-                         status: liveScores.status(forGameId: gameID, league: league)?.status ?? row.game_status)
-        }
-    }
-
-    private var nextJudgmentExpiry: Date? { judgmentReads.values.compactMap(\.validUntilDate).min() }
-
-    private func refreshSourceObservations(_ signals: [Signal], league: HubLeagueSel) {
-        sourceObservationClocks[league] = HubJudgmentSelection.observationClocks(signals.enumerated().map { index, signal in
-            .init(index: index, league: signal.league.label, date: signal.slateDate,
-                  gameID: signal.gameId, sourceKey: signal.sourceKey, judgment: signal.lane?.judgment,
-                  sourceObservedAt: signal.sourceObservedAt)
-        })
-    }
-
-    private var supersededSources: Set<String> {
-        HubJudgmentSelection.suppressedKeys(leagueSignals.compactMap(currentJudgment))
-    }
-
-    private func openRead(_ signal: Signal) {
-        refreshJudgments()
-        if let judgment = currentJudgment(signal) { judgmentRead = JudgmentRead(signal: signal, judgment: judgment) }
-        else { openSignal(signal) }
-    }
 
     /// Player-backed signals open their populated player card — MLB always,
     /// football when today's pack exists for the id. Team-backed rows use
@@ -816,37 +735,22 @@ struct HubView: View {
     /// lane + game + subject (+ regression day) and keep the first (rows come
     /// relevance-ordered), so a double insert never renders as two rows.
     private static func dedupe(_ all: [Signal]) -> [Signal] {
-        let sourceChoices = HubJudgmentSelection.sourceChoices(all.enumerated().map { index, signal in
-            .init(index: index, league: signal.league.label, date: signal.slateDate,
-                  gameID: signal.gameId, sourceKey: signal.sourceKey, judgment: signal.lane?.judgment)
-        })
         var seen = Set<String>()
         var out: [Signal] = []
-        for (index, source) in all.enumerated() {
-            guard let permitsJudgment = sourceChoices[index] else { continue }
-            var s = source
-            s.rejectsJudgment = !permitsJudgment
+        for s in all {
             // Digits are stripped from the subject so a re-run with moved
             // numbers ("France head the title market at +170" → "+175")
             // still collapses to one story.
             let subj = HubFmt.subject(s.headline).filter { !$0.isNumber }
-            let legacyKey = HubStoryIdentity.dedupeKey(
+            let key = HubStoryIdentity.dedupeKey(
                 league: s.league.label, slateDate: s.slateDate, gameID: s.gameId,
                 game: s.game, kind: String(describing: s.kind), subject: subj, variant: s.reg?.day)
-            let key = s.lane?.judgment == nil ? legacyKey :
-                HubJudgmentSelection.suppressionKey(league: s.league.label, date: s.slateDate,
-                                                    gameID: s.gameId, sourceKey: s.sourceKey) ?? legacyKey
             if seen.insert(key).inserted { out.append(s) }
         }
         return out
     }
 
-    private func items(_ k: SignalKind) -> [Signal] {
-        let suppressed = supersededSources
-        return (itemsIndex[sel]?[k] ?? []).filter {
-            currentJudgment($0) == nil && !(judgmentKey($0).map(suppressed.contains) ?? false)
-        }
-    }
+    private func items(_ k: SignalKind) -> [Signal] { itemsIndex[sel]?[k] ?? [] }
 
     /// Name → today's player card, punctuation/case-tolerant. Only names that
     /// resolve become tappable (founder, Jul 22: click a name, get the card).
@@ -904,7 +808,7 @@ struct HubView: View {
 
     @MainActor private func resetForSlate(_ date: String) {
         guard loadedDate != date else { return }
-        fetched = []; itemsIndex = [:]; connectionSnapshots = [:]; sourceObservationClocks = [:]
+        fetched = []; itemsIndex = [:]; connectionSnapshots = [:]
         todayBoard = nil; intelCards = []; pulseByLeague = [:]
         ydaySignals = []; streakRows = []; nightRows = []; hitRate = nil; historyDate = ""
         fetchErrorLeagues = []; boardFetchFailed = false
@@ -967,9 +871,7 @@ struct HubView: View {
             let snapshot = PicksContentEquality.encoded(rows)
             if let snapshot, connectionSnapshots[league] == snapshot { continue }
             resolved.removeAll { $0.league == league }
-            let incoming = rows.compactMap { $0.toSignal() }
-            refreshSourceObservations(incoming, league: league)
-            resolved.append(contentsOf: incoming)
+            resolved.append(contentsOf: rows.compactMap { $0.toSignal() })
             connectionSnapshots[league] = snapshot
             changed = true
         }
@@ -989,7 +891,6 @@ struct HubView: View {
         boardLoading = false
         didLoad = true
         loadedAt = Date()
-        refreshJudgments()
         consumeFocus()
     }
 
@@ -1217,8 +1118,6 @@ struct HubView: View {
 
     // ---- the front page ranking ----
 
-    /// Fantasy source observations belong to the separate published decision contract.
-    /// MLB integrates a compact watch; NFL retains its weekly workflow.
     private static let fantasyKinds: Set<SignalKind> = [
         .fantasyPickups, .twoStart, .closerWatch, .returnWatch, .cutList,
         .fantasyUsage, .fantasyRedZone, .fantasyMatchup, .fantasyTrend,
@@ -1238,25 +1137,15 @@ struct HubView: View {
         slateRows.isEmpty && leagueSignals.contains { $0.kind == .nextSlate }
     }
 
-    /// Ready arguments use the complete editorial slate when it agrees. Major
-    /// developments come first; exact kickoff and stable source order provide
-    /// a useful fallback. Original observations retain their relevance order.
+    /// Original observations retain their server relevance order and dated eligibility.
     private var ranked: [Signal] {
         let currentDate = SupabaseAPI.todayEST()
-        let signals = leagueSignals
-        let suppressed = supersededSources
-        let judgments = signals.filter { currentJudgment($0) != nil }
-        let editorial = HubJudgmentSelection.editorialOrder(candidates: judgments.enumerated().compactMap { index, signal in
-            currentJudgment(signal).map { .init(index: index, judgment: $0) }
-        }, games: judgmentGames)
-        let observations = signals.filter { s in
-            currentJudgment(s) == nil && !(judgmentKey(s).map(suppressed.contains) ?? false)
-                && s.confirmedXI == nil && !Self.fantasyKinds.contains(s.kind)
+        return leagueSignals.filter { s in
+            s.confirmedXI == nil && !Self.fantasyKinds.contains(s.kind)
                 && !Self.moduleKinds.contains(s.kind) && s.kind != .regression
                 && s.reg == nil && !(sel == .mlb && s.kind == .h2h)
                 && s.slateDate == currentDate
         }
-        return editorial.map { judgments[$0] } + observations
     }
     /// THE LEAD must be an INSIGHT — a connection between facts — never a raw
     /// counting stat (founder, Aug 3: "the headline we have now isn't really
@@ -1279,12 +1168,8 @@ struct HubView: View {
         let rows = ranked
         let selection = HubFrontPageSelection.select(
             stories: rows.enumerated().map { index, signal in
-                // Completed cases diversify by exact game. The original
-                // collector label must not push a third useful case below a
-                // raw observation merely because two began with hitting form.
-                .init(index: index, kind: currentJudgment(signal).map { "judgment:\($0.game_id)" }
-                    ?? String(describing: signal.kind), gameID: signal.gameId,
-                      prefersLead: currentJudgment(signal) != nil || Self.leadInsightKinds.contains(signal.kind))
+                .init(index: index, kind: String(describing: signal.kind), gameID: signal.gameId,
+                      prefersLead: Self.leadInsightKinds.contains(signal.kind))
             }, games: frontPageGames, now: frontPageNow)
         return (selection.lead.map { rows[$0] }, selection.supporting.map { rows[$0] })
     }
@@ -1423,18 +1308,15 @@ struct HubView: View {
     /// lane kicker). Regression rows live on the board, never in a beat.
     private func beatRows(_ beat: Beat, featured: Set<UUID>) -> [Signal] {
         let kinds = Set(beat.kinds)
-        let suppressed = supersededSources
         return leagueSignals.filter {
-            kinds.contains($0.kind) && currentJudgment($0) == nil
-                && !(judgmentKey($0).map(suppressed.contains) ?? false)
+            kinds.contains($0.kind)
                 && !featured.contains($0.id)
                 && $0.confirmedXI == nil
                 && $0.reg == nil
         }
     }
 
-    /// The NFL weekly Fantasy desk remains separate. Legacy MLB selections
-    /// migrate to Fantasy watch inside the Hub.
+    /// MLB Fantasy stays in the Hub; NFL retains its separate weekly desk.
     @AppStorage("hubScope") private var hubScope = "hub"
 
     /// A saved Fantasy scope applies only to supported desks. Other sports
@@ -1453,11 +1335,7 @@ struct HubView: View {
         // Without this it would fall through to More Edges and reappear.
         var placed: Set<SignalKind> = Self.fantasyKinds.union([.regression, .h2h, .theSweat, .nextSlate, .practiceReport])
         for b in beats { for k in b.kinds { placed.insert(k) } }
-        let suppressed = supersededSources
-        return leagueSignals.filter {
-            !placed.contains($0.kind) && $0.confirmedXI == nil && !featured.contains($0.id)
-                && currentJudgment($0) == nil && !(judgmentKey($0).map(suppressed.contains) ?? false)
-        }
+        return leagueSignals.filter { !placed.contains($0.kind) && $0.confirmedXI == nil && !featured.contains($0.id) }
     }
 
     // ---- the beats, one block each (extracted from body — the inline
@@ -1487,11 +1365,11 @@ struct HubView: View {
                 HubAfterGarySection(anchor: beat.anchor,
                                     rows: rows,
                                     openBeats: $openBeats,
-                                    onRow: { s in openRead(s) })
+                                    onRow: { s in openSignal(s) })
                     .id(beat.anchor)
             } else if beat.anchor == "nrfi" {
                 HubBoardSection(anchor: beat.anchor, open: $openBeats, title: "First-inning reads", count: rows.count) {
-                    HubNrfiSection(rows: rows, showsHeader: false) { s in openRead(s) }
+                    HubNrfiSection(rows: rows, showsHeader: false) { s in openSignal(s) }
                 }.id(beat.anchor)
             } else if beat.anchor == "matchups" {
                 HubMatchupsSection(
@@ -1499,8 +1377,8 @@ struct HubView: View {
                     slateIndexFor: { slateIndexFor($0) },
                     openBeats: $openBeats,
                     kickerFor: kickerText,
-                    onRow: { s in openRead(s) },
-                    onProfile: { openRead($0) },
+                    onRow: { s in openSignal(s) },
+                    onProfile: { openSignal($0) },
                     onGame: { openGameSheet(for: $0) }
                 )
                 .id(beat.anchor)
@@ -1511,8 +1389,8 @@ struct HubView: View {
                     rows: rows,
                     openBeats: $openBeats,
                     kickerFor: kickerText,
-                    onRow: { s in openRead(s) },
-                    onProfile: { openRead($0) }
+                    onRow: { s in openSignal(s) },
+                    onProfile: { openSignal($0) }
                 )
                 .id(beat.anchor)
             }
@@ -1531,12 +1409,11 @@ struct HubView: View {
             night: selNightRows,
             league: sel,
             nightLabel: nightLabel,
-            onEdge: { s in openRead(s) },
+            onEdge: { s in openSignal(s) },
             cardFor: { intelCard(for: $0) },
             onPlayer: { namedCard = $0 },
             onTeamRow: { openTeamCard(for: $0) },
-            onTeamName: { openTeamCard(named: $0) },
-            judgmentFor: currentJudgment
+            onTeamName: { openTeamCard(named: $0) }
         )
     }
 
@@ -1567,8 +1444,8 @@ struct HubView: View {
                 rows: extras,
                 openBeats: $openBeats,
                 kickerFor: kickerText,
-                onRow: { s in openRead(s) },
-                onProfile: { openRead($0) }
+                onRow: { s in openSignal(s) },
+                onProfile: { openSignal($0) }
             )
             .id("more")
         }
@@ -1580,62 +1457,19 @@ struct HubView: View {
     @ViewBuilder private var frontPageBoards: some View {
         let selection = frontPageSelection
         if let lead = selection.lead {
-            HubLeadStory(s: lead, judgment: currentJudgment(lead), context: storyContext(lead), kicker: kickerText(lead)) { s in
-                openRead(s)
+            HubLeadStory(s: lead, context: storyContext(lead), kicker: kickerText(lead)) { s in
+                openSignal(s)
             }
             .id("lead")
         }
         if !selection.best.isEmpty {
             VStack(alignment: .leading, spacing: 4) {
                 HubHead(title: "More to know")
-                HubBestOf(signals: selection.best, judgmentFor: currentJudgment, contextFor: storyContext, kickerFor: kickerText) { s in
-                    openRead(s)
+                HubBestOf(signals: selection.best, contextFor: storyContext, kickerFor: kickerText) { s in
+                    openSignal(s)
                 }
             }
             .id("bestof")
-        }
-    }
-
-    private var matchupReads: [HubMatchupRead] {
-        let signals = leagueSignals
-        let featured = featuredStoryIDs
-        let suppressed = supersededSources
-        return signals.compactMap { signal in
-            guard let judgment = currentJudgment(signal), let gameID = signal.gameId,
-                  let row = slateRows.first(where: { $0.bdl_game_id.map(String.init) == gameID }) else { return nil }
-            let related = signals.filter {
-                $0.id != signal.id && $0.gameId == gameID && $0.slateDate == signal.slateDate
-                    && $0.reg?.day != "tomorrow" && $0.confirmedXI == nil
-                    && !Self.fantasyKinds.contains($0.kind) && !Self.moduleKinds.contains($0.kind)
-                    && currentJudgment($0) == nil && !(judgmentKey($0).map(suppressed.contains) ?? false)
-            }
-            let isFeatured = featured.contains(signal.id)
-            guard !isFeatured || !related.isEmpty else { return nil }
-            return HubMatchupRead(signal: signal, judgment: judgment, row: row,
-                                  related: Array(related.prefix(2)), featured: isFeatured)
-        }
-    }
-
-    @ViewBuilder private var matchupBriefings: some View {
-        let reads = matchupReads
-        if !reads.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                HubHead(title: "By matchup")
-                let visible = openBeats.contains("gameReads") ? reads : Array(reads.prefix(3))
-                ForEach(visible) { read in
-                    HubMatchupReadCard(read: read, context: storyContext(read.signal), onRead: openRead) {
-                        gameSheet = HubGameSel(row: read.row)
-                    }
-                    .padding(.horizontal, GaryLayout.gutter)
-                }
-                if reads.count > 3 {
-                    HubSeeAllButton(isOpen: openBeats.contains("gameReads"), total: reads.count) {
-                        if openBeats.contains("gameReads") { openBeats.remove("gameReads") }
-                        else { openBeats.insert("gameReads") }
-                    }
-                }
-            }
-            .id("gameReads")
         }
     }
 
@@ -1649,37 +1483,11 @@ struct HubView: View {
         return true
     }
 
-    private func judgmentCase(_ selection: JudgmentRead) -> some View {
-        let signal = selection.signal
-        let playerMatches = intelCards.filter {
-            signal.playerId != nil && $0.player_id == signal.playerId && $0.game_id == signal.gameId
-                && $0.payload != nil && HubCardIdentity.sameLeague($0.league, signal.league.label)
-                && signal.slateDate == loadedDate && loadedDate == SupabaseAPI.todayEST()
-        }
-        let matchingGames = (todayBoard?.board ?? []).filter {
-            signal.gameId != nil && $0.bdl_game_id.map(String.init) == signal.gameId
-                && HubCardIdentity.sameLeague($0.league, signal.league.label)
-                && signal.slateDate == SupabaseAPI.todayEST()
-        }
-        return HubJudgmentCaseView(judgment: selection.judgment, context: storyContext(signal), isCurrent: { now in
-            guard let key = judgmentKey(signal), let current = judgmentReads[key],
-                  HubJudgmentSelection.sameArgument(current, selection.judgment) else { return false }
-            return selection.judgment.isCurrent(league: signal.league.label, date: SupabaseAPI.todayEST(),
-                                                gameID: signal.gameId, sourceKey: signal.sourceKey, now: now)
-        }, onPlayer: playerMatches.count == 1 ? {
-            judgmentRead = nil
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { namedCard = playerMatches[0] }
-        } : nil, onGame: matchingGames.count == 1 ? {
-            judgmentRead = nil
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { gameSheet = HubGameSel(row: matchingGames[0]) }
-        } : nil, onClose: { judgmentRead = nil })
-    }
-
     @ViewBuilder private var signatureBoards: some View {
         if !items(.regression).isEmpty {
             HubBoardSection(anchor: "regression", open: $openBeats, title: "Regression watch", count: items(.regression).count) {
                 HubRegressionBoard(signals: items(.regression), todayEST: SupabaseAPI.todayEST()) { s in
-                    openRead(s)
+                    openSignal(s)
                 }
             }
             .id("regression")
@@ -1688,8 +1496,8 @@ struct HubView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HubHead(title: "The xG Board", sub: "goals vs expected")
                 HubBeatList(rows: items(.xgRegression), open: true, kickerFor: kickerText,
-                            onRow: { s in openRead(s) },
-                            onProfile: { openRead($0) })
+                            onRow: { s in openSignal(s) },
+                            onProfile: { openSignal($0) })
             }
             .id("xgboard")
         }
@@ -1720,28 +1528,25 @@ struct HubView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 18)
         }
-        if ([.mlb, .nfl, .ncaaf].contains(sel) && !pulseRows.isEmpty) || !selNightRows.isEmpty {
-            HubBoardSection(anchor: "reference", open: $openBeats, title: "Reference") {
-                VStack(alignment: .leading, spacing: 24) {
-                    if [.mlb, .nfl, .ncaaf].contains(sel), !pulseRows.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HubHead(title: "League tables")
-                            HubLeaguePulse(rows: pulseRows, selectedTab: $pulseTab,
-                                           cardFor: { intelCard(for: $0) },
-                                           onPlayer: { namedCard = $0 },
-                                           onTeam: { openTeamCard(named: $0) })
-                        }.id("pulse")
-                    }
-                    if !selNightRows.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HubHead(title: nightLabel, count: selNightRows.count)
-                            HubNightBoard(rows: selNightRows,
-                                          cardFor: { intelCard(for: $0) }, onPlayer: { namedCard = $0 },
-                                          onTeam: { openTeamCard(named: $0) })
-                        }.id("lastNight")
-                    }
-                }
-            }.id("reference")
+        if [.mlb, .nfl, .ncaaf].contains(sel), !pulseRows.isEmpty {
+            HubCollapsible(anchor: "pulse", open: $openBeats,
+                           title: "League Pulse", sub: "league-wide tables") {
+                HubLeaguePulse(rows: pulseRows, selectedTab: $pulseTab,
+                               cardFor: { intelCard(for: $0) },
+                               onPlayer: { namedCard = $0 },
+                               onTeam: { openTeamCard(named: $0) })
+            }
+            .id("pulse")
+        }
+
+        if !selNightRows.isEmpty {
+            HubCollapsible(anchor: "lastNight", open: $openBeats,
+                           title: nightLabel, count: selNightRows.count) {
+                HubNightBoard(rows: selNightRows,
+                              cardFor: { intelCard(for: $0) }, onPlayer: { namedCard = $0 },
+                              onTeam: { openTeamCard(named: $0) })
+            }
+            .id("lastNight")
         }
 
         // (The Receipts section came off the page entirely — founder, Aug 6.
@@ -1848,8 +1653,6 @@ struct HubView: View {
                 hubMorningNotice
             }
 
-            matchupBriefings
-
             if sel == .mlb {
                 FantasyBriefingPage(league: "MLB", refreshToken: fantasyRefreshToken, isVisible: isVisible,
                                     compact: true, openPlayer: openFantasyPlayer)
@@ -1861,7 +1664,7 @@ struct HubView: View {
             // mid-editorial. It lives with Last Night now.)
 
             VStack(alignment: .leading, spacing: 12) {
-                if jumpItems.contains(where: { !["nextSlate", "lead", "gameReads", "fantasy", "reference"].contains($0.anchor) }) {
+                if jumpItems.contains(where: { !["nextSlate", "lead", "fantasy", "pulse", "lastNight"].contains($0.anchor) }) {
                     HubHead(title: "Go deeper").padding(.bottom, 4)
                 }
                 signatureBoards
@@ -1883,7 +1686,7 @@ struct HubView: View {
         ScrollViewReader { proxy in
         ScrollView(showsIndicators: false) {
             hubPageStack
-            .accessibilityHidden(selectedSignal != nil || gameSheet != nil || judgmentRead != nil)
+            .accessibilityHidden(selectedSignal != nil || gameSheet != nil)
             .padding(.top, 8)
             .padding(.bottom, 120)
             // WIDTH PINNED to the viewport (founder bug, Aug 4: you could grab
@@ -1898,7 +1701,6 @@ struct HubView: View {
             .frame(minHeight: geo.size.height, alignment: .top)
             .task {
                 if !didLoad { await load() }
-                refreshJudgments()
                 if sel == .mlb, hubScope == "fantasy" {
                     hubScope = "hub"
                     pendingScrollAnchor = "fantasy"
@@ -1915,7 +1717,7 @@ struct HubView: View {
         .coordinateSpace(name: "hubScroll")
         .overlay(alignment: .bottomTrailing) {
             if !searchOpen, didLoad, !jumpItems.isEmpty, !showsFantasy, mastheadOffscreen,
-               selectedSignal == nil, gameSheet == nil, judgmentRead == nil {
+               selectedSignal == nil, gameSheet == nil {
                 HubSectionNav(items: jumpItems, open: $sectionNavOpen, availableHeight: geo.size.height - 190) { anchor in
                     openBeats.insert(anchor)
                     withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(anchor, anchor: .top) }
@@ -1929,18 +1731,9 @@ struct HubView: View {
         .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { now in
             guard isVisible, scenePhase == .active, !showsFantasy else { return }
             frontPageNow = now
-            refreshJudgments(now: now)
             if didLoad, loadedDate != SupabaseAPI.todayEST() || loadedAt.map({ now.timeIntervalSince($0) >= 300 }) != false {
                 Task { await load() }
             }
-        }
-        .onChange(of: liveScores.scores) { _ in refreshJudgments() }
-        .task(id: isVisible ? nextJudgmentExpiry : nil) {
-            guard isVisible, let expiry = nextJudgmentExpiry else { return }
-            let remaining = max(0, expiry.timeIntervalSinceNow)
-            do { try await Task.sleep(nanoseconds: UInt64(min(remaining + 0.05, 86_400) * 1_000_000_000)) }
-            catch { return }
-            refreshJudgments()
         }
         .refreshable {
             fantasyRefreshToken = UUID()
@@ -1950,7 +1743,6 @@ struct HubView: View {
         .onChange(of: isVisible) { vis in
             guard vis else { return }
             frontPageNow = Date()
-            refreshJudgments()
             consumeFocus()
             fantasyRefreshToken = UUID()
             Task { await reloadIfStale() }
@@ -1958,7 +1750,6 @@ struct HubView: View {
         .onChange(of: scenePhase) { phase in
             guard phase == .active, isVisible else { return }
             frontPageNow = Date()
-            refreshJudgments()
             fantasyRefreshToken = UUID()
             Task { await reloadIfStale() }
         }
@@ -1983,11 +1774,6 @@ struct HubView: View {
                 } else { hubScope = arg.lowercased() == "fantasy" ? "fantasy" : "hub" }
                 return
             }
-            if verb == "hubjudgment" {
-                let pool = leagueSignals.filter { currentJudgment($0) != nil }
-                if let index = Int(arg), pool.indices.contains(index) { openRead(pool[index]) }
-                return
-            }
             // "hubtap <lane> <i>" — run the EXACT tap router a row's button
             // calls (openSignal), so sim QA verifies the real routing law:
             // player-backed → player card, team-backed → team card.
@@ -2005,7 +1791,7 @@ struct HubView: View {
                 case "h2h": pool = items(.h2h)
                 default: pool = leagueSignals
                 }
-                if pool.indices.contains(idx) { openRead(pool[idx]) }
+                if pool.indices.contains(idx) { openSignal(pool[idx]) }
                 return
             }
             guard verb == "hub" else { return }
@@ -2018,9 +1804,8 @@ struct HubView: View {
             // Any other arg = a section anchor ("hub fantasy", "hub lastNight")
             // — the tour harness can't drive the pop-out nav.
             default:
-                if ["pulse", "lastNight"].contains(arg) { openBeats.insert("reference") }
+                openBeats.insert(arg)
                 pendingScrollAnchor = arg
-
             }
         }
         .overlay {
@@ -2038,12 +1823,11 @@ struct HubView: View {
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.88), value: selectedSignal?.id)
-        .onChange(of: isVisible && (selectedSignal != nil || gameSheet != nil || judgmentRead != nil)) { blocked in
+        .onChange(of: isVisible && (selectedSignal != nil || gameSheet != nil)) { blocked in
             GaryPushNavigation.shared.setModalBlocked(blocked, owner: "hub-read")
         }
         .onDisappear { GaryPushNavigation.shared.setModalBlocked(false, owner: "hub-read") }
         .sheet(item: $playerRead) { PlayerInsightSheet(signal: $0.signal, prefetched: $0.card) }
-        .sheet(item: $judgmentRead) { selection in judgmentCase(selection) }
         .sheet(item: $teamCardSignal) { s in
             HubTeamCardSheet(
                 signal: s,
@@ -2063,7 +1847,7 @@ struct HubView: View {
                 },
                 onSignal: { next in
                     teamCardSignal = nil
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { openRead(next) }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { openSignal(next) }
                 }
             )
         }
@@ -2081,12 +1865,11 @@ struct HubView: View {
                                  edges: edgesFor(sel.row),
                                  streaks: streaksFor(sel.row),
                                  kickerFor: kickerText,
-                                 judgmentFor: currentJudgment,
                                  onClose: { withAnimation(.spring(response: 0.3, dampingFraction: 0.88)) { gameSheet = nil } },
                                  onViewGame: { onSelectGame($0, sel.row.league, sel.row.bdl_game_id) },
                                  onSignal: { signal in
                                      gameSheet = nil
-                                     openRead(signal)
+                                     openSignal(signal)
                                  },
                                  onTeam: { r in
                                      withAnimation(.spring(response: 0.3, dampingFraction: 0.88)) { gameSheet = nil }
@@ -2102,7 +1885,7 @@ struct HubView: View {
                                 Image(systemName: "xmark")
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundStyle(.white.opacity(0.55))
-                    .frame(width: 44, height: 44)
+                                    .frame(width: 44, height: 44)
                                     .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
@@ -2170,7 +1953,6 @@ struct HubView: View {
         if !leagueSignals.isEmpty {
             let selection = frontPageSelection
             if selection.lead != nil || !selection.best.isEmpty { out.append(("lead", "The briefing")) }
-            if !matchupReads.isEmpty { out.append(("gameReads", "By matchup")) }
         }
         if sel == .mlb { out.append(("fantasy", "Fantasy watch")) }
         if !items(.regression).isEmpty { out.append(("regression", "Regression")) }
@@ -2183,9 +1965,8 @@ struct HubView: View {
             }
             if !overflow(featured: featured).isEmpty { out.append(("more", "More Edges")) }
         }
-        if ([.mlb, .nfl, .ncaaf].contains(sel) && !pulseRows.isEmpty) || !selNightRows.isEmpty {
-            out.append(("reference", "Reference"))
-        }
+        if [.mlb, .nfl, .ncaaf].contains(sel), !pulseRows.isEmpty { out.append(("pulse", "Pulse")) }
+        if !selNightRows.isEmpty { out.append(("lastNight", nightLabel)) }
         return out
     }
 
@@ -2569,86 +2350,69 @@ fileprivate struct HubSlateStrip: View {
 
 fileprivate struct HubLeadStory: View {
     let s: Signal
-    let judgment: HubJudgment?
     let context: String
     let kicker: String
     let onTap: (Signal) -> Void
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    private var major: Bool { judgment?.prominence == "major" }
 
     var body: some View {
         Button { onTap(s) } label: {
-            VStack(alignment: .leading, spacing: major ? 14 : 10) {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .firstTextBaseline, spacing: 12) {
-                        Text(judgment == nil ? "FROM THE RESEARCH" : judgment?.what_changed == nil ? "GARY’S READ" : "UPDATED READ")
-                            .hubKickerFont(11).tracking(1)
-                        Spacer(minLength: 0)
-                        Text(kicker.uppercased()).hubKickerFont(11).multilineTextAlignment(.trailing)
-                    }.foregroundStyle(GaryColors.gold)
-                    if !context.isEmpty {
-                        Text(context).hubDataFont(12, .medium)
-                            .foregroundStyle(GaryColors.sectionSub)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text("THE LEAD").hubKickerFont(11).tracking(1.2)
+                    Spacer(minLength: 0)
+                    Text(kicker.uppercased()).hubKickerFont(11)
+                        .multilineTextAlignment(.trailing)
                 }
-                Text(judgment.map { $0.displayText($0.take) } ?? s.headline)
-                    .hubTitleFont(major ? 30 : 22, major ? .bold : .semibold)
+                .foregroundStyle(GaryColors.gold)
+                .padding(.bottom, 22)
+                Text(s.headline)
+                    .hubTitleFont(30)
                     .foregroundStyle(GaryColors.warmWhite)
                     .fixedSize(horizontal: false, vertical: true)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(judgment.map { $0.displayText($0.explanation) } ?? s.detail.trimmingCharacters(in: .whitespacesAndNewlines))
-                        .hubBodyFont(15.5).lineSpacing(3)
-                        .foregroundStyle(GaryColors.warmWhite.opacity(0.88))
+                if !context.isEmpty {
+                    Text(context).hubDataFont(12, .medium)
+                        .foregroundStyle(GaryColors.sectionSub)
                         .fixedSize(horizontal: false, vertical: true)
-                    if let judgment, let condition = judgment.critical_condition, !condition.isEmpty {
-                        Text(judgment.displayText(condition)).hubBodyFont(14, .semibold)
-                            .foregroundStyle(GaryColors.lightGold)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                        .padding(.top, 12)
                 }
-                footer
+                Text(s.detail.trimmingCharacters(in: .whitespacesAndNewlines))
+                    .hubBodyFont(15.5)
+                    .foregroundStyle(GaryColors.warmWhite.opacity(0.84))
+                    .lineSpacing(4)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 18)
+                if let value = s.displayValue, !s.detail.contains(value) {
+                    Text(value).hubDataFont(12, .medium)
+                        .foregroundStyle(GaryColors.sectionSub).padding(.top, 12)
+                }
+                Rectangle().fill(GaryColors.warmWhite.opacity(0.10))
+                    .frame(height: 1).padding(.top, 22)
+                HStack {
+                    Text(s.playerId != nil ? "Read the breakdown" : "Read the full story")
+                        .hubBodyFont(14, .semibold)
+                    Spacer(minLength: 10)
+                    Image(systemName: "arrow.right").font(.system(size: 16, weight: .medium))
+                }
+                .foregroundStyle(GaryColors.gold).padding(.top, 16)
             }
-            .padding(major ? 24 : 16)
+            .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .garyPanel(radius: GaryLayout.Radius.card, fill: GaryColors.cardBg)
+            .garyPanel(radius: GaryLayout.Radius.card, fill: GaryColors.readingPanel)
             .overlay(alignment: .topLeading) {
                 Rectangle().fill(GaryColors.gold).frame(width: 36, height: 3)
-                    .padding(.leading, major ? 24 : 16).accessibilityHidden(true)
+                    .padding(.leading, 24).accessibilityHidden(true)
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain).multilineTextAlignment(.leading)
-        .accessibilityHint(judgment == nil ? "Open the complete source research" : "Open the reasoning, competing case and cited evidence")
+        .buttonStyle(.plain)
+        .multilineTextAlignment(.leading)
         .padding(.horizontal, GaryLayout.gutter)
-    }
-
-    private var footer: some View {
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
-            : AnyLayout(HStackLayout(alignment: .center, spacing: 12))
-        return layout {
-            if let judgment {
-                HubJudgmentTiming(judgment: judgment, compact: true)
-                if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 0) }
-            }
-            HStack(spacing: 8) {
-                Text(judgment == nil ? "Read the research" : "Read Gary’s full case").hubBodyFont(14, .semibold)
-                Image(systemName: "arrow.right").font(.system(size: 15, weight: .medium)).accessibilityHidden(true)
-            }
-            .foregroundStyle(GaryColors.gold)
-            .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
     }
 }
 
-// MARK: - Supporting reads
 
 fileprivate struct HubBestOf: View {
     let signals: [Signal]
-    let judgmentFor: (Signal) -> HubJudgment?
     let contextFor: (Signal) -> String
     let kickerFor: (Signal) -> String
     let onTap: (Signal) -> Void
@@ -2656,104 +2420,36 @@ fileprivate struct HubBestOf: View {
     var body: some View {
         VStack(spacing: 0) {
             ForEach(Array(signals.enumerated()), id: \.element.id) { i, s in
-                Button { onTap(s) } label: {
-                    HubConnectedRead(signal: s, judgment: judgmentFor(s), context: contextFor(s), kicker: kickerFor(s))
-                }.buttonStyle(.plain)
-                if i < signals.count - 1 { HubRule() }
+                Button { onTap(s) } label: { row(s) }.buttonStyle(.plain)
+                if i < signals.count - 1 { HubRule().padding(.horizontal, 20) }
             }
         }
+        .garyPanel(radius: GaryLayout.Radius.card, fill: GaryColors.readingPanel)
         .padding(.horizontal, GaryLayout.gutter)
     }
-}
 
-fileprivate struct HubConnectedRead: View {
-    let signal: Signal
-    let judgment: HubJudgment?
-    let context: String
-    let kicker: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HubKicker(text: judgment?.what_changed == nil ? kicker : "Updated read", size: 10.5)
-            HStack(alignment: .firstTextBaseline, spacing: 14) {
-                Text(judgment.map { $0.displayText($0.take) } ?? signal.headline)
-                    .hubBodyFont(18, .semibold).foregroundStyle(GaryColors.warmWhite)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Image(systemName: "arrow.up.right").font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(GaryColors.gold).accessibilityHidden(true)
+    @ViewBuilder private func row(_ s: Signal) -> some View {
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 5) {
+                HubKicker(text: kickerFor(s), size: 10.5)
+                Text(s.headline)
+                    .hubBodyFont(17, .semibold)
+                    .foregroundStyle(.white.opacity(0.95))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
+                Text(contextFor(s))
+                    .hubDataFont(10.5, .medium)
+                    .foregroundStyle(GaryColors.sectionSub)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            if !context.isEmpty {
-                Text(context).hubDataFont(12, .medium).foregroundStyle(GaryColors.sectionSub)
-            }
-            if let judgment, let condition = judgment.critical_condition, !condition.isEmpty {
-                Text(judgment.displayText(condition)).hubBodyFont(14, .semibold).foregroundStyle(GaryColors.lightGold)
-            }
-            Text(judgment.map { $0.displayText($0.explanation) } ?? signal.detail)
-                .hubBodyFont(14.5).lineSpacing(3).foregroundStyle(GaryColors.warmWhite.opacity(0.86))
-            if let judgment { HubJudgmentTiming(judgment: judgment, compact: true) }
+            Spacer(minLength: 8)
+            Image(systemName: "arrow.up.right")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(GaryColors.sectionSub)
         }
-        .fixedSize(horizontal: false, vertical: true)
-        .multilineTextAlignment(.leading)
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-        .padding(.vertical, 18).contentShape(Rectangle())
-    }
-}
-
-fileprivate struct HubMatchupRead: Identifiable {
-    let signal: Signal
-    let judgment: HubJudgment
-    let row: TomorrowBoardRow
-    let related: [Signal]
-    let featured: Bool
-    var id: String { "\(signal.league.label)|\(signal.slateDate ?? "")|\(signal.gameId ?? "")" }
-}
-
-fileprivate struct HubMatchupReadCard: View {
-    let read: HubMatchupRead
-    let context: String
-    let onRead: (Signal) -> Void
-    let onGame: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button(action: onGame) {
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text(context).hubDataFont(12, .semibold)
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").font(.caption.weight(.semibold)).accessibilityHidden(true)
-                }
-                .foregroundStyle(GaryColors.gold)
-                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(Rectangle())
-            }.buttonStyle(.plain).accessibilityHint("Open all research for this exact game")
-            Button { onRead(read.signal) } label: {
-                if read.featured {
-                    HStack(spacing: 10) {
-                        Text("Gary’s featured read · Full case").hubBodyFont(14, .semibold)
-                        Spacer(minLength: 0)
-                        Image(systemName: "arrow.up.right").font(.caption).accessibilityHidden(true)
-                    }
-                    .foregroundStyle(GaryColors.warmWhite).frame(minHeight: 44).contentShape(Rectangle())
-                } else {
-                    HubConnectedRead(signal: read.signal, judgment: read.judgment, context: "", kicker: "Gary’s read")
-                }
-            }.buttonStyle(.plain)
-            if !read.related.isEmpty {
-                HubRule().padding(.vertical, 8)
-                Text("More on this matchup").hubBodyFont(13, .semibold).foregroundStyle(GaryColors.sectionSub)
-                ForEach(read.related) { signal in
-                    Button { onRead(signal) } label: {
-                        HStack(alignment: .firstTextBaseline, spacing: 10) {
-                            Text(signal.headline).hubBodyFont(15).foregroundStyle(GaryColors.warmWhite)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            Image(systemName: "arrow.up.right").font(.caption).foregroundStyle(GaryColors.sectionSub).accessibilityHidden(true)
-                        }.frame(minHeight: 48).contentShape(Rectangle())
-                    }.buttonStyle(.plain)
-                }
-            }
-        }
-        .fixedSize(horizontal: false, vertical: true).multilineTextAlignment(.leading)
-        .padding(.horizontal, 18).padding(.vertical, 10)
-        .garyPanel(radius: GaryLayout.Radius.card, fill: GaryColors.cardBg)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 20)
+        .contentShape(Rectangle())
     }
 }
 
@@ -4672,7 +4368,6 @@ fileprivate struct HubGameSheet: View {
     let edges: [Signal]
     let streaks: [StreakRow]
     let kickerFor: (Signal) -> String
-    var judgmentFor: (Signal) -> HubJudgment? = { _ in nil }
     var onClose: () -> Void = {}
     let onViewGame: (String) -> Void
     let onSignal: (Signal) -> Void
@@ -4704,14 +4399,8 @@ fileprivate struct HubGameSheet: View {
                         .padding(.horizontal, 18)
                 } else {
                     VStack(alignment: .leading, spacing: 4) {
-                        HubHead(title: "Game research", count: edges.count)
-                        ForEach(edges.filter { judgmentFor($0) != nil }) { signal in
-                            Button { onSignal(signal) } label: {
-                                HubConnectedRead(signal: signal, judgment: judgmentFor(signal), context: "", kicker: "Gary’s read")
-                            }
-                            .buttonStyle(.plain).padding(.horizontal, GaryLayout.gutter)
-                        }
-                        HubBeatList(rows: edges.filter { judgmentFor($0) == nil }, open: true, kickerFor: kickerFor,
+                        HubHead(title: "The Edges", count: edges.count)
+                        HubBeatList(rows: edges, open: true, kickerFor: kickerFor,
                                     onRow: onSignal, onProfile: onSignal)
                     }
                 }
@@ -4985,19 +4674,15 @@ fileprivate struct HubSearchResults: View {
     var onPlayer: (PlayerInsightCardRow) -> Void = { _ in }
     var onTeamRow: (StreakRow) -> Void = { _ in }
     var onTeamName: (String) -> Void = { _ in }
-    var judgmentFor: (Signal) -> HubJudgment? = { _ in nil }
 
     var body: some View {
         let q = query.lowercased()
         func hits(_ s: Signal) -> Bool {
-            let judgment = judgmentFor(s)
-            return s.headline.lowercased().contains(q)
+            s.headline.lowercased().contains(q)
                 || s.detail.lowercased().contains(q)
                 || s.game.lowercased().contains(q)
                 || s.value.lowercased().contains(q)
                 || signalChipLabel(kind: s.kind, league: s.league).lowercased().contains(q)
-                || [judgment?.take, judgment?.explanation, judgment?.full_case, judgment?.what_changed]
-                    .compactMap { $0 }.contains { $0.lowercased().contains(q) }
         }
         let edgeMatches = edges.filter { hits($0) && $0.result == nil }
         let receiptMatches = receipts.filter(hits)
@@ -5025,19 +4710,12 @@ fileprivate struct HubSearchResults: View {
                 VStack(alignment: .leading, spacing: 22) {
                     if !edgeMatches.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {
-                            HubHead(title: "Reads", count: edgeMatches.count)
+                            HubHead(title: "Edges", count: edgeMatches.count)
                             VStack(spacing: 0) {
                                 ForEach(edgeMatches) { s in
-                                    if let judgment = judgmentFor(s) {
-                                        Button { onEdge(s) } label: {
-                                            HubConnectedRead(signal: s, judgment: judgment, context: s.game,
-                                                             kicker: "Gary’s read")
-                                        }.buttonStyle(.plain).padding(.horizontal, GaryLayout.gutter)
-                                    } else {
-                                        HubStoryRow(s: s, kicker: signalChipLabel(kind: s.kind, league: s.league), expandable: false,
-                                                    showsChevron: true,
-                                                    onTap: { onEdge(s) }, onProfile: nil)
-                                    }
+                                    HubStoryRow(s: s, kicker: signalChipLabel(kind: s.kind, league: s.league), expandable: false,
+                                                showsChevron: true,
+                                                onTap: { onEdge(s) }, onProfile: nil)
                                     HubRule(inset: 18)
                                 }
                             }
