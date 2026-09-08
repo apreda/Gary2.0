@@ -2,9 +2,7 @@
 
 Adam asked to see a different Winners background with the depth of the Home
 grid, and more solid containers for the Fantasy content discussed immediately
-before it. He explicitly requested the guide at
-`/Users/adam.preda/Desktop/anti-ai-slop-design.md`; that request overrides the
-older blanket instruction against stored design guidance for this work.
+before it. These dated preview choices are not standing design instructions.
 
 ## Native changes
 

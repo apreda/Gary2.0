@@ -4,15 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gary · WC Starting XI — g04 Hub Flip-Lane</title>
-<!--
-  g04 — HUB FLIP-LANE
-  Styled as a native Gary Hub lane (where this actually lives): a hubLaneStrip tab row of
-  lanes, warm cream card chrome (#F6F1E7), mono selector chips, gold eyebrows per lane.
-  Boldest move: the Gary "FlippableEdgeCard" idiom — the pitch/lineup card FLIPS on tap to
-  reveal the betting read on its back; the contested Almoez Ali slot is itself a small
-  flippable card whose back shows the 3/5 source split.
-  States: PROJECTED -> CONTESTED -> CONFIRMED. System sans + mono numerals stand in for GaryFonts.
--->
+
 <style>
   :root{
     --cream:#F6F1E7;          /* GaryColors.warmWhite */
@@ -172,7 +164,7 @@
   .pname{font-size:10px;font-weight:700;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.65);line-height:1.05;
     text-align:center;max-width:76px}
   .ppos{font-family:var(--mono);font-size:7.5px;letter-spacing:.06em;color:rgba(255,255,255,.74);text-shadow:0 1px 2px rgba(0,0,0,.6)}
-  /* projected/contested: dashed = "not locked" */
+
   .state-projected .disc,.state-contested .disc{background:rgba(248,243,233,.92);border-style:dashed}
   .state-confirmed .disc{background:var(--chip);border-style:solid}
 

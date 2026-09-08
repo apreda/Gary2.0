@@ -24,7 +24,6 @@ Second most important: **fabrication prevention**. There's a documented history 
 ## 1. Locked / do-not-touch areas
 
 These are user-approved and explicitly should not be restyled or altered without direct confirmation (see `gary2.0/CLAUDE.md` for full text):
-- **Picks page, Game Pick Card, Prop Pick Card/Slip, Home front page** UI designs (iOS) — locked June 2026.
 - **Injury handling logic** (`ballDontLieService.js`, `bdlInjuries.js`, `bdlPlayers.js`) — labels FRESH/PRICED IN/Out For Season/etc. are intentional, don't touch without explicit confirmation.
 - No code edits without explicit user approval — this applies to the project generally (`gary2.0/CLAUDE.md`: "No Edits Without Approval"). A review agent should treat this as **read-only unless told otherwise** — report findings, don't patch them.
 
@@ -226,4 +225,4 @@ These surfaced organically during mapping, not from a targeted audit — treat a
 2. Then §2.2 (constitution files) for Layer 3 violations — the project's own stated highest-stakes review target, and something no automated test catches.
 3. Then §4.3 (scheduler) for reliability — highest real-world blast radius (has caused actual production outages 4x).
 4. Then spot-check §2.6 (statAudit) — is presence-based number matching actually catching fabrication, or just checking a number appears somewhere unrelated.
-5. iOS/web are comparatively lower-risk (locked designs, smaller blast radius) — treat as a lighter pass unless the user asks for UI-level review specifically.
+5. iOS/web have a separate runtime and deployment path — treat as a lighter pass unless the user asks for UI-level review specifically.

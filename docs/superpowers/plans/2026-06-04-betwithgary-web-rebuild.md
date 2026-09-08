@@ -4,7 +4,7 @@
 
 **Goal:** Build the new betwithgary.ai — a Next.js site in `web/` that renders the Gary app's free surfaces (picks, props, Hub, track record) from public Supabase data, funnels to the App Store, is SEO-crawlable, and feeds AI marketing tools — then delete the legacy web code from `gary2.0/`.
 
-**Architecture:** Next.js App Router (ISR for content pages, client polling only for live scores) reading Supabase PostgREST with the anon key server-side. A `lib/gary/` data layer ports battle-tested iOS logic (polymorphic JSONB parsing, odds-tail regex, units math, lane mapping, 3am EST rollover). Design language is the app's "Quant Terminal": gold `#C9A227` rationed on near-black `#08080A`, Barlow Condensed / Inter / JetBrains Mono.
+**Architecture:** Next.js App Router (ISR for content pages, client polling only for live scores) reading Supabase PostgREST with the anon key server-side. A `lib/gary/` data layer ports battle-tested iOS logic (polymorphic JSONB parsing, odds-tail regex, units math, lane mapping, 3am EST rollover).
 
 **Tech Stack:** Next.js (latest, App Router, TypeScript), Tailwind CSS v4, next/font (Barlow Condensed, Inter, JetBrains Mono), vitest for the data layer, @vercel/analytics. No Supabase SDK — plain `fetch` against PostgREST for full ISR cache control.
 
@@ -255,7 +255,7 @@ Expected: build succeeds.
 
 ```bash
 cd /Users/adam.preda/Desktop/Gary2.0
-git add web/ && git commit -m "web: scaffold Next.js app with Quant Terminal design tokens"
+git add web/ && git commit -m "web: scaffold Next.js app with shared rendering helpers"
 ```
 
 ---

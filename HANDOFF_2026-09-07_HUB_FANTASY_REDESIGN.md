@@ -1,8 +1,7 @@
 # Hub and Fantasy redesign — September 7, 2026
 
-Adam authorized a fresh native Hub/Fantasy redesign using our own design
-judgment, his current feedback, and `docs/design/anti-ai-slop-design.md`.
-Old aesthetic/font mandates remain retired. This pass preserves the games
+Adam authorized this native Hub/Fantasy redesign. This is a dated release
+record; its visual choices are not instructions for future design work. This pass preserves the games
 strip and current native font family, and gives the content clearer hierarchy
 and warm solid surfaces.
 

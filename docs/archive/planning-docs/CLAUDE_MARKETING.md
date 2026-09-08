@@ -16,13 +16,10 @@
 - **The transparent logo is `GaryIconBG`** — `ios/GaryApp/Assets.xcassets/GaryIconBG.imageset/GaryIconBG.png` (1024×1024, transparent). This is the canonical overlay mark. *(The old `gary_bg.png` reference was wrong — no such file exists in the repo.)*
 - Mood / character assets (`GaryFire`, `GaryCooking`, `GaryBeer`, `GaryCigar`, …) live in the same `Assets.xcassets/` — reference them by their real names, not loose `.png` paths.
 - For graphics: generate the background / layout with AI, then overlay the REAL Gary asset with Pillow.
-- **App color palette: see `DESIGNER_BRIEFING.md` (canonical)** — gold `#C9A227`, near-black `#08080A`, silver `#C7CCD6`, green wins / red losses. Marketing must match it; don't re-list hexes here (copies drift).
-- **NO blue tint** — AI generators default to blue-ish dark tones, always specify warm black/no blue
 
 ### Content Voice
 - No generic AI slop
 - Don't copy words from screenshots
-- Gary logo = small branding, not centerpiece
 - ~~Tagline: "Every Game. Everyday. Always Free."~~ **OUTDATED — Winners is paid since June 8, 2026.** The free slate is the proof layer; don't market the whole product as free.
 
 ### Instagram Strategy (ON HOLD)

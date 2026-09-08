@@ -4,15 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gary · WC Starting XI — g01 Quant Terminal Board</title>
-<!--
-  g01 — QUANT TERMINAL BOARD (the canonical Gary take)
-  A warm CREAM tactical board (parchment pitch, thin ink hairlines, NO green) inside the
-  locked Quant-Terminal chrome. Players are warm cream discs with mono shirt numbers + name beneath.
-  Gold EYEBROW "STARTING XI"; a gold "Gary's read" strip below. The contested Almoez Ali slot
-  is the lone gold-RINGED disc — the FAN's drama, rendered in the warm Gary palette.
-  States: PROJECTED (hedged) -> CONTESTED (Ali's slot debated) -> CONFIRMED (fires w/ odds).
-  Geometric sans for text, mono for ALL numerals (shirt #, odds, %, clocks). NO serif/mono body.
--->
+
 <style>
   :root{
     /* warm cream surfaces — GaryColors */
@@ -56,7 +48,7 @@
   .phone{width:430px;max-width:100%;background:var(--cream);border-radius:32px;overflow:hidden;
     box-shadow:var(--sh);border:1px solid rgba(120,100,60,.20)}
 
-  /* status bar — quant terminal chrome */
+
   .status{height:32px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;
     font-family:var(--mono);font-size:11px;color:var(--ink2);letter-spacing:.02em}
   .status .r{display:flex;align-items:center;gap:5px;font-size:10px;letter-spacing:.08em}
@@ -95,7 +87,7 @@
   .grade.hit{border-style:solid;border-color:var(--gold-line);background:var(--gold-wash);color:var(--gold-deep)}
   .grade.hit .n{color:var(--gold-deep)}
 
-  /* selector — matte capsule, single gold active pill (Quant Terminal idiom) */
+
   .seg{display:flex;gap:4px;margin:13px 18px 0;background:var(--cream2);padding:4px;border-radius:12px;
     border:1px solid rgba(120,100,60,.14)}
   .seg button{flex:1;border:0;background:transparent;padding:8px 4px 7px;border-radius:9px;
@@ -150,9 +142,9 @@
     letter-spacing:-.01em;max-width:74px;margin-top:3px}
   .ppos{font-family:var(--mono);font-size:7.5px;letter-spacing:.08em;color:var(--ink3);text-transform:uppercase}
 
-  /* projected / contested: dashed ring = "not locked yet" */
+
   .state-projected .disc, .state-contested .disc{border-style:dashed;background:var(--panel)}
-  /* confirmed: solid ink-filled discs = "locked, on paper" */
+
   .state-confirmed .disc{background:var(--ink);color:var(--gold-soft);border-color:var(--ink)}
 
   /* the CONTESTED slot — the lone gold-RINGED disc */

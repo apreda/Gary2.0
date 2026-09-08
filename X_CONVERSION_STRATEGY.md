@@ -54,7 +54,7 @@ The profile is the highest-leverage no-budget asset and it is partly built alrea
 - **Bio (rewrite):** One plain line. What Gary is, free, plus the hook. Example: `AI that picks every game across MLB, NBA, NFL, NHL, college. Every result owned, win or lose. Free in the app below.` No emojis, no dashes, no hype. Settable via the existing `update-x-profile` function.
 - **Website field (repoint):** Campaign-tracked link, `ct=x_profile`, pointed at a Custom Product Page once built.
 - **Pinned post (replace the current evergreen):** A rolling, timestamped results receipt (record to date, recent wins and losses shown honestly) with the App Store link in the *first reply* to the pin (`ct=x_pinned`). Bio makes the promise, pinned delivers the proof. The system can compose and post the pin candidate and flag it; the owner pins manually (no pin API).
-- **Header image (set):** A clean screenshot of the verified pick card / results view (reuse the existing Quant Terminal / Stack Row design) so the value is visible before anyone reads a word. Every screenshot doubles as free app-UI advertising. Manual.
+- **Header image (set):** A clean screenshot of the verified pick card / results view (reuse the current app rendering) so the value is visible before anyone reads a word. Every screenshot doubles as free app-UI advertising. Manual.
 
 ### Stage 3: App Store Page (free levers, no budget)
 

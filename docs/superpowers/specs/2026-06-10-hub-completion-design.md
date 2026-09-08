@@ -11,7 +11,7 @@ The Hub (PropsHubView, tab 2) is fully wired to real data — no mocks, no TODOs
 backend lanes map. What's missing is (1) homes for the four June-10 MLB lanes that
 currently dump into "More Edges", (2) a working lifecycle (the page loads once per app
 session and goes stale/dead), (3) league scoping the night before the World Cup, and
-(4) design-language conformance with the rest of the Quant Terminal app.
+(4) working native presentation.
 
 ## 1. The four new lanes get homes
 
@@ -78,14 +78,6 @@ sections; 3-6 rows each renders sparse), and a second ranked board for starter f
 - Lossy array decode in fetchInsightConnections — one malformed row drops one card,
   not the league's whole day. Dropped-row count logged.
 - `.debut` SignalKind deleted (no producer exists; enum stays honest).
-
-## 5. Retired visual instructions
-
-The former font, "Quant Terminal," color and layout prescriptions were removed
-at Adam's request on September 7, 2026. Use
-[anti-ai-slop-design.md](../../design/anti-ai-slop-design.md) and his current
-feedback. The current Hub typography is acceptable; this historical plan must
-not trigger a font restoration.
 
 ## Out of scope (backend / other tabs — noted for Adam, not touched)
 

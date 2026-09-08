@@ -4,14 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gary · WC Starting XI — d02 Editorial Tactical Board</title>
-<!--
-  d02 — EDITORIAL TACTICAL BOARD
-  The Athletic / NYT restraint, Quant-Terminal-native. Cream/parchment pitch,
-  thin ink hairlines, players as small ink dots with name + role in a refined sans.
-  GOLD used ONLY for the contested slot + Gary's read. Quiet, premium, print-like.
-  States: PROJECTED -> CONTESTED -> CONFIRMED. Tap a dot -> bottom sheet (source split + read).
-  System fonts stand in for GaryFonts. Numerals in mono (Quant Terminal rule).
--->
+
 <style>
   :root{
     /* parchment / ink */
@@ -145,10 +138,10 @@
     margin-top:3px}
   .ppos{font-family:var(--mono);font-size:7.5px;letter-spacing:.08em;color:var(--ink3);text-transform:uppercase}
 
-  /* projected: dot is hollow / pencilled, to read "not locked" */
+
   .state-projected .dot, .state-contested .dot{background:var(--card);border:1.5px solid var(--ink)}
   .state-projected .dot .no, .state-contested .dot .no{color:var(--ink2)}
-  /* confirmed: dots are solid filled ink — "locked, on paper" */
+
   .state-confirmed .dot{background:var(--ink);border:1.5px solid var(--ink)}
   .state-confirmed .dot .no{color:var(--ink3)}
 

@@ -1,6 +1,6 @@
 # MLB and NFL Fantasy briefing — September 7, 2026
 
-The native Fantasy page now presents Gary's actual roster and lineup decisions: the call, why it matters now, who it fits, the counterargument, what to check next, and the dated evidence. Solid warm panels follow Adam's `anti-ai-slop-design.md`. MLB was implemented and published first, followed by researched NFL behavior. NFL covers QB, RB, WR and TE, including rookies, on days without games. NCAAF's existing no-Fantasy behavior is unchanged.
+The native Fantasy page now presents Gary's actual roster and lineup decisions: the call, why it matters now, who it fits, the counterargument, what to check next, and the dated evidence. This release used solid panels; that appearance is not a standing design instruction. MLB was implemented and published first, followed by researched NFL behavior. NFL covers QB, RB, WR and TE, including rookies, on days without games. NCAAF's existing no-Fantasy behavior is unchanged.
 
 ## Live rollout
 

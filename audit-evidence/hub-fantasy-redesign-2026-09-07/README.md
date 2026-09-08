@@ -1,9 +1,7 @@
 # Hub and Fantasy redesign — 2.25 (907)
 
-Release evidence for the September 7, 2026 native UI redesign. Design authority
-is Adam's current conversation feedback and
-[anti-ai-slop-design.md](../../docs/design/anti-ai-slop-design.md). Older font
-mandates and design rules remain retired.
+Release evidence for the September 7, 2026 native UI redesign. This records
+a completed preview, not future design instructions.
 
 ## Changes
 

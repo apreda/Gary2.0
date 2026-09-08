@@ -138,8 +138,8 @@ story until the record speaks), Product Hunt (wrong audience).
 - CFB lane decision opens (§11). [founder, by Aug 8]
 
 **P1 (Jul 28–Aug 9): make the assets.**
-- Brand system consolidation: one BRAND_SYSTEM.md (logo/palette/type/voice/say-never), stale PDFs
-  and Notion brand page replaced, press gallery regenerated. [me]
+- Maintain asset inventory and voice references; regenerate the press gallery. [me]
+  The old visual guides were deleted at Adam's request on September 8, 2026.
 - Launch film shots 1–3 generated, assembly + grade, 45/30/15 cuts. [me, after GO]
 - NFL CPP screenshots drafted; fall App Store listing copy drafted. [me → founder submits]
 - Creator list wave 1 (15–20 vetted handles). [me]
@@ -219,11 +219,9 @@ timing. Everything ships behind `dry_run` previews; founder approves samples bef
 
 ## 8. Brand consolidation (the "company behind Gary" checklist)
 
-- [ ] BRAND_SYSTEM.md — single source: mark (GaryIcon minted-badge bear), palette (ink #0A0908,
-      card #16140E, gold #C9A227 in the app-density role), type (Barlow Condensed display / Inter /
-      JetBrains data-only), voice = POSITIONING.md register, say/never table, the cigar rule (X +
-      marketing = cigar boss; in-app = no cigar).
-- [ ] Replace stale root PDFs (Gary_AI_Brand_Guide.pdf) + Notion Brand Assets page content.
+- [x] Removed obsolete visual guidance from BRAND_SYSTEM.md, deleted the old brand-guide PDF,
+      and removed duplicate palette/font prescriptions from the Notion brand page and hub
+      (September 8, 2026, at Adam's request). Do not recreate the retired guide.
 - [ ] Press kit regenerated (current claims: free, every game, record; kill "100% free"/GPT-5.1
       leftovers). Press gallery re-listed on /press.
 - [ ] X profile pass (T-7): banner stays whole-Gary (the cigar boss), bio v3 states the real

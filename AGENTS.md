@@ -15,15 +15,11 @@ and use explicit paths when staging and committing.
 
 ## Design guidance
 
-Use only Adam's current feedback and `docs/design/anti-ai-slop-design.md` for
-visual decisions. On September 7 he confirmed that the current Hub fonts are
-fine and asked to remove the old design rules so an unwanted font is not
-restored again. This is not a request for another typography change.
-Older briefs, personal design memories, font mandates, layout prescriptions,
-and aesthetic source comments are retired, including anything called a
-"founder law" or "Quant Terminal" identity. Existing code describes what is
-implemented; it does not make that styling mandatory for future work.
-Operational, data-integrity and accessibility requirements still apply.
+Follow Adam's current request for visual decisions. There is no standing
+Gary style guide. Historical plans, screenshots, existing styling and saved
+memories are not design requirements. Do not restore deleted design notes
+from git history or archived copies unless Adam explicitly asks for them.
+Keep operational, data-integrity and accessibility requirements intact.
 
 ## Work directly on main
 

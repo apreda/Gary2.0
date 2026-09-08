@@ -4,10 +4,9 @@
 ## Brand and operational reference
 
 > Jul 24 2026. Owner: Claude (marketing). **Scope: marketing/external surfaces only** — X, web,
-> ads, creator briefs, press, App Store. The app's UI is founder-delegated live design and this
-> file never binds it (Design Authority rule, Jul 7 2026). Voice canonical: `POSITIONING.md` (v5).
-> This file is not a visual design guide. The old brand PDF, Notion design notes
-> and historical visual prescriptions are retired.
+> ads, creator briefs, press, App Store. Voice reference: `POSITIONING.md` (v5).
+> Visual instructions were removed at Adam's request on September 8, 2026.
+> Follow his current request; this file is not a visual design guide.
 
 ---
 
@@ -21,26 +20,14 @@
 - Handles: **@BetwithGary** everywhere. Domains: **betwithgary.ai** (canonical, www), betwithgary.com
   aliases. App Store id **6751238914**.
 
-## 2. The character & the mark
+## 2. Asset reference
 
-- **Site/app mark:** GaryIcon — the minted-badge bear (`web/public/brand/gary-icon.png`, 800px;
-  og variant 400px). Never GaryHead; GaryIconBG only as the JSON-LD logo and on share cards.
-- **Marketing face = the suit-and-cigar boss Gary.** X avatar AND banner are the cigar Gary
-  (`GaryMarketing/profile_kit/banner_x_cigar_v3_1500x500.png`, avatar_1024). The in-app mood
-  assets are no-cigar — that split is deliberate; do not "fix" it in either direction.
-- **No team logos, ever** (licensing) — sport identity is carried by the sport-accent color token
-  and text.
-- The bear is a character with a record, not a mascot for hype: he appears with the tape, a card,
-  or a take — never with money-flash or lifestyle props.
-
-## 3–4. Visual instructions retired
-
-The previous palette and font prescriptions were removed on September 7, 2026.
-Use [anti-ai-slop-design.md](../docs/design/anti-ai-slop-design.md) and current
-conversation feedback. Existing assets and renderer code describe what is
-implemented; they do not mandate fonts or a visual identity for future work.
-Adam is happy with the current Hub typography. No font restoration or change
-is requested by this cleanup.
+- Site/app asset: GaryIcon (`web/public/brand/gary-icon.png`, 800px; og variant 400px).
+  GaryIconBG is also used on share cards and in JSON-LD.
+- Existing marketing assets include suit-and-cigar Gary
+  (`GaryMarketing/profile_kit/banner_x_cigar_v3_1500x500.png`, avatar_1024).
+  In-app mood assets also exist. These describe available assets, not future design requirements.
+- Team logos require appropriate licensing.
 
 ## 5. Voice — the hard laws (canonical: POSITIONING.md v5)
 
@@ -64,8 +51,9 @@ is requested by this cleanup.
 - Live card renderers (prod): `/api/share-card` (1080×1080 app-parity pick card; `&result=won|lost`
   stamps), `/api/results-card` (recap grid). Legacy unused: `/api/pick-card-app`, `/api/take-card`.
 - `gary_asset_sheet.png` — character sheet. Launch film treatment: `LAUNCH_AD_TREATMENT.md`.
-- Stale/superseded: root `Gary_AI_Brand_Guide.pdf` + `Gary_AI_Product_Breakdown.pdf` (pre-warm-gold,
-  pre-positioning); press gallery PNGs delisted pending regen.
+- The obsolete brand-guide PDF was deleted on September 8, 2026.
+  `Gary_AI_Product_Breakdown.pdf` is a historical product reference; press
+  gallery PNGs were delisted pending regeneration.
 
 ## 7. Links & attribution
 

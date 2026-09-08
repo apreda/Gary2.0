@@ -2,9 +2,8 @@
 
 This supersedes the build-905 handoff. Adam asked for sustained work toward a
 production-quality Hub, then explicitly overrode every older aesthetic note.
-Current conversation feedback and `docs/design/anti-ai-slop-design.md` are the
-only design authority. That guide is an exact copy of his supplied Desktop
-file; inherited font/layout comments are not requirements.
+This is a dated release record. Follow the current user request for visual
+decisions; historical appearance is not design authority.
 
 ## Release state
 
@@ -156,17 +155,9 @@ production-truth command reports its existing private-plist exception; that
 file remains the sole intentional local source difference. Final release
 receipts are committed separately from the implementation.
 
-## Follow-up: old design rules removed
+## Later guidance cleanup
 
-Adam clarified that he is fine with the current Hub fonts. This follow-up
-changes documentation and comments only; build 906's UI and font values stay
-unchanged. The root agent instructions and backend guide now record that
-clarification. The retired designer brief redirects to the anti-slop file;
-old Hub/font and marketing palette/type prescriptions were removed or marked
-historical. Stale font mandates in live source comments were removed.
-
-The local Claude memory index and creative-autonomy note were updated too;
-obsolete Gary layout-rule notes now redirect to the current guide. Historical
-project memories cannot override current feedback, even if they call an old
-visual choice a founder law. No new named-font ban was inferred from the
-screenshot. `docs/design/anti-ai-slop-design.md` remains unchanged.
+The September 7 cleanup retired earlier visual mandates but retained a
+separate standing guide. Adam requested removal of that remaining guide and
+old design notes on September 8. That later cleanup supersedes the earlier
+guidance references; release and verification facts above remain historical.

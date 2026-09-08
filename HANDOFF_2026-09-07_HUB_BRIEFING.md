@@ -4,8 +4,7 @@ Adam approved the main Hub samples and said to go ahead. This implements the
 recommended daily briefing direction in the native app: one solid warm lead,
 two supporting reads, and compact expandable specialist boards. The existing
 horizontal game strip, header, full player/team reads, and separate Fantasy
-page remain the foundation. The supplied `anti-ai-slop-design.md` informed the
-warm surfaces, restrained gold labels, and removal of the redundant hero stat.
+page were retained. This is a dated release record, not a design brief.
 
 ## Release status — visual QA still blocked
 

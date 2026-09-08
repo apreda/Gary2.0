@@ -4,13 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gary · WC XI — d07 Terminal Scoreboard</title>
-<!--
-  d07 "Terminal Scoreboard" — retro LED / split-flap / monospace trading-terminal aesthetic.
-  Amber + green phosphor on near-black. Pitch = crisp line-art grid (ASCII-flavored).
-  Numerals everywhere are mono (Quant Terminal house rule). Warm GOLD = Gary's voice + key affordance.
-  States: PROJECTED -> CONTESTED (Almoez Ali slot blinks amber) -> CONFIRMED (reads FIRE).
-  Self-contained: inline CSS/JS only, no network. System mono fonts stand in for GaryFonts.
--->
+
 <style>
   :root{
     --bg:#07090a;            /* near-black phosphor field */
@@ -147,7 +141,7 @@
   .state-projected .disc, .state-contested .disc{border-style:dashed;color:var(--green-dim)}
   .state-projected .disc::after, .state-contested .disc::after{content:"~";position:absolute;top:-9px;right:-2px;
     font-size:9px;color:var(--green-dim);opacity:.7}
-  /* CONFIRMED — solid, bright, locked */
+
   .state-confirmed .disc{border-style:solid;border-color:var(--green);color:var(--green);
     box-shadow:0 0 0 1px rgba(0,0,0,.6),0 0 12px rgba(52,224,138,.4)}
 

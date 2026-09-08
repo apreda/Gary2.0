@@ -4,16 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gary · WC Starting XI — g03 Terminal Tape</title>
-<!--
-  g03 — TERMINAL TAPE (Winners style)
-  Borrows Gary's Winners page idioms: a status-bar header strip, a GAMES/PROPS-style
-  segmented toggle (here PROJECTED / CONTESTED / CONFIRMED), warm cream "tape" rows,
-  matte pick chips, mono numerals, a thin team-color eyebrow seam.
-  The XI is a compact warm tape laid over a subtle pitch; the contested Almoez Ali slot
-  is a flagged matte chip — the dramatic centerpiece, in gold/amber inside the cream world.
-  States: PROJECTED (hedged) -> CONTESTED (Ali debated) -> CONFIRMED (fires, with odds).
-  System geometric sans stands in for GaryFonts; numerals + selector chips in mono.
--->
+
 <style>
   :root{
     --cream:#F6F1E7; --cream2:#EFE6D6; --panel:#FBF7EF;
@@ -120,10 +111,10 @@
     font-family:var(--mono);font-weight:700;font-size:10px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
   .chip .nm{font-size:9.5px;font-weight:700;color:var(--ink);line-height:1;letter-spacing:-.01em;white-space:nowrap}
   .ppos{font-family:var(--mono);font-size:7.5px;letter-spacing:.08em;color:var(--ink3);text-transform:uppercase}
-  /* projected/contested: chips read "not locked" — dashed border, lighter disc */
+
   .state-projected .chip,.state-contested .chip{border-style:dashed}
   .state-projected .chip .no,.state-contested .chip .no{background:var(--ink2)}
-  /* confirmed: solid, locked */
+
   .state-confirmed .chip{border-style:solid;box-shadow:0 2px 7px rgba(40,30,12,.20)}
 
   /* the CONTESTED slot — a flagged matte gold/amber chip, the centerpiece */
@@ -164,7 +155,7 @@
     padding:11px 13px;cursor:pointer}
   .take .lbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.10em;color:var(--gold-soft);font-weight:700;text-transform:uppercase}
   .take .pick{font-size:13px;font-weight:800;color:#fff;letter-spacing:-.01em}
-  /* GREY odds in the pick chip — house rule (odds never gold in the pick title) */
+
   .take .o{margin-left:auto;font-family:var(--mono);font-size:12px;font-weight:700;color:#C9BFA8;
     background:rgba(255,255,255,.08);padding:3px 9px;border-radius:7px}
   .take .chev{color:var(--gold-soft);font-size:16px;margin-left:2px}

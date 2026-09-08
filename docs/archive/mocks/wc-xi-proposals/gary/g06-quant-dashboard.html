@@ -4,16 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gary · WC Starting XI — g06 Quant Terminal Dashboard</title>
-<!--
-  g06 — QUANT TERMINAL DASHBOARD
-  The warm Gary "ESPN-for-bettors" matchday page. The Starting XI is the HERO module
-  inside a scrollable Quant-Terminal stack of gold-eyebrowed modules separated by branded seams:
-    matchbar · STARTING XI (pitch + contested slot) · THE READ · SOURCE CONSENSUS · KEY-PLAYER PROPS.
-  Warm cream throughout, mono numerals, tasteful density. Gold marks Gary's voice + affordances only;
-  the soccer accent is a thin maroon seam at most. System sans + mono numerals STAND IN for GaryFonts.
-  States: PROJECTED (all-day, hedged) -> CONTESTED (Ali's slot debated) -> CONFIRMED (~38m, fires).
-  Tap a player -> bottom sheet drill-down (source split + branch read + form).
--->
+
 <style>
   :root{
     --cream:#F6F1E7; --cream2:#EFE6D6; --panel:#FBF7EF; --panel2:#F2EAD9;
@@ -131,9 +122,9 @@
     color:var(--ink);box-shadow:0 3px 7px rgba(0,0,0,.28);transition:.15s}
   .pname{font-size:10px;font-weight:700;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.65);line-height:1.05;text-align:center;max-width:76px}
   .ppos{font-family:var(--mono);font-size:7.5px;letter-spacing:.06em;color:rgba(255,255,255,.72);text-shadow:0 1px 2px rgba(0,0,0,.6)}
-  /* projected/contested: dashed = not locked */
+
   .state-projected .disc,.state-contested .disc{border-style:dashed;background:rgba(246,241,231,.93)}
-  /* confirmed: solid filled gold-soft ring = locked */
+
   .state-confirmed .disc{border-style:solid;background:var(--gold-wash)}
   /* contested slot — the dramatic centerpiece, amber within the cream world */
   .player.contested .disc{border-color:var(--amber);border-style:solid;background:var(--amber-soft);
@@ -343,7 +334,7 @@
   <div class="seam"><span class="eyebrow">Key-Player Props</span><span class="ln"></span><span class="meta" id="propMeta"></span></div>
   <div class="props" id="props"></div>
 
-  <div class="endcap">Gary · Quant Terminal</div>
+
  </div>
 </div>
 

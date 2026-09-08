@@ -63,19 +63,6 @@ Verify anon SELECT RLS on the older core tables (`daily_picks`, `prop_picks`, `g
 - **Excluded:** DFS (de-listed from app).
 - Mobile UA-redirect behavior from the old site is replaced by responsive design (no separate MobileLanding).
 
-## 4. Design language — "Quant Terminal" on web
-
-Tokens traced from code (`GaryColors` Views.swift ~1381, `GaryFonts` ~17055) — code is canon, not the brand PDF.
-
-- **Colors:** gold `#C9A227` (rationed: one hero per screen; the pick + Gary's voice only), lightGold `#E8D48B`, silver `#C7CCD6` (props twin), bg `#08080A`, card `#15171C`, inner chip `#1C1F26`, elevated `#1A1A1E`. Results: `#3FB950` win / `#E5484D` loss on pick contexts; `#22C55E` / `#EF4444` in charts. Gold gradient `#E8D48B → #C9A227 → #8B6914`.
-- **Sport accents** (dot/badge-sized ONLY, never card outlines): NBA `#3B82F6`, NFL `#22C55E`, NHL `#00A3E0`, NCAAB `#F97316`, NCAAF `#DC2626`, MLB grass `#7BC267` (light variant for text), WC teal `#14B8A6`. MLB field-gradient eyebrow: `#7BC267 → #C9A66B → #EDEDE6`.
-- **Fonts** via `next/font/google`: Barlow Condensed (700) display / Inter body / JetBrains Mono data+eyebrows. Never editorial serif or default mono as a "choice".
-- **Grammar echoed from app:** Terminal Tape toggle (sliding gold underline), status-bar header (`REC w-l · win% | N PLAYS LIVE | league codes`), matte cards with ONE metal hairline (gold=game, silver=prop), inner matte chip for the pick, radii 20/12/10, black depth shadow, **no glows/neon**.
-- **7 anti-slop guardrails apply** (ration gold; hierarchy via weight/space/elevation; no wide-tracked uppercase outside terminal eyebrows; nav ≠ filter styling; bear is a grounded character; zone it).
-- **Zoning:** `/` = warm front door, bear hosts (real `GaryIconBG.png` assets, warm black, no blue tint, never AI-generated bear). `/picks` `/results` `/hub` = the terminal. "The bear hosts; the data closes."
-- **A11y (fix inherited failures):** body text ≥55% white on `#08080A`; essential labels ≥11px; respect `prefers-reduced-motion`.
-- **Copy voice:** plain, professional, understated. No funnel hooks, no hype, no rhetorical questions. Tagline locked: "Every Game. Everyday. Always Free."
-
 ## 5. SEO + AI-marketing machinery
 
 - **JSON-LD:** `SoftwareApplication` + `Organization` site-wide (carry over from old index.html, corrected); `FAQPage` on `/how-it-works`; `ItemList` on picks pages; sport metadata on results pages.
