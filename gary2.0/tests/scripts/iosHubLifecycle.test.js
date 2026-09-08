@@ -18,13 +18,13 @@ function block(text, start) {
   throw new Error(`Unclosed declaration: ${start}`);
 }
 
-function runSwift(body) {
+function runSwift(body, optimized = false) {
   const directory = mkdtempSync(join(tmpdir(), 'gary-hub-lifecycle-'));
   try {
     const file = join(directory, 'Fixture.swift');
     const binary = join(directory, 'fixture');
     writeFileSync(file, `import Foundation\n${body}`);
-    execFileSync('swiftc', ['-parse-as-library', file, '-o', binary], { encoding: 'utf8', timeout: 30_000 });
+    execFileSync('swiftc', ['-parse-as-library', ...(optimized ? ['-O'] : []), file, '-o', binary], { encoding: 'utf8', timeout: 30_000 });
     expect(execFileSync(binary, [], { encoding: 'utf8', timeout: 10_000 })).toContain('Hub lifecycle assertions passed');
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -50,7 +50,12 @@ struct Signal: Codable {
  var kind: SignalKind = .story
  func toSignal() -> Signal? { self }
 }
-typealias Connection = Signal
+struct Connection: Codable {
+ var payload: Signal
+ var date: String? { payload.slateDate }
+ var league: String? { payload.league.label }
+ func toSignal() -> Signal? { payload }
+}
 struct Row { var league: String?; var bdl_game_id: Int? }
 struct TomorrowBoard { var date: String; var board: [Row] }
 struct PlaceholderRow { var marker = "support" }
@@ -98,10 +103,10 @@ ${block(readFileSync(new URL('../../../ios/GaryApp/SharedStores.swift', import.m
  }
  static func fetchPlayerIntelRowsResult(date: String, forceRefresh: Bool) async -> Support { let result = intel; await wait("intel"); return result }
  static func fetchLeaguePulseResult(date: String, league: String, forceRefresh: Bool) async -> Support { let result = pulses[league] ?? Support(); await wait(league); return result }
- static func fetchInsightConnections(date: String, league: String) async throws -> [Signal] {
+ static func fetchInsightConnections(date: String, league: String) async throws -> [Connection] {
   calls.append((date, league))
   if failures[date]?.contains(league) == true { throw FixtureFailure.unavailable }
-  return signals[date]?[league] ?? []
+  return (signals[date]?[league] ?? []).map { Connection(payload: $0) }
  }
  static func releaseBoard() {
   holdBoard = false
@@ -170,7 +175,7 @@ ${block(readFileSync(new URL('../../../ios/GaryApp/SharedStores.swift', import.m
   print("Hub lifecycle assertions passed")
  }
 }
-`);
+`, true);
 }
 
 describe('native Hub lifecycle', () => {
@@ -382,6 +387,15 @@ SupabaseAPI.boards[date] = .success(nil)
 await reader.refresh()
 precondition(reader.fetched.map(\\.id) == ["new-mlb"] && reader.fetchErrorLeagues.isEmpty)
 precondition(reader.todayBoard == nil && !reader.boardFetchFailed, "A successful empty board clears the retained snapshot and warning")
+
+SupabaseAPI.signals[date] = [
+ "MLB": [Signal(id: "wrong-league", league: .nfl, slateDate: date)],
+ "NFL": [Signal(id: "wrong-date", league: .nfl, slateDate: "2026-09-06")]
+]
+await reader.refresh()
+precondition(reader.fetched.map(\\.id) == ["new-mlb"], "Mismatched responses preserve last-good current-slate content")
+precondition(reader.fetchErrorLeagues == [.mlb, .nfl], "A wrong league or date is a source failure, not an authoritative empty response")
+SupabaseAPI.signals[date] = ["MLB": [Signal(id: "new-mlb", league: .mlb, slateDate: date)]]
 
 reader.todayBoard = TomorrowBoard(date: date, board: [Row(league: "MLB", bdl_game_id: 101)])
 SupabaseAPI.boards[date] = .success(TomorrowBoard(date: date, board: [Row(league: "MLB", bdl_game_id: 999)]))

@@ -846,9 +846,17 @@ struct HubView: View {
         await withTaskGroup(of: (HubLeagueSel?, [Connection], Bool, Bool).self) { group in
             for lg in AppFlags.insightLeagues {
                 group.addTask {
-                    let league = HubLeagueSel.from(lg)
-                    do { return (league, try await SupabaseAPI.fetchInsightConnections(date: date, league: lg), false, false) }
-                    catch { return (league, [], true, SupabaseAPI.isCancellation(error)) }
+                    do {
+                        // Await before forming the tuple: an inline await here
+                        // misassigns league keys in optimized Release builds.
+                        let rows = try await SupabaseAPI.fetchInsightConnections(date: date, league: lg)
+                        guard rows.allSatisfy({ $0.date == date && $0.league?.uppercased() == lg }) else {
+                            return (HubLeagueSel.from(lg), [], true, false)
+                        }
+                        return (HubLeagueSel.from(lg), rows, false, false)
+                    } catch {
+                        return (HubLeagueSel.from(lg), [], true, SupabaseAPI.isCancellation(error))
+                    }
                 }
             }
             for await result in group {
