@@ -768,6 +768,8 @@ struct PlayerInsightPack: Decodable {
     let position: String?
     let hand: String?
     let game: String?
+    /// Provider-backed slate status, including off-slate player profiles.
+    let context: String?
     let opponent: Opponent?
     let strengths: [String]?
     let weaknesses: [String]?

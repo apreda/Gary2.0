@@ -818,10 +818,15 @@ struct PlayerCardV4: View {
     }
 
     // MARK: header
+    private var contextLine: String {
+        let context = pack?.context?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return context.isEmpty ? game : context
+    }
+
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if !game.isEmpty {
-                Text(game.uppercased())
+            if !contextLine.isEmpty {
+                Text(contextLine.uppercased())
                     .font(.caption.monospaced().weight(.medium)).foregroundStyle(PCV4.mut2)
                     .fixedSize(horizontal: false, vertical: true)
             }

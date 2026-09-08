@@ -617,11 +617,14 @@ struct HubView: View {
     /// Everything else tonight about this team — id-exact when the signal
     /// carries one, name match otherwise (streak-seeded cards have no id).
     private func relatedTeamSignals(for s: Signal) -> [Signal] {
+        // Tomorrow's projections have their own board and must not appear as
+        // today's team evidence, even when the same clubs play both days.
+        let todaySignals = leagueSignals.filter { $0.reg?.day != "tomorrow" }
         if let tid = s.teamId {
-            return leagueSignals.filter { $0.id != s.id && $0.teamId == tid }
+            return todaySignals.filter { $0.id != s.id && $0.teamId == tid }
         }
         let name = Self.teamCardName(for: s)
-        return leagueSignals.filter { r in
+        return todaySignals.filter { r in
             r.id != s.id && r.league == s.league
                 && HubCardIdentity.matchesTeam(Self.teamCardName(for: r), name: name, abbr: nil, league: s.league.label)
         }
