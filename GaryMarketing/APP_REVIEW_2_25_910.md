@@ -1,6 +1,6 @@
 # App Review package — Gary AI 2.25 / candidate 910
 
-Prepared September 8, 2026. **Draft; not submitted.** Candidate 910 adds a narrow Hub streak-context clarification to the signed 909 baseline. Its optimized simulator build, signed archive and privacy/signature inventory pass; upload is in progress. Candidate 909 archived and uploaded successfully at 05:42:00 UTC on September 8; Apple reported that the uploaded package is processing. Processing completion, internal TestFlight availability and selection for App Review remain unverified. The earlier 901 submission and uploaded 908 build are separate records. Do not reuse the older crash-only What's New text for this candidate.
+Prepared September 8, 2026. **Draft; not submitted.** Candidate 910 adds a narrow Hub streak-context clarification to the signed 909 baseline. Its optimized simulator build, signed archive and privacy/signature inventory pass; upload succeeded at **05:54:41.786 UTC** on September 8, with Apple reporting processing. Candidate 909 archived and uploaded successfully at 05:42:00 UTC on September 8; Apple reported that the uploaded package is processing. Processing completion, internal TestFlight availability and selection for App Review remain unverified. The earlier 901 submission and uploaded 908 build are separate records. Do not reuse the older crash-only What's New text for this candidate.
 
 ## Notes for Review
 
@@ -35,7 +35,7 @@ Retain variable-coverage language, the accurate October offer, personal-tracking
 
 ## Candidate evidence and remaining release gates
 
-- Build 910 source is committed and pushed as `e88b70ce`. It clarifies team streak context and labels the stored next opponent explicitly; it changes no pick, grading, provider or privacy behavior. Final optimized simulator build, signed archive and strict/deep signature pass. All 21 manifests / 14 categories match signed 909. Upload and final changed-label UI receipts are pending.
+- Build 910 source is committed and pushed as `e88b70ce`. It clarifies team streak context and labels the stored next opponent explicitly; it changes no pick, grading, provider or privacy behavior. Final optimized simulator build, signed archive and strict/deep signature pass. All 21 manifests / 14 categories match signed 909. Upload succeeded at **05:54:41.786 UTC**; `/Volumes/KINGSTON/gary-910-upload.log`. The changed-label UI check is pending Mac unlock, and Apple processing completion/selection remains unverified.
 - Complete: optimized simulator build, signed 909 archive, strict/deep code-signature verification and successful upload. Archive: `/Volumes/KINGSTON/Gary-2.25-909-Launch.xcarchive`; upload log: `/Volumes/KINGSTON/gary-909-upload.log`.
 - Complete: signed archive inventory has 21 valid manifests, a 14-category collected-data union, no tracking or tracking domains. The root manifest matches canonical source and declares System Boot Time / `35F9.1` and Customer Support linked to the user for App Functionality.
 - Still required: mirror the Customer Support classification in App Store Connect and reconcile the complete label against the signed inventory. Local manifest compliance does not update App Store Connect automatically.

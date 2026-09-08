@@ -15,7 +15,7 @@ Work directly on `/Users/adam.preda/Gary2.0`, `main`, preserving the private unc
 
 909 archive: `/Volumes/KINGSTON/Gary-2.25-909-Launch.xcarchive`. Signed identity, strict/deep signature and all 21 bundled privacy manifests pass. The 14-category union includes Customer Support linked for App Functionality; the root manifest includes System Boot Time reason `35F9.1`. No tracking domains are declared. Upload succeeded September 8 at **05:42:00.321 UTC**; `/Volumes/KINGSTON/gary-909-upload.log`. Apple reported processing, not processing completion. Preserve this archive and do not upload 909 again.
 
-910 source is committed and pushed. The final optimized simulator build and signed archive passed; `/Volumes/KINGSTON/Gary-2.25-910-Launch.xcarchive` passes strict/deep signature and the same 21-manifest / 14-category privacy inventory as 909. Upload is in progress; `/Volumes/KINGSTON/gary-910-upload.log`. Build logs and archives belong on KINGSTON because internal disk space is limited.
+910 source is committed and pushed. The final optimized simulator build and signed archive passed; `/Volumes/KINGSTON/Gary-2.25-910-Launch.xcarchive` passes strict/deep signature and the same 21-manifest / 14-category privacy inventory as 909. Upload succeeded at **2026-09-08 05:54:41.786 UTC**, exit 0 / EXPORT SUCCEEDED; `/Volumes/KINGSTON/gary-910-upload.log`. Apple reports processing. Do not upload 910 again; processing completion and selection are unverified. Build logs and archives belong on KINGSTON because internal disk space is limited.
 
 The earlier responsiveness build 908 also uploaded successfully; preserve `/Volumes/KINGSTON/Gary-2.25-908-Responsiveness-final.xcarchive` and do not upload it again. Its detailed handoff is [HANDOFF_2026-09-08_RESPONSIVENESS.md](HANDOFF_2026-09-08_RESPONSIVENESS.md). No verified change to the older App Store 2.25 (901) submission is recorded.
 
@@ -29,15 +29,17 @@ The Mac locked during the final pitcher-stats header check. Adam was asked to un
 
 ## Required continuation
 
-1. Finish the 910 upload receipt, then inspect changed labels after the Mac is unlocked. Build/archive/privacy/signature checks already pass. Do not bypass the lock or manufacture screenshots.
+1. Inspect 910 changed labels after the Mac is unlocked. Build/archive/privacy/signature/upload checks already pass; preserve the exact signed archive. Do not bypass the lock or manufacture screenshots.
 2. After the existing App Store Connect sign-in request is satisfied, verify Apple processing/internal TestFlight inclusion and intended build selection. Apply the prepared review package [GaryMarketing/APP_REVIEW_2_25_910.md](GaryMarketing/APP_REVIEW_2_25_910.md), accurate store screenshots and privacy labels only after reconciling the candidate and review-account access. Customer Support classification is in the binary but still must be reconciled in App Store Connect.
 3. Complete physical Apple/Google/email sign-in and recovery, APNs/FCM delivery/account transitions, storefront/billing return and authorized disposable-account Book/profile/deletion checks. Fixtures and guest simulator screens do not establish these results.
 4. Supabase dashboard sign-in in Chrome was requested. Advisor status remains 0 ERROR / 63 WARN / 46 INFO; OTP lifetime exceeds one hour and leaked-password protection is off. The existing Pro plan supports protection. Configure/verify after sign-in; no setting change has been claimed.
 5. Obtain Adam's actual moderation/support owner and coverage commitment. The question about the private report queue and `support@betwithgary.ai` is pending; functioning controls and a runbook do not prove staffed coverage.
-6. Append the final canonical production-truth receipt and preserve the private local plist exception distinctly from actual code/deployment drift.
+6. Final production truth is recorded at 05:54 UTC: canonical scheduler/Winners workers, intended Astra/Sol models, all 20 edge timestamp checks passing and no unpushed commits. Its exit 1 is only the preserved private plist. A separate 6 AM active-slate query at 05:55:18 UTC confirms Sep 7 MLB 11/11 with zero started missing. Log: `/Volumes/KINGSTON/gary-910-production-truth.log`. Later documentation-only receipt updates do not change runtime source.
 
 Use Node 22.23.2 at `/Users/adam.preda/.local/share/gary/runtimes/node-v22.23.2-darwin-arm64/bin`. PostgreSQL fixture temporary data must use internal `/tmp`, not ExFAT KINGSTON. The detached `/Volumes/KINGSTON/gary-launch-909-checks` snapshot is only a credential-free test worktree. Never read private config or send real social messages, notifications, purchases or user-data mutations as casual QA.
 
 The live default Stripe portal was inspected read-only: cancellation, payment/customer updates and invoices enabled; plan/price/quantity changes disabled. No customer/session/charge was created. The launch preview/founding/October offer is reconciled in source and public disclosure; this does not prove future storefront behavior.
 
 Root keeps the goal active and records explicit external dependencies. “Uploaded,” “processed,” “available in TestFlight,” “selected for review” and “approved” are separate states.
+
+The two Home actor-annotation warnings were examined with actual call paths and an optimized actor-precondition probe using the production timeout helper. One hundred suspension/resumption pairs and nested/defer calls passed. No off-main runtime path was found in the tested scope; annotation cleanup remains technical debt, not an established launch blocker. See `launch-readiness/910-home-actor-warning-review.md` in the launch workspace for exact evidence when available.
