@@ -114,8 +114,8 @@ production schema; their zero-row result is expected before any new-policy
 pick has been made. No model review or public QA write was needed for this check.
 
 The full read-only production checker verifies the new era, canonical folder,
-running worker, no unpushed commits and all20 existing edge deployment times.
-It exits1 for28 unrelated working-tree changes from concurrent Hub/native work
+running worker, no unpushed commits and all 20 existing edge deployment times.
+It exits 1 for unrelated working-tree changes from concurrent Hub/native work
 and the existing private Firebase configuration exception. None belongs to this
 MLB deployment. This is an explicit shared-workspace exception, not a globally
 clean release claim. The earlier broad run's native failures were sent to the
@@ -135,3 +135,11 @@ first game. Upcoming fresh children will use v2 and v4. The first natural
 publication and first completed expectation memory remain future observations;
 there is no measured win-rate or profit improvement claim from fixture tests.
 
+The reporting follow-up is pushed as **f2976edb**. After that push, with no
+active reviews or selections, the Winners worker restarted at
+**2026-09-08T16:02:41.273Z**, PID **45706**, logging `mlb-conviction-v4`.
+Its stderr remains unchanged from September 6. The final read-only production
+check again confirms the canonical scheduler, era **4294d3b5a7d2**, all 20 edge
+deployments, no unpushed commits and 0 started games missing picks. Its sole
+parity failure is the shared working tree (32 unrelated changes at that
+snapshot). Final log: `/tmp/gary-mlb-complete-production-final-20260908.log`.
