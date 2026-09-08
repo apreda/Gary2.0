@@ -74,6 +74,7 @@ describe.skipIf(!supported)('Fantasy single-snapshot publication on isolated Pos
     sql(readFileSync(new URL('../../supabase/migrations/20260907183011_fantasy_briefing_legacy_projection.sql', import.meta.url), 'utf8'));
     sql(readFileSync(new URL('../../supabase/migrations/20260907183743_fantasy_briefing_payload_types.sql', import.meta.url), 'utf8'));
     sql(readFileSync(new URL('../../supabase/migrations/20260907192157_fantasy_briefing_legacy_pitcher_role.sql', import.meta.url), 'utf8'));
+    sql(readFileSync(new URL('../../supabase/migrations/20260908135307_fantasy_comparison_deadline_note.sql', import.meta.url), 'utf8'));
   }, 30_000);
   afterAll(() => {
     if (started) execFileSync(`${bin}/pg_ctl`, ['-D', `${directory}/data`, '-m', 'immediate', '-w', 'stop'], { env: pgEnv, stdio: 'ignore' });
@@ -191,5 +192,55 @@ describe.skipIf(!supported)('Fantasy single-snapshot publication on isolated Pos
       expect(sql('SELECT payload FROM public.fantasy_briefings;')).toBe(priorPayload);
       expect(allConnections()).toEqual(before);
     } finally { sql('ALTER TABLE public.insight_connections DROP CONSTRAINT fixture_insert_failure;'); }
+  });
+
+  it('explains Tate’s earlier cross-game deadline without changing his Sunday identity or qualifiers', () => {
+    const tate = decision({ id: 'bdl:33934712', player_id: '33934712', player_name: 'Carnell Tate',
+      team_id: '11', team: 'TEN', position: 'WR', role: 'receiver', action: 'START', horizon: 'next_game',
+      headline: 'Tate merits the PPR flex spot over the lower-volume speculative receivers in this pool',
+      risk: 'Tate is a rookie with no completed 2026 game and no confirmed start; the comparison consists entirely of provider estimates.',
+      watch_for: 'Check for a confirmed starting designation and any revised target projection before the 2026-09-13T17:00:00Z kickoff.',
+      opportunities: [{ game_id: '1392220', opponent: 'NYJ', home: true, start_at: '2026-09-13T17:00:00.000Z' }],
+      valid_until: '2026-09-11T00:35:00.000Z',
+      evidence: [{ id: 'scheduled_matchup', summary: 'TEN hosts NYJ on September 13; this does not confirm the player’s starting role.' },
+        { id: 'bdl:33934502/weekly_projection', player_id: '33934502', label: 'De’Zhaun Stribling · Week 1 forecast', summary: 'Provider estimate for game 1392217.' }],
+    });
+    const row = payload({ date: '2026-09-08', league: 'NFL', generated_at: '2026-09-08T13:09:35Z',
+      fetched_as_of: '2026-09-08T13:03:38Z', expires_at: '2026-09-08T18:15:01Z', decisions: [tate] });
+    publish(row);
+    const actual = allConnections().find(connection => connection.player_id === tate.player_id);
+    expect(actual.meta.read).toContain('Make this comparison before Sep 10, 08:35 PM ET, when the earliest game in this set starts.');
+    expect(actual.meta.read).not.toContain('Next-game call closes');
+    expect(actual.meta.read).toContain(tate.risk);
+    expect(actual.meta.read).toContain(tate.watch_for);
+    expect(actual).toMatchObject({ headline: 'Carnell Tate', game: 'vs NYJ', game_id: '1392220', value: 'START',
+      meta: { valid_until: tate.valid_until, fantasy_decision: tate } });
+    expect(actual.detail).toBe(`${actual.meta.verdict}\n\n${actual.meta.read}`);
+    expect(JSON.parse(sql("SELECT payload FROM public.fantasy_briefings WHERE date='2026-09-08' AND league='NFL';"))).toEqual(row);
+  });
+
+  it('labels same-game cited-peer decisions as comparisons with the supplied deadline intact', () => {
+    const sameGame = decision({ player_id: '2', evidence: [
+      { id: 'lineup', summary: 'Provider lineup is pending.' },
+      { id: 'bdl:3/recent', player_id: '3', summary: 'Comparison player in the same game.' },
+    ] });
+    publish(payload({ fetched_as_of: '2026-09-07T16:00:00Z', generated_at: '2026-09-07T16:01:00Z', decisions: [sameGame] }));
+    const actual = allConnections()[0];
+    expect(actual.meta.read).toContain('Make this comparison before Sep 07, 05:00 PM ET, when the earliest game in this set starts.');
+    expect(actual.meta.valid_until).toBe(sameGame.valid_until);
+    expect(actual.meta.fantasy_decision).toEqual(sameGame);
+  });
+
+  it('does not mistake the subject’s own player-tagged evidence for a comparison', () => {
+    publish(payload({ fetched_as_of: '2026-09-07T16:00:00Z', generated_at: '2026-09-07T16:01:00Z',
+      decisions: [decision({ evidence: [{ id: 'recent', player_id: '1', summary: 'The subject’s own measured history.' }] })] }));
+    expect(allConnections()[0].meta.read).toContain('Next-game call closes at Sep 07, 05:00 PM ET.');
+    expect(allConnections()[0].meta.read).not.toContain('Make this comparison');
+  });
+
+  it('adds no decision deadline to a weekly call even when a peer is cited', () => {
+    publish(payload({ fetched_as_of: '2026-09-07T16:00:00Z', generated_at: '2026-09-07T16:01:00Z',
+      decisions: [decision({ horizon: 'week', valid_until: null, evidence: [{ id: 'bdl:2/recent', player_id: '2', summary: 'Peer history.' }] })] }));
+    expect(allConnections()[0].meta.read).not.toMatch(/call closes|Make this comparison/);
   });
 });
