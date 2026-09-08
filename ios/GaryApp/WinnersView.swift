@@ -324,42 +324,40 @@ struct PremiumPicksView: View {
         ZStack {
             WinnersDepthBackground()
 
-            GeometryReader { viewport in
-                ScrollViewReader { proxy in
-                    ScrollView(showsIndicators: false) {
-                        // Toggle scrolls WITH the page (unpinned) — pinning forced an
-                        // opaque fill that could never match the gradient behind it.
-                        LazyVStack(alignment: .leading, spacing: 0) {
-                            header
+            ScrollViewReader { proxy in
+                ScrollView(showsIndicators: false) {
+                    // Toggle scrolls WITH the page (unpinned) — pinning forced an
+                    // opaque fill that could never match the gradient behind it.
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        header
 
-                            if !loading && boardDataFailed {
-                                winnersSourceFailureBanner
-                            }
+                        if !loading && boardDataFailed {
+                            winnersSourceFailureBanner
+                        }
 
-                            if loading {
-                                HStack { Spacer(); ProgressView().tint(GaryColors.gold).scaleEffect(1.2); Spacer() }
-                                    .padding(.top, 80)
-                            } else if isTodayEmptyBoard {
-                                emptyTodayState
-                            } else if !hasContent {
-                                emptyState
-                            } else {
-                                // League jump bar retired (Jul 5 design review):
-                                // styled like the GAMES/PROPS tabs one line up, it
-                                // read as a second filter row and re-said what the
-                                // shelf headers already say. Deep links still
-                                // scroll via jumpToSport. (GAMES/PROPS now ride
-                                // the single header line above.)
-                                modeContent(minHeight: max(0, viewport.size.height - 210))
-                                    .padding(.top, 8)
-                                    .padding(.bottom, 120)
-                            }
+                        if loading {
+                            HStack { Spacer(); ProgressView().tint(GaryColors.gold).scaleEffect(1.2); Spacer() }
+                                .padding(.top, 80)
+                        } else if isTodayEmptyBoard {
+                            emptyTodayState
+                        } else if !hasContent {
+                            emptyState
+                        } else {
+                            // League jump bar retired (Jul 5 design review):
+                            // styled like the GAMES/PROPS tabs one line up, it
+                            // read as a second filter row and re-said what the
+                            // shelf headers already say. Deep links still
+                            // scroll via jumpToSport. (GAMES/PROPS now ride
+                            // the single header line above.)
+                            modeContent
+                                .padding(.top, 8)
+                                .padding(.bottom, 120)
                         }
                     }
-                    .refreshable { await reload() }
-                    .onChange(of: picksFocus.focusSport) { _ in jumpToFocusSport(proxy) }
-                    .onChange(of: loading) { _ in jumpToFocusSport(proxy) }
                 }
+                .refreshable { await reload() }
+                .onChange(of: picksFocus.focusSport) { _ in jumpToFocusSport(proxy) }
+                .onChange(of: loading) { _ in jumpToFocusSport(proxy) }
             }
             StatusBarScrim()
         }
@@ -719,7 +717,7 @@ struct PremiumPicksView: View {
         return v > 0 ? v : Int((10000.0 / Double(abs(v))).rounded())
     }
 
-    @ViewBuilder private func modeContent(minHeight: CGFloat) -> some View {
+    @ViewBuilder private var modeContent: some View {
         // Tighter inter-shelf rhythm (was 22) — the shelf headers already give
         // each rail vertical breathing room, so 22 over-spaced the board.
         VStack(alignment: .leading, spacing: 16) {
@@ -772,7 +770,6 @@ struct PremiumPicksView: View {
                 if Self.freeLaunch {
                     freeLaunchFooter
                         .padding(.top, 6)
-                        .frame(maxHeight: .infinity, alignment: .top)
                 } else {
                     accountRow
                 }
@@ -784,7 +781,6 @@ struct PremiumPicksView: View {
                 .frame(maxWidth: .infinity).padding(.top, 12)
             }
         }
-        .frame(minHeight: minHeight, alignment: .top)
     }
 
     /// Free-launch announcement, in the exact slot the storefront will occupy.
@@ -808,8 +804,7 @@ struct PremiumPicksView: View {
                         .foregroundStyle(.white.opacity(0.55))
                         .lineSpacing(2)
                 }
-
-                Spacer(minLength: 22)
+                .padding(.bottom, 22)
 
                 HStack(spacing: 0) {
                     launchAccessPoint("GAME PICKS", detail: "OPEN")
@@ -823,16 +818,14 @@ struct PremiumPicksView: View {
                 .overlay(alignment: .bottom) {
                     Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
                 }
-
-                Spacer(minLength: 16)
+                .padding(.bottom, 16)
                 accountRow
             }
             .padding(16)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
             .quantPanel()
             .pageGutter()
         }
-        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     private func launchAccessPoint(_ label: String, detail: String) -> some View {
