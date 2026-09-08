@@ -6,6 +6,7 @@ vi.mock('react', async (original) => ({
   ...await original<typeof import('react')>(),
   useState: hooks.useState,
   useEffect: vi.fn(),
+  useRef: () => ({ current: 0 }),
 }));
 import { PublicProfile } from '@/components/book/PublicProfile';
 
@@ -24,7 +25,8 @@ function dateButtons(days: number) {
     .mockReturnValueOnce([record, vi.fn()])
     .mockReturnValueOnce([false, hooks.setLoading])
     .mockReturnValueOnce([null, vi.fn()])
-    .mockReturnValueOnce([0, vi.fn()]);
+    .mockReturnValueOnce([0, vi.fn()])
+    .mockReturnValueOnce([false, vi.fn()]);
   const buttons: { 'aria-pressed': boolean; onClick: () => void }[] = [];
   const walk = (node: ReactNode) => Children.forEach(node, (child) => {
     if (!isValidElement<{ children?: ReactNode; 'aria-pressed': boolean; onClick: () => void }>(child)) return;

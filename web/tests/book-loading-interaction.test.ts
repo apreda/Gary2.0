@@ -6,7 +6,7 @@ const fixture = vi.hoisted(() => ({
   callbacks: [] as ((...args: unknown[]) => Promise<void>)[],
   effects: [] as (() => void | (() => void))[],
   authChanged: null as null | ((event: string, session: { user: { id: string } } | null) => void),
-  bets: vi.fn(), streak: vi.fn(), profile: vi.fn(), rankings: vi.fn(), unit: vi.fn(),
+  bets: vi.fn(), streak: vi.fn(), profile: vi.fn(), rankings: vi.fn(), rpc: vi.fn(), unit: vi.fn(),
 }));
 
 vi.mock('react', async (original) => ({
@@ -36,7 +36,7 @@ vi.mock('next/link', async () => {
   return { default: ({ children, ...props }: { children: import('react').ReactNode }) => createElement('a', props, children) };
 });
 vi.mock('@/lib/auth/client', () => ({
-  supabaseBrowser: () => ({ auth: { onAuthStateChange: (callback: typeof fixture.authChanged) => {
+  supabaseBrowser: () => ({ rpc: fixture.rpc, auth: { onAuthStateChange: (callback: typeof fixture.authChanged) => {
     fixture.authChanged = callback;
     return { data: { subscription: { unsubscribe: vi.fn() } } };
   } } }),
@@ -50,7 +50,11 @@ vi.mock('@/components/book/BookSlips', () => ({ Ledger: () => null, OpenSlips: (
 vi.mock('@/components/book/LogBet', () => ({ bookButton: '', bookField: '', LogBet: () => null }));
 vi.mock('@/components/book/ProfileEditor', () => ({ profileAvatar: () => 'FP', ProfileEditor: () => null }));
 vi.mock('@/components/book/RideChart', () => ({ RideChart: () => null }));
+vi.mock('@/components/book/BlockedProfiles', () => ({ BlockedProfiles: () => null }));
 vi.mock('@/lib/gary/analytics', () => ({ logBookMilestone: vi.fn() }));
+
+vi.mock('@/components/book/ProfileSafety', () => ({ ProfileSafety: () => null }));
+import { PublicProfile } from '@/components/book/PublicProfile';
 
 import { BookClient } from '@/components/book/BookClient';
 import { Leaderboard } from '@/components/book/Leaderboard';
@@ -62,9 +66,9 @@ const record = [{
 }];
 const garyRows = { '7d': null, '30d': null, season: null };
 
-function render(surface: 'book' | 'leaderboard') {
+function render(surface: 'book' | 'leaderboard' | 'public-profile') {
   fixture.cursor = 0; fixture.callbacks = []; fixture.effects = [];
-  return renderToStaticMarkup(surface === 'book' ? BookClient({ garyRows }) : Leaderboard({}));
+  return renderToStaticMarkup(surface === 'book' ? BookClient({ garyRows }) : surface === 'leaderboard' ? Leaderboard({}) : PublicProfile({ userId: 'target' }));
 }
 const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
 
@@ -152,6 +156,25 @@ describe('standalone leaderboard account guidance', () => {
     expect(html).not.toContain('0/5 decided calls');
   });
 
+  it('distinguishes a fully blocked view from a board with no qualified players', async () => {
+    fixture.rankings.mockResolvedValue({ ...board, qualified_count: 2, hidden_count: 2 });
+    render('leaderboard'); fixture.effects[1](); await flush();
+    const html = render('leaderboard');
+    expect(html).toContain('Your blocked players are hidden.');
+    expect(html).not.toContain('Nobody has qualified');
+  });
+
+  it('gives a moderated owner an appeal route instead of a false qualification prompt', async () => {
+    fixture.rankings.mockResolvedValue({ ...board, my_decided: 8, profile_hidden: true });
+    render('leaderboard'); fixture.effects[0]();
+    fixture.authChanged!('INITIAL_SESSION', { user: { id: 'owner-a' } });
+    render('leaderboard'); fixture.effects[1](); await flush();
+    const html = render('leaderboard');
+    expect(html).toContain('Contact support to appeal');
+    expect(html).toContain('/terms#profile-safety');
+    expect(html).not.toContain('Choose a handle and enable public rankings');
+  });
+
   it('rejects a late qualification response after the account signs out', async () => {
     let finish!: (value: typeof board) => void;
     fixture.rankings.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
@@ -163,5 +186,26 @@ describe('standalone leaderboard account guidance', () => {
     const html = render('leaderboard');
     expect(html).not.toContain('4/5 decided calls');
     expect(html).toContain('Loading the standings');
+  });
+});
+
+
+describe('public profile transport failures', () => {
+  it('handles an owner record without a claimed public profile', async () => {
+    fixture.rpc.mockResolvedValue({ data: { profile: null, is_owner: true }, error: null });
+    render('public-profile'); fixture.effects[1](); await flush();
+    expect(render('public-profile')).toContain('This profile is unavailable');
+  });
+  it('exposes a retry after a rejected transport instead of loading indefinitely', async () => {
+    fixture.rpc.mockRejectedValueOnce(new Error('Network disconnected'));
+    render('public-profile'); fixture.effects[1](); await flush();
+    const html = render('public-profile');
+    expect(html).toContain('This profile could not load. Please retry.');
+    expect(html).not.toContain('Loading the player');
+    expect(html).not.toContain('This profile is unavailable');
+    fixture.rpc.mockResolvedValueOnce({ data: null, error: null });
+    fixture.effects[1](); await flush();
+    expect(render('public-profile')).toContain('This profile is unavailable');
+    expect(render('public-profile')).not.toContain('could not load');
   });
 });

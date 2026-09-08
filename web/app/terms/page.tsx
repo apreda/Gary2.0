@@ -11,7 +11,7 @@ export const metadata: Metadata = pageMetadata({
 export default function TermsPage() {
   return (
     <main className="mx-auto max-w-3xl px-5 py-12">
-      <PageMasthead title="Terms of service" meta="Last updated: September 1, 2026">
+      <PageMasthead title="Terms of service" meta="Last updated: September 8, 2026">
         <p className="mt-2 font-mono text-[11px] text-low">Operated by Gary A.I. LLC</p>
       </PageMasthead>
 
@@ -84,19 +84,40 @@ export default function TermsPage() {
             <li>Attempt to reverse-engineer, decompile, or interfere with the Service.</li>
             <li>Use automated bots or scripts to scrape, harvest, or reproduce Service data.</li>
             <li>Upload or transmit malicious code, viruses, or other harmful software.</li>
+            <li>Publish harassment, threats, hateful or sexual content, spam, or another person&rsquo;s private information.</li>
             <li>
               Impersonate Gary A.I. LLC or misrepresent your affiliation with the Service.
             </li>
           </ul>
+          <div id="profile-safety" className="mt-4 scroll-mt-24">
+            <h3 className="font-semibold text-hi">Public profile safety and appeals</h3>
+            <p className="mt-2">
+              Public handles and bios must follow these rules. Gary filters public profile text;
+              reports can lead to a review and removal from public profiles and leaderboards.
+              Reporting someone does not automatically remove their profile or change their results.
+              Sign in and open a player&rsquo;s profile to report or block them. Blocking hides that
+              player&rsquo;s profile and leaderboard entries from your signed-in account. Manage blocks
+              from the leaderboard. Your private Book and its results are separate.
+            </p>
+            <p className="mt-2">
+              For a safety concern, help with reporting, or an appeal, email{' '}
+              <a href="mailto:support@betwithgary.ai?subject=Gary%20profile%20safety" className="text-gold underline">support@betwithgary.ai</a>.
+              Include the public profile link and report reference if you have one. Do not send passwords,
+              payment details or private bet information. Reports are visible to Gary&rsquo;s support
+              reviewers, not other players. Gary may restrict abusive public profiles while preserving
+              the account&rsquo;s private tracking data and recorded results.
+            </p>
+          </div>
         </section>
 
         <section>
           <h2 className="mb-3 font-display text-xl text-hi">6. No Gambling Facilitation</h2>
           <p>
-            Gary AI is an informational and entertainment service. We are not a sportsbook, a
-            gambling operator, or a gambling-related service as defined under applicable law. We
-            do not accept, process, or hold funds. Nothing in the Service constitutes investment
-            advice or a recommendation to place any wager.
+            Gary provides sports analysis and personal tracking. Gary does not accept or place
+            sportsbook wagers, accept wagering deposits, hold wagering balances, or award cash
+            prizes. Optional Gary subscriptions are sold through Stripe; those payments purchase
+            access to information, not a wager. Predictions are fallible opinions, not guarantees
+            or investment advice. You remain responsible for your own wagering decisions.
           </p>
         </section>
 

@@ -1,14 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { supabaseBrowser } from '@/lib/auth/client';
 import { bookButton } from './LogBet';
 import { profileAvatar } from './ProfileEditor';
+import { ProfileSafety } from './ProfileSafety';
 
 type RecordLine = { wins: number; losses: number };
 interface Card extends RecordLine {
-  profile: { display_name: string; handle: string; bio: string | null; avatar: string | null };
+  profile: { display_name: string; handle: string; bio: string | null; avatar: string | null } | null;
   graded: number;
   tail: RecordLine;
   fade: RecordLine;
@@ -23,16 +25,32 @@ export function PublicProfile({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [blocked, setBlocked] = useState(false);
+  const epoch = useRef(0);
+  useEffect(() => {
+    let owner: string | null | undefined;
+    const { data } = supabaseBrowser().auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
+      const next = session?.user.id ?? null;
+      if (owner === next) return;
+      owner = next; epoch.current += 1;
+      setCard(null); setBlocked(false); setError(null); setLoading(true); setAttempt(n => n + 1);
+    });
+    return () => { epoch.current += 1; data.subscription.unsubscribe(); };
+  }, []);
   useEffect(() => {
     let cancelled = false;
+    const request = ++epoch.current;
     const load = async () => {
-      const { data, error } = await supabaseBrowser().rpc('profile_card', { p_user: userId, p_days: days });
-      if (cancelled) return;
-      setLoading(false);
-      if (error) setError('This profile could not load. Please retry.');
-      else {
+      try {
+        const { data, error } = await supabaseBrowser().rpc('profile_card', { p_user: userId, p_days: days });
+        if (cancelled || request !== epoch.current) return;
+        if (error) throw error;
         setCard(data);
         setError(null);
+      } catch {
+        if (!cancelled && request === epoch.current) setError('This profile could not load. Please retry.');
+      } finally {
+        if (!cancelled && request === epoch.current) setLoading(false);
       }
     };
     void load();
@@ -64,11 +82,11 @@ export function PublicProfile({ userId }: { userId: string }) {
             Retry
           </button>
         </div>
-      ) : !card ? (
+      ) : !card?.profile ? (
         <div className="mt-7 rounded-panel border border-line bg-card p-7">
-          <h1 className="font-display text-3xl text-hi">This profile is private.</h1>
+          <h1 className="font-display text-3xl text-hi">{blocked ? 'This player is blocked.' : 'This profile is unavailable.'}</h1>
           <p className="mt-2 text-sm text-mid">
-            This player has not shared a public profile, or it is no longer available.
+            {blocked ? 'Unblock this player below to see their public profile again.' : 'This player has not shared a public profile, or it is no longer available.'}
           </p>
         </div>
       ) : (
@@ -137,6 +155,12 @@ export function PublicProfile({ userId }: { userId: string }) {
           </div>
         </>
       )}
+      <ProfileSafety key={userId} userId={userId} available={card?.profile != null} onBlockChange={value => {
+        epoch.current += 1;
+        setBlocked(value); setCard(null); setError(null);
+        if (value) setLoading(false);
+        else { setLoading(true); setAttempt(n => n + 1); }
+      }} />
     </div>
   );
 }

@@ -11,7 +11,7 @@ export const metadata: Metadata = pageMetadata({
 export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-3xl px-5 py-12">
-      <PageMasthead title="Privacy policy" meta="Last updated: September 5, 2026">
+      <PageMasthead title="Privacy policy" meta="Last updated: September 8, 2026">
         <p className="mt-2 font-mono text-[11px] text-low">Operated by Gary A.I. LLC</p>
       </PageMasthead>
 
@@ -35,6 +35,15 @@ export default function PrivacyPage() {
               Public leaderboard participation is optional. If you opt in, your handle, chosen
               avatar, bio and qualifying verified performance can be visible to other users.
               Manual bets, private notes, dollar stake displays and your email are not public.
+            </li>
+            <li>
+              If you report a public profile, we store your account identifier, the reported
+              profile identifier, the reason and optional details you provide, a snapshot of that
+              public profile, and report and review timestamps. Gary&rsquo;s support reviewers use
+              these private records to investigate concerns; they are not shown to other players.
+              Blocking stores the blocked player&rsquo;s identifier with your account so we can
+              hide their public profile and leaderboard entries from you. These safety records
+              are separate from optional analytics and your private Book.
             </li>
             <li>
               If you join a launch notification list, we collect the email address you submit,
@@ -194,7 +203,10 @@ export default function PrivacyPage() {
           <h2 className="mb-3 font-display text-xl text-hi">5. Data Retention</h2>
           <p>
             Account and Your Book data are retained while your account remains active or as
-            needed to provide the features you requested. Launch-notification data is retained
+            needed to provide the features you requested. Profile reports, blocks and moderation
+            decisions are retained as needed to manage safety concerns and appeals. Deleting an
+            account removes its blocks and reports made by or about that account from active
+            systems. Launch-notification data is retained
             for the stated notification and related operational needs. Website-update subscriptions
             remain active until you unsubscribe; after that, we retain a suppression record and
             limited delivery logs as reasonably necessary to honor the request, prevent duplicate

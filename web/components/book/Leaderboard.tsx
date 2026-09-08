@@ -8,6 +8,7 @@ import { supabaseBrowser } from '@/lib/auth/client';
 import type { GaryRows } from '@/lib/book/gary';
 import { bookButton } from './LogBet';
 import { profileAvatar } from './ProfileEditor';
+import { BlockedProfiles } from './BlockedProfiles';
 
 const WINDOWS = [
   { key: '7d', label: '7 days' },
@@ -30,7 +31,8 @@ export function Leaderboard({ garyRows }: { garyRows?: GaryRows }) {
   const [loading, setLoading] = useState(true);
   const [moreBusy, setMoreBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  const [signedIn, setSignedIn] = useState(false);
+  const [viewerID, setViewerID] = useState<string | null>(null);
+  const signedIn = viewerID != null;
   const account = useRef<string | null>(null);
   const requestVersion = useRef(0);
   useEffect(() => {
@@ -39,7 +41,7 @@ export function Leaderboard({ garyRows }: { garyRows?: GaryRows }) {
       if (owner === account.current) return;
       account.current = owner;
       requestVersion.current += 1;
-      setSignedIn(owner != null);
+      setViewerID(owner);
       setData(null);
       setError(null);
       setLoading(true);
@@ -157,7 +159,9 @@ export function Leaderboard({ garyRows }: { garyRows?: GaryRows }) {
       </p>
       {signedIn && data && (
         <div className="border-b border-line px-5 py-4 text-[13px] text-mid">
-          {data.me ? (
+          {data.profile_hidden ? (
+            <>Your public profile is hidden by our safety controls. Your private Book remains available. <Link href="/terms#profile-safety" className="text-gold underline">Contact support to appeal</Link>.</>
+          ) : data.me ? (
             <>
               Your place: <strong className="text-gold">#{data.me.rank}</strong> of {data.qualified_count}{' '}
               qualified players.
@@ -216,10 +220,9 @@ export function Leaderboard({ garyRows }: { garyRows?: GaryRows }) {
       ) : (
         !error && (
           <div className="px-5 py-8">
-            <p className="font-display text-xl text-hi">The next name could be yours.</p>
+            <p className="font-display text-xl text-hi">{data?.hidden_count ? 'No players to show in this view.' : 'The next name could be yours.'}</p>
             <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-mid">
-              Nobody has qualified for this view yet. Build a record with five decided calls, choose your
-              favorite pregame call for the streak, and make your profile public.
+              {data?.hidden_count ? 'Your blocked players are hidden. Their results still count in the overall rankings.' : 'Nobody has qualified for this view yet. Build a record with five decided calls, choose your favorite pregame call for the streak, and make your profile public.'}
             </p>
             <Link
               href="/picks"
@@ -252,6 +255,7 @@ export function Leaderboard({ garyRows }: { garyRows?: GaryRows }) {
           </span>
         </div>
       )}
+      {signedIn && <BlockedProfiles key={viewerID} onChange={() => change(() => setAttempt(n => n + 1))} />}
       <details className="border-t border-line px-5 py-4 text-[12px] leading-relaxed text-mid">
         <summary className="cursor-pointer text-gold">How the board works</summary>
         <p className="mt-3">

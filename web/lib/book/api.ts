@@ -13,6 +13,7 @@ import type { UserBet } from './model';
 /** Server diagnostics stay in the console; users get product language. */
 function friendly(diagnostic: string): string {
   const lower = diagnostic.toLowerCase();
+  if (lower.includes('profile text is not allowed')) return 'Use a profile without abusive wording, links or contact details.';
   if (lower.includes('stake')) return 'Choose a stake between 0.01 and 10 units.';
   if (lower.includes('odds')) return 'Use American odds from -100000 to -100 or +100 to +100000.';
   if (lower.includes('streak')) return 'Your streak pick is locked for that day. Choose a future game.';
@@ -243,6 +244,8 @@ export interface RankedRow extends BoardRow {
 export interface LeaderboardData {
   rows: RankedRow[]; me: RankedRow | null; qualified_count: number; min_decided: number;
   my_decided: number; window: string; sort: string; league: string; has_more: boolean;
+  hidden_count?: number;
+  profile_hidden?: boolean;
 }
 export async function fetchRankings(window: string, sort: BoardSort, league: string, offset = 0): Promise<LeaderboardData> {
   const { data, error } = await supabaseBrowser().rpc('your_book_leaderboard_v3', {
