@@ -181,7 +181,7 @@ describe('pick outbox', () => {
     const body = runner.slice(runner.indexOf('{', start) + 1, end)
       .replace(/\bimport\(/g, 'unexpectedImport(');
     const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-    const store = new AsyncFunction('picks', 'useTestTable', 'process', 'picksService', 'testName', 'assertPicksStillPregame', 'unexpectedImport', 'console', body);
+    const store = new AsyncFunction('picks', 'useTestTable', 'process', 'picksService', 'testName', 'assertPicksStillPregame', 'unexpectedImport', 'console', 'dateFilter', body);
     const unexpected = vi.fn(() => { throw new Error('Production outbox reached from dry/test mode'); });
     const storeTestPicks = vi.fn().mockResolvedValue({ success: true, count: 1 });
     const logger = { log: vi.fn() };

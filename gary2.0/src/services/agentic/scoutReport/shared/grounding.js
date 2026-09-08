@@ -13,6 +13,7 @@ import { seasonForSport, findTeamInStandings, sportToBdlKey } from './utilities.
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { codexCliWebSearch } from '../../orchestrator/providerAdapters/codexCliSession.js';
 import { anthropicWebSearchRaw } from './anthropicWebSearch.js';
+import { searchResponseProblem } from '../../searchResponseValidation.js';
 import { createHash } from 'crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync, statSync } from 'fs';
 import { join } from 'path';
@@ -47,7 +48,7 @@ function readDiskCache(query) {
       return null;
     }
     const data = JSON.parse(readFileSync(file, 'utf8'));
-    if (data?.success && data?.data) {
+    if (data?.success && !searchResponseProblem(data?.data)) {
       console.log(`[Grounding Search] ♻️ Disk cache hit (saved a grounding call)`);
       return data;
     }
@@ -323,12 +324,15 @@ async function groundedTransport(prompt, options = {}) {
   const viaBridge = await codexCliWebSearch(prompt, {
     timeoutMs: options.timeoutMs ?? 8 * 60 * 1000,
   });
-  if (viaBridge.success && viaBridge.data) return viaBridge;
+  if (viaBridge.success && !searchResponseProblem(viaBridge.data)) return viaBridge;
   console.warn('[Grounding Search] codex bridge empty/failed — trying Anthropic server web search');
-  return anthropicWebSearchRaw(prompt, {
+  const fallback = await anthropicWebSearchRaw(prompt, {
     maxTokens: Math.max(options.maxTokens ?? 2000, 2000),
     timeoutMs: options.timeoutMs ?? 90_000,
   });
+  const problem = searchResponseProblem(fallback?.data);
+  return fallback?.success && !problem ? fallback
+    : { ...fallback, success: false, data: '', error: fallback?.error || problem };
 }
 
 /**
@@ -364,7 +368,7 @@ export async function groundedWebSearch(query, options = {}) {
   // 1. Check in-memory cache (dedup within single run)
   const cached = _groundingSearchCache.get(cacheKey);
   if (cached) {
-    if (cached.value) {
+    if (cached.value && !searchResponseProblem(cached.value.data)) {
       console.log('[Grounding Search] Reusing cached grounding result');
       return cached.value;
     }

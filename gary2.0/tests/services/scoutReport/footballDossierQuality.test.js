@@ -81,7 +81,7 @@ describe('starting QB block (the "? GP | 0 yds" and "0 career starts" classes)',
   it('labels a prior-season line with its own season, omits nothing that exists', () => {
     const text = formatStartingQBs('Los Angeles Chargers', 'Los Angeles Rams', { home: herbert, away: null, season: 2026 });
     expect(text).toContain('[HOME] Los Angeles Chargers: Justin Herbert (7th Season) (#10)');
-    expect(text).toContain('2025-26 season: 17 GP | 4300 yds | 31 TD / 9 INT | 66.2% | Rating: 98.4');
+    expect(text).toContain('2025-26 prior completed season baseline (not current-season form): 17 GP | 4300 yds | 31 TD / 9 INT | 66.2% | Rating: 98.4');
     expect(text).toContain('[AWAY] Los Angeles Rams: QB data unavailable');
     expect(text).not.toContain('?');
   });
@@ -95,7 +95,7 @@ describe('starting QB block (the "? GP | 0 yds" and "0 career starts" classes)',
   it('omits unknown pct/rating instead of printing question marks', () => {
     const thin = { ...herbert, passingCompletionPct: undefined, qbRating: undefined };
     const text = formatStartingQBs('Los Angeles Chargers', 'Los Angeles Rams', { home: thin, away: null, season: 2026 });
-    expect(text).toContain('2025-26 season: 17 GP | 4300 yds | 31 TD / 9 INT');
+    expect(text).toContain('2025-26 prior completed season baseline (not current-season form): 17 GP | 4300 yds | 31 TD / 9 INT');
     expect(text).not.toContain('%');
     expect(text).not.toContain('Rating: ?');
   });

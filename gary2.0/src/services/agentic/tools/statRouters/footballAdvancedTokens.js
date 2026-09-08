@@ -1,6 +1,7 @@
 import { advancedPair, basisLine, continuityFor } from './footballAdvanced.js';
 import { getPassRushAndCoverage, getQbPressureProfile, getRosterTurnover } from '../../../nflverseService.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
+import { fetchNflTeamBaselinePair } from '../../../nflTeamBaseline.js';
 import { fmtNum, fmtPct } from './statRouterCommon.js';
 import { loadTeamResults } from './footballTeamGames.js';
 import { loadLeagueContext, opponentQualityLine } from './footballLeagueContext.js';
@@ -28,16 +29,9 @@ import { buildGameLedger, ledgerLines, recencyStrip, recordSlice, isNightGame } 
 
 const named = (team) => team?.full_name || team?.name || null;
 
-/** Both teams' season rows, unwrapped. Cached by the BDL service. */
+/** Use the same verified aggregate vintage as the opening briefing. */
 async function bdlPair(bdlSport, home, away, season) {
-  const [h, a] = await Promise.all([
-    ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-    ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-  ]);
-  return {
-    homeStats: Array.isArray(h) ? h[0] : h,
-    awayStats: Array.isArray(a) ? a[0] : a
-  };
+  return fetchNflTeamBaselinePair(bdlSport, home, away, season);
 }
 
 

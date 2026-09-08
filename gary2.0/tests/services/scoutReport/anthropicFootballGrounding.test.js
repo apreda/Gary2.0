@@ -11,6 +11,7 @@ vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/codexCliSes
 import { codexCliWebSearch } from '../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js';
 import {
   fetchAnthropicFootballCurrentState,
+  fetchFootballDeepCoverage,
   isSearchRefusal,
   scrubFootballGroundingText,
 } from '../../../src/services/agentic/scoutReport/shared/anthropicFootballGrounding.js';
@@ -68,6 +69,36 @@ afterEach(() => {
 });
 
 describe('Anthropic football current-state fallback', () => {
+  it('reports known insufficient credits as retrieval unavailability without logging the provider body', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 400, json: async () => ({
+      error: { type: 'invalid_request_error', message: 'Your credit balance is too low to access the Anthropic API. private-provider-body-sentinel' },
+    }) });
+    const result = await fetchFootballDeepCoverage({ homeTeam: 'Seattle Seahawks', awayTeam: 'New England Patriots',
+      sport: 'NFL', lanes: ['skill_players'], fetchImpl });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ allFailed: true, searches: 0, lanes: [{ key: 'skill_players', text: null }] });
+    expect(result.text).toContain('insufficient API credits');
+    expect(result.text).toContain('HTTP 400');
+    expect(result.text).not.toContain('private-provider-body-sentinel');
+    expect(warn.mock.calls.flat().join(' ')).toContain('insufficient API credits');
+    expect(warn.mock.calls.flat().join(' ')).not.toContain('private-provider-body-sentinel');
+  });
+
+  it.each(['other_error', 'invalid_json'])('keeps an unrecognized HTTP400 response generic and private (%s)', async kind => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 400, json: async () => {
+      if (kind === 'invalid_json') throw new Error('private-parse-sentinel');
+      return { error: { type: 'invalid_request_error', message: 'private-provider-body-sentinel' } };
+    } });
+    const result = await fetchFootballDeepCoverage({ homeTeam: 'Seattle Seahawks', awayTeam: 'New England Patriots',
+      sport: 'NFL', lanes: ['skill_players'], fetchImpl });
+    expect(result.text).toContain('search API returned HTTP 400');
+    expect(result.text).not.toContain('private-');
+    expect(warn.mock.calls.flat().join(' ')).not.toContain('private-');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it('uses the server web-search tool with symmetric football-only boundaries', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(response());
     const result = await request(fetchImpl);

@@ -124,6 +124,7 @@ describe('football BDL request reuse', () => {
         { team: { id: 11 }, total_points_per_game: 27.1 }
       ]);
     vi.spyOn(ballDontLieService, 'getStandingsGeneric').mockResolvedValue([]);
+    vi.spyOn(ballDontLieService, 'getGames').mockResolvedValue([]);
 
     const profile = await fetchTeamProfile('Home Team', 'NFL');
 
@@ -139,9 +140,13 @@ describe('football BDL request reuse', () => {
     vi.spyOn(ballDontLieService, 'getTeams').mockResolvedValue([home, away]);
     const getSeasonStats = vi.spyOn(ballDontLieService, 'getTeamSeasonStats').mockResolvedValue([
       { team: { id: 22 }, total_points_per_game: 99.9 },
-      { team: { id: 11 }, total_points_per_game: 25.3 }
+      { team: { id: 11 }, games_played: 1, total_points_per_game: 25.3 }
     ]);
     vi.spyOn(ballDontLieService, 'getStandingsGeneric').mockResolvedValue([]);
+    vi.spyOn(ballDontLieService, 'getGames').mockResolvedValue([{
+      id: 100, season: 2026, season_type: 2, status: 'Final', date: '2026-09-13T17:00:00Z',
+      home_team: home, visitor_team: away
+    }]);
 
     const profile = await fetchTeamProfile('Home Team', 'NFL');
 
@@ -303,7 +308,7 @@ describe('football BDL request reuse', () => {
     );
 
     expect(tape.rows.map((row) => row.name)).toEqual([
-      'L5 Form', 'Record', 'Points/Gm · 2025 baseline', 'Opp Pts/Gm · 2025 baseline',
+      expect.stringMatching(/^L5 Form · \d{4} regular$/), 'Record', 'Points/Gm · 2025 baseline', 'Opp Pts/Gm · 2025 baseline',
       'Rush Yds/Gm · 2025 baseline', 'Pass Yds/Gm · 2025 baseline', 'Key Injuries'
     ]);
     expect(tape.rows.slice(2, 6).map((row) => row.token)).toEqual([

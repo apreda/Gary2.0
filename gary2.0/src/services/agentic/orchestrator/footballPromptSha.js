@@ -27,12 +27,15 @@ const SHARED_SURFACE = [
   // left the tree.)
   './responseParser.js',
   '../scoutReport/shared/dataFetchers.js',
+  '../scoutReport/shared/taleOfTape.js',
   '../scoutReport/shared/anthropicFootballGrounding.js',
   // Grounded-search facades (Sep 1 2026 codex-first cutover) — the
   // retriever shapes desk content, so it rides the era.
   '../scoutReport/shared/grounding.js',
   '../scoutReport/shared/anthropicWebSearch.js',
   './requestCancellation.js',
+  './providerAdapters/codexCliSession.js',
+  '../searchResponseValidation.js',
   '../../pickdesk/webSearch.js',
   // The stat routers ARE the evidence surface: what a factor returns decides
   // what Gary reads. Before Aug 24 2026 they were unhashed, so ten fetchers
@@ -55,10 +58,12 @@ const SHARED_SURFACE = [
   // The 15 ledger tokens are assigned into nflFetchers at load; the file
   // that defines them shapes the desk as much as the fetcher file does.
   '../tools/statRouters/footballAdvancedTokens.js',
+  '../tools/statRouters/footballAdvanced.js',
 ];
 
 const SPORT_SURFACE = {
   NFL: [
+    '../../nflTeamBaseline.js',
     '../constitution/nflConstitution.js',
     '../scoutReport/sports/nfl.js',
     '../tools/statRouters/nflFetchers.js',

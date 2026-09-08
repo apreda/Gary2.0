@@ -2197,7 +2197,7 @@ const ballDontLieService = {
       
       console.log(`🏈 [Ball Don't Lie] Team IDs: ${homeTeam.full_name} (${homeTeam.id}) vs ${awayTeam.full_name} (${awayTeam.id})`);
       
-      const cacheKey = `nfl_roster_depth_${homeTeam.id}_${awayTeam.id}_${season}`;
+      const cacheKey = `nfl_roster_depth_${homeTeam.id}_${awayTeam.id}_${season}_unique_players_v2`;
       return await getCachedOrFetch(cacheKey, async () => {
         // Fetch team rosters (depth charts)
         console.log(`🏈 [Ball Don't Lie] Fetching NFL team rosters...`);
@@ -2216,7 +2216,7 @@ const ballDontLieService = {
           return {
             id: player.id,
             name: `${player.first_name} ${player.last_name}`,
-            position: entry.position || player.position_abbreviation || '?',
+            position: (entry.position || player.position_abbreviation || '?').toUpperCase().replace(/^WR-\d+$/, 'WR'),
             depth: entry.depth || 1,
             jersey: player.jersey_number || '?',
             college: player.college || '',
@@ -2228,9 +2228,10 @@ const ballDontLieService = {
         // Get key skill position players (depth 1-2 only for QB, RB, WR, TE)
         const keyPositions = ['QB', 'RB', 'WR', 'TE'];
         const filterKeyPlayers = (roster) => {
+          const seenPlayers = new Set();
           return roster
-            .filter(entry => keyPositions.includes(entry.position) && entry.depth <= 2)
             .map(formatPlayer)
+            .filter(player => keyPositions.includes(player.position) && player.depth <= 2)
             .sort((a, b) => {
               // Sort by position order, then depth
               const posOrder = { QB: 1, RB: 2, WR: 3, TE: 4 };
@@ -2238,6 +2239,12 @@ const ballDontLieService = {
                 return (posOrder[a.position] || 99) - (posOrder[b.position] || 99);
               }
               return a.depth - b.depth;
+            })
+            .filter(player => {
+              const identity = `${player.id ?? player.name.toLowerCase()}:${player.position}`;
+              if (seenPlayers.has(identity)) return false;
+              seenPlayers.add(identity);
+              return true;
             })
             .slice(0, 12); // Top 12 skill players
         };
@@ -2814,7 +2821,7 @@ const ballDontLieService = {
    * @param {string} sportKey - Sport key ('americanfootball_nfl' or 'americanfootball_ncaaf')
    * @returns {Object|null} - { id, name, firstName, lastName, team, depth, injuryStatus, isBackup }
    */
-  async getStartingQBFromDepthChart(teamId, season = null, sportKey = 'americanfootball_nfl') {
+  async getStartingQBFromDepthChart(teamId, season = null, sportKey = 'americanfootball_nfl', { officialInjuries = [] } = {}) {
     // Calculate dynamic NFL/NCAAF season: Aug-Feb spans years
     if (!season) {
       const month = new Date().getMonth() + 1;
@@ -2844,7 +2851,19 @@ const ballDontLieService = {
         entry.position === 'QB' || 
         entry.player?.position_abbreviation === 'QB' ||
         entry.player?.position === 'Quarterback'
-      );
+      ).map(entry => {
+        if (isNCAAF) return entry;
+        const name = `${entry.player?.first_name || ''} ${entry.player?.last_name || ''}`.trim().toLowerCase();
+        const reports = officialInjuries.filter(injury => {
+          if (injury.freshness !== 'FRESH' || !Number.isFinite(injury.daysSinceReport)
+            || injury.daysSinceReport < 0 || injury.daysSinceReport > 10 || !String(injury.status || '').trim()
+            || /^unknown$/i.test(injury.status)) return false;
+          if (injury.player?.id != null && entry.player?.id != null) return String(injury.player.id) === String(entry.player.id);
+          const reportedName = `${injury.player?.first_name || ''} ${injury.player?.last_name || ''}`.trim().toLowerCase();
+          return !!name && name === reportedName;
+        }).sort((a, b) => (Date.parse(b.reportDate) || 0) - (Date.parse(a.reportDate) || 0));
+        return reports.length ? { ...entry, injury_status: reports[0].status } : entry;
+      });
       
       if (qbs.length === 0) {
         console.warn(`[Ball Don't Lie] No QBs found in roster for team ${teamId}`);
@@ -2859,6 +2878,9 @@ const ballDontLieService = {
       const isOut = (status) => {
         if (!status) return false;
         const s = status.toLowerCase().trim();
+        // Doubtful and questionable still describe uncertain availability;
+        // neither report establishes that the next QB will start.
+        if (!isNCAAF) return /^(?:o|out|(?:ir|pup|nfi)(?:-r)?|reserve\/(?:injured|pup|nfi)|injured reserve|physically unable to perform|non-football injury|inactive|suspended)$/.test(s);
         // Single letter codes
         if (s === 'o' || s === 'd' || s === 'ir') return true;
         // Full word matches
@@ -2892,9 +2914,10 @@ const ballDontLieService = {
         break;
       }
       
-      // If no healthy QB found, log all injured and use the top of depth chart anyway
+      // A list of ruled-out QBs cannot satisfy the scout's required-QB gate.
       if (!selectedQB) {
         console.log(`[Ball Don't Lie] ⚠️ All QBs appear injured:`, injuredQBs.map(q => `${q.name} (${q.status})`).join(', '));
+        if (!isNCAAF) return null;
         selectedQB = qbs[0]; // Use depth=1 even if injured
         console.log(`[Ball Don't Lie] ⚠️ Using depth=1 ${selectedQB?.player?.first_name} ${selectedQB?.player?.last_name} despite injury`);
       }

@@ -91,6 +91,26 @@ export function splitPayload(pair, splitKey, side) {
   return { home: read(pair?.home), away: read(pair?.away) };
 }
 
+function teamSampleLine(ledger, code) {
+  if (!code || !Array.isArray(ledger?.games)) return null;
+  const phases = { REG: 'regular season', POST: 'postseason', PRE: 'preseason' };
+  const games = new Map();
+  for (const game of ledger.games) {
+    if (!Object.hasOwn(game?.lines || {}, code) && !Object.hasOwn(game?.starters || {}, code)) continue;
+    const id = game.game_id == null ? '' : String(game.game_id);
+    const phase = game.season_type;
+    // Incomplete or conflicting provenance cannot establish a full sample.
+    if (!id || !Object.hasOwn(phases, phase) || (games.has(id) && games.get(id) !== phase)) return null;
+    games.set(id, phase);
+  }
+  if (!games.size) return null;
+  const counts = { REG: 0, POST: 0, PRE: 0 };
+  for (const phase of games.values()) counts[phase]++;
+  const detail = Object.entries(counts).filter(([, count]) => count > 0)
+    .map(([phase, count]) => `${count} ${phases[phase]}`).join(', ');
+  return `${code}: ${games.size} game${games.size === 1 ? '' : 's'} (${detail})`;
+}
+
 /**
  * The provenance line every advanced token carries, so a number from last
  * season can never be mistaken for this one.
@@ -99,7 +119,10 @@ export function basisLine(pair) {
   if (!pair) return null;
   if (!pair.ledger) return pair.note;
   const source = `Computed from ${pair.data_season} play-by-play (nflverse), every snap from scrimmage.`;
-  return pair.basis === 'current' ? `${source} ${pair.note}` : `${source} ${pair.note}`;
+  const samples = [...new Set([pair.homeCode, pair.awayCode])]
+    .map(code => teamSampleLine(pair.ledger, code)).filter(Boolean);
+  const sample = samples.length ? ` Sample: ${samples.join('; ')}.` : '';
+  return `${source}${sample} ${pair.note}`;
 }
 
 /**

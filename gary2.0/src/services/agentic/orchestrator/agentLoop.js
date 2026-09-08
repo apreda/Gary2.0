@@ -1716,6 +1716,23 @@ INVESTIGATION COMPLETE`
 
     // Use persistent flags (no false positives from message scanning)
 
+    // Reaching the turn limit cannot bypass NFL's required two-sided case
+    // review. Leave through the existing incomplete-pipeline failure below.
+    if (isNFLSport && !_pass2Injected) break;
+
+    // Check the provider's completion status before either JSON return path.
+    // A parseable fragment can still be an incomplete model response.
+    if (isNFLSport && finishReason === 'max_tokens') {
+      if (iteration >= effectiveMaxIterations) {
+        return { error: 'NFL final output remained truncated after its retry budget', code: 'final_output_truncated',
+          rawAnalysis: message.content, toolCallHistory, iterations: iteration, homeTeam, awayTeam, sport };
+      }
+      const retryMessage = 'Your response was CUT OFF mid-output (token limit reached). Output your COMPLETE pick JSON again. Preserve the same ticket, original evidence and reasons; do not choose again or add new facts. A shorter rationale is fine, but it must end with a complete sentence and the JSON must be complete.';
+      messages.push({ role: 'assistant', content: message.content }, { role: 'user', content: retryMessage });
+      nextMessageToSend = retryMessage;
+      continue;
+    }
+
     // Pass 3 — inject after Pass 2 completes
     if (_pass2Injected && !_pass3Injected && iteration < effectiveMaxIterations) {
       // Pass 2 now produces BOTH the prose card rationale AND a structured
@@ -1821,9 +1838,9 @@ INVESTIGATION COMPLETE`
       messages.push({ role: 'assistant', content: message.content });
       messages.push({
         role: 'user',
-        content: `Your response was CUT OFF mid-output (token limit reached). Output your COMPLETE pick JSON again — shorter rationale is fine but it must be COMPLETE (not truncated). Use stat abbreviations (AdjEM, ORtg, DRtg, eFG%) to save space.`
+        content: `Your response was CUT OFF mid-output (token limit reached). Output your COMPLETE pick JSON again — shorter rationale is fine but it must be COMPLETE (not truncated). Use stat abbreviations (${isNFLSport ? 'EPA/play, YPA, TD, INT' : 'AdjEM, ORtg, DRtg, eFG%'}) to save space.`
       });
-      if (mlbJudgment) nextMessageToSend = messages.at(-1).content;
+      if (mlbJudgment || isNFLSport) nextMessageToSend = messages.at(-1).content;
       continue;
     }
 
@@ -1843,12 +1860,12 @@ INVESTIGATION COMPLETE`
       messages.push({
         role: 'user',
         content: truncatedRationale
-          ? `Your rationale was CUT OFF mid-sentence (token limit). Rewrite your pick JSON with a CONCISE but COMPLETE rationale — 2-3 paragraphs max. Use stat abbreviations (AdjEM, ORtg, DRtg, eFG%, TS%) to save space. The rationale MUST end with a complete sentence.`
+          ? `Your rationale was CUT OFF mid-sentence (token limit). Rewrite your pick JSON with a CONCISE but COMPLETE rationale — 2-3 paragraphs max. Use stat abbreviations (${isNFLSport ? 'EPA/play, YPA, TD, INT' : 'AdjEM, ORtg, DRtg, eFG%, TS%'}) to save space. The rationale MUST end with a complete sentence.`
           : `Your rationale is too short for a pick card. Provide your FULL analysis — your pick and the real reasons you landed on it, with the key evidence, in your own words and your own shape.
 
 Output your complete pick JSON with the full rationale in the "rationale" field.`
       });
-      if (mlbJudgment) nextMessageToSend = messages.at(-1).content;
+      if (mlbJudgment || isNFLSport) nextMessageToSend = messages.at(-1).content;
 
       continue; // Retry
     }

@@ -33,6 +33,7 @@ import {
 } from '../src/services/ncaafGamePolicy.js';
 import { classifyPickMarketSide } from './lib/pickSideClassification.js';
 import { footballCaseSnapshot } from './lib/footballCaseSnapshot.js';
+import { exactFootballMarketBook } from './lib/footballMarketReceipt.js';
 import { SPORT_CONFIG, selectPickSports } from './lib/pickRunSports.js';
 
 // Reject retired lanes before provider initialization or the era-run ledger.
@@ -411,38 +412,6 @@ function formatOddsForStorage(oddsArray, pick, homeTeam, awayTeam) {
   });
 }
 
-/**
- * Identify a football pick's exact sportsbook without electing a new market.
- * Spreads already use the explicit best-line election below. Moneylines/totals
- * historically stored the chosen number and price but dropped the vendor; this
- * recovers it only when one BDL book matches BOTH exactly. No consensus or
- * cross-book fallback is allowed.
- */
-function exactFootballMarketBook(sportsbookOdds, result) {
-  if (!Array.isArray(sportsbookOdds) || !result) return null;
-  const wantedOdds = finiteNumber(result.odds);
-  if (wantedOdds == null) return null;
-  const pickText = String(result.pick || '').trim().toLowerCase();
-  const candidates = sportsbookOdds.filter((row) => {
-    if (!row?.book || normalizeVendorForReceipt(row.book) === 'unknown') return false;
-    if (result.type === 'moneyline') return finiteNumber(row.ml) === wantedOdds;
-    if (result.type !== 'total') return false;
-    const wantedLine = finiteNumber(result.total);
-    if (wantedLine == null || finiteNumber(row.total) !== wantedLine) return false;
-    const rowOdds = pickText.startsWith('over')
-      ? finiteNumber(row.total_over_odds)
-      : pickText.startsWith('under')
-        ? finiteNumber(row.total_under_odds)
-        : null;
-    return rowOdds === wantedOdds;
-  });
-  candidates.sort((a, b) => normalizeVendorForReceipt(a.book).localeCompare(normalizeVendorForReceipt(b.book)));
-  return candidates[0]?.book ?? null;
-}
-
-function normalizeVendorForReceipt(value) {
-  return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-}
 const { supabase, supabaseAdmin: winnersAdmin } = await import('../src/supabaseClient.js');
 const { classOf, classWinRates, winnersScore } = await import('../src/services/pickdesk/winnersScore.js');
 const { enqueueWinnersCandidate, isProductionWinnersRun, confirmedPublishedGame } = await import('../src/services/pickdesk/winnersAdmissions.js');
@@ -794,7 +763,8 @@ async function main() {
 
   // Clear cache if --nocache or --fresh flag is passed (ensures fresh injury/lineup data)
   if (process.argv.includes('--nocache') || process.argv.includes('--fresh')) {
-    console.log('🔄 Clearing all caches for fresh injury/lineup data...');
+    console.log('🔄 Bypassing shared provider and scout caches for fresh injury/lineup data...');
+    process.env.GARY_BDL_SHARED_CACHE_DISABLED = '1';
     ballDontLieService.clearCache();
     console.log('✅ Cache cleared - fetching fresh data from APIs\n');
   }
@@ -1380,7 +1350,10 @@ async function main() {
         const gameESTDate = game.commence_time
           ? new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
           : null;
-        const existingPick = await checkExistingPick(config.name, game.home_team, game.away_team, gameESTDate, bdlGameId);
+        // A public pick cannot satisfy a test run: Gary must generate and
+        // persist a fresh result in the test table even if production exists.
+        const existingPick = useTestTable ? null
+          : await checkExistingPick(config.name, game.home_team, game.away_team, gameESTDate, bdlGameId);
         if (existingPick) {
           console.log(`⏭️  Already have pick for this game: "${existingPick}"`);
           if (bdlGameId != null) existingPickGameIds.add(String(bdlGameId));
@@ -1411,7 +1384,7 @@ async function main() {
 
         // Run agentic analysis (each game is independent)
         const runnerOptions = {
-          nocache: process.argv.includes('--nocache'),
+          nocache: process.argv.includes('--nocache') || process.argv.includes('--fresh'),
           sportsbookOdds: preSportsbookOdds // Pass multi-book odds for scout report
         };
         let result;
@@ -2019,9 +1992,10 @@ async function main() {
           const finalSpreadOdds = asStoredNumber(bestLine?.spreadOdds ?? result.spreadOdds);
           const isFootballPick = config.key === 'americanfootball_nfl' || config.key === 'americanfootball_ncaaf';
           const exactFootballBook = isFootballPick
-            ? exactFootballMarketBook(sportsbookOdds, result)
+            ? exactFootballMarketBook(sportsbookOdds,
+              { ...result, spread: finalSpread, spreadOdds: finalSpreadOdds }, game.line_vendor)
             : null;
-          const bestLineBook = bestLine?.book ?? result.book ?? exactFootballBook ?? null;
+          const bestLineBook = isFootballPick ? exactFootballBook : (bestLine?.book ?? result.book ?? null);
           // AFTER GARY receipt: seal the exact elected football market beside
           // the pick. First-writer-wins storage makes this immutable; later
           // proof refreshes compare only this vendor to that same vendor.
@@ -2540,7 +2514,7 @@ async function main() {
 ║  Total Picks: ${String(allPicks.length).padStart(3)}                                               ║
 ║  Total Time: ${totalTime.padStart(6)}s                                            ║
 ║                                                                  ║
-║  ${allPicks.length > 0 ? '✅ Picks are now live in Supabase!' : 'ℹ️  No picks stored this run — see per-game detail in the log above.'}
+║  ${allPicks.length > 0 ? (useTestTable ? '✅ Test picks saved in test_daily_picks.' : '✅ Picks are now live in Supabase!') : 'ℹ️  No picks stored this run — see per-game detail in the log above.'}
 ║                                                                  ║
 ╚══════════════════════════════════════════════════════════════════╝
 `);
@@ -2572,6 +2546,7 @@ async function main() {
     status: shouldStore ? 'stored' : 'dry_run',
     game_ids: coveredGameIds,
     pick_count: allPicks.length,
+    ...(useTestTable ? { storage_target: 'test_daily_picks' } : {}),
   };
   console.log(formatPickRunOutcome(outcome));
   console.log('✅ Process complete. Exiting cleanly...');
@@ -2666,7 +2641,8 @@ async function storePicks(picks) {
     // row's (last-writer-wins) test_name.
     const armLabel = testName || process.env.GARY_MODEL_OVERRIDE || 'default';
     for (const p of picks) p.test_arm = armLabel;
-    const result = await picksService.storeTestPicks(picks, testName, `Test run at ${new Date().toISOString()}`);
+    const testDate = dateFilter && !dateFilter.includes(',') ? dateFilter.trim() : undefined;
+    const result = await picksService.storeTestPicks(picks, testName, `Test run at ${new Date().toISOString()}`, { date: testDate });
     if (!result.success) {
       throw new Error(`TEST storage failed: ${result.error || result.message || 'unknown error'}`);
     }

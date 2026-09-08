@@ -17,6 +17,7 @@ import { fileURLToPath } from 'url';
 import { describeSportsCalendar } from '../../utils/dateUtils.js';
 import { codexCliWebSearch } from '../agentic/orchestrator/providerAdapters/codexCliSession.js';
 import { requestSignal } from '../agentic/orchestrator/requestCancellation.js';
+import { searchResponseProblem } from '../agentic/searchResponseValidation.js';
 
 // SEARCH CACHE (founder GO, Aug 10): the props tiers re-build the desk per
 // window, so the same four questions about the same game were re-searched
@@ -32,6 +33,7 @@ function searchCacheGet(key) {
   try {
     const { at, value } = JSON.parse(readFileSync(join(SEARCH_CACHE_DIR, `${key}.json`), 'utf8'));
     if (Date.now() - at > SEARCH_CACHE_TTL_MS) return null;
+    if (!value?.success || searchResponseProblem(value.data)) return null;
     console.log(`[Web Search] cache hit (${Math.round((Date.now() - at) / 60000)}m old)`);
     return value;
   } catch { return null; }
@@ -111,9 +113,10 @@ async function anthropicSearchFallback(query, options, reason) {
     signal?.throwIfAborted();
     const viaApi = await anthropicWebSearchRaw(freshnessPrompt(query, options.freshnessHours), { maxTokens: options.maxTokens || 2000, signal });
     signal?.throwIfAborted();
-    return viaApi.success
+    const problem = searchResponseProblem(viaApi.data);
+    return viaApi.success && !problem
       ? { success: true, data: viaApi.data, raw: null }
-      : { success: false, data: '', raw: null, error: viaApi.error || reason };
+      : { success: false, data: '', raw: null, error: viaApi.error || problem || reason };
   } catch (g) {
     signal?.throwIfAborted();
     console.warn(`[Web Search] Anthropic fallback also failed: ${g.message}`);
@@ -144,7 +147,7 @@ export async function openaiWebSearch(query, options = {}) {
   // carries it harmlessly until its next planned edit.)
   const viaCodex = await codexCliWebSearch(freshnessPrompt(query, options.freshnessHours), options);
   signal?.throwIfAborted();
-  if (viaCodex.success) return cachePut(viaCodex);
+  if (viaCodex.success && !searchResponseProblem(viaCodex.data)) return cachePut(viaCodex);
   console.warn('[Web Search] codex-cli grounding empty/failed — trying API providers');
 
   const apiKey = process.env.OPENAI_API_KEY;
@@ -204,8 +207,9 @@ export async function openaiWebSearch(query, options = {}) {
       if (cut > text.length * 0.5) text = text.slice(0, cut + 1);
     }
     console.log(`[Web Search] ${WEB_SEARCH_MODEL} returned ${text.length} chars`);
-    if (text.length > 0) return cachePut({ success: true, data: text, raw: data });
-    return cachePut(await anthropicSearchFallback(query, options, 'OpenAI returned empty output'));
+    const problem = searchResponseProblem(text);
+    if (!problem) return cachePut({ success: true, data: text, raw: data });
+    return cachePut(await anthropicSearchFallback(query, options, problem));
   } catch (e) {
     signal?.throwIfAborted();
     const msg = String(e.message || '');

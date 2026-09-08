@@ -29,7 +29,7 @@ describe('openaiWebSearch (de-Gemini step one, Jul 26 2026)', () => {
     // Default: the codex rung misses so each pin exercises the API chain.
     codexCliWebSearch.mockReset().mockResolvedValue({ success: false, data: '', raw: null, error: 'mocked miss' });
   });
-  afterEach(() => { global.fetch = realFetch; process.env.OPENAI_API_KEY = realKey; });
+  afterEach(() => { vi.restoreAllMocks(); global.fetch = realFetch; process.env.OPENAI_API_KEY = realKey; });
 
   it('the codex GPT Pro bridge is the first rung — a hit never touches the APIs', async () => {
     codexCliWebSearch.mockResolvedValue({ success: true, data: 'Bridge news, dated today.', raw: null });
@@ -38,6 +38,23 @@ describe('openaiWebSearch (de-Gemini step one, Jul 26 2026)', () => {
     expect(codexCliWebSearch).toHaveBeenCalledTimes(1);
     expect(global.fetch).not.toHaveBeenCalled();
     expect(r).toMatchObject({ success: true, data: 'Bridge news, dated today.' });
+  });
+
+  it('uses the existing API fallback when a completed bridge search asks for the task', async () => {
+    codexCliWebSearch.mockResolvedValue({ success: true, data: 'What would you like me to research or do? Please provide the topic, team, company, file, or specific task.' });
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => RESPONSES_OK });
+    expect(await openaiWebSearch('Seattle news')).toMatchObject({ success: true, data: 'Fresh news, dated today.' });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('continues to Anthropic when the API also returns a completed clarification', async () => {
+    const anthropic = await import('../../../src/services/agentic/scoutReport/shared/anthropicWebSearch.js');
+    const fallback = vi.spyOn(anthropic, 'anthropicWebSearchRaw').mockResolvedValue({ success: true, data: 'Verified fallback report, dated September 8.' });
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      output: [{ type: 'message', content: [{ type: 'output_text', text: 'Please provide the topic you want researched.' }] }],
+    }) });
+    expect(await openaiWebSearch('Seattle news')).toMatchObject({ success: true, data: 'Verified fallback report, dated September 8.' });
+    expect(fallback).toHaveBeenCalledTimes(1);
   });
 
   it('sends the freshness protocol + query to the Responses API with the web_search tool', async () => {

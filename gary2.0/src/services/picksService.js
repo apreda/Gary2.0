@@ -694,75 +694,58 @@ async function nflGameAlreadyHasPick(homeTeam, awayTeam, gameDate = null, gameId
 // ═══════════════════════════════════════════════════════════════════════════
 // TEST PICKS STORAGE - Stores to test_daily_picks table (not displayed in app)
 // ═══════════════════════════════════════════════════════════════════════════
-async function storeTestPicks(picks, testName = null, testNotes = null) {
-  if (!picks || !Array.isArray(picks) || picks.length === 0)
-    return { success: false, message: 'No picks provided' };
-
-  // Get current EST date
-  const estDate = new Date().toLocaleString('en-US', { 
-    timeZone: 'America/New_York',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  });
-  const [month, day, year] = estDate.split('/');
-  const currentDateString = `${year}-${month}-${day}`;
-
-  await ensureValidSupabaseSession();
-  
+async function storeTestPicks(picks, testName = null, testNotes = null, { date = null } = {}) {
+  if (!Array.isArray(picks) || !picks.length) return { success: false, message: 'No picks provided' };
+  // Existing experiments retain run-date storage. An exact dated runner may
+  // explicitly target another date without relabeling any historical row.
+  const targetDate = date ?? new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  if (typeof targetDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(targetDate)
+    || !Number.isFinite(Date.parse(`${targetDate}T12:00:00Z`))
+    || new Date(`${targetDate}T12:00:00Z`).toISOString().slice(0,10) !== targetDate) {
+    return { success: false, error: 'Test storage requires one valid YYYY-MM-DD date' };
+  }
+  const writer = supabaseAdmin || supabase;
+  const canonical = value => JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item)
+    ? Object.fromEntries(Object.entries(item).sort(([a],[b]) => a.localeCompare(b))) : item);
+  const columns = 'id,date,picks,test_name,test_notes,updated_at';
   try {
-    // Check for existing test picks for today
-    const { data: existingRows, error: selectError } = await supabase
-      .from('test_daily_picks')
-      .select('id, picks')
-      .eq('date', currentDateString)
-      .limit(1);
-
-    if (selectError) {
-      console.error('Error selecting existing test_daily_picks row:', selectError);
-    }
-
-    const existing = existingRows?.[0];
-    
-    if (existing) {
-      // Append to existing test picks
-      const existingPicks = Array.isArray(existing.picks) ? existing.picks : [];
-      const mergedPicks = [...existingPicks, ...picks];
-      
-      const { error: updateError } = await supabase
-        .from('test_daily_picks')
-        .update({ 
-          picks: mergedPicks,
-          test_name: testName || existing.test_name,
-          test_notes: testNotes || existing.test_notes,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', existing.id);
-
-      if (updateError) {
-        throw new Error(`Failed to update test picks: ${updateError.message}`);
+    const incoming = JSON.parse(JSON.stringify(picks));
+    if (!incoming.every(pick => pick && typeof pick === 'object' && !Array.isArray(pick))) throw new Error('Test picks must retain their original structured records');
+    if (writer === supabase && !await ensureValidSupabaseSession()) throw new Error('Test storage session unavailable');
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { data: rows, error: readError } = await writer.from('test_daily_picks').select(columns)
+        .eq('date', targetDate).limit(1).abortSignal(AbortSignal.timeout(15_000));
+      if (readError) throw readError;
+      const existing = rows?.[0];
+      if (existing && existing.picks != null && !Array.isArray(existing.picks)) throw new Error('Existing test picks are malformed; original row preserved');
+      const merged = [...(existing?.picks || []), ...incoming];
+      let response;
+      if (existing) {
+        const previousTime = existing.updated_at == null ? null : Date.parse(existing.updated_at);
+        if (previousTime !== null && !Number.isFinite(previousTime)) throw new Error('Existing test row has no valid concurrency version');
+        // The version must advance even when two processes finish in the same
+        // millisecond. A stale reader retries instead of replacing another arm.
+        const updatedAt = new Date(Math.max(Date.now(), (previousTime ?? -1) + 1)).toISOString();
+        let update = writer.from('test_daily_picks').update({ picks: merged,
+          test_name: testName || existing.test_name || null, test_notes: testNotes || existing.test_notes || null, updated_at: updatedAt })
+          .eq('id', existing.id);
+        update = existing.updated_at == null ? update.is('updated_at', null) : update.eq('updated_at', existing.updated_at);
+        response = await update.select(columns).abortSignal(AbortSignal.timeout(15_000));
+        if (!response.error && Array.isArray(response.data) && !response.data.length) continue;
+      } else {
+        response = await writer.from('test_daily_picks').insert({ date: targetDate, picks: merged, test_name: testName, test_notes: testNotes })
+          .select(columns).abortSignal(AbortSignal.timeout(15_000));
+        if (response.error?.code === '23505') continue; // Another arm created the shared date row.
       }
-
-      console.log(`✅ Successfully appended ${picks.length} picks to test_daily_picks (total: ${mergedPicks.length})`);
-      return { success: true, count: picks.length, mode: 'append', total: mergedPicks.length };
-    } else {
-      // Insert new test picks row
-      const { error: insertError } = await supabase
-        .from('test_daily_picks')
-        .insert({
-          date: currentDateString,
-          picks: picks,
-          test_name: testName,
-          test_notes: testNotes
-        });
-
-      if (insertError) {
-        throw new Error(`Failed to insert test picks: ${insertError.message}`);
+      if (response.error) throw response.error;
+      const stored = Array.isArray(response.data) && response.data.length === 1 ? response.data[0] : null;
+      if (!stored || stored.date !== targetDate || canonical(stored.picks) !== canonical(merged)) {
+        throw new Error('Test storage did not return the exact saved pick snapshot');
       }
-
-      console.log(`✅ Successfully inserted ${picks.length} test picks for ${currentDateString}`);
-      return { success: true, count: picks.length, mode: 'insert' };
+      console.log(`✅ Stored ${incoming.length} test picks for ${targetDate} (${merged.length} total)`);
+      return { success: true, count: incoming.length, mode: existing ? 'append' : 'insert', total: merged.length, date: targetDate };
     }
+    throw new Error('Test picks changed during every bounded append attempt; other test arms preserved');
   } catch (error) {
     console.error('❌ Error storing test picks:', error.message);
     return { success: false, error: error.message };

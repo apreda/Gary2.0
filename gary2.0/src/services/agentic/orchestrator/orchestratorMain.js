@@ -29,18 +29,35 @@ function scoutCacheGameKey(game) {
   return String(game.id || game.bdl_game_id || game.gamePk || game.commence_time || '');
 }
 
-function scoutCacheKey(homeTeam, awayTeam, sport, game) {
+function stableCacheValue(value) {
+  if (Array.isArray(value)) return value.map(stableCacheValue);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.keys(value).sort().map(key => [key,stableCacheValue(value[key])]));
+}
+
+function footballScoutIdentity(game, options, promptSha) {
+  if (!promptSha) return '';
+  // These inputs are printed on the desk. Include flat market aliases and
+  // nested bookmaker boards, along with the multi-book comparison, so an
+  // updated ticket cannot reuse the earlier priced scout for the same game.
+  const market = Object.fromEntries(Object.entries(game || {}).filter(([key]) => /odds|moneyline|spread|total|book|vendor/i.test(key)));
+  return JSON.stringify(stableCacheValue({promptSha,market,sportsbookOdds:options.sportsbookOdds ?? null,
+    commence_time:game.commence_time ?? null,date:game.date ?? null,game_date:game.game_date ?? null}));
+}
+
+function scoutCacheKey(homeTeam, awayTeam, sport, game, footballIdentity = '') {
   // ET slate day (Jul 30): the UTC key rolled at 8 PM ET, so an evening scout
   // cached under TOMORROW's key — on series nights, tomorrow's desk could be
   // served yesterday evening's scout (stale lines/lineups).
   const date = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   const gameKey = scoutCacheGameKey(game);
-  return createHash('md5').update(`${date}-${sport}-${awayTeam}-${homeTeam}-${gameKey}`.toLowerCase()).digest('hex');
+  return createHash('md5').update(`${date}-${sport}-${awayTeam}-${homeTeam}-${gameKey}`.toLowerCase())
+    .update(footballIdentity).digest('hex');
 }
 
-function loadCachedScoutReport(homeTeam, awayTeam, sport, game) {
+function loadCachedScoutReport(homeTeam, awayTeam, sport, game, footballIdentity) {
   try {
-    const file = join(SCOUT_CACHE_DIR, `${scoutCacheKey(homeTeam, awayTeam, sport, game)}.json`);
+    const file = join(SCOUT_CACHE_DIR, `${scoutCacheKey(homeTeam, awayTeam, sport, game, footballIdentity)}.json`);
     if (!existsSync(file)) return null;
     const stat = statSync(file);
     if (Date.now() - stat.mtimeMs > SCOUT_CACHE_TTL_MS) return null;
@@ -54,10 +71,10 @@ function loadCachedScoutReport(homeTeam, awayTeam, sport, game) {
   } catch { return null; }
 }
 
-function saveCachedScoutReport(homeTeam, awayTeam, sport, game, data) {
+function saveCachedScoutReport(homeTeam, awayTeam, sport, game, data, footballIdentity) {
   try {
     if (!existsSync(SCOUT_CACHE_DIR)) mkdirSync(SCOUT_CACHE_DIR, { recursive: true });
-    const file = join(SCOUT_CACHE_DIR, `${scoutCacheKey(homeTeam, awayTeam, sport, game)}.json`);
+    const file = join(SCOUT_CACHE_DIR, `${scoutCacheKey(homeTeam, awayTeam, sport, game, footballIdentity)}.json`);
     writeFileSync(file, JSON.stringify(data), 'utf8');
     console.log(`[Orchestrator] 💾 Cached scout report for ${awayTeam} @ ${homeTeam}`);
   } catch (e) {
@@ -93,6 +110,7 @@ export async function analyzeGame(game, sport, options = {}) {
   // Freeze the era before asynchronous research. A source edit while Gary is
   // thinking must not stamp an older running decision with the new code's era.
   const originalFootballEra = isFootballGame ? footballPromptSha(sport) : null;
+  const footballCacheIdentity = footballScoutIdentity(game,options,originalFootballEra);
 
   console.log(`\n${'═'.repeat(70)}`);
   console.log(`🐻 GARY AGENTIC ANALYSIS: ${awayTeam} @ ${homeTeam}`);
@@ -109,14 +127,14 @@ export async function analyzeGame(game, sport, options = {}) {
     // and is neither rebuilt nor cached here.
     let scoutReportData = typeof options.prebuiltScoutReport === 'string' && options.prebuiltScoutReport.trim()
       ? options.prebuiltScoutReport
-      : loadCachedScoutReport(homeTeam, awayTeam, sport, game);
+      : (options.nocache || options.fresh ? null : loadCachedScoutReport(homeTeam, awayTeam, sport, game, footballCacheIdentity));
     if (!scoutReportData) {
       console.log('[Orchestrator] Building scout report...');
       scoutReportData = await buildScoutReport(game, sport, { sportsbookOdds: options.sportsbookOdds, testAllowMissingLineups: options.testAllowMissingLineups });
       // Cache for props to reuse. Never persist an all-N/A football tape: a
       // transient BDL throttle must not poison every retry for three hours.
       if (shouldReuseScoutReport(scoutReportData, sport)) {
-        saveCachedScoutReport(homeTeam, awayTeam, sport, game, scoutReportData);
+        saveCachedScoutReport(homeTeam, awayTeam, sport, game, scoutReportData, footballCacheIdentity);
       } else {
         console.warn(`[Orchestrator] Football scout has zero verified performance stats; not caching ${awayTeam} @ ${homeTeam}`);
       }

@@ -8,6 +8,7 @@ import { latestGameNarrative } from './footballGameStory.js';
 import { getKickoffWeather, windDescription } from '../../../weatherService.js';
 import { getPracticeReport, getSnapShare } from '../../../nflverseService.js';
 import { footballAdvancedTokens } from './footballAdvancedTokens.js';
+import { fetchNflTeamBaselinePair, eligibleNflRegularGames } from '../../../nflTeamBaseline.js';
 
 /**
  * Both teams' season rows in one call, unwrapped.
@@ -19,14 +20,7 @@ import { footballAdvancedTokens } from './footballAdvancedTokens.js';
  * getTeamSeasonStats is cached (30 min), so callers share one round trip.
  */
 async function seasonPair(bdlSport, home, away, season) {
-  const [homeArr, awayArr] = await Promise.all([
-    ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-    ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-  ]);
-  return {
-    homeStats: Array.isArray(homeArr) ? homeArr[0] : homeArr,
-    awayStats: Array.isArray(awayArr) ? awayArr[0] : awayArr
-  };
+  return fetchNflTeamBaselinePair(bdlSport, home, away, season);
 }
 
 export const nflFetchers = {
@@ -158,7 +152,7 @@ export const nflFetchers = {
     const calcL5Scoring = (games, teamId) => {
       if (!games || games.length === 0) return null;
       // Filter to completed games, sort by date descending, take last 5
-      const completed = games
+      const completed = (bdlSport === 'americanfootball_nfl' ? eligibleNflRegularGames(games, teamId, season) : games)
         .filter(g => isGameCompleted(g.status))
         .sort((a, b) => new Date(b.date) - new Date(a.date))
         .slice(0, 5);
@@ -529,22 +523,24 @@ export const nflFetchers = {
           : Promise.resolve([])
       ]);
 
-      // ET, never UTC (Aug 19 sweep — the recurring class): toISOString
-      // rolls past midnight at 8 PM ET, misfiling tonight's game.
-      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+      const now = Date.now();
+      const dateLabel = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? value
+        : new Date(value).toLocaleDateString('en-CA', {timeZone:'America/New_York'});
       // The opponent is whichever side is NOT the team this line is for
       // (Sep 1 review: the old `home.id || away.id` test compared every
       // game to the HOME club, so the away club's own home games named the
       // away club as its opponent).
       const formatSchedule = (games, teamName, teamId) => {
-        const sorted = [...(games || [])].sort((a, b) => new Date(a.date || a.datetime) - new Date(b.date || b.datetime));
-        const past = sorted.filter(g => g.status === 'Final').slice(-2);
-        const future = sorted.filter(g => g.status !== 'Final' && (g.date || g.datetime) > today).slice(0, 2);
-        const oppOf = (g) => (g.home_team?.id === teamId ? (g.visitor_team?.name || g.away_team?.name) : g.home_team?.name);
-        const venueOf = (g) => (g.home_team?.id === teamId ? 'vs' : '@');
+        const sorted = eligibleNflRegularGames(games,teamId,season,{before:now,completedOnly:false})
+          .sort((a, b) => new Date(a.date || a.datetime) - new Date(b.date || b.datetime));
+        const past = eligibleNflRegularGames(sorted,teamId,season,{before:now}).slice(-2);
+        const future = sorted.filter(g => !isGameCompleted(g.status_state || g.status)
+          && Date.parse(g.date || g.datetime) > now).slice(0, 2);
+        const oppOf = (g) => (String(g.home_team?.id) === String(teamId) ? (g.visitor_team?.name || g.away_team?.name) : g.home_team?.name);
+        const venueOf = (g) => (String(g.home_team?.id) === String(teamId) ? 'vs' : '@');
         const lines = [`${teamName}:`];
-        if (past.length) lines.push(`  Recent: ${past.map(g => `${venueOf(g)} ${oppOf(g)} (${g.home_team_score ?? '?'}-${g.visitor_team_score ?? g.away_score ?? '?'}, home-away)`).join(', ')}`);
-        if (future.length) lines.push(`  Upcoming: ${future.map(g => `${venueOf(g)} ${oppOf(g)} (${(g.date || g.datetime || '').split('T')[0]})`).join(', ')}`);
+        if (past.length) lines.push(`  Recent: ${past.map(g => `${venueOf(g)} ${oppOf(g)} (${g.home_team_score ?? '?'}-${g.visitor_team_score ?? g.away_score ?? '?'}, home-away; ${dateLabel(g.date || g.datetime)})`).join(', ')}`);
+        if (future.length) lines.push(`  Upcoming: ${future.map(g => `${venueOf(g)} ${oppOf(g)} (${dateLabel(g.date || g.datetime)})`).join(', ')}`);
         return lines.join('\n');
       };
 
@@ -984,6 +980,16 @@ Be factual with historical stats where available.`;
           + (i.player?.position_abbreviation ? ` (${i.player.position_abbreviation})` : ''));
       return {
         total_listed: rows.length,
+        // Preserve every original status, including reserve codes and unknowns.
+        // The common status groups alone are not the full injury report.
+        injuries: rows.map(i => ({
+          player: `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim(),
+          player_id: i.player?.id ?? null,
+          position: i.player?.position_abbreviation ?? null,
+          status: i.status ?? null,
+          comment: i.comment ?? null,
+          date: i.date ?? null,
+        })),
         out: byStatus('OUT'),
         doubtful: byStatus('DOUBTFUL'),
         questionable: byStatus('QUESTIONABLE')
@@ -1056,6 +1062,8 @@ Be factual with historical stats where available.`;
     return {
       category: 'Special Teams',
       source: 'Ball Don\'t Lie',
+      sample: kicking.sample,
+      bdl_baselines: kicking.bdl_baselines,
       home: { team: home.full_name || home.name, kicking: kicking.home, return_game: fieldPosition.home },
       away: { team: away.full_name || away.name, kicking: kicking.away, return_game: fieldPosition.away }
     };
@@ -1221,19 +1229,21 @@ for (const token of SEASON_SAMPLE_TOKENS) {
     const result = await inner(bdlSport, home, away, season, options);
     if (!result || typeof result !== 'object' || result.error) return result;
     try {
-      const { homeStats, awayStats } = await seasonPair(bdlSport, home, away, season);
-      const gp = (stats) => {
-        const n = Number(stats?.games_played);
-        return Number.isFinite(n) && n > 0 ? n : null;
-      };
-      const homeGp = gp(homeStats);
-      const awayGp = gp(awayStats);
-      if (homeGp === null && awayGp === null) return result;
-      const label = (name, n) => `${name}: ${n === null ? 'games played not reported' : `${n} game${n === 1 ? '' : 's'}`}`;
-      result.sample = `Season totals — ${label(home.full_name || home.name, homeGp)}, `
-        + `${label(away.full_name || away.name, awayGp)}${season ? ` (${season} season)` : ''}`;
-    } catch {
-      // Provenance is context, never a reason to lose the stat itself.
+      const { homeStats, awayStats, baselines } = await seasonPair(bdlSport, home, away, season);
+      if (!baselines) return result;
+      result.bdl_baselines = baselines;
+      const label = (team, baseline) => `${team.full_name || team.name}: ${baseline.label}; `
+        + (baseline.games_played == null ? 'games played not reported' : `${baseline.games_played} games`);
+      // Mixed tokens retain their independent play-ledger basis. This line
+      // describes only their BDL aggregate fields, which may use another year.
+      result.bdl_sample = `BDL team aggregates — ${label(home,baselines.home)}; ${label(away,baselines.away)}`;
+      if (!result.basis) result.sample = result.bdl_sample;
+      if ((!homeStats || !awayStats) && !result.basis) {
+        return { category:result.category,error:'Verified regular-season aggregates unavailable for one or both teams',
+          bdl_baselines:baselines,sample:result.bdl_sample };
+      }
+    } catch (error) {
+      return {category:result.category,error:`NFL aggregate provenance unavailable: ${error.message}`};
     }
     return result;
   };

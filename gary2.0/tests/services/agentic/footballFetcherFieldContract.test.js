@@ -99,10 +99,14 @@ function bdlSeasonRow(teamId, misses) {
   for (const key of NFL_SEASON_FIELDS) row[key] = 7;
   // games_played must be a sane divisor for per-game derivations.
   row.games_played = 17;
+  row.season = 2025;
+  row.season_type = 2;
 
   return new Proxy(row, {
     get(target, key, receiver) {
-      if (typeof key === 'string' && !(key in target)) misses.add(key);
+      // Promise resolution checks for a thenable; this is not a requested
+      // provider statistic when a safe baseline reader returns the row.
+      if (typeof key === 'string' && key !== 'then' && !(key in target)) misses.add(key);
       return Reflect.get(target, key, receiver);
     }
   });
@@ -175,7 +179,8 @@ describe('season stats carry the sample behind them', () => {
   it('states the games behind the rate, not just the rate', async () => {
     const result = await nflFetchers.OFFENSIVE_EPA('americanfootball_nfl', home, away, 2025);
     expect(result.sample).toContain('17 games');
-    expect(result.sample).toContain('2025 season');
+    expect(result.bdl_baselines).toMatchObject({home:{season:2025},away:{season:2025}});
+    expect(result.sample).toContain('2025 prior completed');
     expect(result.sample).toContain('Home Team');
     expect(result.sample).toContain('Away Team');
   });

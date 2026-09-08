@@ -30,7 +30,9 @@ describe('source results through the real formatter', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0);
     const data = { home: { injuries: [{ player: 'Existing name', status: 'Existing status', comment: 'Existing comment' }] }, away: { injuries: [] } };
     const original = render(data, 'INJURIES', 'Home', 'Away');
-    for (const sport of ['NFL', 'NCAAF', 'MLB']) expect(render(data, 'INJURIES', 'Home', 'Away', sport)).toBe(original);
+    for (const sport of ['NCAAF', 'MLB']) expect(render(data, 'INJURIES', 'Home', 'Away', sport)).toBe(original);
+    const nfl = render(data, 'INJURIES', 'Home', 'Away', 'NFL');
+    expect(JSON.parse(nfl.slice(nfl.indexOf(':') + 1))).toEqual(data);
   });
   it('retains NFL kicking and return facts in the actual special-teams adapter output', async () => {
     vi.spyOn(nflFetchers,'KICKING').mockResolvedValue({ home: { fg_made: 8, fg_attempts: 10 }, away: { fg_made: 7, fg_attempts: 9 } });

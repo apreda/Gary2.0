@@ -24,6 +24,9 @@ import { groundingSearch, groundedWebSearch } from './grounding.js';
 import { generateSolText } from '../../../insights/solText.js';
 import { fetchAnthropicFootballCurrentState } from './anthropicFootballGrounding.js';
 import { spreadForSide } from '../../../marketTruth.js';
+import { footballSeasonForDate, nflSeasonTypeForGame } from '../sports/footballSeason.js';
+import { hasSubstantiveNflSeasonStats, fetchNflTeamBaseline } from '../../../nflTeamBaseline.js';
+export { hasSubstantiveNflSeasonStats };
 
 /**
  * Do two club names refer to the same club? (shared-mascot class, Aug 19
@@ -61,13 +64,6 @@ export function namesRefer(a, b) {
 // TEAM PROFILE FUNCTIONS
 // ============================================================================
 
-const NFL_TAPE_PERFORMANCE_FIELDS = [
-  'total_points_per_game',
-  'opp_total_points_per_game',
-  'rushing_yards_per_game',
-  'net_passing_yards_per_game'
-];
-
 const NCAAF_TAPE_PERFORMANCE_FIELDS = [
   'passing_yards_per_game',
   'rushing_yards_per_game',
@@ -81,15 +77,6 @@ function exactFootballSeasonStatsRow(rows, teamId) {
     String(row?.team?.id ?? row?.team_id ?? '') === String(teamId)
   );
   return exactRows.length === 1 ? exactRows[0] : null;
-}
-
-export function hasSubstantiveNflSeasonStats(row) {
-  if (!row || Array.isArray(row)) return false;
-  return NFL_TAPE_PERFORMANCE_FIELDS.some((field) => {
-    const value = row[field];
-    return value !== null && value !== undefined && value !== '' &&
-      String(value).trim().toUpperCase() !== 'N/A';
-  });
 }
 
 export function hasSubstantiveNcaafSeasonStats(row) {
@@ -108,14 +95,6 @@ export function hasSubstantiveNcaafSeasonStats(row) {
   });
 }
 
-function isNflAugustPreseason(value = new Date()) {
-  const month = Number(new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    month: 'numeric'
-  }).format(value));
-  return month === 8;
-}
-
 export async function fetchTeamProfile(teamName, sport) {
   try {
     const bdlSport = sportToBdlKey(sport);
@@ -129,18 +108,16 @@ export async function fetchTeamProfile(teamName, sport) {
     // Calculate current season dynamically
     const currentSeason = seasonForSport(sport);
     
-    // BDL does not publish NFL team-season aggregates for preseason. In August,
-    // go directly to the prior completed regular season instead of spending one
-    // of the trial's five requests/minute on a guaranteed-empty current season.
-    // Outside August, try the current season first and fall back only when its
-    // exact team row has no usable performance fields (for example before Week
-    // 1 data has landed).
+    // August uses the prior regular season. In September the provider can
+    // expose last year's 17-game stats with this year's season label before
+    // opening night; current rows also need a verified played-game sample.
     const isNfl = bdlSport === 'americanfootball_nfl';
     const isNcaaf = bdlSport === 'americanfootball_ncaaf';
     const isFootball = isNfl || isNcaaf;
     const priorSeason = currentSeason - 1;
-    let seasonStatsSeason = isNfl && isNflAugustPreseason() ? priorSeason : currentSeason;
-    let seasonStats = await ballDontLieService.getTeamSeasonStats(bdlSport, {
+    const nflBaseline = isNfl ? await fetchNflTeamBaseline(team.id,currentSeason) : null;
+    let seasonStatsSeason = isNfl ? nflBaseline.season : currentSeason;
+    let seasonStats = isNfl ? nflBaseline.stats : await ballDontLieService.getTeamSeasonStats(bdlSport, {
       teamId: team.id,
       season: seasonStatsSeason,
       postseason: false
@@ -161,18 +138,7 @@ export async function fetchTeamProfile(teamName, sport) {
       }
     }
 
-    if (isNfl && seasonStatsSeason === currentSeason && !hasSubstantiveNflSeasonStats(seasonStats)) {
-      const priorRows = await ballDontLieService.getTeamSeasonStats(bdlSport, {
-        teamId: team.id,
-        season: priorSeason,
-        postseason: false
-      });
-      const priorStats = exactFootballSeasonStatsRow(priorRows, team.id);
-      if (hasSubstantiveNflSeasonStats(priorStats)) {
-        seasonStats = priorStats;
-        seasonStatsSeason = priorSeason;
-      }
-    }
+    const currentRegularGamesPlayed = nflBaseline?.currentRegularGamesPlayed ?? null;
 
     // NCAAF opens in August before BDL has a current-season aggregate row.
     // Keep current-season data authoritative whenever it is substantive; only
@@ -308,6 +274,7 @@ export async function fetchTeamProfile(teamName, sport) {
       seasonStatsSeason,
       seasonStatsScope,
       seasonStatsLabel,
+      currentRegularGamesPlayed,
       recordSeason,
       recordSource,
       teamId: team.id,
@@ -596,22 +563,40 @@ ${formatTeamRest(awayTeam, awayRest, false)}`;
 /**
  * Format recent form (simple — used by non-NBA sports)
  */
-export function formatRecentForm(teamName, recentGames, count = 5) {
+export function formatRecentForm(teamName, recentGames, count = 5, options = {}) {
   if (!recentGames || recentGames.length === 0) {
     return `• ${teamName}: Recent games unavailable`;
   }
 
-  let wins = 0, losses = 0;
+  let wins = 0, losses = 0, ties = 0;
 
   // Filter to only completed games (have scores > 0)
   const completedGames = recentGames.filter(game => {
     const homeScore = game.home_team_score ?? game.home_score ?? 0;
     const awayScore = game.visitor_team_score ?? game.away_score ?? 0;
+    if ((options.sport === 'NFL' || options.allowTies) && /^(final|completed)$/i.test(game.status || '')
+      && (game.home_team_score ?? game.home_score) != null && (game.visitor_team_score ?? game.away_score) != null) return true;
     return homeScore > 0 || awayScore > 0; // At least one team scored
   });
 
   if (completedGames.length === 0) {
     return `• ${teamName}: No recent completed games`;
+  }
+
+  if (options.sport === 'NFL') {
+    const groups = new Map();
+    for (const game of completedGames.slice(0, count)) {
+      const rawDate = game.date || game.datetime;
+      const instant = /^\d{4}-\d{2}-\d{2}$/.test(rawDate || '') ? `${rawDate}T12:00:00Z` : rawDate;
+      const validDate = Number.isFinite(Date.parse(instant));
+      const season = game.season ?? (validDate ? footballSeasonForDate('NFL', instant) : 'Unknown season');
+      const phase = validDate ? nflSeasonTypeForGame(game, instant) : Number(game.season_type);
+      const label = `${season} ${{ 1: 'preseason', 2: 'regular season', 3: 'postseason' }[phase] || 'phase unavailable'}`;
+      if (!groups.has(label)) groups.set(label, []);
+      groups.get(label).push(game);
+    }
+    return [...groups].map(([label, games]) => formatRecentForm(teamName, games, games.length, { includeDates: true, allowTies: true })
+      .replace(`• ${teamName}:`, `• ${teamName} — ${label}:`)).join('\n');
   }
 
   const results = completedGames.slice(0, count).map(game => {
@@ -636,13 +621,19 @@ export function formatRecentForm(teamName, recentGames, count = 5) {
     // so a road win read as a home win. Where a game was played is a real
     // factor in every one of these sports — say which it was.
     const venue = isHome ? 'vs' : '@';
+    const rawDate = game.date || game.datetime;
+    const dateLabel = options.includeDates ? ` [${/^\d{4}-\d{2}-\d{2}$/.test(rawDate || '') ? rawDate
+      : Number.isFinite(Date.parse(rawDate)) ? toESTDate(rawDate) : 'date unavailable'}]` : '';
 
-    if (teamScore > oppScore) {
+    if (options.allowTies && Number(teamScore) === Number(oppScore)) {
+      ties++;
+      return `T ${venue} ${oppName} (${teamScore}-${oppScore})${dateLabel}`;
+    } else if (teamScore > oppScore) {
       wins++;
-      return `W ${venue} ${oppName} (${teamScore}-${oppScore})`;
+      return `W ${venue} ${oppName} (${teamScore}-${oppScore})${dateLabel}`;
     } else {
       losses++;
-      return `L ${venue} ${oppName} (${teamScore}-${oppScore})`;
+      return `L ${venue} ${oppName} (${teamScore}-${oppScore})${dateLabel}`;
     }
   }).filter(r => r !== null);
 
@@ -650,7 +641,7 @@ export function formatRecentForm(teamName, recentGames, count = 5) {
   // min(completedGames.length, count), which ignored the games dropped by the
   // filter above — printing e.g. "2-2 last 5" beside four listed games.
   const listed = results.slice(0, count);
-  return `• ${teamName}: ${wins}-${losses} last ${listed.length}
+  return `• ${teamName}: ${wins}-${losses}${ties ? `-${ties}` : ''} last ${listed.length}
   ${listed.join(' | ')}`;
 }
 
@@ -1109,6 +1100,7 @@ export async function fetchInjuries(homeTeam, awayTeam, sport, gameDate = null) 
 
             const injuryObj = {
               player: {
+                id: inj.player?.id ?? null,
                 first_name: inj.player?.first_name,
                 last_name: inj.player?.last_name,
                 position: inj.player?.position || inj.player?.position_abbreviation
@@ -1116,6 +1108,7 @@ export async function fetchInjuries(homeTeam, awayTeam, sport, gameDate = null) 
               status: inj.status || 'Unknown',
               type: inj.comment?.split('(')[1]?.split(')')[0] || 'Unknown', // Extract injury type from comment
               daysSinceReport,
+              reportDate: inj.date || null,
               reportDateStr: injuryDate ? injuryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null,
               freshness,
               // Verbatim comment, never cut (founder law) — the 150-char cut
@@ -3360,7 +3353,15 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
     const isNcaab = sportKey && (sportKey.includes('ncaab') || sportKey.includes('NCAAB'));
     const isNhl = sportKey && (sportKey.includes('nhl') || sportKey.includes('NHL'));
 
-    if (i.status?.toUpperCase() === 'GTD') {
+    if (/^(?:americanfootball_)?nfl$/i.test(sportKey || '')) {
+      // NFL report age is not time missed. Keep the reported availability
+      // separate from the existing freshness/duration metadata.
+      const rawStatus = String(i.status || 'Unknown').trim().toUpperCase() || 'UNKNOWN';
+      const status = ({ Q: 'QUESTIONABLE', D: 'DOUBTFUL', O: 'OUT' })[rawStatus] || rawStatus;
+      const reportContext = i.duration || i.freshness || 'UNKNOWN';
+      const reportedTime = timeInfo.replace(' — Since ', ' — Reported ');
+      durationTag = ` [${status}; ${reportContext}${reportedTime || ' — report date unavailable'}]`;
+    } else if (i.status?.toUpperCase() === 'GTD') {
       const durationContext = days ? ` - was out ${days}d` : '';
       durationTag = ` [GTD${durationContext}]`;
     } else if (i.duration === 'SEASON-LONG' || i.status === 'Injured Reserve' || i.status === 'IR' || i.status === 'LTIR' || i.status === 'OFS') {
@@ -3411,6 +3412,22 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
 
     return result;
   };
+
+  if (/^(?:americanfootball_)?nfl$/i.test(sportKey || '')) {
+    // NFL supplies the date of the latest report, not the start of an absence.
+    // Keep every row once; report age alone cannot establish time missed or
+    // whether an absence has already appeared in the team's games or odds.
+    lines.push('NFL INJURY REPORT');
+    lines.push('────────────────────────────────────────');
+    for (const [side, team, tag] of [['home', homeTeam, '[HOME]'], ['away', awayTeam, '[AWAY]']]) {
+      lines.push(`${tag} ${team}:`);
+      const rows = injuries[side] || [];
+      if (rows.length) rows.forEach(i => lines.push(formatPlayer(i)));
+      else lines.push(injuries.sourceOk === false ? '  Injury report unavailable' : '  No injuries reported');
+      lines.push('');
+    }
+    return lines.join('\n');
+  }
 
   // Split injuries into two structural tiers per team
   const splitTeam = (cats) => {

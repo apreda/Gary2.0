@@ -72,6 +72,8 @@ const DOSSIER_SURFACE_FILES = [
   './optionalResearch.js',
   './requestCancellation.js',
   './providerAdapters/ownedProcessGroups.js',
+  './providerAdapters/codexCliSession.js',
+  '../searchResponseValidation.js',
   './investigationFactors.js',
 ];
 

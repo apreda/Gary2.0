@@ -33,7 +33,7 @@ if (!supported) {
 let directory; let started=false;
 const args=()=>['-h',directory,'-p','55449','-U','testadmin','-d','postgres','-X','-v','ON_ERROR_STOP=1','-At'];
 const sql=s=>execFileSync(`${bin}/psql`,[...args(),'-c',s],{env:pgEnv,encoding:'utf8',stdio:['pipe','pipe','pipe']}).trim();
-describe.skipIf(!supported)('Immutable MLB judgment ledger on isolated local Postgres',()=>{
+describe.skipIf(!supported)('Immutable MLB judgment ledger on isolated local Postgres',{timeout:15000},()=>{
   beforeAll(()=>{
     directory=mkdtempSync(path.join(tmpdir(),'gary-judgment-pg-'));
     try {
@@ -94,6 +94,14 @@ describe.skipIf(!supported)('Immutable MLB judgment ledger on isolated local Pos
   const claim=f=>query(`SELECT coalesce(jsonb_agg(to_jsonb(r)),'[]'::jsonb) FROM public.claim_mlb_winners_selection(${quote(f.date)},${quote(f.kickoff)}) r;`);
   const choice=r=>({summary:'The original complete game judgment supports this exact ticket.',ranked_candidates:r.input_snapshot.candidates.map((c,i)=>({candidate_id:c.id,rank:i+1,selected:true,expected_outcome:'Home wins the committed ticket.',reason:'Original starter and offense support the complete game.',comparison:'This is the strongest supplied original judgment.'}))});
   const finish=(r,selection=choice(r))=>query(`SELECT public.finish_mlb_winners_selection(${r.id},${r.attempts},${json(selection)},'test-gary',10);`);
+  // Each fixture makes several real psql/RPC round trips. Give those writes
+  // headroom under parallel-suite CPU load, then cross the actual server
+  // cutoff without changing any production clock or immutable timestamps.
+  const pregameLeadSeconds=5;
+  const waitUntilPostgame=f=>{
+    sql(`SELECT pg_sleep(GREATEST(0,EXTRACT(EPOCH FROM (${quote(f.kickoff)}::timestamptz-clock_timestamp())))+0.05);`);
+    expect(sql(`SELECT clock_timestamp()>${quote(f.kickoff)}::timestamptz;`)).toBe('t');
+  };
 
   it('atomically commits the initial judgment with server time and content hashes; replay cannot rewrite it',()=>{
     const f=setup();const first=start(f);expect(first).toMatchObject({ok:true,run_id:f.id,phase:'initial_commit'});
@@ -134,7 +142,7 @@ describe.skipIf(!supported)('Immutable MLB judgment ledger on isolated local Pos
   });
   it('cannot backdate initial or later phases, but can record a terminal failure after kickoff',()=>{
     expect(()=>start(setup({seconds:-1}))).toThrow(/future exact game/);
-    const f=setup({seconds:0.25});start(f);sql('SELECT pg_sleep(0.3);');
+    const f=setup({seconds:pregameLeadSeconds});start(f);waitUntilPostgame(f);
     expect(()=>append(f,'factual_research',f.research)).toThrow(/missed first pitch/);
     append(f,'failed',{error:'Research could not finish before kickoff.'});
     expect(()=>append(f,'stress_test',f.stress)).toThrow(/terminal phase/);
@@ -229,8 +237,8 @@ describe.skipIf(!supported)('Immutable MLB judgment ledger on isolated local Pos
   });
 
   const postgame=({originalGame={}}={})=>{
-    const original=setup({seconds:0.6});Object.assign(original.source.game,originalGame);
-    const f=published(original);sql('SELECT pg_sleep(0.65);');
+    const original=setup({seconds:pregameLeadSeconds});Object.assign(original.source.game,originalGame);
+    const f=published(original);waitUntilPostgame(f);
     const header=query(`SELECT to_jsonb(r) FROM public.mlb_judgment_runs r WHERE run_id=${quote(f.id)};`);
     const events=query(`SELECT jsonb_agg(to_jsonb(e) ORDER BY event_id) FROM public.mlb_judgment_events e WHERE run_id=${quote(f.id)};`);
     const snapshot=buildMlbExpectationSnapshot(header,events);

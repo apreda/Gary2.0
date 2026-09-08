@@ -33,9 +33,11 @@
  * Brains stay tool-less: a session created without tools is unchanged.
  */
 import { spawn } from 'child_process';
+import { StringDecoder } from 'node:string_decoder';
 import { isCliTripped, recordCliTimeout, recordCliSuccess, trippedError } from './cliCircuitBreaker.js';
 import { abortError, requestSignal } from '../requestCancellation.js';
 import { registerOwnedProcessGroup } from './ownedProcessGroups.js';
+import { searchResponseProblem } from '../../searchResponseValidation.js';
 
 const CODEX_BIN = process.env.CODEX_CLI_PATH || 'codex';
 // Measured Aug 25 2026 over 2,596 logged CLI responses: median 2.3m, p90 5.8m,
@@ -110,12 +112,15 @@ function runCodex(args, stdinText, timeoutMs = CALL_TIMEOUT_MS, breakerKey = 'co
   if (isCliTripped(breakerKey)) return Promise.reject(trippedError(breakerKey));
   return new Promise((resolve, reject) => {
     // The CLI wrapper starts a native child. Give this invocation its own
-    // process group so cancellation reaches both, without touching other games.
-    const processGroup = !!signal && process.platform !== 'win32';
+    // process group so timeouts and parent shutdown also reach descendants
+    // when the caller did not supply an explicit cancellation signal.
+    const processGroup = process.platform !== 'win32';
     const proc = spawn(CODEX_BIN, args, { stdio: ['pipe', 'pipe', 'pipe'], detached: processGroup });
     const releaseGroup = processGroup ? registerOwnedProcessGroup(proc.pid) : () => {};
     let stdout = '';
     let stderr = '';
+    const stdoutDecoder = new StringDecoder('utf8');
+    const stderrDecoder = new StringDecoder('utf8');
     let settled = false;
     let timer;
     const killOwnedGroup = (killSignal) => {
@@ -149,8 +154,8 @@ function runCodex(args, stdinText, timeoutMs = CALL_TIMEOUT_MS, breakerKey = 'co
     const onAbort = () => fail(signal.reason || abortError('Codex request cancelled'), { terminate: true });
     timer = setTimeout(() => fail(new Error(`codex CLI timed out after ${Math.round(timeoutMs / 60000)}m`), { terminate: true, timedOut: true }), timeoutMs);
     signal?.addEventListener('abort', onAbort, { once: true });
-    proc.stdout.on('data', (d) => { stdout += d.toString(); });
-    proc.stderr.on('data', (d) => { stderr += d.toString(); });
+    proc.stdout.on('data', (d) => { stdout += stdoutDecoder.write(typeof d === 'string' ? Buffer.from(d) : d); });
+    proc.stderr.on('data', (d) => { stderr += stderrDecoder.write(typeof d === 'string' ? Buffer.from(d) : d); });
     proc.on('error', (e) => fail(e));
     proc.stdin.on('error', (e) => fail(e, { terminate: true }));
     proc.on('close', (code) => {
@@ -158,6 +163,8 @@ function runCodex(args, stdinText, timeoutMs = CALL_TIMEOUT_MS, breakerKey = 'co
       settled = true;
       cleanup();
       releaseGroup();
+      stdout += stdoutDecoder.end();
+      stderr += stderrDecoder.end();
       // Any answer at all — even a non-zero exit — means the bridge is alive.
       // A killed request closing is not an answer and cannot erase a timeout.
       recordCliSuccess(breakerKey);
@@ -184,6 +191,7 @@ function parseEvents(stdout) {
   const messages = [];
   let usage = null;
   let failure = null;
+  let completed = false;
   for (const line of String(stdout).split('\n')) {
     const t = line.trim();
     if (!t.startsWith('{')) continue;
@@ -193,12 +201,19 @@ function parseEvents(stdout) {
     if (ev.type === 'item.completed' && ev.item?.type === 'agent_message' && ev.item.text) {
       messages.push(ev.item.text);
     }
-    if (ev.type === 'turn.completed') usage = ev.usage || usage;
+    if (ev.type === 'turn.started') completed = false;
+    if (ev.type === 'turn.completed') {
+      completed = true;
+      usage = ev.usage || usage;
+    }
     if (ev.type === 'turn.failed') failure = ev.error?.message || 'turn.failed';
     if (ev.type === 'error' && !failure) failure = ev.message || 'error event';
   }
   if (failure) throw toError(failure);
-  return { threadId, text: messages.join('\n\n'), usage };
+  // A successful process exit alone cannot establish a completed model turn.
+  // Reject an interrupted/truncated event stream before exposing partial text.
+  if (!completed) throw toError('Incomplete event stream: missing turn.completed receipt');
+  return { threadId, text: messages.join('\n\n'), finalText: messages.at(-1) || '', usage };
 }
 
 export async function createCodexCliSession(options = {}) {
@@ -317,8 +332,13 @@ export async function codexCliWebSearch(prompt, options = {}) {
     // wallet balance, the $0 rung finishing is worth the extra headroom.
     const { code, stdout, stderr } = await runCodex(args, prompt, options.timeoutMs || 8 * 60 * 1000, 'codex-search', options.signal);
     if (code !== 0) throw toError(stderr || stdout);
-    const { text } = parseEvents(stdout);
+    const { text, finalText } = parseEvents(stdout);
     const clean = String(text || '').trim();
+    const problem = searchResponseProblem(finalText);
+    if (problem) {
+      console.warn(`[Web Search] codex-cli search unusable: ${problem}`);
+      return { success: false, data: '', raw: stdout, error: problem };
+    }
     console.log(`[Web Search] codex-cli (${model}) returned ${clean.length} chars (GPT Pro — $0 marginal)`);
     return { success: clean.length > 0, data: clean, raw: stdout };
   } catch (e) {

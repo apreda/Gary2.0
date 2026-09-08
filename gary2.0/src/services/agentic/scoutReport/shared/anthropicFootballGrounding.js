@@ -318,6 +318,21 @@ async function runFootballSearch({
       }
 
       if (!response.ok) {
+        // The provider uses HTTP400 for exhausted credits as well as bad
+        // requests. Classify only this known error; never log arbitrary error
+        // bodies, which can echo request data or credentials.
+        let insufficientCredits = false;
+        if (response.status === 400) {
+          try {
+            const body = await response.json();
+            insufficientCredits = body?.error?.type === 'invalid_request_error' &&
+              /\bcredit balance is too low\b/i.test(String(body.error.message || ''));
+          } catch { /* unknown/malformed error body keeps the generic status */ }
+        }
+        if (insufficientCredits) {
+          console.warn(`[${label}] Anthropic HTTP 400 — insufficient API credits`);
+          return fail('the Anthropic fallback has insufficient API credits (HTTP 400); no research was generated');
+        }
         console.warn(`[${label}] Anthropic HTTP ${response.status}`);
         return fail(response.status === 429
           ? `rate limited by the search API (HTTP 429) after ${RATE_LIMIT_RETRIES} retries — this is NOT a finding that no coverage exists`

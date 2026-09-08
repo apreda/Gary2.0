@@ -4,12 +4,57 @@
  * Builds a verified comparison table for both teams using BDL data.
  * Sport-specific stat rows: NBA (efficiency), NFL (yards/points), NCAAF (yards).
  */
+import { eligibleNflRegularGames } from '../../../nflTeamBaseline.js';
+import { footballSeasonForDate } from '../sports/footballSeason.js';
+import { numericStat } from '../../../playerGameLogFacts.js';
+
+/** Current NFL regular-season form, separate from the prior statistical baseline. */
+export function buildNflRecentFormRow({homeTeam,awayTeam,homeTeamId,awayTeamId,recentHome=[],recentAway=[],before=Date.now(),season=footballSeasonForDate('NFL',before)}) {
+  const summarize = (games,teamId) => {
+    const finals = teamId == null ? [] : eligibleNflRegularGames(games,teamId,season,{before})
+      .filter(game => numericStat(game.home_team_score ?? game.home_score) !== null
+        && numericStat(game.visitor_team_score ?? game.away_team_score ?? game.away_score) !== null)
+      .sort((a,b) => Date.parse(b.date || b.datetime || b.commence_time) - Date.parse(a.date || a.datetime || a.commence_time))
+      .slice(0,5);
+    let wins=0,losses=0,ties=0;
+    for (const game of finals) {
+      const isHome = String(game.home_team?.id ?? game.home_team_id) === String(teamId);
+      const home = numericStat(game.home_team_score ?? game.home_score);
+      const away = numericStat(game.visitor_team_score ?? game.away_team_score ?? game.away_score);
+      const margin = isHome ? home-away : away-home;
+      if (margin > 0) wins++;
+      else if (margin < 0) losses++;
+      else ties++;
+    }
+    return {value:finals.length ? `${wins}-${losses}${ties ? `-${ties}` : ''}` : 'N/A',provenance:{
+      season,phase:'regular',scope:'current_regular_season',games_used:finals.length,
+      game_ids:finals.map(game=>game.id),dates:finals.map(game=>game.date || game.datetime || game.commence_time),
+      as_of:new Date(before).toISOString(),
+      label:`${season} regular season; ${finals.length ? `latest ${finals.length} completed games` : 'no completed games in the supplied evidence'}`,
+    }};
+  };
+  const h=summarize(recentHome,homeTeamId),a=summarize(recentAway,awayTeamId);
+  return {name:`L5 Form · ${season} regular`,token:'L5_FORM',home:{team:homeTeam,value:h.value},away:{team:awayTeam,value:a.value},
+    statProvenance:{home:h.provenance,away:a.provenance}};
+}
+
+/** Repair only an existing display row and its matching text line. */
+export function replaceNflTaleRecentForm(tape,row) {
+  const matches = (tape?.rows || []).filter(item=>item.token==='L5_FORM');
+  if (matches.length !== 1 || row?.token !== 'L5_FORM') throw new Error('Expected exactly one L5_FORM display row');
+  const old = matches[0];
+  const lines = String(tape.text || '').split('\n');
+  const indices = lines.map((line,index)=>line.startsWith(`${old.name} `) ? index : -1).filter(index=>index>=0);
+  if (indices.length !== 1) throw new Error('Expected exactly one matching recent-form text line');
+  lines[indices[0]] = `${row.name.padEnd(14)}${String(row.home.value).padStart(12)}  |  ${row.away.value}`;
+  return {...tape,rows:tape.rows.map(item=>item===old ? row : item),text:lines.join('\n')};
+}
 
 /**
  * Build a verified Tale of the Tape comparison from BDL stats.
  * Returns { text, rows } where rows is structured data for iOS app.
  */
-export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayProfile, sport, injuries = {}, recentHome = [], recentAway = []) {
+export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayProfile, sport, injuries = {}, recentHome = [], recentAway = [], options = {}) {
   const homeStats = homeProfile?.seasonStats || {};
   const awayStats = awayProfile?.seasonStats || {};
 
@@ -190,11 +235,13 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
       true
     );
 
-    // L5 Form
-    const l5Form = formatStat(homeL5, awayL5, true);
+    const currentForm = buildNflRecentFormRow({homeTeam,awayTeam,
+      homeTeamId:homeProfile?.teamId ?? homeStats.team?.id ?? homeStats.team_id,
+      awayTeamId:awayProfile?.teamId ?? awayStats.team?.id ?? awayStats.team_id,
+      recentHome,recentAway,...options});
 
     rows = [
-      { label: 'L5 Form', ...l5Form },
+      {label:currentForm.name,token:currentForm.token,...formatStat(currentForm.home.value,currentForm.away.value),statProvenance:currentForm.statProvenance},
       { label: 'Record', ...record },
       { label: performanceLabel('Points/Gm'), token: 'POINTS_GM', ...ppg, statProvenance: nflStatProvenance },
       { label: performanceLabel('Opp Pts/Gm'), token: 'OPP_PTS_GM', ...oppPpg, statProvenance: nflStatProvenance },

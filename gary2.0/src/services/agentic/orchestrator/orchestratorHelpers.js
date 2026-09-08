@@ -67,8 +67,11 @@ export function summarizeStatForContext(statResult, statToken, homeTeam, awayTea
     // fields (including games_used/record and at_home/on_road). Preserve the
     // complete football payload, including explicit unavailable values. NFL
     // SPECIAL_TEAMS must never enter the old hockey PP/PK formatter below.
-    const footballStats = (/^(?:americanfootball_)?(?:nfl|ncaaf)$/i.test(sport) || /^(?:NFL|NCAAF)_/.test(statToken)) &&
-      !['INJURIES', 'NCAAF_INJURIES', 'NFL_INJURIES'].includes(statToken);
+    // NFL injuries use grouped statuses, original dated records and practice
+    // evidence. The generic injuries[] formatter loses that source context.
+    const nflStats = /^(?:americanfootball_)?nfl$/i.test(sport) || statToken.startsWith('NFL_');
+    const footballStats = nflStats || ((/^(?:americanfootball_)?ncaaf$/i.test(sport) || statToken.startsWith('NCAAF_')) &&
+      !['INJURIES', 'NCAAF_INJURIES'].includes(statToken));
     const scoringSplits = ['QUARTER_SCORING', 'FIRST_HALF_SCORING', 'SECOND_HALF_SCORING', 'FIRST_HALF_TRENDS', 'SECOND_HALF_TRENDS'].includes(statToken);
     if (footballStats || scoringSplits ||
         (statToken === 'RECENT_FORM' && (h.games_used != null || a.games_used != null)) ||

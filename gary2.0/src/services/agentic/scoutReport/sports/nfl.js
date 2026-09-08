@@ -84,7 +84,25 @@ const nflStadiums = {
 // fetchQBStatsByName
 // Fetches season stats for a specific QB by name from BDL
 // =========================================================================
-async function fetchQBStatsByName(qbName, teamName, season = footballSeasonForDate('NFL')) {
+function playerStatsSeason(season, baseline = {}) {
+  return Object.hasOwn(baseline, 'statsSeason') ? baseline.statsSeason : season;
+}
+
+function validPlayerSeasonRows(rows, statsSeason, rosterSeason, baseline = {}) {
+  if (!Number.isInteger(statsSeason)) return [];
+  return (rows || []).filter(row => {
+    if (row.season != null && Number(row.season) !== statsSeason) return false;
+    if (row.postseason === true || row.postseason === 'true' || (row.season_type != null && Number(row.season_type) !== 2)) return false;
+    if (statsSeason === rosterSeason && Object.hasOwn(baseline, 'currentRegularGamesPlayed')) {
+      const count = baseline.currentRegularGamesPlayed;
+      const games = Number(row.games_played);
+      if (!Number.isInteger(count) || count <= 0 || !Number.isInteger(games) || games <= 0 || games > count) return false;
+    }
+    return true;
+  });
+}
+
+async function fetchQBStatsByName(qbName, teamName, season = footballSeasonForDate('NFL'), baseline = {}) {
   try {
     const bdlSport = 'americanfootball_nfl';
     const teams = await ballDontLieService.getTeams(bdlSport);
@@ -93,6 +111,10 @@ async function fetchQBStatsByName(qbName, teamName, season = footballSeasonForDa
       console.log(`[Scout Report] Could not find team ${teamName} for QB stats lookup`);
       return { name: qbName, team: teamName, passingYards: 0, passingTds: 0, gamesPlayed: 0 };
     }
+
+    const selectedStatsSeason = playerStatsSeason(season, baseline);
+    if (!Number.isInteger(selectedStatsSeason)) return { name: qbName, team: teamName, teamAbbr: team.abbreviation,
+      passingYards: null, passingTds: null, gamesPlayed: null, statsSeason: null, note: 'Verified performance baseline unavailable' };
 
     // Reuse the service-level cache shared with fetchKeyPlayers. The previous
     // direct axios request hit this exact endpoint outside the cache, then the
@@ -117,15 +139,15 @@ async function fetchQBStatsByName(qbName, teamName, season = footballSeasonForDa
       return false;
     });
 
-    let statsSeason = season;
-    let qbStats = findQbRows(await ballDontLieService.getNflSeasonStatsByTeam(team.id, statsSeason));
+    let statsSeason = selectedStatsSeason;
+    let qbStats = findQbRows(validPlayerSeasonRows(await ballDontLieService.getNflSeasonStatsByTeam(team.id, statsSeason), statsSeason, season, baseline));
     // PRESEASON / SEASON-OPEN FALLBACK (the qbWatch pattern, founder GO Aug
     // 20): the current season's stat rows are empty until real games are
     // played — before this, August dossiers printed Herbert as "? GP | 0 yds"
     // and the experience notes below called him a debutant. Fall to the PRIOR
     // season, LABELED, whenever the current season has no played games.
     if (!qbStats.length || !(Number(qbStats[0]?.games_played) > 0)) {
-      let prior = findQbRows(await ballDontLieService.getNflSeasonStatsByTeam(team.id, season - 1));
+      let prior = findQbRows(validPlayerSeasonRows(await ballDontLieService.getNflSeasonStatsByTeam(team.id, season - 1), season - 1, season, baseline));
       // A starter who changed clubs in the offseason has no line on this
       // club's prior season (Sep 1 review: the fallback was team-scoped, so
       // a 4,000-yard passer read "no NFL stat line on file"). Find HIM —
@@ -140,7 +162,7 @@ async function fetchQBStatsByName(qbName, teamName, season = footballSeasonForDa
           });
           const him = candidates[0];
           if (him?.id) {
-            const own = (await ballDontLieService.getNflPlayerSeasonStats({ playerId: him.id, season: season - 1 }).catch(() => [])) || [];
+            const own = validPlayerSeasonRows((await ballDontLieService.getNflPlayerSeasonStats({ playerId: him.id, season: season - 1 }).catch(() => [])) || [], season - 1, season, baseline);
             if (own.length && Number(own[0]?.games_played) > 0) prior = own;
           }
         } catch { /* the by-player lookup is additive */ }
@@ -213,7 +235,8 @@ async function fetchQBStatsByName(qbName, teamName, season = footballSeasonForDa
       passingTds: qb.passing_touchdowns || 0,
       passingInterceptions: qb.passing_interceptions || 0,
       passingCompletionPct: qb.passing_completion_pct,
-      qbRating: qb.qbr || qb.qb_rating,
+      qbr: qb.qbr ?? null,
+      qbRating: qb.qb_rating ?? null,
       gamesPlayed: gamesPlayed,
       // Which season this stat line describes — the formatter labels the line
       // with it ("2025-26 season:"), so a prior-season fallback never reads as
@@ -252,7 +275,7 @@ async function fetchQBStatsByName(qbName, teamName, season = footballSeasonForDa
  * branches called had never been defined, and nothing ever noticed).
  * NCAAF resolves its quarterbacks through fetchNcaafKeyPlayers in ncaaf.js.
  */
-async function fetchStartingQBs(homeTeam, awayTeam, sport, injuries = null, season = footballSeasonForDate(sport)) {
+async function fetchStartingQBs(homeTeam, awayTeam, sport, injuries = null, season = footballSeasonForDate(sport), baselines = {}) {
   try {
     const bdlSport = sportToBdlKey(sport);
     if (bdlSport !== 'americanfootball_nfl') {
@@ -275,8 +298,8 @@ async function fetchStartingQBs(homeTeam, awayTeam, sport, injuries = null, seas
 
     // NFL has a true depth chart, so the starter is read rather than inferred.
     const [homeQBDepth, awayQBDepth] = await Promise.all([
-          homeTeamData ? ballDontLieService.getStartingQBFromDepthChart(homeTeamData.id, season, bdlSport) : null,
-          awayTeamData ? ballDontLieService.getStartingQBFromDepthChart(awayTeamData.id, season, bdlSport) : null
+          homeTeamData ? ballDontLieService.getStartingQBFromDepthChart(homeTeamData.id, season, bdlSport, { officialInjuries: injuries?.home || [] }) : null,
+          awayTeamData ? ballDontLieService.getStartingQBFromDepthChart(awayTeamData.id, season, bdlSport, { officialInjuries: injuries?.away || [] }) : null
         ]);
 
     // STEP 2: Fetch season stats for these specific QBs
@@ -285,14 +308,14 @@ async function fetchStartingQBs(homeTeam, awayTeam, sport, injuries = null, seas
     let awayQB = awayQBDepth;
 
     if (homeQBDepth) {
-      const stats = await fetchQBStatsByName(homeQBDepth.name, homeTeam, season);
+      const stats = await fetchQBStatsByName(homeQBDepth.name, homeTeam, season, baselines.home);
       if (stats) {
         homeQB = { ...homeQBDepth, ...stats, isBackup: homeQBDepth.isBackup };
       }
     }
 
     if (awayQBDepth) {
-      const stats = await fetchQBStatsByName(awayQBDepth.name, awayTeam, season);
+      const stats = await fetchQBStatsByName(awayQBDepth.name, awayTeam, season, baselines.away);
       if (stats) {
         awayQB = { ...awayQBDepth, ...stats, isBackup: awayQBDepth.isBackup };
       }
@@ -327,7 +350,7 @@ async function fetchStartingQBs(homeTeam, awayTeam, sport, injuries = null, seas
 // Uses roster depth chart + season stats to show who actually plays
 // This prevents hallucinations about players who've been traded/cut
 // =========================================================================
-export async function fetchKeyPlayers(homeTeam, awayTeam, sport, season = footballSeasonForDate('NFL')) {
+export async function fetchKeyPlayers(homeTeam, awayTeam, sport, season = footballSeasonForDate('NFL'), baselines = {}) {
   try {
     const bdlSport = sportToBdlKey(sport);
     if (bdlSport !== 'americanfootball_nfl') {
@@ -345,12 +368,15 @@ export async function fetchKeyPlayers(homeTeam, awayTeam, sport, season = footba
 
     console.log(`[Scout Report] Fetching NFL rosters for ${homeTeam} (ID: ${homeTeamData?.id}) and ${awayTeam} (ID: ${awayTeamData?.id})`);
 
+    const statsSeasons = { home: playerStatsSeason(season, baselines.home), away: playerStatsSeason(season, baselines.away) };
+    const readStats = async (team, side) => team && Number.isInteger(statsSeasons[side])
+      ? validPlayerSeasonRows(await ballDontLieService.getNflSeasonStatsByTeam(team.id, statsSeasons[side]), statsSeasons[side], season, baselines[side]) : [];
     // Fetch rosters and season stats in parallel
     const [homeRoster, awayRoster, homeStats, awayStats] = await Promise.all([
       homeTeamData ? ballDontLieService.getNflTeamRoster(homeTeamData.id, season) : [],
       awayTeamData ? ballDontLieService.getNflTeamRoster(awayTeamData.id, season) : [],
-      homeTeamData ? ballDontLieService.getNflSeasonStatsByTeam(homeTeamData.id, season) : [],
-      awayTeamData ? ballDontLieService.getNflSeasonStatsByTeam(awayTeamData.id, season) : []
+      readStats(homeTeamData, 'home'),
+      readStats(awayTeamData, 'away')
     ]);
 
     // Process each team's roster to get key starters
@@ -379,18 +405,25 @@ export async function fetchKeyPlayers(homeTeam, awayTeam, sport, season = footba
       // Track positions we've filled to avoid duplicates
       const filledOffense = new Set();
       const filledDefense = new Set();
+      const filledPlayers = new Set();
 
       // Sort by depth to prioritize starters
       const sortedRoster = [...roster].sort((a, b) => (a.depth || 99) - (b.depth || 99));
 
       for (const entry of sortedRoster) {
-        const pos = entry.position?.toUpperCase() || entry.player?.position_abbreviation?.toUpperCase() || '';
+        const rosterPosition = entry.position?.toUpperCase() || entry.player?.position_abbreviation?.toUpperCase() || '';
+        // BDL's WR-2/WR-3 are receiver slots, while KR/PR are separate duties.
+        // Counting return duties as additional offensive players duplicates a receiver.
+        if (['KR', 'PR', 'H', 'LS', 'P', 'PK', 'K'].includes(rosterPosition)) continue;
+        const pos = rosterPosition.replace(/^WR-\d+$/, 'WR');
         const player = entry.player || {};
         const playerId = player.id;
         const playerStats = statsMap.get(playerId) || {};
+        const playerIdentity = `${playerId ?? (entry.player_name || `${player.first_name || ''} ${player.last_name || ''}`).trim().toLowerCase()}:${pos}`;
 
         // Only take depth 1-2 players (starters and key backups)
         if ((entry.depth || 1) > 2) continue;
+        if (filledPlayers.has(playerIdentity)) continue;
 
         const playerInfo = {
           name: entry.player_name || `${player.first_name || ''} ${player.last_name || ''}`.trim(),
@@ -431,6 +464,7 @@ export async function fetchKeyPlayers(homeTeam, awayTeam, sport, season = footba
           if (!['WR', 'RB'].includes(pos)) filledOffense.add(pos);
 
           starters.offense.push(playerInfo);
+          filledPlayers.add(playerIdentity);
         }
 
         // Limit defense to key playmakers
@@ -445,6 +479,7 @@ export async function fetchKeyPlayers(homeTeam, awayTeam, sport, season = footba
           if (!['CB', 'EDGE', 'DE', 'OLB', 'ILB', 'MLB', 'LB'].includes(pos)) filledDefense.add(pos);
 
           starters.defense.push(playerInfo);
+          filledPlayers.add(playerIdentity);
         }
       }
 
@@ -479,7 +514,9 @@ export async function fetchKeyPlayers(homeTeam, awayTeam, sport, season = footba
     return {
       home: homeKeyPlayers,
       away: awayKeyPlayers,
-      season
+      season: statsSeasons.home === statsSeasons.away ? statsSeasons.home : null,
+      rosterSeason: season,
+      statsSeasons
     };
   } catch (error) {
     console.error('[Scout Report] Error fetching key players:', error.message);
@@ -493,7 +530,7 @@ export async function fetchKeyPlayers(homeTeam, awayTeam, sport, season = footba
 // Format key players section for display
 // ENHANCED: Now includes "TOP RECEIVING TARGETS" section
 // =========================================================================
-function formatKeyPlayers(homeTeam, awayTeam, keyPlayers) {
+export function formatKeyPlayers(homeTeam, awayTeam, keyPlayers) {
   if (!keyPlayers || (!keyPlayers.home && !keyPlayers.away)) {
     return '';
   }
@@ -587,7 +624,11 @@ ${awayReceivers.length > 0 ? awayReceivers.map(formatReceiverLine).join('\n') : 
   const statsVintage = keyPlayers.season != null
     ? ` — stat lines are ${footballSeasonLabel(keyPlayers.season)} season totals`
     : '';
-  return `${topReceiversSection}
+  const baselineLabels = keyPlayers.statsSeasons ? ['PLAYER PERFORMANCE BASELINES', ...[['home', homeTeam], ['away', awayTeam]].map(([side, team]) => {
+    const year = keyPlayers.statsSeasons[side];
+    return `${team}: ${year == null ? 'unavailable' : `${footballSeasonLabel(year)} ${year < keyPlayers.rosterSeason ? 'prior completed season baseline (not current-season form)' : 'regular-season totals'}`}`;
+  })].join('\n') + '\n' : '';
+  return `${baselineLabels}${topReceiversSection}
 KEY PLAYERS (CURRENT ROSTER${statsVintage})
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${homeSection}
@@ -608,25 +649,26 @@ function formatNflRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
   }
 
   // Build a set of injured player names for quick lookup
-  const injuredPlayers = new Map();
-  const allInjuries = [...(injuries?.home || []), ...(injuries?.away || [])];
-  for (const inj of allInjuries) {
+  const injuredPlayers = { home: new Map(), away: new Map() };
+  for (const side of ['home', 'away']) for (const inj of (injuries?.[side] || [])) {
     const name = inj.name?.toLowerCase() || `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.toLowerCase().trim();
     if (name && name !== 'unknown') {
-      injuredPlayers.set(name, {
+      injuredPlayers[side].set(name, {
         status: inj.status || 'Unknown',
         description: inj.description || inj.comment || ''
       });
     }
   }
 
-  const getInjuryStatus = (playerName) => getInjuryStatusFromMap(playerName, injuredPlayers);
+  const getInjuryStatus = (playerName, side) => getInjuryStatusFromMap(playerName, injuredPlayers[side]);
 
   // Helper to format a player row
-  const formatPlayerRow = (player) => {
-    const injury = getInjuryStatus(player.name) || (player.injuryStatus ? { status: player.injuryStatus } : null);
-    const status = injury ? '[OUT]' : '[ACTIVE]';
-    const injuryNote = injury ? ` - ${injury.status.toUpperCase()}` : '';
+  const formatPlayerRow = (player, side) => {
+    const injury = getInjuryStatus(player.name, side) || (player.injuryStatus ? { status: player.injuryStatus } : null);
+    const statusText = String(injury?.status || '').toUpperCase();
+    const statusName = { Q: 'QUESTIONABLE', D: 'DOUBTFUL', O: 'OUT', IR: 'INJURED RESERVE', PUP: 'PHYSICALLY UNABLE TO PERFORM' }[statusText] || statusText;
+    const status = injury ? `[${statusName || 'STATUS UNKNOWN'}]` : '[NO REPORTED INJURY]';
+    const injuryNote = injury ? ` - ${statusText || 'UNKNOWN'}` : '';
     const depth = player.depth > 1 ? ` (Depth: ${player.depth})` : '';
 
     return `  ${status} ${player.position}: ${player.name}${depth}${injuryNote}`;
@@ -650,7 +692,7 @@ function formatNflRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
     for (const pos of positions) {
       const posPlayers = rosterDepth.home.filter(p => p.position === pos);
       posPlayers.forEach(player => {
-        lines.push(formatPlayerRow(player));
+        lines.push(formatPlayerRow(player, 'home'));
       });
     }
     lines.push('');
@@ -665,7 +707,7 @@ function formatNflRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
     for (const pos of positions) {
       const posPlayers = rosterDepth.away.filter(p => p.position === pos);
       posPlayers.forEach(player => {
-        lines.push(formatPlayerRow(player));
+        lines.push(formatPlayerRow(player, 'away'));
       });
     }
     lines.push('');
@@ -978,7 +1020,8 @@ function formatStartingQBs(homeTeam, awayTeam, qbs) {
     const jersey = qb.jerseyNumber ? ` (#${qb.jerseyNumber})` : '';
     lines.push(`[${sideLabel}] ${teamName}: ${qb.name}${expLabel}${jersey}${backupLabel}`);
 
-    const seasonLabel = qb.statsSeason != null ? `${footballSeasonLabel(qb.statsSeason)} season` : 'Season';
+    const seasonLabel = qb.statsSeason != null
+      ? `${footballSeasonLabel(qb.statsSeason)} ${qb.statsSeason < qbs.season ? 'prior completed season baseline (not current-season form)' : 'season'}` : 'Season';
     if ((qb.gamesPlayed || 0) > 0) {
       // Handle both old (passingInterceptions) and new (passingInts) property names
       const ints = qb.passingInterceptions || qb.passingInts || 0;
@@ -990,6 +1033,7 @@ function formatStartingQBs(homeTeam, awayTeam, qbs) {
         `${qb.passingTds || 0} TD / ${ints} INT`,
       ];
       if (Number.isFinite(parseFloat(compPct))) parts.push(`${parseFloat(compPct).toFixed(1)}%`);
+      if (Number.isFinite(parseFloat(qb.qbr))) parts.push(`QBR: ${parseFloat(qb.qbr).toFixed(1)}`);
       if (Number.isFinite(parseFloat(rating))) parts.push(`Rating: ${parseFloat(rating).toFixed(1)}`);
       lines.push(`   ${seasonLabel}: ${parts.join(' | ')}`);
     } else {
@@ -1099,7 +1143,11 @@ export async function buildNflScoutReport(game, options = {}) {
   // ===================================================================
   // Step C: Fetch starting QBs (pass injuries to filter out IR/Out players)
   // ===================================================================
-  const startingQBs = await fetchStartingQBs(homeTeam, awayTeam, sportKey, injuries, nflSeasonYear);
+  const playerBaselines = Object.fromEntries([['home', homeProfile], ['away', awayProfile]].map(([side, profile]) => [side, {
+    statsSeason: profile?.seasonStatsSeason ?? null,
+    currentRegularGamesPlayed: profile?.currentRegularGamesPlayed ?? null,
+  }]));
+  const startingQBs = await fetchStartingQBs(homeTeam, awayTeam, sportKey, injuries, nflSeasonYear, playerBaselines);
   // Second half of the hard gate: no pick without both starting QBs.
   if (!startingQBs?.home?.name || !startingQBs?.away?.name) {
     const missing = [!startingQBs?.home?.name ? homeTeam : null, !startingQBs?.away?.name ? awayTeam : null].filter(Boolean).join(', ');
@@ -1110,7 +1158,7 @@ export async function buildNflScoutReport(game, options = {}) {
   // ===================================================================
   // Step D: Fetch key players (roster + stats) to prevent hallucinations
   // ===================================================================
-  const keyPlayers = await fetchKeyPlayers(homeTeam, awayTeam, sportKey, nflSeasonYear);
+  const keyPlayers = await fetchKeyPlayers(homeTeam, awayTeam, sportKey, nflSeasonYear, playerBaselines);
 
   // ===================================================================
   // Step E: Fetch NFL roster depth + playoff history
@@ -1399,8 +1447,8 @@ ${keyPlayers ? formatKeyPlayers(homeTeam, awayTeam, keyPlayers) : ''}${startingQ
 
 RECENT FORM (Last 5 Games)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${formatRecentForm(homeTeam, recentHome)}
-${formatRecentForm(awayTeam, recentAway)}
+${formatRecentForm(homeTeam, recentHome, 5, { sport: 'NFL' })}
+${formatRecentForm(awayTeam, recentAway, 5, { sport: 'NFL' })}
 HEAD-TO-HEAD HISTORY (${seasonLabel} SEASON)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatH2HSection(h2hData, homeTeam, awayTeam)}
@@ -1437,4 +1485,4 @@ ${formatOdds(game, sportKey)}
 }
 
 
-export { fetchStartingQBs, fetchQBStatsByName, formatStartingQBs };
+export { fetchStartingQBs, fetchQBStatsByName, formatStartingQBs, formatNflRosterDepth };

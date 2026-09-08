@@ -1,6 +1,5 @@
-// Only explicitly cancellable bridge calls get separate process groups.
-// The scheduler still owns the ordinary child group; these groups must also
-// die if their Node parent is stopped before its research deadline fires.
+// Each bridge invocation owns its descendant group. Those groups must also
+// die if the Node parent exits, including callers without an abort signal.
 const ownedGroups = new Set();
 
 function killOwnedGroups() {

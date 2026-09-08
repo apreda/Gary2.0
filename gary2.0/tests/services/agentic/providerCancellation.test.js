@@ -55,13 +55,14 @@ describe('bridge cancellation', () => {
     const controller = new AbortController();
     const search = withRequestSignal(controller.signal, () => codexCliWebSearch('lookup'));
     const unrelated = codexCliOneShot('other game');
-    expect(mocks.spawn.mock.calls[1][2].detached).toBe(false);
+    expect(mocks.spawn.mock.calls[1][2].detached).toBe(true);
     const rejected = expect(search).rejects.toMatchObject({ name: 'AbortError' });
     controller.abort();
     await rejected;
     expect(process.kill).toHaveBeenCalledWith(-100000, 'SIGTERM');
     expect(process.kill).not.toHaveBeenCalledWith(-100001, 'SIGTERM');
     processes[1].stdout.emit('data', JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: 'answer' } }) + '\n');
+    processes[1].stdout.emit('data', JSON.stringify({ type: 'turn.completed' }) + '\n');
     processes[1].emit('close', 0);
     expect(await unrelated).toMatchObject({ success: true, data: 'answer' });
   });
@@ -77,6 +78,18 @@ describe('bridge cancellation', () => {
     expect(isCliTripped('codex')).toBe(false);
     expect(await codexCliOneShot('third', { breakerKey: 'contained' })).toMatchObject({ success: false });
     expect(mocks.spawn).toHaveBeenCalledTimes(2);
+  });
+
+  it('terminates the complete timed-out web-search group even without an abort signal', async () => {
+    const task = codexCliWebSearch('lookup', { timeoutMs: 100 });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(await task).toMatchObject({ success: false, error: expect.stringContaining('timed out') });
+    expect(mocks.spawn.mock.calls[0][2].detached).toBe(true);
+    expect(process.kill).toHaveBeenCalledWith(-100000, 'SIGTERM');
+    expect(processes[0].kill).not.toHaveBeenCalled();
+    processes[0].emit('close', 143);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(process.kill).toHaveBeenCalledWith(-100000, 'SIGKILL');
   });
 });
 
