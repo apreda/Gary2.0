@@ -43,3 +43,9 @@ Removing new capture does not fulfill any promise already made. Adam owns the fo
 6. Separately verify receipt and reply routing for the public support, privacy and legal addresses. Adam is the launch support owner in the runbook; actual inbox access/coverage and the internal next-business-day review target still need acceptance. Do not publish a response-time guarantee from that internal target.
 
 These open items correspond to C10, C11 and the conditional P12 email row in `LAUNCH_COMPLETION_TRACKER.md`; they are not completed by the source correction.
+
+## September 8 provider-console follow-up
+
+A read-only check of the existing authenticated Resend session, completed around midnight Eastern, exposed a workspace named `betwithgary` under the business identity. Its Domains table contained exactly one unrelated project domain and no `betwithgary.ai` sending domain; Webhooks reported “No webhooks yet.” The team selector listed only this workspace. The default Emails view reported no sent messages within its displayed last-15-days filter; no recipient lists or message contents were opened.
+
+This establishes a configuration gap in the accessible workspace, not the ownership of the production website's API key. The production key-to-workspace mapping was not verified and no secret value was read. It remains possible that production uses a different provider account. Before activation, establish that mapping and verify Gary's actual sender domain and webhook there. Do not replace DNS, rotate a key, create a webhook in an unconfirmed workspace or enable campaigns merely to make this screen look ready. No Resend settings, subscriptions, sends or billing were changed.

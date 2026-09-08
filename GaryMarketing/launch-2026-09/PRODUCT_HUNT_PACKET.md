@@ -18,7 +18,7 @@ Profile website: `https://www.betwithgary.ai/`. Connect an existing personal soc
 
 The default account wait is one week. A new September 7 account would ordinarily reach that threshold on September 14, after the intended September 13 campaign. The official access article also describes newsletter subscription as an immediate-access option. Check actual account eligibility and Adam's subscription preference; do not claim the option worked without a receipt or fabricate an account age. [Posting access](https://help.producthunt.com/en/articles/481909-how-can-i-get-access-to-post).
 
-Search Product Hunt for Gary and `betwithgary.ai` before creating a product. No existing-listing status is established here. If a listing exists, inspect maker ownership and its launch history; do not duplicate it. Product Hunt generally requires six months plus a significant update between relaunches, with review for earlier relaunches. [Relaunch guidance](https://help.producthunt.com/en/articles/484934-can-i-relaunch-my-product).
+The public duplicate-listing check completed around midnight September 8 found no matching Gary sports-analysis product in the inspected results. Exact-domain searches returned no products or launches; `Gary AI` and `Bet with Gary` returned unrelated results. The scope and limits are recorded below. This is not proof that no draft, renamed or unindexed listing exists. Recheck the actual product-creation flow after sign-in; if a listing exists, inspect maker ownership and launch history rather than duplicating it. Product Hunt generally requires six months plus a significant update between relaunches, with review for earlier relaunches. [Relaunch guidance](https://help.producthunt.com/en/articles/484934-can-i-relaunch-my-product).
 
 ## Submission fields
 
@@ -80,13 +80,15 @@ Check every feature and the offer immediately before use. The house audience is 
 | Item | Actual receipt |
 |---|---|
 | Personal profile / owner | Google sign-up reached September 7; Adam's business email proposed. Paused before account/terms acceptance pending Adam's action-time approval. No account created. |
-| Existing product/listing check | Not verified |
+| Existing product/listing check | Public searches inspected September 8: no matching Gary sports-analysis product found. Exact-domain product/launch queries had no results; name searches returned unrelated products. Private drafts, renamed/unindexed entries and maker ownership remain unverified. |
 | Posting eligibility | Not verified |
 | Gallery files and inspection | Three local website exports plus unchanged square mark completed and visually inspected; [manifest](product-hunt/README.md). Not uploaded. |
 | Platform draft URL | Not saved |
 | Scheduled launch date/time as displayed | Not saved |
 | Live product URL/status | Not published |
 | Launch-day responder | Adam, availability to confirm |
+
+Public search scope: [exact-domain products](https://www.producthunt.com/search?q=betwithgary.ai), [exact-domain launches](https://www.producthunt.com/search/launches?q=betwithgary.ai), both product-result pages for [Gary AI](https://www.producthunt.com/search?q=Gary+AI), its displayed launch results, and product/launch results for [Bet with Gary](https://www.producthunt.com/search?q=Bet+with+Gary). The first product-result page for the broad term `Gary` was also reviewed; that broad query was not exhaustively paginated. No launch or listing was claimed, edited or created. Negative public search results narrow the duplicate risk; they do not establish account eligibility or guarantee uniqueness.
 
 ## Attribution and limits
 
