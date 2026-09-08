@@ -5373,7 +5373,7 @@ const ballDontLieService = {
   /**
    * Get MLB games for a specific date
    */
-  async getMlbGamesForDate(dateStr) {
+  async getMlbGamesForDate(dateStr, { throwOnError = false } = {}) {
     try {
       const cacheKey = `mlb_games_${dateStr}`;
       return await getCachedOrFetch(cacheKey, async () => {
@@ -5386,6 +5386,8 @@ const ballDontLieService = {
       }, 5);
     } catch (error) {
       console.error(`[BDL] MLB games error:`, error?.response?.data || error.message);
+      // A failed fetch is not an empty slate: strict callers must see the failure.
+      if (throwOnError) throw error;
       return [];
     }
   },
@@ -5398,13 +5400,13 @@ const ballDontLieService = {
    * (Same fix as poll-live-scores.js / generateInsightConnections.js — the shared
    * home so every slate-anchored caller stays in sync.)
    */
-  async getMlbGamesForETDate(dateStr) {
+  async getMlbGamesForETDate(dateStr, { throwOnError = false } = {}) {
     const next = new Date(`${dateStr}T00:00:00Z`);
     next.setUTCDate(next.getUTCDate() + 1);
     const nextStr = next.toISOString().slice(0, 10);
     const [d1, d2] = await Promise.all([
-      this.getMlbGamesForDate(dateStr),
-      this.getMlbGamesForDate(nextStr),
+      this.getMlbGamesForDate(dateStr, { throwOnError }),
+      this.getMlbGamesForDate(nextStr, { throwOnError }),
     ]);
     const seen = new Set();
     const out = [];

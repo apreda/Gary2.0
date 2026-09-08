@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  bdlGames: vi.fn(), bdlStats: vi.fn(), bdlSeason: vi.fn(),
   schedule: vi.fn(), teams: vi.fn(), box: vi.fn(), xstats: vi.fn(), profiles: vi.fn(),
   read: vi.fn(), create: vi.fn(), send: vi.fn(),
 }));
@@ -8,6 +9,9 @@ vi.mock('../../../src/services/mlbStatsApiService.js', () => ({
   getMlbSchedule: mocks.schedule,
   default: { getMlbSchedule: mocks.schedule, getMlbTeams: mocks.teams, getGameBoxScore: mocks.box },
 }));
+vi.mock('../../../src/services/ballDontLieService.js', () => ({ ballDontLieService: {
+  getMlbGamesForETDate: mocks.bdlGames, getMlbGameStats: mocks.bdlStats, getMlbPlayerSeasonStats: mocks.bdlSeason,
+} }));
 vi.mock('../../../src/services/baseballSavantService.js', () => ({
   getPitcherXStats: mocks.xstats, getPitcherStatcastProfiles: mocks.profiles,
 }));
@@ -34,17 +38,20 @@ describe('Hub baseball innings evidence', () => {
     expect(parseIpThirds(display)).toBeCloseTo(n, 10);
   });
   it('keeps summed bullpen IP and individual arms in the same baseball notation', async () => {
-    mocks.teams.mockResolvedValue([{ id: 1, name: 'Colorado Rockies' }]);
-    mocks.schedule.mockImplementation(async (date) => ['2026-09-07', '2026-09-06', '2026-09-05'].includes(date)
-      ? [{ gamePk: date, officialDate: date, status: { detailedState: 'Final' }, teams: { home: { team: { id: 1 } } } }]
+    mocks.bdlGames.mockImplementation(async (date) => ['2026-09-07', '2026-09-06', '2026-09-05'].includes(date)
+      ? [{ id: Number(date.slice(-2)), status: 'STATUS_FINAL', date: `${date}T23:10:00.000Z`,
+          home_team: { id: 9, name: 'Colorado Rockies' }, away_team: { id: 8, name: 'Opponent' } }]
       : []);
-    mocks.box.mockImplementation(async (date) => ({ teams: { home: {
-      pitchers: [10, 20], players: { ID20: { person: { fullName: 'Fixture Reliever' }, stats: { pitching: {
-        inningsPitched: date === '2026-09-05' ? '4.0' : '4.1', numberOfPitches: 40,
-      } } } },
-    } } }));
+    mocks.bdlStats.mockImplementation(async ({ gameIds }) => {
+      const outs = gameIds[0] === 5 ? 12 : 13;
+      return [
+        { player: { id: 10, full_name: 'Fixture Starter' }, team: { id: 9 }, game_id: gameIds[0], games_started: 1, pitching_outs: 15, pitch_count: 80, er: 1 },
+        { player: { id: 20, full_name: 'Fixture Reliever' }, team: { id: 9 }, game_id: gameIds[0], games_started: 0, pitching_outs: outs, pitch_count: 40 },
+      ];
+    });
+    mocks.bdlSeason.mockResolvedValue([]);
     const rows = await computeBullpenFatigue({
-      date: '2026-09-08', games: [{ id: 100, home_team: { id: 9, name: 'Colorado Rockies' } }],
+      date: '2026-09-08', games: [{ id: 100, status: 'STATUS_SCHEDULED', home_team: { id: 9, name: 'Colorado Rockies' }, away_team: { id: 8, name: 'Opponent' } }],
       helpers: { gameLabel: () => 'COL @ NYY' },
     });
     expect(rows).toHaveLength(1);
