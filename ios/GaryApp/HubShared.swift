@@ -311,3 +311,14 @@ struct Signal: Identifiable {
     /// Conflicting same-clock publications keep the source facts visible.
     var rejectsJudgment = false
 }
+
+/// The dock sits outside the Hub's custom modal hierarchy. Observe the
+/// existing modal owner locally so its accessibility follows the open read
+/// without changing the dock's appearance or rebuilding every tab.
+struct HubModalDockAccessibility: ViewModifier {
+    @ObservedObject private var navigation = GaryPushNavigation.shared
+
+    func body(content: Content) -> some View {
+        content.accessibilityHidden(navigation.modalBlockers.contains("hub-read"))
+    }
+}

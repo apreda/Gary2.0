@@ -35,6 +35,21 @@ struct HubJudgmentTests {
         precondition(read.critical_condition == "Only if he starts." && read.what_changed == "The starter changed.")
         let cached = try JSONDecoder().decode(HubJudgment.self, from: JSONEncoder().encode(read))
         precondition(valid(cached) && cached.full_case == read.full_case)
+        let editorialFingerprint = String(repeating: "a", count: 64)
+        for (rank, fingerprint) in [(0 as Any, editorialFingerprint as Any), (-1, editorialFingerprint),
+                                    ("1", editorialFingerprint), (1, "not-a-fingerprint"), (1, 42)] {
+            var malformedOrder = payload
+            malformedOrder["editorial_rank"] = rank; malformedOrder["editorial_fingerprint"] = fingerprint
+            let source = try decode(malformedOrder)
+            precondition(source.editorial_rank == nil && source.editorial_fingerprint == nil && valid(source),
+                         "Malformed optional ordering cannot discard valid original research")
+        }
+        var orderedPayload = payload
+        orderedPayload["editorial_rank"] = 2; orderedPayload["editorial_fingerprint"] = editorialFingerprint
+        let orderedRead = try decode(orderedPayload)
+        precondition(HubJudgmentSelection.sameArgument(read, orderedRead), "Editorial movement does not change an open argument")
+        let orderedCopy = try JSONDecoder().decode(HubJudgment.self, from: JSONEncoder().encode(orderedRead))
+        precondition(orderedCopy.editorial_rank == 2 && orderedCopy.editorial_fingerprint == editorialFingerprint)
         precondition(HubJudgmentSelection.sameCase(read, cached), "An unchanged refresh must keep the saved case current")
         var renewalPayload = payload
         renewalPayload["as_of"] = "2026-09-08T15:30:00Z"
@@ -83,6 +98,46 @@ struct HubJudgmentTests {
         precondition(HubJudgment.sourceKey(category: "heat_check", gameID: nil, playerID: "44", teamID: "8") == nil)
         typealias Candidate = HubJudgmentSelection.Candidate
         typealias Game = HubJudgmentSelection.Game
+        typealias Editorial = HubJudgmentSelection.EditorialCandidate
+        func editorialRead(gameID: String, rank: Int?, fingerprint: String? = editorialFingerprint, major: Bool = false) throws -> HubJudgment {
+            var value = payload
+            value["game_id"] = gameID
+            value["primary_source_key"] = "heat_check|\(gameID)|44|8"
+            value["prominence"] = major ? "major" : "standard"
+            if let rank { value["editorial_rank"] = rank }
+            if let fingerprint { value["editorial_fingerprint"] = fingerprint }
+            value["evidence"] = (payload["evidence"] as! [[String: Any]]).map { entry in
+                var copy = entry; copy["game_id"] = gameID
+                copy["source_key"] = (entry["source_key"] as? String)?.replacingOccurrences(of: "|100|", with: "|\(gameID)|")
+                return copy
+            }
+            return try decode(value)
+        }
+        let later = try editorialRead(gameID: "101", rank: 1)
+        let earliest = try editorialRead(gameID: "102", rank: 2)
+        let oldSourceLead = try editorialRead(gameID: "100", rank: 3)
+        let editorialGames = [
+            Game(league: "MLB", gameID: "100", startsAt: "2026-09-08T21:00:00Z", status: "scheduled"),
+            Game(league: "MLB", gameID: "101", startsAt: "2026-09-08T22:00:00Z", status: "scheduled"),
+            Game(league: "MLB", gameID: "102", startsAt: "2026-09-08T20:00:00Z", status: "scheduled"),
+            Game(league: "NFL", gameID: "101", startsAt: "2026-09-08T17:00:00Z", status: "scheduled")
+        ]
+        func order(_ reads: [HubJudgment], games: [Game]? = nil) -> [Int] {
+            HubJudgmentSelection.editorialOrder(candidates: reads.enumerated().map { Editorial(index: $0.offset, judgment: $0.element) },
+                                                games: games ?? editorialGames)
+        }
+        precondition(order([oldSourceLead, later, earliest]) == [1, 2, 0], "A complete editorial ordering outranks old source relevance and game time")
+        let major = try editorialRead(gameID: "100", rank: 3, major: true)
+        precondition(order([major, later, earliest]) == [0, 1, 2], "A major verified development earns prominence before ordinary editorial rank")
+        let mixed = try editorialRead(gameID: "100", rank: 3, fingerprint: String(repeating: "b", count: 64))
+        precondition(order([mixed, later, earliest]) == [2, 0, 1], "Mixed publication epochs fall back together to exact-game timing")
+        let missing = try editorialRead(gameID: "100", rank: nil, fingerprint: nil)
+        precondition(order([missing, later, earliest]) == [2, 0, 1], "A partial editorial publication cannot jump the remaining cases")
+        let duplicateRank = try editorialRead(gameID: "100", rank: 1)
+        precondition(order([duplicateRank, later, earliest]) == [2, 0, 1], "Conflicting editorial ranks fail back to exact-game timing")
+        let departed = try editorialRead(gameID: "100", rank: 7)
+        precondition(order([departed, later]) == [1, 0], "Started games may leave valid noncontiguous editorial ranks")
+        precondition(order([missing, read], games: []) == [0, 1], "Without verified game time, source order remains stable")
         let candidate = Candidate(index: 10, league: "MLB", date: "2026-09-08", gameID: "100", sourceKey: sourceKey, judgment: read)
         let game = Game(league: "MLB", gameID: "100", startsAt: future, status: "scheduled")
         func selected(_ games: [Game], _ candidates: [Candidate] = [candidate]) -> [Int: HubJudgment] {
@@ -162,6 +217,12 @@ struct HubJudgmentTests {
         if case .object(let facts) = rawMeasurement {
             precondition(facts["pitching_era"]?.text == "3.123456" && facts["confirmed"]?.text == "Yes")
         } else { preconditionFailure("Structured cited data lost") }
+        precondition(HubResearchSource.displayName("Gary bullpen_fatigue collector") == "Gary bullpen research")
+        precondition(HubResearchSource.displayName("Gary heat_check collector") == "Gary recent form research")
+        precondition(HubResearchSource.displayName("Gary future_metric collector") == "Gary research")
+        for source in ["BALLDONTLIE dated final player game stats", "ESPN official practice report", "External collector"] {
+            precondition(HubResearchSource.displayName(source) == source, "External provenance labels must remain exact")
+        }
         print("Hub judgment model passed: full copy, citations, exact source/game/date, malformed fallback, invalidation, expiry and schedule state")
     }
 }

@@ -9,10 +9,6 @@ import SwiftUI
 // (The Receipts section came off the page Aug 6 — graded rows
 // now surface only through search.)
 //
-// Design authority: the current conversation and anti-ai-slop-design.md.
-// Historical font and layout preferences in this file are not requirements.
-// Keep the approved readable type and shared Gary backdrop. Content determines
-// emphasis; everyday reads do not inherit a compulsory oversized lead.
 //
 // Data machinery (staleness gates, 6am ET rollover, graded-date walk-back,
 // kept-alive-tab visibility flips) is carried over from the original Hub page
@@ -567,13 +563,7 @@ struct HubView: View {
                          judgment: signal.lane?.judgment, blocked: signal.rejectsJudgment,
                          sourceObservedAt: signal.sourceObservedAt)
         }
-        let games = (todayBoard?.board ?? []).compactMap { row -> HubJudgmentSelection.Game? in
-            guard let gameID = row.bdl_game_id, let league = row.league else { return nil }
-            return .init(league: league, gameID: String(gameID),
-                         startsAt: row.hasConfirmedKickoff ? row.commence_time : nil,
-                         status: liveScores.status(forGameId: gameID, league: league)?.status ?? row.game_status)
-        }
-        let selection = HubJudgmentSelection.current(candidates: candidates, games: games,
+        let selection = HubJudgmentSelection.current(candidates: candidates, games: judgmentGames,
                                                      date: SupabaseAPI.todayEST(), now: now,
                                                      sourceClocks: sourceObservationClocks.values.reduce(into: [:]) { all, clocks in
                                                          all.merge(clocks, uniquingKeysWith: max)
@@ -584,6 +574,15 @@ struct HubView: View {
         }
         if next.count != judgmentReads.count || !next.allSatisfy({ judgmentReads[$0.key] === $0.value }) {
             judgmentReads = next
+        }
+    }
+
+    private var judgmentGames: [HubJudgmentSelection.Game] {
+        (todayBoard?.board ?? []).compactMap { row in
+            guard let gameID = row.bdl_game_id, let league = row.league else { return nil }
+            return .init(league: league, gameID: String(gameID),
+                         startsAt: row.hasConfirmedKickoff ? row.commence_time : nil,
+                         status: liveScores.status(forGameId: gameID, league: league)?.status ?? row.game_status)
         }
     }
 
@@ -1239,14 +1238,17 @@ struct HubView: View {
         slateRows.isEmpty && leagueSignals.contains { $0.kind == .nextSlate }
     }
 
-    /// Keep the complete eligible pool in server relevance order. Applying a
-    /// seven-row cap before game-phase ordering buried later upcoming games.
-    /// Regression owns its specialist board; Fantasy and modules own theirs.
+    /// Ready arguments use the complete editorial slate when it agrees. Major
+    /// developments come first; exact kickoff and stable source order provide
+    /// a useful fallback. Original observations retain their relevance order.
     private var ranked: [Signal] {
         let currentDate = SupabaseAPI.todayEST()
         let signals = leagueSignals
         let suppressed = supersededSources
         let judgments = signals.filter { currentJudgment($0) != nil }
+        let editorial = HubJudgmentSelection.editorialOrder(candidates: judgments.enumerated().compactMap { index, signal in
+            currentJudgment(signal).map { .init(index: index, judgment: $0) }
+        }, games: judgmentGames)
         let observations = signals.filter { s in
             currentJudgment(s) == nil && !(judgmentKey(s).map(suppressed.contains) ?? false)
                 && s.confirmedXI == nil && !Self.fantasyKinds.contains(s.kind)
@@ -1254,7 +1256,7 @@ struct HubView: View {
                 && s.reg == nil && !(sel == .mlb && s.kind == .h2h)
                 && s.slateDate == currentDate
         }
-        return judgments + observations
+        return editorial.map { judgments[$0] } + observations
     }
     /// THE LEAD must be an INSIGHT — a connection between facts — never a raw
     /// counting stat (founder, Aug 3: "the headline we have now isn't really
@@ -2074,6 +2076,7 @@ struct HubView: View {
                 ZStack {
                     Color.black.opacity(0.55).ignoresSafeArea()
                         .onTapGesture { withAnimation(.spring(response: 0.3, dampingFraction: 0.88)) { gameSheet = nil } }
+                        .accessibilityHidden(true)
                     HubGameSheet(row: sel.row,
                                  edges: edgesFor(sel.row),
                                  streaks: streaksFor(sel.row),
@@ -2103,11 +2106,15 @@ struct HubView: View {
                                     .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel("Close game research")
                         }
                         .shadow(color: .black.opacity(0.6), radius: 30, y: 14)
                         .padding(.horizontal, 14)
                         .frame(maxHeight: UIScreen.main.bounds.height * 0.58)
                 }
+                .accessibilityElement(children: .contain)
+                .accessibilityAddTraits(.isModal)
+                .accessibilityAction(.escape) { gameSheet = nil }
                 .transition(.opacity.combined(with: .scale(scale: 0.94)))
             }
         }
@@ -2566,55 +2573,74 @@ fileprivate struct HubLeadStory: View {
     let context: String
     let kicker: String
     let onTap: (Signal) -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var major: Bool { judgment?.prominence == "major" }
 
     var body: some View {
         Button { onTap(s) } label: {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text(judgment == nil ? "FROM THE RESEARCH" : judgment?.what_changed == nil ? "GARY’S READ" : "UPDATED READ")
-                        .hubKickerFont(11).tracking(1)
-                    Spacer(minLength: 0)
-                    Text(kicker.uppercased()).hubKickerFont(11).multilineTextAlignment(.trailing)
-                }.foregroundStyle(GaryColors.gold)
+            VStack(alignment: .leading, spacing: major ? 14 : 10) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        Text(judgment == nil ? "FROM THE RESEARCH" : judgment?.what_changed == nil ? "GARY’S READ" : "UPDATED READ")
+                            .hubKickerFont(11).tracking(1)
+                        Spacer(minLength: 0)
+                        Text(kicker.uppercased()).hubKickerFont(11).multilineTextAlignment(.trailing)
+                    }.foregroundStyle(GaryColors.gold)
+                    if !context.isEmpty {
+                        Text(context).hubDataFont(12, .medium)
+                            .foregroundStyle(GaryColors.sectionSub)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
                 Text(judgment.map { $0.displayText($0.take) } ?? s.headline)
-                    .hubTitleFont(major ? 30 : 25)
+                    .hubTitleFont(major ? 30 : 22, major ? .bold : .semibold)
                     .foregroundStyle(GaryColors.warmWhite)
                     .fixedSize(horizontal: false, vertical: true)
-                if !context.isEmpty {
-                    Text(context).hubDataFont(12, .medium)
-                        .foregroundStyle(GaryColors.sectionSub)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(judgment.map { $0.displayText($0.explanation) } ?? s.detail.trimmingCharacters(in: .whitespacesAndNewlines))
+                        .hubBodyFont(15.5).lineSpacing(3)
+                        .foregroundStyle(GaryColors.warmWhite.opacity(0.88))
                         .fixedSize(horizontal: false, vertical: true)
+                    if let judgment, let condition = judgment.critical_condition, !condition.isEmpty {
+                        Text(judgment.displayText(condition)).hubBodyFont(14, .semibold)
+                            .foregroundStyle(GaryColors.lightGold)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
-                if let judgment, let condition = judgment.critical_condition, !condition.isEmpty {
-                    Text(judgment.displayText(condition)).hubBodyFont(14, .semibold)
-                        .foregroundStyle(GaryColors.lightGold)
-                }
-                Text(judgment.map { $0.displayText($0.explanation) } ?? s.detail.trimmingCharacters(in: .whitespacesAndNewlines))
-                    .hubBodyFont(15.5).lineSpacing(3)
-                    .foregroundStyle(GaryColors.warmWhite.opacity(0.88))
-                    .fixedSize(horizontal: false, vertical: true)
-                if let judgment { HubJudgmentTiming(judgment: judgment, compact: true) }
-                HStack {
-                    Text(judgment == nil ? "Read the research" : "Read Gary’s full case").hubBodyFont(14, .semibold)
-                    Spacer(minLength: 10)
-                    Image(systemName: "arrow.right").font(.system(size: 15, weight: .medium)).accessibilityHidden(true)
-                }
-                .foregroundStyle(GaryColors.gold).frame(minHeight: 30)
+                footer
             }
-            .padding(major ? 24 : 20)
+            .padding(major ? 24 : 16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .garyPanel(radius: GaryLayout.Radius.card, fill: GaryColors.cardBg)
             .overlay(alignment: .topLeading) {
                 Rectangle().fill(GaryColors.gold).frame(width: 36, height: 3)
-                    .padding(.leading, major ? 24 : 20).accessibilityHidden(true)
+                    .padding(.leading, major ? 24 : 16).accessibilityHidden(true)
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain).multilineTextAlignment(.leading)
         .accessibilityHint(judgment == nil ? "Open the complete source research" : "Open the reasoning, competing case and cited evidence")
         .padding(.horizontal, GaryLayout.gutter)
+    }
+
+    private var footer: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: 12))
+        return layout {
+            if let judgment {
+                HubJudgmentTiming(judgment: judgment, compact: true)
+                if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 0) }
+            }
+            HStack(spacing: 8) {
+                Text(judgment == nil ? "Read the research" : "Read Gary’s full case").hubBodyFont(14, .semibold)
+                Image(systemName: "arrow.right").font(.system(size: 15, weight: .medium)).accessibilityHidden(true)
+            }
+            .foregroundStyle(GaryColors.gold)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
     }
 }
 
@@ -3519,9 +3545,6 @@ fileprivate struct HubTugRow: View {
     }
 }
 
-/// First-inning (NRFI/YRFI): recent first innings as scored-vs-scoreless dots.
-/// Color law (founder, Jul 30): scored = green, scoreless = red — yes is
-/// green and no is red app-wide, whatever the bettor's angle.
 fileprivate struct HubDotsRow: View {
     let s: Signal
     let kicker: String
@@ -3548,9 +3571,6 @@ fileprivate struct HubDotsRow: View {
                     .hubBodyFont(14.5, .semibold).foregroundStyle(.white.opacity(0.95))
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
-                // First-inning timeline, oldest → newest (founder Jul 27 built
-                // the section out; Jul 30 color law: scored = green, scoreless
-                // = red — the dots show what HAPPENED, tallies stay neutral).
                 if let teamSeq = m?.team_seq {
                     seqRow(m?.team_abbr ?? "", teamSeq)
                 } else {
@@ -3588,9 +3608,6 @@ fileprivate struct HubDotsRow: View {
                 .hubKickerFont(11).foregroundStyle(.white.opacity(0.85))
                 .frame(width: 40, alignment: .leading)
             HStack(spacing: 3.5) {
-                // Color law (founder, Jul 30): yes = green, no = red — a run
-                // SCORED glows green, a scoreless first burns red, everywhere
-                // in the app. The tallies stay neutral so the dots tell it.
                 ForEach(Array(seq.enumerated()), id: \.offset) { _, v in
                     RoundedRectangle(cornerRadius: 2.5, style: .continuous)
                         .fill(v > 0 ? green.opacity(0.9) : red.opacity(0.45))
@@ -3613,10 +3630,6 @@ fileprivate struct HubDotsRow: View {
 
 // MARK: - The NRFI Watch (mock N10 story card — founder pick, Aug 6)
 
-/// One story card per first-inning edge: kicker row (the row's own side word
-/// + game), display-face headline, Gary's read, then the evidence — each
-/// side's last-10 first innings as dots (color law, Jul 30: a run SCORED
-/// glows green, a scoreless first burns red) and the 1st-inning price line.
 fileprivate struct HubNrfiSection: View {
     let rows: [Signal]
     var showsHeader: Bool = true
@@ -3876,15 +3889,8 @@ fileprivate struct HubMatchupsSection: View {
     }
 }
 
-/// The TEAM CARD — the player breakdown's team twin (founder, Aug 4, the
-/// standing law restated: a tapped team name opens THIS, everywhere, at the
-/// SAME finish as the player card). One design language: PCV4's matte black,
-/// the gold edge, cream ink, the same section grammar and the same MORE
-/// STATS expander. Every figure is a stored fact the app already fetched —
-/// board form / run profile / season series / probable arms, streak rows,
-/// the day's player intel. A stat with no source simply isn't a row; a card
-/// with nothing filed says so honestly. Names on it keep routing by the law:
-/// player names → player card, edges → the router.
+/// Team details assembled from fetched board, streak and player evidence.
+/// Missing facts are omitted; names retain their player/team detail routes.
 fileprivate struct HubTeamCardSheet: View {
     let signal: Signal
     let related: [Signal]
@@ -4711,7 +4717,7 @@ fileprivate struct HubGameSheet: View {
                 }
                 if !streaks.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
-                        HubHead(title: "Team streaks", count: streaks.count)
+                        HubHead(title: "Streaks", count: streaks.count)
                         HubStreakWatch(rows: streaks, onTeam: { onTeam($0) },
                                        cardFor: cardFor, onPlayer: { namedCard = $0 })
                     }

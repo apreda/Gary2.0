@@ -26,6 +26,8 @@ final class HubJudgment: Codable {
     let counter_evidence_ids: [String]
     let supersedes_source_keys: [String]
     let input_fingerprint: String?
+    let editorial_rank: Int?
+    let editorial_fingerprint: String?
     private let observedAt: Date?
     private let expiresAt: Date?
     private let evidenceIsValid: Bool
@@ -51,6 +53,7 @@ final class HubJudgment: Codable {
         case take, explanation, full_case, counterargument, watch_for, horizon
         case as_of, valid_until, prominence, critical_condition, what_changed
         case evidence, supporting_evidence_ids, counter_evidence_ids, supersedes_source_keys, input_fingerprint
+        case editorial_rank, editorial_fingerprint
     }
 
     init(from decoder: Decoder) throws {
@@ -80,6 +83,17 @@ final class HubJudgment: Codable {
         counter_evidence_ids = read(.counter_evidence_ids) ?? []
         supersedes_source_keys = read(.supersedes_source_keys) ?? []
         input_fingerprint = read(.input_fingerprint)
+        let rank: Int? = read(.editorial_rank)
+        let fingerprint: String? = read(.editorial_fingerprint)
+        if let rank, rank > 0, let fingerprint, fingerprint.utf8.count == 64,
+           fingerprint.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }) {
+            editorial_rank = rank
+            editorial_fingerprint = fingerprint
+        } else {
+            // Incomplete/future editorial metadata cannot spoil real research.
+            editorial_rank = nil
+            editorial_fingerprint = nil
+        }
         observedAt = Self.timestamp(as_of)
         expiresAt = Self.timestamp(valid_until)
         let ids = Set(evidence.map(\.id))
@@ -205,6 +219,42 @@ enum HubJudgmentSelection {
         let status: String?
     }
 
+    struct EditorialCandidate {
+        let index: Int
+        let judgment: HubJudgment
+    }
+
+    /// The caller supplies only current, reachable cases. Partial publication
+    /// cannot make a new rank outrun a different editorial slate: the complete
+    /// visible set must agree on one ordering fingerprint and unique ranks.
+    static func editorialOrder(candidates: [EditorialCandidate], games: [Game]) -> [Int] {
+        let fingerprints = Set(candidates.compactMap { $0.judgment.editorial_fingerprint })
+        let ranks = candidates.compactMap { $0.judgment.editorial_rank }
+        let useEditorialOrder = fingerprints.count == 1 && ranks.count == candidates.count
+            && Set(ranks).count == candidates.count
+            && candidates.allSatisfy { $0.judgment.editorial_fingerprint != nil }
+        let gameGroups = Dictionary(grouping: games) { "\($0.league.uppercased())|\($0.gameID)" }
+        let ordered = candidates.enumerated().map { offset, candidate in
+            let judgment = candidate.judgment
+            let matches = gameGroups["\(judgment.league.uppercased())|\(judgment.game_id)"] ?? []
+            let start = matches.count == 1 ? matches.first?.startsAt.flatMap(HubJudgment.timestamp) : nil
+            return (candidate: candidate, offset: offset, start: start)
+        }.sorted { lhs, rhs in
+            let left = lhs.candidate.judgment, right = rhs.candidate.judgment
+            let leftMajor = left.prominence == "major", rightMajor = right.prominence == "major"
+            if leftMajor != rightMajor { return leftMajor }
+            if useEditorialOrder, left.editorial_rank != right.editorial_rank {
+                return left.editorial_rank! < right.editorial_rank!
+            }
+            if lhs.start != rhs.start {
+                if let first = lhs.start, let second = rhs.start { return first < second }
+                return lhs.start != nil
+            }
+            return lhs.offset < rhs.offset
+        }
+        return ordered.map { $0.candidate.index }
+    }
+
     /// Preserve the latest envelope before the legacy headline deduper runs.
     /// A newer invalidation must not disappear behind an older ready source.
     /// Conflicting ready copies at one check clock retain factual research but
@@ -322,6 +372,30 @@ enum HubJudgmentSelection {
                 suppressionKey(league: judgment.league, date: judgment.date, gameID: judgment.game_id, sourceKey: $0)
             }
         })
+    }
+}
+
+/// Source names are presentation labels; the original provenance stays in
+/// the evidence envelope and round-trips without alteration.
+enum HubResearchSource {
+    static func displayName(_ source: String) -> String {
+        guard source.hasPrefix("Gary "), source.hasSuffix(" collector") else { return source }
+        let category = String(source.dropFirst(5).dropLast(10))
+        guard !category.isEmpty, category.utf8.allSatisfy({ (97...122).contains($0) || (48...57).contains($0) || $0 == 95 }) else { return source }
+        let subject: String? = [
+            "bullpen_fatigue": "bullpen", "heat_check": "recent form", "cooling_off": "recent form",
+            "starter_form": "recent pitching form", "starter_team_record": "team results in pitcher starts",
+            "regression_watch": "underlying performance", "head_to_head": "matchup history",
+            "ballpark_shift": "venue", "platoon_edge": "handedness matchup", "first_inning": "first inning",
+            "park_weather": "ballpark weather", "weather": "weather", "streak": "streak",
+            "streaks": "streak", "team_record": "team results", "running_game": "running game",
+            "beneficiary": "roster changes", "injury": "player availability", "availability": "player availability",
+            "practice_report": "practice participation", "quarterback": "quarterback", "trenches": "line play",
+            "pass_rush": "pass rush", "coverage": "coverage", "pace_script": "pace and game flow",
+            "red_zone": "red zone", "turnover_edge": "turnovers", "explosive_play": "explosive plays",
+            "special_teams": "special teams", "coaching": "coaching", "travel_rest": "travel and rest"
+        ][category]
+        return subject.map { "Gary \($0) research" } ?? "Gary research"
     }
 }
 

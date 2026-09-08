@@ -87,7 +87,7 @@ struct HubJudgmentCaseView: View {
                         .foregroundStyle(GaryColors.lightGold)
                     Text(judgment.displayText(item.summary)).font(.callout).lineSpacing(3)
                         .foregroundStyle(GaryColors.warmWhite.opacity(0.88))
-                    Text([item.source, HubJudgmentTiming.timestamp(item.as_of)].filter { !$0.isEmpty }.joined(separator: " · "))
+                    Text([HubResearchSource.displayName(item.source), HubJudgmentTiming.timestamp(item.as_of)].filter { !$0.isEmpty }.joined(separator: " · "))
                         .font(.caption).foregroundStyle(GaryColors.sectionSub)
                     if let facts = item.facts {
                         HubEvidenceNode(label: "Observed data", value: facts)

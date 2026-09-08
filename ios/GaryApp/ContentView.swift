@@ -139,6 +139,7 @@ struct ContentView: View {
                 // Tab bar — the fade dock (founder pick, mock 34).
                 GaryCenteredTabBar(selectedTab: $selectedTab,
                                    bottomSafeAreaInset: geometry.safeAreaInsets.bottom)
+                    .modifier(HubModalDockAccessibility())
 
                 // League Words (founder pick, mock 64) — the full-screen
                 // typographic league switcher. Mounted HERE so it dims the whole
