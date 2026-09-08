@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { accessSync, constants, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { accessSync, constants, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -31,6 +31,15 @@ const sql=s=>execFileSync(`${bin}/psql`,[...args(),'-c',s],{env:pgEnv,encoding:'
 
 const retention = readFileSync(new URL('../../supabase/migrations/20260905144249_reduce_cron_history_io.sql', import.meta.url), 'utf8').split('$cleanup$')[1];
 const repair = readFileSync(new URL('../../scripts/lib/repairNcaafQuarterbackNames.sql', import.meta.url), 'utf8');
+const migrationDirectory = new URL('../../supabase/migrations/', import.meta.url);
+const measurementFiles = readdirSync(migrationDirectory).filter(name => name.endsWith('_correct_verified_legacy_nfl_touchdown_measurement.sql'));
+if (measurementFiles.length !== 1) throw new Error('Expected exactly one verified NFL measurement correction migration');
+const measurementCorrection = readFileSync(new URL(measurementFiles[0], migrationDirectory), 'utf8');
+const insertMeasurement = (extra = {}) => {
+  const row = { id: '10000000-0000-0000-0000-000000000001', prop_pick_id: '20000000-0000-0000-0000-000000000001', game_date: '2025-12-21', player_name: 'Travis Etienne Jr.', prop_type: 'Anytime TD', bet: 'over', line_value: 0.5, actual_value: 0, result: 'won', matchup: 'Jacksonville Jaguars @ Denver Broncos', sport: null, game_id: null, ...extra };
+  const encoded = JSON.stringify(row).replaceAll("'", "''");
+  sql(`INSERT INTO public.prop_results SELECT * FROM json_populate_record(NULL::public.prop_results, '${encoded}'::json);`);
+};
 describe.skipIf(!supported)('operational cleanup and QB repair on isolated Postgres', () => {
   beforeAll(() => {
     directory=mkdtempSync(path.join(tmpdir(),'gary-operational-repair-pg-'));
@@ -40,13 +49,40 @@ describe.skipIf(!supported)('operational cleanup and QB repair on isolated Postg
     sql(`create schema cron;
       create table cron.job_run_details(runid bigint primary key,status text,end_time timestamptz);
       create table public.insight_connections(id bigint primary key,date date,league text,category text,game_id text,detail text,meta jsonb,updated_at timestamptz);
-      create table public.daily_slate(date date,league text,bdl_game_id bigint,away_team text,home_team text);`);
+      create table public.daily_slate(date date,league text,bdl_game_id bigint,away_team text,home_team text);
+      create table public.prop_results(id uuid primary key,prop_pick_id uuid,game_date date,player_name text,prop_type text,bet text,line_value numeric,actual_value numeric,result text,matchup text,sport text,game_id text);`);
   },30000);
   afterAll(() => {
     if(started) execFileSync(`${bin}/pg_ctl`,['-D',`${directory}/data`,'-m','immediate','-w','stop'],{env:pgEnv,stdio:'ignore'});
     if(directory) rmSync(directory,{recursive:true,force:true});
   });
-  beforeEach(() => sql('truncate cron.job_run_details,public.insight_connections,public.daily_slate;'));
+  beforeEach(() => sql('truncate cron.job_run_details,public.insight_connections,public.daily_slate,public.prop_results;'));
+  it('corrects only the verified historical measurement and preserves every other field and ticket', () => {
+    insertMeasurement();
+    insertMeasurement({ id: '10000000-0000-0000-0000-000000000002', line_value: 1.5, result: 'lost' });
+    const before = JSON.parse(sql('select json_agg(p order by id) from public.prop_results p'));
+    sql(measurementCorrection);
+    const after = JSON.parse(sql('select json_agg(p order by id) from public.prop_results p'));
+    expect(after).toEqual([{ ...before[0], actual_value: 1 }, before[1]]);
+    sql(measurementCorrection);
+    expect(JSON.parse(sql('select json_agg(p order by id) from public.prop_results p'))).toEqual(after);
+  });
+  it('is a no-op on an environment without the historical ticket', () => {
+    sql(measurementCorrection);
+    expect(sql('select count(*) from public.prop_results')).toBe('0');
+  });
+  it.each([{ actual_value: 2 }, { actual_value: null }, { result: 'lost' }, { sport: 'NFL' }, { game_id: '123' }])('aborts on a changed audited state %j', change => {
+    insertMeasurement(change);
+    const before = sql('select row_to_json(p) from public.prop_results p');
+    expect(() => sql(measurementCorrection)).toThrow(/prior state changed/);
+    expect(sql('select row_to_json(p) from public.prop_results p')).toBe(before);
+  });
+  it('aborts on duplicate matching identities without changing either measurement', () => {
+    insertMeasurement();
+    insertMeasurement({ id: '10000000-0000-0000-0000-000000000002' });
+    expect(() => sql(measurementCorrection)).toThrow(/prior state changed/);
+    expect(sql('select array_agg(actual_value order by id) from public.prop_results')).toBe('{0,0}');
+  });
   it('removes only terminal history older than 30 days, preserving live, recent and undated runs', () => {
     sql(`insert into cron.job_run_details values
       (1,'succeeded',now()-interval '40 days'),(2,'failed',now()-interval '31 days'),
