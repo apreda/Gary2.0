@@ -185,6 +185,43 @@ describe('Hub structured judgment validation', () => {
 });
 
 describe('Hub prepared display measurements', () => {
+  it('admits each explicit season-label occurrence from a cited measured baseline without licensing years as statistics', () => {
+    const args = fixture();
+    args.contextByGame.get('10').evidence[0].facts.home_pitcher.season_baseline = {
+      season: 2026, pitching_era: 3.20, display_measurements: { pitching_era: '3.20' },
+    };
+    const packets = buildHubJudgmentPackets(args);
+    for (const explanation of [
+      'Cam Schlittler has the stronger established 2026 line, while the current assignment remains probable.',
+      'The 2026 season baseline gives the comparison its background.',
+      'The 2026 baseline is background for the probable assignment.',
+      'The starter has a 3.20 ERA in 2026.',
+      'In 2026, his measured ERA is 3.20.',
+    ]) expect(() => validateHubJudgments(response(packets[0], { explanation }), packets, { now: asOf })).not.toThrow();
+    for (const explanation of [
+      'The 2025 baseline gives the comparison its background.',
+      'The starter has worked 2026 innings.',
+      'The starter has allowed a run in 2026 innings.',
+      'The starter has a 2026 ERA.',
+      'The starter has 2026 home runs.',
+      'The 2026 season line includes 2026 innings.',
+    ]) expect(() => validateHubJudgments(response(packets[0], { explanation }), packets, { now: asOf })).toThrow('uncited numbers');
+  });
+  it('does not substitute packet dates, requested seasons, or uncited provenance for the measured historical season', () => {
+    const args = fixture(), contextFacts = args.contextByGame.get('10').evidence[0].facts;
+    contextFacts.date = args.date; contextFacts.season = 2026;
+    contextFacts.home_pitcher.season_baseline = { season: 2025, pitching_era: 3.20 };
+    // This measured current-season observation is not cited by response().
+    args.rows[2].meta = { season: 2026, hits: 8 };
+    const packets = buildHubJudgmentPackets(args);
+    expect(() => validateHubJudgments(response(packets[0], { explanation: 'The 2025 baseline remains historical context.' }),
+      packets, { now: asOf })).not.toThrow();
+    expect(() => validateHubJudgments(response(packets[0], { explanation: 'The 2026 baseline is established.' }),
+      packets, { now: asOf })).toThrow('2026');
+    delete contextFacts.home_pitcher.season_baseline;
+    expect(() => validateHubJudgments(response(packets[0], { explanation: 'The 2026 season line is established.' }),
+      buildHubJudgmentPackets(args), { now: asOf })).toThrow('2026');
+  });
   it('accepts a cited prepared number without licensing arbitrary rounding', () => {
     const args = fixture();
     args.contextByGame.get('10').evidence[0].facts.home_pitcher.season_baseline = {

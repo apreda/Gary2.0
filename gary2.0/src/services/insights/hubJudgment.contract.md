@@ -76,6 +76,11 @@ The take states an interpretation or expectation for today's game, including
 justified restraint when an inference is unsupported. Merely aligning facts
 or calling them meaningful context is not a completed judgment. Its direction
 remains Gary's reasoning from the cited evidence; abstention is allowed.
+Claims preserve the observed window and unit; a first inning is not a first
+trip through the batting order. A calendar year may label a cited measured
+record's explicit season in phrases such as `2026 line` or `in 2026`; it
+cannot license a statistical quantity. Requested season/date wrappers and
+uncited historical records cannot supply that provenance.
 
 `evidence_state` holds `{source_key, fingerprint, summary}` records for the
 complete input pool, including uncited observations. It supports actual
