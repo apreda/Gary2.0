@@ -66,11 +66,14 @@ describe('the recap card, football edition', () => {
   const models = readFileSync(new URL('../../../ios/GaryApp/Models.swift', import.meta.url), 'utf8');
   const homeView = readFileSync(new URL('../../../ios/GaryApp/HomeView.swift', import.meta.url), 'utf8');
 
-  it('counts touchdowns where baseball counts homers, in the same box line', () => {
-    expect(home).toContain('if let a = story.awayTD, let h = story.homeTD { return ("TDs", a + h) }');
-    expect(home).toContain('if let a = story.awayHR, let h = story.homeHR { return ("HRs", a + h) }');
+  it('carries both teams’ touchdown and homer totals from the recap box to the card', () => {
+    // iosHeadlineScores executes the actual boxStatLine for football/baseball.
+    // Keep this wiring check independent of its league and validity guards.
     expect(models).toContain('let td: Int?');
     expect(homeView).toContain('awayTD: r.box?.away?.td');
+    expect(homeView).toContain('homeTD: r.box?.home?.td');
+    expect(homeView).toContain('awayHR: r.box?.away?.hr');
+    expect(homeView).toContain('homeHR: r.box?.home?.hr');
   });
 
   it('shortens the school on the bottom line instead of cutting it off', () => {

@@ -116,7 +116,9 @@ func reply(for request: URLRequest, marker: String = "fresh") -> Reply {
   configuration.protocolClasses = [FixtureProtocol.self]
   let session = URLSession(configuration: configuration)
   let server = FixtureProtocol.server
-  defer { session.invalidateAndCancel() }
+  // Every fixture request is awaited below. Graceful teardown must not cancel
+  // an error the custom protocol already delivered (corelibs can resume twice).
+  defer { session.finishTasksAndInvalidate() }
   ${body}
   precondition(SupabaseAPI.pendingCount == 0, "All shared request owners must release their slots")
   print("League Pulse concurrency assertions passed")
