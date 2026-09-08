@@ -357,11 +357,13 @@ export function buildFootballBoxLineFromPlays({ plays, awayTeam, homeTeam, awayS
   let awayTd = 0, homeTd = 0, sawScoring = false;
   let previousAway = 0, previousHome = 0;
   for (const play of plays) {
+    if (!play?.scoring_play) continue;
+    // Non-scoring snapshots can briefly reset to 0 or show the next TD early.
+    // Compare official scoring events to each other, not adjacent raw snaps.
     const hasScores = Number.isInteger(play?.away_score) && Number.isInteger(play?.home_score);
     const awayDelta = hasScores ? play.away_score - previousAway : null;
     const homeDelta = hasScores ? play.home_score - previousHome : null;
     if (hasScores) { previousAway = play.away_score; previousHome = play.home_score; }
-    if (!play?.scoring_play) continue;
     sawScoring = true;
     // College supplies score_value; NFL supplies a structured play type.
     const touchdown = play?.score_value != null ? Number(play.score_value) === 6

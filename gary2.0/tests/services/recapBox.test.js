@@ -64,6 +64,18 @@ describe('recap score and sport totals', () => {
     expect(box.home.td).toBe(3);
   });
 
+  it('ignores stale or early non-scoring snapshots when reconciling the scoring ledger', async () => {
+    const copy = structuredClone(payload);
+    const tdIndex = copy.data.findIndex(p => p.score_value === 6);
+    copy.data[tdIndex - 1].away_score = 6;
+    for (const play of copy.data.slice(tdIndex + 1, -1)) {
+      if (!play.scoring_play) { play.away_score = 0; play.home_score = 0; }
+    }
+    const box = await loadRecapBox({ ...args, fetchImpl: async () => response(copy) });
+    expect(box.away.td).toBe(3);
+    expect(box.home.td).toBe(3);
+  });
+
   it('recognizes a complete field-goals-only game as zero touchdowns', async () => {
     const data = [{ game_id: 457172, order: 1, scoring_play: true, score_value: 3,
       team: { college: 'SMU' }, away_score: 3, home_score: 0 }];
