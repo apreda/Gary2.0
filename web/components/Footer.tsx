@@ -66,6 +66,21 @@ export function Footer() {
               public game-pick record. Player props are reported separately; Home Run and
               Touchdown fun picks are excluded from the headline record.
             </p>
+            <a
+              href="https://www.producthunt.com/products/gary-ai?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-gary-ai"
+              className="mt-5 inline-block max-w-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+            >
+              <Image
+                src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1244756&theme=dark"
+                alt="Find Gary AI on Product Hunt"
+                width={250}
+                height={54}
+                className="h-auto max-w-full"
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                unoptimized
+              />
+            </a>
           </div>
 
           {COLUMNS.map(col => (
