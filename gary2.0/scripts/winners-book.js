@@ -20,7 +20,7 @@ export async function readAllRows(query, label) {
 async function readWinnersRecords(db, { since = WINNERS_CUTOVER_DATE, until = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }), includeMlb = false } = {}) {
   const dates = query => query.gte('game_date', since).lte('game_date', until);
   const reads = await Promise.allSettled([
-    readAllRows(() => dates(db.from('winners_candidates').select('id,game_date,league,kind,game_id,ticket_key,pick_text,odds,commence_time,pick_snapshot,policy_version,status,reason,review_model,created_at,reviewed_at,admitted_at')), 'winners_candidates'),
+    readAllRows(() => dates(db.from('winners_candidates').select('id,game_date,league,kind,game_id,ticket_key,pick_text,odds,commence_time,pick_snapshot,policy_version,status,reason,review_model,created_at,reviewed_at,admitted_at' + (includeMlb ? ',judgment:evidence_snapshot->mlbJudgment' : ''))), 'winners_candidates'),
     // Board uses candidate_id instead of id; its maximum is six per league/kind/day.
     (async () => {
       const rows = [];
@@ -63,7 +63,9 @@ async function readWinnersRecords(db, { since = WINNERS_CUTOVER_DATE, until = ne
   ]);
   const failed = reads.filter(read => read.status === 'rejected');
   if (failed.length) throw new Error(failed.map(read => read.reason.message).join('; '));
-  const [candidates, board, gameResults, nflResults, propResults, selectionRuns = [], publicPicks = []] = reads.map(read => read.value);
+  const [candidateRows, board, gameResults, nflResults, propResults, selectionRuns = [], publicPicks = []] = reads.map(read => read.value);
+  const candidates = candidateRows.map(({ judgment, ...candidate }) => judgment
+    ? { ...candidate, evidence_snapshot: { mlbJudgment: judgment } } : candidate);
   const events = [];
   for (let start = 0; start < candidates.length; start += 200) {
     const ids = candidates.slice(start, start + 200).map(row => row.id);

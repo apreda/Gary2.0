@@ -111,4 +111,6 @@ export const CONFIG = {
 // Real-world observed: 27 stat + 6 grounding + 5 iterations ≈ 250s
 export const RESEARCH_BRIEFING_TIMEOUT_MS = 3600000; // 1 hour — let research finish naturally, never kill due to time
 
-console.log(`[Orchestrator] MLB June brain: ${MLB_JUNE_BRAIN_MODEL}. Non-MLB game brain: ${GAME_PICK_MODEL}. Props desk: ${PROPS_DESK_MODEL}. Model cascade: ${DESK_FALLBACK_MODELS.join(' → ')} (each lane skips its own primary).`);
+// Machine-readable reports reserve stdout for their JSON result.
+const logModelPolicy = process.argv.includes('--json') ? console.error : console.log;
+logModelPolicy(`[Orchestrator] MLB June brain: ${MLB_JUNE_BRAIN_MODEL}. Non-MLB game brain: ${GAME_PICK_MODEL}. Props desk: ${PROPS_DESK_MODEL}. Model cascade: ${DESK_FALLBACK_MODELS.join(' → ')} (each lane skips its own primary).`);

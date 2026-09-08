@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { describe, it, expect, vi } from 'vitest';
 import { admittedGameKeys, isWinnersGame, gameTicketIdentity, propTicketIdentity, buildWinnersBook, buildMlbSelectionBook, tallyWinnersBook, unitsAtPrice } from '../../../src/services/pickdesk/winnersBook.js';
 import { readAllRows, readWinnersBook, readWinnersReport, printWinnersBook, printMlbSelectionBook } from '../../../scripts/winners-book.js';
@@ -288,11 +289,24 @@ describe('Prospective candidate outcomes', () => {
 });
 
 describe('Read-only report plumbing', () => {
+  it('keeps config diagnostics out of JSON report stdout',()=>{
+    const moduleUrl=new URL('../../../scripts/winners-book.js',import.meta.url).href;
+    const output=execFileSync(process.execPath,['--input-type=module','-','--json'],{
+      input:`await import(${JSON.stringify(moduleUrl)}); console.log(JSON.stringify({loaded:true}));`,encoding:'utf8',stdio:['pipe','pipe','pipe']});
+    expect(JSON.parse(output)).toEqual({loaded:true});
+  });
+
   function fixtureDb(tables = {}, failures = {}) {
     return { from: vi.fn(table => {
       const builder = {};
       for (const method of ['select', 'gte', 'lte', 'in', 'order']) builder[method] = () => builder;
-      builder.range = async (start, end) => ({ data: (tables[table] || []).slice(start, end + 1), error: failures[table] || null });
+      let columns=''; builder.select=value=>{columns=value;return builder;};
+      builder.range = async (start, end) => ({ data: (tables[table] || []).slice(start, end + 1).map(row=>{
+        if(table!=='winners_candidates')return row;
+        const {evidence_snapshot,...selected}=row;
+        if(columns.includes('judgment:evidence_snapshot->mlbJudgment'))selected.judgment=evidence_snapshot?.mlbJudgment ?? null;
+        return selected;
+      }), error: failures[table] || null });
       return builder;
     }) };
   }
@@ -308,6 +322,17 @@ describe('Read-only report plumbing', () => {
     expect(report.rows).toHaveLength(1);
     expect(report.mlb[0].group).toBe('admitted');
     expect(report.selection_runs).toHaveLength(1);
+  });
+
+  it('reads the v4 journal projection so complete decisions do not appear unavailable',async()=>{
+    const c=judgmentCandidate(); c.policy_version='mlb-conviction-v4';
+    Object.assign(c.pick_snapshot,{decision_policy:'mlb-judgment-v2',judgment_run_id:'run-book',price_endorsement:'endorse',odds_visibility:'odds_visible',
+      game_id:c.game_id,homeTeam:'Boston Red Sox',awayTeam:'Seattle Mariners',type:'moneyline',commence_time:c.commence_time});
+    c.evidence_snapshot={mlbJudgment:mlbJudgmentFixture(c.pick_snapshot,{gameDate:c.game_date,recordedAt:'2026-09-04T19:55:00Z'})};
+    const db=fixtureDb({winners_candidates:[c],winners_board:[boardRow(c)],game_results:[grade()],
+      winners_selection_runs:[selection(c,{policy_version:'mlb-conviction-v4'})],daily_picks:[{date:c.game_date,picks:[publicPick(c)]}]});
+    const report=await readWinnersReport(db,{until:'2026-09-04'});
+    expect(report.mlb[0]).toMatchObject({group:'admitted',judgment_record_status:'complete'});
   });
 
   it('fails explicitly when public coverage or the selection ledger cannot be read completely', async () => {

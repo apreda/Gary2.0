@@ -102,4 +102,36 @@ Verification logs: `/tmp/gary-mlb-complete-backend-stable-20260908.log`,
 `/tmp/gary-mlb-complete-edge-20260908.log`. The earlier mixed working-tree run
 is `/tmp/gary-mlb-complete-backend-20260908.log`.
 
-Final committed-source and fresh-runtime receipts follow after restart.
+## Source and production readback
+
+Implementation commit **1c96ce0e** is pushed to `origin/main`. The first verified
+new-policy Winners restart was **2026-09-08T15:54:31.296Z**, PID **36403**, from
+the canonical backend on Node **22.23.2**, logging `mlb-conviction-v4`. The
+scheduler remains PID96216 and launches fresh pick children from that checkout.
+The live-config read confirms **Astra**, **-179** and era **4294d3b5a7d2**. Main
+memory reads and the bounded postgame worker both successfully read the new
+production schema; their zero-row result is expected before any new-policy
+pick has been made. No model review or public QA write was needed for this check.
+
+The full read-only production checker verifies the new era, canonical folder,
+running worker, no unpushed commits and all20 existing edge deployment times.
+It exits1 for28 unrelated working-tree changes from concurrent Hub/native work
+and the existing private Firebase configuration exception. None belongs to this
+MLB deployment. This is an explicit shared-workspace exception, not a globally
+clean release claim. The earlier broad run's native failures were sent to the
+native release owner; this task leaves those files untouched.
+
+Final reporting verification found that the CLI did not fetch the new journal
+field. Its narrow JSON projection now includes the saved journal, so complete
+v4 decisions cannot be mislabeled unavailable. JSON-mode model diagnostics go
+to stderr, preserving parseable stdout. **42 final reporting/model/integration
+tests pass**, and the production read-only report returns valid empty arrays
+before today's picks. Logs: `/tmp/gary-mlb-complete-book-20260908.log`,
+`/tmp/gary-mlb-complete-live-book-20260908.json`, and
+`/tmp/gary-mlb-complete-production-20260908.log`.
+
+The first scheduled MLB decision window is **17:05 ET**, for the **18:35 ET**
+first game. Upcoming fresh children will use v2 and v4. The first natural
+publication and first completed expectation memory remain future observations;
+there is no measured win-rate or profit improvement claim from fixture tests.
+
