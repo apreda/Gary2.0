@@ -40,7 +40,7 @@ async function edge({ currentPick = pick, box = { data: [stat({ bb: 0, p_bb: 4 }
   });
   vi.stubGlobal('fetch', fetch);
   await import('../../supabase/functions/grade-props/index.ts');
-  const response = await handler(new Request('https://test.invalid/grade-props?dry=1&force=1&date=2026-09-06'));
+  const response = await handler(new Request('https://test.invalid/grade-props?dry=1&force=1&date=2026-09-06', { headers: { Authorization: 'Bearer fixture' } }));
   expect(response.status).toBe(200);
   expect(fetch.mock.calls.every(([, options]) => !options.method || options.method === 'GET')).toBe(true);
   return response.json();

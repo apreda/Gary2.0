@@ -19,6 +19,7 @@
 // ("home_runs", "total_bases", "hits_runs_rbis").
 
 import { isFinalSettlementStatus } from '../_shared/gameSettlement.js';
+import { isServiceAudit } from "../grade-results/audit-auth.ts";
 import { settleUserBet, patchUserBet, fetchUserBetsForDates, matchingPropGrade } from "../grade-results/userbets.ts";
 import { updateUserStreak } from "../grade-results/streaks.ts";
 import { notifySettles, type UserSettleBatch } from "../grade-results/push.ts";
@@ -133,6 +134,11 @@ async function writeProp(row: any): Promise<"insert" | "update" | "noop" | "fail
 }
 
 Deno.serve(async (req) => {
+  // Even dry runs read paid picks and consume provider requests. Only internal
+  // cron/repair callers may reach any prop grading dependency or side effect.
+  if (!isServiceAudit(req, SERVICE_KEY)) {
+    return Response.json({ ok: false, error: "Service authorization required" }, { status: 403 });
+  }
   if (!BDL_KEY) return new Response(JSON.stringify({ ok: false, error: "BALLDONTLIE_API_KEY not set" }),
     { status: 500, headers: { "Content-Type": "application/json" } });
 

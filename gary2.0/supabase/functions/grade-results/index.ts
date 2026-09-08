@@ -650,6 +650,15 @@ async function writeRecap(args: {
 }
 
 Deno.serve(async (req) => {
+  const requestUrl = new URL(req.url);
+  // social-auto-post still reads final-game evidence with the public key.
+  // That GET returns before grading, paid selection reads, models or settlement.
+  // Winners takes precedence below, so it must never inherit this exception.
+  const publicEvidence = req.method === "GET" && requestUrl.searchParams.get("evidence") === "1" &&
+    requestUrl.searchParams.get("winners") !== "1";
+  if (!publicEvidence && !isServiceAudit(req, SERVICE_KEY)) {
+    return Response.json({ ok: false, error: "Service authorization required" }, { status: 403 });
+  }
   if (!BDL_KEY) return new Response(JSON.stringify({ ok: false, error: "BALLDONTLIE_API_KEY not set" }),
     { status: 500, headers: { "Content-Type": "application/json" } });
 
