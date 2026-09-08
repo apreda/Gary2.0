@@ -169,6 +169,10 @@ describe('Hub structured judgment validation', () => {
     const shown = JSON.parse(buildHubJudgmentPrompt(packets).split('DATED GAME EVIDENCE:\n')[1])[0];
     const alias = canonical => shown.evidence.find(entry => entry.source_key === packets[0].evidence.find(e => e.id === canonical).source_key).id;
     const primary = packets[0].evidence[0].id, other = packets[0].evidence[1].id;
+    expect(shown.eligible_primary_evidence_ids).toContain(alias(primary));
+    expect(shown.eligible_primary_evidence_ids).not.toContain(alias('current_context'));
+    expect(shown.required_evidence_ids).toEqual([alias('current_context')]);
+    expect(shown.evidence.find(entry => entry.id === alias('current_context')).primary_eligible).toBe(false);
     const input = { primary_evidence_id: alias(primary), supporting_evidence_ids: [alias(primary), alias(other), alias('current_context')] };
     const [{ judgment }] = validateHubJudgments(response(packets[0], input), packets, { now: asOf });
     expect(judgment.supporting_evidence_ids).toEqual([primary, other, 'current_context']);
