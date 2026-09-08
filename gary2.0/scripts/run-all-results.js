@@ -1835,6 +1835,18 @@ async function main(targetDate = getTargetDate()) {
     console.warn(`  ⚠️ Shadow read failed (non-fatal): ${e.message}`);
   }
 
+  // Main Gary's prospective memory reviews both winning and losing tickets.
+  // Original grading is already complete; this step cannot change any grade.
+  if (targetDate >= '2026-09-08') try {
+    const { reviewMlbExpectationBatch } = await import('./review-mlb-expectations.js');
+    const { supabaseAdmin } = await import('../src/supabaseClient.js');
+    const reviewed = await reviewMlbExpectationBatch({ db: supabaseAdmin, since: '2026-09-08', until: targetDate, limit: 2 });
+    const { reviews: _reviews, ...counts } = reviewed;
+    console.log(`  [MLB Expectations] ${JSON.stringify(counts)}`);
+  } catch (error) {
+    console.warn(`  [MLB Expectations] Review unavailable: ${error.message}; no unverified memory added`);
+  }
+
   // THE NOTEBOOK (Sep 3 2026): autopsies for the day's graded picks (the
   // real Gary's and the notebook shadow's), grade the notebook shadow, and
   // print the three systems side by side. Never reaches the real pick.

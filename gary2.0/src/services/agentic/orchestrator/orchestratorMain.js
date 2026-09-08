@@ -67,6 +67,7 @@ function saveCachedScoutReport(homeTeam, awayTeam, sport, game, data) {
 }
 import { buildPass1Message } from './passBuilders.js';
 import { runAgentLoop } from './agentLoop.js';
+import { mlbJudgmentMarketError } from './mlbJudgmentSession.js';
 import { normalizeSportToLeague } from './orchestratorHelpers.js';
 
 /**
@@ -76,7 +77,7 @@ import { normalizeSportToLeague } from './orchestratorHelpers.js';
  * @param {Object} options - Optional settings
  */
 export async function analyzeGame(game, sport, options = {}) {
-  const marketError = gameMarketUnavailable(game, sport);
+  const marketError = gameMarketUnavailable(game, sport) || (options.mlbJudgmentJournal && mlbJudgmentMarketError(game, sport));
   if (marketError) return { ...marketError, homeTeam: game.home_team, awayTeam: game.away_team, sport };
   // Clear stat router cache from previous game (prevents stale cross-game data)
   clearStatRouterCache();
@@ -240,6 +241,7 @@ export async function analyzeGame(game, sport, options = {}) {
       awayRecord,
       // Pass Flash's investigation-ready scout report (includes Tale of Tape + token menu)
       scoutReport: flashText,
+      originalGaryDesk: garyText,
       // Optional sport-specific Pass 2 decision guards (phase-aligned)
       pass25DecisionGuards: (typeof constitution === 'object' ? constitution.pass25DecisionGuards || '' : ''),
       // The game rides along so a capped MLB game's case headings name the

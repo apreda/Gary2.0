@@ -3,31 +3,52 @@ import vm from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
 import { countRealStats } from '../../src/services/agentic/statsSubstance.js';
 import { MLB_DECISION_POLICY } from '../../src/services/agentic/orchestrator/mlbCaseMenu.js';
+import { shouldRetryPickWithModel } from '../../src/services/marketTruth.js';
 import { originalGameEvidence } from '../../src/services/pickdesk/originalGameEvidence.js';
 
 const runner = readFileSync(new URL('../../scripts/run-agentic-picks.js', import.meta.url), 'utf8');
 
 describe('MLB decision-policy provenance', () => {
-  const game = { home_team: 'Braves', away_team: 'Rockies' };
-  const loadLane = (analyzeGame) => {
+  const game = { id: 1, home_team: 'Braves', away_team: 'Rockies', commence_time: '2026-09-08T23:00:00Z' };
+  const loadLane = (analyzeGame, extra = {}) => {
     // Execute the actual lane function with local doubles. Importing the
     // runner itself would start provider initialization and live generation.
     const start = runner.indexOf('async function runMlbJuneEngine(');
     const end = runner.indexOf('\n}\n', start) + 2;
     return vm.runInNewContext(`(${runner.slice(start, end)})`, {
-      analyzeGame, MLB_JUNE_BRAIN_MODEL: 'test-brain', DESK_FALLBACK_MODELS: [],
+      shouldStore: false, useTestTable: false, args: [], isProductionWinnersRun: ({shouldStore}) => shouldStore,
+      winnersAdmin: {}, readMlbExpectationMemory: vi.fn().mockResolvedValue({rows:[],text:''}),
+      createMlbJudgmentJournal: vi.fn(() => ({fail: vi.fn().mockResolvedValue(null)})),
+      analyzeGame, shouldRetryPickWithModel, MLB_JUNE_BRAIN_MODEL: 'test-brain', DESK_FALLBACK_MODELS: [],
       MLB_DECISION_POLICY, extractJuneBilateralPaths: () => ({ path_home: 'home case', path_away: 'away case' }),
       mlbCaseHeadings: () => ({ lastSide: 'away' }), junePromptSha: async () => 'test-era',
-      console: { warn: vi.fn(), error: vi.fn() },
+      console: { warn: vi.fn(), error: vi.fn() }, ...extra,
     });
   };
 
   it('stamps a newly completed MLB decision with the policy loaded alongside its prompts', async () => {
     const decision = await loadLane(vi.fn().mockResolvedValue({ pick: 'Braves ML -150' }))(game, {});
     expect(decision).toMatchObject({ decision_policy: 'mlb-judgment-v1', _promptSha: 'test-era' });
-    expect(runner).toContain("...(config.key === 'baseball_mlb' ? { decision_policy: result.decision_policy } : {})");
+    expect(runner).toContain("judgment_run_id: result.judgment_run_id, price_endorsement: result.price_endorsement");
     const pick = { pick: decision.pick, decision_policy: decision.decision_policy, homeTeam: 'Braves', awayTeam: 'Rockies' };
     expect(originalGameEvidence({ result: decision, pick, deskText: 'original desk' }).pickSnapshot.decision_policy).toBe(MLB_DECISION_POLICY);
+  });
+
+  it('requires all durable stages in production and gives each whole-brain retry its own journal', async () => {
+    const analyze = vi.fn().mockResolvedValue({pick:'Braves ML -150'});
+    const create = vi.fn(() => ({fail:vi.fn().mockResolvedValue(null)}));
+    const result = await loadLane(analyze, {shouldStore:true,createMlbJudgmentJournal:create})(game,{});
+    expect(result.error).toContain('durable judgment stages');
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(analyze.mock.calls[0][2].mlbJudgmentJournal).not.toBe(analyze.mock.calls[1][2].mlbJudgmentJournal);
+  });
+
+  it('retains the completed v2 policy and memory at the production seam', async () => {
+    const analyze = vi.fn().mockResolvedValue({pick:'Braves ML -150',decision_policy:'mlb-judgment-v2',_mlbJudgment:{receipts:{price_assessment:{ok:true}}}});
+    const result = await loadLane(analyze,{shouldStore:true})(game,{});
+    expect(result.decision_policy).toBe('mlb-judgment-v2');
+    expect(result._mlbJudgmentJournal).toBeTruthy();
+    expect(analyze.mock.calls[0][2].mlbExpectationMemory.rows).toEqual([]);
   });
 
   it('does not assign a policy to a failed analysis or an old recovered publication', async () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { reviewPick, reviewProp, REVIEW_POLICY_VERSION } from '../../../src/services/pickdesk/winnersReviewer.js';
 import { GAME_ML_CAP } from '../../../src/services/agentic/orchestrator/orchestratorConfig.js';
+import { mlbJudgmentFixture } from '../../helpers/mlbJudgmentFixture.js';
 import {
   MLB_REVIEW_POLICY_VERSION, MLB_FACTUAL_REVIEW_SYSTEM, buildMlbFactualAsk,
   mlbFactualVerdict, parseMlbFactualReview, reviewMlbFactualPick,
@@ -9,7 +10,7 @@ import {
 const START = Date.parse('2026-09-08T18:00:00Z');
 const now = () => START;
 const input = {
-  reviewPolicyVersion: MLB_REVIEW_POLICY_VERSION, league: 'MLB', gameDate: '2026-09-08', gameId: '1042',
+  reviewPolicyVersion: 'mlb-conviction-v3', league: 'MLB', gameDate: '2026-09-08', gameId: '1042',
   homeTeam: 'Boston Red Sox', awayTeam: 'Seattle Mariners', pickIsHome: true,
   pickText: 'Red Sox ML', odds: -118, betType: 'moneyline',
   deskText: 'ORIGINAL DESK: Boston starter A threw 91 pitches on September 3. Dated 2026 samples and Seattle opposing bullpen information.',
@@ -44,11 +45,49 @@ const runner = (...objects) => {
 };
 const run = (oneShot, changes = {}, options = {}) => reviewPick({ ...input, ...changes }, { oneShot, now, ...options });
 
+describe('v4 factual review requires an endorsed published staged judgment', () => {
+  const staged = () => {
+    const pickSnapshot = { game_id: input.gameId, league: 'MLB', homeTeam: input.homeTeam, awayTeam: input.awayTeam, pick: input.pickText,
+      odds: input.odds, type: input.betType, commence_time: input.commenceTime, decision_policy: 'mlb-judgment-v2', judgment_run_id: 'run-factual', price_endorsement: 'endorse' };
+    return { ...input, reviewPolicyVersion: MLB_REVIEW_POLICY_VERSION, pickSnapshot, mlbJudgment: mlbJudgmentFixture(pickSnapshot) };
+  };
+  it('uses schema4 and the original structured expectations without rewriting them', async () => {
+    const current = staged(), before = structuredClone(current), oneShot = runner(answer());
+    const result = await reviewPick(current, { oneShot, now });
+    expect(result).toMatchObject({ ok: true, status: 'qualified', policy_version: 'mlb-conviction-v4', review: { schema_version: 4, eligibility_only: true } });
+    expect(oneShot.mock.calls[0][0]).toContain('Original finish expectation');
+    expect(oneShot.mock.calls[0][0]).toContain('MLB WINNERS FACTUAL REVIEW — mlb-conviction-v4');
+    expect(current).toEqual(before);
+    expect(mlbFactualVerdict({ ...result.review, schema_version: 3 }).status).toBe('unavailable');
+  });
+  it.each([
+    ['missing journal', current => { delete current.mlbJudgment; }],
+    ['missing publication receipt', current => { delete current.mlbJudgment.receipts.published; }],
+    ['different original run', current => { current.pickSnapshot.judgment_run_id = 'another'; }],
+    ['different request odds', current => { current.odds = -120; }],
+    ['different requested ticket', current => { current.pickText = 'Mariners ML'; }],
+    ['different requested game', current => { current.gameId = '404'; }],
+    ['different selected side', current => { current.pickIsHome = false; }],
+    ['unrecorded expectation', current => { delete current.mlbJudgment.stress.expectations.finish; }],
+  ])('refuses %s before spending a factual call', async (_label, mutate) => {
+    const current = staged(); mutate(current); const oneShot = vi.fn();
+    expect((await reviewPick(current, { oneShot, now })).status).toBe('unavailable');
+    expect(oneShot).not.toHaveBeenCalled();
+  });
+  it('keeps a price decline out of factual inference without calling it a false baseball premise', async () => {
+    const current = staged(); current.pickSnapshot.price_endorsement = 'decline';
+    current.mlbJudgment.price.decision = 'decline'; current.mlbJudgment.winners_eligible = false;
+    const oneShot = vi.fn(); const result = await reviewPick(current, { oneShot, now });
+    expect(result).toMatchObject({ ok: false, status: 'unavailable', verdict: null });
+    expect(result.error).toContain('declined'); expect(oneShot).not.toHaveBeenCalled();
+  });
+});
+
 describe('MLB factual policy routing and substantive review', () => {
   it('checks original evidence once with Sol while normal forecast risks and absent price prose do not gate', async () => {
     const oneShot = runner(answer());
     const out = await run(oneShot);
-    expect(out).toMatchObject({ ok: true, status: 'qualified', verdict: 'STRONG', policy_version: MLB_REVIEW_POLICY_VERSION, model: 'codex-gpt-5.6-sol' });
+    expect(out).toMatchObject({ ok: true, status: 'qualified', verdict: 'STRONG', policy_version: input.reviewPolicyVersion, model: 'codex-gpt-5.6-sol' });
     expect(out.review).toMatchObject({ schema_version: 3, league: 'MLB', eligibility_only: true, clarification_attempt: null, supplemental_evidence: [] });
     expect(out.review.forecast_risks).toHaveLength(1);
     expect(out.review.ticket).toMatchObject({ pick_text: input.pickText, odds: input.odds });
@@ -70,6 +109,7 @@ describe('MLB factual policy routing and substantive review', () => {
     expect((await run(oneShot, { league: 'NFL' })).status).toBe('unavailable');
     expect((await reviewProp(input, { oneShot, now })).status).toBe('unavailable');
     expect((await run(oneShot, { reviewPolicyVersion: 'future-unknown-policy' })).error).toBe('unsupported explicit review policy');
+    expect((await run(oneShot, { reviewPolicyVersion: 'constructor' })).error).toBe('unsupported explicit review policy');
     expect(oneShot).not.toHaveBeenCalled();
     expect(mlbFactualVerdict({ schema_version: 2, policy_version: REVIEW_POLICY_VERSION }).status).toBe('unavailable');
   });

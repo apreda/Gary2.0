@@ -1,8 +1,9 @@
 /** Gary chooses Winners from factually eligible original MLB decisions. */
 import { codexCliOneShot } from '../agentic/orchestrator/providerAdapters/codexCliSession.js';
 import { MLB_JUNE_BRAIN_MODEL } from '../agentic/orchestrator/orchestratorConfig.js';
+import { mlbJudgmentEvidenceError } from '../agentic/orchestrator/mlbJudgment.js';
 
-export const MLB_WINNERS_POLICY = 'mlb-conviction-v3';
+export const MLB_WINNERS_POLICY = 'mlb-conviction-v4';
 export const MLB_SELECTION_TIMEOUT_MS = 6 * 60 * 1000;
 // A measured payload ceiling, not an exact token count. Typical full 15-game
 // comparison packets fit; unusual packets fail whole without hiding candidates.
@@ -18,9 +19,14 @@ export function mlbComparisonPacket(candidate,gameDate) {
     outcome:pick.type,line:pick.spread ?? pick.line ?? null,home:pick.homeTeam,away:pick.awayTeam,
     picked_side:typeof evidence.pickIsHome==='boolean' ? evidence.pickIsHome?'home':'away' : null,
     original_decision:{observed_at:evidence.observedAt || null,snapshot_version:evidence.snapshotVersion || null,
-      decision_policy:pick.decision_policy || null,review_policy:candidate.policy_version || null,model:pick.model || null,prompt_sha:pick.prompt_sha || null},
+      decision_policy:pick.decision_policy || null,review_policy:candidate.policy_version || null,model:pick.model || null,prompt_sha:pick.prompt_sha || null,
+      judgment_run_id:pick.judgment_run_id || null,price_endorsement:pick.price_endorsement || null},
     rationale:pick.rationale,cases:{home:evidence.caseHome ?? pick.path_home ?? null,away:evidence.caseAway ?? pick.path_away ?? null},
     research_briefing:evidence.researchBriefing ?? null,factual_review:candidate.review,
+    ...(candidate.policy_version === MLB_WINNERS_POLICY && evidence.mlbJudgment ? { recorded_judgment: {
+      initial:evidence.mlbJudgment.initial, targeted_research:evidence.mlbJudgment.research,
+      stress_test:evidence.mlbJudgment.stress, price_assessment:evidence.mlbJudgment.price,
+    } } : {}),
   };
 }
 
@@ -87,6 +93,15 @@ export async function selectMlbWinners(run,{oneShot=codexCliOneShot,clock=Date.n
   const base=()=>({model:modelName,ms:clock()-started,prompt_bytes:promptBytes});
   if(!Number.isFinite(timeoutMs) || timeoutMs<30_000)return {ok:false,error:'Insufficient pregame time for Gary selection',...base()};
   if(!String(model).startsWith('codex-'))return {ok:false,error:'Gary selection requires the configured Codex game brain',...base()};
+  if (!['mlb-conviction-v3', MLB_WINNERS_POLICY].includes(run.policy_version)) return {ok:false,error:'Unsupported MLB selection policy',...base()};
+  if (run.policy_version === MLB_WINNERS_POLICY) {
+    for (const candidate of run.input_snapshot?.candidates || []) {
+      const error = mlbJudgmentEvidenceError(candidate.evidence_snapshot?.mlbJudgment, { pick: candidate.pick_snapshot, gameDate: run.game_date, now: started });
+      if (candidate.policy_version !== MLB_WINNERS_POLICY || candidate.review?.policy_version !== MLB_WINNERS_POLICY
+        || candidate.review?.schema_version !== 4 || candidate.review?.eligibility_only !== true || error
+        || candidate.pick_snapshot?.price_endorsement !== 'endorse') return {ok:false,error:error || 'Candidate lacks the original endorsed v4 judgment and factual eligibility',...base()};
+    }
+  }
   try {
     const prompt=buildMlbSelectionAsk(run);
     promptBytes=Buffer.byteLength(prompt,'utf8')+Buffer.byteLength(MLB_SELECTION_SYSTEM,'utf8');

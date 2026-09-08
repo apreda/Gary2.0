@@ -56,6 +56,10 @@ const DOSSIER_SURFACE_FILES = [
   // The ticket menu and the case headings (Sep 1 2026): the "House limit"
   // and "Tickets on this game" sentences every desk prints live here.
   './mlbCaseMenu.js',
+  './mlbJudgment.js',
+  './mlbJudgmentSession.js',
+  './agentLoop.js',
+  '../../diary/mlbExpectations.js',
   // The line-history sentence in BETTING CONTEXT is worded here (Sep 1 2026).
   '../../oddsSnapshots.js',
   // THE RESEARCHER (restored Sep 3 2026, the Aug 18 version): its prompts,
@@ -89,6 +93,7 @@ export function junePromptSha() {
     `MLB_RESEARCHER=${String(process.env.GARY_RESEARCHER || 'on').toLowerCase() === 'off' ? 'OFF' : 'ON_BOUNDED'} (one cancellable research budget; original desk remains available when research fails)`,
     `RESEARCH_BUDGET=${process.env.GARY_RESEARCH_TIMEOUT_MS || 'default'}; DECISION_RESERVE=${process.env.GARY_RESEARCH_DECISION_RESERVE_MS || 'default'}`,
     'ONE BRAIN PER PICK (founder, Aug 27 2026 — no mid-conversation model switch; a failed brain means the whole game re-runs on the next one)',
+    'MLB JUDGMENT=v2: same-session durable initial, bounded factual research, stress, fixed-ticket price decision; completed prospective memories before the first read; fifteen-minute research decision reserve',
     'RESEARCH HANDOFF=attributed figures and interpretation; no blanket verification (Sep 4 2026)',
     'PASS1 NUDGES=DESK-ONLY v2 (Sep 1 2026 — stall/reminder messages AND the empty-response + fallback nudges in agentLoop.js are desk-only for game lanes; agentLoop is outside this hash, so wording changes there must bump this marker)',
     // The RENDERED system prompt (identity + FACT-CHECKING + BASE_RULES).

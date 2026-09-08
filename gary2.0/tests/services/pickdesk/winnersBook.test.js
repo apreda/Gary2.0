@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { admittedGameKeys, isWinnersGame, gameTicketIdentity, propTicketIdentity, buildWinnersBook, buildMlbSelectionBook, tallyWinnersBook, unitsAtPrice } from '../../../src/services/pickdesk/winnersBook.js';
 import { readAllRows, readWinnersBook, readWinnersReport, printWinnersBook, printMlbSelectionBook } from '../../../scripts/winners-book.js';
+import { mlbJudgmentFixture } from '../../helpers/mlbJudgmentFixture.js';
 
 const NOW = Date.parse('2026-09-05T04:00:00Z');
 const candidate = (extra = {}) => ({
@@ -140,6 +141,44 @@ const boardRow = (c) => ({ candidate_id: c.id, game_date: c.game_date, league: c
   game_id: c.game_id, ticket_key: c.ticket_key, pick_snapshot: c.pick_snapshot, admitted_at: c.admitted_at, policy_version: c.policy_version });
 const grade = (extra = {}) => ({ game_date: '2026-09-04', league: 'MLB', game_id: '42', pick_text: 'Mariners ML', result: 'won', ...extra });
 const book = (c = candidate(), opts = {}) => buildWinnersBook({ candidates: [c], board: [boardRow(c)], gameResults: [grade()], now: NOW, ...opts });
+
+describe('v2 judgment and v4 selection accounting', () => {
+  const current = () => {
+    const c = judgmentCandidate(); c.policy_version = 'mlb-conviction-v4';
+    Object.assign(c.pick_snapshot, { decision_policy: 'mlb-judgment-v2', judgment_run_id: 'run-book', price_endorsement: 'endorse', odds_visibility: 'odds_visible',
+      game_id: c.game_id, homeTeam: 'Boston Red Sox', awayTeam: 'Seattle Mariners', type: 'moneyline', commence_time: c.commence_time });
+    c.evidence_snapshot = { mlbJudgment: mlbJudgmentFixture(c.pick_snapshot, { gameDate: c.game_date, recordedAt: '2026-09-04T19:55:00Z' }) };
+    return c;
+  };
+  const report = (c, options = {}) => mlbBook(c, { selectionRuns: [selection(c, { policy_version: 'mlb-conviction-v4' })], ...options });
+  it('accounts for a complete staged selection without pooling or relabeling the earlier policy', () => {
+    const c = current(), before = structuredClone(c);
+    expect(report(c)[0]).toMatchObject({ group: 'admitted', decision_policy: 'mlb-judgment-v2', policy_version: 'mlb-conviction-v4',
+      judgment_run_id: 'run-book', price_endorsement: 'endorse', judgment_record_status: 'complete', units: 1.5 });
+    expect(mlbBook()[0]).toMatchObject({ group: 'admitted', decision_policy: 'mlb-judgment-v1', policy_version: 'mlb-conviction-v3' });
+    expect(c).toEqual(before);
+  });
+  it('does not treat a v3 comparison as the decision for a v4 public ticket', () => {
+    const c = current();
+    expect(report(c, { selectionRuns: [selection(c)] })[0].group).toBe('selection_record_missing');
+    expect(report(c, { selectionRuns: [selection(c)] })[0].selection_history[0].valid_decision).toBe(false);
+  });
+  it('reports a price decline separately from factual rejection and comparative nonselection', () => {
+    const c = current(); c.admitted_at = null; c.status = 'unavailable'; c.pick_snapshot.price_endorsement = 'decline';
+    c.evidence_snapshot.mlbJudgment.price.decision = 'decline'; c.evidence_snapshot.mlbJudgment.winners_eligible = false;
+    expect(report(c, { board: [], selectionRuns: [] })[0]).toMatchObject({ group: 'price_declined', result: 'won', units: 1.5, judgment_record_status: 'complete' });
+    expect(report(c, { board: [], candidates: [], selectionRuns: [] })[0]).toMatchObject({ group: 'price_declined', judgment_record_status: 'unavailable' });
+    expect(report(c)[0].group).toBe('ledger_conflict');
+  });
+  it('holds an incomplete journal out of selection accounting while retaining the public result', () => {
+    const c = current(); delete c.evidence_snapshot.mlbJudgment.receipts.stress_test;
+    expect(report(c)[0]).toMatchObject({ group: 'judgment_record_unavailable', result: 'won', units: 1.5, judgment_record_status: 'unavailable' });
+  });
+  it('does not attach another decision run to an otherwise identical public ticket', () => {
+    const c = current();
+    expect(report(c, { publicPicks: [publicPick(c, { judgment_run_id: 'different-run' })] })[0].group).toBe('ledger_conflict');
+  });
+});
 
 describe('Exact immutable Winners result flags', () => {
   it('requires date, league, game ID, ticket and publication price after the cutover', () => {

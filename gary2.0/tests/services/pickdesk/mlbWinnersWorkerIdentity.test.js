@@ -3,6 +3,7 @@ vi.mock('../../../src/supabaseClient.js', () => ({ supabaseAdmin: {} }));
 import { winnersCandidate } from '../../../src/services/pickdesk/winnersAdmissions.js';
 import { originalGameEvidence } from '../../../src/services/pickdesk/originalGameEvidence.js';
 import { reviewCandidate } from '../../../scripts/run-winners-board.js';
+import { mlbJudgmentFixture } from '../../helpers/mlbJudgmentFixture.js';
 
 const now = Date.parse('2026-09-08T18:00:00Z');
 function fixture(extra = {}) {
@@ -83,5 +84,39 @@ describe('MLB factual worker binds review to original game identity', () => {
     const review = vi.fn(async () => ({ ok: true, status: 'qualified' }));
     expect((await reviewCandidate(c, { now, gameReview: review })).status).toBe('qualified');
     expect(review.mock.calls[0][0].reviewPolicyVersion).toBe('exact-ticket-v2');
+  });
+});
+
+describe('v4 worker gates new public decisions before review', () => {
+  const staged = () => {
+    const c = fixture({ decision_policy: 'mlb-judgment-v2', judgment_run_id: 'run-worker', price_endorsement: 'endorse', odds_visibility: 'odds_visible' });
+    c.evidence_snapshot.mlbJudgment = mlbJudgmentFixture(c.pick_snapshot);
+    return c;
+  };
+  it('passes the same complete prospective journal to factual review', async () => {
+    const c = staged(), review = vi.fn(async () => ({ ok: true, status: 'qualified' }));
+    expect(c.policy_version).toBe('mlb-conviction-v4');
+    expect((await reviewCandidate(c, { now, gameReview: review })).status).toBe('qualified');
+    expect(review.mock.calls[0][0]).toMatchObject({ reviewPolicyVersion: 'mlb-conviction-v4', mlbJudgment: c.evidence_snapshot.mlbJudgment });
+  });
+  it.each([
+    ['journal missing', c => { delete c.evidence_snapshot.mlbJudgment; }],
+    ['publication missing', c => { delete c.evidence_snapshot.mlbJudgment.receipts.published; }],
+    ['receipt from a different run', c => { c.evidence_snapshot.mlbJudgment.receipts.stress_test.run_id = 'wrong'; }],
+    ['price phase before stress', c => { c.evidence_snapshot.mlbJudgment.receipts.price_assessment.recorded_at = '2026-09-08T15:00:00Z'; }],
+    ['wrong policy pairing', c => { c.policy_version = 'mlb-conviction-v3'; }],
+    ['changed original final ticket', c => { c.evidence_snapshot.mlbJudgment.final_ticket.odds = 120; }],
+    ['published after kickoff', c => { c.evidence_snapshot.mlbJudgment.receipts.published.recorded_at = c.commence_time; }],
+  ])('rejects %s before reviewer inference', async (_label, mutate) => {
+    const c = staged(); mutate(c); const review = vi.fn();
+    expect((await reviewCandidate(c, { now, gameReview: review })).status).toBe('unavailable');
+    expect(review).not.toHaveBeenCalled();
+  });
+  it('preserves the declined ordinary game call and avoids a factual call', async () => {
+    const c = staged(); c.pick_snapshot.price_endorsement = 'decline'; c.evidence_snapshot.pickSnapshot.price_endorsement = 'decline';
+    c.evidence_snapshot.mlbJudgment.price.decision = 'decline'; c.evidence_snapshot.mlbJudgment.winners_eligible = false;
+    const before = structuredClone(c), review = vi.fn();
+    expect((await reviewCandidate(c, { now, gameReview: review })).error).toContain('declined');
+    expect(review).not.toHaveBeenCalled(); expect(c).toEqual(before);
   });
 });

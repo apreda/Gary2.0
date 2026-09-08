@@ -1,10 +1,13 @@
 /** Persist exact published tickets and their original evidence before review. */
 import { createHash } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { pickSideOf } from '../closingLine.js';
 
 export const WINNERS_POLICY_VERSION = 'exact-ticket-v2';
 export const WINNERS_CUTOVER_DATE = '2026-09-04';
-export const MLB_WINNERS_POLICY_VERSION = 'mlb-conviction-v3';
+export const MLB_WINNERS_POLICY_VERSION = 'mlb-conviction-v4';
+export const MLB_WINNERS_LEGACY_POLICY_VERSION = 'mlb-conviction-v3';
+export const MLB_WINNERS_POLICIES = Object.freeze(Object.assign(Object.create(null), { 'mlb-judgment-v1': MLB_WINNERS_LEGACY_POLICY_VERSION, 'mlb-judgment-v2': MLB_WINNERS_POLICY_VERSION }));
 const norm = v => String(v ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
 const digest = v => createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const numeric = v => v == null || String(v).trim() === '' ? null : Number.isFinite(Number(v)) ? Number(v) : null;
@@ -33,8 +36,12 @@ export function winnersPickIsHome(pick) {
  * decision may receive the evidence gathered for this run. */
 export function publishedDecisionMatches(incoming,published,{date,league,kind}) {
   if(!published)return false;
+  const fields = ['rationale','model','prompt_sha'];
+  if (incoming.decision_policy === 'mlb-judgment-v2' || published.decision_policy === 'mlb-judgment-v2') {
+    fields.push('judgment_run_id','decision_policy','price_endorsement','odds_visibility');
+  }
   return winnersCandidate({date,league,kind,pick:incoming}).ticket_key===winnersCandidate({date,league,kind,pick:published}).ticket_key
-    && ['rationale','model','prompt_sha'].every(key=>String(incoming[key] ?? '')===String(published[key] ?? ''));
+    && fields.every(key=>String(incoming[key] ?? '')===String(published[key] ?? ''));
 }
 
 export async function confirmedPublishedGame({date,league,pick},{readPublished}) {
@@ -61,8 +68,8 @@ export function winnersCandidate({ date, league, kind, pick, evidence = {} }) {
     ticket_key: digest([date, league.toUpperCase(), kind, ...(kind === 'prop' ? market : [gameId, norm(pickText)]), odds]),
     pick_text: pickText, odds, commence_time: kickoff,
     pick_snapshot: pick, evidence_snapshot: evidence,
-    policy_version: league.toUpperCase()==='MLB' && kind==='game' && pick.decision_policy==='mlb-judgment-v1'
-      ? MLB_WINNERS_POLICY_VERSION : WINNERS_POLICY_VERSION,
+    policy_version: league.toUpperCase()==='MLB' && kind==='game'
+      ? MLB_WINNERS_POLICIES[pick.decision_policy] || WINNERS_POLICY_VERSION : WINNERS_POLICY_VERSION,
     status: invalid ? 'unavailable' : 'pending',
     reason: invalid ? 'Missing exact game identity, ticket price, or kickoff' : null,
   };
@@ -97,6 +104,27 @@ export async function enqueueWinnersCandidate(client, input) {
         .eq('ticket_key', row.ticket_key).in('status', ['pending', 'unavailable'])
         .gt('commence_time', new Date().toISOString()).is('admitted_at', null)
         .is('evidence_snapshot->>snapshotVersion', null);
+      if (repaired.error) throw repaired.error;
+    }
+    // A publication RPC retry can supply the missing final receipt for the
+    // same four already-recorded phases. It cannot replace any original source
+    // or a completed journal, or reopen an admitted/expired decision.
+    const journal = input.evidence.mlbJudgment;
+    const oldJournal = old?.mlbJudgment;
+    const withoutJournal = evidence => Object.fromEntries(Object.entries(evidence || {}).filter(([key]) => key !== 'mlbJudgment'));
+    const withoutPublished = value => value && { ...value, receipts: Object.fromEntries(Object.entries(value.receipts || {})
+      .filter(([key]) => key !== 'published').map(([phase, receipt]) => [phase, Object.fromEntries(
+        ['ok','run_id','phase','recorded_at','payload_sha256'].map(key => [key, receipt[key]]))])) };
+    const sameJournal = input.pick.decision_policy === 'mlb-judgment-v2' && journal?.receipts?.published
+      && old?.snapshotVersion === 2 && oldJournal?.run_id === journal.run_id && !oldJournal.receipts?.published
+      && publishedDecisionMatches(input.pick, found.data.pick_snapshot, input)
+      && isDeepStrictEqual(withoutJournal(old), withoutJournal(input.evidence))
+      && isDeepStrictEqual(withoutPublished(oldJournal), withoutPublished(journal));
+    if (sameJournal) {
+      const repaired = await client.from('winners_candidates').update({ evidence_snapshot: input.evidence })
+        .eq('ticket_key', row.ticket_key).in('status', ['pending','unavailable']).gt('commence_time', new Date().toISOString())
+        .is('admitted_at', null).eq('evidence_snapshot->mlbJudgment->>run_id', journal.run_id)
+        .is('evidence_snapshot->mlbJudgment->receipts->>published', null);
       if (repaired.error) throw repaired.error;
     }
   }

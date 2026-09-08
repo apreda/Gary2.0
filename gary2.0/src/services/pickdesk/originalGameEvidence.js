@@ -4,6 +4,7 @@ import { winnersPickIsHome, publishedDecisionMatches } from './winnersAdmissions
 export function originalGameEvidence({ result, pick, deskText, first = 'home' }) {
   return {
     snapshotVersion: 2,
+    ...(result?._mlbJudgment ? { mlbJudgment: structuredClone(result._mlbJudgment) } : {}),
     pickSnapshot: pick,
     deskText,
     caseHome: pick.path_home ?? result?.path_home ?? null,
@@ -26,6 +27,7 @@ export function reviewSourceDesk(evidence) {
   const blocks = [evidence.deskText];
   if (evidence.researchBriefing) blocks.push(
     '## ORIGINAL RESEARCH BRIEFING — reported findings and interpretation, not independent verification\n' + evidence.researchBriefing);
+  if (evidence.mlbJudgment) blocks.push('## ORIGINAL RECORDED MLB JUDGMENT — initial view, targeted factual follow-up, stress test and separate price decision\n' + JSON.stringify(evidence.mlbJudgment));
   if (evidence.toolResponses?.length) blocks.push(
     '## ORIGINAL TOOL RESPONSES — exact outputs received during this decision; source limits and errors remain part of the evidence\n' +
     evidence.toolResponses.map(r => `### ${r.name} (${r.observedAt || 'time unavailable'})\n${typeof r.content === 'string' ? r.content : JSON.stringify(r.content)}`).join('\n\n'));

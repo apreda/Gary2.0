@@ -5,16 +5,19 @@ import { pathToFileURL } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { supabaseAdmin as supabase } from '../src/supabaseClient.js';
 import { reviewPick, reviewProp } from '../src/services/pickdesk/winnersReviewer.js';
-import { enqueueWinnersCandidate, coreProp, canonicalProp, winnersCandidate, winnersPickIsHome, WINNERS_CUTOVER_DATE, MLB_WINNERS_POLICY_VERSION } from '../src/services/pickdesk/winnersAdmissions.js';
+import { enqueueWinnersCandidate, coreProp, canonicalProp, winnersCandidate, winnersPickIsHome, WINNERS_CUTOVER_DATE, MLB_WINNERS_POLICY_VERSION, MLB_WINNERS_POLICIES } from '../src/services/pickdesk/winnersAdmissions.js';
 import { matchingDesk } from '../src/services/diary/evidence.js';
-import { originalEvidenceMatches, reviewSourceDesk } from '../src/services/pickdesk/originalGameEvidence.js';
+import { originalGameEvidence, originalEvidenceMatches, reviewSourceDesk } from '../src/services/pickdesk/originalGameEvidence.js';
 import { MLB_WINNERS_POLICY, runMlbSelectionWindow } from '../src/services/pickdesk/mlbWinnersSelection.js';
+import { mlbJudgmentEvidenceError } from '../src/services/agentic/orchestrator/mlbJudgment.js';
+import { mlbCaseOrder } from '../src/services/agentic/orchestrator/mlbCaseMenu.js';
+import { mlbJudgmentDatabaseCall } from '../src/services/pickdesk/mlbJudgmentStorage.js';
 
 const todayET = () => new Date().toLocaleDateString('en-CA',{timeZone:'America/New_York'});
 const check = result => { if(result.error) throw result.error; return result.data; };
 const normalized = value => typeof value === 'string' ? value.trim().toLowerCase().replace(/\s+/g, ' ') : '';
 function mlbCandidateIdentityError(candidate, pick, evidence, now) {
-  if (candidate.league !== 'MLB' || candidate.kind !== 'game' || pick.decision_policy !== 'mlb-judgment-v1') {
+  if (candidate.league !== 'MLB' || candidate.kind !== 'game' || MLB_WINNERS_POLICIES[pick.decision_policy] !== candidate.policy_version) {
     return 'MLB factual policy does not match the original game decision';
   }
   const start = Date.parse(candidate.commence_time);
@@ -54,9 +57,14 @@ export async function reviewCandidate(c, { gameReview=reviewPick, propReview=rev
   if (!Number.isFinite(kickoff) || kickoff<=now) return {ok:false,status:'unavailable',error:'The ticket has no future kickoff; no postgame review is allowed'};
   if (!e.deskText) return {ok:false,status:'unavailable',error:'Original evidence snapshot unavailable; rationale alone cannot verify itself'};
   if (e.observedAt && (!Number.isFinite(Date.parse(e.observedAt)) || Date.parse(e.observedAt)>=kickoff)) return {ok:false,status:'unavailable',error:'Evidence was not recorded before kickoff'};
-  if (c.policy_version === MLB_WINNERS_POLICY_VERSION) {
+  if (Object.values(MLB_WINNERS_POLICIES).includes(c.policy_version)) {
     const error = mlbCandidateIdentityError(c, p, e, now);
     if (error) return {ok:false,status:'unavailable',error};
+  }
+  if (c.policy_version === MLB_WINNERS_POLICY_VERSION) {
+    const error = mlbJudgmentEvidenceError(e.mlbJudgment, { pick: p, gameDate: c.game_date, now });
+    if (error) return {ok:false,status:'unavailable',error};
+    if (p.price_endorsement !== 'endorse') return {ok:false,status:'unavailable',error:'Gary declined to endorse this exact priced ticket; it is not eligible for Winners'};
   }
   const prop=canonicalProp(p);
   const sourceDesk=reviewSourceDesk(e);
@@ -99,7 +107,7 @@ export async function releaseBoards(client=supabase,date=todayET()) {
 
 // Recover publication/queue gaps without inventing missing original evidence.
 // The direct writer can attach its evidence during the 30-second queue grace.
-export async function reconcilePublished(client,date, {now=Date.now()}={}) {
+export async function reconcilePublished(client,date, {now=Date.now(),recoverJudgment}={}) {
   const sources=[];
   for(const [table,kind] of [['daily_picks','game'],['prop_picks','prop']]) {
     const day=check(await client.from(table).select('picks').eq('date',date).maybeSingle());
@@ -139,6 +147,34 @@ export async function reconcilePublished(client,date, {now=Date.now()}={}) {
         } else if (desk?.decision_evidence) {
           evidence = {}; // Same matchup can be another game or another decision.
         }
+      }
+      if (kind === 'game' && league === 'MLB' && p.decision_policy === 'mlb-judgment-v2' && kickoff > now) {
+        try {
+          const recover = recoverJudgment || (await import('../src/services/pickdesk/mlbJudgmentStorage.js')).recoverMlbJudgmentPublication;
+          const journal = await recover(client, p, { gameDate: date, now });
+          if (journal) {
+            // A newly appended server receipt is later than this reconciliation
+            // sweep's start. Validate it at observation, not the stale sweep clock.
+            const error = mlbJudgmentEvidenceError(journal, { pick: p, gameDate: date, now: Math.max(now, Date.now()) });
+            if (error) throw new Error(error);
+            if (evidence.snapshotVersion === 2) evidence = { ...evidence, mlbJudgment: journal };
+            else {
+              // A desk-mirror write can fail after the original source and
+              // public ticket have committed. Recover only that immutable
+              // source, never a newly rebuilt desk or another matchup's mirror.
+              const header = check(await mlbJudgmentDatabaseCall(() => client.from('mlb_judgment_runs').select('*').eq('run_id', p.judgment_run_id).maybeSingle()));
+              const source = header?.source_snapshot;
+              if (!header || header.game_date !== date || String(header.game_id) !== String(p.game_id ?? p.bdl_game_id)
+                || header.model !== p.model || header.prompt_sha !== p.prompt_sha || Date.parse(header.commence_time) !== kickoff
+                || typeof source?.deskText !== 'string' || !source.deskText.trim()
+                || (evidence.deskText && evidence.deskText !== source.deskText)) throw new Error('Immutable MLB source does not match the original public decision');
+              evidence = originalGameEvidence({ pick: p, deskText: source.deskText,
+                first: mlbCaseOrder(source.game) === 'away-first' ? 'away' : 'home',
+                result: { _mlbJudgment: journal, _researchBriefing: source.researchBriefing || null,
+                  _originalToolResponses: source.toolResponses || [], _evidenceObservedAt: journal.receipts.price_assessment.recorded_at } });
+            }
+          }
+        } catch (error) { console.warn('[Winners] original MLB judgment recovery unavailable:', error.message); }
       }
       await enqueueWinnersCandidate(client,{date,league,kind,pick:p,evidence});
   }

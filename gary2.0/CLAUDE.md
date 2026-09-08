@@ -1,13 +1,20 @@
 # CLAUDE.md
 
 Latest MLB decision and Winners policy: read
-`../HANDOFF_2026-09-08_MLB_GARY_WINNERS.md`. New MLB games carry
-`mlb-judgment-v1`: Gary chooses the actual win/cover outcome he expects.
-`mlb-conviction-v3` uses Sol for factual eligibility, then the configured
-primary game brain (Astra) for comparative Winners selection. Price
-justification and self-assigned confidence do not decide admission. The
-existing -179 ML cap and pre-read run-line menus remain. Other sports,
-props, historical boards and notebook/formula records retain their policies.
+`../HANDOFF_2026-09-08_MLB_STAGED_JUDGMENT.md`. New production MLB games use
+`mlb-judgment-v2`: same Gary session, visible odds, durable initial whole-game
+judgment, at most two targeted factual questions, scenario stress test, then
+endorse/decline of that unchanged priced ticket. All four phases must persist
+before final publication; exact public ticket receives a fifth receipt.
+`mlb-conviction-v4` uses Sol for factual eligibility and Astra to compare Gary's
+endorsed original picks in planned windows. Price declines remain ordinary
+calls and have a separate accounting category. The -179 ML cap and original
+run-line menus remain. Main Gary reads only completed prospective expectation
+reviews available before the new read; postgame reviews assess pregame support
+and observed events separately, preserve original claims/citations and use a
+private leased retry queue. Historical v1/v3 records and the separate notebook/
+formula experiments remain intact. This is backend/database deployment;
+no native/web/edge contract changes are required.
 
 Latest native release: read `../HANDOFF_2026-09-08_HUB_BRAND_ALIGNMENT.md`.
 Hub/Fantasy now use Gary's shared visual elements while retaining the approved

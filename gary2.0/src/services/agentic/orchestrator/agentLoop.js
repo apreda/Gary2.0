@@ -17,6 +17,7 @@ import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, nflSeason, ncaafSeason } from '../../../utils/dateUtils.js';
 import { getTokensForSport, toolDefinitions } from '../tools/toolDefinitions.js';
 import { gameMarketUnavailable } from './mlbCaseMenu.js';
+import { runMlbJudgmentSession, mlbJudgmentCardInstruction, attachMlbJudgment, mlbJudgmentMarketError } from './mlbJudgmentSession.js';
 
 function hasInvestigationCompleteMarker(text = '') {
   if (!text || typeof text !== 'string') return false;
@@ -168,7 +169,7 @@ function moneylinePastCap(pick, cap = GAME_ML_CAP) {
 }
 
 export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, options = {}) {
-  const marketError = gameMarketUnavailable(options.game, sport);
+  const marketError = gameMarketUnavailable(options.game, sport) || (options.mlbJudgmentJournal && mlbJudgmentMarketError(options.game, sport));
   if (marketError) return { ...marketError, homeTeam, awayTeam, sport };
   // Internal branch tag for the session-based path (the name predates the
   // provider seam; every session now routes to a codex/claude/anthropic/gpt
@@ -259,6 +260,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   const originalToolResponses = [];
   const recordedTools = new WeakSet();
   let footballCases = null;
+  let mlbJudgment = null;
   const captureTools = () => {
     const captured = [];
     for (const m of messages) if (m.role === 'tool' && !recordedTools.has(m)) {
@@ -272,6 +274,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   const attachOriginalEvidence = pick => {
     captureTools();
     if (footballCases) Object.assign(pick, footballCases);
+    if (isMLBSport && options.mlbJudgmentJournal) attachMlbJudgment(pick, mlbJudgment);
     pick._originalToolResponses = originalToolResponses;
     pick._evidenceObservedAt = new Date().toISOString();
     return pick;
@@ -289,12 +292,13 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   let pendingFunctionResponses = []; // Batched function responses to send
   // Persistent pass-injection flags (survive context pruning)
   let _pass2Injected = false;
+  let _mlbPass2AfterTools = false;
   let _pass2JustInjected = false; // True for ONE iteration after Pass 2 is injected (for response logging)
 
   // Every route into Pass 2 goes through this one gate. Football cannot use
   // a timeout/stall shortcut to bypass the exact two-sided Pass 1 contract.
   // Other sports and props retain their existing progression behavior.
-  const injectPass2 = (currentAssistantText = '') => {
+  const injectPass2 = async (currentAssistantText = '') => {
     const latestAssistant = [...messages].reverse().find(m => m.role === 'assistant');
     if (currentAssistantText && latestAssistant?.content !== currentAssistantText) {
       messages.push({ role: 'assistant', content: currentAssistantText });
@@ -325,11 +329,44 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       footballCases = { path_home: caseCheck.caseHome, path_away: caseCheck.caseAway };
     }
 
+    if (isMLBSport && options.mlbJudgmentJournal && !mlbJudgment) {
+      captureTools();
+      mlbJudgment = await runMlbJudgmentSession({ game: options.game, homeTeam, awayTeam,
+        deskText: options.originalGaryDesk || userMessage, researchBriefing: _researchBriefing,
+        memory: options.mlbExpectationMemory, originalToolResponses, messages, journal: options.mlbJudgmentJournal,
+        ask: async (prompt, { phase }) => {
+          options.signal?.throwIfAborted();
+          console.log(`[MLB Judgment] ${phase} — same Gary session (${currentModelName})`);
+          messages.push({ role: 'user', content: prompt });
+          const answer = await sendToSessionWithRetry(currentSession, prompt, { signal: options.signal });
+          if (answer.toolCalls?.length || !answer.content) throw new Error(`MLB ${phase} requires a complete structured decision`);
+          messages.push({ role: 'assistant', content: answer.content });
+          return answer.content;
+        },
+        research: async questions => {
+          const timeoutMs = researchBudgetMs({ configuredMs: 3 * 60 * 1000,
+            deadlineAt: process.env.GARY_CHILD_DEADLINE_AT, decisionReserveMs: 10 * 60 * 1000 });
+          if (!researcherOn || timeoutMs <= 0) return { error: 'Targeted factual research unavailable within the pregame budget' };
+          const followUp = await runOptionalResearch({ models: [_researchModelUsed || GAME_RESEARCH_MODEL],
+            timeoutMs, signal: options.signal, build: async (researchModel, signal) => {
+              const session = await createResearcherFollowUpSession({ researchModel, scoutReportContent: options.scoutReport || '',
+                briefing: _researchBriefing || '', sport, homeTeam, awayTeam, _costTracker: costTracker, signal });
+              return askResearcher(session, questions.map(q => `${q.question} (Expectation: ${q.expectation_id}; ${q.why_it_matters})`),
+                { sport, homeTeam, awayTeam, options, signal });
+            } });
+          options.signal?.throwIfAborted();
+          return followUp.result ? { answer: followUp.result, model: followUp.model, observed_at: new Date().toISOString() }
+            : { error: followUp.failures.join(' | ') || 'Targeted facts remain unavailable' };
+        },
+      });
+    }
+
     // NBA: the Apr 8 2026 Pass 2.5 decision turn (prose draft, no JSON yet;
     // Pass 3 formats it). Every other sport: the shared Pass 2.
-    const pass2Content = isNBASport
+    let pass2Content = isNBASport
       ? buildNbaPass25Message(homeTeam, awayTeam, options.spread ?? 0, options.pass25DecisionGuards || '')
       : buildPass2Message(homeTeam, awayTeam, sport, options.spread ?? null, options.pass25DecisionGuards || '', options.game || {});
+    if (mlbJudgment) pass2Content += mlbJudgmentCardInstruction(mlbJudgment);
     messages.push({ role: 'user', content: pass2Content });
     nextMessageToSend = pass2Content;
     _pass2Injected = true;
@@ -369,7 +406,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   const RESEARCH_BRIEFING_TIMEOUT_MS = researchBudgetMs({
     configuredMs: Number(process.env.GARY_RESEARCH_TIMEOUT_MS) || 20 * 60 * 1000,
     deadlineAt: process.env.GARY_CHILD_DEADLINE_AT,
-    decisionReserveMs: process.env.GARY_RESEARCH_DECISION_RESERVE_MS ?? 8 * 60 * 1000,
+    decisionReserveMs: process.env.GARY_RESEARCH_DECISION_RESERVE_MS ?? (options.mlbJudgmentJournal ? 15 : 8) * 60 * 1000,
   });
   let _researchBudgetRemainingMs = RESEARCH_BRIEFING_TIMEOUT_MS;
   // Keep the configured research model order; this does not change the brain.
@@ -441,6 +478,12 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   }
 
 
+  if (isMLBSport && options.mlbJudgmentJournal && options.mlbExpectationMemory?.text) {
+    userMessage += `\n\n${options.mlbExpectationMemory.text}`;
+    nextMessageToSend = userMessage;
+    messages[1] = { role: 'user', content: userMessage };
+  }
+
   while (iteration < effectiveMaxIterations) {
     iteration++;
     console.log(`\n[Orchestrator] Iteration ${iteration}/${effectiveMaxIterations} (${provider}, ${currentModelName})`);
@@ -468,6 +511,12 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
             { isFunctionResponse: true }
           );
           pendingFunctionResponses = []; // Clear after sending
+          // A tool-driven MLB transition must first deliver every requested
+          // source response to this same session. Never commit over pending tools.
+          if (_mlbPass2AfterTools && !sessionResponse.toolCalls?.length) {
+            await injectPass2(sessionResponse.content || '');
+            _mlbPass2AfterTools = false;
+          }
           
           // Step 2: Check if Gary responded without tool calls AND we have a pass message queued
           // If so, send the pass message immediately as a follow-up.
@@ -480,7 +529,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           const hasQueuedPassMessage = nextMessageToSend && nextMessageToSend !== userMessage &&
             (nextMessageToSend.includes('PASS 2') || nextMessageToSend.includes('CASE REVIEW') ||
              nextMessageToSend.includes('CASE EVALUATION') || nextMessageToSend.includes('investigation is complete') ||
-             nextMessageToSend.includes('You are still in Pass 1'));
+             nextMessageToSend.includes('You are still in Pass 1') || nextMessageToSend.includes('RECORDED MLB DECISION'));
           
           if (!sessionResponse.toolCalls && hasQueuedPassMessage) {
             console.log(`[Orchestrator] 📝 Sending queued pass message after function responses`);
@@ -585,7 +634,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           // Empty completion + late iteration = Gary is stuck. Force him to commit instead of looping to MAX.
           if (iteration >= effectiveMaxIterations - 3) {
             console.warn(`[Orchestrator] FORCE-PROGRESSION (empty response): iteration ${iteration}/${effectiveMaxIterations} with ${totalCalls} stats across ${categoryCount} categories — injecting Pass 2 to avoid pipeline timeout`);
-            injectPass2();
+            await injectPass2();
             continue;
           }
           // Enough investigation — tell Gary to wrap up investigation (NOT to decide)
@@ -1430,7 +1479,8 @@ INVESTIGATION COMPLETE`;
 
         if (stalledWithEnoughData) {
           console.warn(`[Orchestrator] FORCE-PROGRESSION (stall-based, tool-call path): ${_investigationStallCount} stalls, ${totalCalls} stats, ${categoryCount} categories at iter ${iteration}/${effectiveMaxIterations} — injecting Pass 2 directly to avoid MAX_ITERATIONS timeout`);
-          injectPass2(message.content);
+          if (isMLBSport && options.mlbJudgmentJournal) _mlbPass2AfterTools = true;
+          else await injectPass2(message.content);
         } else if (_investigationStallCount >= 3) {
           console.log(`[Orchestrator] Pass 1 stall detected at ${categoryCount} categories — nudging Gary to emit INVESTIGATION COMPLETE marker`);
           const casePromptStall = bilateralFn
@@ -1449,7 +1499,8 @@ INVESTIGATION COMPLETE`;
         }
       } else if (pass2AlreadyInjected && !pass3AlreadyInjected) {
         // Pass 2 evaluation done — inject Pass 3 for final output
-        const pass3Content = (isNBASport ? buildNbaPass3Message(homeTeam, awayTeam, options) : buildPass3Unified(homeTeam, awayTeam, options));
+        const pass3Content = (isNBASport ? buildNbaPass3Message(homeTeam, awayTeam, options) : buildPass3Unified(homeTeam, awayTeam, options))
+        + (mlbJudgment ? mlbJudgmentCardInstruction(mlbJudgment) : '');
         messages.push({ role: 'user', content: pass3Content });
         _pass3Injected = true;
         console.log(`[Orchestrator] Injected Pass 3 (Final Output)`);
@@ -1519,7 +1570,7 @@ INVESTIGATION COMPLETE`;
             const timeoutMs = researchBudgetMs({
               configuredMs: _researchBudgetRemainingMs,
               deadlineAt: process.env.GARY_CHILD_DEADLINE_AT,
-              decisionReserveMs: process.env.GARY_RESEARCH_DECISION_RESERVE_MS ?? 8 * 60 * 1000,
+              decisionReserveMs: process.env.GARY_RESEARCH_DECISION_RESERVE_MS ?? (options.mlbJudgmentJournal ? 15 : 8) * 60 * 1000,
             });
             const followUp = await runOptionalResearch({
               models: [_researchModelUsed || GAME_RESEARCH_MODEL],
@@ -1586,7 +1637,7 @@ INVESTIGATION COMPLETE`;
         }
 
         // Explicit completion marker (text-only path) — inject Pass 2
-        const pass2Ready = injectPass2(message.content);
+        const pass2Ready = await injectPass2(message.content);
         if (pass2Ready) {
           console.log(`[Orchestrator] Pipeline gate: INVESTIGATION COMPLETE received — injecting Pass 2 (${gateCategories} categories, ${gateCalls} calls)`);
         }
@@ -1599,7 +1650,7 @@ INVESTIGATION COMPLETE`;
       const forceProgress = (iteration >= effectiveMaxIterations - 3) && gateCalls >= 12;
       if (forceProgress) {
         console.warn(`[Orchestrator] FORCE-PROGRESSION: iteration ${iteration}/${effectiveMaxIterations} with ${gateCalls} stats across ${gateCategories} categories — injecting Pass 2 without INVESTIGATION COMPLETE marker to avoid pipeline timeout`);
-        injectPass2(message.content);
+        await injectPass2(message.content);
         continue;
       }
 
@@ -1712,7 +1763,8 @@ INVESTIGATION COMPLETE`
 
       messages.push({ role: 'assistant', content: message.content });
 
-      const pass3Content = (isNBASport ? buildNbaPass3Message(homeTeam, awayTeam, options) : buildPass3Unified(homeTeam, awayTeam, options));
+      const pass3Content = (isNBASport ? buildNbaPass3Message(homeTeam, awayTeam, options) : buildPass3Unified(homeTeam, awayTeam, options))
+        + (mlbJudgment ? mlbJudgmentCardInstruction(mlbJudgment) : '');
       messages.push({ role: 'user', content: pass3Content });
       nextMessageToSend = pass3Content;
       _pass3Injected = true;

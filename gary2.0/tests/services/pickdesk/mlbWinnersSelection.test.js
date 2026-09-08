@@ -1,10 +1,11 @@
 import {describe,it,expect,vi} from 'vitest';
 import {buildMlbSelectionAsk,mlbComparisonPacket,MLB_SELECTION_MAX_PROMPT_BYTES,parseMlbSelection,selectMlbWinners,runMlbSelectionWindow} from '../../../src/services/pickdesk/mlbWinnersSelection.js';
 import {winnersCandidate} from '../../../src/services/pickdesk/winnersAdmissions.js';
+import {mlbJudgmentFixture} from '../../helpers/mlbJudgmentFixture.js';
 const now=Date.parse('2026-09-08T17:00:00Z');
 const candidate=id=>({id,game_id:String(id),pick_text:`Team ${id} -1.5 +110`,commence_time:'2026-09-08T17:20:00Z',
   pick_snapshot:{type:'spread',rationale:'Original baseball judgment',confidence:id===1?.99:.51},evidence_snapshot:{deskText:'Original facts',caseHome:'Home case',caseAway:'Away case'},review:{eligibility_only:true}});
-const run=()=>({id:10,attempts:1,game_date:'2026-09-08',cohort:1,input_snapshot:{observed_at:new Date(now).toISOString(),candidates:[candidate(1),candidate(2)],capacity:{remaining:1},slate:[],previous_selections:[]}});
+const run=()=>({id:10,attempts:1,policy_version:'mlb-conviction-v3',game_date:'2026-09-08',cohort:1,input_snapshot:{observed_at:new Date(now).toISOString(),candidates:[candidate(1),candidate(2)],capacity:{remaining:1},slate:[],previous_selections:[]}});
 const decision=()=>({summary:'The stronger complete-game judgment is the second ticket.',ranked_candidates:[
   {candidate_id:2,rank:1,selected:true,expected_outcome:'Team 2 wins by at least two runs',reason:'The original matchup and innings plan support this ticket.',comparison:'Its documented full-game plan is stronger than candidate 1.'},
   {candidate_id:1,rank:2,selected:false,expected_outcome:'Team 1 wins by at least two runs',reason:'The original pick remains plausible but has more uncertainty.',comparison:'Candidate 2 has a more persuasive full-game argument.'}]});
@@ -113,7 +114,48 @@ describe('Gary MLB Winners selection',()=>{
   it('stamps only new MLB game candidates with the new policy',()=>{
     const pick={game_id:'1',pick:'Team ML -120',odds:-120,commence_time:'2026-09-08T17:20:00Z',decision_policy:'mlb-judgment-v1'};
     expect(winnersCandidate({date:'2026-09-08',league:'MLB',kind:'game',pick}).policy_version).toBe('mlb-conviction-v3');
+    expect(winnersCandidate({date:'2026-09-08',league:'MLB',kind:'game',pick:{...pick,decision_policy:'mlb-judgment-v2'}}).policy_version).toBe('mlb-conviction-v4');
     expect(winnersCandidate({date:'2026-09-08',league:'NFL',kind:'game',pick}).policy_version).toBe('exact-ticket-v2');
     expect(winnersCandidate({date:'2026-09-08',league:'MLB',kind:'game',pick:{...pick,decision_policy:undefined}}).policy_version).toBe('exact-ticket-v2');
+  });
+});
+
+describe('v4 selection requires the original endorsed journal',()=>{
+  const currentRun=()=>{
+    const r=run();r.policy_version='mlb-conviction-v4';
+    for(const c of r.input_snapshot.candidates){
+      Object.assign(c,{policy_version:r.policy_version,game_date:r.game_date});
+      Object.assign(c.pick_snapshot,{game_id:c.game_id,pick:c.pick_text,odds:110,type:'spread',spread:-1.5,homeTeam:`Team ${c.id}`,awayTeam:`Other ${c.id}`,
+        commence_time:c.commence_time,decision_policy:'mlb-judgment-v2',judgment_run_id:`run-${c.id}`,price_endorsement:'endorse'});
+      c.evidence_snapshot.mlbJudgment=mlbJudgmentFixture(c.pick_snapshot);
+      c.review={schema_version:4,policy_version:r.policy_version,eligibility_only:true};
+    }
+    return r;
+  };
+  it('includes the unchanged initial judgment, stress test and price endorsement in comparative context',async()=>{
+    const r=currentRun(),before=structuredClone(r);
+    const oneShot=vi.fn(async()=>({success:true,data:decision()}));
+    expect((await selectMlbWinners(r,{oneShot,clock:()=>now})).ok).toBe(true);
+    expect(oneShot.mock.calls[0][0]).toContain('Original opening expectation');
+    expect(mlbComparisonPacket(r.input_snapshot.candidates[0],r.game_date).recorded_judgment).toMatchObject({
+      initial:r.input_snapshot.candidates[0].evidence_snapshot.mlbJudgment.initial,
+      stress_test:r.input_snapshot.candidates[0].evidence_snapshot.mlbJudgment.stress,
+      price_assessment:r.input_snapshot.candidates[0].evidence_snapshot.mlbJudgment.price,
+    });
+    expect(r).toEqual(before);
+  });
+  it.each([
+    ['missing journal',c=>{delete c.evidence_snapshot.mlbJudgment;}],
+    ['unpublished journal',c=>{delete c.evidence_snapshot.mlbJudgment.receipts.published;}],
+    ['another run',c=>{c.pick_snapshot.judgment_run_id='other';}],
+    ['declined price',c=>{c.pick_snapshot.price_endorsement='decline';c.evidence_snapshot.mlbJudgment.price.decision='decline';c.evidence_snapshot.mlbJudgment.winners_eligible=false;}],
+    ['old factual policy',c=>{c.review.policy_version='mlb-conviction-v3';}],
+    ['old factual schema',c=>{c.review.schema_version=3;}],
+    ['repriced published ticket',c=>{c.pick_snapshot.odds=120;}],
+    ['postgame receipt',c=>{c.evidence_snapshot.mlbJudgment.receipts.published.recorded_at=c.commence_time;}],
+  ])('refuses %s without selecting around the invalid candidate',async(_label,mutate)=>{
+    const r=currentRun();mutate(r.input_snapshot.candidates[0]);const oneShot=vi.fn();
+    expect((await selectMlbWinners(r,{oneShot,clock:()=>now})).ok).toBe(false);
+    expect(oneShot).not.toHaveBeenCalled();
   });
 });

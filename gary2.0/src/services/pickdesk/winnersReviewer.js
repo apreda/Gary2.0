@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { codexCliOneShot } from '../agentic/orchestrator/providerAdapters/codexCliSession.js';
-import { MLB_REVIEW_POLICY_VERSION, reviewMlbFactualPick } from './mlbWinnersFactualReview.js';
+import { MLB_REVIEW_SCHEMAS, reviewMlbFactualPick } from './mlbWinnersFactualReview.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const REVIEW_POLICY_VERSION = 'exact-ticket-v2';
@@ -248,7 +248,7 @@ function validateInput(input, isProp) {
 
 /** Shared API: {ok,review,verdict,status,policy_version,model,ms}; never throws. */
 export async function reviewPick(input, { oneShot = codexCliOneShot, now = Date.now } = {}) {
-  if (input?.reviewPolicyVersion === MLB_REVIEW_POLICY_VERSION) {
+  if (MLB_REVIEW_SCHEMAS[input?.reviewPolicyVersion]) {
     return reviewMlbFactualPick(input, { oneShot, now, model: REVIEW_MODEL, timeoutMs: REVIEW_TIMEOUT_MS });
   }
   if (input?.reviewPolicyVersion && input.reviewPolicyVersion !== REVIEW_POLICY_VERSION) {

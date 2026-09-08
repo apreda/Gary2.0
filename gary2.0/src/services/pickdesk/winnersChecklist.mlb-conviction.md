@@ -1,4 +1,4 @@
-MLB WINNERS FACTUAL REVIEW — mlb-conviction-v3
+MLB WINNERS FACTUAL REVIEW — mlb-conviction-v4
 
 This is factual eligibility review for Gary's existing MLB game ticket. Gary selects his strongest bets separately. Inspect the original decision and evidence; do not make a new pick, rank the slate, calculate an edge, infer a probability from confidence, or write a better argument for the card.
 

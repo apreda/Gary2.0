@@ -1,9 +1,11 @@
 /** MLB factual eligibility; slate selection belongs to Gary's separate review. */
 import { readFileSync } from 'node:fs';
 import { GAME_ML_CAP } from '../agentic/orchestrator/orchestratorConfig.js';
+import { mlbJudgmentEvidenceError } from '../agentic/orchestrator/mlbJudgment.js';
 
-export const MLB_REVIEW_POLICY_VERSION = 'mlb-conviction-v3';
-export const MLB_REVIEW_SCHEMA_VERSION = 3;
+export const MLB_REVIEW_POLICY_VERSION = 'mlb-conviction-v4';
+export const MLB_REVIEW_SCHEMA_VERSION = 4;
+export const MLB_REVIEW_SCHEMAS = Object.freeze(Object.assign(Object.create(null), { 'mlb-conviction-v3': 3, [MLB_REVIEW_POLICY_VERSION]: MLB_REVIEW_SCHEMA_VERSION }));
 const CHECKLIST = readFileSync(new URL('./winnersChecklist.mlb-conviction.md', import.meta.url), 'utf8').trim();
 const MIN_CALL_MS = 15_000;
 const KICKOFF_RESERVE_MS = 5_000;
@@ -59,8 +61,9 @@ Review started: ${reviewStartedAt}.
 ## ORIGINAL SOURCE EVIDENCE\n${input.deskText}
 ## ORIGINAL CASES\n${input.homeTeam}: ${input.caseHome || '(not separately stored)'}\n${input.awayTeam}: ${input.caseAway || '(not separately stored)'}
 ## ORIGINAL PUBLIC CARD\n${input.rationale}
+${input.mlbJudgment ? `\n## ORIGINAL RECORDED JUDGMENT AND EXPECTATIONS\n${JSON.stringify({ initial: input.mlbJudgment.initial, targeted_research: input.mlbJudgment.research, stress: input.mlbJudgment.stress, price: input.mlbJudgment.price })}\nThese are recorded before publication. Verify the facts behind these expectations; their future realization is a sporting judgment, not a factual gate.\n` : ''}
 
-## FACTUAL ELIGIBILITY CHECKLIST\n${CHECKLIST}
+## FACTUAL ELIGIBILITY CHECKLIST\n${CHECKLIST.replace(MLB_REVIEW_POLICY_VERSION, input.reviewPolicyVersion)}
 
 List all decisive factual premises, not predictions of future performance. Include new material contradictory news in facts. facts_review_complete is yes when every decisive premise has been identified and assessed, even if some are explicitly unverified and need clarification. Facts may cite the original desk; news_sources must identify the dated external sources actually checked. Leave clarification_needs empty when no decisive fact needs verification. Do not turn a forecast or an unanswered sporting objection into a factual question.
 Return only this JSON, filled in:\n${FACTUAL_CONTRACT}`;
@@ -85,7 +88,7 @@ export function parseMlbFactualReview(text) {
 /** Explicit policy/schema validation prevents relabeling an old review. */
 export function mlbFactualVerdict(review) {
   const unavailable = decided_by => ({ status: 'unavailable', verdict: null, decided_by });
-  if (review?.policy_version !== MLB_REVIEW_POLICY_VERSION || review?.schema_version !== MLB_REVIEW_SCHEMA_VERSION
+  if (!MLB_REVIEW_SCHEMAS[review?.policy_version] || review?.schema_version !== MLB_REVIEW_SCHEMAS[review?.policy_version]
     || review?.league !== 'MLB' || review?.ticket?.kind !== 'game') return unavailable('review does not use the MLB factual policy');
   if (!review.ticket.game_id || !/^\d{4}-\d{2}-\d{2}$/.test(review.ticket.game_date || '') || review.ticket.league !== 'MLB'
     || !review.ticket.home_team || !review.ticket.away_team || Date.parse(review.ticket.commence_time) !== Date.parse(review.commence_time)) return unavailable('review ticket is missing exact game identity');
@@ -162,14 +165,15 @@ function parseClarification(text, needs, cutoff) {
 /** At most two searches share one timeout budget; neither creates a pick. */
 export async function reviewMlbFactualPick(input, { oneShot, model = 'gpt-5.6-sol', timeoutMs = 360_000, now = Date.now } = {}) {
   const started = now();
+  const policy = input.reviewPolicyVersion;
   const ticket = exactTicket(input);
   const kickoff = Date.parse(input.commenceTime);
   const deadline = Math.min(started + timeoutMs, kickoff - KICKOFF_RESERVE_MS);
-  const base = () => ({ model: model.startsWith('codex-') ? model : `codex-${model}`, ms: Math.max(0, now() - started), policy_version: MLB_REVIEW_POLICY_VERSION });
+  const base = () => ({ model: model.startsWith('codex-') ? model : `codex-${model}`, ms: Math.max(0, now() - started), policy_version: policy });
   const unavailable = (error, review) => ({ ok: false, status: 'unavailable', verdict: null, error, ...(review ? { review, clarification_needs: review.clarification_needs } : {}), ...base() });
   let review;
   try {
-    if (input.reviewPolicyVersion !== MLB_REVIEW_POLICY_VERSION || String(input.league).toUpperCase() !== 'MLB' || input.ticketKind === 'prop') return unavailable('MLB factual policy requires an explicitly versioned MLB game candidate');
+    if (!MLB_REVIEW_SCHEMAS[policy] || String(input.league).toUpperCase() !== 'MLB' || input.ticketKind === 'prop') return unavailable('MLB factual policy requires an explicitly versioned MLB game candidate');
     if (!ticket.game_id || !/^\d{4}-\d{2}-\d{2}$/.test(ticket.game_date) || !Number.isFinite(Date.parse(`${ticket.game_date}T00:00:00Z`))) return unavailable('missing exact game identity or game date');
     if (!str(input.deskText) || !str(input.rationale) || !str(input.pickText) || !str(input.homeTeam) || !str(input.awayTeam) || typeof input.pickIsHome !== 'boolean') return unavailable('missing original game evidence, ticket, card or sides');
     if (!Number.isInteger(ticket.odds) || Math.abs(ticket.odds) < 100 || !['moneyline', 'spread'].includes(ticket.bet_type)
@@ -178,6 +182,16 @@ export async function reviewMlbFactualPick(input, { oneShot, model = 'gpt-5.6-so
     if (!Number.isFinite(kickoff) || deadline - now() < MIN_CALL_MS) return unavailable('insufficient pregame runway for factual review');
     const observed = input.evidenceAsOf || input.observedAt;
     if (observed && (!Number.isFinite(Date.parse(observed)) || Date.parse(observed) > started || Date.parse(observed) >= kickoff)) return unavailable('original evidence timestamp is not valid pregame evidence');
+    if (policy === MLB_REVIEW_POLICY_VERSION) {
+      const error = mlbJudgmentEvidenceError(input.mlbJudgment, { pick: input.pickSnapshot, gameDate: input.gameDate, now: started });
+      if (error) return unavailable(error);
+      const original = input.pickSnapshot;
+      if (str(original.pick) !== str(input.pickText) || original.odds !== ticket.odds || String(original.game_id ?? original.bdl_game_id) !== ticket.game_id
+        || original.homeTeam !== input.homeTeam || original.awayTeam !== input.awayTeam || (original.type || 'moneyline') !== ticket.bet_type
+        || Date.parse(original.commence_time) !== kickoff || (ticket.bet_type === 'spread' && (original.spread ?? original.line) !== ticket.line)
+        || (input.mlbJudgment.final_ticket.side === 'home') !== input.pickIsHome) return unavailable('Review input differs from the original staged game ticket');
+      if (input.mlbJudgment.price.decision !== 'endorse') return unavailable('Gary declined to endorse this exact priced ticket; it is not eligible for Winners');
+    }
     const common = { model: model.replace(/^codex-/, ''), effort: 'high', systemPrompt: MLB_FACTUAL_REVIEW_SYSTEM, breakerKey: 'codex-review', search: true };
     const firstBudget = deadline - now();
     const first = await oneShot(buildMlbFactualAsk(input, new Date(started).toISOString()), { ...common, timeoutMs: Math.floor(Math.min(firstBudget, Math.max(MIN_CALL_MS, firstBudget * 0.65))) });
@@ -185,7 +199,7 @@ export async function reviewMlbFactualPick(input, { oneShot, model = 'gpt-5.6-so
     const parsed = parseMlbFactualReview(first.data);
     if (!parsed) return unavailable('factual review: unparseable answer');
     const initialCompleted = now();
-    review = { ...parsed, schema_version: MLB_REVIEW_SCHEMA_VERSION, policy_version: MLB_REVIEW_POLICY_VERSION, league: 'MLB', ticket,
+    review = { ...parsed, schema_version: MLB_REVIEW_SCHEMAS[policy], policy_version: policy, league: 'MLB', ticket,
       evidence_as_of: observed || null, commence_time: input.commenceTime,
       review_started_at: new Date(started).toISOString(), review_completed_at: new Date(initialCompleted).toISOString(), eligibility_only: true,
       initial_review: { ...structuredClone(parsed), started_at: new Date(started).toISOString(), completed_at: new Date(initialCompleted).toISOString() },

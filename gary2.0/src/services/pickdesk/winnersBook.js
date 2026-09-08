@@ -1,5 +1,6 @@
 /** Prospective Winners accounting. No matchup, confidence or price substitutions. */
 import { WINNERS_CUTOVER_DATE } from './winnersAdmissions.js';
+import { mlbJudgmentEvidenceError } from '../agentic/orchestrator/mlbJudgment.js';
 
 const norm = value => String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
 const num = value => value == null || String(value).trim() === '' || !Number.isFinite(Number(value)) ? null : Number(value);
@@ -143,15 +144,16 @@ export function buildWinnersBook({ candidates = [], board = [], events = [], gam
   });
 }
 
-export const MLB_JUDGMENT_POLICY = 'mlb-judgment-v1';
-export const MLB_SELECTION_POLICY = 'mlb-conviction-v3';
+export const MLB_JUDGMENT_POLICY = 'mlb-judgment-v2';
+export const MLB_SELECTION_POLICY = 'mlb-conviction-v4';
+export const MLB_SELECTION_POLICIES = Object.freeze(Object.assign(Object.create(null), { 'mlb-judgment-v1': 'mlb-conviction-v3', [MLB_JUDGMENT_POLICY]: MLB_SELECTION_POLICY }));
 
 function sameCandidateSnapshot(saved, candidate) {
   return saved && String(saved.id) === String(candidate.id) && saved.ticket_key === candidate.ticket_key
     && saved.policy_version === candidate.policy_version && saved.kind === candidate.kind
     && candidateOutcomeIdentity(saved) !== null && candidateOutcomeIdentity(saved) === candidateOutcomeIdentity(candidate)
     && num(saved.odds) === num(candidate.odds)
-    && ['decision_policy', 'model', 'prompt_sha', 'rationale'].every(key =>
+    && ['decision_policy', 'model', 'prompt_sha', 'rationale', ...(candidate.pick_snapshot?.decision_policy === MLB_JUDGMENT_POLICY ? ['judgment_run_id','price_endorsement','odds_visibility'] : [])].every(key =>
       String(saved.pick_snapshot?.[key] ?? '') === String(candidate.pick_snapshot?.[key] ?? ''));
 }
 
@@ -172,7 +174,8 @@ function selectionHistory(candidate, selectionRuns, now) {
       const started = instant(run.created_at), completed = instant(run.completed_at), kickoff = instant(candidate.commence_time);
       const snapshotMatches = saved.length === 1 && sameCandidateSnapshot(saved[0], candidate)
         && run.game_date === candidate.game_date && norm(run.league) === norm(candidate.league)
-        && run.kind === candidate.kind && run.policy_version === MLB_SELECTION_POLICY;
+        && run.kind === candidate.kind && run.policy_version === candidate.policy_version
+        && run.policy_version === MLB_SELECTION_POLICIES[candidate.pick_snapshot?.decision_policy];
       const timely = Number.isFinite(started) && Number.isFinite(completed) && completed >= started
         && completed < kickoff && completed <= now && instant(candidate.created_at) <= started
         && saved[0]?.status === 'qualified' && instant(saved[0]?.reviewed_at) <= started;
@@ -239,19 +242,29 @@ export function buildMlbSelectionBook({ publicPicks = [], candidates = [], board
       selection_model: latestDecision?.model || null, selection_window: latestDecision?.window_start || null,
       selection_reason: latestDecision?.reason || null, selection_comparison: latestDecision?.comparison || null,
       expected_outcome: latestDecision?.expected_outcome || null,
+      judgment_run_id: p.judgment_run_id || null, price_endorsement: p.price_endorsement || null,
     };
     if (!gameTicketIdentity(identity) || typeof p.pick !== 'string'
         || !['string', 'number'].includes(typeof identity.game_id)) {
       return { ...row, group: 'ledger_conflict', reason: 'Public pick lacks an exact date, league, game ID or ticket' };
     }
     if (matches.length > 1) return { ...row, group: 'ledger_conflict', reason: 'Multiple candidates match the original public ticket and price' };
-    if (candidate && ['decision_policy', 'model', 'prompt_sha', 'rationale'].some(field =>
+    if (candidate && ['decision_policy', 'model', 'prompt_sha', 'rationale', ...(decisionPolicy === MLB_JUDGMENT_POLICY ? ['judgment_run_id','price_endorsement','odds_visibility'] : [])].some(field =>
       String(p[field] ?? '') !== String(candidate.pick_snapshot?.[field] ?? ''))) {
       return { ...row, group: 'ledger_conflict', reason: 'Public decision and candidate snapshot disagree' };
     }
-    if (decisionPolicy !== MLB_JUDGMENT_POLICY) return row;
+    const selectionPolicy = MLB_SELECTION_POLICIES[decisionPolicy];
+    if (!selectionPolicy) return row;
+    if (decisionPolicy === MLB_JUDGMENT_POLICY) {
+      const error = mlbJudgmentEvidenceError(candidate?.evidence_snapshot?.mlbJudgment, { pick: p, gameDate: p.game_date, now });
+      row.judgment_record_status = error ? 'unavailable' : 'complete';
+      row.judgment_record_error = error;
+      if (p.price_endorsement === 'decline') return { ...row, group: row.published ? 'ledger_conflict' : 'price_declined',
+        reason: row.published ? 'A price-declined game call appeared on Winners' : 'Gary retained the sporting call and declined to endorse its priced ticket' };
+      if (error || p.price_endorsement !== 'endorse') return { ...row, group: 'judgment_record_unavailable', reason: error || 'No original price endorsement was recorded' };
+    }
     if (!candidate) return { ...row, reason: 'Original public ticket has no exact Winners candidate record' };
-    if (candidate.policy_version !== MLB_SELECTION_POLICY) return { ...row, group: 'policy_mismatch', reason: 'Judgment pick lacks the Gary selection policy' };
+    if (candidate.policy_version !== selectionPolicy) return { ...row, group: 'policy_mismatch', reason: 'Judgment pick lacks the Gary selection policy' };
     if (row.group === 'timing_excluded') return row;
     if (row.group === 'admitted') {
       const admissionDecision = decisions.find(run => run.selected && instant(run.completed_at) <= instant(boardRow?.admitted_at));

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { shouldRetryPickWithModel } from '../src/services/marketTruth.js';
 import { originalGameEvidence } from '../src/services/pickdesk/originalGameEvidence.js';
+import { createMlbJudgmentJournal } from '../src/services/pickdesk/mlbJudgmentStorage.js';
+import { readMlbExpectationMemory } from '../src/services/diary/mlbExpectations.js';
 /**
  * Agentic Pick Generation Script
  * 
@@ -169,10 +171,33 @@ async function runMlbJuneEngine(game, runnerOptions) {
   // pick system... fallback to another one like opus is fine"): a failure
   // re-runs the SAME engine — same desk, same prompts — on the next model
   // in the cascade. The separate pickdesk brain is retired.
-  let result = await analyzeGame(game, 'baseball_mlb', { ...runnerOptions, modelOverride: MLB_JUNE_BRAIN_MODEL });
-  if (result?.error || !result?.pick) {
+  const production = isProductionWinnersRun({ shouldStore, useTestTable, dryRun: args.includes('--dry-run') });
+  const cutoff = new Date().toISOString();
+  const date = new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  // A read failure is recorded explicitly; unavailable memory cannot masquerade
+  // as reviewed evidence. No historical notebook is substituted.
+  const memory = production ? await readMlbExpectationMemory({ db: winnersAdmin, date, before: cutoff })
+    .catch(error => ({ rows: [], text: '', unavailable: error.message, cutoff })) : null;
+  if (memory?.unavailable) console.warn(`[MLB Memory] ${memory.unavailable}`);
+  const attempt = async model => {
+    const journal = production ? createMlbJudgmentJournal({ db: winnersAdmin, game, model, promptSha: await junePromptSha(), signal: runnerOptions.signal }) : null;
+    let decision;
+    try {
+      decision = await analyzeGame(game, 'baseball_mlb', { ...runnerOptions, modelOverride: model,
+        mlbJudgmentJournal: journal, mlbExpectationMemory: memory });
+      if (production && decision?.pick && !decision.error && !decision._mlbJudgment?.receipts?.price_assessment) {
+        decision = { error: 'Production MLB decision did not complete its durable judgment stages' };
+      }
+    } catch (error) { decision = { error: error.message }; }
+    if (decision?.error || !decision?.pick) {
+      await journal?.fail(decision?.error || 'No final MLB card').catch(error => console.warn(`[MLB Journal] Failure receipt unavailable: ${error.message}`));
+    } else if (journal) decision._mlbJudgmentJournal = journal;
+    return decision;
+  };
+  let result = await attempt(MLB_JUNE_BRAIN_MODEL);
+  if (shouldRetryPickWithModel(result)) {
     console.warn(`[JuneEngine] first attempt failed (${result?.error || 'no pick'}) — one retry on ${MLB_JUNE_BRAIN_MODEL}`);
-    result = await analyzeGame(game, 'baseball_mlb', { ...runnerOptions, modelOverride: MLB_JUNE_BRAIN_MODEL });
+    result = await attempt(MLB_JUNE_BRAIN_MODEL);
   }
   let modelUsed = MLB_JUNE_BRAIN_MODEL;
   // DESK_FALLBACK_MODELS is filtered against GAME_PICK_MODEL at config time,
@@ -181,9 +206,9 @@ async function runMlbJuneEngine(game, runnerOptions) {
   // leaves the primary in the list and a failed brain would get a third run
   // before the first real fallback. Filter against the lane's own primary.
   for (const fallbackModel of DESK_FALLBACK_MODELS.filter((m) => m !== MLB_JUNE_BRAIN_MODEL)) {
-    if (result?.pick && !result?.error) break;
+    if (!shouldRetryPickWithModel(result)) break;
     console.warn(`[JuneEngine] ⚠️ ${modelUsed} failed (${result?.error || 'no pick'}) — same engine on ${fallbackModel}`);
-    result = await analyzeGame(game, 'baseball_mlb', { ...runnerOptions, modelOverride: fallbackModel });
+    result = await attempt(fallbackModel);
     modelUsed = fallbackModel;
   }
   if (result?.error || !result?.pick) {
@@ -205,7 +230,7 @@ async function runMlbJuneEngine(game, runnerOptions) {
   result._promptSha = result._promptSha ?? await junePromptSha();
   // This marker was loaded with this process's MLB prompts, before analysis.
   // It belongs to the new decision, never an existing or recovered publication.
-  result.decision_policy = MLB_DECISION_POLICY;
+  result.decision_policy ??= MLB_DECISION_POLICY;
   return result;
 }
 
@@ -2120,7 +2145,8 @@ async function main() {
             // Which CONTRACT wording produced it — prompt-era hash (Jul 29);
             // joins against prompt_eras for pre-registered before/after reads.
             prompt_sha: result._promptSha ?? null,
-            ...(config.key === 'baseball_mlb' ? { decision_policy: result.decision_policy } : {}),
+            ...(config.key === 'baseball_mlb' ? { decision_policy: result.decision_policy,
+              ...(result._mlbJudgment ? { judgment_run_id: result.judgment_run_id, price_endorsement: result.price_endorsement, odds_visibility: 'odds_visible' } : {}) } : {}),
             league: config.name,
             sport: config.key,
             pick_id: `agentic-${config.key}-${game.id || Date.now()}`,
@@ -2245,6 +2271,16 @@ async function main() {
               // the desk as _context.scoutReport — the old `deskText` key
               // never existed, so no desk was stored from Jul 26 to Sep 2.)
               const deskText = result?._context?.scoutReport || null;
+              let judgmentPublished = !result._mlbJudgmentJournal;
+              if (publishedPick && result._mlbJudgmentJournal) {
+                try {
+                  const receipt = await result._mlbJudgmentJournal.publish(publishedPick);
+                  result._mlbJudgment.receipts.published = receipt;
+                  judgmentPublished = true;
+                } catch (error) {
+                  console.warn(`[MLB Journal] Public ticket stored, publication receipt unavailable: ${error.message}; Winners remains ineligible until exact recovery`);
+                }
+              }
               const evidence = publishedPick ? originalGameEvidence({ result, pick: publishedPick, deskText,
                 first: config.name === 'MLB' && mlbCaseHeadings(cleanPick.homeTeam, cleanPick.awayTeam, game).order === 'away-first' ? 'away' : 'home',
               }) : null;
@@ -2260,7 +2296,7 @@ async function main() {
               }
               // Every newly published ticket enters the same review queue;
               // feature status and underdog status do not admit it.
-              if(publishedPick)await routeToWinners({ league: config.name, game, cleanPick:publishedPick, evidence });
+              if(publishedPick && judgmentPublished)await routeToWinners({ league: config.name, game, cleanPick:publishedPick, evidence });
               // THE SHADOW MODEL (founder GO, Sep 3 2026): a second system's
               // bet for the same game, stored beside Gary's and never shown
               // to him or to fans; graded and read nightly against his.
