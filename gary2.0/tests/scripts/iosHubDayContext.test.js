@@ -13,7 +13,15 @@ const models = source('Models.swift'), hub = source('HubView.swift'), card = sou
 const related = hub.slice(hub.indexOf('    private func relatedTeamSignals('), hub.indexOf('    /// Only a unique team')).replace('private func', 'func');
 const context = card.slice(card.indexOf('    private var contextLine:'), card.indexOf('    private var header:', card.indexOf('    private var contextLine:'))).replace('private var', 'var');
 const dir = mkdtempSync(join(tmpdir(), 'gary-hub-day-'));
-const script = `${source('NCAAFTeams.swift')}\n${source('HubCardIdentity.swift')}
+const script = `import Foundation
+// This test is the MLB Cleveland route. Preserve the real shared identity
+// methods, but trap if this fixture accidentally enters the college dependency;
+// no school/abbreviation data is invented and all tested paths stay optimized.
+enum NCAAFTeams {
+ static func providerAbbreviation(_ name: String) -> String? { preconditionFailure("MLB Hub fixture entered the college lookup") }
+ static func school(_ name: String) -> String? { preconditionFailure("MLB Hub fixture entered the college lookup") }
+}
+${source('HubCardIdentity.swift')}
 ${models.slice(models.indexOf('struct PlayerInsightPack:'), models.indexOf('// MARK: - Daily Slate'))}
 enum League { case mlb; var label: String { "MLB" } }
 struct Regression { var day: String? }

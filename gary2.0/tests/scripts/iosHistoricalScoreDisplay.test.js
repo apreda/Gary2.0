@@ -23,7 +23,13 @@ describe('source-aware native historical scores', () => {
     const directory = mkdtempSync(join(tmpdir(), 'gary-historical-scores-'));
     try {
       const swift = `import Foundation
-${read('NCAAFTeams')}
+// This fixture asserts NFL/MLB score presentation. The untouched production
+// formatter retains its NCAAF branch, but entering that unexercised dependency
+// must fail rather than fabricate a school mapping or compile its huge table.
+enum NCAAFTeams {
+    static func abbreviation(_ name: String) -> String? { preconditionFailure("NFL/MLB score fixture entered the college lookup") }
+    static func school(_ name: String) -> String? { preconditionFailure("NFL/MLB score fixture entered the college lookup") }
+}
 ${picks.slice(picks.indexOf('let mlbTeamKeywords:'), picks.indexOf('/// Reverse keyword index'))}
 ${block(models, 'struct StringOrNumber: Decodable')}
 ${models.slice(models.indexOf('struct GameResult: Decodable'), models.indexOf('struct PropResult: Decodable'))}
