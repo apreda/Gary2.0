@@ -42,3 +42,5 @@ The same external prerequisites have recurred through the original goal turn and
 
 
 The September 8 marketing heartbeat supersedes the upload-time uncertainty about 912 processing: official Apple emails verify completion and existing-tester availability. Read the current [six-workstream execution review](GaryMarketing/launch-2026-09/EXECUTION_REVIEW_2026-09-08.md) for full-day X evidence, source `0093b78c` / social-auto-post v108, live web attribution repair `04647d9f` and video-delivery improvements. No campaign, invitation, vendor message or purchase occurred. The Mac lock and existing account/support inputs remain open; no new build or native acceptance is implied.
+
+Final post-heartbeat runtime readback on `8411083c` confirms canonical workers, intended models, all 20 edge timestamp checks including v108, and no unpushed commits. Sep 8 MLB has 15 future games and zero started missing; exit 1 is solely the preserved private plist. [Receipt](GaryMarketing/launch-2026-09/evidence/production-truth-2026-09-08.json). Later receipt-only commits do not change native, web or backend runtime source.

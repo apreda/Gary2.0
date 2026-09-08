@@ -1,0 +1,28 @@
+{
+  "checkedAt": "2026-09-08T10:25:48.917964+00:00",
+  "sourceCommit": "8411083c",
+  "canonicalCheckout": "/Users/adam.preda/Gary2.0",
+  "schedulerPid": 79083,
+  "winnersWorkerPid": 89023,
+  "intendedModels": {
+    "games": "codex-gpt-6-astra",
+    "props": "codex-gpt-5.6-sol"
+  },
+  "edgeTimestampChecks": {
+    "passed": 20,
+    "socialAutoPostVersion": 108
+  },
+  "calendarSlate": {
+    "date": "2026-09-08",
+    "sport": "MLB",
+    "games": 15,
+    "published": 0,
+    "startedWithoutPick": 0,
+    "interpretation": "All 15 games are future and pending their normal publication windows; this is not a late-pick failure."
+  },
+  "unpushedCommits": 0,
+  "exitCode": 1,
+  "onlyFailure": "One preserved private GoogleService-Info.plist working-tree difference; file contents not read, edited or staged.",
+  "logPath": "/Volumes/KINGSTON/gary-heartbeat-2026-09-08-final-production-truth.log",
+  "scope": "Read-only runtime/model/slate and edge timestamp check. Only social-auto-post has separate full cloud-source byte parity in this heartbeat. Documentation-only receipt commits after this check do not change tested runtime code."
+}
