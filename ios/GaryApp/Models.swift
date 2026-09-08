@@ -74,7 +74,7 @@ struct WeeklyNFLPicksRow: Decodable {
 // CodingKeys are needed. Everything optional so a partial row never aborts the
 // whole decode.
 
-struct Connection: Decodable {
+struct Connection: Codable {
     let date: String?
     let league: String?          // "MLB" / "NBA" / "WC"
     let category: String?        // snake_case lane: heat_check, platoon_edge, ballpark_shift, regression_watch, …
@@ -98,7 +98,7 @@ struct Connection: Decodable {
 /// lanes may publish a number (pressure rate, line, share) or an already-
 /// formatted string ("42%", "7-3"). Decoding both prevents one new factor from
 /// invalidating the entire `insight_connections` response.
-enum InsightMetaValue: Decodable {
+enum InsightMetaValue: Codable {
     case string(String)
     case number(Double)
     case bool(Bool)
@@ -120,6 +120,15 @@ enum InsightMetaValue: Decodable {
         }
     }
 
+    func encode(to encoder: Encoder) throws {
+        var value = encoder.singleValueContainer()
+        switch self {
+        case .string(let item): try value.encode(item)
+        case .number(let item): try value.encode(item)
+        case .bool(let item): try value.encode(item)
+        }
+    }
+
     var display: String {
         switch self {
         case .string(let value):
@@ -138,7 +147,7 @@ enum InsightMetaValue: Decodable {
 /// One provider-identified game on a verified next football slate. Calendar
 /// dates and exact kickoffs stay separate so a date-only fixture never gains
 /// a fabricated clock, including college games after midnight Eastern.
-struct FootballNextSlateGame: Decodable, Identifiable {
+struct FootballNextSlateGame: Codable, Identifiable {
     let game_id: String
     let away_team_id: String?
     let home_team_id: String?
@@ -204,7 +213,7 @@ struct FootballNextSlateGame: Decodable, Identifiable {
 /// inline, inflating each Signal by several KB and overflowing the iPhone's
 /// main-thread stack while SwiftUI assembled the Hub. Reference semantics are
 /// safe here: every field is `let` and decoded once.
-final class SwapMeta: Decodable {
+final class SwapMeta: Codable {
     /// The computed facts behind Gary's read (Jul 27 voice pass moved the
     /// template sentence here) — the expanded card's "numbers behind it" line.
     let evidence: String?
@@ -405,7 +414,7 @@ final class SwapMeta: Decodable {
 /// A quarterback's season passing line (BDL season_stats), stored by the
 /// writer alongside its prose form; `prior` = last season's line while the
 /// current one has no sample.
-struct PassingLine: Decodable {
+struct PassingLine: Codable {
     let yards: Double?
     let pct: Double?
     let ypa: Double?
@@ -418,13 +427,13 @@ struct PassingLine: Decodable {
 
 /// One player's practice participation this week, as the league printed it:
 /// "FP" full · "LP" limited · "DNP" did not participate · nil = not listed that day.
-struct PracticeDays: Decodable {
+struct PracticeDays: Codable {
     let wed: String?
     let thu: String?
     let fri: String?
 }
 
-struct FootballMarketSnapshot: Decodable {
+struct FootballMarketSnapshot: Codable {
     let line: Double?
     let odds: Double?
     let implied_probability: Double?
@@ -433,7 +442,7 @@ struct FootballMarketSnapshot: Decodable {
 /// Directional value of Gary's locked number from the picked side's point of
 /// view. `primary_value` is points for spreads/totals and percentage points
 /// for price-only movement; the backend supplies `primary_unit` explicitly.
-struct FootballMarketMovement: Decodable {
+struct FootballMarketMovement: Codable {
     let advantage: String?
     let primary_unit: String?
     let primary_value: Double?
@@ -442,27 +451,27 @@ struct FootballMarketMovement: Decodable {
 }
 
 /// The 1st-inning market snapshot on an nrfi row.
-struct NrfiPrice: Decodable {
+struct NrfiPrice: Codable {
     let over: Int?
     let under: Int?
 }
 
 /// The last meeting in a head-to-head series (revenge read).
 /// One posted start on a two-start card ("Tue 7/29 at Guardians").
-struct FantasyStart: Decodable {
+struct FantasyStart: Codable {
     let date: String?
     let opp: String?
     let home: Bool?
 }
 
 /// One arm on the closer-watch ladder (saves + holds).
-struct FantasyArm: Decodable {
+struct FantasyArm: Codable {
     let name: String?
     let sv: Int?
     let hld: Int?
 }
 
-struct H2HLast: Decodable {
+struct H2HLast: Codable {
     let score: String?
     let winner: String?
     let revenge: Bool?
@@ -471,7 +480,7 @@ struct H2HLast: Decodable {
 /// One past meeting on the head-to-head ledger. `away`/`home` are the abbrs of
 /// the clubs as they lined up THAT night, so the card can print the real venue
 /// ("MIA @ ATL") instead of repeating tonight's matchup (founder, Aug 6).
-struct H2HMeeting: Decodable {
+struct H2HMeeting: Codable {
     let date: String?
     let away: String?
     let home: String?
@@ -482,7 +491,7 @@ struct H2HMeeting: Decodable {
 }
 
 /// One team's confirmed starting XI (WC Confirmed XI lane).
-struct TeamSheet: Decodable {
+struct TeamSheet: Codable {
     let team: String?
     let formation: String?   // "4-2-3-1"
     let xi: [XIMan]?
@@ -494,7 +503,7 @@ struct TeamSheet: Decodable {
     let abbreviation: String?
 }
 
-struct XIMan: Decodable {
+struct XIMan: Codable {
     let n: String?           // player name
     let p: String?           // position: G / D / M / F
     let num: Int?            // shirt number

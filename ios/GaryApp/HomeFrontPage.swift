@@ -596,8 +596,8 @@ struct HomeMarqueeTracker: View {
     private func upNext(_ e: Entry) -> Bool { !e.isLive && !e.started && !e.isFinal }
     /// The rail: other marquee games and posted underdogs beside the hero (founder:
     /// no drop-down — the space was already there).
-    private var rail: [Entry] {
-        entries.filter { $0.id != hero?.id && $0.railWorthy }.sorted { a, b in
+    private func rail(excluding heroID: String?) -> [Entry] {
+        entries.filter { $0.id != heroID && $0.railWorthy }.sorted { a, b in
             func weight(_ e: Entry) -> Int {
                 if e.isLive { return 0 }
                 if e.isInterrupted || e.started { return 1 }
@@ -622,6 +622,8 @@ struct HomeMarqueeTracker: View {
         // M1 — hero owns the full width; the rest of the day's big ones run
         // as one slim ticker ribbon along the card's bottom (founder-picked
         // over the side rail: shorter card, nothing competing with the hero).
+        let hero = self.hero
+        let rail = rail(excluding: hero?.id)
         VStack(spacing: 0) {
             Group {
                 if let hero {
@@ -639,7 +641,7 @@ struct HomeMarqueeTracker: View {
                 // surface under a gold rule, so it reads as the wire and the
                 // hero keeps the room.
                 Rectangle().fill(GaryColors.gold.opacity(0.3)).frame(height: 1)
-                ribbonView
+                ribbonView(rail)
                     .background(GaryColors.insetBand)
             }
         }
@@ -694,8 +696,9 @@ struct HomeMarqueeTracker: View {
 
     /// The bottom ticker — every non-hero big game as a "PIT @ WSH ▶ 5–3"
     /// chip, hairlines between, tomorrow's marquee dimmed at the end.
-    private var ribbonView: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+    private func ribbonView(_ rail: [Entry]) -> some View {
+        let lastID = rail.last?.id
+        return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 0) {
                 ForEach(rail) { e in
                     Button {
@@ -721,7 +724,7 @@ struct HomeMarqueeTracker: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    if e.id != rail.last?.id || tomorrowTease != nil {
+                    if e.id != lastID || tomorrowTease != nil {
                         Rectangle().fill(Color.white.opacity(0.1))
                             .frame(width: 1, height: 14)
                     }
@@ -1547,17 +1550,14 @@ final class LeagueOverlayState: ObservableObject {
     /// selectable league so the overlay always shows the whole calendar
     /// (mock 64) — never just the leagues currently live. `already` is the
     /// set of codes the caller already built real options for (skip those).
-    /// PLACEHOLDER DATES (founder-approved off the mock, not yet backed by a
-    /// schedule field) — swap for a real `season_windows` lookup if/when one
-    /// exists; until then these are display copy only, never used for gating.
+    /// Only supported desks appear. A missing board is availability, not a
+    /// season date; never invent a kickoff or revive a retired sport.
     static func offSeasonOptions(excluding already: Set<String>) -> [Option] {
-        let calendar: [(code: String, date: String)] = [
-            ("NFL", "SEP 9"), ("NCAAF", "AUG 30"), ("NBA", "OCT 21"), ("NHL", "OCT 7"),
-        ]
-        return calendar
-            .filter { !already.contains($0.code) }
-            .map { .init(code: $0.code, sup: $0.date, live: false, selected: false, selectable: false) }
+        AppFlags.insightLeagues.filter { !already.contains($0) }.map {
+            .init(code: $0, sup: "COMING SOON", live: false, selected: false, selectable: false)
+        }
     }
+
 }
 
 struct LeagueWordsOverlay: View {
@@ -1596,7 +1596,7 @@ struct LeagueWordsOverlay: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(o.selectable ? "\(o.code) league" : "\(o.code) — not yet in season, \(o.sup ?? "")")
+                        .accessibilityLabel(o.selectable ? "\(o.code) league" : "\(o.code) — \(o.sup ?? "Unavailable")")
                         .accessibilityAddTraits(o.selected ? [.isSelected, .isButton] : .isButton)
                     }
                 }

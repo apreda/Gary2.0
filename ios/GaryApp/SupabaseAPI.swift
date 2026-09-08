@@ -872,21 +872,33 @@ enum SupabaseAPI {
         let date: String
         let session: ObjectIdentifier
     }
+    struct PlayerIntelFetch {
+        let rows: [PlayerInsightCardRow]
+        let succeeded: Bool
+        var cancelled = false
+    }
     @MainActor private static var _playerIntelCache: [PlayerIntelCacheKey: (rows: [PlayerInsightCardRow], at: Date)] = [:]
-    @MainActor private static var _playerIntelFlights: [PlayerIntelCacheKey: Task<[PlayerInsightCardRow], Never>] = [:]
+    @MainActor private static var _playerIntelFlights: [PlayerIntelCacheKey: Task<PlayerIntelFetch, Never>] = [:]
 
     /// Complete date-scoped player packs, shared by the Hub and game carousel.
     /// Only a fully read snapshot enters the 30-minute cache; a later-page
     /// failure cannot replace it with a partial Saturday college/MLB slate.
     @MainActor static func fetchPlayerIntelRows(date: String, forceRefresh: Bool = false, session: URLSession = .shared) async -> [PlayerInsightCardRow] {
+        await fetchPlayerIntelRowsResult(date: date, forceRefresh: forceRefresh, session: session).rows
+    }
+
+    /// Preserves the complete last-good snapshot while exposing whether the
+    /// latest attempt succeeded. Staged readers must not mistake a failed read
+    /// for a verified absence of player details.
+    @MainActor static func fetchPlayerIntelRowsResult(date: String, forceRefresh: Bool = false, session: URLSession = .shared) async -> PlayerIntelFetch {
         let key = PlayerIntelCacheKey(date: date, session: ObjectIdentifier(session))
         if !forceRefresh, let c = _playerIntelCache[key], Date().timeIntervalSince(c.at) < 1800 {
-            return c.rows
+            return PlayerIntelFetch(rows: c.rows, succeeded: true)
         }
         let lastGood = _playerIntelCache[key]?.rows ?? []
-        guard !Task.isCancelled else { return lastGood }
+        guard !Task.isCancelled else { return PlayerIntelFetch(rows: lastGood, succeeded: false, cancelled: true) }
         if let flight = _playerIntelFlights[key] { return await flight.value }
-        let task = Task { () -> [PlayerInsightCardRow] in
+        let task = Task { () -> PlayerIntelFetch in
             defer { _playerIntelFlights[key] = nil }
             do {
                 let rows = try await fetchCompletePlayerIntelRows(date: date, session: session)
@@ -901,10 +913,11 @@ enum SupabaseAPI {
                       })?.key {
                     _playerIntelCache[oldest] = nil
                 }
-                return rows
+                return PlayerIntelFetch(rows: rows, succeeded: true)
             } catch {
                 print("[fetchPlayerIntelRows] incomplete \(date): \(error.localizedDescription)")
-                return _playerIntelCache[key]?.rows ?? lastGood
+                return PlayerIntelFetch(rows: _playerIntelCache[key]?.rows ?? lastGood,
+                                        succeeded: false, cancelled: isCancellation(error))
             }
         }
         _playerIntelFlights[key] = task
@@ -1010,20 +1023,32 @@ enum SupabaseAPI {
         let league: String
         let session: ObjectIdentifier
     }
+    struct LeaguePulseFetch {
+        let rows: [LeaguePulseRow]
+        let succeeded: Bool
+        var cancelled = false
+    }
     // Hub fetches MLB, NFL and NCAAF concurrently. Every dictionary read and
     // write must share an actor; URLSession awaits still overlap across sports.
     @MainActor private static var _leaguePulseCache: [LeaguePulseCacheKey: (rows: [LeaguePulseRow], at: Date)] = [:]
-    @MainActor private static var _leaguePulseFlights: [LeaguePulseCacheKey: Task<[LeaguePulseRow], Never>] = [:]
+    @MainActor private static var _leaguePulseFlights: [LeaguePulseCacheKey: Task<LeaguePulseFetch, Never>] = [:]
     /// - Parameter forceRefresh: bypass the 30-min cache (pull-to-refresh / EST
     ///   day rollover) so a manual refresh and the 6am slate flip always refetch.
     @MainActor static func fetchLeaguePulse(date: String, league: String, forceRefresh: Bool = false, session: URLSession = .shared) async -> [LeaguePulseRow] {
+        let result = await fetchLeaguePulseResult(date: date, league: league, forceRefresh: forceRefresh, session: session)
+        // Retain the legacy array API's failure contract for existing readers.
+        return result.succeeded ? result.rows : []
+    }
+
+    @MainActor static func fetchLeaguePulseResult(date: String, league: String, forceRefresh: Bool = false, session: URLSession = .shared) async -> LeaguePulseFetch {
         let cacheKey = LeaguePulseCacheKey(date: date, league: league, session: ObjectIdentifier(session))
         if !forceRefresh, let c = _leaguePulseCache[cacheKey], Date().timeIntervalSince(c.at) < 1800 {
-            return c.rows
+            return LeaguePulseFetch(rows: c.rows, succeeded: true)
         }
-        guard !Task.isCancelled else { return [] }
+        let lastGood = _leaguePulseCache[cacheKey]?.rows ?? []
+        guard !Task.isCancelled else { return LeaguePulseFetch(rows: lastGood, succeeded: false, cancelled: true) }
         if let flight = _leaguePulseFlights[cacheKey] { return await flight.value }
-        let task = Task { () -> [LeaguePulseRow] in
+        let task = Task { () -> LeaguePulseFetch in
             defer { _leaguePulseFlights[cacheKey] = nil }
             let url = buildURL(table: "league_pulse", query: [
                 URLQueryItem(name: "select", value: "date,league,tab,title,subtitle,sort_note,columns,rows"),
@@ -1036,13 +1061,23 @@ enum SupabaseAPI {
                 request.cachePolicy = .reloadIgnoringLocalCacheData
                 request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
             }
-            guard let (data, response) = try? await session.data(for: request),
-                  let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-                  let rows = try? JSONDecoder().decode([LeaguePulseRow].self, from: data) else { return [] }
-            // A verified empty is authoritative; a failure never overwrites
-            // or renews a previous successful snapshot.
-            _leaguePulseCache[cacheKey] = (rows, Date())
-            return rows
+            do {
+                let (data, response) = try await session.data(for: request)
+                guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                    throw URLError(.badServerResponse)
+                }
+                let rows = try JSONDecoder().decode([LeaguePulseRow].self, from: data)
+                guard rows.allSatisfy({ $0.date == date && $0.league == league }) else {
+                    throw URLError(.cannotParseResponse)
+                }
+                // A verified empty is authoritative; a failure never overwrites
+                // or renews a previous successful snapshot.
+                _leaguePulseCache[cacheKey] = (rows, Date())
+                return LeaguePulseFetch(rows: rows, succeeded: true)
+            } catch {
+                return LeaguePulseFetch(rows: _leaguePulseCache[cacheKey]?.rows ?? lastGood,
+                                        succeeded: false, cancelled: isCancellation(error))
+            }
         }
         _leaguePulseFlights[cacheKey] = task
         return await task.value
@@ -1211,40 +1246,59 @@ enum SupabaseAPI {
     /// Live streaks as of the last completed night — newest snapshot wins
     /// (no date math at the call site; the latest written date is the truth).
     static func fetchStreaks() async -> [StreakRow] {
+        (try? await fetchStreaksResult().get()) ?? []
+    }
+
+    static func fetchStreaksResult(session: URLSession = .shared) async -> Result<[StreakRow], Error> {
         let url = buildURL(table: "streaks", query: [
             URLQueryItem(name: "select", value: "game_date,league,subject_type,subject,team,kind,length,detail,next_game"),
             URLQueryItem(name: "order", value: "game_date.desc,length.desc"),
             URLQueryItem(name: "limit", value: "200")
         ])
-        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
-              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let rows = try? JSONDecoder().decode([StreakRow].self, from: data) else { return [] }
-        // Latest snapshot PER LEAGUE — a global latest date would evict any
-        // league whose pipeline wrote a day earlier than its siblings.
-        var latestByLeague: [String: String] = [:]
-        for r in rows {
-            guard let lg = r.league, let d = r.game_date else { continue }
-            if let cur = latestByLeague[lg] { if d > cur { latestByLeague[lg] = d } }
-            else { latestByLeague[lg] = d }
-        }
-        return rows.filter { r in
-            guard let lg = r.league, let d = r.game_date else { return false }
-            return latestByLeague[lg] == d
-        }
+        do {
+            let (data, response) = try await session.data(for: makeRequest(url: url))
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                throw URLError(.badServerResponse)
+            }
+            let rows = try JSONDecoder().decode([StreakRow].self, from: data)
+
+            // Latest snapshot PER LEAGUE — a global latest date would evict any
+            // league whose pipeline wrote a day earlier than its siblings.
+            var latestByLeague: [String: String] = [:]
+            for r in rows {
+                guard let lg = r.league, let d = r.game_date else { continue }
+                if let cur = latestByLeague[lg] { if d > cur { latestByLeague[lg] = d } }
+                else { latestByLeague[lg] = d }
+            }
+            let current = rows.filter { r in
+                guard let lg = r.league, let d = r.game_date else { return false }
+                return latestByLeague[lg] == d
+            }
+            return .success(current)
+        } catch { return .failure(error) }
     }
 
     /// Last night across the whole league — every homer, multi-hit night and
     /// strikeout show, Gary's result attached where he had a position.
     static func fetchNightHighlights(date: String) async -> [NightHighlightRow] {
+        (try? await fetchNightHighlightsResult(date: date).get()) ?? []
+    }
+
+    static func fetchNightHighlightsResult(date: String, session: URLSession = .shared) async -> Result<[NightHighlightRow], Error> {
         let url = buildURL(table: "night_highlights", query: [
             URLQueryItem(name: "select", value: "league,category,player_name,team,detail,gary_result"),
             URLQueryItem(name: "game_date", value: "eq.\(date)"),
             URLQueryItem(name: "order", value: "category.asc")
         ])
-        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
-              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let rows = try? JSONDecoder().decode([NightHighlightRow].self, from: data) else { return [] }
-        return rows
+        do {
+            let (data, response) = try await session.data(for: makeRequest(url: url))
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                throw URLError(.badServerResponse)
+            }
+            let rows = try JSONDecoder().decode([NightHighlightRow].self, from: data)
+
+            return .success(rows)
+        } catch { return .failure(error) }
     }
 
     /// `yyyy-MM-dd` one day after the given date string (UTC-safe, no TZ math).
@@ -1343,19 +1397,28 @@ enum SupabaseAPI {
     /// (hit + miss; pushes excluded). Powers the hub's track-record line.
     /// Returns nil on any failure or when nothing is graded yet.
     static func fetchInsightHitRate(date: String) async -> (hit: Int, graded: Int)? {
+        (try? await fetchInsightHitRateResult(date: date).get()) ?? nil
+    }
+
+    static func fetchInsightHitRateResult(date: String, session: URLSession = .shared) async -> Result<(hit: Int, graded: Int)?, Error> {
         struct ResultRow: Decodable { let result: String? }
         let url = buildURL(table: "insight_connections", query: [
             URLQueryItem(name: "select", value: "result"),
             URLQueryItem(name: "date", value: "eq.\(date)"),
             URLQueryItem(name: "result", value: "not.is.null")
         ])
-        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
-              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let rows = try? JSONDecoder().decode([ResultRow].self, from: data) else { return nil }
-        let hit = rows.filter { $0.result == "hit" }.count
-        let miss = rows.filter { $0.result == "miss" }.count
-        let graded = hit + miss
-        return graded > 0 ? (hit, graded) : nil
+        do {
+            let (data, response) = try await session.data(for: makeRequest(url: url))
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                throw URLError(.badServerResponse)
+            }
+            let rows = try JSONDecoder().decode([ResultRow].self, from: data)
+
+            let hit = rows.filter { $0.result == "hit" }.count
+            let miss = rows.filter { $0.result == "miss" }.count
+            let graded = hit + miss
+            return .success(graded > 0 ? (hit, graded) : nil)
+        } catch { return .failure(error) }
     }
 
     /// Rolling graded record for the Hub masthead: every graded edge across

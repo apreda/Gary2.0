@@ -34,31 +34,48 @@ function runSwift(body) {
 function runLoadFixture(body) {
   const hub = hubSource();
   runSwift(`
-enum HubLeagueSel: String, CaseIterable {
+enum HubLeagueSel: String, CaseIterable, Codable {
  case mlb, nfl, ncaaf, nba, wc
  var label: String { rawValue.uppercased() }
  static func from(_ raw: String) -> HubLeagueSel? { HubLeagueSel(rawValue: raw.lowercased()) }
 }
-enum SignalKind: Hashable { case story }
-struct Signal {
+enum SignalKind: String, Hashable, Codable { case story }
+struct Signal: Codable {
  let id: String
  var league: HubLeagueSel
  var slateDate: String?
  var result: String? = nil
+ var detail = "original"
  var confirmedXI: Bool? = nil
  var kind: SignalKind = .story
  func toSignal() -> Signal? { self }
 }
+typealias Connection = Signal
 struct Row { var league: String?; var bdl_game_id: Int? }
 struct TomorrowBoard { var date: String; var board: [Row] }
-struct PlaceholderRow {}
+struct PlaceholderRow { var marker = "support" }
 typealias NightHighlightRow = PlaceholderRow
 typealias StreakRow = PlaceholderRow
 typealias PlayerInsightCardRow = PlaceholderRow
 typealias LeaguePulseRow = PlaceholderRow
 enum FixtureFailure: Error { case unavailable }
 enum AppFlags { static let insightLeagues = ["MLB", "NFL", "NCAAF", "NBA"] }
+${block(readFileSync(new URL('../../../ios/GaryApp/SharedStores.swift', import.meta.url), 'utf8'), 'enum PicksContentEquality {')}
 @MainActor enum SupabaseAPI {
+ struct Support { var rows: [PlaceholderRow] = []; var succeeded = true; var cancelled = false }
+ static var held: Set<String> = []
+ static var waiters: [String: [CheckedContinuation<Void, Never>]] = [:]
+ static var intel = Support()
+ static var pulses: [String: Support] = [:]
+ static func wait(_ key: String) async {
+  if held.contains(key) { await withCheckedContinuation { waiters[key, default: []].append($0) } }
+ }
+ static func release(_ key: String) {
+  held.remove(key)
+  let pending = waiters.removeValue(forKey: key) ?? []
+  pending.forEach { $0.resume() }
+ }
+ nonisolated static func isCancellation(_ error: Error) -> Bool { error is CancellationError }
  static var date = "2026-09-07"
  static var signals: [String: [String: [Signal]]] = [:]
  static var failures: [String: Set<String>] = [:]
@@ -68,16 +85,19 @@ enum AppFlags { static let insightLeagues = ["MLB", "NFL", "NCAAF", "NBA"] }
  static var boardWaiters: [CheckedContinuation<Void, Never>] = []
  static func todayEST() -> String { date }
  static func hubGradedDateEST() -> String { "2026-09-06" }
- static func fetchInsightHitRate(date: String) async -> (hit: Int, graded: Int)? { (1, 2) }
- static func fetchNightHighlights(date: String) async -> [NightHighlightRow] { [] }
- static func fetchStreaks() async -> [StreakRow] { [] }
+ static var rates: [String: Result<(hit: Int, graded: Int)?, Error>] = [:]
+ static var nights: [String: Result<[NightHighlightRow], Error>] = [:]
+ static var streaks: Result<[StreakRow], Error> = .success([])
+ static func fetchInsightHitRateResult(date: String) async -> Result<(hit: Int, graded: Int)?, Error> { await wait("history"); return rates[date] ?? .success((1, 2)) }
+ static func fetchNightHighlightsResult(date: String) async -> Result<[NightHighlightRow], Error> { nights[date] ?? .success([]) }
+ static func fetchStreaksResult() async -> Result<[StreakRow], Error> { streaks }
  static func fetchTodayBoardResult(date: String) async -> Result<TomorrowBoard?, Error> {
   let response = boards[date] ?? .success(nil)
   if holdBoard { await withCheckedContinuation { boardWaiters.append($0) } }
   return response
  }
- static func fetchPlayerIntelRows(date: String, forceRefresh: Bool) async -> [PlayerInsightCardRow] { [] }
- static func fetchLeaguePulse(date: String, league: String, forceRefresh: Bool) async -> [LeaguePulseRow] { [] }
+ static func fetchPlayerIntelRowsResult(date: String, forceRefresh: Bool) async -> Support { let result = intel; await wait("intel"); return result }
+ static func fetchLeaguePulseResult(date: String, league: String, forceRefresh: Bool) async -> Support { let result = pulses[league] ?? Support(); await wait(league); return result }
  static func fetchInsightConnections(date: String, league: String) async throws -> [Signal] {
   calls.append((date, league))
   if failures[date]?.contains(league) == true { throw FixtureFailure.unavailable }
@@ -92,7 +112,25 @@ enum AppFlags { static let insightLeagues = ["MLB", "NFL", "NCAAF", "NBA"] }
 }
 @MainActor final class Reader {
  var loadTask: Task<Void, Never>?
- var fetched: [Signal] = []
+ var fetchedWrites = 0
+ var indexWrites = 0
+ var fetched: [Signal] = [] { didSet { fetchedWrites += 1 } }
+ var loadGeneration: UInt64 = 0
+ var requestDate = ""
+ var connectionSnapshots: [HubLeagueSel: Data] = [:]
+ var boardLoading = false
+ var intelLoading = false
+ var intelFetchFailed = false
+ var pulseLoadingLeagues: Set<String> = []
+ var pulseErrorLeagues: Set<String> = []
+ var historyLoading = false
+ var historyFetchFailed = false
+ var historyDate = ""
+ var selectedSignal: Signal?
+ var playerRead: Signal?
+ var teamCardSignal: Signal?
+ var namedCard: PlaceholderRow?
+ var gameSheet: PlaceholderRow?
  var didLoad = false
  var loadedAt: Date?
  var loadedDate = ""
@@ -107,14 +145,15 @@ enum AppFlags { static let insightLeagues = ["MLB", "NFL", "NCAAF", "NBA"] }
  var todayBoard: TomorrowBoard?
  var boardFetchFailed = false
  var pulseByLeague: [String: [LeaguePulseRow]] = [:]
- var itemsIndex: [HubLeagueSel: [SignalKind: [Signal]]] = [:]
+ var itemsIndex: [HubLeagueSel: [SignalKind: [Signal]]] = [:] { didSet { indexWrites += 1 } }
  var sel: HubLeagueSel = .mlb
  var consumedFocus = 0
  static func dedupe(_ rows: [Signal]) -> [Signal] { rows }
  ${block(hub, '    private static func buildItemsIndex(')}
  ${block(hub, '    private static func shiftDate(')}
+ ${block(hub, '    private static func failedSupport')}
  ${block(hub, '    @MainActor private func load() async')}
- ${block(hub, '    @MainActor private func performLoad() async')}
+ ${['resetForSlate(', 'acceptsLoad(', 'performLoad(', 'loadCurrent(', 'loadIntel(', 'loadPulse(', 'loadHistory('].map(name => block(hub, '    @MainActor private func ' + name)).join('\n')}
  func refresh() async { await load() }
  func consumeFocus() { consumedFocus += 1 }
 }
@@ -270,60 +309,22 @@ struct Reader {
   }, 45_000);
 
   it.skipIf(!hasSwift)('shares one refresh across simultaneous triggers and keeps a canceled waiter from poisoning the shared load', () => {
-    const hub = hubSource();
-    runSwift(`
-@MainActor final class Reader {
- var loadTask: Task<Void, Never>?
- var starts = 0
- var finishes = 0
- var sawCancellation = false
- var pending: CheckedContinuation<Void, Never>?
- ${block(hub, '    @MainActor private func load() async')}
- private func performLoad() async {
-  starts += 1
-  await withCheckedContinuation { pending = $0 }
-  sawCancellation = sawCancellation || Task.isCancelled
-  finishes += 1
- }
- func refresh() async { await load() }
- func release() { let continuation = pending; pending = nil; continuation?.resume() }
-}
-@MainActor func waitUntil(_ ready: () -> Bool) async {
- for _ in 0..<10_000 {
-  if ready() { return }
-  await Task.yield()
- }
- preconditionFailure("The bounded refresh fixture did not reach its expected state")
-}
-@main struct Fixture {
- @MainActor static func main() async {
-  let reader = Reader()
-  var waitersStarted = 0
-  var waitersFinished = 0
-  let first = Task { waitersStarted += 1; await reader.refresh(); waitersFinished += 1 }
-  await waitUntil { reader.starts == 1 }
-  let foreground = Task { waitersStarted += 1; await reader.refresh(); waitersFinished += 1 }
-  let pullRefresh = Task { waitersStarted += 1; await reader.refresh(); waitersFinished += 1 }
-  await waitUntil { waitersStarted == 3 }
-  first.cancel()
-  for _ in 0..<10 { await Task.yield() }
-  precondition(reader.starts == 1 && reader.finishes == 0 && waitersFinished == 0,
-               "All callers wait for the same underlying request")
-  reader.release()
-  await first.value
-  await foreground.value
-  await pullRefresh.value
-  precondition(reader.starts == 1 && reader.finishes == 1 && waitersFinished == 3)
-  precondition(!reader.sawCancellation, "Canceling one view task must not turn the other callers' shared request into an outage")
-  precondition(reader.loadTask == nil)
-  let later = Task { await reader.refresh() }
-  await waitUntil { reader.starts == 2 }
-  reader.release()
-  await later.value
-  precondition(reader.finishes == 2 && reader.loadTask == nil, "Completion must release the owner for the next refresh")
-  print("Hub lifecycle assertions passed")
- }
-}
+    runLoadFixture(`
+let reader = Reader()
+SupabaseAPI.holdBoard = true
+let first = Task { await reader.refresh() }
+await waitUntil { SupabaseAPI.boardWaiters.count == 1 }
+let foreground = Task { await reader.refresh() }
+let pull = Task { await reader.refresh() }
+first.cancel()
+for _ in 0..<30 { await Task.yield() }
+precondition(SupabaseAPI.boardWaiters.count == 1)
+SupabaseAPI.releaseBoard()
+await first.value; await foreground.value; await pull.value
+precondition(reader.didLoad && !reader.boardFetchFailed && reader.loadTask == nil)
+precondition(SupabaseAPI.calls.filter { $0.date == SupabaseAPI.date }.count == AppFlags.insightLeagues.count)
+await reader.refresh()
+precondition(SupabaseAPI.calls.filter { $0.date == SupabaseAPI.date }.count == 2 * AppFlags.insightLeagues.count)
 `);
   }, 45_000);
 
@@ -399,6 +400,101 @@ precondition(reader.todayBoard == nil && reader.boardFetchFailed, "Neither the r
 precondition(reader.fetchErrorLeagues == [.mlb, .nfl])
 precondition(SupabaseAPI.calls.contains { $0.date == nextDate && $0.league == "NCAAF" }, "Rollover reruns inside the shared owner")
 precondition(reader.loadTask == nil)
+`);
+  }, 45_000);
+
+  it.skipIf(!hasSwift)('publishes today before blocked support, accepts each support independently, and preserves unchanged identities', () => {
+    runLoadFixture(`
+let reader = Reader()
+let date = SupabaseAPI.date
+SupabaseAPI.signals[date] = ["MLB": [Signal(id: "story", league: .mlb, slateDate: date)]]
+SupabaseAPI.boards[date] = .success(TomorrowBoard(date: date, board: [Row(league: "MLB", bdl_game_id: 9)]))
+SupabaseAPI.held = ["intel", "MLB", "NFL", "NCAAF", "history"]
+SupabaseAPI.intel = .init(rows: [PlaceholderRow(marker: "player")])
+SupabaseAPI.pulses["MLB"] = .init(rows: [PlaceholderRow(marker: "table")])
+let first = Task { await reader.refresh() }
+await waitUntil { reader.didLoad && SupabaseAPI.waiters.count == 5 }
+precondition(reader.fetched.first?.id == "story" && reader.todayBoard?.board.first?.bdl_game_id == 9)
+precondition(reader.intelLoading && reader.historyLoading && reader.pulseLoadingLeagues.count == 3)
+precondition(reader.intelCards.isEmpty && reader.loadTask != nil, "Primary content is ready while every supplemental request is blocked")
+SupabaseAPI.release("MLB")
+await waitUntil { !reader.pulseLoadingLeagues.contains("MLB") }
+precondition(reader.pulseByLeague["MLB"]?.first?.marker == "table" && reader.intelLoading && reader.historyLoading)
+SupabaseAPI.release("intel")
+await waitUntil { !reader.intelLoading }
+precondition(reader.intelCards.first?.marker == "player" && reader.historyLoading)
+for key in ["NFL", "NCAAF", "history"] { SupabaseAPI.release(key) }
+await first.value
+let writes = reader.fetchedWrites
+let indexes = reader.indexWrites
+await reader.refresh()
+precondition(reader.fetchedWrites == writes && reader.indexWrites == indexes, "An identical source never reconstructs stories or the grouping index")
+var revised = SupabaseAPI.signals[date]!["MLB"]![0]
+revised.detail = "same count, revised reasoning"
+SupabaseAPI.signals[date]!["MLB"] = [revised]
+await reader.refresh()
+precondition(reader.fetched.first?.detail == revised.detail && reader.indexWrites == indexes + 1)
+SupabaseAPI.intel = .init(succeeded: false)
+SupabaseAPI.pulses["MLB"] = .init(succeeded: false)
+await reader.refresh()
+precondition(reader.intelFetchFailed && reader.intelCards.first?.marker == "player")
+precondition(reader.pulseErrorLeagues.contains("MLB") && reader.pulseByLeague["MLB"]?.first?.marker == "table")
+SupabaseAPI.intel = .init()
+SupabaseAPI.pulses["MLB"] = .init()
+await reader.refresh()
+precondition(reader.intelCards.isEmpty && !reader.intelFetchFailed)
+precondition(reader.pulseByLeague["MLB"]?.isEmpty == true && !reader.pulseErrorLeagues.contains("MLB"))
+`);
+  }, 45_000);
+
+  it.skipIf(!hasSwift)('starts a new slate while old support remains blocked and discards its eventual completion', () => {
+    runLoadFixture(`
+let reader = Reader()
+let oldDate = SupabaseAPI.date
+SupabaseAPI.signals[oldDate] = ["MLB": [Signal(id: "old", league: .mlb, slateDate: oldDate)]]
+SupabaseAPI.intel = .init(rows: [PlaceholderRow(marker: "old-player")])
+SupabaseAPI.held = ["intel"]
+let old = Task { await reader.refresh() }
+await waitUntil { reader.didLoad && SupabaseAPI.waiters["intel"]?.count == 1 }
+SupabaseAPI.date = "2026-09-08"
+SupabaseAPI.intel = .init(rows: [PlaceholderRow(marker: "new-player")])
+SupabaseAPI.signals[SupabaseAPI.date] = ["NFL": [Signal(id: "new", league: .nfl, slateDate: SupabaseAPI.date)]]
+// Release only the gate for future callers; the old continuation stays held.
+SupabaseAPI.held.remove("intel")
+await reader.refresh()
+precondition(reader.loadedDate == SupabaseAPI.date && reader.fetched.first?.id == "new")
+precondition(reader.intelCards.first?.marker == "new-player" && !reader.intelLoading)
+SupabaseAPI.release("intel")
+await old.value
+precondition(reader.fetched.first?.id == "new" && reader.intelCards.first?.marker == "new-player")
+precondition(reader.loadTask == nil && !reader.boardLoading)
+`);
+  }, 45_000);
+
+  it.skipIf(!hasSwift)('treats empty history as success and never relabels retained statistics under a different day', () => {
+    runLoadFixture(`
+let reader = Reader()
+let graded = "2026-09-06"
+let back = "2026-09-05"
+SupabaseAPI.nights[graded] = .success([PlaceholderRow(marker: "graded-day")])
+await reader.refresh()
+precondition(reader.historyDate == graded && reader.nightRows.first?.marker == "graded-day")
+SupabaseAPI.rates[graded] = .failure(FixtureFailure.unavailable)
+SupabaseAPI.nights[graded] = .failure(FixtureFailure.unavailable)
+await reader.refresh()
+precondition(reader.historyFetchFailed && reader.historyDate == graded && reader.nightRows.first?.marker == "graded-day")
+SupabaseAPI.rates[graded] = .success(nil)
+SupabaseAPI.nights[graded] = .success([])
+SupabaseAPI.rates[back] = .failure(FixtureFailure.unavailable)
+SupabaseAPI.nights[back] = .failure(FixtureFailure.unavailable)
+await reader.refresh()
+precondition(reader.historyDate == back && reader.historyFetchFailed)
+precondition(reader.hitRate == nil && reader.nightRows.isEmpty, "Earlier fallback cannot borrow later-day values")
+SupabaseAPI.rates[back] = .success(nil)
+SupabaseAPI.nights[back] = .success([])
+await reader.refresh()
+precondition(!reader.historyFetchFailed && reader.hitRate == nil && reader.nightRows.isEmpty && reader.streakRows.isEmpty)
+precondition(!reader.gradedIsYesterday)
 `);
   }, 45_000);
 

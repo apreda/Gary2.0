@@ -384,7 +384,7 @@ final class LiveScoreCache: ObservableObject {
             let persisted = persistedFinals(for: slateDate)
             scores = persisted
             persistedFinalsSnapshot = persisted
-            gradedFinals = [:]
+            if !gradedFinals.isEmpty { gradedFinals = [:] }
             rebuildIndexes()
             prunePersistedFinals(keeping: slateDate)
         }
@@ -553,6 +553,21 @@ final class LiveScoreCache: ObservableObject {
 // canonical copies, kept logic-identical to the originals so behavior is byte-
 // for-byte the same (per-sport yesterday-recap gate, W/L only on yesterday's
 // fallback, precise line+matchup result keys).
+/// Compare complete model content once a source response is accepted. Encoding
+/// failure is never evidence of equality; callers must publish that response.
+enum PicksContentEquality {
+    static func encoded<Value: Encodable>(_ value: Value) -> Data? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return try? encoder.encode(value)
+    }
+
+    static func equal<Value: Encodable>(_ lhs: Value, _ rhs: Value) -> Bool {
+        guard let left = encoded(lhs), let right = encoded(rhs) else { return false }
+        return left == right
+    }
+}
+
 @MainActor
 final class PropsSlateStore: ObservableObject {
     @Published var allProps: [PropPick] = []
@@ -604,271 +619,219 @@ final class PropsSlateStore: ObservableObject {
     @Published var loading = true
     @Published var fetchFailed = false
     @Published var loaded = false   // first successful (or attempted) load completed
-    /// Bumped on every explicit pull-to-refresh so subviews that own their own
-    /// network state (e.g. LEAGUE PULSE) can re-key their `.task` and refetch.
-    /// Only changes on user refresh — never during live-score polling.
-    @Published var refreshTick = 0
+    /// The grouping memo follows accepted content, including same-count edits.
+    /// Starting a request or receiving unchanged content does not invalidate it.
+    @Published private(set) var contentRevision: UInt64 = 0
+    private var loadGeneration: UInt64 = 0
 
     // MARK: Loading (single source of truth — never fetched twice for one store)
 
-    /// Loads props + game picks once. Safe to call from multiple views' `.task`;
-    /// only the first call does the network work, the rest no-op (unless forced).
-    /// Reset the TODAY-state when the EST slate day has rolled (app left open past
-    /// the 6am ET rollover). Called at the top of EVERY load path — loadIfNeeded AND
-    /// refresh (foreground) — so keep-last-good can never pin the board to yesterday
-    /// under a "Today" header. No-op on first load and within the same day.
-    private func resetIfDayRolled() async {
-        let today = SupabaseAPI.todayEST()
-        guard loadedDate != today else { return }
-        await MainActor.run {
-            if !loadedDate.isEmpty {
-                allProps = []; gamePicks = []; slate = []; slateUnavailable = false
-                propPickSourceFailed = false; gamePickSourceFailures = []; slateSourceFailed = false
-                todayGameResults = [:]; todayPropResults = [:]
-                // Also drop the yesterday-fallback so a PRIOR day's fallback can't
-                // survive the roll before the fresh fetch resolves.
-                yesterdayProps = []; yesterdayPropsAll = []; yesterdayResultsMap = [:]
-                yesterdayGamePicks = []; yesterdayGamePicksAll = []; gameResultsMap = [:]
-                showingYesterdayResults = false; sportsWithFreshProps = []
-            }
-            loadedDate = today
-        }
+    private var loadTask: Task<Void, Never>?
+    private var requestDate = ""
+
+    private func accepts(date: String, generation: UInt64) -> Bool {
+        !Task.isCancelled && loadGeneration == generation
+            && loadedDate == date && SupabaseAPI.todayEST() == date
+    }
+
+    /// Compare accepted content, including edits that leave the count unchanged.
+    /// No serialization runs from a SwiftUI body or memo-signature getter.
+    @discardableResult
+    private func accept<Value: Encodable>(_ value: Value, at path: ReferenceWritableKeyPath<PropsSlateStore, Value>) -> Bool {
+        guard !PicksContentEquality.equal(self[keyPath: path], value) else { return false }
+        self[keyPath: path] = value
+        contentRevision &+= 1
+        return true
+    }
+
+    private func resetIfDayRolled(to date: String) {
+        guard loadedDate != date else { return }
+        allProps = []; gamePicks = []; slate = []; slateUnavailable = false
+        propPickSourceFailed = false; gamePickSourceFailures = []; slateSourceFailed = false
+        todayGameResults = [:]; todayPropResults = [:]
+        yesterdayProps = []; yesterdayPropsAll = []; yesterdayResultsMap = [:]
+        yesterdayGamePicks = []; yesterdayGamePicksAll = []; gameResultsMap = [:]; gameScoreMap = [:]
+        showingYesterdayResults = false; sportsWithFreshProps = []
+        loadedDate = date
+        loaded = false
+        contentRevision &+= 1
     }
 
     func loadIfNeeded(forceRefresh: Bool = false) async {
-        let dayRolled = !loadedDate.isEmpty && loadedDate != SupabaseAPI.todayEST()
-        if loaded && !forceRefresh && !dayRolled { return }
-        await resetIfDayRolled()
-        // Props + game picks share no data — fetch them concurrently instead of
-        // props-then-games serially (was the Picks-tab first-paint delay).
-        async let p: Void = loadProps(forceRefresh: forceRefresh)
-        async let gp: Void = loadGamePicks(forceRefresh: forceRefresh)
-        _ = await (p, gp)
+        if loaded && !forceRefresh && loadedDate == SupabaseAPI.todayEST() { return }
+        await load(forceRefresh: forceRefresh)
     }
 
-    func refresh() async {
-        refreshTick &+= 1
-        await resetIfDayRolled()
-        async let p: Void = loadProps(forceRefresh: true)
-        async let gp: Void = loadGamePicks(forceRefresh: true)
-        _ = await (p, gp)
-    }
+    func refresh() async { await load(forceRefresh: true) }
 
-    private func loadProps(forceRefresh: Bool) async {
-        loading = true
-        fetchFailed = false
-
+    private func load(forceRefresh: Bool) async {
         let date = SupabaseAPI.todayEST()
+        if let task = loadTask, requestDate == date { await task.value; return }
+        loadTask?.cancel()
+        loadGeneration &+= 1
+        let generation = loadGeneration
+        requestDate = date
+        resetIfDayRolled(to: date)
+        if !loading { loading = true }
+        // The owner survives a cancelled gesture; same-day readers share it.
+        // A new slate starts a new owner without waiting on old history.
+        let task = Task { @MainActor in
+            async let props: Void = loadProps(date: date, generation: generation, forceRefresh: forceRefresh)
+            async let games: Void = loadGamePicks(date: date, generation: generation, forceRefresh: forceRefresh)
+            _ = await (props, games)
+            guard accepts(date: date, generation: generation) else { return }
+            loading = false
+            if !loaded { loaded = true }
+        }
+        loadTask = task
+        await task.value
+        guard loadGeneration == generation else { return }
+        loadTask = nil
+        if SupabaseAPI.todayEST() != date { await load(forceRefresh: true) }
+    }
 
-        var props: [PropPick] = []
-        var didFail = false
-        var wasCancelled = false
-        var transientFailure = false
+    private struct PropFetch {
+        var rows: [PropPick] = []
+        var succeeded = false
+        var cancelled = false
+    }
+    private func fetchProps(date: String, seconds: Double, forceRefresh: Bool) async -> PropFetch {
         do {
-            props = try await withTimeout(seconds: 30) {
+            let rows = try await withTimeout(seconds: seconds) {
                 try await SupabaseAPI.fetchPropPicks(date: date, forceRefresh: forceRefresh)
             }
-        } catch {
-            if SupabaseAPI.isCancellation(error) {
-                // Our own torn-down refresh task — state stands, no banner.
-                wasCancelled = true
-                transientFailure = true
-            } else {
-                didFail = true
-                transientFailure = SupabaseAPI.isTransientExternalFailure(error)
-            }
+            return PropFetch(rows: rows, succeeded: true)
+        } catch { return PropFetch(cancelled: SupabaseAPI.isCancellation(error)) }
+    }
+
+    private func loadProps(date: String, generation: UInt64, forceRefresh: Bool) async {
+        let yesterday = SupabaseAPI.yesterdayEST()
+        async let todayFetch = fetchProps(date: date, seconds: 30, forceRefresh: forceRefresh)
+        async let historyFetch = fetchProps(date: yesterday, seconds: 20, forceRefresh: forceRefresh)
+        async let resultsFetch = try? SupabaseAPI.fetchPropResults(since: yesterday, forceRefresh: forceRefresh)
+        let today = await todayFetch
+        let results = await resultsFetch
+        guard accepts(date: date, generation: generation) else { return }
+
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
+        let formatter = DateFormatter()
+        formatter.timeZone = cal.timeZone; formatter.dateFormat = "yyyy-MM-dd"
+        let slateStart = formatter.date(from: date).map { cal.startOfDay(for: $0) }
+            ?? cal.startOfDay(for: Date())
+        let props = today.rows.filter { p in
+            guard let iso = p.commence_time, let start = parseISO8601(iso) else { return true }
+            return start >= slateStart
         }
-
-        // Keep only FRESH props (game today or upcoming). A game that already
-        // happened — e.g. yesterday's props mis-dated under today's key — is not
-        // today's slate and must never show as a live pick without a result; the
-        // yesterday-results fallback below still surfaces graded recaps.
-        var freshCal = Calendar.current
-        freshCal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
-        // Anchor freshness on the 6am-aware SLATE day (todayEST), NOT wall-clock
-        // midnight: between ET-midnight and 6am, todayEST() is still the prior calendar
-        // date, so its ET-midnight keeps that slate's night props visible instead of
-        // dropping the WHOLE board on a cold load in that window.
-        let slateFmt = DateFormatter()
-        slateFmt.timeZone = freshCal.timeZone
-        slateFmt.dateFormat = "yyyy-MM-dd"
-        let slateStart = slateFmt.date(from: SupabaseAPI.todayEST()).map { freshCal.startOfDay(for: $0) }
-            ?? freshCal.startOfDay(for: Date())
-        props = props.filter { p in
-            guard let iso = p.commence_time, let d = parseISO8601(iso) else { return true }
-            return d >= slateStart
-        }
-
-        let allResults = (try? await SupabaseAPI.fetchPropResults(since: SupabaseAPI.yesterdayEST(), forceRefresh: forceRefresh)) ?? []
-
-        let freshSports = Set(props.compactMap { ($0.effectiveLeague ?? "").uppercased() }.filter { !$0.isEmpty })
-        let effectiveFreshSports = transientFailure ? sportsWithFreshProps : freshSports
-
-        var yProps: [PropPick] = []
-        var yPropsAll: [PropPick] = []
-        var yMap: [String: String] = [:]
-        var hasYesterday = false
-        var yFetchOK = false   // true = yesterday fetch SUCCEEDED (even if empty); false = threw
-        do {
-            let yesterday = SupabaseAPI.yesterdayEST()
-            let fetched = try await withTimeout(seconds: 20) {
-                try await SupabaseAPI.fetchPropPicks(date: yesterday, forceRefresh: forceRefresh)
-            }
-            yFetchOK = true
-            // Keep TD scorers in the canonical yesterday payload. The dedicated
-            // Props surface may still offer its NFL-TDs lens, while the Picks
-            // page now shows every NFL play together under the NFL tab.
-            yPropsAll = fetched   // UNGATED — for the explicit Yesterday view
-            let yesterdaySportsNeeded = fetched.filter { !effectiveFreshSports.contains(($0.effectiveLeague ?? "").uppercased()) }
-            if !yesterdaySportsNeeded.isEmpty {
-                yProps = yesterdaySportsNeeded
-                hasYesterday = true
-                for result in allResults.filter({ $0.game_date == yesterday }) {
-                    guard let playerName = result.player_name, let propType = result.prop_type,
-                          let outcome = result.result, !outcome.isEmpty else { continue }
-                    let actualValue = (result.actual_value?.value ?? "").trimmingCharacters(in: .whitespaces)
-                    guard !actualValue.isEmpty else { continue }
-                    let line = normalizeLine(result.line_value?.value ?? "")
-                    let matchup = normalizeMatchup(result.matchup ?? "")
-                    let key = makeResultKey(player: playerName, propType: normalizePropType(propType), line: line, matchup: matchup)
-                    yMap[key] = outcome.lowercased()
-                }
-            }
-        } catch { }
-
-        // TODAY's graded props — same keying as resultForProp, so the Today board
-        // stamps finished props live. Require only a result (actual_value is just
-        // for display and isn't always populated for team props like "Czechia Team
-        // shots", which is exactly the one that wasn't showing its CASHED).
-        var tPropMap: [String: String] = [:]
-        for result in allResults.filter({ $0.game_date == date }) {
-            guard let playerName = result.player_name, let propType = result.prop_type,
+        var todayMap: [String: String] = [:]
+        var yesterdayMap: [String: String] = [:]
+        for result in results ?? [] {
+            guard let player = result.player_name, let type = result.prop_type,
                   let outcome = result.result, !outcome.isEmpty else { continue }
             let line = normalizeLine(result.line_value?.value ?? "")
             let matchup = normalizeMatchup(result.matchup ?? "")
-            tPropMap[makeResultKey(player: playerName, propType: normalizePropType(propType), line: line, matchup: matchup)] = outcome.lowercased()
+            let key = makeResultKey(player: player, propType: normalizePropType(type), line: line, matchup: matchup)
+            if result.game_date == date { todayMap[key] = outcome.lowercased() }
+            if result.game_date == yesterday,
+               !(result.actual_value?.value ?? "").trimmingCharacters(in: .whitespaces).isEmpty {
+                yesterdayMap[key] = outcome.lowercased()
+            }
         }
+        if (!todayMap.isEmpty || todayPropResults.isEmpty), todayPropResults != todayMap {
+            todayPropResults = todayMap
+        }
+        // Current props plus their available grades can render before the
+        // independent yesterday request completes. A failed source never clears.
+        if today.succeeded {
+            accept(props, at: \.allProps)
+        }
+        // A failed refresh still has accepted today props. Those sports must
+        // not acquire a duplicate yesterday fallback while history refreshes.
+        let sports = Set(allProps.compactMap { $0.effectiveLeague?.uppercased() }.filter { !$0.isEmpty })
+        if sportsWithFreshProps != sports { sportsWithFreshProps = sports }
+        updatePropFallback()
+        if !today.cancelled, propPickSourceFailed != !today.succeeded { propPickSourceFailed = !today.succeeded }
 
-        // A successful empty is authoritative and clears the board. ANY
-        // failure keeps the same-date last-good copy on screen — the source
-        // banner (propPickSourceFailed) is what exposes the retry state.
-        // (Aug 26, founder screenshots: a pull-to-refresh that hit a failed
-        // fetch blanked a healthy MLB board and the sports list with it,
-        // snapping the page to an empty NFL desk. A failed fetch is not an
-        // empty result.)
-        if !didFail && !wasCancelled {
-            allProps = props
-            sportsWithFreshProps = freshSports
+        let history = await historyFetch
+        guard accepts(date: date, generation: generation) else { return }
+        if history.succeeded {
+            accept(history.rows, at: \.yesterdayPropsAll)
+            updatePropFallback()
+            if results != nil, yesterdayResultsMap != yesterdayMap { yesterdayResultsMap = yesterdayMap }
         }
-        // Reset the fallback whenever the yesterday fetch SUCCEEDED (yFetchOK) — even
-        // when it now returns nothing needed (today covers every sport). Guarding on
-        // !yProps.isEmpty alone latched showingYesterdayResults ON, so settled yesterday
-        // props lingered on the Today board after today filled in. Any failure
-        // keeps last-good (Aug 26 — same wipe class as the today board above).
-        if yFetchOK {
-            yesterdayProps = yProps
-            yesterdayResultsMap = yMap
-            showingYesterdayResults = hasYesterday
-            yesterdayPropsAll = yPropsAll
-        }
-        if !tPropMap.isEmpty || todayPropResults.isEmpty { todayPropResults = tPropMap }
-        fetchFailed = didFail && allProps.isEmpty && yesterdayProps.isEmpty
-        propPickSourceFailed = didFail
-        loading = false
-        loaded = true
+        let failed = !today.succeeded && !today.cancelled && allProps.isEmpty && yesterdayProps.isEmpty
+        if fetchFailed != failed { fetchFailed = failed }
     }
 
-    private func loadGamePicks(forceRefresh: Bool) async {
-        let date = SupabaseAPI.todayEST()
-        let yesterday = SupabaseAPI.yesterdayEST()
-        // The slate is the pre-pick page's critical path. Start it alongside
-        // today's picks so an empty/slow picks table cannot postpone the 15 game
-        // placeholders users should see all morning.
-        async let todayFetch = fetchIsolatedGamePickSources(
-            date: date
-        )
-        async let yesterdayFetch = fetchIsolatedGamePickSources(
-            date: yesterday
-        )
-        async let slateFetch = SupabaseAPI.fetchDailySlateWithStatus(date: date, forceRefresh: forceRefresh)
-        let todaySnapshot = await todayFetch
-        let sourceFailures = Set(todaySnapshot.failures.map(\.failureKey))
-        let mergedToday = mergeGamePickSnapshot(
-            todaySnapshot,
-            retaining: gamePicks
-        ).filter { !(($0.pick ?? "").isEmpty) }
-        gamePicks = mergedToday
-        gamePickSourceFailures = sourceFailures
-        // Today's full slate — every scheduled game, so the Picks page shows
-        // tonight's matchups (with a "pick drops near game time" placeholder +
-        // intel) before Gary's picks post.
-        let slateResult = await slateFetch
-        let freshSlate = slateResult.rows
-        if slateResult.succeeded {
-            // Explicit [] means the source verified a dark slate (or every game
-            // was removed). Never retain a previous same-date board here.
-            slate = freshSlate
-        } else if slateResult.transientExternalFailure {
-            // Prefer the persisted same-date cache when available; otherwise the
-            // current in-memory same-date slate is already the last-good copy.
-            if !freshSlate.isEmpty { slate = freshSlate }
-        } else {
-            // Internal auth/config/schema failures stay VISIBLE via
-            // slateSourceFailed (the board banner) — but the same-date board
-            // the user is reading stays rendered. Blanking a live board on a
-            // failed refresh stranded the page on an empty desk (Aug 26).
-        }
-        slateSourceFailed = !slateResult.succeeded && !slateResult.cancelled
-        slateUnavailable = !slateResult.succeeded && slate.isEmpty
-        let freshSports = Set(mergedToday.compactMap { ($0.league ?? "").uppercased() }.filter { !$0.isEmpty })
+    private func updatePropFallback() {
+        let rows = yesterdayPropsAll.filter { !sportsWithFreshProps.contains(($0.effectiveLeague ?? "").uppercased()) }
+        accept(rows, at: \.yesterdayProps)
+        if showingYesterdayResults != !rows.isEmpty { showingYesterdayResults = !rows.isEmpty }
+    }
 
-        var yPicks: [GaryPick] = []
-        var yPicksAll: [GaryPick] = []
-        var resultsMap: [String: String] = [:]
-        var scoreMap: [String: String] = [:]
-        var todayMap: [String: String] = [:]
+    private func loadGamePicks(date: String, generation: UInt64, forceRefresh: Bool) async {
+        async let board: Void = loadSlate(date: date, generation: generation, forceRefresh: forceRefresh)
+        async let picks: Void = loadGamePickContent(date: date, generation: generation, forceRefresh: forceRefresh)
+        _ = await (board, picks)
+    }
+
+    private func loadSlate(date: String, generation: UInt64, forceRefresh: Bool) async {
+        let result = await SupabaseAPI.fetchDailySlateWithStatus(date: date, forceRefresh: forceRefresh)
+        guard accepts(date: date, generation: generation) else { return }
+        if result.succeeded || (result.transientExternalFailure && !result.rows.isEmpty) {
+            accept(result.rows, at: \.slate)
+        }
+        if !result.cancelled {
+            if slateSourceFailed != !result.succeeded { slateSourceFailed = !result.succeeded }
+            let unavailable = !result.succeeded && slate.isEmpty
+            if slateUnavailable != unavailable { slateUnavailable = unavailable }
+        }
+    }
+
+    private func loadGamePickContent(date: String, generation: UInt64, forceRefresh: Bool) async {
+        let yesterday = SupabaseAPI.yesterdayEST()
+        async let todayFetch = fetchIsolatedGamePickSources(date: date)
+        async let yesterdayFetch = fetchIsolatedGamePickSources(date: yesterday)
+        async let resultsFetch = try? SupabaseAPI.fetchAllGameResults(since: yesterday, forceRefresh: forceRefresh)
+        let todaySnapshot = await todayFetch
+        guard accepts(date: date, generation: generation) else { return }
+        let mergedToday = mergeGamePickSnapshot(todaySnapshot, retaining: gamePicks).filter { !($0.pick ?? "").isEmpty }
+        accept(mergedToday, at: \.gamePicks)
+        let failures = Set(todaySnapshot.failures.map(\.failureKey))
+        if gamePickSourceFailures != failures { gamePickSourceFailures = failures }
+        let freshSports = Set(mergedToday.compactMap { $0.league?.uppercased() }.filter { !$0.isEmpty })
+        accept(yesterdayGamePicksAll.filter { !freshSports.contains(($0.league ?? "").uppercased()) }, at: \.yesterdayGamePicks)
+
         let yesterdaySnapshot = await yesterdayFetch
-        yPicksAll = mergeGamePickSnapshot(
-            yesterdaySnapshot,
-            retaining: yesterdayGamePicksAll
-        ).filter { !($0.pick ?? "").isEmpty }   // UNGATED — explicit Yesterday view
-        yPicks = yPicksAll.filter { !freshSports.contains(($0.league ?? "").uppercased()) }
-        // Grades for BOTH days — `since: yesterday` covers today too. Today's feed
-        // the live "grade as it finishes" stamps on the Today board; yesterday's
-        // feed the Yesterday tab + its FINAL scores.
-        let results = (try? await SupabaseAPI.fetchAllGameResults(since: yesterday, forceRefresh: forceRefresh)) ?? []
-        // TODAY'S final beats yesterday's for the same matchup key — consecutive-day
-        // series (Reds @ Brewers Jul 1 AND Jul 2) collide on the matchup-only score
-        // key, and iteration order used to decide which final the card footer wore
-        // (today's CASHED Reds card showed yesterday's 2-4).
+        let results = await resultsFetch ?? []
+        guard accepts(date: date, generation: generation) else { return }
+        let yPicksAll = mergeGamePickSnapshot(yesterdaySnapshot, retaining: yesterdayGamePicksAll)
+            .filter { !($0.pick ?? "").isEmpty }
+        var resultsMap: [String: String] = [:]
+        var todayMap: [String: String] = [:]
+        var scoreMap: [String: String] = [:]
         var ydayScores: [String: String] = [:]
         for r in results {
             guard let k = gpKey(from: r.matchup), let outcome = r.result else { continue }
             let rk = garyGameResultKey(matchupKey: k, pickText: r.pick_text)
             if r.game_date == yesterday {
                 resultsMap[rk] = outcome.lowercased()
-                if let s = r.final_score, !s.trimmingCharacters(in: .whitespaces).isEmpty { ydayScores[k] = s }
+                if let score = r.final_score, !score.trimmingCharacters(in: .whitespaces).isEmpty { ydayScores[k] = score }
             } else if r.game_date == date {
                 todayMap[rk] = outcome.lowercased()
-                if let s = r.final_score, !s.trimmingCharacters(in: .whitespaces).isEmpty { scoreMap[k] = s }
+                if let score = r.final_score, !score.trimmingCharacters(in: .whitespaces).isEmpty { scoreMap[k] = score }
             }
         }
-        scoreMap.merge(ydayScores) { today, _ in today }   // today wins collisions
-
-        // Yesterday follows the same per-source contract as Today: successful
-        // empty desks clear themselves and only failed desks retain last-good.
-        yesterdayGamePicks = yPicks
-        yesterdayGamePicksAll = yPicksAll
-        // Grade payloads remain independently keep-last-good.
+        scoreMap.merge(ydayScores) { today, _ in today }
+        accept(yPicksAll, at: \.yesterdayGamePicksAll)
+        accept(yPicksAll.filter { !freshSports.contains(($0.league ?? "").uppercased()) }, at: \.yesterdayGamePicks)
         if !resultsMap.isEmpty || gameResultsMap.isEmpty {
-            gameResultsMap = resultsMap
-            gameScoreMap = ydayScores   // Yesterday tab stays yesterday-pure (series collisions)
+            if gameResultsMap != resultsMap { gameResultsMap = resultsMap }
+            if gameScoreMap != ydayScores { gameScoreMap = ydayScores }
         }
-        if !todayMap.isEmpty || todayGameResults.isEmpty { todayGameResults = todayMap }
-        // Settled finals (today + yesterday) → shared live cache, so EVERY card can
-        // show the final score in its footer even when the live board never carried
-        // it (WC finals) or it's a Yesterday-tab card. Keep-last-good on empty.
-        if !scoreMap.isEmpty || LiveScoreCache.shared.gradedFinals.isEmpty {
+        if (!todayMap.isEmpty || todayGameResults.isEmpty), todayGameResults != todayMap { todayGameResults = todayMap }
+        if (!scoreMap.isEmpty || LiveScoreCache.shared.gradedFinals.isEmpty),
+           LiveScoreCache.shared.gradedFinals != scoreMap {
             LiveScoreCache.shared.gradedFinals = scoreMap
         }
     }

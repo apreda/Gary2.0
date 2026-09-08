@@ -581,6 +581,10 @@ struct PicksCarouselView: View {
     @State private var connections: [Signal] = []
     @State private var connLoaded = false
     @State private var connectionLoadInFlight = false
+    @State private var connectionDate = ""
+    @State private var connectionSnapshots: [HubLeagueSel: Data] = [:]
+    @State private var connectionRevision: UInt64 = 0
+    @State private var memoSignature: String? = nil
     @State private var connectionErrorLeagues: Set<HubLeagueSel> = []
     @State private var sport = "MLB"
     /// True while `sport` was set by the auto-snap rather than a user tap —
@@ -1041,6 +1045,9 @@ struct PicksCarouselView: View {
     /// keep-last-good rule the store already follows (never blank a populated bar
     /// on a transient empty refresh).
     private func rebuildMemo() {
+        let signature = "\(dataSignature)|\(sport)|\(pickDay)|\(ncaafConference)"
+        guard memoSignature != signature else { return }
+        memoSignature = signature
         let built = computeGamesUnsorted()
         // Initial publication: LIVE → upcoming → final, then first pitch.
         // Refreshes keep every existing identity at the same page index and append
@@ -1073,11 +1080,14 @@ struct PicksCarouselView: View {
         // page only wears edges whose game_id is its own (Jul 22 2026, Max Fried),
         // and an id-less edge stays off a doubleheader page rather than guessed.
         var idx: [String: [Signal]] = [:]
+        let currentConnections = self.currentConnections
         for g in built {
             let hay = g.matchup + " " + g.props.compactMap { $0.team }.joined(separator: " ")
             let gKey = Self.matchupKey(g.matchup)
             let gid = bdlGameId(for: g)
-            idx[Self.gameIdentityKey(g.matchup, g.commence)] = connections.filter { s in
+            let scopedLeague = gameLeague(g)
+            idx[Self.gameIdentityKey(g.matchup, g.commence)] = currentConnections.filter { s in
+                guard s.league.label == scopedLeague else { return false }
                 // Exact provider identity wins before any team-name parsing.
                 // NCAAF insight rows intentionally use provider abbreviations,
                 // while slate rows carry full school names; rejecting on the
@@ -1426,9 +1436,8 @@ struct PicksCarouselView: View {
             lockShowcaseIfNeeded()
             consumeFocus()
         }
-        .onChange(of: connLoaded) { _ in rebuildMemo() }
         // The store's picks/props/slate settle asynchronously after each load — a
-        // count signature fires rebuildMemo() once they land (and after a refresh),
+        // accepted-content revision fires rebuildMemo() when they change,
         // so the memo tracks the data without recomputing on every live-score tick.
         .onChange(of: dataSignature) { _ in
             rebuildMemo()
@@ -1478,15 +1487,12 @@ struct PicksCarouselView: View {
             await loadConnections()
         }
         await work.value
-        rebuildMemo()
     }
 
-    /// A cheap Equatable digest of every input the memoized game set + edge index
-    /// depend on (counts + the refresh tick). Changes only when the underlying data
-    /// actually changes — NOT on a live-score publish — so `.onChange` drives
-    /// rebuildMemo() exactly when needed and never on a tick.
+    /// Accepted content, including same-count prose and metadata edits, owns
+    /// memo invalidation. Starting or completing an unchanged fetch does not.
     private var dataSignature: String {
-        "\(store.allProps.count)-\(store.yesterdayPropsAll.count)-\(store.gamePicks.count)-\(store.yesterdayGamePicksAll.count)-\(store.slate.count)-\(connections.count)-\(store.refreshTick)"
+        "\(store.contentRevision)|\(connectionRevision)"
     }
 
     /// Land on the exact game the Hub deep-linked. Typed requests wait for
@@ -2096,11 +2102,17 @@ struct PicksCarouselView: View {
     /// deep-link race before the first rebuild) so reach is never lost — the
     /// fallback applies the same per-GAME id scoping as the index build.
     private func edges(for g: (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])) -> [Signal] {
-        if let hit = edgeIndex[Self.gameIdentityKey(g.matchup, g.commence)] { return hit }
+        guard pickDay == .today, connectionDate == store.loadedDate,
+              connectionDate == SupabaseAPI.todayEST() else { return [] }
+        if let hit = edgeIndex[Self.gameIdentityKey(g.matchup, g.commence)] {
+            return hit.filter { $0.slateDate == connectionDate && $0.league.label == gameLeague(g) }
+        }
         let hay = g.matchup + " " + g.props.compactMap { $0.team }.joined(separator: " ")
         let gKey = Self.matchupKey(g.matchup)
         let gid = bdlGameId(for: g)
-        return connections.filter { s in
+        let scopedLeague = gameLeague(g)
+        return currentConnections.filter { s in
+            guard s.league.label == scopedLeague else { return false }
             if let gid, let sid = s.gameId.flatMap({ Int($0) }) { return sid == gid }
             guard abbrGameMatches(s.game, matchup: hay) || Self.matchupKey(s.game) == gKey else { return false }
             if g.dh, s.gameId != nil { return false }
@@ -2110,15 +2122,20 @@ struct PicksCarouselView: View {
 
     private var effectiveScope: String { sport }
 
+    private var currentConnections: [Signal] {
+        guard connectionDate == store.loadedDate, connectionDate == SupabaseAPI.todayEST() else { return [] }
+        return connections.filter { $0.slateDate == connectionDate }
+    }
+
     /// Edges always belong to the selected sport.
     private var sportConnections: [Signal] {
         guard let lg = HubLeagueSel.from(sport) else { return [] }
-        return connections.filter { $0.league == lg }
+        return currentConnections.filter { $0.league == lg }
     }
 
     private var nextSlateSignal: Signal? {
         guard sport == "NCAAF" else { return nil }
-        return connections.first { $0.league == .ncaaf && $0.kind == .nextSlate }
+        return currentConnections.first { $0.league == .ncaaf && $0.kind == .nextSlate }
     }
 
     private var scopedFootballConnectionFailed: Bool {
@@ -2140,49 +2157,71 @@ struct PicksCarouselView: View {
 
     @MainActor
     private func loadConnections() async {
+        let date = SupabaseAPI.todayEST()
+        if connectionDate != date {
+            connectionLoadInFlight = false
+            connectionDate = date
+            connectionSnapshots = [:]
+            connections = []
+            connectionErrorLeagues = []
+            connLoaded = false
+            connectionRevision &+= 1
+        }
         guard !connectionLoadInFlight else { return }
         connectionLoadInFlight = true
-        defer { connectionLoadInFlight = false }
-        let date = SupabaseAPI.todayEST()
-        let fantasyKinds = Self.fantasyOnlyKinds
-        var successful: [HubLeagueSel: [Signal]] = [:]
+        var successful: [HubLeagueSel: [Connection]] = [:]
         var failures: Set<HubLeagueSel> = []
-        await withTaskGroup(of: (league: HubLeagueSel?, signals: [Signal], failed: Bool).self) { group in
+        var cancelled: Set<HubLeagueSel> = []
+        await withTaskGroup(of: (league: HubLeagueSel?, rows: [Connection], failed: Bool, cancelled: Bool).self) { group in
             for lg in AppFlags.insightLeagues {
                 group.addTask {
                     let league = HubLeagueSel.from(lg)
                     do {
-                        let conns = try await SupabaseAPI.fetchInsightConnections(date: date, league: lg)
-                        let signals = conns.compactMap { $0.toSignal() }
-                            .filter { !fantasyKinds.contains($0.kind) }
-                        return (league, signals, false)
+                        let rows = try await SupabaseAPI.fetchInsightConnections(date: date, league: lg)
+                        return (league, rows, false, false)
                     } catch {
-                        print("[Picks] fetchInsightConnections(\(lg)) error: \(error.localizedDescription)")
-                        return (league, [], true)
+                        return (league, [], true, SupabaseAPI.isCancellation(error))
                     }
                 }
             }
             for await result in group {
                 guard let league = result.league else { continue }
-                if result.failed { failures.insert(league) }
-                else { successful[league] = result.signals }
+                if result.cancelled { cancelled.insert(league) }
+                else if result.failed { failures.insert(league) }
+                else { successful[league] = result.rows }
             }
         }
-
-        // Successful zero-row responses clear that desk. A failed desk alone
-        // keeps its last-good rows and is retried on foreground, pull, and the
-        // same 90-second cadence as picks/props.
-        let retained = connections.filter { failures.contains($0.league) }
-        connections = retained + successful.values.flatMap { $0 }
-        connectionErrorLeagues = failures
-        // A fully-failed load (every league errored — e.g. the FIRST fetch
-        // cancelled by a quick tab switch) must not latch `connLoaded`: with
-        // nothing retained and nothing fetched, latching tells the .task
-        // re-entry guard the board is loaded and parks an empty board on the
-        // 90-second timer (the founder's Aug 20 blank slate-read). Any real
-        // success — including a legitimately empty day — still latches.
-        if !successful.isEmpty { connLoaded = true }
+        // A newer slate may already own a different request. The old owner
+        // cannot clear its in-flight flag or publish over its content.
+        guard connectionDate == date else { return }
+        connectionLoadInFlight = false
+        guard date == SupabaseAPI.todayEST() else {
+            await loadConnections()
+            return
+        }
+        // Compare the full source before conversion creates new Signal UUIDs.
+        // Failed desks retain their accepted rows; successful empty desks clear.
+        var changed = false
+        var resolved = connections
+        for lg in AppFlags.insightLeagues {
+            guard let league = HubLeagueSel.from(lg), let rows = successful[league] else { continue }
+            let snapshot = PicksContentEquality.encoded(rows)
+            if let snapshot, connectionSnapshots[league] == snapshot { continue }
+            resolved.removeAll { $0.league == league }
+            resolved.append(contentsOf: rows.compactMap { $0.toSignal() }
+                .filter { !Self.fantasyOnlyKinds.contains($0.kind) })
+            connectionSnapshots[league] = snapshot
+            changed = true
+        }
+        if changed {
+            connections = resolved
+            connectionRevision &+= 1
+        }
+        let errors = failures.union(connectionErrorLeagues.intersection(cancelled))
+        if connectionErrorLeagues != errors { connectionErrorLeagues = errors }
+        if !successful.isEmpty, !connLoaded { connLoaded = true }
     }
+
 }
 
 struct PicksTodayPage: View {

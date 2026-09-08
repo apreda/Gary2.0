@@ -36,6 +36,7 @@ import FoundationNetworking
 struct PlayerInsightPack: Decodable { let name: String? }
 ${block(source('Models.swift'), 'struct PlayerInsightCardRow:')}
 enum SupabaseAPI {
+ ${block(api, '    static func isCancellation(')}
  private static func buildURL(table: String, query: [URLQueryItem]) -> URL {
   var components = URLComponents(string: "https://fixture.invalid/" + table)!
   components.queryItems = query
@@ -195,7 +196,9 @@ for fault in ["http", "decode", "missing-count", "unknown-count", "changed-count
   }
   return reply
  }
- let result = await SupabaseAPI.fetchPlayerIntelRows(date: "2026-09-07", forceRefresh: true, session: session)
+ let status = await SupabaseAPI.fetchPlayerIntelRowsResult(date: "2026-09-07", forceRefresh: true, session: session)
+ precondition(!status.succeeded && status.cancelled == (fault == "cancelled"))
+ let result = status.rows
  precondition(result.map(\\.player_name) == ["Last good"], "Later-page failure must never leak a partial prefix: " + fault)
  precondition(server.requests.count == 2)
  precondition(SupabaseAPI.cachedAt("2026-09-07", session: session) == originalAt, "Failure does not renew the cache: " + fault)
@@ -212,7 +215,9 @@ server.configure { request, _ in response([card(1)], to: request) }
 let initial = await SupabaseAPI.fetchPlayerIntelRows(date: "2026-09-07", session: session)
 precondition(initial.count == 1)
 server.configure { request, _ in response([], to: request) }
-let empty = await SupabaseAPI.fetchPlayerIntelRows(date: "2026-09-07", forceRefresh: true, session: session)
+let emptyStatus = await SupabaseAPI.fetchPlayerIntelRowsResult(date: "2026-09-07", forceRefresh: true, session: session)
+precondition(emptyStatus.succeeded && !emptyStatus.cancelled)
+let empty = emptyStatus.rows
 precondition(empty.isEmpty && SupabaseAPI.cachedAt("2026-09-07", session: session) == nil)
 server.configure { request, _ in response([card(2)], to: request) }
 let arrived = await SupabaseAPI.fetchPlayerIntelRows(date: "2026-09-07", session: session)

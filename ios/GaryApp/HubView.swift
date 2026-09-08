@@ -506,7 +506,18 @@ struct HubView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var loadTask: Task<Void, Never>? = nil
+    @State private var loadGeneration: UInt64 = 0
+    @State private var requestDate = ""
+    @State private var connectionSnapshots: [HubLeagueSel: Data] = [:]
     @State private var boardFetchFailed = false
+    @State private var boardLoading = false
+    @State private var intelLoading = false
+    @State private var intelFetchFailed = false
+    @State private var pulseLoadingLeagues: Set<String> = []
+    @State private var pulseErrorLeagues: Set<String> = []
+    @State private var historyLoading = false
+    @State private var historyFetchFailed = false
+    @State private var historyDate = ""
     @State private var mastheadOffscreen = false
 
     @State private var sel: HubLeagueSel = .mlb
@@ -778,143 +789,192 @@ struct HubView: View {
     }
 
     @MainActor private func load() async {
-        // Foreground, pull-to-refresh and the slate clock may arrive together.
-        // Share one request so an older response cannot replace newer content.
-        if let task = loadTask { await task.value; return }
-        let task = Task { await performLoad() }
+        let date = SupabaseAPI.todayEST()
+        if let task = loadTask, requestDate == date { await task.value; return }
+        loadTask?.cancel()
+        loadGeneration &+= 1
+        let generation = loadGeneration
+        requestDate = date
+        let forceRefresh = didLoad
+        resetForSlate(date)
+        boardLoading = true
+        intelLoading = true
+        pulseLoadingLeagues = ["MLB", "NFL", "NCAAF"]
+        historyLoading = true
+        // The shared owner survives cancellation of an individual view/gesture.
+        let task = Task { await performLoad(date: date, generation: generation, forceRefresh: forceRefresh) }
         loadTask = task
         await task.value
+        guard loadGeneration == generation else { return }
         loadTask = nil
+        if date != SupabaseAPI.todayEST() { await load() }
     }
 
-    @MainActor private func performLoad() async {
-        let date = SupabaseAPI.todayEST()
-        let gradedDate0 = SupabaseAPI.hubGradedDateEST()
-        async let rateF = SupabaseAPI.fetchInsightHitRate(date: gradedDate0)
-        async let nightF = SupabaseAPI.fetchNightHighlights(date: gradedDate0)
-        async let streaksF = SupabaseAPI.fetchStreaks()
-        async let tbF = SupabaseAPI.fetchTodayBoardResult(date: date)
-        async let intelF = SupabaseAPI.fetchPlayerIntelRows(date: date, forceRefresh: didLoad)
-        // Force past the 30-min pulse cache on refresh/rollover, not first paint.
-        async let pulseMlbF = SupabaseAPI.fetchLeaguePulse(date: date, league: "MLB", forceRefresh: didLoad)
-        async let pulseNflF = SupabaseAPI.fetchLeaguePulse(date: date, league: "NFL", forceRefresh: didLoad)
-        async let pulseNcaafF = SupabaseAPI.fetchLeaguePulse(date: date, league: "NCAAF", forceRefresh: didLoad)
+    @MainActor private func resetForSlate(_ date: String) {
+        guard loadedDate != date else { return }
+        fetched = []; itemsIndex = [:]; connectionSnapshots = [:]
+        todayBoard = nil; intelCards = []; pulseByLeague = [:]
+        ydaySignals = []; streakRows = []; nightRows = []; hitRate = nil; historyDate = ""
+        fetchErrorLeagues = []; boardFetchFailed = false
+        intelFetchFailed = false; pulseErrorLeagues = []; historyFetchFailed = false
+        selectedSignal = nil; playerRead = nil; teamCardSignal = nil; namedCard = nil; gameSheet = nil
+        loadedAt = nil; didLoad = false; loadedDate = date
+    }
 
-        var successful: [HubLeagueSel: [Signal]] = [:]
-        var failedLeagues: Set<HubLeagueSel> = []
-        await withTaskGroup(of: (league: HubLeagueSel?, sigs: [Signal], errored: Bool).self) { group in
+    @MainActor private func acceptsLoad(_ date: String, generation: UInt64) -> Bool {
+        !Task.isCancelled && generation == loadGeneration
+            && loadedDate == date && date == SupabaseAPI.todayEST()
+    }
+
+    @MainActor private func performLoad(date: String, generation: UInt64, forceRefresh: Bool) async {
+        // Primary content owns first paint. Support starts at the same time;
+        // each branch publishes independently once the current slate is ready.
+        let primary = Task { await loadCurrent(date: date, generation: generation) }
+        async let intel: Void = loadIntel(date: date, generation: generation, forceRefresh: forceRefresh, after: primary)
+        async let mlb: Void = loadPulse(date: date, league: "MLB", generation: generation, forceRefresh: forceRefresh, after: primary)
+        async let nfl: Void = loadPulse(date: date, league: "NFL", generation: generation, forceRefresh: forceRefresh, after: primary)
+        async let ncaaf: Void = loadPulse(date: date, league: "NCAAF", generation: generation, forceRefresh: forceRefresh, after: primary)
+        async let history: Void = loadHistory(date: date, generation: generation, after: primary)
+        _ = await (primary.value, intel, mlb, nfl, ncaaf, history)
+    }
+
+    @MainActor private func loadCurrent(date: String, generation: UInt64) async {
+        async let boardFetch = SupabaseAPI.fetchTodayBoardResult(date: date)
+        var successful: [HubLeagueSel: [Connection]] = [:]
+        var failures: Set<HubLeagueSel> = []
+        var cancelled: Set<HubLeagueSel> = []
+        await withTaskGroup(of: (HubLeagueSel?, [Connection], Bool, Bool).self) { group in
             for lg in AppFlags.insightLeagues {
                 group.addTask {
                     let league = HubLeagueSel.from(lg)
-                    do {
-                        let conns = try await SupabaseAPI.fetchInsightConnections(date: date, league: lg)
-                        return (league, conns.compactMap { $0.toSignal() }, false)
-                    } catch {
-                        print("[HubView] fetchInsightConnections(\(lg)) error: \(error.localizedDescription)")
-                        return (league, [], true)
-                    }
+                    do { return (league, try await SupabaseAPI.fetchInsightConnections(date: date, league: lg), false, false) }
+                    catch { return (league, [], true, SupabaseAPI.isCancellation(error)) }
                 }
             }
-            for await r in group {
-                guard let league = r.league else { continue }
-                if r.errored { failedLeagues.insert(league) }
-                else { successful[league] = r.sigs }
+            for await result in group {
+                guard let league = result.0 else { continue }
+                if result.3 { cancelled.insert(league) }
+                else if result.2 { failures.insert(league) }
+                else { successful[league] = result.1 }
             }
         }
-        var collected = successful.values.flatMap { $0 }
-        collected = Self.dedupe(collected)
-        #if DEBUG
-        // Sim-QA breadcrumb (GaryTour's file channel, reversed): lane counts
-        // after the dedupe, readable from the host via the data container.
-        var kindCounts: [String: Int] = [:]
-        for s in collected where s.league == .mlb { kindCounts[s.kind.chip, default: 0] += 1 }
-        let dbg = kindCounts.map { "\($0.key)=\($0.value)" }.sorted().joined(separator: "\n")
-        try? dbg.write(toFile: NSTemporaryDirectory() + "hub-debug.txt", atomically: true, encoding: .utf8)
-        #endif
-
-        // Graded surfaces flip at 6am ET but grading lands ~6:45am — walk back
-        // one day when the morning void has nothing yet.
-        var gradedDate = gradedDate0
-        var rate = await rateF
-        var night = await nightF
-        if rate == nil, night.isEmpty, let back = Self.shiftDate(gradedDate, by: -1) {
-            gradedDate = back
-            async let rateB = SupabaseAPI.fetchInsightHitRate(date: back)
-            async let nightB = SupabaseAPI.fetchNightHighlights(date: back)
-            rate = await rateB
-            night = await nightB
+        let boardResult = await boardFetch
+        guard acceptsLoad(date, generation: generation) else { return }
+        var resolved = fetched.filter { $0.slateDate == date }
+        var changed = resolved.count != fetched.count
+        for lg in AppFlags.insightLeagues {
+            guard let league = HubLeagueSel.from(lg), let rows = successful[league] else { continue }
+            let snapshot = PicksContentEquality.encoded(rows)
+            if let snapshot, connectionSnapshots[league] == snapshot { continue }
+            resolved.removeAll { $0.league == league }
+            resolved.append(contentsOf: rows.compactMap { $0.toSignal() })
+            connectionSnapshots[league] = snapshot
+            changed = true
         }
-        let liveStreaks = await streaksF
-        let boardResult = await tbF
-        let pulse: [String: [LeaguePulseRow]] = [
-            "MLB": await pulseMlbF,
-            "NFL": await pulseNflF,
-            "NCAAF": await pulseNcaafF,
-        ]
-        // Graded rows still load — not for a page section (The Receipts came
-        // off Aug 6), but search surfaces them and the tally maths read them.
+        if changed {
+            fetched = Self.dedupe(resolved)
+            itemsIndex = Self.buildItemsIndex(fetched)
+        }
+        let errors = failures.union(fetchErrorLeagues.intersection(cancelled))
+        if fetchErrorLeagues != errors { fetchErrorLeagues = errors }
+        switch boardResult {
+        case .success(let board):
+            todayBoard = board
+            boardFetchFailed = false
+        case .failure(let error):
+            if !SupabaseAPI.isCancellation(error) { boardFetchFailed = true }
+        }
+        boardLoading = false
+        didLoad = true
+        loadedAt = Date()
+        consumeFocus()
+    }
+
+    @MainActor private func loadIntel(date: String, generation: UInt64, forceRefresh: Bool, after primary: Task<Void, Never>) async {
+        let result = await SupabaseAPI.fetchPlayerIntelRowsResult(date: date, forceRefresh: forceRefresh)
+        await primary.value
+        guard acceptsLoad(date, generation: generation) else { return }
+        if result.succeeded || !result.rows.isEmpty { intelCards = result.rows }
+        if !result.cancelled { intelFetchFailed = !result.succeeded }
+        intelLoading = false
+    }
+
+    @MainActor private func loadPulse(date: String, league: String, generation: UInt64, forceRefresh: Bool, after primary: Task<Void, Never>) async {
+        let result = await SupabaseAPI.fetchLeaguePulseResult(date: date, league: league, forceRefresh: forceRefresh)
+        await primary.value
+        guard acceptsLoad(date, generation: generation) else { return }
+        if result.succeeded || !result.rows.isEmpty { pulseByLeague[league] = result.rows }
+        if !result.cancelled {
+            if result.succeeded { pulseErrorLeagues.remove(league) }
+            else { pulseErrorLeagues.insert(league) }
+        }
+        pulseLoadingLeagues.remove(league)
+    }
+
+    @MainActor private func loadHistory(date: String, generation: UInt64, after primary: Task<Void, Never>) async {
+        let gradedDate0 = SupabaseAPI.hubGradedDateEST()
+        async let rateFetch = SupabaseAPI.fetchInsightHitRateResult(date: gradedDate0)
+        async let nightFetch = SupabaseAPI.fetchNightHighlightsResult(date: gradedDate0)
+        async let streakFetch = SupabaseAPI.fetchStreaksResult()
+        var gradedDate = gradedDate0
+        var rateResult = await rateFetch
+        var nightResult = await nightFetch
+        // Only a verified empty publication warrants looking back another day.
+        if case .success(nil) = rateResult, case .success(let rows) = nightResult,
+           rows.isEmpty, let back = Self.shiftDate(gradedDate, by: -1) {
+            gradedDate = back
+            async let previousRate = SupabaseAPI.fetchInsightHitRateResult(date: back)
+            async let previousNight = SupabaseAPI.fetchNightHighlightsResult(date: back)
+            rateResult = await previousRate
+            nightResult = await previousNight
+        }
+        let streakResult = await streakFetch
         let receiptsDate = gradedDate
+        var successful: Set<HubLeagueSel> = []
         var yday: [Signal] = []
-        await withTaskGroup(of: [Signal].self) { group in
+        await withTaskGroup(of: (HubLeagueSel?, [Signal]?).self) { group in
             for lg in AppFlags.insightLeagues {
                 group.addTask {
-                    guard let conns = try? await SupabaseAPI.fetchInsightConnections(date: receiptsDate, league: lg) else { return [] }
-                    return conns.compactMap { $0.toSignal() }.filter { $0.result != nil }
+                    let rows = try? await SupabaseAPI.fetchInsightConnections(date: receiptsDate, league: lg)
+                    return (HubLeagueSel.from(lg), rows.map { $0.compactMap { $0.toSignal() }.filter { $0.result != nil } })
                 }
             }
-            for await sigs in group { yday.append(contentsOf: sigs) }
+            for await (league, rows) in group {
+                if let league, let rows { successful.insert(league); yday.append(contentsOf: rows) }
+            }
         }
-        yday = Self.dedupe(yday)
-        let intel = await intelF
-        // A request crossing the slate rollover must not relabel yesterday's
-        // response as today's briefing. Restart against the new slate date.
-        guard date == SupabaseAPI.todayEST() else { await performLoad(); return }
+        await primary.value
+        guard acceptsLoad(date, generation: generation) else { return }
+        // Retained values keep their actual publication date. A different
+        // history date must never borrow values from the previous heading.
+        if historyDate != receiptsDate { hitRate = nil; nightRows = []; historyDate = receiptsDate }
+        if case .success(let rate) = rateResult { hitRate = rate }
+        if case .success(let night) = nightResult { nightRows = night }
+        if case .success(let streaks) = streakResult { streakRows = streaks }
+        let retained = ydaySignals.filter { $0.slateDate == receiptsDate && !successful.contains($0.league) }
+        ydaySignals = Self.dedupe(yday + retained)
+        historyFetchFailed = successful.count < AppFlags.insightLeagues.count
+            || Self.failedSupport(rateResult) || Self.failedSupport(nightResult) || Self.failedSupport(streakResult)
+        gradedIsYesterday = gradedDate == gradedDate0
+        if gradedIsYesterday { gradedDayShort = "" }
+        else {
+            let input = DateFormatter(); input.dateFormat = "yyyy-MM-dd"; input.timeZone = TimeZone(identifier: "America/New_York")
+            let output = DateFormatter(); output.dateFormat = "EEE, MMM d"; output.timeZone = input.timeZone
+            gradedDayShort = input.date(from: gradedDate).map { output.string(from: $0) } ?? ""
+        }
+        historyLoading = false
+    }
 
-        await MainActor.run {
-            let sameSlate = loadedDate == date
-            // Successful desks replace their prior rows, including a genuine
-            // empty day. Last-good rows survive only within their own slate.
-            let retained = fetched.filter {
-                loadedDate == date && $0.slateDate == date && failedLeagues.contains($0.league)
-            }
-            let resolved = Self.dedupe(collected + retained)
-            intelCards = intel
-            didLoad = true
-            loadedAt = Date()
-            loadedDate = date
-            fetchErrorLeagues = failedLeagues
-            hitRate = rate
-            gradedIsYesterday = (gradedDate == gradedDate0)
-            if gradedIsYesterday { gradedDayShort = "" } else {
-                let inF = DateFormatter(); inF.dateFormat = "yyyy-MM-dd"; inF.timeZone = TimeZone(identifier: "America/New_York")
-                let outF = DateFormatter(); outF.dateFormat = "EEE, MMM d"; outF.timeZone = TimeZone(identifier: "America/New_York")
-                gradedDayShort = inF.date(from: gradedDate).map { outF.string(from: $0) } ?? ""
-            }
-            streakRows = liveStreaks
-            nightRows = night
-            ydaySignals = yday
-            switch boardResult {
-            case .success(let board):
-                todayBoard = board
-                boardFetchFailed = false
-            case .failure:
-                if !sameSlate { todayBoard = nil }
-                boardFetchFailed = true
-            }
-            pulseByLeague = pulse
-            fetched = resolved
-            itemsIndex = Self.buildItemsIndex(resolved)
-            // A quiet desk is still the reader's choice. Loading MLB content
-            // must never switch away from NFL/NCAAF chosen during the request.
-            consumeFocus()
-        }
+    private static func failedSupport<Value>(_ result: Result<Value, Error>) -> Bool {
+        if case .failure(let error) = result { return !SupabaseAPI.isCancellation(error) }
+        return false
     }
 
     private func reloadIfStale() async {
         guard didLoad else { return }
         let expired = loadedAt.map { Date().timeIntervalSince($0) > 1800 } ?? true
         let emptyBoard = fetched.isEmpty && ydaySignals.isEmpty
-        if loadedDate != SupabaseAPI.todayEST() || expired || !fetchErrorLeagues.isEmpty || boardFetchFailed || emptyBoard {
+        if loadedDate != SupabaseAPI.todayEST() || expired || !fetchErrorLeagues.isEmpty || boardFetchFailed || intelFetchFailed || !pulseErrorLeagues.isEmpty || historyFetchFailed || emptyBoard {
             await load()
         }
     }
@@ -1437,7 +1497,27 @@ struct HubView: View {
     // tables and graded boards are look-ups, not the page's story. One tap
     // opens each. Every name in them routes by the law (Aug 4): player names
     // → player card when the day has one, team names → the team card.
+    private var supportStatus: String? {
+        var pending: [String] = []
+        if intelLoading { pending.append("Player details") }
+        if pulseLoadingLeagues.contains(sel.label) { pending.append("league tables") }
+        if historyLoading { pending.append("recent history") }
+        if !pending.isEmpty { return "Still loading: " + pending.joined(separator: ", ") + "." }
+        var unavailable: [String] = []
+        if intelFetchFailed { unavailable.append("Player details") }
+        if pulseErrorLeagues.contains(sel.label) { unavailable.append("league tables") }
+        if historyFetchFailed { unavailable.append("recent history") }
+        return unavailable.isEmpty ? nil : "Couldn't refresh: " + unavailable.joined(separator: ", ") + ". Pull down to retry."
+    }
+
     @ViewBuilder private var referenceShelf: some View {
+        if let supportStatus {
+            Text(supportStatus)
+                .hubBodyFont(13)
+                .foregroundStyle(GaryColors.sectionSub)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 18)
+        }
         // MLB, NFL, and NCAAF all carry pulse tabs now (Aug 27 2026); the dict
         // read keeps a league with no stored tabs collapsed to nothing.
         if [.mlb, .nfl, .ncaaf].contains(sel), !pulseRows.isEmpty {
@@ -1718,6 +1798,9 @@ struct HubView: View {
         .overlay {
             if let s = selectedSignal {
                 HubEdgeOverlay(signal: s,
+                               supportingNotice: s.playerId == nil ? nil : intelLoading
+                                   ? "Player details are still loading. This is Gary’s full original read."
+                                   : intelFetchFailed ? "Player details couldn't refresh. This is Gary’s full original read." : nil,
                                onClose: { withAnimation(.spring(response: 0.3, dampingFraction: 0.88)) { selectedSignal = nil } },
                                onViewGame: { g in
                                    selectedSignal = nil
@@ -4607,6 +4690,7 @@ fileprivate struct HubGameSheet: View {
 /// while its close button stays reachable. VIEW GAME → exact game on Picks.
 fileprivate struct HubEdgeOverlay: View {
     let signal: Signal
+    var supportingNotice: String? = nil
     let onClose: () -> Void
     let onViewGame: (String) -> Void
     @State private var readHeight: CGFloat = 220
@@ -4701,6 +4785,12 @@ fileprivate struct HubEdgeOverlay: View {
                     Text(note)
                         .hubDataFont(11, .medium)
                         .foregroundStyle(.white.opacity(0.7))
+                }
+                if let supportingNotice {
+                    Text(supportingNotice)
+                        .hubBodyFont(12)
+                        .foregroundStyle(GaryColors.sectionSub)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 if isMatchup {
                     Button { onViewGame(signal.game) } label: {

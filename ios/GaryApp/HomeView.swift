@@ -520,7 +520,8 @@ struct HomeView: View {
                 .onPreferenceChange(HomeScrollOffsetKey.self) { minY in
                     // A tenth of the scroll, clamped so the horizon stays on the
                     // page. Writes go to the model — only the ground re-renders.
-                    groundParallax.offsetY = max(-48, min(0, minY) * 0.10)
+                    let offset = max(-48, min(0, minY) * 0.10)
+                    if groundParallax.offsetY != offset { groundParallax.offsetY = offset }
                 }
             }
 
@@ -1413,6 +1414,8 @@ struct HomeView: View {
     @ViewBuilder private var todaySections: some View {
         // Compute once per body eval (live ticks re-run this often).
         let stories = headlineStories
+        let marqueeEntries = self.marqueeEntries
+        let sheetRows = self.sheetRows
 
         // ── THE HEADLINES lead the page, ALL DAY (founder, Aug 5). They do
         // not move at first pitch and they do not move again at the last out:
@@ -1461,7 +1464,7 @@ struct HomeView: View {
         // twice. The receipts line above it went the same way Aug 4.)
 
         // ── THE BOARD — every game, one list, all day.
-        homeSheet
+        homeSheet(sheetRows)
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
 
@@ -1715,6 +1718,7 @@ struct HomeView: View {
     /// The whole day, one row per slate game, joined with Gary's calls and
     /// the live board. WC games carry two calls (side + total) on one row.
     private var sheetRows: [HomeSheetRow] {
+        let featured = bigOneModel
         let games = slateGames
         guard !games.isEmpty else { return [] }
         var out: [HomeSheetRow] = []
@@ -1893,7 +1897,7 @@ struct HomeView: View {
                 clockText: clockText,
                 statusText: statusText,
                 statusColor: statusColor,
-                bigOne: bigOneModel.map { Self.homeBoardPick($0, matches: g) } ?? false,
+                bigOne: featured.map { Self.homeBoardPick($0, matches: g) } ?? false,
                 commence: g.commence_time ?? "",
                 hitLines: hitLines
             ))
@@ -2335,14 +2339,13 @@ struct HomeView: View {
 
     /// The sheet body — EARLIER (collapsed past), LIVE (glowing middle),
     /// TONIGHT (the queue, grouped by league, countdown on the header line).
-    @ViewBuilder private var homeSheet: some View {
+    @ViewBuilder private func homeSheet(_ sheetRows: [HomeSheetRow]) -> some View {
         // ONE BOARD (founder, Aug 3: live games were splitting out of the
         // board into their own section — "it should all stay in the board
         // view"): every game holds its slate slot all day; the row itself
         // rolls scheduled time → live verdict → the stamp in place.
         let rows = sheetRows
             .filter { HomeBoardLeague(rawValue: $0.league) != nil && $0.league != HomeBoardLeague.you.rawValue }
-            .sorted { $0.commence < $1.commence }
         let youRows = youSheetRows
         let available: Set<HomeBoardLeague> = {
             var set = Set(rows.compactMap { HomeBoardLeague(rawValue: $0.league) })
@@ -2562,8 +2565,7 @@ struct HomeView: View {
     private var bigOneModel: GaryPick? {
         todayPicks
             .filter { !(($0.shortGameSignificance ?? $0.gameSignificance) ?? "").isEmpty }
-            .sorted { ($0.commence_time ?? "") < ($1.commence_time ?? "") }
-            .first
+            .min { ($0.commence_time ?? "") < ($1.commence_time ?? "") }
     }
 
     /// The Hub's top reads for tonight — the pre-bet checklist, full board

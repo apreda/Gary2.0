@@ -36,6 +36,7 @@ import FoundationNetworking
 ${declaration(source('Models.swift'), 'struct LeaguePulseColumn:')}
 ${declaration(source('Models.swift'), 'struct LeaguePulseRow:')}
 enum SupabaseAPI {
+ ${declaration(api, '    static func isCancellation(')}
  private static func buildURL(table: String, query: [URLQueryItem]) -> URL {
   var components = URLComponents(string: "https://fixture.invalid/" + table)!
   components.queryItems = query
@@ -183,28 +184,36 @@ server.configure { request, _ in reply(for: request, marker: "last good") }
 let original = await SupabaseAPI.fetchLeaguePulse(date: "2026-09-07", league: "NCAAF", session: session)
 precondition(original.first?.title == "last good")
 let publishedAt = SupabaseAPI.cached("2026-09-07", "NCAAF", session)!.at
-for fault in ["http", "decode", "transport"] {
+for fault in ["http", "decode", "transport", "cancelled", "wrong-date", "wrong-league"] {
  server.configure { request, _ in
   var result = reply(for: request)
   if fault == "http" { result.status = 503 }
   if fault == "decode" { result.data = Data("not-json".utf8) }
   if fault == "transport" { result.error = URLError(.notConnectedToInternet) }
+  if fault == "cancelled" { result.error = URLError(.cancelled) }
+  if fault == "wrong-date" { result.data = Data(String(data: result.data, encoding: .utf8)!.replacingOccurrences(of: "2026-09-07", with: "2026-09-06").utf8) }
+  if fault == "wrong-league" { result.data = Data(String(data: result.data, encoding: .utf8)!.replacingOccurrences(of: "NCAAF", with: "MLB").utf8) }
   return result
  }
  let failed = await SupabaseAPI.fetchLeaguePulse(date: "2026-09-07", league: "NCAAF", forceRefresh: true, session: session)
  precondition(failed.isEmpty, "Existing API contract reports failure as an empty response")
+ let status = await SupabaseAPI.fetchLeaguePulseResult(date: "2026-09-07", league: "NCAAF", forceRefresh: true, session: session)
+ precondition(!status.succeeded && status.cancelled == (fault == "cancelled"))
+ precondition(status.rows.first?.title == "last good", "New status reader returns same-date last good without disguising failure")
  precondition(SupabaseAPI.cached("2026-09-07", "NCAAF", session)!.at == publishedAt)
  let preserved = await SupabaseAPI.fetchLeaguePulse(date: "2026-09-07", league: "NCAAF", session: session)
- precondition(preserved.first?.title == "last good" && server.requests.count == 1)
+ precondition(preserved.first?.title == "last good" && server.requests.count == 2)
+ if !fault.hasPrefix("wrong-") {
  let otherDate = await SupabaseAPI.fetchLeaguePulse(date: "2026-09-08", league: "NCAAF", session: session)
  let otherLeague = await SupabaseAPI.fetchLeaguePulse(date: "2026-09-07", league: "NFL", session: session)
  precondition(otherDate.isEmpty && otherLeague.isEmpty)
  precondition(SupabaseAPI.cached("2026-09-08", "NCAAF", session) == nil)
  precondition(SupabaseAPI.cached("2026-09-07", "NFL", session) == nil)
+ }
 }
 server.configure { _, _ in Reply(data: Data("[]".utf8)) }
-let empty = await SupabaseAPI.fetchLeaguePulse(date: "2026-09-07", league: "NCAAF", forceRefresh: true, session: session)
-precondition(empty.isEmpty)
+let empty = await SupabaseAPI.fetchLeaguePulseResult(date: "2026-09-07", league: "NCAAF", forceRefresh: true, session: session)
+precondition(empty.rows.isEmpty && empty.succeeded && !empty.cancelled)
 precondition(SupabaseAPI.cached("2026-09-07", "NCAAF", session)!.rows.isEmpty)
 let cachedEmpty = await SupabaseAPI.fetchLeaguePulse(date: "2026-09-07", league: "NCAAF", session: session)
 precondition(cachedEmpty.isEmpty && server.requests.count == 1, "A verified empty remains authoritative")

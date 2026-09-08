@@ -88,7 +88,7 @@ describe('iOS slate-only football page identity', () => {
 
   it('keeps every football fantasy signal out of Picks edges', () => {
     expect(views).toMatch(/fantasyOnlyKinds:[\s\S]*?\.fantasyUsage, \.fantasyRedZone, \.fantasyMatchup, \.fantasyTrend/);
-    expect(views).toContain('.filter { !fantasyKinds.contains($0.kind) }');
+    expect(views).toContain('.filter { !Self.fantasyOnlyKinds.contains($0.kind) }');
   });
 });
 
@@ -367,7 +367,7 @@ describe('Football Picks overview', () => {
   it('preserves each healthy pick desk and labels source failures as unavailable', () => {
     expect(views).toContain('@Published var gamePickSourceFailures: Set<String> = []');
     expect(views).toContain('@Published var propPickSourceFailed = false');
-    expect(views).toContain('let sourceFailures = Set(todaySnapshot.failures.map(\\.failureKey))');
+    expect(views).toContain('let failures = Set(todaySnapshot.failures.map(\\.failureKey))');
     expect(views).toContain('let mergedToday = mergeGamePickSnapshot(');
     expect(views).toContain('Text("BOARD DATA UNAVAILABLE · PULL TO RETRY")');
     expect(supabaseApi).toContain('throw SourceReadFailure(');
@@ -409,8 +409,8 @@ describe('Football Picks overview', () => {
     expect(slateStore).toContain('async let yesterdayFetch = fetchIsolatedGamePickSources(');
     expect(slateStore).toContain('let yesterdaySnapshot = await yesterdayFetch');
     expect(slateStore).toContain('retaining: yesterdayGamePicksAll');
-    expect(slateStore).toContain('yesterdayGamePicks = yPicks');
-    expect(slateStore).toContain('yesterdayGamePicksAll = yPicksAll');
+    expect(slateStore).toContain('accept(yPicksAll.filter { !freshSports.contains(($0.league ?? "").uppercased()) }, at: \\.yesterdayGamePicks)');
+    expect(slateStore).toContain('accept(yPicksAll, at: \\.yesterdayGamePicksAll)');
     expect(slateStore).not.toContain('SupabaseAPI.fetchExactDatePicks');
   });
 });
@@ -418,7 +418,7 @@ describe('Football Picks overview', () => {
 describe('Home MLB/NFL board parity', () => {
   it('uses one canonical tabbed panel in house-gold chrome (no sport-accent, founder Aug 18)', () => {
     const homeSheet = views.slice(
-      views.indexOf('@ViewBuilder private var homeSheet'),
+      views.indexOf('@ViewBuilder private func homeSheet('),
       views.indexOf('// MARK: Tonight extras'),
     );
     const rowBody = views.slice(
@@ -457,7 +457,7 @@ describe('Home MLB/NFL board parity', () => {
     // puddles on the grid, lit near edges, and the floor drifting at a tenth
     // of the scroll through an isolated model — never HomeView state.
     expect(views).toContain('class GroundParallax: ObservableObject');
-    expect(views).toContain('groundParallax.offsetY = max(-48, min(0, minY) * 0.10)');
+    expect(views).toContain('if groundParallax.offsetY != offset { groundParallax.offsetY = offset }');
     expect(views).toContain('.onPreferenceChange(HomeScrollOffsetKey.self)');
     expect(designSystem).toContain('.shadow(color: .black.opacity(0.55), radius: 18, y: 10)');
     expect(views).not.toContain('struct ObsidianGround');
@@ -697,9 +697,15 @@ print("Typed Picks focus regressions passed")
     expect(supabaseApi).toContain('let isTransient = code == 429 || (500...599).contains(code)');
     expect(supabaseApi).toContain('let isTransient = isTransientExternalFailure(error)');
     expect(supabaseApi).toContain('rows: isTransient ? cachedDailySlate(date: date) : []');
-    expect(views).toContain('if slateResult.succeeded {');
-    expect(views).toContain('} else if slateResult.transientExternalFailure {');
-    expect(views).toContain('slate = []');
+    const sharedStore = readFileSync(new URL('../../../ios/GaryApp/SharedStores.swift', import.meta.url), 'utf8');
+    const publish = sharedStore.slice(sharedStore.indexOf('private func loadSlate('), sharedStore.indexOf('private func loadGamePickContent('));
+    expect(publish).toContain('if result.succeeded || (result.transientExternalFailure && !result.rows.isEmpty)');
+    expect(publish).toContain('accept(result.rows, at: \\.slate)');
+    expect(publish).toContain('slateSourceFailed = !result.succeeded');
+    expect(publish).not.toContain('slate = []');
+    const rollover = sharedStore.slice(sharedStore.indexOf('private func resetIfDayRolled('), sharedStore.indexOf('func loadIfNeeded('));
+    expect(rollover).toContain('guard loadedDate != date else { return }');
+    expect(rollover).toContain('slate = []');
   });
 
   it('uses one accessible cobalt token for NFL identity surfaces', () => {
@@ -762,8 +768,10 @@ describe('Billfold canonical NFL metadata', () => {
 
 describe('college Hub has no fantasy desk (founder, Sep 4 2026)', () => {
   it('hides the FANTASY scope word on the NCAAF desk and never routes NCAAF to the fantasy page', () => {
-    expect(hubView).toMatch(/if sel\.supportsFantasy \{\s*\n\s*scopeWord\("FANTASY", on: hubScope == "fantasy"\)/);
-    expect(hubView).toContain('scopeWord("THE HUB", on: hubScope != "fantasy" || !sel.supportsFantasy)');
+    const masthead = swiftBlock(hubView, 'fileprivate struct HubMasthead: View');
+    expect(masthead).toMatch(/if sel\.supportsFantasy \{\s*\n\s*scopeWord\("Fantasy", on: !mainScope\)/);
+    expect(masthead).toContain('scopeWord("The Hub", on: mainScope) { hubScope = "hub" }');
+    expect(swiftBlock(masthead, 'private var mainScope: Bool')).toContain('hubScope != "fantasy" || !sel.supportsFantasy');
     expect(swiftBlock(hubView, 'private var showsFantasy: Bool')).toContain('hubScope == "fantasy" && sel.supportsFantasy');
     expect(swiftBlock(hubView, 'private var hubScopeContent:')).toContain('if showsFantasy {');
   });
