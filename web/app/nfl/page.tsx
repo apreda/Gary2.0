@@ -11,9 +11,9 @@ import { pageMetadata } from '@/lib/seo/metadata';
 
 export const metadata: Metadata = pageMetadata({
   canonical: '/nfl',
-  title: 'NFL Picks for Every Game — Kickoff Sep 9 | Gary AI',
+  title: 'NFL Picks & Reasoning — Kickoff Sep 9 | Gary AI',
   description:
-    'Gary picks every NFL game this season — free in the app, with the reasoning behind each pick, and every result on his public record. First card drops for Kickoff: Patriots at Seahawks, September 9.',
+    'Free published NFL game picks, full reasoning and a public game-pick record. Patriots at Seahawks kicks off September 9; picks appear as analysis is published.',
 });
 
 // Keep the kickoff campaign fresh until launch, then consolidate its authority
@@ -31,12 +31,12 @@ function daysToKickoff(): number {
 
 const covenant = [
   {
-    title: 'Every game',
-    body: 'A pick on every NFL game, every week of the season. The full board, not a shortlist.',
+    title: 'Published picks',
+    body: 'Browse available NFL game picks as analysis is published. Coverage and timing can vary by matchup.',
   },
   {
     title: 'The reasoning',
-    body: 'Each of Gary’s picks comes with a full breakdown — the read on the matchup, written out before kickoff.',
+    body: 'Read Gary’s published matchup analysis alongside each available game pick.',
   },
   {
     title: 'The record',
@@ -44,7 +44,7 @@ const covenant = [
   },
   {
     title: 'Free',
-    body: 'The full daily slate is free in the app. No signup wall.',
+    body: 'Published game picks and their reasoning are free on the website and in the app. No signup wall.',
   },
 ];
 
@@ -74,16 +74,16 @@ export default async function NflPage({
         <div className="lg:col-span-8">
           <Eyebrow>NFL KICKOFF · SEP 9</Eyebrow>
           <h1 className="mt-4 font-display text-[clamp(2.6rem,5.5vw,4.2rem)] leading-[0.96] text-hi">
-            Gary picks every NFL game
+            Gary&apos;s NFL picks
             <br />
-            <span className="text-gold">this season.</span>
+            <span className="text-gold">reasoning included.</span>
           </h1>
           <p className="mt-5 max-w-xl text-[16px] leading-relaxed text-mid">
-            A pick for every game, every week — free on the website and in the app, with the reasoning behind
-            it, and every result on his record, wins and losses.{' '}
+            Explore available NFL game picks and their reasoning, free on the website and in the app.
+            Published game-pick results stay on the public record, wins and losses.{' '}
             {preseason
-              ? 'The first card drops for Kickoff: Patriots at Seahawks, Wednesday September 9.'
-              : 'The season is on — today’s card is live on the website and in the app.'}
+              ? 'NFL kickoff is Patriots at Seahawks, Wednesday September 9.'
+              : 'Browse published NFL analysis and check back for new picks.'}
           </p>
           <div className="mt-7 flex flex-wrap items-center gap-4">
             <AppStoreButton surface="nfl_page_hero" />
@@ -102,15 +102,15 @@ export default async function NflPage({
         <div className="grid gap-4 sm:grid-cols-3">
           <StatTile label="Kickoff" value="SEP 9" sub="Patriots at Seahawks · 8:20 PM ET" />
           <StatTile
-            label={preseason ? 'Days out' : 'Season'}
+            label={preseason ? 'Days to kickoff' : 'Season'}
             value={preseason ? (days === 1 ? 'TOMORROW' : String(days)) : 'LIVE'}
             valueClassName="text-gold"
-            sub={preseason ? 'first card posts before the game' : 'a card for every game, every week'}
+            sub={preseason ? 'countdown to the season opener' : 'published picks and reasoning'}
           />
           <StatTile
             label="The summer tape"
             value={`${mlb30.wins}-${mlb30.losses}`}
-            sub="MLB, last 30 days · every result public"
+            sub="MLB, last 30 days · graded game picks"
           />
         </div>
       </section>
@@ -134,14 +134,14 @@ export default async function NflPage({
       <section className="mt-10 rounded-panel border border-line bg-card px-7 py-9">
         <Eyebrow>GARY DOESN&apos;T START COLD</Eyebrow>
         <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-mid">
-          Gary has been on the board every day all summer — a pick on every MLB game, graded
-          in public the next morning. He&apos;s {mlb30.wins}-{mlb30.losses} over the last 30
-          days, and the all-time tape is{' '}
+          Gary&apos;s public game-pick record includes his graded MLB picks. He&apos;s{' '}
+          {mlb30.wins}-{mlb30.losses} across graded MLB game picks over the last 30
+          days, and the all-time game-pick record is{' '}
           {`${allTime.wins.toLocaleString('en-US')}-${allTime.losses.toLocaleString('en-US')}${
             allTime.pushes > 0 ? `-${allTime.pushes}` : ''
           }`}{' '}
-          across {allTime.graded.toLocaleString('en-US')} graded picks. Every one of them,
-          including the losses, is still up.
+          across {allTime.graded.toLocaleString('en-US')} graded game picks. Wins and losses
+          remain visible; delayed results stay pending until grading is available.
         </p>
         <div className="mt-6">
           <GhostLink href="/results">The full record</GhostLink>
@@ -150,7 +150,7 @@ export default async function NflPage({
 
       {/* Keep the legacy anchor useful without promising an unconfigured email. */}
       <section id="notify" className="mt-16">
-        <Eyebrow>THE FIRST CARD</Eyebrow>
+        <Eyebrow>THE WEEK 1 BOARD</Eyebrow>
         <StitchRule className="mt-4" />
         <div className="mt-7 max-w-xl">
           <h2 className="font-display text-3xl uppercase text-hi">Follow the Week 1 board</h2>
@@ -167,11 +167,11 @@ export default async function NflPage({
       {/* Bottom CTA */}
       <section className="mt-16 rounded-panel border border-line bg-card px-7 py-12 text-center">
         <h2 className="font-display text-[clamp(2rem,4.5vw,3rem)] uppercase leading-[0.95] text-hi">
-          Set before kickoff
+          Find your NFL matchup
         </h2>
         <p className="mx-auto mt-3 max-w-xl text-[15px] leading-relaxed text-mid">
-          The app is live now with the full summer slate, free. Get it today and
-          Gary&apos;s Week 1 board is waiting for you on September 9.
+          Browse available picks and reasoning for free on the website or in the app.
+          NFL analysis appears as it is published; check the board for current coverage.
         </p>
         <div className="mt-7 flex flex-wrap justify-center gap-4">
           <AppStoreButton surface="nfl_page_footer" />

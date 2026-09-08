@@ -16,7 +16,7 @@ vi.mock('next/navigation', () => ({
   permanentRedirect: (path: string) => { throw new Error(`redirect:${path}`); },
 }));
 
-import NflPage from '@/app/nfl/page';
+import NflPage, { metadata } from '@/app/nfl/page';
 
 afterEach(() => { fixture.today = '2026-09-07'; });
 
@@ -36,5 +36,24 @@ describe('NFL launch destination', () => {
     fixture.today = '2026-09-09';
     await expect(NflPage({ searchParams: Promise.resolve({ joined: '1' }) }))
       .rejects.toThrow('redirect:/picks/nfl');
+  });
+
+  it('describes published coverage and pending results without publication guarantees', async () => {
+    const html = renderToStaticMarkup(await NflPage({ searchParams: Promise.resolve({}) }));
+    const visibleText = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+    const marketingCopy = [visibleText, metadata.title, metadata.description].join(' ');
+    expect(marketingCopy).not.toMatch(/every (?:NFL |MLB )?game|every day all summer|next morning|full (?:summer|daily) slate|first card (?:drops|posts)|waiting for you on September 9/i);
+    expect(visibleText).toContain('Coverage and timing can vary by matchup.');
+    expect(visibleText).toContain('delayed results stay pending until grading is available');
+    expect(visibleText).toContain('NFL kickoff is Patriots at Seahawks, Wednesday September 9.');
+    expect(visibleText).toContain('Patriots at Seahawks · 8:20 PM ET');
+    expect(visibleText).toContain('MLB, last 30 days · graded game picks');
+    expect(visibleText).toContain('all-time game-pick record');
+    expect(metadata.description).toContain('picks appear as analysis is published');
+    expect(metadata.alternates?.canonical).toBe('/nfl');
+    expect(metadata.openGraph?.title).toBe(metadata.title);
+    expect(metadata.openGraph?.description).toBe(metadata.description);
+    expect(metadata.twitter?.title).toBe(metadata.title);
+    expect(metadata.twitter?.description).toBe(metadata.description);
   });
 });
