@@ -1,0 +1,3496 @@
+{
+  "data": [
+    {
+      "game_id": 457172,
+      "order": 1,
+      "type": "Coin Toss",
+      "text": "SMU wins the toss, and will ;Florida Stateand will ",
+      "home_score": 0,
+      "away_score": 0,
+      "period": 1,
+      "clock": "15:00",
+      "scoring_play": false,
+      "score_value": 0
+    },
+    {
+      "game_id": 457172,
+      "order": 2,
+      "type": "Coin Toss",
+      "text": "SMU wins the coin toss, and will receive.",
+      "home_score": 0,
+      "away_score": 0,
+      "period": 1,
+      "clock": "15:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 3,
+      "type": "Kickoff",
+      "text": "Conor McAneney kickoff for 65 yds for a touchback",
+      "home_score": 0,
+      "away_score": 0,
+      "period": 1,
+      "clock": "15:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 4,
+      "type": "Rush",
+      "text": "Kendrick Raphael run for 5 yds to the SMU 30",
+      "home_score": 0,
+      "away_score": 0,
+      "period": 1,
+      "clock": "14:50",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 5,
+      "type": "Pass Reception",
+      "text": "Kevin Jennings pass complete to Randy Pittman Jr. for 19 yds to the SMU 49 for a 1ST down",
+      "home_score": 0,
+      "away_score": 0,
+      "period": 1,
+      "clock": "14:15",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 6,
+      "type": "Pass Reception",
+      "text": "Kevin Jennings pass complete to Jalen Cooper for 6 yds to the FSU 45",
+      "home_score": 0,
+      "away_score": 0,
+      "period": 1,
+      "clock": "13:50",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 7,
+      "type": "Rush",
+      "text": "Kevin Jennings run for 14 yds to the FSU 31 for a 1ST down",
+      "home_score": 0,
+      "away_score": 0,
+      "period": 1,
+      "clock": "13:20",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 8,
+      "type": "Pass Reception",
+      "text": "Kevin Jennings pass complete to Jalen Hale for 6 yds to the FSU 25 SMU Penalty, Illegal Block (-10 Yards) to the FSU 35",
+      "home_score": 0,
+      "away_score": 0,
+      "period": 1,
+      "clock": "12:38",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 9,
+      "type": "Rush",
+      "text": "Jalen Hale run for 4 yds to the FSU 31 Jalen Hale fumbled, recovered by FSU",
+      "home_score": 0,
+      "away_score": 0,
+      "period": 1,
+      "clock": "12:24",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 10,
+      "type": "Rush",
+      "text": "Ousmane Kromah run for 1 yd to the FSU 32",
+      "home_score": 0,
+      "away_score": 0,
+      "period": 1,
+      "clock": "12:05",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 11,
+      "type": "Sack",
+      "text": "Ashton Daniels sacked by Jimmy Wyrick for a loss of 3 yards to the FSU 29",
+      "home_score": 0,
+      "away_score": 0,
+      "period": 1,
+      "clock": "11:30",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 12,
+      "type": "Pass Incompletion",
+      "text": "Ashton Daniels pass incomplete to Landen Thomas",
+      "home_score": 0,
+      "away_score": 0,
+      "period": 1,
+      "clock": "11:13",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 13,
+      "type": "Punt",
+      "text": "Daniel Hughes punt for 45 yds , Yamir Knight returns for a loss of 1 yard to the SMU 25",
+      "home_score": 0,
+      "away_score": 0,
+      "period": 1,
+      "clock": "11:10",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 14,
+      "type": "Rush",
+      "text": "Dramekco Green run for 7 yds to the SMU 32",
+      "home_score": 0,
+      "away_score": 0,
+      "period": 1,
+      "clock": "10:48",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 15,
+      "type": "Rush",
+      "text": "Dramekco Green run for 3 yds to the SMU 35 for a 1ST down",
+      "home_score": 0,
+      "away_score": 0,
+      "period": 1,
+      "clock": "10:35",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 16,
+      "type": "Pass Reception",
+      "text": "Kevin Jennings pass complete to Dramekco Green for 6 yds to the SMU 41",
+      "home_score": 0,
+      "away_score": 0,
+      "period": 1,
+      "clock": "10:25",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 17,
+      "type": "Pass Reception",
+      "text": "Kevin Jennings pass complete to Yamir Knight for 3 yds to the SMU 44",
+      "home_score": 0,
+      "away_score": 0,
+      "period": 1,
+      "clock": "10:15",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 18,
+      "type": "Rush",
+      "text": "Dramekco Green run for 6 yds to the 50 yard line for a 1ST down",
+      "home_score": 0,
+      "away_score": 0,
+      "period": 1,
+      "clock": "9:45",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 19,
+      "type": "Passing Touchdown",
+      "text": "Kevin Jennings pass complete to Jalen Cooper for 50 yds for a TD (Nick Reed KICK)",
+      "home_score": 0,
+      "away_score": 7,
+      "period": 1,
+      "clock": "9:32",
+      "scoring_play": true,
+      "score_value": 6,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 20,
+      "type": "Kickoff",
+      "text": "Nick Reed kickoff for 65 yds for a touchback",
+      "home_score": 0,
+      "away_score": 7,
+      "period": 1,
+      "clock": "9:32",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 21,
+      "type": "Pass Reception",
+      "text": "Ashton Daniels pass complete to Jayvan Boggs for 3 yds to the FSU 28",
+      "home_score": 0,
+      "away_score": 7,
+      "period": 1,
+      "clock": "8:20",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 22,
+      "type": "Rush",
+      "text": "Ousmane Kromah run for 11 yds to the FSU 39 for a 1ST down",
+      "home_score": 0,
+      "away_score": 7,
+      "period": 1,
+      "clock": "7:46",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 23,
+      "type": "Pass Reception",
+      "text": "Ashton Daniels pass complete to Micahi Danzy for a loss of 3 yards to the FSU 36",
+      "home_score": 0,
+      "away_score": 7,
+      "period": 1,
+      "clock": "7:12",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 24,
+      "type": "Pass Reception",
+      "text": "Ashton Daniels pass complete to Duce Robinson for 16 yds to the SMU 48 for a 1ST down",
+      "home_score": 0,
+      "away_score": 7,
+      "period": 1,
+      "clock": "6:40",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 25,
+      "type": "Pass Reception",
+      "text": "Ashton Daniels pass complete to Ousmane Kromah for 8 yds to the SMU 40",
+      "home_score": 0,
+      "away_score": 7,
+      "period": 1,
+      "clock": "6:25",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 26,
+      "type": "Rush",
+      "text": "Ousmane Kromah run for 1 yd to the SMU 39",
+      "home_score": 0,
+      "away_score": 7,
+      "period": 1,
+      "clock": "5:45",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 27,
+      "type": "Rush",
+      "text": "Ousmane Kromah run for a loss of 2 yards to the SMU 41",
+      "home_score": 0,
+      "away_score": 7,
+      "period": 1,
+      "clock": "5:10",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 28,
+      "type": "Pass Reception",
+      "text": "Ashton Daniels pass complete to Jayvan Boggs for 5 yds to the SMU 36 for a 1ST down",
+      "home_score": 0,
+      "away_score": 7,
+      "period": 1,
+      "clock": "4:30",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 29,
+      "type": "Rush",
+      "text": "Ashton Daniels run for 8 yds to the SMU 28",
+      "home_score": 0,
+      "away_score": 7,
+      "period": 1,
+      "clock": "4:15",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 30,
+      "type": "Rush",
+      "text": "Samuel Singleton Jr. run for 3 yds to the SMU 25 for a 1ST down",
+      "home_score": 0,
+      "away_score": 7,
+      "period": 1,
+      "clock": "3:45",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 31,
+      "type": "Rush",
+      "text": "Samuel Singleton Jr. run for 7 yds to the SMU 18",
+      "home_score": 0,
+      "away_score": 7,
+      "period": 1,
+      "clock": "3:20",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 32,
+      "type": "Rush",
+      "text": "Ashton Daniels run for 1 yd to the SMU 17",
+      "home_score": 0,
+      "away_score": 7,
+      "period": 1,
+      "clock": "2:45",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 33,
+      "type": "Penalty",
+      "text": "SMU Penalty, Face Mask (9 yards) (9 Yards) to the SMU 8 for a 1ST down",
+      "home_score": 0,
+      "away_score": 7,
+      "period": 1,
+      "clock": "2:20",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 34,
+      "type": "Rushing Touchdown",
+      "text": "Ashton Daniels run for 8 yds for a TD (Gabe Panikowski KICK)",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 1,
+      "clock": "1:55",
+      "scoring_play": true,
+      "score_value": 6,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 35,
+      "type": "Kickoff",
+      "text": "Conor McAneney kickoff for 65 yds for a touchback",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 1,
+      "clock": "1:55",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 36,
+      "type": "Pass Reception",
+      "text": "Kevin Jennings pass complete to Yamir Knight for no gain to the SMU 25",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 1,
+      "clock": "1:30",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 37,
+      "type": "Rush",
+      "text": "Dramekco Green run for 1 yd to the SMU 26",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 1,
+      "clock": "1:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 38,
+      "type": "Pass Reception",
+      "text": "Kevin Jennings pass complete to Randy Pittman Jr. for 30 yds to the FSU 44 for a 1ST down",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 1,
+      "clock": "0:30",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 39,
+      "type": "Rush",
+      "text": "Dramekco Green run for 1 yd to the FSU 43",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 1,
+      "clock": "0:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 40,
+      "type": "End Period",
+      "text": "End of 1st Quarter",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 1,
+      "clock": "0:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 41,
+      "type": "Rush",
+      "text": "Kendrick Raphael run for 2 yds to the FSU 41",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 2,
+      "clock": "14:50",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 42,
+      "type": "Rush",
+      "text": "Dramekco Green run for 8 yds to the FSU 33 for a 1ST down",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 2,
+      "clock": "14:30",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 43,
+      "type": "Rush",
+      "text": "Kevin Jennings run for 9 yds to the FSU 24",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 2,
+      "clock": "13:45",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 44,
+      "type": "Rush",
+      "text": "Dramekco Green run for 3 yds to the FSU 21 for a 1ST down",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 2,
+      "clock": "13:20",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 45,
+      "type": "Rush",
+      "text": "Dramekco Green run for a loss of 4 yards to the FSU 25",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 2,
+      "clock": "12:50",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 46,
+      "type": "Rush",
+      "text": "Kevin Jennings run for 4 yds to the FSU 21",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 2,
+      "clock": "12:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 47,
+      "type": "Pass Incompletion",
+      "text": "Kevin Jennings pass incomplete",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 2,
+      "clock": "11:50",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 48,
+      "type": "Field Goal Missed",
+      "text": "Nick Reed 38 yd FG MISSED",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 2,
+      "clock": "11:45",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 49,
+      "type": "Pass Incompletion",
+      "text": "Ashton Daniels pass incomplete",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 2,
+      "clock": "11:14",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 50,
+      "type": "Pass Reception",
+      "text": "Ashton Daniels pass complete to Jayvan Boggs for 15 yds to the FSU 36 for a 1ST down",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 2,
+      "clock": "11:09",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 51,
+      "type": "Rush",
+      "text": "Ashton Daniels run for 1 yd to the FSU 37",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 2,
+      "clock": "10:30",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 52,
+      "type": "Rush",
+      "text": "Samuel Singleton Jr. run for 7 yds to the FSU 44",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 2,
+      "clock": "10:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 53,
+      "type": "Rush",
+      "text": "Ashton Daniels run for 1 yd to the FSU 45",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 2,
+      "clock": "9:30",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 54,
+      "type": "Rush",
+      "text": "Ousmane Kromah run for a loss of 2 yards to the FSU 43",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 2,
+      "clock": "9:05",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 55,
+      "type": "Rush",
+      "text": "Dramekco Green run for 3 yds to the FSU 40",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 2,
+      "clock": "8:40",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 56,
+      "type": "Pass Reception",
+      "text": "Kevin Jennings pass complete to Yannick Smith for a loss of 3 yards to the FSU 43",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 2,
+      "clock": "8:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 57,
+      "type": "Pass Reception",
+      "text": "Kevin Jennings pass complete to Yannick Smith for 11 yds to the FSU 32 for a 1ST down",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 2,
+      "clock": "7:30",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 58,
+      "type": "Pass Reception",
+      "text": "Kevin Jennings pass complete to Jalen Cooper for 7 yds to the FSU 25",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 2,
+      "clock": "7:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 59,
+      "type": "Pass Reception",
+      "text": "Kevin Jennings pass complete to Yamir Knight for 15 yds to the FSU 10 for a 1ST down",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 2,
+      "clock": "6:55",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 60,
+      "type": "Rush",
+      "text": "Dramekco Green run for 5 yds to the FSU 5",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 2,
+      "clock": "6:30",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 61,
+      "type": "Penalty",
+      "text": "SMU Penalty, 12 Men on the Field (-5 Yards) to the FSU 10",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 2,
+      "clock": "6:08",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 62,
+      "type": "Pass Incompletion",
+      "text": "Kevin Jennings pass incomplete to Kendrick Raphael",
+      "home_score": 7,
+      "away_score": 7,
+      "period": 2,
+      "clock": "5:46",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 63,
+      "type": "Passing Touchdown",
+      "text": "Kevin Jennings pass complete to Randy Pittman Jr. for 10 yds for a TD (Nick Reed KICK)",
+      "home_score": 7,
+      "away_score": 14,
+      "period": 2,
+      "clock": "5:35",
+      "scoring_play": true,
+      "score_value": 6,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 64,
+      "type": "Kickoff",
+      "text": "Nick Reed kickoff for 65 yds for a touchback",
+      "home_score": 7,
+      "away_score": 14,
+      "period": 2,
+      "clock": "5:35",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 65,
+      "type": "Rush",
+      "text": "Ousmane Kromah run for 54 yds to the SMU 21 for a 1ST down Florida State Penalty, Illegal Block (-10 Yards) to the SMU 31 for a 1ST down",
+      "home_score": 7,
+      "away_score": 14,
+      "period": 2,
+      "clock": "5:20",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 66,
+      "type": "Rush",
+      "text": "Ousmane Kromah run for 3 yds to the SMU 28",
+      "home_score": 7,
+      "away_score": 14,
+      "period": 2,
+      "clock": "4:17",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 67,
+      "type": "Pass Incompletion",
+      "text": "Ashton Daniels pass incomplete to Duce Robinson",
+      "home_score": 7,
+      "away_score": 14,
+      "period": 2,
+      "clock": "4:10",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 68,
+      "type": "Pass Incompletion",
+      "text": "Ashton Daniels pass incomplete to Duce Robinson",
+      "home_score": 7,
+      "away_score": 14,
+      "period": 2,
+      "clock": "4:04",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 69,
+      "type": "Field Goal Good",
+      "text": "Gabe Panikowski 46 yd FG GOOD",
+      "home_score": 10,
+      "away_score": 14,
+      "period": 2,
+      "clock": "3:58",
+      "scoring_play": true,
+      "score_value": 3,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 70,
+      "type": "Kickoff Return (Offense)",
+      "text": "Conor McAneney kickoff for 64 yds , Dramekco Green return for 25 yds to the SMU 26",
+      "home_score": 10,
+      "away_score": 14,
+      "period": 2,
+      "clock": "3:58",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 71,
+      "type": "Pass Reception",
+      "text": "Kevin Jennings pass complete to Jalen Hale for 64 yds to the FSU 10 for a 1ST down",
+      "home_score": 10,
+      "away_score": 14,
+      "period": 2,
+      "clock": "3:15",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 72,
+      "type": "Rush",
+      "text": "Kendrick Raphael run for 3 yds to the FSU 7",
+      "home_score": 10,
+      "away_score": 14,
+      "period": 2,
+      "clock": "2:50",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 73,
+      "type": "Rush",
+      "text": "Kendrick Raphael run for 2 yds to the FSU 5",
+      "home_score": 10,
+      "away_score": 14,
+      "period": 2,
+      "clock": "2:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 74,
+      "type": "Pass Incompletion",
+      "text": "Kevin Jennings pass incomplete",
+      "home_score": 10,
+      "away_score": 14,
+      "period": 2,
+      "clock": "1:53",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 75,
+      "type": "Field Goal Good",
+      "text": "Nick Reed 22 yd FG GOOD",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 2,
+      "clock": "1:49",
+      "scoring_play": true,
+      "score_value": 3,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 76,
+      "type": "Kickoff Return (Offense)",
+      "text": "Nick Reed kickoff for 65 yds , Samuel Singleton Jr. return for 29 yds to the FSU 29",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 2,
+      "clock": "1:39",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 77,
+      "type": "Rush",
+      "text": "Ashton Daniels run for 9 yds to the FSU 38",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 2,
+      "clock": "1:20",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 78,
+      "type": "Rush",
+      "text": "Ousmane Kromah run for 5 yds to the FSU 43 for a 1ST down",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 2,
+      "clock": "1:10",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 79,
+      "type": "Pass Incompletion",
+      "text": "Ashton Daniels pass incomplete to Micahi Danzy",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 2,
+      "clock": "0:56",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 80,
+      "type": "Pass Reception",
+      "text": "Ashton Daniels pass complete to Samuel Singleton Jr. for 1 yd to the FSU 44",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 2,
+      "clock": "0:50",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 81,
+      "type": "Pass Reception",
+      "text": "Ashton Daniels pass complete to Desirrio Riles for 6 yds to the 50 yard line",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 2,
+      "clock": "0:44",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 82,
+      "type": "Timeout",
+      "text": "Timeout Florida State, clock 00:42",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 2,
+      "clock": "0:42",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 83,
+      "type": "Punt",
+      "text": "Daniel Hughes punt for 33 yds, downed at the SMU 17",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 2,
+      "clock": "0:31",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 84,
+      "type": "Rush",
+      "text": "Kendrick Raphael run for 23 yds to the SMU 40 for a 1ST down",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 2,
+      "clock": "0:25",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 85,
+      "type": "Pass Incompletion",
+      "text": "Kevin Jennings pass incomplete",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 2,
+      "clock": "0:17",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 86,
+      "type": "Pass Incompletion",
+      "text": "Kevin Jennings pass incomplete",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 2,
+      "clock": "0:08",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 87,
+      "type": "Rush",
+      "text": "Kendrick Raphael run for 5 yds to the SMU 45",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 2,
+      "clock": "0:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 88,
+      "type": "End of Half",
+      "text": "End of 2nd Quarter",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 2,
+      "clock": "0:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 89,
+      "type": "Kickoff",
+      "text": "Nick Reed kickoff for 65 yds for a touchback",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "15:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 90,
+      "type": "Pass Reception",
+      "text": "Ashton Daniels pass complete to Duce Robinson for 10 yds to the FSU 35 for a 1ST down",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "14:40",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 91,
+      "type": "Rush",
+      "text": "Ousmane Kromah run for no gain to the FSU 35",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "14:15",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 92,
+      "type": "Rush",
+      "text": "Ousmane Kromah run for 4 yds to the FSU 39",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "13:55",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 93,
+      "type": "Sack",
+      "text": "Ashton Daniels sacked by Aakil Washington for a loss of 9 yards to the FSU 30",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "13:15",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 94,
+      "type": "Punt",
+      "text": "Daniel Hughes punt for 42 yds , Yamir Knight returns for 10 yds to the SMU 38",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "12:47",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 95,
+      "type": "Rush",
+      "text": "Kendrick Raphael run for 23 yds to the FSU 39 for a 1ST down",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "12:25",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 96,
+      "type": "Pass Reception",
+      "text": "Kevin Jennings pass complete to Kendrick Raphael for 11 yds to the FSU 28 for a 1ST down",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "12:10",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 97,
+      "type": "Pass Reception",
+      "text": "Kevin Jennings pass complete to Yamir Knight for no gain to the FSU 28",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "11:40",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 98,
+      "type": "Pass Reception",
+      "text": "Kevin Jennings pass complete to Yamir Knight for 18 yds to the FSU 10 for a 1ST down",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "11:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 99,
+      "type": "Rush",
+      "text": "Dramekco Green run for 6 yds to the FSU 4",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "10:45",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 100,
+      "type": "Rush",
+      "text": "Kevin Jennings run for a loss of 2 yards to the FSU 6",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "10:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 101,
+      "type": "Pass Interception Return",
+      "text": "Kevin Jennings pass intercepted Nehemiah Chandler return for 3 yds to the FSU 3",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "9:29",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 102,
+      "type": "Rush",
+      "text": "Ousmane Kromah run for 7 yds to the FSU 10",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "9:10",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 103,
+      "type": "Rush",
+      "text": "Ousmane Kromah run for 6 yds to the FSU 16 for a 1ST down",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "8:30",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 104,
+      "type": "Rush",
+      "text": "Ousmane Kromah run for 3 yds to the FSU 19",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "7:50",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 105,
+      "type": "Rush",
+      "text": "Ousmane Kromah run for 2 yds to the FSU 21",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "7:30",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 106,
+      "type": "Pass Incompletion",
+      "text": "Ashton Daniels pass incomplete",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "6:58",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 107,
+      "type": "Punt",
+      "text": "Daniel Hughes punt for 49 yds , Yamir Knight returns for a loss of 1 yard to the SMU 29 Yamir Knight fumbled, recovered by FSU",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "6:48",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 108,
+      "type": "Rush",
+      "text": "Ousmane Kromah run for 6 yds to the SMU 23",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "6:30",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 109,
+      "type": "Rush",
+      "text": "Ousmane Kromah run for a loss of 2 yards to the SMU 25",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "6:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 110,
+      "type": "Rush",
+      "text": "Ashton Daniels run for 3 yds to the SMU 22",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "5:30",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 111,
+      "type": "Penalty",
+      "text": "SMU Penalty, Defensive Offside (5 Yards) to the SMU 17 for a 1ST down",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "4:48",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 112,
+      "type": "Rush",
+      "text": "Ousmane Kromah run for 7 yds to the SMU 10",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "4:22",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 113,
+      "type": "Rush",
+      "text": "Samuel Singleton Jr. run for a loss of 2 yards to the SMU 12",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "3:55",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 114,
+      "type": "Rush",
+      "text": "Samuel Singleton Jr. run for 3 yds to the SMU 9",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "3:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 115,
+      "type": "Timeout",
+      "text": "Timeout Florida State, clock 02:47",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "2:47",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 116,
+      "type": "Pass Reception",
+      "text": "Ashton Daniels pass complete to Desirrio Riles for 2 yds to the SMU 7 for a 1ST down",
+      "home_score": 10,
+      "away_score": 17,
+      "period": 3,
+      "clock": "2:30",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 117,
+      "type": "Rushing Touchdown",
+      "text": "Ousmane Kromah 6 Yd Run (Gabe Panikowski Kick)",
+      "home_score": 17,
+      "away_score": 17,
+      "period": 3,
+      "clock": "2:08",
+      "scoring_play": true,
+      "score_value": 6,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 118,
+      "type": "Kickoff",
+      "text": "Conor McAneney kickoff for 65 yds for a touchback",
+      "home_score": 17,
+      "away_score": 17,
+      "period": 3,
+      "clock": "2:08",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 119,
+      "type": "Penalty",
+      "text": "Jennings, Kevin pass incomplete, PENALTY SMU holding 10 yards to the SMU15, NO PLAY.",
+      "home_score": 17,
+      "away_score": 17,
+      "period": 3,
+      "clock": "2:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 120,
+      "type": "Pass Reception",
+      "text": "Kevin Jennings pass complete to Randy Pittman Jr. for 11 yds to the SMU 26",
+      "home_score": 17,
+      "away_score": 17,
+      "period": 3,
+      "clock": "1:40",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 121,
+      "type": "Pass Reception",
+      "text": "Kevin Jennings pass complete to Yannick Smith for 8 yds to the SMU 34",
+      "home_score": 17,
+      "away_score": 17,
+      "period": 3,
+      "clock": "1:20",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 122,
+      "type": "Pass Reception",
+      "text": "Kevin Jennings pass complete to Randy Pittman Jr. for 5 yds to the SMU 39 for a 1ST down",
+      "home_score": 17,
+      "away_score": 17,
+      "period": 3,
+      "clock": "1:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 123,
+      "type": "Pass Incompletion",
+      "text": "Kevin Jennings pass incomplete",
+      "home_score": 17,
+      "away_score": 17,
+      "period": 3,
+      "clock": "0:50",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 124,
+      "type": "Pass Incompletion",
+      "text": "Kevin Jennings pass incomplete to Yamir Knight",
+      "home_score": 17,
+      "away_score": 17,
+      "period": 3,
+      "clock": "0:45",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 125,
+      "type": "Pass Incompletion",
+      "text": "Kevin Jennings pass incomplete to Yamir Knight",
+      "home_score": 17,
+      "away_score": 17,
+      "period": 3,
+      "clock": "0:38",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 126,
+      "type": "Punt",
+      "text": "Wade McSparron punt for 49 yds , Jasen Lopez returns for 11 yds to the FSU 23",
+      "home_score": 17,
+      "away_score": 17,
+      "period": 3,
+      "clock": "0:28",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 127,
+      "type": "Rush",
+      "text": "Ashton Daniels run for 12 yds to the FSU 35 for a 1ST down",
+      "home_score": 17,
+      "away_score": 17,
+      "period": 3,
+      "clock": "0:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 128,
+      "type": "End Period",
+      "text": "End of 3rd Quarter",
+      "home_score": 17,
+      "away_score": 17,
+      "period": 3,
+      "clock": "0:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 129,
+      "type": "Rush",
+      "text": "Ousmane Kromah run for 4 yds to the FSU 39",
+      "home_score": 17,
+      "away_score": 17,
+      "period": 4,
+      "clock": "14:45",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 130,
+      "type": "Rush",
+      "text": "Ashton Daniels run for 2 yds to the FSU 41",
+      "home_score": 17,
+      "away_score": 17,
+      "period": 4,
+      "clock": "14:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 131,
+      "type": "Pass Incompletion",
+      "text": "Ashton Daniels pass incomplete",
+      "home_score": 17,
+      "away_score": 17,
+      "period": 4,
+      "clock": "13:49",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 132,
+      "type": "Punt",
+      "text": "Daniel Hughes punt for 42 yds, fair catch by Yamir Knight at the SMU 17",
+      "home_score": 17,
+      "away_score": 17,
+      "period": 4,
+      "clock": "13:42",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 133,
+      "type": "Rush",
+      "text": "Dramekco Green run for 5 yds to the SMU 22",
+      "home_score": 17,
+      "away_score": 17,
+      "period": 4,
+      "clock": "13:25",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 134,
+      "type": "Rush",
+      "text": "Dramekco Green run for a loss of 1 yard to the SMU 21",
+      "home_score": 17,
+      "away_score": 17,
+      "period": 4,
+      "clock": "13:15",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 135,
+      "type": "Passing Touchdown",
+      "text": "Kevin Jennings pass complete to Yannick Smith for 79 yds for a TD (Nick Reed KICK)",
+      "home_score": 17,
+      "away_score": 24,
+      "period": 4,
+      "clock": "12:37",
+      "scoring_play": true,
+      "score_value": 6,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 136,
+      "type": "Kickoff",
+      "text": "Nick Reed kickoff for 65 yds for a touchback",
+      "home_score": 17,
+      "away_score": 24,
+      "period": 4,
+      "clock": "12:37",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 137,
+      "type": "Rush",
+      "text": "Samuel Singleton Jr. run for 4 yds to the FSU 29",
+      "home_score": 17,
+      "away_score": 24,
+      "period": 4,
+      "clock": "12:15",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 138,
+      "type": "Rush",
+      "text": "Samuel Singleton Jr. run for 2 yds to the FSU 31",
+      "home_score": 17,
+      "away_score": 24,
+      "period": 4,
+      "clock": "11:40",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 139,
+      "type": "Penalty",
+      "text": "Daniels, Ashton pass incomplete to Robinson, Duce, PENALTY SMU pass interference off-setting, PENALTY FLORIDAST Tripping off-setting, NO PLAY.",
+      "home_score": 17,
+      "away_score": 24,
+      "period": 4,
+      "clock": "11:25",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 140,
+      "type": "Rush",
+      "text": "Ashton Daniels run for 6 yds to the FSU 37 for a 1ST down",
+      "home_score": 17,
+      "away_score": 24,
+      "period": 4,
+      "clock": "11:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 141,
+      "type": "Rush",
+      "text": "Ousmane Kromah run for 1 yd to the FSU 38",
+      "home_score": 17,
+      "away_score": 24,
+      "period": 4,
+      "clock": "10:20",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 142,
+      "type": "Pass Reception",
+      "text": "Ashton Daniels pass complete to Micahi Danzy for 21 yds to the SMU 41 for a 1ST down",
+      "home_score": 17,
+      "away_score": 24,
+      "period": 4,
+      "clock": "9:55",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 143,
+      "type": "Rush",
+      "text": "Ousmane Kromah run for 3 yds to the SMU 38",
+      "home_score": 17,
+      "away_score": 24,
+      "period": 4,
+      "clock": "9:15",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 144,
+      "type": "Rush",
+      "text": "Ashton Daniels run for 4 yds to the SMU 34",
+      "home_score": 17,
+      "away_score": 24,
+      "period": 4,
+      "clock": "8:50",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 145,
+      "type": "Penalty",
+      "text": "Florida State Penalty, False Start (-5 Yards) to the SMU 39",
+      "home_score": 17,
+      "away_score": 24,
+      "period": 4,
+      "clock": "8:30",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 146,
+      "type": "Passing Touchdown",
+      "text": "Ashton Daniels pass complete to Samuel Singleton Jr. for 39 yds for a TD (Gabe Panikowski KICK)",
+      "home_score": 24,
+      "away_score": 24,
+      "period": 4,
+      "clock": "8:17",
+      "scoring_play": true,
+      "score_value": 6,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 147,
+      "type": "Kickoff",
+      "text": "Conor McAneney kickoff for 65 yds for a touchback",
+      "home_score": 24,
+      "away_score": 24,
+      "period": 4,
+      "clock": "8:17",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 148,
+      "type": "Pass Reception",
+      "text": "Kevin Jennings pass complete to Derrick McFall for 12 yds to the SMU 37 for a 1ST down",
+      "home_score": 24,
+      "away_score": 24,
+      "period": 4,
+      "clock": "8:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 149,
+      "type": "Pass Reception",
+      "text": "Kevin Jennings pass complete to Yannick Smith for 12 yds to the SMU 49 for a 1ST down",
+      "home_score": 24,
+      "away_score": 24,
+      "period": 4,
+      "clock": "7:30",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 150,
+      "type": "Rush",
+      "text": "Kendrick Raphael run for 2 yds to the FSU 49",
+      "home_score": 24,
+      "away_score": 24,
+      "period": 4,
+      "clock": "7:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 151,
+      "type": "Pass Interception Return",
+      "text": "Kevin Jennings pass intercepted Ashlynd Barker return for no gain to the FSU 22",
+      "home_score": 24,
+      "away_score": 24,
+      "period": 4,
+      "clock": "6:33",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 152,
+      "type": "Rush",
+      "text": "Ousmane Kromah run for 1 yd to the FSU 23",
+      "home_score": 24,
+      "away_score": 24,
+      "period": 4,
+      "clock": "6:20",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 153,
+      "type": "Pass Incompletion",
+      "text": "Ashton Daniels pass incomplete to Landen Thomas",
+      "home_score": 24,
+      "away_score": 24,
+      "period": 4,
+      "clock": "5:49",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 154,
+      "type": "Sack",
+      "text": "Ashton Daniels sacked by Malcolm Alcorn-Crowder for a loss of 8 yards to the FSU 15",
+      "home_score": 24,
+      "away_score": 24,
+      "period": 4,
+      "clock": "5:20",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 155,
+      "type": "Punt",
+      "text": "Daniel Hughes punt for 59 yds, downed at the SMU 26",
+      "home_score": 24,
+      "away_score": 24,
+      "period": 4,
+      "clock": "4:56",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 156,
+      "type": "Pass Reception",
+      "text": "Kevin Jennings pass complete to Yamir Knight for 13 yds to the SMU 39 for a 1ST down",
+      "home_score": 24,
+      "away_score": 24,
+      "period": 4,
+      "clock": "4:45",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 157,
+      "type": "Rush",
+      "text": "Kevin Jennings run for 8 yds to the SMU 47",
+      "home_score": 24,
+      "away_score": 24,
+      "period": 4,
+      "clock": "4:30",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 158,
+      "type": "Rush",
+      "text": "Kendrick Raphael run for 1 yd to the SMU 48",
+      "home_score": 24,
+      "away_score": 24,
+      "period": 4,
+      "clock": "4:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 159,
+      "type": "Penalty",
+      "text": "Raphael, Kendrick rush for 27 yards to the FLORIDAST25, PENALTY SMU holding 9 yards to the SMU39, NO PLAY.",
+      "home_score": 24,
+      "away_score": 24,
+      "period": 4,
+      "clock": "3:45",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 160,
+      "type": "Pass Reception",
+      "text": "Kevin Jennings pass complete to Dramekco Green for 29 yds to the FSU 32 for a 1ST down",
+      "home_score": 24,
+      "away_score": 24,
+      "period": 4,
+      "clock": "2:45",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 161,
+      "type": "Pass Reception",
+      "text": "Kevin Jennings pass complete to Jalen Cooper for 8 yds to the FSU 24 for a 1ST down Florida State Penalty, Face Mask (12 yards) (12 Yards) to the FSU 12 for a 1ST down",
+      "home_score": 24,
+      "away_score": 24,
+      "period": 4,
+      "clock": "2:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 162,
+      "type": "Rush",
+      "text": "Kendrick Raphael run for 6 yds to the FSU 6",
+      "home_score": 24,
+      "away_score": 24,
+      "period": 4,
+      "clock": "1:30",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 163,
+      "type": "Timeout",
+      "text": "Timeout SMU, clock 01:14",
+      "home_score": 24,
+      "away_score": 24,
+      "period": 4,
+      "clock": "1:14",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 164,
+      "type": "Rush",
+      "text": "Kendrick Raphael run for no gain to the FSU 6",
+      "home_score": 24,
+      "away_score": 24,
+      "period": 4,
+      "clock": "1:09",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 165,
+      "type": "Timeout",
+      "text": "Timeout Florida State, clock 01:09",
+      "home_score": 24,
+      "away_score": 24,
+      "period": 4,
+      "clock": "1:09",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 166,
+      "type": "Rush",
+      "text": "Kendrick Raphael run for 3 yds to the FSU 3",
+      "home_score": 24,
+      "away_score": 24,
+      "period": 4,
+      "clock": "0:50",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 167,
+      "type": "Timeout",
+      "text": "Timeout SMU, clock 00:25",
+      "home_score": 24,
+      "away_score": 24,
+      "period": 4,
+      "clock": "0:25",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 168,
+      "type": "Field Goal Good",
+      "text": "Nick Reed 20 yd FG GOOD",
+      "home_score": 24,
+      "away_score": 27,
+      "period": 4,
+      "clock": "0:21",
+      "scoring_play": true,
+      "score_value": 3,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 169,
+      "type": "Kickoff",
+      "text": "Nick Reed kickoff for 65 yds for a touchback",
+      "home_score": 24,
+      "away_score": 27,
+      "period": 4,
+      "clock": "0:21",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 170,
+      "type": "Pass Incompletion",
+      "text": "Ashton Daniels pass incomplete to Duce Robinson",
+      "home_score": 24,
+      "away_score": 27,
+      "period": 4,
+      "clock": "0:17",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 171,
+      "type": "Pass Incompletion",
+      "text": "Ashton Daniels pass incomplete to Desirrio Riles",
+      "home_score": 24,
+      "away_score": 27,
+      "period": 4,
+      "clock": "0:09",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 172,
+      "type": "Pass Incompletion",
+      "text": "Ashton Daniels pass incomplete",
+      "home_score": 24,
+      "away_score": 27,
+      "period": 4,
+      "clock": "0:02",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 173,
+      "type": "Timeout",
+      "text": "Timeout SMU, clock 00:02",
+      "home_score": 24,
+      "away_score": 27,
+      "period": 4,
+      "clock": "0:02",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 5,
+        "conference": 1,
+        "college": "Florida State",
+        "name": "Seminoles",
+        "full_name": "Florida State Seminoles",
+        "abbreviation": "FSU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 174,
+      "type": "Rush",
+      "text": "Ashton Daniels run for 34 yds to the SMU 48 Duce Robinson Duce Robinson fumbled, recovered by SMU",
+      "home_score": 24,
+      "away_score": 27,
+      "period": 4,
+      "clock": "0:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    },
+    {
+      "game_id": 457172,
+      "order": 175,
+      "type": "End of Game",
+      "text": "End of 4th Quarter",
+      "home_score": 24,
+      "away_score": 27,
+      "period": 4,
+      "clock": "0:00",
+      "scoring_play": false,
+      "score_value": 0,
+      "team": {
+        "id": 12,
+        "conference": 1,
+        "college": "SMU",
+        "name": "Mustangs",
+        "full_name": "SMU Mustangs",
+        "abbreviation": "SMU"
+      }
+    }
+  ]
+}

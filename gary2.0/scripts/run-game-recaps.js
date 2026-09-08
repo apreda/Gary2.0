@@ -22,16 +22,19 @@
  *   node scripts/run-game-recaps.js --date 2026-06-09                # one date, all leagues
  *   node scripts/run-game-recaps.js --date 2026-06-09 --league MLB   # one league
  *   node scripts/run-game-recaps.js --date 2026-06-09 --force        # redo existing rows
+ *   node scripts/run-game-recaps.js --date 2026-09-07 --league NCAAF --repair-boxes-only
  *   node scripts/run-game-recaps.js --date 2026-06-09 --repair-headlines-only
  *   node scripts/run-game-recaps.js --date 2026-06-09 --dry-run      # no writes
  */
 
 import { createClient } from '@supabase/supabase-js';
 import {
-  generateRecap, filterPropsForGame, buildBoxLine, buildFootballBoxLine, buildFootballBoxLineFromPlays,
+  generateRecap, filterPropsForGame,
   gameOnlyHeadline, headlineNeedsRepair,
 } from '../src/services/gameRecap.js';
 import { buildGameEvidence } from '../src/services/factCheck.js';
+import { loadRecapBox, recapBoxComplete } from '../src/services/recapBox.js';
+
 // Load environment variables FIRST (centralized)
 await import('../src/loadEnv.js');
 
@@ -63,6 +66,7 @@ function getArgValue(flag) {
 const dryRun = args.includes('--dry-run');
 const force = args.includes('--force');
 const repairHeadlinesOnly = args.includes('--repair-headlines-only');
+const repairBoxesOnly = args.includes('--repair-boxes-only');
 const leagueArg = getArgValue('--league')?.toUpperCase() || null;
 const explicitDate = getArgValue('--date');
 
@@ -137,68 +141,6 @@ async function fetchMlbStatsForGames(gameIds) {
 
 
 /**
- * One football game's plays. Every touchdown is a six-point scoring play, so
- * this is the only feed that sees a defensive or return score.
- */
-async function footballPlays(league, gameId) {
-  if (!BDL_API_KEY || gameId == null) return null;
-  const path = league === 'NFL' ? 'nfl/v1/plays' : 'ncaaf/v1/plays';
-  try {
-    const res = await fetch(`https://api.balldontlie.io/${path}?game_id=${gameId}&per_page=100`, {
-      headers: { Authorization: BDL_API_KEY },
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (!res.ok) return null;
-    const payload = await res.json();
-    return payload?.data?.length ? payload.data : null;
-  } catch { return null; }
-}
-
-/**
- * The same prefetch for football, so the headline card's box can count
- * touchdowns (founder, Sep 4 2026). NFL and college live on different paths
- * and key their rows differently — the NFL box carries `game.id`, the college
- * box carries a nested `game` object — so each side resolves its own key.
- */
-async function fetchFootballStatsForGames(league, gameIds) {
-  const ids = [...new Set((gameIds || []).filter((id) => id != null).map(String))];
-  const byGame = new Map();
-  if (!BDL_API_KEY || !ids.length) return byGame;
-  const path = league === 'NFL' ? 'nfl/v1/stats' : 'ncaaf/v1/player_stats';
-
-  let cursor = null;
-  for (let page = 0; page < 20; page++) {
-    const params = new URLSearchParams({ per_page: '100' });
-    for (const id of ids) params.append('game_ids[]', id);
-    if (cursor != null) params.set('cursor', String(cursor));
-
-    try {
-      const res = await fetch(`https://api.balldontlie.io/${path}?${params}`, {
-        headers: { Authorization: BDL_API_KEY },
-        signal: AbortSignal.timeout(20_000),
-      });
-      if (!res.ok) {
-        console.warn(`  ⚠️ ${league} slate stats page ${page + 1} unavailable (${res.status})`);
-        break;
-      }
-      const payload = await res.json();
-      for (const row of payload?.data || []) {
-        const key = String(row?.game_id ?? row?.game?.id ?? '');
-        if (!key) continue;
-        if (!byGame.has(key)) byGame.set(key, []);
-        byGame.get(key).push(row);
-      }
-      cursor = payload?.meta?.next_cursor ?? null;
-      if (cursor == null) break;
-    } catch (error) {
-      console.warn(`  ⚠️ ${league} slate stats timed out: ${error.message}`);
-      break;
-    }
-  }
-  return byGame;
-}
-
-/**
  * THE MENU, BACK OUT (founder, Aug 5: "very few have odds"). propsBrain
  * snapshots every priced market at seal time; this hands those prices to the
  * recap writer so a bullet about a prop Gary never took can still say what it
@@ -251,27 +193,18 @@ async function main(targetDate) {
   next.setUTCDate(next.getUTCDate() + 1);
   const nextStr = next.toISOString().slice(0, 10);
   const { data: results, error: resErr } = await supabase
-    .from('game_results').select('game_date, league, matchup, pick_text, result, final_score')
+    .from('game_results').select('game_id, game_date, league, matchup, pick_text, result, final_score')
     .in('game_date', [targetDate, nextStr]);
   if (resErr) {
     console.error(`❌ game_results fetch failed: ${resErr.message}`);
     process.exit(1);
   }
-  const resultByPickText = new Map((results || []).map((r) => [r.pick_text, r]));
 
   // Fetch the whole MLB slate once. This is both faster and materially more
   // reliable than doing network I/O while rendering each recap one at a time.
   const mlbStatsByGame = await fetchMlbStatsForGames(
-    picks.filter((p) => p.league?.toUpperCase() === 'MLB').map((p) => p.game_id),
+    picks.filter((p) => (!leagueArg || leagueArg === 'MLB') && p.league?.toUpperCase() === 'MLB').map((p) => p.game_id),
   );
-  const footballStatsByGame = new Map();
-  for (const lg of ['NFL', 'NCAAF']) {
-    const rows = await fetchFootballStatsForGames(
-      lg, picks.filter((p) => p.league?.toUpperCase() === lg).map((p) => p.game_id),
-    );
-    for (const [key, value] of rows) footballStatsByGame.set(`${lg}:${key}`, value);
-  }
-
   // The night's graded props (real betting prices) — same 2-day window. Each
   // game's subset goes into the evidence pack so bullets can carry the lens.
   const { data: propRows, error: propErr } = await supabase
@@ -289,7 +222,10 @@ async function main(targetDate) {
     if (leagueArg && league !== leagueArg) continue;
 
     const matchup = `${pick.awayTeam} @ ${pick.homeTeam}`;
-    const graded = resultByPickText.get(pick.pick);
+    const matchedResults = (results || []).filter(r => r.league === league && r.pick_text === pick.pick
+      && (r.game_id != null && pick.game_id != null
+        ? String(r.game_id) === String(pick.game_id) : r.matchup === matchup));
+    const graded = matchedResults.length === 1 ? matchedResults[0] : null;
     if (!graded) {
       console.log(`  ⏭️  ${league} ${matchup}: no graded result row — skipping`);
       skipped++;
@@ -299,7 +235,7 @@ async function main(targetDate) {
 
     // Idempotency (mirrors the nightly path)
     let { data: exist, error: dedupErr } = await supabase
-      .from('game_recaps').select('id, headline')
+      .from('game_recaps').select('id, headline, box')
       .eq('game_date', gameDate).eq('league', graded.league).eq('matchup', matchup)
       .maybeSingle();
     // Older rows sometimes stored short team names ("Mariners @ Orioles")
@@ -308,7 +244,7 @@ async function main(targetDate) {
     // being mistaken for a missing one during repair/backfill.
     if (!dedupErr && !exist) {
       ({ data: exist, error: dedupErr } = await supabase
-        .from('game_recaps').select('id, headline')
+        .from('game_recaps').select('id, headline, box')
         .eq('game_date', gameDate).eq('league', graded.league).eq('pick_text', pick.pick)
         .maybeSingle());
     }
@@ -318,11 +254,30 @@ async function main(targetDate) {
       continue;
     }
     const editorialRepair = !!exist && headlineNeedsRepair(exist.headline);
-    if (repairHeadlinesOnly && !exist) {
+    if ((repairHeadlinesOnly || repairBoxesOnly) && !exist) {
       console.log(`  ⏭️  ${league} ${matchup}: no existing recap — repair pass skips creation`);
       skipped++;
       continue;
     }
+    const scoreParts = String(graded.final_score || '').split(/[-–]/).map(s => s.trim());
+    const [awayScore, homeScore] = scoreParts.length === 2 && scoreParts.every(s => /^\d+$/.test(s))
+      ? scoreParts.map(Number) : [null, null];
+    const mlbStats = league === 'MLB' ? (mlbStatsByGame.get(String(pick.game_id)) || null) : null;
+    const box = repairHeadlinesOnly ? exist?.box : !force && recapBoxComplete(exist?.box, league)
+      && exist.box.away.runs === awayScore && exist.box.home.runs === homeScore ? exist.box
+      : await loadRecapBox({ league, gameId: pick.game_id,
+        awayTeam: pick.awayTeam, homeTeam: pick.homeTeam, awayScore, homeScore,
+        mlbStats, apiKey: BDL_API_KEY });
+    if (!repairHeadlinesOnly && exist && box && JSON.stringify(box) !== JSON.stringify(exist.box)) {
+      if (dryRun) {
+        console.log(`  🧪 ${league} ${matchup}: box ${JSON.stringify(box)}`);
+      } else {
+        const { error } = await supabase.from('game_recaps').update({ box }).eq('id', exist.id);
+        if (error) { console.error(`  ❌ ${matchup}: box repair failed: ${error.message}`); failed++; continue; }
+        console.log(`  📦 ${league} ${matchup}: box repaired`);
+      }
+    }
+    if (repairBoxesOnly) { skipped++; continue; }
     if (exist) {
       if (!force && !editorialRepair) {
         console.log(`  ⏩ ${league} ${matchup}: recap exists — skipping (use --force to redo)`);
@@ -332,12 +287,6 @@ async function main(targetDate) {
       console.log(`  🔧 ${league} ${matchup}: ${force ? 'forced rewrite' : 'repairing non-editorial headline'}`);
     }
 
-    // final_score is stored "away-home" (`${vs}-${hs}` in run-all-results.js)
-    const [awayScore, homeScore] = String(graded.final_score || '').split('-').map(Number);
-
-    const mlbStats = league === 'MLB'
-      ? (mlbStatsByGame.get(String(pick.game_id)) || null)
-      : null;
     const gradedProps = filterPropsForGame(propRows || [], pick.homeTeam, pick.awayTeam);
     const evidence = buildGameEvidence({
       league,
@@ -393,16 +342,6 @@ async function main(targetDate) {
         recap: recap.recap,
         bullets: recap.bullets || [],
       };
-      let box = null;
-      if (league === 'MLB') {
-        box = buildBoxLine({ mlbStats, awayTeam: pick.awayTeam, homeTeam: pick.homeTeam, awayScore, homeScore });
-      } else {
-        // The play feed counts EVERY touchdown, defense and returns included;
-        // the player box is the fallback when a game has no plays.
-        const sides = { awayTeam: pick.awayTeam, homeTeam: pick.homeTeam, awayScore, homeScore };
-        box = buildFootballBoxLineFromPlays({ plays: await footballPlays(league, pick.game_id), ...sides })
-          ?? buildFootballBoxLine({ playerStats: footballStatsByGame.get(`${league}:${pick.game_id}`), ...sides });
-      }
       if (box) row.box = box;
 
       if (dryRun) {

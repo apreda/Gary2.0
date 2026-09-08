@@ -1,4 +1,5 @@
 import Foundation
+/* SHIPPING_RECAP_SCORES */
 
 // Network/model/rendering collaborators only. Every request/commit statement,
 // account gate and Eastern clock below is inserted from shipping Swift source.
@@ -11,6 +12,9 @@ struct GaryPick {
 struct PropPick { var id: String; var commence_time: String?; var isHRLane = false; var confidence: Double? = 0.8; var player: String? = "Player" }
 struct GameResult {
     var displayFinalScore: String? { final_score }
+    var effectiveLeague: String? { league }
+    var pick_text: String? { "Away ML" }
+    var teamScores: (away: String, home: String, a: Int, h: Int)? { ("Away", "Home", 3, 1) }
     var id: String; var game_date: String?; var matchup: String? = "Away @ Home"
     var final_score: String? = "3-1"; var result: String? = "won"; var league: String? = "MLB"
 }

@@ -1,0 +1,1354 @@
+{
+  "data": [
+    {
+      "id": "4018732842450",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "rush",
+      "type_text": "Rush",
+      "text": "D.McMillan right end to BLT 33 for 5 yards (Z.Wilson; T.Jackson).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 10
+    },
+    {
+      "id": "4018732842472",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "rush",
+      "type_text": "Rush",
+      "text": "E.Tau-Tolliver left end to BLT 35 for 2 yards (D.Blay).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 10
+    },
+    {
+      "id": "4018732842494",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "pass-reception",
+      "type_text": "Pass Reception",
+      "text": "J.Fagnano pass short middle to E.Tau-Tolliver to BLT 43 for 8 yards (D.Blay).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 10
+    },
+    {
+      "id": "4018732842519",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "pass-reception",
+      "type_text": "Pass Reception",
+      "text": "(Shotgun) J.Fagnano pass short left to A.Randall to BLT 45 for 2 yards (K.Gushiken).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 10
+    },
+    {
+      "id": "4018732842544",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "rush",
+      "type_text": "Rush",
+      "text": "A.Randall left end to PHI 48 for 7 yards (A.Thomas).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 10
+    },
+    {
+      "id": "4018732842566",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "fumble-recovery-opponent",
+      "type_text": "Fumble Recovery (Opponent)",
+      "text": "(Shotgun) J.Fagnano pass short right to E.Sarratt to PHI 36 for 12 yards (S.Wade). FUMBLES (S.Wade), RECOVERED by PHI-A.Thomas at PHI 24.",
+      "scoring_play": false,
+      "team": {
+        "id": 18,
+        "conference": "NFC",
+        "division": "EAST",
+        "location": "Philadelphia",
+        "name": "Eagles",
+        "full_name": "Philadelphia Eagles",
+        "abbreviation": "PHI"
+      },
+      "away_score": 0,
+      "home_score": 10
+    },
+    {
+      "id": "4018732842589",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "official-timeout",
+      "type_text": "Official Timeout",
+      "text": "Official Timeout at 04:04.",
+      "scoring_play": false,
+      "team": {
+        "id": 18,
+        "conference": "NFC",
+        "division": "EAST",
+        "location": "Philadelphia",
+        "name": "Eagles",
+        "full_name": "Philadelphia Eagles",
+        "abbreviation": "PHI"
+      },
+      "away_score": 0,
+      "home_score": 10
+    },
+    {
+      "id": "4018732842612",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "rush",
+      "type_text": "Rush",
+      "text": "C.Steele right tackle to PHI 26 for 2 yards (K.Jackson).",
+      "scoring_play": false,
+      "team": {
+        "id": 18,
+        "conference": "NFC",
+        "division": "EAST",
+        "location": "Philadelphia",
+        "name": "Eagles",
+        "full_name": "Philadelphia Eagles",
+        "abbreviation": "PHI"
+      },
+      "away_score": 0,
+      "home_score": 10
+    },
+    {
+      "id": "4018732842641",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "pass-incompletion",
+      "type_text": "Pass Incompletion",
+      "text": "(Shotgun) T.McKee pass incomplete short right to C.Latu (R.Williford).",
+      "scoring_play": false,
+      "team": {
+        "id": 18,
+        "conference": "NFC",
+        "division": "EAST",
+        "location": "Philadelphia",
+        "name": "Eagles",
+        "full_name": "Philadelphia Eagles",
+        "abbreviation": "PHI"
+      },
+      "away_score": 0,
+      "home_score": 10
+    },
+    {
+      "id": "4018732842664",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "pass-incompletion",
+      "type_text": "Pass Incompletion",
+      "text": "(Shotgun) T.McKee pass incomplete short right to D.Cooper.",
+      "scoring_play": false,
+      "team": {
+        "id": 18,
+        "conference": "NFC",
+        "division": "EAST",
+        "location": "Philadelphia",
+        "name": "Eagles",
+        "full_name": "Philadelphia Eagles",
+        "abbreviation": "PHI"
+      },
+      "away_score": 0,
+      "home_score": 10
+    },
+    {
+      "id": "4018732842687",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "punt",
+      "type_text": "Punt",
+      "text": "B.Mann punts 51 yards to BLT 23, Center-R.Underwood. E.Sarratt to BLT 31 for 8 yards (M.Pulley).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 10
+    },
+    {
+      "id": "4018732842700",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "official-timeout",
+      "type_text": "Official Timeout",
+      "text": "Official Timeout at 03:03.",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 10
+    },
+    {
+      "id": "4018732842713",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "rush",
+      "type_text": "Rush",
+      "text": "D.McMillan right end to BLT 33 for 2 yards (M.Pulley).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 10
+    },
+    {
+      "id": "4018732842742",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "pass-reception",
+      "type_text": "Pass Reception",
+      "text": "(Shotgun) J.Fagnano pass short left to T.Pezza pushed ob at PHI 48 for 19 yards (A.Thomas; M.Pulley).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 10
+    },
+    {
+      "id": "4018732842772",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "rush",
+      "type_text": "Rush",
+      "text": "D.Wade left end to PHI 47 for 1 yard (J.Ramirez).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 10
+    },
+    {
+      "id": "4018732842794",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "pass-reception",
+      "type_text": "Pass Reception",
+      "text": "(Shotgun) J.Fagnano pass short middle to C.Moore to PHI 35 for 12 yards (A.Thomas).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 10
+    },
+    {
+      "id": "4018732842819",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "rush",
+      "type_text": "Rush",
+      "text": "E.Tau-Tolliver up the middle to PHI 34 for 1 yard (S.Mondon).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 10
+    },
+    {
+      "id": "4018732842861",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "rush",
+      "type_text": "Rush",
+      "text": "(Shotgun) A.Randall right guard to PHI 30 for 4 yards (D.Lawson; Z.Wilson).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 10
+    },
+    {
+      "id": "4018732842883",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "pass-reception",
+      "type_text": "Pass Reception",
+      "text": "(Shotgun) J.Fagnano pass short right to D.Wade to PHI 22 for 8 yards (M.McWilliams).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 10
+    },
+    {
+      "id": "4018732842908",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "rush",
+      "type_text": "Rush",
+      "text": "(Shotgun) J.Fagnano scrambles left guard to PHI 21 for 1 yard (J.Weru).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 10
+    },
+    {
+      "id": "4018732842930",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "rush",
+      "type_text": "Rush",
+      "text": "D.McMillan left guard to PHI 20 for 1 yard (S.Mondon; D.Lawson).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 10
+    },
+    {
+      "id": "4018732842952",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "penalty",
+      "type_text": "Penalty",
+      "text": "(Shotgun) J.Fagnano pass incomplete short middle to C.Moore (J.Gray).PENALTY on PHI-A.Thomas, Illegal Contact, 5 yards, enforced at PHI 20 - No Play.",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 10
+    },
+    {
+      "id": "4018732842986",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "pass-reception",
+      "type_text": "Pass Reception",
+      "text": "J.Fagnano pass short left to X.Guillory to PHI 4 for 11 yards (K.Gushiken).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 10
+    },
+    {
+      "id": "4018732843011",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "rushing-touchdown",
+      "type_text": "Rushing Touchdown",
+      "text": "A.Randall right guard for 4 yards, TOUCHDOWN. T.Loop extra point is GOOD, Center-N.Moore, Holder-R.Eckley.",
+      "scoring_play": true,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 17
+    },
+    {
+      "id": "4018732843042",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "official-timeout",
+      "type_text": "Official Timeout",
+      "text": "Official Timeout at 11:24.",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 17
+    },
+    {
+      "id": "4018732843049",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "kickoff",
+      "type_text": "Kickoff",
+      "text": "T.Loop kicks 62 yards from BLT 35 to PHI 3. E.Ezukanma to PHI 22 for 19 yards (M.Robinson).",
+      "scoring_play": false,
+      "team": {
+        "id": 18,
+        "conference": "NFC",
+        "division": "EAST",
+        "location": "Philadelphia",
+        "name": "Eagles",
+        "full_name": "Philadelphia Eagles",
+        "abbreviation": "PHI"
+      },
+      "away_score": 0,
+      "home_score": 17
+    },
+    {
+      "id": "4018732843079",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "penalty",
+      "type_text": "Penalty",
+      "text": "C.Payton sacked at PHI 22 for 0 yards (J.Johnson).PENALTY on PHI-M.Hinton, Offensive Holding, 10 yards, enforced at PHI 22 - No Play.",
+      "scoring_play": false,
+      "team": {
+        "id": 18,
+        "conference": "NFC",
+        "division": "EAST",
+        "location": "Philadelphia",
+        "name": "Eagles",
+        "full_name": "Philadelphia Eagles",
+        "abbreviation": "PHI"
+      },
+      "away_score": 0,
+      "home_score": 17
+    },
+    {
+      "id": "4018732843119",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "pass-reception",
+      "type_text": "Pass Reception",
+      "text": "(Shotgun) C.Payton pass short right to E.Jenkins to PHI 15 for 3 yards (R.Longerbeam).",
+      "scoring_play": false,
+      "team": {
+        "id": 18,
+        "conference": "NFC",
+        "division": "EAST",
+        "location": "Philadelphia",
+        "name": "Eagles",
+        "full_name": "Philadelphia Eagles",
+        "abbreviation": "PHI"
+      },
+      "away_score": 0,
+      "home_score": 17
+    },
+    {
+      "id": "4018732843144",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "pass-incompletion",
+      "type_text": "Pass Incompletion",
+      "text": "(Shotgun) C.Payton pass incomplete short left.",
+      "scoring_play": false,
+      "team": {
+        "id": 18,
+        "conference": "NFC",
+        "division": "EAST",
+        "location": "Philadelphia",
+        "name": "Eagles",
+        "full_name": "Philadelphia Eagles",
+        "abbreviation": "PHI"
+      },
+      "away_score": 0,
+      "home_score": 17
+    },
+    {
+      "id": "4018732843167",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "pass-incompletion",
+      "type_text": "Pass Incompletion",
+      "text": "(Shotgun) C.Payton pass incomplete short right to S.Toure.",
+      "scoring_play": false,
+      "team": {
+        "id": 18,
+        "conference": "NFC",
+        "division": "EAST",
+        "location": "Philadelphia",
+        "name": "Eagles",
+        "full_name": "Philadelphia Eagles",
+        "abbreviation": "PHI"
+      },
+      "away_score": 0,
+      "home_score": 17
+    },
+    {
+      "id": "4018732843190",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "punt",
+      "type_text": "Punt",
+      "text": "B.Mann punts 51 yards to BLT 34, Center-R.Underwood. D.Wade to BLT 38 for 4 yards (B.George; S.Toure).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 17
+    },
+    {
+      "id": "4018732843203",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "official-timeout",
+      "type_text": "Official Timeout",
+      "text": "Official Timeout at 09:57.",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 17
+    },
+    {
+      "id": "4018732843216",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "rush",
+      "type_text": "Rush",
+      "text": "E.Tau-Tolliver left end ran ob at BLT 43 for 5 yards (M.Pulley).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 17
+    },
+    {
+      "id": "4018732843259",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "penalty",
+      "type_text": "Penalty",
+      "text": "A.Reed pass incomplete deep left to C.Johnson [J.Weru].PENALTY on PHI-M.McWilliams, Defensive Holding, 5 yards, enforced at BLT 43 - No Play.",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 17
+    },
+    {
+      "id": "4018732843293",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "rush",
+      "type_text": "Rush",
+      "text": "E.Tau-Tolliver right guard to PHI 46 for 6 yards (A.Thomas; B.George).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 17
+    },
+    {
+      "id": "4018732843320",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "pass-reception",
+      "type_text": "Pass Reception",
+      "text": "A.Reed pass short left to T.Pezza to PHI 43 for 3 yards (K.Gushiken).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 17
+    },
+    {
+      "id": "4018732843345",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "rush",
+      "type_text": "Rush",
+      "text": "E.Tau-Tolliver up the middle to PHI 33 for 10 yards (M.McWilliams).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 17
+    },
+    {
+      "id": "4018732843367",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "rush",
+      "type_text": "Rush",
+      "text": "D.McMillan up the middle to PHI 32 for 1 yard (B.George; D.Lawson).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 17
+    },
+    {
+      "id": "4018732843389",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "sack",
+      "type_text": "Sack",
+      "text": "A.Reed sacked at PHI 41 for -9 yards (T.Jackson).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 17
+    },
+    {
+      "id": "4018732843409",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "pass-reception",
+      "type_text": "Pass Reception",
+      "text": "(Shotgun) A.Reed pass short middle to E.Sarratt to PHI 30 for 11 yards (M.Pulley).PENALTY on PHI-T.Robinson, Roughing the Passer, 15 yards, enforced at PHI 30.",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 17
+    },
+    {
+      "id": "4018732843445",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "rush",
+      "type_text": "Rush",
+      "text": "D.McMillan right guard to PHI 14 for 1 yard (J.Ramirez).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 17
+    },
+    {
+      "id": "4018732843467",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "rushing-touchdown",
+      "type_text": "Rushing Touchdown",
+      "text": "(Shotgun) A.Reed scrambles left end for 14 yards, TOUCHDOWN. T.Loop extra point is GOOD, Center-N.Moore, Holder-R.Eckley.",
+      "scoring_play": true,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 24
+    },
+    {
+      "id": "4018732843498",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "official-timeout",
+      "type_text": "Official Timeout",
+      "text": "Official Timeout at 05:07.",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 0,
+      "home_score": 24
+    },
+    {
+      "id": "4018732843505",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "kickoff",
+      "type_text": "Kickoff",
+      "text": "T.Loop kicks 57 yards from BLT 35 to PHI 8. E.Ezukanma to PHI 41 for 33 yards (A.Oruwariye; R.Longerbeam).",
+      "scoring_play": false,
+      "team": {
+        "id": 18,
+        "conference": "NFC",
+        "division": "EAST",
+        "location": "Philadelphia",
+        "name": "Eagles",
+        "full_name": "Philadelphia Eagles",
+        "abbreviation": "PHI"
+      },
+      "away_score": 0,
+      "home_score": 24
+    },
+    {
+      "id": "4018732843535",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "pass-incompletion",
+      "type_text": "Pass Incompletion",
+      "text": "(Shotgun) C.Payton pass incomplete short left to E.Ezukanma.",
+      "scoring_play": false,
+      "team": {
+        "id": 18,
+        "conference": "NFC",
+        "division": "EAST",
+        "location": "Philadelphia",
+        "name": "Eagles",
+        "full_name": "Philadelphia Eagles",
+        "abbreviation": "PHI"
+      },
+      "away_score": 0,
+      "home_score": 24
+    },
+    {
+      "id": "4018732843558",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "penalty",
+      "type_text": "Penalty",
+      "text": "(Shotgun) C.Payton scrambles left end to PHI 48 for 7 yards (C.Rivers; E.Burke).PENALTY on PHI-M.Hinton, Offensive Holding, 10 yards, enforced at PHI 41 - No Play.",
+      "scoring_play": false,
+      "team": {
+        "id": 18,
+        "conference": "NFC",
+        "division": "EAST",
+        "location": "Philadelphia",
+        "name": "Eagles",
+        "full_name": "Philadelphia Eagles",
+        "abbreviation": "PHI"
+      },
+      "away_score": 0,
+      "home_score": 24
+    },
+    {
+      "id": "4018732843592",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "pass-reception",
+      "type_text": "Pass Reception",
+      "text": "(Shotgun) C.Payton pass short middle to E.Jenkins to PHI 48 for 17 yards (S.Walters; R.Williford).",
+      "scoring_play": false,
+      "team": {
+        "id": 18,
+        "conference": "NFC",
+        "division": "EAST",
+        "location": "Philadelphia",
+        "name": "Eagles",
+        "full_name": "Philadelphia Eagles",
+        "abbreviation": "PHI"
+      },
+      "away_score": 0,
+      "home_score": 24
+    },
+    {
+      "id": "4018732843617",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "pass-incompletion",
+      "type_text": "Pass Incompletion",
+      "text": "(Shotgun) C.Payton pass incomplete short middle to S.Toure (C.Rivers).",
+      "scoring_play": false,
+      "team": {
+        "id": 18,
+        "conference": "NFC",
+        "division": "EAST",
+        "location": "Philadelphia",
+        "name": "Eagles",
+        "full_name": "Philadelphia Eagles",
+        "abbreviation": "PHI"
+      },
+      "away_score": 0,
+      "home_score": 24
+    },
+    {
+      "id": "4018732843640",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "rush",
+      "type_text": "Rush",
+      "text": "(Shotgun) C.Payton scrambles right tackle pushed ob at BLT 35 for 17 yards (E.Burke).",
+      "scoring_play": false,
+      "team": {
+        "id": 18,
+        "conference": "NFC",
+        "division": "EAST",
+        "location": "Philadelphia",
+        "name": "Eagles",
+        "full_name": "Philadelphia Eagles",
+        "abbreviation": "PHI"
+      },
+      "away_score": 0,
+      "home_score": 24
+    },
+    {
+      "id": "4018732843667",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "pass-incompletion",
+      "type_text": "Pass Incompletion",
+      "text": "(No Huddle, Shotgun) C.Payton pass incomplete short middle to S.Toure (D.Wilson).",
+      "scoring_play": false,
+      "team": {
+        "id": 18,
+        "conference": "NFC",
+        "division": "EAST",
+        "location": "Philadelphia",
+        "name": "Eagles",
+        "full_name": "Philadelphia Eagles",
+        "abbreviation": "PHI"
+      },
+      "away_score": 0,
+      "home_score": 24
+    },
+    {
+      "id": "4018732843690",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "rush",
+      "type_text": "Rush",
+      "text": "(Shotgun) C.Payton right end to BLT 20 for 15 yards (S.Walters).",
+      "scoring_play": false,
+      "team": {
+        "id": 18,
+        "conference": "NFC",
+        "division": "EAST",
+        "location": "Philadelphia",
+        "name": "Eagles",
+        "full_name": "Philadelphia Eagles",
+        "abbreviation": "PHI"
+      },
+      "away_score": 0,
+      "home_score": 24
+    },
+    {
+      "id": "4018732843712",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "pass-reception",
+      "type_text": "Pass Reception",
+      "text": "(No Huddle, Shotgun) C.Payton pass short right to J.Jackson to BLT 9 for 11 yards (L.Webb).",
+      "scoring_play": false,
+      "team": {
+        "id": 18,
+        "conference": "NFC",
+        "division": "EAST",
+        "location": "Philadelphia",
+        "name": "Eagles",
+        "full_name": "Philadelphia Eagles",
+        "abbreviation": "PHI"
+      },
+      "away_score": 0,
+      "home_score": 24
+    },
+    {
+      "id": "4018732843737",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "penalty",
+      "type_text": "Penalty",
+      "text": "(No Huddle, Shotgun) C.Payton scrambles left tackle ran ob at BLT 3 for 6 yards (C.Rivers).PENALTY on PHI-M.Morris, Offensive Holding, 10 yards, enforced at BLT 9 - No Play.",
+      "scoring_play": false,
+      "team": {
+        "id": 18,
+        "conference": "NFC",
+        "division": "EAST",
+        "location": "Philadelphia",
+        "name": "Eagles",
+        "full_name": "Philadelphia Eagles",
+        "abbreviation": "PHI"
+      },
+      "away_score": 0,
+      "home_score": 24
+    },
+    {
+      "id": "4018732843776",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "rush",
+      "type_text": "Rush",
+      "text": "(Shotgun) C.Payton scrambles up the middle to BLT 6 for 13 yards (C.Rivers).",
+      "scoring_play": false,
+      "team": {
+        "id": 18,
+        "conference": "NFC",
+        "division": "EAST",
+        "location": "Philadelphia",
+        "name": "Eagles",
+        "full_name": "Philadelphia Eagles",
+        "abbreviation": "PHI"
+      },
+      "away_score": 0,
+      "home_score": 24
+    },
+    {
+      "id": "4018732843798",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "passing-touchdown",
+      "type_text": "Passing Touchdown",
+      "text": "(No Huddle, Shotgun) C.Payton pass short right to E.Ezukanma for 6 yards, TOUCHDOWN [A.Graves]. J.Elliott extra point is GOOD, Center-R.Underwood, Holder-B.Mann.",
+      "scoring_play": true,
+      "team": {
+        "id": 18,
+        "conference": "NFC",
+        "division": "EAST",
+        "location": "Philadelphia",
+        "name": "Eagles",
+        "full_name": "Philadelphia Eagles",
+        "abbreviation": "PHI"
+      },
+      "away_score": 7,
+      "home_score": 24
+    },
+    {
+      "id": "4018732843844",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "kickoff",
+      "type_text": "Kickoff",
+      "text": "J.Elliott kicks 60 yards from PHI 35 to BLT 5. C.Moore to BLT 34 for 29 yards (B.George).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 7,
+      "home_score": 24
+    },
+    {
+      "id": "4018732843867",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "rush",
+      "type_text": "Rush",
+      "text": "E.Tau-Tolliver right end to BLT 40 for 6 yards (D.Blay; B.George).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 7,
+      "home_score": 24
+    },
+    {
+      "id": "4018732843878",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "two-minute-warning",
+      "type_text": "Two-minute warning",
+      "text": "Two-Minute Warning",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 7,
+      "home_score": 24
+    },
+    {
+      "id": "4018732843889",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "rush",
+      "type_text": "Rush",
+      "text": "D.McMillan up the middle to BLT 47 for 7 yards (M.Pulley).",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 7,
+      "home_score": 24
+    },
+    {
+      "id": "4018732843923",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "rush",
+      "type_text": "Rush",
+      "text": "A.Reed kneels to BLT 46 for -1 yards.",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 7,
+      "home_score": 24
+    },
+    {
+      "id": "4018732843945",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "rush",
+      "type_text": "Rush",
+      "text": "A.Reed kneels to BLT 45 for -1 yards.",
+      "scoring_play": false,
+      "team": {
+        "id": 6,
+        "conference": "AFC",
+        "division": "NORTH",
+        "location": "Baltimore",
+        "name": "Ravens",
+        "full_name": "Baltimore Ravens",
+        "abbreviation": "BAL"
+      },
+      "away_score": 7,
+      "home_score": 24
+    },
+    {
+      "id": "401873284493",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "pass-incompletion",
+      "type_text": "Pass Incompletion",
+      "text": "A.Dalton pass short right intended for T.Bigsby INTERCEPTED by A.Isaac at PHI 42. A.Isaac for 42 yards, TOUCHDOWN.The Replay Official reviewed the interception ruling, and the play was REVERSED.A.Dalton pass incomplete short right to T.Bigsby.",
+      "scoring_play": false,
+      "team": null,
+      "away_score": 0,
+      "home_score": 0
+    },
+    {
+      "id": "401873284986",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "end-period",
+      "type_text": "End Period",
+      "text": "END QUARTER 1",
+      "scoring_play": false,
+      "team": null,
+      "away_score": 0,
+      "home_score": 0
+    },
+    {
+      "id": "4018732841968",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "end-of-half",
+      "type_text": "End of Half",
+      "text": "END QUARTER 2",
+      "scoring_play": false,
+      "team": null,
+      "away_score": 0,
+      "home_score": 7
+    },
+    {
+      "id": "4018732842841",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "end-period",
+      "type_text": "End Period",
+      "text": "END QUARTER 3",
+      "scoring_play": false,
+      "team": null,
+      "away_score": 0,
+      "home_score": 10
+    },
+    {
+      "id": "4018732843967",
+      "game": {
+        "id": 1393562
+      },
+      "type_slug": "end-of-game",
+      "type_text": "End of Game",
+      "text": "END GAME",
+      "scoring_play": false,
+      "team": null,
+      "away_score": 7,
+      "home_score": 24
+    }
+  ],
+  "meta": {
+    "prev_cursor": 8892745,
+    "per_page": 100
+  }
+}

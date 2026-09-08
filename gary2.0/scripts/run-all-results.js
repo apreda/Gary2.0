@@ -20,6 +20,7 @@ import { WINNERS_CUTOVER_DATE } from '../src/services/pickdesk/winnersAdmissions
 import { pickSide, matchGame, canGroundGameScore } from '../src/services/teamMatch.js';
 import { factCheckPick, buildGameEvidence } from '../src/services/factCheck.js';
 import { generateRecap, filterPropsForGame, headlineNeedsRepair } from '../src/services/gameRecap.js';
+import { loadRecapBox, recapBoxComplete } from '../src/services/recapBox.js';
 import { runNightHighlights } from '../src/services/nightHighlights.js';
 import { writeStreaks } from '../src/services/streaksService.js';
 import { waitForBdlRequestSlot } from '../src/services/bdlRequestGate.js';
@@ -772,7 +773,7 @@ async function recapGradedPick({ pick, league, gameDate, result, hs, vs, matched
   // bug as writeRecap() in the cloud grade-results function).
   const { data: exist, error: dedupErr } = await supabase
     .from('game_recaps')
-    .select('id, result, headline')
+    .select('id, result, headline, box')
     .eq('game_date', gameDate)
     .eq('league', league)
     .eq('matchup', matchup)
@@ -783,7 +784,19 @@ async function recapGradedPick({ pick, league, gameDate, result, hs, vs, matched
   }
   const stale = !!exist && exist.result !== result;
   const editorialRepair = !!exist && headlineNeedsRepair(exist.headline);
+  let mlbStats = null;
+  let box = exist?.box ?? null;
+  if (stale || !recapBoxComplete(box, league) || box.away.runs !== vs || box.home.runs !== hs) {
+    if (league === 'MLB' && matchedGame?.id != null) mlbStats = await fetchMLBStats([matchedGame.id]);
+    box = await loadRecapBox({ league, gameId: matchedGame?.id ?? pick.game_id,
+      awayTeam: pick.awayTeam, homeTeam: pick.homeTeam, awayScore: vs, homeScore: hs,
+      mlbStats, apiKey: BDL_API_KEY });
+  }
   if (exist && !stale && !editorialRepair) {
+    if (box && JSON.stringify(box) !== JSON.stringify(exist.box)) {
+      const { error } = await supabase.from('game_recaps').update({ box }).eq('id', exist.id);
+      if (error) throw new Error(`Recap box update failed: ${error.message}`);
+    }
     console.log(`  ⏩ Recap exists: ${league} ${matchup} (${gameDate})`);
     return;
   }
@@ -792,8 +805,7 @@ async function recapGradedPick({ pick, league, gameDate, result, hs, vs, matched
   // fetch for prop grading — pitcher lines, HRs, team hit totals — plus this
   // game's graded props WITH their real prices, so bullets can carry the
   // betting lens without inventing odds.
-  let mlbStats = null;
-  if (league === 'MLB' && matchedGame?.id != null) {
+  if (!mlbStats && league === 'MLB' && matchedGame?.id != null) {
     mlbStats = await fetchMLBStats([matchedGame.id]);
   }
   const propRows = await fetchGradedPropRowsAround(gameDate);
@@ -830,7 +842,7 @@ async function recapGradedPick({ pick, league, gameDate, result, hs, vs, matched
   if (stale || editorialRepair) {
     const { error: updateErr } = await supabase
       .from('game_recaps')
-      .update({ result, headline: recap.headline, recap: recap.recap, bullets: recap.bullets || [] })
+      .update({ result, headline: recap.headline, recap: recap.recap, bullets: recap.bullets || [], box })
       .eq('id', exist.id);
     if (updateErr) {
       console.error(`  ❌ RECAP UPDATE FAILED [game_recaps] ${league} ${matchup} (${gameDate}): ${updateErr.message}`);
@@ -849,6 +861,7 @@ async function recapGradedPick({ pick, league, gameDate, result, hs, vs, matched
     headline: recap.headline,
     recap: recap.recap,
     bullets: recap.bullets || [],
+    box,
   });
   if (insertErr) {
     console.error(`  ❌ RECAP INSERT FAILED [game_recaps] ${league} ${matchup} (${gameDate}): ${insertErr.message}`);

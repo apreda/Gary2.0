@@ -14,7 +14,7 @@
  *        node scripts/backfill-recap-box.js --league=NCAAF 2026-09-03
  */
 import { createClient } from '@supabase/supabase-js';
-import { buildBoxLine, buildFootballBoxLine, buildFootballBoxLineFromPlays } from '../src/services/gameRecap.js';
+import { loadRecapBox, recapBoxComplete } from '../src/services/recapBox.js';
 await import('../src/loadEnv.js');
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -23,6 +23,7 @@ const BDL_API_KEY = process.env.BALLDONTLIE_API_KEY || process.env.VITE_BALL_DON
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const args = process.argv.slice(2);
+const dryRun = args.includes('--dry-run');
 const dates = args.filter((a) => /^\d{4}-\d{2}-\d{2}$/.test(a));
 const LEAGUE = (args.find((a) => a.startsWith('--league='))?.split('=')[1] ?? 'MLB').toUpperCase();
 const STAT_PATH = { MLB: 'mlb/v1/stats', NFL: 'nfl/v1/stats', NCAAF: 'ncaaf/v1/player_stats' }[LEAGUE];
@@ -48,56 +49,35 @@ async function statsForGame(gameId) {
   } catch { return null; }
 }
 
-/** One football game's plays — the exact touchdown count, returns included. */
-async function playsForGame(gameId) {
-  if (!BDL_API_KEY || gameId == null || LEAGUE === 'MLB') return null;
-  const path = LEAGUE === 'NFL' ? 'nfl/v1/plays' : 'ncaaf/v1/plays';
-  try {
-    const res = await fetch(`https://api.balldontlie.io/${path}?game_id=${gameId}&per_page=100`,
-      { headers: { Authorization: BDL_API_KEY }, signal: AbortSignal.timeout(20_000) });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data?.data?.length ? data.data : null;
-  } catch { return null; }
-}
-
 for (const date of dates) {
   const { data: recaps } = await supabase
     .from('game_recaps').select('id,matchup,box')
     .eq('game_date', date).eq('league', LEAGUE);
-  const { data: pickRows } = await supabase
-    .from('daily_picks').select('picks').eq('date', date);
   const { data: results } = await supabase
-    .from('game_results').select('matchup,final_score').eq('game_date', date);
-
-  const picks = (pickRows || []).flatMap((r) =>
-    typeof r.picks === 'string' ? JSON.parse(r.picks) : (r.picks || []));
-  const gameIdByMatchup = new Map(
-    picks.map((p) => [`${p.awayTeam} @ ${p.homeTeam}`, p.game_id]));
-  const scoreByMatchup = new Map((results || []).map((r) => [r.matchup, r.final_score]));
+    .from('game_results').select('game_id,matchup,final_score').eq('game_date', date).eq('league', LEAGUE);
 
   console.log(`\n📦 ${date} — ${recaps?.length ?? 0} ${LEAGUE} recap(s)`);
   let written = 0, skipped = 0;
 
   for (const row of recaps || []) {
     // Refresh rows written before the league's stat line joined the box.
-    const already = LEAGUE === 'MLB' ? row.box?.away?.hr : row.box?.away?.td;
-    if (already != null) { skipped++; continue; }
-    const gameId = gameIdByMatchup.get(row.matchup);
+    if (recapBoxComplete(row.box, LEAGUE)) { skipped++; continue; }
+    const matching = (results || []).filter(r => r.matchup === row.matchup);
+    if (matching.length !== 1 || matching[0].game_id == null) { skipped++; continue; }
+    const gameId = matching[0].game_id;
     const [away, home] = String(row.matchup || '').split(' @ ');
-    const [awayScore, homeScore] = String(scoreByMatchup.get(row.matchup) || '')
-      .split('-').map(Number);
-    const stats = await statsForGame(gameId);
+    const scoreParts = String(matching[0].final_score || '').split(/[-–]/).map(s => s.trim());
+    if (scoreParts.length !== 2 || !scoreParts.every(s => /^\d+$/.test(s))) { skipped++; continue; }
+    const [awayScore, homeScore] = scoreParts.map(Number);
+    const stats = LEAGUE === 'MLB' ? await statsForGame(gameId) : null;
     const sides = { awayTeam: away, homeTeam: home, awayScore, homeScore };
-    const box = LEAGUE === 'MLB'
-      ? buildBoxLine({ mlbStats: stats, ...sides })
-      : (buildFootballBoxLineFromPlays({ plays: await playsForGame(gameId), ...sides })
-         ?? buildFootballBoxLine({ playerStats: stats, ...sides }));
+    const box = await loadRecapBox({ league: LEAGUE, gameId, mlbStats: stats, ...sides, apiKey: BDL_API_KEY });
     if (!box) {
       console.log(`   ⏭️  ${row.matchup}: no usable box`);
       skipped++;
       continue;
     }
+    if (dryRun) { console.log(`   PREVIEW ${row.id} ${row.matchup}: ${JSON.stringify(box)}`); continue; }
     const { error } = await supabase.from('game_recaps').update({ box }).eq('id', row.id);
     if (error) {
       console.error(`   ❌ ${row.matchup}: ${error.message}`);

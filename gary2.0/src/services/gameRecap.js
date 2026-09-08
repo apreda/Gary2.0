@@ -354,20 +354,30 @@ export function buildFootballBoxLineFromPlays({ plays, awayTeam, homeTeam, awayS
   if (!awayName || !homeName || awayName === homeName) return null;
   const matches = (team, side) => !!team && !!side && (team.includes(side) || side.includes(team));
 
-  let awayTd = 0, homeTd = 0, sawScoring = false, sawTeam = false;
+  let awayTd = 0, homeTd = 0, sawScoring = false;
+  let previousAway = 0, previousHome = 0;
   for (const play of plays) {
+    const hasScores = Number.isInteger(play?.away_score) && Number.isInteger(play?.home_score);
+    const awayDelta = hasScores ? play.away_score - previousAway : null;
+    const homeDelta = hasScores ? play.home_score - previousHome : null;
+    if (hasScores) { previousAway = play.away_score; previousHome = play.home_score; }
     if (!play?.scoring_play) continue;
     sawScoring = true;
-    if (Number(play?.score_value) !== 6) continue;
-    const team = norm(play?.team?.college ?? play?.team?.full_name ?? play?.team?.name);
-    const isAway = matches(team, awayName), isHome = matches(team, homeName);
-    if (isAway === isHome) continue;
-    sawTeam = true;
+    // College supplies score_value; NFL supplies a structured play type.
+    const touchdown = play?.score_value != null ? Number(play.score_value) === 6
+      : /(?:^|[- ])touchdown$/i.test(play?.type_slug ?? play?.type_text ?? '');
+    if (!touchdown) continue;
+    const team = norm(play?.team?.full_name ?? play?.team?.college ?? play?.team?.name);
+    // A return TD may carry the possession team's identity. The actual score
+    // change identifies who received the six points (plus an attached try).
+    const isAway = hasScores ? [6, 7, 8].includes(awayDelta) && homeDelta === 0 : matches(team, awayName);
+    const isHome = hasScores ? [6, 7, 8].includes(homeDelta) && awayDelta === 0 : matches(team, homeName);
+    if (isAway === isHome) return null;
     if (isAway) awayTd += 1; else homeTd += 1;
   }
   // No scoring plays at all means the feed has no play data for this game —
   // not a 0-0 game (which would still carry kickoffs and punts).
-  if (!sawScoring || !sawTeam) return null;
+  if (!sawScoring) return null;
   if (Number.isFinite(awayScore) && awayTd * 6 > awayScore) return null;
   if (Number.isFinite(homeScore) && homeTd * 6 > homeScore) return null;
 

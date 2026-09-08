@@ -315,8 +315,8 @@ struct HomeView: View {
     @State private var lastNightRecord: (w: Int, l: Int, p: Int) = (0, 0, 0)
     /// "TODAY" once the rolling recap has crossed into today's graded picks, else "LAST NIGHT".
     @State private var recapLabel: String = "LAST NIGHT"
-    /// matchup (lowercased) → "3-1". The recap rows don't carry a score, so
-    /// the headline card borrows it from the same results the board reads.
+    /// Exact dated ticket → numeric away-home score, used only when the recap
+    /// has no structured box score. Never store team-labeled display text here.
     @State private var scoreByMatchup: [String: String] = [:]
     /// GAME picks only — the rolling Home scorecard. It holds yesterday before
     /// first pitch, then becomes today's live/settled record.
@@ -1013,13 +1013,7 @@ struct HomeView: View {
                     // ride the load's single parallel wave at the top; these awaits
                     // just collect results that have been in flight the whole time.)
                     // Scores first — headlineStories reads this map as it builds.
-                    scoreByMatchup = Dictionary(
-                        recentGameResults.compactMap { r -> (String, String)? in
-                            guard let m = r.matchup?.lowercased(), let s = r.displayFinalScore,
-                                  !m.isEmpty, !s.isEmpty else { return nil }
-                            return (m, s)
-                        },
-                        uniquingKeysWith: { first, _ in first })
+                    scoreByMatchup = HomeRecapScores.index(recentGameResults)
                     let recapsToday = await recapsTodayF
                     let fetchedRecaps = recapsToday.isEmpty ? await recapsGradedF : recapsToday
                     guard canPublish() else { return }
@@ -1351,12 +1345,7 @@ struct HomeView: View {
         }
 
         if !recentGames.isEmpty {
-            scoreByMatchup = Dictionary(
-                recentGames.compactMap { row -> (String, String)? in
-                    guard let matchup = row.matchup?.lowercased(), let score = row.displayFinalScore,
-                          !matchup.isEmpty, !score.isEmpty else { return nil }
-                    return (matchup, score)
-                }, uniquingKeysWith: { first, _ in first })
+            scoreByMatchup = HomeRecapScores.index(recentGames)
             sheetGameResults = recentGames.filter {
                 $0.game_date == date && ["won", "lost", "push"].contains(($0.result ?? "").lowercased())
             }
@@ -1508,8 +1497,9 @@ struct HomeView: View {
                 cashed: cashed, recap: r.recap, bullets: r.bullets ?? [],
                 matchup: mu,
                 odds: split.1,
-                // The recap row carries no score; the board's own results do.
-                score: scoreByMatchup[mu.lowercased()],
+                // Prefer this recap's own box, with an exact dated-ticket fallback.
+                score: r.box?.finalScore ?? scoreByMatchup[HomeRecapScores.key(
+                    date: r.game_date, league: r.league, matchup: mu, pick: r.pick_text)],
                 date: Self.shortSlateDay(r.game_date),
                 awayHits: r.box?.away?.hits,
                 homeHits: r.box?.home?.hits,

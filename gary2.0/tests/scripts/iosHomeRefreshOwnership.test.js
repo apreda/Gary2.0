@@ -31,6 +31,7 @@ function fixture(source) {
   ].map(method => method.replace(/^private /, '')).join('\n');
   const clock = [block(api, 'static func todayEST(').replace('todayEST', 'slateDate'), block(api, 'private static func formatDateEST(')].join('\n');
   return readFileSync(new URL('../fixtures/ios/homeRefreshOwnership.swift', import.meta.url), 'utf8')
+    .replace('/* SHIPPING_RECAP_SCORES */', block(read('Models'), 'enum HomeRecapScores'))
     .replace('/* SHIPPING_CLOCK */', clock).replace('/* SHIPPING_METHODS */', methods);
 }
 function runSwift(swift) {

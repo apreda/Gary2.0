@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-const state = vi.hoisted(() => ({ recap: vi.fn(), inserts: [], queryError: null }));
+const state = vi.hoisted(() => ({ recap: vi.fn(), inserts: [], updates: [], existing: null, queryError: null }));
 vi.mock('../../src/loadEnv.js', () => ({}));
 vi.mock('../../src/services/factCheck.js', () => ({ buildGameEvidence: () => 'Verified final: Away 101, Home 99.' }));
 vi.mock('../../src/services/gameRecap.js', () => ({
@@ -8,18 +8,23 @@ vi.mock('../../src/services/gameRecap.js', () => ({
   gameOnlyHeadline: text => text, headlineNeedsRepair: () => false,
 }));
 vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({ from: table => {
+  let update;
   const builder = {
     select: () => builder, eq: () => builder, in: () => builder,
-    maybeSingle: async () => ({ data: null, error: null }),
+    maybeSingle: async () => ({ data: state.existing, error: null }),
+    update: row => { update = row; return builder; },
     insert: async row => { state.inserts.push(row); return { error: state.queryError }; },
-    then: resolve => resolve({ data: table === 'daily_picks' ? [{ picks: [{ league: 'NBA', game_id: 1, awayTeam: 'Away', homeTeam: 'Home', pick: 'Away -1' }] }]
-      : table === 'game_results' ? [{ game_date: '2026-09-04', league: 'NBA', matchup: 'Away @ Home', pick_text: 'Away -1', result: 'won', final_score: '101-99' }] : [], error: null }),
+    then: resolve => {
+      if (update) { state.updates.push(update); return resolve({ error: state.queryError }); }
+      return resolve({ data: table === 'daily_picks' ? [{ picks: [{ league: 'NBA', game_id: 1, awayTeam: 'Away', homeTeam: 'Home', pick: 'Away -1' }] }]
+        : table === 'game_results' ? [{ game_date: '2026-09-04', league: 'NBA', matchup: 'Away @ Home', pick_text: 'Away -1', result: 'won', final_score: '101-99' }] : [], error: null });
+    },
   }; return builder;
 } }) }));
 const savedArgv = process.argv;
 const savedExit = process.exitCode;
 beforeEach(() => {
-  vi.resetModules(); vi.clearAllMocks(); state.inserts = []; state.queryError = null;
+  vi.resetModules(); vi.clearAllMocks(); state.inserts = []; state.updates = []; state.existing = null; state.queryError = null;
   vi.spyOn(console, 'log').mockImplementation(() => {});
   vi.spyOn(console, 'warn').mockImplementation(() => {});
   vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -35,6 +40,14 @@ async function run() {
   await Promise.resolve();
 }
 describe('recap job outcome', () => {
+  it('repairs an existing recap box with no narrative call, even in a forced box-only repair', async () => {
+    state.existing = { id: 42, headline: 'Original headline', box: null };
+    process.argv.push('--repair-boxes-only', '--force');
+    await run();
+    expect(state.recap).not.toHaveBeenCalled();
+    expect(state.inserts).toHaveLength(0);
+    expect(state.updates).toEqual([{ box: { away: { runs: 101 }, home: { runs: 99 } } }]);
+  });
   it('reports provider failure to launchd instead of exiting successfully with no recap', async () => {
     state.recap.mockResolvedValue(null);
     await run();

@@ -917,6 +917,38 @@ struct BoxLine: Decodable {
     }
     let away: Side?
     let home: Side?
+
+    /// Structured recap scores always follow the stored away/home sides.
+    var finalScore: String? {
+        guard let a = away?.runs, let h = home?.runs, a >= 0, h >= 0 else { return nil }
+        return "\(a)-\(h)"
+    }
+}
+
+/// The box renderer takes numeric away-home scores, never presentation text.
+/// Date, league and original ticket keep repeated matchups apart. Conflicting
+/// duplicate results are unavailable instead of choosing an arbitrary score.
+enum HomeRecapScores {
+    static func key(date: String?, league: String?, matchup: String?, pick: String?) -> String {
+        [date, league, matchup, pick].map {
+            ($0 ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        }.joined(separator: "|")
+    }
+
+    static func index(_ results: [GameResult]) -> [String: String] {
+        var scores: [String: String] = [:]
+        var conflicts = Set<String>()
+        for row in results {
+            guard let score = row.teamScores else { continue }
+            let k = key(date: row.game_date, league: row.effectiveLeague,
+                        matchup: row.matchup, pick: row.pick_text)
+            let value = "\(score.a)-\(score.h)"
+            if let previous = scores[k], previous != value { conflicts.insert(k) }
+            scores[k] = value
+        }
+        for key in conflicts { scores.removeValue(forKey: key) }
+        return scores
+    }
 }
 
 // MARK: - Streaks (live runs around the league — teams + bats, $0 pipeline)

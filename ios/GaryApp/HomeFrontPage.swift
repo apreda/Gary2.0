@@ -1114,6 +1114,10 @@ struct HeadlineFlipCard: View {
                 // Real box lines — hits, errors, the winning pitcher — need a
                 // pipeline field first: game_results stores only the score.
                 if let s = Self.sides(story) {
+                    Text("FINAL")
+                        .font(GaryFonts.kicker(8)).tracking(1)
+                        .foregroundStyle(.white.opacity(0.55))
+                        .padding(.bottom, 4)
                     scoreRow(s.away.name, s.away.runs, winner: s.away.runs > s.home.runs)
                     boxRule
                     scoreRow(s.home.name, s.home.runs, winner: s.home.runs > s.away.runs)
@@ -1191,8 +1195,10 @@ struct HeadlineFlipCard: View {
     /// form, "HRs" and "TDs", the way the box's team codes are short). nil
     /// when the night's box carried neither.
     private var boxStatLine: (label: String, total: Int)? {
-        if let a = story.awayTD, let h = story.homeTD { return ("TDs", a + h) }
-        if let a = story.awayHR, let h = story.homeHR { return ("HRs", a + h) }
+        if ["NFL", "NCAAF"].contains(story.league.uppercased()),
+           let a = story.awayTD, let h = story.homeTD, a >= 0, h >= 0 { return ("TDs", a + h) }
+        if story.league.uppercased() == "MLB",
+           let a = story.awayHR, let h = story.homeHR, a >= 0, h >= 0 { return ("HRs", a + h) }
         return nil
     }
 
@@ -1213,9 +1219,9 @@ struct HeadlineFlipCard: View {
             .map { $0.trimmingCharacters(in: .whitespaces) }
         guard clubs.count == 2, !clubs[0].isEmpty, !clubs[1].isEmpty else { return nil }
         let runs = (s.score ?? "").components(separatedBy: CharacterSet(charactersIn: "-–—"))
-            .compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
-        guard runs.count == 2 else { return nil }
-        return (away: (clubs[0], runs[0]), home: (clubs[1], runs[1]))
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+        guard runs.count == 2, let a = Int(runs[0]), let h = Int(runs[1]), a >= 0, h >= 0 else { return nil }
+        return (away: (clubs[0], a), home: (clubs[1], h))
     }
 
     // (moneyText/footMeta deleted Aug 20 — the founder took the money and the
