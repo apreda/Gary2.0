@@ -416,6 +416,32 @@ describe('September 3–4 published copy regressions', () => {
 });
 
 describe('standalone-sentence gate (founder, Aug 26 — the Pirates tweet)', () => {
+  it('rejects the September 7 Athletics excerpt whose capitalized Across hides an unnamed pitcher', () => {
+    const anonymous = 'Across his last five starts, he has a 2.40 ERA over 30.0 innings, with 33 strikeouts and nine walks.';
+    const namedFact = 'Harris last pitched September 4, and Medina last pitched September 3.';
+    const rationale = `Lopez’s improvement is the deciding factor for me. ${anonymous}\n\n${namedFact}`;
+    expect(isStandaloneSentence(anonymous)).toBe(false);
+    expect(reasonCandidates(rationale)).toEqual([namedFact]);
+    expect(isSafeReasonPair(rationale, { opening: anonymous, closing: '' }, 261)).toBe(false);
+    expect(fallbackReasonPair(rationale, 261)).toEqual({ opening: namedFact, closing: '' });
+  });
+
+  it('still accepts an Across sentence with a named subject before its pronoun', () => {
+    const sentence = 'Across five starts, Lopez has worked 30 innings with his 2.40 ERA.';
+    expect(isStandaloneSentence(sentence)).toBe(true);
+    expect(isConcreteFactSentence(sentence)).toBe(true);
+    expect(isStandaloneSentence('Across his five starts, Lopez has worked 30 innings.')).toBe(false);
+  });
+
+  it.each([
+    'Graceffo last pitched September 2 and gives St. Louis an option for multiple innings; O’Brien last worked September 4, throwing 12 pitches.',
+    'Burns’ slider carries a 52.0% whiff rate; his latest start produced seven strikeouts, one walk and two earned runs over 5⅔ innings.',
+    'Williamson covered 5⅓ innings on 87 pitches in his return, allowing three earned runs.',
+  ])('preserves the other naturally published September 7 factual excerpts: %s', (sentence) => {
+    expect(isConcreteFactSentence(sentence)).toBe(true);
+    expect(isSafeReasonPair(sentence, { opening: sentence, closing: '' }, 278)).toBe(true);
+  });
+
   it('drops the exact torn-context opener that reached the feed', () => {
     expect(isStandaloneSentence('But the price compensates for those advantages, while the starting-pitcher platoon matchup points toward Pittsburgh.')).toBe(false);
   });

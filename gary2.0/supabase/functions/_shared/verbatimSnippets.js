@@ -104,7 +104,7 @@ const STAT_ABBREVIATIONS = new Set(['ERA', 'WHIP', 'OPS', 'ER', 'K', 'BB', 'HR',
 // name when it is not an ordinary sentence-starter ("Holmes has..." resolves
 // a later "he"; "Their bullpen..." never does — TORN_OPENER catches those).
 const STARTER_STOPWORDS = new Set([
-  'the', 'a', 'an', 'in', 'on', 'at', 'over', 'with', 'without', 'if', 'when',
+  'the', 'a', 'an', 'in', 'on', 'at', 'over', 'across', 'with', 'without', 'if', 'when',
   'while', 'after', 'before', 'neither', 'both', 'nothing', 'there', 'what',
   'even', 'only', 'now', 'one', 'two', 'no', 'not', 'my', 'i',
   'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven',
