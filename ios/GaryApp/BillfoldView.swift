@@ -9,6 +9,93 @@ import WebKit
 import SafariServices
 import StoreKit
 
+// Shared Billfold presentation for Gary's record and the personal book.
+struct BillfoldBalanceValue: View {
+    let value: String
+
+    var body: some View {
+        Text(value)
+            .font(.system(size: 46, weight: .medium, design: .default))
+            .foregroundStyle(Color.white)
+            .minimumScaleFactor(0.5)
+            .lineLimit(1)
+            .contentTransition(.numericText())
+            .shadow(color: .black.opacity(0.5), radius: 1, y: 1)
+    }
+}
+
+struct BillfoldFilterTab: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Text(title)
+                    .font(.system(size: 12, weight: isSelected ? .bold : .medium, design: .default))
+                    .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.55))
+                Rectangle()
+                    .fill(isSelected ? GaryColors.gold : .clear)
+                    .frame(height: 1.5)
+            }
+        }
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+struct BillfoldMenuLabel: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold, design: .default))
+            Image(systemName: "chevron.down")
+                .font(.system(size: 7, weight: .bold))
+        }
+        .foregroundStyle(GaryColors.gold)
+        .padding(.horizontal, 6)
+        .frame(minHeight: 36)
+        .contentShape(Rectangle())
+    }
+}
+
+struct BillfoldSectionTitle: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 9, weight: .bold))
+            .tracking(1)
+            .foregroundStyle(Color.white.opacity(0.55))
+    }
+}
+
+struct BillfoldResultDots: View {
+    /// Settled outcomes ordered oldest to newest.
+    let results: [String]
+
+    var body: some View {
+        HStack(spacing: 5) {
+            let dots = Array(results.suffix(10))
+            let pad = 10 - dots.count
+            ForEach(0..<10, id: \.self) { i in
+                let result: String? = i >= pad && i - pad < dots.count ? dots[i - pad] : nil
+                Circle()
+                    .fill(
+                        result == "won" ? GaryColors.win :
+                        result == "lost" ? GaryColors.loss :
+                        result == "push" ? GaryColors.gold :
+                        Color.white.opacity(0.12)
+                    )
+                    .frame(width: 6, height: 6)
+            }
+        }
+        .padding(.top, 2)
+    }
+}
+
 // MARK: - Billfold View
 
 struct BillfoldView: View {
@@ -284,11 +371,7 @@ struct BillfoldView: View {
                     // Gary's tabs/timeframes are his-book controls only.
                     // The standings live in the BOARD scope (founder, Aug 20:
                     // the whole Book rides inside the Billfold, not the dock).
-                    ScrollView(showsIndicators: false) {
-                        UserBookSection()
-                            .padding(.top, 6)
-                            .padding(.bottom, 120)
-                    }
+                    UserBookSection()
                 } else if AppFlags.userBookEnabled, billfoldScope == "board" {
                     // THE BOARD — the classic leaderboard (podium + table).
                     ScrollView(showsIndicators: false) {
@@ -617,19 +700,8 @@ struct BillfoldView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
                     ForEach(sortedSportsForBillfold, id: \.self) { sport in
-                        let isSelected = selectedSport == sport
-
-                        Button {
+                        BillfoldFilterTab(title: sport.rawValue, isSelected: selectedSport == sport) {
                             selectedSport = sport
-                        } label: {
-                            VStack(spacing: 4) {
-                                Text(sport.rawValue)
-                                    .font(.system(size: 12, weight: isSelected ? .bold : .medium, design: .default))
-                                    .foregroundStyle(isSelected ? paper : paper.opacity(0.55))
-                                Rectangle()
-                                    .fill(isSelected ? brass : .clear)
-                                    .frame(height: 1.5)
-                            }
                         }
                     }
                 }
@@ -672,19 +744,7 @@ struct BillfoldView: View {
     }
 
     private func passbookChip(_ label: String) -> some View {
-        // No bubble — brass text + chevron; the chevron alone says "menu".
-        HStack(spacing: 3) {
-            Text(label)
-                .font(.system(size: 12, weight: .semibold, design: .default))
-            Image(systemName: "chevron.down")
-                .font(.system(size: 7, weight: .bold))
-        }
-        .foregroundStyle(brass)
-        .padding(.horizontal, 6)
-        // 36 keeps a real tap target without the old 44pt row's dead slack
-        // under the small type (founder, Aug 6 night: "weird spacing").
-        .frame(minHeight: 36)
-        .contentShape(Rectangle())
+        BillfoldMenuLabel(title: label)
     }
 
 
@@ -708,14 +768,8 @@ struct BillfoldView: View {
                 .tracking(1)
                 .foregroundStyle(brass.opacity(0.85))
 
-            Text(signedDollars(netDollars))
-                .font(.system(size: 46, weight: .medium, design: .default))
-                .foregroundStyle(paper)
-                .minimumScaleFactor(0.5)
-                .lineLimit(1)
-                .contentTransition(.numericText())
+            BillfoldBalanceValue(value: signedDollars(netDollars))
                 .animation(.snappy, value: netDollars)
-                .shadow(color: .black.opacity(0.5), radius: 1, y: 1)
 
             VStack(spacing: 5) {
                 HStack(spacing: 9) {
@@ -772,22 +826,7 @@ struct BillfoldView: View {
             .padding(.horizontal, 18)
 
             // Last-10 punch row — wallet card punches, oldest → newest
-            HStack(spacing: 5) {
-                let dots = journal.last10
-                let pad = 10 - dots.count
-                ForEach(0..<10, id: \.self) { i in
-                    let result: String? = i >= pad && i - pad < dots.count ? dots[i - pad] : nil
-                    Circle()
-                        .fill(
-                            result == "won" ? emerald :
-                            result == "lost" ? crimson :
-                            result == "push" ? brass :
-                            paper.opacity(0.12)
-                        )
-                        .frame(width: 6, height: 6)
-                }
-            }
-            .padding(.top, 2)
+            BillfoldResultDots(results: journal.last10)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 6)
@@ -1421,10 +1460,7 @@ struct BillfoldView: View {
     // MARK: - Performance Ledger (by-sport grid + top pick / by spread)
 
     private func ledgerEyebrow(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 9, weight: .bold))
-            .tracking(1)
-            .foregroundStyle(ink.opacity(0.55))
+        BillfoldSectionTitle(title: text)
     }
 
     private func ledgerChip(_ label: String, options: [String], uppercase: Bool = true, action: @escaping (String) -> Void) -> some View {

@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 
 // ─────────────────────────────────────────────────────────────────────────────
 // YOUR BOOK — Tail/Fade + personal ledger (Jul 26 2026).
@@ -932,7 +933,6 @@ struct UserBookSection: View {
     @State private var visibleDays = 30
     @State private var favoritesOnly = false
     @State private var query = ""
-    @State private var exportURL: URL?
     @State private var bets: [UserBet] = []
     @State private var loading = true
     @State private var showQuickLog = false
@@ -977,54 +977,20 @@ struct UserBookSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            if AuthManager.shared.bearerToken == nil {
-                signedOutCard
-            } else if loading {
-                ProgressView().tint(.white.opacity(0.4))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 60)
-            } else if loadFailed {
-                unavailableCard
-            } else if withGary.isEmpty && yourPlays.isEmpty {
-                emptyBookCard
-            } else {
-                // The book, in the Gary page's own order: the wallet header
-                // (record + money + win%), the ride, then the pieces only a
-                // user has — streak, filters, the split book, tiles, slips,
-                // the day ledger.
-                walletHeader
-                if profitPoints.count >= 2 { profitChart }
-                streakCrown
-                VStack(alignment: .leading, spacing: 14) {
-                    trackerFilters
-                    splitBookHeader
-                    statTiles
-                }
-                .padding(14)
-                .background(bookCard())
-                HStack(spacing: 12) {
-                    TextField("Search your bets", text: $query)
-                        .font(GaryFonts.text(13)).textInputAutocapitalization(.never)
-                    Button { favoritesOnly.toggle() } label: {
-                        Image(systemName: favoritesOnly ? "heart.fill" : "heart")
-                            .foregroundStyle(favoritesOnly ? GaryColors.gold : .white.opacity(0.6))
-                            .frame(width: 44, height: 44)
-                    }.accessibilityLabel(favoritesOnly ? "Show all bets" : "Show favorites")
-                    ShareLink(item: BookExport.csv(scopedBets), preview: SharePreview("My Gary bet history")) {
-                        Image(systemName: "square.and.arrow.up").frame(width: 44, height: 44)
-                    }.accessibilityLabel("Export filtered bet history as CSV")
-                }
-                .padding(.horizontal, 12).background(bookCard())
-                pendingBlock
-                settledByDay
-                if scopedBets.isEmpty {
-                    Text("No history matches this date range and filters.")
-                        .font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.6))
-                }
+        VStack(spacing: 0) {
+            if auth.bearerToken != nil, !loading, !loadFailed, !bets.isEmpty {
+                trackerFilters
+                    .padding(.horizontal, 18)
+                    .padding(.top, 4)
             }
+            ScrollView(showsIndicators: false) {
+                bookContent
+                    .padding(.horizontal, 16)
+                    .padding(.top, 4)
+                    .padding(.bottom, 120)
+            }
+            .refreshable { await refreshBook() }
         }
-        .padding(.horizontal, 16)
         .task(id: auth.currentUser?.id) {
             bets = []; streak = nil; todayPicks = []; liveScores = []
             loading = true; loadFailed = false
@@ -1036,9 +1002,7 @@ struct UserBookSection: View {
         .onChange(of: scenePhase) { phase in
             if phase == .active { Task { await refreshBook() } }
         }
-        .refreshable { await refreshBook() }
         .onGaryTour { verb, _ in
-            // QA harness: open the add-a-bet directory without a tap.
             if verb == "logbet" { showQuickLog = true }
         }
         .sheet(isPresented: $showUnitSheet) { UnitSizeSheet() }
@@ -1051,72 +1015,159 @@ struct UserBookSection: View {
         }
     }
 
-    // ── The wallet header — the Gary page's own top block, for YOUR numbers:
-    // verified record big, the money beside it, win% + the run + the share
-    // and log actions on the kicker row.
-    private var walletHeader: some View {
-        let g = record(withGary.filter { !$0.isPending })
-        let decided = g.w + g.l
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("YOUR BOOK · GRADED BY THE MACHINE")
-                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1.3)
-                    .foregroundStyle(GaryColors.gold)
-                Spacer()
-                if withGary.contains(where: { !$0.isPending }) {
-                    Button {
-                        let line = (streak?.current ?? 0) >= 2
-                            ? "Day \(streak!.current) of the streak"
-                            : currentStreakText(withGary)
-                        if let img = renderRideShareImage(record: g, streakText: line) {
-                            shareImage = UserBookShareImage(image: img)
-                        }
-                    } label: {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.62))
-                            .frame(width: 24, height: 24)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Share your record")
+    private var bookContent: some View {
+        VStack(alignment: .leading, spacing: 26) {
+            if AuthManager.shared.bearerToken == nil {
+                signedOutCard
+            } else if loading {
+                ProgressView().tint(.white.opacity(0.4))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 60)
+            } else if loadFailed {
+                unavailableCard
+            } else if withGary.isEmpty && yourPlays.isEmpty {
+                emptyBookCard
+            } else {
+                walletHeader
+                profitChart
+                bookActions
+                streakCrown
+                splitBookHeader
+                statTiles
+                HStack(spacing: 12) {
+                    TextField("Search your bets", text: $query)
+                        .font(GaryFonts.text(13)).textInputAutocapitalization(.never)
+                    Button { favoritesOnly.toggle() } label: {
+                        Image(systemName: favoritesOnly ? "heart.fill" : "heart")
+                            .foregroundStyle(favoritesOnly ? GaryColors.gold : .white.opacity(0.6))
+                            .frame(width: 44, height: 44)
+                    }.accessibilityLabel(favoritesOnly ? "Show all bets" : "Show favorites")
+                    ShareLink(item: BookExport.csv(scopedBets), preview: SharePreview("My Gary bet history")) {
+                        Image(systemName: "square.and.arrow.up").frame(width: 44, height: 44)
+                    }.accessibilityLabel("Export filtered bet history as CSV")
                 }
-                Button { showQuickLog = true } label: {
-                    Text("+ LOG A BET")
-                        .font(GaryFonts.mono(9.5, bold: true)).tracking(0.8)
-                        .foregroundStyle(.black)
-                        .padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(Capsule().fill(GaryColors.gold))
+                .padding(.horizontal, 12)
+                .overlay(alignment: .bottom) {
+                    Rectangle().fill(Color.white.opacity(0.08)).frame(height: 0.5)
                 }
-                .buttonStyle(.plain)
+                pendingBlock
+                settledByDay
+                if scopedBets.isEmpty {
+                    Text("No history matches this date range and filters.")
+                        .font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.6))
+                }
             }
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text("\(g.w)\u{2013}\(g.l)\(g.p > 0 ? "\u{2013}\(g.p)" : "")")
-                    .font(GaryFonts.text(40, .heavy))
-                    .foregroundStyle(GaryColors.warmWhite)
-                    .lineLimit(1).minimumScaleFactor(0.6)
-                Text(BookMoney.netTotal(g.units))
-                    .font(GaryFonts.mono(18, bold: true))
-                    .foregroundStyle(g.units >= 0 ? GaryColors.win : GaryColors.loss)
-                Spacer(minLength: 0)
-            }
-            HStack(spacing: 8) {
-                if decided > 0 {
-                    Text(String(format: "%.1f%% WIN", Double(g.w) / Double(decided) * 100))
-                }
-                if let run = runLabel(withGary) {
-                    Text("·").foregroundStyle(.white.opacity(0.3))
-                    Text(run).foregroundStyle(run.hasPrefix("W") ? GaryColors.gold : GaryColors.loss)
-                }
-                Text("·").foregroundStyle(.white.opacity(0.3))
-                Text("LOCKED AT FIRST PITCH")
-                Spacer()
-            }
-            .font(GaryFonts.mono(9.5, bold: true)).tracking(0.7)
-            .foregroundStyle(.white.opacity(0.5))
         }
-        .padding(16)
-        .background(bookCard())
+    }
+
+    // The headline and curve always describe one grading source. The ledger
+    // can show both sources, with their records separately labeled below.
+    private var summaryBets: [UserBet] {
+        kindFilter == "manual" ? scopedYourPlays : scopedWithGary
+    }
+
+    private var summarySettled: [UserBet] {
+        summaryBets.filter { !$0.isPending && $0.status != "void" }
+            .sorted { a, b in
+                a.game_date == b.game_date
+                    ? (a.placed_at ?? "") < (b.placed_at ?? "")
+                    : a.game_date < b.game_date
+            }
+    }
+
+    private var summarySource: String {
+        switch kindFilter {
+        case "tail": return "TAILS · VERIFIED"
+        case "fade": return "FADES · VERIFIED"
+        case "manual": return "YOUR PLAYS · SELF-GRADED"
+        default: return "WITH GARY · VERIFIED"
+        }
+    }
+
+    private var timeframeLabel: String {
+        switch timeframe {
+        case "7d": return "Last 7 days"
+        case "30d": return "Last 30 days"
+        case "season": return "Season"
+        default: return "All time"
+        }
+    }
+
+    private var walletHeader: some View {
+        let g = record(summarySettled)
+        let decided = g.w + g.l
+        let staked = summarySettled.filter { $0.status == "won" || $0.status == "lost" }
+            .reduce(0.0) { $0 + $1.stake_units }
+        return VStack(spacing: 7) {
+            Text("NET BALANCE · \(kindFilter == "manual" ? "YOUR PLAYS" : "WITH GARY")")
+                .font(.system(size: 10, weight: .semibold)).tracking(1)
+                .foregroundStyle(GaryColors.gold.opacity(0.85))
+            BillfoldBalanceValue(value: BookMoney.netTotal(g.units))
+            VStack(spacing: 5) {
+                HStack(spacing: 9) {
+                    Text(staked > 0 ? String(format: "ROI %+.1f%%", g.units / staked * 100) : "ROI —")
+                        .font(.system(size: 14, weight: .bold).monospacedDigit())
+                        .foregroundStyle(staked > 0 ? (g.units >= 0 ? GaryColors.win : GaryColors.loss) : .white.opacity(0.5))
+                    Text("·").foregroundStyle(GaryColors.gold.opacity(0.5))
+                    Text("\(g.w)–\(g.l)–\(g.p)")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.85))
+                    Text("·").foregroundStyle(GaryColors.gold.opacity(0.5))
+                    Text(String(format: "%+.1fu", g.units))
+                        .font(GaryFonts.mono(12, bold: true)).foregroundStyle(.white.opacity(0.75))
+                }
+                HStack(spacing: 9) {
+                    Text(decided > 0 ? String(format: "%.0f%% win", Double(g.w) / Double(decided) * 100) : "Win rate —")
+                    Text("·").foregroundStyle(GaryColors.gold.opacity(0.5))
+                    Text(timeframeLabel)
+                }
+                .font(.system(size: 12, weight: .medium)).foregroundStyle(GaryColors.gold)
+            }
+            BillfoldResultDots(results: Array(summarySettled.suffix(10).map(\.status)))
+            Text(summarySource)
+                .font(.system(size: 8, weight: .semibold)).tracking(0.8)
+                .foregroundStyle(.white.opacity(0.45))
+                .padding(.top, 3)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 6).padding(.bottom, 2)
+    }
+
+    private var bookActions: some View {
+        HStack(spacing: 16) {
+            Button { showQuickLog = true } label: {
+                Label("LOG A BET", systemImage: "plus")
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(minHeight: 44)
+            }
+            Spacer()
+            if withGary.contains(where: { !$0.isPending }) {
+                Button {
+                    let g = record(withGary.filter { !$0.isPending })
+                    let line = (streak?.current ?? 0) >= 2
+                        ? "Day \(streak!.current) of the streak" : currentStreakText(withGary)
+                    if let img = renderRideShareImage(record: g, streakText: line) {
+                        shareImage = UserBookShareImage(image: img)
+                    }
+                } label: {
+                    VStack(alignment: .trailing, spacing: 3) {
+                        Label("SHARE VERIFIED", systemImage: "square.and.arrow.up")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text("ALL TIME")
+                            .font(.system(size: 8, weight: .medium)).tracking(0.5)
+                            .foregroundStyle(.white.opacity(0.45))
+                    }
+                    .frame(minHeight: 44)
+                }
+                .accessibilityLabel("Share your all-time verified record")
+            }
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(GaryColors.gold)
+        .padding(.horizontal, 12)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Color.white.opacity(0.08)).frame(height: 0.5)
+        }
     }
 
     private var signedOutCard: some View {
@@ -1197,45 +1248,29 @@ struct UserBookSection: View {
         .background(bookCard())
     }
 
-    /// THE STREAK crown — the one-play-a-day game, wearing the board's own
-    /// streak grammar (founder, Aug 20: the streak reads like mock 03 — the
-    /// run IS the headline). Server-written numbers only.
+    /// The personal streak uses the same open ledger treatment as Gary's stats.
     private var streakCrown: some View {
         let todayPlay = bets.first { $0.streak_pick == true && $0.isPending }
-        let ember = Color(hex: "#E5844B")
         let current = streak?.current ?? 0
-        return HStack(alignment: .center, spacing: 14) {
-            // The run, board-style: "W4" alive, "0" waiting — the numeral
-            // carries the card exactly as STRK carries the podium.
-            VStack(spacing: 1) {
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                BillfoldSectionTitle(title: "THE STREAK")
+                Spacer()
+                Text("BEST \(streak?.best ?? 0)")
+                    .font(GaryFonts.mono(9, bold: true)).foregroundStyle(.white.opacity(0.45))
+            }
+            HStack(alignment: .top, spacing: 14) {
                 Text(current > 0 ? "W\(current)" : "0")
                     .font(GaryFonts.mono(30, bold: true))
-                    .foregroundStyle(current > 0 ? ember : .white.opacity(0.4))
-                Text("BEST \(streak?.best ?? 0)")
-                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
-                    .foregroundStyle(.white.opacity(0.45))
-            }
-            .frame(width: 78)
-            Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1)
-                .padding(.vertical, 2)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("THE STREAK")
-                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1.1)
-                    .foregroundStyle(ember)
+                    .foregroundStyle(current > 0 ? GaryColors.gold : .white.opacity(0.4))
+                    .frame(minWidth: 44, alignment: .leading)
                 Text(streakStateLine(todayPlay: todayPlay))
                     .font(GaryFonts.text(12.5))
                     .foregroundStyle(.white.opacity(0.6))
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 14).padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(ember.opacity(0.06))
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(ember.opacity(current > 0 ? 0.35 : 0.15), lineWidth: 1))
-        )
+        .padding(.horizontal, 12)
     }
 
     private func streakStateLine(todayPlay: UserBet?) -> String {
@@ -1258,76 +1293,46 @@ struct UserBookSection: View {
         return "Riding a \(count)-bet heater"
     }
 
-    /// "W5" / "L2" — the newest-back run through a lane's settled rows,
-    /// pushes skipped. Nil until the lane has a decided bet.
-    private func runLabel(_ rows: [UserBet]) -> String? {
-        let decided = rows
-            .filter { $0.status == "won" || $0.status == "lost" }
-            .sorted { a, b in
-                a.game_date == b.game_date
-                    ? (a.placed_at ?? "") > (b.placed_at ?? "")
-                    : a.game_date > b.game_date
+    /// Verified and self-graded histories retain separate, explicit records.
+    private var splitBookHeader: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            BillfoldSectionTitle(title: "BY SOURCE")
+                .padding(.bottom, 10)
+            HStack(spacing: 4) {
+                Text("SOURCE").frame(maxWidth: .infinity, alignment: .leading)
+                Text("RECORD").frame(width: 64, alignment: .trailing)
+                Text("NET").frame(width: 78, alignment: .trailing)
             }
-        guard let first = decided.first else { return nil }
-        let kind = first.status
-        let len = decided.prefix(while: { $0.status == kind }).count
-        return "\(kind == "won" ? "W" : "L")\(len)"
+            .font(.system(size: 8, weight: .bold)).tracking(0.5)
+            .foregroundStyle(.white.opacity(0.4))
+            .padding(.bottom, 5)
+            sourceRow("WITH GARY", subtitle: "VERIFIED", rows: scopedWithGary)
+            Rectangle().fill(Color.white.opacity(0.08)).frame(height: 0.5)
+            sourceRow("YOUR PLAYS", subtitle: "SELF-GRADED", rows: scopedYourPlays)
+        }
+        .padding(.horizontal, 12)
     }
 
-    /// THE SPLIT BOOK (founder pick Aug 20, mock 15): the verified WITH GARY
-    /// half wears the gold stroke; the self-graded YOUR PLAYS half stays
-    /// neutral and labeled. The two ledgers never mix — this panel is the
-    /// page saying so.
-    private var splitBookHeader: some View {
-        let g = record(scopedWithGary.filter { !$0.isPending })
-        let m = record(scopedYourPlays.filter { !$0.isPending })
-        let gDecided = g.w + g.l
-        let mDecided = m.w + m.l
-        func half(_ title: String, _ r: (w: Int, l: Int, p: Int, units: Double),
-                  decided: Int, run: String?, stroked: Bool) -> some View {
+    private func sourceRow(_ title: String, subtitle: String, rows: [UserBet]) -> some View {
+        let r = record(rows.filter { !$0.isPending })
+        return HStack(spacing: 4) {
             VStack(alignment: .leading, spacing: 3) {
-                // Mock 15: both labels stay quiet — the gold STROKE alone
-                // marks the verified half.
-                Text(title)
-                    .font(GaryFonts.mono(8, bold: true)).tracking(0.9)
-                    .foregroundStyle(.white.opacity(0.4))
-                Text("\(r.w)-\(r.l)\(r.p > 0 ? "-\(r.p)" : "")")
-                    .font(GaryFonts.text(24, .heavy))
-                    .foregroundStyle(.white.opacity(0.92))
-                HStack(spacing: 5) {
-                    if decided > 0 {
-                        Text(String(format: "%.1f%%", Double(r.w) / Double(decided) * 100))
-                    }
-                    if let run {
-                        if decided > 0 { Text("·").foregroundStyle(.white.opacity(0.3)) }
-                        Text(run).foregroundStyle(run.hasPrefix("W") ? GaryColors.gold : GaryColors.loss)
-                    }
-                    if decided > 0 || run != nil { Text("·").foregroundStyle(.white.opacity(0.3)) }
-                    Text(BookMoney.netTotal(r.units))
-                        .foregroundStyle(r.units >= 0 ? GaryColors.win : GaryColors.loss)
-                }
-                .font(GaryFonts.mono(10, bold: true))
-                .foregroundStyle(.white.opacity(0.55))
+                Text(title).font(.system(size: 12, weight: .bold)).foregroundStyle(.white.opacity(0.85))
+                Text(subtitle).font(.system(size: 8, weight: .medium)).tracking(0.5)
+                    .foregroundStyle(.white.opacity(0.45))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.white.opacity(0.04))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(stroked ? GaryColors.gold.opacity(0.4) : Color.white.opacity(0.1), lineWidth: 1))
-            )
+            Text("\(r.w)-\(r.l)\(r.p > 0 ? "-\(r.p)" : "")")
+                .font(GaryFonts.mono(12)).foregroundStyle(.white.opacity(0.5))
+                .frame(width: 64, alignment: .trailing)
+            Text(BookMoney.netTotal(r.units))
+                .font(GaryFonts.mono(12, bold: true))
+                .foregroundStyle(r.units == 0 ? .white.opacity(0.5) : r.units > 0 ? GaryColors.win : GaryColors.loss)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .frame(width: 78, alignment: .trailing)
         }
-        return HStack(spacing: 8) {
-            half("WITH GARY · VERIFIED", g, decided: gDecided,
-                 run: runLabel(scopedWithGary), stroked: true)
-            half("YOUR PLAYS · SELF-GRADED", m, decided: mDecided,
-                 run: runLabel(scopedYourPlays), stroked: false)
-        }
+        .padding(.vertical, 9)
     }
-
-    // (ledgerHeader/slipsList — the old compact inline module — came out
-    // Aug 20 with the facelift: the section renders only as the full page.)
 
     // ── Tracker: scope filters ──────────────────────────────────────────────
 
@@ -1346,51 +1351,40 @@ struct UserBookSection: View {
             .sorted { ($0.lock_at ?? "9999") < ($1.lock_at ?? "9999") }
     }
 
-    /// One line, the board's own control grammar (founder, Aug 20: "the
-    /// filters need some TLC"): source lenses as underline tabs, the window
-    /// as the quiet dropdown ClassicLeaderboardView already speaks.
     private var trackerFilters: some View {
-        HStack(alignment: .bottom, spacing: 14) {
-            filterChip("ALL", key: "all")
-            filterChip("TAILS", key: "tail")
-            filterChip("FADES", key: "fade")
-            filterChip("YOURS", key: "manual")
-            Spacer()
-            Menu {
-                Button("Last 7 days") { timeframe = "7d" }
-                Button("Last 30 days") { timeframe = "30d" }
-                Button("Season") { timeframe = "season" }
-                Button("All time") { timeframe = "all" }
-            } label: {
-                HStack(spacing: 4) {
-                    Text(timeframe == "season" ? "SEASON" : timeframe == "all" ? "ALL TIME" : timeframe.uppercased())
-                        .font(GaryFonts.mono(10)).tracking(0.8)
-                    Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold))
+        HStack(spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 14) {
+                    filterChip("ALL", key: "all")
+                    filterChip("TAILS", key: "tail")
+                    filterChip("FADES", key: "fade")
+                    filterChip("YOURS", key: "manual")
                 }
-                .foregroundStyle(.white.opacity(0.55))
             }
+            Menu {
+                ForEach(["7d", "30d", "season", "all"], id: \.self) { value in
+                    Button {
+                        timeframe = value
+                    } label: {
+                        Label(value == "season" ? "Season" : value == "all" ? "All time" : value == "7d" ? "Last 7 days" : "Last 30 days",
+                              systemImage: timeframe == value ? "checkmark" : "")
+                    }
+                }
+            } label: {
+                BillfoldMenuLabel(title: timeframe == "season" ? "SEASON" : timeframe.uppercased())
+            }
+            .accessibilityLabel("Book date range: \(timeframeLabel)")
         }
     }
 
     private func filterChip(_ label: String, key: String) -> some View {
-        // Underline-tab grammar — never a pill (founder law, Jul 26).
-        let isOn = kindFilter == key
-        return Button { kindFilter = key } label: {
-            VStack(spacing: 3) {
-                Text(label)
-                    .font(GaryFonts.mono(10, bold: true)).tracking(1)
-                    .foregroundStyle(isOn ? GaryColors.gold : .white.opacity(0.5))
-                Rectangle().fill(isOn ? GaryColors.gold : .clear).frame(height: 1.5)
-            }
-            .fixedSize()
-        }
-        .buttonStyle(.plain)
+        BillfoldFilterTab(title: label, isSelected: kindFilter == key) { kindFilter = key }
     }
 
     // ── Tracker: stat tiles ─────────────────────────────────────────────────
 
     private var statTiles: some View {
-        let settled = scopedSettled.filter { $0.status != "void" }
+        let settled = summarySettled
         let decisive = settled.filter { $0.status == "won" || $0.status == "lost" }
         let wins = decisive.filter { $0.status == "won" }.count
         let winPct = decisive.isEmpty ? nil : Double(wins) / Double(decisive.count) * 100
@@ -1409,13 +1403,17 @@ struct UserBookSection: View {
             let american = p >= 0.5 ? -(p / (1 - p)) * 100 : ((1 - p) / p) * 100
             return Int(american.rounded())
         }()
-        let bestDay = dayGroups.map { $0.net }.max()
+        let bestDay = Dictionary(grouping: settled, by: \.game_date).values
+            .map { $0.reduce(0.0) { $0 + ($1.units_net ?? 0) } }.max()
 
-        return HStack(spacing: 8) {
+        return HStack(spacing: 0) {
             statTile("WIN%", winPct.map { String(format: "%.0f%%", $0) } ?? "--")
+            statDivider
             statTile("ROI", roi.map { String(format: "%+.0f%%", $0) } ?? "--",
                      tint: (roi ?? 0) >= 0 ? GaryColors.win : GaryColors.loss)
+            statDivider
             statTile("AVG ODDS", avgOdds.map { "\($0 > 0 ? "+" : "")\($0)" } ?? "--")
+            statDivider
             statTile("BEST DAY", bestDay.map { BookMoney.netTotal($0) } ?? "--",
                      tint: GaryColors.gold)
         }
@@ -1433,101 +1431,123 @@ struct UserBookSection: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 9)
-        .background(RoundedRectangle(cornerRadius: 9).fill(Color.white.opacity(0.04)))
+
     }
 
-    // ── Tracker: profit line ────────────────────────────────────────────────
+    private var statDivider: some View {
+        Rectangle().fill(Color.white.opacity(0.08)).frame(width: 0.5, height: 24)
+    }
 
-    /// Cumulative settled units in play order (game_date, then placement).
-    private var profitPoints: [Double] {
-        let settled = scopedSettled
-            .filter { $0.status != "void" }
-            .sorted { a, b in
-                a.game_date == b.game_date
-                    ? (a.placed_at ?? "") < (b.placed_at ?? "")
-                    : a.game_date < b.game_date
-            }
+    private struct ProfitPoint: Identifiable {
+        let date: Date
+        let net: Double
+        var id: Date { date }
+    }
+
+    private var profitPoints: [ProfitPoint] {
+        let grouped = Dictionary(grouping: summarySettled, by: \.game_date)
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "America/New_York")
+        formatter.dateFormat = "yyyy-MM-dd"
         var running = 0.0
-        return settled.map { running += ($0.units_net ?? 0); return running }
+        return grouped.keys.sorted().compactMap { day in
+            guard let date = formatter.date(from: day) else { return nil }
+            running += (grouped[day] ?? []).reduce(0.0) { $0 + ($1.units_net ?? 0) }
+            return ProfitPoint(date: date, net: running)
+        }
     }
 
-    /// THE RIDE — the user's equity curve, drawn to the Gary chart's own
-    /// standard (founder, Aug 20: the YOU page reads like the Gary page):
-    /// taller stage, the high-water and low-water marks priced in money,
-    /// gradient under the line, the current position as a lit endpoint.
     private var profitChart: some View {
-        let pts = profitPoints
-        let lo = min(0, pts.min() ?? 0), hi = max(0, pts.max() ?? 0)
-        let span = max(hi - lo, 0.001)
-        let final = pts.last ?? 0
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("THE RIDE")
-                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1.1)
-                    .foregroundStyle(.white.opacity(0.5))
-                Text("\(pts.count) settled")
-                    .font(GaryFonts.mono(9))
-                    .foregroundStyle(.white.opacity(0.35))
-                Spacer()
+        let points = profitPoints
+        let final = points.last?.net ?? 0
+        let tint = final >= 0 ? GaryColors.win : GaryColors.loss
+        // Daily history should never repeat the same date at intraday ticks.
+        let axisDates = points.count <= 4 ? points.map(\.date)
+            : (0..<4).map { points[$0 * (points.count - 1) / 3].date }
+        return VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("EQUITY CURVE")
+                        .foregroundStyle(.white.opacity(0.7))
+                    Text(kindFilter == "manual" ? "SELF-GRADED" : "VERIFIED")
+                        .foregroundStyle(.white.opacity(0.58))
+                    Spacer()
+                }
+                .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
                 Text(BookMoney.netTotal(final))
-                    .font(GaryFonts.mono(15, bold: true))
-                    .foregroundStyle(final >= 0 ? GaryColors.win : GaryColors.loss)
+                    .font(GaryFonts.mono(22, bold: true)).foregroundStyle(tint)
+                    .contentTransition(.numericText())
             }
-            GeometryReader { geo in
-                let w = geo.size.width, h = geo.size.height
-                let x = { (i: Int) in pts.count > 1 ? w * CGFloat(i) / CGFloat(pts.count - 1) : 0 }
-                let y = { (v: Double) in h - h * CGFloat((v - lo) / span) }
-                ZStack(alignment: .topLeading) {
-                    // zero baseline
-                    Path { p in
-                        p.move(to: CGPoint(x: 0, y: y(0)))
-                        p.addLine(to: CGPoint(x: w, y: y(0)))
-                    }
-                    .stroke(Color.white.opacity(0.12), style: StrokeStyle(lineWidth: 0.5, dash: [3, 4]))
-                    // area under the line
-                    Path { p in
-                        p.move(to: CGPoint(x: 0, y: y(0)))
-                        for (i, v) in pts.enumerated() { p.addLine(to: CGPoint(x: x(i), y: y(v))) }
-                        p.addLine(to: CGPoint(x: w, y: y(0)))
-                        p.closeSubpath()
-                    }
-                    .fill(LinearGradient(colors: [GaryColors.gold.opacity(0.18), GaryColors.gold.opacity(0.02)],
-                                         startPoint: .top, endPoint: .bottom))
-                    // the line
-                    Path { p in
-                        for (i, v) in pts.enumerated() {
-                            let pt = CGPoint(x: x(i), y: y(v))
-                            i == 0 ? p.move(to: pt) : p.addLine(to: pt)
+            .padding(.horizontal, 14).padding(.top, 12)
+
+            Group {
+                if points.isEmpty {
+                    Text("No settled entries in this view")
+                        .font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.4))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    Chart(points) { point in
+                        AreaMark(x: .value("Date", point.date), yStart: .value("Zero", 0),
+                                 yEnd: .value("Units", max(0, point.net)), series: .value("Fill", "pos"))
+                            .foregroundStyle(GaryColors.win.opacity(0.13))
+                            .interpolationMethod(.catmullRom)
+                        AreaMark(x: .value("Date", point.date), yStart: .value("Zero", 0),
+                                 yEnd: .value("Units", min(0, point.net)), series: .value("Fill", "neg"))
+                            .foregroundStyle(GaryColors.loss.opacity(0.13))
+                            .interpolationMethod(.catmullRom)
+                        LineMark(x: .value("Date", point.date), y: .value("Units", point.net))
+                            .foregroundStyle(tint).lineStyle(StrokeStyle(lineWidth: 1.6))
+                            .interpolationMethod(.catmullRom)
+                        if point.id == points.last?.id {
+                            PointMark(x: .value("Date", point.date), y: .value("Units", point.net))
+                                .foregroundStyle(tint).symbolSize(16)
                         }
                     }
-                    .stroke(GaryColors.gold, style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
-                    // the current position, lit
-                    if let last = pts.last {
-                        Circle()
-                            .fill(GaryColors.gold)
-                            .frame(width: 5, height: 5)
-                            .position(x: x(pts.count - 1), y: y(last))
-                            .shadow(color: GaryColors.gold.opacity(0.8), radius: 3)
+                    .chartYScale(domain: min(-0.01, points.map(\.net).min() ?? 0)...max(0.01, points.map(\.net).max() ?? 0))
+                    .chartXAxis {
+                        AxisMarks(values: axisDates) { _ in
+                            AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+                                .foregroundStyle(.white.opacity(0.45))
+                        }
                     }
-                    // high/low water marks, priced
-                    if hi > 0 {
-                        Text(BookMoney.netTotal(hi))
-                            .font(GaryFonts.mono(8))
-                            .foregroundStyle(.white.opacity(0.35))
-                            .offset(x: 2, y: max(y(hi) - 11, 0))
-                    }
-                    if lo < 0 {
-                        Text(BookMoney.netTotal(lo))
-                            .font(GaryFonts.mono(8))
-                            .foregroundStyle(.white.opacity(0.35))
-                            .offset(x: 2, y: min(y(lo) + 3, h - 10))
+                    .chartYAxis {
+                        AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
+                            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.3)).foregroundStyle(.white.opacity(0.12))
+                            AxisValueLabel {
+                                if let units = value.as(Double.self) {
+                                    Text(BookMoney.netTotal(units)).font(.system(size: 9))
+                                        .foregroundStyle(.white.opacity(0.45))
+                                }
+                            }
+                        }
                     }
                 }
             }
-            .frame(height: 108)
+            .frame(height: 185).padding(.horizontal, 10).padding(.top, 6)
+            chartTimeframeRow
+            Text(BookMoney.isSet ? "Your logged stakes · \(summarySource.lowercased())" : "Illustrative $100/unit · set your unit size in Settings")
+                .font(GaryFonts.mono(9.5)).foregroundStyle(.white.opacity(0.55))
+                .frame(maxWidth: .infinity).multilineTextAlignment(.center)
+                .padding(.top, 2)
         }
-        .padding(14)
-        .background(bookCard())
+    }
+
+    private var chartTimeframeRow: some View {
+        HStack(spacing: 0) {
+            ForEach(["7d", "30d", "season", "all"], id: \.self) { value in
+                Button { timeframe = value } label: {
+                    Text(value == "7d" ? "1W" : value == "30d" ? "1M" : value == "season" ? "SEASON" : "ALL")
+                        .font(.system(size: 11, weight: timeframe == value ? .bold : .medium))
+                        .foregroundStyle(timeframe == value ? GaryColors.gold : .white.opacity(0.4))
+                        .frame(maxWidth: .infinity).padding(.vertical, 5)
+                        .background(Capsule().fill(timeframe == value ? GaryColors.gold.opacity(0.12) : .clear))
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(timeframe == value ? .isSelected : [])
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 8)
     }
 
     // ── Tracker: open slips with live context ───────────────────────────────
@@ -1555,14 +1575,11 @@ struct UserBookSection: View {
     @ViewBuilder private var pendingBlock: some View {
         if !openSlips.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
-                Text("OPEN SLIPS")
-                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                    .foregroundStyle(.white.opacity(0.5))
+                BillfoldSectionTitle(title: "OPEN SLIPS")
                     .padding(.bottom, 4)
                 openSlipRows
             }
-            .padding(14)
-            .background(bookCard())
+            .padding(.horizontal, 12)
         }
     }
 
@@ -1635,22 +1652,21 @@ struct UserBookSection: View {
     @ViewBuilder private var settledByDay: some View {
         if !dayGroups.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
-                Text("THE LEDGER")
-                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                    .foregroundStyle(.white.opacity(0.5))
+                BillfoldSectionTitle(title: "DAILY LEDGER")
                     .padding(.bottom, 2)
                 ForEach(dayGroups.prefix(visibleDays), id: \.date) { group in
                     HStack {
                         Text(dayLabel(group.date))
-                            .font(GaryFonts.mono(9.5, bold: true)).tracking(0.8)
-                            .foregroundStyle(.white.opacity(0.55))
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.85))
                         Spacer()
                         Text(BookMoney.netTotal(group.net))
                             .font(GaryFonts.mono(10, bold: true))
                             .foregroundStyle(group.net > 0 ? GaryColors.win
                                              : group.net < 0 ? GaryColors.loss : .white.opacity(0.45))
                     }
-                    .padding(.top, 10).padding(.bottom, 2)
+                    .padding(.top, 12).padding(.bottom, 6)
+                    Rectangle().fill(Color.white.opacity(0.08)).frame(height: 0.5)
                     ForEach(group.rows) { bet in
                         UserBetSlipRow(bet: bet) { updated in
                             if let i = bets.firstIndex(where: { $0.id == updated.id }) { bets[i] = updated }
@@ -1663,8 +1679,7 @@ struct UserBookSection: View {
                     }
                 }
             }
-            .padding(14)
-            .background(bookCard())
+            .padding(.horizontal, 12)
             if dayGroups.count > visibleDays {
                 Button("Show more history") { visibleDays += 30 }
                     .font(GaryFonts.text(13, .semibold)).foregroundStyle(GaryColors.gold)
