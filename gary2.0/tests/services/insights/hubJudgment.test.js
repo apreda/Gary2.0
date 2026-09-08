@@ -155,6 +155,27 @@ describe('Hub structured judgment validation', () => {
       expect(() => validateHubJudgments(response(packets[0], { take }), packets, { now: asOf })).toThrow('uncited numbers');
     }
   });
+  it('reads the documented parenthesized park games count without accepting an unsupplied innings conversion', () => {
+    const args = fixture(); args.rows[0].category = 'ballpark_shift';
+    args.rows[0].meta.computed_detail = 'The pitcher at this park: 2.87 ERA over 47 innings (22G), with a 68.7-inning decimal baseline elsewhere.';
+    const packets = buildHubJudgmentPackets(args);
+    expect(packets[0].evidence[0].facts.venue_games).toBe(22);
+    expect(packets[0].evidence[0].facts.innings_notation).toContain('rounded true decimal');
+    expect(() => validateHubJudgments(response(packets[0], { full_case: 'The venue sample covers 22 appearances.' }), packets, { now: asOf })).not.toThrow();
+    expect(() => validateHubJudgments(response(packets[0], { full_case: 'The other venue sample covers 68.2 innings.' }), packets, { now: asOf })).toThrow('68.2');
+  });
+  it('resolves short game-local citation aliases to canonical source IDs without relaxing citation checks', () => {
+    const packets = buildHubJudgmentPackets(fixture());
+    const shown = JSON.parse(buildHubJudgmentPrompt(packets).split('DATED GAME EVIDENCE:\n')[1])[0];
+    const alias = canonical => shown.evidence.find(entry => entry.source_key === packets[0].evidence.find(e => e.id === canonical).source_key).id;
+    const primary = packets[0].evidence[0].id, other = packets[0].evidence[1].id;
+    const input = { primary_evidence_id: alias(primary), supporting_evidence_ids: [alias(primary), alias(other), alias('current_context')] };
+    const [{ judgment }] = validateHubJudgments(response(packets[0], input), packets, { now: asOf });
+    expect(judgment.supporting_evidence_ids).toEqual([primary, other, 'current_context']);
+    expect(judgment.evidence.every(entry => !/^e\d+$/.test(entry.id))).toBe(true);
+    expect(() => validateHubJudgments(response(packets[0], { ...input, counter_evidence_ids: ['e999'] }), packets, { now: asOf })).toThrow('e999');
+    expect(() => validateHubJudgments(response(packets[0], { ...input, supporting_evidence_ids: [alias(primary), primary] }), packets, { now: asOf })).toThrow('repeats');
+  });
 });
 
 describe('Hub prepared display measurements', () => {
@@ -318,5 +339,32 @@ describe('Hub partial batch acceptance', () => {
     expect(duplicate.failed).toEqual([{ game_id: '10', message: 'Repeated Hub game argument' }]);
     expect(() => validateHubJudgmentBatch('{"judgments":null}', packets, { now: asOf })).toThrow();
     expect(() => validateHubJudgmentBatch('{malformed', packets, { now: asOf })).toThrow();
+  });
+  it('starts all fifteen games before repairs, limits each batch to two, and never exceeds four workers', async () => {
+    const args = fixture(), originalRows = args.rows;
+    args.games = Array.from({ length: 15 }, (_, index) => ({ ...game, id: 10 + index }));
+    args.rows = args.games.flatMap(g => originalRows.map(row => ({ ...row, game_id: g.id })));
+    for (const g of args.games) {
+      const context = JSON.parse(JSON.stringify(args.contextByGame.get('10')));
+      context.evidence[0].game_id = String(g.id); context.evidence[0].source_key = `current_context|${g.id}||`;
+      args.contextByGame.set(String(g.id), context);
+    }
+    const packets = buildHubJudgmentPackets(args), calls = []; let active = 0, peak = 0;
+    const model = vi.fn(async prompt => {
+      const repair = prompt.includes('The prior arguments for these games failed');
+      const shown = JSON.parse(prompt.split('DATED GAME EVIDENCE:\n')[1].split('\nThe prior arguments')[0]);
+      const ids = shown.map(packet => packet.game.id); calls.push({ ids, repair });
+      active++; peak = Math.max(peak, active);
+      await new Promise(resolve => setTimeout(resolve, 5)); active--;
+      return combined(...ids.map(gameID => response(packets.find(packet => packet.game.id === gameID),
+        gameID === '10' && !repair ? { explanation: 'An uncited 99.99% claim.' } : {})));
+    });
+    const result = await synthesizeHubJudgments(args, { ...options, generateText: model, budgetMs: 1000 });
+    expect(peak).toBe(4); expect(calls.every(call => call.ids.length <= 2)).toBe(true);
+    expect(calls.findIndex(call => call.repair)).toBe(8);
+    expect(new Set(calls.filter(call => !call.repair).flatMap(call => call.ids)).size).toBe(15);
+    expect(result.rows.filter(row => row.meta.judgment)).toHaveLength(15);
+    expect(result.failures).toEqual([]);
+    expect(result.diagnostics.every(entry => Number.isFinite(entry.dispatch_after_ms))).toBe(true);
   });
 });

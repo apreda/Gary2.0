@@ -11,7 +11,7 @@ must not inherit a source signal's grade as a grade of the interpretation.
 ```json
 {
   "schema_version": 1,
-  "writer_version": "hub-judgment-v1-2026-09-08-r2",
+  "writer_version": "hub-judgment-v1-2026-09-08-r3",
   "status": "ready",
   "date": "YYYY-MM-DD",
   "league": "mlb",
@@ -60,6 +60,12 @@ Evidence need not be visible until the reader opens the full case.
 Source evidence declares `primary_eligible`: ordinary story rows can anchor
 the judgment; official practice reports remain citeable support while
 retaining their dedicated module. Fantasy and receipt modules are excluded.
+The model sees short, game-local citation aliases (`e1`, `e2`, etc.). They
+resolve strictly against that game's supplied evidence; stored IDs, source
+keys and native citations remain canonical. Unknown or duplicated aliases
+still fail validation. A documented parenthesized park games count is
+prepared as a measured count. Legacy park innings retain their explicit
+rounded-decimal convention; unsupplied notation conversions are rejected.
 
 `evidence_state` holds `{source_key, fingerprint, summary}` records for the
 complete input pool, including uncited observations. It supports actual
@@ -134,7 +140,7 @@ The callback composes `collectHubJudgmentContext` and
 `synthesizeHubJudgments(args, options)`. Generation uses the existing
 `generateSolText` provider/model seam. It adds no app-open model call.
 
-Synthesis runs at most two concurrent requests with up to four games per
+Synthesis runs at most four concurrent requests with up to two games per
 batch, one correction attempt, a 160 KB prompt bound and a four-minute
 deadline. Context collection has a 90-second deadline and at most three
 concurrent lineup requests; statistics use bounded exact-player chunks and
@@ -144,6 +150,10 @@ not silently truncated into a confident take.
 Synthesis returns `{rows,failures,skipped,invalidations,diagnostics}`. Each
 identifiable game is validated independently, so a bad sibling cannot
 discard an accepted case. One repair covers only the failed games;
+repairs join the end of the shared queue so every initial game batch is
+dispatched before a repair can consume a worker. This prevents early
+validation failures from starving later games inside the unchanged run
+deadline. No additional model/provider or unbounded retry is introduced.
 intentional omissions in valid JSON count as abstention. Malformed root
 JSON never counts as abstention. Diagnostics record game IDs, elapsed time
 and exact validation failures before repair, including errors if the repair
