@@ -1,18 +1,18 @@
 # CLAUDE.md
 
-Latest Hub feature candidate: read `../HANDOFF_2026-09-08_HUB_JUDGMENT_916.md`.
-The connected-research Hub is implemented on main: current exact-matchup
-judgment, brief explanation, optional full case and evidence, coherent editorial
-ordering, shared dark reading layout and compact MLB Fantasy watch. NFL retains
-its weekly Fantasy desk. The additive publication RPC and refresh worker are
-deployed; all 15 current MLB cases passed independent content/publication review.
-Final 2.25 (916) Simulator and signed archive match 131 public native inputs at
-`54337a8a`; signature and all 21 privacy manifests passed independent verification.
-Final screens and tested interactions are in the handoff's review packet.
-Physical gestures and complete accessibility traversal remain human acceptance
-checks because the Mac input tool failed its native Settings control. This is
-ready for final feature review; **do not export, upload or submit 916 until Adam
-approves this candidate**. Build 915 keeps its separate immutable release state.
+Latest Hub direction: read `../HANDOFF_2026-09-08_HUB_RESTORED_917.md`.
+Adam explicitly superseded the unapproved judgment-first 916 candidate and
+requested restoration of the earlier gray-card Hub and original observational
+research before discussing further refinements. Player, team and exact-game
+cards, League Pulse and the original research sections are the foundation.
+The dedicated judgment worker is disabled reversibly; ordinary collection must
+not generate game judgments by default. MLB keeps its compact Fantasy watch
+without a separate Fantasy tab; NFL keeps its weekly desk. Correctness and
+accessibility fixes remain. Header changes and new research categories are
+discussion ideas, not additional implementation requirements. Build 917 is the
+local restoration candidate; the handoff records its verification status.
+Do not export/upload/select the superseded 916 artifact. Final submission
+requires the release owner's settled source and readiness verification.
 
 Latest MLB decision and Winners policy: read
 `../HANDOFF_2026-09-08_MLB_STAGED_JUDGMENT.md`. New production MLB games use

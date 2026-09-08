@@ -1,3 +1,5 @@
+> **Superseded by Adam’s later September 8 direction.** Restore the prior gray-card observational Hub first, then discuss refinements. This judgment-first 916 candidate was not approved and must not be exported, uploaded or selected as the final release. See `HANDOFF_2026-09-08_HUB_RESTORED_917.md` for the restoration status.
+
 # Hub 916: connected research and reading experience
 
 Implemented directly on canonical `main` at `/Users/adam.preda/Gary2.0`.
