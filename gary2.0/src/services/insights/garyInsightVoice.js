@@ -4,7 +4,8 @@
  */
 import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { contentModel, contentModelCascade } from './solText.js';
-import { HUB_RESEARCH_COPY_RULES, researchCopyIsSupported, uniqueResearchEntries } from './researchCopyPolicy.js';
+import { HUB_RESEARCH_COPY_RULES, HUB_RESEARCH_COPY_VERSION, researchCopyIsSupported, uniqueResearchEntries } from './researchCopyPolicy.js';
+import { RESEARCH_FACTS_VERSION } from './researchFacts.js';
 
 // Lanes whose detail is already Gary's prose (sourced from a pick rationale or
 // written by their own Sol pass) — rewriting them would launder better copy.
@@ -18,6 +19,7 @@ const SKIP_CATEGORIES = new Set([
   'fantasy_usage', 'fantasy_trend', 'fantasy_matchup',
   // Dated workload/performance facts must not become inferred availability.
   'bullpen_fatigue',
+  'first_inning', 'regression_watch',
 ]);
 
 // Football Hub rows are deliberately written as literal, provider-grounded
@@ -63,7 +65,8 @@ export async function applyGaryVoice(rows, { league = 'mlb' } = {}) {
 
   const eligible = rows
     .map((r, idx) => ({ r, idx }))
-    .filter(({ r }) => r && r.detail && !SKIP_CATEGORIES.has(String(r.category || '')));
+    .filter(({ r }) => r && r.detail && !SKIP_CATEGORIES.has(String(r.category || ''))
+      && r.meta?.research_facts_version !== RESEARCH_FACTS_VERSION);
   if (!eligible.length) return rows;
 
   let applied = 0;
@@ -109,7 +112,7 @@ export async function applyGaryVoice(rows, { league = 'mlb' } = {}) {
       const { i: _index, ...facts } = items[rd.i];
       if (!slot || !researchCopyIsSupported(take, JSON.stringify(facts))) continue;
       const row = slot.r;
-      row.meta = { ...(row.meta || {}), evidence: row.detail };
+      row.meta = { ...(row.meta || {}), evidence: row.detail, research_copy_version: HUB_RESEARCH_COPY_VERSION };
       row.detail = take;
       applied++;
     }

@@ -1,5 +1,7 @@
 import { hasXeraAnalysis } from '../mlbMetricPolicy.js';
 
+export const HUB_RESEARCH_COPY_VERSION = 'observed-research-v1';
+
 // This is the observational Hub's copy contract. Gary's actual pick and
 // Fantasy decision writers have separate jobs and do not use this policy.
 export const HUB_RESEARCH_COPY_RULES = `Write concise sports research that helps the reader reach their own conclusion.

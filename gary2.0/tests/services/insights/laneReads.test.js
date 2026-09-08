@@ -50,6 +50,7 @@ describe('attachLaneReads', () => {
     expect(rows[0].detail).toMatch(/^The measured batting average is .312/);
     expect(rows[0].meta.computed_detail).toBe('Row 1 computed detail with a number, .312.');
     expect(rows[0].meta.read).toBe(rows[0].detail);
+    expect(rows[0].meta.research_copy_version).toBe('observed-research-v1');
   });
 
   it('writes reads only for the rows that ship — top 8 by relevance', async () => {
@@ -92,6 +93,7 @@ describe('attachLaneReads', () => {
     const rows = [row(1)];
     await expect(attachLaneReads('testLane', rows, detailFact, { ask: 'x' })).resolves.toBeUndefined();
     expect(rows[0].detail).toBe('Row 1 computed detail with a number, .312.');
+    expect(rows[0].meta.research_copy_version).toBeUndefined();
   });
 
   it('drops a stub read rather than shipping it', async () => {
@@ -113,6 +115,7 @@ describe('attachLaneReads', () => {
     expect(rows[0].detail).toBe(original);
     expect(rows[0].meta.computed_detail).toBe(original);
     expect(rows[0].meta.read).toBeUndefined();
+    expect(rows[0].meta.research_copy_version).toBeUndefined();
   });
 
   it('does not borrow another row’s number or the response index as evidence', async () => {

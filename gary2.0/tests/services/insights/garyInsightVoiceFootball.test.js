@@ -46,12 +46,18 @@ describe('MLB Hub research copy integrity', () => {
     detail: 'Fixture Hitter is 10-for-32 over the last 8 games, with a .312 AVG.',
     game: 'FIX @ OPP', value: '.312', meta: {} });
 
-  it('never sends deterministic bullpen evidence through the generic model', async () => {
-    const rows = [{ ...row(), category: 'bullpen_fatigue', detail: 'Fixture Arm threw 40 pitches across two games; the team had no game yesterday.' }];
+  it.each(['bullpen_fatigue', 'first_inning', 'regression_watch'])('never sends deterministic %s evidence through the generic model', async category => {
+    const rows = [{ ...row(), category, detail: 'Fixture Arm threw 40 pitches across two games; the team had no game yesterday.' }];
     const before = structuredClone(rows);
     expect(await applyGaryVoice(rows, { league: 'MLB' })).toEqual(before);
     expect(sessions.create).not.toHaveBeenCalled();
     expect(sessions.send).not.toHaveBeenCalled();
+  });
+
+  it('preserves exact-version measured research even in another supported category', async () => {
+    const rows = [{ ...row(), meta: { research_facts_version: 'observed-stats-v1' } }];
+    expect(await applyGaryVoice(rows, { league: 'MLB' })).toEqual(rows);
+    expect(sessions.create).not.toHaveBeenCalled();
   });
 
   it('uses the shared research rules and accepts only the same supplied sample', async () => {
@@ -60,6 +66,7 @@ describe('MLB Hub research copy integrity', () => {
     const [result] = await applyGaryVoice([row()], { league: 'MLB' });
     expect(result.detail).toBe('Over the last 8 games, Fixture Hitter has a .312 AVG on 10-for-32 hitting.');
     expect(result.meta.evidence).toBe(row().detail);
+    expect(result.meta.research_copy_version).toBe('observed-research-v1');
     expect(sessions.create.mock.calls[0][0].systemPrompt).toContain('No betting recommendation');
   });
 
@@ -77,5 +84,6 @@ describe('MLB Hub research copy integrity', () => {
     const [result] = await applyGaryVoice([row()], { league: 'MLB' });
     expect(result.detail).toBe(row().detail);
     expect(result.meta.evidence).toBeUndefined();
+    expect(result.meta.research_copy_version).toBeUndefined();
   });
 });

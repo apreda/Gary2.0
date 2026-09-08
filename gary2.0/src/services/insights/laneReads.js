@@ -5,7 +5,7 @@
 // One optional batched call per lane; invalid or failed rewrites retain the
 // collector's detail. This does not write Gary's picks or Fantasy decisions.
 import { generateSolText } from './solText.js';
-import { HUB_RESEARCH_COPY_RULES, researchCopyIsSupported, uniqueResearchEntries } from './researchCopyPolicy.js';
+import { HUB_RESEARCH_COPY_RULES, HUB_RESEARCH_COPY_VERSION, researchCopyIsSupported, uniqueResearchEntries } from './researchCopyPolicy.js';
 
 // Mirrors generateInsightConnections.postProcess's maxPerCategory: the number
 // of rows a single lane can put on the page. Reads are written for those rows
@@ -92,7 +92,8 @@ ${facts}`;
       const x = eligible[item?.i];
       const read = typeof item?.read === 'string' ? item.read.trim() : '';
       if (!x || read.length < 60 || !researchCopyIsSupported(read, x.fact)) continue;
-      x.r.meta = { ...(x.r.meta || {}), computed_detail: x.r.meta?.computed_detail || x.r.detail, read };
+      x.r.meta = { ...(x.r.meta || {}), computed_detail: x.r.meta?.computed_detail || x.r.detail, read,
+        research_copy_version: HUB_RESEARCH_COPY_VERSION };
       x.r.detail = read;
       attached += 1;
     }
