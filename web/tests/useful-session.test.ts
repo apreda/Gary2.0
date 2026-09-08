@@ -26,6 +26,29 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('consented useful-session measurement', () => {
+  it('sends account-domain referral attribution only after consent without changing session/read counts', async () => {
+    window.location.href = 'https://www.betwithgary.ai/picks';
+    vi.stubGlobal('document', { referrer: 'https://accounts.google.com/private?continue=secret', cookie: '' });
+    const analytics = await import('@/lib/gary/analytics');
+    const consent = await import('@/lib/gary/analytics-consent');
+    analytics.initializeGrowthAnalytics('/picks'); analytics.logMeaningfulPickView(pick);
+    expect(sent()).toEqual([]); expect(local.length).toBe(0); expect(session.length).toBe(0);
+
+    consent.writeAnalyticsConsent('granted');
+    analytics.initializeGrowthAnalytics('/picks'); analytics.initializeGrowthAnalytics(pick);
+    analytics.logMeaningfulPickView(pick); analytics.logMeaningfulPickView(pick);
+    expect(sent().map(e => e.event)).toEqual(['session_started', 'meaningful_pick_view']);
+    for (const event of sent()) {
+      expect(event.props).toMatchObject({
+        first_source: 'accounts.google.com', first_medium: 'referral',
+        latest_source: 'accounts.google.com', latest_medium: 'referral',
+      });
+    }
+    expect(sent()[0].props.session_id).toBe(sent()[1].props.session_id);
+    expect(JSON.stringify(sent())).not.toContain('private');
+    expect(JSON.stringify(sent())).not.toContain('secret');
+  });
+
   it('does not create identifiers, requests or milestones before consent or after withdrawal', async () => {
     const analytics = await import('@/lib/gary/analytics');
     const consent = await import('@/lib/gary/analytics-consent');

@@ -106,7 +106,10 @@ function referrerHost(referrer: string | undefined, siteHost: string): string | 
 }
 
 function isSearchEngine(host: string): boolean {
-  return /(^|\.)(google\.|bing\.com$|duckduckgo\.com$|search\.yahoo\.com$|ecosia\.org$|search\.brave\.com$)/.test(host);
+  // www is already removed. Account/product subdomains are referrals, while
+  // Google's search roots include country domains such as google.co.uk.
+  if (/^google\.(?:com|cat|[a-z]{2}|(?:co|com)\.[a-z]{2})$/.test(host)) return true;
+  return /(^|\.)(bing\.com$|duckduckgo\.com$|search\.yahoo\.com$|ecosia\.org$|search\.brave\.com$)/.test(host);
 }
 
 /**
