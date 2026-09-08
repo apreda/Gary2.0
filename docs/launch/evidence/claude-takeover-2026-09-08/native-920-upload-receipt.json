@@ -16,5 +16,11 @@
     "Physical Sign in with Apple tap on a signed build by Adam (server-side evidence: 12 Apple identities, 5 successful Apple sign-ups Aug 17-31, no failures; provider config verified with bundle id ai.betwithgary.app)",
     "support@betwithgary.ai bounces (Address not found); review notes use adam.preda@betwithgary.ai until the Workspace alias exists",
     "Supabase Auth OTP expiry 86400s and leaked-password protection off (dashboard change blocked for the agent)"
-  ]
+  ],
+  "app_review_submission": {
+    "submission_id": "ca44f7e9-9ef5-4cb9-aae0-20731a668a77",
+    "status": "Waiting for Review",
+    "submitted_et": "2026-09-08 19:38",
+    "item": "iOS App 2.25 (920)"
+  }
 }
