@@ -295,6 +295,8 @@ struct FootballNextSlateGame: Codable, Identifiable {
 /// main-thread stack while SwiftUI assembled the Hub. Reference semantics are
 /// safe here: every field is `let` and decoded once.
 final class SwapMeta: Codable {
+    /// Optional connected interpretation; original research remains intact.
+    let judgment: HubJudgment?
     /// The computed facts behind Gary's read (Jul 27 voice pass moved the
     /// template sentence here) — the expanded card's "numbers behind it" line.
     let evidence: String?

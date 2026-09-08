@@ -493,7 +493,8 @@ extension Connection {
             sweat: kd == .theSweat ? meta : nil,
             afterGary: kd == .afterGary ? meta : nil,
             marketRange: kd == .marketRange ? meta : nil,
-            nextSlate: kd == .nextSlate ? meta : nil
+            nextSlate: kd == .nextSlate ? meta : nil,
+            sourceKey: HubJudgment.sourceKey(category: category, gameID: game_id, playerID: player_id, teamID: team_id)
         )
     }
 }

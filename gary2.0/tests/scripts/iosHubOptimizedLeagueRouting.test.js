@@ -32,6 +32,7 @@ describe('optimized native Hub league routing', () => {
       // A release-only failure previously collapsed every optional enum key to
       // MLB when the tuple contained an inline awaited fetch. Debug passed.
       const source = `import Foundation
+${read('HubJudgment.swift')}
 ${models.slice(models.indexOf('struct Connection:'), models.indexOf('// MARK: - Live Scores'))}
 ${block(shared, 'enum HubLeagueSel {')}
 ${block(modules, 'extension HubLeagueSel {')}

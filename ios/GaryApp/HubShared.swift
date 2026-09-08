@@ -304,4 +304,8 @@ struct Signal: Identifiable {
     var marketRange: SwapMeta? = nil
     /// The next verified FBS slate on an honest NCAAF dark day.
     var nextSlate: SwapMeta? = nil
+    /// Stable original category/game/subject key for connected research.
+    var sourceKey: String? = nil
+    /// Conflicting same-clock publications keep the source facts visible.
+    var rejectsJudgment = false
 }

@@ -161,6 +161,7 @@ ${block(readFileSync(new URL('../../../ios/GaryApp/SharedStores.swift', import.m
  ${['resetForSlate(', 'acceptsLoad(', 'performLoad(', 'loadCurrent(', 'loadIntel(', 'loadPulse(', 'loadHistory('].map(name => block(hub, '    @MainActor private func ' + name)).join('\n')}
  func refresh() async { await load() }
  func consumeFocus() { consumedFocus += 1 }
+ func refreshJudgments() {}
 }
 @MainActor func waitUntil(_ ready: () -> Bool) async {
  for _ in 0..<10_000 {
@@ -275,10 +276,10 @@ struct Reader {
    precondition(!reader.isFantasy && reader.isMain, "The page and masthead agree that the main Hub remains main for every league")
   }
   reader.hubScope = "fantasy"
-  for league in [HubLeagueSel.mlb, .nfl] {
+  for league in [HubLeagueSel.nfl] {
    reader.sel = league
    precondition(reader.isFantasy && !reader.isMain)
-   for unsupported in [HubLeagueSel.ncaaf, .nba, .wc] {
+   for unsupported in [HubLeagueSel.mlb, .ncaaf, .nba, .wc] {
     reader.sel = unsupported
     precondition(!reader.isFantasy && reader.isMain, "Unsupported Fantasy desks keep their main page, search, section index and slate clock")
    }
@@ -289,7 +290,7 @@ struct Reader {
    reader.hubScope = scope
    for league in [HubLeagueSel.mlb, .nfl, .ncaaf, .nba, .wc] {
     reader.sel = league
-    let expectedFantasy = scope == "fantasy" && (league == .mlb || league == .nfl)
+    let expectedFantasy = scope == "fantasy" && league == .nfl
     precondition(reader.isFantasy == expectedFantasy && reader.isMain == !expectedFantasy)
     for isOpen in [false, true] {
      reader.searchOpen = isOpen

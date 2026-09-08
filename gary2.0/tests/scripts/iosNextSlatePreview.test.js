@@ -39,7 +39,7 @@ describe('native next-slate schedule', () => {
       ];
       const fixturePath = join(directory, 'connections.json');
       writeFileSync(fixturePath, JSON.stringify(fixtures));
-      const modelSource = models.slice(models.indexOf('struct Connection:'), models.indexOf('// MARK: - Live Scores'));
+      const modelSource = read('HubJudgment.swift') + '\n' + models.slice(models.indexOf('struct Connection:'), models.indexOf('// MARK: - Live Scores'));
       const formatterSource = formatters.slice(formatters.indexOf('let isoFormatterFrac:'), formatters.indexOf('struct BillfoldTopPickCandidate'));
       const component = view.slice(view.indexOf('struct FootballNextSlatePreview: View'), view.indexOf('// MARK: - Football Today feed'));
       const properties = component.slice(component.indexOf('    private var meta:'), component.indexOf('    var body: some View'));

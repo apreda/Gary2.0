@@ -20,6 +20,7 @@ struct FantasyBriefingPage: View {
     let league: String
     let refreshToken: UUID
     let isVisible: Bool
+    var compact = false
     /// Return true only when the exact league/player has a populated card.
     var openPlayer: (FantasyDecision) -> Bool = { _ in false }
     @AppStorage("fantasyMLBFormat") private var mlbFormat = "categories"
@@ -31,6 +32,7 @@ struct FantasyBriefingPage: View {
     @State private var focus = "all"
     @State private var selected: FantasySelection?
     @State private var loadRequest = UUID()
+    @State private var watchExpanded = false
 
     private var format: String {
         let saved = league == "MLB" ? mlbFormat : nflFormat
@@ -51,10 +53,11 @@ struct FantasyBriefingPage: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            masthead
+        VStack(alignment: .leading, spacing: compact ? 14 : 24) {
+            if compact { watchMasthead } else { masthead }
             TimelineView(.periodic(from: .now, by: 60)) { context in
-                content(now: context.date)
+                if compact { watchContent(now: context.date) }
+                else { content(now: context.date) }
             }
         }
         .padding(.horizontal, GaryLayout.gutter)
@@ -70,6 +73,77 @@ struct FantasyBriefingPage: View {
         .sheet(item: $selected) { selection in
             FantasyDecisionSheet(decision: selection.decision, league: league, briefing: selection.briefing) {
                 selected = nil
+            }
+        }
+    }
+
+    private var watchMasthead: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+                : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 12))
+            layout {
+                Text("Fantasy watch").font(.title3.weight(.semibold)).foregroundStyle(FantasyInk.paper)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Menu {
+                    ForEach(formatOptions, id: \.0) { option in
+                        Button(option.1) { mlbFormat = option.0 }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(formatLabel)
+                        Image(systemName: "chevron.down").font(.caption.weight(.semibold))
+                    }
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(FantasyInk.gold)
+                    .frame(minHeight: 44).contentShape(Rectangle())
+                }
+                .accessibilityLabel("Fantasy scoring: \(formatLabel)")
+            }
+            Text("A few roster decisions worth your attention.").font(.subheadline).foregroundStyle(FantasyInk.secondary)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder private func watchContent(now: Date) -> some View {
+        let calls = calls(now: now)
+        if !loaded {
+            ProgressView("Checking fantasy research").tint(FantasyInk.gold)
+                .font(.subheadline).foregroundStyle(FantasyInk.secondary).padding(.vertical, 12)
+        } else if let briefing, briefing.isCurrent(now: now) {
+            VStack(alignment: .leading, spacing: 12) {
+                if failed {
+                    Text("The latest check failed. These calls remain within their evidence window.")
+                        .font(.caption).foregroundStyle(FantasyInk.secondary)
+                }
+                if !calls.isEmpty {
+                    let visible = watchExpanded ? Array(calls.prefix(3)) : Array(calls.prefix(1))
+                    ForEach(Array(visible.enumerated()), id: \.element.id) { index, decision in
+                        if index > 0 { FantasyRule() }
+                        FantasyWatchRead(decision: decision, now: now, onPlayer: {
+                            open(decision, briefing: briefing)
+                        }, onDetails: { selected = FantasySelection(decision: decision, briefing: briefing) })
+                    }
+                    if calls.count > 1 {
+                        Button { withAnimation(.easeInOut(duration: 0.2)) { watchExpanded.toggle() } } label: {
+                            Text(watchExpanded ? "Show less" : "\(min(calls.count, 3) - 1) more fantasy \(min(calls.count, 3) == 2 ? "read" : "reads")")
+                                .font(.subheadline.weight(.semibold)).foregroundStyle(FantasyInk.gold)
+                                .frame(minHeight: 44).contentShape(Rectangle())
+                        }.buttonStyle(.plain)
+                    }
+                } else {
+                    Text("No current calls for \(formatLabel.lowercased()) scoring. Gary will add a read when the evidence supports one.")
+                        .font(.subheadline).foregroundStyle(FantasyInk.secondary)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(failed ? "Fantasy research couldn’t refresh." : "No current fantasy read is available for this slate.")
+                    .font(.subheadline).foregroundStyle(FantasyInk.secondary)
+                Button { Task { await load() } } label: {
+                    Text("Check for update").font(.subheadline.weight(.semibold)).foregroundStyle(FantasyInk.gold)
+                        .frame(minHeight: 44).contentShape(Rectangle())
+                }.buttonStyle(.plain)
             }
         }
     }
@@ -265,6 +339,35 @@ struct FantasyBriefingPage: View {
             failed = true
         }
         loaded = true
+    }
+}
+
+private struct FantasyWatchRead: View {
+    let decision: FantasyDecision
+    let now: Date
+    let onPlayer: () -> Void
+    let onDetails: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FantasyEyebrow(text: fantasyAction(decision))
+            FantasyPlayerLink(decision: decision, featured: false, action: onPlayer)
+            Button(action: onDetails) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(decision.displayText(decision.headline)).font(.headline).foregroundStyle(FantasyInk.paper)
+                    FantasyNextOpportunity(decision: decision, now: now)
+                    Text(decision.displayText(decision.why_now)).font(.subheadline).lineSpacing(3).foregroundStyle(FantasyInk.secondary)
+                    Text("The risk: " + decision.displayText(decision.risk)).font(.subheadline).foregroundStyle(FantasyInk.secondary)
+                    FantasyReadLink(title: "Read the full fantasy case")
+                }
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Includes scoring fit, the full reasoning and evidence window")
+        }
+        .padding(.vertical, 12)
     }
 }
 

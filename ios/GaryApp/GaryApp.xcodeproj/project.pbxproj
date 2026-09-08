@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		BFE709082026B00000000003 /* HubJudgmentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE709082026B00000000004 /* HubJudgmentView.swift */; };
+		BFE709082026B00000000001 /* HubJudgment.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE709082026B00000000002 /* HubJudgment.swift */; };
 		B70820260908400000000501 /* ReadingMeasurementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70820260908400000000502 /* ReadingMeasurementView.swift */; };
 		B70820260908400000000401 /* UsefulSessionMeasurement.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70820260908400000000402 /* UsefulSessionMeasurement.swift */; };
 		B70820260908400000000301 /* GaryPushNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70820260908400000000302 /* GaryPushNavigation.swift */; };
@@ -93,6 +95,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		BFE709082026B00000000004 /* HubJudgmentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubJudgmentView.swift; sourceTree = "<group>"; };
+		BFE709082026B00000000002 /* HubJudgment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubJudgment.swift; sourceTree = "<group>"; };
 		B70820260908400000000502 /* ReadingMeasurementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingMeasurementView.swift; sourceTree = "<group>"; };
 		B70820260908400000000402 /* UsefulSessionMeasurement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsefulSessionMeasurement.swift; sourceTree = "<group>"; };
 		B70820260908400000000302 /* GaryPushNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaryPushNavigation.swift; sourceTree = "<group>"; };
@@ -242,6 +246,8 @@
 				00BBC4AB067AFFD32ED58FB1 /* GoogleService-Info.plist.example */,
 				8C13DC9C410DA7F379D05F31 /* HomeAdditions.swift */,
 				5B069FA2D1F2F173C8F4EB9F /* HubView.swift */,
+				BFE709082026B00000000004 /* HubJudgmentView.swift */,
+				BFE709082026B00000000002 /* HubJudgment.swift */,
 				BFE709072026B00000000002 /* FantasyBriefingView.swift */,
 				BFE709072026A00000000002 /* FantasyBriefing.swift */,
 				A6B153703E9F452BFFC5A392 /* Info.plist */,
@@ -460,6 +466,8 @@
 				AD40BD1C591C0853AB20200A /* GaryTour.swift in Sources */,
 				0BE6FB14629F5618AA09EDD3 /* HomeAdditions.swift in Sources */,
 				2508CFF6E864FC968DD3FFC7 /* HubView.swift in Sources */,
+				BFE709082026B00000000003 /* HubJudgmentView.swift in Sources */,
+				BFE709082026B00000000001 /* HubJudgment.swift in Sources */,
 				BFE709072026B00000000001 /* FantasyBriefingView.swift in Sources */,
 				BFE709072026A00000000001 /* FantasyBriefing.swift in Sources */,
 				848433E84732600F7F27F78B /* KeychainStorage.swift in Sources */,
@@ -537,7 +545,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 915;
+				CURRENT_PROJECT_VERSION = 916;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -624,7 +632,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 915;
+				CURRENT_PROJECT_VERSION = 916;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_NS_ASSERTIONS = NO;

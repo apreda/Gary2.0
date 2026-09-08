@@ -315,7 +315,7 @@ final class Reader {
   }, 90_000);
   it.skipIf(!hasSwift)('keeps real connection metadata lossless and isolates stories when a new date outruns the old request', () => {
     const models = source('Models.swift'), picks = source('PicksTab.swift');
-    const graph = models.slice(models.indexOf('struct Connection:'), models.indexOf('// MARK: - Live Scores'));
+    const graph = source('HubJudgment.swift') + '\n' + models.slice(models.indexOf('struct Connection:'), models.indexOf('// MARK: - Live Scores'));
     expect(runSwift(`import Foundation
 ${graph}
 ${block(source('SharedStores.swift'), 'enum PicksContentEquality {')}
@@ -351,6 +351,8 @@ enum AppFlags { static let insightLeagues = ["MLB", "NFL", "NCAAF", "NBA"] }
  var connectionRevision: UInt64 = 0; var connectionErrorLeagues: Set<HubLeagueSel> = []
  struct Store { var loadedDate = "2026-09-07" }
  var store = Store()
+ enum PicksDay { case today, yesterday }
+ var pickDay: PicksDay = .today
  static let fantasyOnlyKinds: Set<SignalKind> = [.fantasyUsage]
  ${block(picks, '    @MainActor\n    private func loadConnections()')}
  ${block(picks, '    private var currentConnections:')}
@@ -380,6 +382,10 @@ enum AppFlags { static let insightLeagues = ["MLB", "NFL", "NCAAF", "NBA"] }
   SupabaseAPI.sources[key] = rows
   await reader.refresh()
   let identity = reader.connections[0].id, revision = reader.connectionRevision
+  reader.pickDay = .yesterday
+  precondition(reader.current.isEmpty, "Historical picks must not expose today’s connections")
+  reader.pickDay = .today
+  precondition(reader.current.count == 1)
   await reader.refresh()
   precondition(reader.connections[0].id == identity && reader.connectionRevision == revision)
   SupabaseAPI.sources[key] = try decoder.decode([Connection].self, from: Data(raw.replacingOccurrences(of: "original", with: "revised").utf8))
