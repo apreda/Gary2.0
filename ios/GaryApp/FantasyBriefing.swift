@@ -1,5 +1,13 @@
 import Foundation
 
+enum GaryMlbMetricPolicy {
+    static func containsExcludedAnalysis(_ text: String) -> Bool {
+        text.range(of: #"\bx[\s_-]*era\b|\bexpected[\s-]+(?:era|earned[\s-]+run[\s-]+average)\b"#,
+                   options: [.regularExpression, .caseInsensitive]) != nil
+    }
+}
+
+
 /// Fantasy owns its publication date and freshness independently of game-pick
 /// slates. In particular, a quiet NFL Tuesday still has a weekly briefing.
 struct FantasyBriefing: Decodable {
@@ -209,6 +217,8 @@ struct FantasyDecision: Decodable, Identifiable {
             && (!["START", "SIT"].contains(action) || horizon == "next_game")
             && (horizon == "week" || valid_until.flatMap(FantasyBriefing.timestamp) != nil)
             && [headline, why_now, fit, risk, watch_for].allSatisfy { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            && ([headline, why_now, fit, risk, watch_for] + limitations + evidence.compactMap(\.summary))
+                .allSatisfy { !GaryMlbMetricPolicy.containsExcludedAnalysis($0) }
             && !formats.isEmpty && formats.allSatisfy { allowed.contains($0) }
             && !evidence.isEmpty && Set(evidence.map(\.id)).count == evidence.count
     }

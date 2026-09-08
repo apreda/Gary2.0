@@ -149,7 +149,7 @@ function buildPrompt({ pick, result, evidence }) {
     `explaining the verdict. The note may ONLY cite facts from the evidence above — no outside ` +
     `knowledge, no invented numbers. For "unclear", the note says what the evidence is missing.\n` +
     `4. Classify each claim's TYPE:\n` +
-    `   - "data": the claim rests on cited statistics or verifiable facts (splits, xERA/xG, records, rest days, injuries, lineups)\n` +
+    `   - "data": the claim rests on cited statistics or verifiable facts (splits, ERA, xG, records, rest days, injuries, lineups)\n` +
     `   - "judgment": the claim rests on the analyst's own read — a spot, momentum, team character, a star's influence, ` +
     `a game-script call, or a view that the market/public over- or under-reacted\n\n` +
     `Output STRICT JSON only (no markdown fences, no prose):\n` +

@@ -2,7 +2,7 @@
  * Baseball Savant xStats Service
  *
  * Free public CSV endpoints — no API key needed.
- * Returns expected stats (xBA, xSLG, xWOBA, xERA) for all MLB pitchers and batters,
+ * Returns expected stats (xBA, xSLG, xWOBA) for all MLB pitchers and batters,
  * plus per-pitch average velocity arsenals (the one pitcher metric BDL doesn't carry).
  * Expected stats measure performance based on contact quality (exit velo, launch angle)
  * rather than actual results — the gap between actual and expected signals regression.
@@ -10,6 +10,8 @@
  * Cached in memory with 24hr TTL (data changes daily during season).
  * Two calls cache the entire league: ~873 pitchers + ~673 batters.
  */
+
+import { stripXeraFields } from './mlbMetricPolicy.js';
 
 const SAVANT_BASE = 'https://baseballsavant.mlb.com/leaderboard/expected_statistics';
 const SAVANT_ARSENAL_BASE = 'https://baseballsavant.mlb.com/leaderboard/pitch-arsenals';
@@ -74,7 +76,7 @@ async function fetchXStats(type, year) {
     if (text.includes('<!DOCTYPE') || text.includes('<html')) {
       throw new Error('Got HTML instead of CSV — endpoint may be blocked');
     }
-    const data = parseCsv(text);
+    const data = stripXeraFields(parseCsv(text));
     console.log(`[Savant] Loaded ${data.length} ${type} xStats for ${year}`);
     setCache(key, data);
     return data;
@@ -86,7 +88,7 @@ async function fetchXStats(type, year) {
 
 /**
  * Get pitcher xStats for a season (cached daily).
- * Returns: { player_id, name, era, xera, era_minus_xera_diff, ba (opp), est_ba (xBA), woba, est_woba, ... }
+ * Returns: { player_id, name, era, ba (opp), est_ba (xBA), woba, est_woba, ... }
  */
 export async function getPitcherXStats(year) {
   return fetchXStats('pitcher', year || new Date().getFullYear());
@@ -149,7 +151,7 @@ export async function getPitcherArsenals(year) {
     if (text.includes('<!DOCTYPE') || text.includes('<html')) {
       throw new Error('Got HTML instead of CSV — endpoint may be blocked');
     }
-    const data = parseCsv(text);
+    const data = stripXeraFields(parseCsv(text));
     console.log(`[Savant] Loaded pitch arsenals for ${data.length} pitchers (${season})`);
     setCache(key, data);
     return data;
@@ -208,7 +210,7 @@ export async function getPitcherStatcastProfiles(year) {
     if (text.includes('<!DOCTYPE') || text.includes('<html')) {
       throw new Error('Got HTML instead of CSV — endpoint may be blocked');
     }
-    const data = parseCsv(text);
+    const data = stripXeraFields(parseCsv(text));
     console.log(`[Savant] Loaded pitcher statcast profiles for ${data.length} pitchers (${season})`);
     setCache(key, data);
     return data;

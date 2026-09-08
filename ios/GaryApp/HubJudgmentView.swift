@@ -180,7 +180,8 @@ private struct HubEvidenceNode: View {
                 for (key, value) in display { measured[key] = value }
             }
             return measured.keys.sorted().filter {
-                !hidden.contains($0) && !$0.hasSuffix("_id") && !$0.hasSuffix("_ids")
+                !hidden.contains($0) && !$0.lowercased().contains("xera")
+                    && !["est_era", "expected_era"].contains($0.lowercased()) && !$0.hasSuffix("_id") && !$0.hasSuffix("_ids")
                     && !$0.hasSuffix("Id") && !$0.hasSuffix("ID") && !$0.hasSuffix("Ids")
                     && !$0.hasSuffix("_at") && !$0.hasSuffix("_as_of")
             }.compactMap { key in
@@ -202,7 +203,7 @@ private struct HubEvidenceNode: View {
     }
 
     private static func readable(_ key: String) -> String {
-        let labels = ["era": "ERA", "whip": "WHIP", "ops": "OPS", "xera": "xERA", "xba": "xBA", "xwoba": "xwOBA",
+        let labels = ["era": "ERA", "whip": "WHIP", "ops": "OPS", "xba": "xBA", "xwoba": "xwOBA",
                       "obp": "On-base percentage", "avg": "Batting average", "slg": "Slugging percentage", "ip": "Innings pitched",
                       "hr": "Home runs", "rbi": "RBI", "k_pct": "Strikeout rate", "bb_pct": "Walk rate", "pa": "Plate appearances",
                       "sides": "Teams", "season_baseline": "Season measurements", "probable_pitcher": "Probable starting pitcher"]

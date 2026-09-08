@@ -1,3 +1,4 @@
+import { hasXeraAnalysis } from '../mlbMetricPolicy.js';
 // A Fantasy call is Gary's interpretation of dated evidence, never a tier
 // assigned by a stat threshold. Publication accepts one complete response.
 import { createHash } from 'node:crypto';
@@ -123,7 +124,7 @@ Evidence rules:
 - Missing numbers remain unknown. A prior-season sample is a baseline, not current role or form. A provider collection timestamp is not the date a game was played. Investigate sample size and age before relying on a trend.
 - A point projection is an estimate, never a scoring ceiling, floor or maximum. A scheduled kickoff is the deadline used by this briefing, not proof of the user's league waiver or lineup-lock rules. Say kickoff or first pitch when that is the time actually supplied.
 - Do not infer routes, snap shares, red-zone roles, closer hierarchies, playing time or a return from injury from fields that do not measure those things. Do not infer roster availability from OPS, ERA or star reputation.
-- xERA describes expected outcomes on the supplied sample; it is not automatically a future forecast. A team total is not a player's fantasy projection. A famous opponent's name alone is not evidence of a difficult matchup. Investigate the measured opposing lineup and the actual playing opportunity when relevant.
+- Never use, cite, estimate or infer xERA (expected ERA). It is excluded throughout Gary. Evaluate pitchers from the supplied observed results, workload and contact measurements. A team total is not a player's fantasy projection. A famous opponent's name alone is not evidence of a difficult matchup. Investigate the measured opposing lineup and the actual playing opportunity when relevant.
 - Do not prescribe a drop without this user's roster, replacement and league settings. HOLD/SIT/WATCH can explain a decision without inventing that information.
 - Prefer a clear connection over repeating every measurement. If you cite numbers, copy them from the cited evidence. Baseball ERA/WHIP/K-per-nine can be rounded to two decimals, batting averages/OPS to three. Cite every fact used anywhere in the call, including the counterargument. Use this player's exact evidence IDs. For a comparison with another supplied player, also cite that player's evidence as "candidate_id/evidence_id" (for example "bdl:123/forecast"); that source will be labeled with the other player's name. Every call must cite its own player's evidence; non-WATCH calls require at least two distinct evidence items. Keep the full explanation within the field limits; no ellipses or clipped sentences.
 - Choose horizon next_game when the call depends on acting before the player's next scheduled game; START and SIT always use next_game. Choose week only for a roster decision that remains useful after that game begins. A next-game call automatically closes at first pitch/kickoff.
@@ -248,6 +249,7 @@ export function validateFantasyDecisions(response, evidence) {
         throw new Error(`Fantasy ${candidate.id}: missing or invented evidence reference`);
       }
       const cited = refs.map(ref => source.get(ref));
+      if (hasXeraAnalysis(text) || hasXeraAnalysis(cited)) throw new Error(`Fantasy ${candidate.id}: xERA is excluded from Gary analysis`);
       const numbers = allowedNumbers({ ...candidate, evidence: cited }, evidence);
       const numericIssues = [];
       for (const [field, value] of Object.entries(text)) {

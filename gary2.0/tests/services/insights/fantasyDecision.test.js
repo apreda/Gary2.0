@@ -45,6 +45,8 @@ describe('Fantasy decisions from dated evidence', () => {
   });
 
   it.each([
+    ['excluded metric', { why_now: 'His xERA makes this start appealing.' }],
+    ['expected ERA alias', { why_now: 'His expected earned run average supports this start.' }],
     ['unknown player', { candidate_id: 'bdl:999' }],
     ['invented source', { evidence_ids: ['lineup', 'invented'] }],
     ['single source for a start', { evidence_ids: ['lineup'] }],
@@ -243,4 +245,10 @@ describe('Fantasy decisions from dated evidence', () => {
     await expect(createFantasyBriefing(facts(), { generateText, signal: controller.signal })).rejects.toThrow();
     expect(generateText).toHaveBeenCalledTimes(1);
   });
+});
+
+it('rejects xERA in cited evidence even when the generated prose omits its name', () => {
+  const evidence = facts();
+  evidence.candidates[0].evidence[1].facts.xera = 3.26;
+  expect(() => validateFantasyDecisions(answer(), evidence)).toThrow(/xERA is excluded/);
 });

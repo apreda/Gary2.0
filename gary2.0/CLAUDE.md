@@ -1,5 +1,13 @@
 # CLAUDE.md
 
+## MLB metric policy (founder reaffirmed September 8, 2026)
+
+Do not use, cite, estimate or display xERA (expected ERA) anywhere in Gary.
+This applies to scouting, Hub, Fantasy, Tomorrow, prompts and optional feeds.
+Preserve actual ERA and other useful accurate measurements. BDL is not an
+exclusive source requirement; other sources still need an applicable use basis.
+
+
 Latest Hub direction: read `../HANDOFF_2026-09-08_HUB_RESTORED_917.md`.
 Adam explicitly superseded the unapproved judgment-first 916 candidate and
 requested restoration of the earlier gray-card Hub and original observational

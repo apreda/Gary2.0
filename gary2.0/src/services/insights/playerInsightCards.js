@@ -35,7 +35,7 @@
 //   * getMlbPlayerProps(gameId) -> rows { player_id, prop_type, line_value,
 //     market:{type,odds} }
 //   * getBatterXStats(season)/getPitcherXStats(season) -> name-joined expected
-//     stats (ba/est_ba/slg/est_slg/woba/est_woba ; era/xera for pitchers)
+//     stats (ba/est_ba/slg/est_slg/woba/est_woba ; actual ERA for pitchers)
 
 import axios from 'axios';
 import { loadProjectedFieldLineups, usableLineup } from './lineupSource.js';
@@ -427,7 +427,7 @@ async function buildPitcherPack(a) {
   const venue = pitcherVenue(splits, game);
   if (venue) payload.venue = venue;
 
-  // xstats: ERA vs xERA, opp BA vs xBA.
+  // xstats: actual ERA, opponent BA vs xBA.
   const xrow = pitcherX.get(nameKey(name)) || pitcherX.get(lastNameKey(name));
   const xstats = pitcherXStats(xrow);
   if (xstats.length) payload.xstats = xstats;

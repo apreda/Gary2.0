@@ -267,7 +267,7 @@ struct Signal: Identifiable {
     /// Confirmed-XI payload (WC Confirmed XI lane) — both teams' team sheets,
     /// rendered as the formation + lineup beneath the edge.
     var confirmedXI: SwapMeta? = nil
-    /// Regression payload (pitcher rows) — direction, ERA/xERA, peripherals and
+    /// Regression payload (pitcher rows) — direction, ERA, peripherals and
     /// the verdict. `reg.day` ("tonight"/"tomorrow") splits the Regression Board.
     var reg: SwapMeta? = nil
     /// Head-to-head payload (head_to_head lane) — season series dominance + last meeting.

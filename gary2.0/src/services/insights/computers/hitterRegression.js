@@ -2,8 +2,7 @@
 //
 // LANE: hitterRegression  (category token emitted: regression_watch)
 // "His .310 AVG hides a .240 xBA" — Statcast contact quality vs surface stats
-// for tonight's hitters. These rows join the pitcher ERA-vs-xERA rows on the
-// iOS REGRESSION BOARD (same regression_watch category), but here the unit is a
+// for tonight's hitters on the iOS REGRESSION BOARD. The unit is a
 // HITTER's batting average / wOBA against his expected (xBA / xwOBA) from
 // Baseball Savant's expected_statistics leaderboard. A hitter whose surface
 // average sits well above his expected has been flattered by results and tends

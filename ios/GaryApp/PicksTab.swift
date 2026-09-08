@@ -2749,7 +2749,6 @@ struct GameScoutSection: View {
     private func seasonText(_ st: TomorrowPerson) -> Text? {
         var bits: [Text] = []
         if let e = st.era { bits.append(Self.stat(String(format: "%.2f ERA", e))) }
-        if let x = st.xera { bits.append(Self.stat(String(format: "%.2f xERA", x))) }
         guard !bits.isEmpty else { return nil }
         return bits.dropFirst().reduce(bits[0]) { $0 + Self.stat(" · ", .white.opacity(0.35)) + $1 }
     }

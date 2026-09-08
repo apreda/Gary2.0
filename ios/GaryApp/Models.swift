@@ -173,6 +173,16 @@ struct Connection: Codable {
     let meta: SwapMeta?          // structured lane payload (beneficiary swap rows)
     let result: String?          // "hit" / "miss" / "push" / nil — graded the next morning
     let result_note: String?     // grader's one-liner ("2-for-4, double") — receipts subline
+
+    /// Older collected cards can outlive the retired metric. Keep valid source
+    /// observations even when an inactive meta.judgment contains old analysis.
+    var permitsCurrentMetricPolicy: Bool {
+        guard meta?.kind != "regression_pitcher" else { return false }
+        return [headline, detail, value, meta?.evidence, meta?.read, meta?.verdict,
+                meta?.computed_detail, meta?.reason, meta?.drop_note]
+            .compactMap { $0 }.allSatisfy { !GaryMlbMetricPolicy.containsExcludedAnalysis($0) }
+    }
+
 }
 
 /// A compact value in an insight row's `meta` payload. Football's live state
@@ -384,7 +394,6 @@ final class SwapMeta: Codable {
     let day: String?         // "tonight" | "tomorrow" (tomorrow = projected starter look-ahead)
     let direction: String?   // "overperforming" (due to regress) | "underperforming" (due to bounce back)
     let era: Double?
-    let xera: Double?
     let gap: Double?
     let whip: Double?
     let k9: Double?
@@ -409,7 +418,7 @@ final class SwapMeta: Codable {
     let avg: Double?         // hitter season AVG
     let batting_order: Int?  // lineup spot
     let opp_sp: String?      // opposing starter (hitter pickups)
-    let opp_sp_era: Double?  // opposing starter xERA
+    let opp_sp_era: Double?  // opposing starter ERA
     // Fantasy Corner lane payloads (two_start / closer_watch / return_watch /
     // cut_list): the full Gary read + the numbers the card's stat strip shows.
     let read: String?              // full analyst read (verdict rides `verdict`)
@@ -2482,12 +2491,11 @@ struct TomorrowBoard: Decodable {
     let form: [TomorrowForm]?
     let run_profile: [TomorrowRunProfile]?
     let weather: [TomorrowWeather]?
-    // Grounded league-average ERA/xERA (PA-weighted mean across tomorrow's
+    // Grounded league-average ERA (PA-weighted mean across tomorrow's
     // probable starters) — the baseline the Starters lane colors each pitcher's
-    // ERA/xERA against (below avg = good/green, above = bad/red). Optional;
+    // ERA against (below avg = good/green, above = bad/red). Optional;
     // older rows without these still decode.
     let league_avg_era: Double?
-    let league_avg_xera: Double?
 }
 
 struct TomorrowBoardRow: Decodable {   // mirrors DailySlateRow + presentation extras
@@ -2622,7 +2630,6 @@ struct TomorrowPerson: Decodable {   // starters AND returns share this
     // and older board rows leave them nil.
     let abbr: String?               // team abbreviation (gold in the Starters lane)
     let era: Double?                // Savant season ERA | nil when unavailable
-    let xera: Double?               // Savant expected ERA | nil (never fabricated)
     let game: String?               // the game this starter is in, e.g. "HOU @ DET"
     let opponent: String?           // opposing team abbr | nil
     let home: Bool?                 // pitching at home?

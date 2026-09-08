@@ -217,6 +217,14 @@ precondition(evidence.label == "2025 regular-season baseline")
 precondition(evidence.summary?.contains("8 observed games") == true)
 precondition(evidence.summary?.contains("not current role or current form") == true)
 precondition(evidence.observed_at == "2026-09-08T12:00:00Z")
+let decisionJSON = #"{"id":"one","player_id":"1","player_name":"Fixture Pitcher","action":"WATCH","horizon":"week","headline":"Watch the workload","why_now":"Actual ERA and workload remain worth checking.","fit":"Managers checking a bench spot.","risk":"The role remains uncertain.","watch_for":"The next announced starter.","formats":["categories"],"categories":["strikeouts"],"opportunities":[],"evidence":[{"id":"one","label":"Observed record","source":"Fixture","summary":"Actual ERA 3.26, xBA .250."}],"limitations":[]}"#
+let valid = try JSONDecoder().decode(FantasyDecision.self, from: Data(decisionJSON.utf8))
+precondition(valid.isValid(league: "MLB"))
+for term in ["xERA", "expected ERA", "expected earned run average"] {
+    let invalidJSON = decisionJSON.replacingOccurrences(of: "Actual ERA and workload", with: term)
+    let invalid = try JSONDecoder().decode(FantasyDecision.self, from: Data(invalidJSON.utf8))
+    precondition(!invalid.isValid(league: "MLB"))
+}
 print("Fantasy provenance preserved")
 `);
       const result = spawnSync('swift', [path], { encoding: 'utf8', timeout: 30_000 });

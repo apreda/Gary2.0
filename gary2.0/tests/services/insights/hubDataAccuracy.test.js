@@ -21,7 +21,6 @@ vi.mock('../../../src/services/agentic/orchestrator/sessionManager.js', () => ({
 const { formatIpThirds, parseIpThirds } = await import('../../../src/services/insights/shared.js');
 const { computeBullpenFatigue } = await import('../../../src/services/insights/computers/bullpenFatigue.js');
 const { computeRegressionWatch } = await import('../../../src/services/insights/computers/regressionWatch.js');
-const { applyGaryVoice } = await import('../../../src/services/insights/garyInsightVoice.js');
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -56,24 +55,22 @@ describe('Hub baseball innings evidence', () => {
   });
 });
 
-describe('future starter evidence', () => {
-  it('keeps the computed tomorrow date through both production prose passes', async () => {
-    mocks.xstats.mockResolvedValue([{ name: 'Foster Griffin', era: 3.26, xera: 4.27, pa: 200, ba: 0.235, est_ba: 0.257 }]);
-    mocks.schedule.mockResolvedValue([{ teams: {
-      away: { team: { name: 'Cleveland Guardians', abbreviation: 'CLE' }, probablePitcher: { fullName: 'Foster Griffin' } },
-      home: { team: { name: 'Baltimore Orioles', abbreviation: 'BAL' } },
-    } }]);
-    const rows = await computeRegressionWatch({
-      date: '2026-09-08', season: 2026, games: [], helpers: { gameLabel: () => 'CLE @ BAL' },
-      bdl: { getMlbStandings: async () => [], getMlbSeasonGameIndex: async () => new Map() },
+describe('regression metric policy', () => {
+  it('preserves observed one-run records without loading excluded pitcher regression sources', async () => {
+    mocks.xstats.mockResolvedValue([{ name: 'Fixture Starter', era: 3.26, xera: 4.27, pa: 200 }]);
+    const seasonIndex = new Map(Array.from({ length: 12 }, (_, i) => [i, {
+      status: 'STATUS_FINAL', seasonType: 'regular', homeId: 1, awayId: 2, homeRuns: 4, awayRuns: 3,
+    }]));
+    const rows = await computeRegressionWatch({ season: 2026,
+      games: [{ id: 100, home_team: { id: 1, name: 'Fixture Club', abbreviation: 'FIX' }, visitor_team: { id: 3, abbreviation: 'OPP' } }],
+      bdl: { getMlbSeasonGameIndex: async () => seasonIndex },
     });
     expect(rows).toHaveLength(1);
-    expect(rows[0].meta.day).toBe('tomorrow');
-    expect(rows[0].detail).toContain('Projected to start tomorrow vs BAL');
-    await applyGaryVoice(rows, { league: 'MLB' });
-    expect(rows[0].detail).toContain('Projected to start tomorrow vs BAL');
+    expect(rows[0].headline).toContain('12-0 in one-run games');
+    expect(JSON.stringify(rows)).not.toMatch(/xera|expected era/i);
+    expect(mocks.xstats).not.toHaveBeenCalled();
+    expect(mocks.profiles).not.toHaveBeenCalled();
+    expect(mocks.schedule).not.toHaveBeenCalled();
     expect(mocks.read).not.toHaveBeenCalled();
-    expect(mocks.create).not.toHaveBeenCalled();
-    expect(mocks.send).not.toHaveBeenCalled();
   });
 });

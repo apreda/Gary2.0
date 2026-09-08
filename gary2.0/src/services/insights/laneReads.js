@@ -6,8 +6,7 @@
 // what it sets up tonight. One batched model call PER LANE over the lane's
 // own computed facts; the model is fenced to those facts (prevent-fabrication:
 // nothing generates that isn't in the fact sheet). Non-blocking by contract —
-// any failure keeps the computed detail. Same pattern fantasyPickups and
-// closerWatch proved in (writeAnalystReads / writeReads), centralized.
+// any failure keeps the computed detail. Shared by the observational research lanes.
 import { generateSolText } from './solText.js';
 
 // Mirrors generateInsightConnections.postProcess's maxPerCategory: the number

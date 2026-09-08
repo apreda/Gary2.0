@@ -128,7 +128,7 @@ let changelogEntries: [ChangelogEntry] = [
             "Pick cards are cleaner everywhere: odds in the sport's color, handicaps and totals formatted right, and the same card size on every page",
             "Pick cards show the live score while the game is in play",
             "The Hub reads like a digest now: tap a section to open it, tap a player for the full breakdown",
-            "Regression Board adds tomorrow's projected starters, plus deeper reads on tonight's arms — ERA vs xERA, hard-hit and barrel rates, and the verdict",
+            "Expanded starter research with actual ERA, hard-hit and barrel rates",
             "Your daily recap now reflects how the night actually went",
             "Gary won't post a pick on a game he can't truly read. No real data, no pick.",
             "Cleaner Tonight page with your free pick leading, plus refreshed Gary branding"
@@ -184,7 +184,7 @@ let changelogEntries: [ChangelogEntry] = [
         changes: [
             "MLB Regular Season game picks, props, and DFS lineups now live",
             "Full BDL GOAT-tier integration: player stats, splits, batter vs pitcher, standings, injuries, odds from 6 sportsbooks",
-            "Baseball Savant xStats: expected vs actual performance (xERA, xBA, xSLG, xwOBA)",
+            "Baseball Savant xStats: expected vs actual performance (xBA, xSLG, xwOBA)",
             "L1-L4 game recaps with full box scores, L5/L10 trend aggregates",
             "30 hardcoded park factors, confirmed lineups from MLB Stats API",
             "Support for 8 sports: NFL, NBA, NCAAF, NCAAB, NHL, MLB, EPL, WNBA"

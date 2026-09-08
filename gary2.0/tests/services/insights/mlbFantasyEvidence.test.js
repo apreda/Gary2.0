@@ -312,3 +312,13 @@ describe('MLB fantasy evidence collection', () => {
     await expect(buildMlbFantasyEvidence({ ...f.ctx, date: '2026-02-30' }, f.options)).rejects.toThrow('valid');
   });
 });
+
+it('excludes xERA from pitcher evidence while retaining actual ERA and opponent contact facts', async () => {
+  const f = fixture();
+  f.sources.getPitcherXStats.mockResolvedValue([{ player_id: 777, name: 'Pitcher 20', pa: 200, era: 3.26, xera: 4.27, ba: 0.235, est_ba: 0.257 }]);
+  const result = await buildMlbFantasyEvidence(f.ctx, f.options);
+  const pitcher = result.candidates.find(c => c.id === 'bdl:20');
+  const expected = pitcher.evidence.find(e => e.id.startsWith('expected_'));
+  expect(expected.facts).toMatchObject({ era: 3.26, ba: 0.235, est_ba: 0.257 });
+  expect(JSON.stringify(result)).not.toMatch(/xera|expected era/i);
+});

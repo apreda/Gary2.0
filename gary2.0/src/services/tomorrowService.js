@@ -22,12 +22,12 @@
  *      Today slate. Lines null => board renders "—". any_lines=false when ZERO
  *      games have any posted line ("lines open soon" hero).
  *   2. PROBABLE STARTERS — MLB probable pitchers ONLY (getMlbSchedule, both
- *      sides, all games) joined to Savant season ERA + xERA by name, each tagged
+ *      sides, all games) joined to Savant season ERA by name, each tagged
  *      with its game ("HOU @ DET"), opponent abbr, and home flag. Shape:
- *      {name, team, abbr, era, xera, game, opponent, home, detail}. Plus a
- *      top-level grounded league_avg_era / league_avg_xera (PA-weighted mean of
+ *      {name, team, abbr, era, game, opponent, home, detail}. Plus a
+ *      top-level grounded league_avg_era (PA-weighted mean of
  *      the same Savant pitcher corpus) so the iOS can color each pitcher's
- *      ERA/xERA relative to league (below = good). era/xera null when Savant
+ *      ERA relative to league (below = good). era null when Savant
  *      has no row (never fabricated).
  *   3. KEY RETURNS — best-effort IL->active roster-status lane; honest-empty
  *      when nothing qualifies (no dedicated return-date feed exists).
@@ -297,20 +297,13 @@ function indexStandings(standingsRaw) {
   return byTeamId;
 }
 
-/**
- * Savant pitcher xStats indexed by full-name + last-name key => { era, xera }.
- * The Savant expected-statistics CSV carries BOTH actual season `era` and
- * expected `xera` in the SAME row, so the board gets xERA for free from the
- * fetch that already grounds ERA. xera is null when the CSV row lacks it
- * (never fabricated). Keyed on era presence — a pitcher with no era is skipped.
- */
+/** Actual season ERA indexed by the provider's pitcher name. */
 function indexPitcherEraByName(pitcherX) {
   const map = new Map();
   for (const r of pitcherX || []) {
     const era = Number(r?.era);
     if (!Number.isFinite(era)) continue;
-    const xeraNum = Number(r?.xera);
-    const rec = { era, xera: null }; // xERA OFF app-wide (Aug 10)
+    const rec = { era };
     const last = r?.last_name || '';
     const first = r?.first_name || '';
     if (last) {
@@ -322,7 +315,7 @@ function indexPitcherEraByName(pitcherX) {
   }
   return map;
 }
-/** => { era, xera } for a pitcher name (xera null when unavailable), or null. */
+/** Actual ERA for a pitcher name, or null. */
 function statsForName(fullName, eraByName) {
   if (!fullName) return null;
   const e = eraByName.get(nameKey(fullName));
@@ -332,28 +325,24 @@ function statsForName(fullName, eraByName) {
 }
 
 /**
- * Grounded current MLB LEAGUE-AVERAGE ERA / xERA, derived from the SAME Savant
+ * Grounded current MLB LEAGUE-AVERAGE ERA, derived from the SAME Savant
  * pitcher xStats corpus the starters lane already fetches — a plate-appearance-
  * WEIGHTED mean (weighting by `pa` approximates innings, so workhorse starters
  * count fully and tiny-sample relievers can't distort the average up). Used by
- * the iOS to color each pitcher's ERA/xERA relative to league (below = good).
+ * the iOS to color each pitcher's ERA relative to league (below = good).
  * GROUNDED: null when the corpus is empty; never a hardcoded constant.
- * => { league_avg_era: number|null, league_avg_xera: number|null }
+ * => { league_avg_era: number|null }
  */
 function computeLeagueAvgEra(pitcherX) {
   let eraW = 0, eraPa = 0;
-  let xeraW = 0, xeraPa = 0;
   for (const r of pitcherX || []) {
     const pa = Number(r?.pa);
     const w = Number.isFinite(pa) && pa > 0 ? pa : 1; // unweighted fallback if pa absent
     const era = Number(r?.era);
     if (Number.isFinite(era)) { eraW += era * w; eraPa += w; }
-    const xera = Number(r?.xera);
-    if (Number.isFinite(xera)) { xeraW += xera * w; xeraPa += w; }
   }
   return {
     league_avg_era: eraPa > 0 ? Number((eraW / eraPa).toFixed(2)) : null,
-    league_avg_xera: null, // xERA OFF app-wide (founder ruling, Aug 10)
   };
 }
 
@@ -498,9 +487,6 @@ async function buildStarters(etDateStr, teamIndex, eraByName) {
         const home = side === 'home';
         const stats = statsForName(name, eraByName);
         const era = stats?.era ?? null;
-        // xERA OFF app-wide (founder ruling, Aug 10) — the field stays in
-        // the payload as null so no iOS build is required to go dark.
-        const xera = null;
         const detail = era != null ? `${abbr} ${era.toFixed(2)}` : abbr;
         starters.push({
           league: 'MLB',
@@ -510,7 +496,6 @@ async function buildStarters(etDateStr, teamIndex, eraByName) {
           team: abbr,
           abbr,                         // explicit alias (iOS gold team-name source)
           era,                          // number | null
-          xera,                         // number | null (never fabricated)
           game: gameLabel,              // "HOU @ DET" | null
           // Game identity (Jul 22 2026, doubleheader-safe): which GAME this
           // arm starts. Readers select starters BY GAME, never by team alone
@@ -1664,7 +1649,7 @@ function armsFactLine(st) {
   const name = st.full_name || st.name;
   if (!name) return null;
   const bits = [];
-  if (st.era != null) bits.push(`${st.era} ERA${st.xera != null ? ` (xERA ${st.xera})` : ''}`);
+  if (st.era != null) bits.push(`${st.era} ERA`);
   if (st.last_outing) {
     const lo = st.last_outing;
     bits.push(`last outing${lo.date ? ` ${lo.date}` : ''}${lo.opp ? ` ${lo.at || 'vs'} ${lo.opp}` : ''}: ${lo.ip} IP ${lo.er} ER ${lo.k} K`);
@@ -1684,16 +1669,14 @@ function partialArmsTake(st, missingTeam) {
     first = `${name} has allowed ${st.l3.er} earned runs across ${st.l3.ip} innings `
       + `in his last ${st.l3.gs} starts${st.l3.k != null ? `, with ${st.l3.k} strikeouts` : ''}`;
     if (st.era != null) {
-      first += `, while carrying a ${st.era.toFixed(2)} ERA`
-        + `${st.xera != null ? ` against a ${st.xera.toFixed(2)} xERA` : ''}`;
+      first += `, while carrying a ${st.era.toFixed(2)} ERA`;
     }
   } else if (st.last_outing?.ip != null) {
     const lo = st.last_outing;
     first = `${name} worked ${lo.ip} innings with ${lo.er ?? 0} earned runs`
       + `${lo.k != null ? ` and ${lo.k} strikeouts` : ''} in his last start`;
   } else if (st.era != null) {
-    first = `${name} brings a ${st.era.toFixed(2)} ERA`
-      + `${st.xera != null ? ` and ${st.xera.toFixed(2)} xERA` : ''}`;
+    first = `${name} brings a ${st.era.toFixed(2)} ERA`;
   } else {
     first = `${name} is the only confirmed arm in this matchup so far`;
   }
@@ -2057,7 +2040,7 @@ async function attachRailExtras(board, etDateStr, { existingBoard, idByName, sup
  * re-runs (e.g. the evening line refresh) overwrite in place so overnight-posted
  * lines flip "—" to real numbers before users wake.
  *
- * @returns {Promise<{date,game_count,any_lines,big_games,starters,returns,form,run_profile,weather,league_avg_era,league_avg_xera,countdown_sport}>}
+ * @returns {Promise<{date,game_count,any_lines,big_games,starters,returns,form,run_profile,weather,league_avg_era,countdown_sport}>}
  */
 export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(etDateStr)) {
@@ -2141,10 +2124,10 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
   try { standings = indexStandings(await getMlbStandings(SEASON)); }
   catch (e) { console.warn(`[TomorrowBoard] standings fetch failed: ${e.message}`); }
 
-  // Savant pitcher xStats — one fetch grounds BOTH the per-starter ERA/xERA index
-  // AND the top-level league-average ERA/xERA (PA-weighted mean of this corpus).
+  // Savant pitcher xStats — one fetch grounds BOTH the per-starter ERA index
+  // AND the top-level league-average ERA (PA-weighted mean of this corpus).
   let eraByName = new Map();
-  let leagueAvg = { league_avg_era: null, league_avg_xera: null };
+  let leagueAvg = { league_avg_era: null };
   try {
     const pitcherX = await getPitcherXStats(SEASON);
     eraByName = indexPitcherEraByName(pitcherX);
@@ -2278,11 +2261,10 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
     form,
     run_profile,
     weather,
-    // Grounded current MLB league-average ERA / xERA (PA-weighted mean of the
+    // Grounded current MLB league-average ERA (PA-weighted mean of the
     // Savant pitcher corpus) — the reference the iOS colors each starter's
-    // ERA/xERA against (below avg = good/green, above = bad/red).
+    // ERA against (below avg = good/green, above = bad/red).
     league_avg_era: leagueAvg.league_avg_era,
-    league_avg_xera: leagueAvg.league_avg_xera,
     updated_at: new Date().toISOString(),
   };
 
@@ -2306,7 +2288,7 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
     `[TomorrowBoard] ${status} ${etDateStr}: ${board.length} game(s)${summary ? ` (${summary})` : ''}, ` +
     `${bigGames.length} big game(s), ${starters.length} starter(s), ${returns.length} return(s), ` +
     `${form.length} form, ${run_profile.length} run-profile, ${weather.length} weather, ` +
-    `lgERA=${leagueAvg.league_avg_era ?? '—'}/xERA=${leagueAvg.league_avg_xera ?? '—'}, ` +
+    `lgERA=${leagueAvg.league_avg_era ?? '—'}, ` +
     `lines=${any_lines ? 'posted' : 'open soon'}, countdown=${countdown_sport || 'none'}`,
   );
 
@@ -2321,7 +2303,6 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
     run_profile,
     weather,
     league_avg_era: leagueAvg.league_avg_era,
-    league_avg_xera: leagueAvg.league_avg_xera,
     countdown_sport,
     failures,
     source_health: failures.length > 0 ? 'degraded' : 'healthy',

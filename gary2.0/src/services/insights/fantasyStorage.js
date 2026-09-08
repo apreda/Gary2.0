@@ -1,3 +1,4 @@
+import { hasXeraAnalysis } from '../mlbMetricPolicy.js';
 // The Fantasy board is one atomic row per publication date and league. This
 // module never deletes a prior board and never treats a failed read as empty.
 
@@ -40,6 +41,7 @@ export function validateFantasyPublication(payload) {
         || !Array.isArray(decision.opportunities) || !Array.isArray(decision.evidence)) {
       throw new Error('Fantasy decisions require one named identity and complete call per player');
     }
+    if (hasXeraAnalysis(decision)) throw new Error('xERA is excluded from Fantasy publications');
     players.add(id);
   }
   return payload;

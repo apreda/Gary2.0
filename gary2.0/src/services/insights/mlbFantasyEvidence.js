@@ -228,7 +228,7 @@ function exactXStats(rows, candidate, role) {
   if (matches.length !== 1) return null;
   const row = matches[0], pid = id(row.player_id);
   if (!pid || !(num(row.pa) > 0)) return null;
-  return { mlbam_player_id: pid, match_method: 'unique_exact_full_name', sample_pa: num(row.pa), ...fields(row, role === 'pitcher' ? ['era', 'xera', 'ba', 'est_ba', 'woba', 'est_woba'] : ['ba', 'est_ba', 'slg', 'est_slg', 'woba', 'est_woba']) };
+  return { mlbam_player_id: pid, match_method: 'unique_exact_full_name', sample_pa: num(row.pa), ...fields(row, role === 'pitcher' ? ['era', 'ba', 'est_ba', 'woba', 'est_woba'] : ['ba', 'est_ba', 'slg', 'est_slg', 'woba', 'est_woba']) };
 }
 
 function seasonFacts(rows, candidate, season) {
@@ -260,7 +260,7 @@ function evidenceSummary(key, facts) {
     }).join(', ');
     return `${facts.sample_games} observed appearance${facts.sample_games === 1 ? '' : 's'}, ${facts.rows.at(-1).date} to ${facts.rows[0].date}${totals ? `: ${totals}` : ''}. Latest appearance ${facts.days_since_latest_game} day${facts.days_since_latest_game === 1 ? '' : 's'} before this slate.`;
   }
-  if (key.startsWith('expected_')) return `${facts.season}, ${facts.sample_pa} PA: ${measured([['era', 'ERA'], ['xera', 'xERA'], ['ba', 'AVG'], ['est_ba', 'xBA'], ['slg', 'SLG'], ['est_slg', 'xSLG'], ['woba', 'wOBA'], ['est_woba', 'xwOBA']])}. Season measurements.`;
+  if (key.startsWith('expected_')) return `${facts.season}, ${facts.sample_pa} PA: ${measured([['era', 'ERA'], ['ba', 'AVG'], ['est_ba', 'xBA'], ['slg', 'SLG'], ['est_slg', 'xSLG'], ['woba', 'wOBA'], ['est_woba', 'xwOBA']])}. Season measurements.`;
   if (key.startsWith('hand_splits_')) return facts.rows.map(row => `${row.split}: ${Object.entries(row).filter(([field]) => field !== 'split').map(([field, value]) => `${display(value, field)} ${({ at_bats: 'AB', plate_appearances: 'PA', hits: 'H', home_runs: 'HR', walks: 'BB', strikeouts: 'K', avg: 'AVG', obp: 'OBP', slg: 'SLG', ops: 'OPS', innings_pitched: 'IP', pitching_outs: 'outs', pitching_era: 'ERA', pitching_whip: 'WHIP' })[field] || field}`).join(', ')}`).join('; ');
   if (key === 'opponent_pitchers') return facts.pitchers.map(p => `${p.name}${p.throws ? ` (${p.throws})` : ''}, probable: ${p.season_stats ? Object.entries(p.season_stats).filter(([field]) => ['pitching_gs', 'pitching_ip', 'pitching_k_per_9', 'pitching_bb', 'pitching_era', 'pitching_whip'].includes(field)).map(([field, value]) => `${display(value, field)} ${({ pitching_gs: value === 1 ? 'start' : 'starts', pitching_ip: 'IP', pitching_k_per_9: 'K/9', pitching_bb: 'BB', pitching_era: 'ERA', pitching_whip: 'WHIP' })[field]}`).join(', ') : 'season pitching stats unavailable'}`).join('; ') + '. Planned innings and opener/bulk roles are unconfirmed.';
   if (key.startsWith('opponent_order_')) {

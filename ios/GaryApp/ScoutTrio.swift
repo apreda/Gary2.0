@@ -191,7 +191,6 @@ struct ScoutArmsSection: View {
     }
     private func seasonLine(_ p: TomorrowPerson) -> String? {
         guard let e = p.era else { return nil }
-        if let x = p.xera { return String(format: "%.2f · %.2f xERA", e, x) }
         return String(format: "%.2f ERA", e)
     }
     private func lastOutLine(_ p: TomorrowPerson) -> String? {

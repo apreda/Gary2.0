@@ -117,3 +117,13 @@ describe('Fantasy atomic storage contract', () => {
     expect(() => fantasyPartition('2026-09-07', 'NCAAF')).toThrow();
   });
 });
+
+it('rejects reuse and publication of a legacy briefing whose reasoning still uses xERA', async () => {
+  const old = stored();
+  old.payload.decisions[0].risk = 'His expected ERA raises concern.';
+  expect(canReuseFantasyBriefing(old, { date: old.date, league: old.league, inputFingerprint: hash, now: new Date('2026-09-07T16:00:00Z') })).toBe(false);
+  const client = vi.fn();
+  const storage = createFantasyStorage({ client, supabaseUrl: 'https://fixture.test', serviceKey: 'fixture-only' });
+  await expect(storage.publish(old.payload)).rejects.toThrow(/xERA is excluded/);
+  expect(client).not.toHaveBeenCalled();
+});

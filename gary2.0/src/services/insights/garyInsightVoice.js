@@ -1,6 +1,6 @@
 /**
  * Gary's voice pass for the hub (founder, Jul 27 2026): a hub row never ships
- * as a bare mechanical line ("xERA worse than ERA → regression"). Every row
+ * as a bare mechanical line ("Recent relief workload"). Every row
  * leaves carrying BOTH the computer's evidence AND Gary's read on tonight —
  * written by Sol over that evidence and the matchup, nothing else.
  *

@@ -411,3 +411,13 @@ describe('Hub partial batch acceptance', () => {
     expect(result.diagnostics.every(entry => Number.isFinite(entry.dispatch_after_ms))).toBe(true);
   });
 });
+
+it('excludes legacy xERA observations from synthesis while keeping unrelated original facts', () => {
+  const args = fixture();
+  args.rows[0].meta.judgment = { take: 'Legacy xERA prose, now inactive.' };
+  args.rows.push({ ...args.rows[0], category: 'regression_watch', headline: 'Pitcher ERA vs expected ERA', meta: { era: 3.26, xera: 4.27 } });
+  const [packet] = buildHubJudgmentPackets(args);
+  expect(packet.source_indices).toEqual([0, 1, 2]);
+  expect(JSON.stringify(packet.evidence)).not.toMatch(/xera|expected era/i);
+  expect(() => validateHubJudgments(response(packet, { take: 'His xERA raises concern.' }), [packet], { now: asOf })).toThrow(/xERA is excluded/);
+});

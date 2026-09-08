@@ -574,7 +574,7 @@ struct HubView: View {
     }
 
     /// The player a row is about, as the row spells him. Lanes append their own
-    /// punctuation ("Max Scherzer: 6.16 ERA vs 4.21 xERA", "Grant Taylor /
+    /// punctuation ("Max Scherzer: 6.16 ERA", "Grant Taylor /
     /// Bryan Hudson"), so the name is the head of the headline. Hyphens stay —
     /// Crow-Armstrong is one name.
     static func signalPlayerName(_ s: Signal) -> String {
@@ -4020,7 +4020,6 @@ fileprivate struct HubTeamCardSheet: View {
                         Text("\(HubFmt.stat(era)) ERA").hubDataFont(11, .bold).foregroundStyle(PCV4.mut)
                     }
                 }
-                if let x = p.xera { splitLikeRow("EXPECTED ERA", HubFmt.stat(x)) }
                 if let lo = p.last_outing, let ip = lo.ip, let er = lo.er {
                     let opp = lo.opp.map { " \(lo.at ?? "vs") \($0)" } ?? ""
                     let ks = lo.k.map { " · \($0) K" } ?? ""

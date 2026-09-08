@@ -103,7 +103,7 @@ async function buildAsgData() {
   const rows = Array.isArray(savantRows) ? savantRows : (savantRows?.data || []);
   const blocks = ['Dylan Cease', 'Cristopher Sanchez', 'Cristopher Sánchez'].map(n => {
     const sv = exactRow(rows, n);
-    return sv ? `${n}: Statcast 2026 — ${sv.pa} PA against, ERA ${sv.era ?? 'n/a'}, xERA ${sv.est_era ?? sv.xera ?? 'n/a'}, wOBA-against ${sv.woba ?? 'n/a'}` : null;
+    return sv ? `${n}: Statcast 2026 — ${sv.pa} PA against, ERA ${sv.era ?? 'n/a'}, wOBA-against ${sv.woba ?? 'n/a'}` : null;
   }).filter(Boolean).join('\n');
   return {
     briefs: `EVENT BRIEF (grounded today):\n${news}\n\nMARKET BOARD (grounded):\n${oddsBoard}`,

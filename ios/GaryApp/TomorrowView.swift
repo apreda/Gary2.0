@@ -247,8 +247,7 @@ struct TomorrowView {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     // The pitching matchup — the heart of the game. Each starter on its
-                    // own readable row: abbr · name · ERA (quality-coloured) · xERA (the
-                    // honest regression number, so an elite-looking ERA can't mislead).
+                    // own readable row: abbr · name · actual ERA (quality-coloured).
                     // MLB only; WC big games have nil pitchers.
                     if pitchersLine != nil, let a = away, let h = home {
                         let bRow = bigGameBoardRow(g)
@@ -274,9 +273,9 @@ struct TomorrowView {
             .padding(.vertical, 12)
         }
 
-        /// One probable starter — abbr · name · ERA (quality-coloured) · xERA.
+        /// One probable starter — abbr · name · ERA (quality-coloured).
         private func pitcherLine(fallback: String, abbr: String?,
-                                 stat: (name: String, era: String, xera: String?, color: Color)?) -> some View {
+                                 stat: (name: String, era: String, color: Color)?) -> some View {
             HStack(spacing: 8) {
                 if let ab = abbr, !ab.isEmpty {
                     Text(ab.uppercased())
@@ -290,16 +289,9 @@ struct TomorrowView {
                     .lineLimit(1).minimumScaleFactor(0.85)
                 Spacer(minLength: 8)
                 if let s = stat {
-                    // Label BOTH stats — a bare quality-coloured number next to a
-                    // labelled xERA made readers guess what the first one was.
                     Text("ERA \(s.era)")
                         .font(GaryFonts.mono(13, bold: true))
                         .foregroundStyle(s.color)
-                    if let x = s.xera {
-                        Text("xERA \(x)")
-                            .font(GaryFonts.mono(10.5))
-                            .foregroundStyle(.white.opacity(0.55))
-                    }
                 } else {
                     Text("ERA —")
                         .font(GaryFonts.mono(11))
@@ -320,9 +312,9 @@ struct TomorrowView {
             }
         }
 
-        /// A probable starter's full read (name, ERA, xERA, quality colour), matched
+        /// A probable starter's full read (name, ERA, quality colour), matched
         /// by team abbr + last name. nil when ERA isn't posted.
-        private func starterStat(lastName: String?, abbr: String?) -> (name: String, era: String, xera: String?, color: Color)? {
+        private func starterStat(lastName: String?, abbr: String?) -> (name: String, era: String, color: Color)? {
             guard let lastName, !lastName.isEmpty, let starters = board?.starters else { return nil }
             let key = lastName.lowercased()
             let p = starters.first {
@@ -332,7 +324,7 @@ struct TomorrowView {
             }
             guard let p, let era = p.era else { return nil }
             let avg = board?.league_avg_era ?? 4.32
-            return (p.name ?? lastName, Self.trimNum(era), p.xera.map { Self.trimNum($0) },
+            return (p.name ?? lastName, Self.trimNum(era),
                     Self.bigGameEraColor(era, avg: avg))
         }
 
@@ -595,8 +587,8 @@ struct TomorrowView {
                 case .starters:
                     Text("PITCHER / GAME")
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    Text("ERA · xERA")
-                        .frame(width: 164, alignment: .trailing)
+                    Text("ERA")
+                        .frame(width: 88, alignment: .trailing)
                 case .returns:
                     Text("PLAYER / TEAM")
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -635,13 +627,12 @@ struct TomorrowView {
         }
 
         // STARTERS — pitcher name + gold team abbr + the game it's in on the
-        // left; ERA · xERA on the right, each colored green (below league avg =
+        // left; ERA on the right, each colored green (below league avg =
         // good) / red (above = bad) / white (around avg). The team is dropped
         // from the right side (it was "HOU 4.03") — right side is numbers now.
         @ViewBuilder private func starterRows(_ people: [TomorrowPerson]) -> some View {
             let leagues = TomorrowView.sortedLeagues(people)
             let lgAvgEra = board?.league_avg_era
-            let lgAvgXera = board?.league_avg_xera
             VStack(spacing: 0) {
                 ForEach(leagues, id: \.self) { lg in
                     sportSubHeader(lg)
@@ -674,25 +665,14 @@ struct TomorrowView {
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            // ERA · xERA, both labeled + colored vs league average.
-                            if p.era != nil || p.xera != nil {
-                                HStack(spacing: 6) {
-                                    if let era = p.era {
-                                        eraStat("ERA", era, avg: lgAvgEra)
-                                    }
-                                    if p.era != nil && p.xera != nil {
-                                        Text("·").font(GaryFonts.mono(9)).foregroundStyle(.white.opacity(0.25))
-                                    }
-                                    if let xera = p.xera {
-                                        eraStat("xERA", xera, avg: lgAvgXera)
-                                    }
-                                }
-                                .frame(width: 164, alignment: .trailing)
+                            if let era = p.era {
+                                eraStat("ERA", era, avg: lgAvgEra)
+                                    .frame(width: 88, alignment: .trailing)
                             } else {
                                 Text("—")
                                     .font(GaryFonts.mono(10))
                                     .foregroundStyle(.white.opacity(0.62))
-                                    .frame(width: 164, alignment: .trailing)
+                                    .frame(width: 88, alignment: .trailing)
                             }
                         }
                         .padding(.vertical, 9).padding(.horizontal, 14)
@@ -702,7 +682,7 @@ struct TomorrowView {
             }
         }
 
-        /// One labeled, color-coded ERA/xERA stat: "ERA 4.03". Below the league
+        /// One labeled, color-coded ERA stat: "ERA 4.03". Below the league
         /// average reads green (good), above reads red (bad), neutral white near
         /// the average — a clear bettor signal on the starter's quality.
         private func eraStat(_ label: String, _ value: Double, avg: Double?) -> some View {

@@ -14,7 +14,7 @@ import { generateSolText } from '../solText.js';
 
 // THE CARD CONTRACT (founder, Sep 3 2026 — FOOTBALL = MLB SHAPE): the Hub's
 // Fantasy Corner renders NFL rows through the same FantasyCard as MLB's
-// waiver column, so every row carries what fantasyPickups.js writes —
+// waiver column, so every row carries the shared display fields —
 // headline = the player's NAME, an availability tier, the stat-strip fields
 // under meta, and Gary's read + verdict from the same analyst pass. The
 // computed sentence stays as the fallback detail when the pass fails.
@@ -484,7 +484,7 @@ export async function computeNflFantasyEdges(ctx) {
       `${generated.rows.length} grounded fantasy row(s)` +
       `${generated.rows.some((row) => row.meta?.evidence_scope === 'prior_season_baseline') ? ' (prior-season baseline)' : ''}`,
   );
-  // The same analyst pass MLB's waiver column runs (fantasyPickups.js): ONE
+  // The analyst pass for this weekly column: ONE
   // call writes Gary's read + verdict per row from the grounded facts above.
   // The model is fenced to the listed numbers; any failure keeps the computed
   // detail, so the card never goes dark.

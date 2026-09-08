@@ -218,7 +218,7 @@ export function venueFirstWord(venue) {
  * 0.25 OPS edge, which made every hot bat score an identical 95 and turned the
  * hub's relevance ranking into a coin flip.)
  *
- * @param {number} magnitude   the raw edge (e.g. OPS delta, ERA-xERA gap)
+ * @param {number} magnitude   the raw edge (e.g. OPS delta, one-run win percentage)
  * @param {object} opts
  * @param {number} opts.scale  multiplier applied to magnitude
  * @param {number} [opts.base] floor score for any surfaced row (default 40)
@@ -441,9 +441,7 @@ export function attachPropRates(props, rows, statMap, { window, minRows, phraseF
 }
 
 /**
- * 1 -> "1st", 2 -> "2nd", 14 -> "14th". Lives here because three lanes were
- * each carrying (or, in cutList's case, faking) their own — the founder caught
- * "hitting 1th" on the Hub, Aug 4 2026.
+ * 1 -> "1st", 2 -> "2nd", 14 -> "14th". Shared ordinal formatting for Hub lanes.
  */
 export function ordinal(n) {
   const x = Number(n) || 0;

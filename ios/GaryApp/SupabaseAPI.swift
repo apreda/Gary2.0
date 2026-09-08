@@ -676,7 +676,7 @@ enum SupabaseAPI {
         var out: [GaryPick] = try rows.first.map { row in
             let decoded = try parsePicksRow(row.picks)
             try validateStoredGamePicks(decoded, source: "daily_picks")
-            return decoded.filter { !AppFlags.hidesWorldCupRow($0.league) }
+            return decoded.filter { !AppFlags.hidesWorldCupRow($0.league) && $0.permitsCurrentMetricPolicy }
         } ?? []
         #if DEBUG
         // Sim preview of the PARKED All-Star board (production stays empty
@@ -1214,7 +1214,7 @@ enum SupabaseAPI {
     /// The Hub preserves a same-date snapshot only after an actual failure.
     static func fetchTodayBoardResult(date: String) async -> Result<TomorrowBoard?, Error> {
         let url = buildURL(table: "tomorrow_board", query: [
-            URLQueryItem(name: "select", value: "date,countdown_iso,countdown_sport,countdown_matchup,game_count,any_lines,board,big_games,starters,returns,form,run_profile,weather,league_avg_era,league_avg_xera"),
+            URLQueryItem(name: "select", value: "date,countdown_iso,countdown_sport,countdown_matchup,game_count,any_lines,board,big_games,starters,returns,form,run_profile,weather,league_avg_era"),
             URLQueryItem(name: "date", value: "eq.\(date)"),
             URLQueryItem(name: "limit", value: "1")
         ])
@@ -1597,7 +1597,7 @@ enum SupabaseAPI {
                     userInfo: [NSLocalizedDescriptionKey: "Every insight row failed to decode"]
                 )
             }
-            let conns = decoded.filter { !AppFlags.hidesWorldCupRow($0.league) }
+            let conns = decoded.filter { !AppFlags.hidesWorldCupRow($0.league) && $0.permitsCurrentMetricPolicy }
             if conns.count != rows.count {
                 print("[SupabaseAPI] fetchInsightConnections(\(league)): dropped \(rows.count - conns.count) undecodable/filtered row(s)")
             }
