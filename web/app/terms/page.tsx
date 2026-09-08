@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { PageMasthead } from '@/components/Terminal';
 import { pageMetadata } from '@/lib/seo/metadata';
 
@@ -73,6 +74,12 @@ export default function TermsPage() {
             licensors are protected by applicable intellectual-property laws. You may not copy,
             modify, or distribute any portion of the Service without prior written consent.
             Systematic scraping or automated harvesting of picks data is prohibited.
+          </p>
+          <p className="mt-3">
+            See our{' '}
+            <Link href="/data-sources#nflverse" className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold">data source credits</Link>{' '}
+            for applicable third-party licenses. These Terms do not limit rights granted by
+            those licenses to the material they cover.
           </p>
         </section>
 

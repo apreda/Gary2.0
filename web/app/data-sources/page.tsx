@@ -59,7 +59,7 @@ export default function DataSourcesPage() {
       <PageMasthead
         title="Data sources"
         meta="RESEARCH INPUTS"
-        sub="Gary's research combines several kinds of sports and market data. This page describes the categories without claiming a provider that is not identified on the analysis itself."
+        sub="Gary's research combines several kinds of sports and market data. This page describes the categories and credits selected sources. Coverage varies by sport and analysis."
       />
 
       <section className="mt-8 grid gap-4 md:grid-cols-2">
@@ -85,6 +85,27 @@ export default function DataSourcesPage() {
             The numeric-claim check compares a writeup with the underlying data fetched for that
             analysis. It reduces unsupported claims; it does not make every input complete or
             guarantee that a source will not later update its data.
+          </p>
+        </div>
+      </section>
+
+      <section id="nflverse" className="mt-10 scroll-mt-24">
+        <Eyebrow>DATA ATTRIBUTION</Eyebrow>
+        <h2 className="mt-2 font-display text-2xl uppercase text-hi">nflverse contributors</h2>
+        <div className="mt-3 max-w-3xl space-y-3 text-[15px] leading-relaxed text-mid">
+          <p>
+            Selected NFL data used in Gary&rsquo;s analysis comes from the{' '}
+            <a href="https://github.com/nflverse/nflverse-data" className={linkClass}>nflverse contributors</a>{' '}
+            and their{' '}
+            <a href="https://github.com/nflverse/nflverse-data/releases" className={linkClass}>published datasets</a>,
+            distributed under the{' '}
+            <a href="https://creativecommons.org/licenses/by/4.0/" className={linkClass}>Creative Commons Attribution 4.0 International license (CC BY 4.0)</a>.
+          </p>
+          <p>
+            Gary filters and combines selected data with other sources and calculates derived
+            summaries. Those changes and Gary&rsquo;s analysis are Gary&rsquo;s work; this use does
+            not imply endorsement by nflverse or its contributors. The license applies to the
+            material it covers, not to every source or every part of Gary&rsquo;s service.
           </p>
         </div>
       </section>
