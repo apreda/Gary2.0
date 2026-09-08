@@ -135,7 +135,7 @@ ${block(search, '        func hits(')}
   it.skipIf(!hasSwift)('uses original observation clocks through shipping metadata and ignores later persistence time', () => {
     const models = native('Models.swift');
     const graph = models.slice(models.indexOf('struct Connection:'), models.indexOf('// MARK: - Live Scores'));
-    expect(run(`${native('HubJudgment.swift')}\n${graph}
+    expect(run(`${native('HubJudgment.swift')}\n${block(models, 'struct ExactGameIdentity:')}\n${block(native('FantasyBriefing.swift'), 'enum GaryMlbMetricPolicy {')}\n${graph}
 @main struct Fixture {
  static func main() throws {
   let raw = #"{"date":"2026-09-08","league":"MLB","category":"starter_form","game_id":"100","created_at":"2026-09-08T16:30:00Z","meta":{"computed_as_of":"2026-09-08T15:00:00Z","source_collected_at":"2026-09-08T14:00:00Z","created_at":"2026-09-08T16:30:00Z"}}"#

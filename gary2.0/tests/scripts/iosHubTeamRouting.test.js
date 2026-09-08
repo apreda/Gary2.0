@@ -114,7 +114,10 @@ final class Router {
  var openedReadID: UUID? { playerRead?.id }
  ${block(hub, '    static func teamCardName(')}
  ${block(hub, '    static func signalPlayerName(')}
+ ${block(hub, '    private func researchPlayerIndex(')}
+ ${block(hub, '    private func researchDestination(')}
  ${block(hub, '    private func openSignal(')}
+ func destination(_ s: Signal) -> String { researchDestination(s) }
  func open(_ s: Signal) { openSignal(s) }
 }
 struct GameRoute {
@@ -151,10 +154,12 @@ let router = Router()
 router.intelCards = [card("38", "457178", "NCAAF", name: ranking.headline)]
 router.slateRows = [Row(league: "MLB", bdl_game_id: 457178), Row(league: "NCAAF", bdl_game_id: 457178)]
 router.open(ranking)
+precondition(router.destination(ranking) == "Game research")
 precondition(router.gameSheet?.row.league == "NCAAF" && router.gameSheet?.row.bdl_game_id == 457178)
 precondition(router.teamCardSignal == nil && router.selectedSignal == nil && router.openedPlayer == nil)
 for rows in [[], [Row(league: "MLB", bdl_game_id: 457178)], [Row(league: "NCAAF", bdl_game_id: 457178), Row(league: "NCAAF", bdl_game_id: 457178)]] {
  let fallback = Router(); fallback.slateRows = rows; fallback.open(ranking)
+ precondition(fallback.destination(ranking) == "View insight")
  precondition(fallback.gameSheet == nil && fallback.teamCardSignal == nil && fallback.selectedSignal != nil)
 }
 let player = Signal(headline: "Pete Crow-Armstrong: today's matchup", playerId: "700", teamId: "16", gameId: "2002", detail: String(repeating: "Complete explanation. ", count: 60))
@@ -163,6 +168,7 @@ let secondGame = card("700", "2002")
 let playerRouter = Router()
 playerRouter.intelCards = [firstGame, card("700", "2002", "NFL"), secondGame]
 playerRouter.open(player)
+precondition(playerRouter.destination(player) == "Player research")
 precondition(playerRouter.openedPlayer?.id == secondGame.id, "The prefetched card belongs to this doubleheader game and league")
 precondition(playerRouter.openedReadID == player.id && playerRouter.openedRead?.detail == player.detail, "The card sheet retains the full original signal")
 precondition(playerRouter.selectedSignal == nil && playerRouter.teamCardSignal == nil)
@@ -178,6 +184,7 @@ for candidates in [
  [secondGame, secondGame], [secondGame, card("700", "2002", populated: false)]
 ] {
  let r = Router(); r.intelCards = candidates; r.open(player)
+ precondition(r.destination(player) == "View insight", "A label must not promise a missing or ambiguous player card")
  precondition(r.openedPlayer == nil && r.teamCardSignal == nil && r.gameSheet == nil)
  precondition(r.selectedSignal?.id == player.id && r.selectedSignal?.detail == player.detail, "A missing/ambiguous exact card retains the full player story, even with team metadata")
 }
@@ -211,6 +218,7 @@ for team in [
  Signal(headline: "Pete Crow-Armstrong: matchup context", gameId: "2002", h2h: Meta(dominant_name: "Chicago Cubs"))
 ] {
  let r = Router(); r.intelCards = [secondGame]; r.open(team)
+ precondition(r.destination(team) == "Team research")
  precondition(r.teamCardSignal?.id == team.id && r.openedPlayer == nil && r.selectedSignal == nil, "Authoritative team rows cannot become player cards through a matching name")
 }
 print("Hub team and ranking routes passed")

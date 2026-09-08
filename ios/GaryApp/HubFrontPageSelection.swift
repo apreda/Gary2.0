@@ -7,7 +7,6 @@ enum HubFrontPageSelection {
         let index: Int
         let kind: String
         let gameID: String?
-        let prefersLead: Bool
     }
 
     struct Game {
@@ -117,23 +116,29 @@ enum HubFrontPageSelection {
             if lhs.phase.priority == rhs.phase.priority { return lhs.order < rhs.order }
             return lhs.phase.priority < rhs.phase.priority
         }
-        guard let bestPhase = ordered.first?.phase.priority else { return Selection(lead: nil, supporting: []) }
-        // Connection kinds may lead only within the best available phase. A
-        // completed connection must never outrank an upcoming counting story.
-        let lead = ordered.first { $0.phase.priority == bestPhase && $0.story.prefersLead } ?? ordered[0]
+        // Any researched observation can lead, including a streak or recent
+        // performance run. Keep source relevance inside the best game phase.
+        guard let lead = ordered.first else { return Selection(lead: nil, supporting: []) }
         var selected: Set<Int> = [lead.story.index]
-        var perKind = [lead.story.kind: 1]
+        var kinds: Set<String> = [lead.story.kind]
+        var gameIDs = Set([gameKey(lead.story.gameID)].compactMap { $0 })
         var supporting: [Int] = []
         for priority in 0...3 {
             let phaseRows = ordered.filter { $0.phase.priority == priority && !selected.contains($0.story.index) }
-            // Seek diversity inside this phase, then exhaust its remaining
-            // stories before considering a lower-priority game phase.
-            for respectKindCap in [true, false] {
+            // A small dashboard should show different research and matchups
+            // when available. Unknown IDs are not a shared game; exact IDs
+            // preserve doubleheaders. Never promote final context for variety.
+            for pass in 0...3 {
                 for row in phaseRows where supporting.count < 2 && !selected.contains(row.story.index) {
-                    if respectKindCap && perKind[row.story.kind, default: 0] >= 2 { continue }
+                    let newKind = !kinds.contains(row.story.kind)
+                    let newGame = gameKey(row.story.gameID).map { !gameIDs.contains($0) } ?? true
+                    if pass == 0 && !(newKind && newGame) { continue }
+                    if pass == 1 && !newKind { continue }
+                    if pass == 2 && !newGame { continue }
                     supporting.append(row.story.index)
                     selected.insert(row.story.index)
-                    perKind[row.story.kind, default: 0] += 1
+                    kinds.insert(row.story.kind)
+                    if let gameID = gameKey(row.story.gameID) { gameIDs.insert(gameID) }
                 }
             }
             if supporting.count == 2 { break }

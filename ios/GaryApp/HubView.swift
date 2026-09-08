@@ -531,18 +531,7 @@ struct HubView: View {
     private func openSignal(_ s: Signal) {
         // A populated, exact current-day/game card carries the full original
         // read. Never refetch a player without the doubleheader's game id.
-        if s.reg?.day != "tomorrow",
-           s.playerId != nil || (s.teamId == nil && s.h2h == nil),
-           !(s.league == .ncaaf && s.lane?.source == "balldontlie_ncaaf_rankings"),
-           let index = HubStoryIdentity.playerCardIndex(
-            league: s.league.label, slateDate: s.slateDate,
-            playerID: s.playerId, playerName: Self.signalPlayerName(s), gameID: s.gameId,
-            loadedDate: loadedDate, currentDate: SupabaseAPI.todayEST(),
-            candidates: intelCards.map {
-                .init(league: $0.league, playerID: $0.player_id, gameID: $0.game_id,
-                      name: $0.player_name ?? $0.payload?.name, hasPayload: $0.payload != nil)
-            }
-        ) {
+        if let index = researchPlayerIndex(s) {
             playerRead = PlayerRead(signal: s, card: intelCards[index])
             return
         }
@@ -571,6 +560,35 @@ struct HubView: View {
         // Team context without a populated player card uses the team page.
         if s.teamId != nil || s.h2h != nil { teamCardSignal = s }
         else { selectedSignal = s }
+    }
+
+    /// The visible action and the tap share the same exact-card eligibility.
+    /// A missing player pack opens the observation, never an unrelated card.
+    private func researchPlayerIndex(_ s: Signal) -> Int? {
+        guard s.reg?.day != "tomorrow",
+              s.playerId != nil || (s.teamId == nil && s.h2h == nil),
+              !(s.league == .ncaaf && s.lane?.source == "balldontlie_ncaaf_rankings") else { return nil }
+        return HubStoryIdentity.playerCardIndex(
+            league: s.league.label, slateDate: s.slateDate,
+            playerID: s.playerId, playerName: Self.signalPlayerName(s), gameID: s.gameId,
+            loadedDate: loadedDate, currentDate: SupabaseAPI.todayEST(),
+            candidates: intelCards.map {
+                .init(league: $0.league, playerID: $0.player_id, gameID: $0.game_id,
+                      name: $0.player_name ?? $0.payload?.name, hasPayload: $0.payload != nil)
+            })
+    }
+
+    private func researchDestination(_ s: Signal) -> String {
+        if researchPlayerIndex(s) != nil { return "Player research" }
+        if s.league == .ncaaf, s.lane?.source == "balldontlie_ncaaf_rankings" {
+            let count = slateRows.filter {
+                HubCardIdentity.sameLeague($0.league, s.league.label)
+                    && s.gameId != nil && $0.bdl_game_id.map(String.init) == s.gameId
+            }.count
+            return count == 1 ? "Game research" : "View insight"
+        }
+        if s.playerId == nil, s.teamId != nil || s.h2h != nil { return "Team research" }
+        return "View insight"
     }
 
     /// The player a row is about, as the row spells him. Lanes append their own
@@ -1147,18 +1165,6 @@ struct HubView: View {
                 && s.slateDate == currentDate
         }
     }
-    /// THE LEAD must be an INSIGHT — a connection between facts — never a raw
-    /// counting stat (founder, Aug 3: "the headline we have now isn't really
-    /// a true insight, it's just a stat math thing"). Counting lanes (heat
-    /// checks, streaks, records) still make the Best of the Board; they just
-    /// can't headline the page. Falls back to the top row only when no
-    /// connection lane produced anything today.
-    private static let leadInsightKinds: Set<SignalKind> = [
-        .regression, .ballpark, .platoon, .h2h, .bullpenFatigue,
-        .firstInning, .closerWatch, .runningGame, .parkWeather,
-        .trenches, .quarterback, .passRush, .coverage, .paceScript,
-        .redZone, .turnoverEdge, .explosivePlay, .specialTeams, .coaching,
-    ]
     /// Resolve the lead and remainder from one ranked snapshot. The previous
     /// `bestOfBoard` filter called `lead` inside its closure, which rebuilt
     /// `ranked` while an earlier ranked array was still on the SwiftUI render
@@ -1168,8 +1174,7 @@ struct HubView: View {
         let rows = ranked
         let selection = HubFrontPageSelection.select(
             stories: rows.enumerated().map { index, signal in
-                .init(index: index, kind: String(describing: signal.kind), gameID: signal.gameId,
-                      prefersLead: Self.leadInsightKinds.contains(signal.kind))
+                .init(index: index, kind: String(describing: signal.kind), gameID: signal.gameId)
             }, games: frontPageGames, now: frontPageNow)
         return (selection.lead.map { rows[$0] }, selection.supporting.map { rows[$0] })
     }
@@ -1457,19 +1462,16 @@ struct HubView: View {
     @ViewBuilder private var frontPageBoards: some View {
         let selection = frontPageSelection
         if let lead = selection.lead {
-            HubLeadStory(s: lead, context: storyContext(lead), kicker: kickerText(lead)) { s in
-                openSignal(s)
-            }
-            .id("lead")
-        }
-        if !selection.best.isEmpty {
-            VStack(alignment: .leading, spacing: 4) {
-                HubHead(title: "More to know")
-                HubBestOf(signals: selection.best, contextFor: storyContext, kickerFor: kickerText) { s in
-                    openSignal(s)
+            VStack(alignment: .leading, spacing: 10) {
+                HubLeadStory(s: lead, context: storyContext(lead), kicker: kickerText(lead),
+                             destination: researchDestination(lead)) { s in openSignal(s) }
+                if !selection.best.isEmpty {
+                    HubBestOf(signals: selection.best, contextFor: storyContext, kickerFor: kickerText,
+                              destinationFor: researchDestination) { s in openSignal(s) }
+                        .id("bestof")
                 }
             }
-            .id("bestof")
+            .id("lead")
         }
     }
 
@@ -2130,35 +2132,35 @@ fileprivate struct HubMasthead: View {
     private var mainScope: Bool { hubScope != "fantasy" || !sel.supportsFantasy }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 14) {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 10) {
                 Image(GaryBrand.mark).resizable().scaledToFit()
-                    .frame(width: 25, height: 25).accessibilityHidden(true)
-                leagueButton
-                if !dynamicTypeSize.isAccessibilitySize {
-                    Text(FantasyBriefing.dayLabel(SupabaseAPI.todayEST()).uppercased())
-                        .hubKickerFont(11).foregroundStyle(GaryColors.sectionSub)
+                    .frame(width: 28, height: 28).accessibilityHidden(true)
+                if !sel.supportsFantasy, !dynamicTypeSize.isAccessibilitySize {
+                    Text("The Hub").hubTitleFont(24, .semibold)
+                        .foregroundStyle(GaryColors.warmWhite)
                 }
                 Spacer(minLength: 0)
+                leagueButton
                 if mainScope { searchButton }
             }
-            if dynamicTypeSize.isAccessibilitySize {
-                Text(FantasyBriefing.dayLabel(SupabaseAPI.todayEST()).uppercased())
-                    .hubKickerFont(11).foregroundStyle(GaryColors.sectionSub)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            let scopeLayout = dynamicTypeSize.isAccessibilitySize
-                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
-                : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 26))
-            scopeLayout {
-                scopeWord("The Hub", on: mainScope) { hubScope = "hub" }
-                if sel.supportsFantasy {
-                    scopeWord("Fantasy", on: !mainScope) { hubScope = "fantasy" }
+            if sel.supportsFantasy || dynamicTypeSize.isAccessibilitySize {
+                let scopeLayout = dynamicTypeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+                    : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 24))
+                scopeLayout {
+                    scopeWord("The Hub", on: mainScope) { hubScope = "hub" }
+                    if sel.supportsFantasy {
+                        scopeWord("Fantasy", on: !mainScope) { hubScope = "fantasy" }
+                    }
                 }
             }
-            .padding(.bottom, 4)
-            Rectangle().fill(GaryColors.gold.opacity(0.28)).frame(height: 1)
-                .accessibilityHidden(true)
+            Text([FantasyBriefing.dayLabel(SupabaseAPI.todayEST()).uppercased(),
+                  gameCount > 0 ? "\(gameCount) GAME\(gameCount == 1 ? "" : "S")" : ""]
+                .filter { !$0.isEmpty }.joined(separator: "  ·  "))
+                .hubKickerFont(11).foregroundStyle(GaryColors.sectionSub)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, 4)
             if searchOpen, mainScope { searchField }
         }
         .padding(.horizontal, GaryLayout.gutter)
@@ -2230,14 +2232,10 @@ fileprivate struct HubMasthead: View {
 
     private func scopeWord(_ label: String, on: Bool, tap: @escaping () -> Void) -> some View {
         Button(action: tap) {
-            VStack(alignment: .leading, spacing: 11) {
-                Text(label).hubTitleFont(28, .bold)
-                    .foregroundStyle(on ? GaryColors.warmWhite : GaryColors.sectionSub)
-                    .fixedSize(horizontal: false, vertical: true)
-                Rectangle().fill(on ? GaryColors.gold : .clear).frame(width: 32, height: 3)
-            }
+            Text(label).hubTitleFont(22, on ? .semibold : .regular)
+                .foregroundStyle(on ? GaryColors.warmWhite : GaryColors.sectionSub)
             .fixedSize(horizontal: false, vertical: true)
-            .frame(minHeight: 52)
+            .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -2352,60 +2350,60 @@ fileprivate struct HubLeadStory: View {
     let s: Signal
     let context: String
     let kicker: String
+    let destination: String
     let onTap: (Signal) -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         Button { onTap(s) } label: {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text("THE LEAD").hubKickerFont(11).tracking(1.2)
-                    Spacer(minLength: 0)
-                    Text(kicker.uppercased()).hubKickerFont(11)
-                        .multilineTextAlignment(.trailing)
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(kicker.uppercased()).hubKickerFont(11).tracking(1.1)
+                        .foregroundStyle(GaryColors.gold)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if !dynamicTypeSize.isAccessibilitySize {
+                        Spacer(minLength: 0)
+                        Text("IN FOCUS").hubKickerFont(10)
+                            .foregroundStyle(GaryColors.sectionSub)
+                            .accessibilityHidden(true)
+                    }
                 }
-                .foregroundStyle(GaryColors.gold)
-                .padding(.bottom, 22)
                 Text(s.headline)
-                    .hubTitleFont(30)
+                    .hubTitleFont(21, .semibold)
                     .foregroundStyle(GaryColors.warmWhite)
                     .fixedSize(horizontal: false, vertical: true)
-                if !context.isEmpty {
-                    Text(context).hubDataFont(12, .medium)
-                        .foregroundStyle(GaryColors.sectionSub)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 12)
-                }
                 Text(s.detail.trimmingCharacters(in: .whitespacesAndNewlines))
-                    .hubBodyFont(15.5)
-                    .foregroundStyle(GaryColors.warmWhite.opacity(0.84))
-                    .lineSpacing(4)
+                    .hubBodyFont(14)
+                    .foregroundStyle(GaryColors.warmWhite.opacity(0.78))
+                    .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 18)
-                if let value = s.displayValue, !s.detail.contains(value) {
-                    Text(value).hubDataFont(12, .medium)
-                        .foregroundStyle(GaryColors.sectionSub).padding(.top, 12)
+                let footer = dynamicTypeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10))
+                    : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 12))
+                footer {
+                    if !context.isEmpty {
+                        Text(context).hubDataFont(11, .medium)
+                            .foregroundStyle(GaryColors.sectionSub)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 0) }
+                    HStack(spacing: 6) {
+                        Text(destination).hubDataFont(11, .medium)
+                        Image(systemName: "arrow.up.right").font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundStyle(GaryColors.gold)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
-                Rectangle().fill(GaryColors.warmWhite.opacity(0.10))
-                    .frame(height: 1).padding(.top, 22)
-                HStack {
-                    Text(s.playerId != nil ? "Read the breakdown" : "Read the full story")
-                        .hubBodyFont(14, .semibold)
-                    Spacer(minLength: 10)
-                    Image(systemName: "arrow.right").font(.system(size: 16, weight: .medium))
-                }
-                .foregroundStyle(GaryColors.gold).padding(.top, 16)
+                .padding(.top, 2)
             }
-            .padding(24)
+            .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .garyPanel(radius: GaryLayout.Radius.card, fill: GaryColors.readingPanel)
-            .overlay(alignment: .topLeading) {
-                Rectangle().fill(GaryColors.gold).frame(width: 36, height: 3)
-                    .padding(.leading, 24).accessibilityHidden(true)
-            }
+            .garyPanel(radius: 12, fill: GaryColors.readingPanel)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .multilineTextAlignment(.leading)
+        .accessibilityHint("Opens \(destination.lowercased())")
         .padding(.horizontal, GaryLayout.gutter)
     }
 }
@@ -2415,40 +2413,49 @@ fileprivate struct HubBestOf: View {
     let signals: [Signal]
     let contextFor: (Signal) -> String
     let kickerFor: (Signal) -> String
+    let destinationFor: (Signal) -> String
     let onTap: (Signal) -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        VStack(spacing: 0) {
-            ForEach(Array(signals.enumerated()), id: \.element.id) { i, s in
-                Button { onTap(s) } label: { row(s) }.buttonStyle(.plain)
-                if i < signals.count - 1 { HubRule().padding(.horizontal, 20) }
+        let layout = dynamicTypeSize >= .xxxLarge
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: 10))
+        layout {
+            ForEach(signals) { s in
+                Button { onTap(s) } label: { row(s) }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Opens \(destinationFor(s).lowercased())")
             }
         }
-        .garyPanel(radius: GaryLayout.Radius.card, fill: GaryColors.readingPanel)
         .padding(.horizontal, GaryLayout.gutter)
     }
 
     @ViewBuilder private func row(_ s: Signal) -> some View {
-        HStack(alignment: .center, spacing: 14) {
-            VStack(alignment: .leading, spacing: 5) {
-                HubKicker(text: kickerFor(s), size: 10.5)
-                Text(s.headline)
-                    .hubBodyFont(17, .semibold)
-                    .foregroundStyle(.white.opacity(0.95))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .multilineTextAlignment(.leading)
-                Text(contextFor(s))
-                    .hubDataFont(10.5, .medium)
-                    .foregroundStyle(GaryColors.sectionSub)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 8)
-            Image(systemName: "arrow.up.right")
-                .font(.system(size: 11, weight: .semibold))
+        VStack(alignment: .leading, spacing: 10) {
+            Text(kickerFor(s).uppercased()).hubKickerFont(10)
+                .foregroundStyle(GaryColors.gold)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(s.headline)
+                .hubBodyFont(15, .semibold)
+                .foregroundStyle(GaryColors.warmWhite)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(contextFor(s))
+                .hubDataFont(10.5, .medium)
                 .foregroundStyle(GaryColors.sectionSub)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(destinationFor(s)).hubDataFont(10.5, .medium)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.up.right").font(.system(size: 10, weight: .medium))
+            }
+            .foregroundStyle(GaryColors.sectionSub)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 20)
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .garyPanel(radius: 12, fill: GaryColors.readingPanel)
+        .multilineTextAlignment(.leading)
         .contentShape(Rectangle())
     }
 }
@@ -3602,8 +3609,10 @@ fileprivate struct HubTeamCardSheet: View {
     var onPlayer: (PlayerInsightCardRow) -> Void = { _ in }
     let onSignal: (Signal) -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ObservedObject private var live = LiveScoreCache.shared
     @State private var shapeExpanded = false   // MORE STATS expander (player-card parity)
+    @State private var bullpenExpanded = false
 
     // ── identity: the tapped string (name OR abbr) → full name + abbr ──
 
@@ -3688,6 +3697,11 @@ fileprivate struct HubTeamCardSheet: View {
         guard let t = tonight else { return nil }
         return hubLiveScore(for: t, cache: live)
     }
+    private var bullpenResearch: BullpenResearchLedger? {
+        guard signal.kind == .bullpenFatigue else { return nil }
+        return BullpenResearchLedger(meta: signal.lane, league: signal.league.label,
+                                     slateDate: signal.slateDate, teamID: signal.teamId)
+    }
     /// True when not a single source produced a row — the honest-quiet state.
     private var deskIsQuiet: Bool {
         tonight == nil && formStat == nil && runProfile == nil && starter == nil
@@ -3695,13 +3709,14 @@ fileprivate struct HubTeamCardSheet: View {
             && edgeContent == nil
     }
 
-    // ── body: the v4 card, exactly the player card's chrome ──
+    // ── body: shared player/team research surface ──
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
                 header
                 if let e = edgeContent { edgeHero(e) }
+                if let ledger = bullpenResearch { bullpenSection(ledger) }
                 if let t = tonight { tonightSection(t) }
                 if formStat != nil || runProfile != nil { shapeSection }
                 if let s = tonight?.series { seriesSection(s) }
@@ -3713,53 +3728,53 @@ fileprivate struct HubTeamCardSheet: View {
                 footerMark
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous).fill(PCV4.bg)
-                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(PCV4.gold.opacity(0.5), lineWidth: 1.5))
-                .shadow(color: .black.opacity(0.55), radius: 24, y: 10)
-        )
+        .background(PCV4.surface)
         .padding(16)
         .background(GaryColors.darkBg.ignoresSafeArea())
         .overlay(alignment: .topTrailing) {
             Button { dismiss() } label: {
-                Image(systemName: "xmark.circle.fill").font(.system(size: 26)).foregroundStyle(.white.opacity(0.62))
-            }.buttonStyle(.plain).padding(.top, 14).padding(.trailing, 16)
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(PCV4.mut)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close team details")
+            .padding(.top, 14).padding(.trailing, 16)
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
     }
 
-    // ── header (player-card grammar: context line, display name, chip, identity) ──
+    // ── header: context, identity, then a quiet observed streak ──
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let t = tonight {
                 Text("\(hubSideLabel(t.away_abbr, t.away_team, league: t.league)) @ \(hubSideLabel(t.home_abbr, t.home_team, league: t.league))".uppercased())
                     .hubDataFont(11, .bold).foregroundStyle(PCV4.mut2)
+                    .padding(.trailing, 30)
             } else if !signal.game.isEmpty {
                 Text(signal.game.uppercased())
                     .hubDataFont(11, .bold).foregroundStyle(PCV4.mut2)
+                    .padding(.trailing, 30)
             }
-            HStack(alignment: .top) {
-                Text(resolved.name)
-                    .hubTitleFont(38).foregroundStyle(PCV4.ink).lineLimit(2).minimumScaleFactor(0.7)
-                Spacer()
-                if let st = formStat?.streak, st.count >= 2 {
-                    if st.hasPrefix("W") { chip("▲ \(st)") }
-                    else if st.hasPrefix("L") { chip("▼ \(st)") }
-                }
-            }
+            Text(resolved.name)
+                .font(.title.weight(.bold)).foregroundStyle(PCV4.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
             if let id = identityLine {
-                Text(id).hubBodyFont(13, .medium).foregroundStyle(PCV4.mut)
+                Text(id).font(.subheadline).foregroundStyle(PCV4.mut)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let st = formStat?.streak, st.count >= 2,
+               st.hasPrefix("W") || st.hasPrefix("L") {
+                Text("CURRENT STREAK  ·  \(st)")
+                    .font(.caption.monospaced().weight(.medium)).foregroundStyle(PCV4.mut2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(.horizontal, 26).padding(.top, 24).padding(.bottom, 18)
-    }
-    private func chip(_ t: String) -> some View {
-        Text(t).hubDataFont(10.5, .bold)
-            .foregroundStyle(Color(hex: "#1B1407"))
-            .padding(.horizontal, 10).padding(.vertical, 5)
-            .background(Capsule().fill(PCV4.gold))
+        .padding(.horizontal, 24).padding(.top, 26).padding(.bottom, 24)
     }
     /// "MLB · NYY · Home tonight" — only the parts a source vouches for.
     private var identityLine: String? {
@@ -3769,7 +3784,7 @@ fileprivate struct HubTeamCardSheet: View {
         return bits.isEmpty ? nil : bits.joined(separator: "  ·  ")
     }
 
-    // ── the edge that brought you here (player-card edgeHero, verbatim style) ──
+    // ── the observation that opened this team's research ──
 
     private var edgeContent: PlayerCardV4Edge? {
         // Synthesized taps (a bare name from a table cell) carry no story —
@@ -3789,34 +3804,128 @@ fileprivate struct HubTeamCardSheet: View {
     }
 
     @ViewBuilder private func edgeHero(_ e: PlayerCardV4Edge) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(e.eyebrow.uppercased()).hubDataFont(9.5, .bold).tracking(1.4).foregroundStyle(PCV4.gold)
-            Text(e.title).hubTitleFont(18).foregroundStyle(PCV4.ink).fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 8) {
+            Text(e.eyebrow.uppercased()).font(.caption.monospaced().weight(.medium)).tracking(1).foregroundStyle(PCV4.gold)
+            Text(e.title).font(.headline).foregroundStyle(PCV4.ink).fixedSize(horizontal: false, vertical: true)
             if !e.body.isEmpty {
-                Text(e.body).hubBodyFont(13).foregroundStyle(PCV4.mut).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+                Text(e.body).font(.subheadline).foregroundStyle(PCV4.mut).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(PCV4.gold.opacity(0.07))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(PCV4.line, lineWidth: 1)))
-        .padding(.horizontal, 18).padding(.bottom, 4)
+        .modifier(PCV4ResearchInset())
     }
 
     // ── the player card's section frame, shared by every block below ──
 
     private func section<C: View>(_ cap: String, @ViewBuilder _ content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 13) {
-            Text(cap.uppercased()).hubDataFont(11, .bold).tracking(1.6)
-                .foregroundStyle(PCV4.gold).opacity(0.92)
+            Text(cap.uppercased()).font(.caption.monospaced().weight(.medium)).tracking(1)
+                .foregroundStyle(PCV4.mut2)
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 26).padding(.vertical, 20)
+        .padding(.horizontal, 24).padding(.vertical, 20)
         .overlay(Rectangle().fill(PCV4.line).frame(height: 1), alignment: .top)
     }
 
     // ── TONIGHT: state line, then the lines as a 3-up grid ──
+
+    private static let bullpenDateParser: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+    private static let bullpenDayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "MMM d"
+        return formatter
+    }()
+    private func bullpenDate(_ raw: String) -> String {
+        Self.bullpenDateParser.date(from: raw).map(Self.bullpenDayFormatter.string(from:)) ?? raw
+    }
+
+    private func bullpenSection(_ ledger: BullpenResearchLedger) -> some View {
+        section("Recent bullpen work") {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("3-GAME WINDOW · \(ledger.dates.map(bullpenDate).joined(separator: ", ")) · \(ledger.asOf.prefix(4))")
+                    .font(.caption.monospaced().weight(.medium)).foregroundStyle(PCV4.mut2)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !dynamicTypeSize.isAccessibilitySize {
+                    HStack(spacing: 10) {
+                        Text("RELIEVER").frame(maxWidth: .infinity, alignment: .leading)
+                        Text("RECENT IP").frame(width: 72, alignment: .trailing)
+                        Text("SEASON ERA").frame(width: 76, alignment: .trailing)
+                    }
+                    .font(.caption2.monospaced().weight(.medium)).foregroundStyle(PCV4.mut2)
+                    .accessibilityHidden(true)
+                }
+                let shown = bullpenExpanded ? ledger.arms : Array(ledger.arms.prefix(3))
+                VStack(spacing: 0) {
+                    ForEach(Array(shown.enumerated()), id: \.offset) { index, arm in
+                        bullpenArmRow(arm)
+                        if index < shown.count - 1 {
+                            Rectangle().fill(PCV4.line).frame(height: 1)
+                        }
+                    }
+                }
+                if ledger.arms.count > 3 {
+                    Button { withAnimation(.easeInOut(duration: 0.2)) { bullpenExpanded.toggle() } } label: {
+                        HStack(spacing: 6) {
+                            Text(bullpenExpanded ? "SHOW FEWER RELIEVERS" : "ALL \(ledger.arms.count) RELIEVERS")
+                                .font(.caption.monospaced().weight(.medium))
+                            Image(systemName: bullpenExpanded ? "chevron.up" : "chevron.down")
+                                .font(.caption2.weight(.semibold))
+                        }
+                        .foregroundStyle(PCV4.gold)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(bullpenExpanded ? "Show fewer relievers" : "Show all \(ledger.arms.count) relievers")
+                }
+                Text("MLB StatsAPI final boxscores · through \(bullpenDate(ledger.asOf)), \(ledger.asOf.prefix(4)). Season lines show their observed date.")
+                    .font(.caption).foregroundStyle(PCV4.mut2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func bullpenArmRow(_ arm: BullpenResearchArm) -> some View {
+        let accessible = dynamicTypeSize.isAccessibilitySize
+        let layout = accessible
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: 10))
+        return layout {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(arm.name ?? "—").font(.subheadline.weight(.semibold)).foregroundStyle(PCV4.ink)
+                Text("\(arm.g.map(String.init) ?? "—") app · last \(arm.last_used.map(bullpenDate) ?? "—")")
+                    .font(.caption2).foregroundStyle(PCV4.mut2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: accessible ? .leading : .trailing, spacing: 4) {
+                Text(accessible ? "Recent innings: \(arm.inningsLabel) IP" : arm.inningsLabel)
+                    .font(.subheadline.monospacedDigit().weight(.semibold)).foregroundStyle(PCV4.ink)
+                Text("\(arm.pitchesLabel) pitches").font(.caption2.monospacedDigit()).foregroundStyle(PCV4.mut2)
+            }
+            .frame(width: accessible ? nil : 72, alignment: .trailing)
+            VStack(alignment: accessible ? .leading : .trailing, spacing: 4) {
+                Text(accessible ? "Season ERA: \(arm.seasonERALabel)" : arm.seasonERALabel)
+                    .font(.subheadline.monospacedDigit().weight(.semibold)).foregroundStyle(PCV4.ink)
+                Text("\(arm.seasonIPLabel) IP").font(.caption2.monospacedDigit()).foregroundStyle(PCV4.mut2)
+                if arm.hasSeasonLine, let date = arm.season_as_of {
+                    Text(bullpenDate(date)).font(.caption2).foregroundStyle(PCV4.mut2)
+                }
+            }
+            .frame(width: accessible ? nil : 76, alignment: .trailing)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.vertical, 11)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(arm.name ?? "Unknown reliever"). \(arm.g.map(String.init) ?? "Unknown") appearances in the three-game window, \(arm.inningsLabel) innings and \(arm.pitchesLabel) pitches. Last used \(arm.last_used ?? "unknown"). Season ERA \(arm.seasonERALabel) over \(arm.seasonIPLabel) innings, as of \(arm.hasSeasonLine ? arm.season_as_of ?? "unknown" : "unknown").")
+    }
 
     private func fmtML(_ v: Double) -> String { v > 0 ? "+\(Int(v))" : "\(Int(v))" }
 
@@ -3936,8 +4045,11 @@ fileprivate struct HubTeamCardSheet: View {
                             Image(systemName: shapeExpanded ? "chevron.up" : "chevron.down").font(.system(size: 8, weight: .bold))
                         }
                         .foregroundStyle(PCV4.gold)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(shapeExpanded ? "Show fewer team stats" : "Show more team stats")
                     .padding(.top, 12)
                 }
             }

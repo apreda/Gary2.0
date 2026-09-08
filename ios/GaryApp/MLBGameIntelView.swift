@@ -676,14 +676,35 @@ struct MLBGameIntelView: View {
 // card's twin ("same quality, same finish" — founder), so both read this one
 // palette. Retune here and every breakdown card moves together.
 enum PCV4 {
-    static let bg   = Color(hex: "#161412")   // warm solid surface shared by Hub detail cards
-    static let ink  = Color(hex: "#F7F2E8")   // primary — bright cream
-    static let mut  = Color(hex: "#CFC6B2")   // secondary — readable warm cream (no cold grey)
-    static let mut2 = Color(hex: "#A99E89")   // small labels
-    static let gold = Color(hex: "#ECC256")   // strength / highlight
-    static let bad  = Color(hex: "#E2D9C6")   // "weak" values stay readable, just not gold
-    static let line = Color(hex: "#ECC256").opacity(0.16)
+    static let bg   = Color(hex: "#191A1B")
+    static let ink  = Color(hex: "#F4F2EB")
+    static let mut  = Color(hex: "#C5C4BF")
+    static let mut2 = Color(hex: "#A4A49F")
+    static let gold = Color(hex: "#D6B85F")
+    static let bad  = Color(hex: "#D5D3CB")
+    static let line = Color.white.opacity(0.09)
     static let barbg = Color.white.opacity(0.08)
+
+    static var surface: some View {
+        RoundedRectangle(cornerRadius: 18, style: .continuous).fill(bg)
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1))
+            .shadow(color: .black.opacity(0.3), radius: 20, y: 8)
+    }
+}
+
+/// The selected observation stays visually connected to the research below it.
+struct PCV4ResearchInset: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, 13)
+            .overlay(alignment: .leading) {
+                Rectangle().fill(PCV4.gold.opacity(0.55)).frame(width: 2)
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 22)
+    }
 }
 
 /// One card in the carousel.
@@ -831,28 +852,21 @@ struct PlayerCardV4: View {
                 }
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous).fill(PCV4.bg)
-                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(PCV4.gold.opacity(0.5), lineWidth: 1.5))
-                .shadow(color: .black.opacity(0.55), radius: 24, y: 10)
-        )
+        .background(PCV4.surface)
     }
 
-    // THE EDGE — the Hub's "why this player surfaced" lane verdict, in v4 style.
+    // The observation that opened this player's research.
     @ViewBuilder private func edgeHero(_ e: PlayerCardV4Edge) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text("ORIGINAL READ · \(e.eyebrow.uppercased())")
+        VStack(alignment: .leading, spacing: 8) {
+            Text(e.eyebrow.uppercased())
                 .font(.caption.monospaced().weight(.medium)).tracking(1).foregroundStyle(PCV4.gold)
-            Text(e.title).font(.title3.weight(.semibold)).foregroundStyle(PCV4.ink)
+            Text(e.title).font(.headline).foregroundStyle(PCV4.ink)
                 .fixedSize(horizontal: false, vertical: true)
             if !e.body.isEmpty {
                 Text(e.body).font(.subheadline).foregroundStyle(PCV4.mut).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(PCV4.gold.opacity(0.07)))
-        .padding(.horizontal, 18).padding(.bottom, 4)
+        .modifier(PCV4ResearchInset())
     }
 
     // MARK: header
@@ -868,33 +882,22 @@ struct PlayerCardV4: View {
                     .font(.caption.monospaced().weight(.medium)).foregroundStyle(PCV4.mut2)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            let layout = dynamicTypeSize.isAccessibilitySize
-                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
-                : AnyLayout(HStackLayout(alignment: .top, spacing: 12))
-            layout {
-                Text(pack?.name ?? name)
-                    .font(.title.weight(.bold)).foregroundStyle(PCV4.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if heat == "hot" {
-                    chip("▲ HOT")
-                } else if heat == "cold" {
-                    chip("▼ COLD")
-                }
-            }
+            Text(pack?.name ?? name)
+                .font(.title.weight(.bold)).foregroundStyle(PCV4.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
             if let id = identityLine {
                 Text(id).font(.subheadline).foregroundStyle(PCV4.mut)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if heat == "hot" || heat == "cold" {
+                Text("RECENT FORM  ·  \(heat.uppercased())")
+                    .font(.caption.monospaced().weight(.medium))
+                    .foregroundStyle(PCV4.mut2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .padding(.horizontal, 26).padding(.top, 24).padding(.bottom, 18)
-    }
-    private func chip(_ t: String) -> some View {
-        Text(t).font(.caption.monospaced().weight(.semibold))
-            .fixedSize(horizontal: false, vertical: true)
-            .foregroundStyle(Color(hex: "#1B1407"))
-            .padding(.horizontal, 10).padding(.vertical, 5)
-            .background(Capsule().fill(PCV4.gold))
+        .padding(.horizontal, 24).padding(.top, 26).padding(.bottom, 24)
     }
     private var identityLine: String? {
         guard let p = pack else { return nil }
@@ -966,11 +969,11 @@ struct PlayerCardV4: View {
     private func section<C: View>(_ cap: String, @ViewBuilder _ content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 13) {
             Text(cap.uppercased()).font(.caption.monospaced().weight(.medium)).tracking(1)
-                .foregroundStyle(PCV4.gold).opacity(0.92)
+                .foregroundStyle(PCV4.mut2)
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 26).padding(.vertical, 20)
+        .padding(.horizontal, 24).padding(.vertical, 20)
         .overlay(Rectangle().fill(PCV4.line).frame(height: 1), alignment: .top)
     }
 

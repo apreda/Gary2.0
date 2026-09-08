@@ -33,6 +33,8 @@ describe('optimized native Hub league routing', () => {
       // MLB when the tuple contained an inline awaited fetch. Debug passed.
       const source = `import Foundation
 ${read('HubJudgment.swift')}
+${block(models, 'struct ExactGameIdentity:')}
+${block(read('FantasyBriefing.swift'), 'enum GaryMlbMetricPolicy {')}
 ${models.slice(models.indexOf('struct Connection:'), models.indexOf('// MARK: - Live Scores'))}
 ${block(shared, 'enum HubLeagueSel {')}
 ${block(modules, 'extension HubLeagueSel {')}

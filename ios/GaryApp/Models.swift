@@ -310,6 +310,13 @@ final class SwapMeta: Codable {
     /// Original collector observation clocks; database insertion is not research time.
     let computed_as_of: String?
     let source_collected_at: String?
+    /// Dated measured bullpen research. Older prose-only rows omit these.
+    let research_version: OptionalResearchField<String>?
+    let arms: OptionalResearchField<[BullpenResearchArm]>?
+    let window_dates: OptionalResearchField<[String]>?
+    let no_game_dates: OptionalResearchField<[String]>?
+    let source_as_of: OptionalResearchField<String>?
+    let team_identity: OptionalResearchField<BullpenResearchTeam>?
     /// The computed facts behind Gary's read (Jul 27 voice pass moved the
     /// template sentence here) — the expanded card's "numbers behind it" line.
     let evidence: String?
@@ -502,6 +509,111 @@ final class SwapMeta: Codable {
         let plain = ISO8601DateFormatter()
         guard let start = fractional.date(from: kickoff) ?? plain.date(from: kickoff) else { return false }
         return Date() >= start
+    }
+}
+
+/// A new research field cannot invalidate an otherwise readable Connection.
+/// This also tolerates unrelated legacy lanes that used the same JSON key.
+struct OptionalResearchField<Value: Codable>: Codable {
+    let value: Value?
+    init(from decoder: Decoder) throws {
+        value = try? decoder.singleValueContainer().decode(Value.self)
+    }
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(value)
+    }
+}
+
+struct BullpenResearchTeam: Codable {
+    let id: Int?
+    let name: String?
+    let abbreviation: String?
+}
+
+/// Outs use baseball notation; no decimal-innings arithmetic is used here.
+struct BullpenResearchArm: Codable {
+    let id: Int?
+    let name: String?
+    let ip: String?
+    let g: Int?
+    let pitches: Int?
+    let er: Int?
+    let k: Int?
+    let bb: Int?
+    let last_used: String?
+    let season_era: Double?
+    let season_ip: String?
+    let season_as_of: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, ip, g, pitches, er, k, bb, last_used, season_era, season_ip, season_as_of
+    }
+    init(from decoder: Decoder) throws {
+        let fields = try decoder.container(keyedBy: CodingKeys.self)
+        func read<T: Decodable>(_ key: CodingKeys, as type: T.Type = T.self) -> T? {
+            try? fields.decodeIfPresent(type, forKey: key)
+        }
+        func innings(_ key: CodingKeys) -> String? {
+            if let text: String = read(key) { return Self.validIP(text) ? text : nil }
+            guard let number: Double = read(key), number.isFinite, number >= 0 else { return nil }
+            let text = String(number)
+            return Self.validIP(text) ? text : nil
+        }
+        id = read(.id); name = read(.name); ip = innings(.ip); g = read(.g)
+        pitches = read(.pitches); er = read(.er); k = read(.k); bb = read(.bb)
+        last_used = read(.last_used); season_era = read(.season_era)
+        season_ip = innings(.season_ip); season_as_of = read(.season_as_of)
+    }
+
+    var inningsLabel: String { Self.validIP(ip) ? ip! : "—" }
+    var pitchesLabel: String { pitches.flatMap { $0 >= 0 ? String($0) : nil } ?? "—" }
+
+    var hasSeasonLine: Bool {
+        guard let season_era, season_era.isFinite, season_era >= 0,
+              Self.validIP(season_ip), let season_ip,
+              season_ip != "0" && season_ip != "0.0",
+              ExactGameIdentity(date: season_as_of, gameID: 1) != nil else { return false }
+        return true
+    }
+    var seasonERALabel: String { hasSeasonLine ? String(format: "%.2f", season_era!) : "—" }
+    var seasonIPLabel: String { hasSeasonLine ? season_ip! : "—" }
+
+    static func validIP(_ value: String?) -> Bool {
+        value?.range(of: #"^(?:0|[1-9]\d*)(?:\.[012])?$"#, options: .regularExpression) != nil
+    }
+}
+
+/// Only a current schema with an exact team and coherent observed dates earns
+/// a table. The ledger makes no assertion about tonight's availability.
+struct BullpenResearchLedger {
+    let arms: [BullpenResearchArm]
+    let dates: [String]
+    let asOf: String
+
+    init?(meta: SwapMeta?, league: String, slateDate: String?, teamID: String?) {
+        guard league == "MLB", let meta,
+              meta.kind == "bullpen_fatigue", meta.research_version?.value == "bullpen-facts-v1",
+              meta.source == "MLB StatsAPI final boxscores", meta.games == 3,
+              let id = meta.team_identity?.value?.id, id > 0, teamID == String(id),
+              let slateDate, ExactGameIdentity(date: slateDate, gameID: 1) != nil,
+              let asOf = meta.source_as_of?.value, let dates = meta.window_dates?.value,
+              !dates.isEmpty, dates.count <= 3, dates == Array(Set(dates)).sorted(),
+              dates.allSatisfy({ ExactGameIdentity(date: $0, gameID: 1) != nil && $0 < slateDate }),
+              dates.last == asOf,
+              let arms = meta.arms?.value, !arms.isEmpty,
+              Set(arms.compactMap(\.id)).count == arms.count,
+              arms.allSatisfy({ arm in
+                  guard let id = arm.id, id > 0,
+                        let name = arm.name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                        let last = arm.last_used, dates.contains(last),
+                        let appearances = arm.g, (1...3).contains(appearances) else { return false }
+                  if arm.hasSeasonLine, let date = arm.season_as_of {
+                      return date <= asOf && date.prefix(4) == slateDate.prefix(4)
+                  }
+                  return true
+              }) else { return nil }
+        self.arms = arms; self.dates = dates; self.asOf = asOf
     }
 }
 

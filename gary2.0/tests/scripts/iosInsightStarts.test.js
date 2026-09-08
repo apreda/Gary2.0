@@ -7,12 +7,25 @@ import { execFileSync, spawnSync } from 'node:child_process';
 const models = readFileSync(new URL('../../../ios/GaryApp/Models.swift', import.meta.url), 'utf8');
 const hasSwift = spawnSync('swiftc', ['--version'], { encoding: 'utf8' }).status === 0;
 
+function block(source, marker) {
+  const start = source.indexOf(marker);
+  if (start < 0) throw new Error(`Missing shipping declaration: ${marker}`);
+  let depth = 0;
+  for (let i = source.indexOf('{', start); i < source.length; i++) {
+    if (source[i] === '{') depth++;
+    if (source[i] === '}' && --depth === 0) return source.slice(start, i + 1);
+  }
+  throw new Error(`Unclosed shipping declaration: ${marker}`);
+}
+
 describe('native insight start metadata', () => {
   it.skipIf(!hasSwift)('retains scalar record samples and schedule turns through the actual optimized Connection graph', () => {
     const directory = mkdtempSync(join(tmpdir(), 'gary-insight-starts-'));
     try {
       const source = `import Foundation
 ${readFileSync(new URL('../../../ios/GaryApp/HubJudgment.swift', import.meta.url), 'utf8')}
+${block(models, 'struct ExactGameIdentity:')}
+${block(readFileSync(new URL('../../../ios/GaryApp/FantasyBriefing.swift', import.meta.url), 'utf8'), 'enum GaryMlbMetricPolicy {')}
 ${models.slice(models.indexOf('struct Connection:'), models.indexOf('// MARK: - Live Scores'))}
 func decode(_ starts: Any?, kind: String = "starter_team_record") throws -> Connection {
  var meta: [String: Any] = ["kind": kind]

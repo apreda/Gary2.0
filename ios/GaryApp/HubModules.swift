@@ -703,8 +703,8 @@ struct PlayerInsightSheet: View {
             HStack {
                 Spacer()
                 Button { dismiss() } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title2).foregroundStyle(PCV4.mut)
+                    Image(systemName: "xmark")
+                        .font(.system(size: 18, weight: .medium)).foregroundStyle(PCV4.mut)
                         .frame(minWidth: 44, minHeight: 44)
                         .contentShape(Rectangle())
                 }
