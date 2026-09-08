@@ -533,6 +533,9 @@ struct HubView: View {
     @State private var fantasyRefreshToken = UUID()
     @State private var frontPageNow = Date()
     @State private var judgmentReads: [String: HubJudgment] = [:]
+    /// Complete source clocks survive presentation deduplication and a failed
+    /// refresh, so newer cited facts can withdraw an older interpretation.
+    @State private var sourceObservationClocks: [HubLeagueSel: [String: Date]] = [:]
     private struct JudgmentRead: Identifiable {
         let signal: Signal
         let judgment: HubJudgment
@@ -561,7 +564,8 @@ struct HubView: View {
                   signal.reg?.day != "tomorrow", signal.confirmedXI == nil else { return nil }
             return .init(index: index, league: signal.league.label, date: signal.slateDate,
                          gameID: signal.gameId, sourceKey: signal.sourceKey,
-                         judgment: signal.lane?.judgment, blocked: signal.rejectsJudgment)
+                         judgment: signal.lane?.judgment, blocked: signal.rejectsJudgment,
+                         sourceObservedAt: signal.sourceObservedAt)
         }
         let games = (todayBoard?.board ?? []).compactMap { row -> HubJudgmentSelection.Game? in
             guard let gameID = row.bdl_game_id, let league = row.league else { return nil }
@@ -570,7 +574,10 @@ struct HubView: View {
                          status: liveScores.status(forGameId: gameID, league: league)?.status ?? row.game_status)
         }
         let selection = HubJudgmentSelection.current(candidates: candidates, games: games,
-                                                     date: SupabaseAPI.todayEST(), now: now)
+                                                     date: SupabaseAPI.todayEST(), now: now,
+                                                     sourceClocks: sourceObservationClocks.values.reduce(into: [:]) { all, clocks in
+                                                         all.merge(clocks, uniquingKeysWith: max)
+                                                     })
         var next: [String: HubJudgment] = [:]
         for (index, judgment) in selection {
             if let key = judgmentKey(fetched[index]) { next[key] = judgment }
@@ -581,6 +588,14 @@ struct HubView: View {
     }
 
     private var nextJudgmentExpiry: Date? { judgmentReads.values.compactMap(\.validUntilDate).min() }
+
+    private func refreshSourceObservations(_ signals: [Signal], league: HubLeagueSel) {
+        sourceObservationClocks[league] = HubJudgmentSelection.observationClocks(signals.enumerated().map { index, signal in
+            .init(index: index, league: signal.league.label, date: signal.slateDate,
+                  gameID: signal.gameId, sourceKey: signal.sourceKey, judgment: signal.lane?.judgment,
+                  sourceObservedAt: signal.sourceObservedAt)
+        })
+    }
 
     private var supersededSources: Set<String> {
         HubJudgmentSelection.suppressedKeys(leagueSignals.compactMap(currentJudgment))
@@ -890,7 +905,7 @@ struct HubView: View {
 
     @MainActor private func resetForSlate(_ date: String) {
         guard loadedDate != date else { return }
-        fetched = []; itemsIndex = [:]; connectionSnapshots = [:]
+        fetched = []; itemsIndex = [:]; connectionSnapshots = [:]; sourceObservationClocks = [:]
         todayBoard = nil; intelCards = []; pulseByLeague = [:]
         ydaySignals = []; streakRows = []; nightRows = []; hitRate = nil; historyDate = ""
         fetchErrorLeagues = []; boardFetchFailed = false
@@ -953,7 +968,9 @@ struct HubView: View {
             let snapshot = PicksContentEquality.encoded(rows)
             if let snapshot, connectionSnapshots[league] == snapshot { continue }
             resolved.removeAll { $0.league == league }
-            resolved.append(contentsOf: rows.compactMap { $0.toSignal() })
+            let incoming = rows.compactMap { $0.toSignal() }
+            refreshSourceObservations(incoming, league: league)
+            resolved.append(contentsOf: incoming)
             connectionSnapshots[league] = snapshot
             changed = true
         }
@@ -1644,7 +1661,7 @@ struct HubView: View {
         }
         return HubJudgmentCaseView(judgment: selection.judgment, context: storyContext(signal), isCurrent: { now in
             guard let key = judgmentKey(signal), let current = judgmentReads[key],
-                  current.input_fingerprint == selection.judgment.input_fingerprint else { return false }
+                  HubJudgmentSelection.sameCase(current, selection.judgment) else { return false }
             return selection.judgment.isCurrent(league: signal.league.label, date: SupabaseAPI.todayEST(),
                                                 gameID: signal.gameId, sourceKey: signal.sourceKey, now: now)
         }, onPlayer: playerMatches.count == 1 ? {

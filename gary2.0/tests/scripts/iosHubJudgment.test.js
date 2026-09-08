@@ -38,6 +38,7 @@ describe('native Hub judgment contract and shipping integration', () => {
     const source = `${native('HubJudgment.swift')}\n${native('HubStoryIdentity.swift')}
 ${block(hub, 'enum HubFmt {')}
 enum League { case mlb; var label: String { "MLB" } }
+typealias HubLeagueSel = League
 enum Kind { case hot }
 struct Meta { let judgment: HubJudgment? }
 struct Regression { let day: String }
@@ -45,12 +46,16 @@ struct Signal {
  let id: Int; let headline: String; let detail: String
  var league: League = .mlb; var kind: Kind = .hot; var game = "CHC @ STL"; var value = ""
  var slateDate: String? = "2026-09-08"; var gameId: String? = "100"; var sourceKey: String? = "heat_check|100|44|8"
+ var sourceObservedAt: Date? = nil
  var lane: Meta?; var reg: Regression?; var rejectsJudgment = false
 }
 func signalChipLabel(kind: Kind, league: League) -> String { "Heat check" }
-struct Reader {
+final class Reader {
+ var sourceObservationClocks: [League: [String: Date]] = [:]
 ${block(hub, '    private static func dedupe(')}
+${block(hub, '    private func refreshSourceObservations(')}
  static func resolve(_ rows: [Signal]) -> [Signal] { dedupe(rows) }
+ func observe(_ rows: [Signal]) { refreshSourceObservations(rows, league: .mlb) }
 }
 struct Search {
  let q: String
@@ -79,6 +84,13 @@ ${block(search, '        func hits(')}
   precondition(conflict.count == 1 && conflict[0].rejectsJudgment && conflict[0].detail == raw.detail)
   var gameTwo = raw; gameTwo.gameId = "101"; gameTwo.sourceKey = "heat_check|101|44|8"
   precondition(Reader.resolve([raw, gameTwo]).count == 2, "Doubleheaders stay separate before selection")
+  var laterSource = raw; laterSource.sourceObservedAt = HubJudgment.timestamp("2026-09-08T15:45:00Z")
+  let reader = Reader()
+  reader.observe([upgraded, laterSource])
+  precondition(Reader.resolve([upgraded, laterSource]).map(\\.id) == [2])
+  let scopedKey = HubJudgmentSelection.suppressionKey(league: "MLB", date: "2026-09-08", gameID: "100", sourceKey: raw.sourceKey)!
+  precondition(reader.sourceObservationClocks[.mlb]?[scopedKey] == laterSource.sourceObservedAt,
+               "Original source observations must survive actual presentation deduplication")
   let resolves: (Signal) -> HubJudgment? = { $0.id == 2 ? ready : nil }
   for term in ["matchup gives", "opponent connect", "breaking pitches", "josé"] {
    precondition(Search(q: term, judgmentFor: resolves).hits(upgraded), "Visible judgment and full case are searchable")
@@ -91,5 +103,29 @@ ${block(search, '        func hits(')}
     expect(run(source)).toContain('Hub judgment integration passed');
     expect(hub).toContain('now.timeIntervalSince($0) >= 300');
     expect(hub).toContain('.task(id: isVisible ? nextJudgmentExpiry : nil)');
+    const load = block(hub, '    @MainActor private func loadCurrent(');
+    expect(load.indexOf('refreshSourceObservations(incoming, league: league)')).toBeLessThan(load.indexOf('fetched = Self.dedupe(resolved)'));
+    expect(block(hub, '    private func judgmentCase(')).toContain('HubJudgmentSelection.sameCase(current, selection.judgment)');
+  }, 60_000);
+
+  it.skipIf(!hasSwift)('uses original observation clocks through shipping metadata and ignores later persistence time', () => {
+    const models = native('Models.swift');
+    const graph = models.slice(models.indexOf('struct Connection:'), models.indexOf('// MARK: - Live Scores'));
+    expect(run(`${native('HubJudgment.swift')}\n${graph}
+@main struct Fixture {
+ static func main() throws {
+  let raw = #"{"date":"2026-09-08","league":"MLB","category":"starter_form","game_id":"100","created_at":"2026-09-08T16:30:00Z","meta":{"computed_as_of":"2026-09-08T15:00:00Z","source_collected_at":"2026-09-08T14:00:00Z","created_at":"2026-09-08T16:30:00Z"}}"#
+  let row = try JSONDecoder().decode(Connection.self, from: Data(raw.utf8))
+  let observed = HubJudgment.latestSourceObservation(computedAsOf: row.meta?.computed_as_of, collectedAt: row.meta?.source_collected_at)
+  precondition(observed == HubJudgment.timestamp("2026-09-08T15:00:00Z"), "Same-pass persistence cannot become a newer original observation")
+  let copy = try JSONDecoder().decode(Connection.self, from: JSONEncoder().encode(row))
+  precondition(copy.meta?.computed_as_of == row.meta?.computed_as_of && copy.meta?.source_collected_at == row.meta?.source_collected_at)
+  print("Source observation metadata passed")
+ }
+}
+`)).toContain('Source observation metadata passed');
+    const mapper = native('HubModules.swift');
+    expect(mapper).toContain('sourceObservedAt: HubJudgment.latestSourceObservation(computedAsOf: meta?.computed_as_of,');
+    expect(mapper).toContain('collectedAt: meta?.source_collected_at)');
   }, 60_000);
 });

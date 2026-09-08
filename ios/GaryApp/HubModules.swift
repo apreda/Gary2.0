@@ -494,7 +494,9 @@ extension Connection {
             afterGary: kd == .afterGary ? meta : nil,
             marketRange: kd == .marketRange ? meta : nil,
             nextSlate: kd == .nextSlate ? meta : nil,
-            sourceKey: HubJudgment.sourceKey(category: category, gameID: game_id, playerID: player_id, teamID: team_id)
+            sourceKey: HubJudgment.sourceKey(category: category, gameID: game_id, playerID: player_id, teamID: team_id),
+            sourceObservedAt: HubJudgment.latestSourceObservation(computedAsOf: meta?.computed_as_of,
+                                                                 collectedAt: meta?.source_collected_at)
         )
     }
 }

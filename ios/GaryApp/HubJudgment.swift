@@ -142,6 +142,12 @@ final class HubJudgment: Codable {
         return formatter.date(from: value)
     }
 
+    /// Collection/computation observe the source. Persistence clocks can be
+    /// later than a same-pass case and must not invalidate that research.
+    static func latestSourceObservation(computedAsOf: String?, collectedAt: String?) -> Date? {
+        [computedAsOf, collectedAt].compactMap { $0.flatMap(timestamp) }.max()
+    }
+
     private static func hasText(_ value: String) -> Bool {
         !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -190,6 +196,7 @@ enum HubJudgmentSelection {
         let sourceKey: String?
         let judgment: HubJudgment?
         var blocked = false
+        var sourceObservedAt: Date? = nil
     }
     struct Game {
         let league: String
@@ -229,7 +236,7 @@ enum HubJudgmentSelection {
         return choices
     }
 
-    private static func sameCase(_ lhs: HubJudgment, _ rhs: HubJudgment) -> Bool {
+    static func sameCase(_ lhs: HubJudgment, _ rhs: HubJudgment) -> Bool {
         lhs.primary_source_key == rhs.primary_source_key && lhs.input_fingerprint == rhs.input_fingerprint
             && lhs.take == rhs.take && lhs.explanation == rhs.explanation && lhs.full_case == rhs.full_case
             && lhs.counterargument == rhs.counterargument && lhs.watch_for == rhs.watch_for
@@ -240,8 +247,23 @@ enum HubJudgmentSelection {
             && lhs.counter_evidence_ids == rhs.counter_evidence_ids
     }
 
-    static func current(candidates: [Candidate], games: [Game], date: String, now: Date) -> [Int: HubJudgment] {
+    /// Capture every source before presentation deduplication. A duplicate
+    /// with newer observations must still retire a case based on old facts.
+    static func observationClocks(_ candidates: [Candidate]) -> [String: Date] {
+        var result: [String: Date] = [:]
+        for candidate in candidates {
+            guard let observed = candidate.sourceObservedAt,
+                  let key = suppressionKey(league: candidate.league, date: candidate.date,
+                                           gameID: candidate.gameID, sourceKey: candidate.sourceKey) else { continue }
+            result[key] = result[key].map { max($0, observed) } ?? observed
+        }
+        return result
+    }
+
+    static func current(candidates: [Candidate], games: [Game], date: String, now: Date,
+                        sourceClocks: [String: Date] = [:]) -> [Int: HubJudgment] {
         let gameGroups = Dictionary(grouping: games) { "\($0.league.uppercased())|\($0.gameID)" }
+        let observations = sourceClocks.merging(observationClocks(candidates), uniquingKeysWith: max)
         let scoped = candidates.filter {
             guard $0.date == date, let judgment = $0.judgment,
                   judgment.schema_version == 1, judgment.date == date,
@@ -267,6 +289,12 @@ enum HubJudgmentSelection {
                   }),
                   judgment.isCurrent(league: candidate.league, date: date, gameID: candidate.gameID,
                                      sourceKey: candidate.sourceKey, now: now),
+                  !Set([judgment.primary_source_key] + judgment.evidence.compactMap(\.source_key)).contains(where: { source in
+                      guard let key = suppressionKey(league: judgment.league, date: judgment.date,
+                                                     gameID: judgment.game_id, sourceKey: source),
+                            let observed = observations[key], let checked = judgment.checkedAt else { return false }
+                      return observed > checked
+                  }),
                   let gameID = candidate.gameID,
                   let matching = gameGroups["\(candidate.league.uppercased())|\(gameID)"], matching.count == 1,
                   let game = matching.first,

@@ -123,6 +123,7 @@ ${block(readFileSync(new URL('../../../ios/GaryApp/SharedStores.swift', import.m
  var loadGeneration: UInt64 = 0
  var requestDate = ""
  var connectionSnapshots: [HubLeagueSel: Data] = [:]
+ var sourceObservationClocks: [HubLeagueSel: [String: Date]] = [:]
  var boardLoading = false
  var intelLoading = false
  var intelFetchFailed = false
@@ -162,6 +163,7 @@ ${block(readFileSync(new URL('../../../ios/GaryApp/SharedStores.swift', import.m
  func refresh() async { await load() }
  func consumeFocus() { consumedFocus += 1 }
  func refreshJudgments() {}
+ func refreshSourceObservations(_ signals: [Signal], league: HubLeagueSel) {}
 }
 @MainActor func waitUntil(_ ready: () -> Bool) async {
  for _ in 0..<10_000 {

@@ -297,6 +297,9 @@ struct FootballNextSlateGame: Codable, Identifiable {
 final class SwapMeta: Codable {
     /// Optional connected interpretation; original research remains intact.
     let judgment: HubJudgment?
+    /// Original collector observation clocks; database insertion is not research time.
+    let computed_as_of: String?
+    let source_collected_at: String?
     /// The computed facts behind Gary's read (Jul 27 voice pass moved the
     /// template sentence here) — the expanded card's "numbers behind it" line.
     let evidence: String?

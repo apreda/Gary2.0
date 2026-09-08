@@ -306,6 +306,8 @@ struct Signal: Identifiable {
     var nextSlate: SwapMeta? = nil
     /// Stable original category/game/subject key for connected research.
     var sourceKey: String? = nil
+    /// Latest verified original observation, parsed once when the row is mapped.
+    var sourceObservedAt: Date? = nil
     /// Conflicting same-clock publications keep the source facts visible.
     var rejectsJudgment = false
 }

@@ -17,8 +17,8 @@ struct HubJudgmentTests {
             "supporting_evidence_ids": ["form", "today"], "counter_evidence_ids": ["form"],
             "supersedes_source_keys": [sourceKey], "prominence": "standard",
             "evidence": [
-                ["id": "form", "label": "Recent form", "summary": "Observed performance", "source": "Provider", "game_id": "100", "as_of": "2026-09-08T14:00:00Z"],
-                ["id": "today", "label": "Today's matchup", "summary": "Confirmed opponent", "source": "Provider", "game_id": "100", "as_of": "2026-09-08T15:00:00Z"]
+                ["id": "form", "source_key": sourceKey, "label": "Recent form", "summary": "Observed performance", "source": "Provider", "game_id": "100", "as_of": "2026-09-08T14:00:00Z"],
+                ["id": "today", "source_key": "starter_form|100|55|9", "label": "Today's matchup", "summary": "Confirmed opponent", "source": "Provider", "game_id": "100", "as_of": "2026-09-08T15:00:00Z"]
             ]
         ]
         func decode(_ object: Any) throws -> HubJudgment {
@@ -35,6 +35,7 @@ struct HubJudgmentTests {
         precondition(read.critical_condition == "Only if he starts." && read.what_changed == "The starter changed.")
         let cached = try JSONDecoder().decode(HubJudgment.self, from: JSONEncoder().encode(read))
         precondition(valid(cached) && cached.full_case == read.full_case)
+        precondition(HubJudgmentSelection.sameCase(read, cached), "An unchanged refresh must keep the saved case current")
         for game in [nil, "", "101", "0100"] as [String?] { precondition(!valid(read, game: game)) }
         for key in [nil, "", "heat_check|101|44|8", "heat_check|100|45|8"] as [String?] { precondition(!valid(read, key: key)) }
         precondition(!valid(read, league: "NFL") && !valid(read, date: "2026-09-09"))
@@ -81,6 +82,32 @@ struct HubJudgmentTests {
             HubJudgmentSelection.current(candidates: candidates, games: games, date: "2026-09-08", now: now)
         }
         precondition(selected([game])[10] === read)
+        let observed = HubJudgment.timestamp("2026-09-08T15:30:00Z")!
+        let checked = read.checkedAt!
+        precondition(HubJudgment.latestSourceObservation(computedAsOf: "invalid", collectedAt: "2026-09-08T15:30:00Z") == observed)
+        precondition(HubJudgment.latestSourceObservation(computedAsOf: "2026-09-08T15:30:00Z", collectedAt: "2026-09-08T14:00:00Z") == observed)
+        precondition(HubJudgment.latestSourceObservation(computedAsOf: nil, collectedAt: "2026-09-08") == nil)
+        var freshPrimary = candidate; freshPrimary.sourceObservedAt = observed
+        precondition(selected([game], [freshPrimary]).isEmpty, "Newer primary source observations must withdraw the old case")
+        let secondary = Candidate(index: 20, league: "MLB", date: "2026-09-08", gameID: "100",
+                                  sourceKey: "starter_form|100|55|9", judgment: nil, sourceObservedAt: observed)
+        precondition(selected([game], [candidate, secondary]).isEmpty, "Newer cited secondary facts must withdraw the old case")
+        var samePass = secondary; samePass.sourceObservedAt = checked
+        precondition(selected([game], [candidate, samePass])[10] === read, "Same-pass observations do not invalidate their case")
+        var older = secondary; older.sourceObservedAt = checked.addingTimeInterval(-60)
+        precondition(selected([game], [candidate, older])[10] === read)
+        for unrelated in [
+            Candidate(index: 21, league: "NFL", date: "2026-09-08", gameID: "100", sourceKey: secondary.sourceKey, judgment: nil, sourceObservedAt: observed),
+            Candidate(index: 22, league: "MLB", date: "2026-09-09", gameID: "100", sourceKey: secondary.sourceKey, judgment: nil, sourceObservedAt: observed),
+            Candidate(index: 23, league: "MLB", date: "2026-09-08", gameID: "101", sourceKey: secondary.sourceKey, judgment: nil, sourceObservedAt: observed),
+            Candidate(index: 24, league: "MLB", date: "2026-09-08", gameID: "100", sourceKey: "unrelated|100||", judgment: nil, sourceObservedAt: observed)
+        ] {
+            precondition(selected([game], [candidate, unrelated])[10] === read, "Unrelated observations cannot retire this case")
+        }
+        let beforeDedupe = HubJudgmentSelection.observationClocks([candidate, secondary, older])
+        precondition(HubJudgmentSelection.current(candidates: [candidate], games: [game], date: "2026-09-08", now: now,
+                                                 sourceClocks: beforeDedupe).isEmpty,
+                     "A newer source must still withdraw the case after presentation deduplication removes that copy")
         precondition(selected([]).isEmpty && selected([game, game]).isEmpty, "Missing or ambiguous schedule identity cannot authorize a judgment")
         for other in [Game(league: "MLB", gameID: "101", startsAt: future, status: "scheduled"),
                       Game(league: "NFL", gameID: "100", startsAt: future, status: "scheduled"),
@@ -111,6 +138,7 @@ struct HubJudgmentTests {
         precondition(selected([game], [candidate, revisedCandidate]).keys.sorted() == [12])
         var tiedPayload = payload; tiedPayload["take"] = "A conflicting read at the same check time"
         let tied = try decode(tiedPayload)
+        precondition(!HubJudgmentSelection.sameCase(read, tied), "New wording from the same input cannot keep an older saved case current")
         let tiedCandidate = Candidate(index: 13, league: "MLB", date: "2026-09-08", gameID: "100", sourceKey: sourceKey, judgment: tied)
         precondition(HubJudgmentSelection.sourceChoices([candidate, tiedCandidate])[10] == false)
         precondition(selected([game], [candidate, tiedCandidate]).isEmpty)
