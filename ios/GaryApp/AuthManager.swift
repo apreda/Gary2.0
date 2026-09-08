@@ -413,27 +413,6 @@ final class AuthManager: ObservableObject {
         isAuthenticated = true
     }
 
-    // MARK: - Password Reset
-
-    func resetPassword(email: String) async throws {
-        errorMessage = nil
-
-        let url = try authURL("/auth/v1/recover")
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(apiKey, forHTTPHeaderField: "apikey")
-
-        let body: [String: Any] = ["email": email]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        let (_, response) = try await URLSession.shared.data(for: request)
-
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            throw AuthError.serverError("Failed to send reset email")
-        }
-    }
-
     // MARK: - Sign Out
 
     func signOut() {

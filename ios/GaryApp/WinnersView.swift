@@ -782,7 +782,7 @@ struct PremiumPicksView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(FoundingCohort.beforePaywallStart
                          ? "Every board is free right now."
-                         : "Winners is free for you all season.")
+                         : "Your founding access is included.")
                         .font(GaryFonts.text(15, .semibold))
                         .foregroundStyle(.white.opacity(0.92))
                     Text(FoundingCohort.beforePaywallStart

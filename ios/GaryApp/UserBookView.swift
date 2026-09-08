@@ -68,13 +68,39 @@ extension Notification.Name {
     static let userBookChanged = Notification.Name("UserBookChanged")
 }
 
-// ── Money display (founder, Jul 26: "don't do units, do money"; Aug 20:
-// "use money pretty much everywhere over units") ────────────────────────────
-// Stakes/results STORE as units (the server math is unit-based and unfakeable);
-// the DISPLAY is always dollars — at the user's own unit size once they set
-// one, at the house's hypothetical $100/bet until then (the same convention
-// Gary's Billfold uses, under the same HYPOTHETICAL framing). Units never
-// show on this surface again.
+// MARK: - Personal book history windows
+enum BookTimeframe {
+    struct Window {
+        let start: String
+        let end: String
+        func contains(_ date: String) -> Bool { date >= start && date <= end }
+    }
+
+    /// History windows include today's Eastern date. The separate open-slips
+    /// section and All time remain unbounded so future pending bets stay visible.
+    static func window(_ timeframe: String, now: Date = Date()) -> Window? {
+        guard ["7d", "30d", "season"].contains(timeframe) else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York")!
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        let today = formatter.string(from: now)
+        let floor: String
+        if timeframe == "season" {
+            floor = max("2026-03-01", "\(today.prefix(4))-01-01")
+        } else {
+            let days = timeframe == "7d" ? 6 : 29
+            floor = formatter.string(from: calendar.date(byAdding: .day, value: -days, to: now)!)
+        }
+        return Window(start: floor, end: today)
+    }
+}
+
+// Stakes and results are stored as units. Dollar displays use the account's
+// saved unit size, or the labeled hypothetical $100 convention until it is set.
 enum BookMoney {
     /// The house display convention while no personal unit size is set.
     static let defaultUnitDollars: Double = 100
@@ -554,12 +580,53 @@ enum UserBookAPI {
 }
 
 private func userBookInstant(_ value: String?) -> Date? {
-    guard let value else { return nil }
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    if let date = formatter.date(from: value) { return date }
-    formatter.formatOptions = [.withInternetDateTime]
-    return formatter.date(from: value)
+    value.flatMap(parseISO8601)
+}
+
+enum BookTicketTime {
+    static func gameDate(_ value: String?) -> String? {
+        guard let date = userBookInstant(value) else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "America/New_York")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+
+    static func isLocked(_ value: String?, now: Date = Date()) -> Bool {
+        guard let date = userBookInstant(value) else { return true }
+        return now >= date
+    }
+}
+
+enum BookPropEligibility {
+    static func canVerify(_ prop: PropPick) -> Bool {
+        // The server rejects explicit HR/TD lanes. Legacy home-run threats
+        // follow the existing model classification; tdCategory alone is not a lane.
+        !["HR", "TD"].contains((prop.lane ?? "CORE").uppercased()) && !prop.isHRLane
+    }
+}
+
+struct BookDirectorySnapshot<Game, Prop> {
+    private(set) var date: String?
+    private(set) var games: [Game] = []
+    private(set) var props: [Prop] = []
+    private(set) var failedLanes: [String] = []
+
+    mutating func apply(date: String, games: [Game]?, props: [Prop]?) {
+        if self.date != date { self.games = []; self.props = [] }
+        self.date = date
+        failedLanes = []
+        if let games { self.games = games } else { failedLanes.append("Game picks") }
+        if let props { self.props = props } else { failedLanes.append("Props") }
+    }
+
+    var errorMessage: String? {
+        guard !failedLanes.isEmpty else { return nil }
+        let unavailable = failedLanes.joined(separator: " and ")
+        let retained = games.isEmpty && props.isEmpty ? "" : " Available picks below may be from an earlier refresh."
+        return "\(unavailable) couldn't refresh.\(retained) Try again when you're connected. You can still log an outside bet."
+    }
 }
 
 // ── Tail/Fade row (pick card back) ──────────────────────────────────────────
@@ -589,8 +656,7 @@ struct TailFadeRow: View {
     }
 
     private var locked: Bool {
-        guard let d = userBookInstant(pick.commence_time) else { return true }
-        return Date() >= d
+        BookTicketTime.isLocked(pick.commence_time)
     }
 
     var body: some View {
@@ -1177,9 +1243,9 @@ struct UserBookSection: View {
             return "Tonight's streak play is set: \(p.pick_text)"
         }
         if (streak?.current ?? 0) > 0 {
-            return "One play a day keeps it alive. Pick tonight's from any card."
+            return "Your streak carries over on days off. Choose a pregame tail or fade when you're ready."
         }
-        return "One play a day. Win and it grows, lose and it resets. Mark any tail or fade as your streak play."
+        return "Star one pregame tail or fade per date. Wins build your streak; a loss resets it. Pushes, voids and days off keep it intact."
     }
 
     private func currentStreakText(_ rows: [UserBet]) -> String? {
@@ -1265,25 +1331,10 @@ struct UserBookSection: View {
 
     // ── Tracker: scope filters ──────────────────────────────────────────────
 
-    private func inTimeframe(_ b: UserBet) -> Bool {
-        guard timeframe != "all" else { return true }
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        f.timeZone = TimeZone(identifier: "America/New_York")
-        guard let d = f.date(from: b.game_date), let today = f.date(from: SupabaseAPI.todayEST()) else { return true }
-        switch timeframe {
-        case "7d", "30d":
-            var cal = Calendar(identifier: .gregorian); cal.timeZone = f.timeZone
-            let count = timeframe == "7d" ? 6 : 29
-            return d >= (cal.date(byAdding: .day, value: -count, to: today) ?? today) && d <= today
-        case "season": return b.game_date >= "2026-03-01"
-        default: return true
-        }
-    }
-
     private var scopedBets: [UserBet] {
-        bets.filter { b in
-            inTimeframe(b) && matchesBookFilters(b)
+        let dateWindow = BookTimeframe.window(timeframe)
+        return bets.filter { b in
+            (dateWindow?.contains(b.game_date) ?? true) && matchesBookFilters(b)
         }
     }
     private var scopedWithGary: [UserBet] { scopedBets.filter { $0.isVerified } }
@@ -1689,8 +1740,7 @@ struct PropTailFadeRow: View {
         String((prop.prop ?? "").split(separator: " ").first ?? "").lowercased()
     }
     private var locked: Bool {
-        guard let d = userBookInstant(prop.commence_time) else { return true }
-        return Date() >= d
+        BookTicketTime.isLocked(prop.commence_time)
     }
 
     var body: some View {
@@ -1699,6 +1749,10 @@ struct PropTailFadeRow: View {
             // the buttons speak for themselves and the block moves up.
             if let bet = mine {
                 placedChip(bet)
+            } else if !BookPropEligibility.canVerify(prop) {
+                Text("Long-shot picks can be logged privately in Your Book. They don't enter verified rankings or streaks.")
+                    .font(GaryFonts.text(11)).foregroundStyle(.white.opacity(0.55))
+                    .fixedSize(horizontal: false, vertical: true)
             } else if locked {
                 EmptyView()
             } else if let side = arming {
@@ -1732,9 +1786,7 @@ struct PropTailFadeRow: View {
         guard let owner = auth.currentUser?.id, auth.isAuthenticated else { mine = nil; return }
         let all = await UserBookAPI.fetchMyBets()
         guard owner == auth.currentUser?.id, request == receiptRequest, !Task.isCancelled else { return }
-        let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone(identifier: "America/New_York")
-        let day = userBookInstant(prop.commence_time).map { formatter.string(from: $0) } ?? SupabaseAPI.todayEST()
+        guard let day = BookTicketTime.gameDate(prop.commence_time) else { mine = nil; return }
         if let all {
             let line = Double(prop.line ?? "") ?? Double(prop.prop?.split(separator: " ").last.map(String.init) ?? "")
             mine = all.first { bet in
@@ -1881,14 +1933,14 @@ struct PropTailFadeRow: View {
 
     private func place(_ side: String) {
         guard let player = prop.player, !player.isEmpty, !propToken.isEmpty else { return }
-        let dateStr: String = {
-            guard let ct = prop.commence_time, let d = ISO8601DateFormatter().date(from: ct) else {
-                return SupabaseAPI.todayEST()
-            }
-            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
-            f.timeZone = TimeZone(identifier: "America/New_York")
-            return f.string(from: d)
-        }()
+        guard BookPropEligibility.canVerify(prop) else {
+            errorText = "Log this pick privately in Your Book. It isn't eligible for verified rankings."
+            return
+        }
+        guard !locked, let dateStr = BookTicketTime.gameDate(prop.commence_time) else {
+            errorText = "This pick is locked or its start time is unavailable."
+            return
+        }
         busy = true
         Task {
             defer { busy = false }
@@ -1968,6 +2020,7 @@ struct UserBetSlipRow: View {
 struct QuickLogSheet: View {
     var onLogged: (UserBet) -> Void
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var auth = AuthManager.shared
 
     private struct DirectoryEntry: Identifiable {
         let id: String
@@ -1979,7 +2032,8 @@ struct QuickLogSheet: View {
         let player: String?      // prop lane identity
         let propToken: String?
         let pickId: String?
-        let locked: Bool
+        let commenceTime: String?
+        var locked: Bool { BookTicketTime.isLocked(commenceTime) }
         /// Already on their book — the row shows the receipt instead of an
         /// arm button, so the directory can never double-book a play.
         var booked: String? = nil
@@ -1989,6 +2043,8 @@ struct QuickLogSheet: View {
     }
 
     @State private var entries: [DirectoryEntry] = []
+    @State private var boardSnapshot = BookDirectorySnapshot<GaryPick, PropPick>()
+    @State private var boardRequest = UUID()
     @State private var loadingBoard = true
     @State private var search = ""
     @State private var armedId: String? = nil
@@ -2021,12 +2077,17 @@ struct QuickLogSheet: View {
                 searchField
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
+                        if let message = boardSnapshot.errorMessage {
+                            ProfileNotice(title: "Board couldn't refresh", message: message,
+                                          retry: loadingBoard ? nil : { Task { await loadBoard() } })
+                                .padding(.bottom, 12)
+                        }
                         if loadingBoard {
                             ProgressView().tint(.white.opacity(0.4))
                                 .frame(maxWidth: .infinity).padding(.vertical, 40)
-                        } else if filtered.isEmpty {
+                        } else if filtered.isEmpty && boardSnapshot.errorMessage == nil {
                             Text(entries.isEmpty
-                                 ? "Tonight's board hasn't posted yet. You can still log an outside bet below."
+                                 ? "No verified picks are available in this board. You can still log an outside bet below."
                                  : "Nothing on tonight's board matches that.")
                                 .font(GaryFonts.text(12.5))
                                 .foregroundStyle(.white.opacity(0.5))
@@ -2047,7 +2108,11 @@ struct QuickLogSheet: View {
             }
             .padding(.horizontal, 18)
         }
-        .task { stakeText = String(format: "%.2f", BookMoney.unitDollars); await loadBoard() }
+        .task(id: auth.currentUser?.id) {
+            entries = []; armedId = nil; errorText = nil
+            stakeText = String(format: "%.2f", BookMoney.unitDollars)
+            await loadBoard()
+        }
     }
 
     private var header: some View {
@@ -2334,54 +2399,50 @@ struct QuickLogSheet: View {
     // ── Data + booking ──────────────────────────────────────────────────────
 
     private func loadBoard() async {
+        let request = UUID(); boardRequest = request
+        let owner = auth.currentUser?.id
+        loadingBoard = true
         let today = SupabaseAPI.todayEST()
         async let gameLoad = try? SupabaseAPI.fetchDailyPicks(date: today)
-        async let propLoad = try? SupabaseAPI.fetchPropPicks(date: today)
-        let games = (await gameLoad) ?? []
-        let props = (await propLoad) ?? []
+        async let propLoad = try? SupabaseAPI.fetchPropPicks(date: today, forceRefresh: true)
+        let (games, props) = await (gameLoad, propLoad)
+        guard boardRequest == request, owner == auth.currentUser?.id, !Task.isCancelled else { return }
+        boardSnapshot.apply(date: today, games: games, props: props)
 
-        func etDate(_ iso: String?) -> String {
-            guard let iso, let d = ISO8601DateFormatter().date(from: iso) else { return today }
-            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
-            f.timeZone = TimeZone(identifier: "America/New_York")
-            return f.string(from: d)
-        }
         func etClock(_ iso: String?) -> String? {
-            guard let iso, let d = ISO8601DateFormatter().date(from: iso) else { return nil }
+            guard let d = userBookInstant(iso) else { return nil }
             let f = DateFormatter(); f.dateFormat = "h:mm a"
+            f.locale = Locale(identifier: "en_US_POSIX")
             f.timeZone = TimeZone(identifier: "America/New_York")
             return f.string(from: d)
-        }
-        func isLocked(_ iso: String?) -> Bool {
-            guard let iso, let d = ISO8601DateFormatter().date(from: iso) else { return false }
-            return Date() >= d
         }
 
         var rows: [DirectoryEntry] = []
-        for p in games {
+        for p in boardSnapshot.games {
             guard let text = p.pick, !text.isEmpty else { continue }
             var subBits = [(p.league ?? "").uppercased()]
             if let away = p.awayTeam, let home = p.homeTeam, !away.isEmpty, !home.isEmpty {
                 subBits.append("\(away) @ \(home)")
             }
-            if let c = etClock(p.commence_time) { subBits.append(c) }
+            subBits.append(etClock(p.commence_time) ?? "Start time unavailable")
             rows.append(DirectoryEntry(
                 id: "game-\(p.game_id.map(String.init) ?? text)",
                 title: text,
                 subtitle: subBits.filter { !$0.isEmpty }.joined(separator: " · "),
                 isProp: false,
-                gameDate: etDate(p.commence_time),
+                gameDate: BookTicketTime.gameDate(p.commence_time) ?? "",
                 pickText: text,
                 player: nil, propToken: nil,
                 pickId: p.pick_id,
-                locked: isLocked(p.commence_time), gameID: p.game_id.map(String.init)))
+                commenceTime: p.commence_time, gameID: p.game_id.map(String.init)))
         }
-        for p in props {
+        for p in boardSnapshot.props {
+            guard BookPropEligibility.canVerify(p) else { continue }
             guard let player = p.player, let propText = p.prop, !propText.isEmpty else { continue }
             let betWord = (p.bet ?? "over").uppercased()
             var subBits = [(p.league ?? p.sport ?? "").uppercased()]
             if let m = p.matchup { subBits.append(m) }
-            if let c = etClock(p.commence_time) { subBits.append(c) }
+            subBits.append(etClock(p.commence_time) ?? "Start time unavailable")
             rows.append(DirectoryEntry(
                 id: "prop-\(player)-\(propText)-\(p.game_id.map(String.init) ?? "")",
                 // The app's own prop grammar ("pitcher_earned_runs 2.5" reads
@@ -2390,17 +2451,18 @@ struct QuickLogSheet: View {
                 title: "\(player) \(betWord) \(Formatters.propDisplay(propText, league: p.effectiveLeague))",
                 subtitle: subBits.filter { !$0.isEmpty }.joined(separator: " · "),
                 isProp: true,
-                gameDate: etDate(p.commence_time),
+                gameDate: BookTicketTime.gameDate(p.commence_time) ?? "",
                 pickText: propText,
                 player: player,
                 propToken: String(propText.split(separator: " ").first ?? "").lowercased(),
                 pickId: nil,
-                locked: isLocked(p.commence_time), gameID: p.game_id.map(String.init),
+                commenceTime: p.commence_time, gameID: p.game_id.map(String.init),
                 line: Double(p.line ?? "") ?? Double(p.prop?.split(separator: " ").last.map(String.init) ?? ""), propSide: p.bet))
         }
         // What's already on their book — a bet you hold shows its receipt
         // instead of an arm button, so the directory can't double-book it.
         let mine = AuthManager.shared.bearerToken == nil ? [] : (await UserBookAPI.fetchMyBets() ?? [])
+        guard boardRequest == request, owner == auth.currentUser?.id, !Task.isCancelled else { return }
         rows = rows.map { entry in
             var e = entry
             let matches = mine.filter { bet in
@@ -2432,11 +2494,15 @@ struct QuickLogSheet: View {
                 ? (a.isProp == b.isProp ? a.title < b.title : !a.isProp)
                 : rank(a) < rank(b)
         }
-        if !sorted.isEmpty || entries.isEmpty { entries = sorted }
+        entries = sorted
         loadingBoard = false
     }
 
     private func place(_ entry: DirectoryEntry) {
+        guard !entry.locked, !entry.gameDate.isEmpty else {
+            errorText = "This pick is locked or its start time is unavailable."
+            return
+        }
         busy = true
         errorText = nil
         Task {

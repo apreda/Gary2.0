@@ -11,13 +11,37 @@ import StoreKit
 
 // MARK: - Plans / Pricing sheet (the paywall)
 //
-// A two-state conversion paywall, not a flat price list. State 1 (the default)
-// sells: hero → benefits → a LIVE graded-results receipt → featured plans
-// (All-Access pre-selected) → an "all plans"
-// link. State 2 is the full menu (single sports, bundles, the free tier). One
-// dominant gold CTA at the bottom follows the current selection and discloses
-// the Stripe/Safari hand-off; everything else is quiet. Checkout still rides
-// the same callbacks the storefront uses (onSelect / onBundle / onAccount).
+// A single pricing page with account-owned access. The selected plan supplies
+// both billing disclosures; no monthly fallback can describe an annual pass.
+
+// MARK: - Selected plan billing copy
+
+enum WinnersPlanDisclosure {
+    enum Plan { case monthly, annual, sports([String]) }
+
+    static let coverage = "Game picks and props across supported sports"
+
+    static func billing(for plan: Plan) -> String {
+        switch plan {
+        case .monthly:
+            return "All-Access: \(GaryPricing.allAccessMonthly) billed monthly. New subscribers get a \(GaryPricing.trialPhrase), then renew at that price. A card is required. Returning subscribers pay the regular price. Cancel anytime."
+        case .annual:
+            return "All-Access annual: \(GaryPricing.allAccessAnnual) billed yearly (about \(GaryPricing.allAccessAnnualMonthly)/mo). New subscribers get a \(GaryPricing.trialPhrase), then renew at that yearly price. A card is required. Returning subscribers pay the regular price. Cancel anytime."
+        case .sports(let sports):
+            let selected = Array(Set(sports)).sorted()
+            let price: String
+            switch selected.count {
+            case 1: price = GaryPricing.single
+            case 2: price = GaryPricing.twoSport
+            case 3: price = GaryPricing.threeSport
+            default: return "Choose one to three sports, or All-Access. Billing details appear with your selection."
+            }
+            return "\(selected.joined(separator: " · ")): \(price) billed monthly. No free trial. Cancel anytime."
+        }
+    }
+}
+
+// MARK: - Plans page
 struct PlansSheetView: View {
     let focus: String?               // league context from a blurred-board tap
     let signedIn: Bool
@@ -261,11 +285,11 @@ struct PlansSheetView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HubSectionHeader(eyebrow: "All-Access", sub: "")
                 planCard(selected: selection == .allAccess,
-                         ribbon: "Best value · " + GaryPricing.trialDaysFree, ribbonTeal: false,
+                         ribbon: "New subscribers · " + GaryPricing.trialDaysFree, ribbonTeal: false,
                          title: "ALL-ACCESS",
-                         sub: "All 7 Winners boards · ~$4 a board",
+                         sub: WinnersPlanDisclosure.coverage,
                          price: GaryPricing.allAccessMonthly, per: "PER MONTH",
-                         a11y: "All-Access. \(GaryPricing.allAccessMonthly) a month. All seven boards. \(GaryPricing.trialDaysFree)." + (selection == .allAccess ? " Selected." : "")) {
+                         a11y: "\(WinnersPlanDisclosure.coverage). \(WinnersPlanDisclosure.billing(for: .monthly))" + (selection == .allAccess ? " Selected." : "")) {
                     select(.allAccess)
                 }
                 .padding(.horizontal, 16)
@@ -275,7 +299,7 @@ struct PlansSheetView: View {
                              title: "ALL-ACCESS — ANNUAL",
                              sub: "Every board, all year · works out to \(GaryPricing.allAccessAnnualMonthly)/mo",
                              price: GaryPricing.allAccessAnnual, per: "PER YEAR",
-                             a11y: "All-Access annual. \(GaryPricing.allAccessAnnual) a year — about \(GaryPricing.allAccessAnnualMonthly) a month. \(GaryPricing.trialDaysFree)." + (selection == .allAccessAnnual ? " Selected." : "")) {
+                             a11y: WinnersPlanDisclosure.billing(for: .annual) + (selection == .allAccessAnnual ? " Selected." : "")) {
                         select(.allAccessAnnual)
                     }
                     .padding(.horizontal, 16)
@@ -300,9 +324,7 @@ struct PlansSheetView: View {
         }
     }
 
-    /// The bundle sits between $9.99 single and $34.99 All-Access as the smart
-    /// middle. Picking 2–3 chips makes the bundle the active selection so the
-    /// one CTA carries it; dropping below two reverts to All-Access.
+    /// The public slate and Hub remain free regardless of the selected plan.
     private var includedFreeSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HubSectionHeader(eyebrow: "Free, always", sub: "")
@@ -345,7 +367,7 @@ struct PlansSheetView: View {
     }
 
     private var legalFooter: some View {
-        Text("Plans bill through Stripe and cancel anytime. The \(GaryPricing.trialPhrase) requires a card and converts to \(GaryPricing.allAccessMonthly)/mo unless cancelled. An account keeps your boards across devices.")
+        Text("\(selectedBillingDisclosure) Plans bill through Stripe. An account keeps your boards across devices. No purchase is needed for access already included in your account.")
             .font(GaryFonts.text(10))
             .foregroundStyle(.white.opacity(0.62))
             .fixedSize(horizontal: false, vertical: true)
@@ -431,26 +453,19 @@ struct PlansSheetView: View {
         }
     }
 
+    private var selectedBillingDisclosure: String {
+        switch selection {
+        case .allAccess: return WinnersPlanDisclosure.billing(for: .monthly)
+        case .allAccessAnnual: return WinnersPlanDisclosure.billing(for: .annual)
+        case .sports: return WinnersPlanDisclosure.billing(for: .sports(Array(pickedSports)))
+        }
+    }
+
     private var ctaCaption: String {
         let tail = signedIn ? "Opens secure Stripe checkout."
                             : "You'll sign in first, then secure checkout opens."
-        switch selection {
-        case .allAccess:
-            return "New subscribers: \(GaryPricing.trialDaysFree), then \(GaryPricing.allAccessMonthly)/mo. Returning subscribers pay the regular price. Cancel anytime. \(tail)"
-        case .allAccessAnnual:
-            return "New subscribers: \(GaryPricing.trialDaysFree), then \(GaryPricing.allAccessAnnual)/yr — \(GaryPricing.allAccessAnnualMonthly)/mo. Returning subscribers pay the regular price. Cancel anytime. \(tail)"
-        case .sports:
-            if capHint {
-                return "Three is the max — All-Access covers all 7 boards for \(GaryPricing.allAccessMonthly)/mo."
-            }
-            switch pickedSports.count {
-            case 0:  return "Tap a sport. A second or third bundles automatically."
-            case 1:  return "Every \(pickedSports.first!) play Gary backs. \(GaryPricing.single)/mo, cancel anytime. \(tail)"
-            default:
-                let p = pickedSports.count == 3 ? GaryPricing.threeSport : GaryPricing.twoSport
-                return "\(pickedSports.sorted().joined(separator: " · ")) — \(p)/mo. Cancel anytime. \(tail)"
-            }
-        }
+        let hint = capHint ? "Three sports maximum. Choose All-Access to include every supported sport. " : ""
+        return "\(hint)\(selectedBillingDisclosure) \(tail)"
     }
 
     private func primaryAction() {
@@ -490,7 +505,7 @@ struct PlansSheetView: View {
                 pickedSports.insert(lg)
                 capHint = false
             } else {
-                // A 4th board costs more than all 7 — say so instead of adding.
+                // Keep the three-sport selection and explain how to include all sports.
                 capHint = true
             }
             selection = pickedSports.isEmpty ? .allAccess : .sports

@@ -6,6 +6,7 @@ import AuthenticationServices
 struct AuthView: View {
     @ObservedObject var authManager = AuthManager.shared
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @State private var isSignUp: Bool
     @State private var email = ""
 
@@ -17,10 +18,13 @@ struct AuthView: View {
     @State private var password = ""
     @State private var confirmPassword = ""
     @State private var isSubmitting = false
-    @State private var showForgotPassword = false
-    @State private var resetEmail = ""
-    @State private var resetSent = false
+    @State private var recoveryBrowserFailed = false
     @State private var animateIn = false
+
+    // Start recovery in the user's browser so the email callback has the
+    // same PKCE verifier/cookie as the reset request. No email or token is
+    // passed through this link, and native sign-in remains on screen.
+    private static let recoveryURL = URL(string: "https://www.betwithgary.ai/account/reset")!
 
     var body: some View {
         ZStack {
@@ -228,14 +232,34 @@ struct AuthView: View {
 
                     // Forgot Password (sign-in only)
                     if !isSignUp {
-                        Button {
-                            resetEmail = email
-                            showForgotPassword = true
-                        } label: {
-                            Text("Forgot Password?")
-                                .font(GaryFonts.text(12.5))
-                                .foregroundStyle(GaryColors.lightGold)
+                        VStack(spacing: 10) {
+                            Button {
+                                recoveryBrowserFailed = false
+                                openURL(Self.recoveryURL) { accepted in
+                                    recoveryBrowserFailed = !accepted
+                                }
+                            } label: {
+                                Label("Forgot Password?", systemImage: "arrow.up.right")
+                                    .font(GaryFonts.text(12.5))
+                                    .foregroundStyle(GaryColors.lightGold)
+                                    .padding(.vertical, 8)
+                            }
+                            .accessibilityHint("Opens Gary's password reset page in your browser")
+                            Text("Reset on Gary's website, then return here to sign in. Open the email link in the same browser on this device.")
+                                .font(GaryFonts.text(12))
+                                .foregroundStyle(.white.opacity(0.6))
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                            if recoveryBrowserFailed {
+                                Text("Your browser couldn't open. Visit betwithgary.ai/account/reset to reset your password.")
+                                    .font(GaryFonts.text(12.5))
+                                    .foregroundStyle(GaryColors.loss)
+                                    .multilineTextAlignment(.center)
+                                    .textSelection(.enabled)
+                                    .accessibilityAddTraits(.updatesFrequently)
+                            }
                         }
+                        .padding(.horizontal, 24)
                     }
 
                     Spacer(minLength: 40)
@@ -258,14 +282,6 @@ struct AuthView: View {
         // change, no onChange, the sheet sat there looking dead.
         .onAppear {
             if authManager.isAuthenticated { dismiss() }
-        }
-        .sheet(isPresented: $showForgotPassword) {
-            ForgotPasswordSheet(
-                email: $resetEmail,
-                resetSent: $resetSent,
-                isPresented: $showForgotPassword,
-                authManager: authManager
-            )
         }
     }
 
@@ -529,99 +545,6 @@ struct SocialSignInButton: View {
                     )
             )
         }
-    }
-}
-
-// MARK: - Forgot Password Sheet
-
-struct ForgotPasswordSheet: View {
-    @Binding var email: String
-    @Binding var resetSent: Bool
-    @Binding var isPresented: Bool
-    @ObservedObject var authManager: AuthManager
-    @State private var isSending = false
-
-    var body: some View {
-        ZStack {
-            LiquidGlassBackground(accentColor: GaryColors.gold)
-
-            VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("ACCOUNT")
-                        .font(GaryFonts.mono(10, bold: true)).tracking(1)
-                        .foregroundStyle(GaryColors.gold.opacity(0.9))
-                    Text("Reset Password")
-                        .font(GaryFonts.display(28))
-                        .foregroundStyle(.white)
-                }
-
-                if resetSent {
-                    VStack(spacing: 12) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 48))
-                            .foregroundStyle(GaryColors.gold)
-
-                        Text("Check your email")
-                            .font(GaryFonts.text(17, .semibold))
-                            .foregroundStyle(.white)
-
-                        Text("We sent a password reset link to \(email)")
-                            .font(GaryFonts.text(14))
-                            .foregroundStyle(.white.opacity(0.55))
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 24)
-                } else {
-                    Text("Enter your email and we'll send you a link to reset your password.")
-                        .font(GaryFonts.text(14))
-                        .foregroundStyle(.white.opacity(0.55))
-
-                    AuthTextField(
-                        icon: "envelope.fill",
-                        placeholder: "Email",
-                        text: $email,
-                        keyboardType: .emailAddress,
-                        textContentType: .emailAddress
-                    )
-                }
-
-                Button {
-                    if resetSent {
-                        isPresented = false
-                    } else {
-                        Task {
-                            isSending = true
-                            defer { isSending = false }
-                            do {
-                                try await authManager.resetPassword(email: email)
-                                withAnimation { resetSent = true }
-                            } catch {
-                                // Error handled by AuthManager
-                            }
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 10) {
-                        if isSending {
-                            ProgressView().tint(.black)
-                        } else {
-                            Text(resetSent ? "DONE" : "SEND RESET LINK")
-                                .font(GaryFonts.mono(14, bold: true)).tracking(1)
-                        }
-                    }
-                    .foregroundStyle(.black.opacity(0.85))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(Capsule().fill(GaryColors.gold))
-                }
-                .buttonStyle(.plain)
-                .disabled(isSending || (!resetSent && !email.contains("@")))
-            }
-            .padding(24)
-        }
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.visible)
     }
 }
 

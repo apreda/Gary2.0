@@ -75,7 +75,7 @@ struct AccessView: View {
                     Button {
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                         hasEntered = true
-                        selectedTab = 0
+                        selectedTab = 3
                         }
                     } label: {
                         Text("ACCESS PICKS")
@@ -90,10 +90,10 @@ struct AccessView: View {
                     Button {
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                         hasEntered = true
-                        selectedTab = 1
+                        selectedTab = 0
                         }
                     } label: {
-                        Text("See Today's Picks")
+                        Text("Explore Gary")
                             .font(GaryFonts.text(14, .semibold))
                             .foregroundStyle(GaryColors.gold)
                             .padding(.vertical, 12)

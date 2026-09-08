@@ -344,24 +344,27 @@ struct GaryIntroSheet: View {
     let onDone: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
+        ScrollView {
+          VStack(alignment: .leading, spacing: 22) {
             Text("HOW GARY WORKS")
                 .font(GaryFonts.mono(10, bold: true)).tracking(1)
                 .foregroundStyle(GaryColors.gold.opacity(0.9))
                 .padding(.top, 28)
 
             introRow(icon: "magnifyingglass",
-                     title: "The research comes first",
-                     text: "Before every pick, Gary's research assistant digs through stats, injuries, form, and matchups for each game on the slate.")
+                     title: "See the pick and the reasoning",
+                     text: "Open Picks to find a game, see Gary's AI prediction, and read what supports it — including the reasons it could miss.")
             introRow(icon: "clock",
-                     title: "Picks drop near game time",
-                     text: "Each game's pick lands about 90 minutes before first pitch or tip-off, once lineups are confirmed. The board fills in as the day goes on.")
+                     title: "The board builds through the day",
+                     text: "Picks publish before games start as analysis becomes available. Check the game's date and start time; an empty board means there isn't a published pick yet.")
             introRow(icon: "checkmark.seal",
-                     title: "Everything gets graded",
-                     text: "Results are stamped on every pick and every Hub edge the next morning — wins, losses, and the track record, all visible.")
-
-            Spacer()
-
+                     title: "Follow the full record",
+                     text: "Published game picks and props keep their original reasoning and results. Some results stay pending while final stats are checked. Predictions are never a guarantee.")
+          }
+          .padding(.horizontal, 24)
+          .padding(.bottom, 24)
+        }
+        .safeAreaInset(edge: .bottom) {
             Button(action: onDone) {
                 Text("GOT IT")
                     .font(GaryFonts.mono(13, bold: true)).tracking(1)
@@ -370,9 +373,11 @@ struct GaryIntroSheet: View {
                     .background(Capsule().fill(GaryColors.gold))
             }
             .buttonStyle(.plain)
+            .padding(.horizontal, 24)
             .padding(.bottom, 18)
+            .padding(.top, 12)
+            .background(GaryColors.darkBg)
         }
-        .padding(.horizontal, 24)
         .background(GaryColors.darkBg.ignoresSafeArea())
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
