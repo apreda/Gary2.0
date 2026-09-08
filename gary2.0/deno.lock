@@ -40,7 +40,7 @@
       "dependencies": [
         "npm:@balldontlie/sdk@^1.2.2",
         "npm:@eslint/js@^9.39.5",
-        "npm:@supabase/supabase-js@^2.112.4",
+        "npm:@supabase/supabase-js@^2.115.0",
         "npm:axios@^1.20.0",
         "npm:dotenv@^16.6.1",
         "npm:eslint@^9.39.5",
