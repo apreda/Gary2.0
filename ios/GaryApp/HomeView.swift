@@ -2490,12 +2490,18 @@ struct HomeView: View {
         }()
 
         if !rows.isEmpty || !youRows.isEmpty {
-            // The countdown/marquee-to-board boundary is neutral chrome. A
-            // green rule read like a graded win and changed color mid-slate.
-            HomeSectionRule(tint: GaryColors.warmWhite)
             homeSheetPanel(selected == .you ? youRows : rows.filter { $0.league == selected.rawValue },
                            selected: selected,
                            available: available)
+                // Center the neutral divider in the existing 18pt section gap.
+                // A separate rule row added another gap plus its own top padding.
+                .overlay(alignment: .top) {
+                    Rectangle().fill(GaryColors.warmWhite.opacity(0.25)).frame(height: 1)
+                        .pageGutter()
+                        .offset(y: -9)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
         }
     }
 

@@ -54,3 +54,20 @@ Evidence: `/Users/adam.preda/Documents/ChatGPT/Gary/headline-score-fix-2026-09-0
 The native change still requires a newly built app; a data repair alone cannot
 change an installed binary's numeric parser. This task does not claim an
 App Store or TestFlight upload. Preserve the separate release owner's lane.
+
+## Follow-up: balanced Home spacing
+
+Adam approved tightening the gap below the featured matchup card after comparing
+it with the gap above. `homeSheet` now draws its neutral divider as an overlay
+within the existing 18pt page gap. Previously the standalone rule contributed
+another 18pt gap plus its 7pt padded height, leaving 43pt below the matchup.
+Both card-to-card gaps are now 18pt; the divider, board and league actions stay.
+The decorative divider ignores input and is hidden from accessibility.
+
+Swift parsing and diff checks pass; the two existing Home rendering/football
+wiring suites pass 55 tests. No new simulator build or screenshot is claimed for
+this spacing-only follow-up; the earlier 917 image predates it. Include the
+updated `HomeView.swift` in the next native candidate. The production audit
+again confirms worker paths and all 21 deployed edge timestamps, with a global
+warning for shared uncommitted work and the preserved Google config exception.
+Audit receipt: `home-spacing-2026-09-08/production-truth.log` in the workspace.
