@@ -102,6 +102,22 @@ advance, while `generated_at` remains the original generation time and each
 source observation retains its own time. Validity is at most six hours after
 the successful context check and always ends by first pitch/kickoff.
 
+For non-MLB availability-sensitive observations (injury/practice reports,
+roster quarterback assignments and beneficiaries), validity also ends six
+hours after the original successful collector read. The generator records
+`source_collected_at` at that actual collector boundary. Stored-row replay
+uses that original timestamp or immutable row creation time, never generic
+metadata update time or its new schedule-check time. Missing/future/expired
+observation clocks make context incomplete and withdraw the current take;
+they cannot renew it or generate another claim from the same stale report.
+The original argument and factual row remain preserved. Derived eligibility
+descriptors and collection clocks do not constitute changed evidence.
+
+MLB matchup-history evidence must carry verified `meta.season_type: regular`.
+Legacy rows without that provenance are not reinterpreted as regular-season
+results; those older rows may include spring training and cannot support
+new judgments until an actual scoped collector read replaces them.
+
 Changed/failed context or a re-anchored take returns an explicit invalidation
 with status `context_changed`, `context_unavailable` or `superseded`.
 It preserves the earlier case/evidence for historical inspection but sets
@@ -125,7 +141,13 @@ concurrent lineup requests; statistics use bounded exact-player chunks and
 the existing paginated provider adapter. Oversized/incomplete evidence is
 not silently truncated into a confident take.
 
-Synthesis returns `{rows,failures,skipped,invalidations}`. The generator
+Synthesis returns `{rows,failures,skipped,invalidations,diagnostics}`. Each
+identifiable game is validated independently, so a bad sibling cannot
+discard an accepted case. One repair covers only the failed games;
+intentional omissions in valid JSON count as abstention. Malformed root
+JSON never counts as abstention. Diagnostics record game IDs, elapsed time
+and exact validation failures before repair, including errors if the repair
+subsequently times out. The generator
 returns normal `connections`, plus `judgmentUpdates`,
 `judgmentInvalidations` and `judgmentFailures` outside display caps.
 Ready anchors are retained ahead of ordinary category/floor filtering.

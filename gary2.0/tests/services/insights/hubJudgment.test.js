@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { buildHubJudgmentPackets, buildHubJudgmentPrompt, hubJudgmentSourceKey,
-  synthesizeHubJudgments, validateHubJudgments } from '../../../src/services/insights/hubJudgment.js';
+  synthesizeHubJudgments, validateHubJudgments, validateHubJudgmentBatch, hubJudgmentFingerprint } from '../../../src/services/insights/hubJudgment.js';
 
 const asOf = '2026-09-08T16:00:00.000Z';
 const game = { id: 10, date: '2026-09-08T23:00:00Z', status: 'Scheduled',
@@ -96,6 +96,16 @@ describe('Hub connected evidence packets', () => {
     expect(evidence.as_of).toBe('2026-09-08T11:00:00.000Z');
     expect(JSON.stringify(evidence)).not.toContain('unsupported');
   });
+  it('admits only verified regular-season MLB matchup history and ignores derived eligibility when hashing evidence', () => {
+    const args = fixture(); args.rows.push({ ...args.rows[0], category: 'head_to_head', meta: {} });
+    expect(buildHubJudgmentPackets(args)[0].source_indices).toEqual([0, 1, 2]);
+    args.rows[3].meta.season_type = 'regular';
+    const packet = buildHubJudgmentPackets(args)[0];
+    expect(packet.source_indices).toEqual([0, 1, 2, 3]);
+    const fingerprint = packet.input_fingerprint;
+    packet.evidence.forEach(entry => { delete entry.primary_eligible; });
+    expect(hubJudgmentFingerprint(packet)).toBe(fingerprint);
+  });
 });
 
 describe('Hub structured judgment validation', () => {
@@ -160,6 +170,38 @@ describe('Hub prepared display measurements', () => {
 });
 
 describe('Hub generation, reuse and safe invalidation', () => {
+  it('bounds non-MLB availability judgments to the immutable observation clock in generation and schedule-only reuse', async () => {
+    const args = fixture(); args.league = 'NFL'; args.rows[0].category = 'injury';
+    args.rows[0].id = 'stored-injury'; args.rows[0].created_at = '2026-09-08T13:00:00Z';
+    let packet = buildHubJudgmentPackets(args)[0];
+    const first = await synthesizeHubJudgments(args, { ...options, generateText: async () => response(packet) });
+    expect(first.rows[0].meta.judgment.valid_until).toBe('2026-09-08T19:00:00.000Z');
+    args.previousRows = first.rows; args.asOf = '2026-09-08T17:00:00Z';
+    args.rows[0].updated_at = args.rows[0].meta.updated_at = args.asOf;
+    const model = vi.fn(async () => response(buildHubJudgmentPackets(args)[0]));
+    const later = await synthesizeHubJudgments(args, { now: () => args.asOf, generateText: model });
+    expect(model).not.toHaveBeenCalled();
+    expect(later.rows[0].meta.judgment.valid_until).toBe('2026-09-08T19:00:00.000Z');
+    packet = buildHubJudgmentPackets(args)[0];
+    expect(() => validateHubJudgments(response(packet), [packet], { now: '2026-09-08T19:00:01Z' })).toThrow('expired');
+    args.previousRows = later.rows; args.asOf = '2026-09-08T19:00:00Z'; model.mockClear();
+    const expired = await synthesizeHubJudgments(args, { now: () => args.asOf, generateText: model });
+    expect(model).not.toHaveBeenCalled(); expect(expired.rows[0].meta.judgment).toBeUndefined();
+    expect(expired.invalidations[0].status).toBe('context_unavailable');
+    expect(expired.invalidations[0].full_case).toBe(first.rows[0].meta.judgment.full_case);
+    expect(buildHubJudgmentPackets(args)[0].limitations.join(' ')).toContain('Fresh availability context is missing');
+  });
+  it('requires a known availability observation clock; only a real new collector timestamp can extend that deadline', () => {
+    const args = fixture(); args.league = 'NCAAF'; args.rows[0].category = 'quarterback';
+    expect(buildHubJudgmentPackets(args)[0].context_complete).toBe(false);
+    args.rows[0].meta.source_collected_at = '2026-09-08T13:00:00Z';
+    const before = buildHubJudgmentPackets(args)[0];
+    expect(before.source_valid_until).toBe('2026-09-08T19:00:00.000Z');
+    args.rows[0].meta.source_collected_at = '2026-09-08T15:00:00Z';
+    const after = buildHubJudgmentPackets(args)[0];
+    expect(after.source_valid_until).toBe('2026-09-08T21:00:00.000Z');
+    expect(after.input_fingerprint).toBe(before.input_fingerprint);
+  });
   async function prior() {
     const args = fixture(), packets = buildHubJudgmentPackets(args);
     return synthesizeHubJudgments(args, { ...options, generateText: async () => response(packets[0]) });
@@ -234,5 +276,47 @@ describe('Hub generation, reuse and safe invalidation', () => {
     const hung = vi.fn(async () => new Promise(() => {}));
     const result = await synthesizeHubJudgments(args, { ...options, generateText: hung, budgetMs: 15 });
     expect(result.failures[0].message).toContain('deadline'); expect(hung).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Hub partial batch acceptance', () => {
+  function twoGames() {
+    const args = fixture();
+    args.games.push({ ...game, id: 11 });
+    args.rows.push(...args.rows.map(row => ({ ...row, game_id: 11 })));
+    const context = JSON.parse(JSON.stringify(args.contextByGame.get('10')));
+    context.evidence[0].game_id = '11'; context.evidence[0].source_key = 'current_context|11||';
+    args.contextByGame.set('11', context);
+    return args;
+  }
+  const combined = (...values) => JSON.stringify({ judgments: values.flatMap(value => JSON.parse(value).judgments) });
+  it('retains a valid sibling and repairs only the failed game with its exact validation reason', async () => {
+    const args = twoGames(), packets = buildHubJudgmentPackets(args);
+    const model = vi.fn().mockResolvedValueOnce(combined(response(packets[0]), response(packets[1], { explanation: 'An invented 99.99% claim.' })))
+      .mockResolvedValueOnce(response(packets[1]));
+    const result = await synthesizeHubJudgments(args, { ...options, generateText: model });
+    expect(result.rows.filter(row => row.meta.judgment)).toHaveLength(2);
+    expect(result.failures).toEqual([]);
+    expect(result.diagnostics[0]).toMatchObject({ accepted: 1, validation_errors: [{ game_id: '11', message: expect.stringContaining('uncited numbers') }] });
+    expect(model.mock.calls[1][0]).toContain('99.99');
+    expect(model.mock.calls[1][0]).not.toContain('"game_id":"10"');
+  });
+  it('keeps accepted games when the repair transport hits the deadline', async () => {
+    const args = twoGames(), packets = buildHubJudgmentPackets(args);
+    const model = vi.fn().mockResolvedValueOnce(combined(response(packets[0]), response(packets[1], { explanation: 'An invented 99.99% claim.' })))
+      .mockImplementationOnce(async () => new Promise(() => {}));
+    const result = await synthesizeHubJudgments(args, { ...options, generateText: model, budgetMs: 15 });
+    expect(result.rows.filter(row => row.meta.judgment).map(row => row.meta.judgment.game_id)).toEqual(['10']);
+    expect(result.failures).toEqual([{ game_id: '11', message: expect.stringContaining('deadline') }]);
+  });
+  it('treats valid omissions as abstention, duplicates as game-specific failures, and malformed roots as failures', async () => {
+    const args = twoGames(), packets = buildHubJudgmentPackets(args), model = vi.fn(async () => response(packets[0]));
+    const result = await synthesizeHubJudgments(args, { ...options, generateText: model });
+    expect(model).toHaveBeenCalledTimes(1); expect(result.skipped).toContainEqual({ game_id: '11', reason: 'no_useful_judgment' });
+    const duplicate = validateHubJudgmentBatch(combined(response(packets[0]), response(packets[0]), response(packets[1])), packets, { now: asOf });
+    expect(duplicate.accepted.map(item => item.judgment.game_id)).toEqual(['11']);
+    expect(duplicate.failed).toEqual([{ game_id: '10', message: 'Repeated Hub game argument' }]);
+    expect(() => validateHubJudgmentBatch('{"judgments":null}', packets, { now: asOf })).toThrow();
+    expect(() => validateHubJudgmentBatch('{malformed', packets, { now: asOf })).toThrow();
   });
 });

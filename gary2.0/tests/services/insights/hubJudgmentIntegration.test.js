@@ -1,9 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { buildHubJudgmentPackets } from '../../../src/services/insights/hubJudgment.js';
 
 const fixtures = { rows: [], resolve: vi.fn() };
 vi.doMock('../../../src/services/ballDontLieService.js', () => ({ ballDontLieService: {
   getMlbGamesForDate: async date => date === '2026-09-08' ? [{ id: 10, date: '2026-09-08T23:00:00Z', status: 'Scheduled',
     home_team: { id: 2, abbreviation: 'HOM' }, visitor_team: { id: 1, abbreviation: 'AWY' } }] : [],
+  getNbaGamesForDate: async () => [{ id: 10, date: '2026-09-08', datetime: '2026-09-08T23:00:00Z', status: 'Scheduled',
+    home_team: { id: 2, abbreviation: 'HOM' }, visitor_team: { id: 1, abbreviation: 'AWY' } }],
 } }));
 vi.doMock('../../../src/services/insights/resolveIds.js', () => ({ resolveInsightIds: async rows => {
   fixtures.resolve(rows);
@@ -11,14 +14,16 @@ vi.doMock('../../../src/services/insights/resolveIds.js', () => ({ resolveInsigh
 } }));
 const computers = ['HeatCheck', 'GaryHrThreats', 'PlatoonEdge', 'BallparkShift', 'RegressionWatch',
   'HitterRegression', 'Beneficiary', 'RestFatigue', 'Owned', 'CoolingOff', 'StarterForm',
-  'StarterTeamRecord', 'BullpenFatigue', 'Streaking', 'FirstInning', 'HeadToHead', 'RunningGame', 'ParkWeather', 'ReturnWatch'];
+  'StarterTeamRecord', 'BullpenFatigue', 'Streaking', 'FirstInning', 'HeadToHead', 'RunningGame', 'ParkWeather', 'ReturnWatch',
+  'NbaRestFatigue', 'NbaStreak', 'NbaBeneficiary', 'NbaOwned'];
 for (const name of computers) {
   const file = name[0].toLowerCase() + name.slice(1);
   vi.doMock(`../../../src/services/insights/computers/${file}.js`, () => ({
-    [`compute${name}`]: async () => name === 'HeatCheck' ? fixtures.rows : [],
+    [`compute${name}`]: async () => ['HeatCheck', 'NbaBeneficiary'].includes(name) ? fixtures.rows : [],
   }));
 }
 const { generateInsightConnections, insightConnectionIdentity } = await import('../../../src/services/insights/generateInsightConnections.js');
+afterEach(() => vi.useRealTimers());
 beforeEach(() => {
   fixtures.resolve.mockClear();
   fixtures.rows = Array.from({ length: 20 }, (_, index) => ({ category: 'heat_check', headline: `Observed hitter ${index}`,
@@ -27,6 +32,27 @@ beforeEach(() => {
 });
 
 describe('Hub synthesis enters before final display filtering', () => {
+  it('stamps real collector-shaped fresh availability rows but preserves cached observations at the synthesis seam', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-09-08T16:00:00Z'));
+    const base = { category: 'beneficiary', headline: 'A current absence changes the rotation', detail: 'A checked injury report.',
+      game: 'AWY @ HOM', game_id: 10, team_id: 1, value: 'OUT', tone: 'neutral', relevance_score: 80 };
+    const older = '2026-09-08T06:00:00Z';
+    fixtures.rows = [{ ...base }, { ...base, id: 'stored', created_at: older }, { ...base, id: 'stored-unknown' }];
+    const synthesis = vi.fn(async args => {
+      expect(Number.isFinite(Date.parse(args.rows[0].meta.source_collected_at))).toBe(true);
+      expect(args.rows[1].meta.source_collected_at).toBe(older);
+      expect(args.rows[2].meta?.source_collected_at).toBeUndefined();
+      const contextByGame = new Map([['10', { complete: true, evidence: [] }]]);
+      const packet = buildHubJudgmentPackets({ ...args, rows: [args.rows[0]], contextByGame })[0];
+      expect(packet.context_complete).toBe(true);
+      expect(buildHubJudgmentPackets({ ...args, rows: [args.rows[1]], contextByGame })[0].context_complete).toBe(false);
+      expect(buildHubJudgmentPackets({ ...args, rows: [args.rows[2]], contextByGame })[0].context_complete).toBe(false);
+      return { rows: args.rows };
+    });
+    await generateInsightConnections({ date: '2026-09-08', league: 'NBA', options: { synthesizeJudgments: synthesis } });
+    expect(synthesis).toHaveBeenCalledOnce();
+    expect(fixtures.rows[0].meta).toBeUndefined();
+  });
   it('does not deduplicate same-player doubleheader observations across exact games', () => {
     const row = { category: 'heat_check', game: 'AWY @ HOM', game_id: '10', team_id: '1', player_id: '99', value: '.400' };
     expect(insightConnectionIdentity(row)).not.toBe(insightConnectionIdentity({ ...row, game_id: '11' }));

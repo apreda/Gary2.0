@@ -13,10 +13,12 @@ const EXCLUDED = new Set(['gary_hr_threats', 'the_sweat', 'after_gary', 'next_sl
   'regression_tomorrow', 'fantasy_pickup', 'fantasy_pickups', 'two_start', 'closer_watch', 'return_watch',
   'cut_list', 'fantasy_usage', 'fantasy_red_zone', 'fantasy_trend', 'fantasy_matchup'].map(categoryKey));
 const NON_PRIMARY = new Set(['practice_report'].map(categoryKey));
+const AVAILABILITY_SENSITIVE = new Set(['injury', 'practice_report', 'quarterback', 'beneficiary', 'availability'].map(categoryKey));
+const SOURCE_FRESHNESS_MS = 6 * 3_600_000;
 const NON_FACT = new Set(['judgment', 'read', 'verdict', 'evidence', 'computed_detail',
-  'relevance_score', 'confidence', 'tone', 'lean', 'revenge']);
+  'relevance_score', 'confidence', 'tone', 'lean', 'revenge', 'updated_at']);
 const COLLECTION_CLOCKS = new Set(['as_of', 'fetched_as_of', 'collected_at', 'generated_at', 'checked_at',
-  'computed_as_of', 'source_collected_at']);
+  'computed_as_of', 'source_collected_at', 'source_observed_at', 'observation_valid_until']);
 const iso = value => typeof value === 'string' && value.includes('T') && Number.isFinite(Date.parse(value))
   ? new Date(value).toISOString() : null;
 const id = value => !['string', 'number'].includes(typeof value) || String(value).trim() === ''
@@ -31,7 +33,7 @@ export function hubJudgmentSourceKey(row) {
 function stable(value) {
   if (Array.isArray(value)) return value.map(stable);
   if (!value || typeof value !== 'object') return value;
-  return Object.fromEntries(Object.keys(value).sort().filter(key => !COLLECTION_CLOCKS.has(key))
+  return Object.fromEntries(Object.keys(value).sort().filter(key => !COLLECTION_CLOCKS.has(key) && key !== 'primary_eligible')
     .map(key => [key, stable(value[key])]));
 }
 function facts(value) {
@@ -41,6 +43,10 @@ function facts(value) {
     .map(([key, item]) => [key, facts(item)]));
 }
 const digest = value => createHash('sha256').update(JSON.stringify(stable(value))).digest('hex');
+const observationClock = row => iso(row.meta?.computed_as_of) || iso(row.meta?.source_collected_at) || iso(row.created_at);
+const availabilitySensitive = row => AVAILABILITY_SENSITIVE.has(categoryKey(row.category))
+  || /injur|roster_depth/i.test(String(row.meta?.source || ''))
+  || ['injury_status', 'game_status', 'practice'].some(field => row.meta?.[field] != null);
 
 export function hubJudgmentFingerprint(packet) {
   return digest({ writer: HUB_JUDGMENT_VERSION, date: packet.date, league: packet.league,
@@ -56,7 +62,7 @@ function sourceEvidence(row, asOf) {
   if (typeof summary !== 'string' || !summary.trim()) return null;
   return { id: `source_${digest(hubJudgmentSourceKey(row)).slice(0, 16)}`, source_key: hubJudgmentSourceKey(row),
     label: row.headline, summary, source: typeof meta.source === 'string' ? meta.source : `Gary ${row.category} collector`,
-    as_of: iso(meta.computed_as_of) || iso(meta.source_collected_at) || iso(row.created_at) || asOf,
+    as_of: observationClock(row) || asOf,
     source_updated_at: iso(meta.source_updated_at) || null,
     game_id: id(row.game_id), player_id: id(row.player_id), team_id: id(row.team_id),
     category: row.category, primary_eligible: !NON_PRIMARY.has(categoryKey(row.category)),
@@ -98,6 +104,7 @@ export function buildHubJudgmentPackets({ date, league, rows = [], games = [], a
     rows.forEach((row, index) => {
       if (!row || EXCLUDED.has(categoryKey(row.category)) || row.meta?.source === 'fantasy_briefing_v1'
           || categoryKey(row.meta?.kind) === 'confirmedxi'
+          || (key === 'mlb' && categoryKey(row.category) === 'headtohead' && row.meta?.season_type !== 'regular')
           || id(row.game_id) !== game.id || (row.date && row.date !== date)
           || (row.league && String(row.league).toLowerCase() !== key)
           || (row.meta?.game_id != null && id(row.meta.game_id) !== game.id)
@@ -105,12 +112,20 @@ export function buildHubJudgmentPackets({ date, league, rows = [], games = [], a
           || (row.team_id != null && ![game.home.id, game.away.id].includes(id(row.team_id)))) return;
       const item = sourceEvidence(row, asOf);
       if (!item || seen.has(item.source_key)) return;
+      if (key !== 'mlb' && availabilitySensitive(row)) {
+        item.source_observed_at = observationClock(row);
+        item.observation_valid_until = item.source_observed_at
+          ? new Date(Date.parse(item.source_observed_at) + SOURCE_FRESHNESS_MS).toISOString() : null;
+      }
       seen.add(item.source_key); indices.push(index); evidence.push(item);
     });
     if (!evidence.some(item => item.primary_eligible)) continue;
     const context = contextByGame.get?.(game.id) || contextByGame[game.id];
     const failedCollectors = [...new Set(collectorFailures.map(failure => failure?.computer).filter(name => typeof name === 'string'))].sort();
-    const complete = context?.complete === true && failedCollectors.length === 0;
+    const sensitive = evidence.filter(item => Object.hasOwn(item, 'observation_valid_until'));
+    const stale = sensitive.filter(item => !item.source_observed_at || Date.parse(item.source_observed_at) > Date.parse(asOf)
+      || Date.parse(item.observation_valid_until) <= Date.parse(asOf));
+    const complete = context?.complete === true && failedCollectors.length === 0 && !stale.length;
     for (const item of context?.evidence || []) {
       if (!item || id(item.game_id) !== game.id || !item.id || typeof item.summary !== 'string') continue;
       if (evidence.some(entry => entry.id === item.id)) throw new Error('Duplicate Hub context evidence identity');
@@ -118,7 +133,10 @@ export function buildHubJudgmentPackets({ date, league, rows = [], games = [], a
     }
     const packet = { date, league: key, as_of: iso(asOf), game, evidence, source_indices: indices,
       context_complete: complete, failed_collectors: failedCollectors,
+      ...(sensitive.length ? { source_valid_until: stale.length ? null
+        : new Date(Math.min(...sensitive.map(item => Date.parse(item.observation_valid_until)))).toISOString() } : {}),
       limitations: [...(context?.limitations || ['Current game context could not be fully checked.']),
+        ...stale.map(item => `Fresh availability context is missing for ${item.source_key}. Its original observation is missing or older than six hours; a fresh schedule check cannot renew it.`),
         ...failedCollectors.map(name => `${name} did not complete. Its missing observations are unknown; a prior full-context judgment cannot be renewed.`)] };
     packet.input_fingerprint = hubJudgmentFingerprint(packet);
     const prior = previousRows.filter(row => row?.meta?.judgment?.date === date
@@ -231,7 +249,8 @@ export function validateHubJudgments(response, packets, { now = new Date().toISO
       if (extra.length) throw new Error(`Hub ${field} introduces uncited numbers: ${[...new Set(extra)].join(', ')}`);
     }
     if (/\b(?:guaranteed|sure thing|lock of the|free money)\b/i.test(Object.values(content).join(' '))) throw new Error('Unsupported Hub certainty');
-    const until = Math.min(Date.parse(packet.game.start_at), Date.parse(packet.as_of) + ttlMs);
+    const until = Math.min(Date.parse(packet.game.start_at), Date.parse(packet.as_of) + ttlMs,
+      packet.source_valid_until ? Date.parse(packet.source_valid_until) : Infinity);
     if (!Number.isFinite(until) || until <= Date.parse(now)) throw new Error('Hub game/evidence expired during synthesis');
     return { source_index: packet.source_indices[packet.evidence.findIndex(entry => entry.id === primary.id)], judgment: {
       schema_version: 1, writer_version: HUB_JUDGMENT_VERSION, status: 'ready',
@@ -246,6 +265,35 @@ export function validateHubJudgments(response, packets, { now = new Date().toISO
       evidence_state: evidenceState(packet.evidence),
     } };
   });
+}
+
+/** Validate each identifiable case independently. One malformed argument must
+ * not discard other fully validated games from the same paid response. */
+export function validateHubJudgmentBatch(response, packets, options = {}) {
+  const text = typeof response === 'string' ? response : response?.content;
+  const parsed = JSON.parse(String(text || '').replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/, ''));
+  if (!Array.isArray(parsed?.judgments)) throw new Error('Invalid Hub judgments array');
+  const byGame = new Map(packets.map(packet => [packet.game.id, packet])), grouped = new Map();
+  const accepted = [], failed = [], omitted = [], unidentified = [];
+  for (const item of parsed.judgments) {
+    if (typeof item?.game_id !== 'string' || !byGame.has(item.game_id)) {
+      unidentified.push('Hub response contains a missing or unknown game identity'); continue;
+    }
+    const entries = grouped.get(item.game_id) || []; entries.push(item); grouped.set(item.game_id, entries);
+  }
+  for (const packet of packets) {
+    const entries = grouped.get(packet.game.id);
+    if (!entries) {
+      if (unidentified.length) failed.push({ game_id: packet.game.id, message: unidentified[0] });
+      else omitted.push(packet.game.id); // A valid response may explicitly abstain by omitting a game.
+      continue;
+    }
+    try {
+      if (entries.length !== 1) throw new Error('Repeated Hub game argument');
+      accepted.push(...validateHubJudgments(JSON.stringify({ judgments: entries }), [packet], options));
+    } catch (error) { failed.push({ game_id: packet.game.id, message: error.message }); }
+  }
+  return { accepted, failed, omitted, unidentified };
 }
 
 /** Freshness/content invalidation is explicit so a failed rewrite cannot keep
@@ -276,7 +324,7 @@ export async function synthesizeHubJudgments(args, { generateText, signal, budge
     delete result.meta.judgment;
     return result;
   });
-  const failures = [], skipped = [], invalidations = [], queue = [];
+  const failures = [], skipped = [], invalidations = [], diagnostics = [], queue = [];
   const controller = new AbortController();
   const abort = () => controller.abort(signal?.reason || new Error('Hub synthesis cancelled'));
   if (signal?.aborted) abort(); else signal?.addEventListener('abort', abort, { once: true });
@@ -290,6 +338,9 @@ export async function synthesizeHubJudgments(args, { generateText, signal, budge
   };
   try {
     for (const packet of packets) {
+      if (packet.source_valid_until && Date.parse(packet.source_valid_until) <= Date.parse(now())) {
+        skipped.push({ game_id: packet.game.id, reason: 'expired_availability_context' }); expire(packet, 'context_unavailable'); continue;
+      }
       if (!packet.context_complete) { skipped.push({ game_id: packet.game.id, reason: 'incomplete_context' }); expire(packet, 'context_unavailable'); continue; }
       const prior = packet.previous;
       if (prior?.status === 'ready' && prior.writer_version === HUB_JUDGMENT_VERSION
@@ -300,7 +351,8 @@ export async function synthesizeHubJudgments(args, { generateText, signal, budge
           const currentEvidence = new Map(packet.evidence.map(entry => [entry.id, entry]));
           rows[index].meta.judgment = { ...copy(prior), as_of: packet.as_of,
             generated_at: prior.generated_at || prior.as_of,
-            valid_until: new Date(Math.min(Date.parse(packet.game.start_at), Date.parse(packet.as_of) + ttlMs)).toISOString(),
+            valid_until: new Date(Math.min(Date.parse(packet.game.start_at), Date.parse(packet.as_of) + ttlMs,
+              packet.source_valid_until ? Date.parse(packet.source_valid_until) : Infinity)).toISOString(),
             evidence: prior.evidence.map(entry => copy(currentEvidence.get(entry.id) || entry)),
             evidence_state: evidenceState(packet.evidence) };
           skipped.push({ game_id: packet.game.id, reason: 'unchanged_valid' }); continue;
@@ -314,30 +366,41 @@ export async function synthesizeHubJudgments(args, { generateText, signal, budge
     await Promise.all(Array.from({ length: Math.min(HUB_JUDGMENT_LIMITS.concurrency, batches.length) }, async () => {
       while (next < batches.length) {
         const batch = batches[next++];
+        let pending = batch, priorErrors = [];
         try {
           controller.signal.throwIfAborted();
-          let prompt = buildHubJudgmentPrompt(batch), accepted;
           for (let attempt = 0; attempt < 2; attempt++) {
             controller.signal.throwIfAborted();
+            if (!pending.length) break;
+            const prompt = buildHubJudgmentPrompt(pending) + (priorErrors.length
+              ? `\nThe prior arguments for these games failed validation: ${JSON.stringify(priorErrors)}. Return corrected JSON for only these games, or omit a game if its case cannot be supported. Do not repeat already accepted games.` : '');
+            const started = Date.now();
             const response = await abortable(() => model(prompt, { maxTokens: 10000, effort: 'high', signal: controller.signal }), controller.signal);
             controller.signal.throwIfAborted();
-            try { accepted = validateHubJudgments(response, batch, { now: now(), ttlMs }); break; }
-            catch (error) {
-              if (attempt) throw error;
-              prompt = `${buildHubJudgmentPrompt(batch)}\nThe previous response failed validation: ${error.message}. Return a complete corrected JSON response using only the supplied evidence.`;
+            let checked;
+            try { checked = validateHubJudgmentBatch(response, pending, { now: now(), ttlMs }); }
+            catch (error) { checked = { accepted: [], omitted: [], failed: pending.map(packet => ({ game_id: packet.game.id, message: error.message })) }; }
+            for (const result of checked.accepted) {
+              result.judgment.primary_source_key = hubJudgmentSourceKey(rows[result.source_index]);
+              rows[result.source_index].meta.judgment = result.judgment;
+            }
+            for (const gameID of checked.omitted) {
+              skipped.push({ game_id: gameID, reason: 'no_useful_judgment' });
+              expire(pending.find(packet => packet.game.id === gameID), 'context_changed');
+            }
+            const report = { attempt: attempt + 1, games: pending.map(packet => packet.game.id),
+              elapsed_ms: Date.now() - started, accepted: checked.accepted.length,
+              omitted: checked.omitted, validation_errors: checked.failed, unidentified: checked.unidentified || [] };
+            diagnostics.push(report);
+            if (checked.failed.length || checked.unidentified?.length) console.warn(`[Hub judgment validation] ${JSON.stringify(report)}`);
+            priorErrors = checked.failed;
+            pending = pending.filter(packet => checked.failed.some(failure => failure.game_id === packet.game.id));
+            if (attempt) for (const failure of checked.failed) {
+              failures.push(failure); expire(pending.find(packet => packet.game.id === failure.game_id), 'context_changed');
             }
           }
-          const selected = new Set();
-          for (const result of accepted) {
-            result.judgment.primary_source_key = hubJudgmentSourceKey(rows[result.source_index]);
-            rows[result.source_index].meta.judgment = result.judgment;
-            selected.add(result.judgment.game_id);
-          }
-          for (const packet of batch) if (!selected.has(packet.game.id)) {
-            skipped.push({ game_id: packet.game.id, reason: 'no_useful_judgment' }); expire(packet, 'context_changed');
-          }
         } catch (error) {
-          for (const packet of batch) { failures.push({ game_id: packet.game.id, message: error.message }); expire(packet, 'context_changed'); }
+          for (const packet of pending) { failures.push({ game_id: packet.game.id, message: error.message }); expire(packet, 'context_changed'); }
         }
       }
     }));
@@ -360,5 +423,5 @@ export async function synthesizeHubJudgments(args, { generateText, signal, budge
       as_of: args.asOf, valid_until: args.asOf,
       input_fingerprint: packet?.input_fingerprint || previous.input_fingerprint });
   }
-  return { rows, failures, skipped, invalidations };
+  return { rows, failures, skipped, invalidations, diagnostics };
 }

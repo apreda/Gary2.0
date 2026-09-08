@@ -314,7 +314,16 @@ export async function generateInsightConnections({ date, league = 'mlb', options
       // Per-lane diagnostics: a 0-row lane should be visible in the log, not
       // silently absorbed into the aggregate.
       console.log(`[insights]   ${name}: ${Array.isArray(rows) ? rows.length : 0} row(s)`);
-      const list = Array.isArray(rows) ? rows : [];
+      const collectedAt = new Date().toISOString();
+      // This boundary is an actual completed collector read. Stored-row replay
+      // never traverses it and must retain the original observation timestamp.
+      const list = (Array.isArray(rows) ? rows : []).map(row => {
+        if (leagueKey === 'mlb' || !row || typeof row !== 'object') return row;
+        const originalClock = [row.meta?.computed_as_of, row.meta?.source_collected_at, row.created_at]
+          .find(value => typeof value === 'string' && value.includes('T') && Number.isFinite(Date.parse(value)));
+        const observedAt = originalClock || (row.id == null ? collectedAt : null);
+        return observedAt ? { ...row, meta: { ...(row.meta || {}), source_collected_at: observedAt } } : row;
+      });
       // Lane checkpoint: hand this lane's rows to the caller NOW, post-processed
       // through the same contract as the aggregate (slate membership, relevance
       // floor, in-lane dedupe/caps). The football stage runs under a plist
