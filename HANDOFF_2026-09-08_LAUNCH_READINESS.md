@@ -1,8 +1,8 @@
 # Gary launch readiness — September 8, 2026
 
-**Historical-game correctness hold:** screenshot review confirmed the September 7 NYM/MIA pick (game 5059929, Tong/Pérez) was receiving September 8 scouting context (game 5059941, Manaea/Alcantara). The original pick and dated board are correct; the native reader joins today's context to a historical matchup. A bounded selected-date/exact-game repair is underway in PicksTab/ScoutTrio. The optimized selector build passes, but its signed archive is held. No corrected historical UI acceptance or 915 upload is claimed.
+**Historical-game source repair verified; final app verification underway:** `41793ede` binds scouting, player details and lineup popups to the selected date and exact game. It fixes the observed September 7 NYM/MIA page borrowing September 8 context. The original pick and dated board were correct; no production data repair was needed. Final serial checks pass 63 cases across seven suites, with independent review and replay. The release owner has frozen 129 public build/test inputs at that commit and is building the combined 915 artifact. Corrected installed UI, signed archive and upload remain pending. [Repair evidence](docs/launch/HISTORICAL_GAME_CONTEXT_2026-09-08.md).
 
-**15:33 UTC: the goal remains active and launch signoff is not complete.** The authoritative current state, evidence and remaining gates are in [the continuation](docs/launch/CONTINUATION_2026-09-08.md). Prior build, fixture and production receipts remain in [the historical release ledger](docs/launch/READINESS_2026-09-07.md). Do not treat older pending/complete labels as current state.
+**16:08 UTC: the goal remains active and launch signoff is not complete.** The authoritative current state, evidence and remaining gates are in [the continuation](docs/launch/CONTINUATION_2026-09-08.md). Prior build, fixture and production receipts remain in [the historical release ledger](docs/launch/READINESS_2026-09-07.md). Do not treat older pending/complete labels as current state.
 
 ## Delivered and verified
 
@@ -10,7 +10,7 @@
 - Web account repair `bc64568c` is included in READY production `a729d9c1`, with the Product Hunt badge and live nflverse credit. The integrated web checks pass **838 tests / 72 suites**, TypeScript and full ESLint. Canonical domain aliases and actual account deletion were verified.
 - Native account guards `4e985ac8` passed independent review and five focused executable regressions. Winners spacing correction `6cddd21f` passed review, eight existing checks and actual empty/populated visual review; Billfold retains its results controls. The manual empty-Winners bottom-scroll check remains pending after automated scroll inputs were no-ops.
 - App Store Connect saves interim **2.25 / 914 / Prepare for Submission**, after withdrawal of 901. Reviewer credentials, reviewed copy and the supplied contact are saved/read back. Fourteen privacy types are published, including linked Customer Support/App Functionality, with no tracking. Availability is United States/Canada only.
-- The separately authorized MLB policy `6da0c97e` is deployed with migration `20260908150211` and the restarted Winners worker. Root readback confirms the new era, canonical workers, 20 edge timestamps and no started MLB games missing a pick. Natural new-policy outcomes remain prospective. [Policy and exact test evidence](HANDOFF_2026-09-08_MLB_GARY_WINNERS.md).
+- The separately authorized complete MLB judgment/memory implementation `1c96ce0e` and reporting follow-up `f2976edb` are deployed with migration `20260908155113`. Final owner readback confirms the canonical Winners worker at `mlb-conviction-v4`, era `4294d3b5a7d2`, 20 edge timestamps and zero started games missing picks. Stable backend scope passes 3,298 tests / 275 suites; additional contract, real PostgreSQL and edge receipts are separately recorded. Natural publications and expectation-memory outcomes remain prospective. [Policy and exact test evidence](HANDOFF_2026-09-08_MLB_STAGED_JUDGMENT.md).
 
 ## Active final release
 
@@ -18,9 +18,11 @@ The final **915** candidate includes the user-requested visual-only profile icon
 
 [The release handoff](HANDOFF_2026-09-08_ACCOUNT_GUARD_915.md) owns exact artifact paths, source hashes, signature/privacy checks and upload/processing receipts. Root owns final screenshot review, App Store draft selection and matching [915 reviewer copy](GaryMarketing/APP_REVIEW_2_25_915.md). Preserve the AuthManager/AuthView/Settings hashes from actual native deletion acceptance in the final artifact. Source, simulator, physical installation, TestFlight, saved draft, review submission, approval and release establish different facts.
 
-The MLB owner is also implementing a newly authorized deeper judgment/research/price/memory pipeline. The live `6da0c97e` receipt above is a dated baseline and does not verify that new work.
+The earlier `6da0c97e` MLB implementation is a historical baseline, superseded for new decisions by the completed staged judgment/research/price/memory work above. The first scheduled decision window is 17:05 Eastern, before the first game at 18:35 Eastern; tests do not establish improved betting outcomes.
 
-The separate **Discuss Hub redesign and product** task is preparing a later candidate for explicit feature approval. Its native edits are held through the 915 archive parity receipt. Its work must not silently enter this freeze or be represented as covered by 915 checks.
+Independent review found two database validation gaps in the staged MLB work: original research-response equality for Winners admission and exact original-game identity for expectation-review storage. The owner is addressing those with direct PostgreSQL negative cases; no actual corrupted publication is established. This follow-up remains open until its deployed verification receipt passes.
+
+The separate **Discuss Hub redesign and product** task is preparing candidate 916 for explicit feature approval. Its main native hold was released after the exact 41793ede public-input snapshot was verified. Build 915 is compiled from that frozen snapshot, with before/after hashes; later main changes are outside its artifact and acceptance evidence.
 
 ## Remaining completion gates
 
