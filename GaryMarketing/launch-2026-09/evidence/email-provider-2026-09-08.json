@@ -1,0 +1,59 @@
+{
+  "scope": "Current production-scoped website email configuration and read-only Resend metadata; not a live function environment snapshot or delivery test",
+  "observed_at_utc": "2026-09-08T13:33:04.878Z",
+  "follow_up_at_utc": "2026-09-08T13:35:41.863Z",
+  "vercel": {
+    "correct_project_owns_apex_and_www": true,
+    "production_api_key_selection_unambiguous": true,
+    "production_api_key_usable_for_read_only_metadata": true,
+    "company_postal_address_present": false,
+    "explicit_sender_override_present": false,
+    "explicit_reply_to_override_present": false,
+    "source_default_sender": "Gary AI <updates@betwithgary.ai>",
+    "source_default_reply_to": "support@betwithgary.ai"
+  },
+  "resend": {
+    "domains_http_status": 200,
+    "domain_count": 1,
+    "domain": "betwithgary.ai",
+    "domain_status": "verified",
+    "sending": "enabled",
+    "domains_has_more": false,
+    "webhooks_http_status": 200,
+    "webhook_count": 1,
+    "webhook_status": "enabled",
+    "webhook_endpoint": "https://www.betwithgary.ai/api/webhooks/resend",
+    "webhook_events": [
+      "email.delivered",
+      "email.bounced",
+      "email.complained",
+      "email.failed",
+      "email.suppressed"
+    ],
+    "webhooks_has_more": false,
+    "human_readable_workspace_name_verified": false
+  },
+  "remaining_provider_checks": {
+    "webhook_secret_comparison_performed": false,
+    "webhook_secret_comparison_limit": "Configured Vercel value is sensitive and was not returned in usable plaintext. This is not a mismatch; no alternate extraction attempted.",
+    "usage_http_status": 404,
+    "usage_limits_verified": false,
+    "usage_limit_reason": "Documented usage endpoint is private beta and returned no usable capacity response. No upgrade, enrollment or plan change attempted."
+  },
+  "interpretation": "The earlier browser workspace's unrelated-domain result does not represent the resource set returned by the production-scoped key. Verified sender and enabled webhook replace that earlier uncertainty, not the remaining delivery acceptance gates.",
+  "safety": {
+    "credentials_handled_in_memory_only": true,
+    "secret_values_printed_exported_or_persisted": false,
+    "recipient_or_message_access": false,
+    "emails_or_webhook_test_events_sent": false,
+    "provider_environment_dns_billing_or_database_changes": false,
+    "native_or_pick_process_changes": false
+  },
+  "documentation": [
+    "https://vercel.com/docs/rest-api/projects/retrieve-the-decrypted-value-of-an-environment-variable-of-a-project-by-id",
+    "https://resend.com/docs/api-reference/domains/list-domains",
+    "https://resend.com/docs/api-reference/webhooks/list-webhooks",
+    "https://resend.com/docs/api-reference/webhooks/get-webhook",
+    "https://resend.com/docs/api-reference/usage/retrieve-usage"
+  ]
+}

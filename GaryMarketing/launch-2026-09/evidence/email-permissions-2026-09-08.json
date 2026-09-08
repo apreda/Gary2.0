@@ -1,0 +1,187 @@
+{
+  "scope": "Website-email-only table privilege hardening",
+  "applied_migration": {
+    "version": "20260908134649",
+    "name": "web_email_table_privileges",
+    "file": "gary2.0/supabase/migrations/20260908134649_web_email_table_privileges.sql",
+    "sql_md5": "9ac9236a0518f051780b7480c196f803",
+    "sql_sha256": "a658d5f6e62cf855e12e90be9c9d71997ddf4281ba91b858f65e93b13ed447df",
+    "stored_sql_matches_reviewed_file": true
+  },
+  "verification": {
+    "before_at": "2026-09-08 13:45:19.886495+00",
+    "after_at": "2026-09-08 13:47:08.895345+00",
+    "production_postgres": "15.14",
+    "exact_nine_table_grants_match": true,
+    "all_14_function_bodies_and_execution_permissions_unchanged": true,
+    "service_role_bypasses_rls": true,
+    "tables": [
+      {
+        "rls": true,
+        "table": "web_email_campaign_leases",
+        "forced_rls": true,
+        "anon_has_any": false,
+        "service_privileges": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ],
+        "authenticated_has_any": false
+      },
+      {
+        "rls": true,
+        "table": "web_email_consent_events",
+        "forced_rls": true,
+        "anon_has_any": false,
+        "service_privileges": [
+          "INSERT",
+          "SELECT"
+        ],
+        "authenticated_has_any": false
+      },
+      {
+        "rls": true,
+        "table": "web_email_deliveries",
+        "forced_rls": true,
+        "anon_has_any": false,
+        "service_privileges": [
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ],
+        "authenticated_has_any": false
+      },
+      {
+        "rls": true,
+        "table": "web_email_provider_capacity",
+        "forced_rls": true,
+        "anon_has_any": false,
+        "service_privileges": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ],
+        "authenticated_has_any": false
+      },
+      {
+        "rls": true,
+        "table": "web_email_provider_events",
+        "forced_rls": true,
+        "anon_has_any": false,
+        "service_privileges": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ],
+        "authenticated_has_any": false
+      },
+      {
+        "rls": true,
+        "table": "web_email_provider_state",
+        "forced_rls": true,
+        "anon_has_any": false,
+        "service_privileges": [
+          "SELECT",
+          "UPDATE"
+        ],
+        "authenticated_has_any": false
+      },
+      {
+        "rls": true,
+        "table": "web_email_signup_rate_limits",
+        "forced_rls": true,
+        "anon_has_any": false,
+        "service_privileges": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ],
+        "authenticated_has_any": false
+      },
+      {
+        "rls": true,
+        "table": "web_email_subscriptions",
+        "forced_rls": true,
+        "anon_has_any": false,
+        "service_privileges": [
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ],
+        "authenticated_has_any": false
+      },
+      {
+        "rls": true,
+        "table": "web_email_unsubscribe_tokens",
+        "forced_rls": true,
+        "anon_has_any": false,
+        "service_privileges": [
+          "INSERT",
+          "SELECT"
+        ],
+        "authenticated_has_any": false
+      }
+    ]
+  },
+  "isolated_tests": {
+    "postgres": "17.10",
+    "red_baseline": {
+      "failed": 11,
+      "passed": 13
+    },
+    "new_postgres_tests_passed": 24,
+    "focused_email_tests_passed": 42,
+    "focused_email_test_files": 5,
+    "skipped": 0,
+    "typecheck": "passed",
+    "focused_eslint": "passed",
+    "independent_source_review": "no apply blockers",
+    "behaviors": [
+      "All fourteen security-invoker RPCs execute using the narrowed role",
+      "Confirmation and changed cadence consent",
+      "Delivery claim/retry/final-state/idempotency",
+      "Provider slots and capacity reservations",
+      "Campaign lease ownership and expiry",
+      "Provider event deduplication/reconciliation and suppression",
+      "Unsubscribe token validity and preserved suppression",
+      "Expired operational cleanup without deleting consent/subscription/token ledgers",
+      "Anonymous/authenticated table and RPC denial",
+      "Exact direct and effective ACL sets, including privileges supported by the test server",
+      "Replay preserves schema, functions, RLS, default grants, unrelated ACLs and cron metadata"
+    ],
+    "temporary_clusters_removed": true,
+    "production_function_invocation": false
+  },
+  "full_web_verification": {
+    "started_at_local": "2026-09-08 09:48:56 America/New_York",
+    "test_files_passed": 68,
+    "tests_passed": 611,
+    "skipped": 0,
+    "explicit_postgres_runtime": "17.10",
+    "route_type_generation_and_typecheck": "passed",
+    "full_eslint": "passed",
+    "scope_note": "Full current website checkout, including independently owned concurrent website fixes; these totals are not all new work from this email change."
+  },
+  "security_advisor": {
+    "before_at_utc": "2026-09-08T13:38:39.926Z",
+    "after_at_utc": "2026-09-08T13:47:36.684Z",
+    "email_errors": 0,
+    "email_warnings": 0,
+    "intentional_email_info_findings": 9,
+    "info_reason": "RLS enabled without policies is deliberate for private service-role-only tables; no public policy was added.",
+    "reference": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy"
+  },
+  "boundaries": {
+    "changed": "Only service_role grants on the nine explicitly named web_email tables, atomically with lock/statement timeouts.",
+    "recipient_rows_read_or_mutated": false,
+    "emails_or_provider_events_sent": false,
+    "provider_environment_dns_or_billing_changes": false,
+    "functions_rls_global_defaults_or_schedules_changed": false,
+    "native_account_or_sport_pick_processes_changed": false
+  },
+  "remaining": "Mailing address, chosen test inbox, provider capacity and controlled confirmation/campaign/unsubscribe/event acceptance are still required before email activation."
+}
