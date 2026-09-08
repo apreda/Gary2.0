@@ -56,11 +56,15 @@ async function fcmAccessToken(creds: { email: string; key: string }): Promise<st
   return j.access_token;
 }
 
-async function sendPush(project: string, access: string, deviceToken: string, title: string, body: string): Promise<boolean> {
+async function sendPush(project: string, access: string, deviceToken: string, accountID: string, title: string, body: string): Promise<boolean> {
   const r = await fetch(`https://fcm.googleapis.com/v1/projects/${project}/messages:send`, {
     method: "POST",
     headers: { Authorization: `Bearer ${access}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ message: { token: deviceToken, notification: { title, body } } }),
+    body: JSON.stringify({ message: {
+      token: deviceToken,
+      notification: { title, body },
+      data: { destination: "book", book_scope: "you", account_id: accountID },
+    } }),
   });
   return r.ok;
 }
@@ -89,7 +93,7 @@ export function settleMessage(batch: UserSettleBatch): { title: string; body: st
   const streakEvent = batch.events.find((e) => e.streak_pick && (e.status === "won" || e.status === "lost"));
   if (streakEvent && batch.streakAfter) {
     body += streakEvent.status === "won"
-      ? ` Day ${batch.streakAfter.current} of the streak.`
+      ? ` ${batch.streakAfter.current}-win streak.`
       : ` The streak is over.`;
   }
   return { title: "Your book settled", body };
@@ -127,7 +131,7 @@ export async function notifySettles(
       if (!mine.length) { out.skipped++; continue; }
       let any = false;
       for (const t of mine) {
-        if (await sendPush(creds.project, access, t.device_token, msg.title, msg.body)) any = true;
+        if (await sendPush(creds.project, access, t.device_token, userId, msg.title, msg.body)) any = true;
       }
       any ? out.sent++ : out.failed++;
     }

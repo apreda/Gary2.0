@@ -62,7 +62,7 @@ test("multi-settle summary with living streak", () => {
       { kind: "fade", status: "won", units: 1.2, streak_pick: false },
     ], streakAfter: { current: 5 },
   })!;
-  assertEquals(m.body, "3 plays settled (2-1): +1.11u on the night. Day 5 of the streak.");
+  assertEquals(m.body, "3 plays settled (2-1): +1.11u on the night. 5-win streak.");
 });
 
 test("push-only settles stay silent", () => {
