@@ -157,6 +157,6 @@ describe('permanent game-page JSON-LD', () => {
     expect(article.datePublished).toBe(publishedAt);
     expect(article).not.toHaveProperty('dateModified');
     expect(html).toContain('native-lost');
-    expect(html).toContain('LOST · 2-4');
+    expect(html).toContain('LOST · BOS 2 · NYY 4');
   });
 });

@@ -2,7 +2,13 @@
 import { useState } from "react";
 import { PickCard } from "@/components/PickCard";
 import type { GaryPick } from "@/lib/gary/types";
-export function HomeBoard({ picks }: { picks: GaryPick[] }) {
+export function HomeBoard({
+  picks,
+  date,
+}: {
+  picks: GaryPick[];
+  date?: string;
+}) {
   const [sport, setSport] = useState("all");
   const sports = [
     "all",
@@ -41,6 +47,8 @@ export function HomeBoard({ picks }: { picks: GaryPick[] }) {
             <PickCard
               key={String(p.pick_id || p.game_id || i) + p.pick}
               pick={p}
+              date={date}
+              shareHref={date ? `/archive/${date}` : undefined}
             />
           ))}
       </div>

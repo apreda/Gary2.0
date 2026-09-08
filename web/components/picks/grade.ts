@@ -9,6 +9,7 @@ import type {
   LiveScoreRow,
 } from "@/lib/gary/types";
 import type { CardPick } from "./model";
+import { nativeFinalScore } from "./score-labels";
 export type CardResults = {
   date: string;
   games: GameResultRow[];
@@ -185,7 +186,7 @@ export function applyCardResult(
     ? (row as PropResultRow).actual_value != null
       ? `ACTUAL ${(row as PropResultRow).actual_value}`
       : ""
-    : scoreLine || (row as GameResultRow).final_score || "";
+    : scoreLine || nativeFinalScore(row as GameResultRow);
   const odds = Number(card.odds.replace("−", "-"));
   const profit =
     Number.isFinite(odds) && Math.abs(odds) >= 100

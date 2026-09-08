@@ -11,6 +11,8 @@ import { HomeBoard } from "@/components/site/HomeBoard";
 import { Icon } from "@/components/site/Icon";
 import { fetchDailySlate } from "@/lib/gary/board";
 import { fetchTodayGamePicks } from "@/lib/gary/picks";
+import { fetchArchiveGamePicks } from "@/lib/gary/archive";
+import { etDateLabel } from "@/lib/gary/format";
 import {
   fetchAllGameResults,
   computeRecord,
@@ -32,6 +34,15 @@ export default async function Home() {
     fetchAllGameResults().catch(() => null),
     fetchDailySlate(date),
   ]);
+  // Keep the product visible before today's calls publish, using the actual
+  // previous board with its own date and grades, never illustrative picks.
+  const previousDate = daysAgoEST(1);
+  const previous =
+    picks.length === 0
+      ? await fetchArchiveGamePicks(previousDate).catch(() => [])
+      : [];
+  const showcase = picks.length ? picks : previous;
+  const showcaseDate = picks.length ? date : previousDate;
   const all = results ? computeRecord(results) : null;
   const recent = results
     ? computeRecord(sinceDate(results, daysAgoEST(30)))
@@ -59,8 +70,15 @@ export default async function Home() {
             {picks?.length === 1 ? "call" : "calls"} posted
           </p>
         )}
-        {picks?.length ? (
-          <HomeBoard picks={picks} />
+        {showcase.length ? (
+          <>
+            {!picks.length && (
+              <p className="site-eyebrow mb-5">
+                PREVIOUS BOARD · {etDateLabel(previousDate)}
+              </p>
+            )}
+            <HomeBoard picks={showcase} date={showcaseDate} />
+          </>
         ) : (
           <div className="rounded-panel border border-line bg-card p-7">
             <p className="text-lg">
@@ -74,9 +92,12 @@ export default async function Home() {
             </Link>
           </div>
         )}
-        <p className="site-board-note">
-          Tap a card for Gary’s Take. Use the arrow on the back to keep reading.
-        </p>
+        {showcase.length > 0 && (
+          <p className="site-board-note">
+            Tap a card for Gary’s Take. Use the arrow on the back to keep
+            reading.
+          </p>
+        )}
       </section>
       <section className="site-wrap site-record">
         <div className="site-record-intro">

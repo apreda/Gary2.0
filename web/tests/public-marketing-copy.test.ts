@@ -9,6 +9,7 @@ vi.mock('@/components/AppStoreButton', () => ({ AppStoreButton: () => null }));
 
 import Home, { metadata as homeMetadata } from '@/app/page';
 import { metadata as rootMetadata } from '@/app/layout';
+import { daysAgoEST } from '@/lib/gary/dates';
 import HubPage, { metadata as hubMetadata } from '@/app/hub/page';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -32,6 +33,19 @@ describe('public marketing copy', () => {
     expect(text).not.toMatch(/every game covered|every morning|full slate/i);
     expect(html).toContain('href="/picks"');
     expect(html).toContain('href="/results"');
+  });
+
+  it('labels actual previous-board picks when today is empty', async () => {
+    const previousDate=daysAgoEST(1);
+    vi.stubGlobal('fetch', vi.fn(async (input:string) => {
+      const url=new URL(input);
+      return Response.json(url.pathname.endsWith('/daily_picks')&&url.searchParams.get('date')===`eq.${previousDate}`
+        ? [{date:previousDate,picks:[{league:'MLB',pick:'Mets ML +108',awayTeam:'Mets',homeTeam:'Marlins',rationale:'The original published take.'}]}] : []);
+    }));
+    const text=visibleText(renderToStaticMarkup(await Home()));
+    expect(text).toContain('PREVIOUS BOARD');
+    expect(text).toContain('The original published take.');
+    expect(text).not.toContain('calls posted');
   });
 
   it('keeps root and homepage metadata factual without changing app identity or the canonical', () => {
