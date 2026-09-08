@@ -185,3 +185,53 @@ snapshot. Its only failure remains unrelated shared working-tree changes (10
 at that snapshot). Worker stderr has no new writes. Live ledger and memory
 counts remain zero before today's first decision; no public QA picks were
 created. Runtime log: `/tmp/gary-mlb-identity-production-20260908.log`.
+
+## Requested bug check follow-up
+
+The subsequent bug check reproduced and fixed these integration failures:
+
+- The public daily-pick mapper dropped `decision_policy`, `judgment_run_id`,
+  `price_endorsement` and `odds_visibility`. The real storage-to-publication
+  confirmation regression failed for both endorsed and declined picks. The
+  mapper now preserves these fields, so the public ticket can receive its
+  original journal receipt and enter the correct Winners/memory policy.
+  Explicit v1 markers are preserved; historical unmarked records are not
+  relabeled. Today's live ledger and publications were still empty at discovery.
+- Winners could spend both factual-review attempts while the original
+  publication receipt was missing. Live migration
+  **20260908172215_mlb_winners_review_prerequisites** requires complete immutable
+  original evidence before claiming an attempt. Ready declined tickets still
+  leave pending through deterministic exclusion. The two-model-attempt limit,
+  monotonically increasing ownership tokens and legacy lanes are preserved.
+- Selector database calls could stall the independent loop. Reads and writes
+  now have a ten-second deadline. A failed finish write retries its identical
+  payload once; an ambiguous successful commit is accepted only when the stored
+  completed selection, run, attempt, model and duration match. Gary is not
+  asked to choose again during write recovery.
+- The nightly results runner could run two memory batches, one per grading
+  date. It now runs one two-review/six-minute batch after both dates finish.
+- A normalized duplicate result could be chosen before the exact settled
+  ticket, causing an expensive memory review that the database rejected. The
+  worker and validator now use the exact original ticket and the database's
+  supported settlement values before model work.
+- Cancellation could return a late card, persist a late judgment answer, or
+  become an ordinary unavailable research result. The signal now reaches the
+  staged session and formatter; late responses are discarded and cancellation
+  does not launch another whole-brain attempt.
+- Truncation and short-rationale retries could append corrections locally
+  without sending them to the persistent model. Staged MLB now sends those
+  actual correction prompts, retaining the recorded ticket and source binding.
+
+The queue migration's live function-body hashes match the tested source; all
+three affected functions retain service-only execution and empty search paths.
+No new security advisor findings were introduced. The resulting decision era
+is **c58ae04c89e4**.
+
+Final full backend check (native test files excluded): **3,414 tests across
+280 suites pass**. Log: `/tmp/gary-mlb-bugcheck-backend-20260908.log`. Focused
+receipts include 105 real PostgreSQL tests, 37 selector cases, and the actual
+public-mapper/confirmation regression. Their counts overlap with the full run.
+The failure-before-fix records are retained in
+`/tmp/gary-mlb-bugcheck-storage-red-20260908.log`,
+`/tmp/gary-mlb-bugcheck-cascade-red-20260908.log`, and
+`/tmp/gary-mlb-selector-io-red-20260908.log`.

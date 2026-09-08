@@ -133,4 +133,45 @@ describe('staged MLB process through the actual game loop',()=>{
     await expect(fixture.run()).rejects.toMatchObject({code:'mlb_judgment_locked_evidence'});
     expect(mocks.send).toHaveBeenCalledTimes(5); expect(mocks.fetch).not.toHaveBeenCalled();
   });
+  it('cancels the final formatting request and never returns its late card',async()=>{
+    const fixture=setup(); const controller=new AbortController();
+    fixture.options.signal=controller.signal;
+    mocks.send.mockReset().mockResolvedValueOnce(response('INVESTIGATION COMPLETE')).mockResolvedValueOnce(response(initial))
+      .mockResolvedValueOnce(response(stress)).mockResolvedValueOnce(response(price))
+      .mockImplementationOnce(async()=>{controller.abort(new Error('game decision cancelled'));return response(card());});
+    await expect(fixture.run()).rejects.toThrow('game decision cancelled');
+    expect(mocks.create.mock.calls[0][0].signal).toBe(controller.signal);
+    expect(mocks.send.mock.calls.every(call=>call[2]?.signal===controller.signal)).toBe(true);
+    expect(fixture.record.mock.calls.map(call=>call[0])).toEqual(['initial_commit','factual_research','stress_test','price_assessment']);
+  });
+  it('stops a waiting formatter even when its provider ignores cancellation',async()=>{
+    const fixture=setup(); const controller=new AbortController(); let resolveCard;
+    fixture.options.signal=controller.signal;
+    mocks.send.mockReset().mockResolvedValueOnce(response('INVESTIGATION COMPLETE')).mockResolvedValueOnce(response(initial))
+      .mockResolvedValueOnce(response(stress)).mockResolvedValueOnce(response(price))
+      .mockImplementationOnce(()=>new Promise(resolve=>{resolveCard=resolve;}));
+    const pending=fixture.run(); const rejected=expect(pending).rejects.toThrow('game decision cancelled');
+    await vi.waitFor(()=>expect(resolveCard).toBeTypeOf('function'));
+    controller.abort(new Error('game decision cancelled'));
+    await rejected;
+    resolveCard(response(card()));
+    await Promise.resolve();
+    expect(mocks.send).toHaveBeenCalledTimes(5);
+  });
+  it.each(['max_tokens','short_rationale'])('sends the actual %s correction to the same locked formatting session',async failure=>{
+    const fixture=setup();
+    const incomplete=failure==='max_tokens'?{...response('Incomplete final output'),finishReason:'max_tokens'}
+      :response({...card(),rationale:'The home club wins.'});
+    mocks.send.mockReset().mockResolvedValueOnce(response('INVESTIGATION COMPLETE')).mockResolvedValueOnce(response(initial))
+      .mockResolvedValueOnce(response(stress)).mockResolvedValueOnce(response(price))
+      .mockResolvedValueOnce(response('The recorded home moneyline remains my call.')).mockResolvedValueOnce(incomplete)
+      .mockResolvedValueOnce(response(card()));
+    const result=await fixture.run();
+    expect(result.pick).toBe('Los Angeles Dodgers ML -172');
+    expect(mocks.send.mock.calls[6][1]).toContain(failure==='max_tokens'?'Your response was CUT OFF':'Your rationale is too short');
+    expect(mocks.send.mock.calls[6][1]).toContain('RECORDED MLB DECISION');
+    expect(mocks.send.mock.calls[6][1]).toContain('FORMATTING FROM THE RECORDED SOURCES ONLY');
+    expect(mocks.create).toHaveBeenCalledTimes(1);
+    expect(fixture.record).toHaveBeenCalledTimes(4);
+  });
 });

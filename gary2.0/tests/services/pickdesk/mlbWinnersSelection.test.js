@@ -111,6 +111,54 @@ describe('Gary MLB Winners selection',()=>{
     expect(result.completed).toBe(false);
     expect(rpc).toHaveBeenLastCalledWith('finish_mlb_winners_selection',expect.objectContaining({p_selection:null,p_error:'provider unavailable',p_attempt:1}));
   });
+
+  it.each(['slate','claim','finish'])('bounds a stalled %s database request so the selector loop can recover',async stage=>{
+    vi.useFakeTimers();
+    try {
+      const select=vi.fn(async()=>({ok:true,selection:decision(),model:'gpt-6-astra',ms:50}));
+      const never=()=>new Promise(()=>{});
+      const q={select(){return q;},eq(){return q;},then(resolve){return stage==='slate'?never():Promise.resolve({data:[{commence_time:'2026-09-08T17:20:00Z'}]}).then(resolve);}};
+      const rpc=vi.fn(name=>name==='claim_mlb_winners_selection'?(stage==='claim'?never():Promise.resolve({data:[run()]})):never());
+      let failure;
+      runMlbSelectionWindow({from:()=>q,rpc},'2026-09-08',{now,select}).catch(error=>{failure=error;});
+      await vi.advanceTimersByTimeAsync(31_000);
+      expect(failure).toBeInstanceOf(Error);expect(failure.message).toContain('database deadline');
+      expect(select).toHaveBeenCalledTimes(stage==='finish'?1:0);
+      expect(rpc.mock.calls.filter(([name])=>name==='finish_mlb_winners_selection')).toHaveLength(stage==='finish'?2:0);
+    } finally {vi.useRealTimers();}
+  });
+  it('retries a transient publication error with exactly the same selection and no additional model call',async()=>{
+    const select=vi.fn(async()=>({ok:true,selection:decision(),model:'gpt-6-astra',ms:50}));
+    const q={select(){return q;},eq(){return q;},then(resolve){return Promise.resolve({data:[{commence_time:'2026-09-08T17:20:00Z'}]}).then(resolve);}};
+    let writes=0;
+    const rpc=vi.fn(async name=>name==='claim_mlb_winners_selection'?{data:[run()]}:++writes===1?{error:new Error('temporary transport failure')}:{data:{completed:true,admitted:1,selection_run_id:10}});
+    expect(await runMlbSelectionWindow({from:()=>q,rpc},'2026-09-08',{now,select})).toMatchObject({completed:true,admitted:1});
+    expect(select).toHaveBeenCalledTimes(1);
+    const calls=rpc.mock.calls.filter(([name])=>name==='finish_mlb_winners_selection');expect(calls).toHaveLength(2);expect(calls[0][1]).toEqual(calls[1][1]);
+  });
+  it('recognizes an exact already-committed decision after its write response was lost',async()=>{
+    const select=vi.fn(async()=>({ok:true,selection:decision(),model:'gpt-6-astra',ms:50}));
+    let writes=0;
+    const rpc=vi.fn(async name=>name==='claim_mlb_winners_selection'?{data:[run()]}:++writes===1?{error:new Error('response lost after commit')}:{data:{completed:false,reason:'Stale selection attempt'}});
+    const from=table=>{const q={select(){return q;},eq(){return q;},maybeSingle(){return q;},then(resolve){return Promise.resolve({data:table==='daily_slate'?[{commence_time:'2026-09-08T17:20:00Z'}]:{id:10,status:'completed',attempts:1,selection:decision(),model:'gpt-6-astra',ms:50}}).then(resolve);}};return q;};
+    expect(await runMlbSelectionWindow({from,rpc},'2026-09-08',{now,select})).toMatchObject({completed:true,admitted:1,selection_run_id:10});
+    expect(select).toHaveBeenCalledTimes(1);expect(writes).toBe(2);
+  });
+
+
+  it.each(['attempt','model','selection'])('does not claim another completed %s as its lost publication',async mismatch=>{
+    const select=vi.fn(async()=>({ok:true,selection:decision(),model:'gpt-6-astra',ms:50}));
+    let writes=0;
+    const rpc=vi.fn(async name=>name==='claim_mlb_winners_selection'?{data:[run()]}:++writes===1?{error:new Error('write outcome unknown')}:{data:{completed:false,reason:'Stale selection attempt'}});
+    const saved={id:10,status:'completed',attempts:1,selection:decision(),model:'gpt-6-astra',ms:50};
+    if(mismatch==='attempt')saved.attempts=2;
+    if(mismatch==='model')saved.model='another-model';
+    if(mismatch==='selection')saved.selection.ranked_candidates[0].selected=false;
+    const from=table=>{const q={select(){return q;},eq(){return q;},maybeSingle(){return q;},then(resolve){return Promise.resolve({data:table==='daily_slate'?[{commence_time:'2026-09-08T17:20:00Z'}]:saved}).then(resolve);}};return q;};
+    expect(await runMlbSelectionWindow({from,rpc},'2026-09-08',{now,select})).toMatchObject({completed:false,reason:'Stale selection attempt'});
+    expect(select).toHaveBeenCalledTimes(1);expect(writes).toBe(2);
+  });
+
   it('stamps only new MLB game candidates with the new policy',()=>{
     const pick={game_id:'1',pick:'Team ML -120',odds:-120,commence_time:'2026-09-08T17:20:00Z',decision_policy:'mlb-judgment-v1'};
     expect(winnersCandidate({date:'2026-09-08',league:'MLB',kind:'game',pick}).policy_version).toBe('mlb-conviction-v3');

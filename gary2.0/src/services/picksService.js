@@ -372,6 +372,15 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null, options = {
       // ate field additions three times — sha, blind-split, winners — before
       // it was excised Aug 24. There is ONE mapper now; new fields go here.)
       prompt_sha: pick.prompt_sha || null,
+      // Preserve the exact decision contract through the public mapper. The
+      // publication receipt, Winners policy and prospective memory all join
+      // this saved ticket to its original private judgment using these fields.
+      ...(pick.decision_policy ? { decision_policy: pick.decision_policy } : {}),
+      ...(pick.decision_policy === 'mlb-judgment-v2' ? {
+        judgment_run_id: pick.judgment_run_id,
+        price_endorsement: pick.price_endorsement,
+        odds_visibility: pick.odds_visibility,
+      } : {}),
       // THE BLIND SPLIT read (Aug 5): the whitelist ate both fields on day
       // one (Cubs/Astros stored readless) — the trap's third catch.
       read_winner: pick.read_winner ?? null,

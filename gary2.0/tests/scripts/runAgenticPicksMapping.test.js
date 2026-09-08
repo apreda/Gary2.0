@@ -58,6 +58,17 @@ describe('MLB decision-policy provenance', () => {
     const evidence = originalGameEvidence({ result: { decision_policy: MLB_DECISION_POLICY }, pick: oldPick, deskText: 'original desk' });
     expect(evidence.pickSnapshot.decision_policy).toBeUndefined();
   });
+
+  it('does not start a cancelled MLB lane or retry a cancelled analysis on another brain', async () => {
+    const controller = new AbortController();
+    const analyze = vi.fn(async () => { controller.abort(new Error('game decision cancelled')); throw controller.signal.reason; });
+    const lane = loadLane(analyze, { DESK_FALLBACK_MODELS: ['fallback-brain'] });
+    await expect(lane(game, { signal: controller.signal })).rejects.toThrow('game decision cancelled');
+    expect(analyze).toHaveBeenCalledTimes(1);
+    analyze.mockClear();
+    await expect(lane(game, { signal: controller.signal })).rejects.toThrow('game decision cancelled');
+    expect(analyze).not.toHaveBeenCalled();
+  });
 });
 
 describe('NFL verified Tale of the Tape storage mapping', () => {

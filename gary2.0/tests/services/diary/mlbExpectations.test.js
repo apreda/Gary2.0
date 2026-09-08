@@ -107,6 +107,16 @@ describe('prospective MLB expectation reviews', () => {
     }
     expect(call).not.toHaveBeenCalled();
   });
+  it('accepts the database settlement spelling and rejects reporting-only result aliases before model work', async () => {
+    const f = fixture(); f.input.result.result = ' WON ';
+    expect((await outputFor(f)).review.result).toBe('won');
+    const call = vi.fn();
+    for (const result of ['win', 'loss', 'pushed', 'voided']) {
+      f.input.result.result = result;
+      expect((await reviewMlbExpectations(f.input, { oneShot: call, clock: () => REVIEW_AT })).ok).toBe(false);
+    }
+    expect(call).not.toHaveBeenCalled();
+  });
 });
 
 function dbFixture(tables = {}, rpcData = true) {
@@ -200,6 +210,15 @@ describe('official gameplay binding and incremental worker', () => {
     }
     expect(review).not.toHaveBeenCalled();
     expect(collectEvidence).not.toHaveBeenCalled();
+  });
+
+  it.each(['ticket_text', 'result_alias'])('uses the exact canonical settled row when a %s duplicate appears first', async kind => {
+    const f = fixture(), out = await outputFor(f);
+    const variant = { ...f.input.result, id: 2, ...(kind === 'ticket_text' ? { pick_text: '  red sox ML ' } : { result: 'loss' }) };
+    const db = dbFixture({ mlb_judgment_runs: [f.run], mlb_judgment_events: f.events, game_results: [variant, f.input.result] });
+    const review = vi.fn(async () => out);
+    await reviewMlbExpectationBatch({ db }, { review, collectEvidence: async () => f.input.game_evidence, clock: () => REVIEW_AT, log: () => {} });
+    expect(review.mock.calls[0][0].result).toEqual(f.input.result);
   });
 
   it('counts unpublished failed judgment attempts without repeatedly loading their histories', async () => {

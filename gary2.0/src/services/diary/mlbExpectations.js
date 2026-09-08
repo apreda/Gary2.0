@@ -1,6 +1,6 @@
 /** Prospective expectations from main Gary's immutable MLB judgment process. */
 import { codexCliOneShot } from '../agentic/orchestrator/providerAdapters/codexCliSession.js';
-import { gameTicketIdentity, normalizedResult } from '../pickdesk/winnersBook.js';
+import { gameTicketIdentity } from '../pickdesk/winnersBook.js';
 
 export const MLB_EXPECTATION_POLICY = 'mlb-expectation-v1';
 export const MLB_EXPECTATION_PHASES = ['opening', 'middle', 'finish', 'offense'];
@@ -8,6 +8,12 @@ const POLICY = 'mlb-judgment-v2';
 const time = value => Date.parse(value);
 const text = value => typeof value === 'string' ? value.trim() : '';
 const same = (a, b) => String(a ?? '') === String(b ?? '');
+// Match the immutable review RPC's settlement vocabulary. Reporting aliases
+// such as "win" cannot stand in for an actual settled game_results row.
+export const mlbExpectationResult = value => {
+  const result = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return ['won', 'lost', 'push', 'void'].includes(result) ? result : null;
+};
 const strategy = value => /\b(?:always|never)\s+(?:bet|take|pick|back|fade|lay|choose|favor)\b|\b(?:next time|future bets|from now on|going forward|in future games)\b|\bfade\s+(?:all\s+|the\s+)?(?:favorites?|underdogs?|home|road)\b/i.test(value);
 
 /** Only server-recorded pregame phases can create an expectation to be reviewed. */
@@ -88,7 +94,9 @@ function validateInput(input, now) {
       || !text(e.claim) || !text(e.evidence) || !text(e.disconfirming_observation) || !Number.isFinite(time(e.recorded_at))
       || time(e.recorded_at) >= time(s.commence_time))) return 'Expectation IDs or original pregame times are invalid';
   const pickIdentity = gameTicketIdentity({ ...s, pick_text: s.pick_snapshot?.pick });
-  if (!pickIdentity || pickIdentity !== gameTicketIdentity(result || {}) || !normalizedResult(result?.result)) return 'Missing exact settled original ticket';
+  if (!pickIdentity || pickIdentity !== gameTicketIdentity(result || {}) || result?.pick_text !== s.pick_snapshot?.pick
+      || result.game_date !== s.game_date || result.league !== 'MLB' || !same(result.game_id, s.game_id)
+      || !mlbExpectationResult(result?.result)) return 'Missing exact settled original ticket';
   if (!g || g.league !== 'MLB' || g.game_date !== s.game_date || !same(g.game_id, s.game_id) || g.final !== true
       || !Number.isSafeInteger(Number(g.game_pk)) || Number(g.game_pk) <= 0
       || (s.game_pk != null && !same(s.game_pk, g.game_pk))
@@ -129,7 +137,7 @@ export function parseMlbExpectationReview(raw, input) {
     if (o.status !== 'unknown' && !o.evidence.some(e => input.game_evidence.sources.some(s => s.source_id === e.source_id && ['boxscore', 'plays'].includes(s.kind)))) return null;
   }
   return { schema_version: 1, policy_version: MLB_EXPECTATION_POLICY, run_id: input.snapshot.run_id,
-    game_date: input.snapshot.game_date, game_id: input.snapshot.game_id, result: normalizedResult(input.result.result),
+    game_date: input.snapshot.game_date, game_id: input.snapshot.game_id, result: mlbExpectationResult(input.result.result),
     expectations: rows.map(row => ({ expectation_id: row.expectation_id, decision_review: row.decision_review, outcome_review: row.outcome_review })) };
 }
 
@@ -161,7 +169,7 @@ function validMemory(row, before, date) {
       || time(input.review_started_at) > time(input.review_completed_at) || validateInput(input, time(input.review_started_at))) return false;
   return same(row.run_id, input.snapshot.run_id) && row.game_date === input.snapshot.game_date && same(row.game_id, input.snapshot.game_id)
     && row.review?.policy_version === MLB_EXPECTATION_POLICY && same(row.review?.run_id, row.run_id)
-    && row.review.result === normalizedResult(input.result.result)
+    && row.review.result === mlbExpectationResult(input.result.result)
     && !!parseMlbExpectationReview(row.review, input);
 }
 

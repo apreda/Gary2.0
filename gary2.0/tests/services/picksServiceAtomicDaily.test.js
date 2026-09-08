@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { confirmedPublishedGame, winnersCandidate } from '../../src/services/pickdesk/winnersAdmissions.js';
 
 const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
@@ -40,6 +41,35 @@ describe('atomic daily-picks storage', () => {
   beforeEach(() => {
     mocks.rpc.mockReset();
     mocks.from.mockReset();
+  });
+
+  it.each(['endorse', 'decline'])('retains the staged MLB %s decision through storage and exact publication confirmation', async decision => {
+    const pick = ncaafPick({ league: 'MLB', sport: 'baseball_mlb', homeTeam: 'Los Angeles Dodgers', awayTeam: 'Cincinnati Reds',
+      pick: 'Los Angeles Dodgers ML -150', type: 'moneyline', odds: -150, spread: null,
+      commence_time: '2026-09-08T23:10:00Z', model: 'codex-gpt-6-astra', prompt_sha: 'test-era',
+      decision_policy: 'mlb-judgment-v2', judgment_run_id: '45f8f92a-0ccf-43ea-8259-4583c574a2fb',
+      price_endorsement: decision, odds_visibility: 'odds_visible' });
+    let published;
+    mocks.rpc.mockImplementation(async (_name, args) => {
+      published = structuredClone(args.p_new_picks[0]);
+      return { data: { added: 1, skipped: 0, total: 1, game_ids: ['820001'], mode: 'insert' }, error: null };
+    });
+    const q = { select: () => q, eq: () => q, limit: async () => ({ data: [{ picks: [published] }], error: null }) };
+    mocks.from.mockReturnValue(q);
+    expect((await picksService.storeDailyPicksInDatabase([pick], '2026-09-08')).success).toBe(true);
+    const confirmed = await confirmedPublishedGame({ date: '2026-09-08', league: 'MLB', pick },
+      { readPublished: picksService.pickAlreadyStoredByGameId });
+    expect(confirmed).toMatchObject({ decision_policy: pick.decision_policy, judgment_run_id: pick.judgment_run_id,
+      price_endorsement: decision, odds_visibility: 'odds_visible' });
+    expect(winnersCandidate({ date: '2026-09-08', league: 'MLB', kind: 'game', pick: confirmed }).policy_version).toBe('mlb-conviction-v4');
+  });
+
+  it('preserves an explicitly supplied legacy MLB policy without relabeling old records', async () => {
+    mocks.rpc.mockResolvedValue({ data: { added: 1, skipped: 0, total: 1, game_ids: ['820001'], mode: 'insert' }, error: null });
+    await picksService.storeDailyPicksInDatabase([ncaafPick({ league: 'MLB', decision_policy: 'mlb-judgment-v1' })], '2026-09-08');
+    const stored = mocks.rpc.mock.calls[0][1].p_new_picks[0];
+    expect(stored.decision_policy).toBe('mlb-judgment-v1');
+    expect(stored).not.toHaveProperty('judgment_run_id');
   });
 
   it('sends the mapped NCAAF pick to one date-keyed atomic RPC', async () => {

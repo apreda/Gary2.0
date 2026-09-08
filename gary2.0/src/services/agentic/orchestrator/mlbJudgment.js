@@ -10,12 +10,14 @@
  *
  * Every phase is validated and durably recorded before the next operation.
  * Record failures stop the workflow; missing research remains explicit evidence
- * uncertainty. The caller supplies session continuity, cancellation and budgets.
+ * uncertainty. The caller supplies session continuity, a cancellation signal
+ * and budgets. Cancellation stops the workflow rather than becoming evidence.
  */
 import { mlbGameKind } from './mlbCaseMenu.js';
 import { GAME_ML_CAP } from './orchestratorConfig.js';
 import { finiteMarketNumber, isAmericanPrice } from '../../marketTruth.js';
 import { pickSideOf } from '../../closingLine.js';
+import { awaitWithSignal, requestSignal } from './requestCancellation.js';
 
 export const MLB_JUDGMENT_POLICY = 'mlb-judgment-v2';
 export const MLB_EXPECTATION_IDS = Object.freeze(['opening', 'middle', 'finish', 'offense']);
@@ -181,31 +183,40 @@ Return only JSON: ${JSON.stringify({ ticket_id: ticket.id, decision: 'endorse|de
 }
 
 /** Throws on malformed decisions or a missing durable receipt; never silently skips a stage. */
-export async function runMlbJudgment({ input: suppliedInput, ask, research, record, readMemory, clock = Date.now }) {
+export async function runMlbJudgment({ input: suppliedInput, ask, research, record, readMemory, clock = Date.now, signal: suppliedSignal }) {
+  const signal = requestSignal(suppliedSignal);
+  signal?.throwIfAborted();
   const input = validateInput(suppliedInput);
   if (typeof ask !== 'function' || typeof record !== 'function' || typeof clock !== 'function') fail('ask, durable record and clock callbacks are required');
   const receipts = {};
   let runId;
+  async function step(operation) {
+    const result = await awaitWithSignal(operation, signal);
+    // A provider may complete at the same time it is cancelled. Never use its
+    // late answer or start another phase after the game has been abandoned.
+    signal?.throwIfAborted();
+    return result;
+  }
   async function persist(phase, data) {
     const envelope = { schema_version: 1, policy_version: MLB_JUDGMENT_POLICY, odds_visibility: 'odds_visible', odds_visible: true,
       game_id: input.gameId, game_date: input.gameDate, recorded_at: new Date(clock()).toISOString(), data: clone(data) };
     if (phase === 'initial_commit') envelope.input = { gameKind: input.gameKind, allowedTickets: clone(input.allowedTickets) };
-    const receipt = await record(phase, clone(envelope));
+    const receipt = await step(() => record(phase, clone(envelope)));
     if (!object(receipt) || receipt.ok !== true || !string(receipt.run_id) || receipt.phase !== phase || !string(receipt.payload_sha256)
       || !string(receipt.recorded_at) || !Number.isFinite(Date.parse(receipt.recorded_at)) || (runId && receipt.run_id !== runId)) fail(`${phase} did not receive a matching durable receipt`);
     runId = receipt.run_id;
     receipts[phase] = clone(receipt);
   }
 
-  const memory = typeof readMemory === 'function' ? await readMemory(clone(input)) : null;
-  const initial = validateInitial(parse(await ask(initialAsk(input, memory), { phase: 'initial_commit' }), 'initial_commit'), input);
+  const memory = typeof readMemory === 'function' ? await step(() => readMemory(clone(input))) : null;
+  const initial = validateInitial(parse(await step(() => ask(initialAsk(input, memory), { phase: 'initial_commit' })), 'initial_commit'), input);
   await persist('initial_commit', initial);
 
   const questions = clone(initial.factual_questions);
   const factualResearch = { status: questions.length ? 'unavailable' : 'not_requested', questions, results: null };
   if (questions.length && typeof research === 'function') {
     try {
-      const results = await research(clone(questions));
+      const results = await step(() => research(clone(questions)));
       if (results != null && results !== '' && !(Array.isArray(results) && !results.length)
         && !(object(results) && (results.error || results.ok === false || results.success === false))) {
         factualResearch.status = 'completed';
@@ -215,15 +226,16 @@ export async function runMlbJudgment({ input: suppliedInput, ask, research, reco
         factualResearch.error = 'Targeted research returned no usable answer; questions remain unresolved.';
       }
     } catch (error) {
+      signal?.throwIfAborted();
       factualResearch.error = String(error?.message || error);
     }
   } else if (questions.length) factualResearch.error = 'Targeted research unavailable; questions remain unresolved.';
   await persist('factual_research', factualResearch);
 
-  const stress = validateStress(parse(await ask(stressAsk(initial, factualResearch), { phase: 'stress_test' }), 'stress_test'), initial, input, factualResearch);
+  const stress = validateStress(parse(await step(() => ask(stressAsk(initial, factualResearch), { phase: 'stress_test' })), 'stress_test'), initial, input, factualResearch);
   await persist('stress_test', stress);
   const ticket = input.allowedTickets.find(item => item.id === stress.ticket_id);
-  const price = validatePrice(parse(await ask(priceAsk(stress, ticket), { phase: 'price_assessment' }), 'price_assessment'), stress);
+  const price = validatePrice(parse(await step(() => ask(priceAsk(stress, ticket), { phase: 'price_assessment' })), 'price_assessment'), stress);
   await persist('price_assessment', price);
   return { schema_version: 1, policy_version: MLB_JUDGMENT_POLICY, odds_visibility: 'odds_visible', odds_visible: true, run_id: runId,
     game_id: input.gameId, game_date: input.gameDate, home_team: input.homeTeam, away_team: input.awayTeam,

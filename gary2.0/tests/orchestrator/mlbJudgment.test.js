@@ -156,6 +156,46 @@ describe('prospective MLB judgment sequencing', () => {
     expect(result.initial.winner).toBe('home');
     expect(result.stress.changed_side).toBe(false);
   });
+
+  it.each(['initial_commit', 'stress_test', 'price_assessment'])('does not persist a late %s model answer after game cancellation', async phase => {
+    const fixture = setup(); const controller = new AbortController();
+    fixture.options.signal = controller.signal;
+    const originalAsk = fixture.ask.getMockImplementation();
+    fixture.ask.mockImplementation(async (...args) => {
+      const answer = await originalAsk(...args);
+      if (args[1].phase === phase) controller.abort(new Error('game decision cancelled'));
+      return answer;
+    });
+    await expect(runMlbJudgment(fixture.options)).rejects.toThrow('game decision cancelled');
+    expect(fixture.record.mock.calls.map(call => call[0])).not.toContain(phase);
+  });
+
+  it('propagates parent cancellation from targeted research instead of recording unavailable evidence', async () => {
+    const fixture = setup(); const controller = new AbortController();
+    fixture.options.signal = controller.signal;
+    fixture.options.research = async () => {
+      controller.abort(new Error('game decision cancelled'));
+      throw controller.signal.reason;
+    };
+    await expect(runMlbJudgment(fixture.options)).rejects.toThrow('game decision cancelled');
+    expect(fixture.record.mock.calls.map(call => call[0])).toEqual(['initial_commit']);
+    expect(fixture.ask).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops waiting for an initial receipt on cancellation without starting research when it arrives later', async () => {
+    const fixture = setup(); const controller = new AbortController(); let resolveReceipt;
+    fixture.options.signal = controller.signal;
+    fixture.options.record = vi.fn(() => new Promise(resolve => { resolveReceipt = resolve; }));
+    const pending = runMlbJudgment(fixture.options);
+    const rejected = expect(pending).rejects.toThrow('game decision cancelled');
+    await vi.waitFor(() => expect(resolveReceipt).toBeTypeOf('function'));
+    controller.abort(new Error('game decision cancelled'));
+    await rejected;
+    resolveReceipt(receipt('initial_commit'));
+    await Promise.resolve();
+    expect(fixture.research).not.toHaveBeenCalled();
+    expect(fixture.ask).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('MLB sporting outcome, structured expectations and price boundaries', () => {

@@ -5,8 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { supabaseAdmin } from '../src/supabaseClient.js';
 import { getMlbSchedule, getGameBoxScore, getScoringFlowAttributed } from '../src/services/mlbStatsApiService.js';
-import { gameTicketIdentity, normalizedResult } from '../src/services/pickdesk/winnersBook.js';
-import { buildMlbExpectationSnapshot, reviewMlbExpectations, formatMlbExpectationMemory } from '../src/services/diary/mlbExpectations.js';
+import { buildMlbExpectationSnapshot, reviewMlbExpectations, formatMlbExpectationMemory, mlbExpectationResult } from '../src/services/diary/mlbExpectations.js';
 
 const todayET = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 const normalize = value => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -161,19 +160,20 @@ export async function reviewMlbExpectationBatch({ db = supabaseAdmin, since = '2
       leaseToken = null;
     };
     try {
-      if (!grades.some(grade => String(grade.game_id) === String(run.game_id) && grade.game_date === run.game_date && normalizedResult(grade.result))) {
+      if (!grades.some(grade => String(grade.game_id) === String(run.game_id) && grade.game_date === run.game_date && mlbExpectationResult(grade.result))) {
         report.unsettled++;
         continue;
       }
       const events = await pages(() => db.from('mlb_judgment_events').select('*').eq('run_id', run.run_id), 'event_id', 'judgment events', signal);
       if (!events.some(event => event.phase === 'published')) { report.unsettled++; continue; }
       const snapshot = buildMlbExpectationSnapshot(run, events);
-      const identity = gameTicketIdentity({ ...snapshot, pick_text: snapshot.pick_snapshot.pick });
-      const matching = grades.filter(grade => gameTicketIdentity(grade) === identity && normalizedResult(grade.result));
-      const outcomes = new Set(matching.map(grade => normalizedResult(grade.result)));
+      const matching = grades.filter(grade => grade.game_date === snapshot.game_date && grade.league === 'MLB'
+        && String(grade.game_id) === String(snapshot.game_id) && grade.pick_text === snapshot.pick_snapshot.pick
+        && mlbExpectationResult(grade.result));
+      const outcomes = new Set(matching.map(grade => mlbExpectationResult(grade.result)));
       if (!matching.length) { report.unsettled++; continue; }
       if (outcomes.size !== 1) throw new Error('Conflicting exact-ticket grades; expectation review withheld');
-      const result = { ...matching[0], result: normalizedResult(matching[0].result) };
+      const result = { ...matching[0], result: mlbExpectationResult(matching[0].result) };
       const token = randomUUID();
       const claim = await bounded(() => withSignal(db.rpc('claim_mlb_expectation_review', {
         p_run_id: run.run_id, p_lease_token: token, p_lease_seconds: 420,

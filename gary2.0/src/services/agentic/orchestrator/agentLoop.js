@@ -4,6 +4,7 @@ import { CONFIG, GAME_PICK_MODEL, GAME_ML_CAP, GAME_RESEARCH_MODEL, GAME_RESEARC
 import { createModelSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
 import { buildResearchBriefing, extractResearcherQuestions, createResearcherFollowUpSession, askResearcher } from './researchBriefing.js';
 import { researchBudgetMs, runOptionalResearch, runResearchOnce } from './optionalResearch.js';
+import { awaitWithSignal, requestSignal } from './requestCancellation.js';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { createCostTracker } from './costTracker.js';
@@ -180,6 +181,8 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   const isNCAAFSport = sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
   const isNBASport = sport === 'basketball_nba' || sport === 'NBA';
   const isMLBSport = sport === 'baseball_mlb' || sport === 'MLB';
+  const mlbDecisionSignal = isMLBSport && options.mlbJudgmentJournal ? requestSignal(options.signal) : undefined;
+  mlbDecisionSignal?.throwIfAborted();
 
   // Pass sport through options so downstream builders (Pass 3) can use it
   options.sport = sport;
@@ -235,6 +238,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
 
   // PERSISTENT SESSION SETUP — one session per brain, adapter-routed.
   let currentSession = await createModelSession({ _costTracker: costTracker,
+    ...(mlbDecisionSignal ? { signal: mlbDecisionSignal } : {}),
     modelName: primaryModel,
     systemPrompt: systemPrompt,
     tools: activeTools,
@@ -279,6 +283,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     return captured;
   };
   const attachOriginalEvidence = pick => {
+    mlbDecisionSignal?.throwIfAborted();
     captureTools();
     if (mlbJudgment && !isDeepStrictEqual(originalToolResponses, mlbJudgmentSourceTools)) throw lockedMlbEvidenceError();
     if (footballCases) Object.assign(pick, footballCases);
@@ -291,6 +296,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // Apply this to every formatting/correction turn, including unusual retry
   // paths, before a tool-capable fallback can execute another factual request.
   const sendForCurrentPass = async (session, prompt, requestOptions) => {
+    mlbDecisionSignal?.throwIfAborted();
     let sent = prompt;
     if (mlbJudgment) {
       if (requestOptions?.isFunctionResponse || Array.isArray(prompt)) throw lockedMlbEvidenceError();
@@ -299,8 +305,10 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       const binding = `${content.includes('RECORDED MLB DECISION') ? '' : mlbJudgmentCardInstruction(mlbJudgment)}\n\nFORMATTING FROM THE RECORDED SOURCES ONLY. Use the original desk, original source responses, recorded targeted research and stress test already in this conversation. Do not fetch stats, ask the researcher, browse, or introduce new evidence. Preserve the recorded outcome, exact ticket, price decision and uncertainty while correcting the presentation.`;
       sent = typeof prompt === 'string' ? content + binding : { ...prompt, content: content + binding };
     }
-    const response = requestOptions === undefined
-      ? await sendToSessionWithRetry(session, sent) : await sendToSessionWithRetry(session, sent, requestOptions);
+    const response = mlbDecisionSignal
+      ? await awaitWithSignal(() => sendToSessionWithRetry(session, sent, { ...requestOptions, signal: mlbDecisionSignal }), mlbDecisionSignal)
+      : requestOptions === undefined ? await sendToSessionWithRetry(session, sent) : await sendToSessionWithRetry(session, sent, requestOptions);
+    mlbDecisionSignal?.throwIfAborted();
     if (mlbJudgment && (response.toolCalls?.length || /^\s*(?:[-*]\s*)?ASK RESEARCHER:/im.test(response.content || ''))) throw lockedMlbEvidenceError();
     return response;
   };
@@ -359,12 +367,13 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       mlbJudgmentSourceTools = structuredClone(originalToolResponses);
       mlbJudgment = await runMlbJudgmentSession({ game: options.game, homeTeam, awayTeam,
         deskText: options.originalGaryDesk || userMessage, researchBriefing: _researchBriefing,
-        memory: options.mlbExpectationMemory, originalToolResponses, messages, journal: options.mlbJudgmentJournal,
+        memory: options.mlbExpectationMemory, originalToolResponses, messages, journal: options.mlbJudgmentJournal, signal: mlbDecisionSignal,
         ask: async (prompt, { phase }) => {
-          options.signal?.throwIfAborted();
+          mlbDecisionSignal?.throwIfAborted();
           console.log(`[MLB Judgment] ${phase} — same Gary session (${currentModelName})`);
           messages.push({ role: 'user', content: prompt });
-          const answer = await sendToSessionWithRetry(currentSession, prompt, { signal: options.signal });
+          const answer = await sendToSessionWithRetry(currentSession, prompt, { signal: mlbDecisionSignal });
+          mlbDecisionSignal?.throwIfAborted();
           if (answer.toolCalls?.length || !answer.content) throw new Error(`MLB ${phase} requires a complete structured decision`);
           messages.push({ role: 'assistant', content: answer.content });
           return answer.content;
@@ -374,13 +383,13 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
             deadlineAt: process.env.GARY_CHILD_DEADLINE_AT, decisionReserveMs: 10 * 60 * 1000 });
           if (!researcherOn || timeoutMs <= 0) return { error: 'Targeted factual research unavailable within the pregame budget' };
           const followUp = await runOptionalResearch({ models: [_researchModelUsed || GAME_RESEARCH_MODEL],
-            timeoutMs, signal: options.signal, build: async (researchModel, signal) => {
+            timeoutMs, signal: mlbDecisionSignal, build: async (researchModel, signal) => {
               const session = await createResearcherFollowUpSession({ researchModel, scoutReportContent: options.scoutReport || '',
                 briefing: _researchBriefing || '', sport, homeTeam, awayTeam, _costTracker: costTracker, signal });
               return askResearcher(session, questions.map(q => `${q.question} (Expectation: ${q.expectation_id}; ${q.why_it_matters})`),
                 { sport, homeTeam, awayTeam, options, signal });
             } });
-          options.signal?.throwIfAborted();
+          mlbDecisionSignal?.throwIfAborted();
           return followUp.result ? { answer: followUp.result, model: followUp.model, observed_at: new Date().toISOString() }
             : { error: followUp.failures.join(' | ') || 'Targeted facts remain unavailable' };
         },
@@ -511,6 +520,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   }
 
   while (iteration < effectiveMaxIterations) {
+    mlbDecisionSignal?.throwIfAborted();
     iteration++;
     console.log(`\n[Orchestrator] Iteration ${iteration}/${effectiveMaxIterations} (${provider}, ${currentModelName})`);
 
@@ -601,6 +611,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
         }
 
       } catch (error) {
+        mlbDecisionSignal?.throwIfAborted();
         if (mlbJudgment && error.message?.includes('MALFORMED_FUNCTION_CALL')) throw lockedMlbEvidenceError();
         if (error.isQuotaError) {
           // ONE BRAIN PER PICK (founder, Aug 27: "i want the same core brain
@@ -1812,6 +1823,7 @@ INVESTIGATION COMPLETE`
         role: 'user',
         content: `Your response was CUT OFF mid-output (token limit reached). Output your COMPLETE pick JSON again — shorter rationale is fine but it must be COMPLETE (not truncated). Use stat abbreviations (AdjEM, ORtg, DRtg, eFG%) to save space.`
       });
+      if (mlbJudgment) nextMessageToSend = messages.at(-1).content;
       continue;
     }
 
@@ -1836,6 +1848,7 @@ INVESTIGATION COMPLETE`
 
 Output your complete pick JSON with the full rationale in the "rationale" field.`
       });
+      if (mlbJudgment) nextMessageToSend = messages.at(-1).content;
 
       continue; // Retry
     }

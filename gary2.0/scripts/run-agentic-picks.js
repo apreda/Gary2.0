@@ -171,24 +171,35 @@ async function runMlbJuneEngine(game, runnerOptions) {
   // pick system... fallback to another one like opus is fine"): a failure
   // re-runs the SAME engine — same desk, same prompts — on the next model
   // in the cascade. The separate pickdesk brain is retired.
+  runnerOptions.signal?.throwIfAborted();
   const production = isProductionWinnersRun({ shouldStore, useTestTable, dryRun: args.includes('--dry-run') });
   const cutoff = new Date().toISOString();
   const date = new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   // A read failure is recorded explicitly; unavailable memory cannot masquerade
   // as reviewed evidence. No historical notebook is substituted.
-  const memory = production ? await readMlbExpectationMemory({ db: winnersAdmin, date, before: cutoff })
-    .catch(error => ({ rows: [], text: '', unavailable: error.message, cutoff })) : null;
+  const memory = production ? await readMlbExpectationMemory({ db: winnersAdmin, date, before: cutoff, signal: runnerOptions.signal })
+    .catch(error => {
+      runnerOptions.signal?.throwIfAborted();
+      return { rows: [], text: '', unavailable: error.message, cutoff };
+    }) : null;
   if (memory?.unavailable) console.warn(`[MLB Memory] ${memory.unavailable}`);
   const attempt = async model => {
+    runnerOptions.signal?.throwIfAborted();
     const journal = production ? createMlbJudgmentJournal({ db: winnersAdmin, game, model, promptSha: await junePromptSha(), signal: runnerOptions.signal }) : null;
     let decision;
     try {
       decision = await analyzeGame(game, 'baseball_mlb', { ...runnerOptions, modelOverride: model,
         mlbJudgmentJournal: journal, mlbExpectationMemory: memory });
+      runnerOptions.signal?.throwIfAborted();
       if (production && decision?.pick && !decision.error && !decision._mlbJudgment?.receipts?.price_assessment) {
         decision = { error: 'Production MLB decision did not complete its durable judgment stages' };
       }
-    } catch (error) { decision = { error: error.message }; }
+    } catch (error) {
+      // Cancellation abandons the game; it is not a model failure that should
+      // launch the same research again on another brain.
+      runnerOptions.signal?.throwIfAborted();
+      decision = { error: error.message };
+    }
     if (decision?.error || !decision?.pick) {
       await journal?.fail(decision?.error || 'No final MLB card').catch(error => console.warn(`[MLB Journal] Failure receipt unavailable: ${error.message}`));
     } else if (journal) decision._mlbJudgmentJournal = journal;

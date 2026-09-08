@@ -12,13 +12,13 @@ export function mlbJudgmentMarketError(game, sport) {
 
 /** Compose the staged decision with the already-open, unchanged Gary session. */
 export async function runMlbJudgmentSession({ game, homeTeam, awayTeam, deskText, researchBriefing, memory,
-  originalToolResponses, messages, ask, research, journal }) {
+  originalToolResponses, messages, ask, research, journal, signal }) {
   const menu = buildMlbJudgmentTickets(game, homeTeam, awayTeam);
   const source = { ...menu, game: structuredClone(game), deskText, researchBriefing, memory,
     toolResponses: structuredClone(originalToolResponses), conversation: structuredClone(messages), odds_visibility: 'odds_visible' };
   return runMlbJudgment({ input: { ...menu, gameId: String(game.bdl_game_id ?? game.id),
     gameDate: new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }), homeTeam, awayTeam },
-  ask, research, readMemory: async () => memory ? { text: memory.text, reviewed_games: memory.reviewed_games,
+  ask, research, signal, readMemory: async () => memory ? { text: memory.text, reviewed_games: memory.reviewed_games,
     expectations: memory.expectations, excluded: memory.excluded, unavailable: memory.unavailable } : null,
   record: (phase, envelope) => journal.record(phase, envelope, source) });
 }

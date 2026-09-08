@@ -1,4 +1,6 @@
 /** Gary chooses Winners from factually eligible original MLB decisions. */
+import { isDeepStrictEqual } from 'node:util';
+import { mlbJudgmentDatabaseCall } from './mlbJudgmentStorage.js';
 import { codexCliOneShot } from '../agentic/orchestrator/providerAdapters/codexCliSession.js';
 import { MLB_JUNE_BRAIN_MODEL } from '../agentic/orchestrator/orchestratorConfig.js';
 import { mlbJudgmentEvidenceError } from '../agentic/orchestrator/mlbJudgment.js';
@@ -117,17 +119,43 @@ export async function selectMlbWinners(run,{oneShot=codexCliOneShot,clock=Date.n
 }
 
 const check=result=>{if(result.error)throw result.error;return result.data;};
+
+// A transient publication response must not discard Gary's completed selection.
+// Retry only its identical write, and use the immutable ledger to resolve an
+// ambiguous successful commit. Never invoke the model again for this recovery.
+async function finishSelection(client,run,args) {
+  let stored,lastError;
+  for(let attempt=0;attempt<2;attempt++) {
+    try {
+      stored=check(await mlbJudgmentDatabaseCall(()=>client.rpc('finish_mlb_winners_selection',args)));
+      break;
+    } catch(error) {lastError=error;}
+  }
+  if(lastError && !stored?.completed && args.p_selection) {
+    try {
+      const saved=check(await mlbJudgmentDatabaseCall(()=>client.from('winners_selection_runs')
+        .select('id,status,attempts,selection,model,ms').eq('id',run.id).maybeSingle()));
+      if(saved?.id===run.id && saved.status==='completed' && saved.attempts===args.p_attempt
+        && saved.model===args.p_model && saved.ms===args.p_ms && isDeepStrictEqual(saved.selection,args.p_selection)) {
+        return {completed:true,admitted:saved.selection.ranked_candidates.filter(candidate=>candidate.selected).length,selection_run_id:run.id};
+      }
+    } catch { /* Preserve the original write failure when its status is unknown. */ }
+  }
+  if(stored)return stored;
+  throw lastError || new Error('Missing Winners selection publication response');
+}
+
 /** SQL owns leases, snapshots, capacity and atomic immutable admission. */
 export async function runMlbSelectionWindow(client,date,{select=selectMlbWinners,now=Date.now()}={}) {
-  const slate=check(await client.from('daily_slate').select('commence_time').eq('date',date).eq('league','MLB')) || [];
+  const slate=check(await mlbJudgmentDatabaseCall(()=>client.from('daily_slate').select('commence_time').eq('date',date).eq('league','MLB'))) || [];
   const windows=[...new Set(slate.map(s=>s.commence_time))].filter(t=>Date.parse(t)>now+120_000 && Date.parse(t)<=now+25*60_000).sort();
   for(const window of windows) {
-    const rows=check(await client.rpc('claim_mlb_winners_selection',{p_date:date,p_window_start:window}));
+    const rows=check(await mlbJudgmentDatabaseCall(()=>client.rpc('claim_mlb_winners_selection',{p_date:date,p_window_start:window})));
     const run=rows?.[0];if(!run)continue;
     let result;try {result=await select(run);}catch(error){result={ok:false,error:error.message};}
-    const stored=check(await client.rpc('finish_mlb_winners_selection',{p_id:run.id,p_attempt:run.attempts,
+    const stored=await finishSelection(client,run,{p_id:run.id,p_attempt:run.attempts,
       p_selection:result.ok?result.selection:null,p_model:result.model || null,p_ms:Number.isFinite(result.ms)?Math.round(result.ms):null,
-      p_error:result.ok?null:result.error || 'Gary did not return a selection'}));
+      p_error:result.ok?null:result.error || 'Gary did not return a selection'});
     console.log(`[Winners] Gary MLB group ${run.cohort}: ${stored?.completed?`${stored.admitted} selected`:`not published (${stored?.reason || 'unknown'})`}`);
     return {worked:true,runId:run.id,...stored};
   }

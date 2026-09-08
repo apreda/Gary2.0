@@ -46,8 +46,8 @@ describe.skipIf(!supported)('Immutable MLB judgment ledger on isolated local Pos
       throw new Error(`Could not start isolated Winners Postgres: ${error.stderr?.toString() || error.message}\n${serverLog}`,{cause:error});
     }
     sql(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS; CREATE TABLE public.daily_slate(date text,league text,commence_time timestamptz,bdl_game_id bigint,game_status text,ml_home integer); CREATE TABLE public.daily_picks(date text,picks jsonb); CREATE TABLE public.game_results(id bigint generated always as identity primary key,game_date text,game_id text,league text,pick_text text,result text); GRANT SELECT ON public.daily_slate,public.daily_picks,public.game_results TO service_role;`);
-    const identityMigrations=readdirSync(new URL('../../../supabase/migrations/',import.meta.url)).filter(name=>name.endsWith('_mlb_original_evidence_identity_guards.sql')).sort();
-    expect(identityMigrations).toHaveLength(1);
+    const identityMigrations=readdirSync(new URL('../../../supabase/migrations/',import.meta.url)).filter(name=>name.endsWith('_mlb_original_evidence_identity_guards.sql') || name.endsWith('_mlb_winners_review_prerequisites.sql')).sort();
+    expect(identityMigrations).toHaveLength(2);
     for(const name of ['20260904203500_winners_admissions.sql','20260904203650_winners_review_recovery.sql','20260904205218_winners_prop_cohort_reservations.sql','20260908150211_mlb_gary_winners_selection.sql','20260908155113_mlb_durable_judgment_ledger.sql',...identityMigrations])sql(readFileSync(new URL(`../../../supabase/migrations/${name}`,import.meta.url),'utf8'));
   },30000);
   afterAll(()=>{if(started)execFileSync(`${bin}/pg_ctl`,['-D',`${directory}/data`,'-m','immediate','-w','stop'],{env:pgEnv,stdio:'ignore'});if(directory)rmSync(directory,{recursive:true,force:true});});
@@ -360,6 +360,43 @@ describe.skipIf(!supported)('Immutable MLB judgment ledger on isolated local Pos
     expect(()=>record(p)).toThrow(/current owned/);
     expect(sql('SELECT count(*) FROM public.mlb_expectation_reviews;')).toBe('0');
     p.leaseToken=next;expect(record(p)).toBe('t');
+  });
+
+  it('does not spend a factual model attempt before the original v4 publication receipt is available',()=>{
+    const f=published(setup());candidate(f);
+    sql(`UPDATE public.winners_candidates SET status='pending',attempts=0,review=NULL,reviewed_at=NULL,created_at=clock_timestamp()-interval '1 minute',
+      evidence_snapshot=evidence_snapshot#-'{mlbJudgment,receipts,published}';`);
+    expect(sql('SET ROLE service_role; SELECT count(*) FROM public.claim_winners_candidate();').split('\n').at(-1)).toBe('0');
+    expect(sql('SELECT attempts FROM public.winners_candidates;')).toBe('0');
+    // Exact receipt-only recovery supplies the immutable server receipt; the
+    // pick, prior four phases, source data and attempt token stay unchanged.
+    sql(`UPDATE public.winners_candidates SET evidence_snapshot=jsonb_set(evidence_snapshot,'{mlbJudgment,receipts,published}',${json(f.receipts.published)});`);
+    expect(sql('SET ROLE service_role; SELECT attempts FROM public.claim_winners_candidate();').split('\n').at(-1)).toBe('1');
+  });
+  it('keeps the two-model-attempt limit for complete v4 evidence after provider failures',()=>{
+    const f=published(setup());candidate(f);
+    sql("UPDATE public.winners_candidates SET status='pending',attempts=0,review=NULL,reviewed_at=NULL,created_at=clock_timestamp()-interval '1 minute';");
+    for(const attempt of [1,2]) {
+      expect(sql('SET ROLE service_role; SELECT attempts FROM public.claim_winners_candidate();').split('\n').at(-1)).toBe(String(attempt));
+      expect(sql(`SET ROLE service_role; SELECT public.finish_winners_review(1,${attempt},'unavailable','factual review: provider unavailable',NULL,'gpt-5.6-sol',100);`).split('\n').at(-1)).toBe('t');
+      sql("UPDATE public.winners_candidates SET reviewed_at=clock_timestamp()-interval '3 minutes';");
+    }
+    expect(sql('SET ROLE service_role; SELECT count(*) FROM public.claim_winners_candidate();').split('\n').at(-1)).toBe('0');
+    expect(sql('SELECT attempts FROM public.winners_candidates;')).toBe('2');
+  });
+  it('leaves the legacy prop review claim contract unchanged',()=>{
+    sql(`INSERT INTO public.winners_candidates(game_date,league,kind,game_id,ticket_key,market_key,pick_text,odds,commence_time,pick_snapshot,evidence_snapshot,status,created_at)
+      VALUES (${quote(today())},'NBA','prop','100','legacy-prop','legacy-prop-market','Player over points',-110,clock_timestamp()+interval '1 hour','{}','{}','pending',clock_timestamp()-interval '1 minute');`);
+    expect(sql('SET ROLE service_role; SELECT attempts FROM public.claim_winners_candidate();').split('\n').at(-1)).toBe('1');
+  });
+
+  it('allows a complete declined v4 ticket to leave pending through deterministic exclusion',()=>{
+    const f=published(setup({decision:'decline'}));candidate(f);
+    sql("UPDATE public.winners_candidates SET status='pending',attempts=0,review=NULL,reviewed_at=NULL,created_at=clock_timestamp()-interval '1 minute';");
+    expect(sql('SET ROLE service_role; SELECT attempts FROM public.claim_winners_candidate();').split('\n').at(-1)).toBe('1');
+    expect(sql("SET ROLE service_role; SELECT public.finish_winners_review(1,1,'unavailable','Gary declined to endorse this exact priced ticket',NULL,NULL,0);").split('\n').at(-1)).toBe('t');
+    expect(sql('SELECT status FROM public.winners_candidates;')).toBe('unavailable');
+    expect(claim(f)).toEqual([]);
   });
 
 });
