@@ -587,14 +587,17 @@ struct BullpenResearchArm: Codable {
 /// Only a current schema with an exact team and coherent observed dates earns
 /// a table. The ledger makes no assertion about tonight's availability.
 struct BullpenResearchLedger {
+    /// Final-boxscore sources the ledger accepts, exactly as the writer labels them.
+    static let sources: Set<String> = ["MLB StatsAPI final boxscores", "BallDontLie final box scores"]
     let arms: [BullpenResearchArm]
     let dates: [String]
     let asOf: String
+    let source: String
 
     init?(meta: SwapMeta?, league: String, slateDate: String?, teamID: String?) {
         guard league == "MLB", let meta,
               meta.kind == "bullpen_fatigue", meta.research_version?.value == "bullpen-facts-v1",
-              meta.source == "MLB StatsAPI final boxscores", meta.games == 3,
+              let source = meta.source, Self.sources.contains(source), meta.games == 3,
               let id = meta.team_identity?.value?.id, id > 0, teamID == String(id),
               let slateDate, ExactGameIdentity(date: slateDate, gameID: 1) != nil,
               let asOf = meta.source_as_of?.value, let dates = meta.window_dates?.value,
@@ -613,7 +616,7 @@ struct BullpenResearchLedger {
                   }
                   return true
               }) else { return nil }
-        self.arms = arms; self.dates = dates; self.asOf = asOf
+        self.arms = arms; self.dates = dates; self.asOf = asOf; self.source = source
     }
 }
 

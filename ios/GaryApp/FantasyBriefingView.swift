@@ -21,6 +21,7 @@ struct FantasyBriefingPage: View {
     let refreshToken: UUID
     let isVisible: Bool
     var compact = false
+    var embeddedInHub = false
     /// Return true only when the exact league/player has a populated card.
     var openPlayer: (FantasyDecision) -> Bool = { _ in false }
     @AppStorage("fantasyMLBFormat") private var mlbFormat = "categories"
@@ -54,7 +55,9 @@ struct FantasyBriefingPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 14 : 24) {
-            if compact { watchMasthead } else { masthead }
+            if compact {
+                if embeddedInHub { scoringMenu } else { watchMasthead }
+            } else { masthead }
             TimelineView(.periodic(from: .now, by: 60)) { context in
                 if compact { watchContent(now: context.date) }
                 else { content(now: context.date) }

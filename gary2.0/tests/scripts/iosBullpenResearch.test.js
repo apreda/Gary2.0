@@ -43,6 +43,11 @@ func ledger(_ row: [String: Any], league: String = "MLB", date: String? = "2026-
 }
 let valid = ledger(base)!
 precondition(valid.arms.count == 1 && valid.asOf == "2026-09-06")
+precondition(valid.source == "MLB StatsAPI final boxscores", "The ledger carries its own source label")
+var licensed = base; licensed["source"] = "BallDontLie final box scores"
+precondition(ledger(licensed)?.source == "BallDontLie final box scores", "A licensed final-box source earns the same ledger")
+var unknownSource = base; unknownSource["source"] = "Some other feed"
+precondition(ledger(unknownSource) == nil, "An unrecognized source must not earn a ledger")
 precondition(valid.arms[0].inningsLabel == "2.1" && valid.arms[0].pitchesLabel == "37")
 precondition(valid.arms[0].seasonERALabel == "3.45" && valid.arms[0].seasonIPLabel == "52.1")
 precondition(ledger(base, league: "NFL") == nil)

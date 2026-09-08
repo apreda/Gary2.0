@@ -39,7 +39,20 @@ describe('native next-slate schedule', () => {
       ];
       const fixturePath = join(directory, 'connections.json');
       writeFileSync(fixturePath, JSON.stringify(fixtures));
-      const modelSource = read('HubJudgment.swift') + '\n' + models.slice(models.indexOf('struct Connection:'), models.indexOf('// MARK: - Live Scores'));
+      const policy = read('FantasyBriefing.swift');
+      const policyStart = policy.indexOf('enum GaryMlbMetricPolicy {');
+      let depth = 0, policyEnd = policyStart;
+      for (let i = policy.indexOf('{', policyStart); i < policy.length; i += 1) {
+        if (policy[i] === '{') depth += 1;
+        if (policy[i] === '}' && --depth === 0) { policyEnd = i + 1; break; }
+      }
+      const identityStart = models.indexOf('struct ExactGameIdentity:');
+      depth = 0; let identityEnd = identityStart;
+      for (let i = models.indexOf('{', identityStart); i < models.length; i += 1) {
+        if (models[i] === '{') depth += 1;
+        if (models[i] === '}' && --depth === 0) { identityEnd = i + 1; break; }
+      }
+      const modelSource = read('HubJudgment.swift') + '\n' + policy.slice(policyStart, policyEnd) + '\n' + models.slice(identityStart, identityEnd) + '\n' + models.slice(models.indexOf('struct Connection:'), models.indexOf('// MARK: - Live Scores'));
       const formatterSource = formatters.slice(formatters.indexOf('let isoFormatterFrac:'), formatters.indexOf('struct BillfoldTopPickCandidate'));
       const component = view.slice(view.indexOf('struct FootballNextSlatePreview: View'), view.indexOf('// MARK: - Football Today feed'));
       const properties = component.slice(component.indexOf('    private var meta:'), component.indexOf('    var body: some View'));

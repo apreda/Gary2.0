@@ -34,3 +34,33 @@ A bounded read-only search used 11 company Gmail queries, 14 Google Drive keywor
 Only `web/app/data-sources/page.tsx` and `web/app/terms/page.tsx` changed. No native binary, provider request, runtime data or consent flow changed. Actual React server rendering verified the Terms fragment destination, visible credit, project/dataset/license anchors, adaptation and non-endorsement text, and one page heading per page. All preexisting rendered Terms content is byte-identical after removing the new license paragraph. The iOS Settings Terms URL remains the entrypoint. Full web typecheck and targeted ESLint pass. No permanent copy-mirroring test was added. The React best-practices review confirmed these remain static Server Components without extra client code.
 
 Sanitized workspace evidence: `launch-readiness/continuation-2026-09-08/nflverse-credit-render-receipt.json`, rendered `nflverse-credit-{terms,data-sources}.html`, `nflverse-credit-typecheck.log`, and `nflverse-credit-receipt.md`. The renderer initially assumed anchor attribute order; the one-off harness was corrected to inspect the actual Next Link output, with no application change needed.
+
+## Resolution and Apple declaration basis — September 8, 2026, evening (Claude)
+
+Adam authorized closing this gate on September 8 ("yes do all three"). This section records the basis Gary relies on for Apple's Content Rights field, what changed in the product, and the remaining migration. It is a founder decision on risk posture with an engineering plan, not outside legal advice.
+
+**Answer entered in App Store Connect:** the app contains, shows or accesses third-party content, and Gary has the necessary rights or is otherwise permitted to use it under the laws of the countries where the app is available (United States and Canada). The basis, source by source:
+
+| Source | What Gary displays | Basis |
+| --- | --- | --- |
+| BALLDONTLIE | Schedules, teams/players, statistics, odds, scores, and Gary's derived analysis | Terms §6 (August 4, 2026): commercial display, analysis and derivatives without separate approval. Active paid subscription. |
+| The Odds API | NCAAF player-prop lines and prices inside Gary's stored picks | Terms (August 31, 2026): commercial app/UI display, indefinite retention and derived values. |
+| nflverse data | Server-side NFL research inputs; derived facts in Gary's text | CC BY 4.0 with public credit, license link and adaptation notice at `/data-sources#nflverse`, linked from Terms. |
+| MLB StatsAPI (public, unauthenticated) | Dated factual statistics: relief innings, pitches and earned runs from final box scores (bullpen ledger); first-inning run counts; live outs and base occupancy on live cards; probable-starter and schedule facts inside Gary's text | Facts are displayed as facts, with the source and observation date shown to the reader, in non-bulk, per-game form. Sports statistics and scores are not protected expression under United States copyright law (Feist Publications v. Rural Telephone; NBA v. Motorola), and Canadian law does not protect bare facts. Gary reproduces no MLB logos, marks, photos, audio, video, play descriptions or editorial text, and offers no data feed or bulk download. Gary's reasoning is original text. The residual exposure is contractual (MLB's API copyright notice reserves commercial use for prior written authorization); it is being reduced by the migration below, and no MLB endorsement is claimed anywhere. |
+| Baseball Savant | One customer-visible value: the hitter regression research compares a batter's batting average with Savant's published expected batting average (xBA), e.g. ".308 AVG vs .257 xBA". xERA was removed in build 918; the retired pitcher regression card's opponent-xBA, hard-hit and barrel fields have no backend writer. Other Savant reads are server-side inputs to Gary's original text. | The displayed value is a single published leaderboard statistic shown as a fact with the batter's name and season; the same factual-statistics basis applies. It is on the migration list: either attribute it inline as a Savant figure or retire the comparison if the founder prefers no Savant-derived display. |
+| Tank01 | Nothing shipping (NBA depth-chart tools only, NBA paused) | Verify terms before any NBA relaunch or salary surface. |
+
+**Product changes recorded with this resolution.**
+
+- Build 920: the native bullpen ledger accepts either a `MLB StatsAPI final boxscores` or a `BallDontLie final box scores` source label and prints the label it received (`BullpenResearchLedger.source`), so the backend can move sources without another native release. The workload chart and the team card both print that label with the observation date.
+- The hot/cold hitter research unit repair (September 8) removed 19 live rows that labeled at-bat counts as plate appearances; the recent-window sample now states the provider's actual unit.
+
+**Migration plan for the remaining direct MLB StatsAPI reads (customer-visible first).**
+
+1. Bullpen ledger → BALLDONTLIE `/mlb/v1/stats` per-game pitching lines (`pitching_outs`, `pitch_count`, `er`, `p_k`, `p_bb`, `games_started`) and `/mlb/v1/games` finals for the window. Backend only; iOS already accepts the new label.
+2. First-inning research → BALLDONTLIE `/mlb/v1/games` `inning_scores` for finals; probable starters from the BALLDONTLIE lineup identity already used by `mlb-field-lineups`.
+3. Live outs and base occupancy on live cards → BALLDONTLIE live game data where it carries them; otherwise the diamond is omitted and the card keeps score and inning.
+4. Hitter regression xBA comparison → inline Savant attribution on the row, or retire the comparison (founder call).
+5. Server-side research inputs (scout desk, September facts, pen arms, Tomorrow, streaks, shadow/diary/review scripts) → migrate lane by lane after the customer-visible paths; these feed Gary's original text and are not displayed.
+
+Until each step ships, the affected surface keeps its visible source label and date so the reader always sees where a number came from.

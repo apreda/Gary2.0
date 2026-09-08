@@ -180,5 +180,20 @@ try {
   else line('Unpushed', '✅ none');
 } catch (e) { failed = true; line('Git truth', `(unavailable: ${e.message})`); }
 
+// ─── SUPPORT QUEUE (profile reports) ───
+// Every session that runs this check sees the human support queue; an open
+// report is a flag for the operator, not a parity failure.
+try {
+  const { execFileSync } = await import('node:child_process');
+  const raw = execFileSync(process.execPath, ['scripts/profile-safety.js', 'status'], { cwd: process.cwd(), encoding: 'utf8', timeout: 60_000 });
+  const open = Number(raw.match(/"open_reports":\s*(\d+)/)?.[1]);
+  const stale = Number(raw.match(/"open_over_24_hours":\s*(\d+)/)?.[1]);
+  console.log('\n─── SUPPORT QUEUE (profile reports) ───');
+  line('Open reports', Number.isFinite(open) ? (open === 0 ? '✅ none' : `⚠️ ${open} open · ${stale || 0} older than 24h — run: node scripts/profile-safety.js queue`) : '❓ status unreadable');
+} catch (error) {
+  console.log('\n─── SUPPORT QUEUE (profile reports) ───');
+  line('Open reports', `❓ status unavailable (${String(error?.message || error).split('\n')[0].slice(0, 80)})`);
+}
+
 console.log(`\n${failed ? '🚨 PRODUCTION PARITY FAILED OR UNVERIFIED — see flags above' : '✅ Production is this repo.'}\n`);
 process.exit(failed ? 1 : 0);

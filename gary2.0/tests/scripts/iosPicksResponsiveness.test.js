@@ -318,7 +318,7 @@ final class Reader {
   }, 90_000);
   it.skipIf(!hasSwift)('keeps real connection metadata lossless and isolates stories when a new date outruns the old request', () => {
     const models = source('Models.swift'), picks = source('PicksTab.swift');
-    const graph = source('HubJudgment.swift') + '\n' + models.slice(models.indexOf('struct Connection:'), models.indexOf('// MARK: - Live Scores'));
+    const graph = source('HubJudgment.swift') + '\n' + block(source('FantasyBriefing.swift'), 'enum GaryMlbMetricPolicy {') + '\n' + block(models, 'struct ExactGameIdentity:') + '\n' + models.slice(models.indexOf('struct Connection:'), models.indexOf('// MARK: - Live Scores'));
     expect(runSwift(`import Foundation
 ${graph}
 ${block(source('SharedStores.swift'), 'enum PicksContentEquality {')}

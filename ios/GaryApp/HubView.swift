@@ -57,7 +57,7 @@ fileprivate struct HubScaledText: ViewModifier {
     }
 }
 
-fileprivate extension View {
+extension View {
     func hubBodyFont(_ size: CGFloat, _ weight: Font.Weight = .regular) -> some View {
         modifier(HubScaledText(size: max(14, size), weight: weight, tabular: false, relativeTo: .body))
     }
@@ -131,59 +131,6 @@ func hubValueTint(_ s: Signal) -> Color {
     // grader's branch on it is unaffected.
     if s.kind == .hrThreat { return GaryColors.gold }
     return s.tone.color
-}
-
-/// Collapsed-by-default section (founder, Jul 30: the graded long-tail boards
-/// fold away — the page leads with tonight's signals). Header mirrors
-/// HubHead's grammar with a trailing chevron; the whole line toggles.
-fileprivate struct HubCollapsible<Content: View>: View {
-    let anchor: String
-    @Binding var open: Set<String>
-    let title: String
-    var count: Int? = nil
-    var sub: String? = nil
-    @ViewBuilder let content: () -> Content
-
-    private var isOpen: Bool { open.contains(anchor) }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    if isOpen { open.remove(anchor) } else { open.insert(anchor) }
-                }
-            } label: {
-                VStack(alignment: .leading, spacing: 8) {
-                    Rectangle().fill(GaryColors.gold.opacity(0.25)).frame(height: 1)
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(title.uppercased())
-                            .hubKickerFont(13.5).tracking(1.6)
-                            .foregroundStyle(GaryColors.gold)
-                        if let count, count > 0 {
-                            Text("\(count)")
-                                .hubDataFont(13)
-                                .foregroundStyle(.white.opacity(0.7))
-                        }
-                        Spacer(minLength: 0)
-                        if let sub, !sub.isEmpty {
-                            Text(sub.uppercased())
-                                .hubKickerFont(11).tracking(0.8)
-                                .foregroundStyle(.white.opacity(0.62))
-                                .lineLimit(1)
-                        }
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.55))
-                            .rotationEffect(.degrees(isOpen ? 180 : 0))
-                    }
-                }
-                .padding(.horizontal, 18)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            if isOpen { content() }
-        }
-    }
 }
 
 /// A specialist board keeps its complete renderer behind one clear disclosure.
@@ -498,6 +445,7 @@ struct HubView: View {
     @ObservedObject private var liveScores = LiveScoreCache.shared
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var loadTask: Task<Void, Never>? = nil
     @State private var loadGeneration: UInt64 = 0
     @State private var requestDate = ""
@@ -727,7 +675,15 @@ struct HubView: View {
     private var pulseRows: [LeaguePulseRow] { pulseByLeague[sel.label] ?? [] }
     @State private var pendingScrollAnchor: String? = nil
     /// Beats currently expanded past their top rows ("See all n").
-    @State private var openBeats: Set<String> = []
+    @AppStorage("hubOpenResearchModulesV1") private var savedOpenBeats = "{}"
+    private var openBeats: Set<String> {
+        get { HubResearchLayout.openSections(in: savedOpenBeats, league: sel.label) }
+        nonmutating set { savedOpenBeats = HubResearchLayout.saving(newValue, league: sel.label, in: savedOpenBeats) }
+    }
+    private var openBeatsBinding: Binding<Set<String>> {
+        Binding(get: { openBeats }, set: { openBeats = $0 })
+    }
+    @State private var researchChartSignal: Signal?
     /// Floating section nav — the trailing index button pops the section
     /// list so everything is one tap away (founder, Jul 4).
     @State private var sectionNavOpen = false
@@ -1021,7 +977,6 @@ struct HubView: View {
             return
         }
         hubScope = "hub"
-        let featured = featuredStoryIDs
         let selection = frontPageSelection
         let front = [selection.lead].compactMap { $0 } + selection.best
         let anchor: String
@@ -1034,10 +989,10 @@ struct HubView: View {
         } else if lane == .nextSlate, showsNextSlateCard {
             anchor = "nextSlate"
         } else if let beat = beats.first(where: {
-            $0.kinds.contains(lane) && !beatRows($0, featured: featured).isEmpty
+            $0.kinds.contains(lane) && !beatRows($0).isEmpty
         }) {
             anchor = beat.anchor
-        } else if overflow(featured: featured).contains(where: { $0.kind == lane }) {
+        } else if overflow.contains(where: { $0.kind == lane }) {
             anchor = "more"
         } else {
             anchor = "top"
@@ -1278,13 +1233,19 @@ struct HubView: View {
             beats = [
                 Beat(anchor: "hr", title: "Home Run Threats", kinds: [.hrThreat]),
                 Beat(anchor: "bats", title: "The Bats", kinds: [.hot, .cold, .platoon, .batterVsArm]),
-                Beat(anchor: "arms", title: "The Arms", kinds: [.starterForm, .teamRecord, .bullpenFatigue, .ballpark]),
+                Beat(anchor: "arms", title: "The Arms", kinds: [.starterForm]),
+                Beat(anchor: "bullpens", title: "Bullpens", kinds: [.bullpenFatigue]),
+                Beat(anchor: "teams", title: "Team form", kinds: [.teamRecord, .situational, .streak]),
+                Beat(anchor: "parks", title: "Parks & conditions", kinds: [.ballpark]),
                 Beat(anchor: "nrfi", title: "The NRFI Watch", kinds: [.firstInning]),
             ]
         } else {
             beats = [
                 Beat(anchor: "bats", title: "The Bats", kinds: [.hot, .cold, .platoon, .hrThreat, .batterVsArm]),
-                Beat(anchor: "arms", title: "The Arms", kinds: [.starterForm, .teamRecord, .bullpenFatigue, .ballpark]),
+                Beat(anchor: "arms", title: "The Arms", kinds: [.starterForm]),
+                Beat(anchor: "bullpens", title: "Bullpens", kinds: [.bullpenFatigue]),
+                Beat(anchor: "teams", title: "Team form", kinds: [.teamRecord, .situational, .streak]),
+                Beat(anchor: "parks", title: "Parks & conditions", kinds: [.ballpark]),
                 Beat(anchor: "nrfi", title: "The NRFI Watch", kinds: [.firstInning]),
             ]
         }
@@ -1294,28 +1255,12 @@ struct HubView: View {
     /// tomorrow." String compare works on ISO dates.
     static var hrThreatsLive: Bool { SupabaseAPI.todayEST() >= "2026-07-23" }
 
-    /// Only the three stories actually shown above are removed from later
-    /// beats, for every league. Unfeatured rows remain available in full.
-    ///
-    /// PERF (measured Aug 21 2026): this used to be rebuilt INSIDE `beatRows`,
-    /// so every beat — and every pass of the jump nav over the beats — rebuilt
-    /// `frontPageSelection`, which rebuilds `ranked`, which rebuilds
-    /// `leagueSignals` (proof-gated, date-parsing). Twelve tab switches cost
-    /// 506 `leagueSignals` evaluations and 231 `ranked` rebuilds. The callers
-    /// now compute this ONCE per pass and thread it in — the same "resolve the
-    /// snapshot once" rule `frontPageSelection` itself was written for.
-    private var featuredStoryIDs: Set<UUID> {
-        let selection = frontPageSelection
-        return Set(([selection.lead].compactMap { $0 } + selection.best).map(\.id))
-    }
-
     /// Rows for a beat, in the feed's relevance order (each row keeps its own
     /// lane kicker). Regression rows live on the board, never in a beat.
-    private func beatRows(_ beat: Beat, featured: Set<UUID>) -> [Signal] {
+    private func beatRows(_ beat: Beat) -> [Signal] {
         let kinds = Set(beat.kinds)
         return leagueSignals.filter {
             kinds.contains($0.kind)
-                && !featured.contains($0.id)
                 && $0.confirmedXI == nil
                 && $0.reg == nil
         }
@@ -1333,14 +1278,14 @@ struct HubView: View {
 
     /// Everything not already on the page — a safety net so a future backend
     /// lane always renders somewhere instead of vanishing.
-    private func overflow(featured: Set<UUID>) -> [Signal] {
+    private var overflow: [Signal] {
         // .h2h is EXCLUDED from the Hub, not merely placed (founder, Aug 6:
         // "the H2H parts here doesnt need to be on The Hub") — the team season
         // series lives on the Picks page game view, where the ledger renders.
         // Without this it would fall through to More Edges and reappear.
         var placed: Set<SignalKind> = Self.fantasyKinds.union([.regression, .h2h, .theSweat, .nextSlate, .practiceReport])
         for b in beats { for k in b.kinds { placed.insert(k) } }
-        return leagueSignals.filter { !placed.contains($0.kind) && $0.confirmedXI == nil && !featured.contains($0.id) }
+        return leagueSignals.filter { !placed.contains($0.kind) && $0.confirmedXI == nil }
     }
 
     // ---- the beats, one block each (extracted from body — the inline
@@ -1350,55 +1295,6 @@ struct HubView: View {
     private func openGameSheet(for game: String) {
         if let hit = slateIndexFor(game), slateRows.indices.contains(hit.index) {
             gameSheet = HubGameSel(row: slateRows[hit.index])
-        }
-    }
-
-    @ViewBuilder private func beatView(_ beat: Beat, featured: Set<UUID>) -> some View {
-        let rows = beatRows(beat, featured: featured)
-        // (The second HR block — "Gary's HR Calls Tonight / Longshot Lane",
-        // HubHRCallsBlock — was removed Aug 4 2026 on the founder's call: two
-        // HR sections back to back was one too many. The gold-priced Home Run
-        // Threats beat above stays. The struct and its isolated data path
-        // (hrCalls/hrProps/hrPropsF) were fully self-contained — confirmed no
-        // other surface referenced them — so this was a clean removal, not a
-        // flag-off.)
-        if !rows.isEmpty {
-            // Founder-picked shapes (Aug 6): H2H = the case card (mock H6),
-            // NRFI = the story card (mock N10). WC still speaks the old
-            // storyboard; every other beat keeps the flat feed.
-            if beat.anchor == "afterGary" {
-                HubAfterGarySection(anchor: beat.anchor,
-                                    rows: rows,
-                                    openBeats: $openBeats,
-                                    onRow: { s in openSignal(s) })
-                    .id(beat.anchor)
-            } else if beat.anchor == "nrfi" {
-                HubBoardSection(anchor: beat.anchor, open: $openBeats, title: "First-inning reads", count: rows.count) {
-                    HubNrfiSection(rows: rows, showsHeader: false) { s in openSignal(s) }
-                }.id(beat.anchor)
-            } else if beat.anchor == "matchups" {
-                HubMatchupsSection(
-                    rows: rows,
-                    slateIndexFor: { slateIndexFor($0) },
-                    openBeats: $openBeats,
-                    kickerFor: kickerText,
-                    onRow: { s in openSignal(s) },
-                    onProfile: { openSignal($0) },
-                    onGame: { openGameSheet(for: $0) }
-                )
-                .id(beat.anchor)
-            } else {
-                HubBeatSection(
-                    anchor: beat.anchor,
-                    title: beat.title,
-                    rows: rows,
-                    openBeats: $openBeats,
-                    kickerFor: kickerText,
-                    onRow: { s in openSignal(s) },
-                    onProfile: { openSignal($0) }
-                )
-                .id(beat.anchor)
-            }
         }
     }
 
@@ -1422,57 +1318,193 @@ struct HubView: View {
         )
     }
 
-    @ViewBuilder private var streakWatchSection: some View {
-        if !selStreakRows.isEmpty {
-            HubBoardSection(anchor: "streaks", open: $openBeats, title: "Streak watch", count: selStreakRows.count) {
-                HubStreakWatch(rows: selStreakRows, onTeam: { openTeamCard(for: $0) },
-                               cardFor: { intelCard(for: $0) }, onPlayer: { namedCard = $0 })
-            }
-            .id("streaks")
-        }
-    }
-
-    // The beats + WC intel + the overflow net, one extracted run.
-    @ViewBuilder private var beatsAndOverflow: some View {
-        // ONE snapshot for the whole run (see `featuredStoryIDs`).
-        let featured = featuredStoryIDs
-        let extras = overflow(featured: featured)
-        ForEach(beats) { beat in
-            beatView(beat, featured: featured)
-        }
-
-
-        if !extras.isEmpty {
-            HubBeatSection(
-                anchor: "more",
-                title: "More Edges",
-                rows: extras,
-                openBeats: $openBeats,
-                kickerFor: kickerText,
-                onRow: { s in openSignal(s) },
-                onProfile: { openSignal($0) }
-            )
-            .id("more")
-        }
-    }
-
     // ---- the front page's editorial boards (extracted from body — the
     // inline run plus its closures blew the type-checker's budget) ----
 
     @ViewBuilder private var frontPageBoards: some View {
         let selection = frontPageSelection
         if let lead = selection.lead {
-            VStack(alignment: .leading, spacing: 10) {
-                HubLeadStory(s: lead, context: storyContext(lead), kicker: kickerText(lead),
-                             destination: researchDestination(lead)) { s in openSignal(s) }
-                if !selection.best.isEmpty {
-                    HubBestOf(signals: selection.best, contextFor: storyContext, kickerFor: kickerText,
-                              destinationFor: researchDestination) { s in openSignal(s) }
-                        .id("bestof")
-                }
-            }
+            HubResearchDashboard(lead: lead, pages: quickResearchPages(excluding: lead),
+                contextFor: storyContext, kickerFor: kickerText, destinationFor: researchDestination,
+                onSignal: { openSignal($0) }, onCategory: { jumpToResearch($0) },
+                onChart: { researchChartSignal = $0 })
             .id("lead")
         }
+    }
+
+    private func jumpToResearch(_ anchor: String) {
+        openBeats.insert(anchor)
+        // Opening a module regroups the rows; let that layout settle before
+        // the page scrolls so the target card exists at its new position.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { pendingScrollAnchor = anchor }
+    }
+
+    private func quickResearchPages(excluding lead: Signal) -> [HubQuickResearchPage] {
+        let rows = ranked.filter { $0.id != lead.id }
+        let games = frontPageGames
+        let lanes: [(String, String, Set<SignalKind>)] = sel == .mlb
+            ? [("bats", "Hitters", [.hot, .cold, .platoon, .batterVsArm, .hrThreat]),
+               ("arms", "Starters", [.starterForm]),
+               ("bullpens", "Bullpens", [.bullpenFatigue]),
+               ("teams", "Teams", [.teamRecord, .streak, .situational])]
+            : beats.map { ($0.anchor, $0.title.replacingOccurrences(of: "The ", with: ""), Set($0.kinds)) }
+        return lanes.compactMap { anchor, title, kinds in
+            let pool = rows.filter { kinds.contains($0.kind) }
+            let selected = HubFrontPageSelection.select(stories: pool.enumerated().map {
+                .init(index: $0.offset, kind: String(describing: $0.element.kind), gameID: $0.element.gameId)
+            }, games: games, now: frontPageNow, supportingLimit: 2)
+            let chosen = ([selected.lead].compactMap { $0 } + selected.supporting).map { pool[$0] }
+            return chosen.isEmpty ? nil : HubQuickResearchPage(id: anchor, title: title, rows: chosen)
+        }
+    }
+
+    /// One index powers both the visible modules and navigation. Featured
+    /// observations remain in their research category so a shortcut opens the
+    /// complete set, including the finding that brought the reader there.
+    private var researchModules: [HubResearchModule] {
+        let signals = leagueSignals
+        var modules: [HubResearchModule] = []
+        if !selStreakRows.isEmpty {
+            let first = selStreakRows.max { ($0.length ?? 0) < ($1.length ?? 0) }
+            let preview = first.flatMap { row -> String? in
+                guard let detail = row.detail, !detail.isEmpty else { return nil }
+                return [row.subject, detail].compactMap { $0 }.joined(separator: ": ")
+            } ?? "Team and player streaks"
+            modules.append(.init(id: "streaks", title: "Streak watch", count: selStreakRows.count, preview: preview))
+        }
+        if [.mlb, .nfl, .ncaaf].contains(sel), !pulseRows.isEmpty {
+            modules.append(.init(id: "pulse", title: "League Pulse", count: nil,
+                preview: sel == .mlb ? "Starting pitchers · hot & cold bats · bullpens" : "The board · form · league tables"))
+        }
+        let currentBeats = beats
+        let beatOrder = sel == .mlb ? ["bats", "arms", "bullpens", "teams", "hr", "parks", "nrfi"] : currentBeats.map(\.anchor)
+        for anchor in beatOrder {
+            guard let beat = currentBeats.first(where: { $0.anchor == anchor }) else { continue }
+            let rows = signals.filter { beat.kinds.contains($0.kind) && $0.confirmedXI == nil && $0.reg == nil }
+            guard let first = rows.first else { continue }
+            modules.append(.init(id: anchor, title: anchor == "nrfi" ? "First inning" : beat.title,
+                count: rows.count, preview: first.headline, signals: rows))
+        }
+        let regression = signals.filter { $0.kind == .regression }
+        if let first = regression.first {
+            modules.append(.init(id: "regression", title: "Regression watch", count: regression.count,
+                preview: first.headline, signals: regression))
+        }
+        if sel == .wc {
+            let rows = signals.filter { $0.kind == .xgRegression }
+            if let first = rows.first {
+                modules.append(.init(id: "xgboard", title: "The xG Board", count: rows.count, preview: first.headline, signals: rows))
+            }
+        }
+        if sel == .mlb {
+            modules.append(.init(id: "fantasy", title: "Fantasy watch", count: nil,
+                preview: "Roster decisions · playing time · roles"))
+        }
+        if !selNightRows.isEmpty {
+            modules.append(.init(id: "lastNight", title: nightLabel, count: selNightRows.count,
+                preview: "Recent performances around the league"))
+        }
+        var placed = Self.fantasyKinds.union([.regression, .h2h, .theSweat, .nextSlate, .practiceReport])
+        for beat in currentBeats { placed.formUnion(beat.kinds) }
+        let extras = signals.filter { !placed.contains($0.kind) && $0.confirmedXI == nil }
+        if let first = extras.first {
+            modules.append(.init(id: "more", title: "More research", count: extras.count, preview: first.headline, signals: extras))
+        }
+        return modules
+    }
+
+    private static func researchRowAnchor(_ index: Int) -> String { "research-row-\(index)" }
+    private var researchColumns: Int { dynamicTypeSize >= .xxLarge ? 1 : 2 }
+    /// The page anchor that reaches a research module: the row that holds it.
+    private func researchScrollTarget(for anchor: String) -> String {
+        let rows = HubResearchLayout.rows(ids: researchModules.map(\.id), open: openBeats, columns: researchColumns)
+        guard let index = rows.firstIndex(where: { $0.contains(anchor) }) else { return anchor }
+        return Self.researchRowAnchor(index)
+    }
+
+    private var researchWorkspace: some View {
+        let modules = researchModules
+        let groups = HubResearchLayout.rows(ids: modules.map(\.id), open: openBeats, columns: researchColumns)
+        // Rows and cells are keyed by position so each card's explicit `.id`
+        // stays a distinct scroll target for the navigation strip and quick list.
+        return VStack(alignment: .leading, spacing: 10) {
+            ForEach(Array(groups.enumerated()), id: \.offset) { index, group in
+                HStack(alignment: .top, spacing: 10) {
+                    ForEach(Array(group.enumerated()), id: \.offset) { _, id in
+                        if let module = modules.first(where: { $0.id == id }) {
+                            HubResearchModuleCard(module: module, open: openBeatsBinding) {
+                                researchModuleContent(module)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                        }
+                    }
+                }
+                // Scroll targets live on the row: an open module is its own row,
+                // so its top is the row's top.
+                .id(Self.researchRowAnchor(index))
+            }
+        }
+        .padding(.horizontal, GaryLayout.gutter)
+    }
+
+    private func researchModuleContent(_ module: HubResearchModule) -> AnyView {
+        switch module.id {
+        case "streaks":
+            return AnyView(HubStreakWatch(rows: selStreakRows, onTeam: { openTeamCard(for: $0) },
+                cardFor: { intelCard(for: $0) }, onPlayer: { namedCard = $0 }))
+        case "pulse":
+            return AnyView(HubLeaguePulse(rows: pulseRows, selectedTab: $pulseTab,
+                cardFor: { intelCard(for: $0) }, onPlayer: { namedCard = $0 }, onTeam: { openTeamCard(named: $0) }))
+        case "fantasy":
+            return AnyView(FantasyBriefingPage(league: "MLB", refreshToken: fantasyRefreshToken,
+                isVisible: isVisible, compact: true, embeddedInHub: true, openPlayer: openFantasyPlayer))
+        case "lastNight":
+            return AnyView(HubNightBoard(rows: selNightRows, cardFor: { intelCard(for: $0) },
+                onPlayer: { namedCard = $0 }, onTeam: { openTeamCard(named: $0) }))
+        case "regression":
+            return AnyView(HubRegressionBoard(signals: module.signals, todayEST: SupabaseAPI.todayEST()) { openSignal($0) })
+        case "nrfi":
+            return AnyView(HubNrfiSection(rows: module.signals, showsHeader: false) { openSignal($0) })
+        case "afterGary":
+            return AnyView(HubAfterGarySection(anchor: module.id, rows: module.signals,
+                openBeats: openBeatsBinding, onRow: { openSignal($0) }))
+        case "matchups":
+            // Football keeps its game-grouped storyboard inside the module.
+            return AnyView(HubMatchupsSection(rows: module.signals, slateIndexFor: { slateIndexFor($0) },
+                openBeats: openBeatsBinding, kickerFor: kickerText, onRow: { openSignal($0) },
+                onProfile: { openSignal($0) }, onGame: { openGameSheet(for: $0) }))
+        default:
+            return AnyView(VStack(alignment: .leading, spacing: 0) {
+                if module.id == "bullpens", let signal = module.signals.first(where: { $0.researchLedger != nil }) {
+                    Button { researchChartSignal = signal } label: {
+                        Label("Compare recent workload", systemImage: "chart.bar.xaxis")
+                            .hubBodyFont(14, .medium).foregroundStyle(GaryColors.gold)
+                            .frame(minHeight: 44).padding(.horizontal, 18)
+                    }.buttonStyle(.plain)
+                }
+                HubBeatList(rows: module.signals, open: true, kickerFor: kickerText,
+                    onRow: { openSignal($0) }, onProfile: { openSignal($0) })
+            })
+        }
+    }
+
+    private var researchNavigation: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 18) {
+                ForEach(researchModules) { module in
+                    Button { jumpToResearch(module.id) } label: {
+                        Text(module.title.replacingOccurrences(of: "The ", with: ""))
+                            .hubDataFont(12, .medium)
+                            .foregroundStyle(openBeats.contains(module.id) ? GaryColors.gold : GaryColors.sectionSub)
+                            .frame(minHeight: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Open \(module.title)")
+                }
+            }
+            .padding(.horizontal, GaryLayout.gutter)
+        }
+        .accessibilityLabel("Browse research categories")
     }
 
     private func openFantasyPlayer(_ decision: FantasyDecision) -> Bool {
@@ -1483,26 +1515,6 @@ struct HubView: View {
         guard matches.count == 1 else { return false }
         namedCard = matches[0]
         return true
-    }
-
-    @ViewBuilder private var signatureBoards: some View {
-        if !items(.regression).isEmpty {
-            HubBoardSection(anchor: "regression", open: $openBeats, title: "Regression watch", count: items(.regression).count) {
-                HubRegressionBoard(signals: items(.regression), todayEST: SupabaseAPI.todayEST()) { s in
-                    openSignal(s)
-                }
-            }
-            .id("regression")
-        }
-        if sel == .wc, !items(.xgRegression).isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                HubHead(title: "The xG Board", sub: "goals vs expected")
-                HubBeatList(rows: items(.xgRegression), open: true, kickerFor: kickerText,
-                            onRow: { s in openSignal(s) },
-                            onProfile: { openSignal($0) })
-            }
-            .id("xgboard")
-        }
     }
 
     // THE REFERENCE SHELF — folded by default (founder, Jul 30/Aug 3): league
@@ -1522,46 +1534,13 @@ struct HubView: View {
         return unavailable.isEmpty ? nil : "Couldn't refresh: " + unavailable.joined(separator: ", ") + ". Pull down to retry."
     }
 
-    @ViewBuilder private var referenceShelf: some View {
-        if let supportStatus {
-            Text(supportStatus)
-                .hubBodyFont(13)
-                .foregroundStyle(GaryColors.sectionSub)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 18)
-        }
-        if [.mlb, .nfl, .ncaaf].contains(sel), !pulseRows.isEmpty {
-            HubCollapsible(anchor: "pulse", open: $openBeats,
-                           title: "League Pulse", sub: "league-wide tables") {
-                HubLeaguePulse(rows: pulseRows, selectedTab: $pulseTab,
-                               cardFor: { intelCard(for: $0) },
-                               onPlayer: { namedCard = $0 },
-                               onTeam: { openTeamCard(named: $0) })
-            }
-            .id("pulse")
-        }
-
-        if !selNightRows.isEmpty {
-            HubCollapsible(anchor: "lastNight", open: $openBeats,
-                           title: nightLabel, count: selNightRows.count) {
-                HubNightBoard(rows: selNightRows,
-                              cardFor: { intelCard(for: $0) }, onPlayer: { namedCard = $0 },
-                              onTeam: { openTeamCard(named: $0) })
-            }
-            .id("lastNight")
-        }
-
-        // (The Receipts section came off the page entirely — founder, Aug 6.
-        // ydaySignals stays fetched: graded rows still power Hub search.)
-    }
-
     // Keep the top-level stack's concrete type deliberately shallow. Build 6
     // produced two TestFlight crashes in Swift's runtime demangler while it
     // instantiated the nested _ConditionalContent type generated here. The
     // state/scope branches below are erased independently so Release builds do
     // not have to materialize that pathological generic type at launch.
     private var hubPageStack: some View {
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(alignment: .leading, spacing: 8) {
             HubMasthead(
                 sel: $sel,
                 leagues: availableLeagues,
@@ -1649,34 +1628,18 @@ struct HubView: View {
                     .id("nextSlate")
             }
 
+            researchNavigation
             frontPageBoards
             if frontPageSelection.lead == nil, items(.regression).isEmpty,
                !showsNextSlateCard, selStreakRows.isEmpty, !fetchErrorLeagues.contains(sel) {
                 hubMorningNotice
             }
 
-            if sel == .mlb {
-                FantasyBriefingPage(league: "MLB", refreshToken: fantasyRefreshToken, isVisible: isVisible,
-                                    compact: true, openPlayer: openFantasyPlayer)
-                    .id("fantasy")
+            researchWorkspace
+            if let supportStatus {
+                Text(supportStatus).hubBodyFont(13).foregroundStyle(GaryColors.sectionSub)
+                    .fixedSize(horizontal: false, vertical: true).padding(.horizontal, GaryLayout.gutter)
             }
-
-            // (League Pulse moved to the reference shelf at the bottom
-            // — founder, Aug 3: the agate tables broke the page's flow
-            // mid-editorial. It lives with Last Night now.)
-
-            VStack(alignment: .leading, spacing: 12) {
-                if jumpItems.contains(where: { !["nextSlate", "lead", "fantasy", "pulse", "lastNight"].contains($0.anchor) }) {
-                    HubHead(title: "Go deeper").padding(.bottom, 4)
-                }
-                signatureBoards
-                streakWatchSection
-                if !leagueSignals.isEmpty {
-                    beatsAndOverflow
-                }
-            }
-
-            referenceShelf
         }
         .environment(\.solidPanels, true)
     }
@@ -1717,6 +1680,14 @@ struct HubView: View {
                 .allowsHitTesting(false).accessibilityHidden(true)
         }
         .coordinateSpace(name: "hubScroll")
+        .sheet(item: $researchChartSignal) { signal in
+            HubBullpenChartSheet(signal: signal) {
+                researchChartSignal = nil
+            } onResearch: {
+                researchChartSignal = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { openSignal(signal) }
+            }
+        }
         .overlay(alignment: .bottomTrailing) {
             if !searchOpen, didLoad, !jumpItems.isEmpty, !showsFantasy, mastheadOffscreen,
                selectedSignal == nil, gameSheet == nil {
@@ -1794,6 +1765,17 @@ struct HubView: View {
                 default: pool = leagueSignals
                 }
                 if pool.indices.contains(idx) { openSignal(pool[idx]) }
+                return
+            }
+            // "hubchart" — present the bullpen workload chart for the first
+            // observation that carries a dated ledger (sim QA cannot tap).
+            if verb == "hubchart" {
+                researchChartSignal = leagueSignals.first { $0.researchLedger != nil }
+                return
+            }
+            // "hubclose <module>" — collapse one research module (sim QA).
+            if verb == "hubclose" {
+                openBeats.remove(arg)
                 return
             }
             guard verb == "hub" else { return }
@@ -1907,7 +1889,8 @@ struct HubView: View {
         .onChange(of: pendingScrollAnchor) { anchor in
             guard let anchor else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(anchor, anchor: .top) }
+                let target = researchScrollTarget(for: anchor)
+                withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(target, anchor: .top) }
                 pendingScrollAnchor = nil
             }
         }
@@ -1948,27 +1931,10 @@ struct HubView: View {
 
     /// Jump-bar entries — only sections that exist right now, in page order.
     private var jumpItems: [(anchor: String, label: String)] {
-        // One generic index for every league — the football branch is gone with
-        // the football page (founder, Aug 21: the Hub is MLB's, everywhere).
         var out: [(String, String)] = []
         if showsNextSlateCard { out.append(("nextSlate", "Next Slate")) }
-        if !leagueSignals.isEmpty {
-            let selection = frontPageSelection
-            if selection.lead != nil || !selection.best.isEmpty { out.append(("lead", "The briefing")) }
-        }
-        if sel == .mlb { out.append(("fantasy", "Fantasy watch")) }
-        if !items(.regression).isEmpty { out.append(("regression", "Regression")) }
-        if sel == .wc, !items(.xgRegression).isEmpty { out.append(("xgboard", "xG")) }
-        if !selStreakRows.isEmpty { out.append(("streaks", "Streaks")) }
-        if !leagueSignals.isEmpty {
-            let featured = featuredStoryIDs
-            for beat in beats where !beatRows(beat, featured: featured).isEmpty {
-                out.append((beat.anchor, beat.title.replacingOccurrences(of: "The ", with: "")))
-            }
-            if !overflow(featured: featured).isEmpty { out.append(("more", "More Edges")) }
-        }
-        if [.mlb, .nfl, .ncaaf].contains(sel), !pulseRows.isEmpty { out.append(("pulse", "Pulse")) }
-        if !selNightRows.isEmpty { out.append(("lastNight", nightLabel)) }
+        if frontPageSelection.lead != nil { out.append(("lead", "Quick scan")) }
+        out += researchModules.map { ($0.id, $0.title) }
         return out
     }
 
@@ -2133,18 +2099,19 @@ fileprivate struct HubMasthead: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 10) {
-                Image(GaryBrand.mark).resizable().scaledToFit()
-                    .frame(width: 28, height: 28).accessibilityHidden(true)
-                if !sel.supportsFantasy, !dynamicTypeSize.isAccessibilitySize {
-                    Text("The Hub").hubTitleFont(24, .semibold)
-                        .foregroundStyle(GaryColors.warmWhite)
+            if dynamicTypeSize.isAccessibilitySize {
+                headerRow(inlineDate: false)
+                dateLabel
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    headerRow(inlineDate: true)
+                    VStack(alignment: .leading, spacing: 0) {
+                        headerRow(inlineDate: false)
+                        dateLabel
+                    }
                 }
-                Spacer(minLength: 0)
-                leagueButton
-                if mainScope { searchButton }
             }
-            if sel.supportsFantasy || dynamicTypeSize.isAccessibilitySize {
+            if sel.supportsFantasy {
                 let scopeLayout = dynamicTypeSize.isAccessibilitySize
                     ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
                     : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 24))
@@ -2155,15 +2122,33 @@ fileprivate struct HubMasthead: View {
                     }
                 }
             }
-            Text([FantasyBriefing.dayLabel(SupabaseAPI.todayEST()).uppercased(),
-                  gameCount > 0 ? "\(gameCount) GAME\(gameCount == 1 ? "" : "S")" : ""]
-                .filter { !$0.isEmpty }.joined(separator: "  ·  "))
-                .hubKickerFont(11).foregroundStyle(GaryColors.sectionSub)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.bottom, 4)
             if searchOpen, mainScope { searchField }
         }
         .padding(.horizontal, GaryLayout.gutter)
+    }
+
+    private func headerRow(inlineDate: Bool) -> some View {
+        HStack(spacing: 6) {
+            Image(GaryBrand.mark).resizable().scaledToFit()
+                .frame(width: 26, height: 26).accessibilityHidden(true)
+            if !sel.supportsFantasy {
+                Text("The Hub").hubTitleFont(21, .semibold)
+                    .foregroundStyle(GaryColors.warmWhite)
+                    .fixedSize(horizontal: !dynamicTypeSize.isAccessibilitySize, vertical: true)
+            }
+            Spacer(minLength: 4)
+            if inlineDate { dateLabel.fixedSize() }
+            leagueButton
+            if mainScope { searchButton }
+        }
+    }
+
+    private var dateLabel: some View {
+        Text([FantasyBriefing.dayLabel(SupabaseAPI.todayEST()).uppercased(),
+              gameCount > 0 ? "\(gameCount) GAME\(gameCount == 1 ? "" : "S")" : ""]
+            .filter { !$0.isEmpty }.joined(separator: " · "))
+            .hubKickerFont(11).foregroundStyle(GaryColors.sectionSub)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private var leagueButton: some View {
@@ -2345,120 +2330,6 @@ fileprivate struct HubSlateStrip: View {
 }
 
 // MARK: - The Lead
-
-fileprivate struct HubLeadStory: View {
-    let s: Signal
-    let context: String
-    let kicker: String
-    let destination: String
-    let onTap: (Signal) -> Void
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    var body: some View {
-        Button { onTap(s) } label: {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(kicker.uppercased()).hubKickerFont(11).tracking(1.1)
-                        .foregroundStyle(GaryColors.gold)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if !dynamicTypeSize.isAccessibilitySize {
-                        Spacer(minLength: 0)
-                        Text("IN FOCUS").hubKickerFont(10)
-                            .foregroundStyle(GaryColors.sectionSub)
-                            .accessibilityHidden(true)
-                    }
-                }
-                Text(s.headline)
-                    .hubTitleFont(21, .semibold)
-                    .foregroundStyle(GaryColors.warmWhite)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(s.detail.trimmingCharacters(in: .whitespacesAndNewlines))
-                    .hubBodyFont(14)
-                    .foregroundStyle(GaryColors.warmWhite.opacity(0.78))
-                    .lineSpacing(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                let footer = dynamicTypeSize.isAccessibilitySize
-                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10))
-                    : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 12))
-                footer {
-                    if !context.isEmpty {
-                        Text(context).hubDataFont(11, .medium)
-                            .foregroundStyle(GaryColors.sectionSub)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 0) }
-                    HStack(spacing: 6) {
-                        Text(destination).hubDataFont(11, .medium)
-                        Image(systemName: "arrow.up.right").font(.system(size: 11, weight: .medium))
-                    }
-                    .foregroundStyle(GaryColors.gold)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.top, 2)
-            }
-            .padding(18)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .garyPanel(radius: 12, fill: GaryColors.readingPanel)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .multilineTextAlignment(.leading)
-        .accessibilityHint("Opens \(destination.lowercased())")
-        .padding(.horizontal, GaryLayout.gutter)
-    }
-}
-
-
-fileprivate struct HubBestOf: View {
-    let signals: [Signal]
-    let contextFor: (Signal) -> String
-    let kickerFor: (Signal) -> String
-    let destinationFor: (Signal) -> String
-    let onTap: (Signal) -> Void
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    var body: some View {
-        let layout = dynamicTypeSize >= .xxxLarge
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10))
-            : AnyLayout(HStackLayout(alignment: .top, spacing: 10))
-        layout {
-            ForEach(signals) { s in
-                Button { onTap(s) } label: { row(s) }
-                    .buttonStyle(.plain)
-                    .accessibilityHint("Opens \(destinationFor(s).lowercased())")
-            }
-        }
-        .padding(.horizontal, GaryLayout.gutter)
-    }
-
-    @ViewBuilder private func row(_ s: Signal) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(kickerFor(s).uppercased()).hubKickerFont(10)
-                .foregroundStyle(GaryColors.gold)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(s.headline)
-                .hubBodyFont(15, .semibold)
-                .foregroundStyle(GaryColors.warmWhite)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(contextFor(s))
-                .hubDataFont(10.5, .medium)
-                .foregroundStyle(GaryColors.sectionSub)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(destinationFor(s)).hubDataFont(10.5, .medium)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-                Image(systemName: "arrow.up.right").font(.system(size: 10, weight: .medium))
-            }
-            .foregroundStyle(GaryColors.sectionSub)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .garyPanel(radius: 12, fill: GaryColors.readingPanel)
-        .multilineTextAlignment(.leading)
-        .contentShape(Rectangle())
-    }
-}
 
 // MARK: - The Regression Board
 
@@ -2902,24 +2773,6 @@ fileprivate struct HubStreakWatch: View {
 }
 
 // MARK: - The Beats
-
-/// A beat opens its complete relevance-ordered feed. One disclosure replaces
-/// the repeated four-row preview and nested See All control.
-fileprivate struct HubBeatSection: View {
-    let anchor: String
-    let title: String
-    let rows: [Signal]
-    @Binding var openBeats: Set<String>
-    let kickerFor: (Signal) -> String
-    let onRow: (Signal) -> Void
-    let onProfile: (Signal) -> Void
-
-    var body: some View {
-        HubBoardSection(anchor: anchor, open: $openBeats, title: title, count: rows.count) {
-            HubBeatList(rows: rows, open: true, kickerFor: kickerFor, onRow: onRow, onProfile: onProfile)
-        }
-    }
-}
 
 /// Market movement after Gary published, kept deliberately receipt-like:
 /// matchup, locked line → current line, and which snapshot held the edge.
@@ -3886,7 +3739,7 @@ fileprivate struct HubTeamCardSheet: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(bullpenExpanded ? "Show fewer relievers" : "Show all \(ledger.arms.count) relievers")
                 }
-                Text("MLB StatsAPI final boxscores · through \(bullpenDate(ledger.asOf)), \(ledger.asOf.prefix(4)). Season lines show their observed date.")
+                Text("\(ledger.source) · through \(bullpenDate(ledger.asOf)), \(ledger.asOf.prefix(4)). Season lines show their observed date.")
                     .font(.caption).foregroundStyle(PCV4.mut2)
                     .fixedSize(horizontal: false, vertical: true)
             }

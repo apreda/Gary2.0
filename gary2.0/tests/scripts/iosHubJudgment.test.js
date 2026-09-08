@@ -64,7 +64,7 @@ ${block(hub, '    private func beatRows(')}
  static func resolve(_ rows: [Signal]) -> [Signal] { dedupe(rows) }
  var frontPage: [Signal] { ranked }
  func lane(_ kind: SignalKind) -> [Signal] { items(kind) }
- func beat(_ kinds: [SignalKind], featured: Set<UUID> = []) -> [Signal] { beatRows(Beat(kinds: kinds), featured: featured) }
+ func beat(_ kinds: [SignalKind]) -> [Signal] { beatRows(Beat(kinds: kinds)) }
 }
 struct Search {
  let q: String
@@ -106,7 +106,7 @@ ${block(search, '        func hits(')}
   precondition(reader.frontPage.map(\\.id) == [bullpen.id, upgraded.id], "Major/editorial rank and superseded keys cannot override original current-day ordering")
   precondition(reader.lane(.bullpen).map(\\.id) == [bullpen.id] && reader.lane(.hot).map(\\.id) == [upgraded.id])
   precondition(reader.beat([.bullpen, .hot]).map(\\.id) == [bullpen.id, upgraded.id, nextDate.id], "Original lanes retain observations cited by stored narratives")
-  precondition(reader.beat([.bullpen, .hot], featured: [upgraded.id]).map(\\.id) == [bullpen.id, nextDate.id], "Only actual featured observations are omitted from supporting beats")
+  precondition(reader.frontPage.contains(where: { $0.id == bullpen.id }) && reader.beat([.bullpen]).map(\\.id) == [bullpen.id], "A featured observation stays inside its research category")
   for term in ["josé", "original facts", "chc", "heat check"] {
    precondition(Search(q: term).hits(upgraded), "Visible original observation remains searchable")
   }
@@ -120,14 +120,15 @@ ${block(search, '        func hits(')}
     expect(run(source)).toContain('Hub observation integration passed');
     expect(hub).toContain('now.timeIntervalSince($0) >= 300');
     expect(hub).not.toMatch(/HubJudgment|currentJudgment|openRead\(/);
-    for (const marker of ['fileprivate struct HubLeadStory:', 'fileprivate struct HubBestOf:', 'fileprivate struct HubBoardSection']) {
-      expect(block(hub, marker)).toContain('fill: GaryColors.readingPanel');
+    const dashboard = native('HubResearchDashboard.swift');
+    for (const marker of ['struct HubResearchDashboard: View', 'struct HubResearchModuleCard<Content: View>: View']) {
+      expect(block(dashboard, marker)).toContain('fill: GaryColors.readingPanel');
     }
-    expect(block(hub, 'fileprivate struct HubLeadStory:')).toContain('Text(s.headline)');
-    expect(block(hub, 'fileprivate struct HubLeadStory:')).toContain('Text(s.detail.trimmingCharacters');
-    expect(block(hub, '    @ViewBuilder private var frontPageBoards:')).toContain('openSignal(s)');
-    expect(block(hub, '    @ViewBuilder private var referenceShelf:')).toContain('title: "League Pulse"');
-    expect(block(hub, '    @ViewBuilder private var referenceShelf:')).toContain('HubCollapsible(anchor: "lastNight"');
+    expect(block(dashboard, 'struct HubResearchDashboard: View')).toContain('Text(lead.headline)');
+    expect(block(dashboard, 'struct HubResearchDashboard: View')).toContain('Text(lead.detail.trimmingCharacters');
+    expect(block(hub, '    @ViewBuilder private var frontPageBoards:')).toContain('openSignal($0)');
+    expect(block(hub, '    private var researchModules:')).toContain('title: "League Pulse"');
+    expect(block(hub, '    private func researchModuleContent(')).toContain('case "lastNight":');
     expect(hub).toContain('.accessibilityLabel("Close game research")');
     expect(hub).toContain('.accessibilityAddTraits(.isModal)');
   }, 60_000);

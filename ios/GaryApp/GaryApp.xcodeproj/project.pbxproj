@@ -16,6 +16,7 @@
 		B70820260908400000000101 /* PushRegistrationProductionAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70820260908400000000102 /* PushRegistrationProductionAdapter.swift */; };
 		B70820260908400000000001 /* PushRegistrationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70820260908400000000002 /* PushRegistrationCoordinator.swift */; };
 		BFE709072026C00000000001 /* HubFrontPageSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE709072026C00000000002 /* HubFrontPageSelection.swift */; };
+		BFE709092026D00000000001 /* HubResearchDashboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE709092026D00000000002 /* HubResearchDashboard.swift */; };
 		BFE709072026D00000000001 /* HubStoryIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE709072026D00000000002 /* HubStoryIdentity.swift */; };
 		BFE709072026B00000000001 /* FantasyBriefingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE709072026B00000000002 /* FantasyBriefingView.swift */; };
 		BFE709072026A00000000001 /* FantasyBriefing.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE709072026A00000000002 /* FantasyBriefing.swift */; };
@@ -104,6 +105,7 @@
 		B70820260908400000000102 /* PushRegistrationProductionAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushRegistrationProductionAdapter.swift; sourceTree = "<group>"; };
 		B70820260908400000000002 /* PushRegistrationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushRegistrationCoordinator.swift; sourceTree = "<group>"; };
 		BFE709072026C00000000002 /* HubFrontPageSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubFrontPageSelection.swift; sourceTree = "<group>"; };
+		BFE709092026D00000000002 /* HubResearchDashboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubResearchDashboard.swift; sourceTree = "<group>"; };
 		BFE709072026D00000000002 /* HubStoryIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubStoryIdentity.swift; sourceTree = "<group>"; };
 		BFE709072026B00000000002 /* FantasyBriefingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FantasyBriefingView.swift; sourceTree = "<group>"; };
 		BFE709072026A00000000002 /* FantasyBriefing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FantasyBriefing.swift; sourceTree = "<group>"; };
@@ -236,6 +238,7 @@
 				F04B411A8C0D4A2B9E711A02 /* NCAAFTeams.swift */,
 				A905BCA4B53041AB98CD0002 /* HubCardIdentity.swift */,
 				BFE709072026C00000000002 /* HubFrontPageSelection.swift */,
+				BFE709092026D00000000002 /* HubResearchDashboard.swift */,
 				BFE709072026D00000000002 /* HubStoryIdentity.swift */,
 				F04B411A8C0D4A2B9E7110A2 /* GaryMock.swift */,
 				F04B411A8C0D4A2B9E7110A4 /* GaryMockFixture.swift */,
@@ -459,6 +462,7 @@
 				F04B411A8C0D4A2B9E711A01 /* NCAAFTeams.swift in Sources */,
 				A905BCA4B53041AB98CD0001 /* HubCardIdentity.swift in Sources */,
 				BFE709072026C00000000001 /* HubFrontPageSelection.swift in Sources */,
+				BFE709092026D00000000001 /* HubResearchDashboard.swift in Sources */,
 				BFE709072026D00000000001 /* HubStoryIdentity.swift in Sources */,
 				F04B411A8C0D4A2B9E7110A1 /* GaryMock.swift in Sources */,
 				F04B411A8C0D4A2B9E7110A3 /* GaryMockFixture.swift in Sources */,
@@ -545,7 +549,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 919;
+				CURRENT_PROJECT_VERSION = 920;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -632,7 +636,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 919;
+				CURRENT_PROJECT_VERSION = 920;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_NS_ASSERTIONS = NO;

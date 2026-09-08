@@ -187,10 +187,11 @@ describe('Football Fantasy density', () => {
     expect(scope).toContain('return AnyView(hubEditorialContent)');
     expect(swiftBlock(hubView, 'private var hubEditorialContent:')).toContain('hubEditorialStateContent');
     expect(swiftBlock(hubView, 'private var hubEditorialStateContent:')).toContain('return AnyView(hubLoadedContent)');
-    const editorial = swiftBlock(hubView, 'private var hubLoadedContent:');
-    expect(editorial).toMatch(/if sel == \.mlb \{\s*FantasyBriefingPage\(league: "MLB"/);
-    expect(editorial).toContain('compact: true, openPlayer: openFantasyPlayer');
-    expect(editorial).toContain('.id("fantasy")');
+    expect(swiftBlock(hubView, 'private var hubLoadedContent:')).toContain('researchWorkspace');
+    const modules = swiftBlock(hubView, 'private func researchModuleContent(');
+    expect(modules).toMatch(/case "fantasy":\s*return AnyView\(FantasyBriefingPage\(league: "MLB"/);
+    expect(modules).toContain('compact: true, embeddedInHub: true, openPlayer: openFantasyPlayer');
+    expect(swiftBlock(hubView, 'private var researchModules:')).toContain('id: "fantasy"');
   });
 
   it('keeps dated prior-season provenance visible in the current shared Fantasy full case', () => {
@@ -238,12 +239,14 @@ print("Fantasy provenance preserved")
     // Missing populated cards keep the original story readable; an old pack
     // or the other game of a doubleheader must never become its destination.
     const route = swiftBlock(hubView, 'private func openSignal(');
-    expect(route).toContain('let index = HubStoryIdentity.playerCardIndex(');
-    expect(route).toContain('league: s.league.label, slateDate: s.slateDate,');
-    expect(route).toContain('playerID: s.playerId, playerName: Self.signalPlayerName(s), gameID: s.gameId,');
-    expect(route).toContain('loadedDate: loadedDate, currentDate: SupabaseAPI.todayEST(),');
-    expect(route).toContain('.init(league: $0.league, playerID: $0.player_id, gameID: $0.game_id,');
-    expect(route).toContain('hasPayload: $0.payload != nil');
+    const resolver = swiftBlock(hubView, 'private func researchPlayerIndex(');
+    expect(route).toContain('if let index = researchPlayerIndex(s) {');
+    expect(resolver).toContain('HubStoryIdentity.playerCardIndex(');
+    expect(resolver).toContain('league: s.league.label, slateDate: s.slateDate,');
+    expect(resolver).toContain('playerID: s.playerId, playerName: Self.signalPlayerName(s), gameID: s.gameId,');
+    expect(resolver).toContain('loadedDate: loadedDate, currentDate: SupabaseAPI.todayEST(),');
+    expect(resolver).toContain('.init(league: $0.league, playerID: $0.player_id, gameID: $0.game_id,');
+    expect(resolver).toContain('hasPayload: $0.payload != nil');
     expect(route).toContain('playerRead = PlayerRead(signal: s, card: intelCards[index])');
     expect(route).toContain('if s.playerId != nil { selectedSignal = s; return }');
     expect(route).not.toContain('intelCard(for:');
