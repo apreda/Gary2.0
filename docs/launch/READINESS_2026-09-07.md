@@ -1,14 +1,14 @@
 # Gary launch readiness — current release ledger
 
-**Current checkpoint: September 8, 14:36 UTC. NOT YET READY for launch signoff.** Website deletion repair `bc64568c` is independently reviewed and deployed with Product Hunt badge `a729d9c1` in production deployment `dpl_49QP7SoBHoDR4FETafF8PYbCa6UF` (READY; canonical aliases verified). All **838 web tests / 72 suites**, TypeScript and full ESLint pass. Actual web QA A deletion completed through the public account page; all 30 checked account-data relations are empty, the deleted login is rejected, and QA B plus the retained reviewer remain intact. [Live deletion receipt](/Users/adam.preda/Documents/ChatGPT/Gary/launch-readiness/continuation-2026-09-08/web-account-deletion-live-acceptance.json).
+**Historical-game correctness hold:** screenshot review confirmed the September 7 NYM/MIA pick (game 5059929, Tong/Pérez) was receiving September 8 scouting context (game 5059941, Manaea/Alcantara). The original pick and dated board are correct; the native reader joins today's context to a historical matchup. A bounded selected-date/exact-game repair is underway in PicksTab/ScoutTrio. The optimized selector build passes, but its signed archive is held. No corrected historical UI acceptance or 915 upload is claimed.
 
-Native account repair `4e985ac8` passed independent review and five focused tests across three files. The first optimized 915 build and archive passed, but the release hash check caught the concurrent, user-requested Winners strip removal `acd2ca43`; **915 has not been uploaded**. The unused build number will be rebuilt from one combined source freeze. The original installed 915 is only the account-repair baseline, not the final Winners artifact. Native QA B deletion and final empty/sparse Winners visual acceptance remain pending; GUI testing is paused after unexpected screen changes while a quiet test window is requested.
+**September 8, 15:33 UTC: NOT YET READY for launch signoff.** Both real disposable-account deletion paths and all 30 checked residual-data relations pass; the reviewer remains intact. Current web `a729d9c1` is live and verified. Candidate 915 now combines the account guards, corrected Winners spacing and the explicitly requested profile icon/Billfold selector. The final combined archive/screenshots/upload and external acceptance gates remain open; 915 has not been uploaded and the saved App Store draft still selects 914.
 
-App Store Connect holds the saved **914 / Prepare for Submission** interim draft after withdrawal of 901. Full reviewed copy, actual tested reviewer login, contact and 14 privacy categories are saved. Replace the draft with the final verified 915 artifact, screenshots and notes. The retained reviewer has actual 914 private Profile/Book/Winners/Settings acceptance. Attribution and corrected Hub content are publicly verified. Provider-rights evidence, physical/provider flows, narrow Supabase Auth settings and support/moderation ownership remain open. No App Store approval or release is claimed.
+Read the [current continuation and gate table](CONTINUATION_2026-09-08.md) for the authoritative latest state, the deployed MLB policy and exact test/visual limitations. The dated ledger below preserves historical evidence rather than replacing the current checkpoint.
 
 ## Historical 13:53 UTC release checkpoint
 
-The following records the earlier 914 state and dated baselines. Its current/pending labels are superseded by the 14:36 continuation above.
+The following records the earlier 914 state and dated baselines. Its current/pending labels are superseded by the current continuation linked above.
 
 ## Release decision
 
