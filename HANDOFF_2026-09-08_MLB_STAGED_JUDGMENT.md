@@ -214,10 +214,13 @@ The subsequent bug check reproduced and fixed these integration failures:
   ticket, causing an expensive memory review that the database rejected. The
   worker and validator now use the exact original ticket and the database's
   supported settlement values before model work.
-- Cancellation could return a late card, persist a late judgment answer, or
+- For callers supplying a cancellation signal, cancellation could return a
+  late card, persist a late judgment answer, or
   become an ordinary unavailable research result. The signal now reaches the
   staged session and formatter; late responses are discarded and cancellation
   does not launch another whole-brain attempt.
+  Checks also follow awaited era metadata reads and precede the final return.
+  The CLI's existing process termination behavior remains unchanged.
 - Truncation and short-rationale retries could append corrections locally
   without sending them to the persistent model. Staged MLB now sends those
   actual correction prompts, retaining the recorded ticket and source binding.
@@ -235,3 +238,18 @@ The failure-before-fix records are retained in
 `/tmp/gary-mlb-bugcheck-storage-red-20260908.log`,
 `/tmp/gary-mlb-bugcheck-cascade-red-20260908.log`, and
 `/tmp/gary-mlb-selector-io-red-20260908.log`.
+
+Bug-check source commit **0298675b** is pushed. The canonical Winners worker
+restarted at **2026-09-08T17:26:27.686Z**, PID **29872**. Production readback
+confirms era **c58ae04c89e4**, Astra, scheduler **96216**, all 20 edge deployments,
+no unpushed commits at that snapshot, and zero started games without a pick.
+Worker stderr remains unchanged. The only full-check failure is two unrelated
+working-tree exceptions at that snapshot: private Firebase configuration and
+the ongoing Hub handoff. Runtime log:
+`/tmp/gary-mlb-bugcheck-production-20260908.log`.
+
+Independent review's final two era-read cancellation cases were reproduced
+before the final guards were added. The resulting focused runner/storage/
+staged suite passes **143 tests across five suites**; log:
+`/tmp/gary-mlb-bugcheck-final-contract-20260908.log`. The full 3,414-test receipt
+above predates only this final runner guard and its two regression cases.

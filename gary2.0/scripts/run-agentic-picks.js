@@ -185,7 +185,9 @@ async function runMlbJuneEngine(game, runnerOptions) {
   if (memory?.unavailable) console.warn(`[MLB Memory] ${memory.unavailable}`);
   const attempt = async model => {
     runnerOptions.signal?.throwIfAborted();
-    const journal = production ? createMlbJudgmentJournal({ db: winnersAdmin, game, model, promptSha: await junePromptSha(), signal: runnerOptions.signal }) : null;
+    const promptSha = production ? await junePromptSha() : null;
+    runnerOptions.signal?.throwIfAborted();
+    const journal = production ? createMlbJudgmentJournal({ db: winnersAdmin, game, model, promptSha, signal: runnerOptions.signal }) : null;
     let decision;
     try {
       decision = await analyzeGame(game, 'baseball_mlb', { ...runnerOptions, modelOverride: model,
@@ -242,6 +244,7 @@ async function runMlbJuneEngine(game, runnerOptions) {
   // This marker was loaded with this process's MLB prompts, before analysis.
   // It belongs to the new decision, never an existing or recovered publication.
   result.decision_policy ??= MLB_DECISION_POLICY;
+  runnerOptions.signal?.throwIfAborted();
   return result;
 }
 

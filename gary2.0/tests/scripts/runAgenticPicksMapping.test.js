@@ -69,6 +69,19 @@ describe('MLB decision-policy provenance', () => {
     await expect(lane(game, { signal: controller.signal })).rejects.toThrow('game decision cancelled');
     expect(analyze).not.toHaveBeenCalled();
   });
+
+  it.each(['journal', 'final'])('checks cancellation after the %s era read', async stage => {
+    const controller = new AbortController();
+    let reads = 0;
+    const junePromptSha = vi.fn(async () => {
+      if (++reads === (stage === 'journal' ? 1 : 2)) controller.abort(new Error('game decision cancelled'));
+      return 'test-era';
+    });
+    const analyze = vi.fn().mockResolvedValue({ pick: 'Braves ML -150', decision_policy: 'mlb-judgment-v2',
+      _mlbJudgment: { receipts: { price_assessment: { ok: true } } } });
+    await expect(loadLane(analyze, { shouldStore: true, junePromptSha })(game, { signal: controller.signal })).rejects.toThrow('game decision cancelled');
+    expect(analyze).toHaveBeenCalledTimes(stage === 'journal' ? 0 : 1);
+  });
 });
 
 describe('NFL verified Tale of the Tape storage mapping', () => {
