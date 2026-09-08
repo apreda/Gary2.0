@@ -103,7 +103,8 @@ enum HubFrontPageSelection {
         return phases(games: games, now: now)[key] ?? .unknown
     }
 
-    static func select(stories: [Story], games: [Game], now: Date = Date()) -> Selection {
+    static func select(stories: [Story], games: [Game], now: Date = Date(), supportingLimit: Int = 2) -> Selection {
+        let limit = min(4, max(0, supportingLimit))
         let phaseByGame = phases(games: games, now: now)
         var seen = Set<Int>()
         var ordered: [RankedStory] = []
@@ -129,7 +130,7 @@ enum HubFrontPageSelection {
             // when available. Unknown IDs are not a shared game; exact IDs
             // preserve doubleheaders. Never promote final context for variety.
             for pass in 0...3 {
-                for row in phaseRows where supporting.count < 2 && !selected.contains(row.story.index) {
+                for row in phaseRows where supporting.count < limit && !selected.contains(row.story.index) {
                     let newKind = !kinds.contains(row.story.kind)
                     let newGame = gameKey(row.story.gameID).map { !gameIDs.contains($0) } ?? true
                     if pass == 0 && !(newKind && newGame) { continue }
@@ -141,8 +142,46 @@ enum HubFrontPageSelection {
                     if let gameID = gameKey(row.story.gameID) { gameIDs.insert(gameID) }
                 }
             }
-            if supporting.count == 2 { break }
+            if supporting.count == limit { break }
         }
         return Selection(lead: lead.story.index, supporting: supporting)
+    }
+}
+
+/// Presentation state is scoped to a sport. It contains category identifiers,
+/// never cached research, so yesterday's observations cannot be restored here.
+enum HubResearchLayout {
+    static func openSections(in saved: String, league: String) -> Set<String> {
+        guard let data = saved.data(using: .utf8),
+              let values = try? JSONDecoder().decode([String: [String]].self, from: data) else { return [] }
+        return Set(values[league] ?? [])
+    }
+
+    static func saving(_ sections: Set<String>, league: String, in saved: String) -> String {
+        var values = saved.data(using: .utf8).flatMap {
+            try? JSONDecoder().decode([String: [String]].self, from: $0)
+        } ?? [:]
+        values[league] = sections.sorted()
+        guard let data = try? JSONEncoder().encode(values) else { return saved }
+        return String(data: data, encoding: .utf8) ?? saved
+    }
+
+    /// Expanded research uses the full width; compact peers share a row.
+    /// Stable source order keeps every category reachable after any toggle.
+    static func rows(ids: [String], open: Set<String>, columns: Int) -> [[String]] {
+        var result: [[String]] = []
+        var pending: [String] = []
+        var seen: Set<String> = []
+        for id in ids where seen.insert(id).inserted {
+            if columns < 2 || open.contains(id) {
+                if !pending.isEmpty { result.append(pending); pending = [] }
+                result.append([id])
+            } else {
+                pending.append(id)
+                if pending.count == 2 { result.append(pending); pending = [] }
+            }
+        }
+        if !pending.isEmpty { result.append(pending) }
+        return result
     }
 }

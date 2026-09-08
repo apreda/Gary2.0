@@ -15,7 +15,7 @@
 //     or a non-positive OPS (season OR recent) skips the batter — we never emit
 //     a row off an absent/zero number.
 //   - The raw OPS edge is weighted by recent sample size before scoring
-//     (effectiveEdge = edge * min(1, recentPa / PA_FULL_CREDIT)) so a 25-PA
+//     (effectiveEdge = edge * min(1, sample.count / SAMPLE_FULL_CREDIT)) so a 25-PA
 //     flash doesn't outrank a 120-PA surge.
 //   - PROP TIE-IN: for a surfaced hot bat we look up tonight's posted player
 //     props (getMlbPlayerProps(game.id), cached once per game) and, when found,
@@ -46,13 +46,14 @@ import {
 } from '../shared.js';
 import { attachLaneReads, detailFact } from '../laneReads.js';
 import { makeLineupReader } from '../lineupSource.js';
+import { recentBattingSample, recentBattingSampleMeta } from '../recentBattingSample.js';
 
 // Tunables.
 const MIN_RECENT_PA = 25;          // require a real recent PA sample
 const MIN_RECENT_AB = 22;          // lower floor when only at_bats is available
 const MIN_SEASON_GP = 15;          // require a real season baseline
 const MIN_OPS_EDGE = 0.120;        // recent OPS must beat season by this much
-const PA_FULL_CREDIT = 60;         // recent windows >= this PA get full edge weight
+const SAMPLE_FULL_CREDIT = 60;     // preserve the existing count-based ranking weight
 const MAX_PER_GAME = 2;            // keep at most N hottest bats per game
 const RELEVANCE_SCALE = 200;       // 0.120 weighted edge -> ~+24 over base
 
@@ -78,7 +79,7 @@ export async function computeHeatCheck(ctx) {
   // THE GARY LAYER (founder, Aug 5): the drop-down elaborates — it never
   // repeats the headline. Fenced to this lane's own computed facts.
   await attachLaneReads('heatCheck', rows, detailFact, {
-    ask: 'what this hot stretch actually means tonight — whether it is real form or a run of soft matchups, and what it sets up against tonight\'s pitching',
+    ask: 'the recent OPS, its explicitly supplied PA or AB sample, and the comparison with the season baseline; preserve the sample unit exactly',
   });
 
   console.log(`[heatCheck] examined ${stats.examined}, emitted ${stats.emitted}`);
@@ -142,18 +143,8 @@ async function heatCheckForGame(game, { season, bdl, gameLabel, stats, lineupsFo
       // Prefer true plate_appearances against the PA floor. If only at_bats is
       // present, hold it to a lower AB floor (AB undercounts PA, so applying the
       // PA floor to an AB count would silently demand a bigger real sample).
-      const recentPaRaw = Number(recent.plate_appearances);
-      const recentAbRaw = Number(recent.at_bats);
-      let recentSample;
-      if (Number.isFinite(recentPaRaw)) {
-        if (recentPaRaw < MIN_RECENT_PA) continue;
-        recentSample = recentPaRaw;
-      } else if (Number.isFinite(recentAbRaw)) {
-        if (recentAbRaw < MIN_RECENT_AB) continue;
-        recentSample = recentAbRaw;
-      } else {
-        continue;
-      }
+      const sample = recentBattingSample(recent, { minPA: MIN_RECENT_PA, minAB: MIN_RECENT_AB });
+      if (!sample) continue;
 
       const recentOps = Number(recent.ops);
       if (!Number.isFinite(recentOps) || recentOps <= 0) continue;
@@ -162,8 +153,8 @@ async function heatCheckForGame(game, { season, bdl, gameLabel, stats, lineupsFo
       if (edge < MIN_OPS_EDGE) continue;
 
       // Weight the edge by sample size so a 25-PA flash can't score like a
-      // 120-PA surge; windows at/above PA_FULL_CREDIT keep the full edge.
-      const effectiveEdge = edge * Math.min(1, recentSample / PA_FULL_CREDIT);
+      // 120-PA surge; preserve the existing weighting without relabeling AB.
+      const effectiveEdge = edge * Math.min(1, sample.count / SAMPLE_FULL_CREDIT);
 
       const name = b.name || seasonRec.player?.full_name || 'Batter';
       candidates.push({
@@ -175,7 +166,7 @@ async function heatCheckForGame(game, { season, bdl, gameLabel, stats, lineupsFo
         seasonOps,
         edge,
         effectiveEdge,
-        recentPa: recentSample,
+        recentSample: sample,
         recentLabel: recent.split_name || 'recent',
         seasonHr: Number(seasonRec.batting_hr) || 0,
       });
@@ -202,7 +193,8 @@ async function heatCheckForGame(game, { season, bdl, gameLabel, stats, lineupsFo
       tone: TONES.HOT,
       spark: [round(c.seasonOps, 3), round(c.recentOps, 3)],
       // position drives the iOS Insights row's gold position tag (e.g. "2B").
-      meta: c.position ? { position: c.position } : undefined,
+      meta: { ...recentBattingSampleMeta(c.recentSample, c.recentLabel),
+        ...(c.position ? { position: c.position } : {}) },
       relevance_score: scoreFromEdge(c.effectiveEdge, { scale: RELEVANCE_SCALE, base: 45 }),
       player_id: c.playerId,
       team_id: c.teamId,
@@ -212,7 +204,7 @@ async function heatCheckForGame(game, { season, bdl, gameLabel, stats, lineupsFo
 }
 
 /**
- * Detail copy. Plain/factual; ADDS information the headline lacks — the PA
+ * Detail copy. Plain/factual; ADDS information the headline lacks — the observed
  * sample, the season baseline, the season HR total when meaningful, and (when
  * posted) tonight's total-bases/hits prop line as context. Three deterministic
  * sentence variants keyed off player_id so a slate doesn't read machine-stamped.
@@ -223,13 +215,14 @@ function buildDetail(c, propLine) {
   const win = c.recentLabel.toLowerCase();
   const jump = round(c.edge, 3);
   const hr = c.seasonHr;
+  const sample = `${c.recentSample.count} ${c.recentSample.unit}`;
   // Only fold the HR total in when it is a meaningful power number.
   const hrClause = hr >= 8 ? ` He has ${hr} home runs on the season.` : '';
 
   const variants = [
-    `Over the ${win} (${c.recentPa} PA) he is at a ${recent} OPS, up ${jump} on his ${base} season mark.${hrClause}`,
-    `That ${recent} OPS spans the ${win} (${c.recentPa} PA) against a ${base} season baseline, a ${jump} swing.${hrClause}`,
-    `The ${win} sample runs ${c.recentPa} PA: a ${recent} OPS versus ${base} for the season, ${jump} above his norm.${hrClause}`,
+    `Over the ${win} (${sample}) he is at a ${recent} OPS, up ${jump} on his ${base} season mark.${hrClause}`,
+    `That ${recent} OPS spans the ${win} (${sample}) against a ${base} season baseline, a ${jump} swing.${hrClause}`,
+    `The ${win} sample runs ${sample}: a ${recent} OPS versus ${base} for the season, ${jump} above his norm.${hrClause}`,
   ];
   let detail = pickVariant(variants, c.playerId);
   if (propLine != null) {
