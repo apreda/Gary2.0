@@ -10,6 +10,9 @@ const content = source('ContentView.swift');
 const picks = source('PicksTab.swift');
 const navigation = source('GaryPushNavigation.swift');
 const hasSwift = process.platform === 'darwin' && spawnSync('swiftc', ['--version']).status === 0;
+// The subprocesses retain their 60s compile / 10s execution limits. Allow the
+// enclosing test to include both, including cold compilation on a busy runner.
+const fixtureTimeout = 75000;
 function block(text, declaration) {
   const start = text.indexOf(declaration);
   if (start < 0) throw new Error(`Missing ${declaration}`);
@@ -44,7 +47,7 @@ describe('native notification routing', () => {
       'Fixture.swift': readFileSync(new URL('../fixtures/ios/GaryPushRouterFixture.swift', import.meta.url), 'utf8'),
     });
     expect(result).toContain('Gary push router assertions passed');
-  });
+  }, fixtureTimeout);
 
   it.skipIf(!hasSwift)('executes the actual Picks date/loading guard and exact missing-target feedback', () => {
     const result = execute({
@@ -115,7 +118,7 @@ enum SupabaseAPI {
 }`,
     });
     expect(result).toContain('Actual Picks date guard passed');
-  });
+  }, fixtureTimeout);
 
   it.skipIf(!hasSwift)('executes queued feedback, account-safe resumption and latest-tap supersession', () => {
     const model = block(navigation, 'final class GaryPushNavigation: ObservableObject')
@@ -177,5 +180,5 @@ enum SupabaseAPI { static func todayEST(now: Date = Date()) -> String { "2026-09
 }`,
     });
     expect(result).toContain('Actual push navigation state passed');
-  });
+  }, fixtureTimeout);
 });

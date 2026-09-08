@@ -152,6 +152,48 @@ describe('windowSince + filterBets', () => {
     expect(filterBets(rows, 'all', 'manual', now).map(b => b.id)).toEqual(['man']);
     expect(filterBets(rows, 'all', 'tail', now)).toHaveLength(2);
   });
+  it.each([
+    ['7d', '2026-08-05', '2026-08-04'],
+    ['30d', '2026-07-13', '2026-07-12'],
+    ['season', '2026-03-01', '2026-02-28'],
+  ] as const)('bounds %s history inclusively through Eastern today', (timeframe, first, before) => {
+    const rows = [
+      bet({ id: 'before', game_date: before }),
+      bet({ id: 'first', game_date: first }),
+      bet({ id: 'today', game_date: '2026-08-11', status: 'lost', units_net: -1 }),
+      bet({ id: 'future-open', game_date: '2026-08-12', status: 'pending', units_net: null }),
+      bet({ id: 'future-settled', game_date: '2026-08-12', units_net: 100 }),
+    ];
+    const history = filterBets(rows, timeframe, 'all', now);
+    expect(history.map(b => b.id)).toEqual(['first', 'today']);
+    expect(trackerStats(history).winPct).toBe(50);
+    expect(cumulativeSeries(history).map(point => point.date)).toEqual([first, '2026-08-11']);
+    expect(betsCsv(history)).not.toContain('2026-08-12');
+    expect(filterBets(rows, 'all', 'all', now)).toEqual(rows);
+  });
+  it.each([
+    ['2026-09-08T03:59:59Z', '2026-09-07', '2026-09-08'],
+    ['2026-09-08T04:00:00Z', '2026-09-08', '2026-09-09'],
+    ['2026-03-08T04:59:59Z', '2026-03-07', '2026-03-08'],
+    ['2026-03-08T05:00:00Z', '2026-03-08', '2026-03-09'],
+    ['2026-11-01T03:59:59Z', '2026-10-31', '2026-11-01'],
+    ['2026-11-01T04:00:00Z', '2026-11-01', '2026-11-02'],
+    ['2026-11-01T06:30:00Z', '2026-11-01', '2026-11-02'],
+  ])('uses the Eastern calendar upper bound at %s', (instant, today, tomorrow) => {
+    const rows = [bet({ id: 'today', game_date: today }), bet({ id: 'future', game_date: tomorrow })];
+    for (const timeframe of ['7d', '30d', 'season'] as const) {
+      expect(filterBets(rows, timeframe, 'all', new Date(instant)).map(b => b.id)).toEqual(['today']);
+    }
+  });
+  it.each([
+    ['2026-03-09T04:30:00Z', '2026-03-03', '2026-03-02', '2026-03-09'],
+    ['2026-11-02T05:30:00Z', '2026-10-27', '2026-10-26', '2026-11-02'],
+  ])('keeps seven calendar dates across the DST transition at %s', (instant, first, before, today) => {
+    expect(filterBets([
+      bet({ id: 'before', game_date: before }), bet({ id: 'first', game_date: first }),
+      bet({ id: 'today', game_date: today }),
+    ], '7d', 'all', new Date(instant)).map(b => b.id)).toEqual(['first', 'today']);
+  });
 });
 
 describe('trackerStats', () => {

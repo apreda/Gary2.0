@@ -1,5 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Children, createElement, isValidElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import type { UserBet } from '@/lib/book/model';
 
 const fixture = vi.hoisted(() => ({
   cells: [] as unknown[], cursor: 0,
@@ -44,6 +46,7 @@ vi.mock('@/lib/auth/client', () => ({
 vi.mock('@/lib/book/api', () => ({
   fetchMyBets: fixture.bets, fetchMyStreak: fixture.streak,
   fetchMyProfile: fixture.profile, fetchRankings: fixture.rankings,
+  deleteBet: vi.fn(), gradeManual: vi.fn(), setStreakPick: vi.fn(), updateBet: vi.fn(),
 }));
 vi.mock('@/components/book/BookDay', () => ({ useUnitDollars: () => [0, fixture.unit] }));
 vi.mock('@/components/book/BookSlips', () => ({ Ledger: () => null, OpenSlips: () => null }));
@@ -58,6 +61,10 @@ import { PublicProfile } from '@/components/book/PublicProfile';
 
 import { BookClient } from '@/components/book/BookClient';
 import { Leaderboard } from '@/components/book/Leaderboard';
+import { Ledger, OpenSlips } from '@/components/book/BookSlips';
+import { RideChart } from '@/components/book/RideChart';
+
+const actualSlips = await vi.importActual<typeof import('@/components/book/BookSlips')>('@/components/book/BookSlips');
 
 const board = { rows: [], me: null, qualified_count: 0, min_decided: 5, my_decided: 0, has_more: false };
 const record = [{
@@ -80,6 +87,54 @@ beforeEach(() => {
   fixture.profile.mockResolvedValue({ profile: null, preferences: { unit_value: 0 } });
   fixture.rankings.mockResolvedValue(board);
 });
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+type ElementProps = { children?: ReactNode; [key: string]: unknown };
+function elements(node: ReactNode): ReactElement<ElementProps>[] {
+  const found: ReactElement<ElementProps>[] = [];
+  Children.forEach(node, child => {
+    if (isValidElement<ElementProps>(child)) found.push(child, ...elements(child.props.children));
+  });
+  return found;
+}
+function textOf(node: ReactNode): string {
+  let text = '';
+  Children.forEach(node, child => {
+    if (typeof child === 'string' || typeof child === 'number') text += child;
+    else if (isValidElement<ElementProps>(child)) text += textOf(child.props.children);
+  });
+  return text;
+}
+function bookTree() {
+  fixture.cursor = 0; fixture.callbacks = []; fixture.effects = [];
+  return BookClient({ garyRows });
+}
+function changeFilter(label: string, value: string | boolean) {
+  const field = elements(bookTree()).find(node => node.type === 'label' && textOf(node).trim().startsWith(label))!;
+  const control = elements(field.props.children).find(node => node.type === 'input' || node.type === 'select')!;
+  (control.props.onChange as (event: { target: { value?: string; checked?: boolean } }) => void)({
+    target: typeof value === 'boolean' ? { checked: value } : { value },
+  });
+}
+function chooseTimeframe(label: string) {
+  const button = elements(bookTree()).find(node => node.type === 'button' && textOf(node) === label)!;
+  (button.props.onClick as () => void)();
+}
+function rowElement(tree: ReactNode, type: typeof Ledger | typeof OpenSlips) {
+  return elements(tree).find(node => node.type === type);
+}
+// Render the shipping slip/ledger components using the rows actually passed by
+// BookClient. Isolate child hook cells so these renders cannot alter its state.
+function renderRows(tree: ReactNode, kind: 'open' | 'ledger') {
+  const element = rowElement(tree, kind === 'open' ? OpenSlips : Ledger);
+  if (!element) return '';
+  const saved = { cells: fixture.cells, cursor: fixture.cursor, effects: fixture.effects };
+  fixture.cells = []; fixture.cursor = 0; fixture.effects = [];
+  try {
+    const component = kind === 'open' ? actualSlips.OpenSlips : actualSlips.Ledger;
+    return renderToStaticMarkup(createElement(component, element.props as Parameters<typeof component>[0]));
+  } finally { Object.assign(fixture, saved); }
+}
 
 describe('Book loading and failure presentation', () => {
   it('never invents zero records or a zero streak after the first history request fails', async () => {
@@ -125,6 +180,124 @@ describe('Book loading and failure presentation', () => {
     expect(html).toContain('1–0');
     expect(html).not.toContain('Offline.');
     expect(html).not.toContain('Showing the last Book');
+  });
+});
+
+describe('Book date-filter and open-slip presentation', () => {
+  const bet = (id: string, date: string, extra: Partial<UserBet> = {}): UserBet => ({
+    id, game_date: date, kind: 'manual', pick_type: 'game', league: 'MLB', pick_text: id,
+    matchup: 'PHI @ NYM', player_name: null, prop_type: null, description: null,
+    odds_american: 100, odds_estimated: false, stake_units: 1, gary_confidence: null,
+    streak_pick: false, status: 'pending', units_net: null, lock_at: null, placed_at: null,
+    graded_by: 'self', is_favorite: true, notes: 'Wind read', ...extra,
+  });
+  async function load(rows: UserBet[]) {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime('2026-09-08T04:58:00Z');
+    fixture.bets.mockResolvedValue(rows);
+    bookTree(); await fixture.callbacks[0]();
+  }
+
+  it.each(['7D', '30D', 'Season'])('keeps old and future open slips under %s while bounding history, stats, chart and exported CSV', async timeframe => {
+    await load([
+      bet('Older unresolved', '2025-12-01'),
+      bet('Future unresolved', '2026-09-09'),
+      bet('Current settled', '2026-09-08', { status: 'lost', units_net: -1 }),
+      bet('Future settled', '2026-09-09', { status: 'won', units_net: 100 }),
+      bet('Older settled', '2025-12-01', { status: 'won', units_net: 200 }),
+      bet('Other source', '2026-09-09', { kind: 'tail' }),
+      bet('Other sport', '2026-09-09', { league: 'NFL' }),
+      bet('Other search', '2026-09-09', { notes: 'Calm read' }),
+      bet('Not favorite', '2026-09-09', { is_favorite: false }),
+    ]);
+    chooseTimeframe(timeframe);
+    changeFilter('Source', 'manual');
+    changeFilter('Sport', 'MLB');
+    changeFilter('Search your book', 'wind');
+    changeFilter('Favorites only', true);
+    let tree = bookTree();
+    let open = renderRows(tree, 'open');
+    expect(open).toContain('Older unresolved');
+    expect(open).toContain('Future unresolved');
+    expect(open).toContain('Open slips');
+    expect(open).toContain('Edit bet');
+    for (const excluded of ['Current settled', 'Future settled', 'Older settled', 'Other source', 'Other sport', 'Other search', 'Not favorite']) {
+      expect(open).not.toContain(excluded);
+    }
+    const ledger = renderRows(tree, 'ledger');
+    expect(ledger).toContain('Current settled');
+    expect(ledger).not.toContain('Future settled');
+    expect(ledger).not.toContain('Older settled');
+    expect(elements(tree).find(node => node.props.label === 'Win rate')?.props.value).toBe('0%');
+    expect(elements(tree).find(node => node.props.label === 'Return on stake')?.props.value).toBe('-100%');
+    expect(elements(tree).find(node => node.type === RideChart)?.props.series).toEqual([{ date: '2026-09-08', units: -1 }]);
+    const blobs: Blob[] = [];
+    vi.spyOn(URL, 'createObjectURL').mockImplementation(value => { blobs.push(value as Blob); return 'blob:fixture'; });
+    vi.stubGlobal('document', { createElement: () => ({ click: vi.fn() }) });
+    vi.stubGlobal('window', { setTimeout: vi.fn() });
+    const exportButton = elements(tree).find(node => node.type === 'button' && textOf(node).startsWith('Export CSV'))!;
+    expect(textOf(exportButton)).toBe('Export CSV (1)');
+    (exportButton.props.onClick as () => void)();
+    const csv = await blobs[0].text();
+    expect(csv).toContain('Current settled');
+    for (const excluded of ['Older unresolved', 'Future unresolved', 'Future settled', 'Older settled']) expect(csv).not.toContain(excluded);
+
+    changeFilter('Status', 'pending');
+    tree = bookTree();
+    open = renderRows(tree, 'open');
+    expect(open).toContain('Older unresolved');
+    expect(open).toContain('Future unresolved');
+    expect(renderToStaticMarkup(tree)).toContain('No history matches this date range and filters.');
+    expect(elements(tree).find(node => node.type === 'button' && textOf(node).startsWith('Export CSV'))?.props.disabled).toBe(true);
+
+    changeFilter('Status', 'settled');
+    tree = bookTree();
+    expect(renderRows(tree, 'open')).toBe('');
+    expect(renderRows(tree, 'ledger')).toContain('Current settled');
+    chooseTimeframe('All time');
+    tree = bookTree();
+    expect(renderRows(tree, 'ledger')).toContain('Future settled');
+    expect(renderRows(tree, 'ledger')).toContain('Older settled');
+    expect(textOf(elements(tree).find(node => node.type === 'button' && textOf(node).startsWith('Export CSV')))).toBe('Export CSV (3)');
+  });
+
+  it('renders a future-only Book with usable open slips even when selected history is empty', async () => {
+    await load([bet('Only future bet', '2026-09-09')]);
+    chooseTimeframe('7D');
+    const tree = bookTree();
+    const html = renderToStaticMarkup(tree);
+    expect(html).toContain('No history matches this date range and filters.');
+    expect(html).toContain('Open slips include every date and follow your other filters.');
+    expect(html).not.toContain('Every record starts with one call.');
+    expect(renderRows(tree, 'open')).toContain('Only future bet');
+    expect(renderRows(tree, 'open')).toContain('Edit bet');
+    expect(renderRows(tree, 'ledger')).toBe('');
+  });
+
+  it.each([
+    ['2026-09-08T03:59:59Z', '2026-09-08T04:00:00Z', '2026-09-07', '2026-09-08'],
+    ['2026-03-08T04:59:59Z', '2026-03-08T05:00:00Z', '2026-03-07', '2026-03-08'],
+    ['2026-11-01T03:59:59Z', '2026-11-01T04:00:00Z', '2026-10-31', '2026-11-01'],
+  ])('advances rendered history at Eastern midnight %s while preserving open slips', async (before, after, oldDay, newDay) => {
+    await load([
+      bet('Prior result', oldDay, { status: 'lost', units_net: -1 }),
+      bet('Incoming result', newDay, { status: 'won', units_net: 2 }),
+      bet('Incoming open', newDay),
+    ]);
+    chooseTimeframe('7D');
+    vi.setSystemTime(before);
+    let tree = bookTree();
+    expect(renderRows(tree, 'ledger')).toContain('Prior result');
+    expect(renderRows(tree, 'ledger')).not.toContain('Incoming result');
+    expect(renderRows(tree, 'open')).toContain('Incoming open');
+    expect(elements(tree).find(node => node.props.label === 'Win rate')?.props.value).toBe('0%');
+    expect(textOf(elements(tree).find(node => node.type === 'button' && textOf(node).startsWith('Export CSV')))).toBe('Export CSV (1)');
+    vi.setSystemTime(after);
+    tree = bookTree();
+    expect(renderRows(tree, 'ledger')).toContain('Incoming result');
+    expect(renderRows(tree, 'open')).toContain('Incoming open');
+    expect(elements(tree).find(node => node.props.label === 'Win rate')?.props.value).toBe('50%');
+    expect(textOf(elements(tree).find(node => node.type === 'button' && textOf(node).startsWith('Export CSV')))).toBe('Export CSV (3)');
   });
 });
 

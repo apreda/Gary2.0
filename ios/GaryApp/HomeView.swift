@@ -590,7 +590,7 @@ struct HomeView: View {
             fullHomeRefreshID = requestID
             fullHomeRefreshNonce = taskNonce
             fullHomeRefreshDate = date
-            func canPublish() -> Bool {
+            @MainActor func canPublish() -> Bool {
                 fullHomeRefreshID == requestID
                     && isCurrentHomeRequest(nonce: taskNonce, date: date, accountID: accountID)
             }

@@ -212,8 +212,10 @@ export function windowSince(tf: Timeframe, now: Date = new Date()): string | nul
 
 export function filterBets(rows: UserBet[], tf: Timeframe, source: Source, now: Date = new Date()): UserBet[] {
   const since = windowSince(tf, now);
+  const until = tf === 'all' ? null : estDateStr(now);
   return rows.filter(b => {
     if (since && b.game_date < since) return false;
+    if (until && b.game_date > until) return false;
     if (source !== 'all' && b.kind !== source) return false;
     return true;
   });

@@ -1144,7 +1144,6 @@ struct GaryPropsView: View {
         // Use a timeout to prevent infinite loading
         var props: [PropPick] = []
         var didFail = false
-        var wasCancelled = false
         var transientFailure = false
         do {
             props = try await withTimeout(seconds: 30) {
@@ -1153,7 +1152,6 @@ struct GaryPropsView: View {
         } catch {
             if SupabaseAPI.isCancellation(error) {
                 // Our own torn-down refresh task — state stands, no banner.
-                wasCancelled = true
                 transientFailure = true
             } else {
                 didFail = true

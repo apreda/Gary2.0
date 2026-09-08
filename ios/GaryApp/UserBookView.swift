@@ -1019,7 +1019,7 @@ struct UserBookSection: View {
                 pendingBlock
                 settledByDay
                 if scopedBets.isEmpty {
-                    Text("No bets match these filters.")
+                    Text("No history matches this date range and filters.")
                         .font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.6))
                 }
             }

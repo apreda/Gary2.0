@@ -63,8 +63,6 @@ struct GaryPicksView: View {
             }
             
             return picks.filter { pick in
-                let league = (pick.league ?? "").uppercased()
-
                 guard let commenceTime = pick.commence_time else {
                     // No time specified, show the pick
                     return true

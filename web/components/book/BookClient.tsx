@@ -137,7 +137,9 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
     };
   }, [reload]);
   const handle = profile?.profile?.display_name;
-  const filtered = searchBets(filterBets(bets, timeframe, source), search, league, status, favorites);
+  const matching = searchBets(filterBets(bets, 'all', source), search, league, status, favorites);
+  const filtered = filterBets(matching, timeframe, 'all');
+  const openSlips = matching.filter((b) => b.status === 'pending');
   const stats = trackerStats(filtered);
   const series = cumulativeSeries(filtered);
   const exportBook = () => {
@@ -382,22 +384,22 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
                 />
               </div>
               <p className="text-[11px] leading-relaxed text-low">
-                Stats and chart follow your filters.{' '}
+                History, stats, chart, and CSV follow your filters.{' '}
+                {timeframe !== 'all' && 'Date ranges end today in Eastern time. '}
+                Open slips include every date and follow your other filters.{' '}
                 {source === 'all'
                   ? 'This view includes both verified calls and your self-graded personal bets.'
                   : source === 'manual'
                     ? 'These results are self-graded and private.'
                     : 'These calls are graded by Gary’s result system.'}
               </p>
+              {filtered.length > 0 && <RideChart series={series} unitDollars={unitDollars} />}
+              <OpenSlips bets={openSlips} unitDollars={unitDollars} onChanged={reload} />
               {filtered.length ? (
-                <>
-                  <RideChart series={series} unitDollars={unitDollars} />
-                  <OpenSlips bets={filtered} unitDollars={unitDollars} onChanged={reload} />
-                  <Ledger bets={filtered} unitDollars={unitDollars} onChanged={reload} />
-                </>
+                <Ledger bets={filtered} unitDollars={unitDollars} onChanged={reload} />
               ) : (
                 <p className="rounded-card border border-line p-5 text-[13px] text-mid">
-                  No bets match these filters. Change your search or date range to see more.
+                  No history matches this date range and filters. Change your search or date range to see more.
                 </p>
               )}
             </>

@@ -68,6 +68,7 @@ export function ProfileEditor({
 
 function ProfileForm({ initial, onSaved }: { initial: MyProfile; onSaved?: (profile: MyProfile) => void }) {
   const [handle, setHandle] = useState(initial.profile?.handle ?? initial.profile?.display_name ?? '');
+  const [savedHandle, setSavedHandle] = useState(initial.profile?.handle ?? initial.profile?.display_name ?? '');
   const [bio, setBio] = useState(initial.profile?.bio ?? '');
   const [avatar, setAvatar] = useState(initial.profile?.avatar ?? 'initials');
   const [visible, setVisible] = useState(initial.profile?.leaderboard_visible ?? false);
@@ -77,23 +78,43 @@ function ProfileForm({ initial, onSaved }: { initial: MyProfile; onSaved?: (prof
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const effectiveHandle = handle.trim() || savedHandle;
+  const needsHandle = visible || (!savedHandle && (bio.trim() !== '' || avatar !== 'initials'));
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setBusy(true);
+    if (busy) return;
     setError(null);
     setFeedback(null);
+    if (handle.trim() && !/^[A-Za-z0-9_]{3,18}$/.test(handle.trim())) {
+      setError('Use 3–18 letters, numbers, or underscores for your handle.');
+      return;
+    }
+    if (!effectiveHandle && needsHandle) {
+      setError('Choose a handle to save an avatar or bio or appear on the leaderboard. Favorite sports and unit value can stay private without one.');
+      return;
+    }
+    const unitValue = Number(unit);
+    if (!Number.isFinite(unitValue) || unitValue < 0 || unitValue > 100000) {
+      setError('Enter a unit value from 0 to 100,000 dollars.');
+      return;
+    }
+    setBusy(true);
     try {
       const p = await saveMyProfile({
         handle: handle.trim() || undefined,
-        bio,
-        avatar,
+        ...(effectiveHandle ? { bio, avatar } : {}),
         visible,
         sports,
-        unitValue: Number(unit),
+        unitValue,
       });
-      setUnitDollars(Number(unit));
+      const persistedHandle = p.profile?.handle ?? p.profile?.display_name ?? '';
+      setSavedHandle(persistedHandle);
+      setHandle(persistedHandle);
+      setUnitDollars(p.preferences?.unit_value ?? 0);
       onSaved?.(p);
-      setFeedback('Profile saved. Your preferences sync with the app.');
+      setFeedback(persistedHandle
+        ? 'Profile saved. Your preferences sync with the app.'
+        : 'Private preferences saved. No public profile was created.');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Your profile could not be saved.');
     } finally {
@@ -129,7 +150,7 @@ function ProfileForm({ initial, onSaved }: { initial: MyProfile; onSaved?: (prof
           <input
             className={bookField}
             autoComplete="nickname"
-            required
+            required={needsHandle && !savedHandle}
             minLength={3}
             maxLength={18}
             pattern="[A-Za-z0-9_]{3,18}"
@@ -138,6 +159,11 @@ function ProfileForm({ initial, onSaved }: { initial: MyProfile; onSaved?: (prof
             placeholder="Your name on the board"
           />
           <span className="mt-1 block text-[11px] text-low">3–18 letters, numbers, or underscores.</span>
+          <span className="mt-1 block text-[11px] text-low">
+            {savedHandle
+              ? `Leave blank to keep @${savedHandle}. Public visibility is controlled below.`
+              : 'Optional for favorite sports and unit value. Choose a handle to save an avatar or bio or join public rankings.'}
+          </span>
         </label>
         <label className="block text-[12px] text-mid">
           Bio
@@ -197,7 +223,7 @@ function ProfileForm({ initial, onSaved }: { initial: MyProfile; onSaved?: (prof
           </span>
         </label>
         <button className="rounded-chip bg-gold px-5 py-2.5 text-[13px] font-semibold text-ink">
-          {busy ? 'Saving…' : 'Save profile'}
+          {busy ? 'Saving…' : effectiveHandle || needsHandle ? 'Save profile' : 'Save private preferences'}
         </button>
       </fieldset>
       {feedback && (

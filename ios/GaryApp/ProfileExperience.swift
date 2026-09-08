@@ -202,6 +202,40 @@ struct ProfileNotice: View {
     }
 }
 
+enum ProfileEditRules {
+    /// SQL treats zero as an unset unit preference. Keep that editable without
+    /// weakening validation for a deliberately entered zero or invalid value.
+    static func unitEditorText(_ value: Double?) -> String {
+        guard let value, value != 0 else { return "" }
+        if value.isFinite, abs(value) <= 100_000, value.rounded() == value {
+            return String(format: "%.0f", value)
+        }
+        return String(value)
+    }
+
+    static func unitInputValid(_ text: String) -> Bool {
+        text.isEmpty || (Double(text).map { $0.isFinite && $0 > 0 && $0 <= 100_000 } == true)
+    }
+
+    /// Private sports/unit preferences need no public identity. The server
+    /// stores avatar/bio only when a profile already exists or a handle is
+    /// supplied, so never report those edits saved for an unnamed new account.
+    static func handleIssue(_ handle: String, visible: Bool, hasProfile: Bool, avatar: String, bio: String) -> String? {
+        let name = handle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !name.isEmpty {
+            return name.range(of: "^[A-Za-z0-9_]{3,18}$", options: .regularExpression) == nil
+                ? "Use 3–18 letters, numbers, or underscores for your handle." : nil
+        }
+        // Existing rows have a validated display name; omitted p_handle keeps
+        // that identity, including when public visibility remains enabled.
+        if visible && !hasProfile { return "Choose a handle to appear on the leaderboard." }
+        if !hasProfile && (avatar != "initials" || !bio.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
+            return "Choose a handle to save your avatar or bio. Favorite sports and Book display can be saved without one."
+        }
+        return nil
+    }
+}
+
 struct ProfileEditorSheet: View {
     let snapshot: ProfileIdentityAPI.Snapshot?
     let onSaved: (ProfileIdentityAPI.Snapshot) -> Void
@@ -218,8 +252,10 @@ struct ProfileEditorSheet: View {
     @State private var ownerID: String?
 
     private var cleanHandle: String { handle.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var handleValid: Bool { cleanHandle.range(of: "^[A-Za-z0-9_]{3,18}$", options: .regularExpression) != nil }
-    private var unitValid: Bool { unitText.isEmpty || (Double(unitText).map { $0.isFinite && $0 > 0 && $0 <= 100_000 } == true) }
+    private var handleIssue: String? {
+        ProfileEditRules.handleIssue(cleanHandle, visible: visible, hasProfile: snapshot?.profile != nil, avatar: avatar, bio: bio)
+    }
+    private var unitValid: Bool { ProfileEditRules.unitInputValid(unitText) }
 
     var body: some View {
         NavigationStack {
@@ -227,11 +263,13 @@ struct ProfileEditorSheet: View {
                 VStack(alignment: .leading, spacing: 24) {
                     HStack { Spacer(); ProfileAvatar(name: cleanHandle, symbol: avatar, size: 76); Spacer() }
                     editorSection("MAKE IT YOURS") {
-                        TextField("Your handle", text: $handle)
+                        TextField("Your handle (optional)", text: $handle)
                             .textInputAutocapitalization(.never).autocorrectionDisabled()
                             .font(GaryFonts.text(18, .semibold)).padding(13).background(fieldBackground)
                             .accessibilityLabel("Public handle")
-                        Text("3–18 letters, numbers, or underscores. Your email never appears on the board.")
+                        Text(snapshot?.profile == nil
+                             ? "Optional for private sports and Book display. A profile needs 3–18 letters, numbers, or underscores. Your email never appears on the board."
+                             : "3–18 letters, numbers, or underscores. Leave blank to keep your current handle. Your email never appears on the board.")
                             .font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.5))
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 12) {
                             ForEach(ProfileAvatar.choices, id: \.self) { symbol in
@@ -271,16 +309,16 @@ struct ProfileEditorSheet: View {
                             Text("Typical bet · $").font(GaryFonts.text(14))
                             TextField("100", text: $unitText).keyboardType(.decimalPad).font(GaryFonts.mono(16)).padding(12).background(fieldBackground)
                         }
-                        Text("Converts your saved stakes to dollars. Until you set it, the display uses a hypothetical $100 per unit. It does not change your leaderboard rank.").font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.5))
+                        Text("Converts your saved stakes to dollars. Leave blank to use a hypothetical $100 per unit. It does not change your leaderboard rank.").font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.5))
                     }
                     if let error { Text(error).font(GaryFonts.text(13)).foregroundStyle(GaryColors.loss).fixedSize(horizontal: false, vertical: true) }
                     Button(action: save) {
                         HStack { if saving { ProgressView().tint(.black) }; Text(saving ? "Saving profile" : "Save profile") }
                             .font(GaryFonts.text(15, .semibold)).foregroundStyle(.black).frame(maxWidth: .infinity).padding(.vertical, 15)
                             .background(Capsule().fill(GaryColors.gold))
-                    }.buttonStyle(.plain).disabled(saving || !handleValid || !unitValid || auth.currentUser?.id != ownerID)
-                    if !handleValid { Text("Choose a valid handle to save your profile. It stays private unless you turn on the leaderboard.").font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.6)) }
-                    if !unitValid { Text("Enter a dollar amount greater than zero, up to $100,000.").font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.6)) }
+                    }.buttonStyle(.plain).disabled(saving || handleIssue != nil || !unitValid || auth.currentUser?.id != ownerID)
+                    if let handleIssue { Text(handleIssue).font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.6)) }
+                    if !unitValid { Text("Enter a dollar amount greater than zero, up to $100,000, or leave it blank for the default.").font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.6)) }
                 }.foregroundStyle(GaryColors.warmWhite).padding(20).padding(.bottom, 20)
             }
             .background(Color(hex: "#0F0D0C"))
@@ -296,7 +334,7 @@ struct ProfileEditorSheet: View {
             bio = snapshot?.profile?.bio ?? ""
             visible = snapshot?.profile?.isPublic ?? false
             sports = Set(snapshot?.preferences?.favorite_sports ?? [])
-            if let amount = snapshot?.preferences?.unit_value { unitText = String(format: "%g", amount) }
+            unitText = ProfileEditRules.unitEditorText(snapshot?.preferences?.unit_value)
         }
         .onChange(of: auth.currentUser?.id) { _ in dismiss() }
     }
@@ -309,7 +347,7 @@ struct ProfileEditorSheet: View {
         }
     }
     private func save() {
-        guard !saving, handleValid, unitValid, ownerID == auth.currentUser?.id else { return }
+        guard !saving, handleIssue == nil, unitValid, ownerID == auth.currentUser?.id else { return }
         saving = true; error = nil
         Task {
             defer { saving = false }
