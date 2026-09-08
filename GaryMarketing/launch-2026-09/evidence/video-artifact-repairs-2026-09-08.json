@@ -1,0 +1,28 @@
+{
+  "checked_at_utc": "2026-09-08T10:12:23.775495+00:00",
+  "frame_references_resolved": 39,
+  "frame_references_total": 39,
+  "mapped_master_edits": 8,
+  "mapped_cutdown_edits": 3,
+  "unique_stable_creative_ids": 11,
+  "all_assets_and_caption_paths_exist": true,
+  "url_queries_valid": true,
+  "website_internal_ctas_preserve_acquisition_source": true,
+  "all_video_hashes_match": true,
+  "all_39_frames_present_in_full_zip": true,
+  "full_zip_metadata_matches_working_files": true,
+  "nfl_kit_manifest_maps_its_5_actual_files": true,
+  "zip_crc_checks": "both_pass",
+  "video_payloads_preserved_during_archive_update": true,
+  "publication_or_account_actions": false,
+  "new_policy_search_or_provider_use": false,
+  "changed_files": [
+    "launch-delivery/video-campaign/current-delivery-verification.json",
+    "launch-delivery/video-campaign/PUBLISHING.md",
+    "launch-delivery/video-campaign/publishing-attribution.json",
+    "launch-delivery/video-campaign/README.md",
+    "launch-delivery/Gary-current-app-and-NFL-ads.zip",
+    "launch-delivery/Gary-NFL-kickoff-posting-kit.zip",
+    "launch-delivery/Gary-current-video-delivery.json"
+  ]
+}

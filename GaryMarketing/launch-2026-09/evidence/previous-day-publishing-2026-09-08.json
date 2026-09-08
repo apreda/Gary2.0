@@ -1,0 +1,301 @@
+{
+  "checked_at": "2026-09-08T10:04:14.106858+00:00",
+  "day": "2026-09-07",
+  "window": {
+    "start_inclusive": "2026-09-07T04:00:00Z",
+    "end_exclusive": "2026-09-08T04:00:00Z",
+    "definition": "Full completed Eastern date, selected by canonical post_date and source date; exact starts compared separately"
+  },
+  "source_tables": [
+    "daily_slate",
+    "daily_picks",
+    "social_post_log",
+    "social_publication_intents"
+  ],
+  "counts": {
+    "slate": 12,
+    "stored_game_picks": 12,
+    "slate_games_with_exact_identity_pick": 12,
+    "game_threads": 12,
+    "mlb_game_threads": 11,
+    "ncaaf_game_threads": 1,
+    "recaps": 2,
+    "week_tapes": 1,
+    "all_top_level_logs": 15,
+    "game_threads_with_own_reply": 11,
+    "game_intents": 12,
+    "completed_game_intents": 12,
+    "confirmed_roots_matching_log": 12,
+    "confirmed_replies_matching_log": 11,
+    "late_or_within_five_minutes": 0,
+    "all_reasons_verbatim": 12
+  },
+  "timing": {
+    "min_lead_minutes": 54.94926666666667,
+    "max_lead_minutes": 119.9046,
+    "min_metric_observation_hours": 9.250569722222222,
+    "max_metric_observation_hours": 18.250119444444444
+  },
+  "metrics": {
+    "impressions": {
+      "measured": 12,
+      "denominator": 12,
+      "sum": 5649
+    },
+    "likes": {
+      "measured": 12,
+      "denominator": 12,
+      "sum": 5
+    },
+    "replies": {
+      "measured": 12,
+      "denominator": 12,
+      "sum": 13
+    },
+    "retweets": {
+      "measured": 12,
+      "denominator": 12,
+      "sum": 0
+    },
+    "bookmarks": {
+      "measured": 12,
+      "denominator": 12,
+      "sum": 1
+    },
+    "profile_clicks": {
+      "measured": 12,
+      "denominator": 12,
+      "sum": 43
+    },
+    "link_clicks": {
+      "measured": 0,
+      "denominator": 12,
+      "sum": null
+    }
+  },
+  "excerpt_replay": {
+    "scope": "Retrospective current-rule replay; nine early posts precede the latest facts-only format and are not claims of new-rule violations at their publication time",
+    "before_fix_safe_posts": 3,
+    "after_fix_safe_posts": 2,
+    "newly_rejected_original_posts": [
+      "Athletics +1.5 +105"
+    ],
+    "safe_fallbacks_after_fix": 12,
+    "fallback_changes": [
+      "Athletics +1.5 +105"
+    ],
+    "replays": [
+      {
+        "pick": "Braves ML +146",
+        "url": "https://x.com/BetwithGary/status/2096980574334247165",
+        "posted_at": "2026-09-07T15:15:03.758+00:00",
+        "stored_start": "2026-09-07T17:05:00+00:00",
+        "lead_minutes": 109.93736666666666,
+        "original_text": "Atlanta has a credible path through Holmes to a bullpen that I expect to be better positioned for the decisive outs.\n\nBraves ML\n\nThomas owns an .820 OPS against left-handed pitching, and Acu\u00f1a is 7-for-12 with two homers this series.",
+        "original_reasons_all_verbatim": true,
+        "before_fix_safe": false,
+        "after_fix_safe": false,
+        "safe_fallback_after_fix": true,
+        "fallback_changed": false,
+        "fallback_after_fix": {
+          "opening": "Fuentes pitched two innings on 21 pitches Friday and sat Saturday and Sunday.",
+          "closing": "Lee and Iglesias each threw 13 pitches Sunday after sitting Saturday."
+        }
+      },
+      {
+        "pick": "Mets ML +108",
+        "url": "https://x.com/BetwithGary/status/2096980578817946062",
+        "posted_at": "2026-09-07T15:15:04.882+00:00",
+        "stored_start": "2026-09-07T17:10:00+00:00",
+        "lead_minutes": 114.91863333333333,
+        "original_text": "I expect those location problems to give New York opportunities to reach base and push Miami into its bullpen.\n\nMets ML\n\nSoto has slugged .619 against four-seam fastballs, while Benge has hit .325 against both four-seamers and sinkers.",
+        "original_reasons_all_verbatim": true,
+        "before_fix_safe": false,
+        "after_fix_safe": false,
+        "safe_fallback_after_fix": true,
+        "fallback_changed": false,
+        "fallback_after_fix": {
+          "opening": "Soto has slugged .619 against four-seam fastballs, while Benge has hit .325 against both four-seamers and sinkers.",
+          "closing": ""
+        }
+      },
+      {
+        "pick": "Angels +1.5 -142",
+        "url": "https://x.com/BetwithGary/status/2096988120482828502",
+        "posted_at": "2026-09-07T15:45:02.907+00:00",
+        "stored_start": "2026-09-07T17:35:00+00:00",
+        "lead_minutes": 109.95155,
+        "original_text": "Boston\u2019s recent pitching success came with different starters; I expect this assignment to give Los Angeles more offensive opportunities.\n\nAngels +1.5\n\nBello\u2019s recent work gives the Angels a credible opening, and their bullpen rest helps support the extra run we\u2019re buying.",
+        "original_reasons_all_verbatim": true,
+        "before_fix_safe": false,
+        "after_fix_safe": false,
+        "safe_fallback_after_fix": true,
+        "fallback_changed": false,
+        "fallback_after_fix": {
+          "opening": "Rodriguez has delivered a 2.41 ERA across his last three starts, covering 18.2 innings.",
+          "closing": ""
+        }
+      },
+      {
+        "pick": "Orioles ML -136",
+        "url": "https://x.com/BetwithGary/status/2096988125608186290",
+        "posted_at": "2026-09-07T15:45:04.129+00:00",
+        "stored_start": "2026-09-07T17:35:00+00:00",
+        "lead_minutes": 109.93118333333334,
+        "original_text": "My assumption is that the recent control difference remains meaningful today and Baltimore converts the extra opportunities.\n\nOrioles ML\n\nEncarnacion-Strand\u2019s platoon result covers only 52 at-bats, so it deserves less weight than Mayo\u2019s 127-at-bat sample.",
+        "original_reasons_all_verbatim": true,
+        "before_fix_safe": false,
+        "after_fix_safe": false,
+        "safe_fallback_after_fix": true,
+        "fallback_changed": false,
+        "fallback_after_fix": {
+          "opening": "Smith threw 27 pitches across two innings yesterday, and he has not pitched the following day after any of his 11 outings of at least 25 pitches.",
+          "closing": "Baltimore has Kittredge and Cano unused over the last three days, while Garcia threw nine pitches Saturday."
+        }
+      },
+      {
+        "pick": "Cubs ML +106",
+        "url": "https://x.com/BetwithGary/status/2096995671605678515",
+        "posted_at": "2026-09-07T16:15:03.423+00:00",
+        "stored_start": "2026-09-07T18:10:00+00:00",
+        "lead_minutes": 114.94295,
+        "original_text": "My assumption is that Chicago generates enough early pressure, with Boyd providing enough innings, to make this approximately an even contest.\n\nCubs ML\n\nGasser has allowed an .829 OPS to right-handed hitters, compared with .572 to lefties.",
+        "original_reasons_all_verbatim": true,
+        "before_fix_safe": false,
+        "after_fix_safe": false,
+        "safe_fallback_after_fix": true,
+        "fallback_changed": false,
+        "fallback_after_fix": {
+          "opening": "Gasser has allowed an .829 OPS to right-handed hitters, compared with .572 to lefties.",
+          "closing": ""
+        }
+      },
+      {
+        "pick": "Royals ML -116",
+        "url": "https://x.com/BetwithGary/status/2096995676718567632",
+        "posted_at": "2026-09-07T16:15:04.452+00:00",
+        "stored_start": "2026-09-07T18:10:00+00:00",
+        "lead_minutes": 114.9258,
+        "original_text": "My assumption is that Cameron provides enough innings for Kansas City to reach its less recently used relief options, while Arizona\u2019s consecutive-day usage limits some of its preferred choices.\n\nRoyals ML\n\nLo\u00e1isiga threw 36 pitches across those games, Morillo 32 and Ginkel 26.",
+        "original_reasons_all_verbatim": true,
+        "before_fix_safe": false,
+        "after_fix_safe": false,
+        "safe_fallback_after_fix": true,
+        "fallback_changed": false,
+        "fallback_after_fix": {
+          "opening": "Law opens today after Garcia, Morillo, Ginkel and Lo\u00e1isiga all pitched Saturday and Sunday.",
+          "closing": ""
+        }
+      },
+      {
+        "pick": "Twins ML +102",
+        "url": "https://x.com/BetwithGary/status/2097010769200128403",
+        "posted_at": "2026-09-07T17:15:02.814+00:00",
+        "stored_start": "2026-09-07T19:10:00+00:00",
+        "lead_minutes": 114.9531,
+        "original_text": "My assumption is that Ryan provides enough competitive innings for Minnesota to reach its rested late-game options without an extended middle-relief exposure.\n\nTwins ML\n\nA confirmed restrictive workload limit without an available bulk option would change my assessment.",
+        "original_reasons_all_verbatim": true,
+        "before_fix_safe": false,
+        "after_fix_safe": false,
+        "safe_fallback_after_fix": true,
+        "fallback_changed": false,
+        "fallback_after_fix": {
+          "opening": "G\u00f3mez, Hoffman and Minter all sat Sunday after throwing seven, 17 and 18 pitches Saturday.",
+          "closing": "Detroit\u2019s relief work improved in Cleveland, but Jansen, Holton, Kinley and Sommers pitched Sunday, and Finnegan worked consecutive days."
+        }
+      },
+      {
+        "pick": "Padres -1.5 +108",
+        "url": "https://x.com/BetwithGary/status/2097056068786327782",
+        "posted_at": "2026-09-07T20:15:03.044+00:00",
+        "stored_start": "2026-09-07T21:10:00+00:00",
+        "lead_minutes": 54.94926666666667,
+        "original_text": "I see a credible route to scoring against Irvin and making Washington cover substantial innings afterward.\n\nPadres -1.5\n\nWashington\u2019s bullpen situation makes Irvin\u2019s recent short starts particularly important tonight.",
+        "original_reasons_all_verbatim": true,
+        "before_fix_safe": false,
+        "after_fix_safe": false,
+        "safe_fallback_after_fix": true,
+        "fallback_changed": false,
+        "fallback_after_fix": {
+          "opening": "Lord threw 39 pitches yesterday and has never worked consecutive days this season.",
+          "closing": "Beeter had yesterday off, but his last two appearances produced six earned runs."
+        }
+      },
+      {
+        "pick": "SMU Mustangs -2.5 -115",
+        "url": "https://x.com/BetwithGary/status/2097074954487398712",
+        "posted_at": "2026-09-07T21:30:05.724+00:00",
+        "stored_start": "2026-09-07T23:30:00+00:00",
+        "lead_minutes": 119.9046,
+        "original_text": "I\u2019m taking the spread because I expect SMU\u2019s passing advantage to generate sustained scoring opportunities across four quarters.\n\nSMU Mustangs -2.5",
+        "original_reasons_all_verbatim": true,
+        "before_fix_safe": false,
+        "after_fix_safe": false,
+        "safe_fallback_after_fix": true,
+        "fallback_changed": false,
+        "fallback_after_fix": {
+          "opening": "Jennings returns alongside three offensive-line starters to an offense that already features quick passes and misdirection.",
+          "closing": ""
+        }
+      },
+      {
+        "pick": "Cardinals ML +114",
+        "url": "https://x.com/BetwithGary/status/2097097628823502945",
+        "posted_at": "2026-09-07T23:00:12.142+00:00",
+        "stored_start": "2026-09-08T00:10:00+00:00",
+        "lead_minutes": 69.79763333333334,
+        "original_text": "Graceffo last pitched September 2 and gives St. Louis an option for multiple innings; O\u2019Brien last worked September 4, throwing 12 pitches.\n\nCardinals ML",
+        "original_reasons_all_verbatim": true,
+        "before_fix_safe": true,
+        "after_fix_safe": true,
+        "safe_fallback_after_fix": true,
+        "fallback_changed": false,
+        "fallback_after_fix": {
+          "opening": "Graceffo last pitched September 2 and gives St. Louis an option for multiple innings; O\u2019Brien last worked September 4, throwing 12 pitches.",
+          "closing": ""
+        }
+      },
+      {
+        "pick": "Reds ML +144",
+        "url": "https://x.com/BetwithGary/status/2097101367026290805",
+        "posted_at": "2026-09-07T23:15:03.003+00:00",
+        "stored_start": "2026-09-08T01:10:00+00:00",
+        "lead_minutes": 114.94995,
+        "original_text": "Burns\u2019 slider carries a 52.0% whiff rate; his latest start produced seven strikeouts, one walk and two earned runs over 5\u2154 innings.\n\nReds ML\n\nWilliamson covered 5\u2153 innings on 87 pitches in his return, allowing three earned runs.",
+        "original_reasons_all_verbatim": true,
+        "before_fix_safe": true,
+        "after_fix_safe": true,
+        "safe_fallback_after_fix": true,
+        "fallback_changed": false,
+        "fallback_after_fix": {
+          "opening": "Burns\u2019 slider carries a 52.0% whiff rate; his latest start produced seven strikeouts, one walk and two earned runs over 5\u2154 innings.",
+          "closing": "Williamson covered 5\u2153 innings on 87 pitches in his return, allowing three earned runs."
+        }
+      },
+      {
+        "pick": "Athletics +1.5 +105",
+        "url": "https://x.com/BetwithGary/status/2097116463022723508",
+        "posted_at": "2026-09-08T00:15:02.137+00:00",
+        "stored_start": "2026-09-08T02:05:00+00:00",
+        "lead_minutes": 109.96438333333333,
+        "original_text": "Across his last five starts, he has a 2.40 ERA over 30.0 innings, with 33 strikeouts and nine walks.\n\nAthletics +1.5",
+        "original_reasons_all_verbatim": true,
+        "before_fix_safe": true,
+        "after_fix_safe": false,
+        "safe_fallback_after_fix": true,
+        "fallback_changed": true,
+        "fallback_after_fix": {
+          "opening": "Harris last pitched September 4, and Medina last pitched September 3.",
+          "closing": ""
+        }
+      }
+    ]
+  },
+  "scope_limits": [
+    "Metrics are summed thread components, not unique reach; own replies are not independent audience conversations.",
+    "Latest post metrics are all immature and at unequal ages. No engagement lift, install or causal creative claim is supported.",
+    "Source/log/intent receipts do not independently refetch X status or prove no historical transient failure. pg_net retains only about six hours.",
+    "All Sep7 game posts preceded the current v107 authorization deployment at2026-09-08T03:43:14.971Z. Current-version natural evidence is overnight scheduled success, not a new daytime X send.",
+    "This replay uses stored source only: no model, vendor, post or metric-refresh invocation."
+  ]
+}

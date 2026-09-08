@@ -1,0 +1,42 @@
+{
+  "scope": "Read-only production aggregates; no raw browser or account identifiers, bet contents or volunteered private messages saved.",
+  "manual_book": {
+    "checked_at": "2026-09-08T10:04:29.362672+00:00",
+    "window_start": "2026-08-09T10:04:29.362672+00:00",
+    "window_end_exclusive": "2026-09-08T10:04:29.362672+00:00",
+    "retained_30_day_rows": 102,
+    "manual_rows": 0,
+    "manual_accounts": 0,
+    "manual_settled": 0,
+    "manual_graded_by_manual": 0,
+    "manual_accounts_multiple_eastern_dates": 0,
+    "limitations": [
+      "Retained functional rows only; deleted rows and internal accounts are not separately identified.",
+      "Rolling retained row count is not a retention, churn or unique-user metric.",
+      "No customer rows were created, changed or deleted."
+    ]
+  },
+  "completed_week_cohort_maturity": {
+    "checked_at": "2026-09-08T10:04:56.94854+00:00",
+    "week_start_utc": "2026-08-31T00:00:00Z",
+    "week_end_exclusive_utc": "2026-09-07T00:00:00Z",
+    "cohort_browsers": 3,
+    "matured_browsers": 0,
+    "earliest_maturity": "2026-09-12T11:43:17.93958+00:00",
+    "latest_maturity": "2026-09-13T11:38:06.731481+00:00"
+  },
+  "native_reading": {
+    "checked_at": "2026-09-08T10:05:42.945743+00:00",
+    "window_start": "2026-09-07T00:00:00Z",
+    "window_end_exclusive": "2026-09-08T10:05:42.945743+00:00",
+    "scope": "public.app_events; platform=ios; measurement_version=reasoning_v2; ephemeral sessions, not cross-launch retention",
+    "session_started_events": 0,
+    "observed_sessions": 0,
+    "meaningful_pick_view_events": 0,
+    "sessions_with_reasoning_event": 0,
+    "limitations": [
+      "Separate off-default native reading consent; absence is not proof of no app use.",
+      "These events are not in the website weekly report or its browser return denominator."
+    ]
+  }
+}

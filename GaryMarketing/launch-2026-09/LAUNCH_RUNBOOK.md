@@ -1,14 +1,14 @@
 # Gary launch operating plan
 
-September 4, updated September 7, 2026. Accountable owner: Adam. This replaces the offer, dates, channel assumptions and execution status in the September 1 launch plan. The implementation handoff records deployment and submission evidence; this document defines the operating decisions.
+September 4, updated September 8, 2026. Accountable owner: Adam. This replaces the offer, dates, channel assumptions and execution status in the September 1 launch plan. The implementation handoff records deployment and submission evidence; this document defines the operating decisions.
 
 ## Execution and review
 
-The six workstreams have an explicit completion scorecard in [the September 7 execution review](EXECUTION_REVIEW_2026-09-07.md). Implementation is not audience validation. Codex handles authorized implementation, verification and analysis during active work; Adam supplies account access, founder footage and human contact decisions. The [personal-tracking pilot](PERSONAL_TRACKING_PILOT.md) must produce real observations before the integration spending gate is met.
+The six workstreams have an explicit completion scorecard in [the September 8 execution review](EXECUTION_REVIEW_2026-09-08.md). Implementation is not audience validation. Codex handles authorized implementation, verification and analysis during active work; Adam supplies account access, founder footage and human contact decisions. The [personal-tracking pilot](PERSONAL_TRACKING_PILOT.md) must produce real observations before the integration spending gate is met.
 
 The [September 13 completion tracker](LAUNCH_COMPLETION_TRACKER.md) lists owners, deadlines and real completion receipts. The [Product Hunt packet](PRODUCT_HUNT_PACKET.md) and [Reddit playbook](REDDIT_PLAYBOOK.md) prepare those additional channels without claiming that accounts, platform drafts or posts are already live. This runbook remains authoritative for the offer and operating cadence.
 
-Native/build details below are historical release-owner handoff facts, not a fresh certification of current App Store availability. This website/marketing session does not inspect or change iOS, native builds or Apple accounts. Obtain a dated current handoff from the separate release owner before using native availability claims in launch material.
+Native availability facts come from the dated release-owner evidence and official Apple receipts recorded in the current execution review. A prepared binary or TestFlight notice does not establish public App Store availability; reconcile that separately before promotion.
 
 ## The promise
 
@@ -20,7 +20,7 @@ Use the account-based offer consistently:
 
 > Winners is open for the launch preview until October 1, 2026 at midnight Eastern. Accounts created before that cutoff retain founding access to Winners. No purchase is needed for included access.
 
-This matches the deployed access rules. Founding access currently has no expiry. Do not replace this with “install before October,” “free this season,” a lifetime marketing promise, or an invented season-end date. Existing free game reasoning, available props, Hub, record and private Book remain free. New purchases after preview use the current pricing page; prices and billing details must agree with checkout. The iOS external purchase link is available only for the U.S. storefront after build 901 ships. Its submission has automatic release after approval, with United States and Canada distribution; this does not make external purchase available in the Canadian storefront.
+This matches the deployed access rules. Founding access currently has no expiry. Do not replace this with “install before October,” “free this season,” a lifetime marketing promise, or an invented season-end date. Existing free game reasoning, available props, Hub, record and private Book remain free. New purchases after preview use the current pricing page; prices and billing details must agree with checkout. The iOS external purchase link is restricted to the U.S. storefront in the verified candidate. Use the [current release-owner handoff](../../HANDOFF_2026-09-08_LAUNCH_READINESS.md) for actual availability: build 912 has completed Apple processing and is available to the existing TestFlight recipient, while App Review selection and approval remain unverified. Historical automatic-release and U.S./Canada distribution settings do not establish a new public release or Canadian external-purchase eligibility.
 
 Winners and Insights can become a clearer combined experience later. Do not announce that integration or superior results before it exists and is substantiated. Confidence is Gary’s judgment, not a calibrated probability.
 
@@ -95,3 +95,8 @@ Do not delete losing picks or blend the new Winners history with the whole slate
 - `INTEGRATION_PACKET.md`: accurate company/product brief, audience limitations, vendor questions and an unsent inquiry.
 - `evidence/`: aggregate operational snapshots. Refresh before making external audience claims.
 - `../APP_REVIEW_2_25_901.md`: historical build-901 review instructions and privacy disclosures. Its September 5, 3:13 PM Eastern Waiting for Review receipt is not current release status; obtain the separate release owner's latest handoff before making an availability claim.
+
+
+## September 8 video inventory
+
+The current launch-delivery workspace includes eight finished vertical video masters (three real-app ads, five NFL options including a product demo) and three six-second cutdowns. The eight original still exports remain ready. These are prepared assets, not published campaigns or platform approvals. Current delivery: `/Users/adam.preda/Documents/ChatGPT/Gary/launch-delivery/video-campaign/README.md`. Use its publishing/attribution manifest, date labels and channel gates before an authorized placement; no new unattended schedule is created.

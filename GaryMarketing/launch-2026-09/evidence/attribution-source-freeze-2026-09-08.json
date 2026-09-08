@@ -1,0 +1,35 @@
+{
+  "scope": "Source freeze for root review/integration; not yet committed or deployed by this lane.",
+  "files": [
+    {
+      "path": "web/lib/gary/analytics.ts",
+      "sha256": "e5e994821db5020d50f83c3dd501b4debfc2ac0661dd79b65bb5487d87267139"
+    },
+    {
+      "path": "web/tests/analytics.test.ts",
+      "sha256": "34cdada43a645ab43e95cf1e33d5d11e7c084273679e51276864e257201ac428"
+    },
+    {
+      "path": "web/tests/useful-session.test.ts",
+      "sha256": "4fe5a18b94ec337e8b8b74bbbe99fec15443df6867c4cf18486b1c693cb8e3a8"
+    }
+  ],
+  "verification": {
+    "regression_before": "7 failed / 20 passed across 2 files; expected account/product and suffix false-organic failures",
+    "final_focused": "38 tests / 5 files passed under Node v22.23.2",
+    "typecheck": "npm run typecheck passed",
+    "targeted_lint": "eslint on all three owned files passed",
+    "diff_check": "git diff --check passed",
+    "full_web_snapshot": "504 tests / 64 files passed; snapshot copies of all three owned paths match canonical SHA256",
+    "full_web_typecheck": "Passed in the verification snapshot",
+    "full_web_lint": "Passed in the verification snapshot",
+    "snapshot_preparation": "Removed 26 confirmed AppleDouble metadata files in disposable snapshot after scanners treated them as source; no actual test or source behavior failures."
+  },
+  "preserved": [
+    "Consent and event schema",
+    "Session, useful read and Book milestone definitions",
+    "Explicit campaign UTMs",
+    "Stored attribution and production event rows",
+    "Raw completed/partial-week reports"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "checkedAt": "2026-09-08T10:21:56.765Z",
+  "deploymentId": "dpl_GKkkBwwyfxnYYBHjg8mW985aKdk9",
+  "sourceCommit": "04647d9f63d7640d23a5ad99b7cb17d3dc59f8e2",
+  "state": "READY",
+  "target": "production",
+  "url": "gary20-mlpn1f2m5-adam-predas-projects.vercel.app",
+  "aliases": [
+    "www.betwithgary.ai",
+    "www.betwithgary.com",
+    "gary20-iota.vercel.app",
+    "betwithgary.ai",
+    "betwithgary.com",
+    "gary20-adam-predas-projects.vercel.app",
+    "gary20-git-main-adam-predas-projects.vercel.app"
+  ],
+  "readyAt": "2026-09-08T10:17:12.558Z",
+  "aliasError": null,
+  "scope": "Deployment metadata and canonical aliases only. Public route and served-code readback recorded separately; no installation or authenticated user-flow acceptance inferred."
+}

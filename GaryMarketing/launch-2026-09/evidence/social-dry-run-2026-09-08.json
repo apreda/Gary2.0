@@ -1,0 +1,27 @@
+{
+  "checked_at": "2026-09-08T10:11:33.773Z",
+  "status": 200,
+  "service": "social-auto-post",
+  "dry_run": true,
+  "run_kind": "manual",
+  "posted": false,
+  "reason": "ET hour 6 is outside the posting window",
+  "metrics": {
+    "updated": 0,
+    "checked": 0
+  },
+  "publication_recovery_count": 0,
+  "health": {
+    "status": "ok",
+    "issues": [],
+    "failed_posts": 0,
+    "missed_picks": 0,
+    "posted_picks": 0
+  },
+  "request_flags": {
+    "dry_run": "1",
+    "preview": "1",
+    "force_mode": "pick"
+  },
+  "limits": "At this early Eastern hour the handler exits outside its publication window. This verifies authenticated routing and dry-run guards, not a real X send or model selection."
+}

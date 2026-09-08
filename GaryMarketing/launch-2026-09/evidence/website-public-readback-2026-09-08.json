@@ -1,0 +1,31 @@
+{
+  "checkedAt": "2026-09-08T10:21:58.898248+00:00",
+  "method": "Unauthenticated HTTP GET; JavaScript not executed, no consent or analytics events submitted",
+  "routes": [
+    {
+      "path": "/app?utm_source=x&utm_medium=organic_social&utm_campaign=launch_sep26&utm_content=video_nfl_demo_v1",
+      "status": 200,
+      "finalUrl": "https://www.betwithgary.ai/app?utm_source=x&utm_medium=organic_social&utm_campaign=launch_sep26&utm_content=video_nfl_demo_v1"
+    },
+    {
+      "path": "/picks",
+      "status": 200,
+      "finalUrl": "https://www.betwithgary.ai/picks"
+    },
+    {
+      "path": "/you",
+      "status": 200,
+      "finalUrl": "https://www.betwithgary.ai/you"
+    }
+  ],
+  "servedAssetsRead": 16,
+  "normalizedGoogleRootClassifierFound": true,
+  "classifierProof": [
+    {
+      "assetUrl": "https://www.betwithgary.ai/_next/static/immutable/chunks/1b21noa7fvw50.js",
+      "status": 200,
+      "classifierExcerpt": "s}:{},...n?{referrer:n}:{},landing:D(t.pathname)};if(n)return{source:n,medium:/^google\\.(?:com|cat|[a-z]{2}|(?:co|com)\\.[a-z]{2})$/.test(n)||/(^|\\.)(bing\\.com$|duckduckgo\\.com$|search\\.yahoo\\.com$|ecosia\\.org$|search\\.brave\\.com$)/.test(n)?\"organic\":\"referral\",referrer:n,landing:D(t.pathname)};return{source:\""
+    }
+  ],
+  "scope": "Public route and deployed code availability only; not browser, provider-auth or physical-device acceptance."
+}

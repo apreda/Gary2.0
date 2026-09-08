@@ -1,0 +1,84 @@
+{
+  "version": 108,
+  "deployed_at": "2026-09-08T10:10:56.411Z",
+  "verify_jwt": true,
+  "cloud_file_count": 13,
+  "matching_files": 13,
+  "comparisons": [
+    {
+      "file": "functions/social-auto-post/index.ts",
+      "exact_match": true,
+      "sha256": "f00f0368cdb7cba7bbcfd461b7957112976c4d19a392c354caa4dfbc1692a116"
+    },
+    {
+      "file": "functions/post-single-tweet/authorization.ts",
+      "exact_match": true,
+      "sha256": "1cf7b5f556179cf3ca332a91102072f16b507bd69e6c414915643fd986db80db"
+    },
+    {
+      "file": "functions/social-auto-post/verdicts.ts",
+      "exact_match": true,
+      "sha256": "a97a2fb4af72a824cced3ef64ab92bcff4396dc94e7f200588321d8130b703dc"
+    },
+    {
+      "file": "functions/social-auto-post/weektape.ts",
+      "exact_match": true,
+      "sha256": "2f8c343eeaa64181a20fad458e95b6759cbfae849f03395e4b953b46f3d3d6fa"
+    },
+    {
+      "file": "functions/social-auto-post/recap.ts",
+      "exact_match": true,
+      "sha256": "fdba4b899f79e963aab145fffd864041d4080669b4dc0980ab29de81e285f03d"
+    },
+    {
+      "file": "functions/_shared/verbatimSnippets.js",
+      "exact_match": true,
+      "sha256": "dff94560a61988518c769c5afc83e796ccaf5ebdf53b403edf9dbc01983f6aca"
+    },
+    {
+      "file": "functions/social-auto-post/health.js",
+      "exact_match": true,
+      "sha256": "a4553dd7176654f41b501e4db5a2ddffea9fdf68d5a3621e5ea4340aa2df28b1"
+    },
+    {
+      "file": "functions/social-auto-post/pickSources.js",
+      "exact_match": true,
+      "sha256": "82ae2d8671a439b62afa6201d82c722f96bc2c7f90281dd1fc324c8cfd86e24a"
+    },
+    {
+      "file": "functions/social-auto-post/publication.js",
+      "exact_match": true,
+      "sha256": "150c3779c50cdb84f1fd5411ee01627ac71e221b2cd010d37f06f8de043e1e2b"
+    },
+    {
+      "file": "functions/social-auto-post/barepick.ts",
+      "exact_match": true,
+      "sha256": "7a2a0fc0f5eeae48c28347a8c1829cac555480ee405d05cf44d08a9da20b78b0"
+    },
+    {
+      "file": "functions/social-auto-post/pl.ts",
+      "exact_match": true,
+      "sha256": "e30db19f3675892991a8d2fe1a2eed74d10594e1b76d8f280654e7ab1911422a"
+    },
+    {
+      "file": "functions/social-auto-post/window.ts",
+      "exact_match": true,
+      "sha256": "a567c6aa0af28cb9549a59fa30c54e3e086f6b1d5de4202fd73b6a3b3545a3bd"
+    },
+    {
+      "file": "functions/social-auto-post/marquee.ts",
+      "exact_match": true,
+      "sha256": "bbb29c895dfcae205b2514f7e38d3746d7b6d21b4bff4cd0acaa6b8daf06ff25"
+    }
+  ],
+  "verification": {
+    "focused_verbatim_tests": 104,
+    "publication_regression_tests": 11,
+    "deno_typecheck": "passed",
+    "diff_check": "passed",
+    "cli_version": "2.104.0",
+    "changelog_scanned": "https://supabase.com/changelog.md",
+    "deployment_docs": "https://supabase.com/docs/guides/functions/deploy"
+  },
+  "limits": "Authenticated dry run verifies routing and dry-run guards outside publishing hours. No real post, reply, metrics refresh, or model invocation was performed."
+}

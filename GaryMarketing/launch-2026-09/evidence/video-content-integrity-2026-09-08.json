@@ -1,0 +1,194 @@
+{
+  "checked_at_utc": "2026-09-08T10:06:29.592619+00:00",
+  "scope": "Read-only file/hash check and five existing encoded contact sheets; no new render/full decode, publication, account or provider request",
+  "source_checkout": "/Users/adam.preda/Gary2.0",
+  "head": "c8fa8408",
+  "masters": [
+    {
+      "file": "nfl-kickoff/exports/01-footballs-back.mp4",
+      "exists": true,
+      "bytes": 2842589,
+      "sha256": "bec11d9de763f007466f7aba4761b578e191ebb47abe0ec18db5b30a2b1953c9",
+      "matches_prior_verification": true,
+      "prior_format": {
+        "duration_seconds": 15.0,
+        "width": 1080,
+        "height": 1920,
+        "fps": "30/1",
+        "video": "h264",
+        "audio": "aac"
+      },
+      "missing_manifest_frame_references": [
+        "nfl-kickoff/qa-encoded/01-footballs-back/preview-000.jpg",
+        "nfl-kickoff/qa-encoded/01-footballs-back/preview-001.jpg",
+        "nfl-kickoff/qa-encoded/01-footballs-back/preview-002.jpg",
+        "nfl-kickoff/qa-encoded/01-footballs-back/preview-003.jpg"
+      ],
+      "actual_contact_sheet": "nfl-kickoff/qa-encoded/01-footballs-back/contact-sheet.jpg"
+    },
+    {
+      "file": "nfl-kickoff/exports/02-product-demo.mp4",
+      "exists": true,
+      "bytes": 2782992,
+      "sha256": "1839288d67bae1c7710fdf30d4b331cf068c2759ad7aeec3cb40d9d7ebf5829b",
+      "matches_prior_verification": true,
+      "prior_format": {
+        "duration_seconds": 27.5,
+        "width": 1080,
+        "height": 1920,
+        "fps": "30/1",
+        "video": "h264",
+        "audio": "aac"
+      },
+      "missing_manifest_frame_references": [
+        "nfl-kickoff/qa-encoded/02-product-demo/preview-000.jpg",
+        "nfl-kickoff/qa-encoded/02-product-demo/preview-001.jpg",
+        "nfl-kickoff/qa-encoded/02-product-demo/preview-002.jpg",
+        "nfl-kickoff/qa-encoded/02-product-demo/preview-003.jpg",
+        "nfl-kickoff/qa-encoded/02-product-demo/preview-004.jpg",
+        "nfl-kickoff/qa-encoded/02-product-demo/preview-005.jpg",
+        "nfl-kickoff/qa-encoded/02-product-demo/preview-006.jpg"
+      ],
+      "actual_contact_sheet": "nfl-kickoff/qa-encoded/02-product-demo/contact-sheet.jpg"
+    },
+    {
+      "file": "nfl-kickoff/exports/03-group-chat.mp4",
+      "exists": true,
+      "bytes": 1698477,
+      "sha256": "beb2f6f799fcf3fe4c95b10b8ba9111819422de54cfe29456021ef579f3a595e",
+      "matches_prior_verification": true,
+      "prior_format": {
+        "duration_seconds": 15.0,
+        "width": 1080,
+        "height": 1920,
+        "fps": "30/1",
+        "video": "h264",
+        "audio": "aac"
+      },
+      "missing_manifest_frame_references": [
+        "nfl-kickoff/qa-encoded/03-group-chat/preview-000.jpg",
+        "nfl-kickoff/qa-encoded/03-group-chat/preview-001.jpg",
+        "nfl-kickoff/qa-encoded/03-group-chat/preview-002.jpg",
+        "nfl-kickoff/qa-encoded/03-group-chat/preview-003.jpg"
+      ],
+      "actual_contact_sheet": "nfl-kickoff/qa-encoded/03-group-chat/contact-sheet.jpg"
+    },
+    {
+      "file": "nfl-kickoff/exports/04-read-the-but.mp4",
+      "exists": true,
+      "bytes": 1794899,
+      "sha256": "c5bf2c39e99068bdc42488fc408e1555704f7a26c291e2b6243ab4eb116ef951",
+      "matches_prior_verification": true,
+      "prior_format": {
+        "duration_seconds": 16.0,
+        "width": 1080,
+        "height": 1920,
+        "fps": "30/1",
+        "video": "h264",
+        "audio": "aac"
+      },
+      "missing_manifest_frame_references": [
+        "nfl-kickoff/qa-encoded/04-read-the-but/preview-000.jpg",
+        "nfl-kickoff/qa-encoded/04-read-the-but/preview-001.jpg",
+        "nfl-kickoff/qa-encoded/04-read-the-but/preview-002.jpg",
+        "nfl-kickoff/qa-encoded/04-read-the-but/preview-003.jpg"
+      ],
+      "actual_contact_sheet": "nfl-kickoff/qa-encoded/04-read-the-but/contact-sheet.jpg"
+    },
+    {
+      "file": "nfl-kickoff/exports/05-three-checks.mp4",
+      "exists": true,
+      "bytes": 2068200,
+      "sha256": "fb9df5e77ab071ddb484edb04e80032d1629483dfe24b6e3feeccaf04bb700db",
+      "matches_prior_verification": true,
+      "prior_format": {
+        "duration_seconds": 18.0,
+        "width": 1080,
+        "height": 1920,
+        "fps": "30/1",
+        "video": "h264",
+        "audio": "aac"
+      },
+      "missing_manifest_frame_references": [
+        "nfl-kickoff/qa-encoded/05-three-checks/preview-000.jpg",
+        "nfl-kickoff/qa-encoded/05-three-checks/preview-001.jpg",
+        "nfl-kickoff/qa-encoded/05-three-checks/preview-002.jpg",
+        "nfl-kickoff/qa-encoded/05-three-checks/preview-003.jpg",
+        "nfl-kickoff/qa-encoded/05-three-checks/preview-004.jpg"
+      ],
+      "actual_contact_sheet": "nfl-kickoff/qa-encoded/05-three-checks/contact-sheet.jpg"
+    },
+    {
+      "file": "v2-current-app/exports/01-find-your-game.mp4",
+      "exists": true,
+      "bytes": 6589580,
+      "sha256": "885f75f6c6a4509d92d7e97f6b1382982877c5ab0af0d01d300de7a9ff48ce9e",
+      "matches_prior_verification": true,
+      "prior_format": {
+        "duration_seconds": 18.0,
+        "width": 1080,
+        "height": 1920,
+        "fps": "30/1",
+        "video": "h264",
+        "audio": "aac"
+      },
+      "missing_manifest_frame_references": [
+        "v2-current-app/qa-encoded/01-find-your-game/preview-000.jpg",
+        "v2-current-app/qa-encoded/01-find-your-game/preview-001.jpg",
+        "v2-current-app/qa-encoded/01-find-your-game/preview-002.jpg",
+        "v2-current-app/qa-encoded/01-find-your-game/preview-003.jpg",
+        "v2-current-app/qa-encoded/01-find-your-game/preview-004.jpg"
+      ],
+      "actual_contact_sheet": "v2-current-app/qa-encoded/01-find-your-game/contact-sheet.jpg"
+    },
+    {
+      "file": "v2-current-app/exports/02-show-the-why.mp4",
+      "exists": true,
+      "bytes": 6134579,
+      "sha256": "a53b1a72314788d65fedefeb167143775bae09ead897f2269f49319a8d476e8f",
+      "matches_prior_verification": true,
+      "prior_format": {
+        "duration_seconds": 18.0,
+        "width": 1080,
+        "height": 1920,
+        "fps": "30/1",
+        "video": "h264",
+        "audio": "aac"
+      },
+      "missing_manifest_frame_references": [
+        "v2-current-app/qa-encoded/02-show-the-why/preview-000.jpg",
+        "v2-current-app/qa-encoded/02-show-the-why/preview-001.jpg",
+        "v2-current-app/qa-encoded/02-show-the-why/preview-002.jpg",
+        "v2-current-app/qa-encoded/02-show-the-why/preview-003.jpg",
+        "v2-current-app/qa-encoded/02-show-the-why/preview-004.jpg"
+      ],
+      "actual_contact_sheet": "v2-current-app/qa-encoded/02-show-the-why/contact-sheet.jpg"
+    },
+    {
+      "file": "v2-current-app/exports/03-your-call.mp4",
+      "exists": true,
+      "bytes": 4897472,
+      "sha256": "26bac1fb2172bf05e68705e6a160491510b2e4d8a5dfac05dd2c2014c79b7e88",
+      "matches_prior_verification": true,
+      "prior_format": {
+        "duration_seconds": 18.0,
+        "width": 1080,
+        "height": 1920,
+        "fps": "30/1",
+        "video": "h264",
+        "audio": "aac"
+      },
+      "missing_manifest_frame_references": [
+        "v2-current-app/qa-encoded/03-your-call/preview-000.jpg",
+        "v2-current-app/qa-encoded/03-your-call/preview-001.jpg",
+        "v2-current-app/qa-encoded/03-your-call/preview-002.jpg",
+        "v2-current-app/qa-encoded/03-your-call/preview-003.jpg",
+        "v2-current-app/qa-encoded/03-your-call/preview-004.jpg"
+      ],
+      "actual_contact_sheet": "v2-current-app/qa-encoded/03-your-call/contact-sheet.jpg"
+    }
+  ],
+  "all_eight_match": true,
+  "manifest_missing_frame_references": 39,
+  "runway": "Existing provenance records one five-second Gen-4 Turbo generation on September 7 using 25 existing credits; reused in both first films. No new request or current account/balance verification."
+}
