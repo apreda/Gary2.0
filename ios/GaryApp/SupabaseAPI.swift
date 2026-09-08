@@ -676,7 +676,7 @@ enum SupabaseAPI {
         var out: [GaryPick] = try rows.first.map { row in
             let decoded = try parsePicksRow(row.picks)
             try validateStoredGamePicks(decoded, source: "daily_picks")
-            return decoded.filter { !AppFlags.hidesWorldCupRow($0.league) && $0.permitsCurrentMetricPolicy }
+            return decoded.filter { !AppFlags.hidesWorldCupRow($0.league) }
         } ?? []
         #if DEBUG
         // Sim preview of the PARKED All-Star board (production stays empty
