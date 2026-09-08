@@ -26,8 +26,10 @@ launch, native and Hub work is owned by other tasks and must not be staged here.
    side or ticket requires an explicit change in his baseball reasoning.
 4. Gary separately endorses or declines the same priced ticket. Price cannot
    select a different side or market at this step. A decline remains an
-   ordinary game call, with the reason in the rationale, and is excluded from
-   Winners. The final card is checked against the recorded side, market, line
+   ordinary game call with explicit `price_endorsement` metadata and is excluded
+   from Winners. Gary is instructed to explain the decline in the rationale;
+   the current validator does not guarantee that prose disclosure. The final
+   card is checked against the recorded side, market, line
    and odds. Formatting cannot silently substitute another wager.
 5. Confirmed publication receives its own durable receipt. Every stage and
    original source snapshot is private and immutable; server timestamps and
@@ -45,7 +47,9 @@ launch, native and Hub work is owned by other tasks and must not be staged here.
    game evidence. Pregame factual support and actual realization are separate
    findings. Wins and losses receive the same review. Original claims cannot
    be rewritten, non-unknown findings require matching source excerpts, and
-   the reviewer cannot prescribe a betting strategy from the result.
+   the reviewer is instructed to assess the evidence without prescribing a
+   betting strategy from the result. Schema and text checks constrain that
+   output; they do not prove the meaning of every sentence.
 
 The policy names are `mlb-judgment-v2`, `mlb-conviction-v4` (factual schema 4)
 and `mlb-expectation-v1`. Prior v1/v3 records remain separately accountable.
@@ -143,3 +147,32 @@ check again confirms the canonical scheduler, era **4294d3b5a7d2**, all 20 edge
 deployments, no unpushed commits and 0 started games missing picks. Its sole
 parity failure is the shared working tree (32 unrelated changes at that
 snapshot). Final log: `/tmp/gary-mlb-complete-production-final-20260908.log`.
+
+## Independent identity review follow-up
+
+Independent review found two missing database identity checks, with no observed
+bad records. Live migration **20260908161624_mlb_original_evidence_identity_guards**
+now binds the Winners candidate's complete ordered tool-response array to the
+immutable original source. Altered, omitted or injected responses cannot enter
+the comparison or survive a change between selection and admission.
+
+Postgame snapshot `game_pk` must be an exact JSON copy of the original source's
+`gamePk ?? game_pk ?? mlb_game_pk ?? null`. A manufactured ID cannot bypass the
+exact scheduled-start check when the original source lacks an official ID.
+Known original official IDs continue to support a changed scheduled start for
+the same identified game. This prevents same-date, same-team doubleheader
+substitution. Function body hashes match the tested migration exactly; private
+grants and security modes are unchanged, with no new security advisor findings.
+
+The related formatter gap is also closed: after the staged judgment completes,
+every card-writing and correction turn uses the recorded sources and ticket.
+New tool or researcher requests fail before execution; final evidence is checked
+against the frozen original tool-response list rather than silently dropping
+later information. A failed attempt uses the existing whole-brain recovery.
+The resulting era is **343f7f327a80**.
+
+Final consolidated verification: **1,075 tests in 75 suites pass**, covering
+orchestrator, agentic, pickdesk and diary paths. This includes **38 real
+PostgreSQL ledger cases** with direct tool-evidence tampering and official-ID,
+null/type, alias and doubleheader cases, plus the existing database contracts.
+Log: `/tmp/gary-mlb-identity-final-contract-20260908.log`.

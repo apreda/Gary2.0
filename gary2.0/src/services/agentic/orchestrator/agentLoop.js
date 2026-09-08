@@ -5,6 +5,7 @@ import { createModelSession, sendToSession, sendToSessionWithRetry } from './ses
 import { buildResearchBriefing, extractResearcherQuestions, createResearcherFollowUpSession, askResearcher } from './researchBriefing.js';
 import { researchBudgetMs, runOptionalResearch, runResearchOnce } from './optionalResearch.js';
 import { createHash } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { createCostTracker } from './costTracker.js';
 import { buildPass1Message, buildPass2Message, buildPass3Unified, buildMlCapRetryMessage } from './passBuilders.js';
 import { buildNbaBriefingBlock, buildNbaPass25Message, buildNbaPass3Message } from './nbaWinningEra.js';
@@ -261,6 +262,12 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   const recordedTools = new WeakSet();
   let footballCases = null;
   let mlbJudgment = null;
+  let mlbJudgmentSourceTools = null;
+  const lockedMlbEvidenceError = () => {
+    const error = new Error('MLB formatting cannot request or use new evidence after the recorded judgment');
+    error.code = 'mlb_judgment_locked_evidence';
+    return error;
+  };
   const captureTools = () => {
     const captured = [];
     for (const m of messages) if (m.role === 'tool' && !recordedTools.has(m)) {
@@ -273,11 +280,29 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   };
   const attachOriginalEvidence = pick => {
     captureTools();
+    if (mlbJudgment && !isDeepStrictEqual(originalToolResponses, mlbJudgmentSourceTools)) throw lockedMlbEvidenceError();
     if (footballCases) Object.assign(pick, footballCases);
     if (isMLBSport && options.mlbJudgmentJournal) attachMlbJudgment(pick, mlbJudgment);
     pick._originalToolResponses = originalToolResponses;
     pick._evidenceObservedAt = new Date().toISOString();
     return pick;
+  };
+  // The source record is closed once the staged MLB decision completes.
+  // Apply this to every formatting/correction turn, including unusual retry
+  // paths, before a tool-capable fallback can execute another factual request.
+  const sendForCurrentPass = async (session, prompt, requestOptions) => {
+    let sent = prompt;
+    if (mlbJudgment) {
+      if (requestOptions?.isFunctionResponse || Array.isArray(prompt)) throw lockedMlbEvidenceError();
+      const content = typeof prompt === 'string' ? prompt : prompt?.content;
+      if (typeof content !== 'string') throw lockedMlbEvidenceError();
+      const binding = `${content.includes('RECORDED MLB DECISION') ? '' : mlbJudgmentCardInstruction(mlbJudgment)}\n\nFORMATTING FROM THE RECORDED SOURCES ONLY. Use the original desk, original source responses, recorded targeted research and stress test already in this conversation. Do not fetch stats, ask the researcher, browse, or introduce new evidence. Preserve the recorded outcome, exact ticket, price decision and uncertainty while correcting the presentation.`;
+      sent = typeof prompt === 'string' ? content + binding : { ...prompt, content: content + binding };
+    }
+    const response = requestOptions === undefined
+      ? await sendToSessionWithRetry(session, sent) : await sendToSessionWithRetry(session, sent, requestOptions);
+    if (mlbJudgment && (response.toolCalls?.length || /^\s*(?:[-*]\s*)?ASK RESEARCHER:/im.test(response.content || ''))) throw lockedMlbEvidenceError();
+    return response;
   };
   // Models already exhausted by the provider-agnostic quota cascade below —
   // an exhausted brain must never be retried under another cascade slot.
@@ -331,6 +356,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
 
     if (isMLBSport && options.mlbJudgmentJournal && !mlbJudgment) {
       captureTools();
+      mlbJudgmentSourceTools = structuredClone(originalToolResponses);
       mlbJudgment = await runMlbJudgmentSession({ game: options.game, homeTeam, awayTeam,
         deskText: options.originalGaryDesk || userMessage, researchBriefing: _researchBriefing,
         memory: options.mlbExpectationMemory, originalToolResponses, messages, journal: options.mlbJudgmentJournal,
@@ -505,7 +531,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
         if (pendingFunctionResponses.length > 0) {
           // Step 1: Send batched function responses
           console.log(`[Orchestrator] Sending ${pendingFunctionResponses.length} function response(s) to session`);
-          sessionResponse = await sendToSessionWithRetry(
+          sessionResponse = await sendForCurrentPass(
             currentSession, 
             pendingFunctionResponses, 
             { isFunctionResponse: true }
@@ -535,7 +561,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
             console.log(`[Orchestrator] 📝 Sending queued pass message after function responses`);
             // Send the pass message as follow-up
             const sentMessage = nextMessageToSend;
-            sessionResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
+            sessionResponse = await sendForCurrentPass(currentSession, nextMessageToSend);
             nextMessageToSend = null; // Clear after sending
           }
 
@@ -545,7 +571,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
             console.log(`[Orchestrator] ⚠️ No message to send - using fallback prompt`);
             nextMessageToSend = `Continue: synthesize from the desk — it is your complete evidence — and finish the current pass.`;
           }
-          sessionResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
+          sessionResponse = await sendForCurrentPass(currentSession, nextMessageToSend);
         }
         
         // Normalize session response format for downstream code
@@ -575,6 +601,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
         }
 
       } catch (error) {
+        if (mlbJudgment && error.message?.includes('MALFORMED_FUNCTION_CALL')) throw lockedMlbEvidenceError();
         if (error.isQuotaError) {
           // ONE BRAIN PER PICK (founder, Aug 27: "i want the same core brain
           // to be actually making and writing the rationale so we know its

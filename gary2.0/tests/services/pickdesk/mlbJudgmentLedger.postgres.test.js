@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { execFileSync, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { accessSync, constants, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { accessSync, constants, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { runMlbJudgment, mlbJudgmentEvidenceError } from '../../../src/services/agentic/orchestrator/mlbJudgment.js';
 import { createMlbJudgmentJournal } from '../../../src/services/pickdesk/mlbJudgmentStorage.js';
 import { randomUUID } from 'node:crypto';
@@ -46,7 +46,9 @@ describe.skipIf(!supported)('Immutable MLB judgment ledger on isolated local Pos
       throw new Error(`Could not start isolated Winners Postgres: ${error.stderr?.toString() || error.message}\n${serverLog}`,{cause:error});
     }
     sql(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS; CREATE TABLE public.daily_slate(date text,league text,commence_time timestamptz,bdl_game_id bigint,game_status text,ml_home integer); CREATE TABLE public.daily_picks(date text,picks jsonb); CREATE TABLE public.game_results(id bigint generated always as identity primary key,game_date text,game_id text,league text,pick_text text,result text); GRANT SELECT ON public.daily_slate,public.daily_picks,public.game_results TO service_role;`);
-    for(const name of ['20260904203500_winners_admissions.sql','20260904203650_winners_review_recovery.sql','20260904205218_winners_prop_cohort_reservations.sql','20260908150211_mlb_gary_winners_selection.sql','20260908155113_mlb_durable_judgment_ledger.sql'])sql(readFileSync(new URL(`../../../supabase/migrations/${name}`,import.meta.url),'utf8'));
+    const identityMigrations=readdirSync(new URL('../../../supabase/migrations/',import.meta.url)).filter(name=>name.endsWith('_mlb_original_evidence_identity_guards.sql')).sort();
+    expect(identityMigrations).toHaveLength(1);
+    for(const name of ['20260904203500_winners_admissions.sql','20260904203650_winners_review_recovery.sql','20260904205218_winners_prop_cohort_reservations.sql','20260908150211_mlb_gary_winners_selection.sql','20260908155113_mlb_durable_judgment_ledger.sql',...identityMigrations])sql(readFileSync(new URL(`../../../supabase/migrations/${name}`,import.meta.url),'utf8'));
   },30000);
   afterAll(()=>{if(started)execFileSync(`${bin}/pg_ctl`,['-D',`${directory}/data`,'-m','immediate','-w','stop'],{env:pgEnv,stdio:'ignore'});if(directory)rmSync(directory,{recursive:true,force:true});});
   beforeEach(()=>sql('TRUNCATE public.winners_decision_events,public.winners_board,public.winners_candidates,public.winners_selection_runs,public.daily_slate,public.daily_picks,public.game_results,public.mlb_expectation_review_attempts,public.mlb_expectation_reviews,public.mlb_judgment_events,public.mlb_judgment_runs RESTART IDENTITY CASCADE;'));
@@ -87,7 +89,7 @@ describe.skipIf(!supported)('Immutable MLB judgment ledger on isolated local Pos
   const candidate=f=>{
     sql(`INSERT INTO public.daily_slate(date,league,commence_time,bdl_game_id,game_status) VALUES (${quote(f.date)},'MLB',${quote(f.kickoff)},1,'scheduled');
     INSERT INTO public.winners_candidates(game_date,league,kind,game_id,ticket_key,market_key,pick_text,odds,commence_time,pick_snapshot,evidence_snapshot,policy_version,status,reviewed_at,review,attempts)
-    VALUES (${quote(f.date)},'MLB','game','1','ticket-1','market-1',${quote(f.pick.pick)},-150,${quote(f.kickoff)},${json(f.pick)},${json({deskText:f.source.deskText,researchBriefing:f.source.researchBriefing,mlbJudgment:journal(f)})},'mlb-conviction-v4','qualified',clock_timestamp(),'{"schema_version":4,"policy_version":"mlb-conviction-v4","eligibility_only":true}',1);`);
+    VALUES (${quote(f.date)},'MLB','game','1','ticket-1','market-1',${quote(f.pick.pick)},-150,${quote(f.kickoff)},${json(f.pick)},${json({deskText:f.source.deskText,researchBriefing:f.source.researchBriefing,toolResponses:f.source.toolResponses,mlbJudgment:journal(f)})},'mlb-conviction-v4','qualified',clock_timestamp(),'{"schema_version":4,"policy_version":"mlb-conviction-v4","eligibility_only":true}',1);`);
   };
   const claim=f=>query(`SELECT coalesce(jsonb_agg(to_jsonb(r)),'[]'::jsonb) FROM public.claim_mlb_winners_selection(${quote(f.date)},${quote(f.kickoff)}) r;`);
   const choice=r=>({summary:'The original complete game judgment supports this exact ticket.',ranked_candidates:r.input_snapshot.candidates.map((c,i)=>({candidate_id:c.id,rank:i+1,selected:true,expected_outcome:'Home wins the committed ticket.',reason:'Original starter and offense support the complete game.',comparison:'This is the strongest supplied original judgment.'}))});
@@ -154,7 +156,7 @@ describe.skipIf(!supported)('Immutable MLB judgment ledger on isolated local Pos
     expect(sql('SET ROLE service_role; SELECT public.mlb_judgment_candidate_eligible(c) FROM public.winners_candidates c;').split('\n').at(-1)).toBe('t');
     sql("UPDATE public.winners_candidates SET evidence_snapshot=jsonb_set(evidence_snapshot,'{mlbJudgment,stress,whole_game_view}','\"A rewritten persuasive narrative\"');");
     expect(claim(f)).toEqual([]);
-    sql(`UPDATE public.winners_candidates SET evidence_snapshot=${json({deskText:f.source.deskText,researchBriefing:f.source.researchBriefing,mlbJudgment:journal(f)})};`);
+    sql(`UPDATE public.winners_candidates SET evidence_snapshot=${json({deskText:f.source.deskText,researchBriefing:f.source.researchBriefing,toolResponses:f.source.toolResponses,mlbJudgment:journal(f)})};`);
     const [r]=claim(f);expect(r.policy_version).toBe('mlb-conviction-v4');expect(finish(r)).toMatchObject({completed:true,admitted:1});
     expect(sql('SELECT pick_snapshot FROM public.winners_board;')).toBe(sql('SELECT pick_snapshot FROM public.winners_candidates;'));
     expect(claim(f)).toEqual([]);
@@ -208,8 +210,27 @@ describe.skipIf(!supported)('Immutable MLB judgment ledger on isolated local Pos
     expect(()=>append(f,'published',{final_pick_snapshot:changed})).toThrow(/exact committed ticket/);
   });
 
-  const postgame=()=>{
-    const f=published(setup({seconds:0.6}));sql('SELECT pg_sleep(0.65);');
+
+  it.each(['changed','omitted','injected'])('excludes a candidate with %s original tool responses',kind=>{
+    const f=published(setup());candidate(f);
+    expect(sql('SET ROLE service_role; SELECT public.mlb_judgment_candidate_eligible(c) FROM public.winners_candidates c;').split('\n').at(-1)).toBe('t');
+    const replacement=structuredClone(f.source.toolResponses);
+    if(kind==='changed')replacement[0].content.starter='A substituted pitcher report after the commitment.';
+    if(kind==='injected')replacement.push({content:'New evidence that the original Gary never saw.'});
+    sql(kind==='omitted'?"UPDATE public.winners_candidates SET evidence_snapshot=evidence_snapshot-'toolResponses';"
+      :`UPDATE public.winners_candidates SET evidence_snapshot=jsonb_set(evidence_snapshot,'{toolResponses}',${json(replacement)});`);
+    expect(sql('SET ROLE service_role; SELECT public.mlb_judgment_candidate_eligible(c) FROM public.winners_candidates c;').split('\n').at(-1)).toBe('f');
+    expect(claim(f)).toEqual([]);expect(sql('SELECT count(*) FROM public.winners_board;')).toBe('0');
+  });
+  it('fails a frozen selection when its original tool responses change before admission',()=>{
+    const f=published(setup());candidate(f);const [r]=claim(f);
+    sql("UPDATE public.winners_candidates SET evidence_snapshot=jsonb_set(evidence_snapshot,'{toolResponses}','[]');");
+    expect(finish(r)).toMatchObject({completed:false});expect(sql('SELECT count(*) FROM public.winners_board;')).toBe('0');
+  });
+
+  const postgame=({originalGame={}}={})=>{
+    const original=setup({seconds:0.6});Object.assign(original.source.game,originalGame);
+    const f=published(original);sql('SELECT pg_sleep(0.65);');
     const header=query(`SELECT to_jsonb(r) FROM public.mlb_judgment_runs r WHERE run_id=${quote(f.id)};`);
     const events=query(`SELECT jsonb_agg(to_jsonb(e) ORDER BY event_id) FROM public.mlb_judgment_events e WHERE run_id=${quote(f.id)};`);
     const snapshot=buildMlbExpectationSnapshot(header,events);
@@ -225,6 +246,52 @@ describe.skipIf(!supported)('Immutable MLB judgment ledger on isolated local Pos
     if(!p.claimed){sql(`SET ROLE service_role; SELECT public.claim_mlb_expectation_review(${quote(p.f.id)},${quote(p.leaseToken)},420);`);p.claimed=true;}
     return sql(`SET ROLE service_role; SELECT public.record_mlb_expectation_review(${quote(p.f.id)},'test-review',${json(p.review)},${json(p.evidence)},${quote(p.leaseToken)});`).split('\n').at(-1);
   };
+
+  const replaceOfficialFinal=(p,changes)=>{
+    const source=p.evidence.game_evidence.sources.find(s=>s.kind==='final');
+    source.text=JSON.stringify({...JSON.parse(source.text),...changes});
+  };
+  it('uses the exact original scheduled start when the immutable source has no official gamePk',()=>{
+    const p=postgame();expect(p.evidence.snapshot.game_pk).toBeNull();
+    expect(record(p)).toBe('t');
+  });
+  it.each(['gamePk','game_pk','mlb_game_pk'])('accepts the authoritative original %s alias for the exact official game',alias=>{
+    const p=postgame({originalGame:{[alias]:99}});expect(p.evidence.snapshot.game_pk).toBe(99);
+    expect(record(p)).toBe('t');
+  });
+  it.each(['gamePk','game_pk','mlb_game_pk'])('rejects a replaced %s even when the submitted snapshot and final sources agree',alias=>{
+    const p=postgame({originalGame:{[alias]:98}});
+    // The immutable run says 98; this manufactured snapshot and the supplied
+    // final/box-score sources consistently say 99. Their agreement is not proof.
+    p.evidence.snapshot.game_pk=99;
+    expect(()=>record(p)).toThrow();expect(sql('SELECT count(*) FROM public.mlb_expectation_reviews;')).toBe('0');
+  });
+
+  it('rejects changing the original official ID JSON type even when its text is the same',()=>{
+    const p=postgame({originalGame:{gamePk:99}});p.evidence.snapshot.game_pk='99';
+    expect(()=>record(p)).toThrow();expect(sql('SELECT count(*) FROM public.mlb_expectation_reviews;')).toBe('0');
+  });
+  it('requires the explicit original null official ID instead of omitting the preserved field',()=>{
+    const p=postgame();delete p.evidence.snapshot.game_pk;
+    expect(()=>record(p)).toThrow();expect(sql('SELECT count(*) FROM public.mlb_expectation_reviews;')).toBe('0');
+  });
+
+  it('rejects removal of the official gamePk already recorded in the original source',()=>{
+    const p=postgame({originalGame:{game_pk:99}});p.evidence.snapshot.game_pk=null;
+    expect(()=>record(p)).toThrow();expect(sql('SELECT count(*) FROM public.mlb_expectation_reviews;')).toBe('0');
+  });
+  it('rejects an invented snapshot gamePk that tries to bypass the exact-time doubleheader check',()=>{
+    const p=postgame();expect(p.evidence.snapshot.game_pk).toBeNull();
+    p.evidence.snapshot.game_pk=99;
+    replaceOfficialFinal(p,{gameDate:new Date(Date.parse(p.f.kickoff)-3*60*60*1000).toISOString()});
+    expect(()=>record(p)).toThrow();expect(sql('SELECT count(*) FROM public.mlb_expectation_reviews;')).toBe('0');
+  });
+  it('rejects a same-date same-team game at a different start when the original official ID is absent',()=>{
+    const p=postgame();
+    replaceOfficialFinal(p,{gameDate:new Date(Date.parse(p.f.kickoff)-3*60*60*1000).toISOString()});
+    expect(()=>record(p)).toThrow();expect(sql('SELECT count(*) FROM public.mlb_expectation_reviews;')).toBe('0');
+  });
+
   it('records an immutable postgame review against original claims and exact settled public ticket',()=>{
     const p=postgame();expect(record(p)).toBe('t');expect(record(p)).toBe('f');
     expect(sql('SELECT length(source_hash) FROM public.mlb_expectation_reviews;')).toBe('64');

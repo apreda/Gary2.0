@@ -51,7 +51,11 @@ describe('staged MLB process through the actual game loop',()=>{
     expect(mocks.send.mock.calls[0][1]).toContain('Only previously completed expectations');
     expect(mocks.ask.mock.invocationCallOrder[0]).toBeGreaterThan(fixture.record.mock.invocationCallOrder[0]);
     expect(mocks.send.mock.calls[4][1]).toContain('RECORDED MLB DECISION');
-    if(!formatted)expect(mocks.send.mock.calls[5][1]).toContain('RECORDED MLB DECISION');
+    expect(mocks.send.mock.calls[4][1]).toContain('FORMATTING FROM THE RECORDED SOURCES ONLY');
+    if(!formatted){
+      expect(mocks.send.mock.calls[5][1]).toContain('RECORDED MLB DECISION');
+      expect(mocks.send.mock.calls[5][1]).toContain('FORMATTING FROM THE RECORDED SOURCES ONLY');
+    }
     expect(originalGameEvidence({result,pick:result,deskText:'desk'}).mlbJudgment.price.decision).toBe('endorse');
   });
   it('does not force the only priced team when the original market is incomplete',async()=>{
@@ -85,11 +89,48 @@ describe('staged MLB process through the actual game loop',()=>{
     expect(mocks.send.mock.calls[4][1]).toContain('Record your initial baseball judgment');
     expect(fixture.record.mock.invocationCallOrder[0]).toBeGreaterThan(mocks.send.mock.invocationCallOrder[3]);
     expect(fixture.record.mock.calls[0][2].conversation.some(m=>m.content==='The latest tool evidence is now received.')).toBe(true);
+    expect(result._originalToolResponses).toEqual(fixture.record.mock.calls[0][2].toolResponses);
+    expect(result._originalToolResponses).toHaveLength(3); // Includes unavailable-token responses.
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
   });
   it('rejects a formatter that replaces the recorded Dodgers ticket with Reds value',async()=>{
     const fixture=setup(); const prior=mocks.send.getMockImplementation();
     mocks.send.mockReset().mockResolvedValueOnce(response('INVESTIGATION COMPLETE')).mockResolvedValueOnce(response(initial))
       .mockResolvedValueOnce(response(stress)).mockResolvedValueOnce(response(price)).mockResolvedValueOnce(response(card(away))).mockImplementation(prior);
     await expect(fixture.run()).rejects.toThrow('Final MLB card changed');
+  });
+  it.each(['pass2','pass3','format-retry'])('refuses new source tools in %s after the recorded price assessment',async phase=>{
+    const fixture=setup();
+    mocks.create.mockResolvedValue({provider:'anthropic',modelName:'anthropic-claude-sonnet-5'});
+    fixture.options.modelOverride='anthropic-claude-sonnet-5';
+    mocks.send.mockReset().mockResolvedValueOnce(response('INVESTIGATION COMPLETE')).mockResolvedValueOnce(response(initial))
+      .mockResolvedValueOnce(response(stress)).mockResolvedValueOnce(response(price));
+    if(phase!=='pass2')mocks.send.mockResolvedValueOnce(response('The recorded home moneyline remains my call.'));
+    if(phase==='format-retry')mocks.send.mockResolvedValueOnce({...response('Incomplete final output'),finishReason:'max_tokens'});
+    mocks.send.mockResolvedValueOnce({content:'I will verify an additional stat before formatting.',finishReason:'tool_calls',toolCalls:[
+      {id:'after-judgment',type:'function',function:{name:'fetch_stats',arguments:JSON.stringify({token:'MLB_BULLPEN_ERA',sport:'MLB'})}},
+    ]});
+    await expect(fixture.run()).rejects.toMatchObject({code:'mlb_judgment_locked_evidence'});
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    expect(mocks.ask).toHaveBeenCalledTimes(1); // Only the recorded targeted research.
+    expect(fixture.record.mock.calls.map(call=>call[0])).toEqual(['initial_commit','factual_research','stress_test','price_assessment']);
+    expect(mocks.send.mock.calls.at(-1)[1]).toContain('FORMATTING FROM THE RECORDED SOURCES ONLY');
+    expect(fixture.record.mock.calls[0][2].toolResponses).toEqual([]);
+  });
+  it('rejects a new text researcher request from the formatter without executing or silently ignoring it',async()=>{
+    const fixture=setup();
+    mocks.send.mockReset().mockResolvedValueOnce(response('INVESTIGATION COMPLETE')).mockResolvedValueOnce(response(initial))
+      .mockResolvedValueOnce(response(stress)).mockResolvedValueOnce(response(price))
+      .mockResolvedValueOnce(response('ASK RESEARCHER: Is there a new lineup change?'));
+    await expect(fixture.run()).rejects.toMatchObject({code:'mlb_judgment_locked_evidence'});
+    expect(mocks.ask).toHaveBeenCalledTimes(1); expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+  it('does not invite a malformed tool retry after the original judgment is locked',async()=>{
+    const fixture=setup();
+    mocks.send.mockReset().mockResolvedValueOnce(response('INVESTIGATION COMPLETE')).mockResolvedValueOnce(response(initial))
+      .mockResolvedValueOnce(response(stress)).mockResolvedValueOnce(response(price))
+      .mockRejectedValueOnce(new Error('MALFORMED_FUNCTION_CALL'));
+    await expect(fixture.run()).rejects.toMatchObject({code:'mlb_judgment_locked_evidence'});
+    expect(mocks.send).toHaveBeenCalledTimes(5); expect(mocks.fetch).not.toHaveBeenCalled();
   });
 });
