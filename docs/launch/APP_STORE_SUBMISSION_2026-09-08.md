@@ -22,6 +22,8 @@ The source changes for the refined profile avatar (`5d5e78ba`) and underline-fre
 
 The release handoff separately bounds manual scrolling, VoiceOver, physical provider/push/billing acceptance and the remaining Auth dashboard settings. No confirmed new native defect was inferred from an unavailable or inconclusive test. Apple approval is not guaranteed by these preparations.
 
+**Targeted signing verification, 17:03 UTC:** the archive and its development profile include the Apple sign-in entitlement. More decisively, the still-retained distribution-export app was located through the actual upload's Xcode distribution log and inspected directly. Its Info.plist is 2.25 (915); both signed and provisioning entitlements contain `com.apple.developer.applesignin: [Default]`, `SFBTX6KPLM.ai.betwithgary.app`, production push and `get-task-allow: false`. The distribution profile expires December 6, 2026, and strict/deep signature verification exits 0. Exported executable SHA-256 is `5e1f0d0b7e4671cf6d3b87cadf0f3c0dae36fc5bd269470460de3bd77ba10605`; its different signature explains why it is distinct from the pre-export archive fingerprint. `distribution-apple-signin-verification.json` records the exact retained app path and upload-log provenance. This closes the targeted entitlement/export check, while actual Apple-provider completion remains unverified.
+
 ## Expedition and email
 
 Local, reviewable drafts are complete in `/Users/adam.preda/Documents/ChatGPT/Gary/app-store-submission-2026-09-08/`:
