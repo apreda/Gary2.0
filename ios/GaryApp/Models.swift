@@ -922,7 +922,7 @@ struct StreakRow: Decodable {
     let kind: String?          // win | loss | hit | hitless | hr | over | under
     let length: Int?           // games (hitless: at-bats)
     let detail: String?        // "16 games — 24-for-61 (.393)"
-    let next_game: String?     // "vs Brewers · 7:10 PM ET" when on the line tonight
+    let next_game: String?     // Stored next-game label, e.g. "vs Brewers · 7:10 PM ET"; no date/game identity.
 }
 
 // MARK: - Night Highlights (league-wide who-did-what table, $0 pipeline)

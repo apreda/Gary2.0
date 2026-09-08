@@ -1102,7 +1102,8 @@ struct HubView: View {
         return nil
     }
 
-    /// Streaks on the line in this game — either side's team (or a bat on it).
+    /// Team/player streak context for either side. The stored next-game label
+    /// may refer to a later matchup; it does not identify this slate game.
     private func streaksFor(_ r: TomorrowBoardRow) -> [StreakRow] {
         let full = "\(r.away_team ?? "") @ \(r.home_team ?? "")".lowercased()
         guard full.count > 3 else { return [] }
@@ -2753,8 +2754,8 @@ fileprivate struct HubStreakWatch: View {
     var cardFor: (String?) -> PlayerInsightCardRow? = { _ in nil }
     var onPlayer: (PlayerInsightCardRow) -> Void = { _ in }
 
-    /// Tonight's actionable streaks lead; longest runs break ties; directions
-    /// interleave so a lopsided night still shows both sides near the top.
+    /// Streaks with a stored next-game label lead; longest runs break ties.
+    /// Directions interleave so both sides appear near the top.
     private var ordered: [StreakRow] {
         func sortDir(_ rows: [StreakRow]) -> [StreakRow] {
             rows.sorted {
@@ -2849,10 +2850,11 @@ fileprivate struct HubStreakWatch: View {
                         .lineLimit(1).minimumScaleFactor(0.8)
                 }
                 if let next = r.next_game, !next.isEmpty {
-                    Text(next.uppercased())
+                    Text("NEXT GAME · \(next.uppercased())")
                         .hubDataFont(12.5, .semibold)
                         .foregroundStyle(GaryColors.gold.opacity(0.9))
-                        .lineLimit(1).minimumScaleFactor(0.85)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 1)
                 }
             }
@@ -4535,7 +4537,7 @@ fileprivate struct HubReceipts: View {
 // MARK: - Game sheet (slate-strip tap)
 
 /// Everything the Hub knows about one slate game, in place: status/score,
-/// the lines, every edge touching the matchup, streaks on the line — with
+/// the lines, every edge touching the matchup, related team/player streaks — with
 /// Picks as a CTA at the bottom instead of a forced tab jump.
 fileprivate struct HubGameSheet: View {
     let row: TomorrowBoardRow
@@ -4545,12 +4547,12 @@ fileprivate struct HubGameSheet: View {
     var onClose: () -> Void = {}
     let onViewGame: (String) -> Void
     let onSignal: (Signal) -> Void
-    /// Team tap on an On-the-Line row → close, then the team card (routing law).
+    /// Team tap on a streak row → close, then the team card (routing law).
     var onTeam: (StreakRow) -> Void = { _ in }
     /// Header team names → close, then the team card (the law, Aug 4: a team
     /// name is a door to the team card everywhere it appears).
     var onTeamName: (String) -> Void = { _ in }
-    /// Tap-a-name → player card (On-the-Line player rows).
+    /// Tap-a-name → player card (player streak rows).
     var cardFor: (String?) -> PlayerInsightCardRow? = { _ in nil }
     @ObservedObject private var live = LiveScoreCache.shared
     @State private var namedCard: PlayerInsightCardRow? = nil
@@ -4580,7 +4582,7 @@ fileprivate struct HubGameSheet: View {
                 }
                 if !streaks.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
-                        HubHead(title: "On the Line", count: streaks.count)
+                        HubHead(title: "Team streaks", count: streaks.count)
                         HubStreakWatch(rows: streaks, onTeam: { onTeam($0) },
                                        cardFor: cardFor, onPlayer: { namedCard = $0 })
                     }
