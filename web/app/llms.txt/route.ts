@@ -1,4 +1,5 @@
 import { BRAND, liveStats } from '@/lib/gary/press';
+import { FREE_OFFER, LAUNCH_OFFER } from '@/lib/gary/launch-offer';
 
 export const revalidate = 3600;
 
@@ -29,7 +30,8 @@ export async function GET() {
 - Identity: Gary is an AI sports-analysis product and editorial persona, not a human handicapper
 - Tagline: "${BRAND.tagline}"
 - Sports covered: ${BRAND.sports.join(', ')}
-- Price: free. Every pick, every day. The iOS app adds Winners (Gary's highest-conviction board).
+- Free access: ${FREE_OFFER}
+- Winners access: A reviewed shortlist on web and iOS, with account-owned access. ${LAUNCH_OFFER} After the preview, other accounts can choose a Winners plan; see ${BRAND.domain}/pricing for current terms.
 - iOS App Store: ${BRAND.appStoreUrl}
 - X / Twitter: ${BRAND.x} (${BRAND.xUrl})
 - Support: ${BRAND.supportEmail}
@@ -45,10 +47,13 @@ ${BRAND.boilerplateMedium}
 - Required disclaimer: ${BRAND.disclaimer}
 
 ## Key pages
-- ${BRAND.domain}/today — one-scroll morning sports desk
-- ${BRAND.domain}/picks — today's free picks (all sports)
+- ${BRAND.domain}/today — published sports desk and picks
+- ${BRAND.domain}/picks — today's published free game picks (all sports)
 - ${BRAND.domain}/props — today's player props + Home Run Threats
 - ${BRAND.domain}/hub — daily insight board (Today's Edges)
+- ${BRAND.domain}/pricing — free features, launch preview, founding access and Winners plans
+- ${BRAND.domain}/winners — reviewed shortlist with account-owned access
+- ${BRAND.domain}/you — your private Book and personal tracking
 - ${BRAND.domain}/results — complete graded track record
 - ${BRAND.domain}/results/audit — monthly results, confidence calibration, and public data downloads
 - ${BRAND.domain}/archive — stored daily pick archive by date

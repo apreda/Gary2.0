@@ -19,9 +19,9 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://www.betwithgary.ai'),
-  title: 'Gary AI — Free Sports Picks for Every Game, Every Day',
+  title: 'Gary AI — Free Sports Picks With Written Reasoning',
   description:
-    'Gary AI covers the full slate across pro and college sports with free daily picks, written rationale, a daily research desk, and a public track record.',
+    'Explore free sports picks, written reasoning, research and a public game-pick record. Coverage updates as analysis is published.',
   itunes: { appId: '6751238914' },
   // Home-screen install path. iOS reads these on "Add to Home Screen" and opens
   // the site without browser chrome — the web's answer to the App Store gate on

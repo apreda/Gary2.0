@@ -16,7 +16,7 @@ export const metadata: Metadata = pageMetadata({
   canonical: '/hub',
   title: "The Hub — Today's Edges & Insight Board | Gary AI",
   description:
-    "Gary's daily insight board: heat checks, platoon edges, ballpark shifts, regression watches, and Home Run Threats — graded against results every morning.",
+    "Gary's sports research board: heat checks, matchup trends and Home Run Threats. Results are checked when available; delayed grades can remain pending.",
 });
 
 type Tint = 'green' | 'red' | 'neutral';
@@ -156,7 +156,7 @@ export default async function HubPage() {
       <PageMasthead
         title="Today's sports research and trends"
         meta={todayEST()}
-        sub="The angles Gary's research surfaced today — every board is graded against actual results the next morning."
+        sub="Published sports research and matchup trends, checked against results when available. Delayed results can remain pending."
       >
         {hitRate && hitRate.graded >= 5 && (
           <span className="tnum mt-3 inline-flex items-center rounded-chip border border-line bg-chip px-2.5 py-1 font-mono text-[11px] font-bold text-mid">
@@ -168,12 +168,12 @@ export default async function HubPage() {
       {safeInsights.length === 0 && (
         <div className="mt-7 rounded-panel border border-line bg-card p-7 sm:p-10">
           <p className="text-center text-low">
-            Today&apos;s board is still loading — edges land with the morning research run.
+            No insights are available here yet. Check back as research is published.
           </p>
           <AccountCta
             nextPath="/hub"
             title="Keep a record while the board builds"
-            body="Your free Book follows every call you choose to tail or fade and grades it after the final."
+            body="Your free Book keeps a record of supported tail/fade picks, with grading when results are available."
             className="mt-6 text-left"
           />
         </div>

@@ -97,7 +97,7 @@ export default async function Home() {
             </h1>
             <p className="rise rise-3 mt-6 max-w-xl text-lg leading-relaxed text-mid">
               At the game or on the couch, see what Gary thinks about your matchup.
-              The full slate and written reasoning stay free, with wins and losses on the public record.
+              Published game picks and written reasoning stay free, with wins and losses on the public record.
             </p>
             <div className="rise rise-4 mt-8 flex flex-wrap items-center gap-4">
               <Link
@@ -172,17 +172,17 @@ export default async function Home() {
             <div className="flex flex-col items-center justify-center rounded-card border border-line bg-card p-8 text-center">
               <Image src="/brand/gary-cooking.png" alt="" aria-hidden width={110} height={110} />
               <p className="mt-3 text-[15px] text-mid">
-                The slate&apos;s cooking. Picks drop every morning — last night&apos;s results
-                are on the <Link href="/results" className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold">record</Link>.
+                New picks appear as analysis is published. Check available graded results
+                on the <Link href="/results" className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold">record</Link>.
               </p>
             </div>
           )}
           {topProp && <PropCard prop={topProp} />}
         </div>
         <p className="mt-5 text-sm text-mid">
-          Every game covered, completely free.{' '}
+          Free published game picks, with written reasoning.{' '}
           <Link href="/picks" className="text-gold underline decoration-gold/40 underline-offset-4 transition-colors hover:text-gold-light hover:decoration-gold">
-            All of today&apos;s picks →
+            See today&apos;s published picks →
           </Link>
         </p>
       </section>
@@ -269,12 +269,12 @@ export default async function Home() {
           <div className="lg:col-span-6">
             <Eyebrow>IN THE APP</Eyebrow>
             <h2 className="mt-3 font-display text-[clamp(2.4rem,4.5vw,3.4rem)] leading-[0.95] text-hi">
-              The slate is free.
+              Game picks stay free.
               <br />
               <span className="text-gold">Conviction is the upgrade.</span>
             </h2>
             <p className="mt-4 max-w-lg text-[15px] leading-relaxed text-mid">
-              The full slate is free on web and iOS. Winners is Gary&apos;s reviewed shortlist,
+              Published game picks are free on web and iOS. Winners is Gary&apos;s reviewed shortlist,
               with published tickets kept on the record. Your account owns your access
               and your private Book.
             </p>
@@ -350,10 +350,10 @@ export default async function Home() {
       <section className="mx-auto max-w-6xl px-5 pb-8 pt-10">
         <div className="rounded-panel border border-line bg-card px-7 py-12 text-center">
           <h2 className="font-display text-[clamp(2.2rem,5vw,3.6rem)] leading-[0.95] text-hi">
-            The desk opens every morning.
+            Your next read starts here.
           </h2>
           <p className="mx-auto mt-4 max-w-md text-[15px] leading-relaxed text-mid">
-            Open the Today desk for the full slate, leading calls, Hub reads, live games, and your Book.
+            Open the Today desk for scheduled matchups, published calls, Hub reads, available live scores, and your Book.
           </p>
           <div className="mt-7 flex flex-wrap items-center justify-center gap-4">
             <Link
