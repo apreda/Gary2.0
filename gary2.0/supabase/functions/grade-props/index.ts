@@ -208,12 +208,11 @@ Deno.serve(async (req) => {
   // 3. MLB — finality gate via games status, then per-game stats
   if (mlb.length) {
     // BDL /games `dates` is UTC-keyed: an ET-evening game files under the NEXT
-    // UTC day. The default [today, yesterday] window covers that accidentally;
-    // a single ?date backfill must fetch D and D+1 or every late game on D
-    // reads "not final" (the ETDate law — this exact hole shorted the Aug 3
-    // backfill by ~189 props). The ET-date guard below still pins grading to D.
+    // UTC day. Expand every ET date to D and D+1, including the default
+    // today/yesterday window: today's late finals otherwise remain invisible
+    // until ET midnight. The ET-date guard below still pins each pick to D.
     const utcNext = (d: string) => new Date(Date.parse(`${d}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
-    const gameFetchDates = dates.length === 1 ? [dates[0], utcNext(dates[0])] : dates;
+    const gameFetchDates = [...new Set(dates.flatMap((d) => [d, utcNext(d)]))];
     const games = (await Promise.all(gameFetchDates.map((d) => bdlGet("/mlb/v1/games", { dates: [d], per_page: "50" })))).flat();
     const finalById = new Map<string, boolean>();
     const etDateById = new Map<string, string>();

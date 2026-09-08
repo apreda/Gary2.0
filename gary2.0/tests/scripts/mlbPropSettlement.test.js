@@ -20,9 +20,9 @@ function localLoader(fetchPage) {
   }) };
 }
 
-afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.resetModules(); });
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.resetModules(); });
 
-async function edge({ currentPick = pick, box = { data: [stat({ bb: 0, p_bb: 4 })] }, games } = {}) {
+async function edge({ currentPick = pick, box = { data: [stat({ bb: 0, p_bb: 4 })] }, games, requestQuery = 'dry=1&force=1&date=2026-09-06' } = {}) {
   let handler;
   vi.stubGlobal('Deno', { env: { get: key => ({ SUPABASE_URL: 'https://test.invalid', SUPABASE_SERVICE_ROLE_KEY: 'fixture', BALLDONTLIE_API_KEY: 'fixture' })[key] }, serve: fn => { handler = fn; } });
   const fetch = vi.fn(async (url, options = {}) => {
@@ -33,20 +33,32 @@ async function edge({ currentPick = pick, box = { data: [stat({ bb: 0, p_bb: 4 }
       if (u.pathname.endsWith('/prop_results')) return Response.json([]);
     }
     if (u.hostname === 'api.balldontlie.io') {
-      if (u.pathname === '/mlb/v1/games') return Response.json({ data: games ?? [{ id: 99, status: 'STATUS_FINAL', date: '2026-09-06T20:00:00Z' }] });
+      if (u.pathname === '/mlb/v1/games') return Response.json({ data: typeof games === 'function' ? games(u.searchParams.get('dates[]')) : games ?? [{ id: 99, status: 'STATUS_FINAL', date: '2026-09-06T20:00:00Z' }] });
       if (u.pathname === '/mlb/v1/stats') return Response.json(typeof box === 'function' ? box(u.searchParams.get('cursor')) : box);
     }
     throw new Error('Unexpected fixture URL: ' + url);
   });
   vi.stubGlobal('fetch', fetch);
   await import('../../supabase/functions/grade-props/index.ts');
-  const response = await handler(new Request('https://test.invalid/grade-props?dry=1&force=1&date=2026-09-06', { headers: { Authorization: 'Bearer fixture' } }));
+  const response = await handler(new Request(`https://test.invalid/grade-props?${requestQuery}`, { headers: { Authorization: 'Bearer fixture' } }));
   expect(response.status).toBe(200);
   expect(fetch.mock.calls.every(([, options]) => !options.method || options.method === 'GET')).toBe(true);
   return response.json();
 }
 
 describe('MLB settlement uses the same authoritative fields in both running graders', () => {
+  it('the default cloud window settles tonight’s late final before ET midnight', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-07T03:55:00Z')); // September 6, 11:55 PM ET
+    const requestedDates = [];
+    const out = await edge({ requestQuery: 'dry=1&force=1', games: date => {
+      requestedDates.push(date);
+      return date === '2026-09-07' ? [{ id: 99, status: 'STATUS_FINAL', date: '2026-09-07T00:10:00Z' }] : [];
+    } });
+    expect(new Set(requestedDates)).toEqual(new Set(['2026-09-05', '2026-09-06', '2026-09-07']));
+    expect(requestedDates).toHaveLength(3);
+    expect(out.sample).toEqual([expect.objectContaining({ player: 'Paul Skenes', actual: 4, result: 'won' })]);
+  });
   it.each([
     ['pitcher_walks', { bb: 0, p_bb: 4 }, 4], ['walks_allowed', { bb: 0, p_bb: 4 }, 4],
     ['pitcher_hits', { hits: 0, p_hits: 7 }, 7], ['hits_allowed', { hits: 0, p_hits: 7 }, 7],
