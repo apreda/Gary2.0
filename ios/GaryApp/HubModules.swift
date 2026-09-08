@@ -266,6 +266,7 @@ struct PropSlipBack: View {
     var body: some View {
         GaryTakeCardBack(flipped: flipped,
                          takeText: takeText,
+                         readingTarget: ReadingContentTarget(key: "prop:\(prop.id)", surface: .propCard),
                          shareAccessibilityLabel: "Share this prop pick",
                          shareImages: { renderPropShareImages(prop: prop, gameResult: gameResult) }) {
             if AppFlags.userBookEnabled {

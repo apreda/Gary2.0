@@ -119,6 +119,8 @@ private struct MLBCapBrim: Shape {
 }
 
 struct MLBGameIntelView: View {
+    let gameID: Int?
+    let gameDate: String?
     let matchup: String
     let edges: [Signal]
     var read: Signal? = nil
@@ -132,7 +134,6 @@ struct MLBGameIntelView: View {
     @State private var realHome: SupabaseAPI.MLBTeamLineup? = nil
     @State private var realAway: SupabaseAPI.MLBTeamLineup? = nil
     @State private var homeUp = true
-    @State private var lineupLoaded = false
     /// True only when the builder reports the REAL sheet is confirmed (BDL posted
     /// the official lineup). Until then the Confirmed tab shows an empty state —
     /// the projection never masquerades as confirmed.
@@ -143,9 +144,8 @@ struct MLBGameIntelView: View {
     /// The HR Derby field — one shared pool of contestants, not two lineups:
     /// the away/home toggle is meaningless there and hides.
     private var isDerby: Bool { awayName.localizedCaseInsensitiveContains("derby") }
-    /// All-Star Game — AL @ NL. The lineups are real and public (both sides
-    /// posted), the park is Citizens Bank; only the team-keyword lookup can't
-    /// resolve a league name, so it's special-cased.
+    /// All-Star Game — AL @ NL. League labels need a separate ballpark mapping;
+    /// lineup reads still require the game's exact provider identity.
     private var isAsg: Bool {
         let a = awayName.uppercased(), h = homeName.uppercased()
         return (a == "AL" || a == "AMERICAN LEAGUE") && (h == "NL" || h == "NATIONAL LEAGUE")
@@ -237,27 +237,29 @@ struct MLBGameIntelView: View {
             if #available(iOS 16.4, *) { carousel.presentationBackground(.clear) } else { carousel }
         }
         .sheet(isPresented: $showWeather) { weatherSheet.presentationDetents([.height(300)]) }
-        .task { await loadRealLineup() }
+        .task(id: lineupIdentity) { await loadRealLineup() }
     }
 
-    // Resolve the home team to its BDL abbreviation and pull the day's real field lineup.
+    private var lineupIdentity: ExactGameIdentity? { ExactGameIdentity(date: gameDate, gameID: gameID) }
+
     private func loadRealLineup() async {
-        guard !lineupLoaded else { return }
-        lineupLoaded = true
-        let n = homeName.lowercased()
-        // ASG: the synthetic row is keyed home_team='NL' — a league name never
-        // resolves through the club-keyword map.
-        let asgAbbr: String? = isAsg ? "NL" : nil
-        guard let abbr = asgAbbr ?? mlbTeamKeywords.first(where: { $0.value.contains { n.contains($0) } })?.key else { return }
-        if let row = await SupabaseAPI.fetchMlbFieldLineup(date: SupabaseAPI.todayEST(), homeTeam: abbr) {
-            await MainActor.run {
-                realHome = row.payload.home
-                realAway = row.payload.away
-                // Real status from the builder — BDL posts the confirmed sheet pre-game.
-                let isConfirmed = (row.status == "confirmed")
-                confirmedAvailable = isConfirmed
-                state = isConfirmed ? .confirmed : .projected
-            }
+        await MainActor.run {
+            guard !Task.isCancelled else { return }
+            realHome = nil
+            realAway = nil
+            confirmedAvailable = false
+            state = .projected
+            selected = nil
+        }
+        guard let identity = lineupIdentity else { return }
+        let row = await SupabaseAPI.fetchMlbFieldLineup(date: identity.date, gameID: identity.gameID)
+        guard !Task.isCancelled, let row else { return }
+        await MainActor.run {
+            guard !Task.isCancelled else { return }
+            realHome = row.payload.home
+            realAway = row.payload.away
+            confirmedAvailable = row.status == "confirmed"
+            state = confirmedAvailable ? .confirmed : .projected
         }
     }
 
@@ -945,15 +947,16 @@ struct PlayerCardV4: View {
         }
     }
 
-    // pitch matchup table: PITCH | MIX | HE HITS
+    // Pitchers show opponents' average against each pitch; hitters show their own.
     private func matchupTable(_ rows: [PlayerInsightPack.PitchRow]) -> some View {
-        VStack(spacing: 0) {
+        let averageLabel = pack?.type == "pitcher" ? "OPP AVG" : "HE HITS"
+        return VStack(spacing: 0) {
             if !dynamicTypeSize.isAccessibilitySize {
                 HStack {
                     Text("PITCH")
                     Spacer()
                     Text("MIX").frame(width: 54, alignment: .trailing)
-                    Text("HE HITS").frame(width: 64, alignment: .trailing)
+                    Text(averageLabel).frame(width: 64, alignment: .trailing)
                 }
                 .font(.caption.monospaced().weight(.medium)).foregroundStyle(PCV4.mut2)
                 .padding(.bottom, 6)
@@ -966,7 +969,7 @@ struct PlayerCardV4: View {
                             Text(r.pitch ?? "—").font(.headline).foregroundStyle(PCV4.ink)
                             Text("MIX  \(pitchUsage(r))")
                                 .font(.subheadline.monospacedDigit()).foregroundStyle(PCV4.mut)
-                            Text("HE HITS  \(hits(r))")
+                            Text("\(averageLabel)  \(hits(r))")
                                 .font(.subheadline.monospacedDigit()).foregroundStyle(hitsColor(r.grade))
                         }
                         .fixedSize(horizontal: false, vertical: true)

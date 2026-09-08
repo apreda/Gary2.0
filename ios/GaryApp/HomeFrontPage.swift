@@ -1428,13 +1428,6 @@ struct HomeWinnersStub: View {
         return nil
     }
 
-    private var weekday: String {
-        let f = DateFormatter()
-        f.timeZone = TimeZone(identifier: "America/New_York")
-        f.dateFormat = "EEEE"
-        return f.string(from: Date())
-    }
-
     var body: some View {
         Button(action: onOpen) {
             VStack(spacing: 0) {
@@ -1454,7 +1447,7 @@ struct HomeWinnersStub: View {
                     .overlay(DashedLine().stroke(GaryColors.gold.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("The \(weekday) Card")
+                        Text("The Daily Card")
                             .font(GaryFonts.display(25))
                             .foregroundStyle(GaryColors.warmWhite)
                         Text(valueLine ?? "Selections appear after review · games + props")

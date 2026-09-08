@@ -266,6 +266,18 @@ struct AuthView: View {
                 }
             }
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            HStack {
+                Spacer()
+                Button("Close") { dismiss() }
+                    .font(GaryFonts.text(15, .semibold))
+                    .foregroundStyle(GaryColors.gold)
+                    .frame(minWidth: 64, minHeight: 44)
+                    .accessibilityLabel("Close sign in")
+            }
+            .padding(.horizontal, 16)
+            .background(Color(hex: "#0F0D0C"))
+        }
         .onAppear {
             withAnimation(.easeOut(duration: 0.8)) {
                 animateIn = true

@@ -578,6 +578,8 @@ struct PicksCarouselView: View {
     /// matchups; Yesterday shows that day's matchups + picks with CASHED/LOST tags.
     @State private var pickDay: PicksDay = .today
     @StateObject private var focusState = PicksFocusState.shared
+    @State private var pushFocusLoadInFlight = false
+    @State private var notificationFocusGameID: Int?
     @State private var connections: [Signal] = []
     @State private var connLoaded = false
     @State private var connectionLoadInFlight = false
@@ -966,6 +968,16 @@ struct PicksCarouselView: View {
         let index = ncaafMetaIndex()
         guard !index.isEmpty else { return games }
 
+        // An explicit alert must remain reachable even when the RANKED shelf
+        // or a conference filter would ordinarily leave that game offscreen.
+        func includingNotificationTarget(_ selected: [(matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])])
+            -> [(matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])] {
+            guard pickDay == .today, let gameID = notificationFocusGameID,
+                  !selected.contains(where: { bdlGameId(for: $0) == gameID }),
+                  let target = games.first(where: { bdlGameId(for: $0) == gameID }) else { return selected }
+            return selected + [target]
+        }
+
         if ncaafConference != Self.ncaafRankedFilter {
             let filtered = games.filter {
                 ncaafMeta(for: $0, index: index)?.conferences.contains(ncaafConference) == true
@@ -975,7 +987,7 @@ struct PicksCarouselView: View {
                 // rollover) — snap home to RANKED, never an empty strip.
                 ncaafConference = Self.ncaafRankedFilter
             } else {
-                return filtered
+                return includingNotificationTarget(filtered)
             }
         }
 
@@ -998,11 +1010,12 @@ struct PicksCarouselView: View {
         let backfillNeed = max(0, Self.ncaafRankedFloor - ranked.count)
         let backfill = Array((power.sorted(by: byKickoff) + rest.sorted(by: byKickoff)).prefix(backfillNeed))
         let visible = ranked.sorted(by: byKickoff) + backfill
-        return visible.isEmpty ? games : visible
+        return includingNotificationTarget(visible.isEmpty ? games : visible)
     }
 
     private func selectNcaafConference(_ value: String) {
-        guard ncaafConference != value else { return }
+        guard ncaafConference != value || notificationFocusGameID != nil else { return }
+        notificationFocusGameID = nil
         withAnimation(.easeInOut(duration: 0.25)) {
             ncaafConference = value
             page = 0
@@ -1045,7 +1058,7 @@ struct PicksCarouselView: View {
     /// keep-last-good rule the store already follows (never blank a populated bar
     /// on a transient empty refresh).
     private func rebuildMemo() {
-        let signature = "\(dataSignature)|\(sport)|\(pickDay)|\(ncaafConference)"
+        let signature = "\(dataSignature)|\(sport)|\(pickDay)|\(ncaafConference)|\(notificationFocusGameID.map(String.init) ?? "")"
         guard memoSignature != signature else { return }
         memoSignature = signature
         let built = computeGamesUnsorted()
@@ -1421,6 +1434,7 @@ struct PicksCarouselView: View {
             liveCache.startIfNeeded()
         }
         .onChange(of: sport) { _ in
+            if sport != "NCAAF" { notificationFocusGameID = nil }
             page = 0
             // A fresh league entry always starts college at RANKED.
             ncaafConference = Self.ncaafRankedFilter
@@ -1430,6 +1444,7 @@ struct PicksCarouselView: View {
             consumeFocus()
         }
         .onChange(of: pickDay) { _ in
+            if pickDay != .today { notificationFocusGameID = nil }
             page = 0
             gamesMemo = []
             rebuildMemo()
@@ -1446,6 +1461,8 @@ struct PicksCarouselView: View {
             consumeFocus()
         }
         .onChange(of: focusState.focusGame) { _ in consumeFocus() }
+        .onChange(of: focusState.focusRequestID) { _ in consumeFocus() }
+        .onChange(of: store.loadedDate) { _ in notificationFocusGameID = nil }
         .onChange(of: store.loading) { loading in if !loading { snapSportToAvailableLeague(); consumeFocus() } }
         .onChange(of: scenePhase) { phase in
             // Foreground → silently re-pull picks/props (the spinner is gated by
@@ -1454,6 +1471,7 @@ struct PicksCarouselView: View {
         }
         .onChange(of: selectedTab) { tab in
             guard tab == 3, scenePhase == .active else { return }
+            consumeFocus()
             Task { await refreshRollingPicks() }
         }
         .onReceive(rollingPicksRefreshTimer) { _ in
@@ -1500,6 +1518,8 @@ struct PicksCarouselView: View {
     /// name-only links ("LAD @ ARI") retain their abbreviation fallback.
     private func consumeFocus() {
         guard let focus = focusState.focusGame else { return }
+        guard preparePushFocusIfNeeded() else { return }
+        if focus.isEmpty { focusState.clearGameFocus(); page = 0; return }
         let focusLeague = focusState.focusLeague
         let focusGameID = focusState.focusGameID
         let exactSlate = focusGameID.flatMap { gameID in
@@ -1539,6 +1559,7 @@ struct PicksCarouselView: View {
             // league is still loading into the unscoped source set.
             guard sports.contains(targetLeague) else {
                 if focusGameID != nil && !store.loading {
+                    reportMissingPushFocus()
                     focusState.clearGameFocus()
                     page = 0
                 }
@@ -1554,6 +1575,7 @@ struct PicksCarouselView: View {
         if let gameID = focusGameID {
             guard !store.loading else { return }
             let idx = games.firstIndex { bdlGameId(for: $0) == gameID }
+            if idx == nil { reportMissingPushFocus() }
             focusState.clearGameFocus()
             // A settled missing target returns to the overview, including an
             // empty desk. Matchup/time guesses could open another doubleheader.
@@ -1567,6 +1589,49 @@ struct PicksCarouselView: View {
         if let idx {
             withAnimation(.easeInOut(duration: 0.25)) { page = idx + 1 }
         }
+    }
+
+    private func preparePushFocusIfNeeded() -> Bool {
+        guard let date = focusState.focusDate else { return true }
+        guard selectedTab == 3 else { return false }
+        guard date == SupabaseAPI.todayEST() else {
+            if let league = focusState.focusLeague, let gameID = focusState.focusGameID {
+                GaryPushNavigation.shared.receive([
+                    "destination": "picks", "league": league, "game_id": String(gameID),
+                    "game_date": date, "matchup": focusState.focusGame ?? ""
+                ], requestID: UUID().uuidString)
+            }
+            focusState.clearGameFocus()
+            return false
+        }
+        if store.loadedDate != date || focusState.focusRefresh {
+            guard !pushFocusLoadInFlight else { return false }
+            pushFocusLoadInFlight = true
+            let requestID = focusState.focusRequestID
+            let forceRefresh = focusState.focusRefresh
+            focusState.focusRefresh = false
+            Task {
+                await store.loadIfNeeded(forceRefresh: forceRefresh)
+                pushFocusLoadInFlight = false
+                if focusState.focusRequestID == requestID { rebuildMemo() }
+                consumeFocus()
+            }
+            return false
+        }
+        guard !store.loading else { return false }
+        if sport == "NCAAF", notificationFocusGameID != focusState.focusGameID {
+            notificationFocusGameID = focusState.focusGameID
+            ncaafConference = Self.ncaafRankedFilter
+            rebuildMemo()
+        }
+        return true
+    }
+
+    private func reportMissingPushFocus() {
+        guard let date = focusState.focusDate, let league = focusState.focusLeague,
+              let gameID = focusState.focusGameID else { return }
+        GaryPushNavigation.shared.missingGame(.init(league: league, gameID: gameID,
+            date: date, matchup: focusState.focusGame ?? "Game \(gameID)"))
     }
 
     @ViewBuilder private var content: some View {
@@ -1759,17 +1824,33 @@ struct PicksCarouselView: View {
         .padding(.bottom, 2)
     }
 
+    /// Label the accepted slate, including while a newer day is still loading.
+    /// With no accepted date yet, use the app's shared 6 AM Eastern rollover.
+    private static func slateDayLabel(loadedDate: String, yesterday: Bool, now: Date = Date()) -> String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/New_York") ?? TimeZone(secondsFromGMT: 0)!
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = cal
+        formatter.timeZone = cal.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.isLenient = false
+        func parsedDay(_ value: String) -> Date? {
+            guard let date = formatter.date(from: value), formatter.string(from: date) == value else { return nil }
+            return date
+        }
+        guard let acceptedDay = parsedDay(loadedDate) ?? parsedDay(SupabaseAPI.todayEST(now: now)),
+              let displayDay = cal.date(byAdding: .day, value: yesterday ? -1 : 0, to: acceptedDay) else { return "—" }
+        formatter.dateFormat = "MMM d"
+        return formatter.string(from: displayDay).uppercased()
+    }
+
     /// The strip's first block: TODAY/YESTERDAY ▾ over the day's date. Tap =
     /// back to the day board (or flip the day when already there); long-press
     /// = the explicit menu — the old tab row's behavior in the strip's clothes.
     private var dayBlock: some View {
         let on = (page == 0)
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "America/New_York") ?? cal.timeZone
-        let f = DateFormatter()
-        f.timeZone = cal.timeZone
-        f.dateFormat = "MMM d"
-        let day = f.string(from: cal.date(byAdding: .day, value: pickDay == .today ? 0 : -1, to: Date()) ?? Date()).uppercased()
+        let day = Self.slateDayLabel(loadedDate: store.loadedDate, yesterday: pickDay == .yesterday)
         return Menu {
             Button("Today")     { withAnimation(.easeInOut(duration: 0.25)) { pickDay = .today; page = 0 } }
             Button("Yesterday") { withAnimation(.easeInOut(duration: 0.25)) { pickDay = .yesterday; page = 0 } }

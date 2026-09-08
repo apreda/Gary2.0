@@ -2736,13 +2736,25 @@ struct ProfileView: View {
                 }.padding(18).padding(.bottom, 35)
             }.refreshable { await load(); await access.refresh() }
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            HStack {
+                Spacer()
+                Button("Done") { dismiss() }
+                    .font(GaryFonts.text(15, .semibold))
+                    .foregroundStyle(GaryColors.gold)
+                    .frame(minWidth: 64, minHeight: 44)
+                    .accessibilityLabel("Close profile")
+            }
+            .padding(.horizontal, 16)
+            .background(Color(hex: "#0F0D0C"))
+        }
         .task(id: accountKey) { await load(); if auth.isAuthenticated { await access.refresh() } }
         .onGaryTour { verb, _ in if verb == "profileedit", snapshot != nil { showEditor = true } }
         .onChange(of: scenePhase) { phase in if phase == .active { Task { await load(); await access.refresh() } } }
         .sheet(isPresented: $showEditor) { ProfileEditorSheet(snapshot: snapshot) { updated in snapshot = updated; identityFailed = false } }
         .sheet(isPresented: $showQuickLog, onDismiss: { Task { await load() } }) { QuickLogSheet { _ in } }
         .sheet(isPresented: $showAuth, onDismiss: { Task { await load() } }) { AuthView() }
-        .sheet(isPresented: $showSettings) { SettingsView().environmentObject(auth) }
+        .sheet(isPresented: $showSettings) { SettingsSheetView().environmentObject(auth) }
         .sheet(isPresented: Binding(get: { portalURL != nil }, set: { if !$0 { portalURL = nil } }), onDismiss: { Task { await access.refresh() } }) { if let portalURL { SafariView(url: portalURL) } }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("GaryProfileUpdated"))) { _ in Task { await load() } }
         .onReceive(NotificationCenter.default.publisher(for: .userBookChanged)) { _ in Task { await load() } }
@@ -3005,6 +3017,7 @@ struct ClassicLeaderboardView: View {
     @State private var updatedAt: Date?
     @State private var showClaim = false
     @State private var showAuth = false
+    @State private var showBlockedPlayers = false
     @State private var showRules = false
     @State private var showEditor = false
     @State private var selectedPlayer: ProfileIdentityAPI.BoardRow?
@@ -3061,7 +3074,8 @@ struct ClassicLeaderboardView: View {
         .sheet(isPresented: $showClaim, onDismiss: { Task { await load() } }) { HandleClaimSheet { myHandle = $0 } }
         .sheet(isPresented: $showAuth, onDismiss: { Task { await load() } }) { AuthView() }
         .sheet(isPresented: $showEditor) { ProfileEditorSheet(snapshot: profile) { updated in profile = updated; Task { await load() } } }
-        .sheet(item: $selectedPlayer) { PublicPlayerProfileSheet(player: $0) }
+        .sheet(item: $selectedPlayer, onDismiss: { Task { await load() } }) { PublicPlayerProfileSheet(player: $0) }
+        .sheet(isPresented: $showBlockedPlayers, onDismiss: { Task { await load() } }) { BlockedPlayersSheet() }
         .sheet(isPresented: $showRules) { rulesSheet }
     }
 
@@ -3070,6 +3084,10 @@ struct ClassicLeaderboardView: View {
             HStack {
                 Label("THE PLAYERS' BOARD", systemImage: "checkmark.shield").font(GaryFonts.mono(10, bold: true)).tracking(0.8).foregroundStyle(GaryColors.gold)
                 Spacer()
+                if auth.isAuthenticated {
+                    Button { showBlockedPlayers = true } label: { Image(systemName: "hand.raised").frame(width: 44, height: 44).foregroundStyle(GaryColors.gold) }
+                        .buttonStyle(.plain).accessibilityLabel("Manage blocked players")
+                }
                 Button { showRules = true } label: { Image(systemName: "info.circle").font(.system(size: 17)).foregroundStyle(.white.opacity(0.5)).frame(width: 40, height: 36) }
                     .buttonStyle(.plain).accessibilityLabel("Leaderboard rules")
             }
@@ -3110,6 +3128,7 @@ struct ClassicLeaderboardView: View {
         Button { sort = value } label: {
             VStack(spacing: 5) {
                 Image(systemName: icon).font(.system(size: 13, weight: .semibold))
+                    .accessibilityHidden(true)
                 Text(title).font(GaryFonts.text(12, .semibold)).lineLimit(1).minimumScaleFactor(0.8)
             }.foregroundStyle(selectedSort == value ? GaryColors.gold : .white.opacity(0.45))
                 .frame(maxWidth: .infinity).padding(.vertical, 11)
@@ -3121,6 +3140,11 @@ struct ClassicLeaderboardView: View {
         if let board {
             if !auth.isAuthenticated {
                 invitation(title: "Your name belongs here.", text: "A free account keeps your record and lets you join when you're ready.", button: "Sign in to get started", action: { showAuth = true })
+            } else if board.profile_hidden == true {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Your public profile is hidden by our safety controls. Your private Book remains available.").font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.7))
+                    Link("Contact support to appeal", destination: ProfileSafetyAPI.helpURL).font(GaryFonts.text(13)).tint(GaryColors.gold)
+                }.padding(16).background(cardBackground)
             } else if let me = board.me {
                 Button { selectedPlayer = me } label: {
                     HStack(spacing: 12) {
@@ -3220,8 +3244,8 @@ struct ClassicLeaderboardView: View {
     private var emptyState: some View {
         VStack(spacing: 13) {
             Image(systemName: "trophy").font(.system(size: 34)).foregroundStyle(GaryColors.gold)
-            Text("The next name could be yours.").font(GaryFonts.display(26)).foregroundStyle(GaryColors.warmWhite).multilineTextAlignment(.center)
-            Text("No players have qualified for \(selectedLeague == "all" ? "all sports" : selectedLeague) · \(windowName.lowercased()) yet. Five decided verified picks and a public handle earn a place.")
+            Text((board?.hidden_count ?? 0) > 0 ? "No players to show in this view." : "The next name could be yours.").font(GaryFonts.display(26)).foregroundStyle(GaryColors.warmWhite).multilineTextAlignment(.center)
+            Text((board?.hidden_count ?? 0) > 0 ? "Your blocked players are hidden. Their results still count in the overall rankings." : "No players have qualified for \(selectedLeague == "all" ? "all sports" : selectedLeague) · \(windowName.lowercased()) yet. Five decided verified picks and a public handle earn a place.")
                 .font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.55)).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
             if selectedLeague != "all" || selectedWindow != "season" {
                 Button("Explore the full board") { league = "all"; window = "season" }.font(GaryFonts.text(13, .semibold)).foregroundStyle(GaryColors.gold).padding(.vertical, 6)

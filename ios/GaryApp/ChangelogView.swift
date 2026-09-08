@@ -53,6 +53,21 @@ struct ChangelogEntry: Identifiable {
 
 let changelogEntries: [ChangelogEntry] = [
     ChangelogEntry(
+        version: "2.25",
+        date: "September 2026",
+        type: .update,
+        title: "Gary 2.25 — Football, Your Book, and a steadier board",
+        changes: [
+            "Football picks and matchup analysis are ready for the new season",
+            "Track your picks in Your Book, compare your record with Gary, and explore the community leaderboard",
+            "Home, Picks, and Winners keep the right slate as games finish and a new day begins",
+            "Winners explains when a slate has no selections, when analysis is still underway, and when a refresh needs another try",
+            "Game and prop results match the exact game, including doubleheaders",
+            "Report a public profile or hide it from your leaderboard, with controls to review your blocked profiles",
+            "Choose whether to share reading analytics in Settings, separately from checkout analytics. Both are off by default",
+        ]
+    ),
+    ChangelogEntry(
         version: "2.23",
         date: "August 2026",
         type: .update,

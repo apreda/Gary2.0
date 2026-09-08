@@ -103,6 +103,7 @@ final class AuthManager: ObservableObject {
         currentUser = GaryUser(id: userId, email: userEmail.isEmpty ? nil : userEmail,
                               phone: nil, created_at: nil, user_metadata: nil)
         isAuthenticated = true
+        PushRegistrationCoordinator.shared.requestSync()
     }
 
     // MARK: - Email/Password Sign Up
@@ -456,6 +457,7 @@ final class AuthManager: ObservableObject {
         let appleRevocation = result?["apple_revocation_required"] as? Bool == true
         if currentUser?.id == owner {
             UserDefaults.standard.removeObject(forKey: PrivacyPreferences.analyticsKey)
+            UserDefaults.standard.removeObject(forKey: PrivacyPreferences.readingAnalyticsKey)
             clearSession()
         }
         return appleRevocation
@@ -543,6 +545,7 @@ final class AuthManager: ObservableObject {
         if let refresh = session.refresh_token {
             refreshToken = refresh
         }
+        PushRegistrationCoordinator.shared.requestSync()
     }
 
     private func handleAuthResponse(_ response: AuthResponse) {
@@ -554,6 +557,7 @@ final class AuthManager: ObservableObject {
             remember(user)
         }
         isAuthenticated = true
+        PushRegistrationCoordinator.shared.requestSync()
     }
 
     /// Auth identity is also the checkout/entitlement identity. Some OAuth
@@ -564,6 +568,7 @@ final class AuthManager: ObservableObject {
         userId = user.id
         userEmail = user.email ?? ""
         currentUser = user
+        PushRegistrationCoordinator.shared.requestSync()
     }
 
     private func clearProfileCache() {
@@ -586,6 +591,9 @@ final class AuthManager: ObservableObject {
         infoMessage = nil
         KeychainStore.delete("gary_apple_subject")
         KeychainStore.delete("gary_apple_account")
+        // Credentials are already cleared before queuing the newer,
+        // anonymous registration revision. Sign-out never waits on networking.
+        PushRegistrationCoordinator.shared.requestSync()
     }
 }
 

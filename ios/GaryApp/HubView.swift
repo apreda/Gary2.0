@@ -1818,6 +1818,10 @@ struct HubView: View {
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.88), value: selectedSignal?.id)
+        .onChange(of: isVisible && (selectedSignal != nil || gameSheet != nil)) { blocked in
+            GaryPushNavigation.shared.setModalBlocked(blocked, owner: "hub-read")
+        }
+        .onDisappear { GaryPushNavigation.shared.setModalBlocked(false, owner: "hub-read") }
         .sheet(item: $playerRead) { PlayerInsightSheet(signal: $0.signal, prefetched: $0.card) }
         .sheet(item: $teamCardSignal) { s in
             HubTeamCardSheet(
@@ -4021,6 +4025,9 @@ fileprivate struct HubTeamCardSheet: View {
                     return out
                 }()
                 if !tiles.isEmpty {
+                    // Board prices are a saved snapshot, separate from LiveScoreCache.
+                    Text("SAVED ODDS · NOT LIVE")
+                        .hubDataFont(9, .bold).foregroundStyle(PCV4.mut2)
                     HStack(spacing: 12) {
                         ForEach(tiles.indices, id: \.self) { i in
                             VStack(spacing: 6) {
@@ -4631,6 +4638,10 @@ fileprivate struct HubGameSheet: View {
                     }
                 }
                 // The lines, quietly (meta, never the headline).
+                if row.total != nil || row.spread != nil || (row.ml_home != nil && row.ml_away != nil) {
+                    Text("SAVED ODDS · NOT LIVE")
+                        .hubKickerFont(10.5).foregroundStyle(.white.opacity(0.62))
+                }
                 HStack(spacing: 22) {
                     if let t = row.total { numberStat("O/U", HubFmt.stat(t)) }
                     if let sp = row.spread {

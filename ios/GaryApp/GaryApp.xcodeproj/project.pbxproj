@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B70820260908400000000501 /* ReadingMeasurementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70820260908400000000502 /* ReadingMeasurementView.swift */; };
+		B70820260908400000000401 /* UsefulSessionMeasurement.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70820260908400000000402 /* UsefulSessionMeasurement.swift */; };
+		B70820260908400000000301 /* GaryPushNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70820260908400000000302 /* GaryPushNavigation.swift */; };
+		B70820260908400000000201 /* GaryPushRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70820260908400000000202 /* GaryPushRouter.swift */; };
+		B70820260908400000000101 /* PushRegistrationProductionAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70820260908400000000102 /* PushRegistrationProductionAdapter.swift */; };
+		B70820260908400000000001 /* PushRegistrationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70820260908400000000002 /* PushRegistrationCoordinator.swift */; };
 		BFE709072026C00000000001 /* HubFrontPageSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE709072026C00000000002 /* HubFrontPageSelection.swift */; };
 		BFE709072026D00000000001 /* HubStoryIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE709072026D00000000002 /* HubStoryIdentity.swift */; };
 		BFE709072026B00000000001 /* FantasyBriefingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE709072026B00000000002 /* FantasyBriefingView.swift */; };
@@ -87,6 +93,12 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		B70820260908400000000502 /* ReadingMeasurementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingMeasurementView.swift; sourceTree = "<group>"; };
+		B70820260908400000000402 /* UsefulSessionMeasurement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsefulSessionMeasurement.swift; sourceTree = "<group>"; };
+		B70820260908400000000302 /* GaryPushNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaryPushNavigation.swift; sourceTree = "<group>"; };
+		B70820260908400000000202 /* GaryPushRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaryPushRouter.swift; sourceTree = "<group>"; };
+		B70820260908400000000102 /* PushRegistrationProductionAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushRegistrationProductionAdapter.swift; sourceTree = "<group>"; };
+		B70820260908400000000002 /* PushRegistrationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushRegistrationCoordinator.swift; sourceTree = "<group>"; };
 		BFE709072026C00000000002 /* HubFrontPageSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubFrontPageSelection.swift; sourceTree = "<group>"; };
 		BFE709072026D00000000002 /* HubStoryIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubStoryIdentity.swift; sourceTree = "<group>"; };
 		BFE709072026B00000000002 /* FantasyBriefingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FantasyBriefingView.swift; sourceTree = "<group>"; };
@@ -205,6 +217,12 @@
 				4D7626B616BEDAF94E8687F9 /* AppStoreMetadata.md */,
 				14B79AC926AD34DD865A8E0D /* Assets.xcassets */,
 				008FA1BAD0680B6769DD9D2A /* AuthManager.swift */,
+				B70820260908400000000102 /* PushRegistrationProductionAdapter.swift */,
+				B70820260908400000000002 /* PushRegistrationCoordinator.swift */,
+				B70820260908400000000502 /* ReadingMeasurementView.swift */,
+				B70820260908400000000402 /* UsefulSessionMeasurement.swift */,
+				B70820260908400000000302 /* GaryPushNavigation.swift */,
+				B70820260908400000000202 /* GaryPushRouter.swift */,
 				1DCCF76D59A117BC61451DE6 /* AuthView.swift */,
 				B24536929674F3304E9497C4 /* ChangelogView.swift */,
 				C76D962853397848F9631A85 /* ContentView.swift */,
@@ -420,6 +438,12 @@
 				11082D2682BC0FFD484F133E /* AccessView.swift in Sources */,
 				DB25BB5C9570DD1B389E88A0 /* AppFlags.swift in Sources */,
 				2AC44BD89F056DF4FCA691AD /* AuthManager.swift in Sources */,
+				B70820260908400000000101 /* PushRegistrationProductionAdapter.swift in Sources */,
+				B70820260908400000000001 /* PushRegistrationCoordinator.swift in Sources */,
+				B70820260908400000000501 /* ReadingMeasurementView.swift in Sources */,
+				B70820260908400000000401 /* UsefulSessionMeasurement.swift in Sources */,
+				B70820260908400000000301 /* GaryPushNavigation.swift in Sources */,
+				B70820260908400000000201 /* GaryPushRouter.swift in Sources */,
 				0EB2F8BCD130889212D87639 /* AuthView.swift in Sources */,
 				0D809CA674D78F140C6117B8 /* ChangelogView.swift in Sources */,
 				CA682CB250F6A7F4462A70B2 /* ContentView.swift in Sources */,
@@ -513,7 +537,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 908;
+				CURRENT_PROJECT_VERSION = 909;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -600,7 +624,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 908;
+				CURRENT_PROJECT_VERSION = 909;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_NS_ASSERTIONS = NO;

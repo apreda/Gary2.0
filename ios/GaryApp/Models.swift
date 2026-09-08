@@ -1,4 +1,85 @@
 import Foundation
+import CoreFoundation
+
+/// A provider game is never inferred from a team name or the current date.
+struct ExactGameIdentity: Hashable {
+    let date: String
+    let gameID: Int
+    static let largestJSONInteger = 9_007_199_254_740_991
+    private static let utcCalendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar
+    }()
+    private static let easternCalendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York")!
+        return calendar
+    }()
+
+    init?(date: String?, gameID: Int?) {
+        guard let date, let gameID, gameID > 0, gameID <= Self.largestJSONInteger,
+              date.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil else { return nil }
+        let parts = date.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3,
+              let parsed = Self.utcCalendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2])) else { return nil }
+        let checked = Self.utcCalendar.dateComponents([.year, .month, .day], from: parsed)
+        guard checked.year == parts[0], checked.month == parts[1], checked.day == parts[2] else { return nil }
+        self.date = date
+        self.gameID = gameID
+    }
+
+    static func easternDate(of start: Date?) -> String? {
+        guard let start else { return nil }
+        let parts = easternCalendar.dateComponents([.year, .month, .day], from: start)
+        guard let year = parts.year, let month = parts.month, let day = parts.day else { return nil }
+        return String(format: "%04d-%02d-%02d", year, month, day)
+    }
+
+    static func canonicalProviderID(in row: [String: Any]) throws -> Int? {
+        var selected: Int?
+        for key in ["game_id", "bdl_game_id"] {
+            guard let raw = row[key], !(raw is NSNull) else { continue }
+            let value: Int?
+            if let string = raw as? String {
+                let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+                value = trimmed.range(of: #"^\d+$"#, options: .regularExpression) == nil ? nil : Int(trimmed)
+            } else if let number = raw as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() {
+                let decimal = number.doubleValue
+                value = decimal.isFinite && decimal.rounded() == decimal && decimal > 0
+                    && decimal <= Double(largestJSONInteger) ? Int(decimal) : nil
+            } else { value = nil }
+            guard let value, value > 0, value <= largestJSONInteger else {
+                throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Invalid provider game identity"))
+            }
+            if let selected, selected != value {
+                throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Conflicting provider game identities"))
+            }
+            selected = value
+        }
+        return selected
+    }
+}
+
+/// Retain the weekly alias through PicksValue's typed-array decode. The normal
+/// pick parser then coalesces both names under the canonical game_id field.
+struct StoredProviderGameID: Codable {
+    let value: Int
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let raw: Any
+        if let number = try? container.decode(Int.self) { raw = NSNumber(value: number) }
+        else { raw = try container.decode(String.self) }
+        guard let value = try ExactGameIdentity.canonicalProviderID(in: ["game_id": raw]) else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Missing provider game identity")
+        }
+        self.value = value
+    }
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(value)
+    }
+}
 
 // MARK: - Shared Formatters (expensive to create — reuse)
 
@@ -912,6 +993,8 @@ struct SportsbookOdds: Codable, Identifiable {
 struct GaryPick: Identifiable, Codable {
     let pick_id: String?
     var game_id: Int? = nil   // per-game id — disambiguates doubleheaders (same matchup, two games)
+    // Preserve the canonical weekly NFL alias until the shared stored-pick parser runs.
+    var bdl_game_id: StoredProviderGameID? = nil
     let pick: String?
     let rationale: String?
     // Fan re-register of the same audited rationale (stored since Jul 24 2026);
@@ -1061,6 +1144,9 @@ struct GaryPick: Identifiable, Codable {
     
     /// Parse from dictionary (for manual JSON parsing)
     static func from(dict: [String: Any]) -> GaryPick? {
+        let gameID: Int?
+        do { gameID = try ExactGameIdentity.canonicalProviderID(in: dict) }
+        catch { return nil }
         func number(_ keys: String...) -> Double? {
             for key in keys {
                 if let value = dict[key] as? NSNumber { return value.doubleValue }
@@ -1092,7 +1178,7 @@ struct GaryPick: Identifiable, Codable {
 
         return GaryPick(
             pick_id: dict["pick_id"] as? String,
-            game_id: (dict["game_id"] as? NSNumber)?.intValue,
+            game_id: gameID,
             pick: dict["pick"] as? String,
             rationale: dict["rationale"] as? String,
             rationale_plain: dict["rationale_plain"] as? String,

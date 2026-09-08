@@ -35,7 +35,7 @@ struct AccessView: View {
                         .font(GaryFonts.mono(30))
                         .foregroundStyle(GaryColors.gold)
 
-                    Text("Intelligent Sports Analysis")
+                    Text("AI sports predictions and insights")
                         .font(GaryFonts.text(14.5))
                         .foregroundStyle(.white.opacity(0.55))
                 }
@@ -53,13 +53,13 @@ struct AccessView: View {
                         ],
                         spacing: 10
                     ) {
-                        TechChip(icon: "brain.head.profile", text: "Deep Research")
-                        TechChip(icon: "arrow.triangle.2.circlepath", text: "Agentic AI")
+                        TechChip(icon: "brain.head.profile", text: "Pick Reasoning")
+                        TechChip(icon: "arrow.triangle.2.circlepath", text: "Game Predictions")
                         // STORE-SAFE BRIDGE: no market language on the front door.
                         TechChip(icon: "chart.line.uptrend.xyaxis", text: AppFlags.storeSafe ? "Deep Stats" : "Multi-Book Odds")
-                        TechChip(icon: "globe", text: "Live Search")
-                        TechChip(icon: "doc.text.magnifyingglass", text: "Scout Reports")
-                        TechChip(icon: "chart.bar.xaxis", text: "Live Stats")
+                        TechChip(icon: "globe", text: "Matchup Analysis")
+                        TechChip(icon: "doc.text.magnifyingglass", text: "Player Insights")
+                        TechChip(icon: "chart.bar.xaxis", text: "Scores & Results")
                     }
                     .padding(.horizontal, 24)
                 }
@@ -263,7 +263,7 @@ struct DisclaimerSheet: View {
 
         Odds and picks are not a guarantee of results. Users must comply with all applicable laws and must be of legal age in their jurisdiction.
 
-        This app does not facilitate real-money gambling, deposits, or withdrawals.
+        Gary does not accept wagering deposits or hold a betting balance.
 
         If you or someone you know has a gambling problem, call the National Problem Gambling Helpline at 1-800-522-4700.
 

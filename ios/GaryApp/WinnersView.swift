@@ -38,6 +38,80 @@ func garyGameResultKey(matchupKey: String, pickText: String?) -> String {
     "\(matchupKey)|\(garyGamePickSig(pickText))"
 }
 
+/// A request may finish after the Eastern slate changes. Keep dated content
+/// anchored to its snapshot until a new-date read replaces it.
+enum WinnersBoardDates {
+    static func shouldReload(selectedDate: String?, loadedDate: String?, requestedDate: String?, today: String) -> Bool {
+        selectedDate == nil && loadedDate != today && requestedDate != today
+    }
+
+    static func shouldRefresh(selectedDate: String?, loadedDate: String?, requestedDate: String?,
+                              today: String, lastAttemptAt: Date?, now: Date) -> Bool {
+        guard selectedDate == nil else { return false }
+        if shouldReload(selectedDate: selectedDate, loadedDate: loadedDate, requestedDate: requestedDate, today: today) {
+            return true
+        }
+        guard requestedDate == nil else { return false }
+        return lastAttemptAt.map { now.timeIntervalSince($0) >= 90 } ?? true
+    }
+
+    static func snapshotDate(selectedDate: String?, loadedDate: String?, fallback: String) -> String {
+        selectedDate ?? loadedDate ?? fallback
+    }
+}
+
+/// Empty Winners boards are valid. Only confirmed future starts can justify
+/// an upcoming-review placeholder; missing or interrupted schedules stay neutral.
+enum WinnersEmptyBoardPhase: Equatable {
+    case pending, closed, uncertain, noGames, historical, unavailable
+
+    static func resolve(rows: [DailySlateRow], now: Date, isHistorical: Bool,
+                        boardSucceeded: Bool, scheduleSucceeded: Bool) -> Self {
+        guard boardSucceeded else { return .unavailable }
+        if isHistorical { return .historical }
+        guard scheduleSucceeded else { return .unavailable }
+        guard !rows.isEmpty else { return .noGames }
+        let formatter = ISO8601DateFormatter()
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var uncertain = false
+        for row in rows {
+            if row.isInterrupted { uncertain = true; continue }
+            // Explicit started/finished evidence overrides a stale schedule time.
+            if ["live", "in_progress", "final", "completed"].contains(row.game_status?.lowercased() ?? "") { continue }
+            let kickoff = row.kickoff_status?.lowercased()
+            guard kickoff == nil || kickoff == "confirmed",
+                  row.hasConfirmedKickoff, let raw = row.commence_time,
+                  let start = formatter.date(from: raw) ?? fractional.date(from: raw) else {
+                uncertain = true; continue
+            }
+            if start > now { return .pending }
+        }
+        return uncertain ? .uncertain : .closed
+    }
+
+    var heading: String {
+        switch self {
+        case .pending: return "NO WINNERS SELECTIONS YET"
+        case .unavailable: return "BOARD DATA UNAVAILABLE"
+        case .noGames: return "NO GAMES ON THIS SLATE"
+        default: return "NO WINNERS SELECTIONS"
+        }
+    }
+
+    func message(league: String? = nil, props: Bool = false) -> String {
+        let subject = [league ?? "Winners", props ? "prop" : nil, "selections"].compactMap { $0 }.joined(separator: " ")
+        switch self {
+        case .pending: return "No \(subject) yet. Picks enter Winners only after review."
+        case .closed: return "No \(subject) for this slate. Pregame selection windows have closed."
+        case .historical: return "No \(subject) on this date."
+        case .uncertain: return "No \(subject) published. Some game start times are unconfirmed or have changed."
+        case .noGames: return "No games on this slate. Past cards are under the date above."
+        case .unavailable: return "Board data unavailable. Pull to retry."
+        }
+    }
+}
+
 /// Winners slot curation (founder call, Jul 23 2026): the Winners card is a
 /// DAY OF ACTION, not a confidence leaderboard. Slots do different jobs for
 /// the fan's day and now only ORDER the card — the edge-rail color cue that
@@ -104,6 +178,8 @@ struct PremiumPicksView: View {
     @State private var boardDataFailed = false
     @State private var admittedBoardCache: [String: SupabaseAPI.WinnersBoardSnapshot] = [:]
     @State private var loadedBoardDate: String?
+    @State private var requestedBoardDate: String?
+    @State private var lastBoardAttemptAt: Date?
     @State private var boardLoadToken = UUID()
     // Per-sport shelves show admissions for the selected date only.
     @State private var gameShelves: [GameShelf] = []
@@ -115,14 +191,12 @@ struct PremiumPicksView: View {
     /// Leagues whose board is the reviewer's rows today (Sep 2 2026) — their
     /// shelf never pads to a promised count; the board is what it is.
     @State private var reviewedLeagues: Set<String> = []
-    // Real per-league game count from today's slate — lets the pre-post
-    // "coming soon" state show the actual shelf shape (N sealed placeholders
-    // per league) instead of a generic fixed count (founder, Jul 6: match
-    // the populated board's layout, just with coming-soon wrapper words).
+    // Real per-league game counts give empty boards their dated slate context.
     @State private var todaySlateCounts: [String: Int] = [:]
-    /// Today's full slate rows (teams + start times) — the day card's manifest
-    /// and seal timeline. Counts alone can't say WHEN the card seals.
+    /// Full schedule evidence distinguishes an upcoming review from a closed slate.
     @State private var todaySlateRows: [DailySlateRow] = []
+    @State private var todaySlateSucceeded = false
+    @State private var emptyStateNow = Date()
     @State private var gameResultsMap: [String: String] = [:]   // "away@home" -> won/lost/push
     @State private var gameScoresMap: [String: String] = [:]    // same key -> "away-home" final score
     @State private var matchupScoresMap: [String: String] = [:] // matchup-only key -> final (props share the game's score)
@@ -270,14 +344,18 @@ struct PremiumPicksView: View {
         || propShelves.contains { !$0.settled && !$0.props.isEmpty }
         || (selectedDate == nil && lockedBoardSummaries.contains { $0.count > 0 })
     }
-    /// On TODAY with nothing fresh yet, show the "board drops soon" state (blurred
-    /// placeholder cards) instead of yesterday's results — those live under the date
-    /// menu's Yesterday. A chosen past date always renders its own graded board.
-    private var isTodayComingSoon: Bool {
-        // The room's normal system every day (founder, Jul 13): before fresh
-        // picks post, TODAY shows the coming-soon placeholder cards — never
-        // yesterday's board, which lives under the date menu.
-        selectedDate == nil && !todayHasFreshPicks && !boardDataFailed
+    /// The current date keeps its own empty board, with copy based on whether
+    /// any confirmed pregame review window remains open.
+    private var isTodayEmptyBoard: Bool {
+        selectedDate == nil && !todayHasFreshPicks && !boardDataFailed && !todaySlateRows.isEmpty
+    }
+
+    private func emptyBoardPhase(for league: String? = nil) -> WinnersEmptyBoardPhase {
+        let rows = league.map { wanted in todaySlateRows.filter { ($0.league ?? "").uppercased() == wanted.uppercased() } } ?? todaySlateRows
+        return WinnersEmptyBoardPhase.resolve(
+            rows: rows, now: emptyStateNow, isHistorical: selectedDate != nil,
+            boardSucceeded: !boardDataFailed,
+            scheduleSucceeded: todaySlateSucceeded)
     }
 
     var body: some View {
@@ -299,8 +377,8 @@ struct PremiumPicksView: View {
                             if loading {
                                 HStack { Spacer(); ProgressView().tint(GaryColors.gold).scaleEffect(1.2); Spacer() }
                                     .padding(.top, 80)
-                            } else if isTodayComingSoon {
-                                comingSoonState
+                            } else if isTodayEmptyBoard {
+                                emptyTodayState
                             } else if !hasContent {
                                 emptyState
                             } else {
@@ -325,6 +403,20 @@ struct PremiumPicksView: View {
         }
         .environment(\.solidPanels, true)
         .task { await reload() }
+        .onReceive(Timer.publish(every: 30, on: .main, in: .common).autoconnect()) { now in
+            guard scenePhase == .active, selectedTab == 1, selectedDate == nil else { return }
+            let today = SupabaseAPI.todayEST(now: now)
+            if WinnersBoardDates.shouldRefresh(selectedDate: selectedDate, loadedDate: loadedBoardDate,
+                                               requestedDate: requestedBoardDate, today: today,
+                                               lastAttemptAt: lastBoardAttemptAt, now: now) {
+                // One timer owns both rollover and the 90-second live refresh.
+                // Reserve synchronously so another tick cannot queue a duplicate.
+                requestedBoardDate = today
+                lastBoardAttemptAt = now
+                Task { await reload() }
+            }
+            if emptyBoardPhase() == .pending { emptyStateNow = now }
+        }
         .onChange(of: selectedTab) { tab in
             // Hidden tabs are prewarmed at launch. If that background task was
             // interrupted, entering Winners must make a fresh attempt instead
@@ -361,6 +453,7 @@ struct PremiumPicksView: View {
         }
         .onChange(of: authManager.currentUser?.id) { _ in
             boardLoadToken = UUID()
+            loadedBoardDate = nil; requestedBoardDate = nil; lastBoardAttemptAt = nil
             entitledSports = []; admittedBoardCache = [:]; gameShelves = []; propShelves = []; lockedBoardSummaries = []
             checkoutItem = nil; checkoutError = nil
             if lastAccountID != nil || authManager.currentUser?.id == nil {
@@ -476,7 +569,10 @@ struct PremiumPicksView: View {
     /// Compact date for the one-line header trigger — "TODAY", or "AUG 5" on
     /// a chosen past day (the long form crowded the shared line).
     private var headerDateLabel: String {
-        guard let d = selectedDate else { return "TODAY" }
+        let today = SupabaseAPI.todayEST()
+        let day = WinnersBoardDates.snapshotDate(selectedDate: selectedDate, loadedDate: loadedBoardDate, fallback: today)
+        guard selectedDate != nil || day != today else { return "TODAY" }
+        let d = day
         let inF = DateFormatter(); inF.dateFormat = "yyyy-MM-dd"
         inF.timeZone = TimeZone(identifier: "America/New_York")
         guard let date = inF.date(from: d) else { return d }
@@ -489,11 +585,7 @@ struct PremiumPicksView: View {
             VStack(spacing: 12) {
                 Image(systemName: selectedDate == nil ? "lock.badge.clock" : "calendar.badge.exclamationmark")
                     .font(.system(size: 42)).foregroundStyle(.white.opacity(0.25))
-                Text(boardDataFailed ? "Board data unavailable. Pull to retry."
-                     : selectedDate != nil ? "No Winners selections on this date."
-                     : todaySlateCounts.isEmpty
-                     ? "No games today. Yesterday's card is under the date above."
-                     : "No Winners selections yet. Picks appear after review.")
+                Text(emptyBoardPhase().message())
                     .font(GaryFonts.text(14)).foregroundStyle(.white.opacity(0.62))
                     .multilineTextAlignment(.center)
             }
@@ -524,29 +616,13 @@ struct PremiumPicksView: View {
         .background(Color.black.opacity(0.22))
     }
 
-    /// TODAY, before Gary's board posts — the members' room speaks ONE sealed
-    /// language all day (founder, Jul 5): the same wrapper face the reveal
-    /// uses, rendered as non-interactive placeholders with the drop countdown
-    /// on the seal, under a plain how-it-works card with a one-tap door to
-    /// yesterday's graded card. The old blur-skeletons + pop-up modal are gone.
-    /// Founder, Jul 6: this state should look like the REAL board — same
-    /// per-league shelf headers, same card rail — just with coming-soon
-    /// wrapper words in place of a live tap-to-reveal seal. Iterates
-    /// `gameShelves` (already carries every in-season league, empty picks
-    /// and all) and renders one sealed placeholder per expected slot,
-    /// sized from today's real slate count so it's never overstating or
-    /// understating the day.
-    private var comingSoonState: some View {
-        // THE DAY CARD IS GONE (founder, Aug 5) — the manifest, the seal
-        // countdown and the timeline strip all said what the shelves below
-        // already show. The record band still opens the page honestly, and
-        // the how-it-works block now sits UNDER the not-ready cards, where
-        // it answers the question those cards raise instead of pre-empting it.
+    /// A dated empty board retains league context without promising admissions.
+    private var emptyTodayState: some View {
         VStack(spacing: 22) {
             ForEach(gameShelves) { shelf in
-                comingSoonShelf(shelf.league)
+                emptyTodayShelf(shelf.league)
             }
-            comingSoonIntro
+            emptyTodayIntro
                 .pageGutter()
             // The record signs the page off (founder, Aug 6 night: off the
             // top — "below or just removed") — honesty stays, the board leads.
@@ -564,40 +640,36 @@ struct PremiumPicksView: View {
         .padding(.bottom, 120)
     }
 
-    /// One league's coming-soon shelf: real header, real card footprint,
-    /// placeholder count matched to tonight's actual slate (WC ships 2
-    /// picks/match; everything else shows its usual top-3 shelf).
-    private func comingSoonShelf(_ league: String) -> some View {
-        let games = todaySlateCounts[league.uppercased()] ?? 1
-        let count = 1 // One empty-state card, never a promised number of admissions.
+    private func emptyTodayShelf(_ league: String) -> some View {
+        let games = todaySlateCounts[league.uppercased()] ?? 0
+        let phase = emptyBoardPhase(for: league)
         return VStack(alignment: .leading, spacing: 10) {
-            shelfHeader(league, status: "·  \(games) game\(games == 1 ? "" : "s") tonight")
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(0..<count, id: \.self) { _ in
-                        // The ORIGINAL "TODAY'S CARD / COMING SOON" face (founder,
-                        // Jul 6: he asked to add per-sport headers to this, not to
-                        // replace the wording) — leagueTag is the only new thing.
-                        MembersOnlyCardFace(state: .placeholder(note: "SELECTIONS APPEAR AFTER REVIEW"),
-                                            leagueTag: league.uppercased())
-                            .frame(width: UIScreen.main.bounds.width - (GaryLayout.gutter * 2 + 12))
-                    }
-                }
-                .pageGutter()
+            shelfHeader(league, status: "·  \(games) game\(games == 1 ? "" : "s") on this slate")
+            if phase == .pending {
+                MembersOnlyCardFace(state: .placeholder(note: "SELECTIONS REQUIRE REVIEW"),
+                                    leagueTag: league.uppercased())
+                    .frame(width: UIScreen.main.bounds.width - (GaryLayout.gutter * 2 + 12))
+                    .pageGutter()
+            } else {
+                Text(phase.message(league: league))
+                    .font(GaryFonts.text(13.5))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(18)
+                    .quantPanel(radius: GaryLayout.Radius.card)
+                    .pageGutter()
             }
-            // The rail must never shear the card's drop shadow into a hard
-            // edge (founder, Jul 22: the seal read flat on the page).
-            .unclippedRail()
         }
     }
 
     /// Plain-language how-it-works + the door to yesterday's results.
-    private var comingSoonIntro: some View {
+    private var emptyTodayIntro: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("NO WINNERS SELECTIONS YET")
+            Text(emptyBoardPhase().heading)
                 .font(.system(size: 12.5, weight: .semibold).monospacedDigit()).tracking(1.4)
                 .foregroundStyle(GaryColors.gold)
-            Text("Picks enter Winners after review. The board can stay small or empty, and prop selections arrive in stages. Every published selection stays in its dated record — wins and losses.")
+            Text("The Winners board can stay small or empty. Every published selection stays in its dated record — wins and losses.")
                 .font(GaryFonts.text(13.5))
                 .foregroundStyle(.white.opacity(0.85))
                 .lineSpacing(2)
@@ -938,7 +1010,7 @@ struct PremiumPicksView: View {
     }
 
     private var propsEmptyState: some View {
-        Text("No props posted yet — they'll appear here with the slate.")
+        Text(emptyBoardPhase().message(props: true))
             .font(GaryFonts.text(13))
             .foregroundStyle(.white.opacity(0.62))
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1001,8 +1073,7 @@ struct PremiumPicksView: View {
         }
         let target: Int
         if shelf.league.uppercased() == "WC" {
-            // WC ships 2 plays/match — the target scales with tonight's real
-            // match count (same math as the fully-pre-post comingSoonShelf).
+            // Pre-cutover WC boards keep their original two plays per match.
             target = min((todaySlateCounts["WC"] ?? 0) * 2, 12)
         } else {
             // The card fills to winnersCardCap as the day's picks post —
@@ -1090,7 +1161,8 @@ struct PremiumPicksView: View {
     /// The prop shelf's slate day: a browsed history date, else yesterday for
     /// the settled fallback, else today — the lookup day for graded stamps.
     private func propShelfDay(_ shelf: PropShelf) -> String {
-        selectedDate ?? (shelf.settled ? SupabaseAPI.yesterdayEST() : SupabaseAPI.todayEST())
+        WinnersBoardDates.snapshotDate(selectedDate: selectedDate, loadedDate: loadedBoardDate,
+                                       fallback: shelf.settled ? SupabaseAPI.yesterdayEST() : SupabaseAPI.todayEST())
     }
 
     /// Strip a numeric line embedded at the end of a prop label. This mirrors
@@ -1400,7 +1472,7 @@ struct PremiumPicksView: View {
     }
 
     private func propPlaceholderRow(for league: String) -> some View {
-        Text("No \(league) prop selections yet. Picks appear after review.")
+        Text(emptyBoardPhase(for: league).message(league: league, props: true))
             .font(GaryFonts.text(13))
             .foregroundStyle(.white.opacity(0.62))
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1418,7 +1490,7 @@ struct PremiumPicksView: View {
     }
 
     private func placeholderRow(for league: String) -> some View {
-        let msg = "No \(league) selections yet. Picks appear after review."
+        let msg = emptyBoardPhase(for: league).message(league: league)
         return Text(msg)
             .font(GaryFonts.text(13))
             .foregroundStyle(.white.opacity(0.62))
@@ -1657,9 +1729,18 @@ struct PremiumPicksView: View {
     private func loadAdmittedBoard(_ date: String, isToday: Bool) async {
         let token = UUID()
         let owner = authManager.currentUser?.id
+        defer {
+            Task { @MainActor in
+                if boardLoadToken == token { requestedBoardDate = nil }
+            }
+        }
         await MainActor.run {
             boardLoadToken = token
-            loading = loadedBoardDate != date || !hasContent
+            requestedBoardDate = date
+            lastBoardAttemptAt = Date()
+            // A same-date empty board is valid content too; keep it visible
+            // while checking for the first admission or a newly graded ticket.
+            loading = loadedBoardDate != date
         }
         let retainingThisDate = loadedBoardDate == date
         let previousGameResults = retainingThisDate ? gameResultsMap : [:]
@@ -1677,7 +1758,7 @@ struct PremiumPicksView: View {
         async let admittedF = SupabaseAPI.fetchWinnersBoard(date: date)
         async let resultsF = SupabaseAPI.fetchAllGameResults(since: recordWindowStart)
         async let propResultsF = SupabaseAPI.fetchRecentPropResults(limit: 1000)
-        async let slateF = SupabaseAPI.fetchDailySlate(date: date)
+        async let slateF = SupabaseAPI.fetchDailySlateWithStatus(date: date)
         async let entitlementsF = SupabaseAPI.fetchEntitlements()
 
         var board = SupabaseAPI.WinnersBoardSnapshot()
@@ -1711,7 +1792,8 @@ struct PremiumPicksView: View {
             propResultsFailed = true
             retainPropResults = SupabaseAPI.isTransientExternalFailure(error)
         }
-        let slateRows = await slateF
+        let slate = await slateF
+        let slateRows = slate.rows
         let entitlements = await entitlementsF
         guard owner == authManager.currentUser?.id, boardLoadToken == token else { return }
 
@@ -1785,10 +1867,12 @@ struct PremiumPicksView: View {
             reviewedLeagues = Set(order)
             todaySlateCounts = slateCounts
             todaySlateRows = isToday ? slateRows : []
+            todaySlateSucceeded = slate.succeeded
+            emptyStateNow = Date()
             sportRecords = records
             entitledSports = entitlements
             loadedBoardDate = date
-            boardDataFailed = admissionFailed || resultsFailed || propResultsFailed
+            boardDataFailed = admissionFailed || resultsFailed || propResultsFailed || (isToday && !slate.succeeded)
             loading = false
         }
     }

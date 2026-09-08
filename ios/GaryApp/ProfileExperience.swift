@@ -74,6 +74,8 @@ enum ProfileIdentityAPI {
         let sort: String
         let league: String
         let has_more: Bool
+        let hidden_count: Int?
+        let profile_hidden: Bool?
     }
 
     @MainActor static func request<T: Decodable>(_ name: String, body: [String: Any] = [:], authenticated: Bool = true) async throws -> T {
@@ -97,6 +99,10 @@ enum ProfileIdentityAPI {
         let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
         guard let status = (response as? HTTPURLResponse)?.statusCode, (200...299).contains(status), object?["ok"] as? Bool != false else {
             let diagnostic = ((object?["error"] ?? object?["message"]) as? String ?? "").lowercased()
+            if diagnostic.contains("profile text is not allowed") { throw UserBookError.server("Use a profile without abusive wording, links or contact details.") }
+            if diagnostic.contains("report limit") { throw UserBookError.server("You have sent several reports recently. Try later, or contact support for help.") }
+            if diagnostic.contains("block limit") { throw UserBookError.server("Your blocked-player list is full. Remove a block before adding another.") }
+            if diagnostic.contains("not available") { throw UserBookError.server("This profile is no longer available. Refresh to check it.") }
             if diagnostic.contains("taken") { throw UserBookError.server("That handle is already taken. Try another.") }
             if diagnostic.contains("reserved") { throw UserBookError.server("That handle is reserved. Try another.") }
             if diagnostic.contains("handle") { throw UserBookError.server("Use 3–18 letters, numbers, or underscores for your handle.") }
@@ -120,7 +126,7 @@ enum ProfileIdentityAPI {
         try await request("your_book_leaderboard_v3", body: ["p_window": window, "p_sort": sort, "p_league": league, "p_limit": 50, "p_offset": offset], authenticated: false)
     }
 
-    @MainActor static func card(userID: String) async throws -> PublicCard {
+    @MainActor static func card(userID: String) async throws -> PublicCard? {
         try await request("profile_card", body: ["p_user": userID, "p_days": 30], authenticated: false)
     }
 
@@ -316,18 +322,71 @@ struct ProfileEditorSheet: View {
     }
 }
 
+enum ProfileSafetyAPI {
+    static let helpURL = URL(string: "https://www.betwithgary.ai/terms#profile-safety")!
+    struct State: Decodable { let blocked: Bool; let is_owner: Bool; let my_profile_hidden: Bool }
+    struct BlockedPlayer: Decodable, Identifiable { let user_id: String; let display_name: String; var id: String { user_id } }
+    struct BlockReceipt: Decodable { let ok: Bool; let blocked: Bool }
+    struct ReportReceipt: Decodable { let ok: Bool; let report_id: String }
+    enum Reason: String, CaseIterable, Identifiable {
+        case harassment, hate, threats, sexual_content, spam, impersonation, other
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .harassment: return "Harassment or abuse"
+            case .hate: return "Hateful content"
+            case .threats: return "Threats or violence"
+            case .sexual_content: return "Sexual content"
+            case .spam: return "Spam or links"
+            case .impersonation: return "Impersonation"
+            case .other: return "Something else"
+            }
+        }
+    }
+    @MainActor static func state(_ userID: String) async throws -> State {
+        try await ProfileIdentityAPI.request("get_profile_safety", body: ["p_user": userID])
+    }
+    @MainActor static func blockedPlayers() async throws -> [BlockedPlayer] {
+        try await ProfileIdentityAPI.request("my_blocked_profiles")
+    }
+    @MainActor static func block(_ userID: String, blocked: Bool) async throws {
+        let receipt: BlockReceipt = try await ProfileIdentityAPI.request("set_profile_block", body: ["p_user": userID, "p_blocked": blocked])
+        guard receipt.ok, receipt.blocked == blocked else { throw UserBookError.server("This change could not be confirmed. Please retry.") }
+    }
+    @MainActor static func report(_ userID: String, reason: Reason, details: String) async throws -> String {
+        let receipt: ReportReceipt = try await ProfileIdentityAPI.request("report_profile", body: ["p_user": userID, "p_reason": reason.rawValue, "p_details": details.trimmingCharacters(in: .whitespacesAndNewlines)])
+        guard receipt.ok, UUID(uuidString: receipt.report_id) != nil else { throw UserBookError.server("Your report could not be confirmed. Please retry.") }
+        return receipt.report_id
+    }
+}
+
 struct PublicPlayerProfileSheet: View {
     let player: ProfileIdentityAPI.BoardRow
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var auth = AuthManager.shared
     @State private var card: ProfileIdentityAPI.PublicCard?
+    @State private var safety: ProfileSafetyAPI.State?
     @State private var loading = true
+    @State private var error: String?
+    @State private var safetyError: String?
+    @State private var changingBlock = false
+    @State private var showAuth = false
+    @State private var showReport = false
+    @State private var receipt: String?
+    @State private var requestID = UUID()
+    private var queryKey: String { "\(player.id):\(auth.currentUser?.id ?? "guest"):\(auth.isAuthenticated)" }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    if loading { ProgressView().tint(GaryColors.gold).frame(maxWidth: .infinity).padding(40) }
-                    else if let card, let identity = card.profile {
+                    if loading { ProgressView("Loading player profile").tint(GaryColors.gold).frame(maxWidth: .infinity).padding(40) }
+                    else if let error {
+                        ProfileNotice(title: "Profile could not load", message: error, retry: { Task { await load() } })
+                    } else if safety?.blocked == true {
+                        Text("This player is blocked.").font(GaryFonts.display(26)).foregroundStyle(GaryColors.warmWhite)
+                        Text("Their public profile and leaderboard entries are hidden from your signed-in account.").font(GaryFonts.text(14)).foregroundStyle(.white.opacity(0.65))
+                    } else if let card, let identity = card.profile {
                         VStack(spacing: 10) {
                             ProfileAvatar(name: identity.name, symbol: identity.avatar, size: 76)
                             Text("@\(identity.name)").font(GaryFonts.display(30)).foregroundStyle(GaryColors.warmWhite)
@@ -353,19 +412,195 @@ struct PublicPlayerProfileSheet: View {
                         Text("Only picks locked before the game and graded by Gary count here. Personal stakes, notes and self-tracked bets are private.")
                             .font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.5)).fixedSize(horizontal: false, vertical: true)
                     } else {
-                        ProfileNotice(title: "Profile unavailable", message: "This profile may be private, or we couldn't connect. Your place on the board is unchanged.", icon: "person.crop.circle.badge.exclamationmark", retry: { Task { await load() } })
+                        Text("This profile is unavailable.").font(GaryFonts.display(26)).foregroundStyle(GaryColors.warmWhite)
+                        Text("The player may have made it private, or it may no longer be available.").font(GaryFonts.text(14)).foregroundStyle(.white.opacity(0.65))
                     }
+                    if !loading { safetyControls }
                 }.padding(20)
             }.background(Color(hex: "#0F0D0C"))
                 .navigationTitle("Player profile").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.foregroundStyle(GaryColors.gold) } }
-        }.preferredColorScheme(.dark).task(id: player.id) { await load() }
+        }.preferredColorScheme(.dark).task(id: queryKey) { await load() }
+            .onDisappear { requestID = UUID() }
+            .sheet(isPresented: $showAuth) { AuthView() }
+            .sheet(isPresented: $showReport) { ProfileReportSheet(userID: player.user_id) { receipt = $0 } }
     }
 
+    @ViewBuilder private var safetyControls: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if safety?.is_owner == true {
+                if safety?.my_profile_hidden == true {
+                    Text("Your public profile is hidden by our safety controls. Your private Book remains available.").font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.7))
+                    Link("Contact support to appeal", destination: ProfileSafetyAPI.helpURL).tint(GaryColors.gold)
+                }
+            } else if card != nil || safety?.blocked == true {
+                Divider().overlay(Color.white.opacity(0.1))
+                if auth.isAuthenticated {
+                    if let safety {
+                        Button { Task { await toggleBlock() } } label: {
+                            Label(changingBlock ? "Updating block" : safety.blocked ? "Unblock player" : "Block player", systemImage: safety.blocked ? "person.crop.circle.badge.checkmark" : "hand.raised")
+                                .frame(minHeight: 44)
+                        }.disabled(changingBlock).tint(GaryColors.gold)
+                            .accessibilityLabel(safety.blocked ? "Unblock player" : "Block player")
+                        if receipt == nil {
+                            Button { showReport = true } label: { Label("Report profile", systemImage: "flag").frame(minHeight: 44) }
+                                .disabled(changingBlock).tint(GaryColors.gold).accessibilityLabel("Report profile")
+                        }
+                    }
+                    if let receipt { Text("Report received. Reference: \(receipt). Blocking is available separately.").font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.7)).accessibilityAddTraits(.updatesFrequently) }
+                } else {
+                    Button("Sign in to report or block") { showAuth = true }.tint(GaryColors.gold).frame(minHeight: 44)
+                }
+                Text("A block changes what you see, not anyone’s results.").font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.55))
+                Link("Community rules and support", destination: ProfileSafetyAPI.helpURL).font(GaryFonts.text(13)).tint(GaryColors.gold)
+            }
+            if let safetyError {
+                Text(safetyError).font(GaryFonts.text(13)).foregroundStyle(GaryColors.loss)
+                if safety == nil { Button("Retry safety controls") { Task { await load() } }.tint(GaryColors.gold) }
+                Link("Community rules and support", destination: ProfileSafetyAPI.helpURL).font(GaryFonts.text(13)).tint(GaryColors.gold)
+            }
+        }
+    }
     private func load() async {
-        loading = true
-        do { card = try await ProfileIdentityAPI.card(userID: player.user_id) }
-        catch { card = nil }
+        let request = UUID(); requestID = request
+        let owner = auth.currentUser?.id
+        loading = true; error = nil; safetyError = nil; card = nil; safety = nil; receipt = nil; changingBlock = false
+        do {
+            let next = try await ProfileIdentityAPI.card(userID: player.user_id)
+            guard requestID == request, owner == auth.currentUser?.id, !Task.isCancelled else { return }
+            card = next
+        } catch {
+            guard requestID == request, owner == auth.currentUser?.id, !Task.isCancelled else { return }
+            self.error = "This profile could not load. Please retry."
+        }
+        if auth.isAuthenticated {
+            do {
+                let next = try await ProfileSafetyAPI.state(player.user_id)
+                guard requestID == request, owner == auth.currentUser?.id, !Task.isCancelled else { return }
+                safety = next
+            } catch {
+                guard requestID == request, owner == auth.currentUser?.id, !Task.isCancelled else { return }
+                safetyError = error.localizedDescription
+            }
+        }
+        guard requestID == request, owner == auth.currentUser?.id, !Task.isCancelled else { return }
         loading = false
+    }
+    private func toggleBlock() async {
+        guard let safety, !changingBlock else { return }
+        let request = requestID; let owner = auth.currentUser?.id; let blocked = !safety.blocked
+        changingBlock = true; safetyError = nil
+        do {
+            try await ProfileSafetyAPI.block(player.user_id, blocked: blocked)
+            guard requestID == request, owner == auth.currentUser?.id, !Task.isCancelled else { return }
+            self.safety = ProfileSafetyAPI.State(blocked: blocked, is_owner: false, my_profile_hidden: false)
+            if blocked { card = nil; changingBlock = false } else { await load() }
+        } catch {
+            guard requestID == request, owner == auth.currentUser?.id, !Task.isCancelled else { return }
+            safetyError = error.localizedDescription; changingBlock = false
+        }
+    }
+}
+
+struct ProfileReportSheet: View {
+    let userID: String
+    let onSent: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var auth = AuthManager.shared
+    @State private var reason = ProfileSafetyAPI.Reason.harassment
+    @State private var details = ""
+    @State private var sending = false
+    @State private var error: String?
+    @State private var requestID = UUID()
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("What is wrong with this profile?") {
+                    Picker("Reason", selection: $reason) { ForEach(ProfileSafetyAPI.Reason.allCases) { Text($0.label).tag($0) } }
+                    TextField("Details (optional)", text: $details, axis: .vertical).lineLimit(3...6)
+                        .onChange(of: details) { value in if value.count > 1000 { details = String(value.prefix(1000)) } }
+                }.disabled(sending)
+                Section {
+                    Text("Include only what helps us review this public profile. Do not include passwords, payment details or private bet information. Reports are private.")
+                    if let error { Text(error).foregroundStyle(GaryColors.loss) }
+                    Button(sending ? "Sending report…" : "Send report") { Task { await send() } }.disabled(sending || !auth.isAuthenticated)
+                    Link("Community rules and support", destination: ProfileSafetyAPI.helpURL)
+                }
+            }.tint(GaryColors.gold).navigationTitle("Report profile").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(sending) } }
+        }.preferredColorScheme(.dark)
+            .onDisappear { requestID = UUID() }
+            .onChange(of: auth.currentUser?.id) { _ in requestID = UUID(); details = ""; sending = false; error = "Your account changed. Close this report and sign in again." }
+    }
+    private func send() async {
+        guard !sending, auth.isAuthenticated else { return }
+        let request = UUID(); requestID = request; let owner = auth.currentUser?.id
+        sending = true; error = nil
+        do {
+            let receipt = try await ProfileSafetyAPI.report(userID, reason: reason, details: details)
+            guard requestID == request, owner == auth.currentUser?.id, !Task.isCancelled else { return }
+            onSent(receipt); dismiss()
+        } catch {
+            guard requestID == request, owner == auth.currentUser?.id, !Task.isCancelled else { return }
+            self.error = error.localizedDescription; sending = false
+        }
+    }
+}
+
+struct BlockedPlayersSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var auth = AuthManager.shared
+    @State private var players: [ProfileSafetyAPI.BlockedPlayer]?
+    @State private var error: String?
+    @State private var pending: String?
+    @State private var requestID = UUID()
+    var body: some View {
+        NavigationStack {
+            List {
+                if let players {
+                    if players.isEmpty { Text("You have not blocked any players.") }
+                    ForEach(players) { player in
+                        HStack {
+                            Text(player.display_name)
+                            Spacer()
+                            Button(pending == player.id ? "Updating…" : "Unblock") { Task { await unblock(player.id) } }
+                                .disabled(pending != nil).accessibilityLabel("Unblock \(player.display_name)")
+                        }
+                    }
+                } else if error == nil { ProgressView("Loading blocked players") }
+                if let error {
+                    Text(error).foregroundStyle(GaryColors.loss)
+                    if players == nil { Button("Retry") { Task { await load() } } }
+                }
+                Section { Text("Blocking hides a player from your signed-in public profile and leaderboard views. It does not change anyone’s results.") }
+            }.tint(GaryColors.gold).navigationTitle("Blocked players").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.disabled(pending != nil) } }
+        }.preferredColorScheme(.dark).task(id: auth.currentUser?.id) { await load() }
+            .onDisappear { requestID = UUID() }
+    }
+    private func load() async {
+        let request = UUID(); requestID = request; let owner = auth.currentUser?.id
+        players = nil; error = nil; pending = nil
+        do {
+            let next = try await ProfileSafetyAPI.blockedPlayers()
+            guard requestID == request, owner == auth.currentUser?.id, !Task.isCancelled else { return }
+            players = next
+        } catch {
+            guard requestID == request, owner == auth.currentUser?.id, !Task.isCancelled else { return }
+            self.error = error.localizedDescription
+        }
+    }
+    private func unblock(_ id: String) async {
+        guard pending == nil else { return }
+        let request = requestID; let owner = auth.currentUser?.id
+        pending = id; error = nil
+        do {
+            try await ProfileSafetyAPI.block(id, blocked: false)
+            guard requestID == request, owner == auth.currentUser?.id, !Task.isCancelled else { return }
+            players?.removeAll { $0.id == id }; pending = nil
+        } catch {
+            guard requestID == request, owner == auth.currentUser?.id, !Task.isCancelled else { return }
+            self.error = error.localizedDescription; pending = nil
+        }
     }
 }

@@ -16,6 +16,7 @@ struct SettingsView: View {
     @State private var showDeletionComplete = false
     @State private var needsAppleRevocation = false
     @AppStorage(PrivacyPreferences.analyticsKey) private var analyticsAllowed = false
+    @AppStorage(PrivacyPreferences.readingAnalyticsKey) private var readingAnalyticsAllowed = false
     @Environment(\.openURL) private var openURL
     /// Billfold/Home results format — CASH by default (user call, Jun 18) at a
     /// hypothetical $100/bet; off = the units view. Default must match the
@@ -63,7 +64,8 @@ struct SettingsView: View {
                 .padding(.bottom, 100) // Space for floating tab bar
             }
         }
-        .navigationBarHidden(true)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
         .onAppear {
             withAnimation(.easeOut(duration: 0.6)) {
                 animateIn = true
@@ -186,7 +188,7 @@ struct SettingsView: View {
         // history ("Sportsbook Odds Comparison", "live betting lines") — the
         // whole surface rides the flag rather than scrubbing 30 versions.
         if !AppFlags.storeSafe {
-        NavigationLink(destination: ChangelogView()) {
+        NavigationLink(destination: ChangelogView().navigationBarBackButtonHidden(true)) {
             SettingsRowLabel(title: "What's New", icon: "sparkles", trailingIcon: "chevron.right")
         }
         Divider()
@@ -327,6 +329,14 @@ struct SettingsView: View {
                 .font(GaryFonts.text(15))
                 .tint(GaryColors.gold)
             Text("Help improve Gary by sharing which plans and checkout steps you use. Signed-in events use your account ID; signed-out events have no persistent identifier. No bet notes or payment-card details. Off by default; turn it off here any time. Essential account, billing and notification services still work.")
+                .font(GaryFonts.text(12))
+                .foregroundStyle(.white.opacity(0.65))
+                .fixedSize(horizontal: false, vertical: true)
+            Divider().padding(.vertical, 8)
+            Toggle("Share reading analytics", isOn: $readingAnalyticsAllowed)
+                .font(GaryFonts.text(15))
+                .tint(GaryColors.gold)
+            Text("Help us see whether a visit includes reading Gary’s reasoning. Counts app sessions and expanded pick or prop reasoning visible for five seconds. Uses a temporary session ID held only while the app runs; no account or notification ID, pick details, bet data or reasoning text. Separate from checkout analytics. Off by default; turn it off any time.")
                 .font(GaryFonts.text(12))
                 .foregroundStyle(.white.opacity(0.65))
                 .fixedSize(horizontal: false, vertical: true)

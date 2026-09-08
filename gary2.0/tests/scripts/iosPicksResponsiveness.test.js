@@ -22,12 +22,72 @@ function runSwift(body) {
     const file = join(directory, 'Fixture.swift');
     const binary = join(directory, 'fixture');
     writeFileSync(file, body);
-    execFileSync('swiftc', ['-swift-version', '5', '-parse-as-library', file, '-o', binary], { encoding: 'utf8', timeout: 45_000 });
+    execFileSync('swiftc', ['-O', '-swift-version', '5', '-parse-as-library', '-Xfrontend', '-enable-actor-data-race-checks', file, '-o', binary], { encoding: 'utf8', timeout: 45_000 });
     return execFileSync(binary, [], { encoding: 'utf8', timeout: 15_000 });
   } finally { rmSync(directory, { recursive: true, force: true }); }
 }
 
 describe('Picks accepted-content loading', () => {
+  it.skipIf(!hasSwift)('labels the accepted slate across midnight, 6 AM refreshes, time zones and DST', () => {
+    const picks = source('PicksTab.swift'), api = source('SupabaseAPI.swift');
+    expect(block(picks, '    private var dayBlock:')).toContain(
+      'Self.slateDayLabel(loadedDate: store.loadedDate, yesterday: pickDay == .yesterday)',
+    );
+    const rollover = api.match(/static let slateRolloverHourET = \d+/)?.[0];
+    expect(rollover).toBeTruthy();
+    expect(runSwift(`import Foundation
+enum SupabaseAPI {
+ ${rollover}
+ ${block(api, '    static func todayEST(')}
+ ${block(api, '    private static func formatDateEST(')}
+}
+enum Label {
+ ${block(picks, '    private static func slateDayLabel(').replace('private static', 'static')}
+}
+@main struct Fixture {
+ static func main() {
+  let originalTimeZone = NSTimeZone.default
+  defer { NSTimeZone.default = originalTimeZone }
+  let iso = ISO8601DateFormatter()
+  func label(_ loaded: String, _ yesterday: Bool, _ instant: String) -> String {
+   Label.slateDayLabel(loadedDate: loaded, yesterday: yesterday, now: iso.date(from: instant)!)
+  }
+  for zone in ["America/Los_Angeles", "Asia/Tokyo", "Pacific/Kiritimati"] {
+   NSTimeZone.default = TimeZone(identifier: zone)!
+   precondition(label("2026-09-07", false, "2026-09-08T04:58:00Z") == "SEP 7",
+    "At 00:58 ET the accepted Sep 7 slate must say Sep 7")
+   precondition(label("2026-09-07", true, "2026-09-08T04:58:00Z") == "SEP 6")
+   precondition(label("", false, "2026-09-08T04:58:00Z") == "SEP 7")
+   precondition(label("", true, "2026-09-08T04:58:00Z") == "SEP 6")
+   precondition(label("", false, "2026-09-08T09:59:59Z") == "SEP 7")
+   precondition(label("", false, "2026-09-08T10:00:00Z") == "SEP 8")
+   precondition(label("2026-09-07", false, "2026-09-08T10:00:00Z") == "SEP 7",
+    "The 6 AM clock change cannot relabel retained content during refresh")
+   precondition(label("2026-09-07", true, "2026-09-08T10:00:00Z") == "SEP 6")
+   precondition(label("2026-09-08", false, "2026-09-08T10:00:01Z") == "SEP 8")
+   precondition(label("2026-09-08", true, "2026-09-08T10:00:01Z") == "SEP 7")
+   precondition(label("bad-date", false, "2026-09-08T04:58:00Z") == "SEP 7")
+   precondition(label("2026-02-30", false, "2026-09-08T04:58:00Z") == "SEP 7")
+   precondition(label("", false, "2026-03-08T05:30:00Z") == "MAR 7")
+   precondition(label("", false, "2026-03-08T09:59:59Z") == "MAR 7")
+   precondition(label("", false, "2026-03-08T10:00:00Z") == "MAR 8")
+   precondition(label("2026-03-09", true, "2026-03-09T10:00:00Z") == "MAR 8",
+    "Yesterday is an Eastern calendar day across the 23-hour spring transition")
+   for repeatedHour in ["2026-11-01T04:30:00Z", "2026-11-01T05:30:00Z", "2026-11-01T06:30:00Z", "2026-11-01T10:59:59Z"] {
+    precondition(label("", false, repeatedHour) == "OCT 31")
+    precondition(label("", true, repeatedHour) == "OCT 30")
+   }
+   precondition(label("", false, "2026-11-01T11:00:00Z") == "NOV 1")
+   precondition(label("2026-11-02", true, "2026-11-02T11:00:00Z") == "NOV 1")
+   precondition(label("2028-03-01", true, "2028-03-01T11:00:00Z") == "FEB 29")
+   precondition(label("2027-01-01", true, "2027-01-01T11:00:00Z") == "DEC 31")
+  }
+  print("Accepted slate date-label assertions passed")
+ }
+}
+`)).toContain('Accepted slate date-label assertions passed');
+  }, 60_000);
+
   it.skipIf(!hasSwift)('executes the shipping store with suspended sources, unchanged refreshes, same-count edits, failures and rollovers', () => {
     const store = source('SharedStores.swift');
     const home = source('HomeView.swift');
@@ -226,6 +286,7 @@ struct Store { var contentRevision: UInt64 = 0 }
 final class Reader {
  var store = Store(); var connectionRevision: UInt64 = 0
  var sport = "MLB"; var pickDay = "today"; var ncaafConference = "RANKED"
+ var notificationFocusGameID: Int?
  var memoSignature: String?; var rebuilds = 0
  ${digest}
  func rebuildMemo() { ${guardBody}\n rebuilds += 1 }
@@ -239,6 +300,14 @@ final class Reader {
  reader.pickDay = "yesterday"; reader.rebuildMemo(); precondition(reader.rebuilds == 5)
  reader.ncaafConference = "SEC"; reader.rebuildMemo(); precondition(reader.rebuilds == 6)
  reader.rebuildMemo(); precondition(reader.rebuilds == 6)
+ reader.notificationFocusGameID = 41; reader.rebuildMemo(); precondition(reader.rebuilds == 7,
+  "A newly pinned notification target must rebuild the visible game set")
+ reader.notificationFocusGameID = 41; reader.rebuildMemo(); precondition(reader.rebuilds == 7,
+  "An unchanged notification target must preserve the memo")
+ reader.notificationFocusGameID = 42; reader.rebuildMemo(); precondition(reader.rebuilds == 8)
+ reader.notificationFocusGameID = nil; reader.rebuildMemo(); precondition(reader.rebuilds == 9,
+  "Clearing notification focus must rebuild the ordinary filtered game set")
+ reader.rebuildMemo(); precondition(reader.rebuilds == 9)
  print("Memo assertions passed")
 } }
 `)).toContain('Memo assertions passed');

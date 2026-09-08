@@ -1496,7 +1496,7 @@ enum SupabaseAPI {
     }
 
     /// Optional first-party events. Off until explicitly enabled in Settings;
-    /// only allowlisted plan properties are sent, with no signed-out identifier.
+    /// only allowlisted properties are sent. Reading uses a separate explicit grant.
     static func logEvent(_ event: String, _ props: [String: Any] = [:]) {
         guard let payload = PrivacyPreferences.eventPayload(event, props: props,
                     accountID: UserDefaults.standard.string(forKey: "gary_user_id")),
@@ -1510,7 +1510,7 @@ enum SupabaseAPI {
         req.httpBody = body
         Task.detached {
             // A preference change before this task starts must stop the send.
-            guard UserDefaults.standard.bool(forKey: PrivacyPreferences.analyticsKey) else { return }
+            guard PrivacyPreferences.isEventAllowed(event) else { return }
             _ = try? await URLSession.shared.data(for: req)
         }
     }
@@ -1608,22 +1608,25 @@ enum SupabaseAPI {
         }
     }
 
-    /// The per-game MLB field lineup (real players + positions + opposing starter),
-    /// built daily by run-mlb-field-lineups.js into mlb_field_lineups. Matched by the
-    /// home team's BDL abbreviation. Returns nil before lineups post (~2-3h pre-game).
-    static func fetchMlbFieldLineup(date: String, homeTeam: String) async -> MLBFieldLineupRow? {
+    /// Read exactly one stored provider game/date. A missing or mismatched
+    /// identity leaves the field empty instead of borrowing a sibling lineup.
+    static func fetchMlbFieldLineup(date: String?, gameID: Int?) async -> MLBFieldLineupRow? {
+        guard let identity = ExactGameIdentity(date: date, gameID: gameID) else { return nil }
         let url = buildURL(table: "mlb_field_lineups", query: [
-            URLQueryItem(name: "select", value: "game,home_team,away_team,status,payload"),
-            URLQueryItem(name: "date", value: "eq.\(date)"),
-            URLQueryItem(name: "home_team", value: "eq.\(homeTeam)")
+            URLQueryItem(name: "select", value: "date,game_id,game,home_team,away_team,status,payload"),
+            URLQueryItem(name: "date", value: "eq.\(identity.date)"),
+            URLQueryItem(name: "game_id", value: "eq.\(identity.gameID)"),
+            URLQueryItem(name: "limit", value: "2")
         ])
         guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let rows = try? JSONDecoder().decode([MLBFieldLineupRow].self, from: data) else { return nil }
-        return rows.first
+              let rows = try? JSONDecoder().decode([MLBFieldLineupRow].self, from: data),
+              rows.count == 1, let row = rows.first,
+              row.date == identity.date, row.game_id?.value == identity.gameID else { return nil }
+        return row
     }
 
-    struct MLBFieldLineupRow: Decodable { let game: String?; let home_team: String?; let away_team: String?; let status: String?; let payload: MLBFieldPayload }
+    struct MLBFieldLineupRow: Decodable { let date: String?; let game_id: StoredProviderGameID?; let game: String?; let home_team: String?; let away_team: String?; let status: String?; let payload: MLBFieldPayload }
     struct MLBFieldPayload: Decodable { let home: MLBTeamLineup?; let away: MLBTeamLineup? }
     struct MLBTeamLineup: Decodable {
         let team: String?; let pitcher: MLBLineupPitcher?; let facingPitcher: MLBLineupPitcher?; let fielders: [MLBLineupFielder]
@@ -2071,6 +2074,10 @@ enum SupabaseAPI {
         }
 
         for index in rows.indices {
+            if let gameID = try ExactGameIdentity.canonicalProviderID(in: rows[index]) {
+                rows[index]["game_id"] = gameID
+            }
+            rows[index].removeValue(forKey: "bdl_game_id")
             for key in ["spread", "moneylineHome", "moneylineAway"] {
                 if let text = rows[index][key] as? String,
                    let value = Double(text.trimmingCharacters(in: .whitespacesAndNewlines)) {

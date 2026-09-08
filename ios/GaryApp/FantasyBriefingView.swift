@@ -224,7 +224,7 @@ struct FantasyBriefingPage: View {
             }
         } else {
             notice(failed ? "Gary’s briefing couldn’t be loaded. Try checking again."
-                : briefing == nil ? "The next briefing hasn’t arrived yet. Check again shortly."
+                : briefing == nil ? "No briefing is available for this slate. You can check for an update."
                 : "The evidence window has passed. Check for a refreshed briefing before making a move.", retry: true)
         }
     }

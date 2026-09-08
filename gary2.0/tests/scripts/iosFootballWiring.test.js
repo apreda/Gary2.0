@@ -397,8 +397,8 @@ describe('Football Picks overview', () => {
       views.indexOf('struct MiniBarChart: View'),
     );
 
-    expect(home).toContain('let previousTodayPicks = todayPicks');
-    expect(home).toContain('let previousYesterdayPicks = [yesterdayTopPick].compactMap { $0 }');
+    expect(home).toContain('let previousTodayPicks = sameSlate ? todayPicks : []');
+    expect(home).toContain('let previousYesterdayPicks = sameSlate ? [yesterdayTopPick].compactMap { $0 } : []');
     expect(home).toContain('let pickSnapshot = await picksFetch');
     expect(home).toContain('retaining: previousTodayPicks');
     expect(home).toContain('let previousPicks = todayPicks');
@@ -546,6 +546,7 @@ struct Store {
 }
 final class FocusState {
  var focusGame: String?; var focusLeague: String?; var focusGameID: Int?
+ var focusDate: String?; var focusRefresh = false; var focusRequestID = UUID()
  ${swiftBlock(contentView, 'func focus(game:')}
  ${swiftBlock(contentView, 'func clearGameFocus()')}
 }
@@ -555,6 +556,8 @@ final class Router {
  var focusState = FocusState(); var store = Store(); var pickDay = PickDay.today
  var sport = "MLB"; var sportAutoSelected = true; var sports = ["MLB", "NFL", "NCAAF"]
  var games: [Game] = []; var page = 0
+ func preparePushFocusIfNeeded() -> Bool { true }
+ func reportMissingPushFocus() {}
  ${functions}
  func consume() { consumeFocus() }
 }

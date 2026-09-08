@@ -1100,6 +1100,7 @@ struct ActivityShareSheet: UIViewControllerRepresentable {
 struct GaryTakeCardBack<Tail: View>: View {
     let flipped: Bool
     let takeText: String?
+    let readingTarget: ReadingContentTarget?
     let shareAccessibilityLabel: String
     let shareImages: () -> [UIImage]
     let tail: Tail
@@ -1110,11 +1111,13 @@ struct GaryTakeCardBack<Tail: View>: View {
 
     init(flipped: Bool,
          takeText: String?,
+         readingTarget: ReadingContentTarget? = nil,
          shareAccessibilityLabel: String,
          shareImages: @escaping () -> [UIImage],
          @ViewBuilder tail: () -> Tail) {
         self.flipped = flipped
         self.takeText = takeText
+        self.readingTarget = readingTarget
         self.shareAccessibilityLabel = shareAccessibilityLabel
         self.shareImages = shareImages
         self.tail = tail()
@@ -1179,7 +1182,9 @@ struct GaryTakeCardBack<Tail: View>: View {
                                 .font(GaryFonts.text(14.5))
                                 .foregroundStyle(.white.opacity(0.88))
                                 .lineSpacing(3.5)
+                                .fixedSize(horizontal: false, vertical: true)
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                                .measureOriginalReasoning(readingTarget, presented: flipped && shareItem == nil)
                         } else {
                             ZStack(alignment: .bottom) {
                                 // Paragraph breaks flatten to one space in the
@@ -1206,7 +1211,9 @@ struct GaryTakeCardBack<Tail: View>: View {
                     }
                     .overlay(alignment: .bottomTrailing) {
                         Button {
-                            withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { caseExpanded.toggle() }
+                            // Keep the rail's horizontal geometry stable while a
+                            // long take changes the surrounding page's height.
+                            caseExpanded.toggle()
                         } label: {
                             Image(systemName: caseExpanded ? "chevron.up" : "chevron.down")
                                 .font(.system(size: 11, weight: .bold))
@@ -1264,6 +1271,7 @@ struct PickCardBack: View {
     var body: some View {
         GaryTakeCardBack(flipped: flipped,
                          takeText: takeText,
+                         readingTarget: ReadingContentTarget(key: "game:\(pick.id)", surface: .gameCard),
                          shareAccessibilityLabel: "Share this pick",
                          shareImages: { renderPickShareImages(pick: pick, gameResult: gameResult) }) {
             if AppFlags.userBookEnabled { TailFadeRow(pick: pick) }

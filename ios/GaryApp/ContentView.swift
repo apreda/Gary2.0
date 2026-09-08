@@ -47,21 +47,30 @@ class PicksFocusState: ObservableObject {
     @Published var focusGame: String? = nil
     @Published var focusLeague: String? = nil
     @Published var focusGameID: Int? = nil
+    @Published var focusDate: String? = nil
+    @Published var focusRefresh = false
+    @Published var focusRequestID = UUID()
     /// Deep-link from Home's LIVE FORM tap → jump the Winners board to this sport's shelf.
     @Published var focusSport: String? = nil
 
     /// Set the matchup last so observers consume the complete typed target in
     /// one pass. Legacy Hub links can omit league/id; Home always supplies both.
-    func focus(game: String, league: String? = nil, gameID: Int? = nil) {
+    func focus(game: String, league: String? = nil, gameID: Int? = nil,
+               date: String? = nil, refresh: Bool = false) {
         focusLeague = league?.uppercased()
         focusGameID = gameID
+        focusDate = date
+        focusRefresh = refresh
         focusGame = game
+        focusRequestID = UUID()
     }
 
     func clearGameFocus() {
         focusGame = nil
         focusLeague = nil
         focusGameID = nil
+        focusDate = nil
+        focusRefresh = false
     }
 }
 
@@ -84,6 +93,7 @@ struct ContentView: View {
     @State private var showingGaryIntro = false
     @StateObject private var pickDetailState = PickDetailState.shared
     @State private var loadedTabs: Set<Int> = []
+    @State private var pushShellReady = false
 
     private let garyTabIndex: Int = 2
     private let billfoldTabIndex: Int = 4
@@ -93,6 +103,7 @@ struct ContentView: View {
     private func tabPage<Content: View>(_ index: Int, @ViewBuilder content: () -> Content) -> some View {
         if loadedTabs.contains(index) || selectedTab == index {
             content()
+                .environment(\.readingPageActive, selectedTab == index)
                 .opacity(selectedTab == index ? 1 : 0)
                 .allowsHitTesting(selectedTab == index)
                 .accessibilityHidden(selectedTab != index)
@@ -101,36 +112,39 @@ struct ContentView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            ZStack(alignment: .topTrailing) {
+        GeometryReader { geometry in
+            ZStack(alignment: .bottom) {
                 ZStack(alignment: .topTrailing) {
-                    tabPage(0) { HomeView(selectedTab: $selectedTab) }
-                    tabPage(1) { PremiumPicksView() }
-                    tabPage(2) { GaryPage(selectedTab: $selectedTab) }   // Hub ⟷ Talk to Gary
-                    tabPage(3) { PicksCarouselView() }                   // "Picks" — per-game swipe carousel
-                    tabPage(4) { BillfoldView() }
-                }
-                .transaction { transaction in
-                    if !PerformanceMode.current.useExpensiveEffects {
-                        transaction.animation = nil
+                    ZStack(alignment: .topTrailing) {
+                        tabPage(0) { HomeView(selectedTab: $selectedTab) }
+                        tabPage(1) { PremiumPicksView() }
+                        tabPage(2) { GaryPage(selectedTab: $selectedTab) }   // Hub ⟷ Talk to Gary
+                        tabPage(3) { PicksCarouselView() }                   // "Picks" — per-game swipe carousel
+                        tabPage(4) { BillfoldView() }
                     }
+                    .transaction { transaction in
+                        if !PerformanceMode.current.useExpensiveEffects {
+                            transaction.animation = nil
+                        }
+                    }
+
+                    // Settings now lives in every page header's three-dot button
+                    // (GaryPageHeader / Billfold post ShowSettingsMenu).
                 }
+                // Always fill the screen so the bottom-aligned tab bar can't ride up
+                // to the middle when the active page momentarily collapses (a bare
+                // loading/empty state) — the "nav bar stuck in the middle" glitch.
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                // Settings now lives in every page header's three-dot button
-                // (GaryPageHeader / Billfold post ShowSettingsMenu).
+                // Tab bar — the fade dock (founder pick, mock 34).
+                GaryCenteredTabBar(selectedTab: $selectedTab,
+                                   bottomSafeAreaInset: geometry.safeAreaInsets.bottom)
+
+                // League Words (founder pick, mock 64) — the full-screen
+                // typographic league switcher. Mounted HERE so it dims the whole
+                // screen, dock included, exactly as the mock drew it.
+                LeagueWordsOverlay()
             }
-            // Always fill the screen so the bottom-aligned tab bar can't ride up
-            // to the middle when the active page momentarily collapses (a bare
-            // loading/empty state) — the "nav bar stuck in the middle" glitch.
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            // Tab bar — the fade dock (founder pick, mock 34).
-            GaryCenteredTabBar(selectedTab: $selectedTab)
-
-            // League Words (founder pick, mock 64) — the full-screen
-            // typographic league switcher. Mounted HERE so it dims the whole
-            // screen, dock included, exactly as the mock drew it.
-            LeagueWordsOverlay()
         }
         // The root chrome NEVER rides the keyboard (founder bug, Aug 6: come
         // back from the Google auth sheet — whose passcode prompt had raised
@@ -141,6 +155,7 @@ struct ContentView: View {
         // harmless. Text entry in the app lives in sheets, which handle
         // their own avoidance, and the Hub search field is top-anchored.
         .ignoresSafeArea(.keyboard)
+        .modifier(ReadingMeasurementLifecycle())
         .sheet(isPresented: $showingSettings) {
             SettingsSheetView()
                 .environmentObject(authManager)
@@ -174,6 +189,7 @@ struct ContentView: View {
             if selectedTab < 0 || selectedTab > lastValidTabIndex { selectedTab = 0 }
             loadedTabs.insert(selectedTab)
             maybeShowGaryIntro(for: selectedTab)
+            pushShellReady = true
             // Prepare the regular content tabs one at a time after the first
             // frame. Their existing view state then stays alive, so a first tap
             // does not land on a blank loading page. Billfold is excluded here:
@@ -225,6 +241,11 @@ struct ContentView: View {
                 await BillfoldSnapshotStore.shared.prewarmIfNeeded()
             }
         }
+        .modifier(GaryPushNavigationModifier(selectedTab: $selectedTab,
+            hasSeenIntro: $hasSeenGaryIntro, showingIntro: $showingGaryIntro,
+            shellReady: pushShellReady,
+            rootModalPresented: showingSettings || showingProfile || pickDetailState.isShowing,
+            openProfile: { showingProfile = true }))
     }
 
     /// One-time intro: shown the first time the user lands on a picks page
@@ -410,13 +431,8 @@ struct SettingsSheetView: View {
             SettingsView()
                 .toolbar {
                     ToolbarItem(placement: .navigationBarTrailing) {
-                        Button {
-                            dismiss()
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 24))
-                                .foregroundStyle(.secondary)
-                        }
+                        Button("Done") { dismiss() }
+                            .accessibilityLabel("Close Settings")
                     }
                 }
         }
@@ -432,8 +448,17 @@ struct SettingsSheetView: View {
 // 46pt, labeled THE HUB. The dome (mock 01) and the split-waist bar (the
 // pseudo-separation experiment) both retired with this; their shapes were
 // deleted, not flagged off, per the founder's decisive pick.
+enum GaryDockLayout {
+    /// Keep at least 8pt between the labels and the physical screen edge.
+    /// Home-indicator devices retain the existing 6pt safe-area overlap.
+    static func bottomPadding(safeAreaInset: CGFloat) -> CGFloat {
+        max(-6, 8 - max(0, safeAreaInset))
+    }
+}
+
 struct GaryCenteredTabBar: View {
     @Binding var selectedTab: Int
+    let bottomSafeAreaInset: CGFloat
 
     private struct TabItem { let icon: String; let label: String; let index: Int }
     private let leftTabs: [TabItem] = [
@@ -457,13 +482,10 @@ struct GaryCenteredTabBar: View {
         }
         .padding(.horizontal, 14)
         .padding(.top, 30)
-        // SEATED LOW (founder, Aug 4: "we can lower it still a bit"). The dock
-        // dips 6pt INTO the bottom safe area, so the labels finish ~28pt off
-        // the physical edge — still ~15pt clear of the home indicator's swipe
-        // zone, which is the floor this can't cross without stealing that
-        // gesture. Any lower and a Billfold tap starts competing with a
-        // swipe-up-to-close.
-        .padding(.bottom, -6)
+        // The SE has no bottom safe inset: an unconditional negative padding
+        // clips its labels below the display. Use the current container inset
+        // while preserving the low dock on home-indicator phones.
+        .padding(.bottom, GaryDockLayout.bottomPadding(safeAreaInset: bottomSafeAreaInset))
         .background(alignment: .bottom) {
             // The fade IS the bar: page ink rising from the bottom edge, so
             // content scrolls visibly underneath and dissolves into the dock.

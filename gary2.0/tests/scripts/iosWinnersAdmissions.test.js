@@ -9,6 +9,7 @@ const view = readFileSync(new URL('../../../ios/GaryApp/WinnersView.swift', impo
 const home = readFileSync(new URL('../../../ios/GaryApp/HomeView.swift', import.meta.url), 'utf8');
 const access = readFileSync(new URL('../../../ios/GaryApp/WinnersAccess.swift', import.meta.url), 'utf8');
 const profile = readFileSync(new URL('../../../ios/GaryApp/ProfileExperience.swift', import.meta.url), 'utf8');
+const models = readFileSync(new URL('../../../ios/GaryApp/Models.swift', import.meta.url), 'utf8');
 
 function body(source, start) {
   const first = source.indexOf(start);
@@ -60,6 +61,7 @@ describe('iOS immutable Winners admission contract', () => {
     expect(accessAssignment).toBeTruthy();
     const script = `import Foundation
 import CoreFoundation
+${body(models, 'struct ExactGameIdentity')}
 ${body(access, 'struct WinnersSubscription')}
 ${body(access, 'struct WinnersAccessSnapshot')}
 enum AppFlags { static func hidesWorldCupRow(_ league: String?) -> Bool { false } }

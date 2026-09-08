@@ -261,6 +261,8 @@ func mergeGamePickSnapshot(
 }
 
 struct HomeView: View {
+    @ObservedObject private var homeAuth = AuthManager.shared
+    private var homeTaskID: String { "\(homeNonce)|\(homeAuth.currentUser?.id ?? "guest")" }
     /// Use the root tab selection directly. A second `@AppStorage` wrapper could
     /// briefly report Home as selected while the root was already restoring a
     /// different tab, consuming the first-open recap offscreen.
@@ -363,11 +365,14 @@ struct HomeView: View {
     /// Identifies the keyed full load currently running. The nonce makes the
     /// cancellation defer safe if a newer load starts before the old one exits.
     @State private var fullHomeRefreshNonce: Int? = nil
+    @State private var fullHomeRefreshID = UUID()
+    @State private var fullHomeRefreshDate: String? = nil
     @State private var yesterdayTopPickResult: String? = nil
     @State private var yesterdayTopProp: PropPick? = nil
     @State private var yesterdayTopPropResult: String? = nil
     // Front-page modules
     @State private var marquee: HomeMarqueeHero.Story? = nil
+    @State private var marqueeRequestID = UUID()
     @State private var cachedHeadlines: [HomeMarqueeHero.Story]? = nil   // instant cold-open paint
     @State private var cashRows: [HomeCashesSection.Row] = []
     @State private var worstBeat: HomeCashesSection.Row? = nil
@@ -396,7 +401,15 @@ struct HomeView: View {
     @ObservedObject private var liveCache = LiveScoreCache.shared
     /// The signed-in user's bets for TODAY — feeds the board's YOU tab
     /// (founder, Aug 20). Loaded with the home refresh; empty when signed out.
-    @State private var myTodayBets: [UserBet] = []
+    @State private var myTodayBetsRows: [UserBet] = []
+    @State private var myTodayBetsAccountID: String? = nil
+    @State private var myTodayBetsDate = ""
+    @State private var myBetsRefreshID = UUID()
+    private var myTodayBets: [UserBet] {
+        guard myTodayBetsAccountID == homeAuth.currentUser?.id,
+              myTodayBetsDate == SupabaseAPI.todayEST() else { return [] }
+        return myTodayBetsRows
+    }
 
     /// Time-aware front page: results lead in the morning, the slate leads
     /// pre-game, the tape + takeover lead while Gary's games are in progress.
@@ -561,25 +574,39 @@ struct HomeView: View {
                 selectedHomeBoardLeague = league
             }
         }
-        .task(id: homeNonce) {
+        .task(id: homeTaskID) {
             // The board's YOU tab: today's tails/fades (founder, Aug 20) — its
             // own load so EVERY home refresh path carries it. Signed-out =
             // empty = no tab. Day-cache law: never latch a cancelled empty
             // fetch over rows already showing.
-            if AppFlags.userBookEnabled, AuthManager.shared.bearerToken != nil {
-                let today = SupabaseAPI.todayEST()
-                let mine = (await UserBookAPI.fetchMyBets() ?? []).filter { $0.game_date == today }
-                if !mine.isEmpty || myTodayBets.isEmpty { myTodayBets = mine }
-            } else {
-                myTodayBets = []
-            }
+            await refreshMyTodayBets()
         }
-        .task(id: homeNonce) {
+        .task(id: homeTaskID) {
+            guard !Task.isCancelled else { return }
             let taskNonce = homeNonce
+            let date = SupabaseAPI.todayEST()
+            let accountID = homeAuth.currentUser?.id
+            let requestID = UUID()
+            fullHomeRefreshID = requestID
             fullHomeRefreshNonce = taskNonce
+            fullHomeRefreshDate = date
+            func canPublish() -> Bool {
+                fullHomeRefreshID == requestID
+                    && isCurrentHomeRequest(nonce: taskNonce, date: date, accountID: accountID)
+            }
             defer {
-                if fullHomeRefreshNonce == taskNonce { fullHomeRefreshNonce = nil }
-                if !Task.isCancelled { hasCompletedInitialHomeLoad = true }
+                if canPublish() { hasCompletedInitialHomeLoad = true }
+                if fullHomeRefreshID == requestID {
+                    fullHomeRefreshNonce = nil
+                    fullHomeRefreshDate = nil
+                    // A first-ever load can cross 6 a.m. before any slate exists.
+                    // The owner alone restarts it; the timer cannot use an empty
+                    // loadedSlateDate, and an obsolete defer must never restart.
+                    if !Task.isCancelled, homeNonce == taskNonce,
+                       accountID == homeAuth.currentUser?.id, date != SupabaseAPI.todayEST() {
+                        homeNonce &+= 1
+                    }
+                }
             }
             // Existing content stays painted during a silent reload. The loading
             // placeholder is only for a true first load with nothing to show.
@@ -602,14 +629,15 @@ struct HomeView: View {
                     // PARALLEL FETCH: Run all independent API calls simultaneously
                     // This reduces load time from ~600ms to ~200ms
 
-                    let date = SupabaseAPI.todayEST()
+                    guard canPublish() else { return }
                     // Pull-to-refresh bumps homeNonce (starts at 0 = first load). On a pull we
                     // MUST bypass the per-date cache, or the refresh just re-reads stale data
                     // (this is the "pull-to-refresh shows no new picks/props" bug). Matches the
                     // Picks/Props tabs, which already pass forceRefresh: true on their .refreshable.
-                    let forceFresh = homeNonce > 0
-                    let previousTodayPicks = todayPicks
-                    let previousYesterdayPicks = [yesterdayTopPick].compactMap { $0 }
+                    let forceFresh = taskNonce > 0
+                    let sameSlate = loadedSlateDate == date
+                    let previousTodayPicks = sameSlate ? todayPicks : []
+                    let previousYesterdayPicks = sameSlate ? [yesterdayTopPick].compactMap { $0 } : []
 
                     // Start all fetches in parallel using async let
                     async let recordFetch = SupabaseAPI.fetchYesterdayGameRecord()
@@ -638,7 +666,7 @@ struct HomeView: View {
                     // writes a zeroed row at the start of the slate and re-upserts it
                     // as today's games go FINAL, so the strip shows today's counts
                     // (0 before any final, climbing as they grade), not yesterday's.
-                    async let pulseFetch = SupabaseAPI.fetchMarketPulse(date: SupabaseAPI.todayEST())
+                    async let pulseFetch = SupabaseAPI.fetchMarketPulse(date: date)
                     // The late-page sections' fetches join the SAME wave (Jul 22
                     // perf: they used to start only after everything above them
                     // finished — the tail of every cold open).
@@ -659,30 +687,38 @@ struct HomeView: View {
                     }
 
                     if let record = try? await recordFetch {
+                        guard canPublish() else { return }
                         yesterdayRecord = record
                     }
 
                     // Get the other results (already fetched in parallel, just awaiting)
                     if let breakdown = try? await breakdownFetch {
+                        guard canPublish() else { return }
                         sportBreakdown = breakdown
                     }
-                    sevenDayForm = (try? await formFetch) ?? []
+                    let fetchedForm = (try? await formFetch) ?? []
+                    guard canPublish() else { return }
+                    sevenDayForm = fetchedForm
 
                     let recentGameResults: [GameResult]
                     do {
                         let fresh = try await gameResultsFetch
+                        guard canPublish() else { return }
                         recentGameResultsLastGood = fresh
                         recentGameResults = fresh
                     } catch {
+                        guard canPublish() else { return }
                         recentGameResults = SupabaseAPI.isTransientExternalFailure(error)
                             ? recentGameResultsLastGood : []
                     }
                     let recentPropResults: [PropResult]
                     do {
                         let fresh = try await propResultsFetch
+                        guard canPublish() else { return }
                         recentPropResultsLastGood = fresh
                         recentPropResults = fresh
                     } catch {
+                        guard canPublish() else { return }
                         recentPropResults = SupabaseAPI.isTransientExternalFailure(error)
                             ? recentPropResultsLastGood : []
                     }
@@ -732,6 +768,8 @@ struct HomeView: View {
                     let night = Self.buildLastNight(games: recentGameResults,
                                                     props: recentPropResults.filter { !$0.isHRResult })
                     marquee = night.story
+                    let storyRequestID = UUID()
+                    marqueeRequestID = storyRequestID
                     // The flip side (the pick Gary CALLED + the fact check) rides
                     // OFF the critical path — two round trips that only feed the
                     // marquee's back face update it when they land (Jul 22 perf:
@@ -740,6 +778,7 @@ struct HomeView: View {
                         Task { @MainActor in
                             var s = story
                             if let nightPicks = try? await SupabaseAPI.fetchDailyPicks(date: nightDate) {
+                                guard canPublish() else { return }
                                 let hay = (mg.matchup ?? "").lowercased()
                                 if let match = nightPicks.first(where: { p in
                                     let h = Formatters.shortTeamName(p.homeTeam, league: p.league).lowercased()
@@ -754,6 +793,7 @@ struct HomeView: View {
                             if let fc = await SupabaseAPI.fetchFactCheck(date: nightDate, matchup: mg.matchup ?? "") {
                                 s.claims = (fc.claims ?? []).filter { $0.verdict == "right" || $0.verdict == "wrong" }
                             }
+                            guard canPublish(), marqueeRequestID == storyRequestID else { return }
                             marquee = s
                         }
                     }
@@ -769,10 +809,11 @@ struct HomeView: View {
                     // at 0–0 and building as games grade — and holds the prior
                     // night's final numbers only until that first pitch.
                     let slateRowsResolved = await slateF
+                    guard canPublish() else { return }
                     let cycleStarted = slateRowsResolved.contains {
                         parseISO8601($0.commence_time ?? "").map { $0 <= Date() } ?? false
                     }
-                    let cycleDayRows = recentGameResults.filter { $0.game_date == SupabaseAPI.todayEST() }
+                    let cycleDayRows = recentGameResults.filter { $0.game_date == date }
 
                     // THE BOARD COMMITS THE MOMENT ITS DATA EXISTS (founder,
                     // Aug 24: "that same board seems not to load right away
@@ -786,6 +827,20 @@ struct HomeView: View {
                         $0.game_date == date && ["won", "lost", "push"].contains(($0.result ?? "").lowercased())
                     }
                     slateGames = slateRowsResolved
+                    if !sameSlate {
+                        // Old fallback slots belong to the old board. Clear them
+                        // as the new slate commits, before slower pick desks land.
+                        todayPicks = []
+                        picksByGameId = [:]
+                        playsOnBoard = 0
+                        freePick = nil
+                        freeProp = nil
+                        yesterdayTopPick = nil
+                        yesterdayTopPickResult = nil
+                        yesterdayTopPickScore = nil
+                        yesterdayTopProp = nil
+                        yesterdayTopPropResult = nil
+                    }
                     loadedSlateDate = date
 
                     // Fresh-day recap pop-up — GAME picks only, once per day. Its
@@ -833,6 +888,7 @@ struct HomeView: View {
                         let wireDay = recapDay ?? SupabaseAPI.yesterdayEST()
                         wires = await SupabaseAPI.fetchWireItems(date: wireDay)
                     }
+                    guard canPublish() else { return }
                     // Drop the fabricated X "voice" quotes — Gary never attributes
                     // invented quotes to real handles (founder). Only real betting
                     // news (result / line_move / injury / pace) rides the Wire.
@@ -847,10 +903,12 @@ struct HomeView: View {
                     if pulse.isEmpty, let pulseBack = Self.shiftDate(SupabaseAPI.hubGradedDateEST(), by: -1) {
                         pulse = await SupabaseAPI.fetchMarketPulse(date: pulseBack)
                     }
+                    guard canPublish() else { return }
                     pulseRows = pulse
 
                     // ⑤ Door counts — live games + edges posted tonight.
                     let liveRows = await liveFetch ?? []
+                    guard canPublish() else { return }
                     gamesLiveNow = liveRows.filter { $0.isLive }.count
                     initialLive = liveRows
 
@@ -899,7 +957,9 @@ struct HomeView: View {
                     // Keep the snapshot fresh — the tape/takeover re-render
                     // off the shared 90s poller once it starts.
                     LiveScoreCache.shared.startIfNeeded()
-                    edgesPostedToday = (await todayLedgerFetch).count
+                    let todayLedger = await todayLedgerFetch
+                    guard canPublish() else { return }
+                    edgesPostedToday = todayLedger.count
 
                     // ④ The Receipts — graded lanes from the hub's graded day,
                     // walking back one extra day when the grader hasn't run yet.
@@ -909,6 +969,7 @@ struct HomeView: View {
                         gradedDate = back
                         ledger = await SupabaseAPI.fetchInsightLedger(date: back).filter { $0.result != nil }
                     }
+                    guard canPublish() else { return }
                     receiptLanes = Self.buildReceiptLanes(ledger)
 
                     // Tonight's edges — the Hub's top reads for today's slate,
@@ -928,13 +989,19 @@ struct HomeView: View {
                             return all
                         }
                     }
-                    tonightSignals = Array((await fetchEdges(date: SupabaseAPI.todayEST())).prefix(3))
+                    let fetchedSignals = Array((await fetchEdges(date: date)).prefix(3))
+                    guard canPublish() else { return }
+                    tonightSignals = fetchedSignals
                     // Today's edges post with lineups (~afternoon). Until
                     // then the section shows yesterday's GRADED board — the
                     // Hub's receipts, verdicts attached — instead of nothing.
                     if tonightSignals.isEmpty {
-                        ydayEdges = (await fetchEdges(date: gradedDate)).filter { $0.result != nil }
-                        edgesHitRate = await SupabaseAPI.fetchInsightHitRate(date: gradedDate)
+                        let fetchedEdges = (await fetchEdges(date: gradedDate)).filter { $0.result != nil }
+                        guard canPublish() else { return }
+                        ydayEdges = fetchedEdges
+                        let fetchedHitRate = await SupabaseAPI.fetchInsightHitRate(date: gradedDate)
+                        guard canPublish() else { return }
+                        edgesHitRate = fetchedHitRate
                     }
 
                     // The night's stories. The headline ROLLS TODAY: prefer today's
@@ -954,13 +1021,21 @@ struct HomeView: View {
                         },
                         uniquingKeysWith: { first, _ in first })
                     let recapsToday = await recapsTodayF
-                    nightRecaps = recapsToday.isEmpty ? await recapsGradedF : recapsToday
+                    let fetchedRecaps = recapsToday.isEmpty ? await recapsGradedF : recapsToday
+                    guard canPublish() else { return }
+                    nightRecaps = fetchedRecaps
                     HomeHeadlinesCache.save(headlineStories)   // write-through; no-op if empty
                     // (Board + durable grades committed at the top of the
                     // cycle-clock block — the moment slateF resolved.)
-                    tomorrowBoard = await tomorrowBoardF
-                    todayBoard = await todayBoardF
-                    homeStreaks = await streaksF
+                    let fetchedTomorrowBoard = await tomorrowBoardF
+                    guard canPublish() else { return }
+                    tomorrowBoard = fetchedTomorrowBoard
+                    let fetchedTodayBoard = await todayBoardF
+                    guard canPublish() else { return }
+                    todayBoard = fetchedTodayBoard
+                    let fetchedStreaks = await streaksF
+                    guard canPublish() else { return }
+                    homeStreaks = fetchedStreaks
                     receiptsSub = gradedDate == SupabaseAPI.hubGradedDateEST()
                         ? "Yesterday's boards, graded"
                         : "Boards graded \(Self.prettyDate(gradedDate))"
@@ -970,6 +1045,7 @@ struct HomeView: View {
                     // raw now-minus-1 that would show two-days-ago before 6am ET.
                     do {
                         let yesterdaySnapshot = await yPicksFetch
+                        guard canPublish() else { return }
                         let yPicks = mergeGamePickSnapshot(
                             yesterdaySnapshot,
                             retaining: previousYesterdayPicks
@@ -999,6 +1075,7 @@ struct HomeView: View {
                         }
                         do {
                             let yProps = try await yPropsFetch
+                            guard canPublish() else { return }
                             // HR fun-lane calls never front Home's prop slot.
                             let top = yProps.filter { !$0.isHRLane }
                                 .sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
@@ -1013,6 +1090,7 @@ struct HomeView: View {
                                 yesterdayTopPropResult = nil
                             }
                         } catch {
+                            guard canPublish() else { return }
                             // Same-day last-good is an emergency transport policy,
                             // never a way to hide malformed/auth/config payloads.
                             if !SupabaseAPI.isTransientExternalFailure(error) {
@@ -1025,6 +1103,7 @@ struct HomeView: View {
                     // Get picks data (already fetched in parallel)
                     loading = true
                     let pickSnapshot = await picksFetch
+                    guard canPublish() else { return }
                     let allPicks = mergeGamePickSnapshot(
                         pickSnapshot,
                         retaining: previousTodayPicks
@@ -1056,6 +1135,7 @@ struct HomeView: View {
                     var propCount = 0
                     do {
                         let allProps = try await propPicksFetch
+                        guard canPublish() else { return }
                         var estCal = Calendar.current
                         estCal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
                         let slateFormatter = DateFormatter()
@@ -1072,6 +1152,7 @@ struct HomeView: View {
                         freeProp = freshProps.sorted(by: { ($0.confidence ?? 0) > ($1.confidence ?? 0) }).first
                         propCount = freshProps.count
                     } catch {
+                        guard canPublish() else { return }
                         if !SupabaseAPI.isTransientExternalFailure(error) { freeProp = nil }
                     }
                     playsOnBoard = todayOnlyPicks.count + propCount
@@ -1099,7 +1180,7 @@ struct HomeView: View {
                 }
             } catch {
                 // Timeout or error — stop loading, show whatever we have
-                loading = false
+                if canPublish() { loading = false }
             }
         }
         .onChange(of: scenePhase) { phase in
@@ -1122,11 +1203,44 @@ struct HomeView: View {
         }
         .onReceive(slateRolloverTimer) { _ in
             guard scenePhase == .active, !loadedSlateDate.isEmpty,
-                  loadedSlateDate != SupabaseAPI.todayEST() else { return }
+                  loadedSlateDate != SupabaseAPI.todayEST(),
+                  fullHomeRefreshDate != SupabaseAPI.todayEST() else { return }
             // The betting day changed while Home remained alive. Reload the
             // slate, picks, live rows, and durable grades as one date-keyed set.
             homeNonce &+= 1
         }
+    }
+
+    /// Every request owns one account and one Eastern slate. The persistent
+    /// nonce rejects an older response even after its replacement has finished.
+    private func isCurrentHomeRequest(nonce: Int, date: String, accountID: String?) -> Bool {
+        !Task.isCancelled && homeNonce == nonce && SupabaseAPI.todayEST() == date
+            && AuthManager.shared.currentUser?.id == accountID
+    }
+
+    @MainActor
+    private func refreshMyTodayBets() async {
+        guard !Task.isCancelled else { return }
+        let requestID = UUID()
+        myBetsRefreshID = requestID
+        let nonce = homeNonce
+        let date = SupabaseAPI.todayEST()
+        let accountID = homeAuth.currentUser?.id
+        if myTodayBetsAccountID != accountID || myTodayBetsDate != date {
+            myTodayBetsRows = []
+        }
+        myTodayBetsAccountID = accountID
+        myTodayBetsDate = date
+        guard AppFlags.userBookEnabled, accountID != nil, homeAuth.bearerToken != nil else {
+            myTodayBetsRows = []
+            return
+        }
+        let fetched = await UserBookAPI.fetchMyBets()
+        guard myBetsRefreshID == requestID,
+              isCurrentHomeRequest(nonce: nonce, date: date, accountID: accountID) else { return }
+        // A successful empty book is authoritative. A transport failure keeps
+        // only this account's same-date rows; cancellation never commits empties.
+        if let fetched { myTodayBetsRows = fetched.filter { $0.game_date == date } }
     }
 
     /// Home is opacity-kept-alive even while another tab is selected, so its data
@@ -1152,11 +1266,17 @@ struct HomeView: View {
     @MainActor
     private func refreshRollingHomeContent() async {
         guard !rollingHomeRefreshInFlight, fullHomeRefreshNonce == nil else { return }
+        let date = SupabaseAPI.todayEST()
+        guard loadedSlateDate == date else { return }
+        let requestNonce = homeNonce
+        let fullRequestID = fullHomeRefreshID
+        let accountID = AuthManager.shared.currentUser?.id
         rollingHomeRefreshInFlight = true
         defer { rollingHomeRefreshInFlight = false }
 
-        let date = SupabaseAPI.todayEST()
         let previousPicks = todayPicks
+        let previousGameResults = recentGameResultsLastGood
+        let previousPropResults = recentPropResultsLastGood
         async let picksFetch = fetchIsolatedGamePickSources(
             date: date
         )
@@ -1175,25 +1295,37 @@ struct HomeView: View {
         var propsError: Error? = nil
         do { fetchedProps = try await propsFetch } catch { propsError = error }
         let recentGames: [GameResult]
+        var acceptedGameResults: [GameResult]?
         do {
             let fresh = try await gameResultsFetch
-            recentGameResultsLastGood = fresh
+            acceptedGameResults = fresh
             recentGames = fresh
         } catch {
             recentGames = SupabaseAPI.isTransientExternalFailure(error)
-                ? recentGameResultsLastGood : []
+                ? previousGameResults : []
         }
         let recentProps: [PropResult]
+        var acceptedPropResults: [PropResult]?
         do {
             let fresh = try await propResultsFetch
-            recentPropResultsLastGood = fresh
+            acceptedPropResults = fresh
             recentProps = fresh
         } catch {
             recentProps = SupabaseAPI.isTransientExternalFailure(error)
-                ? recentPropResultsLastGood : []
+                ? previousPropResults : []
         }
         let recapsToday = await recapsTodayFetch
         let recapsGraded = await recapsGradedFetch
+
+        // A full refresh can finish while this older rolling wave is awaiting
+        // its sources. Its persistent nonce still invalidates this wave after
+        // fullHomeRefreshNonce becomes nil again. Commit buffers and visible
+        // content together only for the same account and 6 a.m. slate snapshot.
+        guard isCurrentHomeRequest(nonce: requestNonce, date: date, accountID: accountID),
+              fullHomeRefreshID == fullRequestID, fullHomeRefreshNonce == nil,
+              loadedSlateDate == date else { return }
+        if let acceptedGameResults { recentGameResultsLastGood = acceptedGameResults }
+        if let acceptedPropResults { recentPropResultsLastGood = acceptedPropResults }
 
         // The API is keyed to the 6 a.m. slate date, but keep the same defensive
         // commence-time filter as the full Home load so a misdated row cannot leak.
@@ -1232,6 +1364,7 @@ struct HomeView: View {
             let coreProps = recentProps.filter { !$0.isHRResult }
             let night = Self.buildLastNight(games: recentGames, props: coreProps)
             marquee = night.story
+            marqueeRequestID = UUID()
             cashRows = night.cashes
             worstBeat = night.beat
             lastNightNet = night.graded > 0 ? night.net : nil

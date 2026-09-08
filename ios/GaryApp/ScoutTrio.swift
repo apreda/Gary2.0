@@ -905,11 +905,11 @@ struct PicksGamePage: View {
             if isMLB {
                 // MLB: the flat GAME INTEL list becomes the modular dashboard —
                 // a baseball-field anchor + Pitching / Bats / Park & Weather.
-                // The field + real (projected → confirmed) lineup self-load off
-                // mlb_field_lineups. The Derby page keeps it too (founder):
-                // a synthetic lineup row carries the 8 contestants, so the
-                // standard field view + tappable player cards just work.
-                MLBGameIntelView(matchup: group.matchup, edges: edges, showHeader: false)
+                // Projected/confirmed fields use the selected provider game
+                // and its real date. A special event without that identity
+                // remains unavailable rather than borrowing another lineup.
+                MLBGameIntelView(gameID: bdlGameId, gameDate: ExactGameIdentity.easternDate(of: group.commence),
+                                 matchup: group.matchup, edges: edges, showHeader: false)
             } else if !isFootball && !entries.contains(where: { ($0.pick.type ?? "") == "special" }) {
                 EdgesSection(title: "GAME INTEL", edges: edges)
             }

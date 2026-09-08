@@ -7,6 +7,7 @@ import UserNotifications
 // MARK: - App Delegate for Push Notifications
 
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate, MessagingDelegate {
+    @MainActor private var notificationSettingsGeneration = UUID()
     
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
@@ -47,18 +48,47 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     }
     
     private func requestNotificationPermissions(_ application: UIApplication) {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, _ in
-            if granted {
-                DispatchQueue.main.async {
-                    guard FirebaseApp.app() != nil || self.configureFirebaseIfValid() else { return }
-                    Messaging.messaging().delegate = self
-                    Messaging.messaging().isAutoInitEnabled = true
-                    application.registerForRemoteNotifications()
-                }
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { [weak self] _, _ in
+            Task { @MainActor in
+                // Read the current OS result, including denial. A delayed
+                // permission callback cannot replay an older authorization.
+                self?.refreshNotificationAuthorization(application)
             }
         }
     }
-    
+
+    @MainActor
+    func refreshNotificationAuthorization(_ application: UIApplication) {
+        let generation = UUID()
+        notificationSettingsGeneration = generation
+        Task { @MainActor [weak self] in
+            let settings = await UNUserNotificationCenter.current().notificationSettings()
+            guard let self, self.notificationSettingsGeneration == generation else { return }
+            let allowed: Bool
+            switch settings.authorizationStatus {
+            case .authorized, .provisional, .ephemeral: allowed = true
+            default: allowed = false
+            }
+            // A remembered token can be deactivated even when Firebase has
+            // not been initialized during this launch.
+            PushRegistrationCoordinator.shared.setAuthorized(allowed)
+            guard allowed else {
+                if FirebaseApp.app() != nil { Messaging.messaging().isAutoInitEnabled = false }
+                return
+            }
+            guard FirebaseApp.app() != nil || self.configureFirebaseIfValid() else { return }
+            Messaging.messaging().delegate = self
+            Messaging.messaging().isAutoInitEnabled = true
+            application.registerForRemoteNotifications()
+        }
+    }
+
+    func applicationDidBecomeActive(_ application: UIApplication) {
+        // Compatibility for an app-delegate lifecycle. The SwiftUI scene
+        // below also forwards activation; duplicate reads safely coalesce.
+        Task { @MainActor in refreshNotificationAuthorization(application) }
+    }
+
     // MARK: - Remote Notification Registration
     
     func application(_ application: UIApplication,
@@ -76,45 +106,11 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
         guard let token = fcmToken else { return }
-        
-        // Send token to backend
-        Task {
-            await sendTokenToBackend(token)
+        Task { @MainActor in
+            PushRegistrationCoordinator.shared.receivedToken(token)
         }
     }
-    
-    private func sendTokenToBackend(_ token: String) async {
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
-        guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional || settings.authorizationStatus == .ephemeral else { return }
-        // Register the device token via the register_push_token RPC (SECURITY
-        // DEFINER, server-side upsert). Replaces the old direct PostgREST upsert
-        // into push_tokens so the table needs NO anon policies — the anon key can
-        // register a token but can't read/enumerate or deactivate tokens.
-        guard let url = URL(string: "\(Secrets.supabaseURL)/rest/v1/rpc/register_push_token") else { return }
 
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(Secrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
-        request.setValue("Bearer \(Secrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-
-        var body: [String: Any] = [
-            "p_device_token": token,
-            "p_platform": "ios"
-        ]
-        // Identity (auth user, else install UUID) rides along so pick-drop pushes
-        // can tier payers (full pick) vs free users (tease). Server COALESCEs, so
-        // a later signed-in re-register upgrades the token's identity.
-        body["p_identity"] = SupabaseAPI.identityId
-
-        do {
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
-            _ = try await URLSession.shared.data(for: request)
-        } catch {
-            print("[Push] Failed to register FCM token with backend: \(error.localizedDescription)")
-        }
-    }
-    
     // MARK: - UNUserNotificationCenterDelegate
     
     // Handle notification when app is in foreground
@@ -129,9 +125,15 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
-        // Handle deep linking or navigation based on notification data
-        // Future: Add custom logic here to navigate to specific screens
-        completionHandler()
+        guard response.actionIdentifier == UNNotificationDefaultActionIdentifier else {
+            completionHandler()
+            return
+        }
+        let request = response.notification.request
+        Task { @MainActor in
+            GaryPushNavigation.shared.receive(request.content.userInfo, requestID: request.identifier)
+            completionHandler()
+        }
     }
 }
 
@@ -140,6 +142,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 @main
 struct GaryApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var authManager = AuthManager.shared
     @AppStorage("hasEntered") private var hasEntered: Bool = false
 
@@ -155,6 +158,11 @@ struct GaryApp: App {
                 }
             }
             .preferredColorScheme(.dark)
+            .onChange(of: scenePhase) { phase in
+                if phase == .active {
+                    appDelegate.refreshNotificationAuthorization(UIApplication.shared)
+                }
+            }
             // Native Google sign-in's redirect (the reversed-client-id
             // scheme) routes back through the SDK; every other URL is
             // untouched (handle() returns false and nothing else consumes
