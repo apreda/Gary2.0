@@ -1,0 +1,54 @@
+The following is a diff from the previous accessibility tree for Window: "iPhone 17 (Gary)" with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
++	42 container
++		43 button Description: Switch league — MLB selected, Secondary Actions: Cancel
++		44 text Description: SEP 8, Secondary Actions: Cancel
++		45 button Description: Search, ID: magnifyingglass, Secondary Actions: Cancel
++		46 button (selected) Description: The Hub, Secondary Actions: Cancel
++		47 button Description: Fantasy, Secondary Actions: Cancel
++		48 button Description: CLE @ BAL, 6:35 PM, O/U 8.50, Secondary Actions: Cancel
++		49 button Description: HOU @ PHI, 6:40 PM, O/U 8.50, Secondary Actions: Cancel
++		50 button Description: MIN @ DET, 6:40 PM, O/U 8.50, Secondary Actions: Cancel
++		51 button Description: NYM @ MIA, 6:40 PM, O/U 8, Secondary Actions: Cancel
++		52 button Description: LAA @ BOS, 6:45 PM, O/U 8, Secondary Actions: Cancel
++		53 button Description: COL @ NYY, 7:05 PM, O/U 8, Secondary Actions: Cancel
++		54 button Description: TB @ ATL, 7:15 PM, O/U 8.50, Secondary Actions: Cancel
++		55 button Description: AZ @ KC, 7:40 PM, O/U 9.50, Secondary Actions: Cancel
++		56 button Description: CHC @ MIL, 7:40 PM, O/U 7.50, Secondary Actions: Cancel
++		57 button Description: PIT @ CWS, 7:40 PM, O/U 8.50, Secondary Actions: Cancel
++		58 button Description: TEX @ SEA, 9:40 PM, O/U 8, Secondary Actions: Cancel
++		59 button Description: TOR @ ATH, 9:40 PM, O/U 9.50, Secondary Actions: Cancel
++		60 button Description: WSH @ SD, 9:40 PM, O/U 7.50, Secondary Actions: Cancel
++		61 button Description: STL @ SF, 9:45 PM, O/U 8, Secondary Actions: Cancel
++		62 button Description: CIN @ LAD, 10:10 PM, O/U 8.50, Secondary Actions: Cancel
++		63 button Secondary Actions: Cancel, Description: THE LEAD, BULLPEN, Texas Rangers pen: 18 relief IP over their last 3 games, TEX @ SEA · 9:40 PM ET, Texas is running out of comfortable bullpen answers after 18 relief innings in three games. If Seattle forces an early pitching change, I want the Mariners’ bats against the Rangers’ middle and late relief., Read the full story
++		64 text Description: More to know, Secondary Actions: Cancel
++		65 button Description: HEAT CHECK, Cal Raleigh: 1.376 OPS in Last 15 Days, TEX @ SEA · 9:40 PM ET, Secondary Actions: Cancel
++		66 button Description: HEAT CHECK, Rafael Devers: 1.398 OPS in Last 15 Days, STL @ SF · 9:45 PM ET, Secondary Actions: Cancel
++		67 text Description: Go deeper, Secondary Actions: Cancel
++		68 button Description: Regression watch, Help: Results, contact quality and what may change. Expand board, Value: 11 items, collapsed, Secondary Actions: Cancel
++		69 button Description: Streak watch, Help: Collapse board, Value: 16 items, expanded, Secondary Actions: Cancel
++		70 button Description: 0-18, Leody Taveras, 0-for-18 since August 30, NEXT GAME · VS GUARDIANS · 6:35 PM ET, Secondary Actions: Cancel
++		71 button Description: 11 GM, Coby Mayo, 11 games — 13-for-41 (.317), NEXT GAME · VS GUARDIANS · 6:35 PM ET, Secondary Actions: Cancel
++		72 button Description: 0-17, Isaac Collins, 0-for-17 since August 30, NEXT GAME · VS D-BACKS · 7:40 PM ET, Secondary Actions: Cancel
++		73 button Description: 11 GM, TJ Rumfield, 11 games — 17-for-38 (.447), NEXT GAME · AT YANKEES · 7:05 PM ET, Secondary Actions: Cancel
++		74 button Secondary Actions: Cancel, Description: U ×6, Houston Astros, 6 straight unders — 5.3 rpg vs 8.0 avg line, NEXT GAME · AT PHILLIES · 6:40 PM ET
++		75 button Description: 9 GM, Gleyber Torres, 9 games — 13-for-36 (.361), NEXT GAME · VS TWINS · 6:40 PM ET, Secondary Actions: Cancel
++		76 button Secondary Actions: Cancel, Description: U ×5, Arizona Diamondbacks, 5 straight unders — 5.2 rpg vs 8.2 avg line, NEXT GAME · AT ROYALS · 7:40 PM ET
++		77 button Description: 8 GM, Cal Raleigh, 8 games — 12-for-30 (.400), NEXT GAME · VS RANGERS · 9:40 PM ET, Secondary Actions: Cancel
++		78 button Description: L5, Washington Nationals, outscored 30-15 in the skid, NEXT GAME · AT PADRES · 9:40 PM ET, Secondary Actions: Cancel
++		79 button Description: 8 GM, Javier Sanoja, 8 games — 14-for-31 (.452), NEXT GAME · VS METS · 6:40 PM ET, Secondary Actions: Cancel
++		80 button Description: SEE ALL 16, Secondary Actions: Cancel
++		81 button Description: The Bats, Help: Hitting form and opposing arms. Expand board, Value: 14 items, collapsed, Secondary Actions: Cancel
++		82 button Description: The Arms, Help: Starters, recent work and pitch profiles. Expand board, Value: 19 items, collapsed, Secondary Actions: Cancel
++		83 button Description: First-inning reads, Help: How the opening inning could unfold. Expand board, Value: 5 items, collapsed, Secondary Actions: Cancel
++		84 button Description: More Edges, Help: Expand board, Value: 5 items, collapsed, Secondary Actions: Cancel
++		85 button Description: LEAGUE PULSE, LEAGUE-WIDE TABLES, Secondary Actions: Cancel
++		86 button Description: LAST NIGHT, 63, Secondary Actions: Cancel
++		87 element Secondary Actions: Cancel
++		88 button Description: Jump to a section, ID: list.bullet, Secondary Actions: Cancel
++		89 button Description: Home tab, Secondary Actions: Cancel
++		90 button Description: Winners tab, Secondary Actions: Cancel
++		91 button (selected) Description: The Hub, Secondary Actions: Cancel
++		92 button Description: Picks tab, Secondary Actions: Cancel
++		93 button Description: Billfold tab, Secondary Actions: Cancel
+The focused UI element is 0 standard window iPhone 17 (Gary) – iOS 26.4, Secondary Actions: Raise

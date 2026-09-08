@@ -1,0 +1,24 @@
+{
+  "recorded_at": "2026-09-08T11:57:58Z",
+  "version": "2.25",
+  "build": "912",
+  "bundle_id": "ai.betwithgary.app",
+  "simulator": "iPhone 17 (Gary), iOS 26.4",
+  "source_commit": "7745aada",
+  "checkout_head_at_start": "79ef8b6f",
+  "installed_executable_sha256": "6001718defd374c8d784e0e6c090211fac25068b1039cd1b8621548c5c4e878b",
+  "release_product_executable_sha256": "6001718defd374c8d784e0e6c090211fac25068b1039cd1b8621548c5c4e878b",
+  "build_log": "/Volumes/KINGSTON/gary-912-simulator-build.log",
+  "evidence_sha256": {
+    "mlb-next-game-labels.txt": "f425bad2d24c29b9d43d5770fbca8b9ce670c5aad056cafad2dbea8043690a52",
+    "mlb-starter-record-expanded.png": "0bbff0dfaacf2ebc36a9b9562343ca80798e1cbc55d61838a8f3e895f6bd14ef",
+    "mlb-starter-record-expanded.txt": "d93ea9304dffa430f2d36e58f3d27067809614bf1978f002b8b3f8d61fc9bab8",
+    "mlb-starter-team-detail.png": "9d328ab0b84b3a09ceff56e3ecd855ec47df16c1cbc41408c345b87df1696329",
+    "mlb-streak-context.png": "208808c40fbc3ad0fb6aafe7be33f76da9df3b79a540fa824c5986a2d409236d",
+    "nfl-next-slate.png": "c914ab6b1c9f5af311227c38dcbe01d6bca427d5830056b85f2b6c323cbc4f5c",
+    "nfl-next-slate.txt": "01f4c182f6aef4ba07ef55b10674a5259e4084a5acf1384a5bad1bf64570533d",
+    "nfl-schedule-details.png": "dacf629277e1e30877ef8f743ad0a65e6b4b7a9e2b3aaa3ff095a27dd4b85ba1",
+    "pitcher-more-stats.png": "9a5b1959071df5b5a1bab606ce651e128c2815a969c6ce4eb5ace3716b46feb4",
+    "pitcher-more-stats.txt": "101d5898f9780f0f06c16819cf4b25bc23a242835ccfe0ff0e4a3427438a2923"
+  }
+}

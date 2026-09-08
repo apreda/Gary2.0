@@ -2,6 +2,8 @@
 
 Adam’s launch-readiness goal remains unachieved. Source repair, feature completion and the current release artifact are delivered; physical/account, access and human-operation gates remain open. Do not claim zero bugs or launch approval. The current gate-by-gate record is [the release ledger](docs/launch/READINESS_2026-09-07.md); previous 909–911 receipts remain there as history.
 
+**11:58 UTC continuation:** Mac access returned for a focused simulator pass. Installed the existing optimized 912 product over simulator 909 and verified the NFL next-slate card, restored MLB starter-record detail, pitcher `OPP AVG` expansion/collapse and visible `NEXT GAME` streak labels. [Fresh UI evidence and limits](audit-evidence/resumed-912-2026-09-08/README.md). Earlier Mac-lock statements below describe the earlier checks. Physical/account acceptance, remaining changed-page checks and Apple review selection remain open; Chrome's existing Apple tab points to failed sign-in and fresh page reads timed out. No source change, rebuild or upload occurred.
+
 ## Current source and artifact
 
 - Native **2.25 (912)**, commit `7745aada`: preserve verified team scores, avoid falsely labeling ambiguous legacy NFL score strings, and derive Home winner headlines only from oriented evidence. Includes completed 909–911 feature/access/privacy repairs. Seventy-nine unique focused tests, optimized simulator build and signed archive pass.

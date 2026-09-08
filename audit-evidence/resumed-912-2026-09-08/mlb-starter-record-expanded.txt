@@ -1,0 +1,4 @@
+The following is a diff from the previous accessibility tree for Window: "iPhone 17 (Gary)" with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+~		70 button Secondary Actions: Cancel, Description: RECORD, CLE @ BAL, Guardians 1-7 in Tanner Bibee's last 8 starts, Cleveland has won only one of Tanner Bibee’s last eight starts, and that pattern matters more in a road spot. The Guardians need to show me they can finally finish a Bibee night.
++		89 button Description: TEAM CARD, Secondary Actions: Cancel
+The focused UI element is 0 standard window iPhone 17 (Gary) – iOS 26.4, Secondary Actions: Raise

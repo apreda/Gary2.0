@@ -1,0 +1,5 @@
+The following is a diff from the previous accessibility tree for Window: "iPhone 17 (Gary)" with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
++		58 text Description: OPP AVG VS XBA, Secondary Actions: Cancel
++		59 text Description: .235 vs .257 · overperforming, Secondary Actions: Cancel
+~		57 button Description: LESS, Secondary Actions: Cancel
+The focused UI element is 0 standard window iPhone 17 (Gary) – iOS 26.4, Secondary Actions: Raise
