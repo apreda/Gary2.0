@@ -8,7 +8,6 @@ import { StitchRule, StatTile, GhostLink } from '@/components/Terminal';
 import { fetchAllGameResults, computeRecord, sinceDate } from '@/lib/gary/results';
 import { estDateStr, daysAgoEST } from '@/lib/gary/dates';
 import { pageMetadata } from '@/lib/seo/metadata';
-import { joinWaitlist } from './actions';
 
 export const metadata: Metadata = pageMetadata({
   canonical: '/nfl',
@@ -54,9 +53,9 @@ export default async function NflPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const sp = await searchParams;
-  const joined = typeof sp.joined === 'string' ? sp.joined : null;
-  const src = (typeof sp.src === 'string' ? sp.src : 'direct').slice(0, 64);
+  // Retain request-time rendering for the date-based redirect, including legacy
+  // waitlist URLs. A query string is not evidence of a confirmed email signup.
+  await searchParams;
 
   const days = daysToKickoff();
   const preseason = days > 0;
@@ -149,61 +148,19 @@ export default async function NflPage({
         </div>
       </section>
 
-      {/* Kickoff notify */}
+      {/* Keep the legacy anchor useful without promising an unconfigured email. */}
       <section id="notify" className="mt-16">
         <Eyebrow>THE FIRST CARD</Eyebrow>
         <StitchRule className="mt-4" />
         <div className="mt-7 max-w-xl">
-          {joined === '1' ? (
-            <>
-              <h2 className="font-display text-3xl uppercase text-hi">You&apos;re on the list</h2>
-              <p className="mt-3 text-[15px] leading-relaxed text-mid">
-                We&apos;ll email you when Gary&apos;s first NFL card posts on September 9.
-                That&apos;s the only email. If you want the summer picks in the meantime,
-                the app is free.
-              </p>
-              <div className="mt-6">
-                <AppStoreButton surface="nfl_page_joined" />
-              </div>
-            </>
-          ) : (
-            <>
-              <h2 className="font-display text-3xl uppercase text-hi">Get the Week 1 card</h2>
-              <p className="mt-3 text-[15px] leading-relaxed text-mid">
-                Drop your email and we&apos;ll send Gary&apos;s first NFL card when it posts
-                on September 9. One email at kickoff, nothing else.
-              </p>
-              {joined === '0' && (
-                <p className="mt-3 text-[14px] text-loss">
-                  That didn&apos;t go through on our end. The App Store link below works today.
-                </p>
-              )}
-              <form action={joinWaitlist} className="mt-5 flex flex-col gap-3 sm:flex-row">
-                <input type="hidden" name="src" value={src} />
-                <input
-                  type="text"
-                  name="website"
-                  tabIndex={-1}
-                  autoComplete="off"
-                  aria-hidden="true"
-                  className="hidden"
-                />
-                <input
-                  type="email"
-                  name="email"
-                  required
-                  placeholder="you@example.com"
-                  className="w-full rounded-card border border-line bg-card px-4 py-3 text-[15px] text-hi placeholder:text-faint focus:border-gold/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 sm:max-w-sm"
-                />
-                <button
-                  type="submit"
-                  className="inline-flex items-center justify-center rounded-card bg-gold px-6 py-3 font-body text-sm font-semibold text-ink shadow-card transition-[transform,opacity] duration-150 hover:opacity-95 hover:-translate-y-px active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
-                >
-                  Send me the first card
-                </button>
-              </form>
-            </>
-          )}
+          <h2 className="font-display text-3xl uppercase text-hi">Follow the Week 1 board</h2>
+          <p className="mt-3 text-[15px] leading-relaxed text-mid">
+            Open the free NFL board for published picks and their full reasoning.
+            Save the page and check back as Gary&apos;s analysis is published.
+          </p>
+          <div className="mt-6">
+            <GhostLink href="/picks/nfl">Open the free NFL board</GhostLink>
+          </div>
         </div>
       </section>
 
