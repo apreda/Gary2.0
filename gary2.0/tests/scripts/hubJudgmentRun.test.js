@@ -104,4 +104,31 @@ describe('bounded Hub research-to-judgment pass', () => {
       } });
     expect(result).toBe(settled);
   });
+
+  it('orders the completed set with a separate injection and diagnostic stream after synthesis', async () => {
+    const args = failedRefreshFixture(), generateText = vi.fn(), generateEditorialText = vi.fn();
+    const settled = { rows: args.rows, invalidations: [], failures: [], diagnostics: [{ attempt: 1 }] };
+    const synthesize = vi.fn(async () => settled);
+    const orderJudgments = vi.fn(async ({ rows }) => ({ rows, diagnostics: [{ status: 'reused' }] }));
+    const result = await runHubJudgmentPass(args, { collectContext: async () => new Map(), synthesize,
+      orderJudgments, generateText, generateEditorialText, now: () => failedAt });
+    expect(synthesize.mock.calls[0][1].generateText).toBe(generateText);
+    expect(orderJudgments.mock.calls[0][0]).toMatchObject({ rows: settled.rows, games: args.games });
+    expect(orderJudgments.mock.calls[0][1].generateText).toBe(generateEditorialText);
+    expect(orderJudgments.mock.calls[0][1].budgetMs).toBeLessThanOrEqual(60_000);
+    expect(result.diagnostics).toEqual([{ attempt: 1 }]);
+    expect(result.editorial_diagnostics).toEqual([{ status: 'reused' }]);
+  });
+
+  it('bounds even an uncooperative editor within the total deadline without withdrawing completed judgments', async () => {
+    const args = failedRefreshFixture(), original = structuredClone(args.rows);
+    const settled = { rows: args.rows, invalidations: [], failures: [] }, started = Date.now();
+    const result = await runHubJudgmentPass(args, { collectContext: async () => new Map(),
+      synthesize: async () => settled, orderJudgments: () => new Promise(() => {}),
+      budgetMs: 25, editorialBudgetMs: 60_000, totalBudgetMs: 40, now: () => failedAt });
+    expect(Date.now() - started).toBeLessThan(500);
+    expect(result.rows).toEqual(original);
+    expect(result.invalidations).toEqual([]); expect(result.failures).toEqual([]);
+    expect(result.editorial_diagnostics[0]).toMatchObject({ status: 'failed' });
+  });
 });

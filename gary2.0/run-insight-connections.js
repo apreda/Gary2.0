@@ -263,7 +263,7 @@ async function recordJudgmentPass(league, result, { publish = false } = {}) {
   const report = { date: targetDate, league, checked_at: new Date().toISOString(),
     judgments: rows.map(row => row.meta.judgment), invalidations: result.invalidations || [],
     failures: result.failures || [], skipped: result.skipped || [],
-    diagnostics: result.diagnostics || [], publication };
+    diagnostics: result.diagnostics || [], editorial_diagnostics: result.editorial_diagnostics || [], publication };
   judgmentReports.push(report);
   console.log(`   Hub judgments: ${rows.length} current; ${report.invalidations.length} withdrawn; ${report.failures.length} failed${publication ? `; ${JSON.stringify(publication)}` : ' (preview)'}.`);
   if (judgmentOutput) await writeFile(judgmentOutput, JSON.stringify(judgmentReports, null, 2) + '\n');

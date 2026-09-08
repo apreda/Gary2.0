@@ -185,6 +185,42 @@ Ready anchors are retained ahead of ordinary category/floor filtering.
 The publisher owns atomic, identity-scoped metadata merge and monotonic
 check times; it must not overwrite source prose or unrelated metadata.
 
+## Optional editorial order
+
+After synthesis, `orderHubJudgments({date,league,rows,games}, options)` considers
+the complete currently valid judgment set for that dated league. It returns
+`{rows,diagnostics}` and adds only `editorial_rank` (integer `1...N`) and
+`editorial_fingerprint` (a shared lowercase SHA-256). It never changes an
+approved take, explanation, full case, evidence, input fingerprint or
+`generated_at`. New writing favors one or two concise explanation sentences
+without repeating the same essential condition in multiple fields.
+
+One bounded model attempt returns an exact permutation of all game/source
+identities. Gary chooses usefulness, importance, verified new information
+and timing; the source's old relevance score, betting preference and a
+confidence score do not choose the order. A singleton needs no model call.
+Malformed, missing, duplicated or mismatched identities discard the entire
+new order, while every approved case remains readable without a rank.
+
+The editorial fingerprint covers the exact dated league and complete set,
+each approved argument's content, its measured `input_fingerprint`, and its
+scheduled kickoff. Input order and refreshed observation/expiry clocks do
+not change the cache. An unchanged complete set reuses its stored ordering
+with zero model calls. A source, argument, kickoff or membership change
+requires a new complete order. The native client accepts positive unique
+ranks with one shared fingerprint across its current valid set; ranks may
+have gaps after a game starts. A partial publication or ordering failure
+uses the ordinary prominence/kickoff/source-order fallback.
+
+`runHubJudgmentPass` retains its 330-second research/synthesis phase and
+adds at most 60 seconds for editorial ordering, within a 390-second total.
+The optional stage has a separate `generateEditorialText` injection and
+`editorial_diagnostics` report, and cannot withdraw a verified argument on
+failure. Its `generateSolTextOnce` adapter uses the existing configured
+content model with no retry wrapper or provider cascade. A new slate/current
+set discovered while the call runs rejects that order instead of applying
+it to a changed set. No model call runs when the app opens.
+
 Fixture validation covers exact identities, doubleheaders, full-case
 preservation, missing data, stale clocks, source grounding, changes,
 uncited numbers, expiry, invalidation, re-anchoring, cap placement and
