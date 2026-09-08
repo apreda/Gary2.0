@@ -6,6 +6,9 @@ import { execFileSync, spawnSync } from 'node:child_process';
 
 const source = file => readFileSync(new URL(`../../../ios/GaryApp/${file}`, import.meta.url), 'utf8');
 const hasSwift = spawnSync('swiftc', ['--version'], { encoding: 'utf8' }).status === 0;
+// Publisher emission assertions require Apple's real Combine implementation.
+// The macOS Verify job runs this case; the other Swift cases also run on Linux.
+const hasCombine = hasSwift && process.platform === 'darwin';
 function block(text, start) {
   const begin = text.indexOf(start);
   if (begin < 0) throw new Error(`Missing declaration: ${start}`);
@@ -88,7 +91,7 @@ enum Label {
 `)).toContain('Accepted slate date-label assertions passed');
   }, 60_000);
 
-  it.skipIf(!hasSwift)('executes the shipping store with suspended sources, unchanged refreshes, same-count edits, failures and rollovers', () => {
+  it.skipIf(!hasCombine)('executes the shipping store with suspended sources, unchanged refreshes, same-count edits, failures and rollovers', () => {
     const store = source('SharedStores.swift');
     const home = source('HomeView.swift');
     const api = source('SupabaseAPI.swift');

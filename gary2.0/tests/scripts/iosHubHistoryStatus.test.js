@@ -22,6 +22,9 @@ describe('Hub supplementary history status', () => {
     try {
       const file = join(directory, 'Fixture.swift'), binary = join(directory, 'fixture');
       writeFileSync(file, `import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 final class FixtureSession {
  static let shared = FixtureSession()
  var status = 200; var payload = Data("[]".utf8); var error: Error?

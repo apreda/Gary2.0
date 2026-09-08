@@ -55,6 +55,29 @@ jobs:
       - name: Run edge helper tests
         run: npm run test:edge
 
+  apple-frameworks:
+    name: Apple framework tests
+    runs-on: macos-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: gary2.0
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: gary2.0/package-lock.json
+      - name: Verify Apple Swift toolchain
+        run: swiftc --version
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Run tests requiring Combine and CoreGraphics
+        run: npm test -- --silent=passed-only --maxWorkers=2 tests/scripts/iosPicksResponsiveness.test.js tests/scripts/iosReadingMeasurement.test.js
+
   web:
     name: Web unit tests and types
     runs-on: ubuntu-latest

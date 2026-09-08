@@ -57,6 +57,9 @@ func originalDeleteAccount() async throws {
 
 function fixture() {
   return `import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 ${models}
 enum PrivacyPreferences { static let analyticsKey = "fixture.analytics"; static let readingAnalyticsKey = "fixture.reading" }
 enum KeychainStore { static func delete(_ key: String) {} }

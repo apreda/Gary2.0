@@ -23,7 +23,11 @@ function runSwift(body, optimized = false) {
   try {
     const file = join(directory, 'Fixture.swift');
     const binary = join(directory, 'fixture');
-    writeFileSync(file, `import Foundation\n${body}`);
+    writeFileSync(file, `import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+${body}`);
     execFileSync('swiftc', ['-parse-as-library', ...(optimized ? ['-O'] : []), file, '-o', binary], { encoding: 'utf8', timeout: 30_000 });
     expect(execFileSync(binary, [], { encoding: 'utf8', timeout: 10_000 })).toContain('Hub lifecycle assertions passed');
   } finally {
