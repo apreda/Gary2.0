@@ -94,6 +94,7 @@ export function PublicProfile({ userId }: { userId: string }) {
                 key={n}
                 aria-pressed={days === n}
                 onClick={() => {
+                  if (days === n) return;
                   setLoading(true);
                   setDays(n);
                 }}

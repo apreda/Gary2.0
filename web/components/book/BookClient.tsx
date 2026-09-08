@@ -70,6 +70,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 export function BookClient({ garyRows }: { garyRows: GaryRows }) {
   const [bets, setBets] = useState<UserBet[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const [streak, setStreak] = useState<UserStreak | null>(null);
@@ -92,6 +93,7 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
       setBets(rows);
       setStreak(s);
       setProfile(p);
+      setHasLoaded(true);
       setUnitDollars(Number(p.preferences?.unit_value ?? 0));
       setError(null);
       // Opening/refocusing a usable Book counts; minute-by-minute background
@@ -121,6 +123,7 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
         setBets([]);
         setProfile(null);
         setStreak(null);
+        setHasLoaded(false);
         window.location.assign('/you');
       }
     });
@@ -168,7 +171,7 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button onClick={() => setShowProfile((v) => !v)} className={bookButton}>
+          <button disabled={!profile} onClick={() => setShowProfile((v) => !v)} className={bookButton}>
             {showProfile ? 'Close profile' : 'Edit profile'}
           </button>
           <button
@@ -184,6 +187,11 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
           <p role="alert" className="text-[13px] text-loss">
             {error}
           </p>
+          {hasLoaded && (
+            <p className="mt-2 text-[12px] text-mid">
+              Showing the last Book we loaded. Retry to refresh your record.
+            </p>
+          )}
           <button onClick={() => reload(true)} className={`${bookButton} mt-3`}>
             Retry
           </button>
@@ -201,7 +209,7 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
           }}
         />
       )}
-      {!loading && !profile?.profile?.handle && !showProfile && (
+      {hasLoaded && !profile?.profile?.handle && !showProfile && (
         <div className="rounded-card border border-gold/25 bg-card p-4 text-[13px] text-mid">
           Claim your handle and decide whether to join the rankings.{' '}
           <button className="text-gold underline underline-offset-4" onClick={() => setShowProfile(true)}>
@@ -221,7 +229,7 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
         <p role="status" className="py-8 text-[13px] text-mid">
           Opening your book…
         </p>
-      ) : (
+      ) : hasLoaded ? (
         <>
           <div className="grid gap-4 sm:grid-cols-2">
             <RecordPanel
@@ -416,8 +424,8 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
             )
           )}
         </>
-      )}
-      <Leaderboard key={reloadKey} garyRows={garyRows} myHandle={handle} />
+      ) : null}
+      <Leaderboard key={reloadKey} garyRows={garyRows} />
     </div>
   );
 }

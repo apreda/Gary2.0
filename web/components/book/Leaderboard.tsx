@@ -1,8 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
+import { useEffect, useRef, useState } from 'react';
 import { fetchRankings, type BoardSort, type LeaderboardData, type RankedRow } from '@/lib/book/api';
+import { supabaseBrowser } from '@/lib/auth/client';
 import type { GaryRows } from '@/lib/book/gary';
 import { bookButton } from './LogBet';
 import { profileAvatar } from './ProfileEditor';
@@ -19,7 +21,7 @@ const SORTS: { key: BoardSort; label: string }[] = [
   { key: 'record', label: 'Win rate' },
 ];
 
-export function Leaderboard({ garyRows, myHandle }: { garyRows?: GaryRows; myHandle?: string | null }) {
+export function Leaderboard({ garyRows }: { garyRows?: GaryRows }) {
   const [window_, setWindow] = useState<'7d' | '30d' | 'season'>('30d');
   const [sort, setSort] = useState<BoardSort>('streak');
   const [league, setLeague] = useState('all');
@@ -28,18 +30,40 @@ export function Leaderboard({ garyRows, myHandle }: { garyRows?: GaryRows; myHan
   const [loading, setLoading] = useState(true);
   const [moreBusy, setMoreBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [signedIn, setSignedIn] = useState(false);
+  const account = useRef<string | null>(null);
+  const requestVersion = useRef(0);
+  useEffect(() => {
+    const { data: auth } = supabaseBrowser().auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
+      const owner = session?.user.id ?? null;
+      if (owner === account.current) return;
+      account.current = owner;
+      requestVersion.current += 1;
+      setSignedIn(owner != null);
+      setData(null);
+      setError(null);
+      setLoading(true);
+      setMoreBusy(false);
+      setAttempt((n) => n + 1);
+    });
+    return () => {
+      requestVersion.current += 1;
+      auth.subscription.unsubscribe();
+    };
+  }, []);
   useEffect(() => {
     let cancelled = false;
+    const request = ++requestVersion.current;
     fetchRankings(window_, sort, league)
       .then((next) => {
-        if (!cancelled) {
+        if (!cancelled && request === requestVersion.current) {
           setData(next);
           setError(null);
           setLoading(false);
         }
       })
       .catch((e) => {
-        if (!cancelled) {
+        if (!cancelled && request === requestVersion.current) {
           setError(e.message);
           setLoading(false);
         }
@@ -56,15 +80,18 @@ export function Leaderboard({ garyRows, myHandle }: { garyRows?: GaryRows; myHan
   };
   const more = async () => {
     if (!data) return;
+    const request = requestVersion.current;
     setMoreBusy(true);
     try {
       const next = await fetchRankings(window_, sort, league, data.rows.length);
+      if (request !== requestVersion.current) return;
       setData((prev) => (prev ? { ...next, rows: [...prev.rows, ...next.rows] } : next));
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'The next page could not load.');
+      if (request === requestVersion.current)
+        setError(e instanceof Error ? e.message : 'The next page could not load.');
     } finally {
-      setMoreBusy(false);
+      if (request === requestVersion.current) setMoreBusy(false);
     }
   };
   const gary = league === 'all' ? garyRows?.[window_] : null;
@@ -128,7 +155,7 @@ export function Leaderboard({ garyRows, myHandle }: { garyRows?: GaryRows; myHan
         Net units are compared at a flat one-unit stake per pick. Hot streaks count your designated streak
         picks; pushes and voids leave the streak intact.
       </p>
-      {myHandle && data && (
+      {signedIn && data && (
         <div className="border-b border-line px-5 py-4 text-[13px] text-mid">
           {data.me ? (
             <>
@@ -137,11 +164,10 @@ export function Leaderboard({ garyRows, myHandle }: { garyRows?: GaryRows; myHan
             </>
           ) : (
             <>
-              {Math.max(0, data.min_decided - data.my_decided)} more decided calls to qualify
-              {data.my_decided >= data.min_decided
-                ? ' — enable public rankings in your profile to appear'
-                : ''}
-              .{' '}
+              {data.my_decided < data.min_decided
+                ? `${data.my_decided}/${data.min_decided} decided calls · ${data.min_decided - data.my_decided} more to qualify. `
+                : 'You have enough decided calls to qualify. '}
+              Choose a handle and enable public rankings in your profile to appear.{' '}
               <Link href="/account" className="text-gold underline underline-offset-4">
                 Profile settings
               </Link>
