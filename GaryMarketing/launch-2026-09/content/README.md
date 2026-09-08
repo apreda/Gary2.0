@@ -2,7 +2,7 @@
 
 Four finished concepts, each exported as **1080×1350 portrait** and **1600×900 landscape** JPEG. The editable source is `index.html`; assets are local and no external rendering service is required. The graphics were inspected in the browser at export size. They use original layouts, existing Gary art/fonts and a dated real app screenshot. No audience figures, testimonials or winning results were invented.
 
-**Publication status:** prepared, not posted or scheduled. First-party organic X and the Gary website are the initial destinations. Portrait versions are ready for the adult Instagram editorial rollout described in the runbook once the mobile minimum-age setting is saved and verified. TikTok video scripts require founder footage and a permitted publishing route. Do not boost these assets or book a creator from this package alone.
+**Publication status:** prepared, not posted or scheduled. First-party organic X and the Gary website are the initial destinations. Instagram publication remains gated by all account checks in [tracker C06](../LAUNCH_COMPLETION_TRACKER.md): the saved/reloaded mobile minimum-age setting, working website link and recorded domain-shaped username decision. TikTok video scripts require founder footage and a permitted publishing route. Do not boost these assets or book a creator from this package alone.
 
 ## Copy ready for review
 
@@ -72,5 +72,7 @@ Do not describe a build as live until the App Store confirms availability. These
 ## Reproduce or edit
 
 Serve this directory with a local static server. Open `/?piece=find&export=1` at 1080×1350; use `piece=reason`, `record` or `book` for other concepts. Add `&wide=1` and use 1600×900 for landscape. Browser screenshots return JPEG bytes; use `.jpg` filenames. Review each layout and footer after edits. The full original app screenshot stays in `assets/`; its display is cropped by CSS to the relevant card.
+
+September 7 review: concept 01's small heading now reads “Sports picks. A point of view.” instead of promising every-game coverage. Both concept 01 JPEG exports were regenerated from the editable HTML and visually checked at exactly 1080×1350 and 1600×900, including their full masthead and footer. The other six exports and historical app example were not changed. For these captures, Chrome's observed 125% page zoom was accounted for in the article screenshot clip; verify actual output dimensions and the entire artwork rather than assuming viewport size equals capture size. No browser zoom preference was changed.
 
 This is a concrete campaign package, not a new mandatory design template. Keep the supplied fonts and actual Gary mark for these pieces, and design future pieces around the information they need to communicate.
