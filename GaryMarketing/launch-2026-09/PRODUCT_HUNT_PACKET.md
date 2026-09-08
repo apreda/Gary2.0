@@ -1,6 +1,6 @@
 # Gary Product Hunt launch packet
 
-Prepared September 7; updated September 8, 2026, around 8:50 AM Eastern. **Status: existing draft saved and scheduled for September 13.** The [prelaunch dashboard](https://www.producthunt.com/products/gary-ai/gary-ai/prelaunch) reports **Scheduled**, not launched, featured or approved. The [launch runbook](LAUNCH_RUNBOOK.md) owns the product offer; [the completion tracker](LAUNCH_COMPLETION_TRACKER.md) owns execution status.
+Prepared September 7; updated September 8, 2026. **Status: existing draft saved and scheduled for September 13.** The [prelaunch dashboard](https://www.producthunt.com/products/gary-ai/gary-ai/prelaunch) reports **Scheduled**, not launched, featured or approved. Category, three factual technology shoutouts, a hosted captioned website overview and a published product-forum thread are now recorded in [the extras receipt](PRODUCT_HUNT_EXTRAS_2026-09-08.md), alongside the footer badge and prepared social copy. The [launch runbook](LAUNCH_RUNBOOK.md) owns the product offer; [the completion tracker](LAUNCH_COMPLETION_TRACKER.md) owns execution status.
 
 ## Account and eligibility
 
@@ -32,6 +32,9 @@ The public duplicate-listing check around midnight September 8 found no matching
 | Product X account | `https://x.com/betwithgary` |
 | Pricing | Paid with a free trial or plan selected; fresh preview shows **Free Options**. The entire product is not represented as permanently free. |
 | Launch tags | Sports; Artificial Intelligence |
+| Product category | Predictive AI; separately saved and freshly reloaded September 8. |
+| Shoutouts | Vercel, Supabase, Next.js; factual website stack credits saved and freshly read back. |
+| Video | `https://youtu.be/DsPIea4KyD0`; unlisted 30-second still-image website overview with published English captions; actual Product Hunt embed plays. Copyright check still pending at last inspection. |
 | Optional app link | The pre-existing App Store link was left unchanged. Its release availability was not reverified in this website-only task; this save makes no new native-feature claim. |
 | Promo-code field | No coupon is prepared: the account-based launch preview is not an invented promotional code. |
 | Scheduled launch | September 13, 2026, **12:01 AM PT / 3:01 AM EDT**, as selected in the calendar and displayed by the scheduling UI. Dashboard status: **Scheduled**. |

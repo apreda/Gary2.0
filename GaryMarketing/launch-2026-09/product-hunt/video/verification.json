@@ -1,0 +1,50 @@
+{
+  "verified_at_utc": "2026-09-08T14:05:26.163Z",
+  "output": "gary-website-overview-30s.mp4",
+  "output_sha256": "f15ae4b7467084ab84e84ba307a254564664cee95bcda72873b223f47196a808",
+  "bytes": 601816,
+  "duration_seconds": 30,
+  "width": 1280,
+  "height": 720,
+  "fps": "30/1",
+  "frames": 900,
+  "codec": "h264",
+  "pixel_format": "yuv420p",
+  "audio": false,
+  "source_images_visually_inspected": true,
+  "historical_labels_and_21_plus_notices_preserved": true,
+  "full_decode_passed": true,
+  "sources_unchanged": true,
+  "sources": [
+    {
+      "file": "../exports/01-find-your-game.jpg",
+      "sha256": "784b4cf90addca3a73bdc7b798e3309fc561da3870af82232c390a32afa243d5",
+      "start_seconds": 0,
+      "duration_seconds": 10
+    },
+    {
+      "file": "../exports/02-read-the-reasoning.jpg",
+      "sha256": "75e947bf1531b4703af746e98afabc3364c56fcd444f299baa4aa02d7d7eadb4",
+      "start_seconds": 10,
+      "duration_seconds": 10
+    },
+    {
+      "file": "../exports/03-check-the-record.jpg",
+      "sha256": "c48152e2db2b6f29298d622d68cb6d45d8387f70d3d049f9fb57ab379abc2bb1",
+      "start_seconds": 20,
+      "duration_seconds": 10
+    }
+  ],
+  "encoded_segment_similarity": [
+    { "source": "01-find-your-game.jpg", "at_seconds": 5, "ssim": 0.999012 },
+    { "source": "02-read-the-reasoning.jpg", "at_seconds": 15, "ssim": 0.99933 },
+    { "source": "03-check-the-record.jpg", "at_seconds": 25, "ssim": 0.999318 }
+  ],
+  "segment_check_method": "Decoded representative video samples compared against their source images in memory; no raster files written.",
+  "presentation": "Still-image website overview; historical September 7 examples, not a continuous screen recording.",
+  "new_raster_image_files": false,
+  "native_assets_or_pick_process_changes": false,
+  "published": false,
+  "hosting_url_verified": false,
+  "product_hunt_video_attachment_verified": false
+}
