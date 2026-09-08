@@ -12,9 +12,6 @@ import SwiftUI
 //                     an empty ladder
 // Plus IdentityEditorSheet (handle · avatar · bio) writing update_my_profile.
 //
-// Design language: the Quant Terminal — dark #0F0D0C ground, cardBg panels,
-// gold accents, GaryFonts throughout. Outline cards render whole. No
-// ellipsis truncation anywhere, ever.
 // ═══════════════════════════════════════════════════════════════════════════
 
 // MARK: - API

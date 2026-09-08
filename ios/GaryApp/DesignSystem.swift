@@ -1,47 +1,24 @@
 import SwiftUI
 
-// MARK: - Gary Design System (single source of truth)
-//
-// Extracted from Views.swift (Jul 2 2026) so the brand constants every surface
-// depends on live in ONE findable file: colors, typefaces, logo mark, display
-// pricing, and team colors. Behavior-identical move — no values changed.
 
 
 enum GaryColors {
-    // Core brand colors with P3 gamut
     static let gold = Color(hex: "#C9A227")
     static let lightGold = Color(hex: "#E8D48B")
     static let warmGold = Color(hex: "#F4E4BA")
     static let cream = Color(hex: "#FAF8F5")
     
-    // ── Deep backgrounds — the WARM-BLACK LADDER ────────────────────────────
-    //
-    // LAW (Aug 4 2026): every surface in this app keeps R >= B. The page
-    // background was corrected to warm ink long ago ("the old #090C11/#10161D
-    // charcoals had blue channels leading, and the whole app sat on them: that
-    // was the grey-blue cast" — LiquidGlassBackground), but four blue-leading
-    // blacks survived and kept leaking that cast back in: darkBg #08080A,
-    // cardBg #121214, the TAB BAR #17161A, and the marquee ribbon #0F0E10.
-    // All four are now warm twins at matched luminance — same perceived
-    // elevation, right hue family. Add a new surface? Check R >= B first.
     static let darkBg = Color(hex: "#090808")        // was #08080A (B led)
     static let cardBg = Color(hex: "#131211")        // was #121214 (B led)
-    /// Near-black text/ink that sits on the gold CTA / active pills / chips.
     static let ink = Color(hex: "#0C0B0B")
     static let elevatedBg = Color(hex: "#1E1A1A")
-    /// The tab bar / chrome surface. Warm twin of the mock's #17161A at the
-    /// same lightness — mock-01's geometry and elevation are untouched, only
-    /// the hue is corrected (founder, Aug 4: "the nav bar is a different color").
     static let barSurface = Color(hex: "#1A1613")
-    /// Darker inset band inside a card (the marquee's ticker crawl).
     static let insetBand = Color(hex: "#100E0C")     // was #0F0E10 (B led)
     
-    // Glass tints
     static let glassTint = Color.white.opacity(0.08)
     static let glassHighlight = Color.white.opacity(0.15)
     static let glassBorder = Color.white.opacity(0.12)
     
-    // Accent gradients
     static let goldGradient = LinearGradient(
         colors: [Color(hex: "#E8D48B"), Color(hex: "#C9A227"), Color(hex: "#8B6914")],
         startPoint: .topLeading,
@@ -54,103 +31,43 @@ enum GaryColors {
         endPoint: .bottom
     )
     
-    // Silver — the prop pick card is the silver twin of the gold game card.
-    // Mirrors gold's role exactly: chip text/border, lean rail, secondary labels.
     static let silver = Color(hex: "#CBC7C1")
     static let silverLight = Color(hex: "#DCD7D0")
     static let silverDim = Color(hex: "#B4AEA6")
 
-    // MARK: - Semantic roles (shared neutral text + selection colors — retune in one place)
-    //
-    // Convenience roles for body/label/selection states. Green/red carry
-    // win/loss + hot/cold meaning. Gold is the signature accent — use it
-    // wherever it strengthens hierarchy (it is not restricted to one element).
 
-    /// The signature gold accent — for emphasis (pick chips, prices, CTAs, Gary's voice).
     static let heroAccent = gold
-    /// Section sub-heads (replaces the gold mono eyebrows).
     static let sectionHead = GaryColors.gold.opacity(0.92)   // sections speak gold, like the web
-    /// Section descriptions and quiet supporting labels.
-    /// (Lifted 0.45→0.62 Jul 3 — founder's standing rule: secondary text on the
-    /// near-black bg must sit ≥~0.6 white; 0.4-grey-on-black is a recurring gripe.)
     static let sectionSub = Color.white.opacity(0.68)
-    /// Metadata: times, game tags, fine print. (Lifted 0.55→0.62 Jul 12 —
-    /// founder: strip times "unreadable"; hierarchy survives a step below
-    /// sectionSub at 0.68.)
     static let meta = Color.white.opacity(0.62)
-    /// Selected state for toggles/tabs/chips — a bright neutral fill.
     static let selectedText = Color.white.opacity(0.95)
     static let selectedFill = Color.white.opacity(0.12)
 
-    /// Graded-result marks (HIT/MISS, W/L, ✓/✗) — the saturated pair, distinct
-    /// from HubPalette's muted editorial tones. One token, no more inline hexes.
     static let win = Color(hex: "#3FB950")
     static let loss = Color(hex: "#E5484D")
-    /// An active pick that is neither covering nor losing yet. Amber reads as
-    /// "in progress" without borrowing green/red result semantics or Gary's
-    /// brand gold used for prices and calls.
     static let sweating = Color(hex: "#F0A53A")
-    /// Subtle red-ish gold for LOST result tags — signals a loss without flooding
-    /// the cards with bright red (user call, Jun 16). Gold-family, warmed toward red.
     static let lostTint = Color(hex: "#C77A3A")
-    /// Opaque warm field fill for text inputs (search bars).
     static let fieldBg = Color(hex: "#131110")
-    /// Warm-white overlay base for panel/card chrome (QuantPanel's tint) —
-    /// pure Color.white over the warm black page reads as a cool blue-grey cast.
     static let warmWhite = Color(hex: "#F6F1E7")
 
-    // NFL cobalt — an accessibility-lifted blue rooted in the league's shield
-    // identity. Green belongs to MLB/positive-result semantics in Gary, while
-    // red already carries NCAAF and loss meaning.
-    // Per-sport cue color (founder, Aug 20 second ruling: "a little accent
-    // color... so the user naturally knows the cue color per sport"). The
-    // token stays cobalt; the LAW is restraint — kickers and cue moments
-    // wear it, never whole modules (the saturated look read as foreign).
     static let nflAccent = Color(hex: "#2C7EDB")
 
-    // MLB label/eyebrow accent — a SOLID light grass green (user call, Jun 26):
-    // the old green→dirt-brown→white field gradient was retired for a clean,
-    // readable single field-green that reads well on small text.
     static let mlbGrass = Color(hex: "#63D17E")
     static let mlbFieldText = Color(hex: "#63D17E")
 
-    // ── Panel chrome (one recipe) ───────────────────────────────────────────
-    // Two near-identical panel surfaces used to coexist — quantPanel() at 0.022
-    // fill and six hand-rolled panels at 0.03 — so a retune only ever hit half
-    // the app. One fill, one stroke, both warm-white (pure white at low alpha
-    // over warm black reads as a cool blue-grey cast).
     static let panelFill = warmWhite.opacity(0.03)
     static let panelStroke = warmWhite.opacity(0.07)
-    // THE FLOOR pairing (founder, Aug 19): over a patterned ground the 3% wash
-    // is see-through — this is the SAME color that wash reads as over the plain
-    // ink, locked opaque, so cards sit ON the world instead of dissolving into
-    // it. Applied on Home, Winners and the Fantasy player panels.
     static let panelFillOpaque = Color(hex: "#141210")
-    /// Brighter solid surfaces for longer Hub and Fantasy reading.
     static let readingPanel = Color(hex: "#24211D")
     static let readingPanelRaised = Color(hex: "#2C2822")
 }
 
-// MARK: - Layout (single source of truth)
-//
-// Before Aug 4 2026 the app used 20 distinct horizontal paddings; `16` was only
-// 38% of them. Home ragged its own left edge twice (two blocks at 20) and the
-// content edge JUMPED when you switched tabs (Home/Winners 16, Hub/Picks 18,
-// Billfold 12–20). One gutter fixes all of it.
 enum GaryLayout {
-    /// The page gutter (founder call, Aug 4: 18). Every full-width block,
-    /// section rule, masthead, and hairline aligns to this — no exceptions,
-    /// so the app has ONE left edge on every page.
     static let gutter: CGFloat = 18
 
-    /// Corner radii — three steps, not twenty. (Pick/prop card faces keep their
-    /// own locked geometry and are deliberately NOT on this scale.)
     enum Radius {
-        /// List panels, doors, the wire, the board.
         static let panel: CGFloat = 12
-        /// Hero cards — marquee, Winners stub, takeover.
         static let card: CGFloat = 14
-        /// Modals and sheets.
         static let sheet: CGFloat = 20
     }
 }
@@ -228,7 +145,6 @@ enum TeamColors {
 // registered through Info.plist UIAppFonts; system roles use the scales below.
 // The Hub and shared player cards also have native scalable type modifiers.
 // These helpers describe current rendering, not mandatory design choices.
-// Design guidance: current feedback and docs/design/anti-ai-slop-design.md.
 enum GaryFonts {
     /// Current bundled display face. Its glyphs render capitals only.
     static let displayFace = "BebasNeue-Regular"
@@ -272,25 +188,19 @@ enum GaryFonts {
         .system(size: size, weight: weight)
     }
 
-    /// Deprecated alias — `data`'s name from the "Quant Terminal" era. 400+
-    /// call sites still speak it and the output is identical; new code uses `data`.
+    /// Compatibility alias for the shared data font helper.
     static func mono(_ size: CGFloat, bold: Bool = false) -> Font {
         data(size, bold ? .bold : .semibold)
     }
 }
 
 extension View {
-    /// Horizontal card rails must never shear their cards' drop shadows into
-    /// hard edges (Jul 22: the Winners seal read flat on the page). iOS 17's
-    /// scrollClipDisabled is the real fix; iOS 16 keeps the clipped look —
-    /// a quiet degradation, never a crash.
+    /// Allows rail shadows outside scroll bounds on iOS 17 and later.
     @ViewBuilder func unclippedRail() -> some View {
         if #available(iOS 17.0, *) { self.scrollClipDisabled() } else { self }
     }
 
-    /// THE page gutter. Full-width blocks, mastheads, section rules, and
-    /// hairlines use this instead of a literal `.padding(.horizontal, N)` —
-    /// the app's left edge is defined once, in GaryLayout.gutter.
+    /// Applies the shared horizontal padding value.
     func pageGutter() -> some View { padding(.horizontal, GaryLayout.gutter) }
 
     /// The one panel surface (fill + hairline stroke). Replaces quantPanel()

@@ -50,11 +50,6 @@ extension GaryPick {
 
 // MARK: - Compact Pick Row (Scoreboard-style)
 
-// MARK: - 21B-S "Poured — Still" (Jul 2 2026, user-locked premium finish)
-//
-// The entitled Winners GAME card is a solid poured-gold bar with a machined
-// bevel lip — no animation, dark ink type. Free/standard cards keep the dark
-// card; prop cards keep their silver language. One source for the metal.
 enum GoldBar {
     static let inkHero   = Color(hex: "#2C2304")
     static let inkStrong = Color(hex: "#3A2C04")
@@ -109,10 +104,6 @@ enum GoldBar {
     }
 }
 
-// MARK: - SilverBar (Jul 3 2026, user-locked): the SOLD prop card is the
-// silver twin of the gold game bar — same machining, same physics, silver
-// metal, the black Gary badge as its crest. Winners-page props ONLY; the
-// free Picks-page prop cards stay dark.
 enum SilverBar {
     static let inkHero   = Color(hex: "#1C1C22")
     static let inkStrong = Color(hex: "#2A2A32")
@@ -147,7 +138,7 @@ enum SilverBar {
     }
 }
 
-// MARK: - Members Only reveal system (Jul 3 2026, user-locked)
+// MARK: - Members Only reveal system 
 //
 // A new Winners pick sits SEALED in the rail — black members card, chrome bear,
 // live countdown to first pitch. The owner taps to flip it open into the gold
@@ -708,8 +699,6 @@ struct LockedPickCard: View {
     }
 }
 
-/// The locked LOST physics for the gold bar: a hairline fracture with a branch.
-/// Authored on the 346×232 mock, scaled to whatever the card measures.
 struct CrackShape: Shape {
     func path(in rect: CGRect) -> Path {
         // Single jagged fracture, top to bottom — no fork (founder call, Jul 4:
@@ -822,11 +811,6 @@ struct CompactPickRow: View {
     private var shareTint: Color { premiumFinish ? GoldBar.inkSoft.opacity(0.8) : .white.opacity(0.5) }
     private var chevronTint: Color { premiumFinish ? GoldBar.inkStrong.opacity(0.7) : GaryColors.heroAccent.opacity(0.7) }
 
-    // D3 verdict system (Jul 3 2026, user-locked): dark cards drop the diagonal
-    // stamp. Wins celebrate — full brightness, giant green ghost ✓ behind the
-    // content, green footer verdict. Losses recede — content dims to ~40%, a
-    // whisper-faint ✕ behind, lostTint footer verdict at full strength. The
-    // stamp survives only on the gold bar (its treatment is still being picked).
     private var isGoldLost: Bool { premiumFinish && displayResult == "lost" }
     private var isGoldWon: Bool { premiumFinish && displayResult == "won" }
     /// Premium type scale (founder call, Jul 3): EVERYTHING on the gold bar
@@ -861,9 +845,6 @@ struct CompactPickRow: View {
         return line
     }
 
-    // X1+X4 win moment (Jul 3 2026, user-locked): struck green check + the
-    // payout counting up in the eyebrow row's right corner, one-shot confetti
-    // for FRESH wins. LOST = hairline crack + whole-bar dim (locked earlier).
     @State private var shownPayout: Int = 0
     @State private var showConfetti = false
     /// Profit on a $100 stake from the American odds ("+172" → 172, "-125" → 80).
@@ -1190,15 +1171,6 @@ struct CompactPickRow: View {
             : "\(pickedShort.uppercased())\n\(bet.uppercased())"
     }
 
-    /// Skyscraper type (Jul 2 2026, user-locked; bumped Jul 3 "fill the cards"):
-    /// ONE max size for every call — the pick fills the card. Long team names
-    /// rein themselves in per line via minimumScaleFactor, so the type is
-    /// always as big as the name allows. D3's ghost mark rides BEHIND the type,
-    /// so settled cards need no reserve for it.
-    /// Free/dark cards read at 58 (founder walked 76→64→58, Jul 3); the gold
-    /// bar walked down too (Jul 4, "−15%"): 76→65 base × 1.15 scale ≈ 75.
-    /// PARITY LAW: the silver prop card uses the SAME premium base — the only
-    /// visible differences between Winners cards are the metal and the words.
     private var heroFontSize: CGFloat { premiumFinish ? 65 : 52 }
     /// Tight stacked leading (the mock's line-height .9) — all-caps display type
     /// has no descenders, so the lines pull together safely.
@@ -1351,12 +1323,6 @@ struct CompactPickRow: View {
             }
 
             VStack(alignment: .leading, spacing: 0) {
-                // UNIFORM eyebrow (founder law, Jul 4): mark + GARY'S PICK, same
-                // slot on EVERY pick card — game/prop, gold/silver/dark alike.
-                // Share-card grammar app-wide (founder, Jul 12): eyebrow text
-                // left with air below; the BIG mark floats in the corner as an
-                // overlay (attached after this VStack) so the hero band never
-                // loses a point of height to it.
                 HStack(alignment: .top, spacing: 10) {
                     Text(eyebrowLabel)
                         .font(GaryFonts.accent(12.5 * pf)).tracking(1.0)
@@ -1415,9 +1381,6 @@ struct CompactPickRow: View {
                     // the corner bear are gone/behind the type).
                     .padding(.trailing, (premiumFinish && isGoldWon) ? 96 : 0)
 
-                // LOCKED GEOMETRY (founder law, Jul 4): meta + divider + score
-                // pin to the card BOTTOM — a hero that scales down for a long
-                // name can never float the lower parts upward.
                 Spacer(minLength: 0)
 
                 HStack(alignment: .center, spacing: 8) {
@@ -1426,16 +1389,7 @@ struct CompactPickRow: View {
                         .foregroundStyle(leagueTint)
                         .lineLimit(1)
                         .layoutPriority(1)
-                    // PRICE NEVER TRUNCATES (founder, Aug 24: the NFL card's
-                    // long "NFL PRESEASON" tag squeezed this row until the odds
-                    // ellipsized to "-..." — a hard-law violation). The odds are
-                    // their own fixed-size Text with top layout priority; the
-                    // opponent scales down instead. No ellipsis, ever.
-                    // Scales, never truncates. A college card whose pick was
-                    // written before the provider abbreviations were stamped
-                    // still carries the whole school name here ("Colorado"),
-                    // and at the old 0.6 floor that row printed "vs COLORA…" —
-                    // the hard law says shorten or scale, never clip.
+                    // Keep the full betting price visible when opponent names are long.
                     (Text(metaLine).foregroundColor(metaBodyTint))
                         .font(GaryFonts.text(13.5 * pf, .medium))
                         .lineLimit(1)
@@ -1566,8 +1520,6 @@ struct CompactPickRow: View {
                 .allowsHitTesting(false)
             }
 
-            // GOLD LOSS (locked): the hairline fracture — dark cut with a light
-            // kick off its right edge; the whole bar dims below.
             if isGoldLost {
                 CrackShape()
                     .stroke(Color(hex: "#231A02").opacity(0.72), lineWidth: 2)
@@ -1635,8 +1587,6 @@ struct CompactPickRow: View {
                 }
             }
         )
-        // Locked LOST physics for the gold bar: the metal loses saturation and
-        // light (the crack overlay rides above). Dark cards dim per-element (D3).
         .saturation(isGoldLost ? 0.8 : 1)
         .brightness(isGoldLost ? -0.06 : 0)
         .onAppear {

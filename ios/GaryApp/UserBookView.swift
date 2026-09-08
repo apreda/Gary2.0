@@ -2823,7 +2823,7 @@ struct ProfileView: View {
         let best = card?.streak?.best
         return VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Label("YOUR STREAK", systemImage: "flame.fill").font(GaryFonts.mono(11, bold: true)).tracking(1).foregroundStyle(Color(hex: "#ECA06D"))
+                Label("YOUR STREAK", systemImage: "flame.fill").font(GaryFonts.mono(11, bold: true)).tracking(1).foregroundStyle(GaryColors.gold)
                 Spacer()
                 Text("BEST \(best.map(String.init) ?? "—")").font(GaryFonts.mono(10, bold: true)).foregroundStyle(.white.opacity(0.5))
             }
@@ -2839,7 +2839,7 @@ struct ProfileView: View {
                     .font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.6)).fixedSize(horizontal: false, vertical: true)
             }
             Text("Self-tracked favorites stay in your book and don't count toward this streak.").font(GaryFonts.text(11)).foregroundStyle(.white.opacity(0.4)).fixedSize(horizontal: false, vertical: true)
-        }.padding(18).background(RoundedRectangle(cornerRadius: 17).fill(Color(hex: "#E5844B").opacity(0.07))).overlay(RoundedRectangle(cornerRadius: 17).stroke(Color(hex: "#E5844B").opacity(0.22)))
+        }.padding(18).background(panel)
     }
 
     private func record(_ rows: [UserBet]) -> (wins: Int, losses: Int, pushes: Int, net: Double) {

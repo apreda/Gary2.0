@@ -32,9 +32,6 @@ struct CompactPropRow: View {
     /// Exact height when the flip wrapper passes one — uniform with the game card
     /// (shares CompactPickRow.uniformHeight). nil = natural size (raw/share use).
     var fixedHeight: CGFloat? = nil
-    /// SilverBar finish (Jul 3, user-locked): Winners-page (sold) props render
-    /// as the SILVER twin of the gold game bar — black badge crest, ink type,
-    /// same verdict physics. Free Picks-page props stay dark (default false).
     var premiumFinish: Bool = false
 
     private var accentColor: Color { Sport.from(league: prop.effectiveLeague).accentColor }
@@ -371,9 +368,6 @@ struct CompactPropRow: View {
             }
 
             VStack(alignment: .leading, spacing: 0) {
-                // UNIFORM eyebrow (game-card grammar, Jul 12): accent text left,
-                // the mark floats big in the corner via overlay — same slot,
-                // every finish, every page.
                 HStack(alignment: .top, spacing: 10) {
                     Text(eyebrowLabel)
                         .font(GaryFonts.accent(12.5 * pf)).tracking(1.0)
@@ -436,9 +430,6 @@ struct CompactPropRow: View {
                     // corner marks are gone on every finish (game-card parity).
                     .padding(.trailing, (premiumFinish && isSilverWon) ? 96 : 0)
 
-                // LOCKED GEOMETRY (founder law, Jul 4): meta + divider + score
-                // pin to the card BOTTOM, identical to the game card — a hero
-                // that scales down for a long name can never float them up.
                 Spacer(minLength: 0)
 
                 HStack(alignment: .center, spacing: 8) {
@@ -449,8 +440,7 @@ struct CompactPropRow: View {
                         .foregroundStyle(propLeagueTint)
                         .lineLimit(1)
                         .layoutPriority(1)
-                    // PRICE NEVER TRUNCATES — same split as the game card
-                    // (founder, Aug 24): odds fixed-size, meta scales.
+                    // Keep the full betting price visible when opponent names are long.
                     (Text(metaLine).foregroundColor(metaBodyTint))
                         .font(GaryFonts.text(13.5 * pf, .medium))
                         .lineLimit(1)
@@ -606,7 +596,6 @@ struct CompactPropRow: View {
                 }
             }
         )
-        // Locked LOST physics on the silver bar (gold parity).
         .saturation(isSilverLost ? 0.8 : 1)
         .brightness(isSilverLost ? -0.06 : 0)
         .onAppear {

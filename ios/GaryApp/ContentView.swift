@@ -332,9 +332,6 @@ struct GaryPage: View {
         }
     }
 
-    // Primary nav (Hub ⟷ Fantasy ⟷ Talk) — an underline tab, deliberately distinct
-    // from the gold filter-pills used elsewhere. Role differentiation, not another
-    // gold capsule. (DESIGNER_BRIEFING: differentiate button roles.)
     private var modeSwitch: some View {
         HStack(spacing: 28) {
             ForEach(GaryPageMode.enabled, id: \.self) { m in

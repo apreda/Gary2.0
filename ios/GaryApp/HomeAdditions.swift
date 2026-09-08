@@ -82,9 +82,6 @@ struct HomeWireMini: View {
                                     .foregroundStyle(.white.opacity(0.45))
                                     .lineLimit(1).minimumScaleFactor(0.85)
                                     .frame(width: 76, alignment: .leading)
-                                // NO lineLimit — the headline wraps to whatever
-                                // it needs (the 2-line cap printed "…", the
-                                // hard-law violation, Aug 3 loop 2).
                                 Text(item.headline ?? "")
                                     .font(GaryFonts.text(12.5))
                                     .foregroundStyle(.white.opacity(0.85))

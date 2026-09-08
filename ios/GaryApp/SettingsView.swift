@@ -1,9 +1,5 @@
 import SwiftUI
 
-// MARK: - Settings View
-// Speaks the same Quant Terminal language as the page headers: mono gold
-// wordmark + dashed stitch, mono section eyebrows, flat matte cards
-// (DESIGNER_BRIEFING four horsemen: no glow shadows, no gradient borders).
 
 struct SettingsView: View {
     @EnvironmentObject var authManager: AuthManager

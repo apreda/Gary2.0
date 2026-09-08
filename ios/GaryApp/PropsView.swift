@@ -31,7 +31,7 @@ struct GaryPropsView: View {
     @State private var yesterdayGamePicks: [GaryPick] = []
     @State private var gameResultsMap: [String: String] = [:]
 
-    // MARK: - Dashboard view state (Quant Terminal redesign)
+    // MARK: - Dashboard view state
     @State private var viewMode: PropDashViewMode = .cards
     @State private var sortMode: PropDashSort = .confidence
     @State private var ouFilter: PropDashOU = .all
@@ -204,7 +204,7 @@ struct GaryPropsView: View {
         }
     }
 
-    // MARK: - Dashboard derived data (Quant Terminal)
+    // MARK: - Dashboard derived data
 
     /// `filteredProps` after the O/U + prop-type controls. (Sport selection and
     /// the yesterday-recap fallback are already applied upstream by `filteredProps`.)
@@ -1241,7 +1241,7 @@ struct GaryPropsView: View {
     }
 }
 
-// MARK: - Props Dashboard support types (Quant Terminal)
+// MARK: - Props Dashboard support types
 
 enum PropDashViewMode: Hashable { case cards, table }
 
