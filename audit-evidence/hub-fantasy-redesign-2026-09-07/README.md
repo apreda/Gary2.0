@@ -50,10 +50,18 @@ Additional final Release captures: [MLB Hub](screenshots/mlb-hub-release.jpg),
 [Hub accessibility](screenshots/hub-accessibility.jpg),
 [Fantasy accessibility](screenshots/fantasy-accessibility.jpg).
 
-## Pending release checks
+## Release
 
-Build 907 upload and Apple processing verification are pending. A successful
-archive does not establish TestFlight availability. Native accessibility
-actions and viewport rendering were checked; this does not establish physical
-device touch behavior. No paid generation or data publication was run for this
-presentation pass.
+Implementation commit `f7eb9fbd` is pushed to main. Build 2.25 (907) uploaded
+successfully at 2026-09-08 00:32:00 UTC. App Store Connect was verified Complete
+at 00:35 UTC; the build is assigned to the internal Beta group, one invite,
+90 days remaining. Apple build ID: `3e15a8aa-e9eb-4ac4-ad98-23142eccadd4`.
+
+Production truth after the push: canonical scheduler and Winners worker are
+running; 11/11 MLB games published, zero started missing, all 20 edge timestamp
+checks passed. Exit 1 is the single preserved private local configuration
+exception (`GoogleService-Info.plist`), with no unpushed changes.
+
+Native accessibility actions and viewport rendering were checked; this does
+not establish physical-device touch behavior. No paid generation or data
+publication was run for this presentation pass.
