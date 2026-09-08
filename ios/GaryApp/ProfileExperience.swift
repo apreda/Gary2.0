@@ -153,14 +153,18 @@ struct ProfileAvatar: View {
 
     var body: some View {
         ZStack {
-            Circle().fill(GaryColors.gold.opacity(0.09))
-            Circle().stroke(GaryColors.gold.opacity(0.25), lineWidth: 1)
+            RoundedRectangle(cornerRadius: size * 0.32, style: .continuous)
+                .fill(GaryColors.warmWhite.opacity(0.045))
+            RoundedRectangle(cornerRadius: size * 0.32, style: .continuous)
+                .strokeBorder(GaryColors.warmWhite.opacity(0.14), lineWidth: 0.75)
             if let symbol, Self.choices.contains(symbol), symbol != "initials" {
                 Image(systemName: symbol).font(.system(size: size * 0.38, weight: .semibold))
             } else if let first = name.first {
                 Text(String(first).uppercased()).font(GaryFonts.mono(size * 0.42, bold: true))
             } else {
-                Image(systemName: "person.fill").font(.system(size: size * 0.38, weight: .medium))
+                Image(systemName: "person")
+                    .font(.system(size: size * 0.52, weight: .regular))
+                    .symbolVariant(.none)
             }
         }
         .foregroundStyle(GaryColors.gold)
