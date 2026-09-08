@@ -114,3 +114,20 @@ Local verification logs are `/tmp/gary-mlb-six-backend-20260908.log`,
 `/tmp/gary-mlb-six-final-prompt-selection-20260908.log`, and
 `/tmp/gary-mlb-six-edge-20260908.log`. The current-day read-only ledger is
 `/tmp/gary-mlb-six-live-book-20260908.json`.
+
+## Final source and production check
+
+Implementation commit **6da0c97e** is pushed to `origin/main`. Final additional
+prompt/selection/routing checks passed **78 tests / five suites**, for **215
+focused checks** across the two final runs. The canonical read-only production
+check at `/tmp/gary-mlb-six-production-20260908.log` verifies the new era, Astra
+model, running Winners PID83478, no unpushed commits and all20 edge deployment
+timestamps. It sees15 scheduled MLB games, none started and none published yet.
+
+The overall checker exits1 for10 unrelated working-tree entries: concurrent
+launch/account documentation, the other task's new Hub files/migration, and the
+existing private Firebase configuration exception. These were left untouched
+and uncommitted by this task. The checker is not globally green; this is an
+explicit shared-workspace exception, not undeployed MLB code. No changed MLB
+source remains uncommitted. The Winners stderr file is unchanged since
+September6; no new worker error appeared after restart.
