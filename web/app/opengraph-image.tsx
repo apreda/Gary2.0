@@ -7,10 +7,10 @@ export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
 export default async function Image() {
-  const [jbMono, barlow, bear] = await Promise.all([
-    readFile(join(process.cwd(), 'assets/og/JetBrainsMono-Bold.ttf')),
-    readFile(join(process.cwd(), 'assets/og/BarlowCondensed-Bold.ttf')),
-    readFile(join(process.cwd(), 'public/brand/gary-icon-og.png'), 'base64'),
+  const [uiFont, displayFont, bear] = await Promise.all([
+    readFile(join(process.cwd(), 'assets/og/Inter-SemiBold.ttf')),
+    readFile(join(process.cwd(), 'public/fonts/bebas-neue.ttf')),
+    readFile(join(process.cwd(), 'public/brand/GaryIconBG.png'), 'base64'),
   ]);
   const bearSrc = `data:image/png;base64,${bear}`;
 
@@ -37,7 +37,7 @@ export default async function Image() {
         >
           <div
             style={{
-              fontFamily: 'JetBrains Mono',
+              fontFamily: 'Gary UI',
               fontSize: 34,
               color: '#C9A227',
               letterSpacing: 10,
@@ -49,7 +49,7 @@ export default async function Image() {
             style={{
               display: 'flex',
               flexDirection: 'column',
-              fontFamily: 'Barlow Condensed',
+              fontFamily: 'Gary Display',
               fontSize: 92,
               lineHeight: 1.04,
               color: '#FFFFFF',
@@ -62,7 +62,7 @@ export default async function Image() {
           </div>
           <div
             style={{
-              fontFamily: 'JetBrains Mono',
+              fontFamily: 'Gary UI',
               fontSize: 24,
               color: 'rgba(255,255,255,0.5)',
               letterSpacing: 2,
@@ -77,8 +77,8 @@ export default async function Image() {
     {
       ...size,
       fonts: [
-        { name: 'JetBrains Mono', data: jbMono, style: 'normal', weight: 700 },
-        { name: 'Barlow Condensed', data: barlow, style: 'normal', weight: 700 },
+        { name: 'Gary UI', data: uiFont, style: 'normal', weight: 700 },
+        { name: 'Gary Display', data: displayFont, style: 'normal', weight: 700 },
       ],
     }
   );

@@ -72,14 +72,13 @@ describe('published pick discovery', () => {
     const markup = renderToStaticMarkup(createElement(BoardGrid, {
       items: [{
         key: game.key, label: `${game.away} at ${game.home}`,
-        tile: createElement('span', null, 'Pick preview'),
         panel: createElement(GameRow, { game, analysisHref: path }),
       }],
     }));
     expect(markup).toMatch(new RegExp(`<a[^>]+href="${path}"`));
     expect(markup).toContain('Red Sox at New York Yankees: pick and full analysis</a>');
     expect(markup).toContain('The matchup &amp; the bullpen support this pick.');
-    expect(markup).toMatch(/<details[^>]*>/);
+    expect(markup).toContain('Flip Red Sox Moneyline to read Gary’s Take');
     expect(markup).not.toMatch(/<details[^>]*\sopen(?:=|>)/);
     expect(renderToStaticMarkup(createElement(GameRow, { game }))).not.toContain('pick and full analysis</a>');
   });

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { RecordDashboard } from '@/components/site/RecordDashboard';
 import { AccountCta } from '@/components/AccountCta';
 import { PageMasthead, StatTile, StitchRule, ResultLetter } from '@/components/Terminal';
 import {
@@ -63,7 +64,7 @@ function FormPips({ results }: { results: string[] }) {
       className="mt-4 flex items-center gap-3"
       aria-label={`Last 10: ${results.map(r => PIP_LETTER[r] ?? '?').join(' ')}`}
     >
-      <span className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-low">Last 10</span>
+      <span className="font-mono text-[13px] font-bold uppercase tracking-[0.04em] text-low">Last 10</span>
       <div className="flex gap-1.5" aria-hidden="true">
         {results.map((r, i) => (
           <span key={i} className="h-3 w-3 rounded-[3px]" style={{ background: PIP_COLOR[r] ?? '#555' }} />
@@ -96,9 +97,9 @@ export default async function ResultsPage() {
   const publishedPaths = publishedGamePathSet(pickIndex);
 
   return (
-    <main className="mx-auto max-w-6xl px-5 pb-16 pt-12">
+    <main className="site-wrap pb-16 pt-12">
       <PageMasthead
-        title="Sports picks results and track record"
+        title="The whole record."
         meta="EVERY PICK GRADED"
         sub="The headline record below covers Gary's game picks. Player props are reported separately, and every published result stays on the record. Units assume flat 1-unit stakes at the listed odds."
       />
@@ -106,7 +107,7 @@ export default async function ResultsPage() {
       {/* The receipts — why this record can be trusted (and most can't) */}
       <section className="mt-8 grid gap-4 rounded-lg border border-line p-5 md:grid-cols-3">
         <div>
-          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-gold">Publication receipt</p>
+          <p className="font-mono text-[13px] font-bold uppercase tracking-[0.04em] text-gold">Publication receipt</p>
           <p className="mt-1.5 text-[14px] leading-relaxed text-mid">
             When source timestamps are available, we show when the daily card was first stored
             and its earliest listed game start. Individual picks may have been added later.
@@ -118,59 +119,21 @@ export default async function ResultsPage() {
           </p>
         </div>
         <div>
-          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-gold">Nothing deleted</p>
+          <p className="font-mono text-[13px] font-bold uppercase tracking-[0.04em] text-gold">Nothing deleted</p>
           <p className="mt-1.5 text-[14px] leading-relaxed text-mid">
             Wins, losses, and pushes all stay in the record totals. The recent tape below shows the latest 25 graded picks.
           </p>
         </div>
         <div>
-          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-gold">Graded by machine</p>
+          <p className="font-mono text-[13px] font-bold uppercase tracking-[0.04em] text-gold">Graded by machine</p>
           <p className="mt-1.5 text-[14px] leading-relaxed text-mid">
             Results grade automatically from final scores — the same pipeline grades Gary and everyone who tails him in the app.
           </p>
         </div>
       </section>
 
-      {/* Headline — the all-time figure carries the page */}
-      <section className="mt-7 grid items-end gap-8 lg:grid-cols-12">
-        <div className="lg:col-span-6">
-          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-gold">Game picks · all-time</p>
-          <p className="tnum mt-2 font-mono text-[clamp(3rem,7vw,5rem)] font-bold leading-none text-hi">
-            {allTime.wins.toLocaleString()}
-            <span className="text-faint">–</span>
-            {allTime.losses.toLocaleString()}
-          </p>
-          <p className="tnum mt-3 font-mono text-[12px] text-low">
-            {allTime.pct}% · {fmtUnits(allTime.netUnits)} · {allTime.graded.toLocaleString()} graded
-          </p>
-          {recent.length > 0 && (
-            <FormPips
-              results={recent
-                .slice(0, 10)
-                .map(r => (r.result ?? '').trim().toLowerCase())
-                .reverse()}
-            />
-          )}
-        </div>
-        <div className="grid grid-cols-3 gap-3 lg:col-span-6">
-          <StatTile
-            label="Last 30 days"
-            value={<>{l30.wins}<span className="text-faint">–</span>{l30.losses}</>}
-            sub={`${l30.pct}% · ${fmtUnits(l30.netUnits)}`}
-          />
-          <StatTile
-            label="Last 7 days"
-            value={<>{l7.wins}<span className="text-faint">–</span>{l7.losses}</>}
-            sub={`${l7.pct}% · ${fmtUnits(l7.netUnits)}`}
-          />
-          <StatTile
-            label="Streak"
-            value={streak ? `${streak.count}${streak.kind === 'won' ? 'W' : 'L'}` : '—'}
-            sub={streak ? `${streak.kind === 'won' ? 'wins' : 'losses'} in a row` : ''}
-            valueClassName={streak?.kind === 'won' ? 'text-win' : streak ? 'text-loss' : 'text-hi'}
-          />
-        </div>
-      </section>
+      <RecordDashboard allTime={allTime} recent={l30}/>
+      <div className="mt-6 grid gap-4 sm:grid-cols-3"><StatTile label="Last 7 days" value={`${l7.wins}–${l7.losses}`} sub={`${l7.pct}% · ${fmtUnits(l7.netUnits)}`}/><StatTile label="Streak" value={streak?`${streak.count}${streak.kind==='won'?'W':'L'}`:'—'}/><div className="rounded-panel border border-line p-5"><FormPips results={recent.slice(0,10).map(r=>(r.result||'').trim().toLowerCase()).reverse()}/></div></div>
 
       <AccountCta
         nextPath="/results"
@@ -186,7 +149,7 @@ export default async function ResultsPage() {
         <div className="mt-2 overflow-x-auto">
           <table className="w-full min-w-[560px] text-left">
             <thead>
-              <tr className="border-b border-line font-mono text-[10px] uppercase tracking-[0.04em] text-low">
+              <tr className="border-b border-line font-mono text-[13px] uppercase tracking-[0.04em] text-low">
                 <th className="px-4 py-3 font-bold">Sport</th>
                 <th className="px-4 py-3 font-bold">Record</th>
                 <th className="px-4 py-3 font-bold">Win %</th>
@@ -274,7 +237,7 @@ export default async function ResultsPage() {
             </span>
           ))}
         </p>
-        <div className="mt-6 flex flex-wrap gap-4 font-mono text-[11px] uppercase tracking-[0.05em]">
+        <div className="mt-6 flex flex-wrap gap-4 font-mono text-[14px] uppercase tracking-[0.05em]">
           <Link href="/results/audit" className="text-gold underline decoration-gold/40 underline-offset-4">Model audit and monthly tape</Link>
           <a href="/results.csv" className="text-gold underline decoration-gold/40 underline-offset-4">Download CSV</a>
           <a href="/results.json" className="text-gold underline decoration-gold/40 underline-offset-4">Download JSON</a>

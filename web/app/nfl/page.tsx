@@ -91,7 +91,7 @@ export default async function NflPage({
           </div>
         </div>
         <div className="hidden justify-center lg:col-span-4 lg:flex">
-          <Image src="/brand/gary-icon.png" alt="Gary the bear" width={260} height={260} />
+          <Image src="/brand/GaryIconBG.png" alt="Gary the bear" width={260} height={260} />
         </div>
       </section>
 

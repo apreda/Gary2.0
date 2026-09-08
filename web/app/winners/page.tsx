@@ -1,3 +1,5 @@
+import { todayEST } from '@/lib/gary/dates';
+import { isArchiveDate } from '@/lib/gary/archive';
 import type { Metadata } from 'next';
 import { PageMasthead } from '@/components/Terminal';
 import { WinnersClient } from '@/components/book/WinnersClient';
@@ -8,14 +10,15 @@ export const metadata: Metadata = pageMetadata({
   description:
     'Gary’s reviewed Winners boards. Original published tickets, connected to your membership and your free Book.',
 });
-export default function WinnersPage() {
+export default async function WinnersPage({searchParams}:{searchParams:Promise<{date?:string}>}) {
+  const {date}=await searchParams;const initialDate=date&&isArchiveDate(date)&&date>='2026-09-04'&&date<=todayEST()?date:todayEST();
   return (
     <main className="mx-auto max-w-4xl px-5 pb-20 pt-12">
       <PageMasthead
         title="Winners"
-        sub="The plays Gary would make. Every ticket passes review before it earns a place on the board."
+        sub="A smaller board. A closer look. The call is Gary’s. The choice is yours."
       />
-      <WinnersClient />
+      <WinnersClient initialDate={initialDate} />
     </main>
   );
 }

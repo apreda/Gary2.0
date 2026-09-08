@@ -2,14 +2,16 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { AppStoreButton } from '@/components/AppStoreButton';
+import { PickCard } from '@/components/PickCard';
+import { PropCard } from '@/components/PropCard';
 import { Eyebrow } from '@/components/Eyebrow';
 import { JsonLd } from '@/components/JsonLd';
 import { ScoutRead } from '@/components/ScoutRead';
 import { MeaningfulPickView } from '@/components/MeaningfulPickView';
 import { ShareActions } from '@/components/ShareActions';
-import { ResultLetter, StitchRule } from '@/components/Terminal';
+import { StitchRule } from '@/components/Terminal';
 import { isArchiveDate } from '@/lib/gary/archive';
-import { etDateLabel, etTime, injuryLines, marketLine, oddsText, parseGameTime, propCall, scoutSectionsExcluding } from '@/lib/gary/format';
+import { etDateLabel, etTime, injuryLines, marketLine, scoutSectionsExcluding } from '@/lib/gary/format';
 import {
   fetchGameDay,
   fetchGameProps,
@@ -22,7 +24,6 @@ import {
   slateForGame,
 } from '@/lib/gary/gamepage';
 import { sportBySlug } from '@/lib/gary/leagues';
-import { nowMs } from '@/lib/gary/dates';
 import type { GaryPick } from '@/lib/gary/types';
 import { SITE_URL, pageMetadata } from '@/lib/seo/metadata';
 
@@ -38,10 +39,6 @@ function headline(pick: GaryPick): string {
 function callOf(pick: GaryPick): string {
   return (pick.pick ?? '').replace(/[+-]\d{3,}\s*$/, '').trim();
 }
-function oddsOf(pick: GaryPick): string | null {
-  return oddsText(pick.odds ?? (pick.pick ?? '').match(/[+-]\d{3,}\s*$/)?.[0]);
-}
-
 function publishedLabel(value: string): string {
   return new Date(value).toLocaleString('en-US', {
     timeZone: 'America/New_York',
@@ -106,7 +103,6 @@ export default async function GamePage({ params }: { params: Params }) {
   const props = propsForGame(dayProps, lead);
   const label = etDateLabel(date);
   const time = etTime(lead.commence_time) ?? lead.time ?? null;
-  const started = (parseGameTime(lead.commence_time)?.getTime() ?? Number.MAX_SAFE_INTEGER) <= nowMs();
   const market = marketLine({
     total: slate?.total ?? lead.total,
     spread: slate?.spread ?? lead.spread,
@@ -170,7 +166,7 @@ export default async function GamePage({ params }: { params: Params }) {
         ],
       }} />
 
-      <nav className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] uppercase tracking-[0.05em] text-low">
+      <nav className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[13px] uppercase tracking-[0.05em] text-low">
         <Link href={`/picks/${cfg.slug}`} className="text-gold underline decoration-gold/40 underline-offset-4">{cfg.longName}</Link>
         <span aria-hidden>/</span>
         <Link href={`/picks/${cfg.slug}/${date}`} className="text-gold underline decoration-gold/40 underline-offset-4">{label}</Link>
@@ -182,7 +178,7 @@ export default async function GamePage({ params }: { params: Params }) {
           {lead.awayTeam} <span className="text-low">at</span> {lead.homeTeam}
         </h1>
         {(market || venue) && (
-          <p className="tnum mt-3 font-mono text-[12px] text-low">
+          <p className="tnum mt-3 font-mono text-[14px] text-low">
             {[market, venue].filter(Boolean).join(' · ')}
           </p>
         )}
@@ -199,42 +195,9 @@ export default async function GamePage({ params }: { params: Params }) {
         className="mt-6"
       />
 
-      {/* The call(s) and the result */}
-      <section className="mt-8 grid gap-4">
-        {picks.map(pick => {
-          const result = matchPickResult(pick, day.results);
-          const res = (result?.result ?? '').trim().toLowerCase();
-          const conf = pick.confidence ? Math.round(pick.confidence * 100) : null;
-          const odds = oddsOf(pick);
-          return (
-            <div key={pick.pick} className="rounded-card border border-gold/40 bg-card p-5 shadow-card">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <Eyebrow>Gary&apos;s pick</Eyebrow>
-                  <p className="mt-1.5 flex flex-wrap items-baseline gap-x-3">
-                    <span className="font-display text-[clamp(1.9rem,5vw,2.6rem)] uppercase leading-none text-gold">{callOf(pick)}</span>
-                    {odds && <span className="tnum font-display text-[1.25rem] text-hi/90">{odds}</span>}
-                  </p>
-                  {conf !== null && <p className="tnum mt-2 font-mono text-[11px] text-low">CONF {conf}%</p>}
-                </div>
-                <div className="text-right">
-                  <Eyebrow dim>Result</Eyebrow>
-                  {res ? (
-                    <p className="mt-1.5 flex items-baseline justify-end gap-2">
-                      <ResultLetter result={res} />
-                      <span className={`font-display text-[1.5rem] uppercase leading-none ${res === 'won' ? 'text-win' : res === 'lost' ? 'text-loss' : 'text-gold'}`}>
-                        {res === 'won' ? 'Cashed' : res === 'lost' ? 'Lost' : 'Push'}
-                      </span>
-                      {result?.final_score && <span className="tnum font-mono text-[12px] text-low">Final {result.final_score}</span>}
-                    </p>
-                  ) : (
-                    <p className="mt-1.5 font-mono text-[12px] text-low">{started ? 'Not yet graded' : 'Game not started'}</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })}
+      <section className="mt-8 grid max-w-[470px] gap-4" aria-label="Gary's picks">
+        {picks.map(pick => <PickCard key={pick.pick} pick={pick} date={date} shareHref={pageUrl}
+          initialResults={{ date, games: day.results, props: propResults, slate: day.slate, live: [] }} />)}
       </section>
 
       {/* The read — full text, nothing behind a fold */}
@@ -256,7 +219,7 @@ export default async function GamePage({ params }: { params: Params }) {
                 </MeaningfulPickView>
                 {deeper && deeper.length > 0 && (
                   <>
-                    <p className="mt-7 font-mono text-[10.5px] font-bold uppercase tracking-[0.09em] text-gold/70">The full analysis</p>
+                    <p className="mt-7 font-mono text-[13px] font-bold uppercase tracking-[0.09em] text-gold/70">The full analysis</p>
                     <ScoutRead sections={deeper} className="mt-3" />
                   </>
                 )}
@@ -268,7 +231,7 @@ export default async function GamePage({ params }: { params: Params }) {
             )}
             {injuries.length > 0 && (
               <div className="mt-6">
-                <p className="font-mono text-[10.5px] font-bold uppercase tracking-[0.09em] text-gold/70">Injuries noted</p>
+                <p className="font-mono text-[13px] font-bold uppercase tracking-[0.09em] text-gold/70">Injuries noted</p>
                 {injuries.map(line => (
                   <p key={line} className="mt-1.5 text-[15px] leading-[1.68] text-mid">{line}</p>
                 ))}
@@ -282,24 +245,24 @@ export default async function GamePage({ params }: { params: Params }) {
         <h2 id="analysis-disclosure-heading" className="font-display text-[1.5rem] uppercase leading-none text-hi">About this analysis</h2>
         <dl className="mt-5 grid gap-5 text-[13.5px] leading-relaxed sm:grid-cols-2">
           <div>
-            <dt className="font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-gold">Who made it</dt>
+            <dt className="font-mono text-[13px] font-bold uppercase tracking-[0.06em] text-gold">Who made it</dt>
             <dd className="mt-1.5 text-mid">Gary AI, an AI sports-analysis product operated by Gary A.I. LLC. No human reviewer is claimed unless one is explicitly named.</dd>
           </div>
           <div>
-            <dt className="font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-gold">Published data</dt>
+            <dt className="font-mono text-[13px] font-bold uppercase tracking-[0.06em] text-gold">Published data</dt>
             <dd className="mt-1.5 text-mid">
               {day.publishedAt ? `Board stored ${publishedLabel(day.publishedAt)}.` : `Stored board date: ${label}; an exact publication timestamp is not available in this historical row.`}
             </dd>
           </div>
           <div>
-            <dt className="font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-gold">Odds record</dt>
+            <dt className="font-mono text-[13px] font-bold uppercase tracking-[0.06em] text-gold">Odds record</dt>
             <dd className="mt-1.5 text-mid">
               The displayed line is the value retained with the call.
               {sourceBooks.length > 0 ? ` Stored sportsbook sources: ${sourceBooks.join(', ')}.` : ' Source names were not retained with this call.'}
             </dd>
           </div>
           <div>
-            <dt className="font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-gold">Accountability</dt>
+            <dt className="font-mono text-[13px] font-bold uppercase tracking-[0.06em] text-gold">Accountability</dt>
             <dd className="mt-1.5 text-mid">
               Read the <Link href="/editorial-standards" className="text-gold underline decoration-gold/40 underline-offset-4">editorial standards</Link>,{' '}
               <Link href="/data-sources" className="text-gold underline decoration-gold/40 underline-offset-4">source policy</Link>, and{' '}
@@ -314,37 +277,15 @@ export default async function GamePage({ params }: { params: Params }) {
         <section className="mt-12">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="font-display text-[1.7rem] uppercase leading-none text-hi">Props on this game</h2>
-            <span className="tnum font-mono text-[11px] text-low">{props.length}</span>
+            <span className="tnum font-mono text-[13px] text-low">{props.length}</span>
           </div>
           <StitchRule tone="faint" className="mb-6 mt-4" />
-          <ul className="grid gap-4">
-            {props.map((prop, i) => {
-              const result = matchPropResult(prop, propResults);
-              const res = (result?.result ?? '').trim().toLowerCase();
-              const odds = oddsText(prop.odds);
-              return (
-                <li key={`${prop.player}-${prop.prop}-${i}`} className="rounded-card border border-line bg-card p-5">
-                  <div className="flex flex-wrap items-baseline justify-between gap-3">
-                    <p>
-                      <span className="font-display text-[1.35rem] uppercase leading-none text-hi">{prop.player}</span>
-                      <span className="ml-3 font-mono text-[13px] font-bold text-silver">{propCall(prop)}</span>
-                      {odds && <span className="tnum ml-2 font-mono text-[12px] text-low">{odds}</span>}
-                    </p>
-                    <p className="tnum flex items-center gap-2 font-mono text-[12px] text-low">
-                      {res ? (
-                        <>
-                          <ResultLetter result={res} />
-                          {result?.actual_value != null && <span>Actual {String(result.actual_value)}</span>}
-                        </>
-                      ) : (
-                        <span>{started ? 'Not yet graded' : 'Pending'}</span>
-                      )}
-                    </p>
-                  </div>
-                  <ScoutRead text={prop.rationale ?? prop.analysis} tone="tight" className="mt-4" />
-                </li>
-              );
-            })}
+          <ul className="grid max-w-[470px] gap-4">
+            {props.map((prop, i) => <li key={`${prop.player}-${prop.prop}-${i}`}>
+              <PropCard prop={prop} date={date} shareHref={pageUrl}
+                initialResults={{ date, games: day.results, props: propResults, slate: day.slate, live: [] }} />
+              <ScoutRead text={prop.rationale ?? prop.analysis} tone="tight" className="mt-4" />
+            </li>)}
           </ul>
         </section>
       )}
@@ -357,7 +298,7 @@ export default async function GamePage({ params }: { params: Params }) {
         </p>
         <AppStoreButton surface={`game_page_${cfg.slug}`} />
       </section>
-      <p className="mt-8 flex flex-wrap gap-x-5 gap-y-2 font-mono text-[11px] uppercase tracking-[0.05em]">
+      <p className="mt-8 flex flex-wrap gap-x-5 gap-y-2 font-mono text-[13px] uppercase tracking-[0.05em]">
         <Link href={`/picks/${cfg.slug}/${date}`} className="text-gold underline decoration-gold/40 underline-offset-4">Every {cfg.code} game this day</Link>
         <Link href={`/results/${cfg.slug}`} className="text-gold underline decoration-gold/40 underline-offset-4">The {cfg.code} record</Link>
         <Link href={`/picks/${cfg.slug}`} className="text-gold underline decoration-gold/40 underline-offset-4">Today&apos;s {cfg.code} board</Link>

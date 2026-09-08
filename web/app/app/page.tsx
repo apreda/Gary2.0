@@ -123,7 +123,7 @@ export default function AppPage() {
           </div>
         </div>
         <div className="hidden justify-center lg:col-span-5 lg:flex">
-          <Image src="/brand/gary-icon.png" alt="Gary the bear" width={300} height={300} />
+          <Image src="/brand/GaryIconBG.png" alt="Gary the bear" width={300} height={300} />
         </div>
       </section>
 

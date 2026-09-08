@@ -14,17 +14,17 @@
      surface. A blue-leaning dark palette is the generic-AI tell; the app's
      black is leather-warm, so the web's must be too. ─────── */
   --color-ink: #0A0908;
-  --color-card: #16140E;
-  --color-chip: #211D12;
-  --color-elev: #1B1812;
+  --color-card: #131211;
+  --color-chip: #24211d;
+  --color-elev: #1c1918;
   --color-panel: rgba(255, 255, 255, 0.02);
 
   /* ── Text roles — four grays, not fourteen.
      low = smallest essential text, 0.50 clears WCAG AA (≥5.1:1) on every
      surface here; faint is DECORATION ONLY (never sole-source information). */
   --color-hi: rgba(255, 255, 255, 0.92);
-  --color-mid: rgba(255, 255, 255, 0.62);
-  --color-low: rgba(255, 255, 255, 0.5);
+  --color-mid: #bdb7ae;
+  --color-low: #aaa39a;
   --color-faint: rgba(255, 255, 255, 0.35);
 
   /* ── Hairlines ─────────────────────────────────────────── */
@@ -55,9 +55,9 @@
   --shadow-card: 0 6px 14px rgba(0, 0, 0, 0.45);
 
   /* ── Type ──────────────────────────────────────────────── */
-  --font-display: var(--font-barlow);
-  --font-body: var(--font-inter);
-  --font-mono: var(--font-jbmono);
+  --font-display: 'Gary Display', Impact, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  --font-mono: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
 }
 
 html {

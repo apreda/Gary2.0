@@ -1,32 +1,8 @@
-import { Disclosure } from '@/components/Disclosure';
-import { ScoutRead } from '@/components/ScoutRead';
+import { PropCard } from '@/components/PropCard';
+import type { CardFinish } from '@/components/picks/native-card';
 import { PropTailFadeRow } from '@/components/book/TailFadeRow';
-import { isOverCall, oddsText, propCall, parseScoutSections } from '@/lib/gary/format';
 import { isLongShot } from '@/lib/gary/prop-lanes';
 import type { PropPick } from '@/lib/gary/types';
-
-/**
- * The call, worded like a slip: "OVER 1.5 Total Bases  +135". OVER wears the
- * gold, UNDER goes silver — the app's rule, so direction reads before the
- * words do.
- */
-export function PropCall({ prop, size = 'md' }: { prop: PropPick; size?: 'md' | 'lg' }) {
-  const over = isOverCall(prop);
-  const odds = oddsText(prop.odds);
-  const text = size === 'lg' ? 'text-[14px]' : 'text-[12.5px]';
-  return (
-    <span
-      className={`flex items-center justify-between gap-3 rounded-chip border bg-chip px-4 ${
-        size === 'lg' ? 'py-3' : 'py-2.5'
-      } ${over ? 'border-gold/60' : 'border-silver/55'}`}
-    >
-      <span className={`font-mono ${text} font-bold tracking-[0.03em] ${over ? 'text-gold' : 'text-silver'}`}>
-        {propCall(prop)}
-      </span>
-      {odds && <span className={`tnum font-mono ${text} font-bold text-low`}>{odds}</span>}
-    </span>
-  );
-}
 
 /** The stat spine under a call — the numbers Gary leaned on, verbatim. */
 export function KeyStats({ stats, max = 3 }: { stats?: string[]; max?: number }) {
@@ -34,7 +10,7 @@ export function KeyStats({ stats, max = 3 }: { stats?: string[]; max?: number })
   return (
     <ul className="mt-3 space-y-1.5">
       {stats.slice(0, max).map((s, i) => (
-        <li key={i} className="flex gap-2 font-mono text-[11.5px] leading-[1.5] text-low">
+        <li key={i} className="flex gap-2 font-mono text-[14px] leading-[1.5] text-low">
           <span aria-hidden className="text-gold/50">·</span>
           <span>{s}</span>
         </li>
@@ -43,53 +19,13 @@ export function KeyStats({ stats, max = 3 }: { stats?: string[]; max?: number })
   );
 }
 
-/**
- * One prop inside its game's panel. The written read lives behind a caret so
- * a nine-prop game still scans in one screen — and opens in full, never
- * clipped: the board used to fade its rationale out mid-sentence.
- */
-export function PropRow({ prop }: { prop: PropPick }) {
-  const read = (prop.rationale ?? prop.analysis ?? '').trim();
-  const hasRead = parseScoutSections(read).length > 0;
-  const conf = prop.confidence ? Math.round(prop.confidence * 100) : null;
-  // MLB home runs and NFL anytime scorers wear their fun lane so nobody
-  // reads either as a core prop; neither enters the core props record.
-  const longShot = isLongShot(prop);
-
-  return (
-    <div className="px-5 py-4">
-      <div className="flex flex-wrap items-start justify-between gap-x-5 gap-y-3">
-        <div className="min-w-0">
-          {longShot && (
-            <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-gold">
-              The long shot
-            </p>
-          )}
-          <p className="font-display text-[clamp(1.15rem,3vw,1.45rem)] uppercase leading-tight text-hi">
-            {prop.player}
-          </p>
-          <p className="mt-0.5 font-mono text-[11px] uppercase tracking-[0.05em] text-low">
-            {[prop.team, prop.position].filter(Boolean).join(' · ')}
-            {conf !== null && <span className="text-faint"> · {conf}% conf</span>}
-          </p>
-        </div>
-        <div className="w-full shrink-0 sm:w-[300px]">
-          <PropCall prop={prop} />
-        </div>
-      </div>
-
-      <KeyStats stats={prop.key_stats} />
-
-      {hasRead && (
-        <Disclosure summary="Why Gary likes it" className="mt-3.5">
-          <ScoutRead text={read} tone="tight" />
-        </Disclosure>
-      )}
-
-      {/* Renders only inside a BookDayProvider — board pages opt in. */}
-      {!longShot && <PropTailFadeRow player={prop.player ?? ''} prop={prop.prop ?? ''} commence={prop.commence_time}
-        gameId={prop.game_id != null || prop.bdl_game_id != null ? String(prop.game_id ?? prop.bdl_game_id) : null}
-        line={prop.line != null && Number.isFinite(Number(prop.line)) ? Number(prop.line) : null} side={prop.bet} />}
-    </div>
-  );
+/** The shared native prop card, with Book actions outside the flip target. */
+export function PropRow({ prop, finish='dark',date,shareHref }: { prop: PropPick; finish?:CardFinish;date?:string;shareHref?:string }) {
+  const longShot=isLongShot(prop);
+  return <article className="min-w-0"><PropCard prop={prop} finish={finish} date={date} shareHref={shareHref}/>
+    {Array.isArray(prop.key_stats)&&prop.key_stats.length>0&&<details className="mt-4 text-sm text-mid"><summary className="cursor-pointer text-gold">Stats Behind the Pick</summary><KeyStats stats={prop.key_stats} max={prop.key_stats.length}/></details>}
+    {!longShot && <PropTailFadeRow player={prop.player ?? ''} prop={prop.prop ?? ''} commence={prop.commence_time}
+      gameId={prop.game_id != null || prop.bdl_game_id != null ? String(prop.game_id ?? prop.bdl_game_id) : null}
+      line={prop.line != null && Number.isFinite(Number(prop.line)) ? Number(prop.line) : null} side={prop.bet} />}
+  </article>;
 }

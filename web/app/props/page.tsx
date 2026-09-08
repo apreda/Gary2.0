@@ -1,13 +1,10 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { Eyebrow } from '@/components/Eyebrow';
-import { ScoutRead } from '@/components/ScoutRead';
 import { ReceiptLine } from '@/components/ReceiptLine';
 import { Slab } from '@/components/board/GameRow';
-import { KeyStats, PropCall, PropRow } from '@/components/board/PropRow';
+import { PropRow } from '@/components/board/PropRow';
 import { BookDayProvider } from '@/components/book/BookDay';
-import { PropTailFadeRow } from '@/components/book/TailFadeRow';
 import { AccountCta } from '@/components/AccountCta';
 import { PageMasthead, StitchRule } from '@/components/Terminal';
 import { fetchTodayPropPicks, isLongShot, selectTopProps } from '@/lib/gary/picks';
@@ -27,49 +24,8 @@ export const metadata: Metadata = pageMetadata({
     "Every player prop Gary posted today, grouped by game, with the matchup, the numbers behind it, and the risk. Graded daily on the public record.",
 });
 
-/** The day's highest-confidence prop, read out in full. */
-function FeaturedProp({ prop }: { prop: PropPick }) {
-  const league = normalizeLeague(prop.league, prop.sport) ?? '';
-  const time = etTime(prop.commence_time);
-  const read = (prop.rationale ?? prop.analysis ?? '').trim();
-
-  return (
-    <article className="quant-panel overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 border-b border-line px-6 py-3">
-        <span className="flex items-center gap-2.5">
-          <Slab />
-          <Eyebrow>Gary&apos;s top prop</Eyebrow>
-        </span>
-        <span className="font-mono text-[11px] font-bold uppercase tracking-[0.06em] text-low">
-          {[league, prop.matchup, time].filter(Boolean).join(' · ')}
-        </span>
-      </div>
-      <div className="px-6 py-5">
-        <h2 className="font-display text-[clamp(1.9rem,5vw,2.6rem)] uppercase leading-[1.04] text-hi">
-          {prop.player}
-        </h2>
-        {prop.team && (
-          <p className="mt-1 font-mono text-[11.5px] uppercase tracking-[0.05em] text-low">{prop.team}</p>
-        )}
-        {/* The call ships before the read on a phone (DOM order) and beside it
-            on a desktop (grid order) — nobody should scroll past 300 words to
-            find out what the bet is. */}
-        <div className="mt-4 grid gap-x-8 gap-y-5 md:grid-cols-[1fr_300px] md:items-start">
-          <div className="w-full md:order-2">
-            <PropCall prop={prop} size="lg" />
-            <KeyStats stats={prop.key_stats} max={4} />
-          </div>
-          <div className="min-w-0 md:order-1">
-            <ScoutRead text={read} />
-          </div>
-        </div>
-        <PropTailFadeRow player={prop.player ?? ''} prop={prop.prop ?? ''} commence={prop.commence_time}
-          gameId={prop.game_id != null || prop.bdl_game_id != null ? String(prop.game_id ?? prop.bdl_game_id) : null}
-          line={prop.line != null && Number.isFinite(Number(prop.line)) ? Number(prop.line) : null} side={prop.bet} />
-      </div>
-    </article>
-  );
-}
+/** Featured ticket uses the same native prop component as its game group. */
+function FeaturedProp({prop}:{prop:PropPick}){return <div className="max-w-[430px]"><p className="site-eyebrow mb-5">GARY’S TOP PROP</p><PropRow prop={prop}/></div>}
 
 /** Props for one game, in one panel — the way a bettor reads a card. */
 function GamePropPanel({ matchup, props }: { matchup: string; props: PropPick[] }) {
@@ -88,17 +44,17 @@ function GamePropPanel({ matchup, props }: { matchup: string; props: PropPick[] 
     longShots.length ? '1 long shot' : null,
   ].filter(Boolean).join(' · ');
   return (
-    <article className="quant-panel overflow-hidden">
+    <article className="mb-10">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 border-b border-line px-5 py-3">
         <span className="flex items-center gap-2.5">
           <Slab />
-          <span className="font-display text-[1.15rem] uppercase leading-none text-hi">{matchup}</span>
+          <span className="font-display text-[1.8rem] uppercase leading-none text-hi">{matchup}</span>
         </span>
         <span className="font-mono text-[11px] font-bold uppercase tracking-[0.06em] text-low">
           {[time, league, count].filter(Boolean).join(' · ')}
         </span>
       </div>
-      <div className="divide-y divide-line">
+      <div className="site-pick-grid mt-6">
         {ordered.map((p, i) => (
           <PropRow key={`${p.player}-${p.prop}-${i}`} prop={p} />
         ))}
@@ -145,11 +101,11 @@ export default async function PropsPage() {
   const total = props?.length ?? 0;
 
   return (
-    <main className="mx-auto max-w-5xl px-5 pb-20 pt-12">
+    <main className="site-wrap pb-20 pt-12">
       <PageMasthead
-        title="Today's free player prop picks"
+        title="Player Props."
         meta={etDateLabel(date)}
-        sub="Every player prop Gary posted today — the matchup, the numbers he leaned on, and the way it loses."
+        sub="One player. One number. Gary’s take. Flip a card to read the reasoning."
       />
 
       <div className="mt-4">

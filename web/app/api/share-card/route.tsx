@@ -24,9 +24,9 @@ export async function GET(req: Request) {
   const result = (searchParams.get('result') ?? '').toLowerCase();
   const stamp = result === 'won' ? 'CASHED' : result === 'lost' ? 'LOST' : null;
 
-  const [barlow, jbmono, interMd, bear] = await Promise.all([
-    readFile(join(process.cwd(), 'assets/og/BarlowCondensed-Bold.ttf')),
-    readFile(join(process.cwd(), 'assets/og/JetBrainsMono-Bold.ttf')),
+  const [displayFont, uiFont, interMd, bear] = await Promise.all([
+    readFile(join(process.cwd(), 'public/fonts/bebas-neue.ttf')),
+    readFile(join(process.cwd(), 'assets/og/Inter-SemiBold.ttf')),
     readFile(join(process.cwd(), 'assets/og/Inter-SemiBold.ttf')),
     readFile(join(process.cwd(), 'assets/og/GaryIconBG.png')),
   ]);
@@ -48,22 +48,22 @@ export async function GET(req: Request) {
       <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', background: CARD, padding: 80 }}>
         {/* GARY'S PICK + bear */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div style={{ fontFamily: 'JBMono', fontSize: 30, color: GOLD, letterSpacing: 6, paddingTop: 16 }}>{"GARY'S PICK"}</div>
+          <div style={{ fontFamily: 'Gary UI', fontSize: 30, color: GOLD, letterSpacing: 6, paddingTop: 16 }}>{"GARY'S PICK"}</div>
           {/* ImageResponse renders server-side and requires a native image node. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={bearSrc} alt="" width={116} height={116} style={{ borderRadius: 22 }} />
         </div>
 
-        {/* stacked hero, one line per word, BarlowCondensed — vertically centered in the free space */}
+        {/* stacked hero, one line per word, GaryDisplay — vertically centered in the free space */}
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', flexGrow: 1, marginTop: 20, marginBottom: 20 }}>
           {heroLines.map((line, i) => (
-            <div key={i} style={{ fontFamily: 'Barlow', fontSize: heroSize, color: WHITE, lineHeight: 0.98 }}>{line}</div>
+            <div key={i} style={{ fontFamily: 'GaryDisplay', fontSize: heroSize, color: WHITE, lineHeight: 0.98 }}>{line}</div>
           ))}
         </div>
 
         {/* league token (the card's one sport-color touch) + meta line */}
         <div style={{ display: 'flex', alignItems: 'baseline' }}>
-          <div style={{ fontFamily: 'JBMono', fontSize: 28, color: accent, letterSpacing: 3 }}>{league}</div>
+          <div style={{ fontFamily: 'Gary UI', fontSize: 28, color: accent, letterSpacing: 3 }}>{league}</div>
           <div style={{ fontFamily: 'Inter', fontWeight: 500, fontSize: 38, color: 'rgba(255,255,255,0.55)', marginLeft: 20 }}>{meta}</div>
         </div>
 
@@ -72,13 +72,13 @@ export async function GET(req: Request) {
 
         {/* footer */}
         <div style={{ display: 'flex' }}>
-          <div style={{ fontFamily: 'JBMono', fontSize: 27, color: 'rgba(201,162,39,0.8)' }}>betwithgary.ai</div>
+          <div style={{ fontFamily: 'Gary UI', fontSize: 27, color: 'rgba(201,162,39,0.8)' }}>betwithgary.ai</div>
         </div>
 
         {/* result stamp, rotated over the whole canvas (the app's CASHED/LOST overlay) */}
         {stamp ? (
           <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ display: 'flex', fontFamily: 'JBMono', fontSize: 76, letterSpacing: 8, color: 'rgba(201,162,39,0.92)', border: '6px solid rgba(201,162,39,0.85)', padding: '20px 44px', transform: 'rotate(-12deg)' }}>{stamp}</div>
+            <div style={{ display: 'flex', fontFamily: 'Gary UI', fontSize: 76, letterSpacing: 8, color: 'rgba(201,162,39,0.92)', border: '6px solid rgba(201,162,39,0.85)', padding: '20px 44px', transform: 'rotate(-12deg)' }}>{stamp}</div>
           </div>
         ) : null}
       </div>
@@ -87,8 +87,8 @@ export async function GET(req: Request) {
       width: 1080,
       height: 1080,
       fonts: [
-        { name: 'Barlow', data: barlow, style: 'normal', weight: 700 },
-        { name: 'JBMono', data: jbmono, style: 'normal', weight: 700 },
+        { name: 'GaryDisplay', data: displayFont, style: 'normal', weight: 700 },
+        { name: 'Gary UI', data: uiFont, style: 'normal', weight: 700 },
         { name: 'Inter', data: interMd, style: 'normal', weight: 500 },
       ],
     },

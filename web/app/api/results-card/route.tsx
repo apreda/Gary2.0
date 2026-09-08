@@ -19,8 +19,8 @@ export async function GET(req: Request) {
   const wins = (searchParams.get('w') ?? '').split('|').map((s) => s.trim()).filter(Boolean);
   const losses = (searchParams.get('l') ?? '').split('|').map((s) => s.trim()).filter(Boolean);
 
-  const [anton, interSb, interRg] = await Promise.all([
-    readFile(join(process.cwd(), 'assets/og/Anton-Regular.ttf')),
+  const [displayFont, interSb, interRg] = await Promise.all([
+    readFile(join(process.cwd(), 'public/fonts/bebas-neue.ttf')),
     readFile(join(process.cwd(), 'assets/og/Inter-SemiBold.ttf')),
     readFile(join(process.cwd(), 'assets/og/Inter-Regular.ttf')),
   ]);
@@ -44,14 +44,14 @@ export async function GET(req: Request) {
     (
       <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', background: BLACK, padding: '72px 80px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div style={{ fontFamily: 'Anton', fontSize: 46, color: GOLD }}>GARY A.I.</div>
+          <div style={{ fontFamily: 'GaryDisplay', fontSize: 46, color: GOLD }}>GARY A.I.</div>
           <div style={{ fontFamily: 'Inter', fontWeight: 400, fontSize: 26, color: GRAY, letterSpacing: 2, paddingTop: 8 }}>
             {(date ? date.toUpperCase() + '  ' : '') + 'RESULTS'}
           </div>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 24 }}>
-          <div style={{ fontFamily: 'Anton', fontSize: 178, color: GOLD, lineHeight: 1 }}>{record}</div>
+          <div style={{ fontFamily: 'GaryDisplay', fontSize: 178, color: GOLD, lineHeight: 1 }}>{record}</div>
           <div style={{ fontFamily: 'Inter', fontWeight: 600, fontSize: 36, color: SILVER, marginTop: 10 }}>on the day</div>
         </div>
 
@@ -76,7 +76,7 @@ export async function GET(req: Request) {
       width: 1200,
       height: 1200,
       fonts: [
-        { name: 'Anton', data: anton, style: 'normal', weight: 400 },
+        { name: 'GaryDisplay', data: displayFont, style: 'normal', weight: 400 },
         { name: 'Inter', data: interSb, style: 'normal', weight: 600 },
         { name: 'Inter', data: interRg, style: 'normal', weight: 400 },
       ],

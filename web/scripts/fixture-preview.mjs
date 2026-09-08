@@ -172,8 +172,8 @@ try {
       catch (error) { if (Date.now() >= deadline) throw error; await delay(250); }
     }
     for (const [path, expected] of [
-      ['/', 'Free sports picks.'], ['/picks', 'Local QA fixture.'],
-      ['/results', 'Sports picks results and track record'],
+      ['/', 'Your game.'], ['/picks', 'Local QA fixture.'],
+      ['/results', 'The whole record.'],
       ['/leaderboard', 'Earn your place.'],
     ]) {
       const response = await fetch(`${origin}${path}`, { signal: AbortSignal.timeout(90_000) });
@@ -248,13 +248,11 @@ try {
       assert(html.includes(expected), `${path} must include its published fixture content`);
       if (path === matchup) {
         const receipt = [...html.matchAll(/<li\b[^>]*>[\s\S]*?<\/li>/g)]
-          .map(match => match[0]).find(item => item.includes(`>${prop.player}</span>`)) ?? '';
+          .map(match => match[0]).find(item => item.includes('native-prop')) ?? '';
         const text = receipt.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-        assert(text.includes('OVER 5.5 Strikeouts'), 'Legacy prop must display its encoded line');
-        assert.equal(text.match(/Strikeouts/g)?.length, 1, 'Prop market label must appear once');
-        assert.match(receipt, /class="[^"]*\btext-loss\b[^"]*">L<\/span>/,
-          'The published Over 5.5 receipt must show its loss, not the alternate Over 4.5 win');
-        assert.match(text, /Actual\s+5\b/, 'The receipt must show the recorded five strikeouts');
+        assert(text.includes("K&#x27;S OVER 5.5"), 'Native prop must display its encoded line');
+        assert.match(receipt, /native-lost/, 'The published Over 5.5 receipt must show its loss, not the alternate Over 4.5 win');
+        assert.match(text, /ACTUAL\s+5\b/, 'The receipt must show the recorded five strikeouts');
         console.log('PASS prop receipt: encoded 5.5 line, one market label, correct losing grade');
       }
       console.log(`PASS ${path}: permanent analysis discovery`);

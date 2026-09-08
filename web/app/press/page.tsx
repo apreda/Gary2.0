@@ -33,23 +33,9 @@ const ASSETS = [
     file: '/brand/GaryIconBG.png',
     label: 'Gary Bear Mark',
     dims: '1024 × 1024 px · transparent PNG',
-    hint: 'Primary mark. Use on warm black (#0A0908) only.',
+    hint: 'Current app and website mark. Preserve its original proportions and colors.',
   },
-  {
-    file: '/brand/gary-icon.png',
-    label: 'Gary Icon',
-    dims: '800 × 800 px · transparent PNG',
-    hint: 'The site and app-icon mark. No blue tint.',
-  },
-  {
-    file: '/coin2.png',
-    label: 'Gold Coin',
-    dims: 'PNG · round crop',
-    hint: 'Secondary brand asset.',
-  },
-  // NOTE: the old /press/gallery_*.png cards are intentionally NOT listed —
-  // they carry stale claims (100% free, old AI stack) and are pending
-  // regeneration under the paid-Winners model. Do not redistribute them.
+
 ];
 
 function CopyBlock({ children }: { children: string }) {

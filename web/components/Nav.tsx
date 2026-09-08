@@ -1,122 +1,91 @@
-'use client';
-
-import Link from 'next/link';
-import Image from 'next/image';
-import { usePathname } from 'next/navigation';
-import { accountHref } from '@/lib/auth/redirect';
-import { useSupabaseSessionHint } from '@/lib/auth/session-hint';
-
-const LINKS = [
-  { href: '/today', label: 'Today' },
-  { href: '/picks', label: 'Picks' },
-  { href: '/props', label: 'Props' },
-  { href: '/winners', label: 'Winners' },
-  { href: '/results', label: 'Results' },
-  { href: '/hub', label: 'Hub' },
-  { href: '/you', label: 'Your Book' },
-  { href: '/leaderboard', label: 'Leaderboard' },
+"use client";
+import Link from "next/link";
+import Image from "next/image";
+import { usePathname } from "next/navigation";
+import { accountHref } from "@/lib/auth/redirect";
+import { useSupabaseSessionHint } from "@/lib/auth/session-hint";
+import { Icon } from "./site/Icon";
+const PRIMARY = [
+  ["/picks", "The Picks"],
+  ["/props", "Player Props"],
+  ["/winners", "Winners"],
+  ["/results", "The Record"],
+  ["/#how-it-works", "How Gary Works"],
+  ["/#the-app", "The App"],
 ];
-
-const focusRing =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink';
-
+const PRODUCT = [
+  ["/today", "Today"],
+  ["/hub", "The Hub"],
+  ["/you", "Your Book"],
+  ["/leaderboard", "Leaderboard"],
+  ["/archive", "Pick Archive"],
+];
 export function Nav() {
   const pathname = usePathname();
   const signedIn = useSupabaseSessionHint();
-  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
   const accountPath = signedIn
-    ? '/account'
-    : accountHref(pathname.startsWith('/account') ? '/you' : pathname, 'signup');
-  const accountLabel = signedIn ? 'Account' : 'Join free';
-
+    ? "/account"
+    : accountHref(
+        pathname.startsWith("/account") ? "/you" : pathname,
+        "signup",
+      );
+  const links = (items: string[][]) =>
+    items.map(([href, label]) => (
+      <Link
+        key={href}
+        href={href}
+        prefetch={false}
+        aria-current={
+          pathname === href || pathname.startsWith(href + "/")
+            ? "page"
+            : undefined
+        }
+        onClick={(e) =>
+          e.currentTarget.closest("details")?.removeAttribute("open")
+        }
+      >
+        {label}
+      </Link>
+    ));
   return (
-    <header className="sticky top-0 z-40 bg-ink/85 backdrop-blur">
-      {/* No hairline under the nav — the bar fades into the page the way the
-          app's header does. The scrim only reads when scrolled over content. */}
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-full h-4 bg-gradient-to-b from-ink/80 to-transparent" />
-      <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
-        <Link href="/" prefetch={false} className={`flex items-center gap-2.5 ${focusRing}`}>
-          <Image src="/brand/gary-icon.png" alt="" aria-hidden width={30} height={30} />
-          {/* The app's wordmark rule: mono, regular weight, gold, all caps —
-              quiet weight + signature color beats bold + white. */}
-          <span className="font-mono text-[15px] uppercase tracking-[0.04em] text-gold">Gary A.I.</span>
-        </Link>
-
-        {/* Desktop links — active route wears the 2px gold underline (the app's tab rule) */}
-        <div className="hidden items-center gap-5 lg:flex">
-          {LINKS.map(l => {
-            const active = isActive(l.href);
-            return (
-              <Link
-                key={l.href}
-                href={l.href}
-                prefetch={false}
-                aria-current={active ? 'page' : undefined}
-                className={`relative py-1 text-[13.5px] transition-colors ${focusRing} ${
-                  active ? 'text-hi' : 'text-mid hover:text-gold-light'
-                }`}
-              >
-                {l.label}
-                {active && <span aria-hidden className="absolute -bottom-0.5 left-0 h-0.5 w-full rounded-full bg-gold" />}
-              </Link>
-            );
-          })}
-        </div>
-
-        <div className="flex items-center gap-3">
-          <Link
-            href={accountPath}
-            prefetch={false}
-            className={`hidden rounded-card px-4 py-2 text-[13px] transition-colors sm:inline-flex ${focusRing} ${
-              signedIn
-                ? 'border border-gold/40 text-gold hover:border-gold/70 hover:text-gold-light'
-                : 'bg-gold font-semibold text-ink hover:bg-gold-light'
-            }`}
-          >
-            {accountLabel}
+    <>
+      <a href="#main-content" className="site-skip">
+        Skip to content
+      </a>
+      <header className="site-header">
+        <div className="site-wrap site-nav-inner">
+          <Link href="/" className="site-brand" aria-label="Gary home">
+            <Image src="/site/gary-current.png" alt="" width={43} height={43} />
+            <span>
+              GARY<b>.</b>
+            </span>
           </Link>
-
-          {/* Mobile disclosure menu — no JS, real icon */}
-          <details className="group relative lg:hidden">
-            <summary
-              className={`flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-card border border-line-strong text-mid [&::-webkit-details-marker]:hidden ${focusRing}`}
-              aria-label="Menu"
-            >
-              <svg width="16" height="12" viewBox="0 0 16 12" fill="none" aria-hidden>
-                <path d="M1 1h14M1 6h14M1 11h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="group-open:opacity-0" />
-                <path d="M2 1l12 10M14 1L2 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="opacity-0 group-open:opacity-100" />
-              </svg>
+          <nav aria-label="Main navigation" className="site-nav-links">
+            {links(PRIMARY)}
+          </nav>
+          <Link
+            href="/#the-app"
+            className="site-button site-button-gold site-nav-download"
+          >
+            Get Gary
+            <Icon size={16} />
+          </Link>
+          <details className="site-menu">
+            <summary aria-label="Open navigation and account menu">
+              <Icon name="menu" />
             </summary>
-            <div className="absolute right-0 top-full mt-2 w-56 overflow-hidden rounded-panel border border-line bg-card shadow-card">
-              {LINKS.map(l => (
-                <Link
-                  key={l.href}
-                  href={l.href}
-                  prefetch={false}
-                  onClick={e => e.currentTarget.closest('details')?.removeAttribute('open')}
-                  aria-current={isActive(l.href) ? 'page' : undefined}
-                  className={`block border-b border-line px-5 py-3.5 text-sm last:border-b-0 ${focusRing} ${
-                    isActive(l.href)
-                      ? 'text-gold underline decoration-gold underline-offset-4'
-                      : 'text-mid hover:text-gold-light'
-                  }`}
-                >
-                  {l.label}
-                </Link>
-              ))}
-              <Link
-                href={accountPath}
-                prefetch={false}
-                onClick={e => e.currentTarget.closest('details')?.removeAttribute('open')}
-                aria-current={pathname === '/account' ? 'page' : undefined}
-                className={`block px-5 py-3.5 text-sm text-gold sm:hidden ${focusRing}`}
-              >
-                {accountLabel}
-              </Link>
-            </div>
+            <nav className="site-menu-panel" aria-label="More navigation">
+              <div className="site-menu-primary">{links(PRIMARY)}</div>
+              {links(PRODUCT)}
+              <div className="site-menu-account">
+                {links([
+                  [accountPath, signedIn ? "Account" : "Sign In / Join Free"],
+                ])}
+              </div>
+            </nav>
           </details>
         </div>
-      </nav>
-    </header>
+      </header>
+    </>
   );
 }

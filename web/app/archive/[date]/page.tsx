@@ -179,7 +179,7 @@ export default async function ArchiveDatePage({
               const href = archiveGamePath(pick, date);
               return (
                 <div key={pick.pick_id ?? `${pick.awayTeam}-${pick.homeTeam}-${pick.pick}-${index}`}>
-                  <PickCard pick={pick} expanded />
+                  <PickCard pick={pick} date={date} expanded />
                   {href && (
                     <Link
                       href={href}
@@ -199,7 +199,7 @@ export default async function ArchiveDatePage({
         <ArchiveSection title="Player props" count={props.length}>
           <div className="grid gap-5 md:grid-cols-2">
             {props.map((prop, index) => (
-              <PropCard
+              <PropCard date={date}
                 key={`${prop.player}-${prop.prop}-${prop.line}-${index}`}
                 prop={prop}
                 expanded

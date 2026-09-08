@@ -11,6 +11,7 @@ vi.mock('@/lib/gary/results', () => ({
   fetchPropResultsForDate: async () => [], computePropsRecord: () => ({ wins: 0, losses: 0, pushes: 0, graded: 0 }),
 }));
 import PropsPage from '@/app/props/page';
+import { PropRow } from '@/components/board/PropRow';
 import { PropTailFadeRow } from '@/components/book/TailFadeRow';
 
 function descendants(node: ReactNode): ReactElement<{ children?: ReactNode; prop?: PropPick; props?: PropPick[] }>[] {
@@ -47,7 +48,9 @@ describe('featured prop source identity', () => {
     // Invoke the actual private server component from the page's React tree;
     // inspect the props crossing its real interactive client boundary.
     const render = featured.type as (props: { prop: PropPick }) => ReactNode;
-    const row = descendants(render({ prop: featured.props.prop! })).find(node => node.type === PropTailFadeRow)!;
+    const nativeRow = descendants(render({ prop: featured.props.prop! })).find(node => node.type === PropRow)!;
+    expect(nativeRow.props.prop).toBe(featured.props.prop);
+    const row = descendants(PropRow({prop:nativeRow.props.prop!})).find(node=>node.type===PropTailFadeRow)!;
     expect(row.props).toEqual(expect.objectContaining({
       gameId: fixture.expectedId, line: fixture.expectedLine, side: 'over',
       commence: '2026-09-08T23:00:00Z', player: 'Judge', prop: 'hits 1.5',

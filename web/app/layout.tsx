@@ -1,16 +1,11 @@
 import type { Metadata, Viewport } from 'next';
-import { Barlow_Condensed, Inter, JetBrains_Mono } from 'next/font/google';
 import { Nav } from '@/components/Nav';
 import { Footer } from '@/components/Footer';
 import { JsonLd } from '@/components/JsonLd';
 import { GrowthAnalytics } from '@/components/GrowthAnalytics';
 import './globals.css';
-
-const barlow = Barlow_Condensed({ weight: ['600', '700'], subsets: ['latin'], variable: '--font-barlow' });
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
-// Display and body copy are the LCP-critical faces. Mono remains self-hosted
-// and loads on demand without competing for an additional preload slot.
-const jbmono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-jbmono', preload: false });
+import '@/components/site/site.css';
+import '@/components/picks/native-cards.css';
 
 export const viewport: Viewport = {
   themeColor: '#0A0908',
@@ -51,12 +46,12 @@ const organization = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${barlow.variable} ${inter.variable} ${jbmono.variable}`}>
+    <html lang="en">
       <body>
         <JsonLd data={organization} />
         <JsonLd data={webSite} />
         <Nav />
-        {children}
+        <div id="main-content" tabIndex={-1}>{children}</div>
         <Footer />
         <GrowthAnalytics />
       </body>

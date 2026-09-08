@@ -3,7 +3,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { GameRow } from '@/components/board/GameRow';
-import { GameTile } from '@/components/board/GameTile';
 import { BoardGrid } from '@/components/board/BoardGrid';
 import { BoardDateNotice } from '@/components/BoardDateNotice';
 import { BookDayProvider } from '@/components/book/BookDay';
@@ -233,7 +232,6 @@ export default async function SportPicksPage({ params }: { params: Promise<{ spo
               items={board.map(g => ({
                 key: g.key,
                 label: `${g.away} at ${g.home}`,
-                tile: <GameTile game={g} now={now} />,
                 panel: <GameRow game={g} now={now} analysisHref={publishedPickPath(g.pick, date, publishedPaths)} />,
               }))}
             />

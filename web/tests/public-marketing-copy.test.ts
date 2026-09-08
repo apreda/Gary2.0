@@ -1,11 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('next/font/google', () => ({
-  Barlow_Condensed: () => ({ variable: 'test-barlow' }),
-  Inter: () => ({ variable: 'test-inter' }),
-  JetBrains_Mono: () => ({ variable: 'test-mono' }),
-}));
 vi.mock('@/components/Nav', () => ({ Nav: () => null }));
 vi.mock('@/components/Footer', () => ({ Footer: () => null }));
 vi.mock('@/components/GrowthAnalytics', () => ({ GrowthAnalytics: () => null }));
@@ -31,9 +26,9 @@ describe('public marketing copy', () => {
     serveEmptyFeeds();
     const html = renderToStaticMarkup(await Home());
     const text = visibleText(html);
-    expect(text).toContain('New picks appear as analysis is published.');
-    expect(text).toContain('Free published game picks, with written reasoning.');
-    expect(text).toContain('Published game picks and written reasoning stay free');
+    expect(text).toContain('Gary’s next calls will appear here when published.');
+    expect(text).toContain('Free game picks');
+    expect(text).toContain('Get the reasoning. Follow the results.');
     expect(text).not.toMatch(/every game covered|every morning|full slate/i);
     expect(html).toContain('href="/picks"');
     expect(html).toContain('href="/results"');

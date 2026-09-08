@@ -18,6 +18,7 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
+      { source: '/record', destination: '/results', permanent: true },
       { source: '/changelog', destination: '/', permanent: true },
       { source: '/picks/world-cup', destination: '/results/world-cup', permanent: true },
     ];

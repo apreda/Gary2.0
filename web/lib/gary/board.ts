@@ -11,6 +11,8 @@ import type { GaryPick } from './types';
  * so a morning visitor saw a single card and acres of black.
  */
 export interface SlateRow {
+  game_status?: string | null;
+  status_detail?: string | null;
   bdl_game_id?: string | number | null;
   league: string | null;
   away_team: string | null;
@@ -25,7 +27,7 @@ export interface SlateRow {
 
 export async function fetchDailySlate(date: string, revalidate = 600): Promise<SlateRow[]> {
   return rest<SlateRow[]>(
-    `daily_slate?select=league,away_team,home_team,commence_time,venue,spread,ml_home,ml_away,total,bdl_game_id` +
+    `daily_slate?select=league,away_team,home_team,commence_time,venue,spread,ml_home,ml_away,total,bdl_game_id,game_status,status_detail` +
       `&date=eq.${date}&order=commence_time.asc`,
     { revalidate },
   );

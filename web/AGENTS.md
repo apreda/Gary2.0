@@ -7,3 +7,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## Approved website implementation
+
+The September 8, 2026 app-first site and hero 04 are the current production design. See README.md for the shared components and publishing checks. Preserve the native app pick-card design and behavior through components/picks; do not restore the retired web card layouts or old brand assets.

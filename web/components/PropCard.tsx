@@ -1,46 +1,34 @@
-import { Eyebrow } from './Eyebrow';
-import { ClampFade } from './ClampFade';
-import { normalizeLeague } from '@/lib/gary/leagues';
-import { isOverCall, leadSection, oddsText, propCall } from '@/lib/gary/format';
-import type { PropPick } from '@/lib/gary/types';
-
-/**
- * The silver twin of the gold game card (iOS CompactPropRow): same skeleton,
- * silver stroke, and the call wears its direction — OVER stays gold, UNDER
- * goes silver. The only gold on an UNDER card is nothing at all.
- */
-export function PropCard({ prop, expanded = false }: { prop: PropPick; expanded?: boolean }) {
-  const league = normalizeLeague(prop.league, prop.sport) ?? '';
-  const callColor = isOverCall(prop) ? 'text-gold' : 'text-silver';
-  const odds = oddsText(prop.odds);
-  // The reasoning block, not the whole labelled read — a teaser that opens on
-  // "MATCHUP: RHP …" mid-sentence is the wall of text in miniature.
-  const rationale = leadSection(prop.rationale ?? prop.analysis) ?? '';
-
+"use client";
+import type { PropPick } from "@/lib/gary/types";
+import { NativePickCard, type CardFinish } from "./picks/native-card";
+import { applyCardResult, cardDate, type CardResults } from "./picks/grade";
+import { useCardResults } from "./picks/use-card-results";
+import { propCardPick } from "./picks/model";
+export function PropCard({
+  prop,
+  finish = "dark",
+  date,
+  shareHref,
+  initialResults,
+}: {
+  prop: PropPick;
+  expanded?: boolean;
+  finish?: CardFinish;
+  date?: string;
+  shareHref?: string;
+  initialResults?: CardResults;
+}) {
+  const result = useCardResults(cardDate(prop, date));
+  const card = applyCardResult(
+    propCardPick(prop),
+    prop,
+    result ?? initialResults ?? null,
+  );
   return (
-    <article className="rounded-card border border-silver/40 bg-card p-5 shadow-card">
-      <div className="flex items-center justify-between">
-        <Eyebrow dim>{league}{prop.matchup ? ` · ${prop.matchup}` : ''}</Eyebrow>
-      </div>
-      <h3 className="mt-2.5 font-display text-xl leading-tight text-hi">{prop.player}</h3>
-      {rationale && (
-        expanded ? (
-          <p className="mt-2 text-[15px] leading-relaxed text-mid">{rationale}</p>
-        ) : (
-          <ClampFade lines={3} className="mt-2 text-[15px] leading-relaxed text-mid">{rationale}</ClampFade>
-        )
-      )}
-      <div className="mt-4 flex items-center justify-between gap-3 rounded-chip border border-silver/55 bg-chip px-4 py-2.5">
-        <span className={`font-mono text-sm font-bold tracking-[0.04em] ${callColor}`}>{propCall(prop)}</span>
-        {odds && <span className="tnum font-mono text-sm font-bold text-silver-dim">{odds}</span>}
-      </div>
-      {Array.isArray(prop.key_stats) && prop.key_stats.length > 0 && (
-        <ul className="mt-3 space-y-1">
-          {prop.key_stats.slice(0, 3).map((s, i) => (
-            <li key={i} className="font-mono text-[12px] text-low">· {s}</li>
-          ))}
-        </ul>
-      )}
-    </article>
+    <NativePickCard
+      pick={{ ...card, shareHref }}
+      finish={finish}
+      anchorId={card.id}
+    />
   );
 }

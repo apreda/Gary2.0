@@ -11,8 +11,8 @@ import { AccessCard } from './AccessCard';
 import { bookButton, bookField } from './LogBet';
 import { supabaseBrowser } from '@/lib/auth/client';
 
-export function WinnersClient() {
-  const [date, setDate] = useState(todayEST());
+export function WinnersClient({initialDate}:{initialDate?:string}={}) {
+  const [date, setDate] = useState(initialDate || todayEST());
   const [sport, setSport] = useState('all');
   const [board, setBoard] = useState<WinnersBoard | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -126,13 +126,13 @@ export function WinnersClient() {
           )}
           {tickets.length > 0 ? (
             <BookDayProvider date={date}>
-              <div className="space-y-5">
+              <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
                 {tickets.map((t) => (
                   <div
                     key={t.id ?? t.candidate_id}
-                    className="overflow-hidden rounded-panel border border-line bg-card"
+                    className="min-w-0"
                   >
-                    <div className="flex items-center justify-between px-5 py-3 font-mono text-[10px] text-low">
+                    <div className="flex items-center justify-between py-3 text-[13px] text-low">
                       <span>
                         {t.league} · {t.kind === 'prop' ? 'PROP' : 'GAME'} WINNER
                       </span>
@@ -147,10 +147,10 @@ export function WinnersClient() {
                       </span>
                     </div>
                     {t.kind === 'prop' ? (
-                      <PropRow prop={t.pick_snapshot} />
+                      <PropRow prop={{ ...t.pick_snapshot, league: t.league }} finish="silver" date={date} shareHref={`/winners?date=${date}`} />
                     ) : (
-                      <div className="px-4 pb-4">
-                        <PickCard pick={{ ...t.pick_snapshot, league: t.league }} expanded />
+                      <div className="pb-4">
+                        <PickCard pick={{ ...t.pick_snapshot, league: t.league }} finish="gold" date={date} shareHref={`/winners?date=${date}`} />
                         <TailFadeRow
                           pickText={t.pick_snapshot.pick ?? ''}
                           pickId={t.pick_snapshot.pick_id}
