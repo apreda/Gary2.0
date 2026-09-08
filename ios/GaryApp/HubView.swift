@@ -3623,7 +3623,7 @@ fileprivate struct FantasyCard: View {
                 }
             }
         case "two_start":
-            for st in m.starts ?? [] {
+            for st in m.starts?.schedule ?? [] {
                 if let opp = st.opp { bits.append("\(st.home == true ? "vs" : "at") \(opp)") }
             }
             if let x = m.xera { bits.append("\(x) xERA") }

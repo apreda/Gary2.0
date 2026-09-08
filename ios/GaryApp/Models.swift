@@ -329,7 +329,7 @@ final class SwapMeta: Codable {
     let read: String?              // full analyst read (verdict rides `verdict`)
     let computed_detail: String?   // football lanes: the exact computed sentence behind the read
     let week: String?              // two-start: "Mon 7/27 - Sun 8/2"
-    let starts: [FantasyStart]?    // two-start: the posted turns
+    let starts: InsightStarts?     // two-start schedule or starter-team-record count
     let committee: Bool?           // closer watch: shared ninth
     let leader: FantasyArm?        // closer watch: save leader
     let runner: FantasyArm?        // closer watch: next in line
@@ -456,7 +456,42 @@ struct NrfiPrice: Codable {
     let under: Int?
 }
 
-/// The last meeting in a head-to-head series (revenge read).
+/// The backend uses `starts` for either a posted two-start schedule or the
+/// sample size behind a starter's team record. Preserve both JSON shapes so
+/// a valid record card is not discarded and cached content round-trips.
+enum InsightStarts: Codable {
+    case count(Int)
+    case schedule([FantasyStart])
+
+    init(from decoder: Decoder) throws {
+        let value = try decoder.singleValueContainer()
+        if let count = try? value.decode(Int.self), count >= 0 {
+            self = .count(count)
+        } else if let turns = try? value.decode([FantasyStart].self) {
+            self = .schedule(turns)
+        } else {
+            throw DecodingError.typeMismatch(
+                InsightStarts.self,
+                .init(codingPath: decoder.codingPath,
+                      debugDescription: "Expected a nonnegative start count or a two-start schedule")
+            )
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var value = encoder.singleValueContainer()
+        switch self {
+        case .count(let count): try value.encode(count)
+        case .schedule(let turns): try value.encode(turns)
+        }
+    }
+
+    var schedule: [FantasyStart]? {
+        guard case .schedule(let turns) = self else { return nil }
+        return turns
+    }
+}
+
 /// One posted start on a two-start card ("Tue 7/29 at Guardians").
 struct FantasyStart: Codable {
     let date: String?
