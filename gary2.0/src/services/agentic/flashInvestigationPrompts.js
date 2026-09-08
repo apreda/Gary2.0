@@ -914,10 +914,10 @@ After the starter exits, the bullpen takes over. Investigate:
 - **Baserunning**: Is this an aggressive baserunning team (stolen bases, extra bases taken) or station-to-station? Note SB rate, success%, and extra bases taken. Reason about whether that style matters tonight given the matchup and score state — many runs are scored station-to-station.
 
 ### SUSTAINABILITY & TREND DETECTION
-When recent performance diverges from the season baseline, the question is what's real versus noise — and whether the price reflects it. These are season-long sustainability reads, NOT single-game predictions: a pitcher whose results outrun his expected stats can still throw a gem tonight.
+When recent performance diverges from the season baseline, the question is what's real versus noise. These are season-long sustainability reads, NOT single-game predictions: a pitcher whose results outrun his expected stats can still throw a gem tonight.
 - What evidence distinguishes a real shift from variance?
 - Has the roster changed (trade deadline, IL returns)?
-- Is a key pitcher's ERA outrunning how he's actually throwing? Read it from the desk's decomposition — the start ledger, his whiff-by-start trend, and Statcast contact quality allowed. Modeled estimators (xERA, FIP, SIERA, BABIP, HR/FB, strand rate) are not used — never cite them. Context for the price, not a forecast of tonight.
+- Is a key pitcher's ERA outrunning how he's actually throwing? Read it from the desk's decomposition — the start ledger, his whiff-by-start trend, and Statcast contact quality allowed. Modeled estimators (xERA, FIP, SIERA, BABIP, HR/FB, strand rate) are not used — never cite them.
 - Extreme 1-run / extra-inning records (fetched, in the STANDINGS section) do not sustain over 162 games — useful for judging a team's true level, not tonight's outcome.
 
 ### HOME/AWAY PERFORMANCE
@@ -964,12 +964,9 @@ Baseball is a 162-game marathon with real human dynamics. Beyond the stats, inve
 - **Regression awareness:** A good team on a losing streak is more likely to bounce back than to keep losing. A bad team on a winning streak is more likely to cool off. But investigate what's underneath — is the streak driven by a real change (rotation upgrade, key player returning, trade acquisition) or normal variance?
 - **Where the season is:** Early-season uncertainty, trade deadline energy, September urgency for contenders, September indifference for eliminated teams — all affect how teams play on any given night.
 
-### PRICE AWARENESS (MLB-SPECIFIC)
-MLB betting uses moneyline pricing rather than point spreads. The price reflects the market's assessment of win probability.
-- When investigating, note the moneyline price from the scout report. A -170 favorite and a -115 favorite imply different win probabilities — the depth of your investigation should match.
-- Report the implied probability context: -150 implies ~60% win probability, +150 implies ~40%. Compare to what your investigation suggests.
+### LATE GAME UPDATES
 - Investigate factors that may have shifted since the line was set: confirmed lineups (vs projected), bullpen availability (who pitched last night), day-of weather updates, and any late scratches or IL moves.
-- Report your findings factually. Gary will evaluate which team he believes wins.
+- Report your findings factually. Gary will evaluate the full game and choose the moneyline or run-line outcome he expects.
 
 ### YOUR SCOUT REPORT IS YOUR BASELINE
 The scout report provides the starting point. You are free to re-fetch any stat for deeper investigation.`;
@@ -1248,7 +1245,10 @@ export function getFlashInvestigationPrompt(sport, spread = null) {
   const groundingRules = getGroundingFactOnlyRules();
   const playerTeam = getPlayerToTeamMethodology();
   const crossRef = getCrossReferenceMethodology();
-  const spreadDrivers = getObservableSpreadDriversMethodology();
+  // MLB investigates the actual game outcome. Its own factor section covers
+  // game context; the shared price/perception assignment belongs to other lanes.
+  const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
+  const spreadDrivers = isMLB ? '' : getObservableSpreadDriversMethodology();
   const spreadContext = getSpreadAwareInvestigation(sport, spread);
   return `${factors}
 

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { mlbCappedMenu, mlbCaseHeadings, mlbCaseOrder, mlbPass1Opening, ticketMenu, menuTruthLines } from '../../src/services/agentic/orchestrator/mlbCaseMenu.js';
-import { buildPass1Message } from '../../src/services/agentic/orchestrator/passBuilders.js';
+import { buildPass1Message, buildPass2Message } from '../../src/services/agentic/orchestrator/passBuilders.js';
+import { getFlashInvestigationPrompt } from '../../src/services/agentic/flashInvestigationPrompts.js';
 import { MLB_CONSTITUTION } from '../../src/services/agentic/constitution/mlbConstitution.js';
 
 const capped = { moneyline_home: -230, moneyline_away: 210, spread_home: -1.5, spread_home_odds: -111, spread_away: 1.5, spread_away_odds: -109 };
@@ -83,13 +84,13 @@ describe('Pass 1 and the bilateral prompt agree', () => {
     expect(msg).not.toContain('+1.5 TONIGHT:');
     expect(msg.toLowerCase()).not.toContain('house limit');
     expect(msg).not.toContain('OUTRIGHT AT');
-    // Price-last ruling: the opening names the kind of bet, never the numbers.
+    // The opening names the ticket outcome; exact odds remain on the desk.
     const opening = msg.split('\n').find((l) => l.startsWith("You're deciding"));
     expect(opening).not.toMatch(/-?\d{3}/);
   });
-  it('reads exactly as before on a legal board', () => {
+  it('asks for the team Gary expects to win on a moneyline board', () => {
     const msg = buildPass1Message('DESK', 'Braves', 'Rockies', '2026-09-01', 'baseball_mlb', -1.5, { game: legal });
-    expect(msg).toContain('The board comes first; everything else follows.');
+    expect(msg).toContain('Tonight is a moneyline game. Read the whole game and choose the team you actually expect to win.');
     expect(msg).toContain('CASE FOR BACKING BRAVES TONIGHT:');
     expect(msg).toContain('CASE FOR BACKING ROCKIES TONIGHT:');
   });
@@ -100,10 +101,12 @@ describe('Pass 1 and the bilateral prompt agree', () => {
     expect(p).toContain('the case for taking that side tonight');
     expect(MLB_CONSTITUTION.bilateralCasePrompt('Braves', 'Rockies')).toContain('CASE FOR BACKING BRAVES TONIGHT:');
   });
-  it('mlbPass1Opening names the kind of game, prices at the end either way', () => {
-    expect(mlbPass1Opening({ kind: 'moneyline' })).toContain('The board comes first; everything else follows.');
+  it('mlbPass1Opening names the existing kind and asks for that ticket outcome', () => {
+    expect(mlbPass1Opening({ kind: 'moneyline' })).toContain('choose the team you actually expect to win');
     const rl = mlbPass1Opening({ kind: 'runline', fav: 'Braves', dog: 'Rockies' });
     expect(rl).toContain('Tonight is a run-line game: Braves -1.5 or Rockies +1.5.');
+    expect(rl).toContain('choose the run-line outcome you actually expect');
+    expect(rl).not.toContain('choose the team you actually expect to win');
     expect(rl.toLowerCase()).not.toContain('house limit');
   });
 });
@@ -140,30 +143,44 @@ describe('ticketMenu / menuTruthLines — one definition of a ticket', () => {
   });
 });
 
-describe('what the price already holds (founder GO, Sep 3 2026)', () => {
-  it('both openers carry the sentence verbatim, after "The board comes first"', async () => {
-    const { mlbPass1Opening, MLB_PRICED_IN_SENTENCE } = await import('../../src/services/agentic/orchestrator/mlbCaseMenu.js');
-    expect(MLB_PRICED_IN_SENTENCE).toBe('The prices on the board were set after the starters, the records, the run differential, the season offense and pen numbers, and the park were known. The question is not whether those things exist, everyone can see them, but whether the price has accounted for them correctly for tonight\'s game. Records and run differential describe what has happened; they are not reasons for or against a price.');
+describe('MLB expected ticket outcome assignment (founder, Sep 8 2026)', () => {
+  it('removes price-hunting assignments from the complete MLB prompt surfaces', () => {
     for (const h of [{ kind: 'moneyline' }, { kind: 'runline', fav: 'Dodgers', dog: 'Padres' }]) {
-      const msg = mlbPass1Opening(h);
-      expect(msg.indexOf('The board comes first; everything else follows.')).toBeLessThan(msg.indexOf(MLB_PRICED_IN_SENTENCE));
-      expect(msg).not.toMatch(/cheap|expensive|underdog|favorite is|value/i);
+      const msg = [mlbPass1Opening(h), MLB_CONSTITUTION.pass1Context,
+        getFlashInvestigationPrompt('baseball_mlb'), buildPass2Message('Dodgers', 'Padres', 'MLB', -1.5)].join('\n');
+      expect(msg).not.toMatch(/The board comes first|whether the price has accounted|The market already knows|uncertainty is never a reason|PRICE AWARENESS|Report the implied probability|whether the price reflects it|Context for the price|OBSERVABLE SPREAD DRIVERS/i);
+      expect(mlbPass1Opening(h)).not.toMatch(/cheap|expensive|underdog|favorite is|value|probabilit/i);
     }
   });
-  it('the Aug 19 "price is not a message" clause is retired from the MLB constitution', async () => {
-    const { readFileSync } = await import('node:fs');
-    const text = readFileSync(new URL('../../src/services/agentic/constitution/mlbConstitution.js', import.meta.url), 'utf8');
-    expect(text).not.toContain('The price is not a message about the game');
-    expect(text).toContain('The market already knows what you know');
+  it('retains the exact moneyline-cap boundary and chooses run-line before reading evidence', () => {
+    const atCap = buildPass1Message('DESK', 'Braves', 'Rockies', '2026-09-08', 'MLB', -1.5, { game: { ...capped, moneyline_home: -179 } });
+    const pastCap = buildPass1Message('DESK', 'Braves', 'Rockies', '2026-09-08', 'MLB', -1.5, { game: { ...capped, moneyline_home: -180 } });
+    expect(atCap).toContain('Tonight is a moneyline game.');
+    expect(pastCap).toContain('Tonight is a run-line game: Braves -1.5 or Rockies +1.5.');
+    expect(pastCap.indexOf('Tonight is a run-line game:')).toBeLessThan(pastCap.indexOf('<scout_report>'));
+  });
+  it('keeps the simple final question, evidence questions, and confidence as Gary\'s judgment', () => {
+    const msg = buildPass2Message('Braves', 'Rockies', 'MLB', -1.5);
+    expect(msg).toContain("What's your bet, and what are the reasons why?");
+    expect(msg).toContain('Which supplied facts carry this decision? What remains an assumption? What unresolved fact could change it?');
+    expect(msg).toContain('How confident are you in this pick?');
+    expect(msg).not.toMatch(/expected value|implied probability|win probability|mispric/i);
+  });
+  it('retains late-update factual research and the locked injury awareness', () => {
+    const research = getFlashInvestigationPrompt('MLB');
+    expect(research).toContain('### LATE GAME UPDATES');
+    expect(research).toContain('confirmed lineups (vs projected), bullpen availability (who pitched last night), day-of weather updates, and any late scratches or IL moves');
+    expect(MLB_CONSTITUTION.pass1Context).toContain('### MLB INJURY LABELS (READ FROM SCOUT REPORT)');
+    expect(MLB_CONSTITUTION.pass1Context).toContain('**ESTABLISHED** — 3+ team games missed');
   });
 });
 
 describe('where to look (founder GO, Sep 3 2026)', () => {
-  it('both openers carry the where-to-look line after the priced-in sentence, and it names places only', async () => {
-    const { mlbPass1Opening, MLB_PRICED_IN_SENTENCE, MLB_WHERE_TO_LOOK } = await import('../../src/services/agentic/orchestrator/mlbCaseMenu.js');
+  it('both openers carry the where-to-look line after the ticket assignment, and it names places only', async () => {
+    const { mlbPass1Opening, MLB_WHERE_TO_LOOK } = await import('../../src/services/agentic/orchestrator/mlbCaseMenu.js');
     for (const h of [{ kind: 'moneyline' }, { kind: 'runline', fav: 'Dodgers', dog: 'Padres' }]) {
       const msg = mlbPass1Opening(h);
-      expect(msg.indexOf(MLB_PRICED_IN_SENTENCE)).toBeLessThan(msg.indexOf(MLB_WHERE_TO_LOOK));
+      expect(msg.indexOf('Read the whole game')).toBeLessThan(msg.indexOf(MLB_WHERE_TO_LOOK));
     }
     expect(MLB_WHERE_TO_LOOK).toContain('which arms in each pen can actually go tonight');
     expect(MLB_WHERE_TO_LOOK).not.toMatch(/\b(edge|value|fade|favorite|underdog|means|therefore|so take|bet the)\b/i);

@@ -1,5 +1,14 @@
 # CLAUDE.md
 
+Latest MLB decision and Winners policy: read
+`../HANDOFF_2026-09-08_MLB_GARY_WINNERS.md`. New MLB games carry
+`mlb-judgment-v1`: Gary chooses the actual win/cover outcome he expects.
+`mlb-conviction-v3` uses Sol for factual eligibility, then the configured
+primary game brain (Astra) for comparative Winners selection. Price
+justification and self-assigned confidence do not decide admission. The
+existing -179 ML cap and pre-read run-line menus remain. Other sports,
+props, historical boards and notebook/formula records retain their policies.
+
 Latest native release: read `../HANDOFF_2026-09-08_HUB_BRAND_ALIGNMENT.md`.
 Hub/Fantasy now use Gary's shared visual elements while retaining the approved
 layout and typography. Build 914 integrates the Billfold preseason and Hub
@@ -62,8 +71,14 @@ reviewer stays on Sol. The independent `com.gary.winners` launch agent runs
 `winners_candidates`, all review decisions are logged, and only qualified
 pregame tickets may enter `winners_board`. Six is a maximum per league and
 kind. Prop capacity follows the slate's early/middle/late windows (2/4/6),
-with unused slots carried forward. Confidence only orders already-qualified
-candidates available together. Published ticket snapshots never change.
+with unused slots carried forward. For legacy policies, confidence only orders already-qualified
+candidates available together. From September 8, MLB game admission requires
+Gary's completed comparative selection; factual eligibility cannot auto-admit.
+Chronological slate groups reserve up to 2/4/6 places. The independent Winners
+worker compares eligible original picks near kickoff (T-25, waiting for the
+batch until T-10), using the configured primary game brain. Every choice and
+nonselection is preserved in the private winners_selection_runs ledger.
+Completed sets are not repeatedly sampled to fill a quota. Published ticket snapshots never change.
 The app reads these snapshots for current and historical dates from Sep 4;
 empty/error responses never invoke old local selection. Existing Sep 4
 publications were captured as a separate legacy policy, not rebranded as

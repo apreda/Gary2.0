@@ -1,8 +1,43 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import vm from 'node:vm';
+import { describe, expect, it, vi } from 'vitest';
 import { countRealStats } from '../../src/services/agentic/statsSubstance.js';
+import { MLB_DECISION_POLICY } from '../../src/services/agentic/orchestrator/mlbCaseMenu.js';
+import { originalGameEvidence } from '../../src/services/pickdesk/originalGameEvidence.js';
 
 const runner = readFileSync(new URL('../../scripts/run-agentic-picks.js', import.meta.url), 'utf8');
+
+describe('MLB decision-policy provenance', () => {
+  const game = { home_team: 'Braves', away_team: 'Rockies' };
+  const loadLane = (analyzeGame) => {
+    // Execute the actual lane function with local doubles. Importing the
+    // runner itself would start provider initialization and live generation.
+    const start = runner.indexOf('async function runMlbJuneEngine(');
+    const end = runner.indexOf('\n}\n', start) + 2;
+    return vm.runInNewContext(`(${runner.slice(start, end)})`, {
+      analyzeGame, MLB_JUNE_BRAIN_MODEL: 'test-brain', DESK_FALLBACK_MODELS: [],
+      MLB_DECISION_POLICY, extractJuneBilateralPaths: () => ({ path_home: 'home case', path_away: 'away case' }),
+      mlbCaseHeadings: () => ({ lastSide: 'away' }), junePromptSha: async () => 'test-era',
+      console: { warn: vi.fn(), error: vi.fn() },
+    });
+  };
+
+  it('stamps a newly completed MLB decision with the policy loaded alongside its prompts', async () => {
+    const decision = await loadLane(vi.fn().mockResolvedValue({ pick: 'Braves ML -150' }))(game, {});
+    expect(decision).toMatchObject({ decision_policy: 'mlb-judgment-v1', _promptSha: 'test-era' });
+    expect(runner).toContain("...(config.key === 'baseball_mlb' ? { decision_policy: result.decision_policy } : {})");
+    const pick = { pick: decision.pick, decision_policy: decision.decision_policy, homeTeam: 'Braves', awayTeam: 'Rockies' };
+    expect(originalGameEvidence({ result: decision, pick, deskText: 'original desk' }).pickSnapshot.decision_policy).toBe(MLB_DECISION_POLICY);
+  });
+
+  it('does not assign a policy to a failed analysis or an old recovered publication', async () => {
+    const failure = await loadLane(vi.fn().mockResolvedValue({ error: 'unavailable' }))(game, {});
+    expect(failure.decision_policy).toBeUndefined();
+    const oldPick = { pick: 'Braves ML -150', homeTeam: 'Braves', awayTeam: 'Rockies' };
+    const evidence = originalGameEvidence({ result: { decision_policy: MLB_DECISION_POLICY }, pick: oldPick, deskText: 'original desk' });
+    expect(evidence.pickSnapshot.decision_policy).toBeUndefined();
+  });
+});
 
 describe('NFL verified Tale of the Tape storage mapping', () => {
   const nflMap = {

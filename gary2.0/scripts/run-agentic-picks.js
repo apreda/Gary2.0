@@ -24,7 +24,7 @@ import {
 import { exitAfterFlushing } from './lib/processLifecycle.js';
 import { ncaabSeason } from '../src/utils/dateUtils.js';
 import { countRealStats } from '../src/services/agentic/statsSubstance.js';
-import { mlbCaseHeadings } from '../src/services/agentic/orchestrator/mlbCaseMenu.js';
+import { mlbCaseHeadings, MLB_DECISION_POLICY } from '../src/services/agentic/orchestrator/mlbCaseMenu.js';
 import {
   classifyNcaafFbsGames,
   ncaafSlateDateForInstant,
@@ -203,6 +203,9 @@ async function runMlbJuneEngine(game, runnerOptions) {
   result.case_last = result.case_last ?? mlbCaseHeadings(game.home_team, game.away_team, game).lastSide;
   result._modelUsed = result._modelUsed ?? modelUsed;
   result._promptSha = result._promptSha ?? await junePromptSha();
+  // This marker was loaded with this process's MLB prompts, before analysis.
+  // It belongs to the new decision, never an existing or recovered publication.
+  result.decision_policy = MLB_DECISION_POLICY;
   return result;
 }
 
@@ -2117,6 +2120,7 @@ async function main() {
             // Which CONTRACT wording produced it — prompt-era hash (Jul 29);
             // joins against prompt_eras for pre-registered before/after reads.
             prompt_sha: result._promptSha ?? null,
+            ...(config.key === 'baseball_mlb' ? { decision_policy: result.decision_policy } : {}),
             league: config.name,
             sport: config.key,
             pick_id: `agentic-${config.key}-${game.id || Date.now()}`,

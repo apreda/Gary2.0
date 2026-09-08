@@ -15,6 +15,10 @@
 import { GAME_ML_CAP } from './orchestratorConfig.js';
 import { finiteMarketNumber, isAmericanPrice, footballMarketUnavailable } from '../../marketTruth.js';
 
+// Imported with the decision prompts at process load. Only new decisions
+// under this assignment carry the marker; publication recovery never adds it.
+export const MLB_DECISION_POLICY = 'mlb-judgment-v1';
+
 const fmtPrice = (v) => (Number(v) > 0 ? `+${Number(v)}` : `${Number(v)}`);
 const fmtMl = fmtPrice;
 const priced = isAmericanPrice;
@@ -151,16 +155,16 @@ export function mlbCaseHeadings(homeTeam, awayTeam, game) {
 }
 
 /**
- * Pass 1's opening sentence: which game this is. THE BOARD COMES FIRST
- * (founder GO, Sep 2 2026): the price is the first thing on the desk, so
- * the read is an argument with the number from the first line — prices-last
- * produced reads with no question to answer.
+ * Pass 1's assignment (founder, Sep 8 2026): read the whole game and
+ * choose the ticket outcome Gary expects. The existing game kind and
+ * prices remain available from the start; they do not assign a search
+ * for a mispriced side.
  */
 export function mlbPass1Opening(headings) {
   if (headings && headings.kind === 'runline') {
-    return `You're deciding what to bet on tonight's game below. Tonight is a run-line game: ${headings.fav} -1.5 or ${headings.dog} +1.5. The board comes first; everything else follows.\n\n${MLB_PRICED_IN_SENTENCE}\n\n${MLB_WHERE_TO_LOOK}`;
+    return `You're deciding what to bet on tonight's game below. Tonight is a run-line game: ${headings.fav} -1.5 or ${headings.dog} +1.5. Read the whole game and choose the run-line outcome you actually expect.\n\n${MLB_WHERE_TO_LOOK}`;
   }
-  return `You're deciding what to bet on tonight's game below. The board comes first; everything else follows.\n\n${MLB_PRICED_IN_SENTENCE}\n\n${MLB_WHERE_TO_LOOK}`;
+  return `You're deciding what to bet on tonight's game below. Tonight is a moneyline game. Read the whole game and choose the team you actually expect to win.\n\n${MLB_WHERE_TO_LOOK}`;
 }
 
 /**
@@ -171,17 +175,3 @@ export function mlbPass1Opening(headings) {
  * names places, never what a fact means for the bet.
  */
 export const MLB_WHERE_TO_LOOK = "Where tonight lives on the desk: this starter against this lineup, by hand and by recent form; which arms in each pen can actually go tonight and who threw yesterday; who is out or back in the confirmed nine; the park and the weather tonight; and what the beat has reported today.";
-
-/**
- * WHAT THE PRICE ALREADY HOLDS (founder GO, Sep 3 2026, wording verbatim).
- * The NBA precedent: one sentence naming what the spread was set after and
- * asking whether it accounted for those things correctly went 152-106
- * (+30u, ~2 SD) from Feb 28 to Apr 12 2026, after 162-146 without it, and
- * the single-sentence version beat the paragraphs. The MLB ledger (Aug 5 to
- * Sep 2) lost on favorites chosen for records, run differential and "the
- * better team" — the things already in the price. Awareness only: it names
- * what everyone can see and asks the question; no side, no factor, no word
- * about a price being cheap or expensive (a moneyline "is the price right"
- * leans to the dog; a spread leans nowhere).
- */
-export const MLB_PRICED_IN_SENTENCE = 'The prices on the board were set after the starters, the records, the run differential, the season offense and pen numbers, and the park were known. The question is not whether those things exist, everyone can see them, but whether the price has accounted for them correctly for tonight\'s game. Records and run differential describe what has happened; they are not reasons for or against a price.';

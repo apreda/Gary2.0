@@ -4,6 +4,7 @@ import { pickSideOf } from '../closingLine.js';
 
 export const WINNERS_POLICY_VERSION = 'exact-ticket-v2';
 export const WINNERS_CUTOVER_DATE = '2026-09-04';
+export const MLB_WINNERS_POLICY_VERSION = 'mlb-conviction-v3';
 const norm = v => String(v ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
 const digest = v => createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const numeric = v => v == null || String(v).trim() === '' ? null : Number.isFinite(Number(v)) ? Number(v) : null;
@@ -60,7 +61,8 @@ export function winnersCandidate({ date, league, kind, pick, evidence = {} }) {
     ticket_key: digest([date, league.toUpperCase(), kind, ...(kind === 'prop' ? market : [gameId, norm(pickText)]), odds]),
     pick_text: pickText, odds, commence_time: kickoff,
     pick_snapshot: pick, evidence_snapshot: evidence,
-    policy_version: WINNERS_POLICY_VERSION,
+    policy_version: league.toUpperCase()==='MLB' && kind==='game' && pick.decision_policy==='mlb-judgment-v1'
+      ? MLB_WINNERS_POLICY_VERSION : WINNERS_POLICY_VERSION,
     status: invalid ? 'unavailable' : 'pending',
     reason: invalid ? 'Missing exact game identity, ticket price, or kickoff' : null,
   };

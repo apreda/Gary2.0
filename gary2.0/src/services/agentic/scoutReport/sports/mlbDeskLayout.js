@@ -161,8 +161,8 @@ function renderMarket(mk) {
  */
 export function renderBucketsDesk(p) {
   const top = `${'═'.repeat(66)}\n${String(p.header || '').trim()}\n${'═'.repeat(66)}`;
-  // THE BOARD COMES FIRST (founder GO, Sep 2 2026): the price leads the
-  // desk, so the read is an argument with the number from the first line.
+  // Keep the available tickets visible from the start. The MLB assignment
+  // asks which outcome Gary expects; this ordering does not set his objective.
   return [
     top,
     renderMarket(p.market || {}),

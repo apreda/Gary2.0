@@ -5,24 +5,65 @@ import { pathToFileURL } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { supabaseAdmin as supabase } from '../src/supabaseClient.js';
 import { reviewPick, reviewProp } from '../src/services/pickdesk/winnersReviewer.js';
-import { enqueueWinnersCandidate, coreProp, canonicalProp, winnersPickIsHome, WINNERS_CUTOVER_DATE } from '../src/services/pickdesk/winnersAdmissions.js';
+import { enqueueWinnersCandidate, coreProp, canonicalProp, winnersCandidate, winnersPickIsHome, WINNERS_CUTOVER_DATE, MLB_WINNERS_POLICY_VERSION } from '../src/services/pickdesk/winnersAdmissions.js';
 import { matchingDesk } from '../src/services/diary/evidence.js';
 import { originalEvidenceMatches, reviewSourceDesk } from '../src/services/pickdesk/originalGameEvidence.js';
+import { MLB_WINNERS_POLICY, runMlbSelectionWindow } from '../src/services/pickdesk/mlbWinnersSelection.js';
 
 const todayET = () => new Date().toLocaleDateString('en-CA',{timeZone:'America/New_York'});
 const check = result => { if(result.error) throw result.error; return result.data; };
+const normalized = value => typeof value === 'string' ? value.trim().toLowerCase().replace(/\s+/g, ' ') : '';
+function mlbCandidateIdentityError(candidate, pick, evidence, now) {
+  if (candidate.league !== 'MLB' || candidate.kind !== 'game' || pick.decision_policy !== 'mlb-judgment-v1') {
+    return 'MLB factual policy does not match the original game decision';
+  }
+  const start = Date.parse(candidate.commence_time);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(candidate.game_date || '')
+      || new Date(start).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) !== candidate.game_date) {
+    return 'Candidate game date does not match its original scheduled start';
+  }
+  const rebuilt = winnersCandidate({ date: candidate.game_date, league: candidate.league, kind: 'game', pick });
+  if (rebuilt.status === 'unavailable' || ['game_id', 'market_key', 'ticket_key'].some(key => String(rebuilt[key]) !== String(candidate[key]))
+      || normalized(rebuilt.pick_text) !== normalized(candidate.pick_text) || Number(rebuilt.odds) !== Number(candidate.odds)
+      || Date.parse(rebuilt.commence_time) !== start || normalized(pick.league || pick.sport) !== 'mlb'
+      || (pick.game_date && pick.game_date !== candidate.game_date)) {
+    return 'Candidate identity, ticket, odds or start differs from its original pick snapshot';
+  }
+  if (!originalEvidenceMatches(evidence, pick, candidate.game_date, candidate.league)) {
+    return 'Original evidence envelope does not match this exact game decision';
+  }
+  const saved = evidence.pickSnapshot;
+  if (saved.decision_policy !== pick.decision_policy || normalized(saved.league || saved.sport) !== 'mlb'
+      || (saved.game_date && saved.game_date !== candidate.game_date)
+      || ['homeTeam', 'awayTeam'].some(key => !normalized(pick[key]) || normalized(pick[key]) !== normalized(saved[key])
+        || normalized(pick[key]) !== normalized(evidence[key]))
+      || Date.parse(saved.commence_time) !== start || Date.parse(evidence.commenceTime) !== start
+      || (pick.type || 'moneyline') !== (saved.type || 'moneyline')
+      || (pick.type === 'spread' && Number(pick.spread ?? pick.line) !== Number(saved.spread ?? saved.line))
+      || typeof winnersPickIsHome(pick) !== 'boolean' || evidence.pickIsHome !== winnersPickIsHome(pick)) {
+    return 'Original evidence sides, game identity, ticket type or start differs from the published decision';
+  }
+  if (!Number.isFinite(Date.parse(evidence.observedAt)) || Date.parse(evidence.observedAt) > now || Date.parse(evidence.observedAt) >= start) {
+    return 'Original evidence envelope lacks a valid observation time before this review and kickoff';
+  }
+  return null;
+}
 export async function reviewCandidate(c, { gameReview=reviewPick, propReview=reviewProp, now=Date.now() }={}) {
   const p=c.pick_snapshot || {}, e=c.evidence_snapshot || {};
   const kickoff=Date.parse(c.commence_time);
   if (!Number.isFinite(kickoff) || kickoff<=now) return {ok:false,status:'unavailable',error:'The ticket has no future kickoff; no postgame review is allowed'};
   if (!e.deskText) return {ok:false,status:'unavailable',error:'Original evidence snapshot unavailable; rationale alone cannot verify itself'};
   if (e.observedAt && (!Number.isFinite(Date.parse(e.observedAt)) || Date.parse(e.observedAt)>=kickoff)) return {ok:false,status:'unavailable',error:'Evidence was not recorded before kickoff'};
+  if (c.policy_version === MLB_WINNERS_POLICY_VERSION) {
+    const error = mlbCandidateIdentityError(c, p, e, now);
+    if (error) return {ok:false,status:'unavailable',error};
+  }
   const prop=canonicalProp(p);
   const sourceDesk=reviewSourceDesk(e);
   const input={...e, deskText:sourceDesk, pickIsHome:winnersPickIsHome({...p,homeTeam:p.homeTeam || e.homeTeam,awayTeam:p.awayTeam || e.awayTeam}), league:c.league, pickText:c.pick_text, odds:c.odds, rationale:p.rationale,
-    gameDate:c.game_date, betType:p.type, betLine:p.spread ?? p.line, homeTeam:p.homeTeam || e.homeTeam, awayTeam:p.awayTeam || e.awayTeam,
+    gameId:String(c.game_id), gameDate:c.game_date, betType:p.type, betLine:p.spread ?? p.line, homeTeam:p.homeTeam || e.homeTeam, awayTeam:p.awayTeam || e.awayTeam,
     propType:prop.prop, line:prop.line, side:prop.side, playerName:p.player,
-    commenceTime:c.commence_time};
+    commenceTime:c.commence_time,reviewPolicyVersion:c.policy_version};
   return c.kind==='prop' ? propReview(input) : gameReview(input);
 }
 
@@ -124,10 +165,13 @@ export async function reviewAndRelease(client=supabase, {review=reviewNext, rele
 async function main() {
   if(!process.env.SUPABASE_SERVICE_ROLE_KEY)throw new Error('Winners worker requires the configured service-role credential');
   const watch=process.argv.includes('--watch');
+  console.log(`[Winners] started ${new Date().toISOString()} pid=${process.pid}; MLB policy=${MLB_WINNERS_POLICY}; mode=${watch?'watch':'once'}`);
   if(!watch) {
     await reconcilePublished(supabase,todayET());
     await Promise.all([reviewAndRelease(),reviewAndRelease()]);
     await releaseBoards();
+    await runMlbSelectionWindow(supabase,todayET());
+    await mirrorGames(supabase,todayET());
     return;
   }
   // A slow model call must not delay another completed review or the clock
@@ -146,6 +190,15 @@ async function main() {
       await sleep(30_000);
     }
   };
-  await Promise.all([reader(),reader(),reconcile()]);
+  // Selection has its own loop: Gary's comparative read never holds up factual
+  // verification, other leagues, or the publication/reconciliation clock.
+  const select=async()=>{
+    while(true) {
+      try {await runMlbSelectionWindow(supabase,todayET());await mirrorGames(supabase,todayET());}
+      catch(error){console.error('[Winners] Gary selection:',error.message);}
+      await sleep(30_000);
+    }
+  };
+  await Promise.all([reader(),reader(),reconcile(),select()]);
 }
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href)main().then(()=>process.exit(0)).catch(e=>{console.error('[Winners] startup:',e.message);process.exit(1);});

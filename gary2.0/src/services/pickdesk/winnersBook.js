@@ -134,11 +134,143 @@ export function buildWinnersBook({ candidates = [], board = [], events = [], gam
       game_id: candidate.game_id, pick_text: candidate.pick_text, ticket_key: candidate.ticket_key, odds,
       ...group, ...outcome, published, units: unitsAtPrice(outcome.result, odds),
       policy_version: candidate.policy_version || 'unstamped',
+      decision_policy: p.decision_policy || 'unstamped',
       pick_model: p.model || p.model_used || p.brain_model || 'unstamped',
       prompt_version: p.prompt_sha || p.june_prompt_sha || 'unstamped',
       review_model: candidate.review_model || 'unreviewed',
-      status: candidate.status, reason: candidate.reason,
+      status: candidate.status, reason: candidate.reason, board_reason: boardRow?.reason || null,
     };
+  });
+}
+
+export const MLB_JUDGMENT_POLICY = 'mlb-judgment-v1';
+export const MLB_SELECTION_POLICY = 'mlb-conviction-v3';
+
+function sameCandidateSnapshot(saved, candidate) {
+  return saved && String(saved.id) === String(candidate.id) && saved.ticket_key === candidate.ticket_key
+    && saved.policy_version === candidate.policy_version && saved.kind === candidate.kind
+    && candidateOutcomeIdentity(saved) !== null && candidateOutcomeIdentity(saved) === candidateOutcomeIdentity(candidate)
+    && num(saved.odds) === num(candidate.odds)
+    && ['decision_policy', 'model', 'prompt_sha', 'rationale'].every(key =>
+      String(saved.pick_snapshot?.[key] ?? '') === String(candidate.pick_snapshot?.[key] ?? ''));
+}
+
+/** Preserve failed/incomplete attempts as operational records, not Gary rejections. */
+function selectionHistory(candidate, selectionRuns, now) {
+  return selectionRuns.filter(run => (run.input_snapshot?.candidates || []).some(saved => String(saved.id) === String(candidate.id)))
+    .map(run => {
+      const saved = (run.input_snapshot?.candidates || []).filter(row => String(row.id) === String(candidate.id));
+      const ranked = run.selection?.ranked_candidates;
+      const ids = (run.input_snapshot?.candidates || []).map(row => String(row.id));
+      const rankedIds = Array.isArray(ranked) ? ranked.map(row => String(row.candidate_id)) : [];
+      const validRanking = Array.isArray(ranked) && ranked.length > 0 && ranked.length === ids.length
+        && new Set(ids).size === ids.length && new Set(rankedIds).size === ids.length
+        && rankedIds.every(id => ids.includes(id)) && new Set(ranked.map(row => row.rank)).size === ranked.length
+        && ranked.every(row => Number.isInteger(row.rank) && row.rank > 0 && row.rank <= ranked.length && typeof row.selected === 'boolean'
+          && ['reason', 'expected_outcome', 'comparison'].every(key => typeof row[key] === 'string' && row[key].trim()));
+      const entry = Array.isArray(ranked) ? ranked.find(row => String(row.candidate_id) === String(candidate.id)) : null;
+      const started = instant(run.created_at), completed = instant(run.completed_at), kickoff = instant(candidate.commence_time);
+      const snapshotMatches = saved.length === 1 && sameCandidateSnapshot(saved[0], candidate)
+        && run.game_date === candidate.game_date && norm(run.league) === norm(candidate.league)
+        && run.kind === candidate.kind && run.policy_version === MLB_SELECTION_POLICY;
+      const timely = Number.isFinite(started) && Number.isFinite(completed) && completed >= started
+        && completed < kickoff && completed <= now && instant(candidate.created_at) <= started
+        && saved[0]?.status === 'qualified' && instant(saved[0]?.reviewed_at) <= started;
+      const valid = run.status === 'completed' && snapshotMatches && timely && validRanking;
+      return {
+        run_id: run.id, status: run.status, policy_version: run.policy_version, cohort: run.cohort,
+        window_start: run.window_start, created_at: run.created_at, completed_at: run.completed_at,
+        model: run.model || 'unstamped', ms: run.ms ?? null, attempts: run.attempts, fingerprint: run.fingerprint,
+        error: run.error || null, attempt_history: run.attempt_history || [], lease_until: run.lease_until || null,
+        capacity: run.input_snapshot?.capacity || null, summary: run.selection?.summary || null,
+        rank: entry?.rank ?? null, selected: typeof entry?.selected === 'boolean' ? entry.selected : null,
+        reason: entry?.reason || null, expected_outcome: entry?.expected_outcome || null, comparison: entry?.comparison || null,
+        valid_decision: valid,
+        invalid_reason: !snapshotMatches ? 'candidate snapshot or policy mismatch'
+          : run.status !== 'completed' ? `selection ${run.status}${run.error ? `: ${run.error}` : ''}`
+          : !timely ? 'selection is not an original pregame decision at report time'
+          : !validRanking ? 'incomplete or conflicting candidate ranking' : null,
+      };
+    }).sort((a, b) => (instant(a.created_at) || 0) - (instant(b.created_at) || 0));
+}
+
+/**
+ * Public MLB coverage, including tickets that never entered the Winners queue.
+ * Callers supply original daily_picks entries with their containing game_date.
+ * Rows are never merged across policy eras; completed selection decisions are
+ * distinct from qualification, retries, missing queue records and admissions.
+ */
+export function buildMlbSelectionBook({ publicPicks = [], candidates = [], board = [], events = [],
+  selectionRuns = [], gameResults = [], now = Date.now() } = {}) {
+  const outcomes = outcomeIndex(gameResults, gameTicketIdentity);
+  const candidateRows = buildWinnersBook({ candidates, board, events, gameResults, now });
+  const rowsById = new Map(candidateRows.map(row => [String(row.candidate_id), row]));
+  const byTicket = new Map();
+  for (const candidate of candidates.filter(row => norm(row.league) === 'mlb' && row.kind === 'game')) {
+    const key = publicationKey({ ...candidate, pick_text: candidate.pick_snapshot?.pick || candidate.pick_text }, candidate.odds);
+    if (key) { if (!byTicket.has(key)) byTicket.set(key, []); byTicket.get(key).push(candidate); }
+  }
+  return publicPicks.filter(p => norm(p.league || p.sport) === 'mlb' && p.type !== 'prop' && p.pickType !== 'prop').map((p, index) => {
+    const identity = { game_date: p.game_date, league: 'MLB', game_id: p.game_id ?? p.bdl_game_id, pick_text: p.pick };
+    const odds = num(p.odds), key = publicationKey(identity, odds);
+    const matches = key ? byTicket.get(key) || [] : [];
+    const candidate = matches.length === 1 ? matches[0] : null;
+    const savedRow = candidate ? rowsById.get(String(candidate.id)) : null;
+    const outcome = exactOutcome(outcomes, gameTicketIdentity(identity));
+    const decisionPolicy = p.decision_policy || 'unstamped';
+    const history = candidate ? selectionHistory(candidate, selectionRuns, now) : [];
+    const decisions = history.filter(run => run.valid_decision);
+    const latestDecision = decisions.at(-1);
+    const selectedDecision = decisions.find(run => run.selected);
+    const boardRow = candidate && board.find(row => String(row.candidate_id) === String(candidate.id));
+    const row = {
+      ...identity, kind: 'game', public_pick_id: p.pick_id || null, public_pick_index: p.public_pick_index ?? index,
+      source: 'daily_picks', candidate_id: candidate?.id ?? null, candidate_ids: matches.map(c => c.id),
+      ticket_key: candidate?.ticket_key || null, odds, ...outcome, units: unitsAtPrice(outcome.result, odds),
+      group: savedRow?.group || 'unconsidered', timing_reason: savedRow?.timing_reason || null,
+      published: savedRow?.published || false, decision_policy: decisionPolicy,
+      policy_version: candidate?.policy_version || 'not_queued',
+      pick_model: p.model || p.model_used || p.brain_model || 'unstamped',
+      prompt_version: p.prompt_sha || p.june_prompt_sha || 'unstamped',
+      review_model: candidate?.review_model || 'unreviewed', status: candidate?.status || 'not_queued',
+      reason: candidate?.reason || null, board_reason: boardRow?.reason || null,
+      candidate_recorded_at: candidate?.created_at || null, commence_time: p.commence_time || candidate?.commence_time || null,
+      selection_history: history, selection_run_id: latestDecision?.run_id || null,
+      selection_model: latestDecision?.model || null, selection_window: latestDecision?.window_start || null,
+      selection_reason: latestDecision?.reason || null, selection_comparison: latestDecision?.comparison || null,
+      expected_outcome: latestDecision?.expected_outcome || null,
+    };
+    if (!gameTicketIdentity(identity) || typeof p.pick !== 'string'
+        || !['string', 'number'].includes(typeof identity.game_id)) {
+      return { ...row, group: 'ledger_conflict', reason: 'Public pick lacks an exact date, league, game ID or ticket' };
+    }
+    if (matches.length > 1) return { ...row, group: 'ledger_conflict', reason: 'Multiple candidates match the original public ticket and price' };
+    if (candidate && ['decision_policy', 'model', 'prompt_sha', 'rationale'].some(field =>
+      String(p[field] ?? '') !== String(candidate.pick_snapshot?.[field] ?? ''))) {
+      return { ...row, group: 'ledger_conflict', reason: 'Public decision and candidate snapshot disagree' };
+    }
+    if (decisionPolicy !== MLB_JUDGMENT_POLICY) return row;
+    if (!candidate) return { ...row, reason: 'Original public ticket has no exact Winners candidate record' };
+    if (candidate.policy_version !== MLB_SELECTION_POLICY) return { ...row, group: 'policy_mismatch', reason: 'Judgment pick lacks the Gary selection policy' };
+    if (row.group === 'timing_excluded') return row;
+    if (row.group === 'admitted') {
+      const admissionDecision = decisions.find(run => run.selected && instant(run.completed_at) <= instant(boardRow?.admitted_at));
+      return admissionDecision ? { ...row, selection_run_id: admissionDecision.run_id, selection_model: admissionDecision.model,
+        selection_window: admissionDecision.window_start, selection_reason: admissionDecision.reason,
+        selection_comparison: admissionDecision.comparison, expected_outcome: admissionDecision.expected_outcome }
+        : { ...row, group: 'selection_record_missing', reason: 'Published Winners ticket has no exact completed pregame Gary selection' };
+    }
+    if (row.group === 'rejected') return { ...row, group: 'factual_blocked' };
+    if (row.group !== 'qualified_not_admitted') return row;
+    if (selectedDecision) return { ...row, group: 'selected_not_admitted', selection_run_id: selectedDecision.run_id,
+      selection_reason: selectedDecision.reason, selection_comparison: selectedDecision.comparison,
+      selection_window: selectedDecision.window_start, selection_model: selectedDecision.model, expected_outcome: selectedDecision.expected_outcome };
+    if (latestDecision) return { ...row, group: 'considered_not_selected' };
+    const attempt = history.at(-1);
+    if (attempt) return { ...row, group: attempt.status === 'completed' ? 'selection_record_invalid'
+      : ['failed', 'expired', 'selecting'].includes(attempt.status) ? `selection_${attempt.status}` : 'selection_record_invalid',
+      reason: attempt.invalid_reason };
+    return { ...row, group: 'qualified_unconsidered' };
   });
 }
 
