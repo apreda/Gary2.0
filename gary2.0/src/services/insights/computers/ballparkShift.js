@@ -11,7 +11,7 @@
 //   - Fetch each starter's getMlbPlayerSplits({ playerId, season }) and read the
 //     byArena rows with category === 'pitching'.
 //   - Tonight's venue row is matched by split_name first-word against
-//     venueFirstWord(game.venue). Require games_played >= 2 AND >= 10 innings
+//     venueFirstWord(game.venue). Require games_played >= 3 AND >= 15 innings
 //     at the venue for a real sample.
 //   - Baseline = his ERA everywhere else, computed exactly from the 'All Splits'
 //     row minus the venue row (earned runs and innings subtract cleanly; innings
@@ -61,7 +61,7 @@ export async function computeBallparkShift(ctx) {
 
   for (const game of games) {
     try {
-      const gameRows = await ballparkForGame(
+      const gameRows = await collectBallparkShiftGame(
         game, { season, bdl, gameLabel: helpers.gameLabel, stats },
       );
       rows.push(...gameRows);
@@ -84,7 +84,11 @@ export async function computeBallparkShift(ctx) {
   return rows;
 }
 
-async function ballparkForGame(game, { season, bdl, gameLabel, stats }) {
+/** Collect one game's measured park splits without invoking a prose model. */
+export async function collectBallparkShiftGame(game, {
+  season, bdl, gameLabel, stats = { examined: 0, clearedVenueGate: 0 },
+  now = () => new Date().toISOString(),
+}) {
   const gameId = game?.id;
   if (gameId == null) return [];
   const label = gameLabel(game);
@@ -130,29 +134,30 @@ async function ballparkForGame(game, { season, bdl, gameLabel, stats }) {
       a.split_name.toLowerCase() === 'all splits');
     if (!venue || !allSplits) continue;
 
-    const venueGames = Number(venue.games_played);
-    const venueIp = ipToInnings(venue.innings_pitched);
-    const venueEra = Number(venue.era);
-    const venueEr = Number(venue.earned_runs);
-    if (!Number.isFinite(venueGames) || venueGames < MIN_VENUE_GAMES) continue;
-    if (!Number.isFinite(venueIp) || venueIp < MIN_VENUE_IP) continue;
+    const venueGames = measurement(venue.games_played);
+    const venueOuts = ipToOuts(venue.innings_pitched);
+    const venueEra = measurement(venue.era);
+    const venueEr = measurement(venue.earned_runs);
+    if (!Number.isInteger(venueGames) || venueGames < MIN_VENUE_GAMES) continue;
+    if (!Number.isFinite(venueOuts) || venueOuts < MIN_VENUE_IP * 3) continue;
     if (!Number.isFinite(venueEra) || venueEra < 0) continue;
     stats.clearedVenueGate += 1;
 
     // Baseline = everywhere except tonight's venue, subtracted exactly from
-    // the season totals (ER and IP both subtract cleanly).
-    const allIp = ipToInnings(allSplits.innings_pitched);
-    const allEr = Number(allSplits.earned_runs);
-    if (!Number.isFinite(allIp) || !Number.isFinite(allEr) || !Number.isFinite(venueEr)) continue;
-    const baseIp = allIp - venueIp;
+    // the season totals. Subtract integer outs, never rounded decimal innings.
+    const allOuts = ipToOuts(allSplits.innings_pitched);
+    const allEr = measurement(allSplits.earned_runs);
+    if (!Number.isFinite(allOuts) || !Number.isInteger(allEr) || !Number.isInteger(venueEr) || venueEr < 0) continue;
+    const baseOuts = allOuts - venueOuts;
     const baseEr = allEr - venueEr;
-    if (baseIp < MIN_BASELINE_IP || baseEr < 0) continue;
-    const baselineEra = (baseEr * 9) / baseIp;
+    if (baseOuts < MIN_BASELINE_IP * 3 || baseEr < 0) continue;
+    const baselineEra = (baseEr * 27) / baseOuts;
 
     const edge = venueEra - baselineEra; // + = worse at this park
     if (Math.abs(edge) < MIN_ERA_EDGE) continue;
 
-    const oppAvg = Number(venue.opponent_avg);
+    const oppAvg = measurement(venue.opponent_avg);
+    const starts = measurement(venue.games_started);
     candidates.push({
       playerId,
       teamId,
@@ -160,9 +165,12 @@ async function ballparkForGame(game, { season, bdl, gameLabel, stats }) {
       venueEra: round(venueEra, 2),
       baselineEra: round(baselineEra, 2),
       venueGames,
-      venueIp: round(venueIp, 1),
-      baseIp: round(baseIp, 1),
+      venueStarts: Number.isInteger(starts) && starts >= 0 && starts <= venueGames ? starts : null,
+      venueOuts, baseOuts, venueEr, baseEr,
+      venueIp: outsToIP(venueOuts),
+      baseIp: outsToIP(baseOuts),
       oppAvg: Number.isFinite(oppAvg) ? round(oppAvg, 3) : null,
+      collectedAt: now(),
       edge,
       worseHere: edge > 0,
     });
@@ -198,10 +206,11 @@ async function ballparkForGame(game, { season, bdl, gameLabel, stats }) {
         `baseline elsewhere.${oppClause}`,
     ];
 
+    const detail = pickVariant(detailVariants, c.playerId);
     return makeRow({
       category: 'ballparkShift',
       headline: pickVariant(headlineVariants, c.playerId),
-      detail: pickVariant(detailVariants, c.playerId),
+      detail,
       game: label,
       value: c.venueEra.toFixed(2),
       tone: c.worseHere ? TONES.CAUTION : TONES.EDGE,
@@ -212,6 +221,23 @@ async function ballparkForGame(game, { season, bdl, gameLabel, stats }) {
       player_id: c.playerId,
       team_id: c.teamId,
       game_id: gameId,
+      meta: {
+        source: 'BALLDONTLIE pitching byArena splits', season,
+        computed_detail: detail, computed_detail_kind: 'collector_context',
+        computed_as_of: c.collectedAt, source_collected_at: c.collectedAt,
+        innings_notation: 'baseball_outs',
+        venue: { name: venueName, games: c.venueGames, starts: c.venueStarts,
+          outs: c.venueOuts, innings_pitched: c.venueIp, earned_runs: c.venueEr,
+          era: c.venueEra, opponent_avg: c.oppAvg },
+        elsewhere: { outs: c.baseOuts, innings_pitched: c.baseIp, earned_runs: c.baseEr, era: c.baselineEra },
+        display_measurements: {
+          venue_innings_pitched: c.venueIp, elsewhere_innings_pitched: c.baseIp,
+          venue_games: String(c.venueGames),
+          ...(c.venueStarts != null ? { venue_starts: String(c.venueStarts) } : {}),
+          venue_era: c.venueEra.toFixed(2), elsewhere_era: c.baselineEra.toFixed(2),
+          ...(c.oppAvg != null ? { venue_opponent_avg: pct3(c.oppAvg) } : {}),
+        },
+      },
     });
   });
 }
@@ -225,13 +251,24 @@ function findPitchingArena(arenaRows, predicate) {
   }) || null;
 }
 
-/** MLB thirds-decimal innings (32.2 = 32⅔) -> true innings as a float. */
-function ipToInnings(ip) {
-  const n = Number(ip);
+function measurement(value) {
+  return (typeof value === 'number' || (typeof value === 'string' && value.trim())) ? Number(value) : NaN;
+}
+
+/** Documented MLB innings notation (32.2 = 32⅔) -> exact integer outs. */
+function ipToOuts(ip) {
+  const n = measurement(ip);
   if (!Number.isFinite(n) || n < 0) return NaN;
   const whole = Math.floor(n);
-  const thirds = Math.round((n - whole) * 10); // .0/.1/.2
-  return whole + thirds / 3;
+  const fraction = (n - whole) * 10;
+  const remainingOuts = Math.round(fraction);
+  const outs = whole * 3 + remainingOuts;
+  if (remainingOuts > 2 || Math.abs(fraction - remainingOuts) > 1e-8 || !Number.isSafeInteger(outs)) return NaN;
+  return outs;
+}
+
+function outsToIP(outs) {
+  return `${Math.floor(outs / 3)}.${outs % 3}`;
 }
 
 export default { computeBallparkShift };

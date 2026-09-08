@@ -66,6 +66,16 @@ keys and native citations remain canonical. Unknown or duplicated aliases
 still fail validation. A documented parenthesized park games count is
 prepared as a measured count. Legacy park innings retain their explicit
 rounded-decimal convention; unsupplied notation conversions are rejected.
+Fresh park collection converts the provider's documented innings notation
+to integer outs, subtracts venue outs from season outs, and prepares both
+samples in baseball notation under `display_measurements`. Its source facts
+retain exact `outs` and declare `innings_notation: "baseball_outs"`. An old
+rounded decimal cannot be repaired without reading the original split.
+
+The take states an interpretation or expectation for today's game, including
+justified restraint when an inference is unsupported. Merely aligning facts
+or calling them meaningful context is not a completed judgment. Its direction
+remains Gary's reasoning from the cited evidence; abstention is allowed.
 
 `evidence_state` holds `{source_key, fingerprint, summary}` records for the
 complete input pool, including uncited observations. It supports actual
