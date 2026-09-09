@@ -74,18 +74,162 @@ struct LineMoverStory: Identifiable, Equatable {
     }
 }
 
-struct HubLineMoversBoard: View {
+/// The league's movers, refreshed every minute while on screen. One store
+/// feeds the small box beside the lead and the full board it opens.
+@MainActor final class LineMoversStore: ObservableObject {
+    @Published var stories: [LineMoverStory] = []
+    @Published var updatedAt: Date?
+    @Published var loaded = false
+
+    func run(league: String, sportKey: String) async {
+        await load(league: league, sportKey: sportKey)
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(60))
+            if Task.isCancelled { break }
+            await load(league: league, sportKey: sportKey)
+        }
+    }
+
+    func load(league: String, sportKey: String) async {
+        let today = SupabaseAPI.todayEST()
+        let to: String = {
+            guard LineSport.weekLong(league) else { return today }
+            let base = Date.parse(iso: "\(today)T00:00:00Z") ?? Date()
+            let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(identifier: "UTC"); f.dateFormat = "yyyy-MM-dd"
+            return f.string(from: base.addingTimeInterval(6 * 86_400))
+        }()
+        let movers = await SupabaseAPI.fetchLineMovers(sport: sportKey, from: today, to: to)
+        let built = movers
+            .map { LineMoverStory(mover: $0, league: league) }
+            .filter { $0.nowSpread != nil || $0.nowMoneyline != nil || $0.nowTotal != nil }
+            .sorted { a, b in
+                if a.movement != b.movement { return a.movement > b.movement }
+                return (a.kickoff ?? .distantFuture) < (b.kickoff ?? .distantFuture)
+            }
+        loaded = true
+        if built != stories { stories = built }
+        if !built.isEmpty { updatedAt = Date() }
+    }
+}
+
+/// THE BOARD IS MOVING as the founder drew it (Sep 9): a small box that sits
+/// to the right of the lead card, the three biggest moves and a way into the
+/// full board. It never pushes the dashboard down.
+struct HubLineMoversAside: View {
     let league: String
     let sportKey: String
     let onGame: (LineMoverStory) -> Void
 
-    @State private var stories: [LineMoverStory] = []
-    @State private var loaded = false
-    @State private var updatedAt: Date?
+    @StateObject private var store = LineMoversStore()
+    @State private var showBoard = false
+
+    private static let shownCount = 3
+
+    var body: some View {
+        Group {
+            if store.stories.isEmpty {
+                // Nothing to show until the ledger has a board for this league.
+                Color.clear.frame(width: 0, height: 0)
+            } else {
+                box
+            }
+        }
+        .task(id: sportKey) { await store.run(league: league, sportKey: sportKey) }
+        .sheet(isPresented: $showBoard) {
+            HubLineMoversBoardSheet(league: league, sportKey: sportKey, store: store)
+        }
+    }
+
+    private var box: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("THE BOARD IS MOVING")
+                .hubKickerFont(9.5).tracking(0.9)
+                .foregroundStyle(GaryColors.gold)
+                .fixedSize(horizontal: false, vertical: true)
+            ForEach(Array(store.stories.prefix(Self.shownCount))) { story in
+                Button { onGame(story) } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(story.awayAbbr) @ \(story.homeAbbr)")
+                            .hubDataFont(11, .semibold)
+                            .foregroundStyle(GaryColors.warmWhite)
+                            .lineLimit(1).minimumScaleFactor(0.7)
+                        asideBadge(story.badge)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens every move on this line")
+            }
+            Button { showBoard = true } label: {
+                HStack(spacing: 4) {
+                    Text("ALL \(store.stories.count)")
+                        .hubKickerFont(9.5)
+                    Image(systemName: "chevron.right").font(.system(size: 8, weight: .bold))
+                }
+                .foregroundStyle(GaryColors.gold)
+                .frame(minHeight: 28)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open the full board of \(store.stories.count) games")
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .garyPanel(radius: GaryLayout.Radius.card, fill: GaryColors.readingPanel)
+        .animation(.easeInOut(duration: 0.35), value: store.stories)
+    }
+
+    @ViewBuilder private func asideBadge(_ b: LineStory.Badge) -> some View {
+        switch b {
+        case .moved(let text):
+            Text(text).hubDataFont(10.5, .bold).foregroundStyle(GaryColors.gold)
+                .lineLimit(1).minimumScaleFactor(0.7).contentTransition(.numericText())
+        case .price:
+            Text("PRICE").hubKickerFont(9).foregroundStyle(GaryColors.warmWhite.opacity(0.42))
+        case .holds:
+            Text("HOLDS").hubKickerFont(9).foregroundStyle(GaryColors.warmWhite.opacity(0.42))
+        }
+    }
+}
+
+/// The full board, opened from the small box. A tapped game opens its ladder
+/// on top of this sheet.
+struct HubLineMoversBoardSheet: View {
+    let league: String
+    let sportKey: String
+    @ObservedObject var store: LineMoversStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var ladderSel: LineLadderSel?
+
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                HubLineMoversBoard(league: league, store: store) { story in
+                    ladderSel = LineLadderSel(story: story, sportKey: sportKey)
+                }
+                .padding(.vertical, 12)
+            }
+            .background(ScoutMock.card.ignoresSafeArea())
+            .navigationTitle("The board is moving").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.foregroundStyle(GaryColors.gold) } }
+        }
+        .preferredColorScheme(.dark)
+        .sheet(item: $ladderSel) { sel in LineLadderLoader(sel: sel) }
+    }
+}
+
+struct HubLineMoversBoard: View {
+    let league: String
+    @ObservedObject var store: LineMoversStore
+    let onGame: (LineMoverStory) -> Void
+
     @State private var expanded = false
 
     private static let collapsedCount = 6
 
+    private var stories: [LineMoverStory] { store.stories }
+    private var updatedAt: Date? { store.updatedAt }
     private var shown: [LineMoverStory] {
         expanded ? stories : Array(stories.prefix(Self.collapsedCount))
     }
@@ -97,14 +241,6 @@ struct HubLineMoversBoard: View {
                 Color.clear.frame(height: 0)
             } else {
                 board
-            }
-        }
-        .task(id: sportKey) {
-            await load()
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(60))
-                if Task.isCancelled { break }
-                await load()
             }
         }
     }
@@ -187,19 +323,18 @@ struct HubLineMoversBoard: View {
         .contentShape(Rectangle())
     }
 
+    /// Opened above now, each on its own line, so a price like "MIA -125"
+    /// is never clipped in a third of the row (founder, Sep 9: no ellipsis).
     @ViewBuilder private func market(_ label: String, open: String?, now: String?, moved: Bool) -> some View {
         if let open, let now {
             VStack(alignment: .leading, spacing: 2) {
                 Text(label).hubKickerFont(9.5).foregroundStyle(GaryColors.warmWhite.opacity(0.42))
-                HStack(spacing: 4) {
-                    Text(open).hubDataFont(11, .medium).foregroundStyle(GaryColors.warmWhite.opacity(0.55))
-                    Image(systemName: "arrow.right").font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(GaryColors.warmWhite.opacity(0.35))
-                    Text(now).hubDataFont(11, .bold)
-                        .foregroundStyle(moved ? GaryColors.gold : GaryColors.warmWhite)
-                        .contentTransition(.numericText())
-                }
-                .lineLimit(1).minimumScaleFactor(0.75)
+                Text("OPEN \(open)").hubDataFont(10.5, .medium).foregroundStyle(GaryColors.warmWhite.opacity(0.55))
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                Text(now).hubDataFont(12, .bold)
+                    .foregroundStyle(moved ? GaryColors.gold : GaryColors.warmWhite)
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                    .contentTransition(.numericText())
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -215,27 +350,6 @@ struct HubLineMoversBoard: View {
         case .holds:
             Text("HOLDS").hubKickerFont(9.5).foregroundStyle(GaryColors.warmWhite.opacity(0.42))
         }
-    }
-
-    private func load() async {
-        let today = SupabaseAPI.todayEST()
-        let to: String = {
-            guard LineSport.weekLong(league) else { return today }
-            let base = Date.parse(iso: "\(today)T00:00:00Z") ?? Date()
-            let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(identifier: "UTC"); f.dateFormat = "yyyy-MM-dd"
-            return f.string(from: base.addingTimeInterval(6 * 86_400))
-        }()
-        let movers = await SupabaseAPI.fetchLineMovers(sport: sportKey, from: today, to: to)
-        let built = movers
-            .map { LineMoverStory(mover: $0, league: league) }
-            .filter { $0.nowSpread != nil || $0.nowMoneyline != nil || $0.nowTotal != nil }
-            .sorted { a, b in
-                if a.movement != b.movement { return a.movement > b.movement }
-                return (a.kickoff ?? .distantFuture) < (b.kickoff ?? .distantFuture)
-            }
-        loaded = true
-        if built != stories { stories = built }
-        if !built.isEmpty { updatedAt = Date() }
     }
 }
 

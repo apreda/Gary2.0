@@ -1329,9 +1329,24 @@ struct HubView: View {
             HubResearchDashboard(lead: lead, pages: quickResearchPages(excluding: lead),
                 contextFor: storyContext, kickerFor: kickerText, destinationFor: researchDestination,
                 onSignal: { openSignal($0) }, onCategory: { jumpToResearch($0) },
-                onChart: { researchChartSignal = $0 })
+                onChart: { researchChartSignal = $0 }, aside: moversAside)
             .id("lead")
+        } else if let aside = moversAside {
+            // No lead today: the small box stands on its own, still small.
+            HStack { aside.frame(width: 128); Spacer() }
+                .padding(.horizontal, GaryLayout.gutter)
+                .id("movers")
         }
+    }
+
+    /// THE BOARD IS MOVING (founder, Sep 9 2026): a small box to the right of
+    /// the lead card — the three biggest moves and a door to the full board.
+    /// Store-safe builds omit it, as they do the line-move wire.
+    private var moversAside: AnyView? {
+        guard !AppFlags.storeSafe, let sportKey = LineSport.key(forLeague: sel.label) else { return nil }
+        return AnyView(HubLineMoversAside(league: sel.label, sportKey: sportKey) { story in
+            ladderSel = LineLadderSel(story: story, sportKey: sportKey)
+        })
     }
 
     private func jumpToResearch(_ anchor: String) {
@@ -1607,16 +1622,6 @@ struct HubView: View {
                 HubSlateStrip(rows: slateRows) { r in
                     gameSheet = HubGameSel(row: r)
                 }
-            }
-            // THE BOARD IS MOVING (founder, Sep 9 2026): the league's lines since
-            // they opened — the week for football, today for baseball — sorted by
-            // the size of the move and refreshed every minute. Numbers and times
-            // only; store-safe builds omit it, as they do the line-move wire.
-            if !AppFlags.storeSafe, let sportKey = LineSport.key(forLeague: sel.label) {
-                HubLineMoversBoard(league: sel.label, sportKey: sportKey) { story in
-                    ladderSel = LineLadderSel(story: story, sportKey: sportKey)
-                }
-                .id("movers")
             }
             if boardFetchFailed {
                 Text(slateRows.isEmpty ? "Game schedule couldn't load. Pull down to retry."

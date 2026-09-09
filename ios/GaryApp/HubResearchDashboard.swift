@@ -65,11 +65,22 @@ struct HubResearchDashboard: View {
     let onSignal: (Signal) -> Void
     let onCategory: (String) -> Void
     let onChart: (Signal) -> Void
+    /// A small box that sits to the right of the lead card (THE BOARD IS
+    /// MOVING, Sep 9 2026). Nil when the league has none.
+    var aside: AnyView? = nil
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            leadCard
+            if let aside, !dynamicTypeSize.isAccessibilitySize {
+                HStack(alignment: .top, spacing: 10) {
+                    leadCard
+                    aside.frame(width: 128)
+                }
+            } else {
+                leadCard
+                if let aside { aside }
+            }
             if !pages.isEmpty { quickList }
         }
         .padding(.horizontal, GaryLayout.gutter)
