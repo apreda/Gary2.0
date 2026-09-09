@@ -44,7 +44,10 @@ struct ExactGameIdentity: Hashable {
             if let string = raw as? String {
                 let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
                 value = trimmed.range(of: #"^\d+$"#, options: .regularExpression) == nil ? nil : Int(trimmed)
-            } else if let number = raw as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() {
+            // A JSON bool is an NSNumber whose encoding is "c"; JSON integers never
+            // are. Portable to the Linux swift the fixture tests compile with, which
+            // has no CFGetTypeID (Sep 9 2026).
+            } else if let number = raw as? NSNumber, String(cString: number.objCType) != "c" {
                 let decimal = number.doubleValue
                 value = decimal.isFinite && decimal.rounded() == decimal && decimal > 0
                     && decimal <= Double(largestJSONInteger) ? Int(decimal) : nil

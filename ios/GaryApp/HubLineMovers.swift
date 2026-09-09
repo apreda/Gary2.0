@@ -192,6 +192,7 @@ struct HubLineMoversAside: View {
         }
         .padding(.horizontal, 10).padding(.vertical, 10)
         .frame(width: 100, alignment: .topLeading)
+        .frame(maxHeight: .infinity, alignment: .topLeading)
         .garyPanel(radius: GaryLayout.Radius.card, fill: GaryColors.readingPanel)
         .animation(.easeInOut(duration: 0.35), value: store.stories)
     }

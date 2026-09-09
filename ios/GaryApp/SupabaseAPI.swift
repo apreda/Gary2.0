@@ -591,7 +591,7 @@ enum SupabaseAPI {
             let publicationID: String? = {
                 if let text = row["candidate_id"] as? String, !text.isEmpty { return text }
                 if let number = row["candidate_id"] as? NSNumber,
-                   CFGetTypeID(number) != CFBooleanGetTypeID(),
+                   String(cString: number.objCType) != "c",
                    number.doubleValue > 0, number.doubleValue.rounded() == number.doubleValue {
                     return number.stringValue
                 }
@@ -618,7 +618,7 @@ enum SupabaseAPI {
                 snapshot.games.append(pick)
                 snapshot.gamePublicationIDs.append(publicationID)
             } else if kind == "prop" {
-                if let line = ticket["line"] as? NSNumber, CFGetTypeID(line) != CFBooleanGetTypeID() { ticket["line"] = line.stringValue }
+                if let line = ticket["line"] as? NSNumber, String(cString: line.objCType) != "c" { ticket["line"] = line.stringValue }
                 guard let pick = PropPick.from(dict: ticket), pick.hasValidStoredPayload,
                       pick.effectiveLeague?.uppercased() == league.uppercased() else {
                     throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Invalid Winners prop ticket"))

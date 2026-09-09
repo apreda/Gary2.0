@@ -1513,7 +1513,7 @@ struct HubView: View {
                         Text(module.title.replacingOccurrences(of: "The ", with: ""))
                             .hubDataFont(12, .medium)
                             .foregroundStyle(openBeats.contains(module.id) ? GaryColors.gold : GaryColors.sectionSub)
-                            .frame(minHeight: 36)
+                            .frame(minHeight: 30)
                     }
                     .buttonStyle(.plain)
                     .accessibilityHint("Open \(module.title)")
@@ -1617,10 +1617,11 @@ struct HubView: View {
     }
 
     private var hubLoadedContent: some View {
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(alignment: .leading, spacing: 14) {
             // The schedule strip and the research categories are one header
-            // block (founder, Sep 9: no dead space between them).
-            VStack(alignment: .leading, spacing: 4) {
+            // block (founder, Sep 9: no dead space between them, and no dead
+            // space under the categories before the boards).
+            VStack(alignment: .leading, spacing: 2) {
                 if !slateRows.isEmpty {
                     HubSlateStrip(rows: slateRows) { r in
                         gameSheet = HubGameSel(row: r)

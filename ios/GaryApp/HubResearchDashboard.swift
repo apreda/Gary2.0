@@ -75,10 +75,15 @@ struct HubResearchDashboard: View {
             if let aside, !dynamicTypeSize.isAccessibilitySize {
                 // The strip sizes itself and vanishes when there is nothing
                 // to show, so the lead card never gives up width for nothing.
+                // Both boxes stand the same height (founder, Sep 9 2026: the
+                // strip stopped short of the lead card's bottom). fixedSize on
+                // the row lets the taller child set the height; each child
+                // fills it.
                 HStack(alignment: .top, spacing: 0) {
-                    leadCard
-                    aside
+                    leadCard.frame(maxHeight: .infinity, alignment: .top)
+                    aside.frame(maxHeight: .infinity, alignment: .top)
                 }
+                .fixedSize(horizontal: false, vertical: true)
             } else {
                 leadCard
                 if let aside { aside }
