@@ -393,6 +393,9 @@ struct HomeView: View {
     @State private var wireItems: [SupabaseAPI.WireItem] = []
     @State private var pulseRows: [SupabaseAPI.MarketPulseRow] = []
     @State private var todayPicks: [GaryPick] = []
+    /// Game ids on today's Winners board, so the board can mark Gary's Winners
+    /// picks in place. Empty while a paid board is locked or not loaded.
+    @State private var winnersBoardGameIDs: Set<Int> = []
     /// todayPicks indexed by String(game_id) — rebuilt only when picks change.
     /// pickFor(_ live:) reads this (O(1)) instead of scanning todayPicks per live
     /// score per render; the live tape/takeover/board call it many times a tick.
@@ -1153,6 +1156,9 @@ struct HomeView: View {
                     // (Parked All-Star preview now lives inside fetchDailyPicks —
                     // DEBUG-only there — so every surface gets it from one source.)
                     todayPicks = todayOnlyPicks
+                    if let board = try? await SupabaseAPI.fetchWinnersBoard(date: SupabaseAPI.todayEST()) {
+                        winnersBoardGameIDs = Set(board.games.compactMap { $0.game_id })
+                    }
                     // The "what's on today" sheet lists All-Star events like any
                     // game (founder, Jul 13): synthesize a slate row per special
                     // event when the slate table doesn't carry it.
@@ -1659,6 +1665,8 @@ struct HomeView: View {
         let statusText: String
         let statusColor: Color
         let bigOne: Bool
+        /// Gary's pick on this game is on today's Winners board.
+        var onWinnersBoard: Bool = false
         let commence: String
         /// Picks already mathematically HIT mid-game (an OVER whose line the
         /// score has passed) — stacked under the live status (founder, Jul 7).
@@ -2021,6 +2029,7 @@ struct HomeView: View {
                 statusText: statusText,
                 statusColor: statusColor,
                 bigOne: featured.map { Self.homeBoardPick($0, matches: g) } ?? false,
+                onWinnersBoard: g.bdl_game_id.map { winnersBoardGameIDs.contains($0) } ?? false,
                 commence: g.commence_time ?? "",
                 hitLines: hitLines
             ))

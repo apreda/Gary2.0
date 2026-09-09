@@ -102,8 +102,18 @@ struct BillfoldView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab = 0
     @State private var selectedSport: Sport = .all
-    @State private var gameResults: [GameResult] = []
-    @State private var propResults: [PropResult] = []
+    @State private var allGameResults: [GameResult] = []
+    @State private var allPropResults: [PropResult] = []
+    /// "winners" | "all" — Gary's record is the picks that reached the Winners
+    /// page (founder, Sep 9); every published pick stays one filter away.
+    @AppStorage("billfoldGaryScope") private var garyScope = "winners"
+    private var garyRecordIsWinnersOnly: Bool { garyScope == "winners" && billfoldScope != "you" && billfoldScope != "board" }
+    private var gameResults: [GameResult] {
+        garyRecordIsWinnersOnly ? allGameResults.filter { $0.isWinnersPick } : allGameResults
+    }
+    private var propResults: [PropResult] {
+        garyRecordIsWinnersOnly ? allPropResults.filter { $0.isWinnersPick } : allPropResults
+    }
     @State private var loading = true
     @State private var error: String?
     @State private var lastRefresh: Date?
@@ -421,6 +431,8 @@ struct BillfoldView: View {
             if phase == .active { Task { await loadData() } }
         }
         .onChange(of: selectedTab) { _ in recomputeCache(); chartZoomScale = 1; chartZoomAnchor = 1; scrubDate = nil }
+        .onChange(of: garyScope) { _ in recomputeCache(); chartZoomScale = 1; chartZoomAnchor = 1; scrubDate = nil }
+        .onChange(of: billfoldScope) { _ in recomputeCache() }
         .onChange(of: selectedSport) { _ in recomputeSelectionCache(); chartZoomScale = 1; chartZoomAnchor = 1; scrubDate = nil }
         .onChange(of: timeframe) { _ in onTimeframeChange(); chartZoomScale = 1; chartZoomAnchor = 1 }
         .onChange(of: sportTimeframe) { _ in onSportTimeframeChange() }
@@ -630,12 +642,12 @@ struct BillfoldView: View {
     }
 
     private func applySnapshot(_ snapshot: BillfoldSnapshot) {
-        gameResults = snapshot.games
+        allGameResults = snapshot.games
         // The game-first snapshot intentionally carries no props. Preserve a
         // previously hydrated prop ledger across foreground refreshes instead
         // of flashing the Props tab/HR lane back to empty for a frame.
-        if !snapshot.props.isEmpty || propResults.isEmpty {
-            propResults = snapshot.props
+        if !snapshot.props.isEmpty || allPropResults.isEmpty {
+            allPropResults = snapshot.props
         }
         gameResultLookup = snapshot.resultLookup
         topPickCandidates = snapshot.topPickRows
@@ -735,6 +747,23 @@ struct BillfoldView: View {
                     }
                 } label: {
                     passbookChip(timeframe.uppercased())
+                }
+                if billfoldScope != "you" && billfoldScope != "board" {
+                    Menu {
+                        Button {
+                            garyScope = "winners"
+                        } label: {
+                            Label("Winners picks", systemImage: garyScope == "winners" ? "checkmark" : "")
+                        }
+                        Button {
+                            garyScope = "all"
+                        } label: {
+                            Label("All picks", systemImage: garyScope == "all" ? "checkmark" : "")
+                        }
+                    } label: {
+                        passbookChip(garyScope == "winners" ? "Winners" : "All picks")
+                    }
+                    .accessibilityLabel(garyScope == "winners" ? "Record scope: Winners picks" : "Record scope: all picks")
                 }
             }
 
@@ -1988,7 +2017,7 @@ struct BillfoldView: View {
             if let props {
                 await MainActor.run {
                     guard loadGeneration == billfoldLoadGeneration else { return }
-                    propResults = props
+                    allPropResults = props
                     recomputeCache()
                 }
             }

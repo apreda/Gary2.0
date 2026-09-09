@@ -2281,12 +2281,15 @@ struct GameResult: Decodable {
     /// BDL numbering carried only by nfl_results rows (1 = preseason,
     /// 2 = regular, 3 = postseason); game_results rows decode nil.
     let season_type: Int?
+    /// Stamped by the grader when this exact ticket was on the Winners board.
+    let is_winners_pick: Bool?
+    var isWinnersPick: Bool { is_winners_pick == true }
     enum ScoreSource { case unknown, gameResultsAwayHome }
     private(set) var scoreSource: ScoreSource = .unknown
 
     enum CodingKeys: String, CodingKey {
         case game_id, game_date, league, matchup, pick_text, result, odds, final_score, season_type
-        case away_score, home_score, away_team, home_team
+        case away_score, home_score, away_team, home_team, is_winners_pick
     }
 
     init(from decoder: Decoder) throws {
@@ -2304,12 +2307,14 @@ struct GameResult: Decodable {
             away_score: try container.decodeIfPresent(Int.self, forKey: .away_score),
             home_score: try container.decodeIfPresent(Int.self, forKey: .home_score),
             away_team: try container.decodeIfPresent(String.self, forKey: .away_team),
-            home_team: try container.decodeIfPresent(String.self, forKey: .home_team)
+            home_team: try container.decodeIfPresent(String.self, forKey: .home_team),
+            is_winners_pick: try container.decodeIfPresent(Bool.self, forKey: .is_winners_pick)
         )
     }
 
     /// Memberwise initializer for creating from NFLResult
-    init(game_id: String? = nil, game_date: String?, league: String?, matchup: String?, pick_text: String?, result: String?, odds: StringOrNumber?, final_score: String?, season_type: Int? = nil, away_score: Int? = nil, home_score: Int? = nil, away_team: String? = nil, home_team: String? = nil) {
+    init(game_id: String? = nil, game_date: String?, league: String?, matchup: String?, pick_text: String?, result: String?, odds: StringOrNumber?, final_score: String?, season_type: Int? = nil, away_score: Int? = nil, home_score: Int? = nil, away_team: String? = nil, home_team: String? = nil, is_winners_pick: Bool? = nil) {
+        self.is_winners_pick = is_winners_pick
         self.game_id = game_id
         self.game_date = game_date
         self.league = league
@@ -2402,6 +2407,8 @@ struct GameResult: Decodable {
 }
 
 struct NFLResult: Decodable {
+    let is_winners_pick: Bool?
+    var isWinnersPick: Bool { is_winners_pick == true }
     let game_id: String?
     let game_date: String?
     let week_number: Int?
@@ -2420,7 +2427,7 @@ struct NFLResult: Decodable {
 
     enum CodingKeys: String, CodingKey {
         case game_id, game_date, week_number, season, season_type, matchup, pick_text, result, odds, final_score
-        case home_team, away_team, home_score, away_score, pick_type
+        case home_team, away_team, home_score, away_score, pick_type, is_winners_pick
     }
 
     /// Convert to GameResult for unified display
@@ -2438,7 +2445,8 @@ struct NFLResult: Decodable {
             away_score: away_score,
             home_score: home_score,
             away_team: away_team,
-            home_team: home_team
+            home_team: home_team,
+            is_winners_pick: is_winners_pick
         )
     }
 }
@@ -2467,10 +2475,13 @@ struct PropResult: Decodable {
     /// Grader lane stamp ("HR" | "CORE") — newer rows only; isHRResult holds
     /// the fallback rule for the history that predates it.
     let lane: String?
+    /// Stamped by the database when this exact prop ticket was on the Winners board.
+    let is_winners_pick: Bool?
+    var isWinnersPick: Bool { is_winners_pick == true }
 
     enum CodingKeys: String, CodingKey {
         case game_date, matchup, player_name, pick_text, prop_type, bet
-        case line_value, result, odds, actual_value, confidence, league, sport, lane
+        case line_value, result, odds, actual_value, confidence, league, sport, lane, is_winners_pick
     }
     
     /// Get the effective league (normalized to match Sport enum values)

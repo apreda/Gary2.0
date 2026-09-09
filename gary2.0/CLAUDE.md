@@ -120,8 +120,16 @@ reviewer stays on Sol. The independent `com.gary.winners` launch agent runs
 pregame tickets may enter `winners_board`. Six is a maximum per league and
 kind. Prop capacity follows the slate's early/middle/late windows (2/4/6),
 with unused slots carried forward. For legacy policies, confidence only orders already-qualified
-candidates available together. From September 8, MLB game admission requires
-Gary's completed comparative selection; factual eligibility cannot auto-admit.
+candidates available together. **From September 9 (founder, Sep 9) game
+admission is rule-based in `release_winners_board`: every underdog moneyline and
+every plus-line spread/run-line ticket is admitted as soon as it is a valid
+future ticket, whatever the reviewer said; favorites then fill by confidence
+toward five a day, opening 2/4/5 places with the slate clock
+(`winners_game_fill_capacity`). The Sol factual review and Gary's comparative
+read keep recording but no longer gate games; `claim_mlb_winners_selection`
+idles from Sep 9. Props keep the review-gated path.** Gary's Billfold record is
+the Winners picks (`is_winners_pick` on game/nfl/prop results; props are
+stamped by a database trigger from the board); every pick stays one filter away.
 Chronological slate groups reserve up to 2/4/6 places. The independent Winners
 worker compares eligible original picks near kickoff (T-25, waiting for the
 batch until T-10), using the configured primary game brain. Every choice and

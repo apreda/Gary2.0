@@ -1363,6 +1363,12 @@ struct HomeSheetRowView: View {
                             )
                             .lineLimit(1).fixedSize()
                     }
+                    if row.onWinnersBoard {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(GaryColors.gold.opacity(0.9))
+                            .accessibilityLabel("Winners pick")
+                    }
                     if row.bigOne {
                         Text("THE BIG ONE")
                             .font(.system(size: 12, weight: .bold).monospacedDigit()).tracking(0.8)
