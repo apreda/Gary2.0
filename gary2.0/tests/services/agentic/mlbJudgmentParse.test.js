@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { firstJsonObject } from '../../../src/services/agentic/orchestrator/mlbJudgment.js';
 
 // Sep 9 2026: the Claude bridge's first staged MLB judgment on the cascade
@@ -35,15 +35,40 @@ describe('MLB judgment reply repair', () => {
   });
 });
 
-describe('MLB judgment reply one bracket short', () => {
-  it('closes the open brackets of a reply that stopped early and parses the whole content', async () => {
-    const { closeOpenJson } = await import('../../../src/services/agentic/orchestrator/mlbJudgment.js');
-    const reply = '{"winner":"home","expectations":{"items":[{"view":"a } inside \\"quotes\\""}]}';
-    const closed = closeOpenJson(reply);
-    expect(closed.endsWith('}]}}')).toBe(true);
-    expect(JSON.parse(closed).expectations.items[0].view).toBe('a } inside "quotes"');
-    // Complete JSON and a reply cut inside a string pass through unchanged.
-    expect(closeOpenJson('{"a":1}')).toBe('{"a":1}');
-    expect(closeOpenJson('{"a":"unterminated')).toBe('{"a":"unterminated');
+describe('MLB judgment shape contract (Sep 9 2026)', () => {
+  const exp = { claim: 'c', evidence: 'e', disconfirming_observation: 'd' };
+  const expectations = { opening: exp, middle: exp, finish: exp, offense: exp };
+  const input = {
+    gameId: '5059953', gameDate: '2026-09-09', homeTeam: 'Tigers', awayTeam: 'Twins', gameKind: 'moneyline',
+    allowedTickets: [
+      { id: 'home-moneyline', side: 'home', type: 'moneyline', line: null, odds: -132, pick: 'Tigers ML -132' },
+      { id: 'away-moneyline', side: 'away', type: 'moneyline', line: null, odds: 112, pick: 'Twins ML +112' },
+    ],
+  };
+  const good = { winner: 'home', ticket_id: 'home-moneyline', whole_game_view: 'v', expectations, strongest_opposing_case: 's', uncertain_assumption: 'u', factual_questions: [] };
+  // The Sep 9 bridge reply: the three trailing fields nested inside expectations.
+  const misnested = { winner: 'home', ticket_id: 'home-moneyline', whole_game_view: 'v', expectations: { ...expectations, strongest_opposing_case: 's', uncertain_assumption: 'u', factual_questions: [] } };
+  const stress = { winner: 'home', ticket_id: 'home-moneyline', whole_game_view: 'v', expectations, strongest_alternative: { scenario: 's', effect_on_expected_outcome: 'e', response: 'r' }, changed_side: false, revision_evidence: [] };
+  const price = { ticket_id: 'home-moneyline', decision: 'endorse', reason: 'r' };
+  const record = async (phase) => ({ ok: true, run_id: 'run-1', phase, payload_sha256: 'sha', recorded_at: new Date().toISOString() });
+
+  it('asks once more, in the same session, when a reply is not the requested shape', async () => {
+    const { runMlbJudgment } = await import('../../../src/services/agentic/orchestrator/mlbJudgment.js');
+    const replies = [JSON.stringify(misnested), JSON.stringify(good), JSON.stringify(stress), JSON.stringify(price)];
+    const prompts = [];
+    const ask = vi.fn(async (prompt) => { prompts.push(prompt); return replies.shift(); });
+    const result = await runMlbJudgment({ input, ask, research: vi.fn(), record });
+    expect(ask).toHaveBeenCalledTimes(4);
+    expect(prompts[1]).toContain('did not satisfy the required shape');
+    expect(prompts[1]).toContain('initial judgment has an invalid schema');
+    expect(result.initial.winner).toBe('home');
+    expect(prompts[0]).toContain('exactly these seven top-level keys');
+  });
+
+  it('fails the brain after one correction, never a third ask for the same step', async () => {
+    const { runMlbJudgment } = await import('../../../src/services/agentic/orchestrator/mlbJudgment.js');
+    const ask = vi.fn(async () => JSON.stringify(misnested));
+    await expect(runMlbJudgment({ input, ask, research: vi.fn(), record })).rejects.toThrow(/invalid schema/);
+    expect(ask).toHaveBeenCalledTimes(2);
   });
 });
