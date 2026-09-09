@@ -14,13 +14,13 @@ Spec: `docs/superpowers/specs/2026-09-09-your-book-analytics-design.md`.
 **Edge function `book-slip-scan` (deployed)**: verifies the session, counts the scan as the user, sends the screenshot to Anthropic (`claude-opus-5`, effort low, JSON schema output, server-side refusal fallbacks) and returns normalized wagers. Never writes a bet. Four Deno tests.
 
 **iOS (`ios/GaryApp/`)**
-- New `BookAnalytics.swift` (Foundation only): `BookEntry`, `BookDates` (Eastern calendar date — the Book's day rolls at midnight, not the slate's 3 AM), `BookPeriod` (WEEK Sunday–Saturday / MONTH / YEAR / ALL, prev/next, forward stops at today), `BookSummary`, `BookCalendar.month` (six rows of seven), `BookBreakdown` (league, type, book, tags, riding vs fading Gary, Gary's lean tiers), `BookBankroll.rolling` (30/60/90 ending today), `BookTags`, `BookMarket`.
+- New `BookAnalytics.swift` (Foundation only): `BookEntry`, `BookDates` (Eastern calendar dates; `today(now:rolloverHour:)` follows the slate clock, see the founder decisions below), `BookPeriod` (WEEK Sunday–Saturday / MONTH / YEAR / ALL, prev/next, forward stops at today), `BookSummary`, `BookCalendar.month` (six rows of seven), `BookBreakdown` (league, type, book, tags, riding vs fading Gary, Gary's lean tiers), `BookBankroll.rolling` (30/60/90 ending today), `BookTags`, `BookMarket`.
 - New `BookAnalyticsViews.swift`: period pager, calendar, day sheet, breakdowns card (columns mirror Gary's BY SPORT grid), bankroll card, tag chips + editor (iOS 16 `Layout`), bet-type picker.
 - `UserBookView.swift`: YOU page order is pager → balance → equity curve → calendar → actions → streak → by source → tiles → breakdowns → bankroll → search/export → open slips → daily ledger. The period replaces the 7D/30D/SEASON/ALL menu and the chart's row. Calendar and breakdowns follow the graded lane (verified unless YOURS) — two ledgers, never mixed. Search matches tags and bet type; CSV gains Bet type + Tags. Outside-bet form gains bet type, tags (suggestions from the user's own book) and SCAN A SLIP (PhotosPicker → edge function → prefilled form; nothing saves until Add). Leaderboard gains EVERYONE / FRIENDS; the player sheet gains Follow / Following. Harness verbs (DEBUG): `bookday <date>`, `bookperiod week|month|year|all`, `bookdim league|market|bookmaker|tags|side|confidence`, `bookfilter all|tail|fade|manual`, `boardscope all|friends`.
 - `UserBetDetailSheet.swift`: bet type on the receipt, tag editor on every row, bet-type picker on manual rows.
 - `ProfileExperience.swift`: `ProfileFollowAPI`, `BoardRow.following`, board scope parameter.
 - `project.pbxproj`: the two new files registered.
-- Test: `ios/Tests/BookAnalyticsTests.swift` (65 checks; copy to a scratch `main.swift` and compile with `BookAnalytics.swift`).
+- Test: `ios/Tests/BookAnalyticsTests.swift` (72 checks; copy to a scratch `main.swift` and compile with `BookAnalytics.swift`).
 
 **Web (`web/`)**
 - New `lib/book/analytics.ts` (port of the Swift math, same answers), `components/book/BookCalendar.tsx`, `components/book/BookAnalytics.tsx` (pager, breakdowns, bankroll, tag chips/input, market select).
@@ -30,9 +30,11 @@ Spec: `docs/superpowers/specs/2026-09-09-your-book-analytics-design.md`.
 ## QA account
 `qa.book@betwithgary.ai` (id `98e396c8-27f5-428d-8966-e059a87c3bea`), profile `QA_Book`, leaderboard hidden and listed in `user_experience_private.excluded_profiles`, unit value $50, 96 seeded bets (Jul 20 – Sep 9: MLB/NFL/NCAAF tails and fades with markets, leans, tags; outside bets with sportsbooks; three open slips today). Credentials live only in the session scratchpad; rotate with the admin API if needed.
 
-## Founder note
-Adam confirmed Apple Sign-in works on the phone (Sep 9). That item is closed.
+## Founder decisions at the peek (Sep 9, ~10:50 AM ET)
+- Adam confirmed Apple Sign-in works on the phone. Closed.
+- Adam: late NFL and MLB games finish after midnight, so the Book's day must not roll at midnight. Fixed in `0cb623d7`: the Book's period, calendar highlight and rolling windows follow each platform's slate clock — `SupabaseAPI.todayEST()` (6 AM ET) on the phone, `todayEST()` (3 AM ET) on the web. `BookDates.today(now:rolloverHour:)` keeps the rule testable (72 checks).
+- Adam gave the word to ship. Pushed `main` at 2f4d4bd4..0cb623d7 (the release session's `fd4c7cc8` and `4f691061` rode along); Vercel deploys the web. Build bumped to 2.25 (922) — the release session had already uploaded 921 for its Winners work — and archived for TestFlight from this checkout. **Upload succeeded September 9 at 11:02:15 AM ET** (`/Volumes/KINGSTON/gary-922-upload.log`: Upload succeeded, Uploaded GaryApp, EXPORT SUCCEEDED, exit 0). Archive: `/Volumes/KINGSTON/Gary-2.25-922-Book.xcarchive`, stamped 2.25/922. Apple processing and TestFlight availability are not yet verified. Do not upload 922 again.
 
-## Not done / next
-- The founder peek: iOS screenshots and the web page, then push (deploys web on Vercel) and the next TestFlight build. Build 920 is still in App Review; this work rides the next upload.
-- `node scripts/production-truth.js` must be green before the session ends; the edge function is deployed, migrations applied.
+## Next
+- Build 920 stays in App Review; 922 is a TestFlight build unless Adam swaps it in.
+- `node scripts/production-truth.js`: edge function parity green; only the standing local plist exception remains uncommitted.
