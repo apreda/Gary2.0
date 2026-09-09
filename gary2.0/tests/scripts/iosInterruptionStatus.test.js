@@ -55,7 +55,7 @@ describe('iOS Picks interruption state', () => {
     expect(gamePage).toContain('liveInSlot: true, interruptionLabel: interruptionLabel)');
     expect(teaser).toContain('guard providerStatus == nil else { return false }');
     expect(teaser).toContain('Text(providerStatus ?? (gameStarted ? "THIS GAME" : "INCOMING"))');
-    expect(teaser).toContain('Gary\'s call stays off the live board.');
+    expect(teaser).toContain('Gary\'s pick stays off the live board.');
   });
 
   it('shows interruptions on pick and prop card footers without a final label', () => {
