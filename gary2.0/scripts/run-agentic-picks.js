@@ -68,6 +68,17 @@ const brainFor = (key) => LEAGUE_BRAIN[key] || { model: GAME_PICK_MODEL, thinkin
 // systems… memory didn't help Gary"): Sep 3-8 the formula went 25-44 and the
 // notebook read 23-27 against Gary's 33-37. GARY_MLB_TEST_SYSTEMS=on revives them.
 const MLB_TEST_SYSTEMS_ON = process.env.GARY_MLB_TEST_SYSTEMS === 'on';
+// BRAIN PREFLIGHT (founder, Sep 9 2026: "why did it go through the whole
+// process just to hit the cap when we could check that up front"): one
+// one-word turn per bridge brain before any desk is built or research bought.
+// Every brain capped → the game waits for its next tier, and the child says so.
+const { preflightBrains, describePreflight } = await import('../src/services/agentic/orchestrator/providerAdapters/brainPreflight.js');
+let _brainPreflight = null;
+let cappedGames = 0;
+async function brainPreflightOnce(models) {
+  if (!_brainPreflight) _brainPreflight = await preflightBrains(models);
+  return _brainPreflight;
+}
 
 // ERA LIVE — this is a fresh process, so its module cache IS disk truth. One
 // line + a ledger append make every pick run auditable by folder/commit/era,
@@ -1409,6 +1420,14 @@ async function main() {
           // Aug 27 — the separate pickdesk system is retired; model
           // failures cascade inside runMlbJuneEngine). Other sports route
           // through analyzeGame as before.
+          const brainPlan = config.key === 'baseball_mlb' ? MLB_JUNE_BRAIN_MODEL : brainFor(config.key).model;
+          const preflight = await brainPreflightOnce([brainPlan, ...DESK_FALLBACK_MODELS.filter((m) => m !== brainPlan)]);
+          if (!preflight.ok) {
+            const label = `${game.away_team?.name || game.away_team?.full_name || game.away_team} @ ${game.home_team?.name || game.home_team?.full_name || game.home_team}`;
+            console.warn(`⏸️  Every brain is capped right now (${describePreflight(preflight)}) — leaving ${label} to the next tier; no desk built, no research bought`);
+            cappedGames += 1;
+            continue;
+          }
           if (config.key === 'baseball_mlb') {
             result = await runMlbJuneEngine(game, runnerOptions);
           } else {
@@ -2558,12 +2577,13 @@ async function main() {
   const coveredGameIds = [...new Set([...existingPickGameIds, ...storedGameIds])];
   // A no-store run (--store=false) that produced a pick is a successful dry run,
   // not a missing pick (Sep 9 2026: the NFL rehearsals exited 1 on success).
-  if (gameIdFilter && shouldStore && !coveredGameIds.includes(String(gameIdFilter))) {
+  if (gameIdFilter && shouldStore && cappedGames === 0 && !coveredGameIds.includes(String(gameIdFilter))) {
     throw new Error(`Exact game ${gameIdFilter} completed without a verified stored pick`);
   }
 
   const outcome = {
-    status: shouldStore ? 'stored' : 'dry_run',
+    status: (allPicks.length === 0 && cappedGames > 0) ? 'capped' : (shouldStore ? 'stored' : 'dry_run'),
+    ...(cappedGames > 0 ? { capped_games: cappedGames } : {}),
     game_ids: coveredGameIds,
     pick_count: allPicks.length,
     ...(useTestTable ? { storage_target: 'test_daily_picks' } : {}),

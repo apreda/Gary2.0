@@ -294,6 +294,24 @@ export async function claudeCliAgentRun({ model = 'claude-sonnet-5', systemPromp
 }
 
 /**
+ * One one-word turn to learn whether this model answers right now (the
+ * brain preflight, Sep 9 2026). A capped subscription refuses instantly and
+ * free; its own breaker lane so a ping never counts against the brain.
+ */
+export async function claudeCliPing(model = 'claude-fable-5-1', { timeoutMs = 60 * 1000 } = {}) {
+  try {
+    const args = ['-p', '--model', model, '--effort', 'low', '--output-format', 'json', '--disallowedTools', BRAIN_DISALLOWED_TOOLS];
+    const { code, stdout, stderr } = await runClaude(args, 'Reply with the single word OK.', timeoutMs, 'claude-preflight');
+    if (code !== 0) throw toError(code, stdout, stderr);
+    const data = JSON.parse(stdout);
+    if (data.is_error) throw toError(code, data.result || stdout, stderr);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message, isQuotaError: Boolean(e.isQuotaError) };
+  }
+}
+
+/**
  * Grounded web search on the subscription — WebSearch tool only, nothing else.
  * Same return contract as openaiWebSearch/groundedWebSearch:
  * { success, data, raw }. Defaults to Sonnet (its own weekly bucket) so news
