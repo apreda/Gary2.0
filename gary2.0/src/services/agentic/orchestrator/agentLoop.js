@@ -1,6 +1,6 @@
 import { fetchPlayerGameLogEvidence } from '../tools/playerGameLogTool.js';
 import { cleanNcaafPlayerRows, aggregateNcaafPlayerRows } from '../scoutReport/sports/ncaafPlayerEvidence.js';
-import { CONFIG, GAME_PICK_MODEL, GAME_ML_CAP, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, validateSessionModel } from './orchestratorConfig.js';
+import { CONFIG, GAME_PICK_MODEL, GAME_ML_CAP, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL, validateSessionModel } from './orchestratorConfig.js';
 import { createModelSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
 import { buildResearchBriefing, extractResearcherQuestions, createResearcherFollowUpSession, askResearcher } from './researchBriefing.js';
 import { researchBudgetMs, runOptionalResearch, runResearchOnce } from './optionalResearch.js';
@@ -244,11 +244,14 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     tools: activeTools,
     // Game picks run Sol at its TOP reasoning tier (founder GO Jul 22 eve —
     // the WC specials precedent); props ride their own desk model.
-    thinkingLevel: 'xhigh',
+    // The brain's bar is xhigh (founder GO Jul 22); a lane may pass its own
+    // level (NCAAF runs Sol at high, Sep 9 2026) and GARY_BRAIN_EFFORT lowers
+    // every bridge brain when a login's weekly allowance has to stretch.
+    thinkingLevel: options.thinkingLevel || process.env.GARY_BRAIN_EFFORT || 'xhigh',
     enableCache: true  // Cache system prompt + tools (~10K stable tokens, 90% off on reuse)
   });
   let currentModelName = currentSession.modelName;
-  console.log(`[Orchestrator] ${modelLabel} session created (${currentModelName}, ${sport}, thinking: xhigh)`);
+  console.log(`[Orchestrator] ${modelLabel} session created (${currentModelName}, ${sport}, thinking: ${options.thinkingLevel || process.env.GARY_BRAIN_EFFORT || 'xhigh'})`);
 
   // Messages array for state tracking (pass detection) — API calls go
   // through the persistent session
@@ -445,12 +448,15 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   });
   let _researchBudgetRemainingMs = RESEARCH_BRIEFING_TIMEOUT_MS;
   // Keep the configured research model order; this does not change the brain.
-  const RESEARCH_MODELS = [GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL].filter((m, i, a) => m && a.indexOf(m) === i);
+  const RESEARCH_MODELS = [GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL].filter((m, i, a) => m && a.indexOf(m) === i);
   let _researchModelUsed = null;
-  // MLB (the June engine) and NBA (the April winning era) run it; football
-  // stays desk-only pending its own review.
+  // MLB (the June engine), NBA (the April winning era) and NFL (founder,
+  // Sep 9 2026: "NFL should be the same system") run it. NCAAF is desk-only
+  // with the full data — an allowlist by league, never an NCAAF branch
+  // (league isolation law).
+  const RESEARCHER_LEAGUES = new Set(['baseball_mlb', 'MLB', 'basketball_nba', 'NBA', 'americanfootball_nfl', 'NFL']);
   const researcherOn = String(process.env.GARY_RESEARCHER || 'on').toLowerCase() !== 'off'
-    && ((sport === 'baseball_mlb' || sport === 'MLB') || isNBASport)
+    && (RESEARCHER_LEAGUES.has(sport) || isNBASport)
     && !!options.scoutReport;
   // A briefing handed in (the notebook shadow re-reading the main read's
   // desk, Sep 3 2026) is used as-is: same desk, same research, the
@@ -501,7 +507,9 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     messages[1] = { role: 'user', content: userMessage };
     console.log(`[Orchestrator] 📋 Research briefing included before Pass 1 (${_researchBriefing.length} chars) — Gary tasked with spread investigation`);
   } else if (_researchBriefing) {
-    const brainHasTools = !['claude-cli', 'codex-cli'].includes(currentSession?.provider);
+    // A bridge brain created with tools holds them through the CLI protocol
+    // (Sep 9 2026: the June shape — Gary can verify for himself).
+    const brainHasTools = Boolean(currentSession?.tools) || !['claude-cli', 'codex-cli'].includes(currentSession?.provider);
     const investigateAsk = brainHasTools
       ? `Investigate further with your own fetch_stats calls wherever your read wants more evidence — duplicates of already-fetched stats return nothing new, so only novel requests cost anything. You can also hand a question to your research assistant: write a line starting with ASK RESEARCHER: followed by the question (one per line, up to 6 per game) and the answer comes back with its supporting evidence when available.`
       : `Your research assistant stays on call. To dig deeper into anything — a split the briefing summarized, a number you want verified, a factor it did not cover — write a line starting with ASK RESEARCHER: followed by the question (one per line, up to 6 per game). The answers come back with their supporting evidence when available before you continue. Weigh the briefing's findings honestly rather than repeating them.`;

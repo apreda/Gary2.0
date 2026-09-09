@@ -11,9 +11,15 @@
  * Mechanics: prompt rides STDIN (a ~100KB desk would blow past comfort on
  * argv), `--output-format json` gives { result, session_id, usage }, and the
  * rails' corrective retry continues the SAME conversation via `--resume`.
- * All tools are disallowed for brain calls — the desk is the entire evidence,
- * exactly like the API brains. claudeCliWebSearch() is the one exception:
- * WebSearch-only, for the desk's WORLD grounding.
+ * The CLI's own tools (shell, files, web) stay disallowed on every brain and
+ * research call. Gary's tools ride the text instead (founder, Sep 9 2026:
+ * "full research assistant, full Gary with tools on the bridge, just like the
+ * June system"): a session created WITH tools carries the catalog as the JSON
+ * call protocol shared with the Codex bridge (cliToolProtocol.js), a
+ * {"tool_calls":[…]} reply comes back as toolCalls, and the caller's function
+ * responses go back on the same conversation as one TOOL RESULTS turn.
+ * claudeCliWebSearch() is the one CLI-tool exception: WebSearch-only, for the
+ * desk's WORLD grounding.
  *
  * Failure mapping: a usage-cap / rate-limit refusal from the CLI sets
  * isQuotaError so the desk cascade escalates to the Gemini fallbacks —
@@ -24,6 +30,7 @@ import { mkdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { isCliTripped, recordCliTimeout, recordCliSuccess, trippedError } from './cliCircuitBreaker.js';
+import { renderCliToolProtocol, formatCliFunctionResponses, parseCliToolCalls } from './cliToolProtocol.js';
 
 // NEUTRAL GROUND (Aug 12 2026 — the Baz press-refusal autopsy): headless
 // `claude -p` auto-loads the project memory (CLAUDE.md, memory index) of its
@@ -58,7 +65,14 @@ const BRAIN_DISALLOWED_TOOLS = 'Task,Bash,Glob,Grep,Read,Edit,Write,MultiEdit,No
 // max ("sonnet is the one — but then we need max reasoning") — its separate
 // weekly bucket makes the extra depth free.
 const CLI_EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
-const effortFor = (modelName, thinkingLevel) => {
+const effortFor = (modelName, thinkingLevel, { research = false } = {}) => {
+  // The research assistant's factor turns run at the level the researcher
+  // asks for (high): eight factors, two or three turns each, inside one
+  // 20-minute budget. The pins below are the brain's bar.
+  if (research) {
+    const level = process.env.GARY_RESEARCH_EFFORT || 'medium';
+    return CLI_EFFORT_LEVELS.has(level) ? level : 'medium';
+  }
   if (String(modelName).includes('sonnet')) return 'max';
   // Fable 5.1 at xhigh (founder, Sep 9 2026: "fallback to Claude Bridge
   // Fable 5.1 on XHigh"). The Aug 10 "Fable in Max" pin was a diagnostic for
@@ -72,9 +86,11 @@ export function isClaudeCliModel(modelName) {
   return typeof modelName === 'string' && modelName.startsWith('claude');
 }
 
-function runClaude(args, stdinText, timeoutMs = CALL_TIMEOUT_MS) {
+function runClaude(args, stdinText, timeoutMs = CALL_TIMEOUT_MS, breakerKey = 'claude') {
   // A bridge that has already timed out repeatedly this run is not asked again.
-  if (isCliTripped('claude')) return Promise.reject(trippedError('claude'));
+  // The breaker is keyed per LANE: a research session's timeouts never count
+  // against the brain, and a slow grounding search never darkens a pick.
+  if (isCliTripped(breakerKey)) return Promise.reject(trippedError(breakerKey));
   return new Promise((resolve, reject) => {
     // The claude CLI prefers ANTHROPIC_API_KEY over the founder's subscription
     // login when the env var is present. The key entered .env on Aug 18 for the
@@ -88,16 +104,16 @@ function runClaude(args, stdinText, timeoutMs = CALL_TIMEOUT_MS) {
     let stderr = '';
     const timer = setTimeout(() => {
       proc.kill('SIGTERM');
-      recordCliTimeout('claude');
+      recordCliTimeout(breakerKey);
       reject(new Error(`claude CLI timed out after ${Math.round(timeoutMs / 60000)}m`));
     }, timeoutMs);
     proc.stdout.on('data', (d) => { stdout += d.toString(); });
     proc.stderr.on('data', (d) => { stderr += d.toString(); });
-    proc.on('error', (e) => { clearTimeout(timer); recordCliSuccess('claude'); reject(e); });
+    proc.on('error', (e) => { clearTimeout(timer); recordCliSuccess(breakerKey); reject(e); });
     proc.on('close', (code) => {
       clearTimeout(timer);
       // Any answer at all — even a non-zero exit — means the bridge is alive.
-      recordCliSuccess('claude');
+      recordCliSuccess(breakerKey);
       resolve({ code, stdout, stderr });
     });
     proc.stdin.write(stdinText);
@@ -139,15 +155,21 @@ export async function createClaudeCliSession(options = {}) {
   const {
     modelName = 'claude-fable-5-1',
     systemPrompt = '',
-    thinkingLevel = 'high', // informational only — Fable's thinking is always on
+    thinkingLevel = 'high', // the brain's effort is pinned per model; research honors this
     _costTracker = null,
+    tools = null,
   } = options;
-  console.log(`[Session] Created ${modelName} session via Claude Code CLI adapter (subscription bridge, tools: 0)`);
+  const toolList = Array.isArray(tools) && tools.length ? tools : null;
+  const breakerKey = options.breakerLane === 'research' ? 'claude-research' : 'claude';
+  console.log(`[Session] Created ${modelName} session via Claude Code CLI adapter (subscription bridge, tools: ${toolList ? toolList.length : 0}, lane: ${breakerKey})`);
   return {
     provider: 'claude-cli',
     modelName,
     thinkingLevel,
-    _systemPrompt: systemPrompt,
+    breakerKey,
+    // Tools mode: the catalog rides with the system prompt on turn one.
+    _systemPrompt: toolList ? `${systemPrompt}\n\n${renderCliToolProtocol(toolList)}` : systemPrompt,
+    tools: toolList,
     claudeSessionId: null, // set after the first send; --resume continues it
     _costTracker,
   };
@@ -162,20 +184,28 @@ export function resetClaudeCliSessionChat(session, seedHistory = []) {
   return session;
 }
 
-export async function sendToClaudeCliSession(session, message, _options = {}) {
+export async function sendToClaudeCliSession(session, message, options = {}) {
   const startTime = Date.now();
-  const text = typeof message === 'string' ? message : JSON.stringify(message);
-  const body = session._seedText ? `${session._seedText}\n\n${text}` : text;
+  const research = session.breakerKey === 'claude-research';
+  // Tools mode: the caller's function responses ride as one TOOL RESULTS turn.
+  const text = (session.tools && options.isFunctionResponse && Array.isArray(message))
+    ? formatCliFunctionResponses(message)
+    : (typeof message === 'string' ? message : JSON.stringify(message));
+  let body = session._seedText ? `${session._seedText}\n\n${text}` : text;
   session._seedText = null;
 
-  const args = ['-p', '--model', session.modelName, '--effort', effortFor(session.modelName, session.thinkingLevel), '--output-format', 'json', '--disallowedTools', BRAIN_DISALLOWED_TOOLS];
+  const args = ['-p', '--model', session.modelName, '--effort', effortFor(session.modelName, session.thinkingLevel, { research }), '--output-format', 'json', '--disallowedTools', BRAIN_DISALLOWED_TOOLS];
   if (session.claudeSessionId) {
     args.push('--resume', session.claudeSessionId);
+  } else if (session._systemPrompt && research) {
+    // A research session's contract carries the whole scout report — far too
+    // long for argv. It rides stdin as the preamble of turn one, as on Codex.
+    body = `${session._systemPrompt}\n\n${body}`;
   } else if (session._systemPrompt) {
     args.push('--append-system-prompt', session._systemPrompt);
   }
 
-  const { code, stdout, stderr } = await runClaude(args, body);
+  const { code, stdout, stderr } = await runClaude(args, body, CALL_TIMEOUT_MS, session.breakerKey || 'claude');
   const duration = Date.now() - startTime;
   if (code !== 0) {
     const error = toError(code, stdout, stderr);
@@ -203,10 +233,13 @@ export async function sendToClaudeCliSession(session, message, _options = {}) {
   if (session._costTracker) session._costTracker.addUsage(session.modelName, usage);
   console.log(`[Session] Claude CLI response in ${duration}ms (tokens: ${usage.total_tokens}, cached: ${usage.cached_tokens}, subscription — $0 marginal)`);
 
+  // Tools mode: a tool_calls reply comes back as toolCalls.
+  const content = typeof data.result === 'string' ? data.result : '';
+  const toolCalls = session.tools ? parseCliToolCalls(content, { idPrefix: 'claude_call' }) : null;
   return {
-    content: typeof data.result === 'string' ? data.result : '',
-    toolCalls: null, // brain calls run tool-less by construction
-    finishReason: 'stop',
+    content: toolCalls ? null : content,
+    toolCalls,
+    finishReason: toolCalls ? 'tool_calls' : 'stop',
     usage,
     raw: data,
   };

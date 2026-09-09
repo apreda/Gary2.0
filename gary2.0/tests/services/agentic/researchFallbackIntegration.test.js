@@ -21,7 +21,7 @@ describe('original-desk decision after optional research failure', () => {
     for (let attempt = 0; attempt < 2; attempt++) {
       await expect(runAgentLoop('system', 'original desk decision input', 'baseball_mlb', 'Home', 'Away', { ...options })).rejects.toThrow('test stops at brain decision input');
     }
-    expect(mocks.research).toHaveBeenCalledTimes(2); // two researchers, once across both brain attempts
+    expect(mocks.research).toHaveBeenCalledTimes(3); // three researcher rungs (API, Codex, Claude bridge), once across both brain attempts
     expect(mocks.send).toHaveBeenCalledTimes(2);
     for (const call of mocks.send.mock.calls) expect(call[1]).toBe('original desk decision input');
   });

@@ -1,4 +1,5 @@
 import { codexCliWebSearch } from '../../orchestrator/providerAdapters/codexCliSession.js';
+import { claudeCliWebSearch } from '../../orchestrator/providerAdapters/claudeCliSession.js';
 
 // CODEX FIRST (founder GO, Sep 1 2026): every football search lane — current
 // state, recent coverage, and all six deep-read lanes — tries the $0 GPT Pro
@@ -266,6 +267,29 @@ async function runFootballSearch({
         console.warn(`[${label}] codex draft failed validation (${v.reason || `chars=${v.cleaned.length}, missing=${v.missing.join('|') || 'none'}`}) — falling back to Anthropic`);
       } else {
         console.warn(`[${label}] codex search failed (${viaCodex.error || 'empty'}) — falling back to Anthropic`);
+      }
+    } finally {
+      releaseSearchSlot();
+    }
+  }
+
+  // ── Rung 1b: the Claude subscription bridge, WebSearch only (GARY_GROUNDING_VIA_CLAUDE=1) ──
+  // Sep 9 2026: with the Codex login capped and the API unfunded, every
+  // football press lane came back empty on the first regular-season desk.
+  // Same prompt, same validation floor, same slot gate as the codex rung.
+  if (String(process.env.GARY_GROUNDING_VIA_CLAUDE || '') === '1') {
+    await acquireSearchSlot();
+    try {
+      const viaClaude = await claudeCliWebSearch(prompt, { timeoutMs: CODEX_TIMEOUT_MS });
+      if (viaClaude.success) {
+        const v = validateNarrative(viaClaude.data, { mustMention, minChars });
+        if (v.ok) {
+          console.log(`[${label}] claude web search OK (${v.cleaned.length} chars, ${Date.now() - startedAt}ms, $0)`);
+          return { data: v.cleaned, provider: 'claude-web-search', searchCount: null };
+        }
+        console.warn(`[${label}] claude draft failed validation (${v.reason || `chars=${v.cleaned.length}, missing=${v.missing.join('|') || 'none'}`}) — falling back to Anthropic`);
+      } else {
+        console.warn(`[${label}] claude search failed (${viaClaude.error || 'empty'}) — falling back to Anthropic`);
       }
     } finally {
       releaseSearchSlot();

@@ -58,11 +58,14 @@ describe('compact research carry-forward',()=>{
     const output=await buildResearchBriefing('original desk','baseball_mlb','H','A',options());
     const firstSeed=mocks.reset.mock.calls[0][1][0].parts[0].text;
     const secondSeed=mocks.reset.mock.calls[1][1][0].parts[0].text;
+    // June's carry-forward (Sep 9 2026): compact FINDINGS SO FAR, 260/260/220
+    // per field; the final briefing is June's Key finding / Numbers / Context.
     expect(secondSeed.length-firstSeed.length).toBeLessThan(1200);
-    expect(secondSeed).toContain('MLB_WEATHER token');
-    expect(output.briefing).toContain(huge.uncertainties);
+    expect(secondSeed).toContain('FINDINGS SO FAR');
+    expect(secondSeed).toContain('Key finding: '+huge.keyFinding.slice(0,260));
+    expect(output.briefing).toContain('Key finding: '+huge.keyFinding);
     expect(output.briefing).toContain(huge.numbers+' different');
-    expect(output.briefing.length).toBeGreaterThan(90000);
+    expect(output.briefing.length).toBeGreaterThan(50000);
   });
   it('isolates concurrent subscription chats, shares overlapping stat reads, and preserves ordered findings',async()=>{
     const sessions = new Set();

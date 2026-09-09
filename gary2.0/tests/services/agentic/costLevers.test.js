@@ -26,7 +26,7 @@ describe('the researcher is back for MLB (Sep 3 2026, the Aug 18 version)', () =
 
   it('is gated to MLB and NBA with one env switch and continues from the original desk if optional research fails', () => {
     const loop = src('orchestrator/agentLoop.js');
-    expect(loop).toContain("(sport === 'baseball_mlb' || sport === 'MLB')");
+    expect(loop).toContain("RESEARCHER_LEAGUES.has(sport)");
     expect(loop).toContain("process.env.GARY_RESEARCHER || 'on'");
     expect(loop).toContain('const research = await runResearchOnce(');
     expect(loop).toContain('Optional research unavailable; Gary proceeds with the original desk');

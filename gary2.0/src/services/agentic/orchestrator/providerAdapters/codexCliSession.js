@@ -30,7 +30,12 @@
  * API adapters return, and the caller's function responses go back on the
  * same thread as a TOOL RESULTS message. The research prompt, factor plan and
  * tool executors do not change — only the model call moves onto the sub.
- * Brains stay tool-less: a session created without tools is unchanged.
+ * A brain created WITH tools speaks the same protocol (founder, Sep 9 2026:
+ * "full Gary with tools on the bridge, just like the June system").
+ *
+ * LOGINS (Sep 9 2026): each ChatGPT account is its own CODEX_HOME; a thread
+ * is pinned to the login that started it, and new work takes the first login
+ * with allowance (codexHomes.js).
  */
 import { spawn } from 'child_process';
 import { StringDecoder } from 'node:string_decoder';
@@ -38,6 +43,8 @@ import { isCliTripped, recordCliTimeout, recordCliSuccess, trippedError } from '
 import { abortError, requestSignal } from '../requestCancellation.js';
 import { registerOwnedProcessGroup } from './ownedProcessGroups.js';
 import { searchResponseProblem } from '../../searchResponseValidation.js';
+import { renderCliToolProtocol, formatCliFunctionResponses, parseCliToolCalls } from './cliToolProtocol.js';
+import { availableCodexHomes, markCodexHomeCapped, codexHomeLabel } from './codexHomes.js';
 
 const CODEX_BIN = process.env.CODEX_CLI_PATH || 'codex';
 // Measured Aug 25 2026 over 2,596 logged CLI responses: median 2.3m, p90 5.8m,
@@ -58,54 +65,18 @@ export function isCodexCliModel(modelName) {
 }
 const cliModelOf = (modelName) => String(modelName).replace(/^codex-/, '');
 
-/** The tool catalog as text: name, purpose, parameters (JSON schema). */
-export function renderCodexToolProtocol(tools = []) {
-  const catalog = (tools || []).map((t) => {
-    const f = t?.function || t;
-    return `- ${f.name}: ${String(f.description || '').replace(/\s+/g, ' ').trim()}\n  parameters: ${JSON.stringify(f.parameters || {})}`;
-  }).join('\n');
-  return `## TOOLS (call protocol)
-This is not a coding session: there is no shell, no file system and no repository here. The ONLY tools are the ones listed below, and they run outside this conversation. To call one or more, reply with ONLY a JSON object — no prose before or after, no code fence — shaped exactly like this:
-{"tool_calls":[{"name":"fetch_stats","arguments":{"token":"EXAMPLE_TOKEN"}}]}
-Each call names a tool and gives its arguments as an object. You may put several calls in one reply. The results come back in the next message under TOOL RESULTS. When you have what you need, reply with your normal answer as text (no "tool_calls" key).
-RULE: whenever you are asked to investigate a factor, your FIRST reply is the tool_calls object fetching what that factor needs — never findings written from memory or from the report alone. Write the findings only after the TOOL RESULTS arrive.
-
-${catalog}`;
-}
-
-/** Caller's function responses → one TOOL RESULTS turn on the thread. */
-export function formatCodexFunctionResponses(responses = []) {
-  const blocks = (responses || []).map((r) => `### ${r.name}\n${typeof r.content === 'string' ? r.content : JSON.stringify(r.content)}`);
-  return `TOOL RESULTS\n\n${blocks.join('\n\n')}\n\nContinue: reply with another JSON tool_calls object if you need more, or write your answer as text.`;
-}
-
-/** A reply that is a tool_calls object → chat-completions toolCalls; else null. */
-export function parseCodexToolCalls(text) {
-  const raw = String(text || '').trim();
-  if (!raw) return null;
-  const unfenced = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-  const start = unfenced.indexOf('{');
-  const end = unfenced.lastIndexOf('}');
-  if (start < 0 || end <= start) return null;
-  let obj;
-  try { obj = JSON.parse(unfenced.slice(start, end + 1)); } catch { return null; }
-  if (!obj || !Array.isArray(obj.tool_calls) || obj.tool_calls.length === 0) return null;
-  const calls = obj.tool_calls
-    .filter((c) => c && typeof c.name === 'string' && c.name.trim())
-    .map((c, i) => ({
-      id: `codex_call_${Date.now()}_${i}`,
-      type: 'function',
-      function: { name: c.name.trim(), arguments: JSON.stringify(c.arguments && typeof c.arguments === 'object' ? c.arguments : (c.args && typeof c.args === 'object' ? c.args : {})) },
-    }));
-  return calls.length ? calls : null;
-}
+// The protocol text and parser are shared with the Claude bridge
+// (cliToolProtocol.js); these names stay for existing callers and tests.
+export const renderCodexToolProtocol = renderCliToolProtocol;
+export const formatCodexFunctionResponses = formatCliFunctionResponses;
+export const parseCodexToolCalls = (text) => parseCliToolCalls(text, { idPrefix: 'codex_call' });
 
 // The breaker is keyed per LANE, not per binary: a web search lane running
 // under a deliberately short cap (football grounding: 150s across up to ten
 // concurrent lanes) must never count as evidence that the zero-tool pick
 // session is hanging. Two slow searches used to trip 'codex' for the whole
 // process and push every remaining pick onto the metered cascade.
-function runCodex(args, stdinText, timeoutMs = CALL_TIMEOUT_MS, breakerKey = 'codex', explicitSignal) {
+function runCodex(args, stdinText, timeoutMs = CALL_TIMEOUT_MS, breakerKey = 'codex', explicitSignal, home = null) {
   const signal = requestSignal(explicitSignal);
   signal?.throwIfAborted();
   // A bridge that has already timed out repeatedly this run is not asked again.
@@ -115,7 +86,9 @@ function runCodex(args, stdinText, timeoutMs = CALL_TIMEOUT_MS, breakerKey = 'co
     // process group so timeouts and parent shutdown also reach descendants
     // when the caller did not supply an explicit cancellation signal.
     const processGroup = process.platform !== 'win32';
-    const proc = spawn(CODEX_BIN, args, { stdio: ['pipe', 'pipe', 'pipe'], detached: processGroup });
+    // Each ChatGPT login has its own CODEX_HOME (auth + thread store).
+    const env = home ? { ...process.env, CODEX_HOME: home } : process.env;
+    const proc = spawn(CODEX_BIN, args, { stdio: ['pipe', 'pipe', 'pipe'], detached: processGroup, env });
     const releaseGroup = processGroup ? registerOwnedProcessGroup(proc.pid) : () => {};
     let stdout = '';
     let stderr = '';
@@ -216,6 +189,38 @@ function parseEvents(stdout) {
   return { threadId, text: messages.join('\n\n'), finalText: messages.at(-1) || '', usage };
 }
 
+const etClock = (ms) => new Date(ms).toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+/**
+ * One turn on the first login with allowance. A login answering "usage
+ * limit" is marked capped until the reset it names and the turn moves to the
+ * next login; a resumed thread is pinned to the login that started it and
+ * cannot move. Returns the parsed events plus which login answered.
+ */
+async function codexTurn(args, body, timeoutMs, breakerKey, signal, { preferred = null, pinned = null } = {}) {
+  const homes = pinned !== null ? [pinned] : availableCodexHomes({ preferred });
+  if (!homes.length) throw toError('every Codex login is at its usage limit — no login has allowance right now');
+  let lastError = null;
+  for (const home of homes) {
+    try {
+      const { code, stdout, stderr } = await runCodex(args, body, timeoutMs, breakerKey, signal, home || null);
+      signal?.throwIfAborted();
+      if (code !== 0) throw toError(stderr || stdout);
+      return { ...parseEvents(stdout), stdout, home: home || '' };
+    } catch (error) {
+      signal?.throwIfAborted();
+      if (error?.isQuotaError && home) {
+        const until = markCodexHomeCapped(home, error.message);
+        const moving = pinned === null;
+        console.warn(`[Codex CLI] login "${codexHomeLabel(home)}" is at its usage limit until ${etClock(until)} ET${moving ? ' — trying the next login' : ' (this thread is pinned to it)'}`);
+        if (moving) { lastError = error; continue; }
+      }
+      throw error;
+    }
+  }
+  throw lastError;
+}
+
 export async function createCodexCliSession(options = {}) {
   const {
     modelName = 'codex-gpt-5.6-sol',
@@ -225,11 +230,16 @@ export async function createCodexCliSession(options = {}) {
     tools = null,
   } = options;
   const toolList = Array.isArray(tools) && tools.length ? tools : null;
-  console.log(`[Session] Created ${modelName} session via Codex CLI adapter (GPT Pro bridge, tools: ${toolList ? toolList.length : 0})`);
+  // A research session trips its own breaker lane; a brain, tools or not,
+  // stays on the brain's lane.
+  const breakerKey = options.breakerLane === 'research' ? 'codex-research' : 'codex';
+  console.log(`[Session] Created ${modelName} session via Codex CLI adapter (ChatGPT bridge, tools: ${toolList ? toolList.length : 0}, lane: ${breakerKey})`);
   return {
     provider: 'codex-cli',
     modelName,
     thinkingLevel,
+    breakerKey,
+    codexHome: null, // the login that answered turn one; resume is pinned to it
     // Tools mode: the catalog rides the first message with the system prompt.
     _systemPrompt: toolList ? `${systemPrompt}\n\n${renderCodexToolProtocol(toolList)}` : systemPrompt,
     tools: toolList,
@@ -267,24 +277,31 @@ export async function sendToCodexCliSession(session, message, options = {}) {
     args = [
       'exec', '--skip-git-repo-check', '-s', 'read-only', '--json',
       '-m', cliModelOf(session.modelName),
-      '-c', `model_reasoning_effort="${effortFor(session.thinkingLevel)}"`,
+      // A research session's turns are tool calls and findings, not the
+      // pick: they run at GARY_RESEARCH_EFFORT (default medium) so eight
+      // factors fit one budget and one login's allowance (Sep 9 2026 — Luna
+      // at high spent 75-440 s a turn and timed out 28 of 30 games).
+      '-c', `model_reasoning_effort="${effortFor(session.breakerKey === 'codex-research' ? (process.env.GARY_RESEARCH_EFFORT || 'medium') : session.thinkingLevel)}"`,
       '-',
     ];
     // No system flag on exec — the contract rides as a preamble on turn one.
     if (session._systemPrompt) body = `${session._systemPrompt}\n\n${body}`;
   }
 
-  // A research (tools) session trips its own breaker lane, never the brain's.
-  const { code, stdout, stderr } = await runCodex(args, body, CALL_TIMEOUT_MS, session.tools ? 'codex-research' : 'codex', signal);
-  signal?.throwIfAborted();
-  const duration = Date.now() - startTime;
-  if (code !== 0) {
-    const error = toError(stderr || stdout);
-    console.error(`[Session] Codex CLI error after ${duration}ms:`, error.message);
+  // A research session trips its own breaker lane, never the brain's. A new
+  // thread takes the first login with allowance; a resumed thread is pinned.
+  let turn;
+  try {
+    turn = await codexTurn(args, body, CALL_TIMEOUT_MS, session.breakerKey || 'codex', signal,
+      session.codexThreadId ? { pinned: session.codexHome ?? '' } : { preferred: session.codexHome ?? null });
+  } catch (error) {
+    signal?.throwIfAborted();
+    console.error(`[Session] Codex CLI error after ${Date.now() - startTime}ms:`, error.message);
     throw error;
   }
-
-  const { threadId, text: content, usage: rawUsage } = parseEvents(stdout);
+  const duration = Date.now() - startTime;
+  const { threadId, text: content, usage: rawUsage, stdout, home } = turn;
+  session.codexHome = home || session.codexHome || '';
   session.codexThreadId = threadId || session.codexThreadId;
 
   const usage = {
@@ -294,9 +311,9 @@ export async function sendToCodexCliSession(session, message, options = {}) {
     cached_tokens: rawUsage?.cached_input_tokens || 0,
   };
   if (session._costTracker) session._costTracker.addUsage(session.modelName, usage);
-  console.log(`[Session] Codex CLI response in ${duration}ms (tokens: ${usage.total_tokens}, cached: ${usage.cached_tokens}, GPT Pro — $0 marginal)`);
+  console.log(`[Session] Codex CLI response in ${duration}ms (tokens: ${usage.total_tokens}, cached: ${usage.cached_tokens}, login "${codexHomeLabel(session.codexHome)}" — $0 marginal)`);
 
-  // Tools mode: a tool_calls reply comes back as toolCalls; brains stay tool-less.
+  // Tools mode: a tool_calls reply comes back as toolCalls.
   const toolCalls = session.tools ? parseCodexToolCalls(content) : null;
   return {
     content: toolCalls ? null : content,
@@ -330,16 +347,14 @@ export async function codexCliWebSearch(prompt, options = {}) {
     // queries running past the old 5m cap (3 of 4 timed out) while completed
     // ones landed 6-17K chars — and with the metered fallback rung subject to
     // wallet balance, the $0 rung finishing is worth the extra headroom.
-    const { code, stdout, stderr } = await runCodex(args, prompt, options.timeoutMs || 8 * 60 * 1000, 'codex-search', options.signal);
-    if (code !== 0) throw toError(stderr || stdout);
-    const { text, finalText } = parseEvents(stdout);
+    const { text, finalText, stdout, home } = await codexTurn(args, prompt, options.timeoutMs || 8 * 60 * 1000, 'codex-search', options.signal);
     const clean = String(text || '').trim();
     const problem = searchResponseProblem(finalText);
     if (problem) {
       console.warn(`[Web Search] codex-cli search unusable: ${problem}`);
       return { success: false, data: '', raw: stdout, error: problem };
     }
-    console.log(`[Web Search] codex-cli (${model}) returned ${clean.length} chars (GPT Pro — $0 marginal)`);
+    console.log(`[Web Search] codex-cli (${model}) returned ${clean.length} chars (login "${codexHomeLabel(home)}" — $0 marginal)`);
     return { success: clean.length > 0, data: clean, raw: stdout };
   } catch (e) {
     requestSignal(options.signal)?.throwIfAborted();
@@ -368,11 +383,9 @@ export async function codexCliOneShot(prompt, options = {}) {
       '-',
     ];
     const stdinText = options.systemPrompt ? `${options.systemPrompt}\n\n${prompt}` : prompt;
-    const { code, stdout, stderr } = await runCodex(args, stdinText, options.timeoutMs || 6 * 60 * 1000, breakerKey, options.signal);
-    if (code !== 0) throw toError(stderr || stdout);
-    const { text, usage } = parseEvents(stdout);
+    const { text, usage, stdout, home } = await codexTurn(args, stdinText, options.timeoutMs || 6 * 60 * 1000, breakerKey, options.signal);
     const clean = String(text || '').trim();
-    console.log(`[Codex one-shot] ${breakerKey} (${model}, ${effort}${options.search ? ', search' : ''}) returned ${clean.length} chars (GPT Pro — $0 marginal)`);
+    console.log(`[Codex one-shot] ${breakerKey} (${model}, ${effort}${options.search ? ', search' : ''}) returned ${clean.length} chars (login "${codexHomeLabel(home)}" — $0 marginal)`);
     return { success: clean.length > 0, data: clean, raw: stdout, usage: usage || null };
   } catch (e) {
     requestSignal(options.signal)?.throwIfAborted();

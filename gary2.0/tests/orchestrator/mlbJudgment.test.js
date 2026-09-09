@@ -18,8 +18,11 @@ const receipt = phase => ({ ok: true, run_id: 'run-1', phase, event_id: 1, recor
 
 function setup({ first = initial(), second = stress(), third = price(), fixture = input(), researchAnswer = [{ question_id: 'q1', answer: 'No restriction reported in the supplied dated announcement.', source: 'original announcement', observed_at: time }] } = {}) {
   const timeline = [];
-  const answers = [first, second, third];
-  const ask = vi.fn(async (_prompt, { phase }) => { timeline.push(`ask:${phase}`); return JSON.stringify(answers[ask.mock.calls.length - 1]); });
+  // Answers are keyed by phase: a corrective re-ask (Sep 9 2026 — one per
+  // phase, same session) receives the same reply again, so a rejection test
+  // sees the specific defect surface, not the next phase's shape.
+  const answers = { initial_commit: first, stress_test: second, price_assessment: third };
+  const ask = vi.fn(async (_prompt, { phase }) => { timeline.push(`ask:${phase}`); return JSON.stringify(answers[phase]); });
   const research = vi.fn(async () => { timeline.push('research'); return researchAnswer; });
   const record = vi.fn(async phase => { timeline.push(`record:${phase}`); return receipt(phase); });
   const options = { input: fixture, ask, research, record, clock: () => Date.parse(time) };
@@ -260,7 +263,7 @@ describe('MLB sporting outcome, structured expectations and price boundaries', (
     const second = stress(); mutate(second);
     const fixture = setup({ second });
     await expect(runMlbJudgment(fixture.options)).rejects.toThrow('MLB judgment');
-    expect(fixture.ask).toHaveBeenCalledTimes(2);
+    expect(fixture.ask).toHaveBeenCalledTimes(3); // initial, stress, and the one corrective re-ask
     expect(fixture.record.mock.calls.map(call => call[0])).toEqual(['initial_commit', 'factual_research']);
   });
 

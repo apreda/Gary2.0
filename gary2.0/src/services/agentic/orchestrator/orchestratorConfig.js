@@ -26,6 +26,10 @@ export const GAME_PICK_MODEL = process.env.GARY_MODEL_OVERRIDE || 'codex-gpt-6-a
 // different model from Gary's Astra.
 export const GAME_RESEARCH_MODEL = process.env.GARY_RESEARCH_MODEL || 'anthropic-claude-haiku-4-5';
 export const GAME_RESEARCH_FALLBACK_MODEL = process.env.GARY_RESEARCH_FALLBACK_MODEL || 'codex-gpt-5.6-luna';
+// The third researcher rung (founder, Sep 9 2026): the Claude subscription
+// bridge in tools mode — Sonnet's own weekly bucket, $0, so a capped Codex
+// login and an unfunded API still leave Gary a research assistant.
+export const GAME_RESEARCH_BRIDGE_MODEL = process.env.GARY_RESEARCH_BRIDGE_MODEL || 'claude-sonnet-5';
 // (MLB_RESEARCH_MODEL deleted Sep 1 2026 — zero consumers after the
 // researcher kill.)
 // The MLB June brain: Astra on the codex bridge (founder GO, Sep 4 2026).

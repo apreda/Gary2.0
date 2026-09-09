@@ -20,7 +20,8 @@ describe('iOS line ladder and movers board', () => {
   it('mounts under the football pick card and on the Hub front page, and is registered in the project', () => {
     expect(swift('FootballGameIntelView.swift')).toContain('lineLadderModule');
     const hub = swift('HubView.swift');
-    expect(hub).toContain('HubLineMoversBoard(league: sel.label, sportKey: sportKey)');
+    // Sep 9 2026 (founder correction via the peer): the movers ride a 128pt aside beside the lead card; the full board is a sheet.
+    expect(hub).toContain('HubLineMoversAside(league: sel.label, sportKey: sportKey)');
     expect(hub).toContain('.sheet(item: $ladderSel)');
     const pbx = swift('GaryApp.xcodeproj/project.pbxproj');
     expect(pbx).toContain('LineLadder.swift in Sources');

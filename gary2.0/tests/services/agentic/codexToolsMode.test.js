@@ -52,6 +52,14 @@ describe('the Codex bridge in tools mode', () => {
     expect(t).toContain('Continue: reply with another JSON tool_calls object if you need more, or write your answer as text.');
   });
 
+  it('a brain created with tools speaks the protocol too (Sep 9 2026: full Gary with tools on the bridge)', async () => {
+    const brain = await createCodexCliSession({ modelName: 'codex-gpt-6-astra', systemPrompt: 'You are Gary.', tools });
+    expect(brain.tools).toHaveLength(2);
+    expect(brain._systemPrompt).toContain('## TOOLS (call protocol)');
+    expect(brain.breakerKey).toBe('codex');
+    expect(parseCodexToolCalls('{"tool_calls":[{"name":"fetch_stats","arguments":{"token":"A"}}]}\n{"tool_calls":[{"name":"fetch_stats","arguments":{"token":"B"}}]}')).toHaveLength(2);
+  });
+
   it('a session created with tools carries the protocol; one without stays tool-less', async () => {
     const withTools = await createCodexCliSession({ modelName: 'codex-gpt-5.6-luna', systemPrompt: 'You are the research assistant.', tools });
     expect(withTools.tools).toHaveLength(2);
@@ -64,7 +72,7 @@ describe('the Codex bridge in tools mode', () => {
 
   it('the adapter routes tool sessions through their own breaker lane and returns toolCalls', () => {
     const c = src('orchestrator/providerAdapters/codexCliSession.js');
-    expect(c).toContain("session.tools ? 'codex-research' : 'codex'");
+    expect(c).toContain("options.breakerLane === 'research' ? 'codex-research' : 'codex'");
     expect(c).toContain('const toolCalls = session.tools ? parseCodexToolCalls(content) : null;');
     expect(c).toContain("finishReason: toolCalls ? 'tool_calls' : 'stop'");
     expect(c).toContain('? formatCodexFunctionResponses(message)');
@@ -74,7 +82,7 @@ describe('the Codex bridge in tools mode', () => {
     expect(GAME_RESEARCH_MODEL).toBe('anthropic-claude-haiku-4-5');
     expect(GAME_RESEARCH_FALLBACK_MODEL).toBe('codex-gpt-5.6-luna');
     const loop = src('orchestrator/agentLoop.js');
-    expect(loop).toContain('const RESEARCH_MODELS = [GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL]');
+    expect(loop).toContain('const RESEARCH_MODELS = [GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL]');
     expect(loop).toContain('models: RESEARCH_MODELS,');
     expect(loop).toContain('_costTracker: costTracker, researchModel, signal }');
     expect(loop).toContain("trying the next researcher");

@@ -273,6 +273,7 @@ Current preseason personnel, announced starter rest, rotations, injuries and coa
     const flashMaxOutput = undefined; // use CONFIG.maxTokens default
 
     const briefingSession = await createModelSession({
+      breakerLane: 'research',
       signal: options.signal,
       _costTracker: options._costTracker || null,
       // EVERY game sport's research runs the Haiku tier (June engine, Aug 18
@@ -404,7 +405,9 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
       // scout report + compact findings-so-far so each factor still investigates with
       // full context + all prior CONCLUSIONS. resetSessionChat re-attaches the system
       // prompt inline if the session is not cache-backed (never a naked chat).
-      const _findingsSoFar = renderFindingsSoFar(completedFactorFindings.filter(Boolean), !isNBASport);
+      // June's carry-forward: compact FINDINGS SO FAR (founder, Sep 9 2026:
+      // "system wise we are modeling June").
+      const _findingsSoFar = renderFindingsSoFar(completedFactorFindings.filter(Boolean), false);
       const _seedUserText = _findingsSoFar ? `${briefingPrompt}\n\n---\n\n${_findingsSoFar}` : briefingPrompt;
       // Clone only the mutable chat handle. All factor sessions reuse the one
       // cache-backed GenerativeModel; no additional cache or system prompt is
@@ -659,7 +662,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
     if (!parsed.payload) {
       console.warn(`[Research Briefing] Parse issue: ${parsed.error} — rendering directly`);
       // Fallback: render directly from accumulated factors without normalization
-      const directBriefing = !isNBASport ? renderEvidenceBriefing(_accumulatedFactors) : _accumulatedFactors.map(f => {
+      const directBriefing = _accumulatedFactors.map(f => {
         const name = f.factor || f.name || f.title || 'Unknown';
         const finding = f.keyFinding || f.key_finding || f.finding || '';
         const numbers = f.numbers || f.stats || '';
@@ -669,7 +672,11 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
       return { briefing: directBriefing, calledTokens };
     }
 
-    const briefing = isNBASport ? renderStructuredBriefing(parsed.payload) : renderEvidenceBriefing(_accumulatedFactors);
+    // The briefing Gary reads is June's shape — Key finding / Numbers / Context
+    // per factor (188-136 in June, 47-37 Aug 17-23). The evidence-attributed
+    // rendering (Sep 4) stayed in the code for the Winners reviewer; the
+    // researcher's evidence rules above still govern what goes INTO the fields.
+    const briefing = renderStructuredBriefing(parsed.payload);
     console.log(`[Research Briefing] ✅ Briefing rendered (${briefing.length} chars)`);
 
     // Coverage diagnostics
@@ -743,6 +750,7 @@ ${scoutReportContent}
 ## YOUR EARLIER BRIEFING
 ${briefing}`;
   const session = await createModelSession({
+    breakerLane: 'research',
     _costTracker,
     modelName: researchModel || GAME_RESEARCH_MODEL,
     systemPrompt,

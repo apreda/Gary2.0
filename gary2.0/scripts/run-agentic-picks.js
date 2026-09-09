@@ -53,6 +53,17 @@ const { picksService } = await import('../src/services/picksService.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
 const { findStaleInjuryMentions } = await import('../src/services/agentic/orchestrator/statAudit.js');
 const { GAME_PICK_MODEL, MLB_JUNE_BRAIN_MODEL, DESK_FALLBACK_MODELS } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
+// THE BRAIN BY LEAGUE (founder, Sep 9 2026: "NCAAF can't use Astra, it's too
+// expensive"): college runs Sol at high on the bridge; every other league
+// keeps GAME_PICK_MODEL at the brain's bar. A table keyed by league, never a
+// branch — the league isolation law.
+const LEAGUE_BRAIN = Object.freeze({
+  americanfootball_ncaaf: {
+    model: process.env.GARY_NCAAF_BRAIN_MODEL || 'codex-gpt-5.6-sol',
+    thinkingLevel: process.env.GARY_NCAAF_BRAIN_EFFORT || 'high',
+  },
+});
+const brainFor = (key) => LEAGUE_BRAIN[key] || { model: GAME_PICK_MODEL, thinkingLevel: null };
 
 // ERA LIVE — this is a fresh process, so its module cache IS disk truth. One
 // line + a ledger append make every pick run auditable by folder/commit/era,
@@ -90,6 +101,7 @@ if (!process.env.OPENAI_API_KEY || !researchKeyOk) {
   console.error(`[JuneEngine] 🚨 REQUIRED API KEY MISSING (${!process.env.OPENAI_API_KEY ? 'OPENAI_API_KEY' : `researcher ${GAME_RESEARCH_MODEL}`}) — MLB picks WILL FAIL loudly until it lands in .env. There is no fallback system.`);
 } else {
   console.log(`[JuneEngine] ⚾ MLB games run the June engine (brain: ${MLB_JUNE_BRAIN_MODEL}, researcher: ${researcherOff ? 'OFF (GARY_RESEARCHER=off)' : GAME_RESEARCH_MODEL}, model cascade: ${DESK_FALLBACK_MODELS.join(' → ')}).`);
+  console.log(`[Researcher] 🏈 NFL games run the research assistant too (founder, Sep 9 2026); NCAAF stays desk-only with the full data.`);
   console.log(`[NbaWinningEra] 🏀 NBA games run the Apr 8 2026 winning-era prompts (brain: ${GAME_PICK_MODEL}, researcher: ${researcherOff ? 'OFF (GARY_RESEARCHER=off)' : GAME_RESEARCH_MODEL})`);
 }
 
@@ -1399,12 +1411,14 @@ async function main() {
             // ONE BRAIN PER PICK, every sport (founder, Aug 27): a failed or
             // quota-dead brain never hands THIS game's context to another
             // model mid-stream — the next brain re-runs the whole game.
-            result = await analyzeGame(game, config.key, { ...runnerOptions, modelOverride: GAME_PICK_MODEL });
-            let cascadeModel = GAME_PICK_MODEL;
-            for (const fallbackModel of DESK_FALLBACK_MODELS) {
+            const brain = brainFor(config.key);
+            const brainOptions = brain.thinkingLevel ? { thinkingLevel: brain.thinkingLevel } : {};
+            result = await analyzeGame(game, config.key, { ...runnerOptions, ...brainOptions, modelOverride: brain.model });
+            let cascadeModel = brain.model;
+            for (const fallbackModel of DESK_FALLBACK_MODELS.filter((m) => m !== brain.model)) {
               if (!shouldRetryPickWithModel(result)) break;
               console.warn(`[Runner] ⚠️ ${cascadeModel} failed (${result?.error || 'no pick'}) — same game, whole re-run on ${fallbackModel}`);
-              result = await analyzeGame(game, config.key, { ...runnerOptions, modelOverride: fallbackModel });
+              result = await analyzeGame(game, config.key, { ...runnerOptions, ...brainOptions, modelOverride: fallbackModel });
               cascadeModel = fallbackModel;
             }
             if (result && !result.error && result.pick) result._modelUsed = result._modelUsed ?? cascadeModel;

@@ -100,7 +100,7 @@ export function researchConcurrencyForSport(sport, provider) {
   // The subscription researcher otherwise spends its entire game budget on
   // the first two or three of eight factors. Each worker has its own chat and
   // the complete original desk; bound the pool without dropping any factors.
-  if (provider === 'codex-cli' && ['baseball_mlb', 'MLB'].includes(sport)) {
+  if (['codex-cli', 'claude-cli'].includes(provider) && ['baseball_mlb', 'MLB'].includes(sport)) {
     return MLB_CODEX_RESEARCH_CONCURRENCY;
   }
   return NFL_KEYS.has(sport) ? NFL_RESEARCH_CONCURRENCY : 1;
