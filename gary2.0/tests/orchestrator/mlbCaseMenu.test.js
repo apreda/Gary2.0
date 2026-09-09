@@ -164,7 +164,7 @@ describe('MLB expected ticket outcome assignment (founder, Sep 8 2026)', () => {
   it('keeps the simple final question, evidence questions, and confidence as Gary\'s judgment', () => {
     const msg = buildPass2Message('Braves', 'Rockies', 'MLB', -1.5);
     expect(msg).toContain("What's your bet, and what are the reasons why?");
-    expect(msg).toContain('Which supplied facts carry this decision? What remains an assumption? What unresolved fact could change it?');
+    expect(msg).not.toContain('Which supplied facts carry this decision?'); // removed Sep 9 2026 (founder)
     expect(msg).toContain('How confident are you in this pick?');
     expect(msg).not.toMatch(/expected value|implied probability|win probability|mispric/i);
   });

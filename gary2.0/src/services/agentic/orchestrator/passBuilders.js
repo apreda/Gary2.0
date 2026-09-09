@@ -6,7 +6,6 @@ import { getNbaSpreadFactors, getNflSpreadFactors, getNcaafSpreadFactors, getMlb
 import { GAME_ML_CAP } from './orchestratorConfig.js';
 import { mlbCaseHeadings } from './mlbCaseMenu.js';
 import { NBA_PASS1_INVESTIGATE_LINES } from './nbaWinningEra.js';
-import { DECISION_EVIDENCE_QUESTIONS } from './evidenceQuality.js';
 
 /**
  * Build the PASS 1 user message - Identify battlegrounds, DO NOT pick a side yet
@@ -308,7 +307,9 @@ Your JSON must include all three fields: "final_pick", "rationale", AND "confide
 
   // Founder GO Sep 4: a small evidence check, with the side and confidence
   // still Gary's judgment. NBA's separate April prompts remain pinned.
-  const synthesis = `What's your bet, and what are the reasons why?${isMLB || isFootball ? `\n\n${DECISION_EVIDENCE_QUESTIONS}` : ''}`;
+  // The three evidence questions that rode under the ask (Sep 4) are gone
+  // (founder, Sep 9 2026: "i never asked for that"). The ask is the ask.
+  const synthesis = `What's your bet, and what are the reasons why?`;
 
   // MLB (founder GO, Sep 2 2026): the decision turn is the question and the
   // output contract, nothing else — no checkpoint block (pass names and the
