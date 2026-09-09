@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 
 const book = readFileSync(new URL('../../../ios/GaryApp/UserBookView.swift', import.meta.url), 'utf8');
+// The period, market and tag helpers the section relies on (Foundation only).
+const analytics = readFileSync(new URL('../../../ios/GaryApp/BookAnalytics.swift', import.meta.url), 'utf8');
 const section = book.slice(book.indexOf('struct UserBookSection:'));
 const hasSwift = spawnSync('swiftc', ['--version']).status === 0;
 
@@ -37,9 +39,8 @@ describe('native You book summary and ledger scopes', () => {
         'private var openSlips:',
         'private func matchesBookFilters(',
       ].map(marker => declaration(section, marker)).join('\n');
-      writeFileSync(file, String.raw`import Foundation
+      writeFileSync(file, String.raw`${analytics}
 ${declaration(book, 'struct UserBet:')}
-${declaration(book, 'enum BookTimeframe')}
 
 func bet(_ id: String, _ kind: String, _ day: String, _ status: String,
          net: Double? = nil, placed: String? = nil, lock: String? = nil,
@@ -58,7 +59,7 @@ func bet(_ id: String, _ kind: String, _ day: String, _ status: String,
 struct BookProbe {
     var bets: [UserBet] = []
     var kindFilter = "all"
-    var timeframe = "all"
+    var period = BookPeriod.containing(BookDates.today(), kind: .all)
     var favoritesOnly = false
     var query = ""
     ${members}
@@ -156,26 +157,25 @@ struct BookProbe {
         func shifted(_ day: String, _ amount: Int) -> String {
             formatter.string(from: calendar.date(byAdding: .day, value: amount, to: formatter.date(from: day)!)!)
         }
-        // scopedBets uses the real clock. Build fixtures at its current Eastern
-        // boundaries without changing the production declaration to inject time.
-        for value in ["7d", "30d", "season"] {
-            timeframe = value
-            let window = BookTimeframe.window(value)!
-            let before = shifted(window.start, -1)
-            let after = shifted(window.end, 1)
+        // History is bounded by the chosen calendar period (Sep 9 2026). Build
+        // fixtures at each period's own boundaries; open slips ignore them.
+        for kind in [BookPeriodKind.week, .month, .year] {
+            period = BookPeriod.containing(BookDates.today(), kind: kind)
+            let before = shifted(period.start, -1)
+            let after = shifted(period.end, 1)
             bets = [
-                bet("floor", "tail", window.start, "won", net: 2, favorite: true, notes: "Needle"),
-                bet("today", "fade", window.end, "lost", net: -1, favorite: false),
+                bet("floor", "tail", period.start, "won", net: 2, favorite: true, notes: "Needle"),
+                bet("today", "fade", period.end, "lost", net: -1, favorite: false),
                 bet("old", "tail", before, "won", net: 100, favorite: true, notes: "Needle"),
                 bet("future-settled", "tail", after, "won", net: 200),
                 bet("future-pending", "fade", after, "pending", lock: after + "T12:00:00Z", favorite: false, notes: "Needle"),
                 bet("old-pending", "tail", before, "pending", favorite: true, notes: "Needle"),
                 bet("future-tail", "tail", after, "pending", lock: after + "T20:00:00Z", favorite: true, notes: "Needle")
             ]
-            precondition(ids(scopedBets) == ["floor", "today"], "History includes both date boundaries and excludes dates outside them")
+            precondition(ids(scopedBets) == ["floor", "today"], "History includes both period boundaries and excludes dates outside them")
             precondition(ids(summarySettled) == ["floor", "today"] && profitPoints.last?.net == 1)
             precondition(openSlips.map(\.id) == ["future-pending", "future-tail", "old-pending"],
-                "Pending slips remain visible outside history dates and sort by lock with unknown locks last")
+                "Pending slips remain visible outside the period and sort by lock with unknown locks last")
             favoritesOnly = true
             query = "needle"
             kindFilter = "tail"
@@ -187,10 +187,24 @@ struct BookProbe {
             query = ""
             favoritesOnly = false
             kindFilter = "all"
-            timeframe = "all"
-            precondition(scopedBets.count == 7, "All time removes the history date boundary")
+            period = BookPeriod.containing(BookDates.today(), kind: .all)
+            precondition(scopedBets.count == 7, "All time removes the period boundary")
             precondition(record(summarySettled).units == 301)
         }
+        // Search reaches tags and the bet type label too.
+        self = BookProbe()
+        bets = [
+            UserBet(id: "tagged", kind: "manual", pick_type: nil, game_date: "2026-09-01", league: "NFL", pick_text: "Chiefs -3.5",
+                matchup: nil, player_name: nil, prop_type: nil, description: nil, odds_american: -110, odds_estimated: false,
+                stake_units: 1, gary_confidence: nil, streak_pick: nil, status: "won", units_net: 0.91, lock_at: nil, placed_at: nil,
+                graded_by: "user", is_favorite: nil, notes: nil, bookmaker: nil, source_game_id: nil, source_pick_id: nil,
+                source_line: nil, source_side: nil, market: "spread", tags: ["primetime"]),
+            bet("plain", "tail", "2026-09-01", "won", net: 1)
+        ]
+        query = "primetime"
+        precondition(ids(scopedBets) == ["tagged"], "Search matches tags")
+        query = "spread"
+        precondition(ids(scopedBets) == ["tagged"], "Search matches the bet type label")
         print("BOOK_HISTORY_AND_OPEN_SLIPS_OK")
     }
 }

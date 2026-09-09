@@ -114,6 +114,8 @@ print("BOOK_TIME_BOUNDARIES_OK")
     expect(placeProp).not.toContain('todayEST');
     const placeEntry = declaration(book, 'private func place(_ entry: DirectoryEntry)');
     expect(placeEntry).toContain('guard !entry.locked, !entry.gameDate.isEmpty');
-    expect(declaration(book, 'private var scopedBets:')).toContain('BookTimeframe.window(timeframe)');
+    // Sep 9 2026: history is bounded by the calendar period (BookAnalytics), open slips never are.
+    expect(declaration(book, 'private var scopedBets:')).toContain('period.contains(b.game_date)');
+    expect(declaration(book, 'private var openSlips:')).not.toContain('period');
   });
 });
