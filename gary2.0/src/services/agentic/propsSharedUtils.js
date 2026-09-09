@@ -64,13 +64,15 @@ export function applyPropsPerGameConstraint(picks, gameId) {
     return { constrainedPicks: [], droppedPicks: [], garySpecials: [] };
   }
 
-  // FUN-LANE RULE: AT MOST ONE fun-lane prop per game, kept OUTSIDE the
-  // 2-per-game core cap. HR (user, Jun 18): lottery-style — surface a single
-  // best HR threat per matchup, never stack two. Anytime TD (founder GO,
-  // Aug 20 2026 — football on the same system as MLB): the exact analog, one
-  // best scorer per game, never competing with core props for the 2 slots.
-  // Skim the fun lane off the top, keep the highest-confidence one per game,
-  // then run the normal 2-per-game logic on the rest.
+  // FUN-LANE RULE: the fun lane is kept OUTSIDE the 2-per-game core cap,
+  // with its own cap per game. HR (user, Jun 18): lottery-style — surface a
+  // single best HR threat per matchup, never stack two. Anytime TD (founder
+  // GO, Aug 20 2026 — football on the same system as MLB; founder, Sep 9
+  // 2026: "we need 2 TD bets too"): two scorers per game, each its own card,
+  // never competing with core props for the 2 slots. Skim the fun lane off
+  // the top, keep the highest-confidence ones up to the lane's cap, then run
+  // the normal 2-per-game logic on the rest.
+  const funLaneCap = (token) => (/anytime_?(?:td|touchdown)/.test(token) ? 2 : 1);
   const hrConstrained = [];
   const hrDropped = [];
   {
@@ -85,10 +87,12 @@ export function applyPropsPerGameConstraint(picks, gameId) {
     }
     for (const mu of Object.keys(funByGame)) {
       const g = funByGame[mu].sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
-      hrConstrained.push(g[0]);
-      if (g.length > 1) {
-        hrDropped.push(...g.slice(1));
-        console.log(`[Props Constraint] 🏠 1-fun-lane-per-game: kept ${g[0].player} ${g[0].prop} (${Math.round((g[0].confidence || 0) * 100)}%), dropped ${g.length - 1} other fun-lane pick(s) for ${mu}`);
+      const cap = funLaneCap(`${(g[0].prop || '')} ${(g[0].prop_type || '')}`.toLowerCase());
+      hrConstrained.push(...g.slice(0, cap));
+      if (g.length > cap) {
+        hrDropped.push(...g.slice(cap));
+        const kept = g.slice(0, cap).map((p) => `${p.player} ${p.prop} (${Math.round((p.confidence || 0) * 100)}%)`).join(', ');
+        console.log(`[Props Constraint] 🏠 ${cap}-fun-lane-per-game: kept ${kept}, dropped ${g.length - cap} other fun-lane pick(s) for ${mu}`);
       }
     }
     picks = rest;  // the 2-per-game logic below now only sees core picks
