@@ -1332,15 +1332,15 @@ struct HubView: View {
                 onChart: { researchChartSignal = $0 }, aside: moversAside)
             .id("lead")
         } else if let aside = moversAside {
-            // No lead today: the small box stands on its own, still small.
-            HStack { aside.frame(width: 128); Spacer() }
+            // No lead today: the slim strip stands on its own, off to the right.
+            HStack { Spacer(); aside }
                 .padding(.horizontal, GaryLayout.gutter)
                 .id("movers")
         }
     }
 
-    /// THE BOARD IS MOVING (founder, Sep 9 2026): a small box to the right of
-    /// the lead card — the three biggest moves and a door to the full board.
+    /// Line movement (founder, Sep 9 2026): a slim strip to the right of the
+    /// lead card — game and move, nothing else, and a door to the full board.
     /// Store-safe builds omit it, as they do the line-move wire.
     private var moversAside: AnyView? {
         guard !AppFlags.storeSafe, let sportKey = LineSport.key(forLeague: sel.label) else { return nil }
@@ -1513,7 +1513,7 @@ struct HubView: View {
                         Text(module.title.replacingOccurrences(of: "The ", with: ""))
                             .hubDataFont(12, .medium)
                             .foregroundStyle(openBeats.contains(module.id) ? GaryColors.gold : GaryColors.sectionSub)
-                            .frame(minHeight: 44)
+                            .frame(minHeight: 36)
                     }
                     .buttonStyle(.plain)
                     .accessibilityHint("Open \(module.title)")
@@ -1618,10 +1618,15 @@ struct HubView: View {
 
     private var hubLoadedContent: some View {
         VStack(alignment: .leading, spacing: 22) {
-            if !slateRows.isEmpty {
-                HubSlateStrip(rows: slateRows) { r in
-                    gameSheet = HubGameSel(row: r)
+            // The schedule strip and the research categories are one header
+            // block (founder, Sep 9: no dead space between them).
+            VStack(alignment: .leading, spacing: 4) {
+                if !slateRows.isEmpty {
+                    HubSlateStrip(rows: slateRows) { r in
+                        gameSheet = HubGameSel(row: r)
+                    }
                 }
+                researchNavigation
             }
             if boardFetchFailed {
                 Text(slateRows.isEmpty ? "Game schedule couldn't load. Pull down to retry."
@@ -1645,7 +1650,6 @@ struct HubView: View {
                     .id("nextSlate")
             }
 
-            researchNavigation
             frontPageBoards
             if frontPageSelection.lead == nil, items(.regression).isEmpty,
                !showsNextSlateCard, selStreakRows.isEmpty, !fetchErrorLeagues.contains(sel) {

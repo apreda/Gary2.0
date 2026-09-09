@@ -73,9 +73,11 @@ struct HubResearchDashboard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if let aside, !dynamicTypeSize.isAccessibilitySize {
-                HStack(alignment: .top, spacing: 10) {
+                // The strip sizes itself and vanishes when there is nothing
+                // to show, so the lead card never gives up width for nothing.
+                HStack(alignment: .top, spacing: 0) {
                     leadCard
-                    aside.frame(width: 128)
+                    aside
                 }
             } else {
                 leadCard
@@ -228,9 +230,12 @@ struct HubResearchModuleCard<Content: View>: View {
             } label: {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        // One line, scaled to fit — a wrapped title made two
+                        // cards in a row different heights (founder, Sep 9).
                         Text(module.title)
                             .hubBodyFont(15, .semibold)
                             .foregroundStyle(GaryColors.warmWhite)
+                            .lineLimit(1).minimumScaleFactor(0.8)
                         Spacer(minLength: 0)
                         if let count = module.count, count > 0 {
                             Text("\(count)").hubDataFont(11, .medium)
@@ -241,11 +246,14 @@ struct HubResearchModuleCard<Content: View>: View {
                             .foregroundStyle(GaryColors.gold)
                             .rotationEffect(.degrees(isOpen ? 90 : 0))
                     }
-                    if !isOpen, !module.preview.isEmpty {
+                    if !isOpen {
+                        // Two reserved lines so every closed card in a row is
+                        // the same height; long previews scale, never clip.
                         Text(module.preview)
                             .hubBodyFont(13)
                             .foregroundStyle(GaryColors.sectionSub)
-                            .lineLimit(3)
+                            .lineLimit(3, reservesSpace: true)
+                            .minimumScaleFactor(0.6)
                     }
                 }
                 .fixedSize(horizontal: false, vertical: true)

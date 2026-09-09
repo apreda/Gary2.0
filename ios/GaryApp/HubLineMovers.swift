@@ -64,6 +64,29 @@ struct LineMoverStory: Identifiable, Equatable {
         return spreadPriceMoved ? .price : .holds
     }
 
+    /// The move a strip row shows: open → now on the market that carries the
+    /// story for this sport (football the spread, baseball the favorite's
+    /// price), falling back to whichever market moved, then to the number as
+    /// it stands. Numbers only (founder, Sep 9: "-1.5 → -3.5 and so on").
+    var leadMove: (open: String, now: String, moved: Bool) {
+        let spread: (String, String, Bool)? = {
+            guard let o = spreadLine(mover.open_spread_home), let n = spreadLine(mover.now_spread_home) else { return nil }
+            return (LineText.spread(o), LineText.spread(n), abs(n) != abs(o))
+        }()
+        let price: (String, String, Bool)? = {
+            guard let o = openFavorite, let n = nowFavorite else { return nil }
+            return (LineText.american(o), LineText.american(n), o != n)
+        }()
+        let total: (String, String, Bool)? = {
+            guard let o = mover.open_total, let n = mover.now_total else { return nil }
+            return (LineText.number(o), LineText.number(n), o != n)
+        }()
+        let order = league.uppercased() == "MLB" ? [price, total, spread] : [spread, total, price]
+        if let hit = order.compactMap({ $0 }).first(where: { $0.2 }) { return hit }
+        if let any = order.compactMap({ $0 }).first { return any }
+        return ("—", "—", false)
+    }
+
     /// Sort weight — football by the spread, then the total, then the price;
     /// baseball (the run line is fixed) by the price first.
     var movement: Double {
@@ -112,84 +135,65 @@ struct LineMoverStory: Identifiable, Equatable {
     }
 }
 
-/// THE BOARD IS MOVING as the founder drew it (Sep 9): a small box that sits
-/// to the right of the lead card, the three biggest moves and a way into the
-/// full board. It never pushes the dashboard down.
+/// Line movement as the founder drew it (Sep 9): a slim strip to the right
+/// of the lead card. Game and move, three rows, a door to the full board.
+/// It never pushes the dashboard down and takes no width when empty.
 struct HubLineMoversAside: View {
     let league: String
     let sportKey: String
     let onGame: (LineMoverStory) -> Void
 
     @StateObject private var store = LineMoversStore()
-    @State private var showBoard = false
 
-    private static let shownCount = 3
+    private static let shownCount = 5
 
     var body: some View {
         Group {
-            if store.stories.isEmpty {
-                // Nothing to show until the ledger has a board for this league.
-                Color.clear.frame(width: 0, height: 0)
+            if store.stories.contains(where: { !$0.started }) {
+                strip.padding(.leading, 8)
             } else {
-                box
+                // A zero-size host keeps the loader alive; an empty Group has
+                // no view for `.task` to run on (seen live Sep 9: no strip).
+                Color.clear.frame(width: 0, height: 0)
             }
         }
         .task(id: sportKey) { await store.run(league: league, sportKey: sportKey) }
-        .sheet(isPresented: $showBoard) {
-            HubLineMoversBoardSheet(league: league, sportKey: sportKey, store: store)
-        }
     }
 
-    private var box: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("THE BOARD IS MOVING")
-                .hubKickerFont(9.5).tracking(0.9)
+    private var strip: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("LINE MOVES")
+                .hubKickerFont(8.5).tracking(0.8)
                 .foregroundStyle(GaryColors.gold)
-                .fixedSize(horizontal: false, vertical: true)
-            ForEach(Array(store.stories.prefix(Self.shownCount))) { story in
+                .lineLimit(1).minimumScaleFactor(0.8)
+            // Pregame only: once a game starts its "now" is a live price, not
+            // line movement. Started games keep their ladder from the board.
+            ForEach(Array(store.stories.filter { !$0.started }.prefix(Self.shownCount))) { story in
+                let move = story.leadMove
                 Button { onGame(story) } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("\(story.awayAbbr) @ \(story.homeAbbr)")
-                            .hubDataFont(11, .semibold)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("\(story.awayAbbr)@\(story.homeAbbr)")
+                            .hubDataFont(10, .semibold)
                             .foregroundStyle(GaryColors.warmWhite)
                             .lineLimit(1).minimumScaleFactor(0.7)
-                        asideBadge(story.badge)
+                        Text("\(move.open) → \(move.now)")
+                            .hubDataFont(9.5, .bold)
+                            .foregroundStyle(move.moved ? GaryColors.gold : GaryColors.warmWhite.opacity(0.5))
+                            .lineLimit(1).minimumScaleFactor(0.7)
+                            .contentTransition(.numericText())
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("\(story.awayAbbr) at \(story.homeAbbr), opened \(move.open), now \(move.now)")
                 .accessibilityHint("Opens every move on this line")
             }
-            Button { showBoard = true } label: {
-                HStack(spacing: 4) {
-                    Text("ALL \(store.stories.count)")
-                        .hubKickerFont(9.5)
-                    Image(systemName: "chevron.right").font(.system(size: 8, weight: .bold))
-                }
-                .foregroundStyle(GaryColors.gold)
-                .frame(minHeight: 28)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Open the full board of \(store.stories.count) games")
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .padding(.horizontal, 10).padding(.vertical, 10)
+        .frame(width: 100, alignment: .topLeading)
         .garyPanel(radius: GaryLayout.Radius.card, fill: GaryColors.readingPanel)
         .animation(.easeInOut(duration: 0.35), value: store.stories)
-    }
-
-    @ViewBuilder private func asideBadge(_ b: LineStory.Badge) -> some View {
-        switch b {
-        case .moved(let text):
-            Text(text).hubDataFont(10.5, .bold).foregroundStyle(GaryColors.gold)
-                .lineLimit(1).minimumScaleFactor(0.7).contentTransition(.numericText())
-        case .price:
-            Text("PRICE").hubKickerFont(9).foregroundStyle(GaryColors.warmWhite.opacity(0.42))
-        case .holds:
-            Text("HOLDS").hubKickerFont(9).foregroundStyle(GaryColors.warmWhite.opacity(0.42))
-        }
     }
 }
 
