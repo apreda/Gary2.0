@@ -22,6 +22,10 @@ describe('Winners picks are Gary\'s record: Billfold scope and Home board mark',
       expect(decl).toContain('isWinnersPick');
     }
     expect(block(models, 'struct GameResult')).toMatch(/is_winners_pick: try container\.decodeIfPresent\(Bool\.self, forKey: \.is_winners_pick\)/);
+    // The column lists must request the flag; a synthesized decoder cannot see what PostgREST never sent.
+    const api = native('SupabaseAPI.swift');
+    expect(api).toContain('"game_id,game_date,league,matchup,pick_text,result,final_score,is_winners_pick"');
+    expect(api).toContain('line_value,result,odds,actual_value,sport,is_winners_pick"');
   });
 
   it('defaults the Gary Billfold to Winners picks with an explicit all-picks filter, leaving You and Board alone', () => {

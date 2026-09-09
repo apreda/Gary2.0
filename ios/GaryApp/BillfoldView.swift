@@ -51,6 +51,8 @@ struct BillfoldMenuLabel: View {
         HStack(spacing: 3) {
             Text(title)
                 .font(.system(size: 12, weight: .semibold, design: .default))
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
             Image(systemName: "chevron.down")
                 .font(.system(size: 7, weight: .bold))
         }

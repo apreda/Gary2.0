@@ -1857,7 +1857,7 @@ enum SupabaseAPI {
     /// Fetch game results with optional date filter (excludes NFL - those come from nfl_results)
     static func fetchGameResults(since dateFilter: String?) async throws -> [GameResult] {
         var query = [
-            URLQueryItem(name: "select", value: "game_id,game_date,league,matchup,pick_text,result,final_score"),
+            URLQueryItem(name: "select", value: "game_id,game_date,league,matchup,pick_text,result,final_score,is_winners_pick"),
             URLQueryItem(name: "order", value: "game_date.desc,id.asc")
         ]
         
@@ -1994,7 +1994,7 @@ enum SupabaseAPI {
         var query = [
             URLQueryItem(
                 name: "select",
-                value: "game_date,matchup,player_name,pick_text,prop_type,bet,line_value,result,odds,actual_value,sport"
+                value: "game_date,matchup,player_name,pick_text,prop_type,bet,line_value,result,odds,actual_value,sport,is_winners_pick"
             ),
             URLQueryItem(name: "order", value: "game_date.desc")
         ]
