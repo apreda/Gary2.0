@@ -988,6 +988,18 @@ export const mlbFetchers = {
     try {
       const homeId = home.id || home.teamId;
       const awayId = away.id || away.teamId;
+      // No ids = no lookup happened. Say so — the no-meetings sentence below
+      // is a finding, and an unresolved club is not a finding (Sep 9 2026:
+      // the researcher read "no regular-season meetings" for Twins @ Tigers
+      // the day after they played).
+      if (!homeId || !awayId) {
+        return {
+          homeValue: 'H2H lookup unavailable this run (team ids unresolved) — treat season-series data as unavailable, NOT as "no meetings". Do not cite season-series records or run totals.',
+          awayValue: '',
+          comparison: `MLB H2H: ${awayTeam} vs ${homeTeam}`,
+          source: 'BDL API (lookup not attempted)',
+        };
+      }
       if (homeId && awayId) {
         // paginateAll (Aug 27): one 100-row page of a full MLB season ended
         // in mid-June — H2H said "may not have played yet" about clubs that
