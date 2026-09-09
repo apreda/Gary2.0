@@ -1,0 +1,14 @@
+{
+  "build": "923",
+  "version": "2.25",
+  "source_commit": "13a56306",
+  "source_tree": "shared checkout at 13a56306 (the peer's Book-analytics work committed in 3636d2bf/8438f8cc, so no worktree was needed); the private GoogleService-Info.plist stays uncommitted as always",
+  "build_number_source": "CURRENT_PROJECT_VERSION=923 passed on the xcodebuild archive command; the committed project file says 922 (the peer's bump)",
+  "archive": "/Volumes/KINGSTON/Gary-2.25-923-Line.xcarchive",
+  "archive_log": "/Volumes/KINGSTON/gary-923-archive.log",
+  "upload_log": "/Volumes/KINGSTON/gary-923-upload.log",
+  "upload_succeeded_utc": "2026-09-09T15:18:09Z",
+  "changes": "THE LINE under the football pick card (spread, total, moneyline opened vs now, size of each move, Gary's rung, THE LADDER sheet); THE BOARD IS MOVING in The Hub (the week's lines sorted by size of move, refreshed every minute); Week 1 NFL page: prior-season sample labeled (2025 season), quarterbacks named in their line, head-to-head names the leader, practice status column widened, pick not call in the pending card; the rail's lanes widened to pass rush, red zone and coaching edges",
+  "verification": "Debug simulator build green twice (sim-build.log, sim-build2.log); captures qa2-line-card, qa2-ladder-sheet, qa2-hub-board on iPhone 17 (Gary); contract suites tests/scripts/iosLineLadder.test.js, tests/services/lineWatch.test.js, tests/services/insights/footballInsights.test.js; line_ladder/line_movers answered live from production",
+  "app_review": "Build 920 remains Waiting for Review (submission ca44f7e9-9ef5-4cb9-aae0-20731a668a77); 922 (Book analytics) and 923 are TestFlight-only until Adam decides which build goes to review next"
+}

@@ -1129,3 +1129,40 @@ summary:focus-visible {
   .site-record-stat > strong { font-size: 48px; }
   .site-record-total { font-size: 50px; }
 }
+
+/* THE APP page (Sep 9 2026): real screenshots and a real tape in phone frames. */
+.site-shot,
+.site-tape {
+  overflow: hidden;
+  border-radius: 38px;
+  background: #090808;
+  box-shadow:
+    0 24px 50px #0009,
+    0 0 0 1px #ffffff30;
+}
+.site-shot img,
+.site-tape video {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.site-shot-grid {
+  display: grid;
+  gap: 28px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  align-items: start;
+}
+.site-shot-grid figcaption {
+  margin-top: 12px;
+  font: 700 10.5px/1.4 var(--ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8d8781;
+  text-align: center;
+}
+@media (max-width: 640px) {
+  .site-shot,
+  .site-tape {
+    border-radius: 26px;
+  }
+}

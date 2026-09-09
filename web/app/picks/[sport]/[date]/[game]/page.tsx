@@ -7,6 +7,8 @@ import { PropCard } from '@/components/PropCard';
 import { Eyebrow } from '@/components/Eyebrow';
 import { JsonLd } from '@/components/JsonLd';
 import { ScoutRead } from '@/components/ScoutRead';
+import { LineLadderPanel } from '@/components/LineLadder';
+import { fetchLineLadder, lineStory } from '@/lib/gary/lines';
 import { MeaningfulPickView } from '@/components/MeaningfulPickView';
 import { ShareActions } from '@/components/ShareActions';
 import { StitchRule } from '@/components/Terminal';
@@ -113,6 +115,9 @@ export default async function GamePage({ params }: { params: Params }) {
     league: cfg.code,
   });
   const venue = slate?.venue ?? lead.venue ?? null;
+  // THE LINE (Sep 9 2026): the same ladder the app shows under the pick card —
+  // one book, opened → now, every rung. Absent when the ledger has nothing.
+  const ladder = await fetchLineLadder(cfg.code, date, lead.bdl_game_id ?? slate?.bdl_game_id ?? lead.game_id);
 
   const pageUrl = `${SITE_URL}/picks/${cfg.slug}/${date}/${canonicalSlug}`;
   const imageUrl = `${pageUrl}/card`;
@@ -199,6 +204,12 @@ export default async function GamePage({ params }: { params: Params }) {
         {picks.map(pick => <PickCard key={pick.pick} pick={pick} date={date} shareHref={pageUrl}
           initialResults={{ date, games: day.results, props: propResults, slate: day.slate, live: [] }} />)}
       </section>
+
+      {ladder && (
+        <div className="mt-6 max-w-[470px]">
+          <LineLadderPanel story={lineStory(ladder, lead.awayTeam ?? 'Away', lead.homeTeam ?? 'Home', lead.commence_time)} matchup={headline(lead)} />
+        </div>
+      )}
 
       {/* The read — full text, nothing behind a fold */}
       {picks.map(pick => {
