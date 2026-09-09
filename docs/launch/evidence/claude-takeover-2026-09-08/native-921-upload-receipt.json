@@ -1,0 +1,14 @@
+{
+  "build": "921",
+  "version": "2.25",
+  "source_commit": "fe2597c0",
+  "source_tree": "detached git worktree at fe2597c0 (Documents/ChatGPT/Gary/claude-takeover-2026-09-08/native-921-src) with compiler-only symlinks to the canonical private GoogleService-Info.plist and SecretsLocal.swift; the shared checkout held another session's uncommitted Book-analytics work, which this archive excludes",
+  "build_number_source": "CURRENT_PROJECT_VERSION=921 passed on the xcodebuild archive command; the committed project still says 920 until the shared project file is free to commit",
+  "archive": "/Volumes/KINGSTON/Gary-2.25-921-Winners.xcarchive",
+  "archive_signing": "Apple Development: Adam Preda (AN9294U46X), team SFBTX6KPLM",
+  "upload_log": "/Volumes/KINGSTON/gary-921-upload.log",
+  "upload_succeeded_utc": "2026-09-09T14:01:40Z",
+  "changes": "Gary Billfold record = Winners picks with an All picks chip; Winners flag requested on game and prop result fetches; gold star on Home board rows whose pick is on today's Winners board; prop results carry the Winners flag via database trigger (migration 20260909134645)",
+  "verification": "Debug simulator build green (xcodebuild-921-sim-debug-r3.log); Billfold captures shots921/01-03; contract suite tests/scripts/iosWinnersMarks.test.js; Home ownership fixture updated (5d57d14c). Remaining native failures in iosBookTime belong to the other session's uncommitted Book-analytics work.",
+  "app_review": "Build 920 remains Waiting for Review (submission ca44f7e9-9ef5-4cb9-aae0-20731a668a77); 921 is TestFlight-only until Adam decides to swap or ship it as the next update"
+}
