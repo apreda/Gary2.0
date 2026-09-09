@@ -39,7 +39,7 @@ describe('source results through the real formatter', () => {
     vi.spyOn(nflFetchers,'FIELD_POSITION').mockResolvedValue({ home: { own_net_punt_avg: 44 }, away: { own_net_punt_avg: 42 } });
     const result = await nflFetchers.NFL_SPECIAL_TEAMS('americanfootball_nfl',home,away,2026);
     const text = render(result,'SPECIAL_TEAMS',home.full_name,away.full_name,'NFL');
-    expect(text).toContain('"fg_made": 8'); expect(text).toContain('"own_net_punt_avg": 42');
+    expect(text).toContain('fg made: 8'); expect(text).toContain('own net punt avg: 42');
     expect(text).not.toContain('PP N/A'); expect(text).not.toContain('[object Object]');
     expect(text).toContain(result.source);
   });
@@ -50,8 +50,8 @@ describe('source results through the real formatter', () => {
     const result = await nbaFetchers.QUARTER_SCORING('americanfootball_nfl',home,away,2026);
     for (const sport of ['NFL','NBA']) {
       const text = render(result,'QUARTER_SCORING',home.full_name,away.full_name,sport);
-      expect(text).toContain('"Q1": "0.0"'); expect(text).toContain('"games_analyzed": 1');
-      expect(text).toContain('"allowed"'); expect(text).not.toContain('[object Object]');
+      expect(text).toContain('Q1: 0.0'); expect(text).toContain('games analyzed: 1');
+      expect(text).toContain('allowed'); expect(text).not.toContain('[object Object]');
     }
   });
   it('keeps nested player logs and their scope without making EPA from ordinary game scores', () => {

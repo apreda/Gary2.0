@@ -1,4 +1,5 @@
 import { ballDontLieService } from '../../ballDontLieService.js';
+import { renderFootballStat } from './footballStatProse.js';
 
 /**
  * Check if Gary has investigated enough to proceed to bilateral cases.
@@ -76,10 +77,18 @@ export function summarizeStatForContext(statResult, statToken, homeTeam, awayTea
     if (footballStats || scoringSplits ||
         (statToken === 'RECENT_FORM' && (h.games_used != null || a.games_used != null)) ||
         (statToken === 'HOME_AWAY_SPLITS' && ((typeof h === 'object' && 'at_home' in h) || (typeof a === 'object' && 'at_home' in a)))) {
-      const { home: homeData, away: awayData, ...context } = statResult;
-      return `${statToken}: ${JSON.stringify({ ...context,
-        ...(homeFirst ? { home: homeData, away: awayData } : { away: awayData, home: homeData })
-      }, null, 2)}`;
+      // Sep 9 2026: rendered as sentences, not a JSON dump — the NE @ SEA card
+      // recited "0.0896 sack rate" because this is what Gary was handed.
+      // Every field survives; rates read as percentages, EPA as points per play.
+      // Injury reports keep their structured form: grouped statuses, dated
+      // records and practice evidence are read as records, not as prose.
+      if (['INJURIES', 'NFL_INJURIES'].includes(statToken)) {
+        const { home: homeData, away: awayData, ...context } = statResult;
+        return `${statToken}: ${JSON.stringify({ ...context,
+          ...(homeFirst ? { home: homeData, away: awayData } : { away: awayData, home: homeData })
+        }, null, 2)}`;
+      }
+      return renderFootballStat(statToken, statResult, homeTeam, awayTeam, { homeFirst });
     }
 
     // Baseball adapters already render the game evidence as readable text.

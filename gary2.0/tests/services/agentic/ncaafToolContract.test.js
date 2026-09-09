@@ -30,11 +30,11 @@ describe('college tool menu through its actual adapters and formatter', () => {
     const recent = await ncaafFetchers.NCAAF_RECENT_FORM('americanfootball_ncaaf', home, away, 2026);
     const splits = await ncaafFetchers.NCAAF_HOME_AWAY_SPLITS('americanfootball_ncaaf', home, away, 2026);
     const render = (r,t) => summarizeStatForContext(r,t,home.full_name,away.full_name,'americanfootball_ncaaf');
-    expect(render(recent,'RECENT_FORM')).toContain('"record": "1-0"');
-    expect(render(recent,'RECENT_FORM')).toContain('"games_used": 1');
+    expect(render(recent,'RECENT_FORM')).toContain('record: 1-0');
+    expect(render(recent,'RECENT_FORM')).toContain('games used: 1');
     expect(render(recent,'RECENT_FORM')).toContain('Away Tech');
-    expect(render(splits,'HOME_AWAY_SPLITS')).toContain('"at_home"');
-    expect(render(splits,'HOME_AWAY_SPLITS')).toContain('"record": "1-0"');
+    expect(render(splits,'HOME_AWAY_SPLITS')).toContain('at home');
+    expect(render(splits,'HOME_AWAY_SPLITS')).toContain('record: 1-0');
     expect(render(splits,'HOME_AWAY_SPLITS')).not.toContain('undefined');
     expect(render(recent,'RECENT_FORM')).toContain(recent.data_scope);
   });
@@ -44,7 +44,7 @@ describe('college tool menu through its actual adapters and formatter', () => {
       home: { team: 'Home State', sacks: 0, games_used: 1 }, away: { team: 'Away Tech', note: 'No player game rows returned' } };
     const text = summarizeStatForContext(result,'PRESSURE_RATE','Home State','Away Tech','NCAAF');
     expect(text).toContain(result.data_scope);
-    expect(text).toContain('"sacks": 0');
+    expect(text).toContain('sacks: 0');
     expect(text).toContain(result.away.note);
   });
 });

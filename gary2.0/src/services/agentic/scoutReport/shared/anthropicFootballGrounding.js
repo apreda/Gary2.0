@@ -226,7 +226,10 @@ export function mentionsTeam(lowerText, teamName) {
  * on the desk as THE SKILL PLAYERS and THE DEFENSES. An empty lane is an
  * absent module, never a placeholder — and never an apology.
  */
-const REFUSAL = /\b(?:I apologi[sz]e|I(?:'m| am) (?:sorry|unable to)|I can(?:not|'t) (?:provide|fulfil|fulfill|complete|find)|I(?:'d| would) be happy to (?:provide|help)|Let me search)\b/i;
+// Sep 9 2026: a lane pasted "UNABLE TO FULFILL REQUEST — the request cannot be
+// completed as specified" into THE DEFENSES on the first regular-season desk;
+// the headline forms join the first-person ones.
+const REFUSAL = /\b(?:I apologi[sz]e|I(?:'m| am) (?:sorry|unable to)|I can(?:not|'t) (?:provide|fulfil|fulfill|complete|find)|I(?:'d| would) be happy to (?:provide|help)|Let me search|unable to (?:fulfil|fulfill|complete) (?:the |this |your )?request|(?:request|task) cannot be (?:completed|fulfilled)|to fulfill this request,? I would need)\b/i;
 export function isSearchRefusal(text) {
   return REFUSAL.test(String(text || ''));
 }
