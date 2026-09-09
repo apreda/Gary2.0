@@ -60,10 +60,11 @@ const BRAIN_DISALLOWED_TOOLS = 'Task,Bash,Glob,Grep,Read,Edit,Write,MultiEdit,No
 const CLI_EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 const effortFor = (modelName, thinkingLevel) => {
   if (String(modelName).includes('sonnet')) return 'max';
-  // Fable at its ceiling (founder, Aug 10 night: "Fable in Max so that way
-  // we can fully rule out the model" — data/context now complete, so a miss
-  // can't hide behind the desk or the effort dial).
-  if (String(modelName).includes('fable')) return 'max';
+  // Fable 5.1 at xhigh (founder, Sep 9 2026: "fallback to Claude Bridge
+  // Fable 5.1 on XHigh"). The Aug 10 "Fable in Max" pin was a diagnostic for
+  // ruling out Fable 5 while the desk was still being built; the cascade
+  // rung runs at the Sol-era bar.
+  if (String(modelName).includes('fable')) return 'xhigh';
   return CLI_EFFORT_LEVELS.has(thinkingLevel) ? thinkingLevel : 'xhigh';
 };
 
@@ -136,7 +137,7 @@ function toError(code, stdout, stderr) {
 
 export async function createClaudeCliSession(options = {}) {
   const {
-    modelName = 'claude-fable-5',
+    modelName = 'claude-fable-5-1',
     systemPrompt = '',
     thinkingLevel = 'high', // informational only — Fable's thinking is always on
     _costTracker = null,

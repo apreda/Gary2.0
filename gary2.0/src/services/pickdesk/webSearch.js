@@ -16,6 +16,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { describeSportsCalendar } from '../../utils/dateUtils.js';
 import { codexCliWebSearch } from '../agentic/orchestrator/providerAdapters/codexCliSession.js';
+import { claudeCliWebSearch } from '../agentic/orchestrator/providerAdapters/claudeCliSession.js';
 import { requestSignal } from '../agentic/orchestrator/requestCancellation.js';
 import { searchResponseProblem } from '../agentic/searchResponseValidation.js';
 
@@ -142,13 +143,24 @@ export async function openaiWebSearch(query, options = {}) {
   // SUBSCRIPTION BRIDGE (Sep 1 2026 — founder: Claude CLI OUT of the pick
   // lane, "use codex since it's free too"): grounding runs on the GPT Pro
   // codex bridge first, $0 marginal. The OpenAI API → Anthropic API chain
-  // below stays as the fallback if the bridge search fails. (The old
-  // GARY_GROUNDING_VIA_CLAUDE flag is retired — the scheduler plist still
-  // carries it harmlessly until its next planned edit.)
+  // below stays as the fallback if the bridge search fails. Since Sep 9 2026
+  // GARY_GROUNDING_VIA_CLAUDE=1 (the scheduler plist carries it) puts the
+  // Claude subscription's WebSearch rung between the two.
   const viaCodex = await codexCliWebSearch(freshnessPrompt(query, options.freshnessHours), options);
   signal?.throwIfAborted();
   if (viaCodex.success && !searchResponseProblem(viaCodex.data)) return cachePut(viaCodex);
-  console.warn('[Web Search] codex-cli grounding empty/failed — trying API providers');
+  // Sep 9 2026 (founder: fall back to the Claude bridge while the codex
+  // bridge is capped): with GARY_GROUNDING_VIA_CLAUDE=1 (the scheduler plist
+  // carries it) the subscription WebSearch rung sits between the codex bridge
+  // and the metered APIs. No model option is forwarded — callers pass OpenAI
+  // model names in options.model, which are not Claude models.
+  if (String(process.env.GARY_GROUNDING_VIA_CLAUDE || '') === '1') {
+    console.warn('[Web Search] codex-cli grounding empty/failed — trying the Claude bridge');
+    const viaClaude = await claudeCliWebSearch(freshnessPrompt(query, options.freshnessHours), { signal: options.signal, timeoutMs: options.timeoutMs });
+    signal?.throwIfAborted();
+    if (viaClaude.success && !searchResponseProblem(viaClaude.data)) return cachePut(viaClaude);
+  }
+  console.warn('[Web Search] bridge grounding empty/failed — trying API providers');
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return cachePut(await anthropicSearchFallback(query, options, 'OPENAI_API_KEY missing'));

@@ -5,8 +5,9 @@
 //     CONTENT pass, and the first grounded-SEARCH rung.
 //   · Metered APIs as rare fallbacks only: OpenAI Responses web_search, then
 //     Anthropic server search; the model cascade's anthropic- rungs.
-//   · The Claude CLI adapter still exists as plumbing but nothing in
-//     production names a claude-* model anymore.
+//   · The Claude CLI adapter (his Claude subscription) is the desk cascade's
+//     third rung since Sep 9 2026 — claude-fable-5-1 at xhigh, reached only
+//     when both codex brains fail a game (see DESK_FALLBACK_MODELS).
 // Gemini stays eradicated (founder, Aug 24: "no more gemini for anything");
 // the session seam (validateSessionModel below) refuses any gemini-* name.
 // ═══════════════════════════════════════════════════════════════════════════
@@ -63,7 +64,13 @@ export const PROPS_DESK_MODEL = process.env.GARY_PROPS_MODEL_OVERRIDE || 'codex-
 // from the CLI bridge to the metered API (anthropic- prefix). They fire only
 // when the codex bridge fails a whole game — a rare, cross-vendor last resort.
 // The chain filters out the primary so a quota error never retries itself.
-export const DESK_FALLBACK_MODELS = ['codex-gpt-5.6-sol', 'anthropic-claude-opus-5', 'anthropic-claude-sonnet-5'].filter((m) => m !== GAME_PICK_MODEL);
+// Sep 9 2026 (founder: "we can fallback to Claude Bridge Fable 5.1 on XHigh"):
+// the Codex bridge hit its usage limit through Sep 15 and the Anthropic API
+// balance was empty, so the whole cascade failed every game on the morning
+// of Sep 9. The Claude CLI bridge (his subscription, $0 marginal) is now the
+// rung right after the codex brains and before the metered API rungs —
+// Fable 5.1 at xhigh. It fires only when both codex brains fail a whole game.
+export const DESK_FALLBACK_MODELS = ['codex-gpt-5.6-sol', 'claude-fable-5-1', 'anthropic-claude-opus-5', 'anthropic-claude-sonnet-5'].filter((m) => m !== GAME_PICK_MODEL);
 
 // $ per 1M tokens [input, output] — desk-lane cost logging only, not billing.
 // Bridge entries are $0 (no marginal token cost on a subscription); the
@@ -75,6 +82,7 @@ export const DESK_COST_PER_M = {
   'codex-gpt-5.6-luna': [0, 0],
   'codex-gpt-5.6-terra': [0, 0],
   'claude-fable-5': [0, 0],
+  'claude-fable-5-1': [0, 0],
   'claude-opus-5': [0, 0],
   'claude-sonnet-5': [0, 0],
   'anthropic-claude-opus-5': [15, 75],

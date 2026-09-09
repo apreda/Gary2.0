@@ -26,7 +26,12 @@ import { createModelSession, sendToSession, sendToSessionWithRetry } from '../ag
 import { DESK_FALLBACK_MODELS } from '../agentic/orchestrator/orchestratorConfig.js';
 
 export const contentModel = () => process.env.GARY_CONTENT_MODEL_OVERRIDE || 'codex-gpt-5.6-sol';
-export const contentModelCascade = () => [...new Set([contentModel(), ...DESK_FALLBACK_MODELS])];
+// Sep 9 2026: the desk cascade's Claude bridge rung is for the PICK brains.
+// Content lanes (hundreds of lane reads a day) stay off the founder's Claude
+// subscription unless GARY_CONTENT_BRIDGE_MODEL names a bridge model — a
+// burned weekly cap must never cost a game pick.
+const contentRung = (m) => (String(m).startsWith('claude-') ? (process.env.GARY_CONTENT_BRIDGE_MODEL || null) : m);
+export const contentModelCascade = () => [...new Set([contentModel(), ...DESK_FALLBACK_MODELS.map(contentRung).filter(Boolean)])];
 
 /** Optional editorial ordering gets one attempt on the configured content
  * model. Existing prose callers retain their established retry/cascade path. */
