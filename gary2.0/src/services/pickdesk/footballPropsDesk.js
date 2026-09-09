@@ -54,7 +54,10 @@ export const isFootballFunLane = (propType) => /anytime_?(?:td|touchdown)/.test(
 
 // Football props ask — the MLB contract with football's day grammar (the
 // founder's tonight→today porting rule, c3691c04) and the TD fun-lane label.
-export const FOOTBALL_PROPS_ASK = `Take two prop bets from today's board — two prop cards is what this game publishes.
+// TWO TOUCHDOWN BETS (founder, Sep 9 2026: "we need 2 TD bets too") — football's
+// fun lane, the HR analog; each publishes as its own card, never the core record.
+export const THE_TOUCHDOWN_ASK = 'From the anytime touchdown market, when it is printed, take two anytime touchdown bets; each publishes as its own card.';
+export const FOOTBALL_PROPS_ASK = `Take two prop bets from today's board — two prop cards is what this game publishes. ${THE_TOUCHDOWN_ASK}
 
 Injuries: an absence already games old is already in the price and in the team's recent results; fresh news — today's inactive — is the exception.
 
