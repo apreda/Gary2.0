@@ -243,6 +243,40 @@ async function fireOnPostedLineups(livePending, entry, match, now) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// A DELAY NEVER LEAVES A GAME UNPICKED (founder, Sep 9 2026: "Min Detroit
+// was delayed but that shouldn't have stopped Gary from getting a pick").
+// A delay is more time, not less. When the delay hold begins and the game
+// has no stored pick, the earliest remaining tier fires now instead of
+// waiting for MLB to post a new first pitch; the other tiers stay held and
+// re-anchor when the new time posts, exactly as before.
+// ─────────────────────────────────────────────────────────────────────────
+const delayFiredGames = new Set();
+async function fireOnDelayHold(livePending, entry, now) {
+  try {
+    const key = scheduleEntryKey(entry);
+    if (delayFiredGames.has(key)) return;
+    const { picksService } = await import('../src/services/picksService.js');
+    const stored = await picksService.pickAlreadyStoredByGameId(entry.sport.name || 'MLB', entry.slateDate || getTodayETDateStr(), entry.gameId).catch(() => null);
+    if (stored?.exists) { delayFiredGames.add(key); return; }
+    const tiers = (livePending || [])
+      .filter((e) => scheduleEntryKey(e) === key && !isScheduleEntryRetired(e) && !isSportFetchRetryEntry(e))
+      .sort((a, b) => a.triggerTime - b.triggerTime);
+    const next = tiers[0];
+    delayFiredGames.add(key);
+    if (!next) {
+      log(`⚠️ DELAY, NO PICK YET: ${entry.matchup} — every pregame tier already ran; nothing left to fire (id ${entry.gameId})`);
+      return;
+    }
+    delete next.scheduleHold;
+    next.triggerTime = new Date(now);
+    queueWake = true;
+    log(`🟢 DELAY, NO PICK YET: ${entry.matchup} — one tier fires now while the game waits on a new first pitch (id ${entry.gameId})`);
+  } catch (e) {
+    log(`⚠️ delay fire skipped for ${entry?.matchup || '?'} (${e.message})`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // THE CLOSING BOARD (founder GO, Sep 3 2026): one odds fetch per game at
 // first pitch, recorded to odds_snapshots (every book), so the closing-line
 // read has a real close instead of the last pick tier's board.
@@ -1018,6 +1052,7 @@ async function startMlbDriftGuard(getPendingEntries) {
           if (held > 0) {
             log(`⏸️ MLB DELAY HOLD: ${entry.matchup} — ${held} remaining tier(s) paused; no replacement first-pitch time was assumed (id ${entry.gameId})`);
           }
+          await fireOnDelayHold(livePending, entry, now);
           await persistOfficialMlbStatusTransition(livePending, entry, match.status);
           continue;
         }
