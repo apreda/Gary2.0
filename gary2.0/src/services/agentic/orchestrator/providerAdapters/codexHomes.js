@@ -41,10 +41,20 @@ export function discoverCodexHomes({ env = process.env, home = homedir() } = {})
 
 /** "Sep 15th, 2026 11:17 AM" (the CLI's own wording) → epoch ms, or null. */
 export function parseCodexResetTime(message, now = Date.now()) {
-  const m = String(message || '').match(/try again (?:at|after) ([A-Za-z]{3,9} \d{1,2})(?:st|nd|rd|th)?,? (\d{4})(?: (\d{1,2}:\d{2}) ?([AP]M))?/i);
-  if (!m) return null;
-  const when = Date.parse(`${m[1]}, ${m[2]}${m[3] ? ` ${m[3]} ${m[4].toUpperCase()}` : ' 12:00 PM'}`);
-  if (!Number.isFinite(when) || when <= now) return null;
+  const text = String(message || '');
+  const dated = text.match(/try again (?:at|after) ([A-Za-z]{3,9} \d{1,2})(?:st|nd|rd|th)?,? (\d{4})(?: (\d{1,2}:\d{2}) ?([AP]M))?/i);
+  if (dated) {
+    const when = Date.parse(`${dated[1]}, ${dated[2]}${dated[3] ? ` ${dated[3]} ${dated[4].toUpperCase()}` : ' 12:00 PM'}`);
+    return Number.isFinite(when) && when > now ? when : null;
+  }
+  // The five-hour window's wording carries only a clock: "try again at 7:30 PM"
+  // — today in ET, or tomorrow when that time has already passed.
+  const clock = text.match(/try again (?:at|after) (\d{1,2}:\d{2}) ?([AP]M)/i);
+  if (!clock) return null;
+  const etDay = new Date(now).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' });
+  let when = Date.parse(`${etDay} ${clock[1]} ${clock[2].toUpperCase()}`);
+  if (!Number.isFinite(when)) return null;
+  if (when <= now) when += 24 * 60 * 60 * 1000;
   return when;
 }
 

@@ -1,4 +1,4 @@
-import {describe,it,expect,vi,beforeEach} from 'vitest';
+import {describe,it,expect,vi,beforeEach,afterEach} from 'vitest';
 const mocks=vi.hoisted(()=>({create:vi.fn(),send:vi.fn(),reset:vi.fn(),fetch:vi.fn(),search:vi.fn(),teams:vi.fn(),players:vi.fn(),averages:vi.fn()}));
 vi.mock('../../../src/services/agentic/orchestrator/sessionManager.js',()=>({createModelSession:mocks.create,sendToSessionWithRetry:mocks.send,resetSessionChat:mocks.reset}));
 vi.mock('../../../src/services/agentic/flashInvestigationPrompts.js',()=>({getFlashInvestigationPrompt:()=>''}));
@@ -13,7 +13,9 @@ const {renderEvidenceBriefing,COMPACT_RESEARCH_LIMITS}=await import('../../../sr
 const huge={factor:'First factor',keyFinding:'interpretation '+ 'I'.repeat(9000),numbers:'2026 dated facts '+ 'N'.repeat(9000),context:'three dated games '+ 'C'.repeat(9000),sources:'MLB_WEATHER token '+ 'S'.repeat(9000),uncertainties:'sample conflict '+ 'U'.repeat(9000)};
 const tool={toolCalls:[{function:{name:'fetch_stats',arguments:JSON.stringify({token:'MLB_WEATHER'})}}]};
 const options=(signal)=>({signal,gameTime:'2026-09-05T02:00:00Z',researchModel:'codex-gpt-5.6-luna'});
-beforeEach(()=>{vi.resetAllMocks();mocks.create.mockResolvedValue({provider:'codex-cli',tools:[]});});
+// These boundaries pin the text protocol; MCP mode (Sep 9 2026) is a native agent run and has its own test.
+beforeEach(()=>{vi.resetAllMocks();vi.stubEnv('GARY_RESEARCH_MCP','0');mocks.create.mockResolvedValue({provider:'codex-cli',tools:[]});});
+afterEach(()=>{vi.unstubAllEnvs();});
 describe('compact research carry-forward',()=>{
   it('uses the valid NBA defensive endpoint in the researcher and returns its named zero stats',async()=>{
     const team={id:1,full_name:'Home Team'};

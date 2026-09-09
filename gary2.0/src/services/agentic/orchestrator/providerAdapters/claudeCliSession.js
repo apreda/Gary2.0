@@ -26,7 +26,7 @@
  * a capped subscription degrades to pennies, never to a dark slate.
  */
 import { spawn } from 'child_process';
-import { mkdirSync } from 'fs';
+import { mkdirSync, writeFileSync, unlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { isCliTripped, recordCliTimeout, recordCliSuccess, trippedError } from './cliCircuitBreaker.js';
@@ -246,6 +246,45 @@ export async function sendToClaudeCliSession(session, message, options = {}) {
 }
 
 /**
+ * One agent run with Gary's tools served over MCP (founder, Sep 9 2026: "do
+ * the MCP upgrade ASAP"). The CLI spawns the local tools server, the model
+ * calls fetch_stats and friends with its own native tool calling, and the
+ * whole loop runs inside ONE process — no JSON-in-text protocol, no spawn per
+ * tool turn. The contract rides stdin (a research contract carries the
+ * whole scout report). Returns the final text; what was fetched is in the
+ * MCP log the caller named.
+ */
+export async function claudeCliAgentRun({ model = 'claude-sonnet-5', systemPrompt = '', prompt, mcp, effort = null, timeoutMs = CALL_TIMEOUT_MS, breakerKey = 'claude-research', maxTurns = 30, _costTracker = null }) {
+  const level = effort || process.env.GARY_RESEARCH_EFFORT || 'medium';
+  const cfgPath = join(neutralCwd(), `mcp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.json`);
+  writeFileSync(cfgPath, JSON.stringify({ mcpServers: { gary: { command: process.execPath, args: [mcp.serverPath], env: { GARY_MCP_CONTEXT: mcp.contextPath, GARY_MCP_LOG: mcp.logPath } } } }));
+  const allowed = (mcp.tools || []).map((t) => `mcp__gary__${t}`);
+  const args = ['-p', '--model', model, '--effort', CLI_EFFORT_LEVELS.has(level) ? level : 'medium', '--output-format', 'json',
+    '--mcp-config', cfgPath, '--strict-mcp-config', '--max-turns', String(maxTurns),
+    '--allowedTools', ...allowed, '--disallowedTools', BRAIN_DISALLOWED_TOOLS];
+  const body = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
+  const startTime = Date.now();
+  try {
+    const { code, stdout, stderr } = await runClaude(args, body, timeoutMs, breakerKey);
+    if (code !== 0) throw toError(code, stdout, stderr);
+    let data;
+    try { data = JSON.parse(stdout); } catch { throw toError(code, stdout, stderr); }
+    if (data.is_error) throw toError(code, data.result || stdout, stderr);
+    const usage = {
+      prompt_tokens: data.usage?.input_tokens || 0,
+      completion_tokens: data.usage?.output_tokens || 0,
+      total_tokens: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
+      cached_tokens: data.usage?.cache_read_input_tokens || 0,
+    };
+    if (_costTracker) _costTracker.addUsage(model, usage);
+    console.log(`[Agent Run] claude-cli ${model} (${level}, MCP tools: ${allowed.length}) finished in ${Date.now() - startTime}ms — ${data.num_turns ?? '?'} turns (subscription — $0 marginal)`);
+    return { text: typeof data.result === 'string' ? data.result : '', usage, turns: data.num_turns ?? null, raw: data };
+  } finally {
+    try { unlinkSync(cfgPath); } catch { /* best effort */ }
+  }
+}
+
+/**
  * Grounded web search on the subscription — WebSearch tool only, nothing else.
  * Same return contract as openaiWebSearch/groundedWebSearch:
  * { success, data, raw }. Defaults to Sonnet (its own weekly bucket) so news
@@ -270,4 +309,4 @@ export async function claudeCliWebSearch(prompt, options = {}) {
   }
 }
 
-export default { isClaudeCliModel, createClaudeCliSession, sendToClaudeCliSession, resetClaudeCliSessionChat, claudeCliWebSearch };
+export default { isClaudeCliModel, createClaudeCliSession, sendToClaudeCliSession, resetClaudeCliSessionChat, claudeCliWebSearch, claudeCliAgentRun };

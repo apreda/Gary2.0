@@ -341,6 +341,39 @@ export async function sendToCodexCliSession(session, message, options = {}) {
 }
 
 /**
+ * One agent run with Gary's tools served over MCP (founder, Sep 9 2026). The
+ * Codex CLI spawns the local tools server from the -c overrides below and
+ * the model calls the tools natively inside one exec; login routing and the
+ * breaker lane are the same as every other Codex turn. Returns the final
+ * text; what was fetched is in the MCP log the caller named.
+ */
+export async function codexCliAgentRun({ model = 'codex-gpt-5.6-luna', systemPrompt = '', prompt, mcp, effort = null, timeoutMs = CALL_TIMEOUT_MS, breakerKey = 'codex-research', signal, _costTracker = null }) {
+  const level = effort || process.env.GARY_RESEARCH_EFFORT || 'medium';
+  const toml = (s) => JSON.stringify(String(s)); // a TOML basic string; paths carry nothing JSON escapes differently
+  const args = [
+    'exec', '--skip-git-repo-check', '-s', 'read-only', '--json',
+    '-m', cliModelOf(model),
+    '-c', `model_reasoning_effort="${effortFor(level)}"`,
+    '-c', `mcp_servers.gary.command=${toml(process.execPath)}`,
+    '-c', `mcp_servers.gary.args=[${toml(mcp.serverPath)}]`,
+    '-c', `mcp_servers.gary.env={GARY_MCP_CONTEXT=${toml(mcp.contextPath)},GARY_MCP_LOG=${toml(mcp.logPath)}}`,
+    '-',
+  ];
+  const body = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
+  const startTime = Date.now();
+  const turn = await codexTurn(args, body, timeoutMs, breakerKey, requestSignal(signal));
+  const usage = {
+    prompt_tokens: turn.usage?.input_tokens || 0,
+    completion_tokens: (turn.usage?.output_tokens || 0) + (turn.usage?.reasoning_output_tokens || 0),
+    total_tokens: (turn.usage?.input_tokens || 0) + (turn.usage?.output_tokens || 0),
+    cached_tokens: turn.usage?.cached_input_tokens || 0,
+  };
+  if (_costTracker) _costTracker.addUsage(model, usage);
+  console.log(`[Agent Run] codex-cli ${cliModelOf(model)} (${effortFor(level)}, MCP tools) finished in ${Date.now() - startTime}ms (login "${codexHomeLabel(turn.home)}" — $0 marginal)`);
+  return { text: turn.finalText || turn.text || '', usage, home: turn.home, raw: turn.stdout };
+}
+
+/**
  * One-shot grounded web search on the GPT Pro subscription (founder GO,
  * Sep 1 2026: "not use Claude CLI at all... since codex is free too") —
  * the $0 first rung for every pick-lane search. Same { success, data, raw }
@@ -410,4 +443,4 @@ export async function codexCliOneShot(prompt, options = {}) {
   }
 }
 
-export default { isCodexCliModel, createCodexCliSession, sendToCodexCliSession, resetCodexCliSessionChat, codexCliWebSearch, codexCliOneShot };
+export default { isCodexCliModel, createCodexCliSession, sendToCodexCliSession, resetCodexCliSessionChat, codexCliWebSearch, codexCliOneShot, codexCliAgentRun };

@@ -4,6 +4,9 @@ import { createModelSession, sendToSessionWithRetry, resetSessionChat } from './
 import { getFlashInvestigationPrompt } from '../flashInvestigationPrompts.js';
 import { getMlbSeasonAwareness } from './spreadEvaluationFactors.js';
 import { GAME_RESEARCH_MODEL } from './orchestratorConfig.js';
+import { isCodexCliModel, codexCliAgentRun } from './providerAdapters/codexCliSession.js';
+import { isClaudeCliModel, claudeCliAgentRun } from './providerAdapters/claudeCliSession.js';
+import { GARY_MCP_SERVER_PATH, MCP_TOOL_NAMES, writeMcpContext, readMcpLog } from '../tools/mcp/mcpContext.js';
 import { NBA_RESEARCHER_RULES } from './nbaWinningEra.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, getESTDate, toESTDate } from '../../../utils/dateUtils.js';
@@ -272,14 +275,14 @@ Current preseason personnel, announced starter rest, rotations, injuries and coa
     const flashThinkingLevel = 'high';
     const flashMaxOutput = undefined; // use CONFIG.maxTokens default
 
-    const briefingSession = await createModelSession({
-      breakerLane: 'research',
-      signal: options.signal,
-      _costTracker: options._costTracker || null,
-      // EVERY game sport's research runs the Haiku tier (June engine, Aug 18
-      // 2026 — the founder's one-system law: no Gemini in any pick lane).
-      modelName: options.researchModel || GAME_RESEARCH_MODEL,
-      systemPrompt: `You are the research assistant for a sports bettor named Gary. Your job is to find the full context and nuance behind the stats — the stuff a human bettor would know but raw numbers don't show.
+    const researchModelName = options.researchModel || GAME_RESEARCH_MODEL;
+    // MCP MODE (founder, Sep 9 2026: "do the MCP upgrade ASAP"): on a CLI
+    // bridge every factor runs as ONE native agent process with Gary's tools
+    // served over MCP — the model's own tool calling, no JSON-in-text
+    // protocol, no spawn per tool turn. GARY_RESEARCH_MCP=0 restores the
+    // text protocol.
+    const mcpMode = process.env.GARY_RESEARCH_MCP !== '0' && (isCodexCliModel(researchModelName) || isClaudeCliModel(researchModelName));
+    const researchSystemPrompt = `You are the research assistant for a sports bettor named Gary. Your job is to find the full context and nuance behind the stats — the stuff a human bettor would know but raw numbers don't show.
 
 A stat by itself is just a number. Your job is to figure out WHY. An efficiency spike could be a real shift or 3 games against tanking teams. A player's absence could be devastating or already absorbed. A record could be misleading because of blowout variance. You find the story behind the data.
 
@@ -306,8 +309,17 @@ OUTPUT FORMAT — for each factor you investigate, write your findings as a JSON
 Do NOT make a pick or recommendation.
 
 ## SCOUT REPORT (this game's data — the baseline for every factor)
-${scoutReportContent}`,
-      tools: researchTools,
+${scoutReportContent}`;
+    const briefingSession = await createModelSession({
+      breakerLane: 'research',
+      signal: options.signal,
+      _costTracker: options._costTracker || null,
+      // EVERY game sport's research runs the Haiku tier (June engine, Aug 18
+      // 2026 — the founder's one-system law: no Gemini in any pick lane).
+      modelName: options.researchModel || GAME_RESEARCH_MODEL,
+      systemPrompt: researchSystemPrompt,
+      // MCP mode serves the tools through the CLI; the session carries none.
+      tools: mcpMode ? [] : researchTools,
       thinkingLevel: flashThinkingLevel,
       // Jul 8 cost audit: the scout report (~8K tokens) now lives INSIDE the
       // cached prefix (system prompt + tools) instead of riding every
@@ -382,6 +394,12 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
     let completedFactorCount = 0;
     console.log(`[Research Briefing] Factor worker concurrency: ${researchConcurrency}`);
 
+    // One context file per briefing; one call log per factor.
+    const researchToolNames = new Set((researchTools || []).map((t) => (t?.function || t)?.name).filter(Boolean));
+    const mcpContext = mcpMode
+      ? writeMcpContext({ sport, homeTeam, awayTeam, gameDate, options, groundingCap: isNHLSport ? 10 : 4, tools: MCP_TOOL_NAMES.filter((t) => researchToolNames.has(t)) })
+      : null;
+    if (mcpContext) console.log(`[Research Briefing] MCP mode: ${researchModelName} runs each factor as one native agent process (tools: ${mcpContext.tools.join(', ')})`);
     const factorResults = await mapResearchFactors(
       researchFactorPlan.factors,
       researchConcurrency,
@@ -417,6 +435,45 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
         { role: 'user', parts: [{ text: _seedUserText }] },
         { role: 'model', parts: [{ text: 'Understood. I have the scout report and all prior findings. Tell me the next factor to investigate and I will return exactly one JSON object.' }] }
       ]);
+
+      if (mcpMode && mcpContext) {
+        const factorLog = `${mcpContext.logPath}.${fi}.jsonl`;
+        const agentRun = isClaudeCliModel(researchModelName) ? claudeCliAgentRun : codexCliAgentRun;
+        const run = await awaitResearch(() => agentRun({
+          model: researchModelName,
+          systemPrompt: researchSystemPrompt,
+          prompt: `${_seedUserText}\n\n---\n\n${factorPrompt}`,
+          mcp: { serverPath: GARY_MCP_SERVER_PATH, contextPath: mcpContext.contextPath, logPath: factorLog, tools: mcpContext.tools },
+          signal: options.signal,
+          _costTracker: options._costTracker || null,
+        }));
+        for (const entry of readMcpLog(factorLog)) {
+          if (entry.tool === 'fetch_narrative_context') {
+            groundingCalls++;
+            if (options._costTracker) options._costTracker.addGroundingCall();
+            continue;
+          }
+          if (!entry.token || entry.quality === 'cached' || entry.quality === 'refused') continue;
+          totalToolCalls++;
+          calledTokens.push({ token: entry.token, quality: entry.quality === 'available' ? 'available' : 'unavailable' });
+        }
+        const content = String(run.text || '').trim();
+        if (!content) return null;
+        try {
+          const factorObj = JSON.parse(content.match(/\{[\s\S]*\}/)?.[0] || content);
+          factorObj.factor = factorObj.factor || factorObj.name || factorObj.title || factorName;
+          completedFactorFindings[fi] = factorObj;
+          completedFactorCount += 1;
+          console.log(`[Research Briefing] ✓ Factor "${factorObj.factor}" complete (${completedFactorCount}/${allFactorNames.length}, MCP agent run)`);
+          return factorObj;
+        } catch {
+          const proseFactor = { factor: factorName, keyFinding: content.slice(0, 200), numbers: '', context: content };
+          completedFactorFindings[fi] = proseFactor;
+          completedFactorCount += 1;
+          console.log(`[Research Briefing] ✓ Factor "${factorName}" complete (prose, ${completedFactorCount}/${allFactorNames.length}, MCP agent run)`);
+          return proseFactor;
+        }
+      }
 
       // Flash investigates this factor — may take multiple iterations for tool calls
       let currentMessage = factorPrompt;
