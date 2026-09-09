@@ -74,7 +74,10 @@ export const PROPS_DESK_MODEL = process.env.GARY_PROPS_MODEL_OVERRIDE || 'codex-
 // of Sep 9. The Claude CLI bridge (his subscription, $0 marginal) is now the
 // rung right after the codex brains and before the metered API rungs —
 // Fable 5.1 at xhigh. It fires only when both codex brains fail a whole game.
-export const DESK_FALLBACK_MODELS = ['codex-gpt-5.6-sol', 'claude-fable-5-1', 'anthropic-claude-opus-5', 'anthropic-claude-sonnet-5'].filter((m) => m !== GAME_PICK_MODEL);
+// Opus 5 on the metered API left the cascade Sep 9 2026 (founder funding the
+// key): one tooled game on it cost $9.39 on Sep 4, and Sonnet 5 API is the
+// funded last rung at a fifth of the price.
+export const DESK_FALLBACK_MODELS = ['codex-gpt-5.6-sol', 'claude-fable-5-1', 'anthropic-claude-sonnet-5'].filter((m) => m !== GAME_PICK_MODEL);
 
 // $ per 1M tokens [input, output] — desk-lane cost logging only, not billing.
 // Bridge entries are $0 (no marginal token cost on a subscription); the
