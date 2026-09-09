@@ -52,3 +52,9 @@ Plain and spoken, the way a fan says it at a bar. Gary is a character, never an 
 
 ## 9. Where the work lives
 Canvas: https://claude.ai/code/artifact/4d4ffb87-e082-4401-b98b-79f8ae3f828b (page 1 feed format, page 2 install ads, page 3 NFL tonight). Sources for the Sep 9 set: `GaryMarketing/ads/2026-09-09-x-ads/` (build scripts, crops, subset fonts, canvas.json). Re-seed with the design canvas helper from a fresh session; the scratchpad copy is disposable.
+
+## 10. Rendering and posting (Sep 9 2026)
+- Artboards: `python3 build4.py && python3 build5.py` (and `build6.py` for the NFL board with the live card) in `GaryMarketing/ads/2026-09-09-x-ads/` writes the `.dc.html` files next to the assets.
+- Render: `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --disable-gpu --hide-scrollbars --window-size=1080,1350 --screenshot=out/<Board>.png "file://<dir>/<Board>.dc.html"`. Renders live in `out/`.
+- Post: the `post-tweet-media` edge function, body `{ text, images_base64: [<raw base64 png>] }`, header `Authorization: Bearer <service role key>`. The App Store link (`apps.apple.com/us/app/gary-ai/id6751238914`) at the end of the text renders the app card.
+- Posted Sep 9: NFL tonight (live Seahawks card), Fade the bear, the graded board, He had it. Held: "5 PM" (the phone header shows the losing L7 record and a 12:46 clock under a 5 PM headline; Adam's call).
