@@ -8,14 +8,23 @@
 
 import { codexCliWebSearch } from '../../orchestrator/providerAdapters/codexCliSession.js';
 import { anthropicWebSearchRaw } from './anthropicWebSearch.js';
+import { claudeCliWebSearch } from '../../orchestrator/providerAdapters/claudeCliSession.js';
+import { takeMeteredSearch } from './meteredSearchBudget.js';
 
-// Grounded transport (Sep 1 2026 — founder: Claude CLI OUT of the pick
-// lane): codex GPT Pro bridge first ($0), Anthropic server web-search
-// second. Prompts here carry their own date anchors, so no extra wrapping.
-// Returns text or null.
+// Grounded transport: codex bridge first ($0); with GARY_GROUNDING_VIA_CLAUDE=1
+// the Claude subscription bridge second ($0); the Anthropic server web-search
+// API last and only from the metered budget (GARY_METERED_SEARCH_CAP, default
+// 0 — Sep 9 2026, founder: the key pays for research, nothing else). Prompts
+// here carry their own date anchors, so no extra wrapping. Returns text or null.
 async function groundedPropsSearch(prompt, { maxTokens = 3000 } = {}) {
   const viaBridge = await codexCliWebSearch(prompt, { timeoutMs: 8 * 60 * 1000 });
   if (viaBridge.success && viaBridge.data) return viaBridge.data;
+  if (String(process.env.GARY_GROUNDING_VIA_CLAUDE || '') === '1') {
+    console.warn('[Props Search] codex bridge empty/failed — trying the Claude bridge');
+    const viaClaude = await claudeCliWebSearch(prompt, { timeoutMs: 5 * 60 * 1000 });
+    if (viaClaude.success && viaClaude.data) return viaClaude.data;
+  }
+  if (!takeMeteredSearch('props search')) return null;
   console.warn('[Props Search] codex bridge empty/failed — trying Anthropic server web search');
   const viaApi = await anthropicWebSearchRaw(prompt, { maxTokens });
   return viaApi.success ? viaApi.data : null;

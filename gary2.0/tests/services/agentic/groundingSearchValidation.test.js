@@ -4,6 +4,9 @@ import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js', () => ({ codexCliWebSearch: vi.fn() }));
 vi.mock('../../../src/services/agentic/scoutReport/shared/anthropicWebSearch.js', () => ({ anthropicWebSearchRaw: vi.fn() }));
+vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/claudeCliSession.js', () => ({ claudeCliWebSearch: vi.fn() }));
+import { claudeCliWebSearch } from '../../../src/services/agentic/orchestrator/providerAdapters/claudeCliSession.js';
+import { _resetMeteredSearchBudget } from '../../../src/services/agentic/scoutReport/shared/meteredSearchBudget.js';
 import { codexCliWebSearch } from '../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js';
 import { anthropicWebSearchRaw } from '../../../src/services/agentic/scoutReport/shared/anthropicWebSearch.js';
 import { groundingSearch, groundedWebSearch } from '../../../src/services/agentic/scoutReport/shared/grounding.js';
@@ -13,8 +16,34 @@ const fallback = 'Seattle published the current roster transaction on September 
 beforeEach(() => {
   codexCliWebSearch.mockReset().mockResolvedValue({ success: true, data: clarification });
   anthropicWebSearchRaw.mockReset().mockResolvedValue({ success: true, data: fallback });
+  claudeCliWebSearch.mockReset().mockResolvedValue({ success: false, data: '' });
+  delete process.env.GARY_GROUNDING_VIA_CLAUDE;
+  // The metered rung is what these cases exercise; the default budget is 0.
+  process.env.GARY_METERED_SEARCH_CAP = '-1';
+  _resetMeteredSearchBudget();
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => { vi.restoreAllMocks(); delete process.env.GARY_METERED_SEARCH_CAP; delete process.env.GARY_GROUNDING_VIA_CLAUDE; });
+
+describe('the press never bills the key on its own (Sep 9 2026)', () => {
+  it('with the default budget the metered API is not bought when the codex bridge fails', async () => {
+    delete process.env.GARY_METERED_SEARCH_CAP;
+    _resetMeteredSearchBudget();
+    codexCliWebSearch.mockResolvedValue({ success: false, data: '', error: 'capped' });
+    const result = await groundedWebSearch('Seahawks roster news', { sport: 'NFL' });
+    expect(result.success).toBe(false);
+    expect(anthropicWebSearchRaw).not.toHaveBeenCalled();
+  });
+  it('the Claude bridge answers before the metered API when GARY_GROUNDING_VIA_CLAUDE=1', async () => {
+    process.env.GARY_GROUNDING_VIA_CLAUDE = '1';
+    codexCliWebSearch.mockResolvedValue({ success: false, data: '', error: 'capped' });
+    claudeCliWebSearch.mockResolvedValue({ success: true, data: fallback });
+    const result = await groundedWebSearch('Seahawks roster news', { sport: 'NFL' });
+    expect(result.success).toBe(true);
+    expect(result.data).toContain('September 8, 2026');
+    expect(claudeCliWebSearch).toHaveBeenCalledTimes(1);
+    expect(anthropicWebSearchRaw).not.toHaveBeenCalled();
+  });
+});
 
 describe('grounding rejects completed non-answers before they become research', () => {
   it('uses the existing Anthropic fallback when Codex asks for the already supplied task', async () => {

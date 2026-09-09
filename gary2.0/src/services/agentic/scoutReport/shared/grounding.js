@@ -13,6 +13,8 @@ import { seasonForSport, findTeamInStandings, sportToBdlKey } from './utilities.
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { codexCliWebSearch } from '../../orchestrator/providerAdapters/codexCliSession.js';
 import { anthropicWebSearchRaw } from './anthropicWebSearch.js';
+import { claudeCliWebSearch } from '../../orchestrator/providerAdapters/claudeCliSession.js';
+import { takeMeteredSearch } from './meteredSearchBudget.js';
 import { searchResponseProblem } from '../../searchResponseValidation.js';
 import { createHash } from 'crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync, statSync } from 'fs';
@@ -314,17 +316,23 @@ ${snapshot.join('\n')}
 }
 
 /**
- * Two-rail grounded transport (Sep 1 2026 — founder: Claude CLI OUT of the
- * pick lane, "use codex since it's free too"): the GPT Pro codex bridge
- * first ($0), the Anthropic server web-search API second (metered, rare —
- * never the Claude subscription). Both take a full prompt and return
- * { success, data }.
+ * Grounded transport: the codex bridge first ($0); with
+ * GARY_GROUNDING_VIA_CLAUDE=1 the Claude subscription bridge second ($0);
+ * the Anthropic server web-search API last, and only from the per-process
+ * metered budget (GARY_METERED_SEARCH_CAP, default 0 — Sep 9 2026, founder:
+ * the key pays for research, nothing else). All return { success, data }.
  */
 async function groundedTransport(prompt, options = {}) {
   const viaBridge = await codexCliWebSearch(prompt, {
     timeoutMs: options.timeoutMs ?? 8 * 60 * 1000,
   });
   if (viaBridge.success && !searchResponseProblem(viaBridge.data)) return viaBridge;
+  if (String(process.env.GARY_GROUNDING_VIA_CLAUDE || '') === '1') {
+    console.warn('[Grounding Search] codex bridge empty/failed — trying the Claude bridge');
+    const viaClaude = await claudeCliWebSearch(prompt, { timeoutMs: options.timeoutMs ?? 5 * 60 * 1000 });
+    if (viaClaude.success && !searchResponseProblem(viaClaude.data)) return viaClaude;
+  }
+  if (!takeMeteredSearch('grounding search')) return { success: false, data: '', error: 'metered search budget spent for this process' };
   console.warn('[Grounding Search] codex bridge empty/failed — trying Anthropic server web search');
   const fallback = await anthropicWebSearchRaw(prompt, {
     maxTokens: Math.max(options.maxTokens ?? 2000, 2000),
