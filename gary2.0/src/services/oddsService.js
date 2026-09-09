@@ -122,8 +122,9 @@ const VENDOR_PRIORITY = [
   'fanatics', 'betway', 'ballybet', 'betparx', 'rebet'
 ];
 
-// Filter blocked vendors from a bookmakers array
-const filterBlockedVendors = (bookmakers) => {
+// Filter blocked vendors from a bookmakers array (exported for the line
+// watch, which records boards without passing through getUpcomingGames).
+export const filterBlockedVendors = (bookmakers) => {
   if (!Array.isArray(bookmakers)) return [];
   return bookmakers.filter(b => !BLOCKED_VENDORS.has(b.key?.toLowerCase()));
 };

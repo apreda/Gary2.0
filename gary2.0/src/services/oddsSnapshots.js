@@ -32,13 +32,19 @@ function boardOf(g) {
     spread_home_odds: num(g.spread_home_odds),
     spread_away: num(g.spread_away),
     spread_away_odds: num(g.spread_away_odds),
+    // The total rides too (Sep 9 2026 — the fan's weather-and-pace story lives
+    // on the total; the ladder under the pick card prints all three markets).
+    total: num(g.total),
+    total_over_odds: num(g.total_over_odds),
+    total_under_odds: num(g.total_under_odds),
     // The book the numbers came from: two books' prices are not a line
     // move (the odds service can legitimately switch vendors between
     // fetches), so history compares like with like.
     line_vendor: g.line_vendor ? String(g.line_vendor).toLowerCase() : null,
   };
 }
-const BOARD_KEYS = ['moneyline_home', 'moneyline_away', 'spread_home', 'spread_home_odds', 'spread_away', 'spread_away_odds', 'line_vendor'];
+const BOARD_KEYS = ['moneyline_home', 'moneyline_away', 'spread_home', 'spread_home_odds', 'spread_away', 'spread_away_odds', 'total', 'total_over_odds', 'total_under_odds', 'line_vendor'];
+const BOARD_COLUMNS = BOARD_KEYS.join(', ');
 const sameBoard = (a, b) => a && b && BOARD_KEYS.every((k) => (a[k] ?? null) === (b[k] ?? null));
 
 const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -63,7 +69,7 @@ export function boardsOfGame(g) {
   for (const bk of Array.isArray(g.bookmakers) ? g.bookmakers : []) {
     const vendor = bk?.key ? String(bk.key).toLowerCase() : null;
     if (!vendor || seen.has(vendor)) continue;
-    const board = { moneyline_home: null, moneyline_away: null, spread_home: null, spread_home_odds: null, spread_away: null, spread_away_odds: null, line_vendor: vendor };
+    const board = { moneyline_home: null, moneyline_away: null, spread_home: null, spread_home_odds: null, spread_away: null, spread_away_odds: null, total: null, total_over_odds: null, total_under_odds: null, line_vendor: vendor };
     const sideOf = (name) => {
       const n = norm(name);
       if (!n) return null;
@@ -78,8 +84,15 @@ export function boardsOfGame(g) {
         if (m.key === 'h2h') board[`moneyline_${side}`] = num(o.price);
         if (m.key === 'spreads') { board[`spread_${side}`] = num(o.point); board[`spread_${side}_odds`] = num(o.price); }
       }
+      if (m.key === 'totals') {
+        for (const o of Array.isArray(m?.outcomes) ? m.outcomes : []) {
+          const name = String(o?.name || '').toLowerCase();
+          if (name === 'over') { board.total = num(o.point); board.total_over_odds = num(o.price); }
+          if (name === 'under') { if (board.total == null) board.total = num(o.point); board.total_under_odds = num(o.price); }
+        }
+      }
     }
-    if (board.moneyline_home == null && board.moneyline_away == null && board.spread_home_odds == null) continue;
+    if (board.moneyline_home == null && board.moneyline_away == null && board.spread_home_odds == null && board.total == null) continue;
     seen.add(vendor);
     out.push(board);
   }
@@ -93,16 +106,20 @@ export async function recordOddsSnapshots(sport, games) {
     const rows = games
       .flatMap((g) => {
         const gameId = String(g.bdl_game_id ?? g.id ?? '');
-        const gameDate = etDate(g.start_time || g.commence_time);
+        const start = g.start_time || g.commence_time;
+        const gameDate = etDate(start);
         if (!gameId || !gameDate) return [];
-        return boardsOfGame(g).map((board) => ({ sport, game_date: gameDate, game_id: gameId, home_team: String(g.home_team || ''), away_team: String(g.away_team || ''), ...board }));
+        // The kickoff rides on every row so a ladder can name its close (the
+        // last rung before the game started) without a second table.
+        const commence = start ? new Date(start).toISOString() : null;
+        return boardsOfGame(g).map((board) => ({ sport, game_date: gameDate, game_id: gameId, home_team: String(g.home_team || ''), away_team: String(g.away_team || ''), commence_time: commence, ...board }));
       })
       .filter(Boolean);
     if (!rows.length) return 0;
     const dates = [...new Set(rows.map((r) => r.game_date))];
     const { data: latest } = await (await db())
       .from('odds_snapshots')
-      .select('game_id, game_date, moneyline_home, moneyline_away, spread_home, spread_home_odds, spread_away, spread_away_odds, line_vendor, seen_at')
+      .select(`game_id, game_date, ${BOARD_COLUMNS}, seen_at`)
       .eq('sport', sport)
       .in('game_date', dates)
       .order('seen_at', { ascending: false });
@@ -130,7 +147,7 @@ export async function getOddsHistory(sport, gameDate, gameId, vendor = null) {
   try {
     const { data, error } = await (await db())
       .from('odds_snapshots')
-      .select('moneyline_home, moneyline_away, spread_home, spread_home_odds, spread_away, spread_away_odds, line_vendor, seen_at')
+      .select(`${BOARD_COLUMNS}, seen_at`)
       .eq('sport', sport)
       .eq('game_date', gameDate)
       .eq('game_id', String(gameId))

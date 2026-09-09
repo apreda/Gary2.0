@@ -218,6 +218,35 @@ export const ballDontLieOddsService = {
   },
 
   /**
+   * THE LINE WATCH (Sep 9 2026): boards for games the caller already holds
+   * (an NFL or NCAAF slate list), one odds request per hundred ids and no
+   * game download — the week-long ladder cannot afford a game fetch per poll
+   * at the account-wide BDL gate. NCAAF callers pass FBS-classified games;
+   * this path adds no classification of its own.
+   */
+  async getGamesWithOddsByIds(sportKey, games) {
+    const isNfl = sportKey === 'americanfootball_nfl';
+    const isNcaaf = sportKey === 'americanfootball_ncaaf';
+    if (!isNfl && !isNcaaf) throw new Error(`getGamesWithOddsByIds: unsupported sport ${sportKey}`);
+    const list = (Array.isArray(games) ? games : []).filter((g) => g?.id != null);
+    if (list.length === 0) return [];
+    const ids = [...new Set(list.map((g) => g.id))];
+    const rows = [];
+    for (let index = 0; index < ids.length; index += 100) {
+      const page = await ballDontLieService.getOddsV2({ game_ids: ids.slice(index, index + 100) }, isNfl ? 'nfl' : 'ncaaf');
+      if (Array.isArray(page)) rows.push(...page);
+    }
+    const byGame = new Map();
+    for (const row of rows) {
+      const key = String(row?.game_id);
+      if (!byGame.has(key)) byGame.set(key, []);
+      byGame.get(key).push(row);
+    }
+    const normalize = isNfl ? normalizeExactNflGame : normalizeExactNcaafGame;
+    return list.map((g) => normalize(g, byGame.get(String(g.id)) || [])).filter(Boolean);
+  },
+
+  /**
    * Scheduler-only NCAAF fast path. Resolve one canonical provider game and
    * its game-id-scoped odds, while retaining the same fail-closed FBS policy
    * as full-slate discovery.

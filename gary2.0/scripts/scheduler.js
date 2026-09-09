@@ -285,6 +285,28 @@ function startClosingCapture() {
   closingTimer.unref();
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// THE LINE WATCH (founder, Sep 9 2026): the week's NFL/NCAAF boards, polled
+// through the week so the ladder under the pick card and The Hub's movers
+// board have real rungs. Cadence and sources: src/services/lineWatch.js.
+// GARY_LINE_WATCH=off disables it without a code change.
+// ─────────────────────────────────────────────────────────────────────────
+let lineWatchTimer = null;
+function startLineWatch() {
+  if (lineWatchTimer || String(process.env.GARY_LINE_WATCH || 'on').toLowerCase() === 'off') return;
+  const tick = async () => {
+    try {
+      const { runLineWatchTick } = await import('../src/services/lineWatch.js');
+      await runLineWatchTick({ now: new Date(), log });
+    } catch (e) {
+      log(`⚠️ line watch tick failed (${e.message})`);
+    }
+  };
+  setTimeout(() => { tick(); }, 20_000).unref();
+  lineWatchTimer = setInterval(() => { tick(); }, 60_000);
+  lineWatchTimer.unref();
+}
+
 // A 24/7 daemon must SURVIVE transient network blips. Waking from sleep often
 // hits the network before DNS is ready — `getaddrinfo ENOTFOUND ...supabase.co`
 // — and on Jun 21 2026 exactly that crashed the scheduler mid-morning (main()'s
@@ -1746,6 +1768,7 @@ async function sleepUntilPlanTime() {
 async function main() {
   startHeartbeat();
   startClosingCapture();
+  startLineWatch();
   const args = process.argv.slice(2);
 
   if (args.includes('--now')) {
