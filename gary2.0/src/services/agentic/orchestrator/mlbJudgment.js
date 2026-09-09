@@ -43,18 +43,59 @@ function strings(value, names, label) {
   for (const name of names) if (!string(value[name])) fail(`${label}.${name} must be nonempty text`);
 }
 
+/**
+ * The first complete top-level JSON object in a reply — the answer a brain
+ * wrapped in a sentence or a fenced block (Sep 9 2026: the Claude bridge's
+ * first MLB judgment on the cascade came back as valid JSON inside prose and
+ * the whole game fell through to the unfunded API rungs). Strings and
+ * escapes are honoured so a brace inside a quoted view cannot end the object
+ * early. Null when no complete object exists.
+ */
+export function firstJsonObject(text) {
+  const s = String(text ?? '');
+  const start = s.indexOf('{');
+  if (start < 0) return null;
+  let depth = 0;
+  let inString = false;
+  for (let i = start; i < s.length; i += 1) {
+    const ch = s[i];
+    if (inString) {
+      if (ch === '\\') i += 1;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '{') depth += 1;
+    else if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) return s.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
 function parse(answer, phase) {
   const raw = typeof answer === 'string' ? answer : answer?.text;
   if (typeof raw !== 'string') fail(`${phase} returned no text`);
   const text = raw.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/i, '$1');
+  let result;
   try {
-    const result = JSON.parse(text);
-    if (!object(result)) fail(`${phase} must return an object`);
-    return result;
-  } catch (error) {
-    if (error.code === 'mlb_judgment_invalid') throw error;
-    fail(`${phase} returned invalid JSON`);
+    result = JSON.parse(text);
+  } catch {
+    // Not bare JSON: take the one object the reply carries, if it carries one.
+    const embedded = firstJsonObject(text);
+    try {
+      result = embedded == null ? undefined : JSON.parse(embedded);
+    } catch {
+      result = undefined;
+    }
+    if (result === undefined) {
+      console.error(`[MLB Judgment] ${phase} reply was not JSON (${text.length} chars): ${text.slice(0, 300).replace(/\s+/g, ' ')}`);
+      fail(`${phase} returned invalid JSON`);
+    }
   }
+  if (!object(result)) fail(`${phase} must return an object`);
+  return result;
 }
 
 /** Preserve the existing pre-read game kind and exact bookmaker ticket pairs. */
