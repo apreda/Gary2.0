@@ -684,6 +684,8 @@ struct HubView: View {
         Binding(get: { openBeats }, set: { openBeats = $0 })
     }
     @State private var researchChartSignal: Signal?
+    /// THE BOARD IS MOVING → THE LADDER for the tapped game (Sep 9 2026).
+    @State private var ladderSel: LineLadderSel?
     /// Floating section nav — the trailing index button pops the section
     /// list so everything is one tap away (founder, Jul 4).
     @State private var sectionNavOpen = false
@@ -1606,6 +1608,16 @@ struct HubView: View {
                     gameSheet = HubGameSel(row: r)
                 }
             }
+            // THE BOARD IS MOVING (founder, Sep 9 2026): the league's lines since
+            // they opened — the week for football, today for baseball — sorted by
+            // the size of the move and refreshed every minute. Numbers and times
+            // only; store-safe builds omit it, as they do the line-move wire.
+            if !AppFlags.storeSafe, let sportKey = LineSport.key(forLeague: sel.label) {
+                HubLineMoversBoard(league: sel.label, sportKey: sportKey) { story in
+                    ladderSel = LineLadderSel(story: story, sportKey: sportKey)
+                }
+                .id("movers")
+            }
             if boardFetchFailed {
                 Text(slateRows.isEmpty ? "Game schedule couldn't load. Pull down to retry."
                                       : "Showing the last available schedule. Pull down to retry.")
@@ -1687,6 +1699,9 @@ struct HubView: View {
                 researchChartSignal = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { openSignal(signal) }
             }
+        }
+        .sheet(item: $ladderSel) { sel in
+            LineLadderLoader(sel: sel)
         }
         .overlay(alignment: .bottomTrailing) {
             if !searchOpen, didLoad, !jumpItems.isEmpty, !showsFantasy, mastheadOffscreen,

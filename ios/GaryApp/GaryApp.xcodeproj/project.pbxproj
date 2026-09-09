@@ -17,6 +17,8 @@
 		B70820260908400000000001 /* PushRegistrationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70820260908400000000002 /* PushRegistrationCoordinator.swift */; };
 		BFE709072026C00000000001 /* HubFrontPageSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE709072026C00000000002 /* HubFrontPageSelection.swift */; };
 		BFE709092026D00000000001 /* HubResearchDashboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE709092026D00000000002 /* HubResearchDashboard.swift */; };
+		BFE709092026D00000000003 /* LineLadder.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE709092026D00000000004 /* LineLadder.swift */; };
+		BFE709092026D00000000005 /* HubLineMovers.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE709092026D00000000006 /* HubLineMovers.swift */; };
 		BFE709072026D00000000001 /* HubStoryIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE709072026D00000000002 /* HubStoryIdentity.swift */; };
 		BFE709072026B00000000001 /* FantasyBriefingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE709072026B00000000002 /* FantasyBriefingView.swift */; };
 		BFE709072026A00000000001 /* FantasyBriefing.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFE709072026A00000000002 /* FantasyBriefing.swift */; };
@@ -108,6 +110,8 @@
 		B70820260908400000000002 /* PushRegistrationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushRegistrationCoordinator.swift; sourceTree = "<group>"; };
 		BFE709072026C00000000002 /* HubFrontPageSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubFrontPageSelection.swift; sourceTree = "<group>"; };
 		BFE709092026D00000000002 /* HubResearchDashboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubResearchDashboard.swift; sourceTree = "<group>"; };
+		BFE709092026D00000000004 /* LineLadder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineLadder.swift; sourceTree = "<group>"; };
+		BFE709092026D00000000006 /* HubLineMovers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubLineMovers.swift; sourceTree = "<group>"; };
 		BFE709072026D00000000002 /* HubStoryIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubStoryIdentity.swift; sourceTree = "<group>"; };
 		BFE709072026B00000000002 /* FantasyBriefingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FantasyBriefingView.swift; sourceTree = "<group>"; };
 		BFE709072026A00000000002 /* FantasyBriefing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FantasyBriefing.swift; sourceTree = "<group>"; };
@@ -243,6 +247,8 @@
 				A905BCA4B53041AB98CD0002 /* HubCardIdentity.swift */,
 				BFE709072026C00000000002 /* HubFrontPageSelection.swift */,
 				BFE709092026D00000000002 /* HubResearchDashboard.swift */,
+				BFE709092026D00000000004 /* LineLadder.swift */,
+				BFE709092026D00000000006 /* HubLineMovers.swift */,
 				BFE709072026D00000000002 /* HubStoryIdentity.swift */,
 				F04B411A8C0D4A2B9E7110A2 /* GaryMock.swift */,
 				F04B411A8C0D4A2B9E7110A4 /* GaryMockFixture.swift */,
@@ -469,6 +475,8 @@
 				A905BCA4B53041AB98CD0001 /* HubCardIdentity.swift in Sources */,
 				BFE709072026C00000000001 /* HubFrontPageSelection.swift in Sources */,
 				BFE709092026D00000000001 /* HubResearchDashboard.swift in Sources */,
+				BFE709092026D00000000003 /* LineLadder.swift in Sources */,
+				BFE709092026D00000000005 /* HubLineMovers.swift in Sources */,
 				BFE709072026D00000000001 /* HubStoryIdentity.swift in Sources */,
 				F04B411A8C0D4A2B9E7110A1 /* GaryMock.swift in Sources */,
 				F04B411A8C0D4A2B9E7110A3 /* GaryMockFixture.swift in Sources */,

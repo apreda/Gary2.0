@@ -123,8 +123,11 @@ struct FootballGameIntelView: View {
     private var injuryWireRows: [Signal] { morningRows([.injury]) }
     /// The league's official report for this game (footballPracticeReport).
     private var practiceRows: [Signal] { morningRows([.practiceReport]) }
+    /// The rail's lanes: pace, turnovers, explosives, the trenches, and since
+    /// Sep 9 2026 the pass rush, the red zone and the coaching edges — on a
+    /// Week 1 slate the first four alone left the rail one row deep.
     private var numberRailRows: [Signal] {
-        morningRows([.paceScript, .turnoverEdge, .explosivePlay, .trenches], cap: 4)
+        morningRows([.paceScript, .turnoverEdge, .explosivePlay, .trenches, .passRush, .redZone, .coaching], cap: 4)
     }
 
     /// One line per team off the wire: today's injury first, else today's
@@ -380,8 +383,40 @@ struct FootballGameIntelView: View {
         }
     }
 
+    // ── THE LINE (founder, Sep 9 2026) ───────────────────────────────────
+    // Where this game's line opened and where it is now, one book, with
+    // Gary's own number as a rung — the module under the pick card. Reads the
+    // odds ledger by the exact provider game id; absent until it has rungs.
+    private var lineKickoff: Date? {
+        [row?.commence_time, primaryPick?.commence_time].compactMap { $0 }.compactMap(LineClock.parse).first
+    }
+    private var lineGaryAnchor: LineGaryAnchor? {
+        if let meta = numberSignal?.afterGary,
+           let label = meta.pick_label?.trimmingCharacters(in: .whitespacesAndNewlines), !label.isEmpty {
+            var text = label.uppercased()
+            if let line = meta.published?.line { text += " \(LineText.spread(line))" }
+            if let odds = meta.published?.odds { text += " (\(LineText.american(Int(odds.rounded()))))" }
+            return LineGaryAnchor(label: text, postedAt: LineClock.parse(meta.published_at))
+        }
+        if let text = primaryPick?.pick?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
+            return LineGaryAnchor(label: text, postedAt: nil)
+        }
+        return nil
+    }
+    @ViewBuilder private var lineLadderModule: some View {
+        if let sportKey = LineSport.key(forLeague: normalizedLeague),
+           let gameID = exactGameID ?? row?.bdl_game_id.map(String.init),
+           let date = gameDate {
+            LineLadderCard(sportKey: sportKey, gameDate: date, gameID: gameID, league: normalizedLeague,
+                           awayAbbr: scoreboardTeamAbbreviation(sides.away, stored: laneAbbreviation(home: false), league: normalizedLeague),
+                           homeAbbr: scoreboardTeamAbbreviation(sides.home, stored: laneAbbreviation(home: true), league: normalizedLeague),
+                           kickoff: lineKickoff, gary: lineGaryAnchor)
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            lineLadderModule
             if let take = quarterbackTake, quarterbackPlate(home: false) != nil || quarterbackPlate(home: true) != nil {
                 ScoutArmsLayout(title: "THE QUARTERBACKS", take: take,
                                 left: quarterbackPlate(home: false), right: quarterbackPlate(home: true))
