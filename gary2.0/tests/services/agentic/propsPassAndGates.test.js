@@ -119,7 +119,7 @@ describe('F-9 REVERSED (Jul 8 cost audit): props run on Tier 2', () => {
   // cheap tier (PROPS_DESK_MODEL since Jul 22 2026), never the big brain.
   it('props run the desk brain on PROPS_DESK_MODEL — the orchestrator never selects a props model', () => {
     const brain = src('src/services/pickdesk/propsBrain.js');
-    expect(brain).toContain('const cascade = [...new Set([PROPS_DESK_MODEL, ...DESK_FALLBACK_MODELS, LEGACY_BRAIN_FALLBACK])];');
+    expect(brain).toContain('const cascade = PROPS_CASCADE;'); // bridge-only props (Sep 9 2026)
     expect(src('src/services/agentic/orchestrator/agentLoop.js')).not.toContain('PROPS_DESK_MODEL');
   });
 });

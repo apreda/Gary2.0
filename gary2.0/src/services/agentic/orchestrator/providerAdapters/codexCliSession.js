@@ -255,7 +255,9 @@ export async function createCodexCliSession(options = {}) {
     modelName,
     thinkingLevel,
     breakerKey,
-    codexHome: null, // the login that answered turn one; resume is pinned to it
+    // A lane may prefer a login (props ride the newest one); turn one takes
+    // it when it has allowance, then the thread is pinned to whoever answered.
+    codexHome: options.preferredCodexHome || null,
     // Tools mode: the catalog rides the first message with the system prompt.
     _systemPrompt: toolList ? `${systemPrompt}\n\n${renderCodexToolProtocol(toolList)}` : systemPrompt,
     tools: toolList,

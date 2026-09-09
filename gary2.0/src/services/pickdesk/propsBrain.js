@@ -22,7 +22,15 @@ import path from 'path';
 import { buildMlbDesk, fetchTonightsGameCall } from './mlbDesk.js';
 import { buildPropSheets } from './propSheets.js';
 import { screenBoard, lineupRates, pitcherProfile } from './propModel.js';
-import { PROPS_DESK_MODEL, LEGACY_BRAIN_FALLBACK, DESK_FALLBACK_MODELS, DESK_COST_PER_M } from '../agentic/orchestrator/orchestratorConfig.js';
+import { PROPS_DESK_MODEL, PROPS_CASCADE, PROPS_EFFORT, DESK_COST_PER_M } from '../agentic/orchestrator/orchestratorConfig.js';
+import { discoverCodexHomes } from '../agentic/orchestrator/providerAdapters/codexHomes.js';
+
+/** The Codex login the props lane prefers: GARY_PROPS_CODEX_HOME, else the newest login found. */
+function propsCodexHome() {
+  if (process.env.GARY_PROPS_CODEX_HOME) return process.env.GARY_PROPS_CODEX_HOME;
+  const homes = discoverCodexHomes();
+  return homes.length > 1 ? homes[homes.length - 1] : null;
+}
 import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { normalizePropBetDirection } from '../agentic/propsSharedUtils.js';
 import { auditPickRationale, auditCountClaims, buildStatAuditRetryMessage } from '../agentic/orchestrator/statAudit.js';
@@ -519,7 +527,9 @@ export async function runPropsDeskBrain({ systemPrompt, userMessage, corpus, rec
       modelName,
       systemPrompt,
       tools: [],
-      thinkingLevel: 'xhigh',
+      // A formula's writer, not the pick brain: medium by default (GARY_PROPS_EFFORT).
+      thinkingLevel: PROPS_EFFORT,
+      preferredCodexHome: propsCodexHome(),
     });
 
     const usage = { in: 0, out: 0 };
@@ -565,7 +575,8 @@ export async function runPropsDeskBrain({ systemPrompt, userMessage, corpus, rec
   // Match the game-desk resilience policy: subscription primary, the other
   // subscription provider, then the remaining desk fallbacks. De-duplicate so
   // an override can never retry the same exhausted model under another slot.
-  const cascade = [...new Set([PROPS_DESK_MODEL, ...DESK_FALLBACK_MODELS, LEGACY_BRAIN_FALLBACK])];
+  // Bridge-only (founder, Sep 9 2026): props never reach a metered API.
+  const cascade = PROPS_CASCADE;
   // RESPONDER STAMP + OVERLOAD RETRY (founder GO, Aug 12): mirrors the game
   // lane. Server-busy errors retry the SAME brain before cascading (a 529 is
   // not a cap), and the brain that actually answered stamps every pick — a
