@@ -1,0 +1,148 @@
+{
+  "pages": [
+    {
+      "id": "page-1",
+      "name": "Feed format"
+    },
+    {
+      "id": "page-2",
+      "name": "Gary install ads"
+    },
+    {
+      "id": "page-3",
+      "name": "NFL tonight"
+    }
+  ],
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "Gary — in the feed",
+      "x": 0,
+      "y": 0,
+      "w": 600,
+      "h": 880,
+      "page": "page-1"
+    },
+    {
+      "file": "GaryCreative.dc.html",
+      "title": "Gary — ad creative 1080×1350",
+      "x": 720,
+      "y": 0,
+      "w": 1080,
+      "h": 1350,
+      "page": "page-1"
+    },
+    {
+      "file": "SyncdFeed.dc.html",
+      "title": "Sync’d — in the feed",
+      "x": 0,
+      "y": 1500,
+      "w": 600,
+      "h": 880,
+      "page": "page-1"
+    },
+    {
+      "file": "SyncdCreative.dc.html",
+      "title": "Sync’d — ad creative 1080×1350",
+      "x": 720,
+      "y": 1500,
+      "w": 1080,
+      "h": 1350,
+      "page": "page-1"
+    },
+    {
+      "file": "AdFade.dc.html",
+      "title": "1 · Fade the bear",
+      "x": 0,
+      "y": 0,
+      "w": 1080,
+      "h": 1350,
+      "page": "page-2"
+    },
+    {
+      "file": "AdGraded.dc.html",
+      "title": "2 · The graded board",
+      "x": 1180,
+      "y": 0,
+      "w": 1080,
+      "h": 1350,
+      "page": "page-2"
+    },
+    {
+      "file": "AdPhone.dc.html",
+      "title": "3 · 5 PM",
+      "x": 2360,
+      "y": 0,
+      "w": 1080,
+      "h": 1350,
+      "page": "page-2"
+    },
+    {
+      "file": "AdHadIt.dc.html",
+      "title": "4 · He had it",
+      "x": 3540,
+      "y": 0,
+      "w": 1080,
+      "h": 1350,
+      "page": "page-2"
+    },
+    {
+      "file": "NflTonight.dc.html",
+      "title": "NFL 1 · Tonight (live card slot)",
+      "x": 0,
+      "y": 0,
+      "w": 1080,
+      "h": 1350,
+      "page": "page-3"
+    },
+    {
+      "file": "NflIntel.dc.html",
+      "title": "NFL 2 · The intel",
+      "x": 1180,
+      "y": 0,
+      "w": 1080,
+      "h": 1350,
+      "page": "page-3"
+    },
+    {
+      "file": "NflOffer.dc.html",
+      "title": "NFL 3 · Free through September",
+      "x": 2360,
+      "y": 0,
+      "w": 1080,
+      "h": 1350,
+      "page": "page-3"
+    },
+    {
+      "file": "NflFeed.dc.html",
+      "title": "NFL 1 · in the feed",
+      "x": 3540,
+      "y": 0,
+      "w": 600,
+      "h": 880,
+      "page": "page-3"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "campaign-idea",
+      "x": 0,
+      "y": -420,
+      "w": 1180,
+      "page": "page-2",
+      "text": "FOUR IDEAS, FOUR FORMATS — every screen is captured from today's build and chosen for one argument.\n\n1 Fade the bear (card back). Why this screen: the flipped card is the only place in the category that hands you his reasoning AND a button to bet against him. That is the character and the product in one frame. Hook: permission to disagree.\n\n2 The graded board (six real cards). Why: three CASHED and three LOST from Tuesday, exactly as they sit in the app the next morning. Trust is the conversion problem in this category; this shows the receipt instead of claiming one.\n\n3 5 PM (the whole phone). Why: the Picks board as it opens is the answer to the fan's actual question. The device is fitted from the status bar down. Note the header carries the real L7 record (38–45); your call whether to keep it in frame.\n\n4 He had it (recap card). Why: SMU −2.5 was the real Monday-night pick and it cashed 27–24. Drama the fan already cares about, tied to the pick and the record.\n\nSame CTA on all four: Get Gary free."
+    },
+    {
+      "id": "nfl-swap",
+      "x": 0,
+      "y": -300,
+      "w": 1180,
+      "page": "page-3",
+      "text": "NFL TONIGHT — Patriots at Seahawks, 8:20 PM ET (NE +150 · SEA −178 · O/U 44.5 in the app at 1:27 PM).\nThe dashed gold boxes are placeholders for the live pick card. When Gary's NFL card posts tonight: open Picks → NFL in the app, screenshot the card, crop at its border, and drop it into the slot (760×470 on board 1, the 880×150 strip on boards 2 and 3). Everything else on these boards is already real: the Home board strip, the Hub field notes, the launch card, all captured from today's build."
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "page-3"
+  }
+}
