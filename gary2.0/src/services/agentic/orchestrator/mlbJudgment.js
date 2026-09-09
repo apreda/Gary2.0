@@ -74,25 +74,56 @@ export function firstJsonObject(text) {
   return null;
 }
 
+/**
+ * A brain writing a paragraph inside a JSON string breaks the line rather
+ * than escaping it (Sep 9 2026: the second bridge judgment opened as valid
+ * JSON and still failed to parse — 6,649 chars of prose fields). Raw control
+ * characters inside string literals become their escapes; everything outside
+ * strings is left alone.
+ */
+export function repairJsonText(text) {
+  const s = String(text ?? '');
+  let out = '';
+  let inString = false;
+  for (let i = 0; i < s.length; i += 1) {
+    const ch = s[i];
+    if (inString) {
+      if (ch === '\\') { out += ch + (s[i + 1] ?? ''); i += 1; continue; }
+      if (ch === '"') { inString = false; out += ch; continue; }
+      if (ch === '\n') { out += '\\n'; continue; }
+      if (ch === '\r') { out += '\\r'; continue; }
+      if (ch === '\t') { out += '\\t'; continue; }
+      if (ch < ' ') continue;
+      out += ch;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    out += ch;
+  }
+  return out;
+}
+
+function parseLoose(text) {
+  const attempts = [text, repairJsonText(text)];
+  for (const candidate of attempts) {
+    try { return JSON.parse(candidate); } catch { /* next */ }
+    const embedded = firstJsonObject(candidate);
+    if (embedded != null) {
+      try { return JSON.parse(embedded); } catch { /* next */ }
+    }
+  }
+  return undefined;
+}
+
 function parse(answer, phase) {
   const raw = typeof answer === 'string' ? answer : answer?.text;
   if (typeof raw !== 'string') fail(`${phase} returned no text`);
   const text = raw.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/i, '$1');
-  let result;
-  try {
-    result = JSON.parse(text);
-  } catch {
-    // Not bare JSON: take the one object the reply carries, if it carries one.
-    const embedded = firstJsonObject(text);
-    try {
-      result = embedded == null ? undefined : JSON.parse(embedded);
-    } catch {
-      result = undefined;
-    }
-    if (result === undefined) {
-      console.error(`[MLB Judgment] ${phase} reply was not JSON (${text.length} chars): ${text.slice(0, 300).replace(/\s+/g, ' ')}`);
-      fail(`${phase} returned invalid JSON`);
-    }
+  const result = parseLoose(text);
+  if (result === undefined) {
+    const squash = (t) => t.replace(/\s+/g, ' ');
+    console.error(`[MLB Judgment] ${phase} reply was not JSON (${text.length} chars): ${squash(text.slice(0, 300))} … ${squash(text.slice(-200))}`);
+    fail(`${phase} returned invalid JSON`);
   }
   if (!object(result)) fail(`${phase} must return an object`);
   return result;

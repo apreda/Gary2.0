@@ -21,3 +21,16 @@ describe('MLB judgment reply parsing', () => {
     expect(firstJsonObject('{"unterminated": true')).toBeNull();
   });
 });
+
+describe('MLB judgment reply repair', () => {
+  it('escapes raw line breaks inside JSON strings and leaves structure alone', async () => {
+    const { repairJsonText } = await import('../../../src/services/agentic/orchestrator/mlbJudgment.js');
+    const reply = '{"winner":"home","whole_game_view":"I expect the Tigers to win.\nThe pen holds.\tTabbed","expectations":{"a":"x\r\ny"}}';
+    const parsed = JSON.parse(repairJsonText(reply));
+    expect(parsed.whole_game_view).toBe('I expect the Tigers to win.\nThe pen holds.\tTabbed');
+    expect(parsed.expectations.a).toBe('x\r\ny');
+    // Already-valid JSON passes through unchanged.
+    const valid = '{"k":"a\\nb","n":{"deep":true}}';
+    expect(repairJsonText(valid)).toBe(valid);
+  });
+});
