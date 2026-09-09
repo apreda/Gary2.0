@@ -1013,9 +1013,9 @@ struct UserBookSection: View {
     @State private var streak: UserBookAPI.UserStreak? = nil
     // Tracker controls (YOU page): calendar period + source filters, live-slip context.
     @AppStorage("bookPeriodKind") private var periodKindRaw = "month"
-    @State private var period = BookPeriod.containing(BookDates.today(), kind: .month)
+    @State private var period = BookPeriod.containing(SupabaseAPI.todayEST(), kind: .month)
     /// Any date inside the month the calendar shows; follows the period when it is a month.
-    @State private var calendarAnchor = BookDates.today()
+    @State private var calendarAnchor = SupabaseAPI.todayEST()
     @State private var breakdownDimension: BookBreakdownDimension = .league
     @State private var selectedDay: BookSelectedDay? = nil
     @State private var kindFilter = "all"         // all | tail | fade | manual
@@ -1070,7 +1070,7 @@ struct UserBookSection: View {
             bets = []; streak = nil; todayPicks = []; liveScores = []
             loading = true; loadFailed = false
             let kind = BookPeriodKind(rawValue: periodKindRaw) ?? .month
-            if period.kind != kind { period = BookPeriod.containing(BookDates.today(), kind: kind) }
+            if period.kind != kind { period = BookPeriod.containing(SupabaseAPI.todayEST(), kind: kind) }
             await refreshBook()
         }
         .onChange(of: period) { next in
@@ -1094,7 +1094,7 @@ struct UserBookSection: View {
             switch verb {
             case "logbet": showQuickLog = true
             case "bookday": selectedDay = BookSelectedDay(date: arg)
-            case "bookperiod": period = BookPeriod.containing(BookDates.today(), kind: BookPeriodKind(rawValue: arg) ?? .month)
+            case "bookperiod": period = BookPeriod.containing(SupabaseAPI.todayEST(), kind: BookPeriodKind(rawValue: arg) ?? .month)
             case "bookdim": breakdownDimension = BookBreakdownDimension(rawValue: arg) ?? .league
             case "bookfilter": kindFilter = arg
             default: break
@@ -1192,7 +1192,7 @@ struct UserBookSection: View {
     }
 
     private var periodPager: some View {
-        BookPeriodPager(period: $period, today: BookDates.today())
+        BookPeriodPager(period: $period, today: SupabaseAPI.todayEST())
             .padding(.horizontal, 12)
     }
 
@@ -1202,7 +1202,7 @@ struct UserBookSection: View {
     }
 
     private var calendarCard: some View {
-        let today = BookDates.today()
+        let today = SupabaseAPI.todayEST()
         let grid = monthGrid
         return BookCalendarView(
             grid: grid, today: today,
@@ -1226,7 +1226,7 @@ struct UserBookSection: View {
     }
 
     private var bankrollCard: some View {
-        BookBankrollCard(windows: BookBankroll.rolling(laneBets.map(\.analyticsEntry), today: BookDates.today()),
+        BookBankrollCard(windows: BookBankroll.rolling(laneBets.map(\.analyticsEntry), today: SupabaseAPI.todayEST()),
                          sourceLine: "\(summarySource.lowercased()) · the last 30, 60 and 90 days, ending today in Eastern time · independent of the period above")
             .padding(.horizontal, 12)
     }

@@ -64,9 +64,14 @@ enum BookDates {
     static func parse(_ value: String) -> Date? { formatter.date(from: value) }
     static func string(_ date: Date) -> String { formatter.string(from: date) }
 
-    /// The Book's day: the Eastern calendar date (midnight rollover), the same
-    /// key every row carries — not the pick slate's 3 AM day.
-    static func today(now: Date = Date()) -> String { string(now) }
+    /// The Book's day rolls with the pick slate, not at midnight: NFL and MLB
+    /// games often finish after midnight, and a fan still watching stays on the
+    /// day (and the week) that game belongs to (founder, Sep 9). The app passes
+    /// its slate rollover hour (SupabaseAPI.slateRolloverHourET, 6 AM ET).
+    static func today(now: Date = Date(), rolloverHour: Int = 6) -> String {
+        let hour = calendar.component(.hour, from: now)
+        return hour < rolloverHour ? shift(string(now), days: -1) : string(now)
+    }
 
     static func shift(_ value: String, days: Int) -> String {
         guard let d = parse(value), let moved = calendar.date(byAdding: .day, value: days, to: d) else { return value }

@@ -20,7 +20,7 @@ import {
   canMoveForward, monthGrid, monthOf, periodContaining, periodContains, periodKicker, popularTags, rollingWindows, shiftPeriod,
   type BookPeriod, type PeriodKind,
 } from '@/lib/book/analytics';
-import { estDateStr } from '@/lib/gary/dates';
+import { todayEST } from '@/lib/gary/dates';
 import { supabaseBrowser } from '@/lib/auth/client';
 import type { GaryRows } from '@/lib/book/gary';
 import { useUnitDollars } from './BookDay';
@@ -89,10 +89,11 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const [streak, setStreak] = useState<UserStreak | null>(null);
-  // The Book's day is the Eastern calendar date (midnight rollover), the same
-  // key every row carries — not the pick slate's 3 AM day.
-  const today = estDateStr(new Date());
-  const [period, setPeriodState] = useState<BookPeriod>(() => periodContaining(estDateStr(new Date()), 'month'));
+  // The Book's day rolls at 3 AM Eastern, the same clock as the pick slate:
+  // late NFL and MLB games finish after midnight and a fan still watching
+  // stays on the day (and the week) that game belongs to (founder, Sep 9).
+  const today = todayEST();
+  const [period, setPeriodState] = useState<BookPeriod>(() => periodContaining(todayEST(), 'month'));
   const [calendarAnchor, setCalendarAnchor] = useState(today);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const setPeriod = useCallback((next: BookPeriod) => {
@@ -203,7 +204,7 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
     // Restore the last period kind after hydration (a per-browser convenience).
     const restore = () => {
       const kind = storedPeriodKind();
-      if (kind !== 'month') setPeriodState((current) => periodContaining(current.kind === 'all' ? estDateStr(new Date()) : current.start, kind));
+      if (kind !== 'month') setPeriodState((current) => periodContaining(current.kind === 'all' ? todayEST() : current.start, kind));
     };
     restore();
   }, []);

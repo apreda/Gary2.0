@@ -26,6 +26,16 @@ verify(BookDates.shift("2026-03-08", days: 1) == "2026-03-09", "DST day still on
 verify(BookDates.daysInMonth(year: 2026, month: 2) == 28, "February 2026 has 28 days")
 verify(BookDates.daysInMonth(year: 2028, month: 2) == 29, "leap year")
 
+// ── The Book's day (rolls with the slate, 6 AM Eastern on the phone) ────────
+func instant(_ iso: String) -> Date { ISO8601DateFormatter().date(from: iso)! }
+verify(BookDates.today(now: instant("2026-09-08T03:59:59Z")) == "2026-09-07", "23:59 ET is still that day")
+verify(BookDates.today(now: instant("2026-09-08T04:00:00Z")) == "2026-09-07", "midnight ET stays on the sports day")
+verify(BookDates.today(now: instant("2026-09-08T09:59:59Z")) == "2026-09-07", "5:59 AM ET stays on the sports day")
+verify(BookDates.today(now: instant("2026-09-08T10:00:00Z")) == "2026-09-08", "6 AM ET rolls the day")
+verify(BookDates.today(now: instant("2026-11-01T10:59:59Z")) == "2026-10-31", "5:59 AM EST after the DST end stays on Halloween")
+verify(BookDates.today(now: instant("2026-11-01T11:00:00Z")) == "2026-11-01", "6 AM EST rolls the day")
+verify(BookDates.today(now: instant("2026-09-08T07:00:00Z"), rolloverHour: 3) == "2026-09-08", "a 3 AM clock rolls at 3")
+
 // ── Periods ────────────────────────────────────────────────────────────────
 let week = BookPeriod.containing("2026-09-09", kind: .week)
 verify(week.start == "2026-09-06" && week.end == "2026-09-12", "week runs Sunday to Saturday")
