@@ -284,7 +284,9 @@ async function runFootballSearch({
   if (String(process.env.GARY_GROUNDING_VIA_CLAUDE || '') === '1') {
     await acquireSearchSlot();
     try {
-      const viaClaude = await claudeCliWebSearch(prompt, { timeoutMs: CODEX_TIMEOUT_MS });
+      // Sonnet at high needs more than the codex rung's 150 s on a deep read
+      // (71-180 s seen live); its own 5-minute ceiling, its own breaker lane.
+      const viaClaude = await claudeCliWebSearch(prompt, { timeoutMs: Number(process.env.FOOTBALL_CLAUDE_SEARCH_TIMEOUT_MS) || 5 * 60 * 1000 });
       if (viaClaude.success) {
         const v = validateNarrative(viaClaude.data, { mustMention, minChars });
         if (v.ok) {

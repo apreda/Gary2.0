@@ -24,12 +24,12 @@ describe('openaiWebSearch (de-Gemini step one, Jul 26 2026)', () => {
   const realFetch = global.fetch;
   const realKey = process.env.OPENAI_API_KEY;
 
-  beforeEach(() => {
+  beforeEach(() => { vi.stubEnv("GARY_METERED_SEARCH_CAP", "-1");
     process.env.OPENAI_API_KEY = 'test-key';
     // Default: the codex rung misses so each pin exercises the API chain.
     codexCliWebSearch.mockReset().mockResolvedValue({ success: false, data: '', raw: null, error: 'mocked miss' });
   });
-  afterEach(() => { vi.restoreAllMocks(); global.fetch = realFetch; process.env.OPENAI_API_KEY = realKey; });
+  afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); global.fetch = realFetch; process.env.OPENAI_API_KEY = realKey; });
 
   it('the codex GPT Pro bridge is the first rung — a hit never touches the APIs', async () => {
     codexCliWebSearch.mockResolvedValue({ success: true, data: 'Bridge news, dated today.', raw: null });

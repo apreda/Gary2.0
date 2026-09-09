@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+// The metered press-search budget is zero by default (Sep 9 2026); these pins exercise the API rung on purpose.
+process.env.GARY_METERED_SEARCH_CAP = '-1';
 
 // CODEX FIRST (Sep 1 2026): the football search transport tries the $0 codex
 // bridge before Anthropic. Mocked to a miss here so these gate/throttle pins

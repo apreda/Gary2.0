@@ -305,7 +305,10 @@ export async function claudeCliWebSearch(prompt, options = {}) {
     // Grounding runs at high, not max — retrieval quality is search-bound,
     // and max-depth thinking on every news lookup just risks the timeout.
     const args = ['-p', '--model', model, '--effort', 'high', '--output-format', 'json', '--allowedTools', 'WebSearch'];
-    const { code, stdout, stderr } = await runClaude(args, prompt, options.timeoutMs || 5 * 60 * 1000);
+    // Its own breaker lane (Sep 9 2026): two slow press searches tripped the
+    // shared 'claude' breaker and disabled the BRAIN for the rest of the NFL
+    // rehearsal. A search lane's timeouts are never evidence about the pick.
+    const { code, stdout, stderr } = await runClaude(args, prompt, options.timeoutMs || 5 * 60 * 1000, 'claude-search');
     if (code !== 0) throw toError(code, stdout, stderr);
     const data = JSON.parse(stdout);
     if (data.is_error) throw toError(code, data.result || stdout, stderr);

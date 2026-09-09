@@ -57,7 +57,7 @@ function request(fetchImpl, overrides = {}) {
 }
 
 beforeEach(() => {
-  _resetMeteredSearchBudget();
+  _resetMeteredSearchBudget(); vi.stubEnv("GARY_METERED_SEARCH_CAP", "-1");
   process.env.ANTHROPIC_API_KEY = 'test-key';
   delete process.env.ANTHROPIC_GROUNDING_MODEL;
 });

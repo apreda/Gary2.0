@@ -7,18 +7,19 @@
  * The $0 rungs (Codex search, the Claude bridge) are never counted. Only the
  * fall-through to the metered API takes from this budget; when it is spent,
  * a lane reports itself unavailable instead of buying another search.
- * GARY_METERED_SEARCH_CAP sets the cap per process (default 3; -1 = no cap).
+ * GARY_METERED_SEARCH_CAP sets the cap per process (default 0 — the key pays for research, not for press; -1 = no cap).
  */
-const CAP = Number.isFinite(Number(process.env.GARY_METERED_SEARCH_CAP)) ? Number(process.env.GARY_METERED_SEARCH_CAP) : 3;
+const cap = () => (process.env.GARY_METERED_SEARCH_CAP != null && process.env.GARY_METERED_SEARCH_CAP !== '' && Number.isFinite(Number(process.env.GARY_METERED_SEARCH_CAP)) ? Number(process.env.GARY_METERED_SEARCH_CAP) : 0);
 let used = 0;
 
-export function meteredSearchCap() { return CAP; }
+export function meteredSearchCap() { return cap(); }
 export function meteredSearchesUsed() { return used; }
 
 /** Take one metered search from the budget; false when the budget is spent. */
 export function takeMeteredSearch(label = 'search') {
-  if (CAP >= 0 && used >= CAP) {
-    console.warn(`[Metered Search] budget of ${CAP} per process is spent — ${label} stays unavailable rather than buying another search`);
+  const limit = cap();
+  if (limit >= 0 && used >= limit) {
+    console.warn(`[Metered Search] budget of ${limit} per process is spent — ${label} stays unavailable rather than buying another search`);
     return false;
   }
   used += 1;
