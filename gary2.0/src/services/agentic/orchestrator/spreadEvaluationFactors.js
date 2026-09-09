@@ -78,7 +78,7 @@ Some nights one thing decides it; some nights it's the whole picture. Lead with 
 export function getMlbSeasonAwareness() {
   return `## MLB SEASON AWARENESS
 
-- **Baseball runs on heavy game-to-game variance.** The best team in baseball wins about 60% of its games — they lose 4 out of every 10. Hot streaks and losing streaks happen to every team multiple times per season. Investigate whether recent form reflects a real trend (pitcher struggles, lineup changes, bullpen fatigue) or normal variance.`;
+- **Baseball runs on heavy game-to-game variance.** The best team in baseball wins about 60% of its games — they lose 4 out of every 10. Hot streaks and losing streaks happen to every team multiple times per season.`;
 }
 
 

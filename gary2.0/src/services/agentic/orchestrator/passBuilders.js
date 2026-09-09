@@ -487,7 +487,8 @@ export function buildMlCapRetryMessage(sport, cap = GAME_ML_CAP) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread, game = null) {
-  const factors = getMlbSpreadFactors();
+  // READING THIS GAME is gone (founder, Sep 9 2026); the awareness line is the
+  // one bullet below.
   const mlbAwareness = getMlbSeasonAwareness();
   // THE GAME KIND (founder, Sep 2 2026): decided before any data is read —
   // a moneyline game asks who wins, a run-line game asks the run line. The
@@ -506,12 +507,6 @@ ${scoutReport}
 <season_context>
 ${mlbAwareness}
 </season_context>
-
-<reading_the_game>
-## READING THIS GAME
-
-${factors}
-</reading_the_game>
 
 <instructions>
 ## YOUR TASK
