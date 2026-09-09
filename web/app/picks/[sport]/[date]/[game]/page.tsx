@@ -8,6 +8,8 @@ import { Eyebrow } from '@/components/Eyebrow';
 import { JsonLd } from '@/components/JsonLd';
 import { ScoutRead } from '@/components/ScoutRead';
 import { LineLadderPanel } from '@/components/LineLadder';
+import { GameResearch } from '@/components/GameResearch';
+import { fetchArchiveInsights } from '@/lib/gary/archive';
 import { fetchLineLadder, lineStory } from '@/lib/gary/lines';
 import { MeaningfulPickView } from '@/components/MeaningfulPickView';
 import { ShareActions } from '@/components/ShareActions';
@@ -117,7 +119,11 @@ export default async function GamePage({ params }: { params: Params }) {
   const venue = slate?.venue ?? lead.venue ?? null;
   // THE LINE (Sep 9 2026): the same ladder the app shows under the pick card —
   // one book, opened → now, every rung. Absent when the ledger has nothing.
-  const ladder = await fetchLineLadder(cfg.code, date, lead.bdl_game_id ?? slate?.bdl_game_id ?? lead.game_id);
+  const gameId = lead.bdl_game_id ?? slate?.bdl_game_id ?? lead.game_id;
+  const ladder = await fetchLineLadder(cfg.code, date, gameId);
+  // THE RESEARCH: the same dated rows the app shows under the card. Optional —
+  // a failed read leaves the page without the section, never without the pick.
+  const research = await fetchArchiveInsights(date).catch(() => []);
 
   const pageUrl = `${SITE_URL}/picks/${cfg.slug}/${date}/${canonicalSlug}`;
   const imageUrl = `${pageUrl}/card`;
@@ -251,6 +257,8 @@ export default async function GamePage({ params }: { params: Params }) {
           </section>
         );
       })}
+
+      <GameResearch rows={research} gameId={gameId} matchup={headline(lead)} />
 
       <section className="mt-12 rounded-panel border border-line bg-card p-6" aria-labelledby="analysis-disclosure-heading">
         <h2 id="analysis-disclosure-heading" className="font-display text-[1.5rem] uppercase leading-none text-hi">About this analysis</h2>
