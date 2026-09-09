@@ -65,7 +65,10 @@ export const LEGACY_RESEARCH_MODEL = 'anthropic-claude-haiku-4-5';
 // fallbacks. GARY_PROPS_CODEX_HOME pins the props lane to one login (default:
 // the newest login found, so the Pro login keeps its allowance for games).
 export const PROPS_DESK_MODEL = process.env.GARY_PROPS_MODEL_OVERRIDE || 'codex-gpt-5.6-luna';
-export const PROPS_CASCADE = [...new Set([PROPS_DESK_MODEL, 'codex-gpt-5.6-luna', 'claude-sonnet-5', 'claude-fable-5-1'])].filter((m) => /^(codex-|claude)/.test(m));
+// The one metered rung props may ever reach is Haiku (founder, Sep 9 2026:
+// "unless they have to — if so use Haiku"): about $0.45 for a full props desk
+// against $1.45 on Sonnet, and only after every bridge has refused.
+export const PROPS_CASCADE = [...new Set([PROPS_DESK_MODEL, 'codex-gpt-5.6-luna', 'claude-sonnet-5', 'claude-fable-5-1', 'anthropic-claude-haiku-4-5'])].filter((m) => /^(codex-|claude)/.test(m) || m === 'anthropic-claude-haiku-4-5');
 export const PROPS_EFFORT = process.env.GARY_PROPS_EFFORT || 'medium';
 
 // Quota cascade for the desk lanes (founder approved Jul 29, after the Jul 28
