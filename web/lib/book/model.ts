@@ -39,6 +39,10 @@ export interface UserBet {
   source_pick_id?: string | null;
   source_line?: number | null;
   source_side?: string | null;
+  /** moneyline | spread | total | prop | parlay | other — server-derived on
+   * verified tickets, chosen by the user on outside bets (Sep 9 2026). */
+  market?: string | null;
+  tags?: string[] | null;
 }
 
 /** The ledger's calendar key is the game's Eastern-time start date. Weekly
@@ -154,7 +158,7 @@ export function searchBets(rows: UserBet[], search: string, league: string, stat
   return rows.filter(b => (!league || b.league === league) &&
     (!status || (status === 'settled' ? isSettled(b) : b.status === status)) &&
     (!favoritesOnly || b.is_favorite) &&
-    (!query || [b.pick_text, b.matchup, b.notes, b.bookmaker, b.player_name].some(v => v?.toLowerCase().includes(query))));
+    (!query || [b.pick_text, b.matchup, b.notes, b.bookmaker, b.player_name, b.market, ...(b.tags ?? [])].some(v => v?.toLowerCase().includes(query))));
 }
 
 /** CSV cells stay data even when a personal note begins with a formula. */
@@ -165,8 +169,8 @@ export function betsCsv(rows: UserBet[]): string {
     return `"${s.replaceAll('"', '""')}"`;
   };
   return [
-    ['Date', 'League', 'Selection', 'Source', 'Status', 'American odds', 'Stake units', 'Net units', 'Graded by', 'Favorite', 'Streak pick', 'Sportsbook', 'Notes'],
-    ...rows.map(b => [b.game_date, b.league, b.pick_text, b.kind, b.status, b.odds_american, b.stake_units, b.units_net, b.graded_by, !!b.is_favorite, !!b.streak_pick, b.bookmaker, b.notes]),
+    ['Date', 'League', 'Bet type', 'Selection', 'Source', 'Status', 'American odds', 'Stake units', 'Net units', 'Graded by', 'Favorite', 'Streak pick', 'Sportsbook', 'Tags', 'Notes'],
+    ...rows.map(b => [b.game_date, b.league, b.market ?? '', b.pick_text, b.kind, b.status, b.odds_american, b.stake_units, b.units_net, b.graded_by, !!b.is_favorite, !!b.streak_pick, b.bookmaker, (b.tags ?? []).join(' '), b.notes]),
   ].map(row => row.map(cell).join(',')).join('\r\n');
 }
 

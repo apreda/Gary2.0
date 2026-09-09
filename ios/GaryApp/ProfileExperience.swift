@@ -58,6 +58,7 @@ enum ProfileIdentityAPI {
         let streak_kind: String
         let best_streak: Int
         let decided: Int
+        var following: Bool? = nil
         var id: String { user_id }
         var name: String { handle ?? display_name }
         var record: String { "\(wins)–\(losses)" }
@@ -76,6 +77,8 @@ enum ProfileIdentityAPI {
         let has_more: Bool
         let hidden_count: Int?
         let profile_hidden: Bool?
+        var scope: String? = nil
+        var following_count: Int? = nil
     }
 
     @MainActor static func request<T: Decodable>(_ name: String, body: [String: Any] = [:], authenticated: Bool = true) async throws -> T {
@@ -102,6 +105,8 @@ enum ProfileIdentityAPI {
             if diagnostic.contains("profile text is not allowed") { throw UserBookError.server("Use a profile without abusive wording, links or contact details.") }
             if diagnostic.contains("report limit") { throw UserBookError.server("You have sent several reports recently. Try later, or contact support for help.") }
             if diagnostic.contains("block limit") { throw UserBookError.server("Your blocked-player list is full. Remove a block before adding another.") }
+            if diagnostic.contains("follow limit") { throw UserBookError.server("You are following the maximum number of players. Unfollow someone to add another.") }
+            if diagnostic.contains("follow yourself") { throw UserBookError.server("You are already on your own friends board.") }
             if diagnostic.contains("not available") { throw UserBookError.server("This profile is no longer available. Refresh to check it.") }
             if diagnostic.contains("taken") { throw UserBookError.server("That handle is already taken. Try another.") }
             if diagnostic.contains("reserved") { throw UserBookError.server("That handle is reserved. Try another.") }
@@ -122,8 +127,8 @@ enum ProfileIdentityAPI {
         return try await request("save_my_profile", body: payload)
     }
 
-    @MainActor static func board(window: String, sort: String, league: String, offset: Int = 0) async throws -> Board {
-        try await request("your_book_leaderboard_v3", body: ["p_window": window, "p_sort": sort, "p_league": league, "p_limit": 50, "p_offset": offset], authenticated: false)
+    @MainActor static func board(window: String, sort: String, league: String, offset: Int = 0, scope: String = "all") async throws -> Board {
+        try await request("your_book_leaderboard_v3", body: ["p_window": window, "p_sort": sort, "p_league": league, "p_limit": 50, "p_offset": offset, "p_scope": scope], authenticated: false)
     }
 
     @MainActor static func card(userID: String) async throws -> PublicCard? {
@@ -364,6 +369,29 @@ struct ProfileEditorSheet: View {
     }
 }
 
+/// Follows power the FRIENDS lens on the board. Following is private to the
+/// follower; it never changes what anyone else sees or how anyone ranks.
+enum ProfileFollowAPI {
+    struct Receipt: Decodable { let ok: Bool; let following: Bool; let count: Int }
+    struct Followed: Decodable, Identifiable {
+        let user_id: String; let display_name: String?; let handle: String?; let avatar: String?; let available: Bool?
+        var id: String { user_id }
+        var name: String { handle ?? display_name ?? "" }
+    }
+    private struct List: Decodable { let ok: Bool; let rows: [Followed] }
+
+    @MainActor static func set(_ userID: String, following: Bool) async throws -> Int {
+        let receipt: Receipt = try await ProfileIdentityAPI.request("set_follow", body: ["p_user": userID, "p_follow": following])
+        guard receipt.ok, receipt.following == following else { throw UserBookError.server("That change could not be confirmed. Please retry.") }
+        return receipt.count
+    }
+
+    @MainActor static func mine() async throws -> [Followed] {
+        let list: List = try await ProfileIdentityAPI.request("my_follows")
+        return list.rows
+    }
+}
+
 enum ProfileSafetyAPI {
     static let helpURL = URL(string: "https://www.betwithgary.ai/terms#profile-safety")!
     struct State: Decodable { let blocked: Bool; let is_owner: Bool; let my_profile_hidden: Bool }
@@ -416,6 +444,9 @@ struct PublicPlayerProfileSheet: View {
     @State private var showReport = false
     @State private var receipt: String?
     @State private var requestID = UUID()
+    @State private var following: Bool = false
+    @State private var changingFollow = false
+    @State private var followError: String?
     private var queryKey: String { "\(player.id):\(auth.currentUser?.id ?? "guest"):\(auth.isAuthenticated)" }
 
     var body: some View {
@@ -434,6 +465,23 @@ struct PublicPlayerProfileSheet: View {
                             Text("@\(identity.name)").font(GaryFonts.display(30)).foregroundStyle(GaryColors.warmWhite)
                             if let bio = identity.bio, !bio.isEmpty { Text(bio).font(GaryFonts.text(14)).foregroundStyle(.white.opacity(0.65)).multilineTextAlignment(.center) }
                             Label("Verified player", systemImage: "checkmark.shield").font(GaryFonts.mono(10, bold: true)).foregroundStyle(GaryColors.gold)
+                            if auth.isAuthenticated, player.user_id != auth.currentUser?.id, safety?.blocked != true {
+                                Button { Task { await toggleFollow() } } label: {
+                                    Text(changingFollow ? "UPDATING" : following ? "FOLLOWING" : "FOLLOW")
+                                        .font(GaryFonts.mono(10, bold: true)).tracking(0.9)
+                                        .foregroundStyle(following ? GaryColors.gold : .black)
+                                        .padding(.horizontal, 18).frame(minHeight: 36)
+                                        .background(
+                                            Capsule().fill(following ? GaryColors.gold.opacity(0.12) : GaryColors.gold)
+                                                .overlay(Capsule().stroke(GaryColors.gold.opacity(following ? 0.6 : 0), lineWidth: 1))
+                                        )
+                                }
+                                .buttonStyle(.plain).disabled(changingFollow)
+                                .accessibilityLabel(following ? "Unfollow player" : "Follow player")
+                                Text(following ? "On your friends board." : "Follow to see this player on your friends board.")
+                                    .font(GaryFonts.text(11)).foregroundStyle(.white.opacity(0.5))
+                                if let followError { Text(followError).font(GaryFonts.text(12)).foregroundStyle(GaryColors.loss) }
+                            }
                         }.frame(maxWidth: .infinity)
                         VStack(alignment: .leading, spacing: 18) {
                             Text("LAST 30 DAYS · ALL SPORTS").font(GaryFonts.mono(10, bold: true)).foregroundStyle(GaryColors.gold)
@@ -503,9 +551,25 @@ struct PublicPlayerProfileSheet: View {
             }
         }
     }
+    private func toggleFollow() async {
+        guard !changingFollow else { return }
+        let request = requestID; let owner = auth.currentUser?.id; let next = !following
+        changingFollow = true; followError = nil
+        do {
+            _ = try await ProfileFollowAPI.set(player.user_id, following: next)
+            guard requestID == request, owner == auth.currentUser?.id, !Task.isCancelled else { return }
+            following = next
+            NotificationCenter.default.post(name: Notification.Name("GaryFollowsChanged"), object: nil)
+        } catch {
+            guard requestID == request, owner == auth.currentUser?.id, !Task.isCancelled else { return }
+            followError = error.localizedDescription
+        }
+        changingFollow = false
+    }
     private func load() async {
         let request = UUID(); requestID = request
         let owner = auth.currentUser?.id
+        following = player.following ?? false; followError = nil; changingFollow = false
         loading = true; error = nil; safetyError = nil; card = nil; safety = nil; receipt = nil; changingBlock = false
         do {
             let next = try await ProfileIdentityAPI.card(userID: player.user_id)

@@ -14,18 +14,32 @@ import {
   searchBets,
   trackerStats,
   type Source,
-  type Timeframe,
   type UserBet,
 } from '@/lib/book/model';
+import {
+  canMoveForward, monthGrid, monthOf, periodContaining, periodContains, periodKicker, popularTags, rollingWindows, shiftPeriod,
+  type BookPeriod, type PeriodKind,
+} from '@/lib/book/analytics';
+import { estDateStr } from '@/lib/gary/dates';
 import { supabaseBrowser } from '@/lib/auth/client';
 import type { GaryRows } from '@/lib/book/gary';
 import { useUnitDollars } from './BookDay';
-import { Ledger, OpenSlips } from './BookSlips';
+import { Ledger, OpenSlips, Slip } from './BookSlips';
 import { Leaderboard } from './Leaderboard';
 import { bookButton, bookField, LogBet } from './LogBet';
 import { ProfileEditor, profileAvatar } from './ProfileEditor';
 import { RideChart } from './RideChart';
+import { BookCalendar } from './BookCalendar';
+import { BookBankroll, BookBreakdowns, PeriodPager } from './BookAnalytics';
 import { logBookMilestone } from '@/lib/gary/analytics';
+
+const PERIOD_KEY = 'bookPeriodKind';
+function storedPeriodKind(): PeriodKind {
+  try {
+    const raw = window.localStorage.getItem(PERIOD_KEY);
+    return raw === 'week' || raw === 'month' || raw === 'year' || raw === 'all' ? raw : 'month';
+  } catch { return 'month'; }
+}
 
 function RecordPanel({
   title,
@@ -75,7 +89,18 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const [streak, setStreak] = useState<UserStreak | null>(null);
-  const [timeframe, setTimeframe] = useState<Timeframe>('all');
+  // The Book's day is the Eastern calendar date (midnight rollover), the same
+  // key every row carries — not the pick slate's 3 AM day.
+  const today = estDateStr(new Date());
+  const [period, setPeriodState] = useState<BookPeriod>(() => periodContaining(estDateStr(new Date()), 'month'));
+  const [calendarAnchor, setCalendarAnchor] = useState(today);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const setPeriod = useCallback((next: BookPeriod) => {
+    setPeriodState(next);
+    setSelectedDay(null);
+    if (next.kind === 'month') setCalendarAnchor(next.start);
+    try { window.localStorage.setItem(PERIOD_KEY, next.kind); } catch { /* per-browser convenience only */ }
+  }, []);
   const [source, setSource] = useState<Source>('all');
   const [search, setSearch] = useState('');
   const [league, setLeague] = useState('');
@@ -95,7 +120,7 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
     accountEpoch.current += 1; setAccountGeneration(accountEpoch.current);
     setBets([]); setProfile(null); setStreak(null); setHasLoaded(false);
     setShowLog(false); setShowProfile(false); setSearch('');
-    setSource('all'); setTimeframe('all'); setLeague(''); setStatus(''); setFavorites(false);
+    setSource('all'); setLeague(''); setStatus(''); setFavorites(false); setSelectedDay(null);
     setError(null); setLoading(next !== null); setUnitDollars(0);
   }, [setUnitDollars]);
   const reload = useCallback(async (recordOpen = false) => {
@@ -174,12 +199,33 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
       auth.subscription.unsubscribe();
     };
   }, [reload, clearAccount]);
+  useEffect(() => {
+    // Restore the last period kind after hydration (a per-browser convenience).
+    const restore = () => {
+      const kind = storedPeriodKind();
+      if (kind !== 'month') setPeriodState((current) => periodContaining(current.kind === 'all' ? estDateStr(new Date()) : current.start, kind));
+    };
+    restore();
+  }, []);
   const handle = profile?.profile?.display_name;
   const matching = searchBets(filterBets(bets, 'all', source), search, league, status, favorites);
-  const filtered = filterBets(matching, timeframe, 'all');
+  const filtered = matching.filter((b) => periodContains(period, b.game_date));
+  const history = filtered.filter((b) => b.status !== 'pending');
   const openSlips = matching.filter((b) => b.status === 'pending');
   const stats = trackerStats(filtered);
   const series = cumulativeSeries(filtered);
+  // The graded lane the headline describes: verified unless YOURS is selected.
+  // Two ledgers, never mixed — the calendar, breakdowns and bankroll follow it.
+  const lane = matching.filter((b) => (source === 'manual' ? b.kind === 'manual' : isVerified(b)));
+  const laneInPeriod = lane.filter((b) => periodContains(period, b.game_date));
+  const laneName = source === 'manual' ? 'YOUR PLAYS · SELF-GRADED' : source === 'tail' ? 'TAILS · VERIFIED' : source === 'fade' ? 'FADES · VERIFIED' : 'WITH GARY · VERIFIED';
+  const month = monthOf(calendarAnchor);
+  const grid = monthGrid(month.year, month.month, lane);
+  const dayRows = selectedDay ? lane.filter((b) => b.game_date === selectedDay) : null;
+  const shiftCalendar = (steps: number) => {
+    if (period.kind === 'month') setPeriod(shiftPeriod(period, steps));
+    else { setCalendarAnchor(shiftPeriod(grid.period, steps).start); setSelectedDay(null); }
+  };
   const exportBook = () => {
     const url = URL.createObjectURL(
       new Blob(['\uFEFF', betsCsv(filtered)], { type: 'text/csv;charset=utf-8;' }),
@@ -265,6 +311,7 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
         <LogBet
           ownerId={ownerId ?? undefined}
           isCurrent={isCurrentAccount}
+          tagSuggestions={popularTags(bets)}
           onLogged={(bet) => {
             if (!isCurrentAccount()) return;
             setBets((prev) => [bet, ...prev.filter((b) => b.id !== bet.id)]);
@@ -331,19 +378,8 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
           {bets.length > 0 ? (
             <>
               <div className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex flex-wrap gap-2">
-                    {(['7d', '30d', 'season', 'all'] as Timeframe[]).map((t) => (
-                      <button
-                        key={t}
-                        aria-pressed={timeframe === t}
-                        onClick={() => setTimeframe(t)}
-                        className={`${bookButton} ${timeframe === t ? 'border-gold text-gold' : ''}`}
-                      >
-                        {t === 'all' ? 'All time' : t === 'season' ? 'Season' : t.toUpperCase()}
-                      </button>
-                    ))}
-                  </div>
+                <PeriodPager period={period} today={today} onChange={setPeriod} />
+                <div className="flex justify-end">
                   <button onClick={exportBook} disabled={!filtered.length} className={bookButton}>
                     Export CSV ({filtered.length})
                   </button>
@@ -429,8 +465,7 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
                 />
               </div>
               <p className="text-[11px] leading-relaxed text-low">
-                History, stats, chart, and CSV follow your filters.{' '}
-                {timeframe !== 'all' && 'Date ranges end today in Eastern time. '}
+                History, stats, chart, and CSV follow your filters and the {periodKicker(period).toLowerCase()} period.{' '}
                 Open slips include every date and follow your other filters.{' '}
                 {source === 'all'
                   ? 'This view includes both verified calls and your self-graded personal bets.'
@@ -439,9 +474,46 @@ export function BookClient({ garyRows }: { garyRows: GaryRows }) {
                     : 'These calls are graded by Gary’s result system.'}
               </p>
               {filtered.length > 0 && <RideChart series={series} unitDollars={unitDollars} />}
+              <BookCalendar
+                grid={grid}
+                today={today}
+                unitDollars={unitDollars}
+                canMoveForward={canMoveForward(grid.period, today)}
+                selectedDay={selectedDay}
+                onShift={shiftCalendar}
+                onSelect={(cell) => setSelectedDay((d) => (d === cell.date ? null : cell.date))}
+              />
+              {dayRows && (
+                <section className="quant-panel overflow-hidden" aria-label={`Slips on ${selectedDay}`}>
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
+                    <h2 className="font-mono text-[11.5px] font-bold uppercase tracking-[0.1em] text-gold">Day ledger · {selectedDay}</h2>
+                    <div className="flex items-center gap-3">
+                      <span className={`tnum font-mono text-[12px] font-bold ${dayRows.some((b) => b.status !== 'pending') ? (dayRows.reduce((s, b) => s + (b.units_net ?? 0), 0) >= 0 ? 'text-win' : 'text-loss') : 'text-low'}`}>
+                        {dayRows.some((b) => b.status !== 'pending') ? fmtNetTotal(dayRows.reduce((s, b) => s + (b.units_net ?? 0), 0), unitDollars) : 'No result yet'}
+                      </span>
+                      <button type="button" className={bookButton} onClick={() => setSelectedDay(null)}>Close</button>
+                    </div>
+                  </div>
+                  {dayRows.length === 0 ? (
+                    <p className="px-5 py-4 text-[13px] text-mid">Nothing on your book for this day.</p>
+                  ) : (
+                    <ul className="divide-y divide-line">
+                      {dayRows.map((bet) => (
+                        <Slip key={bet.id} bet={bet} unitDollars={unitDollars} onChanged={reload} />
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              )}
+              <BookBreakdowns rows={laneInPeriod} scopeLine={`${laneName} · ${periodKicker(period)}`} unitDollars={unitDollars} />
+              <BookBankroll
+                windows={rollingWindows(lane, today)}
+                sourceLine={`${laneName.toLowerCase()} · the last 30, 60 and 90 days, ending today in Eastern time · independent of the period above.`}
+                unitDollars={unitDollars}
+              />
               <OpenSlips bets={openSlips} unitDollars={unitDollars} onChanged={reload} />
-              {filtered.length ? (
-                <Ledger bets={filtered} unitDollars={unitDollars} onChanged={reload} />
+              {history.length ? (
+                <Ledger bets={history} unitDollars={unitDollars} onChanged={reload} />
               ) : (
                 <p className="rounded-card border border-line p-5 text-[13px] text-mid">
                   No history matches this date range and filters. Change your search or date range to see more.

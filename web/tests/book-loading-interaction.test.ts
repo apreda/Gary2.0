@@ -50,7 +50,14 @@ vi.mock('@/lib/book/api', () => ({
   deleteBet: vi.fn(), gradeManual: vi.fn(), setStreakPick: vi.fn(), updateBet: vi.fn(),
 }));
 vi.mock('@/components/book/BookDay', () => ({ useUnitDollars: () => [0, fixture.unit] }));
-vi.mock('@/components/book/BookSlips', () => ({ Ledger: () => null, OpenSlips: () => null }));
+vi.mock('@/components/book/BookSlips', () => ({ Ledger: () => null, OpenSlips: () => null, Slip: () => null }));
+// The Sep 9 2026 analytics surfaces have their own pure-math coverage
+// (book-analytics.test.ts); here they stay outside the interaction boundary.
+vi.mock('@/components/book/BookCalendar', () => ({ BookCalendar: () => null }));
+vi.mock('@/components/book/BookAnalytics', () => ({
+  PeriodPager: () => null, BookBreakdowns: () => null, BookBankroll: () => null,
+  TagChips: () => null, TagInput: () => null, MarketSelect: () => null,
+}));
 vi.mock('@/components/book/LogBet', () => ({ bookButton: '', bookField: '', LogBet: () => null }));
 vi.mock('@/components/book/ProfileEditor', () => ({ profileAvatar: () => 'FP', ProfileEditor: () => null }));
 vi.mock('@/components/book/RideChart', () => ({ RideChart: () => null }));
@@ -66,6 +73,9 @@ import { Ledger, OpenSlips } from '@/components/book/BookSlips';
 import { RideChart } from '@/components/book/RideChart';
 import { LogBet } from '@/components/book/LogBet';
 import { ProfileEditor } from '@/components/book/ProfileEditor';
+import { PeriodPager } from '@/components/book/BookAnalytics';
+import { periodContaining, type PeriodKind } from '@/lib/book/analytics';
+import { estDateStr } from '@/lib/gary/dates';
 
 const actualSlips = await vi.importActual<typeof import('@/components/book/BookSlips')>('@/components/book/BookSlips');
 
@@ -121,9 +131,14 @@ function changeFilter(label: string, value: string | boolean) {
     target: typeof value === 'boolean' ? { checked: value } : { value },
   });
 }
-function chooseTimeframe(label: string) {
-  const button = elements(bookTree()).find(node => node.type === 'button' && textOf(node) === label)!;
-  (button.props.onClick as () => void)();
+// The period pager owns its buttons; choosing a kind goes through its
+// onChange exactly as a tap on WEEK / MONTH / YEAR / ALL would.
+function choosePeriod(kind: PeriodKind) {
+  const pager = elements(bookTree()).find(node => node.type === PeriodPager)!;
+  (pager.props.onChange as (period: ReturnType<typeof periodContaining>) => void)(periodContaining(estDateStr(new Date()), kind));
+}
+function pagerProps() {
+  return elements(bookTree()).find(node => node.type === PeriodPager)!.props as { period: ReturnType<typeof periodContaining>; today: string };
 }
 function rowElement(tree: ReactNode, type: typeof Ledger | typeof OpenSlips) {
   return elements(tree).find(node => node.type === type);
@@ -203,7 +218,9 @@ describe('Book date-filter and open-slip presentation', () => {
     bookTree(); await fixture.callbacks[0]();
   }
 
-  it.each(['7D', '30D', 'Season'])('keeps old and future open slips under %s while bounding history, stats, chart and exported CSV', async timeframe => {
+  it.each(['week', 'month', 'year'] as PeriodKind[])('keeps old and future open slips under the %s period while bounding history, stats, chart and exported CSV', async kind => {
+    // System time is 00:58 ET on Sep 8 (Tuesday): week = Sep 6–12, month =
+    // September, year = 2026. All three hold Sep 8 and 9.
     await load([
       bet('Older unresolved', '2025-12-01'),
       bet('Future unresolved', '2026-09-09'),
@@ -215,7 +232,7 @@ describe('Book date-filter and open-slip presentation', () => {
       bet('Other search', '2026-09-09', { notes: 'Calm read' }),
       bet('Not favorite', '2026-09-09', { is_favorite: false }),
     ]);
-    chooseTimeframe(timeframe);
+    choosePeriod(kind);
     changeFilter('Source', 'manual');
     changeFilter('Sport', 'MLB');
     changeFilter('Search your book', 'wind');
@@ -231,21 +248,24 @@ describe('Book date-filter and open-slip presentation', () => {
     }
     const ledger = renderRows(tree, 'ledger');
     expect(ledger).toContain('Current settled');
-    expect(ledger).not.toContain('Future settled');
+    expect(ledger).toContain('Future settled');
     expect(ledger).not.toContain('Older settled');
-    expect(elements(tree).find(node => node.props.label === 'Win rate')?.props.value).toBe('0%');
-    expect(elements(tree).find(node => node.props.label === 'Return on stake')?.props.value).toBe('-100%');
-    expect(elements(tree).find(node => node.type === RideChart)?.props.series).toEqual([{ date: '2026-09-08', units: -1 }]);
+    expect(elements(tree).find(node => node.props.label === 'Win rate')?.props.value).toBe('50%');
+    expect(elements(tree).find(node => node.props.label === 'Return on stake')?.props.value).toBe('4950%');
+    expect(elements(tree).find(node => node.type === RideChart)?.props.series).toEqual([{ date: '2026-09-08', units: -1 }, { date: '2026-09-09', units: 99 }]);
     const blobs: Blob[] = [];
     vi.spyOn(URL, 'createObjectURL').mockImplementation(value => { blobs.push(value as Blob); return 'blob:fixture'; });
     vi.stubGlobal('document', { createElement: () => ({ click: vi.fn() }) });
     vi.stubGlobal('window', { setTimeout: vi.fn() });
     const exportButton = elements(tree).find(node => node.type === 'button' && textOf(node).startsWith('Export CSV'))!;
-    expect(textOf(exportButton)).toBe('Export CSV (1)');
+    // The export carries every row inside the period, open slips included.
+    expect(textOf(exportButton)).toBe('Export CSV (3)');
     (exportButton.props.onClick as () => void)();
     const csv = await blobs[0].text();
     expect(csv).toContain('Current settled');
-    for (const excluded of ['Older unresolved', 'Future unresolved', 'Future settled', 'Older settled']) expect(csv).not.toContain(excluded);
+    expect(csv).toContain('Future settled');
+    expect(csv).toContain('Future unresolved');
+    for (const excluded of ['Older unresolved', 'Older settled']) expect(csv).not.toContain(excluded);
 
     changeFilter('Status', 'pending');
     tree = bookTree();
@@ -253,13 +273,14 @@ describe('Book date-filter and open-slip presentation', () => {
     expect(open).toContain('Older unresolved');
     expect(open).toContain('Future unresolved');
     expect(renderToStaticMarkup(tree)).toContain('No history matches this date range and filters.');
-    expect(elements(tree).find(node => node.type === 'button' && textOf(node).startsWith('Export CSV'))?.props.disabled).toBe(true);
+    // The open slip inside the period is still exportable.
+    expect(textOf(elements(tree).find(node => node.type === 'button' && textOf(node).startsWith('Export CSV')))).toBe('Export CSV (1)');
 
     changeFilter('Status', 'settled');
     tree = bookTree();
     expect(renderRows(tree, 'open')).toBe('');
     expect(renderRows(tree, 'ledger')).toContain('Current settled');
-    chooseTimeframe('All time');
+    choosePeriod('all');
     tree = bookTree();
     expect(renderRows(tree, 'ledger')).toContain('Future settled');
     expect(renderRows(tree, 'ledger')).toContain('Older settled');
@@ -268,7 +289,7 @@ describe('Book date-filter and open-slip presentation', () => {
 
   it('renders a future-only Book with usable open slips even when selected history is empty', async () => {
     await load([bet('Only future bet', '2026-09-09')]);
-    chooseTimeframe('7D');
+    choosePeriod('week');
     const tree = bookTree();
     const html = renderToStaticMarkup(tree);
     expect(html).toContain('No history matches this date range and filters.');
@@ -280,29 +301,46 @@ describe('Book date-filter and open-slip presentation', () => {
   });
 
   it.each([
-    ['2026-09-08T03:59:59Z', '2026-09-08T04:00:00Z', '2026-09-07', '2026-09-08'],
-    ['2026-03-08T04:59:59Z', '2026-03-08T05:00:00Z', '2026-03-07', '2026-03-08'],
-    ['2026-11-01T03:59:59Z', '2026-11-01T04:00:00Z', '2026-10-31', '2026-11-01'],
-  ])('advances rendered history at Eastern midnight %s while preserving open slips', async (before, after, oldDay, newDay) => {
+    // Monday → Tuesday: the chosen week already holds both days.
+    ['2026-09-08T03:59:59Z', '2026-09-08T04:00:00Z', '2026-09-07', '2026-09-08', true],
+    // Saturday → Sunday: a new week begins, the chosen week stays put and the next page opens.
+    ['2026-03-08T04:59:59Z', '2026-03-08T05:00:00Z', '2026-03-07', '2026-03-08', false],
+    ['2026-11-01T03:59:59Z', '2026-11-01T04:00:00Z', '2026-10-31', '2026-11-01', false],
+  ])('keeps the chosen week across Eastern midnight %s while advancing today and preserving open slips', async (before, after, oldDay, newDay, sameWeek) => {
     await load([
       bet('Prior result', oldDay, { status: 'lost', units_net: -1 }),
       bet('Incoming result', newDay, { status: 'won', units_net: 2 }),
       bet('Incoming open', newDay),
     ]);
-    chooseTimeframe('7D');
     vi.setSystemTime(before);
+    choosePeriod('week');
     let tree = bookTree();
+    expect(pagerProps().today).toBe(oldDay);
     expect(renderRows(tree, 'ledger')).toContain('Prior result');
-    expect(renderRows(tree, 'ledger')).not.toContain('Incoming result');
     expect(renderRows(tree, 'open')).toContain('Incoming open');
-    expect(elements(tree).find(node => node.props.label === 'Win rate')?.props.value).toBe('0%');
-    expect(textOf(elements(tree).find(node => node.type === 'button' && textOf(node).startsWith('Export CSV')))).toBe('Export CSV (1)');
+    if (sameWeek) {
+      expect(renderRows(tree, 'ledger')).toContain('Incoming result');
+      expect(elements(tree).find(node => node.props.label === 'Win rate')?.props.value).toBe('50%');
+    } else {
+      expect(renderRows(tree, 'ledger')).not.toContain('Incoming result');
+      expect(elements(tree).find(node => node.props.label === 'Win rate')?.props.value).toBe('0%');
+    }
+    const chosen = pagerProps().period;
     vi.setSystemTime(after);
     tree = bookTree();
-    expect(renderRows(tree, 'ledger')).toContain('Incoming result');
+    // Midnight moves today, never the period the reader chose.
+    expect(pagerProps().today).toBe(newDay);
+    expect(pagerProps().period).toEqual(chosen);
     expect(renderRows(tree, 'open')).toContain('Incoming open');
-    expect(elements(tree).find(node => node.props.label === 'Win rate')?.props.value).toBe('50%');
-    expect(textOf(elements(tree).find(node => node.type === 'button' && textOf(node).startsWith('Export CSV')))).toBe('Export CSV (3)');
+    expect(renderRows(tree, 'ledger')).toContain('Prior result');
+    if (sameWeek) {
+      expect(renderRows(tree, 'ledger')).toContain('Incoming result');
+    } else {
+      expect(renderRows(tree, 'ledger')).not.toContain('Incoming result');
+      // The new week is now reachable with the forward arrow.
+      choosePeriod('week');
+      expect(renderRows(bookTree(), 'ledger')).toContain('Incoming result');
+    }
   });
 });
 

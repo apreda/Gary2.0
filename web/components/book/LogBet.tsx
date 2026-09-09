@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { logManual, updateBet } from '@/lib/book/api';
+import { logManual, scanSlip, updateBet, type ScannedBet } from '@/lib/book/api';
 import type { UserBet } from '@/lib/book/model';
 import { todayEST } from '@/lib/gary/dates';
 import { logBookMilestone } from '@/lib/gary/analytics';
+import { MarketSelect, TagInput } from './BookAnalytics';
 
 const LEAGUES = ['MLB', 'NFL', 'NBA', 'NCAAF', 'OTHER'];
 export const bookField =
@@ -19,12 +20,14 @@ export function LogBet({
   existing,
   ownerId,
   isCurrent = () => true,
+  tagSuggestions = [],
 }: {
   onLogged: (bet: UserBet) => void;
   onClose: () => void;
   existing?: UserBet;
   ownerId?: string;
   isCurrent?: () => boolean;
+  tagSuggestions?: string[];
 }) {
   const active = useRef(true);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
@@ -36,8 +39,51 @@ export function LogBet({
   const [notes, setNotes] = useState(existing?.notes ?? '');
   const [bookmaker, setBookmaker] = useState(existing?.bookmaker ?? '');
   const [favorite, setFavorite] = useState(existing?.is_favorite ?? false);
+  const [market, setMarket] = useState<string | null>(existing?.market ?? null);
+  const [tags, setTags] = useState<string[]>(existing?.tags ?? []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanned, setScanned] = useState<ScannedBet[]>([]);
+  const [scanBook, setScanBook] = useState<string | null>(null);
+  const [scanNote, setScanNote] = useState<string | null>(null);
+
+  // The reader fills the form; the user still reviews and saves.
+  const applyScan = (bet: ScannedBet, book: string | null) => {
+    const legs = bet.legs.length > 1 ? ` — ${bet.legs.join(', ')}` : '';
+    setDescription(`${bet.description}${legs}`.slice(0, 300));
+    setLeague(LEAGUES.includes(bet.league) ? bet.league : 'OTHER');
+    setMarket(bet.market);
+    if (bet.odds_american != null) setOddsText(String(bet.odds_american));
+    if (bet.game_date) setDate(bet.game_date);
+    if (book && !bookmaker) setBookmaker(book);
+    if (bet.stake_dollars != null) setScanNote(`The slip shows a $${bet.stake_dollars.toFixed(2)} stake. Enter it in units above.`);
+    setError(null);
+  };
+  const scan = async (file: File | undefined) => {
+    if (!file || scanning) return;
+    if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type)) { setError('Choose a JPEG, PNG, WebP or GIF screenshot of the slip.'); return; }
+    if (file.size > 6 * 1024 * 1024) { setError('That screenshot is too large. Crop it to the slip and try again.'); return; }
+    setScanning(true); setError(null); setScanNote(null); setScanned([]);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(',')[1] ?? '');
+        reader.onerror = () => reject(new Error('That image could not be read.'));
+        reader.readAsDataURL(file);
+      });
+      const result = await scanSlip(base64, file.type);
+      if (!active.current) return;
+      setScanned(result.bets); setScanBook(result.sportsbook);
+      if (result.bets[0]) applyScan(result.bets[0], result.sportsbook);
+      if (result.bets.length > 1) setScanNote((n) => [n, `${result.bets.length} bets found. The first is loaded; save it, then load another.`].filter(Boolean).join(' '));
+      else if (result.notes) setScanNote((n) => [n, result.notes].filter(Boolean).join(' '));
+    } catch (e) {
+      if (active.current) setError(e instanceof Error ? e.message : 'The slip could not be read.');
+    } finally {
+      if (active.current) setScanning(false);
+    }
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,6 +114,8 @@ export function LogBet({
             notes,
             bookmaker,
             is_favorite: favorite,
+            market,
+            tags,
           })
         : await logManual({
             league,
@@ -78,6 +126,8 @@ export function LogBet({
             notes,
             bookmaker,
             favorite,
+            market,
+            tags,
           }, ownerId!, () => active.current && isCurrent());
       if (!active.current || !isCurrent()) return;
       if (!existing) logBookMilestone('manual_bet_saved');
@@ -98,6 +148,29 @@ export function LogBet({
         toward public rankings or verified streaks.
       </p>
       <fieldset disabled={busy} className="mt-5 space-y-4 disabled:opacity-60">
+        {!existing && (
+          <div className="rounded-card border border-gold/25 bg-gold/5 p-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <label className={`${bookButton} cursor-pointer border-gold/50 text-gold`}>
+                {scanning ? 'Reading your slip…' : 'Scan a slip'}
+                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="sr-only" disabled={scanning} onChange={(e) => { void scan(e.target.files?.[0]); e.target.value = ''; }} />
+              </label>
+              <span className="text-[12px] text-mid">A screenshot of the slip fills this form. You still review and save it.</span>
+            </div>
+            {scanNote && <p className="mt-2 text-[12px] text-mid">{scanNote}</p>}
+            {scanned.length > 1 && (
+              <ul className="mt-2 space-y-1">
+                {scanned.map((b, i) => (
+                  <li key={`${b.description}-${i}`}>
+                    <button type="button" onClick={() => applyScan(b, scanBook)} className={`${bookButton} w-full text-left`}>
+                      {b.description} · {b.league}{b.odds_american != null ? ` · ${b.odds_american > 0 ? '+' : ''}${b.odds_american}` : ''}{b.stake_dollars != null ? ` · $${b.stake_dollars}` : ''}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
         <label className={label}>
           Selection
           <input
@@ -154,6 +227,10 @@ export function LogBet({
           </label>
         </div>
         <label className={label}>
+          Bet type <span className="text-low">(groups your breakdowns)</span>
+          <MarketSelect value={market} onChange={setMarket} />
+        </label>
+        <label className={label}>
           Sportsbook <span className="text-low">(optional)</span>
           <input
             className={bookField}
@@ -163,6 +240,10 @@ export function LogBet({
             placeholder="Where you placed the bet"
           />
         </label>
+        <div className={label}>
+          Tags <span className="text-low">(optional · up to 8)</span>
+          <div className="mt-1"><TagInput tags={tags} onChange={setTags} suggestions={tagSuggestions} /></div>
+        </div>
         <label className={label}>
           Private notes <span className="text-low">(optional)</span>
           <textarea

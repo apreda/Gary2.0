@@ -1,5 +1,6 @@
 import SwiftUI
 import Charts
+import PhotosUI
 
 // ─────────────────────────────────────────────────────────────────────────────
 // YOUR BOOK — Tail/Fade + personal ledger (Jul 26 2026).
@@ -52,6 +53,10 @@ struct UserBet: Codable, Identifiable {
     var source_pick_id: String? = nil
     var source_line: Double? = nil
     var source_side: String? = nil
+    /// moneyline | spread | total | prop | parlay | other — server-derived on
+    /// verified tickets, chosen by the user on outside bets (Sep 9 2026).
+    var market: String? = nil
+    var tags: [String]? = nil
 
     var isVerified: Bool { kind == "tail" || kind == "fade" }
     var isPending: Bool { status == "pending" }
@@ -442,6 +447,8 @@ enum UserBookAPI {
         var notes: String = ""
         var bookmaker: String = ""
         var favorite: Bool = false
+        var market: String? = nil
+        var tags: [String] = []
     }
 
     @MainActor static func logManual(_ draft: ManualBetDraft) async throws -> UserBet {
@@ -470,8 +477,10 @@ enum UserBookAPI {
             "stake_units": draft.stake,
             "streak_pick": false, "is_favorite": draft.favorite,
             "notes": draft.notes, "bookmaker": draft.bookmaker,
+            "tags": draft.tags,
         ]
         if let o = draft.odds { payload["odds_american"] = o }
+        if let m = draft.market, !m.isEmpty { payload["market"] = m }
         let body = try JSONSerialization.data(withJSONObject: payload)
         var req = try authedRequest(comps.url!, method: "POST", body: body)
         req.setValue("return=representation", forHTTPHeaderField: "Prefer")
@@ -517,10 +526,10 @@ enum UserBookAPI {
         } catch { return false }
     }
 
-    @MainActor static func updateDetails(id: String, favorite: Bool, notes: String, bookmaker: String) async throws -> UserBet {
+    @MainActor static func updateDetails(id: String, favorite: Bool, notes: String, bookmaker: String, tags: [String]) async throws -> UserBet {
         var comps = URLComponents(url: rest.appendingPathComponent("user_bets"), resolvingAgainstBaseURL: false)!
         comps.queryItems = [URLQueryItem(name: "id", value: "eq.\(id)")]
-        let body = try JSONSerialization.data(withJSONObject: ["is_favorite": favorite, "notes": notes, "bookmaker": bookmaker])
+        let body = try JSONSerialization.data(withJSONObject: ["is_favorite": favorite, "notes": notes, "bookmaker": bookmaker, "tags": tags] as [String: Any])
         var req = try authedRequest(comps.url!, method: "PATCH", body: body)
         req.setValue("return=representation", forHTTPHeaderField: "Prefer")
         let data = try await run(req)
@@ -531,7 +540,7 @@ enum UserBookAPI {
         return row
     }
 
-    @MainActor static func editManual(id: String, description: String, odds: Int, stake: Double, gameDate: String) async throws -> UserBet {
+    @MainActor static func editManual(id: String, description: String, odds: Int, stake: Double, gameDate: String, market: String? = nil) async throws -> UserBet {
         guard odds <= -100 && odds >= -100000 || odds >= 100 && odds <= 100000,
               stake.isFinite, stake >= 0.01, stake <= 10,
               !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
@@ -540,7 +549,9 @@ enum UserBookAPI {
         }
         var comps = URLComponents(url: rest.appendingPathComponent("user_bets"), resolvingAgainstBaseURL: false)!
         comps.queryItems = [URLQueryItem(name: "id", value: "eq.\(id)"), URLQueryItem(name: "kind", value: "eq.manual")]
-        let body = try JSONSerialization.data(withJSONObject: ["pick_text": description, "description": description, "odds_american": odds, "stake_units": stake, "game_date": gameDate])
+        var patch: [String: Any] = ["pick_text": description, "description": description, "odds_american": odds, "stake_units": stake, "game_date": gameDate]
+        patch["market"] = (market?.isEmpty == false) ? market! : NSNull()
+        let body = try JSONSerialization.data(withJSONObject: patch)
         var req = try authedRequest(comps.url!, method: "PATCH", body: body)
         req.setValue("return=representation", forHTTPHeaderField: "Prefer")
         let data = try await run(req)
@@ -582,6 +593,65 @@ enum UserBookAPI {
 
 private func userBookInstant(_ value: String?) -> Date? {
     value.flatMap(parseISO8601)
+}
+
+/// The slip scanner (Sep 9 2026): a screenshot goes to the `book-slip-scan`
+/// edge function and comes back as form values. Nothing is saved until the
+/// user taps Add — the reader fills the form, the user owns the entry.
+enum SlipScanAPI {
+    struct ScannedBet: Decodable, Identifiable {
+        let description: String
+        let league: String
+        let market: String?
+        let odds_american: Int?
+        let stake_dollars: Double?
+        let game_date: String?
+        let result: String?
+        let legs: [String]
+        var id: String { "\(description)|\(game_date ?? "")|\(odds_american ?? 0)|\(stake_dollars ?? 0)" }
+        var oddsText: String { odds_american.map { ($0 > 0 ? "+" : "") + String($0) } ?? "odds not shown" }
+        var stakeText: String { stake_dollars.map { String(format: "$%.2f", $0) } ?? "stake not shown" }
+    }
+    struct Result: Decodable {
+        let ok: Bool
+        let bets: [ScannedBet]
+        let sportsbook: String?
+        let notes: String?
+        let used: Int?
+        let limit: Int?
+    }
+    private struct Failure: Decodable { let error: String? }
+
+    @MainActor static func scan(jpeg: Data) async throws -> Result {
+        guard let token = AuthManager.shared.bearerToken else { throw UserBookError.notSignedIn }
+        var req = URLRequest(url: Secrets.supabaseURL.appendingPathComponent("/functions/v1/book-slip-scan"))
+        req.httpMethod = "POST"
+        req.timeoutInterval = 75
+        req.setValue(Secrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["image_base64": jpeg.base64EncodedString(), "media_type": "image/jpeg"])
+        let (data, response) = try await URLSession.shared.data(for: req)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200...299).contains(status) else {
+            let message = (try? JSONDecoder().decode(Failure.self, from: data))?.error
+            throw UserBookError.server(message ?? "The slip reader is unavailable right now. Enter the bet by hand or try again shortly.")
+        }
+        return try JSONDecoder().decode(Result.self, from: data)
+    }
+
+    /// A phone screenshot is a few megabytes; the reader needs far less.
+    static func prepare(_ image: UIImage, maxSide: CGFloat = 1600) -> Data? {
+        let longest = max(image.size.width, image.size.height)
+        let scale = longest > maxSide ? maxSide / longest : 1
+        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let rendered = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
+        return rendered.jpegData(compressionQuality: 0.82)
+    }
 }
 
 enum BookTicketTime {
@@ -941,8 +1011,13 @@ struct UserBookSection: View {
     @AppStorage("userUnitDollars") private var userUnitDollars = 0.0
     @State private var shareImage: UserBookShareImage? = nil
     @State private var streak: UserBookAPI.UserStreak? = nil
-    // Tracker controls (YOU page): window + source filters, live-slip context.
-    @State private var timeframe = "all"          // 7d | 30d | season | all
+    // Tracker controls (YOU page): calendar period + source filters, live-slip context.
+    @AppStorage("bookPeriodKind") private var periodKindRaw = "month"
+    @State private var period = BookPeriod.containing(BookDates.today(), kind: .month)
+    /// Any date inside the month the calendar shows; follows the period when it is a month.
+    @State private var calendarAnchor = BookDates.today()
+    @State private var breakdownDimension: BookBreakdownDimension = .league
+    @State private var selectedDay: BookSelectedDay? = nil
     @State private var kindFilter = "all"         // all | tail | fade | manual
     @State private var liveScores: [LiveScore] = []
     @State private var todayPicks: [GaryPick] = []
@@ -994,7 +1069,18 @@ struct UserBookSection: View {
         .task(id: auth.currentUser?.id) {
             bets = []; streak = nil; todayPicks = []; liveScores = []
             loading = true; loadFailed = false
+            let kind = BookPeriodKind(rawValue: periodKindRaw) ?? .month
+            if period.kind != kind { period = BookPeriod.containing(BookDates.today(), kind: kind) }
             await refreshBook()
+        }
+        .onChange(of: period) { next in
+            periodKindRaw = next.kind.rawValue
+            if next.kind == .month { calendarAnchor = next.start }
+        }
+        .sheet(item: $selectedDay) { day in
+            BookDaySheet(date: day.date, bets: laneBets.filter { $0.game_date == day.date }) { updated in
+                if let i = bets.firstIndex(where: { $0.id == updated.id }) { bets[i] = updated }
+            } onDelete: { id in bets.removeAll { $0.id == id } }
         }
         .onReceive(NotificationCenter.default.publisher(for: .userBookChanged)) { _ in
             Task { await refreshBook() }
@@ -1002,8 +1088,17 @@ struct UserBookSection: View {
         .onChange(of: scenePhase) { phase in
             if phase == .active { Task { await refreshBook() } }
         }
-        .onGaryTour { verb, _ in
-            if verb == "logbet" { showQuickLog = true }
+        .onGaryTour { verb, arg in
+            // DEBUG harness only (GaryTour posts these): drive the analytics
+            // surfaces the simulator cannot tap on its own.
+            switch verb {
+            case "logbet": showQuickLog = true
+            case "bookday": selectedDay = BookSelectedDay(date: arg)
+            case "bookperiod": period = BookPeriod.containing(BookDates.today(), kind: BookPeriodKind(rawValue: arg) ?? .month)
+            case "bookdim": breakdownDimension = BookBreakdownDimension(rawValue: arg) ?? .league
+            case "bookfilter": kindFilter = arg
+            default: break
+            }
         }
         .sheet(isPresented: $showUnitSheet) { UnitSizeSheet() }
         .sheet(isPresented: $showQuickLog) {
@@ -1028,12 +1123,16 @@ struct UserBookSection: View {
             } else if withGary.isEmpty && yourPlays.isEmpty {
                 emptyBookCard
             } else {
+                periodPager
                 walletHeader
                 profitChart
+                calendarCard
                 bookActions
                 streakCrown
                 splitBookHeader
                 statTiles
+                breakdownsCard
+                bankrollCard
                 HStack(spacing: 12) {
                     TextField("Search your bets", text: $query)
                         .font(GaryFonts.text(13)).textInputAutocapitalization(.never)
@@ -1084,13 +1183,52 @@ struct UserBookSection: View {
         }
     }
 
-    private var timeframeLabel: String {
-        switch timeframe {
-        case "7d": return "Last 7 days"
-        case "30d": return "Last 30 days"
-        case "season": return "Season"
-        default: return "All time"
-        }
+    private var timeframeLabel: String { period.label }
+
+    /// The graded lane the headline describes (verified, or self-graded on
+    /// YOURS), every date, with the search and favorite filters applied.
+    private var laneBets: [UserBet] {
+        bets.filter { (kindFilter == "manual" ? $0.kind == "manual" : $0.isVerified) && matchesBookFilters($0) }
+    }
+
+    private var periodPager: some View {
+        BookPeriodPager(period: $period, today: BookDates.today())
+            .padding(.horizontal, 12)
+    }
+
+    private var monthGrid: BookMonthGrid {
+        let m = BookCalendar.monthOf(calendarAnchor)
+        return BookCalendar.month(year: m.year, month: m.month, entries: laneBets.map(\.analyticsEntry))
+    }
+
+    private var calendarCard: some View {
+        let today = BookDates.today()
+        let grid = monthGrid
+        return BookCalendarView(
+            grid: grid, today: today,
+            canMoveForward: grid.period.canMoveForward(today: today),
+            onShift: { steps in
+                if period.kind == .month {
+                    period = period.shifted(by: steps)
+                } else {
+                    calendarAnchor = grid.period.shifted(by: steps).start
+                }
+            },
+            onSelect: { cell in selectedDay = BookSelectedDay(date: cell.date) })
+        .padding(.horizontal, 12)
+    }
+
+    private var breakdownsCard: some View {
+        BookBreakdownsCard(entries: summaryBets.map(\.analyticsEntry),
+                           scopeLine: "\(summarySource) · \(period.kicker)",
+                           dimension: $breakdownDimension)
+            .padding(.horizontal, 12)
+    }
+
+    private var bankrollCard: some View {
+        BookBankrollCard(windows: BookBankroll.rolling(laneBets.map(\.analyticsEntry), today: BookDates.today()),
+                         sourceLine: "\(summarySource.lowercased()) · the last 30, 60 and 90 days, ending today in Eastern time · independent of the period above")
+            .padding(.horizontal, 12)
     }
 
     private var walletHeader: some View {
@@ -1337,10 +1475,7 @@ struct UserBookSection: View {
     // ── Tracker: scope filters ──────────────────────────────────────────────
 
     private var scopedBets: [UserBet] {
-        let dateWindow = BookTimeframe.window(timeframe)
-        return bets.filter { b in
-            (dateWindow?.contains(b.game_date) ?? true) && matchesBookFilters(b)
-        }
+        bets.filter { b in period.contains(b.game_date) && matchesBookFilters(b) }
     }
     private var scopedWithGary: [UserBet] { scopedBets.filter { $0.isVerified } }
     private var scopedYourPlays: [UserBet] { scopedBets.filter { $0.kind == "manual" } }
@@ -1361,19 +1496,12 @@ struct UserBookSection: View {
                     filterChip("YOURS", key: "manual")
                 }
             }
-            Menu {
-                ForEach(["7d", "30d", "season", "all"], id: \.self) { value in
-                    Button {
-                        timeframe = value
-                    } label: {
-                        Label(value == "season" ? "Season" : value == "all" ? "All time" : value == "7d" ? "Last 7 days" : "Last 30 days",
-                              systemImage: timeframe == value ? "checkmark" : "")
-                    }
-                }
-            } label: {
-                BillfoldMenuLabel(title: timeframe == "season" ? "SEASON" : timeframe.uppercased())
-            }
-            .accessibilityLabel("Book date range: \(timeframeLabel)")
+            Spacer(minLength: 0)
+            Text(period.kicker)
+                .font(GaryFonts.mono(9, bold: true)).tracking(0.6)
+                .foregroundStyle(GaryColors.gold)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .accessibilityLabel("Book period: \(timeframeLabel)")
         }
     }
 
@@ -1524,30 +1652,12 @@ struct UserBookSection: View {
                     }
                 }
             }
-            .frame(height: 185).padding(.horizontal, 10).padding(.top, 6)
-            chartTimeframeRow
+            .frame(height: 185).padding(.horizontal, 10).padding(.top, 6).padding(.bottom, 8)
             Text(BookMoney.isSet ? "Your logged stakes · \(summarySource.lowercased())" : "Illustrative $100/unit · set your unit size in Settings")
                 .font(GaryFonts.mono(9.5)).foregroundStyle(.white.opacity(0.55))
                 .frame(maxWidth: .infinity).multilineTextAlignment(.center)
                 .padding(.top, 2)
         }
-    }
-
-    private var chartTimeframeRow: some View {
-        HStack(spacing: 0) {
-            ForEach(["7d", "30d", "season", "all"], id: \.self) { value in
-                Button { timeframe = value } label: {
-                    Text(value == "7d" ? "1W" : value == "30d" ? "1M" : value == "season" ? "SEASON" : "ALL")
-                        .font(.system(size: 11, weight: timeframe == value ? .bold : .medium))
-                        .foregroundStyle(timeframe == value ? GaryColors.gold : .white.opacity(0.4))
-                        .frame(maxWidth: .infinity).padding(.vertical, 5)
-                        .background(Capsule().fill(timeframe == value ? GaryColors.gold.opacity(0.12) : .clear))
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(timeframe == value ? .isSelected : [])
-            }
-        }
-        .padding(.horizontal, 12).padding(.vertical, 8)
     }
 
     // ── Tracker: open slips with live context ───────────────────────────────
@@ -1689,7 +1799,8 @@ struct UserBookSection: View {
     }
 
     private func matchesBookFilters(_ bet: UserBet) -> Bool {
-        let text = [bet.pick_text, bet.league ?? "", bet.notes ?? "", bet.bookmaker ?? ""].joined(separator: " ")
+        let text = ([bet.pick_text, bet.league ?? "", bet.notes ?? "", bet.bookmaker ?? "", BookMarket.label(bet.market)] + (bet.tags ?? []))
+            .joined(separator: " ")
         return (kindFilter == "all" || bet.kind == kindFilter)
             && (!favoritesOnly || bet.is_favorite == true)
             && (query.isEmpty || text.localizedCaseInsensitiveContains(query))
@@ -1720,6 +1831,11 @@ struct UserBookSection: View {
 struct UserBookShareImage: Identifiable {
     let id = UUID()
     let image: UIImage
+}
+
+struct BookSelectedDay: Identifiable {
+    let date: String
+    var id: String { date }
 }
 
 /// Plain UIActivityViewController wrapper for the Your Book share card
@@ -2000,8 +2116,10 @@ struct UserBetSlipRow: View {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(bet.pick_text).font(GaryFonts.text(13, .semibold))
                         .foregroundStyle(.white.opacity(0.9)).fixedSize(horizontal: false, vertical: true)
-                    Text("\(bet.game_date) · \(BookMoney.stake(bet.stake_units))\(bet.odds_american.map { " · \($0 > 0 ? "+" : "")\($0)" } ?? "")")
+                    Text("\(bet.game_date) · \(BookMoney.stake(bet.stake_units))\(bet.odds_american.map { " · \($0 > 0 ? "+" : "")\($0)" } ?? "")\(BookMarket.shortLabel(bet.market).isEmpty ? "" : " · \(BookMarket.shortLabel(bet.market))")\((bet.bookmaker ?? "").isEmpty ? "" : " · \(bet.bookmaker!)")")
                         .font(GaryFonts.mono(9)).foregroundStyle(.white.opacity(0.5))
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                    TagChipsRow(tags: bet.tags ?? [])
                     if bet.kind == "manual" && bet.isPending {
                         Text("Tap to record your result").font(GaryFonts.text(11)).foregroundStyle(GaryColors.gold)
                     }
@@ -2073,6 +2191,13 @@ struct QuickLogSheet: View {
     @State private var oddsText = "-110"
     @State private var manualDate = Date()
     @State private var stakeText = ""
+    @State private var tagSuggestions: [String] = []
+    @State private var slipItem: PhotosPickerItem? = nil
+    @State private var scanning = false
+    @State private var scanned: [SlipScanAPI.ScannedBet] = []
+    @State private var scanSportsbook: String? = nil
+    @State private var scanNotes: String? = nil
+    @State private var scanError: String? = nil
     private let leagues = ["MLB", "NFL", "NCAAF", "NBA", "OTHER"]
     private let ember = Color(hex: "#E5844B")
 
@@ -2127,6 +2252,10 @@ struct QuickLogSheet: View {
             entries = []; armedId = nil; errorText = nil
             stakeText = String(format: "%.2f", BookMoney.unitDollars)
             await loadBoard()
+        }
+        .onGaryTour { verb, _ in
+            // DEBUG harness: open the outside-bet form for screenshots.
+            if verb == "outsidebet" { withAnimation { showOutside = true } }
         }
     }
 
@@ -2333,6 +2462,7 @@ struct QuickLogSheet: View {
 
             if showOutside {
                 VStack(alignment: .leading, spacing: 10) {
+                    scanRow
                     HStack(spacing: 12) {
                         ForEach(leagues, id: \.self) { lg in
                             let isOn = draft.league == lg
@@ -2368,9 +2498,21 @@ struct QuickLogSheet: View {
                     DatePicker("Bet date (Eastern)", selection: $manualDate, displayedComponents: .date)
                         .environment(\.timeZone, TimeZone(identifier: "America/New_York")!)
                         .font(GaryFonts.text(13)).tint(GaryColors.gold)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("BET TYPE")
+                            .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
+                            .foregroundStyle(.white.opacity(0.45))
+                        BookMarketPicker(market: $draft.market)
+                    }
                     TextField("Sportsbook (optional)", text: $draft.bookmaker)
                         .font(GaryFonts.text(13)).padding(10)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.06)))
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("TAGS")
+                            .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
+                            .foregroundStyle(.white.opacity(0.45))
+                        TagChipsEditor(tags: $draft.tags, suggestions: tagSuggestions)
+                    }
                     TextField("Private notes (optional)", text: $draft.notes, axis: .vertical)
                         .font(GaryFonts.text(13)).padding(10)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.06)))
@@ -2409,6 +2551,119 @@ struct QuickLogSheet: View {
                 }
             }
         }
+    }
+
+    // ── The slip scanner ─────────────────────────────────────────────────────
+
+    @ViewBuilder private var scanRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                PhotosPicker(selection: $slipItem, matching: .images, photoLibrary: .shared()) {
+                    HStack(spacing: 6) {
+                        Image(systemName: scanning ? "hourglass" : "doc.viewfinder")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text(scanning ? "READING YOUR SLIP" : "SCAN A SLIP")
+                            .font(GaryFonts.mono(9.5, bold: true)).tracking(0.9)
+                    }
+                    .foregroundStyle(GaryColors.gold)
+                    .padding(.horizontal, 12).frame(minHeight: 36)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(GaryColors.gold.opacity(0.10))
+                            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(GaryColors.gold.opacity(0.4), lineWidth: 1))
+                    )
+                }
+                .disabled(scanning || !auth.isAuthenticated)
+                .accessibilityLabel("Scan a sportsbook slip screenshot to fill this form")
+                Text("A screenshot of the slip fills the form. You still review and add it.")
+                    .font(GaryFonts.text(11))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let scanError {
+                Text(scanError)
+                    .font(GaryFonts.mono(9.5))
+                    .foregroundStyle(GaryColors.loss.opacity(0.9))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if scanned.count > 1 {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("\(scanned.count) BETS ON THIS SLIP · TAP ONE TO LOAD IT")
+                        .font(GaryFonts.mono(8.5, bold: true)).tracking(0.7)
+                        .foregroundStyle(.white.opacity(0.5))
+                    ForEach(scanned) { bet in
+                        Button { apply(bet) } label: {
+                            HStack(spacing: 8) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(bet.description)
+                                        .font(GaryFonts.text(12.5, .semibold))
+                                        .foregroundStyle(.white.opacity(0.9))
+                                        .lineLimit(2).minimumScaleFactor(0.7)
+                                    Text("\(bet.league) · \(bet.oddsText) · \(bet.stakeText)")
+                                        .font(GaryFonts.mono(9)).foregroundStyle(.white.opacity(0.45))
+                                        .lineLimit(1).minimumScaleFactor(0.7)
+                                }
+                                Spacer(minLength: 6)
+                                Text(draft.description == bet.description ? "LOADED" : "LOAD")
+                                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.7)
+                                    .foregroundStyle(GaryColors.gold.opacity(draft.description == bet.description ? 0.5 : 0.9))
+                            }
+                            .padding(10)
+                            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.045)))
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            if let scanNotes, !scanNotes.isEmpty {
+                Text(scanNotes)
+                    .font(GaryFonts.mono(9)).foregroundStyle(.white.opacity(0.45))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .onChange(of: slipItem) { item in
+            guard let item else { return }
+            Task { await scan(item) }
+        }
+    }
+
+    private func scan(_ item: PhotosPickerItem) async {
+        scanning = true; scanError = nil; scanNotes = nil; scanned = []
+        defer { scanning = false; slipItem = nil }
+        do {
+            guard let raw = try await item.loadTransferable(type: Data.self),
+                  let image = UIImage(data: raw),
+                  let jpeg = SlipScanAPI.prepare(image) else {
+                scanError = "That image couldn't be opened. Try a screenshot of the slip."
+                return
+            }
+            let result = try await SlipScanAPI.scan(jpeg: jpeg)
+            scanned = result.bets
+            scanSportsbook = result.sportsbook
+            scanNotes = result.notes
+            if let first = result.bets.first { apply(first) }
+            if result.bets.count > 1 {
+                scanNotes = [result.notes ?? "", "The first bet is loaded. Add it, then scan again or tap another to load it."]
+                    .filter { !$0.isEmpty }.joined(separator: " ")
+            }
+        } catch {
+            scanError = error.localizedDescription
+        }
+    }
+
+    /// Prefills the outside-bet form. The user still reviews and taps Add.
+    private func apply(_ bet: SlipScanAPI.ScannedBet) {
+        var text = bet.description
+        if bet.legs.count > 1 { text += " — " + bet.legs.joined(separator: ", ") }
+        draft.description = String(text.prefix(300))
+        draft.league = leagues.contains(bet.league) ? bet.league : "OTHER"
+        draft.market = bet.market
+        if let odds = bet.odds_american { oddsText = String(odds) }
+        if let dollars = bet.stake_dollars { stakeText = String(format: "%.2f", dollars) }
+        if let book = scanSportsbook, draft.bookmaker.isEmpty { draft.bookmaker = book }
+        if let day = bet.game_date, let date = BookDates.parse(day) { manualDate = date }
+        errorText = nil
     }
 
     // ── Data + booking ──────────────────────────────────────────────────────
@@ -2478,6 +2733,7 @@ struct QuickLogSheet: View {
         // instead of an arm button, so the directory can't double-book it.
         let mine = AuthManager.shared.bearerToken == nil ? [] : (await UserBookAPI.fetchMyBets() ?? [])
         guard boardRequest == request, owner == auth.currentUser?.id, !Task.isCancelled else { return }
+        tagSuggestions = BookTags.popular(mine.map(\.analyticsEntry))
         rows = rows.map { entry in
             var e = entry
             let matches = mine.filter { bet in
@@ -3021,6 +3277,7 @@ struct ClassicLeaderboardView: View {
     @AppStorage("bookBoardSort") private var sort = "streak"
     @AppStorage("bookBoardWindow") private var window = "30d"
     @AppStorage("bookBoardLeague") private var league = "all"
+    @AppStorage("bookBoardScope") private var scope = "all"
     @AppStorage("myHandle") private var myHandle = ""
     @State private var board: ProfileIdentityAPI.Board?
     @State private var rows: [ProfileIdentityAPI.BoardRow] = []
@@ -3043,7 +3300,9 @@ struct ClassicLeaderboardView: View {
     private var selectedSort: String { ["streak", "wins", "record"].contains(sort) ? sort : "streak" }
     private var selectedWindow: String { ["season", "30d", "7d"].contains(window) ? window : "30d" }
     private var selectedLeague: String { ["all", "MLB", "NFL", "NBA", "NCAAF"].contains(league) ? league : "all" }
-    private var queryKey: String { "\(auth.currentUser?.id ?? "guest"):\(auth.isAuthenticated):\(selectedWindow):\(selectedSort):\(selectedLeague)" }
+    /// FRIENDS needs an account; a signed-out viewer always sees everyone.
+    private var selectedScope: String { scope == "friends" && auth.isAuthenticated ? "friends" : "all" }
+    private var queryKey: String { "\(auth.currentUser?.id ?? "guest"):\(auth.isAuthenticated):\(selectedWindow):\(selectedSort):\(selectedLeague):\(selectedScope)" }
     private var windowName: String { selectedWindow == "season" ? "This year" : selectedWindow == "7d" ? "Last 7 days" : "Last 30 days" }
     private var heading: String { selectedSort == "wins" ? "The win leaders." : selectedSort == "record" ? "Make every call count." : "Who's on a heater?" }
 
@@ -3082,10 +3341,14 @@ struct ClassicLeaderboardView: View {
         }
         .pageGutter()
         .task(id: queryKey) { await load() }
-        .onGaryTour { verb, _ in if verb == "boardrules" { showRules = true } }
+        .onGaryTour { verb, arg in
+            if verb == "boardrules" { showRules = true }
+            if verb == "boardscope" { scope = arg == "friends" ? "friends" : "all" }
+        }
         .onChange(of: scenePhase) { phase in if phase == .active { Task { await load() } } }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("GaryProfileUpdated"))) { _ in Task { await load() } }
         .onReceive(NotificationCenter.default.publisher(for: .userBookChanged)) { _ in Task { await load() } }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("GaryFollowsChanged"))) { _ in Task { await load() } }
         .sheet(isPresented: $showClaim, onDismiss: { Task { await load() } }) { HandleClaimSheet { myHandle = $0 } }
         .sheet(isPresented: $showAuth, onDismiss: { Task { await load() } }) { AuthView() }
         .sheet(isPresented: $showEditor) { ProfileEditorSheet(snapshot: profile) { updated in profile = updated; Task { await load() } } }
@@ -3114,6 +3377,18 @@ struct ClassicLeaderboardView: View {
 
     private var controls: some View {
         VStack(spacing: 14) {
+            HStack(spacing: 18) {
+                BillfoldFilterTab(title: "EVERYONE", isSelected: selectedScope == "all") { scope = "all" }
+                BillfoldFilterTab(title: "FRIENDS", isSelected: selectedScope == "friends") {
+                    if auth.isAuthenticated { scope = "friends" } else { showAuth = true }
+                }
+                Spacer()
+                if selectedScope == "friends", let n = board?.following_count {
+                    Text("\(n) FOLLOWED")
+                        .font(GaryFonts.mono(9, bold: true)).tracking(0.6)
+                        .foregroundStyle(.white.opacity(0.45))
+                }
+            }
             HStack(spacing: 5) {
                 sortButton("Hot streaks", value: "streak", icon: "flame")
                 sortButton("Most wins", value: "wins", icon: "checkmark")
@@ -3242,7 +3517,7 @@ struct ClassicLeaderboardView: View {
             Text("\(row.rank)").font(GaryFonts.mono(12, bold: true)).foregroundStyle(isMe ? GaryColors.gold : .white.opacity(0.45)).frame(minWidth: 18, alignment: .leading)
             VStack(alignment: .leading, spacing: 4) {
                 Text(row.name).font(GaryFonts.text(14, .semibold)).foregroundStyle(isMe ? GaryColors.gold : GaryColors.warmWhite).lineLimit(2).minimumScaleFactor(0.8)
-                Text(isMe ? "YOU · BEST W\(row.best_streak)" : "BEST W\(row.best_streak)").font(GaryFonts.mono(8, bold: true)).foregroundStyle(.white.opacity(0.4))
+                Text(isMe ? "YOU · BEST W\(row.best_streak)" : row.following == true ? "FOLLOWING · BEST W\(row.best_streak)" : "BEST W\(row.best_streak)").font(GaryFonts.mono(8, bold: true)).foregroundStyle(row.following == true && !isMe ? GaryColors.gold.opacity(0.7) : .white.opacity(0.4))
             }.frame(maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .trailing, spacing: 4) {
                 Text(row.record).font(GaryFonts.mono(13, bold: true)).foregroundStyle(.white.opacity(0.85))
@@ -3259,8 +3534,12 @@ struct ClassicLeaderboardView: View {
     private var emptyState: some View {
         VStack(spacing: 13) {
             Image(systemName: "trophy").font(.system(size: 34)).foregroundStyle(GaryColors.gold)
-            Text((board?.hidden_count ?? 0) > 0 ? "No players to show in this view." : "The next name could be yours.").font(GaryFonts.display(26)).foregroundStyle(GaryColors.warmWhite).multilineTextAlignment(.center)
-            Text((board?.hidden_count ?? 0) > 0 ? "Your blocked players are hidden. Their results still count in the overall rankings." : "No players have qualified for \(selectedLeague == "all" ? "all sports" : selectedLeague) · \(windowName.lowercased()) yet. Five decided verified picks and a public handle earn a place.")
+            Text(selectedScope == "friends" ? "Your friends board is empty." : (board?.hidden_count ?? 0) > 0 ? "No players to show in this view." : "The next name could be yours.").font(GaryFonts.display(26)).foregroundStyle(GaryColors.warmWhite).multilineTextAlignment(.center)
+            Text(selectedScope == "friends"
+                 ? ((board?.following_count ?? 0) == 0
+                    ? "Open any player from the board and tap Follow. Everyone you follow ranks here against you, with the same five-pick minimum."
+                    : "None of the players you follow has five decided verified picks for \(selectedLeague == "all" ? "all sports" : selectedLeague) · \(windowName.lowercased()) yet.")
+                 : (board?.hidden_count ?? 0) > 0 ? "Your blocked players are hidden. Their results still count in the overall rankings." : "No players have qualified for \(selectedLeague == "all" ? "all sports" : selectedLeague) · \(windowName.lowercased()) yet. Five decided verified picks and a public handle earn a place.")
                 .font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.55)).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
             if selectedLeague != "all" || selectedWindow != "season" {
                 Button("Explore the full board") { league = "all"; window = "season" }.font(GaryFonts.text(13, .semibold)).foregroundStyle(GaryColors.gold).padding(.vertical, 6)
@@ -3277,6 +3556,7 @@ struct ClassicLeaderboardView: View {
                     rulesItem("Read the numbers", "W–L and win rate use the selected time window. Win rate excludes pushes and voids. Streaks and personal bests use all settled starred picks in the selected sport, so changing a date filter doesn't reset a run.")
                     rulesItem("Same rules for everyone", "Rankings use verified picks graded by the system. Self-tracked bets and their favorites stay private and never change the public standings. Membership doesn't improve your rank.")
                     rulesItem("Ties are shared", "Total wins and the number of decided picks break ties. Players with identical ranking numbers share their place. The board is calculated across every eligible player. Your position stays visible even when you're beyond the loaded page.")
+                    rulesItem("Friends board", "Follow players from their profile and the FRIENDS lens ranks them against you with the same rules. Who you follow is private and changes nothing for anyone else.")
                     rulesItem("You control your visibility", "Edit your profile to leave the leaderboard at any time. Your book is still yours, and making your record private doesn't erase it.")
                 }.padding(22)
             }.background(Color(hex: "#0F0D0C")).navigationTitle("How the board works").navigationBarTitleDisplayMode(.inline)
@@ -3300,7 +3580,7 @@ struct ClassicLeaderboardView: View {
         loading = true; loadingMore = false; error = nil
         do {
             async let profileRead = auth.isAuthenticated ? try? ProfileIdentityAPI.mine() : nil
-            let result = try await ProfileIdentityAPI.board(window: selectedWindow, sort: selectedSort, league: selectedLeague)
+            let result = try await ProfileIdentityAPI.board(window: selectedWindow, sort: selectedSort, league: selectedLeague, scope: selectedScope)
             let identity = await profileRead
             guard key == queryKey, requestID == request, !Task.isCancelled else { return }
             board = result; rows = result.rows; nextOffset = result.rows.count; profile = identity; updatedAt = Date()
@@ -3323,7 +3603,7 @@ struct ClassicLeaderboardView: View {
         let key = queryKey; let request = requestID; let offset = nextOffset
         loadingMore = true; error = nil
         do {
-            let result = try await ProfileIdentityAPI.board(window: selectedWindow, sort: selectedSort, league: selectedLeague, offset: offset)
+            let result = try await ProfileIdentityAPI.board(window: selectedWindow, sort: selectedSort, league: selectedLeague, offset: offset, scope: selectedScope)
             guard key == queryKey, requestID == request, !Task.isCancelled else { return }
             var existing = Set(rows.map(\.id))
             rows += result.rows.filter { existing.insert($0.id).inserted }

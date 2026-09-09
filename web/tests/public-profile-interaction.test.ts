@@ -26,7 +26,13 @@ function dateButtons(days: number) {
     .mockReturnValueOnce([false, hooks.setLoading])
     .mockReturnValueOnce([null, vi.fn()])
     .mockReturnValueOnce([0, vi.fn()])
-    .mockReturnValueOnce([false, vi.fn()]);
+    .mockReturnValueOnce([false, vi.fn()])
+    // Sep 9 2026: viewer id, following, follow busy, follow error — a
+    // signed-out viewer, so no Follow button joins the date buttons.
+    .mockReturnValueOnce([null, vi.fn()])
+    .mockReturnValueOnce([null, vi.fn()])
+    .mockReturnValueOnce([false, vi.fn()])
+    .mockReturnValueOnce([null, vi.fn()]);
   const buttons: { 'aria-pressed': boolean; onClick: () => void }[] = [];
   const walk = (node: ReactNode) => Children.forEach(node, (child) => {
     if (!isValidElement<{ children?: ReactNode; 'aria-pressed': boolean; onClick: () => void }>(child)) return;

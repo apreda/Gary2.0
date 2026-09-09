@@ -14,8 +14,10 @@ import {
 } from '@/lib/book/model';
 import { bookButton, bookField, LogBet } from './LogBet';
 import { logBookMilestone } from '@/lib/gary/analytics';
+import { marketShort } from '@/lib/book/analytics';
+import { TagChips, TagInput } from './BookAnalytics';
 
-function Slip({
+export function Slip({
   bet,
   unitDollars,
   onChanged,
@@ -29,6 +31,7 @@ function Slip({
   const [editing, setEditing] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [notes, setNotes] = useState(bet.notes ?? '');
+  const [tags, setTags] = useState<string[]>(bet.tags ?? []);
   const [removing, setRemoving] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -75,8 +78,9 @@ function Slip({
             {bet.pick_text}
           </p>
           <p className="mt-1 font-mono text-[10px] text-low">
-            {[bet.league, bet.matchup, bet.game_date, bet.bookmaker].filter(Boolean).join(' · ')}
+            {[bet.league, marketShort(bet.market), bet.matchup, bet.game_date, bet.bookmaker].filter(Boolean).join(' · ')}
           </p>
+          {!showNotes && <div className="mt-1.5"><TagChips tags={bet.tags} /></div>}
         </div>
         <div className="shrink-0 text-right">
           <p
@@ -137,7 +141,7 @@ function Slip({
             </button>
           )}
           <button disabled={busy} className={bookButton} onClick={() => setShowNotes((v) => !v)}>
-            {bet.notes ? 'Edit notes' : 'Add notes'}
+            {bet.notes || bet.tags?.length ? 'Edit notes and tags' : 'Add notes or tags'}
           </button>
           {(manual || !locked) && (
             <button disabled={busy} className={bookButton} onClick={() => setRemoving(true)}>
@@ -161,17 +165,21 @@ function Slip({
               onChange={(e) => setNotes(e.target.value)}
             />
           </label>
+          <div className="mt-3 text-[12px] text-mid">
+            Tags
+            <div className="mt-1"><TagInput tags={tags} onChange={setTags} /></div>
+          </div>
           <button
             disabled={busy}
             className={`${bookButton} mt-2`}
             onClick={() =>
               run(async () => {
-                await updateBet(bet.id, { notes });
+                await updateBet(bet.id, { notes, tags });
                 setShowNotes(false);
               })
             }
           >
-            Save notes
+            Save notes and tags
           </button>
         </div>
       )}

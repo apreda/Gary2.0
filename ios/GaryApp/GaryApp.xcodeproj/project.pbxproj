@@ -92,6 +92,8 @@
 		FAE577A219F049637480970D /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 423887686C6839DEC44C0DEA /* GoogleService-Info.plist */; };
 		324609B2D349E9C4A8B65059 /* ProfileExperience.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504772BE6AB695908974B7B2 /* ProfileExperience.swift */; };
 		6199AE6DBA24A673E008525A /* UserBetDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B5D1C43C3ED917E9B33E58 /* UserBetDetailSheet.swift */; };
+		54F487F8B6CF414FA618DD9A /* BookAnalytics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8465728EE4548168A87D52A /* BookAnalytics.swift */; };
+		8067084599A9455B91E5CAFA /* BookAnalyticsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1162B768E11E4A77988C5391 /* BookAnalyticsViews.swift */; };
 		DA6929ABA0783579FD371853 /* WinnersAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = E42EB87F7613B5B15EF2560E /* WinnersAccess.swift */; };
 /* End PBXBuildFile section */
 
@@ -182,6 +184,8 @@
 		FBB94BA05B70C7412D0F1576 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		504772BE6AB695908974B7B2 /* ProfileExperience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileExperience.swift; sourceTree = "<group>"; };
 		F0B5D1C43C3ED917E9B33E58 /* UserBetDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserBetDetailSheet.swift; sourceTree = "<group>"; };
+		A8465728EE4548168A87D52A /* BookAnalytics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookAnalytics.swift; sourceTree = "<group>"; };
+		1162B768E11E4A77988C5391 /* BookAnalyticsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookAnalyticsViews.swift; sourceTree = "<group>"; };
 		E42EB87F7613B5B15EF2560E /* WinnersAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinnersAccess.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -269,6 +273,8 @@
 				0110A48840365DDC8DBFCABF /* UserBookView.swift */,
 				E42EB87F7613B5B15EF2560E /* WinnersAccess.swift */,
 				F0B5D1C43C3ED917E9B33E58 /* UserBetDetailSheet.swift */,
+				A8465728EE4548168A87D52A /* BookAnalytics.swift */,
+				1162B768E11E4A77988C5391 /* BookAnalyticsViews.swift */,
 				504772BE6AB695908974B7B2 /* ProfileExperience.swift */,
 				073A6BFCDD5D5E5DE86DC846 /* ViewsShared.swift */,
 				2F2CCDF3FCD06FA671EB3F94 /* HomeView.swift */,
@@ -486,6 +492,8 @@
 				0E2DFD72AAC6F9DA0E624548 /* UserBookView.swift in Sources */,
 				DA6929ABA0783579FD371853 /* WinnersAccess.swift in Sources */,
 				6199AE6DBA24A673E008525A /* UserBetDetailSheet.swift in Sources */,
+				54F487F8B6CF414FA618DD9A /* BookAnalytics.swift in Sources */,
+				8067084599A9455B91E5CAFA /* BookAnalyticsViews.swift in Sources */,
 				324609B2D349E9C4A8B65059 /* ProfileExperience.swift in Sources */,
 				4EC2B7A1B9697343A9C0E6F9 /* ViewsShared.swift in Sources */,
 				93B93DF3AECBE25E4485E1AD /* HomeView.swift in Sources */,

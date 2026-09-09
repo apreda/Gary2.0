@@ -155,6 +155,8 @@ export async function logManual(args: {
   notes?: string;
   bookmaker?: string;
   favorite?: boolean;
+  market?: string | null;
+  tags?: string[];
 }, expectedOwner: string, isCurrent: () => boolean = () => true): Promise<UserBet> {
   const supabase = supabaseBrowser();
   const authorization = await bookAuthorization(expectedOwner);
@@ -171,8 +173,10 @@ export async function logManual(args: {
     notes: args.notes ?? '',
     bookmaker: args.bookmaker ?? '',
     is_favorite: args.favorite ?? false,
+    tags: args.tags ?? [],
   };
   if (args.odds != null) row.odds_american = args.odds;
+  if (args.market) row.market = args.market;
 
   const { data, error } = await supabase.from('user_bets').insert(row).select('*').setHeader('Authorization', authorization);
   if (error) {
@@ -238,7 +242,7 @@ export async function saveMyProfile(args: { handle?: string; avatar?: string; bi
   return data as MyProfile;
 }
 
-export async function updateBet(id: string, patch: Partial<Pick<UserBet, 'is_favorite' | 'notes' | 'bookmaker' | 'pick_text' | 'description' | 'game_date' | 'league' | 'odds_american' | 'stake_units'>>): Promise<UserBet> {
+export async function updateBet(id: string, patch: Partial<Pick<UserBet, 'is_favorite' | 'notes' | 'bookmaker' | 'tags' | 'market' | 'pick_text' | 'description' | 'game_date' | 'league' | 'odds_american' | 'stake_units'>>): Promise<UserBet> {
   const { data, error } = await supabaseBrowser().from('user_bets').update(patch).eq('id', id).select('*').single();
   if (error || !data) throw new Error(friendly(error?.message ?? 'update failed'));
   return data as UserBet;
@@ -254,17 +258,74 @@ export type BoardSort = 'streak' | 'wins' | 'record' | 'units';
 export interface RankedRow extends BoardRow {
   rank: number; user_id: string; handle: string | null; avatar: string | null;
   win_pct: number | null; streak_len: number; streak_kind: string | null; decided: number;
+  following?: boolean;
 }
+export type BoardScope = 'all' | 'friends';
 export interface LeaderboardData {
   rows: RankedRow[]; me: RankedRow | null; qualified_count: number; min_decided: number;
   my_decided: number; window: string; sort: string; league: string; has_more: boolean;
   hidden_count?: number;
   profile_hidden?: boolean;
+  scope?: BoardScope;
+  following_count?: number;
 }
-export async function fetchRankings(window: string, sort: BoardSort, league: string, offset = 0): Promise<LeaderboardData> {
+export async function fetchRankings(window: string, sort: BoardSort, league: string, offset = 0, scope: BoardScope = 'all'): Promise<LeaderboardData> {
   const { data, error } = await supabaseBrowser().rpc('your_book_leaderboard_v3', {
-    p_window: window, p_sort: sort, p_league: league, p_limit: 25, p_offset: offset,
+    p_window: window, p_sort: sort, p_league: league, p_limit: 25, p_offset: offset, p_scope: scope,
   });
   if (error || !data) throw new Error('The leaderboard could not load. Please retry.');
   return data as LeaderboardData;
+}
+
+// ── Follows (the FRIENDS lens) ───────────────────────────────────────────────
+// Who you follow is private to you and changes nothing for anyone else.
+
+export interface FollowedPlayer { user_id: string; display_name: string | null; handle: string | null; avatar: string | null; available: boolean }
+
+export async function setFollow(userId: string, following: boolean): Promise<number> {
+  const { data, error } = await supabaseBrowser().rpc('set_follow', { p_user: userId, p_follow: following });
+  if (error) throw new Error(friendlyFollow(error.message));
+  const receipt = data as { ok?: boolean; following?: boolean; count?: number } | null;
+  if (!receipt?.ok || receipt.following !== following) throw new Error('That change could not be confirmed. Please retry.');
+  return receipt.count ?? 0;
+}
+
+export async function myFollows(): Promise<FollowedPlayer[]> {
+  const { data, error } = await supabaseBrowser().rpc('my_follows');
+  if (error) throw new Error('Your follow list could not load. Please retry.');
+  return ((data as { rows?: FollowedPlayer[] } | null)?.rows ?? []);
+}
+
+function friendlyFollow(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes('follow limit')) return 'You are following the maximum number of players. Unfollow someone to add another.';
+  if (m.includes('follow yourself')) return 'You are already on your own friends board.';
+  if (m.includes('not available')) return 'This player is not available to follow.';
+  if (m.includes('not signed in') || m.includes('jwt')) return 'Sign in to follow players.';
+  return 'That change could not be saved. Please retry.';
+}
+
+// ── The slip scanner ─────────────────────────────────────────────────────────
+// A screenshot goes to the book-slip-scan edge function and comes back as
+// form values. Nothing is saved until the user submits the form.
+
+export interface ScannedBet {
+  description: string; league: string; market: string | null; odds_american: number | null;
+  stake_dollars: number | null; game_date: string | null; result: string | null; legs: string[];
+}
+export interface SlipScan { ok: true; bets: ScannedBet[]; sportsbook: string | null; notes: string; used: number; limit: number }
+
+export async function scanSlip(imageBase64: string, mediaType: string): Promise<SlipScan> {
+  const { data: session } = await supabaseBrowser().auth.getSession();
+  const token = session.session?.access_token;
+  if (!token) throw new Error('Sign in to scan a slip.');
+  const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/book-slip-scan`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image_base64: imageBase64, media_type: mediaType }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof body?.error === 'string' ? body.error : 'The slip reader is unavailable right now. Enter the bet by hand or try again shortly.');
+  return body as SlipScan;
 }

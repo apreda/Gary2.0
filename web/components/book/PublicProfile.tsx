@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { supabaseBrowser } from '@/lib/auth/client';
+import { myFollows, setFollow } from '@/lib/book/api';
 import { bookButton } from './LogBet';
 import { profileAvatar } from './ProfileEditor';
 import { ProfileSafety } from './ProfileSafety';
@@ -26,6 +27,10 @@ export function PublicProfile({ userId }: { userId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [blocked, setBlocked] = useState(false);
+  const [viewerId, setViewerId] = useState<string | null>(null);
+  const [following, setFollowing] = useState<boolean | null>(null);
+  const [followBusy, setFollowBusy] = useState(false);
+  const [followError, setFollowError] = useState<string | null>(null);
   const epoch = useRef(0);
   useEffect(() => {
     let owner: string | null | undefined;
@@ -33,6 +38,7 @@ export function PublicProfile({ userId }: { userId: string }) {
       const next = session?.user.id ?? null;
       if (owner === next) return;
       owner = next; epoch.current += 1;
+      setViewerId(next); setFollowing(null); setFollowError(null);
       setCard(null); setBlocked(false); setError(null); setLoading(true); setAttempt(n => n + 1);
     });
     return () => { epoch.current += 1; data.subscription.unsubscribe(); };
@@ -58,6 +64,29 @@ export function PublicProfile({ userId }: { userId: string }) {
       cancelled = true;
     };
   }, [userId, days, attempt]);
+  useEffect(() => {
+    // Following state resets in the auth handler; here we only read the list.
+    if (!viewerId || viewerId === userId) return;
+    let cancelled = false;
+    const read = async () => {
+      try {
+        const rows = await myFollows();
+        if (!cancelled) setFollowing(rows.some((r) => r.user_id === userId));
+      } catch {
+        if (!cancelled) setFollowing(false);
+      }
+    };
+    void read();
+    return () => { cancelled = true; };
+  }, [viewerId, userId, attempt]);
+  const toggleFollow = async () => {
+    if (followBusy || following == null) return;
+    const next = !following;
+    setFollowBusy(true); setFollowError(null);
+    try { await setFollow(userId, next); setFollowing(next); }
+    catch (e) { setFollowError(e instanceof Error ? e.message : 'That change could not be saved.'); }
+    finally { setFollowBusy(false); }
+  };
   return (
     <div>
       <Link href="/leaderboard" className="text-[13px] text-gold underline underline-offset-4">
@@ -103,6 +132,21 @@ export function PublicProfile({ userId }: { userId: string }) {
               <p className="mt-1 text-[12px] text-gold">Verified Book record</p>
             </div>
           </div>
+          {viewerId && viewerId !== userId && !blocked && following != null && (
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={toggleFollow}
+                disabled={followBusy}
+                aria-pressed={following}
+                className={following ? `${bookButton} border-gold/60 text-gold` : 'rounded-chip bg-gold px-4 py-2 text-[12px] font-semibold text-ink disabled:opacity-50'}
+              >
+                {followBusy ? 'Updating…' : following ? 'Following' : 'Follow'}
+              </button>
+              <span className="text-[12px] text-mid">{following ? 'On your friends board.' : 'Follow to see this player on your friends board.'}</span>
+              {followError && <span role="alert" className="text-[12px] text-loss">{followError}</span>}
+            </div>
+          )}
           {card.profile.bio && (
             <p className="mt-4 text-[14px] leading-relaxed text-mid">{card.profile.bio}</p>
           )}

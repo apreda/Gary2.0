@@ -10,6 +10,8 @@ struct UserBetDetailSheet: View {
     @State private var favorite = false
     @State private var notes = ""
     @State private var bookmaker = ""
+    @State private var tags: [String] = []
+    @State private var market: String? = nil
     @State private var busy = false
     @State private var error: String?
     @State private var confirmDelete = false
@@ -27,6 +29,7 @@ struct UserBetDetailSheet: View {
                     LabeledContent("Source", value: bet.isVerified ? "Verified · \(bet.kind.capitalized)" : "Your plays · Self-graded")
                     LabeledContent("Stake", value: BookMoney.stake(bet.stake_units))
                     LabeledContent("Odds", value: bet.odds_american.map { ($0 > 0 ? "+" : "") + String($0) } ?? "Not recorded")
+                    LabeledContent("Bet type", value: BookMarket.label(bet.market).capitalized)
                     LabeledContent("Result", value: bet.status.capitalized)
                     if !bet.isPending { LabeledContent("Net", value: BookMoney.net(bet.units_net ?? 0)) }
                     if bet.odds_estimated == true { Text("The original market price was unavailable; this receipt uses estimated -110 odds.").font(.caption).foregroundStyle(.secondary) }
@@ -38,9 +41,10 @@ struct UserBetDetailSheet: View {
                     TextField("Private notes", text: $notes, axis: .vertical)
                         .lineLimit(3...8)
                         .onChange(of: notes) { value in notes = String(value.prefix(2000)) }
+                    TagChipsEditor(tags: $tags)
                     Button("Save details") { saveDetails() }.disabled(busy)
                 } header: { Text("Only you can see this") }
-                  footer: { Text("Favorites bookmark any bet. They do not affect your ranked streak.") }
+                  footer: { Text("Favorites bookmark any bet. Tags group bets in your breakdowns (live, promo, primetime). Neither affects your ranked streak.") }
                 if bet.isVerified {
                     Section {
                         if bet.canChangeStreak {
@@ -64,6 +68,10 @@ struct UserBetDetailSheet: View {
                             .onChange(of: descriptionText) { value in descriptionText = String(value.prefix(300)) }
                         TextField("American odds", text: $oddsText).keyboardType(.numbersAndPunctuation)
                         TextField("Stake in dollars", text: $stakeText).keyboardType(.decimalPad)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Bet type").font(.subheadline).foregroundStyle(.secondary)
+                            BookMarketPicker(market: $market)
+                        }
                         DatePicker("Date (Eastern)", selection: $betDate, displayedComponents: .date)
                             .environment(\.timeZone, TimeZone(identifier: "America/New_York")!)
                         Button("Save entry correction") { editEntry() }.disabled(busy)
@@ -88,6 +96,7 @@ struct UserBetDetailSheet: View {
             .tint(GaryColors.gold)
             .onAppear {
                 favorite = bet.is_favorite == true; notes = bet.notes ?? ""; bookmaker = bet.bookmaker ?? ""
+                tags = bet.tags ?? []; market = bet.market
                 descriptionText = bet.pick_text; oddsText = bet.odds_american.map(String.init) ?? ""
                 stakeText = String(format: "%.2f", bet.stake_units * BookMoney.unitDollars)
                 betDate = Self.dateFormatter.date(from: bet.game_date) ?? Date()
@@ -112,7 +121,7 @@ struct UserBetDetailSheet: View {
         Task {
             defer { busy = false }
             do {
-                let updated = try await UserBookAPI.updateDetails(id: bet.id, favorite: favorite, notes: notes, bookmaker: bookmaker)
+                let updated = try await UserBookAPI.updateDetails(id: bet.id, favorite: favorite, notes: notes, bookmaker: bookmaker, tags: tags)
                 onUpdate(updated); dismiss()
             } catch { self.error = error.localizedDescription }
         }
@@ -132,7 +141,7 @@ struct UserBetDetailSheet: View {
             defer { busy = false }
             do {
                 let updated = try await UserBookAPI.editManual(id: bet.id, description: descriptionText, odds: odds,
-                    stake: dollars / BookMoney.unitDollars, gameDate: Self.dateFormatter.string(from: betDate))
+                    stake: dollars / BookMoney.unitDollars, gameDate: Self.dateFormatter.string(from: betDate), market: market)
                 onUpdate(updated); dismiss()
             } catch { self.error = error.localizedDescription }
         }
@@ -158,12 +167,12 @@ enum BookExport {
     }
 
     static func csv(_ bets: [UserBet]) -> URL {
-        let header = "Date,Source,League,Pick,American odds,Stake units,Status,Net units,Streak pick,Favorite,Sportsbook,Private notes"
+        let header = "Date,Source,League,Bet type,Pick,American odds,Stake units,Status,Net units,Streak pick,Favorite,Sportsbook,Tags,Private notes"
         let rows = bets.map { b in
-            [cell(b.game_date), cell(b.kind), cell(b.league ?? ""), cell(b.pick_text),
+            [cell(b.game_date), cell(b.kind), cell(b.league ?? ""), cell(b.market ?? ""), cell(b.pick_text),
              b.odds_american.map(String.init) ?? "", String(b.stake_units), cell(b.status),
              b.units_net.map { String($0) } ?? "", b.streak_pick == true ? "true" : "false",
-             b.is_favorite == true ? "true" : "false", cell(b.bookmaker ?? ""), cell(b.notes ?? "")].joined(separator: ",")
+             b.is_favorite == true ? "true" : "false", cell(b.bookmaker ?? ""), cell((b.tags ?? []).joined(separator: " ")), cell(b.notes ?? "")].joined(separator: ",")
         }
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("Gary-my-bets.csv")
         try? ([header] + rows).joined(separator: "\r\n").write(to: url, atomically: true, encoding: .utf8)

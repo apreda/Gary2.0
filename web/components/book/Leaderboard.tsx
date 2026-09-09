@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { useEffect, useRef, useState } from 'react';
-import { fetchRankings, type BoardSort, type LeaderboardData, type RankedRow } from '@/lib/book/api';
+import { fetchRankings, type BoardScope, type BoardSort, type LeaderboardData, type RankedRow } from '@/lib/book/api';
 import { supabaseBrowser } from '@/lib/auth/client';
 import type { GaryRows } from '@/lib/book/gary';
 import { bookButton } from './LogBet';
@@ -26,6 +26,7 @@ export function Leaderboard({ garyRows }: { garyRows?: GaryRows }) {
   const [window_, setWindow] = useState<'7d' | '30d' | 'season'>('30d');
   const [sort, setSort] = useState<BoardSort>('streak');
   const [league, setLeague] = useState('all');
+  const [scope, setScope] = useState<BoardScope>('all');
   const [data, setData] = useState<LeaderboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -42,6 +43,7 @@ export function Leaderboard({ garyRows }: { garyRows?: GaryRows }) {
       account.current = owner;
       requestVersion.current += 1;
       setViewerID(owner);
+      if (!owner) setScope('all');
       setData(null);
       setError(null);
       setLoading(true);
@@ -56,7 +58,7 @@ export function Leaderboard({ garyRows }: { garyRows?: GaryRows }) {
   useEffect(() => {
     let cancelled = false;
     const request = ++requestVersion.current;
-    fetchRankings(window_, sort, league)
+    fetchRankings(window_, sort, league, 0, scope)
       .then((next) => {
         if (!cancelled && request === requestVersion.current) {
           setData(next);
@@ -73,7 +75,7 @@ export function Leaderboard({ garyRows }: { garyRows?: GaryRows }) {
     return () => {
       cancelled = true;
     };
-  }, [window_, sort, league, attempt]);
+  }, [window_, sort, league, scope, attempt]);
   const change = (fn: () => void) => {
     setLoading(true);
     setData(null);
@@ -85,7 +87,7 @@ export function Leaderboard({ garyRows }: { garyRows?: GaryRows }) {
     const request = requestVersion.current;
     setMoreBusy(true);
     try {
-      const next = await fetchRankings(window_, sort, league, data.rows.length);
+      const next = await fetchRankings(window_, sort, league, data.rows.length, scope);
       if (request !== requestVersion.current) return;
       setData((prev) => (prev ? { ...next, rows: [...prev.rows, ...next.rows] } : next));
       setError(null);
@@ -108,6 +110,24 @@ export function Leaderboard({ garyRows }: { garyRows?: GaryRows }) {
             Verified calls. Real records.
           </span>
         </div>
+        {signedIn && (
+          <div className="mt-4 flex items-center gap-4">
+            {([['all', 'Everyone'], ['friends', 'Friends']] as [BoardScope, string][]).map(([key, label]) => (
+              <button
+                key={key}
+                disabled={moreBusy}
+                aria-pressed={scope === key}
+                onClick={() => { if (scope !== key) change(() => setScope(key)); }}
+                className={`py-1 font-mono text-[11px] font-bold uppercase tracking-[0.08em] ${scope === key ? 'border-b border-gold text-hi' : 'text-mid'}`}
+              >
+                {label}
+              </button>
+            ))}
+            {scope === 'friends' && data && (
+              <span className="font-mono text-[10px] uppercase tracking-wider text-low">{data.following_count ?? 0} followed</span>
+            )}
+          </div>
+        )}
         <div className="mt-5 flex flex-wrap gap-2">
           {SORTS.map((s) => (
             <button
@@ -220,9 +240,13 @@ export function Leaderboard({ garyRows }: { garyRows?: GaryRows }) {
       ) : (
         !error && (
           <div className="px-5 py-8">
-            <p className="font-display text-xl text-hi">{data?.hidden_count ? 'No players to show in this view.' : 'The next name could be yours.'}</p>
+            <p className="font-display text-xl text-hi">{scope === 'friends' ? 'Your friends board is empty.' : data?.hidden_count ? 'No players to show in this view.' : 'The next name could be yours.'}</p>
             <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-mid">
-              {data?.hidden_count ? 'Your blocked players are hidden. Their results still count in the overall rankings.' : 'Nobody has qualified for this view yet. Build a record with five decided calls, choose your favorite pregame call for the streak, and make your profile public.'}
+              {scope === 'friends'
+                ? ((data?.following_count ?? 0) === 0
+                  ? 'Open any player from the board and tap Follow. Everyone you follow ranks here against you, with the same five-pick minimum.'
+                  : 'None of the players you follow has five decided verified picks in this view yet.')
+                : data?.hidden_count ? 'Your blocked players are hidden. Their results still count in the overall rankings.' : 'Nobody has qualified for this view yet. Build a record with five decided calls, choose your favorite pregame call for the streak, and make your profile public.'}
             </p>
             <Link
               href="/picks"
@@ -265,6 +289,10 @@ export function Leaderboard({ garyRows }: { garyRows?: GaryRows }) {
           window; W means wins and L means losses.
         </p>
         <p className="mt-2">
+          Friends: follow players from their profile and the Friends view ranks them against you with the same rules.
+          Who you follow is private and changes nothing for anyone else.
+        </p>
+        <p className="mt-2">
           Rankings require five wins or losses in the selected period; pushes do not qualify you. Streaks,
           wins, win rate, and flat-stake units offer different views of the same verified history. Home-run
           threats and self-graded bets are excluded. Gary is shown separately as a reference, with his public
@@ -294,6 +322,7 @@ function RankingRow({ row: r, me }: { row: RankedRow; me: boolean }) {
           >
             {r.display_name}
             {me && <span className="ml-2 text-[10px] text-gold">YOU</span>}
+            {!me && r.following && <span className="ml-2 font-mono text-[9px] uppercase tracking-wider text-gold/70">Following</span>}
           </Link>
         </div>
       </td>
