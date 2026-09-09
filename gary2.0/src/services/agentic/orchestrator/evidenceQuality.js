@@ -20,7 +20,7 @@ export function renderEvidenceBriefing(factors,{compact=false}={}) {
   const seen = new Map();
   return factors.map((factor, index) => {
     const name = value(factor.factor || factor.factorName || factor.name || factor.title) || `Factor ${index + 1}`;
-    const raw={finding:value(factor.keyFinding || factor.key_finding || factor.finding),numbers:value(factor.numbers || factor.stats),
+    const raw={finding:value(factor.findings || factor.keyFinding || factor.key_finding || factor.finding),numbers:value(factor.numbers || factor.stats),
       context:value(factor.context || factor.sampleContext || factor.sample_context),sources:value(factor.sources),uncertainty:value(factor.uncertainties || factor.conflicts)};
     const {finding,numbers,context,sources,uncertainty}=compact
       ? Object.fromEntries(Object.entries(raw).map(([key,text])=>[key,excerpt(text,COMPACT_RESEARCH_LIMITS[key])])) : raw;

@@ -48,12 +48,12 @@ const pieces = () => ({
 });
 
 describe('renderBucketsDesk', () => {
-  it('orders the three buckets MARKET → TEAMS → MATCHUP, home team first, no SITUATION bucket', () => {
+  it('orders the three buckets MATCHUP → MARKET → TEAMS, home team first, no SITUATION bucket', () => {
     const text = renderBucketsDesk(pieces());
     const at = (s) => { const i = text.indexOf(s); expect(i, `missing "${s}"`).toBeGreaterThan(-1); return i; };
-    // THE BOARD COMES FIRST (founder GO, Sep 2 2026).
+    // TONIGHT'S GAME COMES FIRST (founder GO, Sep 9 2026), the price right behind it.
+    expect(at('THE MATCHUP')).toBeLessThan(at('THE MARKET'));
     expect(at('THE MARKET')).toBeLessThan(at('THE TEAMS'));
-    expect(at('THE TEAMS')).toBeLessThan(at('THE MATCHUP'));
     expect(text).not.toContain('THE SITUATION');
     // Inside THE MATCHUP: series → park (with weather) → schedule and rest → news.
     expect(at('── Series state ──')).toBeLessThan(at('── The park ──'));
@@ -61,16 +61,15 @@ describe('renderBucketsDesk', () => {
     expect(at('Weather: Clear, 84°F')).toBeLessThan(at('── Schedule and rest ──'));
     expect(at('── Schedule and rest ──')).toBeLessThan(at("── Today's news ──"));
     expect(at('═══ ATLANTA BRAVES ═══')).toBeLessThan(at('═══ SAN FRANCISCO GIANTS ═══'));
-    expect(at('═══ SAN FRANCISCO GIANTS ═══')).toBeLessThan(at('THE MATCHUP'));
+    expect(at("── Today's news ──")).toBeLessThan(at('THE MARKET'));
   });
 
   it('keeps every team subsection inside its own team block, in the agreed order', () => {
     const text = renderBucketsDesk(pieces());
     const homeStart = text.indexOf('═══ ATLANTA BRAVES ═══');
     const awayStart = text.indexOf('═══ SAN FRANCISCO GIANTS ═══');
-    const matchupStart = text.indexOf('THE MATCHUP');
     const homeBlock = text.slice(homeStart, awayStart);
-    const awayBlock = text.slice(awayStart, matchupStart);
+    const awayBlock = text.slice(awayStart);
     let last = -1;
     for (const label of TEAM_SUBSECTIONS) {
       const marker = `── ${label} ──`;
@@ -90,10 +89,10 @@ describe('renderBucketsDesk', () => {
     expect(text).not.toContain('── Defense ──');
     expect(text).not.toContain('── Catcher');
     const homeBlock = text.slice(text.indexOf('═══ ATLANTA BRAVES ═══'), text.indexOf('═══ SAN FRANCISCO GIANTS ═══'));
-    // Recency first: the club opens with Right now, before its standings,
-    // and the standings sit right before tonight's lineup.
-    expect(homeBlock.indexOf('── Right now ──')).toBeLessThan(homeBlock.indexOf('── Where they stand ──'));
-    expect(homeBlock.indexOf('── Where they stand ──')).toBeLessThan(homeBlock.indexOf("── Tonight's lineup ──"));
+    // Recency first: the club opens with Right now, then tonight's lineup;
+    // the standing closes the block (founder GO, Sep 9 2026).
+    expect(homeBlock.indexOf('── Right now ──')).toBeLessThan(homeBlock.indexOf("── Tonight's lineup ──"));
+    expect(homeBlock.indexOf('── Roster moves ──')).toBeLessThan(homeBlock.indexOf('── Where they stand ──'));
     // The pen reads the last games, then every arm, then the beat.
     const penGames = homeBlock.indexOf('The last games, newest first, appearance by appearance:');
     const penArms = homeBlock.indexOf('Each arm, newest work first:');
@@ -104,7 +103,7 @@ describe('renderBucketsDesk', () => {
   });
 
 
-  it('puts the market first and the price nowhere else', () => {
+  it('puts the price right after the matchup and nowhere else', () => {
     const text = renderBucketsDesk(pieces());
     const marketIdx = text.indexOf('THE MARKET');
     const teamsIdx = text.indexOf('THE TEAMS');

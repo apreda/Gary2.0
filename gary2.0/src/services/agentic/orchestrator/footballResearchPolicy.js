@@ -66,6 +66,7 @@ export function buildResearchFactorPlan(sport, sportFactors = {}, options = {}) 
 function hasSubstantiveFactorFinding(result) {
   if (!result || typeof result !== 'object') return false;
   const text = [
+    result.findings,
     result.keyFinding,
     result.key_finding,
     result.finding,

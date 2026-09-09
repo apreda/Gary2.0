@@ -22,9 +22,33 @@ describe('MLB decision-policy provenance', () => {
       analyzeGame, shouldRetryPickWithModel, MLB_JUNE_BRAIN_MODEL: 'test-brain', DESK_FALLBACK_MODELS: [],
       MLB_DECISION_POLICY, extractJuneBilateralPaths: () => ({ path_home: 'home case', path_away: 'away case' }),
       mlbCaseHeadings: () => ({ lastSide: 'away' }), junePromptSha: async () => 'test-era',
+      // The runner's preflight plan: start on the planned brain unless a test hands in a capped one.
+      brainStartPlan: (preflight, planned) => {
+        const dead = new Set((preflight?.results || []).filter((r) => !r.ok).map((r) => r.model));
+        const live = (preflight?.results || []).find((r) => r.ok)?.model;
+        return { start: dead.has(planned) && live ? live : planned, dead };
+      },
       console: { warn: vi.fn(), error: vi.fn() }, ...extra,
     });
   };
+
+  it('starts on the brain the preflight heard answer and never runs a rung it heard refuse (Sep 9 2026)', async () => {
+    const analyzeGame = vi.fn().mockResolvedValue({ pick: 'Braves ML -150' });
+    const preflight = { ok: true, results: [{ model: 'test-brain', ok: false, reason: 'capped' }, { model: 'sol', ok: false, reason: 'capped' }, { model: 'fable', ok: true }] };
+    const decision = await loadLane(analyzeGame, { DESK_FALLBACK_MODELS: ['sol', 'fable'] })(game, {}, preflight);
+    expect(decision.pick).toBe('Braves ML -150');
+    expect(analyzeGame).toHaveBeenCalledTimes(1);
+    expect(analyzeGame.mock.calls[0][2].modelOverride).toBe('fable');
+  });
+
+  it('a capped rung is skipped in the cascade too, so a failure never re-buys research on it', async () => {
+    const analyzeGame = vi.fn().mockResolvedValue({ error: 'no pick' });
+    const preflight = { ok: true, results: [{ model: 'test-brain', ok: true }, { model: 'sol', ok: false, reason: 'capped' }] };
+    await loadLane(analyzeGame, { DESK_FALLBACK_MODELS: ['sol', 'fable'] })(game, {}, preflight);
+    const models = analyzeGame.mock.calls.map((c) => c[2].modelOverride);
+    expect(models).not.toContain('sol');
+    expect(models[0]).toBe('test-brain');
+  });
 
   it('stamps a newly completed MLB decision with the policy loaded alongside its prompts', async () => {
     const decision = await loadLane(vi.fn().mockResolvedValue({ pick: 'Braves ML -150' }))(game, {});

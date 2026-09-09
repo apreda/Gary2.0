@@ -80,6 +80,18 @@ async function brainPreflightOnce(models) {
   if (!_brainPreflight) _brainPreflight = await preflightBrains(models);
   return _brainPreflight;
 }
+// The first brain the preflight heard answer, and every rung it heard refuse
+// (Sep 9 2026: NE @ SEA bought its desk and research three times walking
+// through two capped Codex logins before Fable). A game starts on the live
+// brain; a rung the preflight saw refuse is never run for it.
+function brainStartPlan(preflight, planned) {
+  const results = preflight?.results || [];
+  const dead = new Set(results.filter((r) => !r.ok).map((r) => r.model));
+  const firstLive = results.find((r) => r.ok)?.model;
+  const start = dead.has(planned) && firstLive ? firstLive : planned;
+  if (start !== planned) console.warn(`[Runner] ${planned} refused the preflight — starting on ${start}; no desk or research bought for a capped brain`);
+  return { start, dead };
+}
 
 // ERA LIVE — this is a fresh process, so its module cache IS disk truth. One
 // line + a ledger append make every pick run auditable by folder/commit/era,
@@ -195,7 +207,7 @@ function extractJuneBilateralPaths(rawAnalysis, homeTeam, awayTeam) {
   };
 }
 
-async function runMlbJuneEngine(game, runnerOptions) {
+async function runMlbJuneEngine(game, runnerOptions, preflight = null) {
   // ONE PICK SYSTEM (founder, Aug 27: "no need for a full fallback other
   // pick system... fallback to another one like opus is fine"): a failure
   // re-runs the SAME engine — same desk, same prompts — on the next model
@@ -240,18 +252,19 @@ async function runMlbJuneEngine(game, runnerOptions) {
     } else if (journal) decision._mlbJudgmentJournal = journal;
     return decision;
   };
-  let result = await attempt(MLB_JUNE_BRAIN_MODEL);
+  const { start: primary, dead: deadBrains } = brainStartPlan(preflight, MLB_JUNE_BRAIN_MODEL);
+  let result = await attempt(primary);
   if (shouldRetryPickWithModel(result)) {
-    console.warn(`[JuneEngine] first attempt failed (${result?.error || 'no pick'}) — one retry on ${MLB_JUNE_BRAIN_MODEL}`);
-    result = await attempt(MLB_JUNE_BRAIN_MODEL);
+    console.warn(`[JuneEngine] first attempt failed (${result?.error || 'no pick'}) — one retry on ${primary}`);
+    result = await attempt(primary);
   }
-  let modelUsed = MLB_JUNE_BRAIN_MODEL;
+  let modelUsed = primary;
   // DESK_FALLBACK_MODELS is filtered against GAME_PICK_MODEL at config time,
   // but THIS lane's primary is MLB_JUNE_BRAIN_MODEL — when the two constants
   // differ (any run without GARY_MODEL_OVERRIDE in env), the config filter
   // leaves the primary in the list and a failed brain would get a third run
   // before the first real fallback. Filter against the lane's own primary.
-  for (const fallbackModel of DESK_FALLBACK_MODELS.filter((m) => m !== MLB_JUNE_BRAIN_MODEL)) {
+  for (const fallbackModel of DESK_FALLBACK_MODELS.filter((m) => m !== MLB_JUNE_BRAIN_MODEL && m !== primary && !deadBrains.has(m))) {
     if (!shouldRetryPickWithModel(result)) break;
     console.warn(`[JuneEngine] ⚠️ ${modelUsed} failed (${result?.error || 'no pick'}) — same engine on ${fallbackModel}`);
     result = await attempt(fallbackModel);
@@ -1435,16 +1448,17 @@ async function main() {
             continue;
           }
           if (config.key === 'baseball_mlb') {
-            result = await runMlbJuneEngine(game, runnerOptions);
+            result = await runMlbJuneEngine(game, runnerOptions, preflight);
           } else {
             // ONE BRAIN PER PICK, every sport (founder, Aug 27): a failed or
             // quota-dead brain never hands THIS game's context to another
             // model mid-stream — the next brain re-runs the whole game.
             const brain = brainFor(config.key);
             const brainOptions = brain.thinkingLevel ? { thinkingLevel: brain.thinkingLevel } : {};
-            result = await analyzeGame(game, config.key, { ...runnerOptions, ...brainOptions, modelOverride: brain.model });
-            let cascadeModel = brain.model;
-            for (const fallbackModel of DESK_FALLBACK_MODELS.filter((m) => m !== brain.model)) {
+            const { start: startModel, dead: deadBrains } = brainStartPlan(preflight, brain.model);
+            result = await analyzeGame(game, config.key, { ...runnerOptions, ...brainOptions, modelOverride: startModel });
+            let cascadeModel = startModel;
+            for (const fallbackModel of DESK_FALLBACK_MODELS.filter((m) => m !== startModel && !deadBrains.has(m))) {
               if (!shouldRetryPickWithModel(result)) break;
               console.warn(`[Runner] ⚠️ ${cascadeModel} failed (${result?.error || 'no pick'}) — same game, whole re-run on ${fallbackModel}`);
               result = await analyzeGame(game, config.key, { ...runnerOptions, ...brainOptions, modelOverride: fallbackModel });

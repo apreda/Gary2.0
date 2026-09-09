@@ -83,13 +83,15 @@ function parseStructuredBriefingPayload(rawText = '') {
   factors.forEach((factor, index) => {
     const idx = index + 1;
     const factorName = getStringValue(factor?.factor, factor?.name, factor?.title);
-    const keyFinding = getStringValue(factor?.keyFinding, factor?.key_finding, factor?.finding);
+    const keyFinding = getStringValue(factor?.findings, factor?.keyFinding, factor?.key_finding, factor?.finding);
     const numbers = getStringValue(factor?.numbers, factor?.stats);
     const context = getStringValue(factor?.context, factor?.sampleContext, factor?.sample_context);
 
     normalizedFactors.push({
       factorName: factorName || `Factor ${idx}`,
       keyFinding,
+      // Facts carry a Findings label (MLB/NFL, Sep 9 2026); a summary keeps June's Key finding.
+      findingsLabel: findingsLabel(factor),
       numbers,
       context
     });
@@ -98,12 +100,19 @@ function parseStructuredBriefingPayload(rawText = '') {
   return { payload: { factors: normalizedFactors }, error: null };
 }
 
+// The label a factor's finding prints under: "Findings" when the researcher
+// reported facts (the MLB/NFL contract since Sep 9 2026), "Key finding" for a
+// summary (June's shape, still NBA's).
+export function findingsLabel(factor) {
+  return getStringValue(factor?.findings) ? 'Findings' : 'Key finding';
+}
+
 function renderStructuredBriefing(payload) {
   const blocks = [];
   for (const factor of payload.factors) {
     const lines = [
       `**${factor.factorName}**`,
-      `Key finding: ${factor.keyFinding}`,
+      `${factor.findingsLabel || 'Key finding'}: ${factor.keyFinding}`,
       `Numbers: ${factor.numbers}`,
       `Context: ${factor.context}`
     ];
@@ -125,10 +134,10 @@ export function renderFindingsSoFar(accumulated, evidenceAware = false) {
   }
   const blocks = accumulated.map(f => {
     const name = f.factor || f.name || f.title || 'Unknown';
-    const finding = String(f.keyFinding || f.key_finding || f.finding || '').slice(0, 260);
+    const finding = String(f.findings || f.keyFinding || f.key_finding || f.finding || '').slice(0, 260);
     const numbers = String(f.numbers || f.stats || '').slice(0, 260);
     const context = String(f.context || f.sample_context || '').slice(0, 220);
-    return `**${name}**\nKey finding: ${finding}\nNumbers: ${numbers}\nContext: ${context}`;
+    return `**${name}**\n${findingsLabel(f)}: ${finding}\nNumbers: ${numbers}\nContext: ${context}`;
   });
   return '## FINDINGS SO FAR (prior factor conclusions — build on these; do NOT re-investigate unless needed)\n\n' + blocks.join('\n\n');
 }
@@ -295,7 +304,7 @@ ${mlbAwarenessBlock}
 ${researchProvenanceBlock}
 ${isNBASport ? '' : RESEARCH_EVIDENCE_RULES}CRITICAL RULES:
 - Report specific numbers with context: "Team went 2-4 with -8.3 net rating during games 60-65 when Player X was out — but 3 of those were against top-10 defenses"
-${isNBASport ? NBA_RESEARCHER_RULES.reporting : `- Report each factor's findings, and weight them honestly: for each, note whether it meaningfully moves THIS game or is minor context. Most individual factors move a single game far less than they look like they do — say so when that's the case. Gary makes the final call and connects the dots, but your job is to tell him what carries real weight and what is small, not to present every factor as equally important`}
+${isNBASport ? NBA_RESEARCHER_RULES.reporting : `- Report each factor's findings as facts: what the desk and your tools returned for BOTH teams, with the exact figures and the sample each comes from. Gary weighs them, connects the dots and makes the final call`}
 - If you reference opponent quality or recency distortion, include concrete evidence (named opponents and/or score/result context), not generic claims like "weaker opposition"
 - When citing any trend (L5/L10 or recent stretch), include concrete sample context: opponent names/results and who was active/inactive in that window
 - For search/grounding results, use factual events only. Ignore picks, predictions, and opinion content
@@ -304,7 +313,7 @@ ${isNBASport ? NBA_RESEARCHER_RULES.reporting : `- Report each factor's findings
 ${isNBASport ? NBA_RESEARCHER_RULES.figures : `- Every figure you cite must exist verbatim in the scout report or a tool return. A metric neither provides (wRC+, xERA, FIP, SIERA, BABIP, DRS, pop time, and the like) is NOT AVAILABLE — say so instead of recalling or deriving a value. Never present arithmetic you performed (a computed differential, an inferred rate) as a fetched stat; if you must derive, label it as your own calculation from named inputs`}
 
 OUTPUT FORMAT — for each factor you investigate, write your findings as a JSON object:
-{"factor": "Factor name", "keyFinding": "1-2 sentence finding", "numbers": "Concrete stats for BOTH teams — repeat the exact figures in THIS field; never leave it empty", "context": "Opponent quality / who played / sample window context — never leave it empty"${isNBASport ? '' : ', "sources": "Desk section / tool token / source URL and publication date when supplied; identify missing attribution", "uncertainties": "Unresolved facts, conflicting reports and missing sample context; do not invent any"'}}
+{"factor": "Factor name", ${isNBASport ? '"keyFinding": "1-2 sentence finding"' : '"findings": "What you found for BOTH teams — the facts, with their exact figures and the sample each comes from"'}, "numbers": "Concrete stats for BOTH teams — repeat the exact figures in THIS field; never leave it empty", "context": "Opponent quality / who played / sample window context — never leave it empty"${isNBASport ? '' : ', "sources": "Desk section / tool token / source URL and publication date when supplied; identify missing attribution", "uncertainties": "Unresolved facts, conflicting reports and missing sample context; do not invent any"'}}
 
 Do NOT make a pick or recommendation.
 
@@ -703,7 +712,7 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
     console.log(`[Research Briefing] ✅ ${_accumulatedFactors.length}/${allFactorNames.length} factors completed in ${elapsed}s (${totalToolCalls} stat + ${groundingCalls} grounding calls)`);
 
     // Data quality check — warn about factors with empty findings
-    const emptyFactors = _accumulatedFactors.filter(f => !f.keyFinding && !f.numbers);
+    const emptyFactors = _accumulatedFactors.filter(f => !f.findings && !f.keyFinding && !f.numbers);
     if (emptyFactors.length > 0) {
       console.warn(`[Research Briefing] ⚠️ ${emptyFactors.length} factors have empty findings: ${emptyFactors.map(f => f.factor).join(', ')}`);
     }
@@ -721,10 +730,10 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
       // Fallback: render directly from accumulated factors without normalization
       const directBriefing = _accumulatedFactors.map(f => {
         const name = f.factor || f.name || f.title || 'Unknown';
-        const finding = f.keyFinding || f.key_finding || f.finding || '';
+        const finding = f.findings || f.keyFinding || f.key_finding || f.finding || '';
         const numbers = f.numbers || f.stats || '';
         const context = f.context || f.sample_context || '';
-        return `**${name}**\nKey finding: ${finding}\nNumbers: ${numbers}\nContext: ${context}`;
+        return `**${name}**\n${findingsLabel(f)}: ${finding}\nNumbers: ${numbers}\nContext: ${context}`;
       }).join('\n\n');
       return { briefing: directBriefing, calledTokens };
     }

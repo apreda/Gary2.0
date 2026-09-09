@@ -2,15 +2,18 @@
  * THE THREE-BUCKET DESK (founder GO, Sep 1 2026): the same facts the flat
  * desk carries, regrouped the way a bettor reads a game —
  *
- *   THE MARKET     the price — FIRST (founder GO, Sep 2 2026): the board
- *                  leads the desk so the read argues with the number from
- *                  the first line; prices-last read as "who is better"
- *   THE TEAMS      who they are: one whole dossier per club, home first
- *   THE MATCHUP    tonight's game: series, the park and its weather, schedule
- *                  and rest, the day's news — nothing restated from the
- *                  team blocks. (A separate SITUATION bucket lived for one
- *                  build — founder, same day: the two were splitting one
- *                  subject; rest said "game 1 of series" beside series state.)
+ *   THE MATCHUP    tonight's game — FIRST (founder GO, Sep 9 2026: the
+ *                  desk led with season lines and the read graded the
+ *                  clubs instead of the game): series, the park and its
+ *                  weather, schedule and rest, the day's news — nothing
+ *                  restated from the team blocks. (A separate SITUATION
+ *                  bucket lived for one build — founder, Sep 2: the two were
+ *                  splitting one subject.)
+ *   THE MARKET     the price, right behind the game (founder GO, Sep 2 2026:
+ *                  the read argues with the number early; prices-last read
+ *                  as "who is better")
+ *   THE TEAMS      who they are, as background: one whole dossier per club,
+ *                  home first, each club's standing closing its block
  *
  * This module only ARRANGES pieces the builder in mlb.js already made; it
  * writes no facts of its own. Every required piece that arrives empty prints
@@ -44,14 +47,16 @@ export function resolveDeskLayout(options = {}) {
 // games as games, the last turn through the rotation — and the season
 // follows as the backdrop. Inside every subsection the same order holds:
 // the newest fact leads, the season line closes.
+// (Founder GO, Sep 9 2026: the standing closes the block — the season line
+// is the backdrop, never the opening line of a club.)
 export const TEAM_SUBSECTIONS = [
   'Right now',
-  'Where they stand',
   "Tonight's lineup",
   "Tonight's starter",
   'The pen',
   'Injuries',
   'Roster moves',
+  'Where they stand',
 ];
 
 export const MATCHUP_SUBSECTIONS = ['Series state', 'The park', 'Schedule and rest', "Today's news"];
@@ -82,8 +87,6 @@ function renderTeam(t) {
     has(t.boxScores) ? t.boxScores : null,
   ])));
 
-  blocks.push(sub('Where they stand', has(t.stand) ? t.stand : `${name}: ${absent('standings context')}`));
-
   blocks.push(sub("Tonight's lineup", joinBlocks([
     has(t.lineup) ? t.lineup : `${name}: lineup not yet posted — treat as missing data, not as a quiet lane.`,
     has(t.bench) ? `Bench: ${t.bench}` : null,
@@ -109,6 +112,8 @@ function renderTeam(t) {
   ])));
 
   blocks.push(sub('Roster moves', has(t.rosterMoves) ? t.rosterMoves : `${name}: ${absent('transaction data')}`));
+
+  blocks.push(sub('Where they stand', has(t.stand) ? t.stand : `${name}: ${absent('standings context')}`));
 
   return blocks.join('\n\n');
 }
@@ -161,14 +166,15 @@ function renderMarket(mk) {
  */
 export function renderBucketsDesk(p) {
   const top = `${'═'.repeat(66)}\n${String(p.header || '').trim()}\n${'═'.repeat(66)}`;
-  // Keep the available tickets visible from the start. The MLB assignment
-  // asks which outcome Gary expects; this ordering does not set his objective.
+  // Tonight's game first, the price right behind it, the clubs as background
+  // (founder GO, Sep 9 2026). The MLB assignment asks which outcome Gary
+  // expects; this ordering does not set his objective.
   return [
     top,
+    renderMatchup(p.matchup || {}),
     renderMarket(p.market || {}),
     bucket('THE TEAMS', 'who they are'),
     renderTeam(p.home),
     renderTeam(p.away),
-    renderMatchup(p.matchup || {}),
   ].join('\n\n').trim();
 }

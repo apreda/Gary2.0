@@ -119,15 +119,17 @@ export const INVESTIGATION_FACTORS = {
   // MLB_PITCH_TYPES_HITTERS left the walk (founder: hitter-vs-pitch-type
   // crossover is micro matching-stats fuel, not context — the token stays
   // ASK-able for the rare game that genuinely needs it).
+  // Tonight's matchup first, the clubs' situation as background (founder GO,
+  // Sep 9 2026: the briefing opened on standings and graded the clubs).
   baseball_mlb: {
-    THE_SITUATION: ['MLB_STANDINGS_STRUCTURED', 'MLB_RECENT_FORM_STRUCTURED', 'MLB_RECENT_RESULTS'],
     PITCHING_MATCHUP: ['MLB_STARTING_PITCHERS', 'MLB_PITCHER_SEASON_STATS', 'MLB_PITCH_TYPES_SP', 'MLB_PITCHER_RECENT_FORM', 'MLB_PITCHER_SCOUTING'],  // Both starters: season line, per-pitch xwOBA/whiff%/chase%, last-5 form, platoon/venue scouting
     BULLPEN: ['MLB_BULLPEN', 'MLB_BULLPEN_WORKLOAD', 'MLB_CLOSER_RELIEVER_STATS'],
     HITTING_MATCHUPS: ['MLB_KEY_HITTERS', 'MLB_LINEUP', 'MLB_RISP_SITUATIONAL', 'MLB_PLAYER_SPLITS', 'MLB_STATCAST', 'MLB_BATTER_VS_PITCHER'],  // Lineups + L/R splits + Statcast contact quality + BvP history
     DEFENSE: ['MLB_CATCHER_DEFENSE', 'MLB_TEAM_DEFENSE', 'MLB_KEY_HITTERS'],  // Catcher arm (CS numbers) + team fielding + SB threat (season SB stats ride MLB_KEY_HITTERS)
-    H2H: ['H2H_HISTORY', 'MLB_H2H'],
     INJURIES: ['INJURIES', 'MLB_INJURIES'],
     GAME_ENVIRONMENT: ['MLB_PARK_FACTORS', 'MLB_WEATHER', 'MLB_ODDS', 'MLB_GAME_PREVIEW', 'MLB_TOP_PLAYERS', 'REST_SITUATION'],  // Park + conditions + betting context + rest
+    THE_SITUATION: ['MLB_RECENT_FORM_STRUCTURED', 'MLB_RECENT_RESULTS', 'MLB_STANDINGS_STRUCTURED'],
+    H2H: ['H2H_HISTORY', 'MLB_H2H'],
   },
 };
 
