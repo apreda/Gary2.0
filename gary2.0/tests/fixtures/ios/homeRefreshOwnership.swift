@@ -139,6 +139,8 @@ enum AppFlags { static let userBookEnabled = true; static let insightLeagues = [
         let wave = wave; await wait(wave + "|todayBoard"); return wave
     }
     static func fetchStreaks() async -> [String] { let wave = wave; await wait(wave + "|streaks"); return [wave] }
+    struct WinnersBoardSnapshot { var games: [GaryPick] = [] }
+    static func fetchWinnersBoard(date: String) async throws -> WinnersBoardSnapshot { let wave = wave; await wait(wave + "|winners"); return WinnersBoardSnapshot() }
     static func fetchInsightConnections(date: String, league: String) async throws -> [Signal] {
         let wave = wave; await wait(wave + "|edges|" + date); return [.init(id: wave)]
     }
@@ -189,6 +191,7 @@ func mergeGamePickSnapshot(_ snapshot: GamePickSourceSnapshot, retaining previou
     var sportBreakdown: [SupabaseAPI.SportRecord] = []; var sevenDayForm: [SupabaseAPI.SportRecord] = []
     var recentGameResultsLastGood: [GameResult] = []; var recentPropResultsLastGood: [PropResult] = []
     var todayPicks: [GaryPick] = []; var yesterdayTopPick: GaryPick?; var freePick: GaryPick?
+    var winnersBoardGameIDs: Set<Int> = []
     var freeProp: PropPick?; var yesterdayTopProp: PropPick?; var yesterdayTopPropResult: String?
     var yesterdayTopPickResult: String?; var yesterdayTopPickScore: String?
     var marqueeRequestID = UUID()
