@@ -103,8 +103,35 @@ export function repairJsonText(text) {
   return out;
 }
 
+/**
+ * A reply that stops one bracket short (Sep 9 2026, 12:39 PM: Fable ended
+ * its turn on `"}]}` with the root object still open, 6,409 chars of complete
+ * content) gets its open brackets closed. Truncation inside a string is not
+ * repairable and returns the text unchanged.
+ */
+export function closeOpenJson(text) {
+  const s = String(text ?? '');
+  const stack = [];
+  let inString = false;
+  for (let i = 0; i < s.length; i += 1) {
+    const ch = s[i];
+    if (inString) {
+      if (ch === '\\') i += 1;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '{') stack.push('}');
+    else if (ch === '[') stack.push(']');
+    else if (ch === '}' || ch === ']') stack.pop();
+  }
+  if (inString || stack.length === 0) return s;
+  return s.trimEnd().replace(/,\s*$/, '') + stack.reverse().join('');
+}
+
 function parseLoose(text) {
-  const attempts = [text, repairJsonText(text)];
+  const repaired = repairJsonText(text);
+  const attempts = [text, repaired, closeOpenJson(repaired)];
   for (const candidate of attempts) {
     try { return JSON.parse(candidate); } catch { /* next */ }
     const embedded = firstJsonObject(candidate);

@@ -34,3 +34,16 @@ describe('MLB judgment reply repair', () => {
     expect(repairJsonText(valid)).toBe(valid);
   });
 });
+
+describe('MLB judgment reply one bracket short', () => {
+  it('closes the open brackets of a reply that stopped early and parses the whole content', async () => {
+    const { closeOpenJson } = await import('../../../src/services/agentic/orchestrator/mlbJudgment.js');
+    const reply = '{"winner":"home","expectations":{"items":[{"view":"a } inside \\"quotes\\""}]}';
+    const closed = closeOpenJson(reply);
+    expect(closed.endsWith('}]}}')).toBe(true);
+    expect(JSON.parse(closed).expectations.items[0].view).toBe('a } inside "quotes"');
+    // Complete JSON and a reply cut inside a string pass through unchanged.
+    expect(closeOpenJson('{"a":1}')).toBe('{"a":1}');
+    expect(closeOpenJson('{"a":"unterminated')).toBe('{"a":"unterminated');
+  });
+});
