@@ -189,6 +189,19 @@ function parseEvents(stdout) {
   return { threadId, text: messages.join('\n\n'), finalText: messages.at(-1) || '', usage };
 }
 
+/** The CLI's own failure line from a non-zero exit's event stream, if any. */
+function failureMessageIn(stdout) {
+  for (const line of String(stdout || '').split('\n')) {
+    const t = line.trim();
+    if (!t.startsWith('{')) continue;
+    let ev;
+    try { ev = JSON.parse(t); } catch { continue; }
+    if (ev.type === 'turn.failed' && ev.error?.message) return ev.error.message;
+    if (ev.type === 'error' && ev.message) return ev.message;
+  }
+  return null;
+}
+
 const etClock = (ms) => new Date(ms).toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
 /**
@@ -205,7 +218,10 @@ async function codexTurn(args, body, timeoutMs, breakerKey, signal, { preferred 
     try {
       const { code, stdout, stderr } = await runCodex(args, body, timeoutMs, breakerKey, signal, home || null);
       signal?.throwIfAborted();
-      if (code !== 0) throw toError(stderr || stdout);
+      // A non-zero exit still carries the CLI's own event stream; its error
+      // line ("You've hit your usage limit… try again at …") is the message,
+      // not the thread.started line that happens to come first.
+      if (code !== 0) throw toError(failureMessageIn(stdout) || stderr || stdout);
       return { ...parseEvents(stdout), stdout, home: home || '' };
     } catch (error) {
       signal?.throwIfAborted();
