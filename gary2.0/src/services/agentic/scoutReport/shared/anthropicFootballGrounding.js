@@ -1,5 +1,6 @@
 import { codexCliWebSearch } from '../../orchestrator/providerAdapters/codexCliSession.js';
 import { claudeCliWebSearch } from '../../orchestrator/providerAdapters/claudeCliSession.js';
+import { takeMeteredSearch } from './meteredSearchBudget.js';
 
 // CODEX FIRST (founder GO, Sep 1 2026): every football search lane — current
 // state, recent coverage, and all six deep-read lanes — tries the $0 GPT Pro
@@ -300,6 +301,7 @@ async function runFootballSearch({
   }
 
   // ── Rung 2: Anthropic server web search (metered; unchanged below) ──
+  if (!takeMeteredSearch(label)) return fail('the metered search budget for this process is spent');
   if (!apiKey || typeof fetchImpl !== 'function') {
     return fail('the codex search missed and the Anthropic fallback is unavailable (missing API key)');
   }

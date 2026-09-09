@@ -17,6 +17,7 @@ import { fileURLToPath } from 'url';
 import { describeSportsCalendar } from '../../utils/dateUtils.js';
 import { codexCliWebSearch } from '../agentic/orchestrator/providerAdapters/codexCliSession.js';
 import { claudeCliWebSearch } from '../agentic/orchestrator/providerAdapters/claudeCliSession.js';
+import { takeMeteredSearch } from '../agentic/scoutReport/shared/meteredSearchBudget.js';
 import { requestSignal } from '../agentic/orchestrator/requestCancellation.js';
 import { searchResponseProblem } from '../agentic/searchResponseValidation.js';
 
@@ -108,6 +109,7 @@ CRITICAL REMINDER: Today is ${todayStr}. Use ONLY fresh search results. Your tra
 async function anthropicSearchFallback(query, options, reason) {
   const signal = requestSignal(options.signal);
   signal?.throwIfAborted();
+  if (!takeMeteredSearch('web search')) return { success: false, data: '', raw: null, error: 'metered search budget spent for this process' };
   console.warn(`[Web Search] falling back to Anthropic server web search (${reason})`);
   try {
     const { anthropicWebSearchRaw } = await import('../agentic/scoutReport/shared/anthropicWebSearch.js');

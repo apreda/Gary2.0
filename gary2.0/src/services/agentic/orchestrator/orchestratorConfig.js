@@ -68,7 +68,8 @@ export const PROPS_DESK_MODEL = process.env.GARY_PROPS_MODEL_OVERRIDE || 'codex-
 // The one metered rung props may ever reach is Haiku (founder, Sep 9 2026:
 // "unless they have to — if so use Haiku"): about $0.45 for a full props desk
 // against $1.45 on Sonnet, and only after every bridge has refused.
-export const PROPS_CASCADE = [...new Set([PROPS_DESK_MODEL, 'codex-gpt-5.6-luna', 'claude-sonnet-5', 'claude-fable-5-1', 'anthropic-claude-haiku-4-5'])].filter((m) => /^(codex-|claude)/.test(m) || m === 'anthropic-claude-haiku-4-5');
+// Sep 9 2026, 5:15 PM: props never touch the API, not even Haiku. Bridge or wait.
+export const PROPS_CASCADE = [...new Set([PROPS_DESK_MODEL, 'codex-gpt-5.6-luna', 'claude-sonnet-5', 'claude-fable-5-1'])].filter((m) => /^(codex-|claude)/.test(m));
 export const PROPS_EFFORT = process.env.GARY_PROPS_EFFORT || 'medium';
 
 // Quota cascade for the desk lanes (founder approved Jul 29, after the Jul 28
@@ -89,7 +90,10 @@ export const PROPS_EFFORT = process.env.GARY_PROPS_EFFORT || 'medium';
 // Opus 5 on the metered API left the cascade Sep 9 2026 (founder funding the
 // key): one tooled game on it cost $9.39 on Sep 4, and Sonnet 5 API is the
 // funded last rung at a fifth of the price.
-export const DESK_FALLBACK_MODELS = ['codex-gpt-5.6-sol', 'claude-fable-5-1', 'anthropic-claude-sonnet-5'].filter((m) => m !== GAME_PICK_MODEL);
+// Sep 9 2026, 5:15 PM (founder: the key is for research, and $7 left it in
+// 40 minutes): NO metered brain rung. When every bridge is capped a game
+// waits for the next tier instead of buying a Sonnet API decision.
+export const DESK_FALLBACK_MODELS = ['codex-gpt-5.6-sol', 'claude-fable-5-1'].filter((m) => m !== GAME_PICK_MODEL);
 
 // $ per 1M tokens [input, output] — desk-lane cost logging only, not billing.
 // Bridge entries are $0 (no marginal token cost on a subscription); the

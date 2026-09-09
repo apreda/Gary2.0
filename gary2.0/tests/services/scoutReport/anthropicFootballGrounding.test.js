@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { _resetMeteredSearchBudget } from '../../../src/services/agentic/scoutReport/shared/meteredSearchBudget.js';
 
 // CODEX FIRST (Sep 1 2026): every football search lane tries the $0 codex
 // bridge before the Anthropic server search. Mocked here so a unit test never
@@ -56,6 +57,7 @@ function request(fetchImpl, overrides = {}) {
 }
 
 beforeEach(() => {
+  _resetMeteredSearchBudget();
   process.env.ANTHROPIC_API_KEY = 'test-key';
   delete process.env.ANTHROPIC_GROUNDING_MODEL;
 });
