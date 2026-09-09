@@ -24,9 +24,9 @@ const BASE_RULES = `
 [DATA] DATA SOURCE RULES (CRITICAL)
 ═══════════════════════════════════════════════════════════════════════════════
 
-1. THE DESK IS THE EVIDENCE - This conversation carries no live tools
-   - Every stat, name, and number you use comes from the scout report and the materials provided in this conversation
-   - There is no stat-fetch tool and no live search here - never reference calling one, and never wait for more data to arrive
+1. THE EVIDENCE IS WHAT THIS CONVERSATION HOLDS - the scout report, what your own stat tools return, what your research assistant answers, and, where the web is open to you, what you read
+   - Every stat, name, and number you use comes from one of those - never from memory
+   - Use the tools when your read wants more; do not describe a tool call you did not make, and do not wait for data you did not ask for
 
 2. LIVE CONTEXT - Search results the desk carries (breaking news, storylines, weather) were retrieved for you before this conversation started
    - Treat them as provided data, same as any desk section
