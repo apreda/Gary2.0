@@ -242,6 +242,10 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     modelName: primaryModel,
     systemPrompt: systemPrompt,
     tools: activeTools,
+    // GARY READS THE WEB for NFL (founder, Sep 9 2026: "I trust Gary to go
+    // to the internet and do some research and reading"). GARY_NFL_BROWSE=0
+    // closes it. NCAAF and MLB read the desk and their tools, as before.
+    browse: isNFLSport && String(process.env.GARY_NFL_BROWSE || '') !== '0',
     // Game picks run Sol at its TOP reasoning tier (founder GO Jul 22 eve —
     // the WC specials precedent); props ride their own desk model.
     // The brain's bar is xhigh (founder GO Jul 22); a lane may pass its own
@@ -520,6 +524,18 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     console.log(`[Orchestrator] 📋 Research briefing included before Pass 1 (${_researchBriefing.length} chars)`);
   }
 
+
+  if (currentSession?.browse) {
+    // The one contract for reading the web: know what day it is and the
+    // date of what you read (founder, Sep 9 2026: "Gary needs to know the
+    // date of what he is reading and handle that the way a human would").
+    const todayEt = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    const kickoffEt = options.gameTime ? new Date(options.gameTime).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null;
+    userMessage += `\n\n## READING THE WEB\nToday is ${todayEt} (ET)${kickoffEt ? `; this game kicks off ${kickoffEt} ET` : ''}. You can search the web and open pages while you read this game. Every page carries a date — find it, and weigh what you read the way a fan would: a report from days ago may already be overtaken by what came after, and this morning's word is the latest. Name the date of anything you cite. Nothing you read replaces the desk's verified numbers.`;
+    nextMessageToSend = userMessage;
+    messages[1] = { role: 'user', content: userMessage };
+    console.log('[Orchestrator] 🌐 Gary reads the web on this game (dated reading contract appended)');
+  }
 
   if (isMLBSport && options.mlbJudgmentJournal && options.mlbExpectationMemory?.text) {
     userMessage += `\n\n${options.mlbExpectationMemory.text}`;

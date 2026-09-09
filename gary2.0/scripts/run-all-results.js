@@ -1837,6 +1837,9 @@ async function main(targetDate = getTargetDate()) {
     console.warn(`  ⚠️ Closing-line read failed (non-fatal): ${e.message}`);
   }
 
+  // Retired Sep 9 2026 (founder): the formula and the notebook read never beat
+  // Gary. GARY_MLB_TEST_SYSTEMS=on revives the nightly three-way read.
+  if (process.env.GARY_MLB_TEST_SYSTEMS === 'on') {
   // THE SHADOW READ (Sep 3 2026): grade the shadow model's MLB picks from
   // the official finals and print Gary vs the shadow on the same ruler.
   try {
@@ -1864,6 +1867,7 @@ async function main(targetDate = getTargetDate()) {
   } catch (e) {
     console.warn(`  ⚠️ Notebook step failed (non-fatal): ${e.message}`);
   }
+  } // GARY_MLB_TEST_SYSTEMS
 
   console.log(`\n════════════════════════════════════════`);
   console.log(`SUMMARY FOR ${targetDate}`);

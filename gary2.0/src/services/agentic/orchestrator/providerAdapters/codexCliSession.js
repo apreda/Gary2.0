@@ -249,12 +249,16 @@ export async function createCodexCliSession(options = {}) {
   // A research session trips its own breaker lane; a brain, tools or not,
   // stays on the brain's lane.
   const breakerKey = options.breakerLane === 'research' ? 'codex-research' : 'codex';
-  console.log(`[Session] Created ${modelName} session via Codex CLI adapter (ChatGPT bridge, tools: ${toolList ? toolList.length : 0}, lane: ${breakerKey})`);
+  const browse = Boolean(options.browse);
+  console.log(`[Session] Created ${modelName} session via Codex CLI adapter (ChatGPT bridge, tools: ${toolList ? toolList.length : 0}, lane: ${breakerKey}${browse ? ', web: reading' : ''})`);
   return {
     provider: 'codex-cli',
     modelName,
     thinkingLevel,
     breakerKey,
+    // GARY READS THE WEB (founder, Sep 9 2026): native web search stays on
+    // for this thread; the sandbox stays read-only.
+    browse,
     // A lane may prefer a login (props ride the newest one); turn one takes
     // it when it has allowance, then the thread is pinned to whoever answered.
     codexHome: options.preferredCodexHome || null,
@@ -300,6 +304,7 @@ export async function sendToCodexCliSession(session, message, options = {}) {
       // factors fit one budget and one login's allowance (Sep 9 2026 — Luna
       // at high spent 75-440 s a turn and timed out 28 of 30 games).
       '-c', `model_reasoning_effort="${effortFor(session.breakerKey === 'codex-research' ? (process.env.GARY_RESEARCH_EFFORT || 'medium') : session.thinkingLevel)}"`,
+      ...(session.browse ? ['-c', 'tools.web_search=true'] : []),
       '-',
     ];
     // No system flag on exec — the contract rides as a preamble on turn one.

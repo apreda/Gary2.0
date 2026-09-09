@@ -64,6 +64,10 @@ const LEAGUE_BRAIN = Object.freeze({
   },
 });
 const brainFor = (key) => LEAGUE_BRAIN[key] || { model: GAME_PICK_MODEL, thinkingLevel: null };
+// THE TWO MLB TEST SYSTEMS ARE RETIRED (founder, Sep 9 2026: "kill the 2 test
+// systems… memory didn't help Gary"): Sep 3-8 the formula went 25-44 and the
+// notebook read 23-27 against Gary's 33-37. GARY_MLB_TEST_SYSTEMS=on revives them.
+const MLB_TEST_SYSTEMS_ON = process.env.GARY_MLB_TEST_SYSTEMS === 'on';
 
 // ERA LIVE — this is a fresh process, so its module cache IS disk truth. One
 // line + a ledger append make every pick run auditable by folder/commit/era,
@@ -2302,7 +2306,7 @@ async function main() {
               // THE SHADOW MODEL (founder GO, Sep 3 2026): a second system's
               // bet for the same game, stored beside Gary's and never shown
               // to him or to fans; graded and read nightly against his.
-              if (config.name === 'MLB') {
+              if (config.name === 'MLB' && MLB_TEST_SYSTEMS_ON) {
                 try {
                   const { supabaseAdmin, supabase } = await import('../src/supabaseClient.js');
                   const todayEt = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
@@ -2325,7 +2329,7 @@ async function main() {
                 // this child or touches the real pick. It reads the desk
                 // snapshot stored above; if that store failed there is no
                 // desk to re-read and the shadow simply skips.
-                if (deskText && publishedPick) {
+                if (deskText && publishedPick && MLB_TEST_SYSTEMS_ON) {
                   try {
                     const { spawn } = await import('node:child_process');
                     const { openSync, mkdirSync } = await import('node:fs');

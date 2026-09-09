@@ -60,3 +60,27 @@ describe('the CLI tool protocol', () => {
     expect(codexResearch.breakerKey).toBe('codex-research');
   });
 });
+
+describe('Gary reads the web (founder, Sep 9 2026)', () => {
+  it('a browse session opens the CLI web tools and nothing else; a plain session keeps them shut', async () => {
+    const reading = await createClaudeCliSession({ modelName: 'claude-fable-5-1', systemPrompt: 'You are Gary.', tools, browse: true });
+    expect(reading.browse).toBe(true);
+    const plain = await createClaudeCliSession({ modelName: 'claude-fable-5-1', systemPrompt: 'You are Gary.', tools });
+    expect(plain.browse).toBe(false);
+    const codex = await createCodexCliSession({ modelName: 'codex-gpt-6-astra', systemPrompt: 'You are Gary.', tools, browse: true });
+    expect(codex.browse).toBe(true);
+  });
+
+  it('the adapters and the loop wire it: WebSearch/WebFetch allowed on Claude, web_search on Codex, NFL only, with the dated reading contract', async () => {
+    const { readFileSync } = await import('node:fs');
+    const cl = readFileSync(new URL('../../../src/services/agentic/orchestrator/providerAdapters/claudeCliSession.js', import.meta.url), 'utf8');
+    expect(cl).toContain("if (session.browse) args.push('--allowedTools', 'WebSearch', 'WebFetch');");
+    expect(cl).toContain("filter((t) => !['WebSearch', 'WebFetch', 'WebSearchTool'].includes(t))");
+    const cx = readFileSync(new URL('../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js', import.meta.url), 'utf8');
+    expect(cx).toContain("...(session.browse ? ['-c', 'tools.web_search=true'] : []),");
+    const loop = readFileSync(new URL('../../../src/services/agentic/orchestrator/agentLoop.js', import.meta.url), 'utf8');
+    expect(loop).toContain("browse: isNFLSport && String(process.env.GARY_NFL_BROWSE || '') !== '0',");
+    expect(loop).toContain('## READING THE WEB');
+    expect(loop).toContain('Name the date of anything you cite.');
+  });
+});

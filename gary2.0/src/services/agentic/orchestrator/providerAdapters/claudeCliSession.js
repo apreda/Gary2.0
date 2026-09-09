@@ -158,15 +158,20 @@ export async function createClaudeCliSession(options = {}) {
     thinkingLevel = 'high', // the brain's effort is pinned per model; research honors this
     _costTracker = null,
     tools = null,
+    browse = false,
   } = options;
   const toolList = Array.isArray(tools) && tools.length ? tools : null;
   const breakerKey = options.breakerLane === 'research' ? 'claude-research' : 'claude';
-  console.log(`[Session] Created ${modelName} session via Claude Code CLI adapter (subscription bridge, tools: ${toolList ? toolList.length : 0}, lane: ${breakerKey})`);
+  console.log(`[Session] Created ${modelName} session via Claude Code CLI adapter (subscription bridge, tools: ${toolList ? toolList.length : 0}, lane: ${breakerKey}${browse ? ', web: reading' : ''})`);
   return {
     provider: 'claude-cli',
     modelName,
     thinkingLevel,
     breakerKey,
+    // GARY READS THE WEB (founder, Sep 9 2026: "I trust Gary to go to the
+    // internet and do some research and reading"): the CLI's own WebSearch and
+    // WebFetch stay open on this session; everything else of the CLI's stays shut.
+    browse: Boolean(browse),
     // Tools mode: the catalog rides with the system prompt on turn one.
     _systemPrompt: toolList ? `${systemPrompt}\n\n${renderCliToolProtocol(toolList)}` : systemPrompt,
     tools: toolList,
@@ -194,7 +199,10 @@ export async function sendToClaudeCliSession(session, message, options = {}) {
   let body = session._seedText ? `${session._seedText}\n\n${text}` : text;
   session._seedText = null;
 
-  const args = ['-p', '--model', session.modelName, '--effort', effortFor(session.modelName, session.thinkingLevel, { research }), '--output-format', 'json', '--disallowedTools', BRAIN_DISALLOWED_TOOLS];
+  const disallowed = session.browse
+    ? BRAIN_DISALLOWED_TOOLS.split(',').filter((t) => !['WebSearch', 'WebFetch', 'WebSearchTool'].includes(t)).join(',')
+    : BRAIN_DISALLOWED_TOOLS;
+  const args = ['-p', '--model', session.modelName, '--effort', effortFor(session.modelName, session.thinkingLevel, { research }), '--output-format', 'json', '--disallowedTools', disallowed];
   if (session.claudeSessionId) {
     args.push('--resume', session.claudeSessionId);
   } else if (session._systemPrompt && research) {
@@ -204,6 +212,7 @@ export async function sendToClaudeCliSession(session, message, options = {}) {
   } else if (session._systemPrompt) {
     args.push('--append-system-prompt', session._systemPrompt);
   }
+  if (session.browse) args.push('--allowedTools', 'WebSearch', 'WebFetch');
 
   const { code, stdout, stderr } = await runClaude(args, body, CALL_TIMEOUT_MS, session.breakerKey || 'claude');
   const duration = Date.now() - startTime;
