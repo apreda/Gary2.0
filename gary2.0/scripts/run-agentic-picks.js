@@ -698,7 +698,7 @@ if (sportsToRun.length === 0) {
 ║                                                                  ║
 ╚══════════════════════════════════════════════════════════════════╝
 `);
-  process.exit(0);
+  console.error('[Runner] no sport flag given (--mlb, --nfl, --ncaaf, --nba) — nothing ran'); process.exit(2);
 }
 
 // Check environment variables
@@ -2556,7 +2556,9 @@ async function main() {
     .filter((id) => id != null)
     .map(String);
   const coveredGameIds = [...new Set([...existingPickGameIds, ...storedGameIds])];
-  if (gameIdFilter && !coveredGameIds.includes(String(gameIdFilter))) {
+  // A no-store run (--store=false) that produced a pick is a successful dry run,
+  // not a missing pick (Sep 9 2026: the NFL rehearsals exited 1 on success).
+  if (gameIdFilter && shouldStore && !coveredGameIds.includes(String(gameIdFilter))) {
     throw new Error(`Exact game ${gameIdFilter} completed without a verified stored pick`);
   }
 
