@@ -75,22 +75,22 @@ describe('mlbCaseHeadings', () => {
 });
 
 describe('Pass 1 and the bilateral prompt agree', () => {
-  it('names the game kind before the desk and asks the run line on a run-line game', () => {
+  it('the desk speaks first — no opening paragraph, no WHERE TO LOOK list (founder, Sep 9 2026); the cases keep their exact headings', () => {
     const msg = buildPass1Message('DESK', 'Braves', 'Rockies', '2026-09-01', 'baseball_mlb', -1.5, { game: capped });
-    expect(msg).toContain('Tonight is a run-line game: Braves -1.5 or Rockies +1.5.');
+    expect(msg.startsWith('<scout_report>')).toBe(true);
+    expect(msg).not.toContain("You're deciding");
+    expect(msg).not.toContain('Where tonight lives on the desk');
     expect(msg).toContain('CASE FOR BACKING BRAVES TONIGHT:');
     expect(msg).toContain('CASE FOR BACKING ROCKIES TONIGHT:');
     expect(msg).not.toContain('-1.5 TONIGHT:');
     expect(msg).not.toContain('+1.5 TONIGHT:');
     expect(msg.toLowerCase()).not.toContain('house limit');
     expect(msg).not.toContain('OUTRIGHT AT');
-    // The opening names the ticket outcome; exact odds remain on the desk.
-    const opening = msg.split('\n').find((l) => l.startsWith("You're deciding"));
-    expect(opening).not.toMatch(/-?\d{3}/);
   });
-  it('asks for the team Gary expects to win on a moneyline board', () => {
+  it('a moneyline board reads the same way — desk first, cases under the headings', () => {
     const msg = buildPass1Message('DESK', 'Braves', 'Rockies', '2026-09-01', 'baseball_mlb', -1.5, { game: legal });
-    expect(msg).toContain('Tonight is a moneyline game. Read the whole game and choose the team you actually expect to win.');
+    expect(msg.startsWith('<scout_report>')).toBe(true);
+    expect(msg).not.toContain('Tonight is a moneyline game.');
     expect(msg).toContain('CASE FOR BACKING BRAVES TONIGHT:');
     expect(msg).toContain('CASE FOR BACKING ROCKIES TONIGHT:');
   });
@@ -155,9 +155,11 @@ describe('MLB expected ticket outcome assignment (founder, Sep 8 2026)', () => {
   it('retains the exact moneyline-cap boundary and chooses run-line before reading evidence', () => {
     const atCap = buildPass1Message('DESK', 'Braves', 'Rockies', '2026-09-08', 'MLB', -1.5, { game: { ...capped, moneyline_home: -179 } });
     const pastCap = buildPass1Message('DESK', 'Braves', 'Rockies', '2026-09-08', 'MLB', -1.5, { game: { ...capped, moneyline_home: -180 } });
-    expect(atCap).toContain('Tonight is a moneyline game.');
-    expect(pastCap).toContain('Tonight is a run-line game: Braves -1.5 or Rockies +1.5.');
-    expect(pastCap.indexOf('Tonight is a run-line game:')).toBeLessThan(pastCap.indexOf('<scout_report>'));
+    // The kind no longer opens the message; the boundary still decides the ticket menu.
+    expect(atCap).not.toContain('Tonight is a');
+    expect(pastCap).not.toContain('Tonight is a');
+    expect(mlbCaseHeadings('Braves', 'Rockies', { ...capped, moneyline_home: -179 }).kind).toBe('moneyline');
+    expect(mlbCaseHeadings('Braves', 'Rockies', { ...capped, moneyline_home: -180 }).kind).toBe('runline');
   });
   it('keeps the simple final question, evidence questions, and confidence as Gary\'s judgment', () => {
     const msg = buildPass2Message('Braves', 'Rockies', 'MLB', -1.5);

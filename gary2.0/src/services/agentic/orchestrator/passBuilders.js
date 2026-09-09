@@ -4,7 +4,7 @@
 // the pre-deletion state (53962904^).
 import { getNbaSpreadFactors, getNflSpreadFactors, getNcaafSpreadFactors, getMlbSpreadFactors, getMlbSeasonAwareness, getFootballSeasonAwareness } from './spreadEvaluationFactors.js';
 import { GAME_ML_CAP } from './orchestratorConfig.js';
-import { mlbCaseHeadings, mlbPass1Opening } from './mlbCaseMenu.js';
+import { mlbCaseHeadings } from './mlbCaseMenu.js';
 import { NBA_PASS1_INVESTIGATE_LINES } from './nbaWinningEra.js';
 import { DECISION_EVIDENCE_QUESTIONS } from './evidenceQuality.js';
 
@@ -493,9 +493,9 @@ function buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread, game = nu
   // opening line names which; the cases follow it (mlbCaseMenu.js).
   const headings = mlbCaseHeadings(homeTeam, awayTeam, game);
 
+  // The opening paragraph and its WHERE TO LOOK list are gone (founder,
+  // Sep 9 2026: "idk why we need that at all"). The desk speaks first.
   return `
-${mlbPass1Opening(headings)}
-
 <scout_report>
 ## MATCHUP BRIEFING (TODAY: ${today})
 
