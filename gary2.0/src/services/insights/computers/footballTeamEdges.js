@@ -9,7 +9,7 @@ import { makeRow, TONES } from '../shared.js';
 import { attachLaneReads, detailFact } from '../laneReads.js';
 import {
   aggregateFootballTeamStats,
-  loadFootballTeamGameStats,
+  loadFootballTeamSample,
 } from '../footballData.js';
 
 // Possession renders as minutes, not raw seconds — "31:24 per game".
@@ -311,8 +311,11 @@ export async function computeFootballTeamEdges(ctx) {
   const league = String(ctx?.league || '').toLowerCase();
   if (!['nfl', 'ncaaf'].includes(league)) return [];
 
-  const raw = await loadFootballTeamGameStats({ bdl, league, season, date, games });
+  const sample = await loadFootballTeamSample({ bdl, league, season, date, games });
+  const raw = sample.rows;
   const statsByTeam = aggregateFootballTeamStats(raw, { league });
+  // A prior-season sample says so in every sentence (see loadFootballTeamSample).
+  const priorTag = sample.prior ? ` (${sample.season} season)` : '';
   const through = (() => {
     const d = Date.parse(`${date}T00:00:00Z`);
     return Number.isFinite(d) ? new Date(d - 86400000).toISOString().slice(0, 10) : date;
@@ -353,27 +356,32 @@ export async function computeFootballTeamEdges(ctx) {
 
       rows.push(makeRow({
         category: metric.category,
-        headline: metric.headline(teamName(leader.team), gapText),
+        headline: `${metric.headline(teamName(leader.team), gapText)}${priorTag}`,
         detail:
           `${teamName(awayTeam)} is at ${awayText}${pct} ${metric.label} over ${sampleWord(awayStats.games)}; ` +
           `${teamName(homeTeam)} is at ${homeText}${pct} over ${sampleWord(homeStats.games)}. ` +
-          `Those are current-${season} team-game results through ${through}.`,
+          (sample.prior
+            ? `Those are ${sample.season} regular-season team-game results; the ${season} season has no finals for these clubs yet.`
+            : `Those are current-${season} team-game results through ${through}.`),
         game: helpers.gameLabel(game),
         value: metric.short === '%' ? `${gapText}%` : `${gapText} ${metric.short}`,
         tone: TONES.EDGE,
         relevance_score: relevance(metric, gap, league),
         team_id: leader.team.id,
         game_id: game.id,
-        meta: evidenceMeta({
-          metric,
-          league,
-          season,
-          date: through,
-          away: sides.away,
-          home: sides.home,
-          awayValue,
-          homeValue,
-        }),
+        meta: {
+          ...evidenceMeta({
+            metric,
+            league,
+            season: sample.season,
+            date: through,
+            away: sides.away,
+            home: sides.home,
+            awayValue,
+            homeValue,
+          }),
+          prior_season: sample.prior,
+        },
       }));
     }
   }
@@ -382,7 +390,7 @@ export async function computeFootballTeamEdges(ctx) {
     ask: 'what this statistical gap actually means for how the game gets played — who dictates the style, how it collides with the other side\'s identity, and where the sample could mislead',
   });
 
-  console.log(`[footballTeamEdges] ${league.toUpperCase()} ${date}: ${raw.length} BDL team boxes -> ${rows.length} row(s)`);
+  console.log(`[footballTeamEdges] ${league.toUpperCase()} ${date}: ${raw.length} BDL team boxes${sample.prior ? ` (${sample.season} season — ${season} has no finals for these clubs yet)` : ''} -> ${rows.length} row(s)`);
   return rows;
 }
 

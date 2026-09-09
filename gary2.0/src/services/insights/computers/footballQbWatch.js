@@ -10,6 +10,7 @@
 
 import { makeRow, TONES } from '../shared.js';
 import { attachLaneReads, detailFact } from '../laneReads.js';
+import { footballSeasonLive } from '../footballData.js';
 
 function fixed(value, decimals = 1) {
   const n = Number(value);
@@ -42,11 +43,17 @@ function passingLine(stat) {
   };
 }
 
-async function seasonLineFor(bdl, playerId, season) {
+async function seasonLineFor(bdl, playerId, season, seasonLive = true) {
   if (!playerId) return null;
-  const current = (await bdl.getNflPlayerSeasonStats({ playerId, season })) || [];
-  const currentLine = passingLine(current[0]);
-  if (currentLine) return { ...currentLine, season, prior: false };
+  // BDL season_stats serves LAST season's line under this season's label until
+  // a regular-season game is final (Sep 9 2026, the morning of Week 1: Drake
+  // Maye showed a 17-game "2026 line so far"). Until the season is live the
+  // prior season is the only honest source, read under its own name.
+  if (seasonLive) {
+    const current = (await bdl.getNflPlayerSeasonStats({ playerId, season })) || [];
+    const currentLine = passingLine(current[0]);
+    if (currentLine) return { ...currentLine, season, prior: false };
+  }
   const prior = (await bdl.getNflPlayerSeasonStats({ playerId, season: season - 1 })) || [];
   const priorLine = passingLine(prior[0]);
   if (priorLine) return { ...priorLine, season: season - 1, prior: true };
@@ -62,6 +69,8 @@ export async function computeFootballQbWatch(ctx) {
   const { games, season, bdl, helpers, date } = ctx;
   const league = String(ctx?.league || '').toLowerCase();
   if (league !== 'nfl') return [];
+
+  const seasonLive = await footballSeasonLive(bdl, season);
 
   const rows = [];
   for (const game of games || []) {
@@ -93,7 +102,7 @@ export async function computeFootballQbWatch(ctx) {
 
       let line = null;
       try {
-        line = await seasonLineFor(bdl, qb.id, season);
+        line = await seasonLineFor(bdl, qb.id, season, seasonLive);
       } catch (err) {
         console.warn(`[footballQbWatch] season stats failed for ${qb.name}: ${err?.message || err}`);
       }
@@ -103,8 +112,11 @@ export async function computeFootballQbWatch(ctx) {
         ? ` He is listed ${String(qb.injuryStatus).toLowerCase()} on the injury report.`
         : '';
 
+      // The sentence names him — the plate and the take show the detail on its
+      // own, where "His" had no antecedent (Sep 9 2026).
+      const surname = String(qb.name).trim().split(/\s+/).pop() || qb.name;
       const detail = line
-        ? `${line.prior ? `His ${line.season} season line` : `His ${line.season} line so far`}: ${line.text}${line.games ? ` over ${line.games} game${line.games === 1 ? '' : 's'}` : ''}.${injuryNote}`
+        ? `${line.prior ? `${surname}'s ${line.season} season line` : `${surname}'s ${line.season} line so far`}: ${line.text}${line.games ? ` over ${line.games} game${line.games === 1 ? '' : 's'}` : ''}.${injuryNote}`
         : `${rosterBits ? `${rosterBits[0].toUpperCase()}${rosterBits.slice(1)}. ` : ''}No ${season} or ${season - 1} passing line on file yet.${injuryNote}`;
 
       rows.push(makeRow({

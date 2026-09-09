@@ -184,9 +184,21 @@ export async function computeFootballHeadToHead(ctx) {
         ? `The series is ${awayWins}-${homeWins}${ties ? `-${ties}` : ''} across the last two seasons`
         : `${awayWins > homeWins ? awayName : homeName} has taken ${Math.max(awayWins, homeWins)} of the last ${tallyPool.length}${ties ? ` (${ties} tie${ties === 1 ? '' : 's'})` : ''}`;
 
+    // The card's big number is the LEADER's record, so the headline names the
+    // leader (Sep 9 2026: "NE and SEA have met once" beside a green 1-0 said
+    // nothing about whose 1-0 it was).
+    const metCount = `met ${meetings.length === 1 ? 'once' : `${meetings.length} times`} since ${Number(season) - 1}`;
+    const leaderName = !countable.length || awayWins === homeWins ? null : (awayWins > homeWins ? awayName : homeName);
+    const trailerName = leaderName === awayName ? homeName : awayName;
+    const headline = !countable.length
+      ? `${awayName} and ${homeName} have ${metCount}, preseason only`
+      : leaderName
+        ? `${leaderName} lead the series with ${trailerName} since ${Number(season) - 1}`
+        : `${awayName} and ${homeName} are even since ${Number(season) - 1}`;
+
     rows.push(makeRow({
       category: 'headToHead',
-      headline: `${awayName} and ${homeName} have met ${meetings.length === 1 ? 'once' : `${meetings.length} times`} since ${Number(season) - 1}`,
+      headline,
       detail: `${tallyLead}. ${meetingLines.join('. ')}.`,
       game: helpers.gameLabel(game),
       value: countable.length ? `${Math.max(awayWins, homeWins)}-${Math.min(awayWins, homeWins)}${ties ? `-${ties}` : ''} SERIES` : 'PRESEASON ONLY',

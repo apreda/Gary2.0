@@ -697,12 +697,66 @@ describe('NFL depth lanes (availability, QB watch, situational)', () => {
     expect(qbs.length).toBe(2);
     const vet = qbs.find((r) => r.player_id === 57);
     expect(vet.headline).toBe('Quality Starter starts at quarterback for MIA');
-    expect(vet.detail).toContain('His 2025 season line');
+    expect(vet.detail).toContain("Starter's 2025 season line");
     expect(vet.detail).toContain('24-9 TD-INT');
     expect(vet.meta.prior_season_line).toBe(true);
     const rookie = qbs.find((r) => r.player_id === 91);
     expect(rookie.detail).toContain('No 2026 or 2025 passing line on file yet');
     expect(rookie.detail).toContain('listed questionable');
+  });
+
+  it('reads the prior season under its own name until a regular-season game is final (Week 1 morning)', async () => {
+    // Sep 9 2026: BDL season_stats served Drake Maye's 17-game 2025 line under
+    // the 2026 label the morning of Week 1. The standings gate says the season
+    // is not live, so the lane reads 2025 and names it.
+    bdl.getGames.mockResolvedValue([nflSlateGame]);
+    bdl.nflStandingsCountable = vi.fn().mockResolvedValue(false);
+    bdl.getNflRosterDepth.mockResolvedValue({
+      home: [{ id: 57, name: 'Drake Maye', position: 'QB', depth: 1, college: 'North Carolina', experience: '3rd Season', injuryStatus: null }],
+      away: [],
+    });
+    bdl.getNflPlayerSeasonStats.mockImplementation(async ({ season }) => [{
+      games_played: 17, passing_yards: 4394, passing_completion_pct: 72,
+      yards_per_pass_attempt: 8.93, passing_touchdowns: 31, passing_interceptions: 8,
+      season,
+    }]);
+    try {
+      const result = await generateInsightConnections({ date: '2026-09-10', league: 'NFL' });
+      const maye = result.connections.find((r) => r.category === 'quarterback' && r.player_id === 57);
+      expect(maye.detail).toContain("Maye's 2025 season line");
+      expect(maye.detail).not.toContain('2026 line so far');
+      expect(maye.meta.prior_season_line).toBe(true);
+      expect(maye.meta.stats_season).toBe(2025);
+      expect(bdl.getNflPlayerSeasonStats).toHaveBeenCalledWith({ playerId: 57, season: 2025 });
+      expect(bdl.getNflPlayerSeasonStats).not.toHaveBeenCalledWith({ playerId: 57, season: 2026 });
+    } finally {
+      delete bdl.nflStandingsCountable;
+    }
+  });
+
+  it('fills the team lanes from the prior regular season, labeled, until the current season has finals', async () => {
+    bdl.getGames.mockResolvedValue([nflSlateGame]);
+    bdl.nflStandingsCountable = vi.fn().mockResolvedValue(false);
+    const priorBox = (team, values) => ({ team, game: { ...historicalGame(700), date: '2025-11-02T18:00:00.000Z', season: 2025 }, ...values });
+    bdl.getTeamStats.mockImplementation(async (sport, params) => (
+      params?.seasons?.[0] === 2025
+        ? [priorBox(away, { rushing_yards: 130, net_passing_yards: 190, total_yards: 350, turnovers: 0, yards_per_play: 6.1, sacks: 1 }),
+           priorBox(home, { rushing_yards: 80, net_passing_yards: 250, total_yards: 330, turnovers: 3, yards_per_play: 5.4, sacks: 4 })]
+        : []
+    ));
+    try {
+      const result = await generateInsightConnections({ date: '2026-09-10', league: 'NFL' });
+      const edges = result.connections.filter((r) => r.meta?.source === 'balldontlie_team_stats' && r.category !== 'mismatch');
+      expect(edges.length).toBeGreaterThan(0);
+      expect(edges.every((r) => r.headline.endsWith('(2025 season)'))).toBe(true);
+      expect(edges.every((r) => r.detail.includes('2025 regular-season team-game results'))).toBe(true);
+      expect(edges.every((r) => r.meta.prior_season === true && r.meta.season === 2025)).toBe(true);
+      const mismatch = result.connections.find((r) => r.category === 'mismatch');
+      expect(mismatch.headline.endsWith('(2025 season)')).toBe(true);
+      expect(mismatch.meta.prior_season).toBe(true);
+    } finally {
+      delete bdl.nflStandingsCountable;
+    }
   });
 
   it('reads the standings as a preseason ledger in August and as the real table in season', async () => {

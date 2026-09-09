@@ -799,8 +799,11 @@ private struct FootballAvailabilityCard: View {
                         .frame(width: 30)
                 }
             }
+            // 108pt, not 88: QUESTIONABLE beside its chevron truncated to
+            // "QUESTION…" at 88 (Sep 9 2026, the Week 1 report) — shown text
+            // is complete, never trimmed.
             Text("STATUS").font(GaryFonts.data(9.5, .semibold)).tracking(1.1).foregroundStyle(.white.opacity(0.42))
-                .frame(width: 88, alignment: .trailing)
+                .frame(width: 108, alignment: .trailing)
         }
     }
 
@@ -863,7 +866,7 @@ private struct FootballAvailabilityCard: View {
                             Text(status.uppercased())
                                 .font(GaryFonts.data(10.5, .bold)).tracking(1.1)
                                 .foregroundStyle(Self.statusColor(status))
-                                .lineLimit(1).minimumScaleFactor(0.7)
+                                .lineLimit(1).minimumScaleFactor(0.6).allowsTightening(true)
                         } else {
                             Text("–").foregroundStyle(.white.opacity(0.25))
                                 .accessibilityLabel("Game status not reported")
@@ -875,7 +878,7 @@ private struct FootballAvailabilityCard: View {
                                 .rotationEffect(.degrees(isOpen ? 180 : 0))
                         }
                     }
-                    .frame(width: 88, alignment: .trailing)
+                    .frame(width: 108, alignment: .trailing)
                 }
                 if isOpen, let note = line.note {
                     Text(note)

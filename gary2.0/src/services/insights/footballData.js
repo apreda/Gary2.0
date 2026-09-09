@@ -210,6 +210,37 @@ export async function loadFootballSlate({ bdl, league, date }) {
 }
 
 /**
+ * Is the football season under way? NFL: a regular-season game of `season`
+ * is final (the standings' own gate, `nflStandingsCountable`). NCAAF: always,
+ * its season starts before the NFL's. A missing gate on the provider reads as
+ * live (the legacy behaviour); a gate that throws reads as NOT live — the
+ * prior season is the honest sample either way.
+ */
+export async function footballSeasonLive(bdl, season, league = 'nfl') {
+  if (leagueKey(league) !== 'nfl') return true;
+  if (typeof bdl?.nflStandingsCountable !== 'function') return true;
+  try { return Boolean(await bdl.nflStandingsCountable(season)); } catch { return false; }
+}
+
+/**
+ * THE WEEK-1 SAMPLE (Sep 9 2026): the current NFL season has no finals before
+ * its first kickoff, so every team-box lane went dark on opening night and
+ * THE BIG NUMBERS rail carried one row. Until the season is live — and for a
+ * slate team with no current-season box yet — the prior season's regular-
+ * season boxes are the sample, and every consumer labels them (`prior: true`,
+ * `season` = the year actually read).
+ */
+export async function loadFootballTeamSample({ bdl, league, season, date, games }) {
+  if (await footballSeasonLive(bdl, season, league)) {
+    const rows = await loadFootballTeamGameStats({ bdl, league, season, date, games });
+    if (rows.length || leagueKey(league) !== 'nfl') return { rows, season: Number(season), prior: false };
+  }
+  const priorSeason = Number(season) - 1;
+  const rows = await loadFootballTeamGameStats({ bdl, league, season: priorSeason, date, games });
+  return { rows, season: priorSeason, prior: true };
+}
+
+/**
  * Fetch current-season team-game boxes for every team on the slate. Calls are
  * chunked to stay under the endpoint's 100-row page and run sequentially to
  * avoid creating a BDL rate-limit burst on a full college slate.

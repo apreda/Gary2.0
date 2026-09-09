@@ -17,7 +17,7 @@ import { makeRow, TONES } from '../shared.js';
 import { attachLaneReads, detailFact } from '../laneReads.js';
 import {
   aggregateFootballTeamStats,
-  loadFootballTeamGameStats,
+  loadFootballTeamSample,
 } from '../footballData.js';
 
 function clockText(seconds) {
@@ -110,8 +110,10 @@ export async function computeFootballMismatch(ctx) {
   const league = String(ctx?.league || '').toLowerCase();
   if (!['nfl', 'ncaaf'].includes(league)) return [];
 
-  const raw = await loadFootballTeamGameStats({ bdl, league, season, date, games });
-  const statsByTeam = aggregateFootballTeamStats(raw, { league });
+  const sample = await loadFootballTeamSample({ bdl, league, season, date, games });
+  const statsByTeam = aggregateFootballTeamStats(sample.rows, { league });
+  // A prior-season sample says so in every sentence (see loadFootballTeamSample).
+  const priorTag = sample.prior ? ` (${sample.season} season)` : '';
 
   const rows = [];
   for (const game of games || []) {
@@ -149,8 +151,8 @@ export async function computeFootballMismatch(ctx) {
 
     rows.push(makeRow({
       category: 'mismatch',
-      headline: metric.frame(teamName(winner), teamName(loser), show(winnerValue), show(loserValue)),
-      detail: `The widest gap on this matchup's tape: ${metric.unit.toLowerCase()} — ${teamName(awayTeam)} ${show(awayValue)}, ${teamName(homeTeam)} ${show(homeValue)}, over ${awayStats.games} and ${homeStats.games} game samples.`,
+      headline: `${metric.frame(teamName(winner), teamName(loser), show(winnerValue), show(loserValue))}${priorTag}`,
+      detail: `The widest gap on this matchup's tape: ${metric.unit.toLowerCase()} — ${teamName(awayTeam)} ${show(awayValue)}, ${teamName(homeTeam)} ${show(homeValue)}, over ${awayStats.games} and ${homeStats.games} game samples${sample.prior ? ` from the ${sample.season} regular season` : ''}.`,
       game: helpers.gameLabel(game),
       value: `${show(winnerValue)} VS ${show(loserValue)}`,
       tone: TONES.NEUTRAL,
@@ -162,7 +164,8 @@ export async function computeFootballMismatch(ctx) {
         metric: metric.key,
         unit: metric.unit,
         league: league.toUpperCase(),
-        season,
+        season: sample.season,
+        prior_season: sample.prior,
         severity: Number(best.severity.toFixed(2)),
         away: { team_id: awayTeam.id, abbreviation: teamName(awayTeam), value: awayValue, games: awayStats.games },
         home: { team_id: homeTeam.id, abbreviation: teamName(homeTeam), value: homeValue, games: homeStats.games },

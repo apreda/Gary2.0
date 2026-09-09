@@ -2466,10 +2466,10 @@ struct TeasedPickCard: View {
                 .padding(.trailing, 52)
 
                 Text(providerStatus != nil
-                     ? "The provider lists this game as \(providerStatus!.lowercased()). Gary's call stays off the live board."
+                     ? "The provider lists this game as \(providerStatus!.lowercased()). Gary's pick stays off the live board."
                      : gameStarted
-                     ? "Gary's call didn't post for this one. The rest of the board is live."
-                     : "Gary posts his call ~90 minutes before \(eventName)")
+                     ? "Gary's pick didn't post for this one. The rest of the board is live."
+                     : "Gary posts his pick ~90 minutes before \(eventName)")
                     .font(GaryFonts.text(13.5, .medium))
                     .foregroundStyle(.white.opacity(0.6))
                     .lineLimit(1).minimumScaleFactor(0.8)
