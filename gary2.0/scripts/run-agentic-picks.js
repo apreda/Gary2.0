@@ -68,6 +68,7 @@ const brainFor = (key) => LEAGUE_BRAIN[key] || { model: GAME_PICK_MODEL, thinkin
 // systems… memory didn't help Gary"): Sep 3-8 the formula went 25-44 and the
 // notebook read 23-27 against Gary's 33-37. GARY_MLB_TEST_SYSTEMS=on revives them.
 const MLB_TEST_SYSTEMS_ON = process.env.GARY_MLB_TEST_SYSTEMS === 'on';
+const MLB_JUDGMENT_ON = process.env.GARY_MLB_JUDGMENT === 'on';
 // BRAIN PREFLIGHT (founder, Sep 9 2026: "why did it go through the whole
 // process just to hit the cap when we could check that up front"): one
 // one-word turn per bridge brain before any desk is built or research bought.
@@ -200,7 +201,11 @@ async function runMlbJuneEngine(game, runnerOptions) {
   // re-runs the SAME engine — same desk, same prompts — on the next model
   // in the cascade. The separate pickdesk brain is retired.
   runnerOptions.signal?.throwIfAborted();
-  const production = isProductionWinnersRun({ shouldStore, useTestTable, dryRun: args.includes('--dry-run') });
+  // THE FOUR JUDGMENT STAGES ARE OFF (founder, Sep 9 2026: "just remove that stress
+  // test thing… the odds should be shown up front just like the rest of the
+  // info, that is how NFL works"). An MLB pick ends at the card, as football
+  // does. GARY_MLB_JUDGMENT=on revives the Sep 8 stages and their ledger.
+  const production = isProductionWinnersRun({ shouldStore, useTestTable, dryRun: args.includes('--dry-run') }) && runnerOptions.mlbJudgment !== false;
   const cutoff = new Date().toISOString();
   const date = new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   // A read failure is recorded explicitly; unavailable memory cannot masquerade
@@ -1412,7 +1417,8 @@ async function main() {
         // Run agentic analysis (each game is independent)
         const runnerOptions = {
           nocache: process.argv.includes('--nocache') || process.argv.includes('--fresh'),
-          sportsbookOdds: preSportsbookOdds // Pass multi-book odds for scout report
+          sportsbookOdds: preSportsbookOdds, // Pass multi-book odds for scout report
+          mlbJudgment: MLB_JUDGMENT_ON, // the Sep 8 stages, off unless GARY_MLB_JUDGMENT=on
         };
         let result;
         try {

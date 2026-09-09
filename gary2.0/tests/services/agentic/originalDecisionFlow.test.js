@@ -104,7 +104,7 @@ describe('original evidence through actual decision exits', () => {
     expect(result.error).toBeUndefined();
     expect(result).toMatchObject({ path_home: homeCase, path_away: awayCase });
     expect(result._originalToolResponses.map(r => r.toolCallId)).toEqual(early ? ['first'] : ['first','later']);
-    expect(result._originalToolResponses[0].content).toContain('"record": "1-0"');
+    expect(result._originalToolResponses[0].content).toContain('record: 1-0') // football tool results read as prose (Sep 9 2026);
     const delivered = mocks.send.mock.calls.filter(call => call[2]?.isFunctionResponse).flatMap(call => call[1]);
     expect(delivered[0].content).toBe(result._originalToolResponses[0].content);
     expect(mocks.fetch.mock.calls[0][0]).toBe('americanfootball_ncaaf'); // model's incorrect args.sport cannot change the menu
