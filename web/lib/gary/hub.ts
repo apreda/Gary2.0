@@ -85,6 +85,18 @@ export function laneNeedsFullDetail(lane: LaneKey): boolean {
 }
 
 /**
+ * The eyebrow a research row wears wherever it is shown on its own (archive
+ * day pages, game pages): the lane's chip when the category is known, else
+ * the raw key in plain words ("the_sweat" → "THE SWEAT"). Never a raw key.
+ */
+export function laneChip(category: string | null | undefined, fallback = 'INSIGHT'): string {
+  const lane = laneFromCategory(category);
+  if (lane) return LANES[lane].chip;
+  const words = (category ?? '').replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase();
+  return words || fallback;
+}
+
+/**
  * Port of iOS SignalKind.from (Views.swift:11404). Unknown categories return
  * null so the row is DROPPED rather than mis-bucketed.
  */

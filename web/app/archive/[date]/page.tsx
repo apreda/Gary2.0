@@ -17,6 +17,7 @@ import {
 import { archiveGamePath } from '@/lib/gary/archive-path';
 import { normalizeLeague, sportByCode } from '@/lib/gary/leagues';
 import type { GameResultRow, InsightRow, PropResultRow } from '@/lib/gary/types';
+import { laneChip } from '@/lib/gary/hub';
 import { SITE_URL, pageMetadata } from '@/lib/seo/metadata';
 
 export const revalidate = 3600;
@@ -278,7 +279,7 @@ function ArchiveInsight({ row }: { row: InsightRow }) {
     <li className="rounded-card border border-line bg-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-mono text-[9.5px] font-bold uppercase tracking-[0.05em] text-gold">
-          {row.category ?? row.league ?? 'Insight'}
+          {laneChip(row.category, (row.league ?? 'Insight').toUpperCase())}
         </span>
         <span className="tnum font-mono text-[10.5px] text-low">{row.game}</span>
       </div>
