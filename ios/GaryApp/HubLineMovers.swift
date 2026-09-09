@@ -161,23 +161,29 @@ struct HubLineMoversAside: View {
     }
 
     private var strip: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        // The box stands as tall as the lead card beside it (Sep 9 2026), so
+        // the rows spread through that height instead of huddling at the top,
+        // and the type is sized for the room.
+        VStack(alignment: .leading, spacing: 0) {
             Text("LINE MOVES")
-                .hubKickerFont(8.5).tracking(0.8)
+                .hubKickerFont(9).tracking(0.8)
                 .foregroundStyle(GaryColors.gold)
                 .lineLimit(1).minimumScaleFactor(0.8)
+                .padding(.bottom, 8)
             // Pregame only: once a game starts its "now" is a live price, not
             // line movement. Started games keep their ladder from the board.
-            ForEach(Array(store.stories.filter { !$0.started }.prefix(Self.shownCount))) { story in
+            let shown = Array(store.stories.filter { !$0.started }.prefix(Self.shownCount))
+            ForEach(Array(shown.enumerated()), id: \.element.id) { index, story in
                 let move = story.leadMove
+                if index > 0 { Spacer(minLength: 6) }
                 Button { onGame(story) } label: {
-                    VStack(alignment: .leading, spacing: 1) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text("\(story.awayAbbr)@\(story.homeAbbr)")
-                            .hubDataFont(10, .semibold)
+                            .hubDataFont(11.5, .semibold)
                             .foregroundStyle(GaryColors.warmWhite)
                             .lineLimit(1).minimumScaleFactor(0.7)
                         Text("\(move.open) → \(move.now)")
-                            .hubDataFont(9.5, .bold)
+                            .hubDataFont(11, .bold)
                             .foregroundStyle(move.moved ? GaryColors.gold : GaryColors.warmWhite.opacity(0.5))
                             .lineLimit(1).minimumScaleFactor(0.7)
                             .contentTransition(.numericText())
