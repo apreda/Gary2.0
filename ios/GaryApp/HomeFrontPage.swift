@@ -1369,11 +1369,9 @@ struct HomeSheetRowView: View {
                             .foregroundStyle(GaryColors.gold.opacity(0.9))
                             .accessibilityLabel("Winners pick")
                     }
-                    if row.bigOne {
-                        Text("THE BIG ONE")
-                            .font(.system(size: 12, weight: .bold).monospacedDigit()).tracking(0.8)
-                            .foregroundStyle(GaryColors.gold)
-                    }
+                    // No "THE BIG ONE" tag on the row (founder, Sep 10 2026):
+                    // the star already marks a Winners pick; the row's
+                    // bigOne flag stays for the marquee, unlabeled here.
                 }
                 if let call = row.callLine {
                     VStack(alignment: .leading, spacing: 2) {
