@@ -1,0 +1,767 @@
+import { normalizeSportToLeague } from './orchestratorHelpers.js';
+
+/**
+ * Parse props response — extract finalize_props tool call or JSON from Gary's response
+ */
+export function parsePropsResponse(content, toolCallArgs) {
+  // If we received direct tool call args (from finalize_props), use those
+  if (toolCallArgs && toolCallArgs.picks) {
+    return toolCallArgs.picks;
+  }
+
+  // Fallback: try to extract from text response
+  if (!content) return null;
+
+  // Try ALL JSON code blocks (not just the first) — Flash may output game-pick JSON before props JSON.
+  // Require BOTH player + bet on array items so a game-pick JSON that happens to include "player"
+  // (e.g. player-of-the-game rationale) cannot be misidentified as the props array.
+  const jsonBlocks = [...content.matchAll(/```json\s*([\s\S]*?)```/g)];
+  for (const match of jsonBlocks) {
+    try {
+      const parsed = JSON.parse(match[1]);
+      if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].player && parsed[0].bet) return parsed;
+      if (parsed.picks && Array.isArray(parsed.picks) && parsed.picks.length > 0) return parsed.picks;
+    } catch (e) { /* continue to next block */ }
+  }
+
+  // Try raw JSON object with picks — find the specific block containing "picks": [
+  const rawMatch = content.match(/\{[^{}]*"picks"\s*:\s*\[[\s\S]*?\]\s*\}/);
+  if (rawMatch) {
+    try {
+      const parsed = JSON.parse(rawMatch[0]);
+      if (parsed.picks && Array.isArray(parsed.picks)) return parsed.picks;
+    } catch (e) { /* continue */ }
+  }
+
+  return null;
+}
+
+
+/**
+ * Determine the current pass based on message history
+ * Returns: 'investigation', 'evaluation', 'final_decision', or 'default'
+ */
+export function determineCurrentPass(messages) {
+  // Check from most recent to oldest
+  const hasPass3 = messages.some(m =>
+    m.content?.includes('PASS 3 - FINAL OUTPUT') || m.content?.includes('PASS 3 - PROPS EVALUATION PHASE')
+  );
+  if (hasPass3) return 'final_decision';
+
+  const hasPass25 = messages.some(m => m.content?.includes('PASS 2.5'));
+  if (hasPass25) return 'evaluation';
+
+  // Default to investigation (Pass 1)
+  return 'investigation';
+}
+
+/**
+ * Parse Gary's response to extract the pick JSON
+ * 
+ * IMPORTANT: We try to extract a valid pick from JSON FIRST.
+ * Pass indicators are only checked if no valid pick is found in JSON.
+ * This prevents false positives like "moving on" in analysis from triggering PASS.
+ */
+export function parseGaryResponse(content, homeTeam, awayTeam, sport, gameOdds = {}) {
+  if (!content) return null;
+
+  // Helper to fix common JSON issues from Gemini
+  const fixJsonString = (jsonStr) => {
+    // Fix 1: Remove + prefix from numeric values (e.g., "+610" -> "610" or "moneylineAway": +610 -> 610)
+    // This handles cases like "moneylineAway": +610 or "odds": +110
+    // We use a more robust regex that handles decimals and potential spaces
+    let fixed = jsonStr.replace(/:\s*\+([-+]?\d*\.?\d+)/g, ': $1');
+    
+    // Fix 2: Remove + prefix from numbers in arrays or elsewhere
+    fixed = fixed.replace(/,\s*\+([-+]?\d*\.?\d+)/g, ', $1');
+    fixed = fixed.replace(/\[\s*\+([-+]?\d*\.?\d+)/g, '[ $1');
+    
+    // Fix 3: Remove stats array if present (can cause parsing issues)
+    fixed = fixed.replace(/"stats"\s*:\s*\[[\s\S]*?\],?/g, '');
+    
+    // Fix 4: Handle cases where Gary puts a + sign right before a number without a colon
+    // e.g. "moneylineAway":+130
+    fixed = fixed.replace(/([:,\[])\+([-+]?\d*\.?\d+)/g, '$1$2');
+    
+    // Fix 5: Replace unescaped newlines in string values with spaces
+    // This handles "Unterminated string" errors from newlines in rationale text
+    fixed = fixed.replace(/"([^"]*)\n([^"]*)"/g, (match, p1, p2) => {
+      // Recursively replace all newlines within string values
+      return `"${p1.replace(/\n/g, ' ')} ${p2.replace(/\n/g, ' ')}"`;
+    });
+    
+    // Fix 6: Handle truncated JSON by attempting to close it properly
+    // Count open/close braces and brackets
+    const openBraces = (fixed.match(/\{/g) || []).length;
+    const closeBraces = (fixed.match(/\}/g) || []).length;
+    const openBrackets = (fixed.match(/\[/g) || []).length;
+    const closeBrackets = (fixed.match(/\]/g) || []).length;
+    
+    // If JSON appears truncated, try to close it
+    if (openBraces > closeBraces || openBrackets > closeBrackets) {
+      // Remove trailing incomplete content (like partial strings)
+      fixed = fixed.replace(/,\s*"[^"]*$/, ''); // Remove trailing partial key
+      fixed = fixed.replace(/:\s*"[^"]*$/, ': null'); // Close partial string value
+      fixed = fixed.replace(/,\s*$/, ''); // Remove trailing comma
+      
+      // Add missing closing brackets/braces
+      for (let i = 0; i < openBrackets - closeBrackets; i++) {
+        fixed += ']';
+      }
+      for (let i = 0; i < openBraces - closeBraces; i++) {
+        fixed += '}';
+      }
+    }
+    
+    return fixed;
+  };
+
+  // Try to find JSON in the response
+  const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
+  if (jsonMatch) {
+    let jsonStr = jsonMatch[1];
+    try {
+      const parsed = JSON.parse(jsonStr);
+      return normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds);
+    } catch (e) {
+      console.warn('[Orchestrator] Failed to parse JSON from code block:', e.message);
+      // Try to fix common Gemini JSON issues
+      try {
+        const fixedJson = fixJsonString(jsonStr);
+        const parsed = JSON.parse(fixedJson);
+        console.log('[Orchestrator] Parsed JSON after fixing Gemini formatting issues');
+        return normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds);
+      } catch (e2) {
+        console.warn('[Orchestrator] Still failed after fixes:', e2.message);
+      }
+    }
+  }
+
+  // Try to find raw JSON object
+  // Use greedy [\s\S]* before the final } to match the LAST closing brace,
+  // not the first (which could be an inner nested object)
+  const rawJsonMatch = content.match(/\{[\s\S]*?"pick"[\s\S]*\}/);
+  if (rawJsonMatch) {
+    let jsonStr = rawJsonMatch[0];
+    try {
+      const parsed = JSON.parse(jsonStr);
+      return normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds);
+    } catch (e) {
+      console.warn('[Orchestrator] Failed to parse raw JSON:', e.message);
+      // Try to fix common Gemini JSON issues
+      try {
+        const fixedJson = fixJsonString(jsonStr);
+        const parsed = JSON.parse(fixedJson);
+        console.log('[Orchestrator] Parsed JSON after fixing Gemini formatting issues');
+        return normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds);
+      } catch (e2) {
+        console.warn('[Orchestrator] Still failed after fixes:', e2.message);
+        // Log a snippet of the problematic JSON
+        console.log('[Orchestrator] JSON snippet:', jsonStr.substring(0, 500));
+      }
+    }
+  }
+
+  // NO PASS ALLOWED: Gary must always make a pick. If he tries to pass,
+  // return null to trigger retry logic which will tell him to pick a side.
+  const lowerContent = content.toLowerCase();
+  const passIndicators = [
+    'i\'m passing', 'im passing', 'i am passing',
+    'no pick', 'passing on this', 'pass on this',
+    '"type": "pass"', '"pick": "pass"', '"pick":"pass"',
+    'this is a pass', 'staying away', 'stay away'
+  ];
+
+  const isPass = passIndicators.some(indicator => lowerContent.includes(indicator));
+  if (isPass) {
+    console.error('[Orchestrator] REJECTED: Gary tried to PASS — no passes allowed, must make a pick');
+    return null; // Triggers retry — Gary will be told to pick a side
+  }
+
+  // 5. Last resort: Extract pick from natural language text
+  // When Gary writes "I'm taking [Team] +3.5" as text instead of calling finalize_pick
+  const cleanedText = content.replace(/\*\*/g, '');
+  const textPickPatterns = [
+    // "I'm taking [the] Team [at] +/-X.X" (spread)
+    { re: /I.m taking\s+(?:the\s+)?(.+?)\s+(?:at\s+)?([+-]\d+\.?\d*)/, type: 'spread' },
+    // "I'm taking [the] Team ML/moneyline"
+    { re: /I.m taking\s+(?:the\s+)?(.+?)\s+(?:ML|moneyline)\b/i, type: 'ml' },
+    // "My pick/call: Team [at] +/-X.X"
+    { re: /My\s+(?:final\s+)?(?:pick|call)[:\s]+(?:the\s+)?(.+?)\s+(?:at\s+)?([+-]\d+\.?\d*)/i, type: 'spread' },
+    // "My pick/call: Team ML"
+    { re: /My\s+(?:final\s+)?(?:pick|call)[:\s]+(?:the\s+)?(.+?)\s+(?:ML|moneyline)\b/i, type: 'ml' },
+  ];
+
+  for (const { re, type } of textPickPatterns) {
+    const match = cleanedText.match(re);
+    if (match) {
+      const teamName = match[1].replace(/[.*#]/g, '').trim();
+      if (teamName.length < 3) continue; // Skip noise matches
+
+      const spread = type === 'spread' ? match[2] : null;
+      const pickStr = spread ? `${teamName} ${spread}` : `${teamName} ML`;
+
+      // Extract rationale from the decision statement onward
+      const pickIdx = cleanedText.indexOf(match[0]);
+      let rationale = cleanedText.substring(pickIdx).trim();
+      if (rationale.length < 300) {
+        rationale = cleanedText.substring(Math.max(0, pickIdx - 2000)).trim();
+      }
+      rationale = `Gary's Take\n\n${rationale}`;
+
+      console.log(`[Orchestrator] 📋 Extracted pick from text (last resort): "${pickStr}"`);
+      return normalizePickFormat({ pick: pickStr, rationale }, homeTeam, awayTeam, sport, gameOdds);
+    }
+  }
+
+  // No valid JSON pick found and no clear pass indicators - return null to trigger retry
+  console.log('[Orchestrator] ⚠️ No valid pick JSON found in response');
+  return null;
+}
+
+/**
+ * Detect which team a pick refers to. Returns 'home', 'away', or null.
+ *
+ * Strategy (in order):
+ *   1. Full team name substring match — most reliable.
+ *   2. Last-word (nickname) word-boundary match — distinguishes same-city
+ *      matchups where a substring approach collides (Lakers vs Clippers,
+ *      Yankees vs Mets, Rangers vs Islanders, Knicks vs Nets, Cubs vs
+ *      White Sox, Dodgers vs Angels, etc.).
+ *   3. Any 3+ char shared word fallback — partial mentions.
+ *
+ * Returns null when truly ambiguous (e.g. NCAA "Bulldogs" vs "Bulldogs" with
+ * no full name in the pick) so the caller can decide how to handle it.
+ */
+export function detectPickedTeam(pickText, homeTeam, awayTeam) {
+  if (!pickText || !homeTeam || !awayTeam) return null;
+  const pick = String(pickText);
+  const pickLower = pick.toLowerCase();
+  const home = String(homeTeam).toLowerCase().trim();
+  const away = String(awayTeam).toLowerCase().trim();
+  if (!home || !away) return null;
+
+  // 1) Full team name substring match
+  const homeFull = home && pickLower.includes(home);
+  const awayFull = away && pickLower.includes(away);
+  if (homeFull && !awayFull) return 'home';
+  if (awayFull && !homeFull) return 'away';
+
+  // 2) Nickname (last word) — word-boundary regex so "Sox" can't match inside
+  //    a longer word and "Nets" can't pull in "Hornets" coincidentally.
+  const homeNick = home.split(/\s+/).pop();
+  const awayNick = away.split(/\s+/).pop();
+  if (homeNick && awayNick && homeNick !== awayNick) {
+    const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const homeNickHit = new RegExp(`\\b${esc(homeNick)}\\b`, 'i').test(pick);
+    const awayNickHit = new RegExp(`\\b${esc(awayNick)}\\b`, 'i').test(pick);
+    if (homeNickHit && !awayNickHit) return 'home';
+    if (awayNickHit && !homeNickHit) return 'away';
+  }
+
+  // 3) Any-significant-word fallback (3+ chars)
+  const homeWords = home.split(/\s+/).filter(w => w.length >= 3);
+  const awayWords = away.split(/\s+/).filter(w => w.length >= 3);
+  const homeAny = homeWords.some(w => pickLower.includes(w));
+  const awayAny = awayWords.some(w => pickLower.includes(w));
+  if (homeAny && !awayAny) return 'home';
+  if (awayAny && !homeAny) return 'away';
+
+  return null;
+}
+
+/**
+ * Validate that a pick references one of the two teams in the game
+ * Prevents wrong-game picks from being stored (e.g., "Miami Heat" for a Nuggets @ Bulls game)
+ */
+export function validatePickTeam(pickText, homeTeam, awayTeam) {
+  if (!pickText) return false;
+  const pickLower = pickText.toLowerCase();
+  const homeWords = homeTeam.toLowerCase().split(' ');
+  const awayWords = awayTeam.toLowerCase().split(' ');
+  // Check if ANY significant word (3+ chars) from home or away team appears in pick
+  const homeMatch = homeWords.some(w => w.length >= 3 && pickLower.includes(w));
+  const awayMatch = awayWords.some(w => w.length >= 3 && pickLower.includes(w));
+  return homeMatch || awayMatch;
+}
+
+// SOCCER (World Cup) dual-pick: one analysis run emits BOTH a side play (3-way
+// ML or Asian handicap) and a total play (Over/Under) in one JSON. Expand into
+// two independently-normalized picks — the side is primary, the total rides in
+// `additionalPicks` so the storage layer writes each as its own card
+// (keyed soccer|match_id|type, they coexist). Degrades to a single pick if the
+// model only fills one play. _dualExpanded guards the recursive normalize calls.
+// Resolve a World Cup pick's odds (and line/handicap) from the consensus MARKET
+// data we already fetched — soccer_three_way_ml { home, draw, away },
+// soccer_spread { homeValue, homeOdds, awayValue, awayOdds }, and
+// soccer_total { line, over, under } — keyed by the pick's market + side. This is
+// the source of truth: Gary's prose is only a label and can drop the +sign or the
+// odds entirely (e.g. "Over 2.5 115"). Returns null when the matching market isn't
+// present, so the caller keeps whatever it parsed from the text as a fallback.
+function resolveSoccerMarketOdds(parsed, pickText, homeTeam, awayTeam, gameOdds) {
+  if (!gameOdds) return null;
+  const ml = gameOdds.soccer_three_way_ml || null;
+  const sp = gameOdds.soccer_spread || null;
+  const tot = gameOdds.soccer_total || null;
+  const lc = (pickText || '').toLowerCase();
+  const refs = (name) => (name || '').toLowerCase().split(/\s+/).some(w => w.length >= 3 && lc.includes(w));
+  const namesHome = refs(homeTeam);
+  const namesAway = refs(awayTeam);
+
+  if (parsed.type === 'total' && tot) {
+    const isOver = /\bover\b/.test(lc);
+    return { odds: (isOver ? tot.over : tot.under) ?? null, goal_line: tot.line ?? null, handicap: null };
+  }
+  if (parsed.type === 'asian_handicap' && sp) {
+    if (namesHome && !namesAway) return { odds: sp.homeOdds ?? null, handicap: sp.homeValue ?? null, goal_line: null };
+    if (namesAway && !namesHome) return { odds: sp.awayOdds ?? null, handicap: sp.awayValue ?? null, goal_line: null };
+  }
+  if (parsed.type === 'draw' && ml) {
+    return { odds: ml.draw ?? null, handicap: null, goal_line: null };
+  }
+  if (parsed.type === 'moneyline' && ml) {
+    if (namesHome && !namesAway) return { odds: ml.home ?? null, handicap: null, goal_line: null };
+    if (namesAway && !namesHome) return { odds: ml.away ?? null, handicap: null, goal_line: null };
+  }
+  return null;
+}
+
+function expandSoccerDualPick(parsed, homeTeam, awayTeam, sport, gameOdds) {
+  const build = (pickText, rationale, conf, forceType) => {
+    if (!pickText || typeof pickText !== 'string' || !pickText.trim()) return null;
+    const sub = {
+      pick: pickText,
+      rationale: rationale || parsed.rationale || '',
+      confidence_score: conf ?? parsed.confidence_score ?? parsed.confidence ?? null,
+      _dualExpanded: true,
+    };
+    if (forceType) sub.type = forceType;
+    return normalizePickFormat(sub, homeTeam, awayTeam, sport, gameOdds);
+  };
+  const side = build(parsed.side_pick, parsed.side_rationale, parsed.side_confidence, null);
+  const total = build(parsed.total_pick, parsed.total_rationale, parsed.total_confidence, 'total');
+  const primary = side || total;
+  if (!primary) {
+    console.error('[Orchestrator] ⚽ WC dual-pick: neither side_pick nor total_pick parsed — null');
+    return null;
+  }
+  if (side && total) {
+    primary.additionalPicks = [primary === side ? total : side];
+    console.log(`[Orchestrator] ⚽ WC dual-pick — SIDE "${side.pick}" (${side.type}) + TOTAL "${total.pick}"`);
+  } else {
+    console.warn(`[Orchestrator] ⚽ WC dual-pick: only one play parsed ("${primary.pick}") — storing single pick`);
+  }
+  return primary;
+}
+
+export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds = {}) {
+  // SOCCER dual-pick expansion — must run before the single-pick logic below.
+  const isSoccerDual = (sport === 'soccer_world_cup' || sport === 'WC')
+    && parsed && !parsed._dualExpanded
+    && (parsed.side_pick || parsed.total_pick);
+  if (isSoccerDual) {
+    return expandSoccerDualPick(parsed, homeTeam, awayTeam, sport, gameOdds);
+  }
+
+  // CRITICAL: Support both legacy format (pick) and new format (final_pick)
+  // The new Pass 2.5 format uses "final_pick" instead of "pick"
+  if (!parsed.pick && parsed.final_pick) {
+    parsed.pick = parsed.final_pick;
+    console.log(`[Orchestrator] 📋 Using final_pick as pick: "${parsed.pick}"`);
+  }
+  
+  // NO PASS: If Gary outputs a PASS pick, reject it — he must pick a side
+  const isPassPick = parsed.type === 'pass' ||
+                     (parsed.pick && parsed.pick.toUpperCase() === 'PASS');
+
+  if (isPassPick) {
+    console.error('[Orchestrator] REJECTED: Gary output PASS in JSON — no passes allowed, must pick a side');
+    return null; // Triggers retry
+  }
+  
+  // NHL: Detect ML vs Puck Line from Gary's pick text
+  const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
+  const isSoccer = sport === 'soccer_world_cup' || sport === 'WC';
+  if (isNHL && parsed.pick) {
+    const pickLowerNHL = parsed.pick.toLowerCase();
+    if (pickLowerNHL.includes('puck line') || pickLowerNHL.includes('pl ') || pickLowerNHL.includes(' pl') ||
+        pickLowerNHL.includes('-1.5') || pickLowerNHL.includes('+1.5')) {
+      parsed.type = 'spread'; // Puck line is a spread
+      // Clean up pick text: remove "PL" / "puck line" — just show "Team -1.5" or "Team +1.5"
+      parsed.pick = parsed.pick
+        .replace(/\s*puck\s*line\s*/gi, ' ')
+        .replace(/\s+PL\s+/g, ' ')
+        .replace(/\s+PL$/g, '')
+        .replace(/^PL\s+/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      console.log(`[Orchestrator] 🏒 NHL: Detected puck line pick → cleaned to "${parsed.pick}"`);
+    } else {
+      parsed.type = 'moneyline';
+      console.log(`[Orchestrator] 🏒 NHL: Detected moneyline pick`);
+    }
+  } else if (isNHL) {
+    parsed.type = 'moneyline';
+    console.log(`[Orchestrator] 🏒 NHL: Defaulting to moneyline`);
+  }
+  // SOCCER (World Cup): 3-way market — Draw is a valid selection; totals and
+  // Asian handicaps are also offered to Gary (the consensus odds carry both),
+  // so detect them from the pick text and extract the line so grading
+  // (soccerGrading.js reads pick.goal_line / pick.handicap) can settle them.
+  else if (isSoccer && parsed.pick) {
+    const pickText = parsed.pick;
+    const overUnderMatch = pickText.match(/\b(over|under)\s+(\d+(?:\.\d+)?)/i);
+    // Handicap lines are small (±0.25 to ±4ish); larger signed numbers in the
+    // pick text are odds (e.g. "Mexico -230") and must NOT read as a handicap.
+    const signedNums = [...pickText.matchAll(/([+-]\d+(?:\.\d+)?)/g)].map(m => parseFloat(m[1]));
+    // Gary's prose sometimes drops the sign on a handicap ("Cabo Verde 3.3"); a small
+    // unsigned DECIMAL that isn't a 3+ digit odds price is a handicap candidate too.
+    const unsignedHandicap = [...pickText.matchAll(/(?:^|\s)(\d+\.\d+)(?=\s|@|$)/g)]
+      .map(m => parseFloat(m[1])).find(v => Math.abs(v) < 10);
+    const handicapValue = signedNums.find(v => Math.abs(v) < 10) ?? unsignedHandicap ?? null;
+    const handicapMatch = handicapValue != null;
+    if (/\b(draw|tie)\b/i.test(pickText)) {
+      parsed.type = 'draw';
+      console.log(`[Orchestrator] ⚽ WC: Detected Draw pick — bypassing ML caps & team check`);
+    } else if (parsed.type === 'total' || overUnderMatch) {
+      parsed.type = 'total';
+      parsed.goal_line = parsed.goal_line ?? (overUnderMatch ? parseFloat(overUnderMatch[2]) : null);
+      console.log(`[Orchestrator] ⚽ WC: Detected total pick (line ${parsed.goal_line ?? '?'})`);
+    } else if (parsed.type === 'asian_handicap' || (handicapMatch && !/\bml\b|moneyline/i.test(pickText))) {
+      parsed.type = 'asian_handicap';
+      parsed.handicap = parsed.handicap ?? handicapValue ?? null;
+      console.log(`[Orchestrator] ⚽ WC: Detected Asian handicap pick (${parsed.handicap ?? '?'})`);
+    } else if (!parsed.type) {
+      parsed.type = 'moneyline';
+      console.log(`[Orchestrator] ⚽ WC: Detected moneyline pick`);
+    }
+    // HOLISTIC ODDS: take the price (and line/handicap) from the consensus market
+    // data we already fetched, keyed by the pick's market + side — NOT scraped
+    // from Gary's prose, which can drop the +sign or odds entirely. Gary's text
+    // stays the label; the book's number is authoritative.
+    const mkt = resolveSoccerMarketOdds(parsed, pickText, homeTeam, awayTeam, gameOdds);
+    if (mkt) {
+      if (mkt.odds != null) parsed.odds = mkt.odds;
+      if (mkt.goal_line != null) parsed.goal_line = mkt.goal_line;
+      if (mkt.handicap != null) parsed.handicap = mkt.handicap;
+      console.log(`[Orchestrator] ⚽ WC: market odds → odds=${parsed.odds ?? '-'} line=${parsed.goal_line ?? '-'} hcap=${parsed.handicap ?? '-'}`);
+    }
+    // Rebuild a clean, self-contained pick string from the resolved structured
+    // fields. Gary's prose is only a label and arrives malformed (dropped signs,
+    // doubled odds, a dangling "@"); the resolved book number is authoritative, and
+    // both the app card and the X auto-poster read this string — so keep it clean.
+    const sgn = (v) => (v == null ? null : (v > 0 ? `+${v}` : `${v}`));
+    const soccerSide = detectPickedTeam(pickText, homeTeam, awayTeam);
+    const soccerTeam = soccerSide === 'home' ? homeTeam : soccerSide === 'away' ? awayTeam : null;
+    if (parsed.type === 'total' && parsed.goal_line != null) {
+      const ou = /\bover\b/i.test(pickText) ? 'Over' : 'Under';
+      parsed.pick = [`${ou} ${parsed.goal_line}`, sgn(parsed.odds)].filter(Boolean).join(' ');
+    } else if (parsed.type === 'asian_handicap' && soccerTeam && parsed.handicap != null) {
+      parsed.pick = [`${soccerTeam} ${sgn(parsed.handicap)}`, sgn(parsed.odds)].filter(Boolean).join(' ');
+    } else if (parsed.type === 'draw') {
+      parsed.pick = ['Draw', sgn(parsed.odds)].filter(Boolean).join(' ');
+    } else if (parsed.type === 'moneyline' && soccerTeam) {
+      parsed.pick = [`${soccerTeam} ML`, sgn(parsed.odds)].filter(Boolean).join(' ');
+    }
+  }
+  // DETECT TYPE FROM PICK TEXT if not explicitly provided (non-NHL)
+  else if (!parsed.type && parsed.pick) {
+    const pickLower = parsed.pick.toLowerCase();
+    if (pickLower.includes(' ml ') || pickLower.includes(' moneyline') || pickLower.endsWith(' ml')) {
+      parsed.type = 'moneyline';
+      console.log(`[Orchestrator] 📋 Detected type: moneyline (from pick text)`);
+    } else if (/[+-]\d+\.?\d*/.test(parsed.pick) && !pickLower.includes(' ml ')) {
+      // Has a spread number like +3.5 or -5.5 but not ML
+      parsed.type = 'spread';
+      console.log(`[Orchestrator] 📋 Detected type: spread (from pick text)`);
+    } else {
+      // Default to moneyline as general default
+      parsed.type = 'moneyline';
+      console.log(`[Orchestrator] 📋 Defaulting type to: moneyline`);
+    }
+  }
+  
+  // ML ODDS CEILING:
+  // - NHL: No enforcement — Gary decides ML vs puck line organically. Log for diagnostics only.
+  // - Other sports: Favorite ML worse than -200 → force to spread (safety net)
+  if (parsed.type === 'moneyline' && gameOdds && !isNHL && !isSoccer) {
+    const mlCeiling = -200;
+    const sideML = detectPickedTeam(parsed.pick, homeTeam, awayTeam);
+    const pickedHomeML = sideML === 'home';
+    const pickedAwayML = sideML === 'away';
+
+    const pickedTeamMlOdds = pickedHomeML ? (gameOdds.moneyline_home ?? gameOdds.ml_home)
+      : pickedAwayML ? (gameOdds.moneyline_away ?? gameOdds.ml_away)
+      : null;
+
+    if (pickedTeamMlOdds != null && pickedTeamMlOdds <= mlCeiling) {
+      const teamName = pickedHomeML ? homeTeam : awayTeam;
+      const spreadVal = pickedHomeML ? gameOdds.spread_home : gameOdds.spread_away;
+      if (spreadVal != null) {
+        const spreadStr = parseFloat(spreadVal) >= 0 ? `+${spreadVal}` : `${spreadVal}`;
+        console.log(`[Orchestrator] 🚫 ML ODDS CEILING: ${teamName} ML odds (${pickedTeamMlOdds}) exceed ${mlCeiling} limit — forcing to spread ${spreadStr}`);
+        parsed.type = 'spread';
+        parsed.pick = `${teamName} ${spreadStr}`;
+        parsed.spread = spreadVal;
+      } else {
+        console.error(`[Orchestrator] 🚫 ML ODDS CEILING: ${teamName} ML odds (${pickedTeamMlOdds}) exceed ${mlCeiling} limit but no spread available — REJECTING pick`);
+        return null;
+      }
+    }
+  }
+  // NHL: Favorite ML capped at -149. Heavier lines (-150 or worse) are off the table —
+  // the valid option set becomes underdog ML, underdog +1.5, or favorite -1.5.
+  // We do NOT force-convert (that would misrepresent Gary's pick). We reject so the
+  // caller can re-run with the option-set constraint reinforced.
+  if (isNHL && parsed.type === 'moneyline' && gameOdds) {
+    const sideNHL = detectPickedTeam(parsed.pick, homeTeam, awayTeam);
+    const pickedHomeML = sideNHL === 'home';
+    const pickedAwayML = sideNHL === 'away';
+    const pickedTeamMlOdds = pickedHomeML ? (gameOdds.moneyline_home ?? gameOdds.ml_home)
+      : pickedAwayML ? (gameOdds.moneyline_away ?? gameOdds.ml_away)
+      : null;
+    if (pickedTeamMlOdds != null && pickedTeamMlOdds <= -150) {
+      const teamName = pickedHomeML ? homeTeam : awayTeam;
+      console.error(`[Orchestrator] 🚫 NHL ML CAP: ${teamName} ML at ${pickedTeamMlOdds} is heavier than -150 — favorite ML is off the table. REJECTING pick.`);
+      return null;
+    }
+  }
+
+  // EXTRACT ODDS FROM PICK TEXT if not explicitly provided
+  // E.g., "Detroit Red Wings ML -185" → odds = -185
+  if (!parsed.odds && parsed.pick) {
+    const oddsMatch = parsed.pick.match(/([+-]\d{3,4})(?:\s*$|\s)/);
+    if (oddsMatch) {
+      parsed.odds = parseInt(oddsMatch[1], 10);
+      console.log(`[Orchestrator] 📋 Extracted odds from pick text: ${parsed.odds}`);
+    } else {
+      // Unsigned American odds — the model sometimes drops the + on a plus-money
+      // price (e.g. "Over 2.5 115"). A trailing 3-4 digit integer with no sign and
+      // no decimal is positive odds; never let it silently store as null.
+      const bare = parsed.pick.match(/(?:^|\s)(\d{3,4})\s*$/);
+      if (bare && !new RegExp(`\\.${bare[1]}\\b|${bare[1]}\\.`).test(parsed.pick)) {
+        parsed.odds = parseInt(bare[1], 10);
+        console.log(`[Orchestrator] 📋 Inferred unsigned positive odds: +${parsed.odds}`);
+      }
+    }
+  }
+  
+  // EXTRACT CONFIDENCE from parsed data if available
+  if (!parsed.confidence && parsed.confidence_score) {
+    parsed.confidence = parsed.confidence_score;
+    console.log(`[Orchestrator] Using confidence_score: ${parsed.confidence}`);
+  }
+  if (!parsed.confidence && !parsed.confidence_score) {
+    console.warn(`[Orchestrator] WARNING: Gary did not output a confidence score — storing as null`);
+  }
+  
+  // Clean up pick text - remove placeholder patterns like -X.X
+  let pickText = parsed.pick || '';
+  if (pickText.includes('-X.X') || pickText.includes('+X.X')) {
+    // If spread placeholder, try to determine actual pick from context
+    pickText = pickText.replace(/[+-]X\.X/g, 'ML');
+  }
+
+  // Strip literal "null" or "undefined" from pick text — Gary sometimes includes null when a value was missing
+  pickText = pickText.replace(/\bnull\b/gi, '').replace(/\bundefined\b/gi, '').replace(/\s{2,}/g, ' ').trim();
+
+  // Strip parenthesized odds from pick text — Gary sometimes wraps odds in parens like "(−115)"
+  pickText = pickText.replace(/\s*\([+-]\d{3,4}\)\s*$/, '').trim();
+
+  // Strip malformed short odds after "ML" — Gary sometimes truncates odds (e.g., "ML -02" instead of "ML -102")
+  // Valid American odds are always 3+ digits. Short patterns after ML are malformed and should be removed.
+  pickText = pickText.replace(/(\bML)\s+[+-]\d{1,2}\s*$/i, '$1').trim();
+
+  // FIX: If pick says "Team spread -110" without actual number, insert the spread value
+  if (pickText.toLowerCase().includes(' spread ') && parsed.spread) {
+    const spreadNum = parseFloat(parsed.spread);
+    if (!isNaN(spreadNum)) {
+      const spreadStr = spreadNum > 0 ? `+${spreadNum}` : `${spreadNum}`;
+      // Replace "spread" with actual spread number
+      pickText = pickText.replace(/\s+spread\s+/i, ` ${spreadStr} `);
+    }
+  }
+
+  // Ensure pick text includes odds if not already present
+  // Use CORRECT odds for pick type — spread picks get spread odds, ML picks get ML odds
+  // NEVER default to -110 or use ML odds for a spread pick
+  let odds;
+  if (parsed.type === 'spread') {
+    // For spread picks: use spreadOdds, then game spread_odds — NEVER ML odds
+    // Try parsed odds first, then game odds (field is spread_home_odds, not spread_odds)
+    const sideSpread = detectPickedTeam(parsed.pick, homeTeam, awayTeam);
+    const pickedHomeSpread = sideSpread === 'home';
+    odds = parsed.odds ?? parsed.spreadOdds
+      ?? (pickedHomeSpread ? gameOdds.spread_home_odds : gameOdds.spread_away_odds)
+      ?? gameOdds.spread_home_odds ?? null;
+  } else {
+    // For ML picks: determine which team was picked and use their ML odds
+    const sideOdds = detectPickedTeam(parsed.pick, homeTeam, awayTeam);
+    const pickedHome = sideOdds === 'home';
+    odds = parsed.odds ?? (pickedHome ? parsed.moneylineHome : parsed.moneylineAway)
+      ?? (pickedHome ? gameOdds.moneyline_home : gameOdds.moneyline_away) ?? null;
+  }
+
+  if (odds == null) {
+    console.warn(`[Orchestrator] ⚠️ NO ODDS AVAILABLE for pick "${pickText}" — AI and game data both missing`);
+  }
+  // Normalize the trailing odds. Strip an existing trailing price — a signed token
+  // (always odds) OR an unsigned copy of THIS price (Gary drops the + on plus-money,
+  // e.g. "... 105") — then append the authoritative price with a correct sign. Fixes
+  // the missing-sign and doubled-odds ("... 105 +105") bugs without touching spread/
+  // total lines (decimals or ≤2 digits never look like a 3+ digit trailing price).
+  if (odds != null && typeof odds === 'number') {
+    const absOdds = Math.abs(odds);
+    pickText = pickText
+      .replace(/\s*[+-]\d{3,}\s*$/, '')
+      .replace(new RegExp(`\\s*${absOdds}\\s*$`), '')
+      .trim();
+    const oddsStr = odds > 0 ? `+${odds}` : `${odds}`;
+    pickText = `${pickText} ${oddsStr}`;
+  }
+
+  // SPREAD SIGN VALIDATION: Ensure the spread in pick text has the correct sign
+  // Gary sometimes omits the sign or uses the wrong one (especially NCAAB)
+  if (parsed.type === 'spread' && gameOdds.spread_home != null) {
+    const spreadInText = pickText.match(/\s([+-]?)(\d+\.?\d*)\s/);
+    if (spreadInText) {
+      const currentSign = spreadInText[1]; // '+', '-', or '' (missing)
+      const spreadNum = parseFloat(spreadInText[2]);
+
+      // Determine if picked team is home or away (full-name → nickname → word-fallback,
+      // handling same-city collisions like Lakers vs Clippers and same-mascot NCAA cases
+      // like Georgia Bulldogs vs Mississippi State Bulldogs).
+      const sideSign = detectPickedTeam(pickText, homeTeam, awayTeam);
+      let pickedHome = sideSign === 'home';
+      let pickedAway = sideSign === 'away';
+
+      // Calculate correct spread from picked team's perspective
+      const homeSpread = parseFloat(gameOdds.spread_home);
+      if (!isNaN(homeSpread) && (pickedHome || pickedAway)) {
+        const correctSpread = pickedHome ? homeSpread : -homeSpread;
+        const correctSign = correctSpread >= 0 ? '+' : '-';
+        const correctAbs = Math.abs(correctSpread);
+
+        // Fix if: sign is missing, sign is wrong, OR number doesn't match odds
+        if (!currentSign || (currentSign === '+' && correctSpread < 0) || (currentSign === '-' && correctSpread > 0)) {
+          const oldFragment = spreadInText[0];
+          const correctStr = correctSpread >= 0 ? `+${correctAbs}` : `-${correctAbs}`;
+          const newFragment = ` ${correctStr} `;
+          pickText = pickText.replace(oldFragment, newFragment);
+          console.log(`[Orchestrator] 🔧 SPREAD SIGN FIX: "${oldFragment.trim()}" → "${correctStr}" (home_spread=${homeSpread}, picked=${pickedHome ? 'home' : 'away'})`);
+        }
+      }
+    }
+  }
+
+  // Reject picks with too-short or invalid text — do NOT fabricate picks
+  if ((parsed.type !== 'draw' && pickText.length < 5) || !pickText.match(/[A-Za-z]{3,}/)) {
+    console.error(`[Orchestrator] REJECTED: Pick text too short/invalid: "${pickText}" — not fabricating a pick`);
+    return null;
+  }
+
+  // Validate that the pick references one of the two teams in the game.
+  // Soccer Draw picks and totals ("Over 2.5") legitimately name neither team — exempt them.
+  if (parsed.type !== 'draw' && parsed.type !== 'total' && !validatePickTeam(pickText, homeTeam, awayTeam)) {
+    console.error(`[Orchestrator] REJECTED: Pick "${pickText}" does not reference ${homeTeam} or ${awayTeam} — wrong game`);
+    return null;
+  }
+
+  // Get rationale and validate it - try multiple fields as fallbacks
+  let rationale = parsed.rationale || parsed.analysis || parsed.reasoning || '';
+
+  // If rationale is still empty, try to construct one from other available data
+  if (!rationale || rationale.length < 150) {
+    // Try gary_take or analysis_summary (can be substantial)
+    if (parsed.gary_take && parsed.gary_take.length > 50) {
+      rationale = parsed.gary_take;
+      console.log(`[Orchestrator] Using gary_take as rationale fallback (${rationale.length} chars)`);
+    }
+    else if (parsed.analysis_summary && parsed.analysis_summary.length > 50) {
+      rationale = parsed.analysis_summary;
+      console.log(`[Orchestrator] Using analysis_summary as rationale fallback (${rationale.length} chars)`);
+    }
+    // If we reach here, the rationale is too short and should trigger a retry
+  }
+
+  // Check for placeholder/invalid rationales - these should NOT happen
+  const invalidRationales = [
+    'see detailed analysis',
+    'see analysis below',
+    'detailed analysis below',
+    'analysis below',
+    'see above',
+    'see below',
+    'tbd',
+    'to be determined',
+    'key factors:'  // Catch any remaining bullet-point fallbacks
+  ];
+
+  const lowerRationale = rationale.toLowerCase().trim();
+  const isPlaceholderRationale = invalidRationales.some(inv => lowerRationale.includes(inv));
+
+  // Minimum 1000 chars — a proper Gary's Take should be 3-4 paragraphs (~300-400 words ≈ 1500-2400 chars).
+  // EXCEPTION: World Cup dual picks ship TWO plays per match, each with its own
+  // focused 2-4 sentence take, so their per-pick rationale is intentionally short.
+  const minRationaleChars = parsed._dualExpanded ? 120 : 1000;
+  const isTooShort = rationale.length < minRationaleChars;
+
+  // Retry if rationale is a placeholder, completely missing, or too short for a proper analysis
+  if (isPlaceholderRationale || rationale.length === 0 || isTooShort) {
+    console.log(`[Orchestrator] ⚠️ Invalid/short rationale detected (length: ${rationale.length}, placeholder: ${isPlaceholderRationale}, tooShort: ${isTooShort}) - will retry`);
+    return null; // Return null to trigger retry
+  }
+
+  // TRUNCATION DETECTION: fixJsonString silently repairs broken JSON from MAX_TOKENS cutoff.
+  // If the rationale ends mid-word (last char is alphanumeric, no sentence-ending punctuation),
+  // it was likely truncated. Return null to trigger retry with concise-rationale instruction.
+  const trimmedRationale = rationale.trim();
+  const lastChar = trimmedRationale.slice(-1);
+  const endsWithPunctuation = /[.!?")\]]/.test(lastChar);
+  const endsWithWord = /[a-zA-Z0-9]/.test(lastChar);
+  if (endsWithWord && !endsWithPunctuation) {
+    console.log(`[Orchestrator] ⚠️ Rationale appears TRUNCATED (ends with "${trimmedRationale.slice(-20)}" — no sentence-ending punctuation) — will retry`);
+    return null; // Return null to trigger retry
+  }
+
+  // Sanitize pick text — fix double plus signs (e.g., "++100" → "+100") and ensure clean formatting
+  pickText = pickText.replace(/\+{2,}/g, '+').trim();
+
+  // Ensure odds is a number, not a string like "+100" or "-110"
+  if (typeof odds === 'string') {
+    odds = parseInt(odds, 10) || null;
+  }
+
+  return {
+    pick: pickText,
+    type: parsed.type || 'spread',
+    odds: odds,
+    // CONFIDENCE - Gary's organic conviction in the bet (no fallback — must come from Gary)
+    confidence: parsed.confidence ?? null,
+    homeTeam: parsed.homeTeam || homeTeam,
+    awayTeam: parsed.awayTeam || awayTeam,
+    league: normalizeSportToLeague(sport),
+    sport: sport,
+    rationale: rationale,
+    // Include odds from Gary's output — fall back to game data, NEVER to -110
+    spread: parsed.spread ?? gameOdds.spread_home ?? null,
+    spreadOdds: parsed.spreadOdds ?? gameOdds.spread_home_odds ?? null,
+    moneylineHome: parsed.moneylineHome ?? gameOdds.moneyline_home ?? null,
+    moneylineAway: parsed.moneylineAway ?? gameOdds.moneyline_away ?? null,
+    total: parsed.total ?? gameOdds.total ?? null,
+    totalOdds: parsed.totalOdds ?? gameOdds.total_over_odds ?? null,
+    // Soccer market lines — soccerGrading.js settles totals via goal_line and
+    // Asian handicaps via handicap; without these the pick stores null and
+    // can never be graded.
+    goal_line: parsed.goal_line ?? null,
+    handicap: parsed.handicap ?? null,
+    // Additional judge fields
+    momentum: parsed.momentum || null,
+    agentic: true // Flag to identify agentic picks
+  };
+}
+
+/**
+ * Normalize sport to league name
+ */
+

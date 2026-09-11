@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { _resetMeteredSearchBudget } from '../../../src/services/agentic/scoutReport/shared/meteredSearchBudget.js';
 vi.mock('../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js', () => ({ codexCliWebSearch: vi.fn() }));
 import { codexCliWebSearch } from '../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js';
 import { withRequestSignal } from '../../../src/services/agentic/orchestrator/requestCancellation.js';
@@ -20,6 +21,9 @@ const searched = {
 beforeEach(() => {
   vi.useFakeTimers();
   vi.stubEnv('GARY_SEARCH_CACHE_OFF', '1');
+  // These cases exercise the metered Anthropic fallback; the budget defaults to 0 (Sep 9 2026).
+  vi.stubEnv('GARY_METERED_SEARCH_CAP', '-1');
+  _resetMeteredSearchBudget();
   vi.stubEnv('OPENAI_API_KEY', 'test-only');
   vi.stubEnv('ANTHROPIC_API_KEY', 'test-only');
   vi.stubGlobal('fetch', vi.fn());

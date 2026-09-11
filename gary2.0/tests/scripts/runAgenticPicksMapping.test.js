@@ -19,7 +19,7 @@ describe('MLB decision-policy provenance', () => {
       shouldStore: false, useTestTable: false, args: [], isProductionWinnersRun: ({shouldStore}) => shouldStore,
       winnersAdmin: {}, readMlbExpectationMemory: vi.fn().mockResolvedValue({rows:[],text:''}),
       createMlbJudgmentJournal: vi.fn(() => ({fail: vi.fn().mockResolvedValue(null)})),
-      analyzeGame, shouldRetryPickWithModel, MLB_JUNE_BRAIN_MODEL: 'test-brain', DESK_FALLBACK_MODELS: [],
+      analyzeGame, analyzeGameJune: analyzeGame, shouldRetryPickWithModel, MLB_JUNE_BRAIN_MODEL: 'test-brain', DESK_FALLBACK_MODELS: [],
       MLB_DECISION_POLICY, extractJuneBilateralPaths: () => ({ path_home: 'home case', path_away: 'away case' }),
       mlbCaseHeadings: () => ({ lastSide: 'away' }), junePromptSha: async () => 'test-era',
       // The runner's preflight plan: start on the planned brain unless a test hands in a capped one.

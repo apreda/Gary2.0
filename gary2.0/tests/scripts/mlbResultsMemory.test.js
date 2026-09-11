@@ -25,6 +25,8 @@ describe('scheduled MLB expectation review placement', () => {
       nflWeekStartForDate: date => date, runNightHighlights: noop, writeStreaks: noop, BDL_API_KEY: 'fixture',
       supabase: { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { picks: [] } }) }) }) }) },
       loadModule: async () => modules, console: { log: noop, warn: noop },
+      // The nightly run reads GARY_MLB_TEST_SYSTEMS (Sep 9 2026) — the sliced code needs a process.
+      process: { env: {}, argv: [] },
     };
     await runInNewContext(`${main}\n${run}\nrun()`.replaceAll('await import(', 'await loadModule('), context);
     expect(events).toEqual(['graded:2026-09-09', 'graded:2026-09-08', 'memory:2026-09-09']);

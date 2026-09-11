@@ -87,11 +87,9 @@ describe('MLB game lane runs the restored June engine (Aug 18 restoration)', () 
     expect(loop).toContain('THE RESEARCHER RETURNS FOR MLB');
     expect(loop).toContain("new Set(['baseball_mlb', 'MLB', 'basketball_nba', 'NBA', 'americanfootball_nfl', 'NFL'])");
     expect(loop).toContain('RESEARCHER_LEAGUES.has(sport)');
+    // The MLB era stamp is the June 15 2026 tree (founder, Sep 11 2026).
     const sha = src('orchestrator/junePromptSha.js');
-    expect(sha).toContain('MLB_RESEARCHER=${');
-    expect(sha).toContain("String(process.env.GARY_RESEARCHER || 'on').toLowerCase() === 'off' ? 'OFF' : 'ON_BOUNDED'");
-    expect(sha).toContain("'./optionalResearch.js'");
-    expect(sha).not.toContain('RESEARCHER=OFF, ALL SPORTS');
+    expect(sha).toContain("'../mlbJuneEra/eraSha.js'");
   });
 
   it('the house limit caps every game moneyline (founder, Aug 18)', () => {

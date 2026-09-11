@@ -57,12 +57,9 @@ describe('the researcher is back for MLB (Sep 3 2026, the Aug 18 version)', () =
     for (const rel of ['orchestrator/researchBriefing.js', 'orchestrator/investigationFactors.js', 'flashInvestigationPrompts.js', 'orchestrator/footballResearchPolicy.js']) {
       expect(() => src(rel), `${rel} must exist`).not.toThrow();
     }
+    // The MLB era stamp is the June 15 2026 tree (founder, Sep 11 2026).
     const sha = src('orchestrator/junePromptSha.js');
-    expect(sha).toContain("'./researchBriefing.js'");
-    expect(sha).toContain("'../flashInvestigationPrompts.js'");
-    expect(sha).toContain("'./investigationFactors.js'");
-    expect(sha).toContain('MLB_RESEARCHER=${');
-    expect(sha).toContain("'OFF' : 'ON_BOUNDED'");
-    expect(sha).toContain("'./optionalResearch.js'");
+    expect(sha).toContain("'../mlbJuneEra/eraSha.js'");
+    expect(sha).toContain('mlbJuneEraSha()');
   });
 });

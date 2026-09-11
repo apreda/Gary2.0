@@ -48,6 +48,9 @@ try {
 
 // Now import modules that depend on env vars
 const { analyzeGame } = await import('../src/services/agentic/orchestrator/index.js');
+// THE JUNE ENGINE (founder, Sep 11 2026): MLB games enter the June 15 tree,
+// verbatim, models adapted — never the September orchestrator above.
+const { analyzeGame: analyzeGameJune } = await import('../src/services/agentic/mlbJuneEra/index.js');
 const { oddsService } = await import('../src/services/oddsService.js');
 const { picksService } = await import('../src/services/picksService.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
@@ -235,7 +238,7 @@ async function runMlbJuneEngine(game, runnerOptions, preflight = null) {
     const journal = production ? createMlbJudgmentJournal({ db: winnersAdmin, game, model, promptSha, signal: runnerOptions.signal }) : null;
     let decision;
     try {
-      decision = await analyzeGame(game, 'baseball_mlb', { ...runnerOptions, modelOverride: model,
+      decision = await analyzeGameJune(game, 'baseball_mlb', { ...runnerOptions, modelOverride: model,
         mlbJudgmentJournal: journal, mlbExpectationMemory: memory });
       runnerOptions.signal?.throwIfAborted();
       if (production && decision?.pick && !decision.error && !decision._mlbJudgment?.receipts?.price_assessment) {
