@@ -986,8 +986,9 @@ export const mlbFetchers = {
     const awayTeam = away.full_name || away.name;
     // Use BDL game history to compute H2H — no grounding needed
     try {
-      const homeId = home.id || home.teamId;
-      const awayId = away.id || away.teamId;
+      // ADAPTED (bug fix, Sep 11 2026): MLB rows reach this router name-only (the index skips the BDL team lookup for MLB), so these ids were never set and H2H read "unavailable" every night — resolve them the way every other MLB fetcher does.
+      const homeId = home.id || home.teamId || await resolveBdlTeamId(home);
+      const awayId = away.id || away.teamId || await resolveBdlTeamId(away);
       // No ids = no lookup happened. Say so — the no-meetings sentence below
       // is a finding, and an unresolved club is not a finding (Sep 9 2026:
       // the researcher read "no regular-season meetings" for Twins @ Tigers
