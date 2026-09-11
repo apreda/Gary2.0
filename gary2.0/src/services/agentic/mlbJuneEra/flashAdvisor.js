@@ -5,7 +5,7 @@ import { getMlbSeasonAwareness } from './spreadEvaluationFactors.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, nflSeason } from '../../../utils/dateUtils.js';
 import { toolDefinitions, getTokensForSport } from './tools/toolDefinitions.js';
-import { fetchStats } from '../tools/statRouters/index.js';
+import { fetchStats } from './tools/statRouters/index.js'; // ADAPTED (import paths): June's own stat routers, in this folder
 import { summarizeStatForContext, summarizeNbaPlayerAdvancedStats, summarizeMlbPlayerGameLogs } from './orchestratorHelpers.js';
 import { geminiGroundingSearch } from './scoutReport/scoutReportBuilder.js';
 

@@ -1,6 +1,6 @@
 // ADAPTED (models + import paths): the Gemini SDK import is gone (unused here); June's siblings live in this folder; the data layer underneath is today's.
 import { toolDefinitions, getTokensForSport } from './tools/toolDefinitions.js';
-import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js';
+import { fetchStats, clearStatRouterCache } from './tools/statRouters/index.js'; // ADAPTED (import paths): June's own stat routers, in this folder
 import { getConstitution } from './constitution/index.js';
 import { getFlashInvestigationPrompt } from './flashInvestigationPrompts.js';
 import { buildScoutReport } from './scoutReport/scoutReportBuilder.js';

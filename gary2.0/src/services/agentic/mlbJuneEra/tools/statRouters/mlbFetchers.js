@@ -22,7 +22,28 @@ import {
 import { getPitcherArsenal, getPitcherStatcastProfile } from '../../../../baseballSavantService.js';
 import { ballDontLieService } from '../../../../ballDontLieService.js';
 import { formatSampleSuffix } from './statRouterCommon.js';
+import { foldName } from '../../../../../utils/nameUtils.js'; // ADAPTED (bug fix): accent-folded name matching — June's lowercase match found no line for Carlos Rodón
 import { geminiGroundingSearch } from '../../scoutReport/shared/grounding.js';
+
+// ADAPTED (bug fix): BDL season stats accumulate for the club a man pitched FOR, so a traded reliever kept rendering as tonight's pen (Aug 4 2026). Fold-join the pen against the current MLB Stats roster; a failed roster fetch tags nothing.
+const rosterFoldCache = new Map();
+async function currentRosterFolds(teamName) {
+  if (!rosterFoldCache.has(teamName)) {
+    rosterFoldCache.set(teamName, (async () => {
+      try {
+        const { findMlbTeam, getTeamRoster } = await import('../../../../mlbStatsApiService.js');
+        const t = await findMlbTeam(teamName);
+        if (!t?.id) return null;
+        const roster = await getTeamRoster(t.id);
+        const folds = new Set((roster || []).map(r => foldName(r.name)).filter(Boolean));
+        return folds.size ? folds : null;
+      } catch { return null; }
+    })());
+  }
+  return rosterFoldCache.get(teamName);
+}
+const goneTag = (rosterFolds, name) =>
+  rosterFolds && !rosterFolds.has(foldName(name)) ? ' — not on current roster' : '';
 
 // ═══════════════════════════════════════════════════════════════════
 // STATIC PARK FACTOR DATA (no API needed)
@@ -213,9 +234,9 @@ export const mlbFetchers = {
             if (bdlTeamId) {
               try {
                 const result = await fetchSeasonStatsWithFallback({ teamId: bdlTeamId, season: currentYear });
-                const pitcherLower = name.toLowerCase();
+                const pitcherLower = foldName(name); // ADAPTED (bug fix)
                 const match = (result.stats || []).find(s => {
-                  const n = (s.player?.full_name || s.player?.last_name || '').toLowerCase();
+                  const n = foldName(s.player?.full_name || s.player?.last_name); // ADAPTED (bug fix)
                   return (n.includes(pitcherLower) || pitcherLower.includes(n)) && s.pitching_ip > 0;
                 });
                 if (match) {
@@ -281,10 +302,11 @@ export const mlbFetchers = {
 
         if (relievers.length > 0) {
           usedApi = true;
+          const rosterFolds = await currentRosterFolds(teamName); // ADAPTED (bug fix)
           lines.push(`${teamName} Key Relievers:`);
           for (const r of relievers) {
             const name = r.player?.full_name || r.player?.last_name || 'Unknown';
-            lines.push(`  ${name}: ${r.pitching_sv ?? 0} SV, ${r.pitching_hld ?? 0} HLD, ${r.pitching_era?.toFixed(2) ?? '—'} ERA, ${r.pitching_ip?.toFixed(1) ?? '—'} IP`);
+            lines.push(`  ${name}: ${r.pitching_sv ?? 0} SV, ${r.pitching_hld ?? 0} HLD, ${r.pitching_era?.toFixed(2) ?? '—'} ERA, ${r.pitching_ip?.toFixed(1) ?? '—'} IP${goneTag(rosterFolds, name)}`); // ADAPTED (bug fix)
           }
         }
 
@@ -434,7 +456,7 @@ export const mlbFetchers = {
           const result = await fetchSeasonStatsWithFallback({ teamId: bdlTeamId, season: currentYear });
           const target = name.toLowerCase();
           const match = (result.stats || []).find(s => {
-            const n = (s.player?.full_name || s.player?.last_name || '').toLowerCase();
+            const n = foldName(s.player?.full_name || s.player?.last_name); // ADAPTED (bug fix)
             return (n.includes(target) || target.includes(n)) && (s.pitching_ip || 0) > 0;
           });
           bdlId = match?.player?.id || null;
@@ -912,6 +934,7 @@ export const mlbFetchers = {
     };
   },
 
+// ADAPTED (bug fix): MLB_H2H is today's block — every page of the season (June read one 100-row page and told the researcher two clubs had not met), an unresolved club or a failed lookup says so instead of "may not have played yet", and a final with no runs landed is skipped instead of counted 0-0. The season-series wording is June's.
   MLB_H2H: async (sport, home, away, season, options) => {
     const homeTeam = home.full_name || home.name;
     const awayTeam = away.full_name || away.name;
@@ -919,8 +942,23 @@ export const mlbFetchers = {
     try {
       const homeId = home.id || home.teamId;
       const awayId = away.id || away.teamId;
+      // No ids = no lookup happened. Say so — the no-meetings sentence below
+      // is a finding, and an unresolved club is not a finding (Sep 9 2026:
+      // the researcher read "no regular-season meetings" for Twins @ Tigers
+      // the day after they played).
+      if (!homeId || !awayId) {
+        return {
+          homeValue: 'H2H lookup unavailable this run (team ids unresolved) — treat season-series data as unavailable, NOT as "no meetings". Do not cite season-series records or run totals.',
+          awayValue: '',
+          comparison: `MLB H2H: ${awayTeam} vs ${homeTeam}`,
+          source: 'BDL API (lookup not attempted)',
+        };
+      }
       if (homeId && awayId) {
-        const games = await ballDontLieService.getGames('baseball_mlb', { team_ids: [homeId], seasons: [season || new Date().getFullYear()], per_page: 100 });
+        // paginateAll (Aug 27): one 100-row page of a full MLB season ended
+        // in mid-June — H2H said "may not have played yet" about clubs that
+        // met LAST NIGHT. Every page now, spring filtered below.
+        const games = await ballDontLieService.getGames('baseball_mlb', { team_ids: [homeId], seasons: [season || new Date().getFullYear()], per_page: 100, paginateAll: true });
         const h2h = (games || []).filter(g => {
           const hId = g.home_team?.id || g.home_team_data?.id;
           const aId = g.visitor_team?.id || g.away_team?.id;
@@ -942,8 +980,12 @@ export const mlbFetchers = {
             // BDL MLB game objects carry runs in home/away_team_data.runs
             // (home_team_data is BOX data — hits/runs/errors — not a team
             // object, so it has no .id; the team id lives on home_team).
-            const hScore = g.home_team_data?.runs ?? g.home_team_score ?? g.home_score ?? 0;
-            const vScore = g.away_team_data?.runs ?? g.visitor_team_score ?? g.away_score ?? 0;
+            const hScore = Number(g.home_team_data?.runs ?? g.home_team_score ?? g.home_score);
+            const vScore = Number(g.away_team_data?.runs ?? g.visitor_team_score ?? g.away_score);
+            // A final whose runs haven't landed yet must be SKIPPED — the old
+            // `?? 0` fallbacks made it read 0-0, and the else-branch handed a
+            // phantom win to the away side (Jul 30; the streak-splice class).
+            if (!Number.isFinite(hScore) || !Number.isFinite(vScore) || hScore === vScore) continue;
             const isHomeTeamHome = g.home_team?.id === homeId;
             const ourRuns = isHomeTeamHome ? hScore : vScore;     // runs by tonight's home team
             const theirRuns = isHomeTeamHome ? vScore : hScore;   // runs by tonight's away team
@@ -954,23 +996,37 @@ export const mlbFetchers = {
             const date = (g.date || g.game_date || '').split('T')[0];
             results.push(`${date}: ${homeTeam.split(' ').pop()} ${ourRuns}-${theirRuns}`);
           }
-          const n = h2h.length;
-          return {
-            homeValue: `${homeTeam}: ${homeWins}W vs ${awayTeam} this season, ${homeRuns} runs scored (${(homeRuns / n).toFixed(1)}/gm)`,
-            awayValue: `${awayTeam}: ${awayWins}W vs ${homeTeam} this season, ${awayRuns} runs scored (${(awayRuns / n).toFixed(1)}/gm)`,
-            comparison: `Season series: ${n} games played — ${results.join(', ')}`,
-            source: 'BDL API (game history)',
-          };
+          // Count only the games actually tallied (skips above) — n drives
+          // both the label and the runs/gm averages. Zero tallied falls
+          // through to the honest no-data return below.
+          const n = homeWins + awayWins;
+          if (n > 0) {
+            return {
+              homeValue: `${homeTeam}: ${homeWins}W vs ${awayTeam} this season, ${homeRuns} runs scored (${(homeRuns / n).toFixed(1)}/gm)`,
+              awayValue: `${awayTeam}: ${awayWins}W vs ${homeTeam} this season, ${awayRuns} runs scored (${(awayRuns / n).toFixed(1)}/gm)`,
+              comparison: `Season series: ${n} games played — ${results.join(', ')}`,
+              source: 'BDL API (game history)',
+            };
+          }
         }
       }
     } catch (e) {
+      // A FAILED lookup is not an empty result (funnel law): say it failed,
+      // never "they may not have played" — that read as series blindness on
+      // a desk whose pen section narrated the same series (Aug 27 catch).
       console.warn(`[MLB Fetchers] BDL H2H failed: ${e.message}`);
+      return {
+        homeValue: 'H2H lookup FAILED this run — treat season-series data as unavailable, NOT as "no meetings". Do not cite season-series records or run totals.',
+        awayValue: '',
+        comparison: `MLB H2H: ${awayTeam} vs ${homeTeam}`,
+        source: 'BDL API (lookup failed)',
+      };
     }
     return {
-      homeValue: 'No H2H data available (teams may not have played yet this season). Season-series run totals: NOT AVAILABLE — do not cite per-game series scoring averages.',
+      homeValue: 'No regular-season meetings between these clubs this season (full season paginated). Season-series run totals: NOT AVAILABLE — do not cite per-game series scoring averages.',
       awayValue: '',
       comparison: `MLB H2H: ${awayTeam} vs ${homeTeam}`,
-      source: 'BDL API (no data)',
+      source: 'BDL API (no meetings)',
     };
   },
 
@@ -1124,9 +1180,9 @@ export const mlbFetchers = {
       try {
         // Get season stats
         const seasonResult = await fetchSeasonStatsWithFallback({ teamId: bdlTeamId, season: currentYear });
-        const pitcherLower = pitcherName.toLowerCase();
+        const pitcherLower = foldName(pitcherName); // ADAPTED (bug fix)
         const match = (seasonResult.stats || []).find(s => {
-          const n = (s.player?.full_name || s.player?.last_name || '').toLowerCase();
+          const n = foldName(s.player?.full_name || s.player?.last_name); // ADAPTED (bug fix)
           return (n.includes(pitcherLower) || pitcherLower.includes(n)) && s.pitching_ip > 0;
         });
 
@@ -1330,9 +1386,9 @@ export const mlbFetchers = {
           }
           // Find pitchers (have pitching_era or pitching_ip) and match name
           const pitchers = (result.stats || []).filter(s => s.pitching_era != null || s.pitching_ip > 0);
-          const pitcherLower = pitcherName.toLowerCase();
+          const pitcherLower = foldName(pitcherName); // ADAPTED (bug fix)
           const match = pitchers.find(p => {
-            const n = (p.player?.full_name || p.player?.last_name || '').toLowerCase();
+            const n = foldName(p.player?.full_name || p.player?.last_name); // ADAPTED (bug fix)
             return n.includes(pitcherLower) || pitcherLower.includes(n);
           });
           if (match) {
@@ -1422,9 +1478,9 @@ export const mlbFetchers = {
       if (bdlTeamId) {
         try {
           const result = await fetchSeasonStatsWithFallback({ teamId: bdlTeamId, season: currentYear });
-          const pitcherLower = pitcherName.toLowerCase();
+          const pitcherLower = foldName(pitcherName); // ADAPTED (bug fix)
           const match = (result.stats || []).find(s => {
-            const n = (s.player?.full_name || s.player?.last_name || '').toLowerCase();
+            const n = foldName(s.player?.full_name || s.player?.last_name); // ADAPTED (bug fix)
             return (n.includes(pitcherLower) || pitcherLower.includes(n)) && s.pitching_ip > 0;
           });
           if (match?.player?.id) pitcherId = match.player.id;
@@ -1483,9 +1539,9 @@ export const mlbFetchers = {
       if (bdlTeamId) {
         try {
           const result = await fetchSeasonStatsWithFallback({ teamId: bdlTeamId, season: currentYear });
-          const pitcherLower = pitcherName.toLowerCase();
+          const pitcherLower = foldName(pitcherName); // ADAPTED (bug fix)
           const match = (result.stats || []).find(s => {
-            const n = (s.player?.full_name || s.player?.last_name || '').toLowerCase();
+            const n = foldName(s.player?.full_name || s.player?.last_name); // ADAPTED (bug fix)
             return (n.includes(pitcherLower) || pitcherLower.includes(n)) && s.pitching_ip > 0;
           });
           if (match) {

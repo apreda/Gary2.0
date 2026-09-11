@@ -8,7 +8,7 @@ import { buildPass1Message, buildPass25Message, buildPass25PropsMessage, buildPa
 import { parseGaryResponse, parsePropsResponse, normalizePickFormat, determineCurrentPass } from './responseParser.js';
 import { auditPickRationale, auditPropsPicks, buildStatAuditRetryMessage } from './statAudit.js';
 import { isInvestigationSufficient, summarizeStatForContext, formatNum, formatPct, summarizePlayerGameLogs, summarizeMlbPlayerGameLogs, summarizePlayerStats, summarizeNbaPlayerAdvancedStats, pruneContextIfNeeded, normalizeSportToLeague, MAX_CONTEXT_MESSAGES, PRUNE_AFTER_ITERATION } from './orchestratorHelpers.js';
-import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js';
+import { fetchStats, clearStatRouterCache } from './tools/statRouters/index.js'; // ADAPTED (import paths): June's own stat routers, in this folder
 import { getConstitution } from './constitution/index.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, nhlSeason, nflSeason } from '../../../utils/dateUtils.js';
