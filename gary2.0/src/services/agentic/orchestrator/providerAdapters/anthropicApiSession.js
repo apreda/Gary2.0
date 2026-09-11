@@ -151,6 +151,19 @@ export async function sendToAnthropicApiSession(session, message, options = {}) 
   session._messages.push({ role: 'user', content: session._pendingUserBlocks });
   session._pendingUserBlocks = [];
 
+  // INCREMENTAL PROMPT CACHE (Sep 11 2026): the June research assistant
+  // carries the scout report and every tool answer in the conversation, not
+  // the system block, and re-sent 1.1-1.5M uncached tokens a game ($2 of
+  // Haiku per pick against $0.15). One moving breakpoint on the newest user
+  // block caches the whole prefix; the next call reads it at a tenth of the
+  // price. The previous breakpoint is lifted so the four-breakpoint cap holds.
+  for (const m of session._messages) if (Array.isArray(m.content)) for (const b of m.content) if (b && b.cache_control) delete b.cache_control;
+  const lastUser = session._messages[session._messages.length - 1];
+  if (Array.isArray(lastUser?.content) && lastUser.content.length) {
+    const tail = lastUser.content[lastUser.content.length - 1];
+    if (tail && (tail.type === 'text' ? String(tail.text || '').trim() : true)) tail.cache_control = { type: 'ephemeral' };
+  }
+
   const body = {
     model: session._apiModel,
     max_tokens: session.maxOutputTokens,

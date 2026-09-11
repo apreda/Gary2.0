@@ -20,16 +20,18 @@ beforeEach(() => {
   delete process.env.GARY_GROUNDING_VIA_CLAUDE;
   // The metered rung is what these cases exercise; the default budget is 0.
   process.env.GARY_METERED_SEARCH_CAP = '-1';
+  // No disk cache between cases: an earlier case's answer must not serve a later query.
+  process.env.GARY_SEARCH_CACHE_OFF = '1';
   _resetMeteredSearchBudget();
 });
-afterEach(() => { vi.restoreAllMocks(); delete process.env.GARY_METERED_SEARCH_CAP; delete process.env.GARY_GROUNDING_VIA_CLAUDE; });
+afterEach(() => { vi.restoreAllMocks(); delete process.env.GARY_METERED_SEARCH_CAP; delete process.env.GARY_GROUNDING_VIA_CLAUDE; delete process.env.GARY_SEARCH_CACHE_OFF; });
 
 describe('the press never bills the key on its own (Sep 9 2026)', () => {
   it('with the default budget the metered API is not bought when the codex bridge fails', async () => {
     delete process.env.GARY_METERED_SEARCH_CAP;
     _resetMeteredSearchBudget();
     codexCliWebSearch.mockResolvedValue({ success: false, data: '', error: 'capped' });
-    const result = await groundedWebSearch('Seahawks roster news', { sport: 'NFL' });
+    const result = await groundedWebSearch('Seahawks roster news, budget case ' + Math.random(), { sport: 'NFL' });
     expect(result.success).toBe(false);
     expect(anthropicWebSearchRaw).not.toHaveBeenCalled();
   });
@@ -37,7 +39,7 @@ describe('the press never bills the key on its own (Sep 9 2026)', () => {
     process.env.GARY_GROUNDING_VIA_CLAUDE = '1';
     codexCliWebSearch.mockResolvedValue({ success: false, data: '', error: 'capped' });
     claudeCliWebSearch.mockResolvedValue({ success: true, data: fallback });
-    const result = await groundedWebSearch('Seahawks roster news', { sport: 'NFL' });
+    const result = await groundedWebSearch('Seahawks roster news, budget case ' + Math.random(), { sport: 'NFL' });
     expect(result.success).toBe(true);
     expect(result.data).toContain('September 8, 2026');
     expect(claudeCliWebSearch).toHaveBeenCalledTimes(1);
