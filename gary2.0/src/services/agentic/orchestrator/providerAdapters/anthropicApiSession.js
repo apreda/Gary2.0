@@ -223,17 +223,24 @@ export async function sendToAnthropicApiSession(session, message, options = {}) 
     console.log(`[Session] 🔧 ${toolUses.length} tool_use block(s) requested`);
   }
 
+  // Anthropic's input_tokens EXCLUDES the cache: reads and writes are their
+  // own fields, priced at 10% and 125% of the input rate. The tracker gets
+  // all three (Sep 11 2026 — the old mapping hid cache reads and writes, so a
+  // fully cached research run printed as $0.33 while billing about $0.70).
+  const cacheRead = data.usage?.cache_read_input_tokens || 0;
+  const cacheWrite = data.usage?.cache_creation_input_tokens || 0;
   const usage = {
     prompt_tokens: data.usage?.input_tokens || 0,
     completion_tokens: data.usage?.output_tokens || 0,
-    total_tokens: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
-    cached_tokens: data.usage?.cache_read_input_tokens || 0,
+    total_tokens: (data.usage?.input_tokens || 0) + cacheRead + cacheWrite + (data.usage?.output_tokens || 0),
+    cache_read_tokens: cacheRead,
+    cache_write_tokens: cacheWrite,
   };
   if (session._costTracker) {
     session._costTracker.addUsage(session.modelName, usage);
   }
 
-  console.log(`[Session] Response in ${duration}ms (tokens: ${usage.total_tokens}, cached: ${usage.cached_tokens})`);
+  console.log(`[Session] Response in ${duration}ms (tokens: ${usage.total_tokens}, uncached in: ${usage.prompt_tokens}, cache read: ${cacheRead}, cache write: ${cacheWrite}, out: ${usage.completion_tokens})`);
 
   // Re-normalize to the chat-completions toolCalls shape agentLoop consumes.
   const toolCalls = toolUses.map((b) => ({

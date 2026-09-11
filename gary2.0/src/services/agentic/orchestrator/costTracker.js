@@ -41,7 +41,7 @@ export function createCostTracker(pipelineLabel) {
 
   function ensureBucket(model) {
     if (!buckets[model]) {
-      buckets[model] = { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, calls: 0 };
+      buckets[model] = { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, calls: 0 };
     }
   }
 
@@ -58,7 +58,13 @@ export function createCostTracker(pipelineLabel) {
       const input = count(usage.prompt_tokens);
       buckets[model].inputTokens += input;
       buckets[model].outputTokens += count(usage.completion_tokens);
+      // OpenAI-style: cached_tokens is a SUBSET of prompt_tokens. Anthropic-style
+      // (Sep 11 2026): cache_read_tokens / cache_write_tokens are ADDITIONAL to
+      // prompt_tokens (which is the uncached input alone) — reads bill at 10%
+      // of the input rate, writes at 125%.
       buckets[model].cachedInputTokens += Math.min(input, count(usage.cached_tokens));
+      buckets[model].cacheReadTokens += count(usage.cache_read_tokens);
+      buckets[model].cacheWriteTokens += count(usage.cache_write_tokens);
       buckets[model].calls += 1;
     },
 
@@ -77,7 +83,7 @@ export function createCostTracker(pipelineLabel) {
         // Every codex-* model uses the same subscription bridge, including
         // newly introduced models. Never invent a Haiku API bill for Astra.
         const rates = model.startsWith('codex-') ? { input: 0, output: 0 } : MODEL_RATES[model];
-        const inputCost = rates ? (b.inputTokens / 1_000_000) * rates.input : null;
+        const inputCost = rates ? ((b.inputTokens / 1_000_000) * rates.input) + ((b.cacheReadTokens / 1_000_000) * rates.input * 0.10) + ((b.cacheWriteTokens / 1_000_000) * rates.input * 1.25) : null;
         const outputCost = rates ? (b.outputTokens / 1_000_000) * rates.output : null;
         const modelCost = rates ? inputCost + outputCost : null;
         if (modelCost == null) unpricedModelCalls += b.calls;
@@ -87,6 +93,8 @@ export function createCostTracker(pipelineLabel) {
           inputTokens: b.inputTokens,
           outputTokens: b.outputTokens,
           cachedInputTokens: b.cachedInputTokens,
+          cacheReadTokens: b.cacheReadTokens,
+          cacheWriteTokens: b.cacheWriteTokens,
           uncachedInputTokens: b.inputTokens - b.cachedInputTokens,
           calls: b.calls,
           inputCost,
@@ -113,7 +121,8 @@ export function createCostTracker(pipelineLabel) {
         // nicknames were Gemini-era labels on non-Gemini calls (Aug 24 2026).
         const shortModel = b.model.replace(/^(anthropic-|codex-)/, '');
         const cost = b.modelCost == null ? 'unpriced' : `$${b.modelCost.toFixed(2)} model estimate`;
-        console.log(`[Cost]   ${shortModel}: ${b.calls} calls, ${(b.inputTokens / 1000).toFixed(1)}K in (${(b.cachedInputTokens / 1000).toFixed(1)}K cached, ${(b.uncachedInputTokens / 1000).toFixed(1)}K uncached), ${(b.outputTokens / 1000).toFixed(1)}K out = ${cost}`);
+                const cacheNote = (b.cacheReadTokens || b.cacheWriteTokens) ? ` + ${(b.cacheReadTokens / 1000).toFixed(1)}K cache-read + ${(b.cacheWriteTokens / 1000).toFixed(1)}K cache-write` : '';
+        console.log(`[Cost]   ${shortModel}: ${b.calls} calls, ${(b.inputTokens / 1000).toFixed(1)}K in (${(b.cachedInputTokens / 1000).toFixed(1)}K cached, ${(b.uncachedInputTokens / 1000).toFixed(1)}K uncached)${cacheNote}, ${(b.outputTokens / 1000).toFixed(1)}K out = ${cost}`);
       }
       if (gc > 0) {
         console.log(`[Cost]   Grounding: ${gc} logical queries; provider costs not recorded here`);
