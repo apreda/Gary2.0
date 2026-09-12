@@ -128,12 +128,15 @@ try {
   ).toString());
   const deployedBySlug = new Map(deployed.map((f) => [f.slug, f]));
 
+  // Test-runner changes are not deployed function code. Keep runtime/shared
+  // edits in the comparison without demanding a redeploy for test-only commits.
+  const withoutTests = "':(glob,exclude)**/*.test.*'";
   const gitLastMs = (relPath) => {
-    const out = execSync(`git log -1 --format=%ct -- ${JSON.stringify(relPath)}`, { cwd: PROJECT_DIR }).toString().trim();
+    const out = execSync(`git log -1 --format=%ct -- ${JSON.stringify(relPath)} ${withoutTests}`, { cwd: PROJECT_DIR }).toString().trim();
     return out ? Number(out) * 1000 : 0;
   };
   const isDirty = (relPath) => {
-    return execSync(`git status --porcelain -- ${JSON.stringify(relPath)}`, { cwd: PROJECT_DIR }).toString().trim().length > 0;
+    return execSync(`git status --porcelain -- ${JSON.stringify(relPath)} ${withoutTests}`, { cwd: PROJECT_DIR }).toString().trim().length > 0;
   };
   const localFns = readdirSync(fnRoot).filter((name) => {
     if (name.startsWith('_') || name.startsWith('.')) return false;
