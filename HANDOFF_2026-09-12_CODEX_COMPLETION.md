@@ -114,6 +114,12 @@ Runtime/shared source changes remain checked; timestamps still do not prove
 deployed source-byte equality. The private `ios/GaryApp/GoogleService-Info.plist`
 remains untouched and uncommitted, the documented working-tree exception.
 
+The two new migration versions (`20260912133639`, `20260912133808`) match the
+remote ledger. The repository also has substantial pre-existing historical
+local/remote migration-name mismatches, including older short date prefixes.
+Those were not relabeled or marked applied without a separate content audit.
+Do not infer that a blanket `db push` is safe from today's two matching entries.
+
 The importer audit found `mlbJudgment*` still used by Winners evidence/history;
 `mlbCaseMenu` by shared data fetchers and the generic orchestrator; `penArms`,
 `bullpenLedger`, `mlbSeasonContext` and `mlbSeriesState` by shared stat routers
