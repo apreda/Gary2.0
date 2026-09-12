@@ -1,7 +1,8 @@
-import { assertEquals, assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { test } from "node:test";
+import { deepStrictEqual as assertEquals, ok as assert } from "node:assert";
 import { createScanHandler, normalizeScan, parseModelJSON } from "./handler.ts";
 
-Deno.test("normalizeScan keeps only what a slip can prove", () => {
+test("normalizeScan keeps only what a slip can prove", () => {
   const out = normalizeScan({
     sportsbook: "  DraftKings ",
     notes: "stake blurry",
@@ -25,7 +26,7 @@ Deno.test("normalizeScan keeps only what a slip can prove", () => {
   assertEquals(out.bets[2].stake_dollars, null);
 });
 
-Deno.test("parseModelJSON tolerates prose around the object", () => {
+test("parseModelJSON tolerates prose around the object", () => {
   assertEquals((parseModelJSON('Here you go: {"bets":[]} thanks') as { bets: unknown[] }).bets, []);
   let threw = false;
   try { parseModelJSON("no json here"); } catch { threw = true; }
@@ -36,7 +37,7 @@ function handlerWith(fetchImpl: typeof fetch) {
   return createScanHandler({ supabaseURL: "https://sb.test", anonKey: "anon", anthropicKey: "key", model: "claude-opus-5", fetch: fetchImpl });
 }
 
-Deno.test("scan flow: verifies the user, counts the scan, returns normalized bets, never writes a bet", async () => {
+test("scan flow: verifies the user, counts the scan, returns normalized bets, never writes a bet", async () => {
   const calls: string[] = [];
   const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
@@ -68,7 +69,7 @@ Deno.test("scan flow: verifies the user, counts the scan, returns normalized bet
   assert(!calls.some((c) => c.includes("/rest/v1/user_bets")));
 });
 
-Deno.test("scan flow: no session, bad media, and the daily limit", async () => {
+test("scan flow: no session, bad media, and the daily limit", async () => {
   const limited = (async (input: string | URL | Request) => {
     const url = String(input);
     if (url.endsWith("/auth/v1/user")) return new Response(JSON.stringify({ id: "11111111-2222-4333-8444-555555555555" }), { status: 200 });
