@@ -1,8 +1,8 @@
 import { isSocialServiceRequest } from "../post-single-tweet/authorization.ts";
 // social-auto-post — server-side @BetwithGary auto-poster (picks drip + metrics refresh)
-// Cron: every 15 min (was hourly at :45 UTC until Aug 5 2026). Every run: refresh metrics, then post every
-// pick whose FIRST PITCH is still 5-120 min away. Posting is game-paced, not clock-paced — see the LEAD_*
-// constants below.
+// Cron: every 15 min. Refresh metrics, then consider one audience-selected pick
+// whose start is still 5–120 min away. A 30-minute gap and daily schedule plan
+// pace the feed; the database serializes claims across overlapping runs.
 // (The noon personality post is RETIRED as of Jun 29 2026 — runPersonalityMode early-returns; dry-run preview only.)
 // Daily recap restored Sep 4 2026: one post per sport, 10 AM ET with retries through 2 PM.
 // (The verdict quote-tweets are RETIRED as of Aug 24 2026 — runVerdictMode early-returns; dry-run preview only.)
@@ -34,8 +34,7 @@ import { mergeSocialPickSources, hasLoggedTicket, publicationKey } from "./pickS
 import { publishIntent, publicationStore } from "./publication.js";
 import { barePick } from "./barepick.ts";
 import { computeStanding } from "./pl.ts";
-import { selectPicks, type Slot } from "./window.ts";
-import { marqueeScore } from "./marquee.ts";
+import { selectAudiencePicks, audienceDeadlineOutcomes } from "./audience.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -50,30 +49,14 @@ const ANTHROPIC_MODEL = Deno.env.get("SOCIAL_ANTHROPIC_MODEL") ?? "claude-sonnet
 const CARD_BASE = Deno.env.get("CARD_BASE_URL") ?? "https://www.betwithgary.ai";
 const sb = createClient(SB_URL, SERVICE_KEY);
 
-// Jul 7 (founder): 5 pick threads/day in the standard text format.
-//
-// Aug 5 2026 REWRITE (founder: "those cannot go out after the game starts... that's like making a pick after
-// the game starts. It looks like we're retroactively making a pick"). Posting is now GAME-PACED, not
-// clock-paced. The old design ran one post per hourly slot, which failed three ways:
-//   1. A clustered slate could not be covered. Aug 5 had four picks first-pitching inside 60 minutes
-//      (2:10 / 2:20 / 2:35 / 3:10) — at one post per hour, two were late no matter what.
-//   2. ET hour 12 resolved to the RETIRED "personality" mode and posted nothing at all — a dead noon slot.
-//   3. A single failed run forfeited its pick for a full hour, by which point the game had started and the
-//      pick was dropped forever (Aug 5: Astros -1.5 and Cubs/Dodgers ML were never tweeted).
-// Now every run posts every pick whose first pitch sits inside the lead window, up to MAX_POSTS_PER_RUN,
-// and each pick composes/posts independently so one LLM hiccup cannot take the others down with it.
+// The founder's pregame deadline remains mandatory: no pick after its start.
+// Sep 12 replaces the summer every-game setting with an audience-selected slate.
 const POST_HOURS_START = 8;   // ET hour the poster starts considering picks
 const POST_HOURS_END = 23;    // ...and stops (inclusive)
 const LEAD_MAX_MIN = 120;     // don't post more than 2h before first pitch (keeps the take timely)
 const LEAD_MIN_MIN = 5;       // HARD DEADLINE: must be >= 5 min before first pitch, otherwise never post
-// EVERY GAME POSTS (founder, Aug 14 2026: "until football season lets post every game of the day").
-// The 5/day cap and the day-part reservations existed to ration a scarce cap across the day; with the
-// whole slate posting, rationing is off. The lead window is unchanged — each game still posts in its own
-// 2h pre-game window, so the slate spreads itself across the day naturally. Burst guard sized for a
-// six-game 6:40 ET cluster to clear in a single run.
-const MAX_POSTS_PER_RUN = 8;
-const PICKS_PER_DAY = 30;
-const SLOT_RESERVE: Record<Slot, number> = { morning: 0, afternoon: 0, evening: 0, late: 0 };
+// Sep 12: football is here. Audience selection now owns a smaller daily slate,
+// one root at a time, with schedule-based reservations and 30-minute spacing.
 const RECAP_HOUR = 10;
 // In-thread handoff (replaces the old buried App Store link CTA). No URL on purpose: the install path lives in the bio +
 // pinned post, which out-convert an in-thread link, and a link in-thread suppresses reach. Rotated by post-of-day so the
@@ -416,15 +399,14 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
     dayProps = ppRows?.[0]?.picks ?? [];
   } catch (e) { console.error("props fetch for replies failed (pick tweets unaffected): " + String(e)); }
 
-  const { data: logRows, error: logErr } = await sb.from("social_post_log").select("pick_text, thread_format, publication_key").eq("post_date", today);
+  const { data: logRows, error: logErr } = await sb.from("social_post_log").select("pick_text, thread_format, publication_key, posted_at, league, slot, audience_selection").eq("post_date", today);
   if (logErr) throw logErr;
   const { data: intentRows, error: intentErr } = await sb.from("social_publication_intents").select("*").eq("post_date", today);
   if (intentErr) throw new Error("PUBLICATION_READ_FAILED");
   const existingIntents = new Map((intentRows ?? []).map((row) => [row.publication_key, row]));
   // Whitelist the ACTUAL pick-thread formats: with verdict/arc/wc rows in the same log, a blacklist would let
-  // them eat the 3/day cap (three verdicts would silently block the day's real picks) and suppress the handoff.
+  // them consume the daily pick budget and suppress the handoff.
   const pickThreads = (logRows ?? []).filter((r) => ["standard", "top_pick"].includes(r.thread_format ?? ""));
-  if (pickThreads.length >= PICKS_PER_DAY && !preview) return { posted: false, reason: `daily cap of ${PICKS_PER_DAY} reached`, source_errors };
   // Durable reservations serialize overlapping runs and protect each exact game.
 
   const MIN = 60_000;
@@ -437,16 +419,22 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
   // "GAME JUST STARTED, frame the angle as live, just-underway energy". That is what shipped tweets like
   // "First pitch just went in Denver" 35 minutes after the Rays game began. A pick published after the game
   // starts reads as a retroactive call, so there is no grace period any more: miss the window, skip the pick.
-  const { queue: selected, missed, eligibleCount, budget, reserved } = selectPicks(unposted, {
-    nowMs,
-    leadMinMin: LEAD_MIN_MIN,
-    leadMaxMin: LEAD_MAX_MIN,
-    maxPerRun: MAX_POSTS_PER_RUN,
-    dailyCap: PICKS_PER_DAY,
-    postedToday: pickThreads.length,
-    reserve: SLOT_RESERVE,
-    marqueeScore,
-  });
+  const [{ data: slate, error: slateError }, { data: history, error: historyError }] = await Promise.all([
+    sb.from("daily_slate").select("league,away_team,home_team,bdl_game_id,commence_time,away_ranking,home_ranking,game_status").eq("date", today),
+    sb.from("social_post_log").select("league,slot,pick_text,posted_at,thread_format,impressions,profile_clicks,audience_selection")
+      .gte("post_date", new Date(nowMs - 28 * 86400_000).toISOString().slice(0, 10)).lt("post_date", today)
+      .in("thread_format", ["standard", "top_pick"]).order("posted_at", { ascending: false }).limit(1000),
+  ]);
+  // An unavailable schedule cannot justify spending the spaces held for games
+  // whose research has not arrived. A missing metrics read can use explicit priors.
+  if (slateError || !slate?.length) return { posted: false, reason: "AUDIENCE_SCHEDULE_UNAVAILABLE", source_errors: [...source_errors, "AUDIENCE_SCHEDULE_UNAVAILABLE"] };
+  if (historyError) source_errors.push("AUDIENCE_HISTORY_UNAVAILABLE");
+  const postable = unposted.filter(p => !/^pass\b/i.test(String(p.pick ?? "").trim())
+    && fallbackReasonPair(String(p.rationale ?? ""), 278 - barePick(String(p.pick)).length - 4)?.opening);
+  const selection = { ...selectAudiencePicks(postable, slate, pickThreads, history ?? [], nowMs, picks),
+    skipped_copy: unposted.filter(p => !postable.includes(p)).map(p => p.pick) };
+  const selected = selection.queue;
+  const { missed, skipped_pregame } = audienceDeadlineOutcomes(picks, pickThreads, intentRows ?? [], nowMs);
 
   // A pick whose first pitch has already passed can NEVER post now. Say so loudly: the Aug 5 misses
   // (Astros -1.5, Cubs/Dodgers ML) disappeared with nothing in any log to notice them.
@@ -454,18 +442,13 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
     console.error(`MISSED_PICKS ${today}: first pitch passed before these could post -> ${missed.join(" | ")}`);
   }
 
-  // preview (dry-run only): ignore timing, just compose the highest-confidence unposted pick so we can vet formatting anytime.
+  // preview (dry-run only): compose an unposted pick ignoring timing to vet formatting.
   let queue = selected;
   if (!queue.length && preview && dryRun) {
-    queue = [...unposted].sort((a, b) => parseFloat(b.confidence ?? 0) - parseFloat(a.confidence ?? 0)).slice(0, 1);
+    queue = [...unposted].slice(0, 1);
   }
   if (!queue.length) {
-    const reason = !eligibleCount
-      ? "no pick inside the lead window"
-      : reserved
-      ? `cap spent; ${reserved} slot(s) held for later day-parts`
-      : `daily cap of ${PICKS_PER_DAY} reached`;
-    return { posted: false, reason, eligible: eligibleCount, budget, reserved, missed, source_errors };
+    return { posted: false, reason: selection.reason, audience: selection, missed, skipped_pregame, source_errors };
   }
 
   const maxConf = Math.max(...picks.map((p) => parseFloat(p.confidence ?? 0)));
@@ -496,8 +479,18 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
    try {
     const prepared = existingIntents.get(publicationKey(chosen));
     if (prepared && !dryRun) {
-      // A pre-send crash resumes its frozen copy without another model request.
-      const publication = await publishIntent(prepared, { store: publicationStore(sb), send: postTweet });
+      // Resume frozen copy without another model request, but reacquire the
+      // shared cadence guard: another game may have claimed since this crashed.
+      const { data: resumed, error: resumeError } = await sb.rpc("claim_social_publication", {
+        p_date: today, p_key: prepared.publication_key,
+        p_payload: prepared.log_payload, p_reply: prepared.reply_text,
+      });
+      if (resumeError) throw new Error("PUBLICATION_CLAIM_FAILED");
+      if (!resumed?.length) {
+        results.push({ posted: false, pick: chosen.pick, reason: "publication interval reserved" });
+        continue;
+      }
+      const publication = await publishIntent(resumed[0], { store: publicationStore(sb), send: postTweet });
       if (publication.posted) threadsSoFar++;
       results.push({ ...publication, pick: chosen.pick });
       continue;
@@ -586,7 +579,7 @@ ${numbered}`;
     // thread. isTopPick is retained in publication metadata; the copy carries facts.
     if (dryRun) {
       threadsSoFar++;
-      results.push({ posted: false, dry_run: true, pick: chosen.pick, is_top_pick: isTopPick, lead_min: Math.round((new Date(chosen.commence_time).getTime() - nowMs) / MIN), hook, props_reply: propsReply, handoff: propsReply ? null : handoff });
+      results.push({ posted: false, dry_run: true, pick: chosen.pick, audience_selection: chosen.audience_selection, is_top_pick: isTopPick, lead_min: Math.round((new Date(chosen.commence_time).getTime() - nowMs) / MIN), hook, props_reply: propsReply, handoff: propsReply ? null : handoff });
       continue;
     }
 
@@ -595,10 +588,11 @@ ${numbered}`;
     const { data: claims, error: claimError } = await sb.rpc("claim_social_publication", {
       p_date: today, p_key: publicationKey(chosen), p_reply: handoff,
       p_payload: { slot, league, pick_text: chosen.pick, confidence: conf || null,
-        commence_time: chosen.commence_time, thread_format: isTopPick ? "top_pick" : "standard", post_text: hook },
+        commence_time: chosen.commence_time, thread_format: isTopPick ? "top_pick" : "standard", post_text: hook,
+        audience_selection: chosen.audience_selection ?? null },
     });
     if (claimError) throw new Error("PUBLICATION_CLAIM_FAILED");
-    if (!claims?.length) { results.push({ posted: false, pick: chosen.pick, reason: "game already reserved or daily cap reached" }); continue; }
+    if (!claims?.length) { results.push({ posted: false, pick: chosen.pick, reason: "game or posting interval reserved, or daily cap reached" }); continue; }
     const publication = await publishIntent(claims[0], { store: publicationStore(sb), send: postTweet });
     if (publication.posted) threadsSoFar++;
     results.push({ ...publication, pick: chosen.pick, lead_min: Math.round((new Date(chosen.commence_time).getTime() - Date.now()) / MIN) });
@@ -607,7 +601,7 @@ ${numbered}`;
     results.push({ posted: false, pick: chosen.pick, error: String(e) });
    }
   }
-  return { posted: results.some((r) => r.posted), results, count_today: threadsSoFar, missed, source_errors };
+  return { posted: results.some((r) => r.posted), results, count_today: threadsSoFar, audience: { ...selection, queue: undefined }, missed, skipped_pregame, source_errors };
 }
 
 // VERDICT LOOP (Engine 0, Jul 2026): when a game Gary tweeted a pick for goes FINAL, quote-tweet HIS OWN
