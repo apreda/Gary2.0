@@ -14,7 +14,7 @@ import {
   getInjuryStatusFromMap
 } from '../shared/utilities.js';
 import { fetchStandingsSnapshot } from '../shared/grounding.js';
-import { fetchFootballDeepCoverage } from '../shared/anthropicFootballGrounding.js';
+import { fetchNflArticlesAsWritten } from './nflArticlesAsWritten.js';
 import { loadTeamResults, gameStoryLine } from '../../tools/statRouters/footballTeamGames.js';
 import {
   fetchTeamProfile,
@@ -1348,7 +1348,8 @@ export async function buildNflScoutReport(game, options = {}) {
     } catch (e) {
       console.warn(`[Scout Report] Known-accounts context unavailable: ${e.message}`);
     }
-    const coverage = await fetchFootballDeepCoverage({ homeTeam, awayTeam, sport: sportKey, knownAccounts });
+    const coverage = await fetchNflArticlesAsWritten({ homeTeam, awayTeam, knownAccounts,
+      asOf: Math.min(Date.now(), Date.parse(game.commence_time) || Date.now()) });
     recentCoverage = coverage?.text || null;
   } catch (e) {
     console.warn(`[Scout Report] Recent-game coverage unavailable: ${e.message}`);
