@@ -1,5 +1,7 @@
 # Product Hunt launch extras — September 8, 2026
 
+**Schedule update September 12:** The launch is now saved for September 20 at 3:01 AM Eastern. Remaining announcements are held until that date. [Postponement receipt](LAUNCH_POSTPONEMENT_2026-09-12.md). September 8 completed-action receipts retain their original dates.
+
 Updated at approximately 10:35 AM Eastern. This receipt covers the extra items Adam requested from the prelaunch checklist. Website and marketing only: no native app, pick generation, scoring, grading or publishing process was changed by this work.
 
 ## Completed account actions
@@ -63,11 +65,11 @@ The official dark **Find us on Product Hunt** badge was added to the website foo
 
 ## Prepared social posts
 
-**Prepared, not posted or platform-scheduled.** Publish only after the September 13 public launch and website destination are verified. No vote request or incentive. Product Hunt engagement and Gary useful sessions/returns must be reported separately.
+**Prepared, not posted or platform-scheduled.** Publish only after the September 20 public launch and website destination are verified. No vote request or incentive. Product Hunt engagement and Gary useful sessions/returns must be reported separately.
 
 The dashboard exposes separate **Copy Link** buttons for X and LinkedIn. Their URLs were not retrievable through the browser's virtual clipboard; Adam was asked to paste both. Do not invent platform tracking IDs or call the clean fallback below a captured platform-tracked URL. Replace the clean link with the corresponding copied URL when supplied.
 
-### X — combine with the September 13 record slot
+### X — combine with the September 20 record slot
 
 > Gary is on Product Hunt today. Free sports picks, written reasoning, and a public record—including losses. Take a look and tell us what would make the record clearer.
 >

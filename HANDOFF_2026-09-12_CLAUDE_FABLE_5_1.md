@@ -1,5 +1,7 @@
 # Gary takeover — Claude / Fable 5.1
 
+> **Later September 12 direction:** Adam postponed the launch from September 13 to **September 20**. Product Hunt was rescheduled and saved for **3:01 AM Eastern**; remaining launch announcements are held until September 20. Read the [postponement receipt](GaryMarketing/launch-2026-09/LAUNCH_POSTPONEMENT_2026-09-12.md) before acting on older launch dates below. App Review remains in place.
+
 Prepared September 12, 2026. Read this before the September 8 handoff. Older files contain superseded build numbers, model policies and unfinished-work lists.
 
 ## Assignment and working directory

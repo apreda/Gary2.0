@@ -1,6 +1,8 @@
 # Website launch support and rehearsal
 
-Prepared September 7, 2026 for the September 13 campaign. **Status: operator material and reply drafts; not messages already sent or a completed rehearsal.** Adam owns support and human community replies. The [runbook](LAUNCH_RUNBOOK.md) owns the offer; the [completion tracker](LAUNCH_COMPLETION_TRACKER.md) records actual outcomes.
+**September 12 update:** Launch postponed to **September 20, 2026**. Product Hunt is saved for **3:01 AM Eastern** that day. Hold remaining launch announcements and campaign publication until September 20; verify App Store availability before promotion. Rehearsal moves to September 19. [Saved schedule and scope](LAUNCH_POSTPONEMENT_2026-09-12.md).
+
+Prepared September 7; updated September 12, 2026 for the September 20 campaign. **Status: operator material and reply drafts; not messages already sent or a completed rehearsal.** Adam owns support and human community replies. The [runbook](LAUNCH_RUNBOOK.md) owns the offer; the [completion tracker](LAUNCH_COMPLETION_TRACKER.md) records actual outcomes.
 
 This session covers the website and marketing. Native/iOS source, builds, App Store Connect and native release verification are outside its scope, including read-only inspection. Accept a dated factual handoff from the separate release owner if needed for marketing copy. Do not request or make a native change from this checklist.
 
@@ -115,14 +117,14 @@ This is a small support/first-use note, not a second research study. Use the exi
 
 No real observations are recorded by this template. Declined optional analytics is not a usability failure. Do not silently join anonymous feedback to browser telemetry or export a private conversation to public campaign material.
 
-## September 13 operator run-of-show
+## September 20 operator run-of-show
 
 This is a manual operating sequence relative to the selected publication slots, not a new cron or a fixed game schedule. The actual Product Hunt date/time must come from its saved platform receipt. Existing game-paced publishing retains its owner, hours and cap.
 
 | Window | Operator action | Owner | Evidence / decision |
 |---|---|---|---|
-| Sep 12, before final content freeze | Complete the tracker rehearsal; check offer, screenshots, dates, destinations, account controls and accessibility text. | Codex + Adam | Checked final asset manifest and page paths; unresolved dependencies attached to their channels. |
-| Sep 12, end of rehearsal | Choose final slots and assign real response/support coverage. Confirm any optional PH/Reddit state literally. | Adam | Named human owner, actual draft/schedule links; no unspecified “team will handle it.” |
+| Sep 19, before final content freeze | Complete the tracker rehearsal; check offer, screenshots, dates, destinations, account controls and accessibility text. | Codex + Adam | Checked final asset manifest and page paths; unresolved dependencies attached to their channels. |
+| Sep 19, end of rehearsal | Choose final slots and assign real response/support coverage. Confirm any optional PH/Reddit state literally. | Adam | Named human owner, actual draft/schedule links; no unspecified “team will handle it.” |
 | 60–30 minutes before the first campaign slot | Recheck website availability and the promoted real game/example. Read the existing operational readiness receipt with its timestamp. | Codex; existing publishing owner for their service | Go for working surfaces; hold any broken destination or false availability claim. |
 | Immediately before each manual publication | Compare final copy and destination to current behavior; verify that the same post/email has not already succeeded. | Authorized publishing operator | Exact approved content version, channel and existing authority; no repeat approval if already authorized. |
 | At the selected slot | Publish only the ready piece; record the actual external ID/URL and time. | Authorized publishing operator | Submitted/scheduled/published distinction preserved. Automatic game publishing continues independently. |
@@ -153,4 +155,4 @@ This is a manual operating sequence relative to the selected publication slots, 
 |---|---|---|---|---|
 | Support preparation | 2026-09-07 | Codex | Draft replies, anonymous note template and operator sequence prepared. | Live rehearsal, coverage assignment and actual user outcomes are outstanding. |
 
-Do not mark the September 12 rehearsal or September 13 operation complete from this file's existence. No messages, campaigns, account changes or native inspections are performed by creating this document.
+Do not mark the September 19 rehearsal or September 20 operation complete from this file's existence. No messages, campaigns, account changes or native inspections are performed by creating this document.

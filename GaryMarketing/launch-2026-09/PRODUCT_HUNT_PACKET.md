@@ -1,6 +1,6 @@
 # Gary Product Hunt launch packet
 
-Prepared September 7; updated September 8, 2026. **Status: existing draft saved and scheduled for September 13.** The [prelaunch dashboard](https://www.producthunt.com/products/gary-ai/gary-ai/prelaunch) reports **Scheduled**, not launched, featured or approved. Category, three factual technology shoutouts, a hosted captioned website overview and a published product-forum thread are now recorded in [the extras receipt](PRODUCT_HUNT_EXTRAS_2026-09-08.md), alongside the footer badge and prepared social copy. The [launch runbook](LAUNCH_RUNBOOK.md) owns the product offer; [the completion tracker](LAUNCH_COMPLETION_TRACKER.md) owns execution status.
+Prepared September 7; updated September 12, 2026. **Status: existing launch rescheduled to September 20 at 3:01 AM Eastern.** [Saved September 12 rescheduling receipt](LAUNCH_POSTPONEMENT_2026-09-12.md). September 8 account/content receipts below retain their historical dates. The [prelaunch dashboard](https://www.producthunt.com/products/gary-ai/gary-ai/prelaunch) reports **Scheduled**, not launched, featured or approved. Category, three factual technology shoutouts, a hosted captioned website overview and a published product-forum thread are now recorded in [the extras receipt](PRODUCT_HUNT_EXTRAS_2026-09-08.md), alongside the footer badge and prepared social copy. The [launch runbook](LAUNCH_RUNBOOK.md) owns the product offer; [the completion tracker](LAUNCH_COMPLETION_TRACKER.md) owns execution status.
 
 ## Account and eligibility
 
@@ -37,7 +37,7 @@ The public duplicate-listing check around midnight September 8 found no matching
 | Video | `https://youtu.be/DsPIea4KyD0`; unlisted 30-second still-image website overview with published English captions; actual Product Hunt embed plays. Copyright check still pending at last inspection. |
 | Optional app link | The pre-existing App Store link was left unchanged. Its release availability was not reverified in this website-only task; this save makes no new native-feature claim. |
 | Promo-code field | No coupon is prepared: the account-based launch preview is not an invented promotional code. |
-| Scheduled launch | September 13, 2026, **12:01 AM PT / 3:01 AM EDT**, as selected in the calendar and displayed by the scheduling UI. Dashboard status: **Scheduled**. |
+| Scheduled launch | September 20, 2026, **12:01 AM PT / 3:01 AM EDT**. Saved September 12 through Update; the existing edit page confirms **Scheduled** for September 20. |
 
 The tagline is below 60 characters and the description below 260, accommodating the stricter of the two description lengths in official help. The current launch guide permits up to 500 description characters. The main URL must remain a direct clean URL: Product Hunt explicitly rejects shortened and UTM/track links in that field. Gallery: at least two images, recommended 1270×760; thumbnail: square, recommended 240×240, below 3 MB. Scheduling is available up to one month ahead. Verify the actual form and its displayed launch date/time instead of guessing an Eastern conversion from help pages' PST wording. [Official submission guide](https://www.producthunt.com/launch/preparing-for-launch), [posting help](https://help.producthunt.com/en/articles/479557-how-to-post-a-product).
 
@@ -78,7 +78,7 @@ Check every feature and the offer immediately before use. The house audience is 
 3. Saved fields, pricing, ordered gallery and retained draft comment are recorded below. Adam can personalize the introduction before launch.
 4. The scheduling action was submitted **once** after selecting September 13. Do not submit again merely to recheck it; use the prelaunch dashboard and report its actual state.
 5. At launch, open the public product page and its Visit destination. Adam responds to real questions; ask for product feedback, never votes. No paid hunters, voting rings or unsolicited mass messages. [Community guidelines](https://help.producthunt.com/en/articles/3615694-community-guidelines).
-6. If moderation or another platform dependency changes the scheduled state, record it and resolve it through the existing account. The first-Sunday website/X launch remains independent of Product Hunt approval or featuring.
+6. If moderation or another platform dependency changes the scheduled state, record it and resolve it through the existing account. The September 20 campaign remains subject to current App Store availability and verified public launch state before promotion.
 
 | Item | Actual receipt |
 |---|---|

@@ -1,12 +1,14 @@
 # Gary launch operating plan
 
-September 4, updated September 8, 2026. Accountable owner: Adam. This replaces the offer, dates, channel assumptions and execution status in the September 1 launch plan. The implementation handoff records deployment and submission evidence; this document defines the operating decisions.
+**September 12 update:** Launch postponed to **September 20, 2026**. Product Hunt is saved for **3:01 AM Eastern** that day. Hold remaining launch announcements and campaign publication until September 20; verify App Store availability before promotion. Rehearsal moves to September 19. [Saved schedule and scope](LAUNCH_POSTPONEMENT_2026-09-12.md).
+
+September 4, updated September 12, 2026. Accountable owner: Adam. This replaces the offer, dates, channel assumptions and execution status in the September 1 launch plan. The implementation handoff records deployment and submission evidence; this document defines the operating decisions.
 
 ## Execution and review
 
 The six workstreams have an explicit completion scorecard in [the September 8 execution review](EXECUTION_REVIEW_2026-09-08.md). Implementation is not audience validation. Codex handles authorized implementation, verification and analysis during active work; Adam supplies account access, founder footage and human contact decisions. The [personal-tracking pilot](PERSONAL_TRACKING_PILOT.md) must produce real observations before the integration spending gate is met.
 
-The [September 13 completion tracker](LAUNCH_COMPLETION_TRACKER.md) lists owners, deadlines and real completion receipts. The [Product Hunt packet](PRODUCT_HUNT_PACKET.md) records the existing account/draft and verified September 13 schedule; scheduled is not launched or approved. The [Reddit playbook](REDDIT_PLAYBOOK.md) records verified signup email and the remaining password/account handoff, not a completed account or published post. This runbook remains authoritative for the offer and operating cadence.
+The [September 20 completion tracker](LAUNCH_COMPLETION_TRACKER.md) lists owners, deadlines and real completion receipts. The [Product Hunt packet](PRODUCT_HUNT_PACKET.md) records the existing account/draft and verified September 20 schedule; scheduled is not launched or approved. The [Reddit playbook](REDDIT_PLAYBOOK.md) records verified signup email and the remaining password/account handoff, not a completed account or published post. This runbook remains authoritative for the offer and operating cadence.
 
 Native availability facts come from the dated release-owner evidence and official Apple receipts recorded in the current execution review. A prepared binary or TestFlight notice does not establish public App Store availability; reconcile that separately before promotion.
 
@@ -29,19 +31,19 @@ Winners and Insights can become a clearer combined experience later. Do not anno
 | Window | Deliverable | Evidence before promotion |
 |---|---|---|
 | September 4–8 | Privacy, consent, review notes, storefront purchase behavior, unified offer, useful-session measurement, X reliability fixes | Passing relevant checks; deployed web/backend; correct uploaded binary and live App Store disclosures |
-| September 5–12 | Four prepared product pieces, used at selected times alongside existing game publishing | Working destination, final copy and artwork review; accurate feature availability that day |
+| September 5–19 | Four prepared product pieces, used at selected times alongside existing game publishing | Working destination, final copy and artwork review; accurate feature availability that day |
 | September 9 | Normal NFL kickoff publishing | Actual published pregame pick; scheduled poster healthy |
-| September 13 | First-Sunday marketing launch and founder introduction | Available app/site features; current release state; no promise that an unapproved binary is available |
-| September 14–30 | Weekly acquisition/return review and conversations with willing adult users | Counts with observation windows and consent exclusions; recorded user feedback |
+| September 20 | Marketing launch and founder introduction | Available app/site features; current release state; no promise that an unapproved binary is available |
+| September 21–30 | Weekly acquisition/return review and conversations with willing adult users | Counts with observation windows and consent exclusions; recorded user feedback |
 | After audience evidence | Vendor diligence and a small authorized data-import pilot | Demand, economics, data rights, privacy and sandbox acceptance criteria in the integration packet |
 
-September 9 kickoff is Patriots at Seattle at 8:20 PM ET. The September 13 marketing date does not determine Apple's release date. [Official game preview](https://www.patriots.com/news/game-preview-patriots-at-seahawks-week-1)
+September 9 kickoff is Patriots at Seattle at 8:20 PM ET. The September 20 marketing date does not determine Apple's release date. [Official game preview](https://www.patriots.com/news/game-preview-patriots-at-seahawks-week-1)
 
-September 8 execution: the first website introduction and single destination reply are [published and pinned on Gary's X profile](https://x.com/BetwithGary/status/2097311939441434809). [Actual copy, image and verification receipt](content/README.md#september-8-publication-receipt). With that first slot now used, the remaining editorial plan is reasoning September 10 and record September 13; Your Book follows in the next ready slot after its live journey is rechecked. This preserves the up-to-three original Gary product pieces per week below. These future slots are not platform schedules; the existing game-paced publisher remains unchanged.
+September 8 execution: the first website introduction and single destination reply are [published and pinned on Gary's X profile](https://x.com/BetwithGary/status/2097311939441434809). [Actual copy, image and verification receipt](content/README.md#september-8-publication-receipt). With that first slot now used, the former September 10 reasoning and September 13 record slots are superseded by the September 12 postponement. Remaining campaign pieces are held until September 20; Your Book follows after its live journey is rechecked. This preserves the up-to-three original Gary product pieces per week below. These future slots are not platform schedules; the existing game-paced publisher remains unchanged.
 
 ## The weekly operating rhythm
 
-Adam owns publication, support and account access until another person is assigned. Code automates the existing game feed. There is no new unattended posting schedule. A daily Codex follow-up is active for 28 runs from September 5 to revisit readiness, evidence and authorized improvements; it reports material changes only.
+Adam owns publication, support and account access until another person is assigned. Code automates the existing game feed. There is no new unattended posting schedule. The existing daily Codex follow-up remains active for readiness work. Its September 12 update holds launch announcements until September 20 and supersedes the September 13 plan; it reports material changes only.
 
 | When | Action | Decision it supports |
 |---|---|---|
