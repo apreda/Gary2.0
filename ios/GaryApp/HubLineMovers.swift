@@ -178,7 +178,7 @@ struct HubLineMoversAside: View {
                 if index > 0 { Spacer(minLength: 6) }
                 Button { onGame(story) } label: {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("\(story.awayAbbr)@\(story.homeAbbr)")
+                        Text("\(story.awayAbbr) @ \(story.homeAbbr)")
                             .hubDataFont(11.5, .semibold)
                             .foregroundStyle(GaryColors.warmWhite)
                             .lineLimit(1).minimumScaleFactor(0.7)

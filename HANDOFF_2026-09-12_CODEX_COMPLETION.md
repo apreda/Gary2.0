@@ -1,5 +1,9 @@
 # September 12 follow-through and remaining gates
 
+Later native/readability follow-up: see `HANDOFF_2026-09-12_FEED_929.md`.
+Signed build 929 supersedes the ready 928 archive below; Apple upload is still
+blocked by Xcode's account session. Earlier backend/Winners decisions remain.
+
 Updated after Adam’s subscription-first and required-window-coverage follow-up.
 This receipt supersedes pending decisions in the earlier September 12 handoffs.
 Adam authorized the work, asked Codex to own Winners selection, reaffirmed June

@@ -917,6 +917,8 @@ struct SignalRow: View {
     /// promise. The Hub passes a handler and gets it once the row has no read
     /// to open.
     var onTap: ((String) -> Void)? = nil
+    /// The day feed sits over the floor grid; its facts need an opaque surface.
+    var contained: Bool = false
     /// Collapsed by default (founder, Sep 3 2026 — the Hub's story rows are
     /// the template): headline + value + chevron.down; a tap opens the read.
     /// Football reads run 450-660 characters, so an always-open row was a
@@ -924,8 +926,11 @@ struct SignalRow: View {
     @State private var expanded = false
 
     var body: some View {
-        Button {
-            if !dedupedDetail.isEmpty {
+        // Normalizing the complete read is relatively expensive. Do it once
+        // for this rendering, rather than again for each disclosure and label.
+        let detail = dedupedDetail
+        return Button {
+            if !detail.isEmpty {
                 withAnimation(.easeInOut(duration: 0.18)) { expanded.toggle() }
             } else {
                 onTap?(s.game)
@@ -940,41 +945,38 @@ struct SignalRow: View {
                     Spacer()
                     Text(s.game.uppercased()).font(GaryFonts.mono(9, bold: false)).tracking(0.6).foregroundStyle(.white.opacity(0.62)).lineLimit(1)
                 }
+                if contained {
+                    // Full-width headlines avoid squeezing a sentence into a
+                    // narrow column beside a large, repeated statistic.
+                    headline
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        metricValue
+                        Spacer(minLength: 6)
+                        if let sample = sampleLabel {
+                            Text(sample).font(GaryFonts.mono(9))
+                                .foregroundStyle(.white.opacity(0.62))
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityLabel("Sample: \(sample)")
+                        }
+                        disclosure(hasDetail: !detail.isEmpty)
+                    }
+                } else {
                 HStack(alignment: .top, spacing: 10) {
                     // The headline is the fact and always shows whole (no
                     // ellipsis, ever); only the read collapses.
-                    Text(s.headline).font(GaryFonts.text(16)).foregroundStyle(.white)
-                        .fixedSize(horizontal: false, vertical: true)
+                    headline
                     // Spark mini-bar removed on the Picks edge rows (user call — the
                     // little 2-bar block read as ambiguous).
                     Spacer(minLength: 6)
                     // Streak values never render — the headline already says
                     // "won 9 straight" and a W9 beside it is the same fact
                     // twice (founder, Aug 14).
-                    if !s.value.isEmpty, s.kind != .streak {
-                        if s.value.contains(where: { $0.isNumber }) {
-                            Text(s.value).font(GaryFonts.mono(20, bold: true)).foregroundStyle(hubValueTint(s))
-                        } else {
-                            Text(s.value).font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(hubValueTint(s))
-                                .padding(.horizontal, 7).padding(.vertical, 3)
-                                .overlay(Capsule().stroke(s.tone.color.opacity(0.28), lineWidth: 1))
-                        }
-                    }
-                    if !dedupedDetail.isEmpty {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.62))
-                            .rotationEffect(.degrees(expanded ? 180 : 0))
-                            .padding(.top, 5)
-                    } else if onTap != nil {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.25))
-                            .padding(.top, 5)
-                    }
+                    metricValue
+                    disclosure(hasDetail: !detail.isEmpty).padding(.top, 5)
                 }
-                if expanded, !dedupedDetail.isEmpty {
-                    Text(dedupedDetail).font(.system(size: 12.5)).foregroundStyle(.white.opacity(0.65))
+                }
+                if expanded, !detail.isEmpty {
+                    Text(detail).font(.system(size: 12.5)).foregroundStyle(.white.opacity(0.65))
                         .lineSpacing(2)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 2)
@@ -983,11 +985,73 @@ struct SignalRow: View {
                     ConfirmedXISheetView(meta: xi)
                 }
             }
-            .padding(.vertical, 11)
+            .padding(.vertical, contained ? 12 : 11)
+            .padding(.horizontal, contained ? 12 : 0)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .overlay(Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1), alignment: .bottom)
+        .background {
+            if contained {
+                RoundedRectangle(cornerRadius: 12).fill(GaryColors.panelFillOpaque)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if contained {
+                RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.08), lineWidth: 1)
+            } else {
+                Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+            }
+        }
+        .accessibilityValue(detail.isEmpty ? "" : (expanded ? "Expanded" : "Collapsed"))
+    }
+
+    private var headline: some View {
+        Text(s.headline).font(GaryFonts.text(16)).foregroundStyle(.white)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Show the measured sample before a tap, especially on one-game college
+    /// slates. The provider's season keeps a prior-year baseline explicit.
+    private var sampleLabel: String? {
+        guard s.league == .nfl || s.league == .ncaaf,
+              let meta = s.lane,
+              ["balldontlie_team_stats", "balldontlie_team_stats_opponents"].contains(meta.source ?? ""),
+              let season = meta.season?.display, !season.isEmpty,
+              let away = meta.away?.games, away > 0,
+              let home = meta.home?.games, home > 0 else { return nil }
+        func games(_ count: Int) -> String { "\(count) game\(count == 1 ? "" : "s")" }
+        if away == home { return "\(season) · \(games(away)) each" }
+        guard let a = meta.away?.abbreviation, let h = meta.home?.abbreviation else { return nil }
+        return "\(season) · \(a) \(games(away)) · \(h) \(games(home))"
+    }
+
+    @ViewBuilder private var metricValue: some View {
+        if !s.value.isEmpty, s.kind != .streak {
+            if s.value.contains(where: { $0.isNumber }) {
+                Text(s.value).font(GaryFonts.mono(contained ? 16 : 20, bold: true))
+                    .foregroundStyle(hubValueTint(s))
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text(s.value).font(GaryFonts.mono(8.5, bold: true)).tracking(1)
+                    .foregroundStyle(hubValueTint(s))
+                    .padding(.horizontal, 7).padding(.vertical, 3)
+                    .overlay(Capsule().stroke(s.tone.color.opacity(0.28), lineWidth: 1))
+            }
+        }
+    }
+
+    @ViewBuilder private func disclosure(hasDetail: Bool) -> some View {
+        if hasDetail {
+            Image(systemName: "chevron.down")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.white.opacity(0.62))
+                .rotationEffect(.degrees(expanded ? 180 : 0))
+        } else if onTap != nil {
+            Image(systemName: "chevron.right")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.25))
+        }
     }
 }
 

@@ -53,7 +53,7 @@ const METRICS = Object.freeze([
     short: '%',
     decimals: 1,
     threshold: { nfl: 5, ncaaf: 6 },
-    headline: (leader, gap) => `${leader} gets off the field on third down ${gap}% more often`,
+    headline: (leader, gap) => `${leader} allows a third-down conversion rate ${gap} percentage points lower`,
   }),
   Object.freeze({
     // The opponent's giveaways are this defense's takeaways — the other half of
@@ -75,7 +75,7 @@ const METRICS = Object.freeze([
     decimals: 1,
     leagues: new Set(['nfl']),
     threshold: { nfl: 10 },
-    headline: (leader, gap) => `${leader} holds red-zone trips to a score ${gap}% less often`,
+    headline: (leader, gap) => `${leader} allows a red-zone scoring rate ${gap} percentage points lower`,
   }),
   Object.freeze({
     key: 'sacksPerGame',
@@ -217,7 +217,7 @@ export async function computeFootballDefensiveEdges(ctx) {
           `${teamName(homeTeam)} is at ${homeText}${pct} over ${sampleWord(homeAllowed.games)}. ` +
           `Those come from the opposing team boxes in the games each side has already played this ${season} season, through ${through}.`,
         game: helpers.gameLabel(game),
-        value: metric.short === '%' ? `${gapText}%` : `${gapText} ${metric.short}`,
+        value: metric.short === '%' ? `${gapText} PP` : `${gapText} ${metric.short}`,
         tone: TONES.EDGE,
         relevance_score: Math.min(90, Math.round(50 + (gap / (metric.threshold?.[league] || 1)) * 10)),
         team_id: leaderTeam.id,

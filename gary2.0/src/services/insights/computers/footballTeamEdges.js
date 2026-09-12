@@ -90,7 +90,7 @@ const METRICS = Object.freeze([
     decimals: 1,
     better: 'high',
     threshold: { nfl: 5, ncaaf: 6 },
-    headline: (leader, gap) => `${leader} converts third downs at a +${gap}% clip`,
+    headline: (leader, gap) => `${leader}'s third-down conversion rate is ${gap} percentage points higher`,
   }),
   Object.freeze({
     key: 'possessionSecondsPerGame',
@@ -115,7 +115,7 @@ const METRICS = Object.freeze([
     better: 'high',
     leagues: new Set(['nfl']),
     threshold: { nfl: 8 },
-    headline: (leader, gap) => `${leader} scores on +${gap}% more of its red-zone trips`,
+    headline: (leader, gap) => `${leader}'s red-zone scoring rate is ${gap} percentage points higher`,
   }),
   Object.freeze({
     key: 'redZoneTripsPerGame',
@@ -143,7 +143,7 @@ const METRICS = Object.freeze([
     key: 'fourthDownAttemptsPerGame',
     category: 'coaching',
     label: 'fourth-down attempts per game',
-    short: 'GOES',
+    short: 'ATT/G',
     decimals: 2,
     better: 'high',
     threshold: { nfl: 0.6, ncaaf: 0.8 },
@@ -157,7 +157,7 @@ const METRICS = Object.freeze([
     decimals: 1,
     better: 'high',
     threshold: { nfl: 15, ncaaf: 18 },
-    headline: (leader, gap) => `${leader} converts fourth downs at a +${gap}% clip`,
+    headline: (leader, gap) => `${leader}'s fourth-down conversion rate is ${gap} percentage points higher`,
   }),
   Object.freeze({
     key: 'firstDownsPerGame',
@@ -364,7 +364,9 @@ export async function computeFootballTeamEdges(ctx) {
             ? `Those are ${sample.season} regular-season team-game results; the ${season} season has no finals for these clubs yet.`
             : `Those are current-${season} team-game results through ${through}.`),
         game: helpers.gameLabel(game),
-        value: metric.short === '%' ? `${gapText}%` : `${gapText} ${metric.short}`,
+        // Subtracting two percentages produces percentage points, not a
+        // conversion rate or a relative percentage increase.
+        value: metric.short === '%' ? `${gapText} PP` : `${gapText} ${metric.short}`,
         tone: TONES.EDGE,
         relevance_score: relevance(metric, gap, league),
         team_id: leader.team.id,

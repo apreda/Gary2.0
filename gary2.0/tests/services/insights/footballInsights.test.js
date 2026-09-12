@@ -569,6 +569,42 @@ describe('football generator registration and row contract', () => {
     expect(result.connections.some((row) => /SP\+|FPI|EPA|havoc/i.test(`${row.headline} ${row.detail}`))).toBe(false);
   });
 
+  it('labels offensive and defensive rate differences as percentage points, retaining actual rates and samples', async () => {
+    bdl.getGames.mockResolvedValue([nflSlateGame]);
+    bdl.getTeamStats.mockResolvedValue([
+      teamBox(away, { third_down_conversions: 8, third_down_attempts: 10,
+        fourth_down_conversions: 3, fourth_down_attempts: 4,
+        red_zone_scores: 4, red_zone_attempts: 5 }),
+      teamBox(home, { third_down_conversions: 4, third_down_attempts: 10,
+        fourth_down_conversions: 0, fourth_down_attempts: 2,
+        red_zone_scores: 2, red_zone_attempts: 5 }),
+    ]);
+    const { computeFootballTeamEdges } = await import('../../../src/services/insights/computers/footballTeamEdges.js');
+    const { computeFootballDefensiveEdges } = await import('../../../src/services/insights/computers/footballDefensiveEdges.js');
+    const context = { date: '2026-09-10', league: 'NFL', season: 2026, bdl,
+      games: [{ ...nflSlateGame, away_team: away }],
+      helpers: { gameLabel: () => 'BUF @ MIA' } };
+    // Exercise each computed rate before the feed's category/dedup display cap.
+    const connections = [...await computeFootballTeamEdges(context), ...await computeFootballDefensiveEdges(context)];
+    const byMetric = metric => connections.find(row => row.meta?.metric === metric);
+    const offense = byMetric('thirdDownPct');
+    expect(offense.value).toBe('40 PP'); // 80% - 40%, neither 40% nor a relative 100%.
+    expect(offense.headline).toContain('40 percentage points higher');
+    expect(offense.detail).toContain('80%');
+    expect(offense.detail).toContain('40%');
+    expect(offense.meta.away).toMatchObject({ value: 80, games: 1 });
+    expect(offense.meta.home).toMatchObject({ value: 40, games: 1 });
+    const defense = byMetric('allowed_thirdDownPct');
+    expect(defense.value).toBe('40 PP');
+    expect(defense.headline).toContain('40 percentage points lower');
+    expect(defense.meta.away.value).toBe(40);
+    expect(defense.meta.home.value).toBe(80);
+    expect(byMetric('fourthDownPct').value).toBe('75 PP');
+    expect(byMetric('redZonePct').value).toBe('40 PP');
+    expect(byMetric('allowed_redZonePct').value).toBe('40 PP');
+    expect(byMetric('fourthDownAttemptsPerGame').value).toBe('2 ATT/G');
+  });
+
   it('keeps a new-season NCAAF slate honest when current-season stats are absent', async () => {
     bdl.getGames.mockResolvedValue([{
       id: 457157,

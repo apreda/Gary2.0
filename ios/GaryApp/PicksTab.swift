@@ -92,7 +92,11 @@ struct EdgesSection: View {
                 if tabbed && kinds.count > 1 { categoryTabBar }
                 // (The ledger no longer renders from a list — it owns its own
                 // section on the game page, GameH2HSection.)
-                VStack(spacing: 0) { ForEach(shown) { SignalRow(s: $0) } }
+                // College slates can carry hundreds of observations. Build and
+                // lay out rows as they approach the viewport, not the whole day.
+                LazyVStack(spacing: tabbed ? 8 : 0) {
+                    ForEach(shown) { SignalRow(s: $0, contained: tabbed) }
+                }
                     .pageGutter()
             }
         }
@@ -1429,7 +1433,7 @@ struct PicksCarouselView: View {
                 content
             }
         }
-
+        .environment(\.solidPanels, sport == "NCAAF")
         .task {
             await store.loadIfNeeded()
             rebuildMemo()          // build the memo before consumeFocus reads `games`
@@ -1491,7 +1495,7 @@ struct PicksCarouselView: View {
         .onChange(of: scenePhase) { phase in
             // Foreground → silently re-pull picks/props (the spinner is gated by
             // !hasContent, so existing data stays put while fresh rows load underneath).
-            if phase == .active { Task { await refreshRollingPicks() } }
+            if phase == .active, selectedTab == 3 { Task { await refreshRollingPicks() } }
         }
         .onChange(of: selectedTab) { tab in
             guard tab == 3, scenePhase == .active else { return }
@@ -1708,6 +1712,7 @@ struct PicksCarouselView: View {
                 .tag(0)
                 ForEach(Array(games.enumerated()), id: \.offset) { idx, g in
                     ScrollView(showsIndicators: false) {
+                        DeferredPicksPage {
                         PicksGamePage(group: g,
                                       // MLB HR is a HOME-RUN props lane — never show the game's
                                       // side/total pick there, only the HR bets. On Yesterday,
@@ -1734,6 +1739,7 @@ struct PicksCarouselView: View {
                                       onSeeYesterday: { withAnimation(.easeInOut(duration: 0.25)) { pickDay = .yesterday; page = 0 } },
                                       pageLeagueHint: league(for: g))
                             .padding(.bottom, 130)
+                        }
                     }
                     .refreshable { await refreshRollingPicks() }
                     .clipped()
@@ -2322,6 +2328,14 @@ struct PicksCarouselView: View {
         if !successful.isEmpty, !connLoaded { connLoaded = true }
     }
 
+}
+
+/// Creating the carousel's lightweight page list must not eagerly resolve
+/// every game's picks, grades and scout inputs. SwiftUI requests this content
+/// when the page controller mounts the page (including its swipe neighbours).
+private struct DeferredPicksPage<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+    var body: some View { content() }
 }
 
 struct PicksTodayPage: View {
