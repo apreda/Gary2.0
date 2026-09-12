@@ -65,8 +65,24 @@
     "Apple/Xcode account access and current review/build reconciliation",
     "June engine / no-xERA direction conflict",
     "One uncertain X publication requires receipt reconciliation before any retry",
-    "Auth/Cloud configuration checks and launch rehearsal"
+    "Auth/Cloud configuration checks and launch rehearsal",
+    "Five website dependency alerts require applicability review, patching and deployment verification"
   ],
   "claude_message_sent": false,
-  "evidence_directory": "/Users/adam.preda/Documents/ChatGPT/Gary/claude-handoff-2026-09-12"
+  "evidence_directory": "/Users/adam.preda/Documents/ChatGPT/Gary/claude-handoff-2026-09-12",
+  "github_dependency_alerts": {
+    "open": 5,
+    "critical": 2,
+    "high": 1,
+    "medium": 2,
+    "numbers": [
+      102,
+      103,
+      104,
+      105,
+      106
+    ],
+    "manifest": "web/package-lock.json",
+    "remediated_this_pass": false
+  }
 }

@@ -4,7 +4,7 @@ Read /Users/adam.preda/Gary2.0/HANDOFF_2026-09-12_CLAUDE_FABLE_5_1.md in full fi
 
 Adam has authorized committing/pushing completed work, TestFlight/App Review submission, and the Apple expedite/email follow-up. All source through 571ef2c9 was already pushed. Build 927 now has a verified signed archive at /Volumes/KINGSTON/Gary-2.25-927-Handoff.xcarchive, but upload failed because Xcode could not use its Apple account. Both browser sessions also need Apple sign-in. Read the final September 12 release receipt before uploading, rebuilding or withdrawing anything.
 
-Apple support case 102957999956 received a corrected follow-up from the membership email apreda31@gmail.com on September 12. Do not duplicate it. The handoff also records one uncertain X send requiring receipt reconciliation, the restored June engine's xERA conflict, remaining configuration checks, the October offer, all marketing assets and operational commands.
+Apple support case 102957999956 received a corrected follow-up from the membership email apreda31@gmail.com on September 12. Do not duplicate it. The handoff also records one uncertain X send requiring receipt reconciliation, the restored June engine's xERA conflict, five open website dependency alerts (including two critical Next.js advisories), remaining configuration checks, the October offer, all marketing assets and operational commands.
 
 Preserve the private Firebase plist and SecretsLocal.swift without reading or committing them; do not replay the old WIP checkpoint. Use current runtime observations over stale model prose: Sol games/MLB and Luna props. Preserve immutable tickets/results, user privacy and protected injury/NBA behavior.
 

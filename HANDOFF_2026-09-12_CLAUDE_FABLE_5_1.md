@@ -130,6 +130,20 @@ Read `GaryMarketing/launch-2026-09/LAUNCH_RUNBOOK.md`, `LAUNCH_COMPLETION_TRACKE
 
 No new marketing campaign, vendor message, user invitation or purchase was made in this pass. The already authorized Apple follow-up is recorded above.
 
+## Open website dependency alerts discovered on the final push
+
+A fresh authenticated GitHub alert read on September 12 returned five open alerts against \`web/package-lock.json\`:
+
+| Alert | Package | GitHub severity | First patched version reported |
+|---|---|---|---|
+| [105](https://github.com/apreda/Gary2.0/security/dependabot/105) | next | Critical: AVIF image-optimization remote-code-execution advisory | 16.3.3 |
+| [104](https://github.com/apreda/Gary2.0/security/dependabot/104) | next | Critical: Windows-hosted-server remote-code-execution advisory | 16.3.3 |
+| [106](https://github.com/apreda/Gary2.0/security/dependabot/106) | sharp | High: bundled libheif vulnerabilities | 0.35.4 |
+| [103](https://github.com/apreda/Gary2.0/security/dependabot/103) | vitest | Medium: mock redirect path traversal / arbitrary file read | 4.1.11 |
+| [102](https://github.com/apreda/Gary2.0/security/dependabot/102) | @vitest/mocker | Medium: same mock redirect advisory | 4.1.11 |
+
+These are actual open dependency alerts, not proof of exploitation or a completed assessment of production applicability. The Windows-specific condition must not be assumed to describe Vercel. Assess the official advisories, update the affected dependencies/lockfile, run the required web checks and verify the production deployment. This is urgent website launch work; this pass did not change dependencies or dismiss alerts. It is separate from Apple's native review and the Xcode account issue.
+
 ## Verification and immediate continuation
 
 This pass ran **39 tests across six suites**, all passing: June source contracts, cost tracking/levers, Home rendering, Home lifecycle, and actual stale-response/account-ownership behavior. The signed Release archive also passed. These checks do not constitute a fresh every-page audit or proof the app is bug-free.
@@ -152,6 +166,6 @@ Immediate work:
 2. Continue Apple case 102957999956 from the membership email; wait for an actual response before claiming expedition.
 3. Reconcile the uncertain X publication from receipts, without duplicate posting.
 4. Resolve the June/xERA conflict and recheck remaining Auth/Cloud configuration through supported access.
-5. Rehearse current Book and campaign destinations, refresh matured funnel evidence, and verify the September 13 launch packet.
+5. Address the open website dependency alerts, verify the deployment, rehearse Book/campaign destinations, refresh matured funnel evidence, and verify the September 13 launch packet.
 
 Local evidence: `/Users/adam.preda/Documents/ChatGPT/Gary/claude-handoff-2026-09-12/`. The committed release receipt carries the final bounded outcomes. This is a written handoff for Adam to provide to Claude; no new Claude session or message delivery is implied.
