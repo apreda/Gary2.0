@@ -4,9 +4,10 @@
 // gemini-3-flash-preview (GEMINI_FLASH_MODEL), fallback brain
 // GEMINI_PRO_FALLBACK. The same three roles, June's names kept so the June
 // code reads unchanged, filled by the models the house runs today.
-import { MLB_JUNE_BRAIN_MODEL, GAME_RESEARCH_MODEL, DESK_FALLBACK_MODELS } from '../orchestrator/orchestratorConfig.js';
+import { MLB_JUNE_BRAIN_MODEL, DESK_FALLBACK_MODELS } from '../orchestrator/orchestratorConfig.js';
+import { JUNE_RESEARCH_MODELS } from '../orchestrator/juneResearchSession.js';
 export const GEMINI_PRO_MODEL = MLB_JUNE_BRAIN_MODEL;
-export const GEMINI_FLASH_MODEL = GAME_RESEARCH_MODEL;
+export const GEMINI_FLASH_MODEL = JUNE_RESEARCH_MODELS[0];
 export const GEMINI_PRO_FALLBACK = DESK_FALLBACK_MODELS.find((m) => m !== MLB_JUNE_BRAIN_MODEL) || MLB_JUNE_BRAIN_MODEL;
 export const ALLOWED_GEMINI_MODELS = [GEMINI_PRO_MODEL, GEMINI_FLASH_MODEL, GEMINI_PRO_FALLBACK];
 export function validateGeminiModel(model) { return model; }

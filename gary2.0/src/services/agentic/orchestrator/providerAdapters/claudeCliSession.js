@@ -26,6 +26,8 @@
  * a capped subscription degrades to pennies, never to a dark slate.
  */
 import { spawn } from 'child_process';
+import { requestSignal, abortError } from '../requestCancellation.js';
+import { registerOwnedProcessGroup } from './ownedProcessGroups.js';
 import { mkdirSync, writeFileSync, unlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -65,12 +67,12 @@ const BRAIN_DISALLOWED_TOOLS = 'Task,Bash,Glob,Grep,Read,Edit,Write,MultiEdit,No
 // max ("sonnet is the one — but then we need max reasoning") — its separate
 // weekly bucket makes the extra depth free.
 const CLI_EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
-const effortFor = (modelName, thinkingLevel, { research = false } = {}) => {
+const effortFor = (modelName, thinkingLevel, { research = false, researchEffort = null } = {}) => {
   // The research assistant's factor turns run at the level the researcher
   // asks for (high): eight factors, two or three turns each, inside one
   // 20-minute budget. The pins below are the brain's bar.
   if (research) {
-    const level = process.env.GARY_RESEARCH_EFFORT || 'medium';
+    const level = researchEffort || process.env.GARY_RESEARCH_EFFORT || 'medium';
     return CLI_EFFORT_LEVELS.has(level) ? level : 'medium';
   }
   if (String(modelName).includes('sonnet')) return 'max';
@@ -86,36 +88,50 @@ export function isClaudeCliModel(modelName) {
   return typeof modelName === 'string' && modelName.startsWith('claude');
 }
 
-function runClaude(args, stdinText, timeoutMs = CALL_TIMEOUT_MS, breakerKey = 'claude') {
-  // A bridge that has already timed out repeatedly this run is not asked again.
-  // The breaker is keyed per LANE: a research session's timeouts never count
-  // against the brain, and a slow grounding search never darkens a pick.
+function runClaude(args, stdinText, timeoutMs = CALL_TIMEOUT_MS, breakerKey = 'claude', explicitSignal) {
+  const signal = requestSignal(explicitSignal);
+  signal?.throwIfAborted();
   if (isCliTripped(breakerKey)) return Promise.reject(trippedError(breakerKey));
   return new Promise((resolve, reject) => {
-    // The claude CLI prefers ANTHROPIC_API_KEY over the founder's subscription
-    // login when the env var is present. The key entered .env on Aug 18 for the
-    // June-engine researcher (which reads process.env in-process) — every CLI
-    // child MUST NOT see it, or the $0 sub bridge silently bills the API key
-    // (caught Aug 18: props desk burned real credits all evening).
     const env = { ...process.env };
     delete env.ANTHROPIC_API_KEY;
-    const proc = spawn(CLAUDE_BIN, args, { stdio: ['pipe', 'pipe', 'pipe'], cwd: neutralCwd(), env });
-    let stdout = '';
-    let stderr = '';
-    const timer = setTimeout(() => {
-      proc.kill('SIGTERM');
-      recordCliTimeout(breakerKey);
-      reject(new Error(`claude CLI timed out after ${Math.round(timeoutMs / 60000)}m`));
-    }, timeoutMs);
-    proc.stdout.on('data', (d) => { stdout += d.toString(); });
-    proc.stderr.on('data', (d) => { stderr += d.toString(); });
-    proc.on('error', (e) => { clearTimeout(timer); recordCliSuccess(breakerKey); reject(e); });
-    proc.on('close', (code) => {
-      clearTimeout(timer);
-      // Any answer at all — even a non-zero exit — means the bridge is alive.
+    const processGroup = process.platform !== 'win32';
+    const proc = spawn(CLAUDE_BIN, args, { stdio: ['pipe', 'pipe', 'pipe'], cwd: neutralCwd(), env, detached: processGroup });
+    const releaseGroup = processGroup ? registerOwnedProcessGroup(proc.pid) : () => {};
+    let stdout = '', stderr = '', settled = false, timer;
+    const kill = (kind) => {
+      if (!proc.pid) return;
+      try { if (processGroup) process.kill(-proc.pid, kind); else proc.kill(kind); }
+      catch (error) { if (error.code !== 'ESRCH') console.warn(`[Claude CLI] Could not terminate request: ${error.message}`); }
+    };
+    const cleanup = () => { clearTimeout(timer); signal?.removeEventListener('abort', onAbort); };
+    const fail = (error, terminate = false, timedOut = false) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (timedOut) recordCliTimeout(breakerKey);
+      if (terminate) {
+        kill('SIGTERM');
+        setTimeout(() => { kill('SIGKILL'); releaseGroup(); }, 1000).unref();
+      } else releaseGroup();
+      reject(error);
+    };
+    const onAbort = () => fail(signal.reason || abortError('Claude request cancelled'), true);
+    timer = setTimeout(() => fail(new Error(`claude CLI timed out after ${Math.round(timeoutMs / 60000)}m`), true, true), timeoutMs);
+    signal?.addEventListener('abort', onAbort, { once: true });
+    proc.stdout.on('data', d => { stdout += d.toString(); });
+    proc.stderr.on('data', d => { stderr += d.toString(); });
+    proc.on('error', e => fail(e));
+    proc.stdin.on('error', e => fail(e, true));
+    proc.on('close', code => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      releaseGroup();
       recordCliSuccess(breakerKey);
       resolve({ code, stdout, stderr });
     });
+    if (signal?.aborted) { onAbort(); return; }
     proc.stdin.write(stdinText);
     proc.stdin.end();
   });
@@ -167,6 +183,8 @@ export async function createClaudeCliSession(options = {}) {
     provider: 'claude-cli',
     modelName,
     thinkingLevel,
+    researchEffort: options.researchEffort || null,
+    signal: requestSignal(options.signal),
     breakerKey,
     // GARY READS THE WEB (founder, Sep 9 2026: "I trust Gary to go to the
     // internet and do some research and reading"): the CLI's own WebSearch and
@@ -190,6 +208,8 @@ export function resetClaudeCliSessionChat(session, seedHistory = []) {
 }
 
 export async function sendToClaudeCliSession(session, message, options = {}) {
+  const signal = requestSignal(options.signal, session.signal);
+  signal?.throwIfAborted();
   const startTime = Date.now();
   const research = session.breakerKey === 'claude-research';
   // Tools mode: the caller's function responses ride as one TOOL RESULTS turn.
@@ -197,12 +217,11 @@ export async function sendToClaudeCliSession(session, message, options = {}) {
     ? formatCliFunctionResponses(message)
     : (typeof message === 'string' ? message : JSON.stringify(message));
   let body = session._seedText ? `${session._seedText}\n\n${text}` : text;
-  session._seedText = null;
 
   const disallowed = session.browse
     ? BRAIN_DISALLOWED_TOOLS.split(',').filter((t) => !['WebSearch', 'WebFetch', 'WebSearchTool'].includes(t)).join(',')
     : BRAIN_DISALLOWED_TOOLS;
-  const args = ['-p', '--model', session.modelName, '--effort', effortFor(session.modelName, session.thinkingLevel, { research }), '--output-format', 'json', '--disallowedTools', disallowed];
+  const args = ['-p', '--model', session.modelName, '--effort', effortFor(session.modelName, session.thinkingLevel, { research, researchEffort: session.researchEffort }), '--output-format', 'json', '--disallowedTools', disallowed];
   if (session.claudeSessionId) {
     args.push('--resume', session.claudeSessionId);
   } else if (session._systemPrompt && research) {
@@ -214,7 +233,7 @@ export async function sendToClaudeCliSession(session, message, options = {}) {
   }
   if (session.browse) args.push('--allowedTools', 'WebSearch', 'WebFetch');
 
-  const { code, stdout, stderr } = await runClaude(args, body, CALL_TIMEOUT_MS, session.breakerKey || 'claude');
+  const { code, stdout, stderr } = await runClaude(args, body, CALL_TIMEOUT_MS, session.breakerKey || 'claude', signal);
   const duration = Date.now() - startTime;
   if (code !== 0) {
     const error = toError(code, stdout, stderr);
@@ -231,6 +250,7 @@ export async function sendToClaudeCliSession(session, message, options = {}) {
   }
   if (data.is_error) throw toError(code, data.result || stdout, stderr);
 
+  session._seedText = null;
   session.claudeSessionId = data.session_id || session.claudeSessionId;
 
   const usage = {
@@ -247,6 +267,7 @@ export async function sendToClaudeCliSession(session, message, options = {}) {
   const toolCalls = session.tools ? parseCliToolCalls(content, { idPrefix: 'claude_call' }) : null;
   return {
     content: toolCalls ? null : content,
+    transcriptText: content,
     toolCalls,
     finishReason: toolCalls ? 'tool_calls' : 'stop',
     usage,
@@ -326,7 +347,7 @@ export async function claudeCliWebSearch(prompt, options = {}) {
     // Its own breaker lane (Sep 9 2026): two slow press searches tripped the
     // shared 'claude' breaker and disabled the BRAIN for the rest of the NFL
     // rehearsal. A search lane's timeouts are never evidence about the pick.
-    const { code, stdout, stderr } = await runClaude(args, prompt, options.timeoutMs || 5 * 60 * 1000, 'claude-search');
+    const { code, stdout, stderr } = await runClaude(args, prompt, options.timeoutMs || 5 * 60 * 1000, 'claude-search', options.signal);
     if (code !== 0) throw toError(code, stdout, stderr);
     const data = JSON.parse(stdout);
     if (data.is_error) throw toError(code, data.result || stdout, stderr);
@@ -334,6 +355,7 @@ export async function claudeCliWebSearch(prompt, options = {}) {
     console.log(`[Web Search] claude-cli (${model}) returned ${text.length} chars (subscription)`);
     return { success: text.length > 0, data: text, raw: data };
   } catch (e) {
+    requestSignal(options.signal)?.throwIfAborted();
     console.warn(`[Web Search] claude-cli failed: ${e.message}`);
     return { success: false, data: '', raw: null, error: e.message };
   }

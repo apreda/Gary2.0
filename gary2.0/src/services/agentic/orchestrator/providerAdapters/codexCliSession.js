@@ -255,6 +255,7 @@ export async function createCodexCliSession(options = {}) {
     provider: 'codex-cli',
     modelName,
     thinkingLevel,
+    researchEffort: options.researchEffort || null,
     breakerKey,
     // GARY READS THE WEB (founder, Sep 9 2026): native web search stays on
     // for this thread; the sandbox stays read-only.
@@ -289,7 +290,6 @@ export async function sendToCodexCliSession(session, message, options = {}) {
     ? formatCodexFunctionResponses(message)
     : (typeof message === 'string' ? message : JSON.stringify(message));
   let body = session._seedText ? `${session._seedText}\n\n${text}` : text;
-  session._seedText = null;
 
   let args;
   if (session.codexThreadId) {
@@ -303,7 +303,7 @@ export async function sendToCodexCliSession(session, message, options = {}) {
       // pick: they run at GARY_RESEARCH_EFFORT (default medium) so eight
       // factors fit one budget and one login's allowance (Sep 9 2026 — Luna
       // at high spent 75-440 s a turn and timed out 28 of 30 games).
-      '-c', `model_reasoning_effort="${effortFor(session.breakerKey === 'codex-research' ? (process.env.GARY_RESEARCH_EFFORT || 'medium') : session.thinkingLevel)}"`,
+      '-c', `model_reasoning_effort="${effortFor(session.breakerKey === 'codex-research' ? (session.researchEffort || process.env.GARY_RESEARCH_EFFORT || 'medium') : session.thinkingLevel)}"`,
       ...(session.browse ? ['-c', 'tools.web_search=true'] : []),
       '-',
     ];
@@ -324,6 +324,7 @@ export async function sendToCodexCliSession(session, message, options = {}) {
   }
   const duration = Date.now() - startTime;
   const { threadId, text: content, usage: rawUsage, stdout, home } = turn;
+  session._seedText = null;
   session.codexHome = home || session.codexHome || '';
   session.codexThreadId = threadId || session.codexThreadId;
 
@@ -340,6 +341,7 @@ export async function sendToCodexCliSession(session, message, options = {}) {
   const toolCalls = session.tools ? parseCodexToolCalls(content) : null;
   return {
     content: toolCalls ? null : content,
+    transcriptText: content,
     toolCalls,
     finishReason: toolCalls ? 'tool_calls' : 'stop',
     usage,

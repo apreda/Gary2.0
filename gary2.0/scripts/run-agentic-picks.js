@@ -114,27 +114,21 @@ try {
 // JUNE ENGINE (MLB) — Aug 18 2026 restoration (founder GO after the ledger
 // post-mortem: June +26u/58% on the agentic engine, negative every week since
 // the Jul 22-26 pickdesk cutover). MLB game picks return to the orchestrator:
-// scout report → Haiku research briefing (checklist, hard-fail) → Sol brain
+// scout report → subscription research briefing (checklist, hard-fail) → Sol brain
 // WITH tools → bilateral cases → Pass 2 decision (ML or RL, Gary's choice)
 // → Pass 3 + statAudit. THE lane, unconditionally (founder, Aug 27) —
-// requires ANTHROPIC_API_KEY (researcher) + OPENAI_API_KEY (brain); a
-// missing key fails loudly instead of rerouting to a second system.
+// Research uses Sonnet → Luna subscriptions. Exhaustion stops the game;
+// there is no metered researcher fallback.
 // ═══════════════════════════════════════════════════════════════════════════
 // ONE LANE (founder, Aug 27): MLB runs the June engine unconditionally —
-// no pickdesk fallback. THE RESEARCHER RETURNS (founder GO, Sep 3 2026):
-// the Aug 18 Haiku research briefing runs before Pass 1 again for MLB, so
-// the researcher key is required too; a missing key fails loudly, never
-// silently.
+// no pickdesk fallback. June's original research briefing runs before Pass 1,
+// through Sonnet then Luna subscriptions (founder GO, Sep 12 2026).
 const { GAME_RESEARCH_MODEL } = await import('../src/services/agentic/orchestrator/orchestratorConfig.js');
+const { juneResearchModels } = await import('../src/services/agentic/orchestrator/juneResearchSession.js');
 const researcherOff = String(process.env.GARY_RESEARCHER || 'on').toLowerCase() === 'off';
-const researchKeyOk = researcherOff || GAME_RESEARCH_MODEL.startsWith('codex-') || (GAME_RESEARCH_MODEL.startsWith('anthropic-') ? !!process.env.ANTHROPIC_API_KEY : !!process.env.OPENAI_API_KEY);
-if (!process.env.OPENAI_API_KEY || !researchKeyOk) {
-  console.error(`[JuneEngine] 🚨 REQUIRED API KEY MISSING (${!process.env.OPENAI_API_KEY ? 'OPENAI_API_KEY' : `researcher ${GAME_RESEARCH_MODEL}`}) — MLB picks WILL FAIL loudly until it lands in .env. There is no fallback system.`);
-} else {
-  console.log(`[JuneEngine] ⚾ MLB games run the June engine (brain: ${MLB_JUNE_BRAIN_MODEL}, researcher: ${researcherOff ? 'OFF (GARY_RESEARCHER=off)' : GAME_RESEARCH_MODEL}, model cascade: ${DESK_FALLBACK_MODELS.join(' → ')}).`);
-  console.log(`[Researcher] 🏈 NFL games run the research assistant too (founder, Sep 9 2026); NCAAF stays desk-only with the full data.`);
-  console.log(`[NbaWinningEra] 🏀 NBA games run the Apr 8 2026 winning-era prompts (brain: ${GAME_PICK_MODEL}, researcher: ${researcherOff ? 'OFF (GARY_RESEARCHER=off)' : GAME_RESEARCH_MODEL})`);
-}
+console.log(`[JuneEngine] ⚾ MLB games run the June engine (brain: ${MLB_JUNE_BRAIN_MODEL}, researcher: ${juneResearchModels().join(' → ')} → wait; no API fallback, brain cascade: ${DESK_FALLBACK_MODELS.join(' → ')}).`);
+console.log(`[Researcher] 🏈 NFL games run the research assistant too (founder, Sep 9 2026); NCAAF stays desk-only with the full data.`);
+console.log(`[NbaWinningEra] 🏀 NBA games run the Apr 8 2026 winning-era prompts (brain: ${GAME_PICK_MODEL}, researcher: ${researcherOff ? 'OFF (GARY_RESEARCHER=off)' : GAME_RESEARCH_MODEL})`);
 
 // Era stamp for the restored lane: one hash over the engine's full surface —
 // static prompts AND the dossier-surface files (see junePromptSha.js; the

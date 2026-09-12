@@ -7,6 +7,8 @@ import { _resetCliBreakers, isCliTripped } from '../../../src/services/agentic/o
 import { withRequestSignal } from '../../../src/services/agentic/orchestrator/requestCancellation.js';
 import { createModelSession, sendToSessionWithRetry } from '../../../src/services/agentic/orchestrator/sessionManager.js';
 
+import { createClaudeCliSession, sendToClaudeCliSession } from '../../../src/services/agentic/orchestrator/providerAdapters/claudeCliSession.js';
+
 let processes;
 beforeEach(() => {
   vi.useFakeTimers();
@@ -34,10 +36,10 @@ afterEach(async () => {
 });
 
 describe('bridge cancellation', () => {
-  it('kills only the cancelled invocation group, keeps a hard-kill backstop after wrapper exit, and prevents another send', async () => {
+  it.each([[createCodexCliSession, sendToCodexCliSession], [createClaudeCliSession, sendToClaudeCliSession]])('kills only the cancelled invocation group and prevents another send (%#)', async (create, send) => {
     const controller = new AbortController();
-    const session = await createCodexCliSession({ signal: controller.signal });
-    const task = sendToCodexCliSession(session, 'research');
+    const session = await create({ signal: controller.signal });
+    const task = send(session, 'research');
     const rejected = expect(task).rejects.toMatchObject({ name: 'AbortError' });
     controller.abort();
     await rejected;
@@ -46,7 +48,7 @@ describe('bridge cancellation', () => {
     processes[0].emit('close', 143);
     await vi.advanceTimersByTimeAsync(1000);
     expect(process.kill).toHaveBeenCalledWith(-100000, 'SIGKILL');
-    await expect(sendToCodexCliSession(session, 'late retry')).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(send(session, 'late retry')).rejects.toMatchObject({ name: 'AbortError' });
     expect(mocks.spawn).toHaveBeenCalledTimes(1);
     expect(isCliTripped('codex')).toBe(false);
   });
