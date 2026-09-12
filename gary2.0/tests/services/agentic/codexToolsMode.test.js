@@ -3,15 +3,14 @@
 // function calling, so a session created WITH tools carries the catalog as a
 // JSON call protocol; a {"tool_calls":[…]} reply comes back in the same
 // chat-completions shape the API adapters return, and the caller's function
-// responses ride back as one TOOL RESULTS turn. Brains stay tool-less. The
-// researcher runs Luna on the sub first and falls back to the Aug 18 Haiku
-// researcher if the bridge fails, so a capped sub costs 12 cents, not a pick.
+// responses ride back as one TOOL RESULTS turn. Research now tries Sonnet,
+// then Luna subscription capacity before the paid Haiku fallback (Sep 12).
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { renderCodexToolProtocol, formatCodexFunctionResponses, parseCodexToolCalls, createCodexCliSession } from '../../../src/services/agentic/orchestrator/providerAdapters/codexCliSession.js';
-import { GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL } from '../../../src/services/agentic/orchestrator/orchestratorConfig.js';
+import { GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL } from '../../../src/services/agentic/orchestrator/orchestratorConfig.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const src = (rel) => readFileSync(path.join(__dirname, '../../../src/services/agentic', rel), 'utf8');
@@ -78,9 +77,10 @@ describe('the Codex bridge in tools mode', () => {
     expect(c).toContain('? formatCodexFunctionResponses(message)');
   });
 
-  it('the researcher runs Haiku first and falls back to Luna on the sub', () => {
-    expect(GAME_RESEARCH_MODEL).toBe('anthropic-claude-haiku-4-5');
+  it('the researcher uses Sonnet and Luna subscriptions before paid Haiku', () => {
+    expect(GAME_RESEARCH_MODEL).toBe('claude-sonnet-5');
     expect(GAME_RESEARCH_FALLBACK_MODEL).toBe('codex-gpt-5.6-luna');
+    expect(GAME_RESEARCH_BRIDGE_MODEL).toBe('anthropic-claude-haiku-4-5');
     const loop = src('orchestrator/agentLoop.js');
     expect(loop).toContain('const RESEARCH_MODELS = [GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL]');
     expect(loop).toContain('models: RESEARCH_MODELS,');

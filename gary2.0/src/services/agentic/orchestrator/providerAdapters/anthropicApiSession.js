@@ -138,6 +138,13 @@ export async function sendToAnthropicApiSession(session, message, options = {}) 
   const { isFunctionResponse = false } = options;
   const startTime = Date.now();
 
+  // Roll back an unaccepted turn before a retry. Preserve native tool IDs and
+  // seeded CLI history exactly; otherwise retries append an empty user turn
+  // after consuming the pending results, which the Messages API rejects.
+  const priorState = structuredClone({ messages: session._messages,
+    user: session._pendingUserBlocks, tools: session._pendingToolUses });
+  try {
+
   if (isFunctionResponse) {
     queueFunctionResponses(session, message);
     drainUnansweredCalls(session);
@@ -201,9 +208,6 @@ export async function sendToAnthropicApiSession(session, message, options = {}) 
     const error = new Error(`Anthropic ${res.status}: ${detail || 'request failed'}`);
     error.status = res.status;
     if (res.status === 429 || res.status === 529) error.isQuotaError = true;
-    // The failed user turn stays in _messages; a retry resends it — correct,
-    // since the API never accepted it. The rails' resetSessionChat path covers
-    // the fresh-context case.
     console.error(`[Session] Error after ${duration}ms:`, error.message);
     throw error;
   }
@@ -256,6 +260,12 @@ export async function sendToAnthropicApiSession(session, message, options = {}) 
     usage,
     raw: data,
   };
+  } catch (error) {
+    session._messages = priorState.messages;
+    session._pendingUserBlocks = priorState.user;
+    session._pendingToolUses = priorState.tools;
+    throw error;
+  }
 }
 
 export default { isAnthropicApiModel, createAnthropicApiSession, sendToAnthropicApiSession, resetAnthropicApiSessionChat };

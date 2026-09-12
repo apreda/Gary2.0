@@ -44,7 +44,7 @@ describe.skipIf(!supported)('Winners database contract on isolated local Postgre
       throw new Error(`Could not start isolated Winners Postgres: ${error.stderr?.toString() || error.message}\n${serverLog}`,{cause:error});
     }
     sql(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS; CREATE TABLE public.daily_slate(date text,league text,commence_time timestamptz,bdl_game_id bigint,game_status text,ml_home integer); GRANT SELECT ON public.daily_slate TO service_role;`);
-    for(const name of ['20260904203500_winners_admissions.sql','20260904203650_winners_review_recovery.sql','20260904205218_winners_prop_cohort_reservations.sql','20260908150211_mlb_gary_winners_selection.sql','20260908172215_mlb_winners_review_prerequisites.sql','20260909133844_winners_underdog_admission.sql','20260912133639_winners_daily_curation.sql','20260912133808_winners_curation_review_queue.sql'])sql(readFileSync(new URL(`../../../supabase/migrations/${name}`,import.meta.url),'utf8'));
+    for(const name of ['20260904203500_winners_admissions.sql','20260904203650_winners_review_recovery.sql','20260904205218_winners_prop_cohort_reservations.sql','20260908150211_mlb_gary_winners_selection.sql','20260908172215_mlb_winners_review_prerequisites.sql','20260909133844_winners_underdog_admission.sql','20260912133639_winners_daily_curation.sql','20260912133808_winners_curation_review_queue.sql','20260912143745_winners_required_window_coverage.sql'])sql(readFileSync(new URL(`../../../supabase/migrations/${name}`,import.meta.url),'utf8'));
   },30000);
   afterAll(()=>{if(started)execFileSync(`${bin}/pg_ctl`,['-D',`${directory}/data`,'-m','immediate','-w','stop'],{env:pgEnv,stdio:'ignore'});if(directory)rmSync(directory,{recursive:true,force:true});});
   beforeEach(()=>sql('TRUNCATE public.winners_decision_events,public.winners_board,public.winners_candidates,public.winners_selection_runs,public.winners_curation_runs,public.daily_slate RESTART IDENTITY CASCADE;'));
@@ -247,11 +247,9 @@ describe.skipIf(!supported)('Winners database contract on isolated local Postgre
       expect(plan.slate_count).toBe(45);expect(plan.target).toBe(5);expect(plan.windows).toHaveLength(5);
       expect(plan.windows.reduce((n,w)=>n+w.quota,0)).toBe(5);
     });
-    it('refuses excess early picks, unsupported selections, stale attempts and changed evidence',()=>{
+    it('refuses excess early picks, stale attempts and changed evidence',()=>{
       stage();let r=claim('NFL');
       expect(finish(r,decision(r,3)).completed).toBe(false);
-      sql('TRUNCATE winners_curation_runs RESTART IDENTITY;');r=claim('NFL');
-      expect(finish(r,decision(r,1,'toss_up')).completed).toBe(false);
       sql('TRUNCATE winners_curation_runs RESTART IDENTITY;');r=claim('NFL');
       expect(finish(r,decision(r),99).reason).toContain('Stale');
       sql(`UPDATE winners_candidates SET evidence_snapshot='{}' WHERE id=${r.input_snapshot.candidates[0].id};`);
@@ -267,10 +265,79 @@ describe.skipIf(!supported)('Winners database contract on isolated local Postgre
       expect(()=>sql(`SET ROLE anon; SELECT public.claim_winners_curation('${day}','NFL');`)).toThrow();
       expect(()=>sql('SET ROLE authenticated; SELECT * FROM winners_curation_runs;')).toThrow();
     });
-    it('does not automatically admit a single unsupported late game',()=>{
+    it('admits a single unsupported game through clock coverage even after a completed comparison declined it',()=>{
       stage('NFL',[1]);const r=claim('NFL');expect(r.input_snapshot.capacity).toBe(1);
       expect(finish(r,decision(r,0,'unsupported')).admitted).toBe(0);
+      expect(sql(`SELECT ensure_winners_window_coverage('${day}','NFL');`)).toBe('1');
+      expect(sql(`SELECT policy_version FROM winners_board;`)).toBe('daily-curation-v2');
       expect(claim('NFL')).toBeNull();
+    });
+    it('fills a window of toss-ups by their independent relative rank',()=>{
+      stage('NFL',[8]);const r=claim('NFL');
+      expect(finish(r,decision(r,2,'toss_up')).admitted).toBe(2);
+    });
+    it.each(['MLB','NBA','NFL','NCAAF','NHL','NCAAB','EPL','WC'])('fills %s normal quota despite an active model lease and missing research',league=>{
+      stage(league,[8,5,1]);const r=claim(league);expect(r).not.toBeNull();
+      sql("UPDATE winners_candidates SET evidence_snapshot='{}',pick_snapshot=pick_snapshot||'{\"confidence\":0.01}';");
+      expect(sql(`SET ROLE service_role; SELECT ensure_winners_window_coverage('${day}','${league}');`).split('\n').pop()).toBe('3');
+      // Two earliest tickets plus the already-published lone late game.
+      expect(sql("SELECT string_agg(game_id,',' ORDER BY candidate_id) FROM winners_board;")).toBe('1,2,14');
+      expect(sql(`SELECT ensure_winners_window_coverage('${day}','${league}');`)).toBe('0');
+      expect(finish(r,decision(r,2)).completed).toBe(false);
+    });
+    it('waits for the normal T-60 fill while publishing a lone night ticket immediately',()=>{
+      stage();sql("UPDATE daily_slate SET commence_time=commence_time+interval '20 minutes'; UPDATE winners_candidates c SET commence_time=s.commence_time FROM daily_slate s WHERE c.game_id=s.bdl_game_id::text;");
+      expect(sql(`SELECT ensure_winners_window_coverage('${day}','NFL');`)).toBe('1');
+      expect(sql('SELECT game_id FROM winners_board;')).toBe('14');
+    });
+    it('ignores missing slate starts, PASS tickets, invalid odds and live games without blocking a valid alternative',()=>{
+      stage('NFL',[8]);
+      sql("INSERT INTO daily_slate(date,league,bdl_game_id) SELECT date,league,999 FROM daily_slate LIMIT 1; UPDATE winners_candidates SET pick_text='PASS' WHERE id=1; UPDATE winners_candidates SET odds=0 WHERE id=2; UPDATE daily_slate SET game_status='live' WHERE bdl_game_id=3; UPDATE winners_candidates SET commence_time=commence_time+interval '1 minute' WHERE id=4;");
+      expect(sql(`SELECT ensure_winners_window_coverage('${day}','NFL');`)).toBe('2');
+      expect(sql("SELECT string_agg(game_id,',' ORDER BY candidate_id) FROM winners_board;")).toBe('5,6');
+    });
+    it('uses a completed original comparison ahead of stable order for scheduled fill',()=>{
+      stage('NFL',[8]);let r=claim('NFL'),d=decision(r,0);
+      d.ranked_candidates.reverse().forEach((c,i)=>{c.rank=i+1;c.assessment='lean';});
+      expect(finish(r,d).admitted).toBe(0);
+      expect(sql(`SELECT ensure_winners_window_coverage('${day}','NFL');`)).toBe('2');
+      expect(sql("SELECT string_agg(game_id,',' ORDER BY candidate_id) FROM winners_board;")).toBe('7,8');
+    });
+    it('serializes simultaneous clock fills, caps normal admissions at five, and denies public access',async()=>{
+      stage('NCAAF',[45]);
+      const query=`SELECT ensure_winners_window_coverage('${day}','NCAAF');`;
+      const result=await Promise.all([1,2].map(()=>run(`${bin}/psql`,[...args(),'-c',query],{env:pgEnv})));
+      expect(result.map(x=>x.stdout.trim()).sort()).toEqual(['0','5']);
+      expect(()=>sql(`SET ROLE anon; ${query}`)).toThrow();
+      expect(()=>sql(`SET ROLE authenticated; ${query}`)).toThrow();
+    });
+    it('keeps three legacy early tickets and reserves three later windows with a one-day six-ticket transition',()=>{
+      stage('NCAAF',[8,5,4,1]);
+      sql(`INSERT INTO winners_board(candidate_id,game_date,league,kind,game_id,ticket_key,market_key,pick_snapshot,admitted_at,policy_version,reason)
+        SELECT id,game_date,league,kind,game_id,ticket_key,market_key,pick_snapshot,now(),'exact-ticket-v2','Earlier policy admission' FROM winners_candidates WHERE id<=3;
+        UPDATE winners_candidates SET admitted_at=now() WHERE id<=3;`);
+      const p=JSON.parse(sql(`SELECT winners_daily_plan('${day}','NCAAF');`));
+      expect(p.target).toBe(6);expect(p.transitional_coverage).toBe(true);
+      // Lone night game enters immediately; early tickets never get deleted.
+      expect(sql(`SELECT ensure_winners_window_coverage('${day}','NCAAF');`)).toBe('1');
+      expect(sql('SELECT count(*) FROM winners_board;')).toBe('4');
+      for (let i=0;i<2;i++) {
+        sql("UPDATE daily_slate SET commence_time=commence_time-interval '200 minutes'; UPDATE winners_candidates c SET commence_time=s.commence_time FROM daily_slate s WHERE c.game_id=s.bdl_game_id::text AND c.admitted_at IS NULL;");
+        expect(sql(`SELECT ensure_winners_window_coverage('${day}','NCAAF');`)).toBe('1');
+      }
+      expect(sql('SELECT count(*) FROM winners_board;')).toBe('6');
+      expect(sql(`SELECT ensure_winners_window_coverage('${day}','NCAAF');`)).toBe('0');
+      expect(()=>sql('DELETE FROM winners_board;')).toThrow();
+    });
+    it('finishes a 15-game day with four tickets across all four windows even if every model read is unavailable',()=>{
+      stage('MLB',[6,4,4,1]);
+      expect(sql(`SELECT ensure_winners_window_coverage('${day}','MLB');`)).toBe('2');
+      for (let i=0;i<2;i++) {
+        sql("UPDATE daily_slate SET commence_time=commence_time-interval '200 minutes'; UPDATE winners_candidates c SET commence_time=s.commence_time FROM daily_slate s WHERE c.game_id=s.bdl_game_id::text AND c.admitted_at IS NULL;");
+        expect(sql(`SELECT ensure_winners_window_coverage('${day}','MLB');`)).toBe('1');
+      }
+      expect(sql("SELECT string_agg(game_id,',' ORDER BY candidate_id) FROM winners_board;")).toBe('1,7,11,15');
+      expect(sql(`SELECT ensure_winners_window_coverage('${day}','MLB');`)).toBe('0');
     });
     it('enforces the six-clear exception in the database and never admits a seventh',()=>{
       stage('NFL',[24]);let r=claim('NFL');

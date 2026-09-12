@@ -3,8 +3,9 @@ import { formatCliFunctionResponses } from './providerAdapters/cliToolProtocol.j
 import { requestSignal } from './requestCancellation.js';
 
 // September 12: model/transport adaptation only. June still owns every
-// research prompt, factor, tool invocation and final briefing. No API rung.
-export const JUNE_RESEARCH_MODELS = Object.freeze(['claude-sonnet-5', 'codex-gpt-5.6-luna']);
+// research prompt, factor, tool invocation and final briefing. Founder approved
+// paid research only AFTER both included subscription routes are unavailable.
+export const JUNE_RESEARCH_MODELS = Object.freeze(['claude-sonnet-5', 'codex-gpt-5.6-luna', 'anthropic-claude-haiku-4-5']);
 const cappedModels = new Set();
 
 export function juneResearchModels() {
@@ -44,14 +45,21 @@ export async function sendToJuneResearchSession(session, message, options = {}, 
     }
     try {
       signal?.throwIfAborted();
-      if (!session.current) {
+      const switching = !session.current;
+      if (switching) {
         session.current = await createModelSession({ ...session.options, modelName, signal });
         // Carry the exact successful conversation across a provider switch.
         // No model-generated summary, repeated stat fetch, or rewritten finding.
         if (session.history.length) resetSessionChat(session.current, [...session.history]);
       }
       session.modelName = modelName;
-      const response = await sendToSessionWithRetry(session.current, message, { ...options, signal }, maxRetries);
+      // CLI tool calls have no native Anthropic tool_use IDs. On the first API
+      // turn, carry their pending results as exact text beside the full history.
+      // Subsequent API turns use native tool_result IDs normally.
+      const bridgeResults = switching && modelName.startsWith('anthropic-') && options.isFunctionResponse;
+      const response = await sendToSessionWithRetry(session.current,
+        bridgeResults ? `TOOL RESULTS FROM PREVIOUS PROVIDER\n${JSON.stringify(message)}` : message,
+        { ...options, signal, ...(bridgeResults ? { isFunctionResponse: false } : {}) }, maxRetries);
       signal?.throwIfAborted();
       session.history.push(
         { role: 'user', parts: [{ text: `USER:\n${userText(session, message, options)}` }] },
@@ -65,11 +73,11 @@ export async function sendToJuneResearchSession(session, message, options = {}, 
       session.current = null;
       session.modelIndex++;
       const next = JUNE_RESEARCH_MODELS[session.modelIndex];
-      console.warn(`[June Research] ${modelName} failed: ${error.message}${next ? ` — continuing the same research on ${next}` : ' — research unavailable; no metered fallback'}`);
+      console.warn(`[June Research] ${modelName} failed: ${error.message}${next ? ` — continuing the same research on ${next}` : ' — all research routes unavailable'}`);
     }
   }
   session.exhausted = true;
-  const error = new Error('June research unavailable: Sonnet and Luna could not finish; wait for subscription capacity. No API fallback.');
+  const error = new Error('June research unavailable: Sonnet subscription, Luna subscription and paid Haiku research could not finish.');
   error.code = 'JUNE_RESEARCH_UNAVAILABLE';
   error.isQuotaError = true;
   throw error;

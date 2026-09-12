@@ -3,7 +3,7 @@ import { codexCliOneShot } from '../agentic/orchestrator/providerAdapters/codexC
 import { usedOutsideSelectionEvidence } from './mlbWinnersSelection.js';
 import { reviewSourceDesk } from './originalGameEvidence.js';
 
-export const CURATION_POLICY = 'daily-curation-v1';
+export const CURATION_POLICY = 'daily-curation-v2';
 export const CURATION_MODEL = 'gpt-5.6-sol';
 // Sol advertises a 272K-token context. Real college records use roughly
 // 3.7 bytes/token; bounded whole-record batches leave room for reasoning and
@@ -69,16 +69,30 @@ export function parseCuration(raw, run) {
 export function selectWithinSchedule(assessment, run) {
   const input = run.input_snapshot;
   const capacity = Math.max(0, Number(input.capacity));
-  const eligible = assessment.ranked_candidates.filter(c => ['clear','lean'].includes(c.assessment));
-  // The best supported ticket covers the window. Additional places require
-  // clear evidence, so a target never turns a stack of weak leans into Winners.
-  const chosen = eligible.filter((c,i) => i === 0 || c.assessment === 'clear').slice(0, capacity);
+  // Founder Sep 12: compare relative strength, then fill the scheduled places.
+  // Grades describe the read; they cannot veto coverage or the normal target.
+  const eligible = assessment.ranked_candidates;
+  const chosen = eligible.slice(0, capacity);
   const lastWindow = input.window.number === input.plan.windows.length;
   const sixth = eligible.find(c => c.assessment === 'clear' && !chosen.includes(c));
   if (input.plan.target === 5 && lastWindow && input.reserved === 0 && input.used + chosen.length === 5
       && chosen.every(c => c.assessment === 'clear') && (input.prior || []).every(p => p.selection?.assessment === 'clear') && sixth) chosen.push(sixth);
   const selected = new Set(chosen.map(c => c.candidate_id));
-  return { ...assessment, ranked_candidates: assessment.ranked_candidates.map(c => ({ ...c, selected: selected.has(c.candidate_id) })) };
+  return { ...assessment, ranked_candidates: assessment.ranked_candidates.map(c => ({ ...c, selected: selected.has(c.candidate_id),
+    selection_basis: !selected.has(c.candidate_id) ? 'not_selected' : chosen.indexOf(c) >= capacity ? 'six_clear_exception'
+      : ['clear','lean'].includes(c.assessment) ? 'comparative_read' : 'schedule_fill' })) };
+}
+
+// Runs independently of model reads. The database reserves later windows,
+// admits a lone game immediately, and fills normal places by T-60 minutes.
+export async function ensureDailyCoverage(client, date) {
+  const slate = check(await client.from('daily_slate').select('league').eq('date', date)) || [];
+  const results = await Promise.allSettled([...new Set(slate.map(s => s.league))].map(async league => {
+    const admitted = check(await client.rpc('ensure_winners_window_coverage', { p_date: date, p_league: league }));
+    if (admitted) console.log(`[Winners] ${league}: ${admitted} scheduled coverage admission(s)`);
+  }));
+  for (const result of results) if (result.status === 'rejected') console.error('[Winners] coverage:', result.reason?.message || result.reason);
+  return results;
 }
 
 export function curationBatches(run, maxBytes = MAX_READ_BYTES) {

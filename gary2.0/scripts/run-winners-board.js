@@ -8,7 +8,7 @@ import { reviewPick, reviewProp } from '../src/services/pickdesk/winnersReviewer
 import { enqueueWinnersCandidate, coreProp, canonicalProp, winnersCandidate, winnersPickIsHome, WINNERS_CUTOVER_DATE, MLB_WINNERS_POLICY_VERSION, MLB_WINNERS_POLICIES } from '../src/services/pickdesk/winnersAdmissions.js';
 import { matchingDesk } from '../src/services/diary/evidence.js';
 import { originalGameEvidence, originalEvidenceMatches, reviewSourceDesk } from '../src/services/pickdesk/originalGameEvidence.js';
-import { CURATION_POLICY, runDailyCuration } from '../src/services/pickdesk/winnersCuration.js';
+import { CURATION_POLICY, runDailyCuration, ensureDailyCoverage } from '../src/services/pickdesk/winnersCuration.js';
 import { mlbJudgmentEvidenceError } from '../src/services/agentic/orchestrator/mlbJudgment.js';
 import { mlbCaseOrder } from '../src/services/agentic/orchestrator/mlbCaseMenu.js';
 import { mlbJudgmentDatabaseCall } from '../src/services/pickdesk/mlbJudgmentStorage.js';
@@ -204,6 +204,7 @@ async function main() {
   console.log(`[Winners] started ${new Date().toISOString()} pid=${process.pid}; game policy=${CURATION_POLICY}; mode=${watch?'watch':'once'}`);
   if(!watch) {
     await reconcilePublished(supabase,todayET());
+    await ensureDailyCoverage(supabase,todayET());
     await Promise.all([reviewAndRelease(),reviewAndRelease()]);
     await releaseBoards();
     await runDailyCuration(supabase,todayET());
@@ -235,6 +236,15 @@ async function main() {
       await sleep(30_000);
     }
   };
-  await Promise.all([reader(),reader(),reconcile(),select()]);
+  // Keep the publication clock independent of both model calls and recovery
+  // of older evidence. Direct publishers already enqueue their own tickets.
+  const coverage=async()=>{
+    while(true) {
+      try {await ensureDailyCoverage(supabase,todayET());await mirrorGames(supabase,todayET());}
+      catch(error){console.error('[Winners] coverage clock:',error.message);}
+      await sleep(15_000);
+    }
+  };
+  await Promise.all([reader(),reader(),reconcile(),select(),coverage()]);
 }
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href)main().then(()=>process.exit(0)).catch(e=>{console.error('[Winners] startup:',e.message);process.exit(1);});

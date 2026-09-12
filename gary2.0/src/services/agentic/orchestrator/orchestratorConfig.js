@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// MODEL POLICY (Sep 1 2026 — the founder's Claude weekly subscription carries
-// ZERO Gary traffic). Two vendors, three roles:
+// MODEL POLICY (updated Sep 12 2026): subscription capacity before paid
+// research. Two vendors, three roles:
 //   · ChatGPT codex bridge ($0 on GPT Pro): every game/props BRAIN, every
 //     CONTENT pass, and the first grounded-SEARCH rung.
 //   · Metered APIs as rare fallbacks only: OpenAI Responses web_search, then
@@ -16,22 +16,12 @@
 // GARY_MODEL_OVERRIDE=codex-gpt-6-astra so every game brain rides the bridge.
 export const GAME_PICK_MODEL = process.env.GARY_MODEL_OVERRIDE || 'codex-gpt-6-astra';
 
-// THE RESEARCHER IS DEAD (founder, Aug 27 2026 — all sports): the desk is the
-// entire evidence and the brains run tool-less. GAME_RESEARCH_MODEL survives
-// ONLY as validateSessionModel's reroute target for refused model names.
-// THE RESEARCH ASSISTANT (founder, Sep 3 2026: "use Haiku then Luna when
-// Haiku is out of money — simple"): the Aug 18 Haiku researcher first
-// (metered, ~12¢ a game); if the Anthropic key is out of credit or the call
-// fails, Luna through the Codex bridge in tools mode — $0 on the sub, a
-// different model from Gary's Astra.
-export const GAME_RESEARCH_MODEL = process.env.GARY_RESEARCH_MODEL || 'anthropic-claude-haiku-4-5';
+// Founder Sep 12: included subscription capacity first, then real money.
+// Applies to the shared NFL/NBA researcher; MLB's frozen June adapter carries
+// the same order while preserving its exact successful research conversation.
+export const GAME_RESEARCH_MODEL = process.env.GARY_RESEARCH_MODEL || 'claude-sonnet-5';
 export const GAME_RESEARCH_FALLBACK_MODEL = process.env.GARY_RESEARCH_FALLBACK_MODEL || 'codex-gpt-5.6-luna';
-// The third researcher rung (founder, Sep 9 2026): the Claude subscription
-// bridge in tools mode — Sonnet's own weekly bucket, $0, so a capped Codex
-// login and an unfunded API still leave Gary a research assistant.
-export const GAME_RESEARCH_BRIDGE_MODEL = process.env.GARY_RESEARCH_BRIDGE_MODEL || 'claude-sonnet-5';
-// (MLB_RESEARCH_MODEL deleted Sep 1 2026 — zero consumers after the
-// researcher kill.)
+export const GAME_RESEARCH_BRIDGE_MODEL = process.env.GARY_RESEARCH_BRIDGE_MODEL || 'anthropic-claude-haiku-4-5';
 // The MLB June brain: Astra on the codex bridge (founder GO, Sep 4 2026).
 // GARY_MLB_BRAIN_MODEL is the explicit per-lane override.
 export const MLB_JUNE_BRAIN_MODEL = process.env.GARY_MLB_BRAIN_MODEL || 'codex-gpt-6-astra';

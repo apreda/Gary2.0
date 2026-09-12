@@ -16,13 +16,13 @@ describe('Winners curation of original decisions',()=>{
   expect(parseCuration(p,run())).toBeNull();
   expect(parseCuration({...assessment(),ranked_candidates:[row(1),row(1),row(3)]},run())).toBeNull();
  });
- it('covers the window with its best supported pick; extra slots require clear evidence',()=>{
-  expect(selectWithinSchedule(assessment(),run()).ranked_candidates.filter(c=>c.selected).map(c=>c.candidate_id)).toEqual([1]);
+ it('fills the scheduled quota with the best relative reads, including leans',()=>{
+  expect(selectWithinSchedule(assessment(),run()).ranked_candidates.filter(c=>c.selected).map(c=>c.candidate_id)).toEqual([1,2]);
   expect(selectWithinSchedule(assessment(['clear','clear','lean']),run()).ranked_candidates.filter(c=>c.selected).map(c=>c.candidate_id)).toEqual([1,2]);
-  expect(selectWithinSchedule(assessment(['lean','lean','toss_up']),run()).ranked_candidates.filter(c=>c.selected).map(c=>c.candidate_id)).toEqual([1]);
+  expect(selectWithinSchedule(assessment(['lean','lean','toss_up']),run()).ranked_candidates.filter(c=>c.selected).map(c=>c.candidate_id)).toEqual([1,2]);
  });
- it('does not force a toss-up just to meet the schedule target',()=>{
-  expect(selectWithinSchedule(assessment(['toss_up','toss_up','unsupported']),run()).ranked_candidates.some(c=>c.selected)).toBe(false);
+ it('fills normal places even when all original reads are balanced or unsupported',()=>{
+  expect(selectWithinSchedule(assessment(['toss_up','toss_up','unsupported']),run()).ranked_candidates.filter(c=>c.selected).map(c=>c.candidate_id)).toEqual([1,2]);
  });
  it('allows exactly one sixth only in the last window when every admitted judgment is clear',()=>{
   const r=run({capacity:1,used:4,reserved:0,prior:Array.from({length:4},()=>({selection:{assessment:'clear'}})),window:{number:3},plan:{target:5,windows:[{},{},{}]}});

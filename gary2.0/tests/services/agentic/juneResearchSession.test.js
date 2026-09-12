@@ -58,14 +58,34 @@ describe('June researcher subscription failover', () => {
     expect(s.modelName).toBe('codex-gpt-5.6-luna');
   });
 
-  it('fails closed when both subscriptions are capped and does not retry capped models for another brain', async () => {
+  it('fails closed only after both subscriptions and paid research fail, without retrying capped routes', async () => {
     mocks.send.mockRejectedValue(quota());
     const s = await createGeminiSession(options);
     await expect(sendToSessionWithRetry(s, 'report')).rejects.toMatchObject({ code: 'JUNE_RESEARCH_UNAVAILABLE' });
     const another = await createGeminiSession(options);
     await expect(sendToSessionWithRetry(another, 'report')).rejects.toMatchObject({ code: 'JUNE_RESEARCH_UNAVAILABLE' });
-    expect(mocks.send).toHaveBeenCalledTimes(2);
-    expect(mocks.create.mock.calls.map(([o]) => o.modelName)).toEqual(['claude-sonnet-5', 'codex-gpt-5.6-luna']);
+    expect(mocks.send).toHaveBeenCalledTimes(3);
+    expect(mocks.create.mock.calls.map(([o]) => o.modelName)).toEqual(['claude-sonnet-5', 'codex-gpt-5.6-luna', 'anthropic-claude-haiku-4-5']);
+  });
+
+  it('uses paid research only after both subscriptions fail and preserves pending CLI tool results', async () => {
+    mocks.send.mockResolvedValueOnce({ content: 'Original findings, verbatim.' })
+      .mockRejectedValueOnce(quota()).mockRejectedValueOnce(quota())
+      .mockResolvedValueOnce({ content: 'Completed through paid research.' });
+    const session = await createGeminiSession(options);
+    await sendToSessionWithRetry(session, 'Complete initial scout report');
+    const results = [{ name: 'fetch_stats', content: 'Exact final tool result, including its tail.' }];
+    await sendToSessionWithRetry(session, results, { isFunctionResponse: true });
+    expect(mocks.create.mock.calls.map(([o]) => o.modelName)).toEqual(['claude-sonnet-5', 'codex-gpt-5.6-luna', 'anthropic-claude-haiku-4-5']);
+    const paid = mocks.send.mock.calls.at(-1);
+    expect(paid[1]).toContain('Exact final tool result, including its tail.');
+    expect(paid[1]).not.toContain('reply with another JSON tool_calls');
+    expect(paid[2].isFunctionResponse).toBe(false);
+    expect(mocks.reset.mock.calls.at(-1)[1].map(h => h.parts[0].text).join('\n')).toContain('Original findings, verbatim.');
+    mocks.send.mockResolvedValueOnce({ content: 'Next native API result' });
+    await sendToSessionWithRetry(session, results, { isFunctionResponse: true });
+    expect(mocks.send.mock.calls.at(-1)[1]).toBe(results);
+    expect(mocks.send.mock.calls.at(-1)[2].isFunctionResponse).toBe(true);
   });
 
   it('does not fail over an aborted game', async () => {
