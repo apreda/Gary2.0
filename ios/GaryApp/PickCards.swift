@@ -1167,8 +1167,9 @@ struct CompactPickRow: View {
         var lead = 0
         while lead < words.count, teamWords.contains(words[lead].lowercased()) { lead += 1 }
         let bet = words[lead...].joined(separator: " ")
-        return bet.isEmpty ? pickedShort.uppercased()
-            : "\(pickedShort.uppercased())\n\(bet.uppercased())"
+        let pickedRank = isNCAAF ? (homeIsPicked ? homeSeedTag : awaySeedTag) : nil
+        let headlineTeam = [pickedRank, pickedShort.uppercased()].compactMap { $0 }.joined(separator: " ")
+        return bet.isEmpty ? headlineTeam : "\(headlineTeam)\n\(bet.uppercased())"
     }
 
     private var heroFontSize: CGFloat { premiumFinish ? 65 : 52 }
@@ -1185,6 +1186,7 @@ struct CompactPickRow: View {
     /// Meta slot after the league token — opponent + time/live/final + odds.
     /// State-aware: live games show the live line, settled show the score.
     private var metaLine: String {
+        if isNCAAF { return ncaafOpponentLine }
         // Specials: the event name already leads the page strip — repeating
         // "HR Derby @ Philly" here just ellipsizes the price off the row.
         if (pick.type ?? "") == "special" { return "" }
@@ -1215,6 +1217,19 @@ struct CompactPickRow: View {
         // Start time moved to the eyebrow row (frontTime); meta keeps matchup + odds.
         // Odds render separately in the sport's accent color (see body) — not appended here.
         return parts.joined(separator: " · ")
+    }
+
+    // NCAAF uses the same card frame and opponent line as other sports.
+    // Its picked rank lives in the headline; its opponent rank stays here.
+    private var ncaafOpponentLine: String {
+        func label(home: Bool) -> String {
+            let rank = home ? homeSeedTag : awaySeedTag
+            let name = isRankedMatchup ? metaTeamAbbrev(homeSide: home) : (home ? homeName : awayName)
+            return [rank, name].compactMap { $0 }.joined(separator: " ")
+        }
+        if homeIsPicked { return "vs \(label(home: false))" }
+        if awayIsPicked { return "@ \(label(home: true))" }
+        return "\(label(home: false)) @ \(label(home: true))"
     }
 
     /// Footer's gold state slot — the live line while the game runs, the
@@ -1384,7 +1399,7 @@ struct CompactPickRow: View {
                 Spacer(minLength: 0)
 
                 HStack(alignment: .center, spacing: 8) {
-                    Text(significanceTag ?? (pick.league ?? "").uppercased())
+                    Text(isNCAAF ? "NCAAF" : (significanceTag ?? (pick.league ?? "").uppercased()))
                         .font(GaryFonts.mono(11 * pf, bold: true)).tracking(1.2)
                         .foregroundStyle(leagueTint)
                         .lineLimit(1)
@@ -1463,6 +1478,13 @@ struct CompactPickRow: View {
                                 .minimumScaleFactor(0.8)
                         }
                         Spacer()
+                        if isNCAAF, let tag = significanceTag, tag != "NCAAF" {
+                            Text(tag)
+                                .font(GaryFonts.mono(10 * pf, bold: true)).tracking(0.5)
+                                .foregroundStyle(leagueTint)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.65)
+                        }
                         if showTakeAffordance {
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 12, weight: .bold))
