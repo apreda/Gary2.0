@@ -44,10 +44,10 @@ describe.skipIf(!supported)('Winners database contract on isolated local Postgre
       throw new Error(`Could not start isolated Winners Postgres: ${error.stderr?.toString() || error.message}\n${serverLog}`,{cause:error});
     }
     sql(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS; CREATE TABLE public.daily_slate(date text,league text,commence_time timestamptz,bdl_game_id bigint,game_status text,ml_home integer); GRANT SELECT ON public.daily_slate TO service_role;`);
-    for(const name of ['20260904203500_winners_admissions.sql','20260904203650_winners_review_recovery.sql','20260904205218_winners_prop_cohort_reservations.sql','20260908150211_mlb_gary_winners_selection.sql','20260909133844_winners_underdog_admission.sql'])sql(readFileSync(new URL(`../../../supabase/migrations/${name}`,import.meta.url),'utf8'));
+    for(const name of ['20260904203500_winners_admissions.sql','20260904203650_winners_review_recovery.sql','20260904205218_winners_prop_cohort_reservations.sql','20260908150211_mlb_gary_winners_selection.sql','20260908172215_mlb_winners_review_prerequisites.sql','20260909133844_winners_underdog_admission.sql','20260912133639_winners_daily_curation.sql','20260912133808_winners_curation_review_queue.sql'])sql(readFileSync(new URL(`../../../supabase/migrations/${name}`,import.meta.url),'utf8'));
   },30000);
   afterAll(()=>{if(started)execFileSync(`${bin}/pg_ctl`,['-D',`${directory}/data`,'-m','immediate','-w','stop'],{env:pgEnv,stdio:'ignore'});if(directory)rmSync(directory,{recursive:true,force:true});});
-  beforeEach(()=>sql('TRUNCATE public.winners_decision_events,public.winners_board,public.winners_candidates,public.winners_selection_runs,public.daily_slate RESTART IDENTITY CASCADE;'));
+  beforeEach(()=>sql('TRUNCATE public.winners_decision_events,public.winners_board,public.winners_candidates,public.winners_selection_runs,public.winners_curation_runs,public.daily_slate RESTART IDENTITY CASCADE;'));
   it('grants read-only board access and denies anon evidence and privileged functions',()=>{
     expect(sql("SET ROLE anon; SELECT count(*) FROM public.winners_board;")).toContain('0');
     expect(()=>sql('SET ROLE anon; SELECT * FROM public.winners_candidates;')).toThrow();
@@ -216,4 +216,91 @@ describe.skipIf(!supported)('Winners database contract on isolated local Postgre
       }
     });
   });
+  describe('schedule-aware curation from September 12',()=>{
+    const day=new Date().toLocaleDateString('en-CA',{timeZone:'America/New_York'});
+    const stage=(league='NFL',groups=[8,5,1])=>{
+      let id=1;
+      groups.forEach((count,index)=>{
+        for(let n=0;n<count;n++,id++)sql(`INSERT INTO daily_slate(date,league,commence_time,bdl_game_id,game_status)
+          VALUES ('${day}','${league}',now()+make_interval(mins=>${60+index*200}),${id},'scheduled');`);
+      });
+      sql(`INSERT INTO winners_candidates(game_date,league,kind,game_id,ticket_key,market_key,pick_text,odds,commence_time,pick_snapshot,evidence_snapshot)
+        SELECT date,league,'game',bdl_game_id::text,'cur-'||bdl_game_id,'market-'||bdl_game_id,'Home ML -110',-110,commence_time,
+        jsonb_build_object('rationale','The original rationale','confidence',0.99),jsonb_build_object('deskText','Original pregame facts','observedAt',now()-interval '5 minutes') FROM daily_slate;`);
+    };
+    const claim=league=>JSON.parse(sql(`SELECT to_jsonb(r) FROM public.claim_winners_curation('${day}','${league}') r;`) || 'null');
+    const decision=(run,count=1,grade='clear')=>({summary:'Complete original evidence comparison',ranked_candidates:run.input_snapshot.candidates.map((c,i)=>({candidate_id:c.id,rank:i+1,assessment:grade,selected:i<count,reason:'A concrete original matchup advantage supports the exact ticket.'}))});
+    const finish=(run,selection,attempt=run.attempts)=>JSON.parse(sql(`SELECT public.finish_winners_curation(${run.id},${attempt},'${JSON.stringify(selection).replaceAll("'","''")}'::jsonb,'fixture',1);`));
+    it('groups nearby NFL starts and reserves a late singleton within a quarter-slate target',()=>{
+      stage();const plan=JSON.parse(sql(`SELECT public.winners_daily_plan('${day}','NFL');`));
+      expect(plan.slate_count).toBe(14);expect(plan.target).toBe(4);
+      expect(plan.windows.map(w=>w.quota)).toEqual([2,1,1]);
+      const r=claim('NFL');expect(r.input_snapshot.capacity).toBe(2);expect(r.input_snapshot.reserved).toBe(2);
+      expect(finish(r,decision(r,2)).admitted).toBe(2);
+      expect(claim('NFL')).toBeNull();
+      expect(sql(`SELECT public.release_winners_board('${day}','NFL','game');`)).toBe('0');
+      expect(sql('SELECT count(*) FROM winners_board;')).toBe('2');
+    });
+    it('caps a large college slate at five even with many start windows',()=>{
+      stage('NCAAF',[8,8,8,8,8,5]);
+      const plan=JSON.parse(sql(`SELECT public.winners_daily_plan('${day}','NCAAF');`));
+      expect(plan.slate_count).toBe(45);expect(plan.target).toBe(5);expect(plan.windows).toHaveLength(5);
+      expect(plan.windows.reduce((n,w)=>n+w.quota,0)).toBe(5);
+    });
+    it('refuses excess early picks, unsupported selections, stale attempts and changed evidence',()=>{
+      stage();let r=claim('NFL');
+      expect(finish(r,decision(r,3)).completed).toBe(false);
+      sql('TRUNCATE winners_curation_runs RESTART IDENTITY;');r=claim('NFL');
+      expect(finish(r,decision(r,1,'toss_up')).completed).toBe(false);
+      sql('TRUNCATE winners_curation_runs RESTART IDENTITY;');r=claim('NFL');
+      expect(finish(r,decision(r),99).reason).toContain('Stale');
+      sql(`UPDATE winners_candidates SET evidence_snapshot='{}' WHERE id=${r.input_snapshot.candidates[0].id};`);
+      expect(finish(r,decision(r)).completed).toBe(false);
+      expect(sql('SELECT count(*) FROM winners_board;')).toBe('0');
+    });
+    it('is idempotent and keeps completed evidence and selected tickets immutable',()=>{
+      stage();const r=claim('NFL'),d=decision(r);
+      expect(finish(r,d).admitted).toBe(1);expect(finish(r,d).already_recorded).toBe(true);
+      expect(sql('SELECT count(*) FROM winners_board;')).toBe('1');
+      expect(()=>sql("UPDATE winners_curation_runs SET input_snapshot='{}';")).toThrow();
+      expect(()=>sql('DELETE FROM winners_board;')).toThrow();
+      expect(()=>sql(`SET ROLE anon; SELECT public.claim_winners_curation('${day}','NFL');`)).toThrow();
+      expect(()=>sql('SET ROLE authenticated; SELECT * FROM winners_curation_runs;')).toThrow();
+    });
+    it('does not automatically admit a single unsupported late game',()=>{
+      stage('NFL',[1]);const r=claim('NFL');expect(r.input_snapshot.capacity).toBe(1);
+      expect(finish(r,decision(r,0,'unsupported')).admitted).toBe(0);
+      expect(claim('NFL')).toBeNull();
+    });
+    it('enforces the six-clear exception in the database and never admits a seventh',()=>{
+      stage('NFL',[24]);let r=claim('NFL');
+      const mixed=decision(r,6);mixed.ranked_candidates[5].assessment='lean';
+      expect(finish(r,mixed).completed).toBe(false);
+      sql('TRUNCATE winners_curation_runs RESTART IDENTITY;');r=claim('NFL');
+      expect(finish(r,decision(r,6)).admitted).toBe(6);
+      expect(claim('NFL')).toBeNull();expect(sql('SELECT count(*) FROM winners_board;')).toBe('6');
+    });
+    it('serializes concurrent publication receipts without duplicate admissions',async()=>{
+      stage('NFL',[8]);const r=claim('NFL'),d=decision(r,2);
+      const query=`SELECT public.finish_winners_curation(${r.id},${r.attempts},'${JSON.stringify(d).replaceAll("'","''")}'::jsonb,'fixture',1);`;
+      const receipts=await Promise.all([1,2].map(()=>run(`${bin}/psql`,[...args(),'-c',query],{env:pgEnv})));
+      expect(receipts.map(x=>JSON.parse(x.stdout)).filter(x=>x.already_recorded)).toHaveLength(1);
+      expect(sql('SELECT count(*) FROM winners_board;')).toBe('2');
+    });
+    it('keeps new games out of the old review queue while props continue',()=>{
+      stage('NFL',[2]);sql("UPDATE winners_candidates SET created_at=now()-interval '5 minutes';");
+      expect(sql('SELECT count(*) FROM claim_winners_candidate();')).toBe('0');
+      add('pending',1,"UPDATE winners_candidates SET evidence_snapshot='{\"deskText\":\"original\"}' WHERE kind='prop';");
+      expect(sql('SELECT kind FROM claim_winners_candidate();')).toBe('prop');
+    });
+    it('refuses changed start times and live-game slate updates before publishing',()=>{
+      stage('NFL',[2]);const r=claim('NFL');
+      sql("UPDATE daily_slate SET game_status='live';");
+      expect(finish(r,decision(r)).completed).toBe(false);
+      expect(sql('SELECT count(*) FROM winners_board;')).toBe('0');
+      sql('TRUNCATE winners_curation_runs RESTART IDENTITY;');
+      expect(claim('NFL')).toBeNull();
+    });
+  });
+
 });

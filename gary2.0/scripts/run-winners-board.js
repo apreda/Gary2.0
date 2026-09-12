@@ -8,7 +8,7 @@ import { reviewPick, reviewProp } from '../src/services/pickdesk/winnersReviewer
 import { enqueueWinnersCandidate, coreProp, canonicalProp, winnersCandidate, winnersPickIsHome, WINNERS_CUTOVER_DATE, MLB_WINNERS_POLICY_VERSION, MLB_WINNERS_POLICIES } from '../src/services/pickdesk/winnersAdmissions.js';
 import { matchingDesk } from '../src/services/diary/evidence.js';
 import { originalGameEvidence, originalEvidenceMatches, reviewSourceDesk } from '../src/services/pickdesk/originalGameEvidence.js';
-import { MLB_WINNERS_POLICY, runMlbSelectionWindow } from '../src/services/pickdesk/mlbWinnersSelection.js';
+import { CURATION_POLICY, runDailyCuration } from '../src/services/pickdesk/winnersCuration.js';
 import { mlbJudgmentEvidenceError } from '../src/services/agentic/orchestrator/mlbJudgment.js';
 import { mlbCaseOrder } from '../src/services/agentic/orchestrator/mlbCaseMenu.js';
 import { mlbJudgmentDatabaseCall } from '../src/services/pickdesk/mlbJudgmentStorage.js';
@@ -78,14 +78,14 @@ export async function reviewCandidate(c, { gameReview=reviewPick, propReview=rev
 // Mirror for existing game-only clients/records. New clients read immutable
 // winners_board snapshots. Empty/error never means use confidence as admission.
 async function mirrorGames(client,date) {
-  const rows=check(await client.from('winners_candidates').select('*').eq('game_date',date).eq('kind','game').neq('status','pending').neq('status','reviewing')) || [];
+  const rows=check(await client.from('winners_candidates').select('*').eq('game_date',date).eq('kind','game')) || [];
   const byGame=new Map();
   for(const c of rows){const old=byGame.get(`${c.league}|${c.game_id}`); if(!old || c.admitted_at || (!old.admitted_at && c.id>old.id))byGame.set(`${c.league}|${c.game_id}`,c);}
   for(const c of byGame.values()) {
     const p=c.pick_snapshot;
     check(await client.from('winners_reviews').upsert({game_date:date,league:c.league,game_id:c.game_id,pick_text:c.pick_text,
       matchup:p.matchup || `${p.awayTeam} @ ${p.homeTeam}`,odds:c.odds,bet_type:p.type || null,
-      on_board:!!c.admitted_at,reason:c.admitted_at?'review':null,verdict:c.status==='qualified'?'STRONG':c.status==='rejected'?'WEAK':null,
+      on_board:!!c.admitted_at,reason:c.admitted_at?'curation':null,verdict:c.status==='qualified'?'STRONG':c.status==='rejected'?'WEAK':null,
       decided_by:c.reason,review:c.review,review_error:c.status==='unavailable'?c.reason:null,model:c.review_model,ms:c.review_ms,
       reviewed_at:c.reviewed_at || c.created_at},{onConflict:'game_date,league,game_id'}));
   }
@@ -126,7 +126,7 @@ export async function reconcilePublished(client,date, {now=Date.now(),recoverJud
   const desks=deskResult.data || [];
   for(const {kind,p} of sources) {
       const league=String(p.league || p.sport || '').toUpperCase();
-      if(!['MLB','NBA','NFL','NCAAF'].includes(league) || (kind==='prop' && !coreProp(p)))continue;
+      if(!['MLB','NBA','NFL','NCAAF','NHL','NCAAB','EPL','WC'].includes(league) || (kind==='prop' && !coreProp(p)))continue;
       let evidence={};
       const kickoff=Date.parse(p.commence_time);
       if(kind==='game' && kickoff>now) {
@@ -201,12 +201,12 @@ export async function reviewAndRelease(client=supabase, {review=reviewNext, rele
 async function main() {
   if(!process.env.SUPABASE_SERVICE_ROLE_KEY)throw new Error('Winners worker requires the configured service-role credential');
   const watch=process.argv.includes('--watch');
-  console.log(`[Winners] started ${new Date().toISOString()} pid=${process.pid}; MLB policy=${MLB_WINNERS_POLICY}; mode=${watch?'watch':'once'}`);
+  console.log(`[Winners] started ${new Date().toISOString()} pid=${process.pid}; game policy=${CURATION_POLICY}; mode=${watch?'watch':'once'}`);
   if(!watch) {
     await reconcilePublished(supabase,todayET());
     await Promise.all([reviewAndRelease(),reviewAndRelease()]);
     await releaseBoards();
-    await runMlbSelectionWindow(supabase,todayET());
+    await runDailyCuration(supabase,todayET());
     await mirrorGames(supabase,todayET());
     return;
   }
@@ -230,7 +230,7 @@ async function main() {
   // verification, other leagues, or the publication/reconciliation clock.
   const select=async()=>{
     while(true) {
-      try {await runMlbSelectionWindow(supabase,todayET());await mirrorGames(supabase,todayET());}
+      try {await runDailyCuration(supabase,todayET());await mirrorGames(supabase,todayET());}
       catch(error){console.error('[Winners] Gary selection:',error.message);}
       await sleep(30_000);
     }

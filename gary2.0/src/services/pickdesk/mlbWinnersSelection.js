@@ -82,7 +82,9 @@ export function usedOutsideSelectionEvidence(raw) {
   return String(raw || '').split('\n').some(line=>{
     let event;try {event=JSON.parse(line);}catch{return false;}
     return event.type?.startsWith('item.') && event.item?.type
-      && !['agent_message','reasoning'].includes(event.item.type);
+      // CLI diagnostics (for example a shortened skill catalog) do not
+      // retrieve evidence. Tool and unknown action events still fail closed.
+      && !['agent_message','reasoning','error'].includes(event.item.type);
   });
 }
 
