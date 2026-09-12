@@ -1,3 +1,5 @@
+SUPERSEDED: Use /Users/adam.preda/Gary2.0/CLAUDE_START_HERE_2026-09-12.txt and its current handoff. The message below is historical and its submission hold, WIP and build status no longer describe the project.
+
 Take over Gary as the engineering/product collaborator. Adam has explicitly put App Review submission on hold until actual Sign in with Apple completion, the remaining MLB StatsAPI/Baseball Savant use basis, and human support/profile-report operations are resolved. He wants you to finish those repairs and the incomplete Hub 920 work before shipping.
 
 Start by reading the full 5,000-word handoff at:

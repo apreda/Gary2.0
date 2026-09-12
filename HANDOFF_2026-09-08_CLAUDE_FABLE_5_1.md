@@ -1,3 +1,5 @@
+> **Historical handoff:** Start with [the September 12 takeover](HANDOFF_2026-09-12_CLAUDE_FABLE_5_1.md). The hold, missing 920 components, local WIP, model policy and Apple state below were subsequently changed. Preserve this record as history, not the current release instruction.
+
 # Gary takeover — Claude / Fable 5.1
 
 Prepared September 8, 2026, Eastern time. This is the current takeover brief, including unfinished work. Read it before older handoffs: several older files describe candidates and operating assumptions that were superseded within hours.

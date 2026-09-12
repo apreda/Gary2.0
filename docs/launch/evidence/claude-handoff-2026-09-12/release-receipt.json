@@ -1,0 +1,72 @@
+{
+  "checked_at": "2026-09-12",
+  "source_commit": "571ef2c9de15dda76662a8ca614d89ff1926d47c",
+  "source_already_pushed": true,
+  "private_configuration_preserved": true,
+  "focused_verification": {
+    "suites": 6,
+    "tests_passed": 39,
+    "tests_failed": 0
+  },
+  "native": {
+    "version": "2.25",
+    "build": "927",
+    "archive": "/Volumes/KINGSTON/Gary-2.25-927-Handoff.xcarchive",
+    "archive_succeeded": true,
+    "strict_signature_exit": 0,
+    "public_manifest_files_unchanged": 103,
+    "upload_attempt_exit": 70,
+    "upload_error": "exportArchive Failed to Use Accounts",
+    "upload_confirmed": false,
+    "testflight_confirmed": false,
+    "app_review_changed": false
+  },
+  "prior_apple": {
+    "submitted_build": "920",
+    "submission_id": "ca44f7e9-9ef5-4cb9-aae0-20731a668a77",
+    "last_review_status_email": "Waiting for Review",
+    "status_email_time": "2026-09-08T23:38:33Z",
+    "latest_confirmed_testflight_build": "926",
+    "testflight_email_time": "2026-09-09T21:52:30Z",
+    "fresh_authenticated_read": false
+  },
+  "apple_support": {
+    "case": "102957999956",
+    "followup_sent": true,
+    "sent_at": "2026-09-12T10:09:56Z",
+    "from": "apreda31@gmail.com",
+    "to": "appreview@apple.com",
+    "gmail_id": "1a095185bdddb8e8",
+    "sent_label_verified": true,
+    "expedited_review_granted": false
+  },
+  "production": {
+    "scheduler_pid": 11667,
+    "winners_pid": 759,
+    "game_model": "codex-gpt-5.6-sol",
+    "props_model": "codex-gpt-5.6-luna",
+    "game_era": "80c55f8305ca",
+    "props_era": "0dc78ba3374d",
+    "edge_timestamp_checks_passed": 22,
+    "uncommitted_exception": "ios/GaryApp/GoogleService-Info.plist",
+    "open_profile_reports": 0,
+    "command_exit": 1
+  },
+  "marketing": {
+    "checked_at": "2026-09-12T10:11:42.275732+00:00",
+    "status": "action_required",
+    "uncertain_sends": 1,
+    "yesterday": "2026-09-11",
+    "logged_posts": 18,
+    "pick_threads": 16,
+    "new_funnel_or_retention_report": false
+  },
+  "remaining": [
+    "Apple/Xcode account access and current review/build reconciliation",
+    "June engine / no-xERA direction conflict",
+    "One uncertain X publication requires receipt reconciliation before any retry",
+    "Auth/Cloud configuration checks and launch rehearsal"
+  ],
+  "claude_message_sent": false,
+  "evidence_directory": "/Users/adam.preda/Documents/ChatGPT/Gary/claude-handoff-2026-09-12"
+}
