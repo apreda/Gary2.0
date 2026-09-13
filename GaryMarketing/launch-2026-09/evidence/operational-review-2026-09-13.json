@@ -66,5 +66,11 @@
     "temporary_tabs_closed": true,
     "viewport_restored": true
   },
-  "scope": "A dated check, not certification of Apple approval, complete end-to-end acceptance, unchanged future state or zero bugs."
+  "scope": "A dated check, not certification of Apple approval, complete end-to-end acceptance, unchanged future state or zero bugs.",
+  "later_owner_evidence": {
+    "commit": "1709fec1",
+    "handoff": "HANDOFF_2026-09-13_NFL_SUNDAY_RECOVERY.md",
+    "reported_cause": "Laptop lost power, reported by Adam to the Sunday recovery owner",
+    "recovery": "Morning health ok at 14:34:44.720Z, workers on AC power; ongoing pregame work, no historical picks manufactured"
+  }
 }

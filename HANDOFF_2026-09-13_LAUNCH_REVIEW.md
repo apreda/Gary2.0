@@ -2,7 +2,7 @@
 
 Work in `/Users/adam.preda/Gary2.0` on `main`. Read `AGENTS.md`; preserve concurrent changes and private configuration. The Documents workspace `repo` clone is retired. The full project background is [the September 12 Claude handoff](HANDOFF_2026-09-12_CLAUDE_FABLE_5_1.md), but its open-issue list was superseded later that day.
 
-Read these current records in order:
+Read these current records in order; also read [the Sunday recovery handoff](HANDOFF_2026-09-13_NFL_SUNDAY_RECOVERY.md), added during this review, for the founder-reported laptop power loss and verified morning recovery:
 
 1. [September 12 completion](HANDOFF_2026-09-12_CODEX_COMPLETION.md): founder direction, June freeze, subscription-first research, current Winners policy, fixed dependency alerts and reconciled X receipt.
 2. [Feed/build 929](HANDOFF_2026-09-12_FEED_929.md): native changes, verification, signed archive and failed Apple upload.
@@ -18,12 +18,12 @@ Native performance work and tests are changing concurrently in the shared checko
 
 Current scheduler/Winners PIDs observed: 2340/2347. Models: Sol games/MLB, Luna props. Later founder work removed the MLB hold. Preserve June's original prompt/engine, including original xERA references, for the requested 300-pick observation period. Do not revive the older no-xERA/hold instructions from historical launch documents.
 
-The material finding is **23/60 prior-day stored slate coverage**, plus a **21h43m44s scheduler-log gap**. Both workers are currently running with sleep-prevention assertions. Cause of the gap is unknown; current health does not establish continuous operation. Check host/process evidence and actual schedule states without manufacturing missed historical picks or changing frozen prediction behavior.
+The material finding is **23/60 prior-day stored slate coverage**, plus a **21h43m44s scheduler-log gap**. Both workers are currently running with sleep-prevention assertions. The newer Sunday recovery handoff records Adam reporting laptop power loss, supplies its recovery checks and confirms AC power. Exact power-loss timing was not independently mapped to the entire log interval; current health does not establish continuous operation. Confirm continued coverage and actual schedule states without manufacturing missed historical picks or changing frozen prediction behavior.
 
 ## This review's delivered change
 
-Source **7dc7a951** is pushed: the marketing report now understands curated X selection, preserving app coverage and durable failed-attempt checks. Future recap copy no longer promises every game every day. **social-auto-post v111**, deployed September 13 at 14:31:01.795 UTC, retains JWT verification and matches all 14 canonical source files. Twenty readiness tests, 132 related social regressions, all 235 edge-helper tests and Deno check passed. No manual post or campaign was sent and no cadence/selection/generation configuration changed.
+Source **7dc7a951** is pushed: the marketing report now understands curated X selection, preserving app coverage and durable failed-attempt checks. Future recap copy no longer promises every game every day. **social-auto-post v111**, deployed September 13 at 14:31:01.795 UTC, retains JWT verification and matches all 14 canonical source files. Twenty readiness tests, 132 related social regressions, all 235 edge-helper tests and Deno check passed. The normal 14:45 UTC cycle reported audience-drip-v1 and healthy status, with zero unresolved/uncertain receipts. Today’s 5/28 stored picks leave only future games uncovered at that checkpoint. No manual post or campaign was sent and no cadence/selection/generation configuration changed.
 
-The website dependency alerts are closed; production at `4a027b2b` is READY. The newer peer source `5e1d5d52` restores Sunday Wire source receipts; consult its own tests/diff before further changes. The working tree still contains native WIP and its tests. Use explicit stage/commit paths.
+The website dependency alerts are closed; production at `4a027b2b` is READY. Peer source `5e1d5d52` restores Sunday Wire source receipts, with the operational handoff committed in `1709fec1`; consult its own tests/diff before further changes. The working tree still contains native WIP and its tests. Use explicit stage/commit paths.
 
 The latest cohort has eight consented sessions, one useful read, and one return among three mature observed browsers. No measured Book demand or sportsbook relationship is established. Assets are prepared but new campaigns are held until September 20. Read the scorecard for precise denominators and remaining gates. Source, deployment, upload, review, public availability and audience validation are separate outcomes.

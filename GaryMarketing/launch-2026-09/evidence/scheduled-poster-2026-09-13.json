@@ -1,0 +1,37 @@
+{
+  "checked_at": "2026-09-13T14:45:28.99271+00:00",
+  "status": "ready",
+  "posting_coverage": {
+    "policy": "audience-drip-v1",
+    "attempted_deadline_misses": 0,
+    "unselected_past_deadline": 0
+  },
+  "slate_coverage": {
+    "scheduled_games": 28,
+    "games_with_stored_pick": 5,
+    "scheduled_start_passed_without_pick": 0,
+    "future_games_without_pick": 23,
+    "interrupted_games_without_pick": 0,
+    "unknown_start_without_pick": 0,
+    "stored_picks_without_matching_slate": 0
+  },
+  "latest_poster_response": {
+    "created": "2026-09-13T14:45:01.225979+00:00",
+    "health": {
+      "failed_posts": 0,
+      "issues": [],
+      "missed_picks": 0,
+      "posted_picks": 0,
+      "status": "ok"
+    },
+    "posting_policy": "audience-drip-v1",
+    "status_code": 200
+  },
+  "publication_recovery": {
+    "stale_unresolved": 0,
+    "uncertain_sends": 0,
+    "unresolved": 0
+  },
+  "issues": [],
+  "scope": "Read-only SQL inspection of the existing scheduled cycle; no handler invocation or manual post. Future games are not missed picks. Healthy observation is not full-day or launch acceptance."
+}

@@ -67,7 +67,8 @@
     "scheduler_running_on_read": true,
     "winners_worker_running_on_read": true,
     "caffeinate_assertions_present": true,
-    "cause": "not established; log silence is not proof of a specific shutdown, sleep or scheduler failure",
-    "configuration_changed_in_this_review": false
+    "cause": "Later HANDOFF_2026-09-13_NFL_SUNDAY_RECOVERY.md records Adam reporting laptop power loss and verified recovery. Exact power-loss timing was not independently mapped to the entire observed log gap.",
+    "configuration_changed_in_this_review": false,
+    "recovery_handoff": "HANDOFF_2026-09-13_NFL_SUNDAY_RECOVERY.md"
   }
 }

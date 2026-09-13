@@ -4,7 +4,7 @@ Launch campaigns are held until September 20; Product Hunt is saved for 3:01 AM 
 
 Website dependency alerts and the uncertain X receipt are resolved. Later founder direction preserves June unchanged, including xERA, for 300 picks and removed the MLB hold. Runtime is Sol games/MLB and Luna props. Current Winners and X selection policies are in the later September 12 handoffs.
 
-September 13's review found stored picks for only 23 of the prior day's 60 scheduled games and a 21h43m44s scheduler-log gap. Both workers are now running; establish continuity and actual cause before changing infrastructure. Do not invent historical picks or rewrite records. The narrow X reporting/recap repair is pushed in 7dc7a951 and deployed as v111 with exact source parity and passing tests.
+September 13's review found stored picks for only 23 of the prior day's 60 scheduled games and a 21h43m44s scheduler-log gap. The newer HANDOFF_2026-09-13_NFL_SUNDAY_RECOVERY.md records Adam reporting laptop power loss and verified morning recovery. Both workers are running on AC power; establish continued coverage before changing infrastructure. Do not invent historical picks or rewrite records. The narrow X reporting/recap repair is pushed in 7dc7a951 and deployed as v111 with exact source parity and passing tests.
 
 Preserve concurrent native performance changes, local configuration and the production scheduler. Never read/hash/stage private Firebase or SecretsLocal files, including archive copies. Commit only completed explicit paths. Do not confuse a shared dirty tree with a final release candidate.
 
