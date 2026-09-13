@@ -50,7 +50,7 @@ WITH clock AS (
 ), responses AS (
   SELECT created, status_code, content::jsonb AS body FROM response_candidates
 ), scheduled_responses AS (
-  SELECT created, status_code, body->'health' AS health FROM responses
+  SELECT created, status_code, body->'health' AS health, body->>'posting_policy' AS posting_policy FROM responses
   WHERE body->>'dry_run' = 'false' AND body->>'run_kind' = 'scheduled'
 ), redirects AS (
   SELECT 'legacy_link_clicks' AS source_table, ct, count(*) AS raw_events,
@@ -92,6 +92,9 @@ WITH clock AS (
   SELECT l.pick_text AS pick, l.commence_time
   FROM public.social_post_log l CROSS JOIN clock c WHERE l.post_date = c.et_day::text
     AND l.thread_format IN ('standard', 'top_pick')
+), today_publication_intents AS (
+  SELECT i.publication_key, i.state
+  FROM public.social_publication_intents i CROSS JOIN clock c WHERE i.post_date = c.et_day::text
 )
 SELECT json_build_object(
   'checked_at', c.checked_at, 'et_date', c.et_day,
@@ -115,5 +118,6 @@ SELECT json_build_object(
   'today_picks', coalesce((SELECT json_agg(x) FROM today_picks x), '[]'::json),
   'current_week_nfl_picks', coalesce((SELECT json_agg(x) FROM current_week_nfl_picks x), '[]'::json),
   'today_slate', coalesce((SELECT json_agg(x) FROM today_slate x), '[]'::json),
-  'today_post_logs', coalesce((SELECT json_agg(x) FROM today_post_logs x), '[]'::json)
+  'today_post_logs', coalesce((SELECT json_agg(x) FROM today_post_logs x), '[]'::json),
+  'today_publication_intents', coalesce((SELECT json_agg(x) FROM today_publication_intents x), '[]'::json)
 ) AS snapshot FROM clock c;

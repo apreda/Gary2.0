@@ -34,7 +34,7 @@ import { mergeSocialPickSources, hasLoggedTicket, publicationKey } from "./pickS
 import { publishIntent, publicationStore } from "./publication.js";
 import { barePick } from "./barepick.ts";
 import { computeStanding } from "./pl.ts";
-import { selectAudiencePicks, audienceDeadlineOutcomes } from "./audience.ts";
+import { AUDIENCE_VERSION, selectAudiencePicks, audienceDeadlineOutcomes } from "./audience.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -770,7 +770,7 @@ async function runArcUpdateMode(today: string, dryRun: boolean) {
 //   - UAB +27.5 -118 ✅
 //   - Georgia Tech -6.5 -110 ❌
 //
-//   Every game, every day. The full card is in the app.
+//   The picks and full reasoning are in the app.
 //
 // Deterministic: no LLM, no mood, no opening commentary. Props excluded
 // (founder: "just do game picks not props"). Composition lives in recap.ts;
@@ -908,7 +908,7 @@ Deno.serve(async (req) => {
   // it. The retained pg_net response provides the real result to the read-only
   // marketing-readiness command. No additional cron, posts, or alerts.
   const respond = (body: any, init?: ResponseInit) => Response.json({
-    ...body, service: "social-auto-post", checked_at: new Date().toISOString(),
+    ...body, service: "social-auto-post", posting_policy: AUDIENCE_VERSION, checked_at: new Date().toISOString(),
     dry_run: dryRun, run_kind: runKind, publication_recovery: publicationRecovery, health: socialRunHealth({ ...body, publication_recovery: publicationRecovery }),
   }, init);
   try {

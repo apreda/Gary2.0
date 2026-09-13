@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { evaluateMarketingReadiness, formatMarketingReadiness, sameSlateGame } from '../../scripts/lib/marketingReadiness.js';
 
 const snapshot = () => ({
-  checked_at: '2026-09-04T18:45:00Z', et_date: '2026-09-04',
+  checked_at: '2026-09-04T18:45:00Z', et_date: '2026-09-04', posting_policy: 'all_games',
   window: { start_inclusive: '2026-08-21', end_exclusive: '2026-09-04' },
   jobs: [{ jobname: 'social-auto-post-hourly', active: true, last_started_at: '2026-09-04T18:30:00Z', last_sql_status: 'succeeded' },
     { jobname: 'engagement-sheet-daily', active: true }],
@@ -14,6 +14,51 @@ const snapshot = () => ({
 });
 
 describe('read-only marketing readiness decisions', () => {
+  const curated = () => {
+    const state = snapshot();
+    state.latest_poster_response.posting_policy = 'audience-drip-v1';
+    state.today_picks = [1, 2].map(game_id => ({ league: 'MLB', game_id,
+      away_team: 'Tigers', home_team: 'Guardians', pick: `Ticket ${game_id}`,
+      commence_time: '2026-09-04T18:30:00Z' }));
+    state.today_slate = state.today_picks;
+    state.today_publication_intents = [];
+    return state;
+  };
+
+  it('does not call intentional audience omissions failed X posts', () => {
+    const report = evaluateMarketingReadiness(curated());
+    expect(report.status).toBe('ready');
+    expect(report.current_slate.deadline_passed_without_log).toBe(2);
+    expect(report.posting_coverage).toMatchObject({ policy: 'audience-drip-v1', attempted_deadline_misses: 0, unselected_past_deadline: 2 });
+    expect(formatMarketingReadiness(report)).toContain('2 unselected past deadline');
+  });
+
+  it('still flags a failed durable attempt and keeps the other doubleheader game separate', () => {
+    const state = curated();
+    state.today_publication_intents = [{ publication_key: '["MLB","id","2"]', state: 'expired' }];
+    const report = evaluateMarketingReadiness(state);
+    expect(report.exit_code).toBe(1);
+    expect(report.posting_coverage).toMatchObject({ attempted_deadline_misses: 1, unselected_past_deadline: 1 });
+    expect(report.issues.map(x => x.code)).toContain('PREGAME_COVERAGE_GAP');
+    expect(report).not.toHaveProperty('today_publication_intents');
+  });
+
+  it('cannot certify omissions without the durable attempt read or a recognized policy', () => {
+    const state = curated(); delete state.today_publication_intents;
+    expect(evaluateMarketingReadiness(state).issues.map(x => x.code)).toContain('POSTING_ATTEMPTS_UNVERIFIED');
+    delete state.latest_poster_response.posting_policy; delete state.posting_policy;
+    expect(evaluateMarketingReadiness(state).issues.map(x => x.code)).toContain('POSTING_POLICY_UNVERIFIED');
+  });
+
+  it('keeps missing app picks and stale or degraded poster responses actionable under curation', () => {
+    const state = curated();
+    state.today_slate = [...state.today_slate, { ...state.today_slate[0], game_id: 3 }];
+    state.latest_poster_response.health = { status: 'degraded', issues: ['X_CREDITS_UNAVAILABLE'] };
+    const issues = evaluateMarketingReadiness(state).issues.map(x => x.code);
+    expect(issues).toContain('SLATE_PICK_COVERAGE_GAP');
+    expect(issues).toContain('POSTER_DEGRADED');
+  });
+
   it('a healthy no-game day is ready without assuming paid account balance or audience growth', () => {
     const report = evaluateMarketingReadiness(snapshot());
     expect(report.status).toBe('ready');

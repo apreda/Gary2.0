@@ -1,4 +1,4 @@
-import { sameSourceGame, mergeSocialPickSources, hasPostedSourcePick } from '../../supabase/functions/social-auto-post/pickSources.js';
+import { sameSourceGame, mergeSocialPickSources, hasPostedSourcePick, publicationKey } from '../../supabase/functions/social-auto-post/pickSources.js';
 export const sameSlateGame = sameSourceGame;
 
 /** Website's active weekly NFL source, restricted to this ET game date. */
@@ -44,17 +44,40 @@ export function evaluateMarketingReadiness(snapshot) {
   }
   const publishedSlatePicks = mergePublishedSlatePicks(snapshot.today_picks ?? [], snapshot.current_week_nfl_picks ?? [], snapshot.et_date);
   const currentSlate = { stored_picks: 0, logged_pick_threads: 0, pending_picks: 0, deadline_passed_without_log: 0, missing_or_invalid_start: 0 };
+  const pastDeadline = [];
   for (const pick of publishedSlatePicks) {
     currentSlate.stored_picks++;
     const logged = hasPostedSourcePick(pick, snapshot.today_post_logs ?? []);
     if (logged) { currentSlate.logged_pick_threads++; continue; }
     const start = Date.parse(pick.commence_time);
     if (!Number.isFinite(start)) currentSlate.missing_or_invalid_start++;
-    else if (start - now < 5 * 60000) currentSlate.deadline_passed_without_log++;
+    else if (start - now < 5 * 60000) { currentSlate.deadline_passed_without_log++; pastDeadline.push(pick); }
     else currentSlate.pending_picks++;
   }
-  if (currentSlate.deadline_passed_without_log || currentSlate.missing_or_invalid_start) {
+  const postingCoverage = { policy: response?.posting_policy ?? snapshot.posting_policy ?? 'unverified',
+    attempted_deadline_misses: null, unselected_past_deadline: null };
+  if (postingCoverage.policy === 'audience-drip-v1') {
+    if (!Array.isArray(snapshot.today_publication_intents)) {
+      issue('POSTING_ATTEMPTS_UNVERIFIED', 'unverified', 'No durable attempt rows were read; unposted picks cannot be classified as intentional omissions.');
+    } else {
+      const attempted = new Set(snapshot.today_publication_intents.map(row => row.publication_key));
+      postingCoverage.attempted_deadline_misses = 0;
+      postingCoverage.unselected_past_deadline = 0;
+      for (const pick of pastDeadline) {
+        try {
+          if (attempted.has(publicationKey(pick))) postingCoverage.attempted_deadline_misses++;
+          else postingCoverage.unselected_past_deadline++;
+        } catch {
+          issue('POSTING_IDENTITY_UNVERIFIED', 'unverified', 'An unposted pick lacks stable game identity; its attempt cannot be matched.');
+        }
+      }
+      if (postingCoverage.attempted_deadline_misses) issue('PREGAME_COVERAGE_GAP', 'action_required', `${postingCoverage.attempted_deadline_misses} durable publication attempts passed the five-minute posting deadline without an exact-ticket log. Reconcile existing receipts before any retry.`);
+    }
+    if (currentSlate.missing_or_invalid_start) issue('POSTING_START_UNVERIFIED', 'unverified', `${currentSlate.missing_or_invalid_start} stored picks have no usable start; do not infer a missed or eligible publication.`);
+  } else if (postingCoverage.policy === 'all_games' && (currentSlate.deadline_passed_without_log || currentSlate.missing_or_invalid_start)) {
     issue('PREGAME_COVERAGE_GAP', 'action_required', `${currentSlate.deadline_passed_without_log} stored picks passed the posting deadline without a log; ${currentSlate.missing_or_invalid_start} have no usable start. This does not establish when the source pick became available.`);
+  } else if (postingCoverage.policy !== 'all_games' && (currentSlate.deadline_passed_without_log || currentSlate.missing_or_invalid_start)) {
+    issue('POSTING_POLICY_UNVERIFIED', 'unverified', 'The poster has not reported a recognized selection policy; unposted picks are not automatically failed publications.');
   }
   const slateCoverage = { scheduled_games: 0, games_with_stored_pick: 0, scheduled_start_passed_without_pick: 0,
     future_games_without_pick: 0, interrupted_games_without_pick: 0, unknown_start_without_pick: 0, stored_picks_without_matching_slate: 0 };
@@ -76,17 +99,18 @@ export function evaluateMarketingReadiness(snapshot) {
     if (slateCoverage.scheduled_start_passed_without_pick) issue('SLATE_PICK_COVERAGE_GAP', 'action_required', `${slateCoverage.scheduled_start_passed_without_pick} slate games have passed their stored scheduled start without a matching published game pick. Inspect generation and schedule status; this does not prove the games actually started.`);
     if (slateCoverage.unknown_start_without_pick) issue('SLATE_START_UNVERIFIED', 'unverified', `${slateCoverage.unknown_start_without_pick} uncovered slate games have no usable scheduled start.`);
   }
-  const { today_picks: _privateWorkingRows, current_week_nfl_picks: _weeklyRows, today_slate: _slateRows, today_post_logs: _postRows, ...evidence } = snapshot;
+  const { today_picks: _privateWorkingRows, current_week_nfl_picks: _weeklyRows, today_slate: _slateRows, today_post_logs: _postRows, today_publication_intents: _attemptRows, ...evidence } = snapshot;
   const status = issues.some((i) => i.severity === 'action_required') ? 'action_required'
     : issues.length ? 'unverified' : 'ready';
   return {
     status, exit_code: status === 'ready' ? 0 : status === 'action_required' ? 1 : 2,
-    issues, current_slate: currentSlate, slate_coverage: slateCoverage, ...evidence,
+    issues, current_slate: currentSlate, posting_coverage: postingCoverage, slate_coverage: slateCoverage, ...evidence,
     measurement_notes: [
       '14 completed Eastern dates; today is excluded from audience comparisons.',
       'Current stored-pick posting coverage is separate from full daily_slate coverage. Game IDs take precedence; fallback matching requires league, both exact normalized teams and exact start, so one doubleheader pick cannot cover both games.',
       'Both publication and posting coverage use the poster\'s shared daily_picks + latest active weekly_nfl_picks merge, restricted to the weekly game\'s ET date and deduplicated by game identity; daily picks take precedence.',
       'Stored schedule times/statuses may lag real events; interrupted games are separate and future games are not declared missed.',
+      'Audience curation intentionally omits some picks. Unposted-after-deadline is descriptive; only durable attempted publications are missed X posts under audience-drip-v1. Full app slate coverage is checked separately.',
       'New X publications reserve a game identity before sending and preserve confirmed root/reply receipts for log repair. Unknown send outcomes require reconciliation, never automatic re-sending. Legacy receipts retain conservative ticket-text dedup. Readiness still requires exact ticket/start coverage; corrected schedules can produce an honest unverified gap.',
       'Mature observed = published at least 6 days ago with a metric snapshot at least 5 days after publication; all other rows are separate.',
       'Every metric reports its non-null denominator. Null is unavailable, never zero.',
@@ -104,6 +128,8 @@ export function formatMarketingReadiness(report) {
     `Observed: ${report.checked_at}`, `Audience window: ${report.window.start_inclusive} through ${report.window.end_exclusive} exclusive, Eastern dates`];
   for (const item of report.issues) lines.push(`${item.severity.toUpperCase()} ${item.code}: ${item.detail}`);
   lines.push(`Stored pick posting: ${report.current_slate.logged_pick_threads}/${report.current_slate.stored_picks} logged; ${report.current_slate.pending_picks} pending; ${report.current_slate.deadline_passed_without_log} past deadline without a log; ${report.current_slate.missing_or_invalid_start} missing start`);
+  const posting = report.posting_coverage;
+  lines.push(`Posting policy: ${posting.policy}; ${posting.attempted_deadline_misses ?? 'unverified'} attempted misses; ${posting.unselected_past_deadline ?? 'unverified'} unselected past deadline`);
   const slate = report.slate_coverage;
   lines.push(`Daily slate: ${slate.games_with_stored_pick}/${slate.scheduled_games} games have a stored pick; uncovered: ${slate.scheduled_start_passed_without_pick} scheduled starts passed, ${slate.future_games_without_pick} future, ${slate.interrupted_games_without_pick} interrupted, ${slate.unknown_start_without_pick} unknown start; ${slate.stored_picks_without_matching_slate} stored picks have no matching slate game`);
   lines.push('Stored audience cohorts (sum of thread metrics):');

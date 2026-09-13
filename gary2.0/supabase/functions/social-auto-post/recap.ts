@@ -82,7 +82,7 @@ export function composeRecaps(rows: RecapRow[], slateDay: string): RecapPost[] {
       .sort((a, b) => Number(b.confidence ?? 0) - Number(a.confidence ?? 0))
       .map((p) => `- ${p.pick_text} ${marker(String(p.result ?? "").toLowerCase())}`);
     const text = `${ordinalDate(slateDay)}:\n\n${league}: ${won}-${lost}\n${lines.join("\n")}`
-      + `\n\nEvery game, every day. The full card is in the app.`;
+      + `\n\nThe picks and full reasoning are in the app.`;
     posts.push({ league, text, won, lost, pushes });
   }
 

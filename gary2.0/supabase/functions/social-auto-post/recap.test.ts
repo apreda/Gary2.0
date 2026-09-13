@@ -35,7 +35,7 @@ test("each sport gets its own post, biggest slate first", () => {
     "- Guardians -1.5 +106 ✅",
     "- Rays ML -160 ❌",
     "",
-    "Every game, every day. The full card is in the app.",
+    "The picks and full reasoning are in the app.",
   ].join("\n"));
 
   // The college post stands alone — its own date line, its own record.
