@@ -625,6 +625,10 @@ struct PicksCarouselView: View {
     /// `TabView` swipe can strand UIKit halfway between two game controllers.
     @State private var gamesMemo: [(matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])] = []
     @State private var edgeIndex: [String: [Signal]] = [:]
+    /// Resolve provider identity when accepted content changes, not for every
+    /// strip label, score, delay label and page redraw. Optional values also
+    /// cache an unresolved game; a missing ID must not trigger repeated scans.
+    @State private var gameIDMemo: (signature: String, ids: [String: Int?])?
     /// Masthead + strip context (founder, Jul 22: the Hub's upper part —
     /// wordmark, LAST 7 DAYS line, double rule, slate strip — is the Picks
     /// page's top now): the rolling 7-day pick record, and the day board for
@@ -1079,6 +1083,9 @@ struct PicksCarouselView: View {
         guard memoSignature != signature else { return }
         memoSignature = signature
         let built = computeGamesUnsorted()
+        gameIDMemo = (gameIDSignature, Dictionary(built.map {
+            (Self.gameIdentityKey($0.matchup, $0.commence), resolveBdlGameId(for: $0))
+        }, uniquingKeysWith: { first, _ in first }))
         // Initial publication: LIVE → upcoming → final, then first pitch.
         // Refreshes keep every existing identity at the same page index and append
         // genuinely new games. SwiftUI's page TabView is backed by
@@ -1158,7 +1165,21 @@ struct PicksCarouselView: View {
 
     /// The game's BDL id from its slate row (doubleheader-exact edge + live
     /// attachment). nil when the slate hasn't landed or the row predates ids.
+    private var gameIDSignature: String {
+        "\(store.contentRevision)|\(store.loadedDate)|\(sport)|\(pickDay)"
+    }
+
     private func bdlGameId(for g: (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])) -> Int? {
+        if let memo = gameIDMemo, memo.signature == gameIDSignature,
+           let cached = memo.ids[Self.gameIdentityKey(g.matchup, g.commence)] {
+            return cached
+        }
+        // Navigation may arrive before the visible game set has been built.
+        // Resolve against current content until its scoped memo is ready.
+        return resolveBdlGameId(for: g)
+    }
+
+    private func resolveBdlGameId(for g: (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])) -> Int? {
         guard let selectedDate = GamePageDataScope.slateDate(loadedDate: store.loadedDate, yesterday: pickDay == .yesterday) else { return nil }
         let expectedGameDate = ExactGameIdentity.easternDate(of: g.commence) ?? selectedDate
         func belongsToSelectedDate(_ stamp: String?) -> Bool {
@@ -1220,33 +1241,9 @@ struct PicksCarouselView: View {
     /// this, football look-aheads briefly mounted the baseball sections and an
     /// untyped INCOMING card until a later payload happened to supply a league.
     private func league(for g: (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])) -> String? {
-        let activeLeague = sport.uppercased()
-        if let league = g.props.first?.effectiveLeague, !league.isEmpty,
-           league.uppercased() == activeLeague {
-            return league.uppercased()
-        }
-
-        let key = Self.gameIdentityKey(g.matchup, g.commence)
-        if let league = store.slate.first(where: {
-            let rowLeague = ($0.league ?? "").uppercased()
-            return rowLeague == activeLeague
-                && Self.gameIdentityKey("\($0.away_team ?? "") @ \($0.home_team ?? "")",
-                                        $0.commence_time.flatMap(parseISO8601)) == key
-        })?.league, !league.isEmpty {
-            return league.uppercased()
-        }
-
-        let dayPicks = pickDay == .today ? store.gamePicks : store.yesterdayGamePicksAll
-        if let league = dayPicks.first(where: {
-            let matchup = "\($0.awayTeam ?? "") @ \($0.homeTeam ?? "")"
-            let pickLeague = ($0.league ?? "").uppercased()
-            return pickLeague == activeLeague
-                && Self.gameIdentityKey(matchup, $0.commence_time.flatMap(parseISO8601)) == key
-        })?.league, !league.isEmpty {
-            return league.uppercased()
-        }
-
-        return activeLeague
+        // Every branch of the former slate/pick scan required this same
+        // league and returned it. The game set is already sport-scoped.
+        sport.uppercased()
     }
 
     /// Per-GAME live lookup: BDL id first (doubleheader-exact), matchup-string
@@ -1834,7 +1831,7 @@ struct PicksCarouselView: View {
     private var slateStrip: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 0) {
+                LazyHStack(spacing: 0) {
                     dayBlock
                     // NCAAF only: the conference selector rides the strip in
                     // the day block's grammar (founder, Aug 25 2026).
@@ -1843,12 +1840,16 @@ struct PicksCarouselView: View {
                         conferenceBlock
                     }
                     ForEach(Array(games.enumerated()), id: \.offset) { idx, g in
-                        Rectangle().fill(Color.white.opacity(0.1)).frame(width: 1, height: 26)
-                        stripBlock(idx + 1, g)
+                        HStack(spacing: 0) {
+                            Rectangle().fill(Color.white.opacity(0.1)).frame(width: 1, height: 26)
+                            stripBlock(idx + 1, g)
+                        }
+                        .id(idx + 1)
                     }
                 }
                 .padding(.horizontal, 18)
             }
+            .fixedSize(horizontal: false, vertical: true)
             .onChange(of: page) { p in withAnimation { proxy.scrollTo(p, anchor: .center) } }
         }
         .padding(.top, 12)
@@ -1971,7 +1972,6 @@ struct PicksCarouselView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .id(index)
     }
 
     /// One college side on the strip: the provider's abbreviation, else the
@@ -2192,9 +2192,7 @@ struct PicksCarouselView: View {
         }
     }
 
-    /// Best-effort league for a strip block so teamAbbrev can pick the right
-    /// abbreviation map. Reads the game's own props first, then the day's
-    /// picks / slate, falling back to the active filter.
+    /// The game set's league, shared by strip labels and exact score lookups.
     private func gameLeague(_ g: (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])) -> String {
         league(for: g) ?? ""
     }

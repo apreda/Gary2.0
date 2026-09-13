@@ -102,6 +102,8 @@ struct BillfoldResultDots: View {
 
 struct BillfoldView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.readingPageActive) private var activePage
+    @State private var deferredForegroundRefresh = false
     @State private var selectedTab = 0
     @State private var selectedSport: Sport = .all
     @State private var allGameResults: [GameResult] = []
@@ -429,8 +431,21 @@ struct BillfoldView: View {
         }
         .task { await loadData() }
         .onChange(of: scenePhase) { phase in
-            // Foreground → silently refresh the ledger/chart (loadData is silent-safe).
-            if phase == .active { Task { await loadData() } }
+            guard phase == .active else { return }
+            if activePage {
+                deferredForegroundRefresh = false
+                Task { await loadData() }
+            } else {
+                deferredForegroundRefresh = true
+            }
+        }
+        .onChange(of: activePage) { active in
+            // A kept-alive Billfold waits until it is visible to refresh. It
+            // must still catch up when entered after a foreground elsewhere.
+            if active, scenePhase == .active, deferredForegroundRefresh {
+                deferredForegroundRefresh = false
+                Task { await loadData() }
+            }
         }
         .onChange(of: selectedTab) { _ in recomputeCache(); chartZoomScale = 1; chartZoomAnchor = 1; scrubDate = nil }
         .onChange(of: garyScope) { _ in recomputeCache(); chartZoomScale = 1; chartZoomAnchor = 1; scrubDate = nil }

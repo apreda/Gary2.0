@@ -1,7 +1,9 @@
 // Shipping model/selector/cache/loader declarations are extracted by the Node
 // wrapper. Only transport and view state are replaced; no network or SDK UI.
 func check(_ value: Bool, _ message: String = "Check failed") { precondition(value, message) }
+var timestampParseCalls = 0
 func parseISO8601(_ value: String) -> Date? {
+    timestampParseCalls += 1
     let f = ISO8601DateFormatter()
     f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     return f.date(from: value) ?? ISO8601DateFormatter().date(from: value)
@@ -14,7 +16,7 @@ struct GaryPick { var league: String? = "MLB"; var awayTeam: String? = "New York
 struct PropPick { var league = "MLB"; var commence_time: String?; var game_id: Int? }
 struct SlateRow { var league: String? = "MLB"; var away_team: String? = "New York Mets"; var home_team: String? = "Miami Marlins"; var commence_time: String?; var bdl_game_id: Int? }
 enum PicksDay { case today, yesterday }
-final class PickStore { var loadedDate: String? = "2026-09-08"; var gamePicks: [GaryPick] = []; var yesterdayGamePicksAll: [GaryPick] = []; var slate: [SlateRow] = [] }
+final class PickStore { var contentRevision: UInt64 = 0; var loadedDate: String? = "2026-09-08"; var gamePicks: [GaryPick] = []; var yesterdayGamePicksAll: [GaryPick] = []; var slate: [SlateRow] = [] }
 
 @MainActor enum SupabaseAPI {
     struct WireItem { let date: String?; let league: String?; let kind: String?; let headline: String? }
@@ -117,6 +119,35 @@ func player(_ dateMarker: String, id: Int = 5059929, playerID: String = "42", le
     precondition(resolver.bdlGameId(for: (matchup, "", nil, false, [])) == 5059941, "An accepted date-only current slate remains usable")
     resolver.store.slate.append(SlateRow(commence_time: "2026-09-08T17:10:00Z", bdl_game_id: 5059942))
     precondition(resolver.bdlGameId(for: (matchup, "", nil, true, [])) == nil)
+
+    // Cache both a resolved game and an unresolved one. Repainting scores,
+    // selecting pages and swiping the strip must not reparse the whole slate.
+    let memoReader = PicksCarouselView()
+    memoReader.pickDay = .yesterday
+    memoReader.store.yesterdayGamePicksAll = [GaryPick(commence_time: pastStart, game_id: 5059929)]
+    let key = PicksCarouselView.gameIdentityKey(group.matchup, group.commence)
+    let missing = (matchup: "Other Away @ Other Home", time: "", commence: group.commence, dh: false, props: [PropPick]())
+    let missingKey = PicksCarouselView.gameIdentityKey(missing.matchup, missing.commence)
+    memoReader.gameIDMemo = (memoReader.gameIDSignature, [key: 5059929, missingKey: nil])
+    timestampParseCalls = 0
+    for _ in 0..<1000 {
+        precondition(memoReader.bdlGameId(for: group) == 5059929)
+        precondition(memoReader.bdlGameId(for: missing) == nil)
+    }
+    precondition(timestampParseCalls == 0, "Cached identity reads must not parse timestamps")
+    memoReader.store.yesterdayGamePicksAll[0].game_id = 5059930
+    memoReader.store.contentRevision += 1
+    precondition(memoReader.bdlGameId(for: group) == 5059930, "Same-count ID edit invalidates memo")
+    precondition(timestampParseCalls > 0)
+    memoReader.gameIDMemo = (memoReader.gameIDSignature, [key: 5059930])
+    memoReader.sport = "NFL"
+    precondition(memoReader.bdlGameId(for: group) == nil, "Another league cannot reuse a cached provider ID")
+    memoReader.sport = "MLB"; memoReader.pickDay = .today
+    precondition(memoReader.bdlGameId(for: group) == nil, "Today cannot reuse Yesterday's memo")
+    memoReader.pickDay = .yesterday; memoReader.store.loadedDate = "2026-09-09"
+    memoReader.store.yesterdayGamePicksAll = []
+    precondition(memoReader.bdlGameId(for: group) == nil, "Rollover retires the old memo")
+    print("Identity memo: 2,000 reads, zero timestamp parses; content/league/day/rollover invalidation passed")
 
     // Shared caches keep each date independent, reject mislabeled responses,
     // and reuse an in-flight same-day request without a current-day fallback.

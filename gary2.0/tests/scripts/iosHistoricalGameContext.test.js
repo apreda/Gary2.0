@@ -89,11 +89,14 @@ ${declaration(picks, 'enum ScoutWireCache')}
  var store = PickStore()
  var pickDay = PicksDay.today
  var sport = "MLB"
+ var gameIDMemo: (signature: String, ids: [String: Int?])?
  func propSportKey(_ p: PropPick) -> String { p.league == "MLB HR" ? "MLB" : p.league }
  ${method(picks, '    static func matchupKey(')}
  nonisolated ${method(picks, '    static func timeBucket(').trim()}
  ${method(picks, '    static func gameIdentityKey(')}
  ${method(picks, '    private func bdlGameId(for')}
+ ${method(picks, '    private var gameIDSignature:')}
+ ${method(picks, '    private func resolveBdlGameId(for')}
 }
 ${fixture}`;
       const path = join(dir, 'Fixture.swift');

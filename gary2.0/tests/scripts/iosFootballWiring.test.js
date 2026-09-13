@@ -560,7 +560,8 @@ describe('Home MLB/NFL board parity', () => {
       }).join('\n');
       const functions = [
         'static func matchupKey(', 'static func timeBucket(', 'static func gameIdentityKey(',
-        'private func propSportKey(', 'private func bdlGameId(', 'private func consumeFocus()',
+        'private func propSportKey(', 'private func bdlGameId(', 'private var gameIDSignature:',
+        'private func resolveBdlGameId(', 'private func consumeFocus()',
       ].map(declaration => swiftBlock(picksTab, declaration)).join('\n');
       // Execute the shipping navigation, ID resolution and name matcher. Only
       // SwiftUI animation/state and the network-backed model/store are stubbed.
@@ -588,6 +589,7 @@ struct PickRow {
  var commence_time: String? = "2026-09-07T17:00:00Z"
 }
 struct Store {
+ var contentRevision: UInt64 = 0
  var loadedDate: String? = "2026-09-07"
  var loading = false; var slate: [SlateRow] = []
  var gamePicks: [PickRow] = []; var yesterdayGamePicksAll: [PickRow] = []
@@ -601,6 +603,7 @@ final class FocusState {
 enum PickDay { case today, yesterday }
 typealias Game = (matchup: String, time: String, commence: Date?, dh: Bool, props: [PropPick])
 final class Router {
+ var gameIDMemo: (signature: String, ids: [String: Int?])?
  var focusState = FocusState(); var store = Store(); var pickDay = PickDay.today
  var sport = "MLB"; var sportAutoSelected = true; var sports = ["MLB", "NFL", "NCAAF"]
  var games: [Game] = []; var page = 0

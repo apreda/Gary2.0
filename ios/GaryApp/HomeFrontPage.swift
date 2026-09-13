@@ -1075,16 +1075,14 @@ struct HeadlineFlipCard: View {
                 // pick answered by truncating to "CARDINALS…". An ellipsis is
                 // never acceptable — the glyph moved instead.
                 HStack(spacing: 6) {
-                    if !story.league.isEmpty {
-                        Text(story.league.uppercased())
-                            .font(GaryFonts.kicker(9.9)).tracking(1.6)
-                            .foregroundStyle(leagueAccent)
-                    }
-                    if !story.date.isEmpty {
-                        Text(story.league.isEmpty ? story.date : "· \(story.date)")
-                            .font(GaryFonts.kicker(9.9)).tracking(1.6)
-                            .foregroundStyle(GaryColors.gold)
-                    }
+                    // One compressible line keeps the date together in the
+                    // narrower story column, including five-letter leagues.
+                    (Text(story.league.uppercased()).foregroundColor(leagueAccent)
+                     + Text(story.date.isEmpty ? "" : (story.league.isEmpty ? story.date : " · \(story.date)"))
+                        .foregroundColor(GaryColors.gold))
+                        .font(GaryFonts.kicker(9.9)).tracking(1)
+                        .lineLimit(1).minimumScaleFactor(0.75)
+                        .allowsTightening(true)
                     Spacer(minLength: 4)
                     if !story.bullets.isEmpty {
                         Image(systemName: "arrow.left.arrow.right")
@@ -1677,24 +1675,34 @@ struct DashedLine: Shape {
 /// 1Hz live countdown to the next first pitch/kickoff — a chip, not a hero.
 struct HomeCountdownText: View {
     let target: Date
+    @Environment(\.readingPageActive) private var activePage
+    @Environment(\.scenePhase) private var scenePhase
     /// Base size — the hero's clock column runs it smaller than the old
     /// full-width clock did.
     var size: CGFloat = 24
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { ctx in
-            let s = max(0, Int(target.timeIntervalSince(ctx.date)))
-            // Gold and tabular (A pass, Jul 26): the clock is the card's
-            // pulse — and never jitters. No leading zero on the lead unit
-            // (founder, Jul 27) — it reads like a clock, not a stopwatch:
-            // "9:55:16", and "55:16" once the hour is gone.
-            let h = s / 3600, m = (s % 3600) / 60
-            Text(s == 0 ? "ANY MINUTE"
-                        : (h > 0 ? String(format: "%d:%02d:%02d", h, m, s % 60)
-                                 : String(format: "%d:%02d", m, s % 60)))
-                .font(GaryFonts.mono(size, bold: true))
-                .foregroundStyle(GaryColors.gold)
+        if activePage, scenePhase == .active {
+            TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                countdown(at: ctx.date)
+            }
+        } else {
+            countdown(at: Date())
         }
+    }
+
+    private func countdown(at date: Date) -> some View {
+        let s = max(0, Int(target.timeIntervalSince(date)))
+        // Gold and tabular (A pass, Jul 26): the clock is the card's
+        // pulse — and never jitters. No leading zero on the lead unit
+        // (founder, Jul 27) — it reads like a clock, not a stopwatch:
+        // "9:55:16", and "55:16" once the hour is gone.
+        let h = s / 3600, m = (s % 3600) / 60
+        return Text(s == 0 ? "ANY MINUTE"
+                    : (h > 0 ? String(format: "%d:%02d:%02d", h, m, s % 60)
+                             : String(format: "%d:%02d", m, s % 60)))
+            .font(GaryFonts.mono(size, bold: true))
+            .foregroundStyle(GaryColors.gold)
     }
 }
 

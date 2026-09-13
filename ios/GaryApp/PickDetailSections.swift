@@ -1187,11 +1187,10 @@ enum Formatters {
         // Pattern to match American odds at the end (typically -110, +150, -105, etc.)
         // American odds are usually 3+ digits (100 or greater absolute value)
         // Spread/line values are smaller (like -7.5, +3, -14.5)
-        let pattern = #"(.+?)\s+([-+]\d{3,}\.?\d*)$"#
         var pickPart = pick
         var oddsPart = ""
         
-        if let regex = try? NSRegularExpression(pattern: pattern),
+        if let regex = trailingOddsPattern,
            let match = regex.firstMatch(in: pick, range: NSRange(pick.startIndex..., in: pick)) {
             if let pickRange = Range(match.range(at: 1), in: pick),
                let oddsRange = Range(match.range(at: 2), in: pick) {
@@ -1219,7 +1218,9 @@ enum Formatters {
         return (truncatedPick, oddsPart)
     }
     
-    private static func shortenTeamNamesInPick(_ pick: String) -> String {
+    // Immutable patterns are shared across cards and threads. Recompiling
+    // both city patterns for every pick dominated Home's formatting sample.
+    private static let proCityPatterns: [(followingWord: NSRegularExpression?, remove: NSRegularExpression?)] = {
         // Pro sports cities to shorten (NOT college - college teams use city/school as part of name)
         let cities = ["Dallas", "Detroit", "Los Angeles", "LA", "New York", "NY", "Boston", "Washington",
                       "Golden State", "San Francisco", "San Antonio", "New Orleans", "Oklahoma City", "OKC",
@@ -1230,14 +1231,24 @@ enum Formatters {
                       "New England", "Tennessee", "Arizona", "Carolina", "Buffalo"]
         // Note: Removed "Jacksonville" - it's also a college team name (Jacksonville State)
         
+        return cities.map { city in
+            (try? NSRegularExpression(pattern: "\\b\(city)\\s+(\\w+)", options: .caseInsensitive),
+             try? NSRegularExpression(pattern: "\\b\(city)\\s+", options: .caseInsensitive))
+        }
+    }()
+    private static let trailingOddsPattern = try? NSRegularExpression(pattern: #"(.+?)\s+([-+]\d{3,}\.?\d*)$"#)
+    private static let marketSuffixPattern = try? NSRegularExpression(
+        pattern: #"^(.+?)\s+(ML|moneyline|over\s+[\d.]+|under\s+[\d.]+|[-+][\d.]+)$"#,
+        options: .caseInsensitive)
+
+    private static func shortenTeamNamesInPick(_ pick: String) -> String {
         // College indicators - don't strip city if followed by these words
         let collegeIndicators = ["State", "Tech", "A&M", "University", "College", "Southern", "Northern", "Eastern", "Western", "Central"]
         
         var result = pick
-        for city in cities {
+        for patterns in proCityPatterns {
             // Check if this city is followed by a college indicator - if so, skip it
-            let cityPattern = "\\b\(city)\\s+(\\w+)"
-            if let regex = try? NSRegularExpression(pattern: cityPattern, options: .caseInsensitive),
+            if let regex = patterns.followingWord,
                let match = regex.firstMatch(in: result, range: NSRange(result.startIndex..., in: result)),
                let nextWordRange = Range(match.range(at: 1), in: result) {
                 let nextWord = String(result[nextWordRange])
@@ -1247,8 +1258,7 @@ enum Formatters {
             }
             
             // Safe to remove pro city name
-            let pattern = "\\b\(city)\\s+"
-            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
+            if let regex = patterns.remove {
                 result = regex.stringByReplacingMatches(in: result, range: NSRange(result.startIndex..., in: result), withTemplate: "")
             }
         }
@@ -1267,9 +1277,7 @@ enum Formatters {
         cleanPick = cleanPick.replacingOccurrences(of: " spread", with: "", options: .caseInsensitive)
         
         // Extract bet type and value at the end (ML, -7.5, +3, over 145.5, under 200, etc.)
-        let betPattern = #"^(.+?)\s+(ML|moneyline|over\s+[\d.]+|under\s+[\d.]+|[-+][\d.]+)$"#
-        
-        if let regex = try? NSRegularExpression(pattern: betPattern, options: .caseInsensitive),
+        if let regex = marketSuffixPattern,
            let match = regex.firstMatch(in: cleanPick, range: NSRange(cleanPick.startIndex..., in: cleanPick)) {
             if let teamRange = Range(match.range(at: 1), in: cleanPick),
                let betRange = Range(match.range(at: 2), in: cleanPick) {
