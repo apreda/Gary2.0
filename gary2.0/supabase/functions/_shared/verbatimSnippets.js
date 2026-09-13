@@ -184,10 +184,11 @@ export function reasonCandidates(rationale) {
 }
 
 /** The final boundary shared by model selection and deterministic fallback. */
-export function isSafeReasonPair(rationale, pair, budget) {
+export function isSafeReasonPair(rationale, pair, budget, { requireClosing = false } = {}) {
   if (!pair || typeof pair.opening !== 'string' || typeof pair.closing !== 'string') return false;
   if (!Number.isFinite(budget) || budget < 0) return false;
   const { opening, closing } = pair;
+  if (requireClosing && !closing.trim()) return false;
   const candidates = reasonCandidates(rationale).map(normWs);
   const safe = (sentence) => sentence.trim().length > 0
     && isConcreteFactSentence(sentence) && candidates.includes(normWs(sentence));
@@ -201,10 +202,11 @@ export function isSafeReasonPair(rationale, pair, budget) {
  * Facts lead (founder, Sep 7, supersedes thesis-first selection). Keep the
  * original evidence order and optionally the next fitting fact in the same
  * paragraph. One fact is complete; no commentary or unrelated padding is
- * required. Nothing fitting returns null, never permission to invent copy.
+ * required by default. Social posts requireClosing as of Sep 13; then only
+ * complete pairs are eligible. Nothing fitting returns null, never permission to invent copy.
  * @returns {{ opening: string, closing: string } | null}
  */
-export function fallbackReasonPair(rationale, budget) {
+export function fallbackReasonPair(rationale, budget, { requireClosing = false } = {}) {
   const cands = reasonCandidates(rationale);
   // No safe reason is a visible copy failure, never permission to reintroduce
   // headings, stakes, prices, or context-dependent prose through a fallback.
@@ -216,6 +218,9 @@ export function fallbackReasonPair(rationale, budget) {
     if (opening.length > budget) continue;
     const closing = cands.slice(oi + 1).find(s => paragraphOf(s) === paragraphOf(opening)
       && opening.length + s.length <= budget) ?? '';
+    // Mandatory three-part posts must keep looking when the first fact has
+    // no fitting partner. Never pad, truncate or duplicate a source sentence.
+    if (requireClosing && !closing) continue;
     return { opening, closing };
   }
   return null;

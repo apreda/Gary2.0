@@ -90,11 +90,11 @@ describe('X service endpoints reject untrusted callers at the real entrypoint', 
 });
 
 describe('authorized X operations retain their existing behavior against recording HTTP fixtures', () => {
-  it('a prepared pick rechecks the shared cadence reservation before sending its frozen copy',async()=>{
+  it.each([true, false])('prepared copy obeys layout and cadence guards (three parts: %s)',async threeParts=>{
     const day='2026-09-19', now=Date.parse(day+'T10:00:00-04:00');
     const p={league:'MLB',game_id:1,awayTeam:'Cubs',homeTeam:'Brewers',pick:'Cubs ML',commence_time:day+'T12:00:00-04:00',
       rationale:'Gómez, Hoffman and Minter all sat Sunday after throwing seven, 17 and 18 pitches Saturday.'};
-    const frozen={post_text:'Already prepared exact copy',pick_text:p.pick,commence_time:p.commence_time,thread_format:'standard'};
+    const frozen={post_text:threeParts ? 'Opening factual evidence.\n\nCubs ML\n\nClosing factual evidence.' : 'Opening factual evidence.\n\nCubs ML',pick_text:p.pick,commence_time:p.commence_time,thread_format:'standard'};
     const prepared={publication_key:'["MLB","id","1"]',state:'prepared',log_payload:frozen,reply_text:null};
     const f=fixture('social-auto-post',{transport:call=>{
       switch(call.url.pathname){
@@ -108,11 +108,39 @@ describe('authorized X operations retain their existing behavior against recordi
     }});
     const result=await f.internal('runPickMode')(day,now,false);
     expect(result.posted).toBe(false);
+    if (!threeParts) {
+      expect(result.results[0].error).toContain('required three-part layout');
+      expect(f.calls.filter(c=>c.method!=='GET')).toEqual([]);
+      return;
+    }
     expect(result.results[0].reason).toBe('publication interval reserved');
     const mutations=f.calls.filter(c=>c.method!=='GET');
     expect(mutations).toHaveLength(1);
     expect(mutations[0].url.pathname).toBe('/rest/v1/rpc/claim_social_publication');
     expect(JSON.parse(mutations[0].body).p_payload).toEqual(frozen);
+  });
+  it.each([true, false])('game-pick preview requires two source facts during a model outage (pair available: %s)', async hasPair => {
+    const day = '2026-09-19', now = Date.parse(day + 'T10:00:00-04:00');
+    const opening = 'Every Angels reliever had yesterday off.';
+    const closing = 'Sánchez has allowed a .737 OPS to right-handed hitters compared with .357 to lefties.';
+    const p = { league: 'MLB', game_id: 1, awayTeam: 'Angels', homeTeam: 'Brewers', pick: 'Angels ML',
+      commence_time: day + 'T12:00:00-04:00', rationale: hasPair ? `${opening} ${closing}` : opening };
+    const f = fixture('social-auto-post', { transport: call => {
+      switch (call.url.pathname) {
+        case '/rest/v1/daily_picks': return Response.json([{ picks: [p] }]);
+        case '/rest/v1/daily_slate': return Response.json([{ ...p, away_team: p.awayTeam, home_team: p.homeTeam, bdl_game_id: 1 }]);
+        case '/rest/v1/weekly_nfl_picks': case '/rest/v1/prop_picks': case '/rest/v1/social_post_log':
+        case '/rest/v1/social_publication_intents': return Response.json([]);
+        default: throw new Error('Unexpected send or dependency: ' + call.url.pathname);
+      }
+    } });
+    const result = await f.internal('runPickMode')(day, now, true, true);
+    if (hasPair) expect(result.results[0].hook).toBe(`${opening}\n\nAngels ML\n\n${closing}`);
+    else {
+      expect(result.results[0].error).toContain('no two whole standalone facts fit');
+      expect(result.results[0].hook).toBeUndefined();
+    }
+    expect(f.calls.filter(c => c.method !== 'GET')).toEqual([]);
   });
   it.each([
     ['postTweet', ['Fixture single'], '/functions/v1/post-single-tweet'],

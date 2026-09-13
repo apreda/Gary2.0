@@ -463,3 +463,44 @@ describe('standalone-sentence gate (founder, Aug 26 — the Pirates tweet)', () 
     expect(kept).toEqual(['Milwaukee is 26-12 against left-handed starters.']);
   });
 });
+
+
+describe('September 13 required fact / pick / second fact layout', () => {
+  const opening = 'Bijan Robinson finished last season with 1,478 rushing yards and 820 receiving yards.';
+  const closing = 'Pittsburgh allowed opposing tight ends 6.4 receptions per game last season.';
+  const rationale = `${opening} ${closing}`;
+  const options = { requireClosing: true };
+
+  it('preserves two whole source facts around the bare pick', () => {
+    const pick = 'Atlanta Falcons +6.5';
+    const budget = 278 - pick.length - 4;
+    const pair = fallbackReasonPair(rationale, budget, options);
+    expect(pair).toEqual({ opening, closing });
+    expect(isSafeReasonPair(rationale, pair, budget, options)).toBe(true);
+    const hook = [pair.opening, pick, pair.closing].join('\n\n');
+    expect(hook.split('\n\n')).toEqual([opening, pick, closing]);
+    expect(hook.length).toBeLessThanOrEqual(278);
+  });
+
+  it('rejects a missing, duplicate, invented, cross-paragraph or over-budget second fact', () => {
+    expect(fallbackReasonPair(opening, 278, options)).toBeNull();
+    for (const second of ['', ' ', opening, 'Bijan Robinson rushed for 2,000 yards.']) {
+      expect(isSafeReasonPair(rationale, { opening, closing: second }, 278, options)).toBe(false);
+    }
+    expect(fallbackReasonPair(`${opening}\n\n${closing}`, 278, options)).toBeNull();
+    expect(isSafeReasonPair(`${opening}\n\n${closing}`, { opening, closing }, 278, options)).toBe(false);
+    expect(fallbackReasonPair(rationale, opening.length + closing.length - 1, options)).toBeNull();
+  });
+
+  it('tries a later pair when the first fact cannot fit with a partner', () => {
+    const first = 'Gómez, Hoffman and Minter all sat Sunday after throwing seven, 17 and 18 pitches Saturday.';
+    const second = 'Every Angels reliever had yesterday off.';
+    const third = 'Sánchez has allowed a .737 OPS to right-handed hitters compared with .357 to lefties.';
+    const budget = second.length + third.length;
+    // Isolate the first candidate in its own paragraph, where it has no partner.
+    const paragraphs = `${first}\n\n${second} ${third}`;
+    const pair = fallbackReasonPair(paragraphs, budget, options);
+    expect(pair).toEqual({ opening: second, closing: third });
+    expect(isSafeReasonPair(paragraphs, pair, budget, options)).toBe(true);
+  });
+});

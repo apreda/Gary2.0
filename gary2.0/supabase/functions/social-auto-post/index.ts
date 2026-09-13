@@ -14,7 +14,7 @@ import { isSocialServiceRequest } from "../post-single-tweet/authorization.ts";
 //   - North Star is APP DOWNLOADS + retained users, NOT impressions/followers.
 //   - ZERO emojis anywhere (removed the sport-emoji map and the TOP PICK badge).
 //   - "Give the pick, hold the depth" withhold policy: the pick hook shows the BARE pick (no odds — founder, Aug 26) + ONE strongest falsifiable
-//     factor; the full breakdown and the rest of the day's slate stay in the app (that is the reason to download).
+//     factor; superseded Sep 13 by the required fact / bare pick / second fact layout.
 //   - No hashtags. No "Full breakdown" promise. No in-thread App Store link (the buried link converted ~0; the bio +
 //     pinned post carry the install path, and the profile out-converts an in-thread link). Pick thread = hook, plus a
 //     "link in bio" handoff reply on the DAY'S FIRST thread ONLY (Jul 5: every-thread handoffs read generic-capper).
@@ -479,6 +479,13 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
    try {
     const prepared = existingIntents.get(publicationKey(chosen));
     if (prepared && !dryRun) {
+      // An unsent older two-part payload must not bypass the Sep 13 layout.
+      // Preserve its frozen receipt; already-sent roots reconcile separately.
+      const parts = String(prepared.log_payload?.post_text ?? '').split('\n\n');
+      if (parts.length !== 3 || parts.some(p => !p.trim()) || parts[1] !== barePick(String(chosen.pick))) {
+        results.push({ posted: false, pick: chosen.pick, error: 'NO_SAFE_COPY: prepared post does not use the required three-part layout' });
+        continue;
+      }
       // Resume frozen copy without another model request, but reacquire the
       // shared cadence guard: another game may have claimed since this crashed.
       const { data: resumed, error: resumeError } = await sb.rpc("claim_social_publication", {
@@ -503,7 +510,7 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
     // total is part of the bet; the price is just today's number at one book).
     const pickLine = barePick(String(chosen.pick)); // clean machine-readable shorthand, no odds, no emoji
 
-    // FACTS ONLY, VERBATIM (founder, Sep 7): the hook is up to two of Gary's
+    // FACTS ONLY, VERBATIM (founder, Sep 13): the hook is exactly two of Gary's
     // own concrete evidence sentences around the injected pick line —
     // the feed says exactly what the app says, word for word. The model only
     // selects which sentences; code verifies every selection is a verbatim
@@ -521,17 +528,17 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
     const budget = 278 - pickLine.length - 4;
     const reasonParagraphs = rationaleText.split(/\n+/).map(p => p.replace(/\s+/g, " ").trim());
     const numbered = list.map((s, i) => `P${reasonParagraphs.findIndex(p => p.includes(s.replace(/\s+/g, " ").trim())) + 1} / ${i + 1}. ${s}`).join("\n");
-    const user = `Choose up to two factual evidence sentences for a single bet's post. Return ONLY JSON: {"opening": "...", "closing": "..."}.
-Both nonempty values MUST be sentences copied character-for-character from the numbered list below, without the P/number label — different sentences from the SAME source paragraph (same P label), and their combined length must be at most ${budget} characters. If only one safe sentence fits, use it as opening and return an empty closing.
+    const user = `Choose exactly two factual evidence sentences for a single bet's post: opening fact, pick, closing fact. Return ONLY JSON: {"opening": "...", "closing": "..."}.
+Both values MUST be nonempty sentences copied character-for-character from the numbered list below, without the P/number label — different sentences from the SAME source paragraph (same P label), and their combined length must be at most ${budget} characters. If no safe pair fits, return empty values; do not invent, shorten or duplicate a sentence to fill the layout.
 Both must report concrete facts from the real pick: pitching workload, recent appearances, batting/pitching results, matchup statistics or lineup/personnel facts. NEVER a thesis, abstract conclusion, forecast, personal opinion, scene-setting opener or bet restatement.
 Each chosen sentence must STAND ALONE for a reader who has seen nothing else: every person it mentions is named IN the sentence, and it never opens mid-argument ("But…", "Those advantages…", "He…").
-opening: the most useful concrete fact supporting this pick. A sentence saying who pitched, rested, hit or allowed what is complete on its own. Do not introduce it with commentary about why it "tips the matchup", creates an "advantage" or supplies a "credible route". closing: optional additional factual evidence from the SAME paragraph supporting the same pick; never an objection or the opponent's case. One useful fact is enough. Preserve the source's exact words and qualifiers; reject an unsuitable sentence whole, never turn a prediction into a fact by deleting its uncertainty.
+opening: the most useful concrete fact supporting this pick. A sentence saying who pitched, rested, hit or allowed what is complete on its own. Do not introduce it with commentary about why it "tips the matchup", creates an "advantage" or supplies a "credible route". closing: required additional factual evidence from the SAME paragraph supporting the same pick; never an objection or the opponent's case. Preserve the source's exact words and qualifiers; reject an unsuitable sentence whole, never turn a prediction into a fact by deleting its uncertainty.
 PICK: ${chosen.pick} | ${chosen.awayTeam} @ ${chosen.homeTeam} | league ${league}
 
 SENTENCES:
 ${numbered}`;
     const selectionOk = (o: string, c: string) =>
-      isSafeReasonPair(rationaleText, { opening: o, closing: c }, budget);
+      isSafeReasonPair(rationaleText, { opening: o, closing: c }, budget, { requireClosing: true });
     // OUTAGE PATH (Aug 21 2026). The model only SELECTS which two of Gary's own
     // sentences to run — `fallbackReasonPair` below chooses from the identical
     // list, so the posted words are the same either way. Before this, a THROWN
@@ -547,22 +554,22 @@ ${numbered}`;
     if (!selectionOk(opening, closing)) {
       // One retry with the violation named, then the deterministic fallback.
       out = await selectHookSentences(
-        `${user}\n\nYour previous selection was rejected: use only complete standalone sentences COPIED EXACTLY from the numbered list, from the same P paragraph, fitting ${budget} characters combined. Use one sentence with an empty closing if a pair cannot fit.`,
+        `${user}\n\nYour previous selection was rejected: select TWO different complete standalone factual sentences COPIED EXACTLY from the numbered list, from the same P paragraph, fitting ${budget} characters combined. Both opening and closing are required.`,
       );
       opening = String(out.opening ?? "").trim();
       closing = String(out.closing ?? "").trim();
     }
     if (!selectionOk(opening, closing)) {
-      const pair = fallbackReasonPair(rationaleText, budget);
+      const pair = fallbackReasonPair(rationaleText, budget, { requireClosing: true });
       if (!pair) {
-        throw new Error(`NO_SAFE_COPY: no whole standalone reason fits for "${chosen.pick}", refusing to post`);
+        throw new Error(`NO_SAFE_COPY: no two whole standalone facts fit for "${chosen.pick}", refusing to post`);
       }
       opening = pair.opening;
       closing = pair.closing;
     }
     // Every path crosses the same safety boundary, including vendor outages.
     if (!selectionOk(opening, closing)) throw new Error(`NO_SAFE_COPY: final reason validation failed for "${chosen.pick}"`);
-    const hook = [opening, pickLine, closing].filter(Boolean).join("\n\n");
+    const hook = [opening, pickLine, closing].join("\n\n");
     if (hook.length > 280) {
       throw new Error(`Hook exceeds X limit for "${chosen.pick}" — ${hook.length} characters, refusing to post`);
     }
