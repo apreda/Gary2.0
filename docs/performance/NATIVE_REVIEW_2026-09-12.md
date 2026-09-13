@@ -95,4 +95,4 @@ caught it and it was corrected before final build verification.
 
 Apple account sign-in already blocks native distribution. An archive or source
 push does not put this change on Adam's phone. Final archive, signing, upload
-and production-audit status belong in `HANDOFF_2026-09-12_PERFORMANCE_930.md`.
+and production-audit status belong in `HANDOFF_2026-09-13_TESTFLIGHT_930.md`.

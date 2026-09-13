@@ -1,0 +1,52 @@
+
+═══ PRODUCTION TRUTH ═══
+
+Scheduler              PID 2340 @ /Users/adam.preda/Gary2.0/gary2.0
+Repo                   /Users/adam.preda/Gary2.0/gary2.0
+Commit                 9e76551d+dirty
+Game era (disk)        ddea440c3b63
+Props era (disk)       0dc78ba3374d
+June era (disk)        ddea440c3b63
+Game model (plist)     codex-gpt-5.6-sol
+Props model (plist)    codex-gpt-5.6-luna
+MLB model (plist)      codex-gpt-5.6-sol
+Winners worker         PID 2347 · running
+Stored (2026-09-13)    14 picks · eras [ddea440c3b63] · models [codex-gpt-5.6-sol]
+MLB publication        14/15 slate games published · 0 started without a pick · 1 pending
+
+─── DEPLOY PARITY (edge functions) ───
+A new version of Supabase CLI is available: v2.117.0 (currently installed v2.104.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+billing-portal         ✅ deployed 2026-09-04T22:12Z (v3)
+book-slip-scan         ✅ deployed 2026-09-09T13:36Z (v2)
+create-checkout        ✅ deployed 2026-09-04T22:07Z (v14)
+delete-account         ✅ deployed 2026-09-04T22:44Z (v10)
+engagement-sheet       ✅ deployed 2026-09-05T11:47Z (v8)
+get-tweet-metrics      ✅ deployed 2026-09-08T03:43Z (v15)
+grade-props            ✅ deployed 2026-09-08T13:25Z (v23)
+grade-results          ✅ deployed 2026-09-08T03:52Z (v36)
+live-scores            ✅ deployed 2026-09-08T03:50Z (v23)
+mlb-field-lineups      ✅ deployed 2026-09-08T18:51Z (v12)
+mlb-live-batting       ✅ deployed 2026-09-08T19:15Z (v2)
+notify-new-pick        ✅ deployed 2026-09-08T03:28Z (v9)
+post-delete-tweet      ✅ deployed 2026-09-08T03:43Z (v8)
+post-quote-tweet       ✅ deployed 2026-09-08T03:43Z (v8)
+post-reply-tweet       ✅ deployed 2026-09-08T03:43Z (v14)
+post-single-tweet      ✅ deployed 2026-09-08T03:43Z (v14)
+post-tweet-media       ✅ deployed 2026-09-08T03:43Z (v10)
+reply-engine-scan      ✅ deployed 2026-09-08T03:43Z (v12)
+reply-engine-send      ✅ deployed 2026-09-08T03:43Z (v9)
+social-auto-post       ✅ deployed 2026-09-13T18:52Z (v113)
+stripe-webhook         ✅ deployed 2026-09-04T21:52Z (v19)
+update-x-banner        ✅ deployed 2026-09-08T03:43Z (v9)
+Working tree           ⚠️ 1 uncommitted change(s)
+Unpushed               ✅ none
+Initialising login role...
+A new version of Supabase CLI is available: v2.117.0 (currently installed v2.104.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+
+─── SUPPORT QUEUE (profile reports) ───
+Open reports           ✅ none
+
+🚨 PRODUCTION PARITY FAILED OR UNVERIFIED — see flags above
+
