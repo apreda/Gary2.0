@@ -359,7 +359,8 @@ describe('composer wiring', () => {
     expect(composerSrc).toContain('VERBATIM_RULES');
     expect(composerSrc).toContain('isSafeReasonPair(');
     expect(composerSrc).toContain('reasonCandidates(');
-    expect(composerSrc).toContain('fallbackReasonPair(');
+    expect(composerSrc).not.toContain('fallbackReasonPair(');
+    expect(composerSrc).toContain('selectPrimaryPair(');
     expect(composerSrc).not.toContain('PICK_HOOK_SCHEMA');
     expect(composerSrc).not.toContain('Write the hook for a single bet');
   });

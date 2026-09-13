@@ -7,7 +7,8 @@ export function socialRunHealth(body) {
   const issues = new Set();
   if (body?.source_errors?.length) issues.add('PICK_SOURCE_UNAVAILABLE');
   for (const failure of failures) {
-    if (/PUBLICATION_/.test(failure)) issues.add('PUBLICATION_RECOVERY_REQUIRED');
+    if (/HOOK_/.test(failure)) issues.add(failure.match(/HOOK_[A-Z_]+/)[0]);
+    else if (/PUBLICATION_/.test(failure)) issues.add('PUBLICATION_RECOVERY_REQUIRED');
     else if (/POST_LOG_WRITE_FAILED/.test(failure)) issues.add('POST_LOG_WRITE_FAILED');
     else if (/NO_SAFE_COPY/.test(failure)) issues.add('NO_SAFE_COPY');
     else if (/402|credits?\s*(?:depleted|exhausted)|insufficient.*credit|payment.required/i.test(failure)) issues.add('X_CREDITS_UNAVAILABLE');

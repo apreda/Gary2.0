@@ -28,7 +28,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { matchVerdicts, plainVerdict, buildVerdictPrompt, trimTweet, isValidVerdict } from "./verdicts.ts";
 import { composeWeekTape } from "./weektape.ts";
 import { composeRecaps, type RecapRow } from "./recap.ts";
-import { fallbackReasonPair, isSafeReasonPair, reasonCandidates } from "../_shared/verbatimSnippets.js";
+import { isSafeReasonPair, reasonCandidates } from "../_shared/verbatimSnippets.js";
 import { socialRunHealth } from "./health.js";
 import { mergeSocialPickSources, hasLoggedTicket, publicationKey } from "./pickSources.js";
 import { publishIntent, publicationStore } from "./publication.js";
@@ -193,10 +193,10 @@ async function fetchMetricsBatch(ids: string[]): Promise<Record<string, any>> {
 // Metrics throttle (Aug 5 2026): the newest metrics_updated_at stamp IS the "when did we last refresh" clock,
 // so no extra state is needed and the throttle holds at any cron cadence.
 const METRICS_MIN_INTERVAL_MIN = 45;
-let warnedMissingCols = false; // one log line per cold start, not one per row
 async function metricsRefreshedRecently(): Promise<boolean> {
-  const { data } = await sb.from("social_post_log").select("metrics_updated_at")
+  const { data, error } = await sb.from("social_post_log").select("metrics_updated_at")
     .not("metrics_updated_at", "is", null).order("metrics_updated_at", { ascending: false }).limit(1);
+  if (error) throw new Error(`METRICS_READ_FAILED: ${error.code}`);
   const last = data?.[0]?.metrics_updated_at;
   return !!last && (Date.now() - new Date(last).getTime()) < METRICS_MIN_INTERVAL_MIN * 60_000;
 }
@@ -206,7 +206,8 @@ async function metricsRefreshedRecently(): Promise<boolean> {
 async function refreshMetrics(): Promise<{ updated: number; checked: number }> {
   const since = new Date(Date.now() - 6 * 86400_000).toISOString().slice(0, 10);
   const { data: rows, error } = await sb.from("social_post_log").select("id, hook_tweet_id, reasoning_tweet_id, cta_tweet_id").gte("post_date", since).not("hook_tweet_id", "is", null);
-  if (error || !rows?.length) return { updated: 0, checked: 0 };
+  if (error) throw new Error(`METRICS_READ_FAILED: ${error.code}`);
+  if (!rows?.length) return { updated: 0, checked: 0 };
   const allIds = new Set<string>();
   for (const row of rows) for (const id of [row.hook_tweet_id, row.reasoning_tweet_id, row.cta_tweet_id]) if (id) allIds.add(id);
   const byId = await fetchMetricsBatch([...allIds]);
@@ -227,29 +228,12 @@ async function refreshMetrics(): Promise<{ updated: number; checked: number }> {
       impressions: sum("impressions"), likes: sum("likes"), replies: sum("replies"), retweets: sum("retweets"),
       metrics_updated_at: nowIso,
     };
-    // Deploy-order safety: this function ships before migration 20260805201000_social_post_log_intent_metrics
-    // can be applied (the repo's migration history is out of sync with remote, so `db push` is blocked and the
-    // DDL is applied by hand). Until those three columns exist, PostgREST rejects the whole UPDATE with 42703
-    // and metrics would stop refreshing entirely. So: try the full write, and fall back to the legacy column
-    // set if the columns are not there yet. The moment the DDL lands, intent metrics start recording on their
-    // own with no redeploy. Remove the fallback once the columns are confirmed in production.
     const { error: upErr } = await sb.from("social_post_log").update({
       ...legacy,
       bookmarks: sum("bookmarks"), profile_clicks: sum("user_profile_clicks"),
       link_clicks: anyLinkClicks ? sum("url_link_clicks") : null,
     }).eq("id", row.id);
-    if (upErr) {
-      // PGRST204 = PostgREST cannot find the column in its schema cache (what a write to a not-yet-created
-      // column actually returns; Postgres's own 42703 only surfaces on reads, so both are accepted here).
-      if (upErr.code !== "PGRST204" && upErr.code !== "42703") {
-        throw new Error(`social_post_log update failed (${upErr.code}): ${upErr.message}`);
-      }
-      if (!warnedMissingCols) {
-        console.warn("intent-metric columns missing (bookmarks/profile_clicks/link_clicks) — apply migration 20260805201000; storing legacy metrics only");
-        warnedMissingCols = true;
-      }
-      await sb.from("social_post_log").update(legacy).eq("id", row.id);
-    }
+    if (upErr) throw new Error(`METRICS_WRITE_FAILED: ${upErr.code}`);
     updated++;
   }
   return { updated, checked: rows.length };
@@ -276,23 +260,37 @@ Always return ONLY valid JSON as instructed.`;
 // Gary's own published rationale, word for word. The model only SELECTS which
 // two whole sentences to surface — it never writes, edits, shortens, or
 // paraphrases. Selection is verified in code against the stored rationale;
-// a failed selection falls back to deterministic sentence choice.
-const VERBATIM_RULES = `You select tweet content for @BetwithGary. The numbered sentences you receive are Gary's own published pick rationale. You NEVER write, edit, shorten, merge, or paraphrase — you only CHOOSE sentences, copied character-for-character as listed. Always return ONLY valid JSON as instructed.`;
+// a failed primary selection stops this pick and is exposed as a failed run.
+const VERBATIM_RULES = `You select tweet content for @BetwithGary. Every numbered pair contains two complete factual sentences from the same supporting paragraph of Gary's published rationale. Choose the pair giving the strongest useful evidence for the named pick. The opening leads, the bare pick sits in the middle, and the closing supplies a second fact. Use select_pair exactly once. You never write, edit, shorten or paraphrase the source text.`;
 
-const PICK_VERBATIM_SCHEMA: JsonSchema = {
-  type: "object",
-  properties: {
-    opening: {
-      type: "string",
-      description: "One sentence copied EXACTLY from the numbered list: the strongest story/hook sentence.",
-    },
-    closing: {
-      type: "string",
-      description: "One DIFFERENT sentence copied EXACTLY from the numbered list: the strongest reason or stance sentence.",
-    },
-  },
-  required: ["opening", "closing"],
-};
+async function selectPrimaryPair(pairs: { opening: string; closing: string }[], pick: string): Promise<number> {
+  if (!ANTHROPIC_KEY) throw new Error('HOOK_PROVIDER_CONFIG: ANTHROPIC_API_KEY missing');
+  let r: Response;
+  let j: any;
+  try {
+    r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', signal: AbortSignal.timeout(25_000),
+      headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: ANTHROPIC_MODEL, max_tokens: 256, system: VERBATIM_RULES,
+        messages: [{ role: 'user', content: JSON.stringify({ pick, pairs: pairs.map((p, id) => ({ id, ...p })) }) }],
+        tools: [{ name: 'select_pair', description: 'Select the strongest supporting evidence pair for the named pick. Each ID maps to an already validated opening and closing. Select exactly one listed ID; the application inserts the original text and bare pick without rewriting. No other copy is accepted.',
+          input_schema: { type: 'object', properties: { pair_id: { type: 'integer', enum: pairs.map((_, id) => id) } }, required: ['pair_id'], additionalProperties: false } }],
+        tool_choice: { type: 'tool', name: 'select_pair', disable_parallel_tool_use: true },
+      }),
+    });
+    j = await r.json();
+  } catch (e) {
+    throw new Error(`HOOK_PROVIDER_UNAVAILABLE: model=${ANTHROPIC_MODEL}; cause=${e instanceof Error ? e.name : 'transport error'}`);
+  }
+  if (!r.ok) throw new Error(`HOOK_PROVIDER_FAILED: status=${r.status}; model=${ANTHROPIC_MODEL}; type=${j?.error?.type ?? 'unknown'}; request_id=${r.headers.get('request-id') ?? 'unavailable'}`);
+  const calls = (Array.isArray(j.content) ? j.content : []).filter((c: any) => c.type === 'tool_use');
+  const id = calls[0]?.input?.pair_id;
+  if (j.stop_reason !== 'tool_use' || calls.length !== 1 || calls[0].name !== 'select_pair' || !Number.isInteger(id) || id < 0 || id >= pairs.length) {
+    throw new Error(`HOOK_SELECTION_INVALID: model=${ANTHROPIC_MODEL}; expected one valid pair ID; stop_reason=${j.stop_reason ?? 'missing'}`);
+  }
+  return id;
+}
 
 // ── THE PROPS REPLY (founder, Aug 14 2026) ────────────────────────────────────
 // Under every game tweet: "Gary's Prop Bets", the bare list for THAT game — no
@@ -391,13 +389,11 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
   const picks: any[] = mergeSocialPickSources((dpRows ?? []).flatMap((row) => row.picks ?? []), weeklyRows?.[0], today);
   if (!picks.length) return { posted: false, reason: "no picks loaded yet", source_errors };
 
-  // The day's props, fetched once — each game thread's reply lists ITS OWN props
-  // (founder, Aug 14). A fetch failure costs the replies, never the pick tweets.
-  let dayProps: any[] = [];
-  try {
-    const { data: ppRows } = await sb.from("prop_picks").select("picks").eq("date", today);
-    dayProps = ppRows?.[0]?.picks ?? [];
-  } catch (e) { console.error("props fetch for replies failed (pick tweets unaffected): " + String(e)); }
+  // A failed props read is different from a game with no props. Do not
+  // replace an unavailable props reply with alternate handoff copy.
+  const { data: ppRows, error: ppError } = await sb.from("prop_picks").select("picks").eq("date", today);
+  if (ppError) throw new Error(`PROPS_SOURCE_UNAVAILABLE: ${ppError.code}`);
+  const dayProps: any[] = ppRows?.[0]?.picks ?? [];
 
   const { data: logRows, error: logErr } = await sb.from("social_post_log").select("pick_text, thread_format, publication_key, posted_at, league, slot, audience_selection").eq("post_date", today);
   if (logErr) throw logErr;
@@ -428,11 +424,10 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
   // An unavailable schedule cannot justify spending the spaces held for games
   // whose research has not arrived. A missing metrics read can use explicit priors.
   if (slateError || !slate?.length) return { posted: false, reason: "AUDIENCE_SCHEDULE_UNAVAILABLE", source_errors: [...source_errors, "AUDIENCE_SCHEDULE_UNAVAILABLE"] };
-  if (historyError) source_errors.push("AUDIENCE_HISTORY_UNAVAILABLE");
-  const postable = unposted.filter(p => !/^pass\b/i.test(String(p.pick ?? "").trim())
-    && fallbackReasonPair(String(p.rationale ?? ""), 278 - barePick(String(p.pick)).length - 4)?.opening);
+  if (historyError) return { posted: false, reason: "AUDIENCE_HISTORY_UNAVAILABLE", source_errors: [...source_errors, "AUDIENCE_HISTORY_UNAVAILABLE"] };
+  const postable = unposted.filter(p => !/^pass\b/i.test(String(p.pick ?? "").trim()));
   const selection = { ...selectAudiencePicks(postable, slate, pickThreads, history ?? [], nowMs, picks),
-    skipped_copy: unposted.filter(p => !postable.includes(p)).map(p => p.pick) };
+    skipped_pass: unposted.filter(p => !postable.includes(p)).map(p => p.pick) };
   const selected = selection.queue;
   const { missed, skipped_pregame } = audienceDeadlineOutcomes(picks, pickThreads, intentRows ?? [], nowMs);
 
@@ -454,22 +449,6 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
   const maxConf = Math.max(...picks.map((p) => parseFloat(p.confidence ?? 0)));
   const results: any[] = [];
   let threadsSoFar = pickThreads.length;
-
-  // Sentence SELECTION only — never composition. A failure returns nothing so
-  // the caller's deterministic verbatim chooser runs instead of the pick dying.
-  // Latched for the run: once the vendor is confirmed unreachable, the rest of
-  // the slate goes straight to the fallback rather than re-timing-out per pick.
-  let llmDown = false;
-  const selectHookSentences = async (prompt: string): Promise<Record<string, unknown>> => {
-    if (llmDown) return {};
-    try {
-      return parseJsonBlock(await callLLM(VERBATIM_RULES, prompt, PICK_VERBATIM_SCHEMA));
-    } catch (e) {
-      llmDown = true;
-      console.error(`HOOK_LLM_DOWN: sentence selection unavailable, posting Gary's own sentences instead -> ${String(e)}`);
-      return {};
-    }
-  };
 
   // Each pick composes and posts INDEPENDENTLY inside its own try/catch. Before Aug 5 a single failure (an
   // empty Gemini hook tripping the guard below, an X API blip) threw out of runPickMode and forfeited the
@@ -514,65 +493,32 @@ async function runPickMode(today: string, nowMs: number, dryRun: boolean, previe
     // own concrete evidence sentences around the injected pick line —
     // the feed says exactly what the app says, word for word. The model only
     // selects which sentences; code verifies every selection is a verbatim
-    // substring of the stored rationale and falls back to deterministic
-    // sentence choice when it is not. Select the facts themselves, without a
+    // substring of the stored rationale. Failure stops publication; there is
+    // no alternate selector. Select the facts themselves, without a
     // thesis or commentary sentence. Sentences are never rewritten or cut.
     const rationaleText = String(chosen.rationale ?? "");
     // The lines carry the concrete facts from Gary's published analysis.
     // Stake/odds-restatement sentences never reach the candidate list — the
     // injected pick line between them already says the bet.
-    const candidates = reasonCandidates(rationaleText);
-    const list = candidates;
-    if (!list.length) throw new Error(`NO_SAFE_COPY: no standalone reason for "${chosen.pick}", refusing to post`);
-    // Two newline-pairs join the three segments; keep the whole post ≤ 278.
     const budget = 278 - pickLine.length - 4;
-    const reasonParagraphs = rationaleText.split(/\n+/).map(p => p.replace(/\s+/g, " ").trim());
-    const numbered = list.map((s, i) => `P${reasonParagraphs.findIndex(p => p.includes(s.replace(/\s+/g, " ").trim())) + 1} / ${i + 1}. ${s}`).join("\n");
-    const user = `Choose exactly two factual evidence sentences for a single bet's post: opening fact, pick, closing fact. Return ONLY JSON: {"opening": "...", "closing": "..."}.
-Both values MUST be nonempty sentences copied character-for-character from the numbered list below, without the P/number label — different sentences from the SAME source paragraph (same P label), and their combined length must be at most ${budget} characters. If no safe pair fits, return empty values; do not invent, shorten or duplicate a sentence to fill the layout.
-Both must report concrete facts from the real pick: pitching workload, recent appearances, batting/pitching results, matchup statistics or lineup/personnel facts. NEVER a thesis, abstract conclusion, forecast, personal opinion, scene-setting opener or bet restatement.
-Each chosen sentence must STAND ALONE for a reader who has seen nothing else: every person it mentions is named IN the sentence, and it never opens mid-argument ("But…", "Those advantages…", "He…").
-opening: the most useful concrete fact supporting this pick. A sentence saying who pitched, rested, hit or allowed what is complete on its own. Do not introduce it with commentary about why it "tips the matchup", creates an "advantage" or supplies a "credible route". closing: required additional factual evidence from the SAME paragraph supporting the same pick; never an objection or the opponent's case. Preserve the source's exact words and qualifiers; reject an unsuitable sentence whole, never turn a prediction into a fact by deleting its uncertainty.
-PICK: ${chosen.pick} | ${chosen.awayTeam} @ ${chosen.homeTeam} | league ${league}
-
-SENTENCES:
-${numbered}`;
-    const selectionOk = (o: string, c: string) =>
-      isSafeReasonPair(rationaleText, { opening: o, closing: c }, budget, { requireClosing: true });
-    // OUTAGE PATH (Aug 21 2026). The model only SELECTS which two of Gary's own
-    // sentences to run — `fallbackReasonPair` below chooses from the identical
-    // list, so the posted words are the same either way. Before this, a THROWN
-    // API error skipped that chooser entirely and forfeited the pick: today's
-    // Gemini billing 403 turned "one dead vendor" into "the account tweets
-    // nothing", every pick, all day. A selection failure now costs the model's
-    // judgement, never the tweet. `llmDown` is per-run, so a hard outage burns
-    // one failed call for the whole slate instead of two per pick.
-    const out0 = await selectHookSentences(user);
-    let out = out0;
-    let opening = String(out.opening ?? "").trim();
-    let closing = String(out.closing ?? "").trim();
-    if (!selectionOk(opening, closing)) {
-      // One retry with the violation named, then the deterministic fallback.
-      out = await selectHookSentences(
-        `${user}\n\nYour previous selection was rejected: select TWO different complete standalone factual sentences COPIED EXACTLY from the numbered list, from the same P paragraph, fitting ${budget} characters combined. Both opening and closing are required.`,
-      );
-      opening = String(out.opening ?? "").trim();
-      closing = String(out.closing ?? "").trim();
-    }
-    if (!selectionOk(opening, closing)) {
-      const pair = fallbackReasonPair(rationaleText, budget, { requireClosing: true });
-      if (!pair) {
-        throw new Error(`NO_SAFE_COPY: no two whole standalone facts fit for "${chosen.pick}", refusing to post`);
+    const list = reasonCandidates(rationaleText);
+    // The primary selects among complete validated pairs, avoiding text copying
+    // mistakes, missing closers and model character-count arithmetic.
+    const pairs: { opening: string; closing: string }[] = [];
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const pair = { opening: list[i], closing: list[j] };
+        if (isSafeReasonPair(rationaleText, pair, budget, { requireClosing: true })) pairs.push(pair);
       }
-      opening = pair.opening;
-      closing = pair.closing;
     }
-    // Every path crosses the same safety boundary, including vendor outages.
-    if (!selectionOk(opening, closing)) throw new Error(`NO_SAFE_COPY: final reason validation failed for "${chosen.pick}"`);
+    if (!pairs.length) throw new Error(`NO_SAFE_COPY: no valid two-fact pair; candidates=${list.length}; budget=${budget}; pick=${chosen.pick}`);
+    const pairId = await selectPrimaryPair(pairs, `${chosen.pick} | ${chosen.awayTeam} @ ${chosen.homeTeam} | ${league}`);
+    const { opening, closing } = pairs[pairId];
+    if (!isSafeReasonPair(rationaleText, { opening, closing }, budget, { requireClosing: true })) {
+      throw new Error('HOOK_SELECTION_INVALID: selected pair failed final source validation');
+    }
     const hook = [opening, pickLine, closing].join("\n\n");
-    if (hook.length > 280) {
-      throw new Error(`Hook exceeds X limit for "${chosen.pick}" — ${hook.length} characters, refusing to post`);
-    }
+    if (hook.length > 280) throw new Error(`HOOK_SELECTION_INVALID: hook length ${hook.length}`);
     // THE PROPS REPLY (founder, Aug 14 2026 — supersedes the Jul 5 first-thread-only handoff): every game
     // thread gets ONE reply — "Gary's Prop Bets", the bare list for THIS game (HR threats included, no
     // commentary), then the classic app handoff. A game with no props falls back to the old rule: the
@@ -913,11 +859,14 @@ Deno.serve(async (req) => {
   let publicationRecovery: any[] = [];
   // pg_cron success means the HTTP request was enqueued, not that X accepted
   // it. The retained pg_net response provides the real result to the read-only
-  // marketing-readiness command. No additional cron, posts, or alerts.
-  const respond = (body: any, init?: ResponseInit) => Response.json({
-    ...body, service: "social-auto-post", posting_policy: AUDIENCE_VERSION, checked_at: new Date().toISOString(),
-    dry_run: dryRun, run_kind: runKind, publication_recovery: publicationRecovery, health: socialRunHealth({ ...body, publication_recovery: publicationRecovery }),
-  }, init);
+  // marketing-readiness command and failure monitor. Degraded runs are HTTP 503.
+  const respond = (body: any, init?: ResponseInit) => {
+    const health = socialRunHealth({ ...body, publication_recovery: publicationRecovery });
+    return Response.json({
+      ...body, service: "social-auto-post", posting_policy: AUDIENCE_VERSION, checked_at: new Date().toISOString(),
+      dry_run: dryRun, run_kind: runKind, publication_recovery: publicationRecovery, health,
+    }, { ...init, status: init?.status ?? (health.status === 'ok' ? 200 : 503) });
+  };
   try {
     const url = new URL(req.url);
     const preview = url.searchParams.get("preview") === "1";
@@ -946,12 +895,6 @@ Deno.serve(async (req) => {
       } catch (e) { console.error("metrics refresh failed: " + String(e)); metrics = { error: String(e) }; }
     }
     if (metricsOnly) return respond({ metrics_only: true, metrics });
-
-    // Missing key is a WARNING, never a run-killer: sentence SELECTION is the
-    // only thing the model does here, and the deterministic verbatim chooser
-    // covers it — the Aug 21 outage law says a dead vendor must never silence
-    // the account. callLLM throws per-call and the per-pick catch handles it.
-    if (!ANTHROPIC_KEY) console.error("ANTHROPIC_API_KEY secret not set — posts run on the verbatim fallback until it is added (Supabase dashboard → Project Settings → Edge Functions → Secrets)");
 
     // Verdict loop rides every unforced hourly run: finals detected within ~1hr, quote-tweeted.
     let verdict: any = undefined;

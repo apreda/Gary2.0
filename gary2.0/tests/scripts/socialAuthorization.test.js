@@ -33,7 +33,7 @@ beforeAll(async () => {
   }
 }, 30000);
 
-function fixture(endpoint, { transport, service = serviceKey } = {}) {
+function fixture(endpoint, { transport, service = serviceKey, envValues = {} } = {}) {
   let handler;
   const calls = [];
   const background = [];
@@ -41,7 +41,7 @@ function fixture(endpoint, { transport, service = serviceKey } = {}) {
     SUPABASE_URL: 'https://fixture.invalid', SUPABASE_SERVICE_ROLE_KEY: service,
     SUPABASE_ANON_KEY: 'fixture-anon-key', X_API_KEY: 'fixture-x-key',
     X_API_SECRET: 'fixture-x-secret', X_ACCESS_TOKEN: 'fixture-x-token',
-    X_ACCESS_TOKEN_SECRET: 'fixture-x-token-secret',
+    X_ACCESS_TOKEN_SECRET: 'fixture-x-token-secret', ...envValues,
   };
   const context = vm.createContext({
     Deno: { env: { get: name => env[name] }, serve: fn => { handler = fn; } },
@@ -119,14 +119,21 @@ describe('authorized X operations retain their existing behavior against recordi
     expect(mutations[0].url.pathname).toBe('/rest/v1/rpc/claim_social_publication');
     expect(JSON.parse(mutations[0].body).p_payload).toEqual(frozen);
   });
-  it.each([true, false])('game-pick preview requires two source facts during a model outage (pair available: %s)', async hasPair => {
-    const day = '2026-09-19', now = Date.parse(day + 'T10:00:00-04:00');
+  it.each(['ok', 'missing-key', 'rate-limit', 'invalid-id', 'truncated', 'no-pair'])('primary pick selection has one path and exposes %s', async scenario => {
+    const day = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
     const opening = 'Every Angels reliever had yesterday off.';
     const closing = 'Sánchez has allowed a .737 OPS to right-handed hitters compared with .357 to lefties.';
     const p = { league: 'MLB', game_id: 1, awayTeam: 'Angels', homeTeam: 'Brewers', pick: 'Angels ML',
-      commence_time: day + 'T12:00:00-04:00', rationale: hasPair ? `${opening} ${closing}` : opening };
-    const f = fixture('social-auto-post', { transport: call => {
+      commence_time: day + 'T23:00:00-04:00', rationale: scenario === 'no-pair' ? opening : `${opening} ${closing}` };
+    const f = fixture('social-auto-post', { envValues: { ANTHROPIC_API_KEY: scenario === 'missing-key' ? '' : 'fixture-anthropic' }, transport: call => {
       switch (call.url.pathname) {
+        case '/v1/messages': {
+          const body = JSON.parse(call.body);
+          expect(body.tool_choice.name).toBe('select_pair');
+          expect(body.tools[0].input_schema.properties.pair_id.enum).toEqual([0]);
+          if (scenario === 'rate-limit') return Response.json({ error: { type: 'rate_limit_error' } }, { status: 429 });
+          return Response.json({ stop_reason: scenario === 'truncated' ? 'max_tokens' : 'tool_use', content: [{ type: 'tool_use', name: 'select_pair', input: { pair_id: scenario === 'invalid-id' ? 99 : 0 } }] });
+        }
         case '/rest/v1/daily_picks': return Response.json([{ picks: [p] }]);
         case '/rest/v1/daily_slate': return Response.json([{ ...p, away_team: p.awayTeam, home_team: p.homeTeam, bdl_game_id: 1 }]);
         case '/rest/v1/weekly_nfl_picks': case '/rest/v1/prop_picks': case '/rest/v1/social_post_log':
@@ -134,13 +141,27 @@ describe('authorized X operations retain their existing behavior against recordi
         default: throw new Error('Unexpected send or dependency: ' + call.url.pathname);
       }
     } });
-    const result = await f.internal('runPickMode')(day, now, true, true);
-    if (hasPair) expect(result.results[0].hook).toBe(`${opening}\n\nAngels ML\n\n${closing}`);
+    const result = await f.internal('runPickMode')(day, Date.parse(day + 'T22:00:00-04:00'), true, true);
+    if (scenario === 'ok') expect(result.results[0].hook).toBe(`${opening}\n\nAngels ML\n\n${closing}`);
     else {
-      expect(result.results[0].error).toContain('no two whole standalone facts fit');
+      const code = { 'missing-key': 'HOOK_PROVIDER_CONFIG', 'rate-limit': 'HOOK_PROVIDER_FAILED', 'invalid-id': 'HOOK_SELECTION_INVALID', truncated: 'HOOK_SELECTION_INVALID', 'no-pair': 'NO_SAFE_COPY' }[scenario];
+      expect(result.results[0].error).toContain(code);
       expect(result.results[0].hook).toBeUndefined();
+      expect(f.internal('socialRunHealth')(result).issues).toContain(code);
     }
-    expect(f.calls.filter(c => c.method !== 'GET')).toEqual([]);
+    expect(f.calls.filter(c => c.url.pathname === '/v1/messages')).toHaveLength(['missing-key', 'no-pair'].includes(scenario) ? 0 : 1);
+    expect(f.calls.filter(c => c.method !== 'GET' && c.url.hostname !== 'api.anthropic.com')).toEqual([]);
+  });
+
+  it('returns HTTP 503 for a failed dependency rather than a healthy HTTP 200', async () => {
+    const f = fixture('social-auto-post', { transport: call => {
+      if (call.url.pathname === '/rest/v1/social_publication_intents') return Response.json([]);
+      if (call.url.pathname === '/rest/v1/social_post_log') return Response.json({ message: 'fixture read rejected' }, { status: 400 });
+      throw new Error('Unexpected dependency');
+    } });
+    const response = await f.handler(request('social-auto-post', { query: '?metrics_only=1' }));
+    expect(response.status).toBe(503);
+    expect((await response.json()).health.status).toBe('degraded');
   });
   it.each([
     ['postTweet', ['Fixture single'], '/functions/v1/post-single-tweet'],
